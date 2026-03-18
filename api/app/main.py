@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
+from app.routes import categories, suppliers, search, forms, sponsors
 
 app = FastAPI(title="Circuits.com API", version="0.1.0")
 
@@ -11,6 +12,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(categories.router)
+app.include_router(suppliers.router)
+app.include_router(search.router)
+app.include_router(forms.router)
+app.include_router(sponsors.router)
 
 
 @app.get("/api/health")
