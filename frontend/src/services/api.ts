@@ -1,6 +1,7 @@
 import axios from 'axios';
 import type { Category, CategoryDetail } from '../types/category';
 import type { Supplier } from '../types/supplier';
+import type { Sponsor } from '../types/sponsor';
 
 const client = axios.create({ baseURL: '/api' });
 
@@ -21,6 +22,9 @@ export const api = {
 
   getSuppliers: () =>
     client.get<Supplier[]>('/suppliers').then(r => r.data),
+
+  getSponsorByKeyword: (keyword: string) =>
+    client.get<Sponsor>(`/sponsors/keyword/${keyword}`).then(r => r.data),
 
   submitContact: (data: Record<string, string>) =>
     client.post('/contact', data),
