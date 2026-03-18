@@ -1,0 +1,170 @@
+@use '../styles/variables' as *;
+@use '../styles/mixins' as *;
+@use '../styles/animations';
+
+// ─── Search header ──────────────────────────────────────────────────────────
+
+.searchHeader {
+  background: $executive-blue;
+  padding: 32px 20px 36px;
+}
+
+.headerInner {
+  @include container;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.title {
+  font-family: $font-heading;
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #ffffff;
+  margin: 0;
+
+  @include responsive($bp-mobile) {
+    font-size: 1.35rem;
+  }
+}
+
+.queryHighlight {
+  color: rgba(255, 255, 255, 0.7);
+  font-weight: 400;
+}
+
+.searchBarRow {
+  max-width: 600px;
+}
+
+// ─── Results content ────────────────────────────────────────────────────────
+
+.content {
+  @include container;
+  padding-top: 32px;
+  padding-bottom: 48px;
+  min-height: 40vh;
+}
+
+.section {
+  margin-bottom: 36px;
+}
+
+.sectionTitle {
+  font-family: $font-heading;
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: $text-primary;
+  margin: 0 0 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sectionCount {
+  font-size: 0.85rem;
+  font-weight: 400;
+  color: $text-secondary;
+}
+
+// ─── Result cards grid ──────────────────────────────────────────────────────
+
+.resultsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: $grid-gap;
+}
+
+.resultCard {
+  @include card-base;
+  padding: 20px;
+  text-decoration: none;
+  color: $text-primary;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  @include hover-lift;
+}
+
+.cardIcon {
+  font-size: 1.5rem;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.cardBody {
+  min-width: 0;
+}
+
+.cardName {
+  font-weight: 600;
+  font-size: 0.95rem;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cardMeta {
+  font-size: 0.8rem;
+  color: $text-secondary;
+  margin: 2px 0 0;
+}
+
+// ─── Supplier card extras ───────────────────────────────────────────────────
+
+.featuredBadge {
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: $sponsor-gold;
+  background: rgba($sponsor-gold, 0.1);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+// ─── Empty / Loading states ─────────────────────────────────────────────────
+
+.emptyState {
+  text-align: center;
+  padding: 60px 20px;
+}
+
+.emptyIcon {
+  font-size: 3rem;
+  display: block;
+  margin-bottom: 16px;
+}
+
+.emptyTitle {
+  font-family: $font-heading;
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: $text-primary;
+  margin: 0 0 8px;
+}
+
+.emptySubtitle {
+  color: $text-secondary;
+  font-size: 0.95rem;
+  margin: 0 0 20px;
+}
+
+.browseLink {
+  color: $nav-blue;
+  text-decoration: none;
+  font-weight: 500;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.loadingSkeleton {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: $grid-gap;
+}

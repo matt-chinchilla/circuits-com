@@ -1,0 +1,97 @@
+@use 'sass:color';
+@use '../../styles/variables' as *;
+@use '../../styles/animations';
+
+.glowButton {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 28px;
+  border: none;
+  border-radius: 6px;
+  font-family: $font-body;
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  overflow: hidden;
+  transition:
+    transform $transition-fast,
+    box-shadow $transition-normal,
+    background-color $transition-normal;
+
+  &:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+    transform: none !important;
+    box-shadow: none !important;
+  }
+
+  // Sweep overlay
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    transition: opacity $transition-normal;
+    pointer-events: none;
+  }
+
+  &:not(:disabled):hover {
+    transform: scale(1.02);
+
+    &::before {
+      opacity: 1;
+    }
+  }
+
+  &:not(:disabled):active {
+    transform: scale(0.98);
+  }
+}
+
+// ─── Primary (nav-blue) ─────────────────────────────────────────────────────
+
+.primary {
+  background: $nav-blue;
+  color: #ffffff;
+
+  &::before {
+    background: linear-gradient(
+      135deg,
+      color.adjust($nav-blue, $lightness: 8%) 0%,
+      $nav-blue 50%,
+      color.adjust($nav-blue, $lightness: -4%) 100%
+    );
+  }
+
+  &:not(:disabled):hover {
+    box-shadow:
+      0 0 14px rgba($nav-blue, 0.45),
+      0 4px 12px rgba($nav-blue, 0.3);
+  }
+}
+
+// ─── Gold (sponsor-gold) ────────────────────────────────────────────────────
+
+.gold {
+  background: $sponsor-gold;
+  color: #ffffff;
+
+  &::before {
+    background: linear-gradient(
+      135deg,
+      $sponsor-gold-light 0%,
+      $sponsor-gold 50%,
+      color.adjust($sponsor-gold, $lightness: -6%) 100%
+    );
+  }
+
+  &:not(:disabled):hover {
+    box-shadow:
+      0 0 14px rgba($sponsor-gold, 0.45),
+      0 4px 12px rgba($sponsor-gold, 0.3);
+  }
+}

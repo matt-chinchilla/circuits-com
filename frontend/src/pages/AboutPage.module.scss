@@ -1,0 +1,176 @@
+@use '../styles/variables' as *;
+@use '../styles/mixins' as *;
+@use '../styles/animations';
+
+// ─── Hero banner ────────────────────────────────────────────────────────────
+
+.hero {
+  background: $executive-blue;
+  padding: 56px 20px 64px;
+  text-align: center;
+
+  @include responsive($bp-mobile) {
+    padding: 40px 20px 48px;
+  }
+}
+
+.heroInner {
+  @include container;
+  max-width: 720px;
+}
+
+.heroTitle {
+  font-family: $font-heading;
+  font-size: 2.4rem;
+  font-weight: 700;
+  color: #ffffff;
+  margin: 0 0 16px;
+  line-height: 1.2;
+
+  @include responsive($bp-mobile) {
+    font-size: 1.75rem;
+  }
+}
+
+.heroSubtitle {
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 1.1rem;
+  line-height: 1.6;
+  margin: 0;
+
+  @include responsive($bp-mobile) {
+    font-size: 0.95rem;
+  }
+}
+
+// ─── How it works ───────────────────────────────────────────────────────────
+
+.howSection {
+  @include container;
+  padding-top: 56px;
+  padding-bottom: 56px;
+  text-align: center;
+}
+
+.sectionTitle {
+  font-family: $font-heading;
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: $text-primary;
+  margin: 0 0 40px;
+}
+
+.stepsGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 32px;
+
+  @include responsive($bp-mobile) {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+}
+
+.stepCard {
+  @include card-base;
+  padding: 32px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  @include hover-lift;
+}
+
+.stepIcon {
+  font-size: 2.5rem;
+  line-height: 1;
+}
+
+.stepNumber {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: $nav-blue;
+  color: #ffffff;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.stepTitle {
+  font-family: $font-heading;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: $text-primary;
+  margin: 0;
+}
+
+.stepDescription {
+  font-size: 0.9rem;
+  color: $text-secondary;
+  line-height: 1.5;
+  margin: 0;
+}
+
+// ─── Arrow connector (desktop only) ────────────────────────────────────────
+
+.stepConnector {
+  display: none; // connectors live inside the grid but are purely visual on larger screens
+}
+
+// ─── Value proposition ──────────────────────────────────────────────────────
+
+.valueSection {
+  background: $surface;
+  padding: 56px 20px;
+}
+
+.valueInner {
+  @include container;
+  max-width: 800px;
+  text-align: center;
+}
+
+.valueTitle {
+  font-family: $font-heading;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: $text-primary;
+  margin: 0 0 20px;
+}
+
+.valueText {
+  font-size: 1rem;
+  color: $text-secondary;
+  line-height: 1.7;
+  margin: 0 0 16px;
+
+  &:last-of-type {
+    margin-bottom: 0;
+  }
+}
+
+// ─── CTA section ────────────────────────────────────────────────────────────
+
+.ctaSection {
+  @include container;
+  padding-top: 56px;
+  padding-bottom: 64px;
+  text-align: center;
+}
+
+.ctaTitle {
+  font-family: $font-heading;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: $text-primary;
+  margin: 0 0 12px;
+}
+
+.ctaSubtitle {
+  font-size: 1rem;
+  color: $text-secondary;
+  margin: 0 0 28px;
+}
