@@ -29,9 +29,7 @@ services:
   frontend:
     build: ./frontend
     ports:
-      - "3000:3000"
-    volumes:
-      - ./frontend/src:/app/src
+      - "3000:80"
 
   n8n:
     build: ./n8n
