@@ -1,0 +1,82 @@
+@use '../../styles/variables' as *;
+@use '../../styles/mixins' as *;
+@use '../../styles/animations';
+
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  width: 100%;
+}
+
+.topStrip {
+  background-color: $nav-blue;
+  height: $nav-height;
+  display: flex;
+  align-items: center;
+}
+
+.inner {
+  @include container;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.brand {
+  font-family: $font-heading;
+  font-weight: 700;
+  font-size: 1.1rem;
+  color: #ffffff;
+  letter-spacing: 0.02em;
+  user-select: none;
+}
+
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.navLink {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  font-family: $font-body;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.9);
+  text-decoration: none;
+  transition: color $transition-fast;
+
+  &::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    width: 0;
+    height: 2px;
+    background: #ffffff;
+    transition: left 0.3s ease, width 0.3s ease;
+  }
+
+  &:hover {
+    color: #ffffff;
+
+    &::after {
+      left: 0;
+      width: 100%;
+    }
+  }
+
+  &.active {
+    color: #ffffff;
+
+    &::after {
+      left: 0;
+      width: 100%;
+    }
+  }
+}
