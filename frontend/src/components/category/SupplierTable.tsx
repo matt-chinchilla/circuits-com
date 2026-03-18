@@ -19,7 +19,7 @@ const rowVariants = {
   visible: (i: number) => ({
     opacity: 1,
     x: 0,
-    transition: { delay: i * 0.06, duration: 0.35, ease: 'easeOut' as const },
+    transition: { delay: i * 0.03, duration: 0.35, ease: 'easeOut' as const },
   }),
 };
 
