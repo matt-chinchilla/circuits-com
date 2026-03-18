@@ -1,11 +1,15 @@
-import { useCategories } from '../../hooks/useCategories';
 import CategoryCard from './CategoryCard';
 import SkeletonLoader from '../shared/SkeletonLoader';
+import type { Category } from '../../types/category';
 import styles from './CategoryGrid.module.scss';
 
-export default function CategoryGrid() {
-  const { categories, loading, error } = useCategories();
+interface CategoryGridProps {
+  categories: Category[];
+  loading: boolean;
+  error: string | null;
+}
 
+export default function CategoryGrid({ categories, loading, error }: CategoryGridProps) {
   return (
     <section className={styles.section}>
       <div className={styles.container}>

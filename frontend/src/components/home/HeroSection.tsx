@@ -1,12 +1,14 @@
 import CircuitTraces from './CircuitTraces';
 import SearchBar from '../layout/SearchBar';
 import AnimatedLink from '../shared/AnimatedLink';
-import { useCategories } from '../../hooks/useCategories';
+import type { Category } from '../../types/category';
 import styles from './HeroSection.module.scss';
 
-export default function HeroSection() {
-  const { categories } = useCategories();
+interface HeroSectionProps {
+  categories: Category[];
+}
 
+export default function HeroSection({ categories }: HeroSectionProps) {
   return (
     <section className={styles.hero}>
       <CircuitTraces />
