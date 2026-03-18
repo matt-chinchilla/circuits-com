@@ -1,0 +1,102 @@
+{
+  "name": "Keyword Request",
+  "nodes": [
+    {
+      "id": "webhook-trigger",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "keyword-request",
+      "parameters": {
+        "path": "keyword-request",
+        "httpMethod": "POST",
+        "responseMode": "onReceived",
+        "responseData": "allEntries"
+      }
+    },
+    {
+      "id": "format-data",
+      "name": "Format Request Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [470, 300],
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "company_name",
+              "name": "company_name",
+              "value": "={{ $json.body.company_name }}",
+              "type": "string"
+            },
+            {
+              "id": "email",
+              "name": "email",
+              "value": "={{ $json.body.email }}",
+              "type": "string"
+            },
+            {
+              "id": "keyword",
+              "name": "keyword",
+              "value": "={{ $json.body.keyword }}",
+              "type": "string"
+            },
+            {
+              "id": "message",
+              "name": "message",
+              "value": "={{ $json.body.message }}",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "notify-john",
+      "name": "Notify John",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [690, 300],
+      "parameters": {
+        "fromEmail": "noreply@circuits.com",
+        "toEmail": "john@circuits.com",
+        "subject": "Keyword Sponsorship Request: {{ $json.keyword }}",
+        "emailType": "text",
+        "text": "New keyword sponsorship request:\n\nCompany: {{ $json.company_name }}\nEmail: {{ $json.email }}\nKeyword: {{ $json.keyword }}\n\nMessage:\n{{ $json.message }}"
+      },
+      "continueOnFail": true
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Format Request Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Request Data": {
+      "main": [
+        [
+          {
+            "node": "Notify John",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "id": "keyword-request-001"
+}

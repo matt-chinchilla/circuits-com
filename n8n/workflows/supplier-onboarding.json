@@ -1,0 +1,162 @@
+{
+  "name": "Supplier Onboarding",
+  "nodes": [
+    {
+      "id": "webhook-trigger",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "supplier-onboard",
+      "parameters": {
+        "path": "supplier-onboard",
+        "httpMethod": "POST",
+        "responseMode": "onReceived",
+        "responseData": "allEntries"
+      }
+    },
+    {
+      "id": "extract-fields",
+      "name": "Extract Form Fields",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [470, 300],
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "company_name",
+              "name": "company_name",
+              "value": "={{ $json.body.company_name }}",
+              "type": "string"
+            },
+            {
+              "id": "contact_person",
+              "name": "contact_person",
+              "value": "={{ $json.body.contact_person }}",
+              "type": "string"
+            },
+            {
+              "id": "email",
+              "name": "email",
+              "value": "={{ $json.body.email }}",
+              "type": "string"
+            },
+            {
+              "id": "phone",
+              "name": "phone",
+              "value": "={{ $json.body.phone }}",
+              "type": "string"
+            },
+            {
+              "id": "website",
+              "name": "website",
+              "value": "={{ $json.body.website }}",
+              "type": "string"
+            },
+            {
+              "id": "categories",
+              "name": "categories_of_interest",
+              "value": "={{ $json.body.categories_of_interest }}",
+              "type": "string"
+            },
+            {
+              "id": "message",
+              "name": "message",
+              "value": "={{ $json.body.message }}",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "log-supplier",
+      "name": "Log Supplier Creation",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [690, 200],
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:8000/api/suppliers",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "company_name",
+              "value": "={{ $json.company_name }}"
+            },
+            {
+              "name": "contact_person",
+              "value": "={{ $json.contact_person }}"
+            },
+            {
+              "name": "email",
+              "value": "={{ $json.email }}"
+            },
+            {
+              "name": "phone",
+              "value": "={{ $json.phone }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 5000,
+          "allowUnauthorizedCerts": true
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "id": "welcome-email",
+      "name": "Send Welcome Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [690, 400],
+      "parameters": {
+        "fromEmail": "noreply@circuits.com",
+        "toEmail": "={{ $json.email }}",
+        "subject": "Welcome to Circuits.com — Supplier Onboarding",
+        "emailType": "text",
+        "text": "Hi {{ $json.contact_person }},\n\nThank you for registering {{ $json.company_name }} on Circuits.com!\n\nWe've received your supplier application and will review it shortly. You'll hear from us within 1-2 business days.\n\nBest regards,\nThe Circuits.com Team"
+      },
+      "continueOnFail": true
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Extract Form Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Form Fields": {
+      "main": [
+        [
+          {
+            "node": "Log Supplier Creation",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send Welcome Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "id": "supplier-onboarding-001"
+}

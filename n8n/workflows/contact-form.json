@@ -1,0 +1,72 @@
+{
+  "name": "Contact Form",
+  "nodes": [
+    {
+      "id": "webhook-trigger",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "contact",
+      "parameters": {
+        "path": "contact",
+        "httpMethod": "POST",
+        "responseMode": "onReceived",
+        "responseData": "allEntries"
+      }
+    },
+    {
+      "id": "forward-to-john",
+      "name": "Forward to John",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [500, 200],
+      "parameters": {
+        "fromEmail": "noreply@circuits.com",
+        "toEmail": "john@circuits.com",
+        "subject": "New Contact Form: {{ $json.body.subject }}",
+        "emailType": "text",
+        "text": "New contact form submission:\n\nName: {{ $json.body.name }}\nEmail: {{ $json.body.email }}\nSubject: {{ $json.body.subject }}\n\nMessage:\n{{ $json.body.message }}"
+      },
+      "continueOnFail": true
+    },
+    {
+      "id": "auto-reply",
+      "name": "Auto-Reply to Sender",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [500, 400],
+      "parameters": {
+        "fromEmail": "noreply@circuits.com",
+        "toEmail": "={{ $json.body.email }}",
+        "subject": "We received your message — Circuits.com",
+        "emailType": "text",
+        "text": "Hi {{ $json.body.name }},\n\nThank you for reaching out to Circuits.com! We've received your message and will get back to you as soon as possible.\n\nFor reference, your message was:\n\nSubject: {{ $json.body.subject }}\n{{ $json.body.message }}\n\nBest regards,\nThe Circuits.com Team"
+      },
+      "continueOnFail": true
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Forward to John",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Auto-Reply to Sender",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "id": "contact-form-001"
+}
