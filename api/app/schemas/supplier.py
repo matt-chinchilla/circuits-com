@@ -5,9 +5,9 @@ from pydantic import BaseModel, ConfigDict
 class SupplierResponse(BaseModel):
     id: UUID
     name: str
-    phone: str
-    website: str
-    email: str
+    phone: str | None = None
+    website: str | None = None
+    email: str | None = None
     description: str | None = None
     logo_url: str | None = None
     is_featured: bool = False
