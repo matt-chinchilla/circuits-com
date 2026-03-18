@@ -2,6 +2,14 @@ import { motion } from 'framer-motion';
 import type { Supplier } from '../../types/supplier';
 import styles from './SupplierTable.module.scss';
 
+function displayHostname(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return url;
+  }
+}
+
 interface SupplierTableProps {
   suppliers: Supplier[];
 }
@@ -65,7 +73,7 @@ export default function SupplierTable({ suppliers }: SupplierTableProps) {
                     rel="noopener noreferrer"
                     className={styles.website}
                   >
-                    {new URL(supplier.website).hostname.replace(/^www\./, '')}
+                    {displayHostname(supplier.website)}
                   </a>
                 ) : (
                   <span className={styles.na}>--</span>
