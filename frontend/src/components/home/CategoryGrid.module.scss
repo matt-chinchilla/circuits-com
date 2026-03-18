@@ -1,0 +1,58 @@
+@use '../../styles/variables' as *;
+@use '../../styles/mixins' as *;
+
+.section {
+  background: $surface;
+  padding: 60px 20px;
+}
+
+.container {
+  @include container;
+}
+
+.heading {
+  font-family: $font-heading;
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: $text-primary;
+  margin: 0 0 32px;
+  text-align: center;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: $grid-gap;
+
+  @include responsive($bp-tablet) {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  @include responsive($bp-mobile) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.error {
+  text-align: center;
+  color: #dc2626;
+  font-family: $font-body;
+  font-size: 0.95rem;
+  margin: 20px 0;
+}
+
+// ─── Skeleton loading cards ──────────────────────────────────────────────────
+
+.skeletonCard {
+  @include card-base;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.skeletonPills {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}

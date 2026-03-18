@@ -1,4 +1,5 @@
 import { Routes, Route } from 'react-router-dom'
+import HomePage from './pages/HomePage'
 
 function Placeholder({ name }: { name: string }) {
   return <div style={{ padding: '2rem', textAlign: 'center' }}><h1>{name}</h1><p>Coming soon...</p></div>
@@ -7,7 +8,7 @@ function Placeholder({ name }: { name: string }) {
 function App() {
   return (
     <Routes>
-      <Route path="/" element={<Placeholder name="Home" />} />
+      <Route path="/" element={<HomePage />} />
       <Route path="/category/:slug" element={<Placeholder name="Category" />} />
       <Route path="/search" element={<Placeholder name="Search" />} />
       <Route path="/join" element={<Placeholder name="Join" />} />

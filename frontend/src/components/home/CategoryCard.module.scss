@@ -1,0 +1,48 @@
+@use '../../styles/variables' as *;
+@use '../../styles/mixins' as *;
+@use '../../styles/animations';
+
+.card {
+  @include card-base;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  animation: breathing-shadow 4s ease-in-out infinite;
+  transition: box-shadow $transition-normal;
+
+  &:hover {
+    box-shadow: $shadow-lg;
+  }
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.icon {
+  font-size: 1.5rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.name {
+  font-family: $font-heading;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: $text-primary;
+  margin: 0;
+}
+
+.subcategories {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.pill {
+  font-size: 0.8rem;
+  padding: 4px 12px;
+}

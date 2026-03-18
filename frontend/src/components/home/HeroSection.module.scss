@@ -1,0 +1,96 @@
+@use '../../styles/variables' as *;
+@use '../../styles/mixins' as *;
+@use '../../styles/animations';
+
+.hero {
+  position: relative;
+  background: $executive-blue;
+  width: 100%;
+  overflow: hidden;
+  padding: 80px 20px 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 420px;
+}
+
+// ─── Circuit SVG behind content ───────────────────────────────────────────────
+
+.circuitTraces {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.trace {
+  animation: draw-circuit 2.5s ease forwards;
+}
+
+.node {
+  opacity: 0;
+  animation: fade-in-up 0.4s ease forwards;
+}
+
+// ─── Content ──────────────────────────────────────────────────────────────────
+
+.content {
+  position: relative;
+  z-index: 1;
+  @include container;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+
+.heading {
+  font-family: $font-heading;
+  font-size: 2.25rem;
+  font-weight: 700;
+  color: #ffffff;
+  line-height: 1.25;
+  margin: 0;
+  max-width: 700px;
+  animation: fade-in-up 0.6s ease both;
+
+  @include responsive($bp-mobile) {
+    font-size: 1.5rem;
+  }
+}
+
+.subtitle {
+  font-family: $font-body;
+  font-size: 1.125rem;
+  color: rgba(255, 255, 255, 0.8);
+  margin: 0;
+  animation: fade-in-up 0.6s ease 0.15s both;
+
+  @include responsive($bp-mobile) {
+    font-size: 1rem;
+  }
+}
+
+// ─── Quick links ──────────────────────────────────────────────────────────────
+
+.quickLinks {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 8px;
+  animation: fade-in-up 0.6s ease 0.3s both;
+
+  // Override AnimatedLink colors for dark background
+  a {
+    color: rgba(255, 255, 255, 0.85);
+    border-color: rgba(255, 255, 255, 0.25);
+
+    &:hover {
+      color: #ffffff;
+      box-shadow: 0 0 12px rgba(255, 255, 255, 0.2);
+    }
+  }
+}

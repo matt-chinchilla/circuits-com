@@ -1,0 +1,36 @@
+@use '../../styles/variables' as *;
+
+.animatedLink {
+  position: relative;
+  display: inline-block;
+  padding: 6px 16px;
+  font-family: $font-body;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: $nav-blue;
+  text-decoration: none;
+  border-radius: 20px;
+  border: 1px solid rgba($nav-blue, 0.25);
+  overflow: hidden;
+  transition: color $transition-normal, box-shadow $transition-normal;
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: $nav-blue;
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform $transition-normal;
+    z-index: -1;
+  }
+
+  &:hover {
+    color: #ffffff;
+    box-shadow: 0 0 12px rgba($nav-blue, 0.3);
+
+    &::before {
+      transform: scaleX(1);
+    }
+  }
+}
