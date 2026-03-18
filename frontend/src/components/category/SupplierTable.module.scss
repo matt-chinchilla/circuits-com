@@ -1,0 +1,89 @@
+@use '../../styles/variables' as *;
+@use '../../styles/mixins' as *;
+@use '../../styles/animations';
+
+.tableWrap {
+  @include card-base;
+  overflow: hidden;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: $font-body;
+}
+
+.headerRow {
+  background: #d5d5d5;
+}
+
+.th {
+  text-align: left;
+  padding: 12px 16px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: $text-primary;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+.row {
+  border-bottom: 1px solid #eee;
+  transition: transform $transition-fast, box-shadow $transition-fast;
+  cursor: default;
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  &.featured {
+    border-left: 3px solid $nav-blue;
+    background: rgba($nav-blue, 0.03);
+  }
+}
+
+.td {
+  padding: 14px 16px;
+  font-size: 0.9rem;
+  color: $text-primary;
+  vertical-align: middle;
+}
+
+.name {
+  font-weight: 500;
+}
+
+.phone {
+  color: $text-secondary;
+  text-decoration: none;
+  transition: color $transition-fast;
+
+  &:hover {
+    color: $nav-blue;
+  }
+}
+
+.website {
+  color: $nav-blue;
+  text-decoration: none;
+  font-weight: 500;
+  transition: color $transition-fast;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.na {
+  color: $text-secondary;
+  font-style: italic;
+}
+
+.empty {
+  @include card-base;
+  padding: 48px 24px;
+  text-align: center;
+  color: $text-secondary;
+  font-size: 0.95rem;
+}

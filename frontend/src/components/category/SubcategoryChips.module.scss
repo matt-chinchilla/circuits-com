@@ -1,0 +1,60 @@
+@use '../../styles/variables' as *;
+@use '../../styles/mixins' as *;
+@use '../../styles/animations';
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 18px;
+  border-radius: 20px;
+  border: 1.5px solid rgba(255, 255, 255, 0.35);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.9);
+  font-family: $font-body;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background $transition-fast, color $transition-fast, border-color $transition-fast;
+  overflow: hidden;
+
+  &:hover {
+    border-color: rgba(255, 255, 255, 0.7);
+    color: #ffffff;
+  }
+
+  &.active {
+    background: rgba(255, 255, 255, 0.95);
+    color: $executive-blue;
+    border-color: transparent;
+    font-weight: 600;
+  }
+}
+
+.activeIndicator {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: rgba(255, 255, 255, 0.95);
+  z-index: 0;
+}
+
+.label {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.icon {
+  font-size: 0.9rem;
+  line-height: 1;
+}

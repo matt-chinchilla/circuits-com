@@ -1,0 +1,138 @@
+@use '../styles/variables' as *;
+@use '../styles/mixins' as *;
+@use '../styles/animations';
+
+// ─── Category header ────────────────────────────────────────────────────────
+
+.categoryHeader {
+  background: $executive-blue;
+  padding: 32px 20px 36px;
+}
+
+.headerInner {
+  @include container;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+// ─── Breadcrumb ──────────────────────────────────────────────────────────────
+
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  animation: fade-in-up 0.4s ease both;
+}
+
+.breadcrumbLink {
+  color: rgba(255, 255, 255, 0.7);
+  text-decoration: none;
+  transition: color $transition-fast;
+
+  &:hover {
+    color: #ffffff;
+  }
+}
+
+.breadcrumbSep {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.breadcrumbCurrent {
+  color: #ffffff;
+  font-weight: 500;
+}
+
+// ─── Title ───────────────────────────────────────────────────────────────────
+
+.title {
+  font-family: $font-heading;
+  font-size: 2rem;
+  font-weight: 700;
+  color: #ffffff;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+
+  @include responsive($bp-mobile) {
+    font-size: 1.5rem;
+  }
+}
+
+.titleIcon {
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+// ─── Skeleton chips ──────────────────────────────────────────────────────────
+
+.skeletonChips {
+  display: flex;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+// ─── Content layout ──────────────────────────────────────────────────────────
+
+.content {
+  @include container;
+  padding-top: 32px;
+  padding-bottom: 48px;
+}
+
+.contentInner {
+  display: flex;
+  gap: 28px;
+  align-items: flex-start;
+
+  @include responsive($bp-tablet) {
+    flex-direction: column;
+  }
+}
+
+.left {
+  flex: 0 0 65%;
+  min-width: 0;
+
+  @include responsive($bp-tablet) {
+    flex: 1 1 auto;
+    width: 100%;
+  }
+}
+
+.right {
+  flex: 0 0 calc(35% - 28px);
+  min-width: 0;
+  position: sticky;
+  top: calc($nav-height + 20px);
+
+  @include responsive($bp-tablet) {
+    flex: 1 1 auto;
+    width: 100%;
+    position: static;
+  }
+}
+
+// ─── Skeleton table ──────────────────────────────────────────────────────────
+
+.tableSkeleton {
+  @include card-base;
+  padding: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+// ─── Error ───────────────────────────────────────────────────────────────────
+
+.error {
+  @include card-base;
+  padding: 24px;
+  text-align: center;
+  color: #c0392b;
+  font-size: 0.95rem;
+}
