@@ -1,0 +1,45 @@
+@use 'variables' as *;
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: $font-body;
+  color: $text-primary;
+  background: $surface;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  color: $nav-blue;
+  text-decoration: none;
+  transition: color $transition-fast;
+  &:hover {
+    color: darken($nav-blue, 10%);
+  }
+}
+
+button {
+  cursor: pointer;
+  border: none;
+  font-family: $font-body;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: $font-heading;
+  line-height: 1.3;
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+}

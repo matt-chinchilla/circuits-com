@@ -1,0 +1,50 @@
+@use 'variables' as *;
+
+@mixin container {
+  max-width: $container-max;
+  margin: 0 auto;
+  padding: 0 20px;
+}
+
+@mixin card-base {
+  background: $card-white;
+  border-radius: 8px;
+  box-shadow: $shadow-sm;
+}
+
+@mixin hover-lift {
+  transition: transform $transition-normal, box-shadow $transition-normal;
+  &:hover {
+    transform: translateY(-4px);
+    box-shadow: $shadow-lg;
+  }
+}
+
+@mixin responsive($breakpoint) {
+  @media (max-width: $breakpoint) {
+    @content;
+  }
+}
+
+@mixin skeleton-shimmer {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+@mixin gold-shimmer-border {
+  position: relative;
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 2px;
+    background: linear-gradient(135deg, $sponsor-gold, $sponsor-gold-light, $sponsor-gold);
+    background-size: 200% 200%;
+    animation: gold-shimmer 3s ease infinite;
+    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+}
