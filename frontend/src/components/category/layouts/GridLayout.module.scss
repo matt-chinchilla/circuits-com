@@ -1,0 +1,53 @@
+@use '../../../styles/variables' as *;
+@use '../../../styles/mixins' as *;
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+
+  @include responsive($bp-tablet) {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  @include responsive($bp-mobile) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.tile {
+  @include card-base;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 24px 16px;
+  text-decoration: none;
+  color: $text-primary;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  transition: transform $transition-fast, box-shadow $transition-fast, border-color $transition-fast;
+
+  &:hover {
+    transform: translateY(-3px);
+    box-shadow: $shadow-md;
+    border-color: rgba($nav-blue, 0.2);
+  }
+}
+
+.iconCircle {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba($nav-blue, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+}
+
+.name {
+  font-family: $font-heading;
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-align: center;
+}

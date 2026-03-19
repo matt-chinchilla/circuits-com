@@ -7,14 +7,35 @@ interface SponsorBlockProps {
 }
 
 export default function SponsorBlock({ sponsor }: SponsorBlockProps) {
-  if (!sponsor) return null;
+  if (!sponsor) {
+    return (
+      <motion.div
+        className={styles.placeholder}
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, ease: 'easeOut' as const }}
+      >
+        <span className={styles.placeholderIcon} aria-hidden="true">&#9733;</span>
+        <h3 className={styles.placeholderTitle}>Advertise Here</h3>
+        <p className={styles.placeholderText}>
+          Reach buyers actively browsing this category. Get featured placement with your brand, logo, and direct contact info.
+        </p>
+        <a
+          href="mailto:john@circuits.com?subject=Category%20Sponsorship%20Inquiry"
+          className={styles.placeholderCta}
+        >
+          Become a Sponsor →
+        </a>
+      </motion.div>
+    );
+  }
 
   return (
     <motion.div
       className={styles.sponsor}
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5, ease: 'easeOut' }}
+      transition={{ duration: 0.5, ease: 'easeOut' as const }}
       whileHover={{ scale: 1.02, filter: 'brightness(1.05)' }}
     >
       <span className={styles.badge}>&#9733; CATEGORY SPONSOR</span>

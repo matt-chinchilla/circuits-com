@@ -1,0 +1,46 @@
+@use '../../../styles/variables' as *;
+@use '../../../styles/mixins' as *;
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+
+  @include responsive($bp-mobile) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.card {
+  @include card-base;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px;
+  text-decoration: none;
+  color: $text-primary;
+  border-left: 4px solid $nav-blue;
+  transition: transform $transition-fast, box-shadow $transition-fast;
+
+  &:hover {
+    transform: translateY(-3px);
+    box-shadow: $shadow-md;
+  }
+}
+
+.icon {
+  font-size: 1.8rem;
+  flex-shrink: 0;
+}
+
+.info {
+  flex: 1;
+  min-width: 0;
+}
+
+.name {
+  font-family: $font-heading;
+  font-size: 1rem;
+  font-weight: 600;
+  display: block;
+}

@@ -6,16 +6,32 @@ import Footer from '../components/layout/Footer';
 import SubcategoryChips from '../components/category/SubcategoryChips';
 import SupplierTable from '../components/category/SupplierTable';
 import SponsorBlock from '../components/category/SponsorBlock';
+import TopPartners from '../components/category/TopPartners';
+import LayoutSwitcher from '../components/category/LayoutSwitcher';
+import GridLayout from '../components/category/layouts/GridLayout';
+import ListLayout from '../components/category/layouts/ListLayout';
+import CompactLayout from '../components/category/layouts/CompactLayout';
+import CardsLayout from '../components/category/layouts/CardsLayout';
 import SkeletonLoader from '../components/shared/SkeletonLoader';
 import { api } from '../services/api';
 import type { CategoryDetail } from '../types/category';
 import styles from './CategoryPage.module.scss';
+
+type LayoutMode = 'grid' | 'list' | 'compact' | 'cards';
+
+const LAYOUT_COMPONENTS = {
+  grid: GridLayout,
+  list: ListLayout,
+  compact: CompactLayout,
+  cards: CardsLayout,
+} as const;
 
 export default function CategoryPage() {
   const { slug } = useParams<{ slug: string }>();
   const [category, setCategory] = useState<CategoryDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [layout, setLayout] = useState<LayoutMode>('grid');
 
   useEffect(() => {
     if (!slug) return;
@@ -28,12 +44,15 @@ export default function CategoryPage() {
       .finally(() => setLoading(false));
   }, [slug]);
 
+  const isParent = category && category.children.length > 0;
+  const LayoutComponent = LAYOUT_COMPONENTS[layout];
+
   return (
     <motion.div
       initial={{ opacity: 0, x: 20 }}
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
-      transition={{ duration: 0.3, ease: 'easeInOut' }}
+      transition={{ duration: 0.3, ease: 'easeInOut' as const }}
     >
       <Navbar />
 
@@ -60,19 +79,24 @@ export default function CategoryPage() {
             </>
           ) : category ? (
             <>
-              <motion.h1
-                className={styles.title}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.4, ease: 'easeOut' }}
-              >
-                {category.icon && <span className={styles.titleIcon}>{category.icon}</span>}
-                {category.name}
-              </motion.h1>
-              <SubcategoryChips
-                subcategories={category.children}
-                parentSlug={category.slug}
-              />
+              <div className={styles.titleRow}>
+                <motion.h1
+                  className={styles.title}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.4, ease: 'easeOut' as const }}
+                >
+                  {category.icon && <span className={styles.titleIcon}>{category.icon}</span>}
+                  {category.name}
+                </motion.h1>
+                {isParent && <LayoutSwitcher active={layout} onChange={setLayout} />}
+              </div>
+              {!isParent && (
+                <SubcategoryChips
+                  subcategories={category.children}
+                  parentSlug={category.slug}
+                />
+              )}
             </>
           ) : null}
         </div>
@@ -97,7 +121,22 @@ export default function CategoryPage() {
               <SkeletonLoader width="100%" height="280px" borderRadius="8px" />
             </div>
           </div>
+        ) : category && isParent ? (
+          /* Parent view: subcategory layouts + sidebar */
+          <div className={styles.contentInner}>
+            <div className={styles.left}>
+              <LayoutComponent
+                subcategories={category.children}
+                parentSlug={category.slug}
+              />
+            </div>
+            <div className={styles.right}>
+              <TopPartners suppliers={category.suppliers} />
+              <SponsorBlock sponsor={category.sponsor} />
+            </div>
+          </div>
         ) : category ? (
+          /* Leaf view: supplier table + sponsor */
           <div className={styles.contentInner}>
             <div className={styles.left}>
               <SupplierTable suppliers={category.suppliers} />

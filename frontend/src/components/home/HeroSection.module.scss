@@ -25,12 +25,11 @@
 }
 
 .trace {
-  animation: draw-circuit 2.5s ease forwards;
+  animation: draw-circuit 6s ease-in-out infinite alternate;
 }
 
 .node {
-  opacity: 0;
-  animation: fade-in-up 0.4s ease forwards;
+  animation: node-glow 4s ease-in-out infinite;
 }
 
 // ─── Content ──────────────────────────────────────────────────────────────────

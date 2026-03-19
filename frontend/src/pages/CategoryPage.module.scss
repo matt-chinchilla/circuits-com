@@ -67,6 +67,18 @@
   line-height: 1;
 }
 
+.titleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+
+  @include responsive($bp-mobile) {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
 // ─── Skeleton chips ──────────────────────────────────────────────────────────
 
 .skeletonChips {
@@ -94,7 +106,7 @@
 }
 
 .left {
-  flex: 0 0 65%;
+  flex: 1 1 0;
   min-width: 0;
 
   @include responsive($bp-tablet) {

@@ -1,3 +1,4 @@
+@use 'sass:color';
 @use '../../styles/variables' as *;
 @use '../../styles/mixins' as *;
 @use '../../styles/animations';
@@ -11,6 +12,53 @@
   &.hero {
     max-width: 720px;
     margin: 0 auto;
+  }
+
+  &.nav {
+    max-width: none;
+    width: 100%;
+
+    .searchForm {
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+      border-radius: 5px;
+      overflow: hidden;
+    }
+
+    .searchInput {
+      padding: 7px 14px;
+      font-size: 0.85rem;
+      background: #ffffff;
+      color: $text-primary;
+      border: none;
+      border-radius: 5px 0 0 5px;
+
+      &::placeholder {
+        color: $text-secondary;
+        font-weight: 400;
+      }
+
+      &:focus {
+        animation: none;
+        box-shadow: none;
+      }
+    }
+
+    .searchButton {
+      padding: 7px 16px;
+      font-size: 0.75rem;
+      letter-spacing: 0.05em;
+      background-color: $executive-blue;
+      border-radius: 0 5px 5px 0;
+
+      &:hover {
+        background-color: color.adjust($executive-blue, $lightness: -6%);
+        transform: none;
+      }
+
+      &:active {
+        transform: none;
+      }
+    }
   }
 
   &.compact {
@@ -198,6 +246,12 @@
 .dropdownFooter {
   border-top: 1px solid rgba(0, 0, 0, 0.06);
   padding: 8px 12px;
+}
+
+@include responsive($bp-mobile) {
+  .searchWrapper.nav {
+    display: none;
+  }
 }
 
 .seeAllBtn {

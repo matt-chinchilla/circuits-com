@@ -55,6 +55,9 @@ export default function SupplierTable({ suppliers }: SupplierTableProps) {
             >
               <td className={styles.td}>
                 <span className={styles.name}>{supplier.name}</span>
+                {supplier.is_featured && (
+                  <span className={styles.preferredBadge}>★ Preferred Partner</span>
+                )}
               </td>
               <td className={styles.td}>
                 {supplier.phone ? (

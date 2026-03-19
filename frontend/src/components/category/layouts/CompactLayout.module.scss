@@ -1,0 +1,39 @@
+@use '../../../styles/variables' as *;
+@use '../../../styles/mixins' as *;
+
+.compact {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  background: $card-white;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 20px;
+  text-decoration: none;
+  color: $text-primary;
+  font-size: 0.82rem;
+  font-weight: 500;
+  transition: border-color $transition-fast, background-color $transition-fast, transform $transition-fast;
+  box-shadow: $shadow-sm;
+
+  &:hover {
+    border-color: rgba($nav-blue, 0.3);
+    background-color: rgba($nav-blue, 0.04);
+    transform: translateY(-1px);
+  }
+}
+
+.icon {
+  font-size: 0.9rem;
+  line-height: 1;
+}
+
+.label {
+  white-space: nowrap;
+}

@@ -80,3 +80,57 @@
     text-decoration: underline;
   }
 }
+
+.placeholder {
+  border: 2px dashed $sponsor-gold;
+  border-radius: 8px;
+  padding: 28px 24px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  background: rgba($sponsor-gold, 0.04);
+}
+
+.placeholderIcon {
+  font-size: 2rem;
+  color: $sponsor-gold;
+  opacity: 0.6;
+}
+
+.placeholderTitle {
+  font-family: $font-heading;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: $sponsor-gold;
+  margin: 0;
+}
+
+.placeholderText {
+  font-size: 0.85rem;
+  color: $text-secondary;
+  line-height: 1.5;
+  margin: 0;
+  max-width: 280px;
+}
+
+.placeholderCta {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 8px 20px;
+  font-family: $font-heading;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #ffffff;
+  background: $sponsor-gold;
+  border-radius: 6px;
+  text-decoration: none;
+  transition: background-color $transition-fast, transform $transition-fast;
+
+  &:hover {
+    background-color: $sponsor-gold-light;
+    transform: scale(1.03);
+  }
+}

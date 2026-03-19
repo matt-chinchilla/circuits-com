@@ -1,0 +1,57 @@
+@use '../../../styles/variables' as *;
+@use '../../../styles/mixins' as *;
+
+.list {
+  @include card-base;
+  overflow: hidden;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 20px;
+  text-decoration: none;
+  color: $text-primary;
+  transition: background-color $transition-fast;
+
+  &:hover {
+    background-color: rgba($nav-blue, 0.05);
+  }
+
+  &.alt {
+    background-color: rgba(0, 0, 0, 0.02);
+
+    &:hover {
+      background-color: rgba($nav-blue, 0.05);
+    }
+  }
+
+  & + & {
+    border-top: 1px solid rgba(0, 0, 0, 0.06);
+  }
+}
+
+.icon {
+  font-size: 1.2rem;
+  flex-shrink: 0;
+  width: 32px;
+  text-align: center;
+}
+
+.name {
+  flex: 1;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.chevron {
+  flex-shrink: 0;
+  font-size: 1.4rem;
+  color: $text-secondary;
+  transition: transform $transition-fast;
+
+  .row:hover & {
+    transform: translateX(3px);
+  }
+}
