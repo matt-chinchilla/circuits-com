@@ -1,0 +1,66 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "filepath=$(echo \"$TOOL_INPUT\" | jq -r '.file_path // empty'); if [[ \"$filepath\" == *.env* || \"$filepath\" == *package-lock.json ]]; then echo '{\"decision\":\"block\",\"reason\":\"Protected file — do not edit .env or lock files directly\"}'; fi",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "filepath=$(echo \"$TOOL_INPUT\" | jq -r '.file_path // empty'); if [[ \"$filepath\" == *.ts || \"$filepath\" == *.tsx || \"$filepath\" == *.scss ]]; then cd frontend && npx tsc --noEmit 2>&1 | tail -20; fi",
+            "timeout": 30
+          },
+          {
+            "type": "command",
+            "command": "filepath=$(echo \"$TOOL_INPUT\" | jq -r '.file_path // empty'); if [[ \"$filepath\" == */api/*.py || \"$filepath\" == */tests/*.py ]]; then cd api && python -m pytest tests/ -q 2>&1 | tail -15; fi",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "matcher": "permission_prompt",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "notify-send -u normal 'Claude Code' 'Permission requested — check terminal'"
+          }
+        ]
+      },
+      {
+        "matcher": "idle_prompt",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "notify-send -u low 'Claude Code' 'Waiting for your input'"
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "Bash(cd frontend && npx tsc:*)",
+      "Bash(cd frontend && npm run:*)",
+      "Bash(cd api && python -m pytest:*)",
+      "Bash(cd api && alembic:*)",
+      "Bash(cd api && python -m app.db.seed:*)",
+      "Bash(docker compose:*)",
+      "Read",
+      "Glob",
+      "Grep"
+    ]
+  }
+}

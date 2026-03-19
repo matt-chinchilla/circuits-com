@@ -8,3 +8,5 @@ build/
 .superpowers/
 postgres-data/
 n8n-data/
+.claude.local.md
+.claude/settings.local.json

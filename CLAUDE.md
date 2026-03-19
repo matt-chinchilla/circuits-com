@@ -2,6 +2,12 @@
 
 Electronic components directory prototype — Vite React SPA + FastAPI + PostgreSQL + n8n, all in Docker.
 
+## Prerequisites
+
+- Docker & Docker Compose
+- Python >= 3.12 (for local API dev)
+- Node.js (for local frontend dev)
+
 ## Commands
 
 ### Development
@@ -14,6 +20,7 @@ docker compose down -v             # Stop and remove volumes
 ```bash
 cd api && pip install -e ".[dev]"  # Install deps locally
 pytest tests/ -v                   # Run all 9 tests (SQLite in-memory)
+pytest tests/test_categories.py -v # Run single test file
 alembic upgrade head               # Run migrations
 python -m app.db.seed              # Seed database (idempotent)
 ```
@@ -25,6 +32,8 @@ npm run dev                        # Vite dev server on :3000
 npm run build                      # Production build
 npx tsc --noEmit                   # Type check
 ```
+
+> No ESLint or Prettier configured. TypeScript strict mode (`noUnusedLocals`, `noUnusedParameters`) is the only static analysis. Frontend has no tests — only the API has a pytest suite.
 
 ## Architecture
 
@@ -88,6 +97,8 @@ All API routes prefixed with `/api/`. Router prefix set in each route file.
 
 ## Gotchas
 
+- TypeScript strict mode: `noUnusedLocals` + `noUnusedParameters` — remove unused vars, don't prefix with `_`
+- Vite dev server proxies `/api` → `http://api:8000` — only works inside Docker network; for local dev without Docker, change proxy target
 - Framer Motion v12 requires `as const` on ease values (e.g., `'easeInOut' as const`) or tsc errors with string vs Easing type
 - Supplier `phone`/`website`/`email` are nullable (`str | None`) — templates must handle null
 - SQLite tests don't enforce CHECK constraints — the XOR sponsor constraint only works in PostgreSQL
