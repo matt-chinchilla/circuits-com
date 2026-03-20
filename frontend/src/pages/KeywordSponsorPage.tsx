@@ -6,6 +6,7 @@ import Footer from '../components/layout/Footer';
 import GlowButton from '../components/shared/GlowButton';
 import { api } from '../services/api';
 import type { Sponsor } from '../types/sponsor';
+import CircuitTraces from '../components/shared/CircuitTraces';
 import styles from './KeywordSponsorPage.module.scss';
 
 export default function KeywordSponsorPage() {
@@ -192,6 +193,7 @@ export default function KeywordSponsorPage() {
 
       {/* Gold hero */}
       <section className={styles.hero}>
+        <CircuitTraces />
         <div className={styles.heroInner}>
           <motion.span
             className={styles.badge}

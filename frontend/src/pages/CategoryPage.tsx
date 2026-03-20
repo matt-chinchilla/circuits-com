@@ -15,6 +15,7 @@ import CardsLayout from '../components/category/layouts/CardsLayout';
 import SkeletonLoader from '../components/shared/SkeletonLoader';
 import { api } from '../services/api';
 import type { CategoryDetail } from '../types/category';
+import CircuitTraces from '../components/shared/CircuitTraces';
 import styles from './CategoryPage.module.scss';
 
 type LayoutMode = 'grid' | 'list' | 'compact' | 'cards';
@@ -57,6 +58,7 @@ export default function CategoryPage() {
       <Navbar />
 
       <div className={styles.categoryHeader}>
+        <CircuitTraces />
         <div className={styles.headerInner}>
           <nav className={styles.breadcrumb} aria-label="Breadcrumb">
             <Link to="/" className={styles.breadcrumbLink}>Home</Link>

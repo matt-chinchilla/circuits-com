@@ -1,4 +1,4 @@
-import CircuitTraces from './CircuitTraces';
+import CircuitTraces from '../shared/CircuitTraces';
 import SearchBar from '../layout/SearchBar';
 import AnimatedLink from '../shared/AnimatedLink';
 import type { Category } from '../../types/category';

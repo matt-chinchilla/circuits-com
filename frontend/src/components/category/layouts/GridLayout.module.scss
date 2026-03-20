@@ -20,8 +20,10 @@
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 12px;
   padding: 24px 16px;
+  height: 100%;
   text-decoration: none;
   color: $text-primary;
   border: 1px solid rgba(0, 0, 0, 0.06);

@@ -5,6 +5,7 @@ import Navbar from '../components/layout/Navbar';
 import Footer from '../components/layout/Footer';
 import GlowButton from '../components/shared/GlowButton';
 import { api } from '../services/api';
+import CircuitTraces from '../components/shared/CircuitTraces';
 import styles from './ContactPage.module.scss';
 
 const CONTACT_INFO = {
@@ -59,6 +60,7 @@ export default function ContactPage() {
       <Navbar />
 
       <div className={styles.pageHeader}>
+        <CircuitTraces />
         <div className={styles.headerInner}>
           <motion.h1
             className={styles.title}

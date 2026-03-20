@@ -7,6 +7,7 @@ import SearchBar from '../components/layout/SearchBar';
 import SkeletonLoader from '../components/shared/SkeletonLoader';
 import { api } from '../services/api';
 import type { SearchResults } from '../services/api';
+import CircuitTraces from '../components/shared/CircuitTraces';
 import styles from './SearchPage.module.scss';
 
 const cardVariants = {
@@ -64,6 +65,7 @@ export default function SearchPage() {
       <Navbar />
 
       <div className={styles.searchHeader}>
+        <CircuitTraces />
         <div className={styles.headerInner}>
           <h1 className={styles.title}>
             {q ? (
