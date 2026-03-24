@@ -5,6 +5,37 @@ const T = (d: number) => ({ animationDelay: `${d}s` });
 const S = (o: number, w = 1) => ({ stroke: `rgba(201,168,76,${o})`, strokeWidth: w });
 const DASH = { strokeDasharray: 1200, strokeDashoffset: 1200 };
 
+// Electrons: [path, duration(s), delay(s), radius]
+// Each follows a major trace route across the board
+const ELECTRONS: [string, number, number, number][] = [
+  // Bundle 1 — IC1 left → left edge
+  ['M411 140 H380 L360 120 H200 L170 90 H0', 3, 0.8, 2],
+  ['M411 180 H398 L378 160 H240 L210 130 H0', 3.5, 2, 1.5],
+  // Bundle 2 — IC1 bottom → bottom edge
+  ['M450 229 V270 L430 290 V400', 2.5, 1.5, 1.8],
+  // Bundle 3 — IC1 right → IC2 left (chip-to-chip)
+  ['M519 145 H580 L600 125 H750 L770 110 H913', 4, 1, 2],
+  ['M519 175 H595 L615 155 H765 L785 140 H913', 4.5, 3, 1.5],
+  // Bundle 4 — IC1 top → top edge
+  ['M460 121 V90 L480 70 V20 L500 0', 2.5, 0.5, 1.8],
+  // Bundle 5 — IC2 right → right edge
+  ['M977 110 H1020 L1040 90 H1100 L1120 70 H1200', 3, 2.5, 2],
+  // Long horizontal — full-span edge-to-edge
+  ['M0 380 H200 L220 360 H400 L420 380 H620 L650 350 H800 L830 320 H950 L970 340 H1200', 6, 0, 2.2],
+  // Vertical long-run
+  ['M650 0 V60 L670 80 V160 L690 180 V400', 4, 1.2, 1.8],
+  // Cross-board horizontal
+  ['M550 300 H700 L720 280 H850 L870 260 H1000 L1020 240 H1200', 4.5, 2, 1.5],
+  // IC3 bottom → bottom edge
+  ['M150 327 V350 L170 370 H300 L320 390 V400', 3, 3.5, 1.8],
+  // Power rail — top edge (full width)
+  ['M0 10 H1200', 5, 0.3, 2],
+  // Power rail — bottom edge (full width, reverse direction for variety)
+  ['M1200 390 H0', 5.5, 1.8, 1.8],
+  // USB trace → IC1
+  ['M511 390 V380 L490 360 V340 L470 320 V275', 3, 2.8, 1.5],
+];
+
 export default function CircuitTraces() {
   return (
     <svg
@@ -15,56 +46,6 @@ export default function CircuitTraces() {
       aria-hidden="true"
       preserveAspectRatio="xMidYMid slice"
     >
-      <defs>
-        {/* Diagonal light sweep — simulates overhead light moving across metal */}
-        <linearGradient id="lightSweep" gradientUnits="userSpaceOnUse"
-          x1="0" y1="0" x2="500" y2="500">
-          <stop offset="0%" stopColor="#fff8dc" stopOpacity="0" />
-          <stop offset="40%" stopColor="#fff8dc" stopOpacity="0" />
-          <stop offset="50%" stopColor="#fff8dc" stopOpacity="0.22" />
-          <stop offset="60%" stopColor="#fff8dc" stopOpacity="0" />
-          <stop offset="100%" stopColor="#fff8dc" stopOpacity="0" />
-          <animateTransform
-            attributeName="gradientTransform"
-            type="translate"
-            values="-800 -800; 1800 800"
-            dur="5s"
-            repeatCount="indefinite"
-          />
-        </linearGradient>
-
-        {/* Secondary slower sweep at opposite angle for depth */}
-        <linearGradient id="lightSweep2" gradientUnits="userSpaceOnUse"
-          x1="500" y1="0" x2="0" y2="400">
-          <stop offset="0%" stopColor="#ffd700" stopOpacity="0" />
-          <stop offset="44%" stopColor="#ffd700" stopOpacity="0" />
-          <stop offset="50%" stopColor="#ffd700" stopOpacity="0.12" />
-          <stop offset="56%" stopColor="#ffd700" stopOpacity="0" />
-          <stop offset="100%" stopColor="#ffd700" stopOpacity="0" />
-          <animateTransform
-            attributeName="gradientTransform"
-            type="translate"
-            values="1800 -400; -800 800"
-            dur="7s"
-            repeatCount="indefinite"
-          />
-        </linearGradient>
-
-        {/* Specular lighting filter — real metallic reflection on pads */}
-        <filter id="metalSpec" x="-50%" y="-50%" width="200%" height="200%">
-          <feGaussianBlur in="SourceAlpha" stdDeviation="1.5" result="blur" />
-          <feSpecularLighting in="blur" surfaceScale="4" specularConstant="0.7"
-            specularExponent="20" lightingColor="#ffd700" result="spec">
-            <fePointLight x="600" y="200" z="250">
-              <animate attributeName="x" values="-300;1500;-300" dur="6s" repeatCount="indefinite" />
-            </fePointLight>
-          </feSpecularLighting>
-          <feComposite in="spec" in2="SourceAlpha" operator="in" result="specClip" />
-          <feComposite in="SourceGraphic" in2="specClip" operator="arithmetic"
-            k1="0" k2="1" k3="0.5" k4="0" />
-        </filter>
-      </defs>
-
       {/* ═══════════════════════════════════════════════════════════════════════
           QFP IC Package 1 — large, center-left (body at 420,130 → 510,220)
           ═══════════════════════════════════════════════════════════════════════ */}
@@ -453,9 +434,20 @@ export default function CircuitTraces() {
       <path d="M1096 185 V200 L1080 220 V250" {...S(0.05, 0.6)} {...DASH} className={styles.trace} style={T(3.6)} />
       <path d="M1114 185 V210 L1135 230 V400" {...S(0.05, 0.6)} {...DASH} className={styles.trace} style={T(3.7)} />
 
-      {/* Light sweep overlays — simulate moving light source reflecting off metal */}
-      <rect x="0" y="0" width="1200" height="400" fill="url(#lightSweep)" className={styles.lightSweep} />
-      <rect x="0" y="0" width="1200" height="400" fill="url(#lightSweep2)" className={styles.lightSweep} />
+      {/* ═══════════════════════════════════════════════════════════════════════
+          Electrons — small bright dots that follow trace paths
+          ═══════════════════════════════════════════════════════════════════════ */}
+      {ELECTRONS.map(([path, dur, delay, r], i) => (
+        <circle key={`e${i}`} r={r} fill="rgba(255, 220, 80, 0.9)" className={styles.electron}>
+          <animateMotion
+            path={path}
+            dur={`${dur}s`}
+            begin={`${delay}s`}
+            repeatCount="indefinite"
+            rotate="auto"
+          />
+        </circle>
+      ))}
     </svg>
   );
 }
