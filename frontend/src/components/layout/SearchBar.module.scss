@@ -128,14 +128,14 @@
   font-weight: 700;
   letter-spacing: 0.06em;
   color: #ffffff;
-  background-color: #3b82f6;
+  background-color: $nav-blue;
   border: none;
   border-radius: 0 6px 6px 0;
   cursor: pointer;
   transition: background-color $transition-fast, transform $transition-fast;
 
   &:hover {
-    background-color: #2563eb;
+    background-color: color.adjust($nav-blue, $lightness: -8%);
     transform: scale(1.03);
   }
 

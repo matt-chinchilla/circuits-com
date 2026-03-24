@@ -15,6 +15,56 @@ export default function CircuitTraces() {
       aria-hidden="true"
       preserveAspectRatio="xMidYMid slice"
     >
+      <defs>
+        {/* Diagonal light sweep — simulates overhead light moving across metal */}
+        <linearGradient id="lightSweep" gradientUnits="userSpaceOnUse"
+          x1="0" y1="0" x2="500" y2="500">
+          <stop offset="0%" stopColor="#fff8dc" stopOpacity="0" />
+          <stop offset="40%" stopColor="#fff8dc" stopOpacity="0" />
+          <stop offset="50%" stopColor="#fff8dc" stopOpacity="0.22" />
+          <stop offset="60%" stopColor="#fff8dc" stopOpacity="0" />
+          <stop offset="100%" stopColor="#fff8dc" stopOpacity="0" />
+          <animateTransform
+            attributeName="gradientTransform"
+            type="translate"
+            values="-800 -800; 1800 800"
+            dur="5s"
+            repeatCount="indefinite"
+          />
+        </linearGradient>
+
+        {/* Secondary slower sweep at opposite angle for depth */}
+        <linearGradient id="lightSweep2" gradientUnits="userSpaceOnUse"
+          x1="500" y1="0" x2="0" y2="400">
+          <stop offset="0%" stopColor="#ffd700" stopOpacity="0" />
+          <stop offset="44%" stopColor="#ffd700" stopOpacity="0" />
+          <stop offset="50%" stopColor="#ffd700" stopOpacity="0.12" />
+          <stop offset="56%" stopColor="#ffd700" stopOpacity="0" />
+          <stop offset="100%" stopColor="#ffd700" stopOpacity="0" />
+          <animateTransform
+            attributeName="gradientTransform"
+            type="translate"
+            values="1800 -400; -800 800"
+            dur="7s"
+            repeatCount="indefinite"
+          />
+        </linearGradient>
+
+        {/* Specular lighting filter — real metallic reflection on pads */}
+        <filter id="metalSpec" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur in="SourceAlpha" stdDeviation="1.5" result="blur" />
+          <feSpecularLighting in="blur" surfaceScale="4" specularConstant="0.7"
+            specularExponent="20" lightingColor="#ffd700" result="spec">
+            <fePointLight x="600" y="200" z="250">
+              <animate attributeName="x" values="-300;1500;-300" dur="6s" repeatCount="indefinite" />
+            </fePointLight>
+          </feSpecularLighting>
+          <feComposite in="spec" in2="SourceAlpha" operator="in" result="specClip" />
+          <feComposite in="SourceGraphic" in2="specClip" operator="arithmetic"
+            k1="0" k2="1" k3="0.5" k4="0" />
+        </filter>
+      </defs>
+
       {/* ═══════════════════════════════════════════════════════════════════════
           QFP IC Package 1 — large, center-left (body at 420,130 → 510,220)
           ═══════════════════════════════════════════════════════════════════════ */}
@@ -402,6 +452,10 @@ export default function CircuitTraces() {
       <path d="M1105 154 V120 L1080 100 V0" {...S(0.06, 0.7)} {...DASH} className={styles.trace} style={T(3.6)} />
       <path d="M1096 185 V200 L1080 220 V250" {...S(0.05, 0.6)} {...DASH} className={styles.trace} style={T(3.6)} />
       <path d="M1114 185 V210 L1135 230 V400" {...S(0.05, 0.6)} {...DASH} className={styles.trace} style={T(3.7)} />
+
+      {/* Light sweep overlays — simulate moving light source reflecting off metal */}
+      <rect x="0" y="0" width="1200" height="400" fill="url(#lightSweep)" className={styles.lightSweep} />
+      <rect x="0" y="0" width="1200" height="400" fill="url(#lightSweep2)" className={styles.lightSweep} />
     </svg>
   );
 }

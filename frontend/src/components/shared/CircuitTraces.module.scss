@@ -9,11 +9,21 @@
 }
 
 .trace {
-  animation: draw-circuit 6s ease-in-out infinite alternate;
-  filter: drop-shadow(0 0 1px rgba(201, 168, 76, 0.3));
+  animation: draw-circuit 6s ease-in-out infinite alternate,
+             trace-shimmer 4s ease-in-out infinite;
+  filter:
+    drop-shadow(0 0 1px rgba(255, 215, 0, 0.4))
+    drop-shadow(0 0 3px rgba(201, 168, 76, 0.2))
+    drop-shadow(0 0 6px rgba(218, 165, 32, 0.1));
 }
 
 .node {
   animation: node-glow 4s ease-in-out infinite;
-  filter: drop-shadow(0 0 2px rgba(218, 165, 32, 0.5));
+  filter: url(#metalSpec);
+}
+
+.lightSweep {
+  mix-blend-mode: screen;
+  pointer-events: none;
+  opacity: 1;
 }

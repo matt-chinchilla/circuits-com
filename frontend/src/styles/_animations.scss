@@ -44,3 +44,18 @@
   0%, 100% { opacity: 0.15; filter: drop-shadow(0 0 1px rgba(201, 168, 76, 0.2)); }
   50% { opacity: 0.5; filter: drop-shadow(0 0 4px rgba(218, 165, 32, 0.6)); }
 }
+
+@keyframes trace-shimmer {
+  0%, 100% {
+    filter:
+      drop-shadow(0 0 1px rgba(255, 215, 0, 0.4))
+      drop-shadow(0 0 3px rgba(201, 168, 76, 0.2))
+      drop-shadow(0 0 6px rgba(218, 165, 32, 0.1));
+  }
+  50% {
+    filter:
+      drop-shadow(0 0 2px rgba(255, 215, 0, 0.6))
+      drop-shadow(0 0 5px rgba(201, 168, 76, 0.35))
+      drop-shadow(0 0 10px rgba(218, 165, 32, 0.15));
+  }
+}
