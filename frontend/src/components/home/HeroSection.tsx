@@ -1,14 +1,9 @@
 import CircuitTraces from '../shared/CircuitTraces';
 import SearchBar from '../layout/SearchBar';
 import AnimatedLink from '../shared/AnimatedLink';
-import type { Category } from '../../types/category';
 import styles from './HeroSection.module.scss';
 
-interface HeroSectionProps {
-  categories: Category[];
-}
-
-export default function HeroSection({ categories }: HeroSectionProps) {
+export default function HeroSection() {
   return (
     <section className={styles.hero}>
       <CircuitTraces />
@@ -20,15 +15,10 @@ export default function HeroSection({ categories }: HeroSectionProps) {
           Find the Best Supplier in every category
         </p>
         <SearchBar />
-        {categories.length > 0 && (
-          <div className={styles.quickLinks}>
-            {categories.slice(0, 3).map((cat) => (
-              <AnimatedLink key={cat.id} to={`/category/${cat.slug}`}>
-                {cat.name}
-              </AnimatedLink>
-            ))}
-          </div>
-        )}
+        <div className={styles.quickLinks}>
+          <AnimatedLink to="/search">Find Parts</AnimatedLink>
+          <AnimatedLink to="/join">Top Distributors</AnimatedLink>
+        </div>
       </div>
     </section>
   );

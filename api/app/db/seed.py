@@ -139,249 +139,129 @@ def get_or_create_sponsor(
 
 def seed(db: Session) -> None:
     # ------------------------------------------------------------------
-    # 1. Top-level categories
+    # 1. Categories and subcategories (15 top-level, 5 subs each)
     # ------------------------------------------------------------------
-    top_level: list[tuple[str, str]] = [
-        ("Integrated Circuits (ICs)", "⚡"),
-        ("Electromechanical Components", "⚙️"),
-        ("Optoelectronic Devices", "💡"),
-        ("Circuit Protection Devices", "🛡️"),
-        ("Power Supply Products", "🔋"),
-        ("RF & Wireless", "📡"),
-        ("Sensors", "🌡️"),
-        ("Passive Components", "📐"),
-        ("Discrete Semiconductors", "🔌"),
-        ("Memory", "💾"),
-        ("Test & Measurement", "🔬"),
-        ("Cables & Wire", "🔗"),
-        ("Development Tools", "🛠️"),
-        ("Industrial Automation", "🏭"),
+    # Format: (name, icon, [(sub_name, sub_icon), ...])
+    category_data: list[tuple[str, str, list[tuple[str, str]]]] = [
+        ("Power Management ICs (PMICs)", "⚡", [
+            ("Voltage Regulators (LDOs)", "🔋"),
+            ("DC-DC Converters (Buck/Boost)", "🔋"),
+            ("Battery Management ICs (BMS)", "🔋"),
+            ("Power Supervisors / Reset ICs", "⚡"),
+            ("LED Drivers", "💡"),
+        ]),
+        ("Microcontrollers & Processors", "🖥️", [
+            ("8-bit Microcontrollers", "💻"),
+            ("32-bit Microcontrollers (ARM Cortex-M)", "💻"),
+            ("Application Processors", "🖥️"),
+            ("Digital Signal Processors (DSPs)", "📊"),
+            ("System-on-Chip (SoC)", "🔲"),
+        ]),
+        ("Analog ICs", "〰️", [
+            ("Operational Amplifiers (Op-Amps)", "📈"),
+            ("Comparators", "⚖️"),
+            ("Analog Multiplexers / Switches", "🔀"),
+            ("Voltage References", "🎯"),
+            ("Instrumentation Amplifiers", "📐"),
+        ]),
+        ("Interface ICs", "🔌", [
+            ("UART / USART Transceivers", "🔌"),
+            ("USB Interface ICs", "🔌"),
+            ("I2C / SPI Interface ICs", "🔌"),
+            ("CAN / LIN Transceivers", "🚗"),
+            ("Level Shifters", "↕️"),
+        ]),
+        ("Memory ICs", "💾", [
+            ("EEPROM", "💾"),
+            ("NOR Flash", "💾"),
+            ("NAND Flash", "💾"),
+            ("SRAM", "💾"),
+            ("DRAM", "💾"),
+        ]),
+        ("Logic ICs", "🧮", [
+            ("Logic Gates (AND, OR, NOT, etc.)", "🔢"),
+            ("Flip-Flops / Latches", "🔲"),
+            ("Counters", "🔢"),
+            ("Shift Registers", "➡️"),
+            ("Programmable Logic (CPLDs / FPGAs)", "🔧"),
+        ]),
+        ("RF & Wireless ICs", "📡", [
+            ("Bluetooth ICs", "📶"),
+            ("Wi-Fi ICs", "📶"),
+            ("RF Transceivers", "📻"),
+            ("GPS / GNSS Receivers", "🛰️"),
+            ("NFC / RFID ICs", "📱"),
+        ]),
+        ("Sensor ICs", "🌡️", [
+            ("Temperature Sensors", "🌡️"),
+            ("Accelerometers", "📐"),
+            ("Gyroscopes", "🔄"),
+            ("Pressure Sensors", "🔵"),
+            ("Proximity / Light Sensors", "💡"),
+        ]),
+        ("Audio & Video ICs", "🔊", [
+            ("Audio Amplifiers", "🔊"),
+            ("CODECs (Audio/Video)", "🎵"),
+            ("Video Processors", "🎬"),
+            ("HDMI / Display Interface ICs", "🖥️"),
+            ("Microphone Preamplifiers", "🎤"),
+        ]),
+        ("Clock & Timing ICs", "⏱️", [
+            ("Oscillators", "〰️"),
+            ("Real-Time Clocks (RTC)", "⏰"),
+            ("Clock Generators", "⏱️"),
+            ("PLL (Phase-Locked Loops)", "🔃"),
+            ("Timer ICs", "⏱️"),
+        ]),
+        ("Motor & Motion Control ICs", "⚙️", [
+            ("Motor Drivers (DC/Stepper/BLDC)", "⚙️"),
+            ("Servo Controllers", "🎮"),
+            ("Gate Drivers (MOSFET/IGBT)", "⚡"),
+            ("Motion Control ICs", "🏃"),
+            ("PWM Controllers", "📊"),
+        ]),
+        ("Data Conversion ICs", "🔄", [
+            ("Analog-to-Digital Converters (ADC)", "📊"),
+            ("Digital-to-Analog Converters (DAC)", "📉"),
+            ("Sigma-Delta Converters", "📈"),
+            ("Voltage-to-Frequency Converters", "〰️"),
+            ("Touchscreen Controllers", "📱"),
+        ]),
+        ("Security & Authentication ICs", "🔒", [
+            ("Secure Elements", "🔒"),
+            ("Cryptographic Coprocessors", "🔐"),
+            ("TPM (Trusted Platform Modules)", "🛡️"),
+            ("Hardware Encryption ICs", "🔑"),
+            ("ID / Authentication ICs", "🪪"),
+        ]),
+        ("Automotive ICs", "🚗", [
+            ("Automotive PMICs", "⚡"),
+            ("CAN / LIN Automotive ICs", "🔌"),
+            ("ADAS Processing ICs", "🖥️"),
+            ("Automotive Sensors", "🌡️"),
+            ("Infotainment Processors", "🎵"),
+        ]),
+        ("Display & LED ICs", "💡", [
+            ("LED Matrix Drivers", "💡"),
+            ("LCD Drivers", "🖥️"),
+            ("OLED Drivers", "✨"),
+            ("Backlight Controllers", "🔆"),
+            ("Display Timing Controllers (TCON)", "⏱️"),
+        ]),
     ]
 
     cats: dict[str, Category] = {}
-    for sort_order, (name, icon) in enumerate(top_level):
+    for sort_order, (name, icon, subs) in enumerate(category_data):
         cat = get_or_create_category(db, name, icon=icon, sort_order=sort_order)
         cats[name] = cat
+        for sub_order, (sub_name, sub_icon) in enumerate(subs):
+            sub = get_or_create_category(
+                db, sub_name, icon=sub_icon, parent=cat, sort_order=sub_order
+            )
+            cats[sub_name] = sub
 
     # ------------------------------------------------------------------
-    # 2. Subcategories
-    # ------------------------------------------------------------------
-
-    # Integrated Circuits (ICs) — level 1
-    ic_subs: list[tuple[str, str]] = [
-        ("Clock and Timing", "⏱️"),
-        ("Data Converter ICs", "🔄"),
-        ("Embedded Processors and Controllers", "💻"),
-        ("Interface and Transceiver ICs", "🔁"),
-    ]
-    ic_sub_cats: dict[str, Category] = {}
-    for sort_order, (name, icon) in enumerate(ic_subs):
-        cat = get_or_create_category(
-            db, name, icon=icon, parent=cats["Integrated Circuits (ICs)"], sort_order=sort_order
-        )
-        ic_sub_cats[name] = cat
-        cats[name] = cat
-
-    # Clock and Timing — level 2
-    clock_timing_subs: list[tuple[str, str]] = [
-        ("Clock Buffers", "🔲"),
-        ("Clock Drivers", "🔳"),
-        ("Oscillators", "〰️"),
-        ("PLLs", "🔃"),
-    ]
-    for sort_order, (name, icon) in enumerate(clock_timing_subs):
-        cat = get_or_create_category(
-            db, name, icon=icon, parent=ic_sub_cats["Clock and Timing"], sort_order=sort_order
-        )
-        cats[name] = cat
-
-    # Data Converter ICs — level 2
-    data_converter_subs: list[tuple[str, str]] = [
-        ("ADCs", "📊"),
-        ("DACs", "📉"),
-    ]
-    for sort_order, (name, icon) in enumerate(data_converter_subs):
-        cat = get_or_create_category(
-            db, name, icon=icon, parent=ic_sub_cats["Data Converter ICs"], sort_order=sort_order
-        )
-        cats[name] = cat
-
-    # Electromechanical Components — level 1
-    em_subs: list[tuple[str, str]] = [
-        ("Audio Products", "🔊"),
-        ("Motors and Drives", "⚙️"),
-        ("Relays", "🔌"),
-        ("Electromechanical Switches", "🔘"),
-        ("Connectors", "🔗"),
-        ("Accessories", "🧩"),
-    ]
-    for sort_order, (name, icon) in enumerate(em_subs):
-        cat = get_or_create_category(
-            db, name, icon=icon, parent=cats["Electromechanical Components"], sort_order=sort_order
-        )
-        cats[name] = cat
-
-    # Optoelectronic Devices — level 1
-    opto_subs: list[tuple[str, str]] = [
-        ("Display Modules", "🖥️"),
-        ("Fiber Optic Components", "💡"),
-        ("Electric Lamp Components", "💡"),
-        ("Laser Device Components", "🔴"),
-        ("Optocoupler Relay Devices", "🔁"),
-    ]
-    for sort_order, (name, icon) in enumerate(opto_subs):
-        cat = get_or_create_category(
-            db, name, icon=icon, parent=cats["Optoelectronic Devices"], sort_order=sort_order
-        )
-        cats[name] = cat
-
-    # Circuit Protection Devices — level 1
-    cp_subs: list[tuple[str, str]] = [
-        ("Circuit Breaker Parts", "⚡"),
-        ("ESD Protection Diodes", "🛡️"),
-        ("IC ESD Protection Circuit", "🛡️"),
-        ("Fuses", "🔥"),
-        ("PTC Resettable Fuses", "♻️"),
-        ("TVS Diodes", "🔌"),
-    ]
-    for sort_order, (name, icon) in enumerate(cp_subs):
-        cat = get_or_create_category(
-            db, name, icon=icon, parent=cats["Circuit Protection Devices"], sort_order=sort_order
-        )
-        cats[name] = cat
-
-    # Power Supply Products — level 1
-    ps_subs: list[tuple[str, str]] = [
-        ("AC-DC Converters", "🔋"),
-        ("DC-DC Converters", "🔋"),
-        ("Voltage Regulators", "⚡"),
-        ("Power Management ICs", "💡"),
-    ]
-    for sort_order, (name, icon) in enumerate(ps_subs):
-        cat = get_or_create_category(
-            db, name, icon=icon, parent=cats["Power Supply Products"], sort_order=sort_order
-        )
-        cats[name] = cat
-
-    # RF & Wireless — level 1
-    rf_subs: list[tuple[str, str]] = [
-        ("Antennas", "📡"),
-        ("RF Amplifiers", "📶"),
-        ("RF Transceivers", "📻"),
-        ("RF Filters", "🔍"),
-    ]
-    for sort_order, (name, icon) in enumerate(rf_subs):
-        cat = get_or_create_category(
-            db, name, icon=icon, parent=cats["RF & Wireless"], sort_order=sort_order
-        )
-        cats[name] = cat
-
-    # Sensors — level 1
-    sensor_subs: list[tuple[str, str]] = [
-        ("Temperature Sensors", "🌡️"),
-        ("Pressure Sensors", "🔵"),
-        ("Motion Sensors", "🏃"),
-        ("Proximity Sensors", "📍"),
-    ]
-    for sort_order, (name, icon) in enumerate(sensor_subs):
-        cat = get_or_create_category(
-            db, name, icon=icon, parent=cats["Sensors"], sort_order=sort_order
-        )
-        cats[name] = cat
-
-    # Passive Components — level 1
-    passive_subs: list[tuple[str, str]] = [
-        ("Capacitors", "⚡"),
-        ("Resistors", "🔴"),
-        ("Inductors", "🌀"),
-        ("Transformers", "🔄"),
-    ]
-    for sort_order, (name, icon) in enumerate(passive_subs):
-        cat = get_or_create_category(
-            db, name, icon=icon, parent=cats["Passive Components"], sort_order=sort_order
-        )
-        cats[name] = cat
-
-    # Discrete Semiconductors — level 1
-    discrete_subs: list[tuple[str, str]] = [
-        ("Diodes", "🔌"),
-        ("Transistors", "🔧"),
-        ("Thyristors", "⚡"),
-        ("MOSFETs", "💡"),
-    ]
-    for sort_order, (name, icon) in enumerate(discrete_subs):
-        cat = get_or_create_category(
-            db, name, icon=icon, parent=cats["Discrete Semiconductors"], sort_order=sort_order
-        )
-        cats[name] = cat
-
-    # Memory — level 1
-    memory_subs: list[tuple[str, str]] = [
-        ("DRAM", "💾"),
-        ("Flash Memory", "💾"),
-        ("SRAM", "💾"),
-        ("EEPROM", "💾"),
-    ]
-    for sort_order, (name, icon) in enumerate(memory_subs):
-        cat = get_or_create_category(
-            db, name, icon=icon, parent=cats["Memory"], sort_order=sort_order
-        )
-        cats[name] = cat
-
-    # Test & Measurement — level 1
-    tm_subs: list[tuple[str, str]] = [
-        ("Oscilloscopes", "🔬"),
-        ("Multimeters", "📏"),
-        ("Signal Generators", "📡"),
-        ("Logic Analyzers", "🔍"),
-    ]
-    for sort_order, (name, icon) in enumerate(tm_subs):
-        cat = get_or_create_category(
-            db, name, icon=icon, parent=cats["Test & Measurement"], sort_order=sort_order
-        )
-        cats[name] = cat
-
-    # Cables & Wire — level 1
-    cable_subs: list[tuple[str, str]] = [
-        ("Cable Assemblies", "🔗"),
-        ("Wire", "〰️"),
-        ("Coaxial Cables", "📡"),
-        ("Fiber Optic Cables", "💡"),
-    ]
-    for sort_order, (name, icon) in enumerate(cable_subs):
-        cat = get_or_create_category(
-            db, name, icon=icon, parent=cats["Cables & Wire"], sort_order=sort_order
-        )
-        cats[name] = cat
-
-    # Development Tools — level 1
-    devtools_subs: list[tuple[str, str]] = [
-        ("Dev Boards", "🛠️"),
-        ("Debuggers", "🐛"),
-        ("Programmers", "💻"),
-        ("Software Tools", "🔧"),
-    ]
-    for sort_order, (name, icon) in enumerate(devtools_subs):
-        cat = get_or_create_category(
-            db, name, icon=icon, parent=cats["Development Tools"], sort_order=sort_order
-        )
-        cats[name] = cat
-
-    # Industrial Automation — level 1
-    ia_subs: list[tuple[str, str]] = [
-        ("PLCs", "🏭"),
-        ("HMIs", "🖥️"),
-        ("Motor Controllers", "⚙️"),
-        ("Industrial Sensors", "🌡️"),
-    ]
-    for sort_order, (name, icon) in enumerate(ia_subs):
-        cat = get_or_create_category(
-            db, name, icon=icon, parent=cats["Industrial Automation"], sort_order=sort_order
-        )
-        cats[name] = cat
-
-    # ------------------------------------------------------------------
-    # 3. Suppliers
+    # 2. Suppliers
     # ------------------------------------------------------------------
     supplier_data: list[dict] = [
         dict(
@@ -449,13 +329,13 @@ def seed(db: Session) -> None:
     arrow = suppliers["Arrow Electronics"]
 
     # ------------------------------------------------------------------
-    # 4. CategorySupplier associations
+    # 3. CategorySupplier associations
     # ------------------------------------------------------------------
-    # Every top-level category gets at least 3 suppliers.
-    # Kennedy Electronics is featured in "Integrated Circuits (ICs)" and its subcategories.
+    # Every top-level category gets 3-5 suppliers.
+    # Kennedy Electronics is featured in PMICs and Microcontrollers.
 
-    # Integrated Circuits (ICs)
-    ic = cats["Integrated Circuits (ICs)"]
+    # Power Management ICs — Kennedy featured
+    pmic = cats["Power Management ICs (PMICs)"]
     for sup, featured, rank in [
         (kennedy, True, 1),
         (digikey, False, 2),
@@ -463,97 +343,99 @@ def seed(db: Session) -> None:
         (avnet, False, 4),
         (arrow, False, 5),
     ]:
-        get_or_create_category_supplier(db, ic, sup, is_featured=featured, rank=rank)
+        get_or_create_category_supplier(db, pmic, sup, is_featured=featured, rank=rank)
 
-    # Kennedy featured in IC subcategories
-    for sub_name in ["Clock and Timing", "Data Converter ICs", "Embedded Processors and Controllers", "Interface and Transceiver ICs"]:
+    # Kennedy featured in PMIC subcategories
+    for sub_name in ["Voltage Regulators (LDOs)", "DC-DC Converters (Buck/Boost)",
+                     "Battery Management ICs (BMS)", "Power Supervisors / Reset ICs", "LED Drivers"]:
         sub_cat = cats[sub_name]
         get_or_create_category_supplier(db, sub_cat, kennedy, is_featured=True, rank=1)
         get_or_create_category_supplier(db, sub_cat, digikey, is_featured=False, rank=2)
         get_or_create_category_supplier(db, sub_cat, mouser, is_featured=False, rank=3)
 
-    # Clock and Timing sub-subcategories
-    for sub_name in ["Clock Buffers", "Clock Drivers", "Oscillators", "PLLs"]:
-        sub_cat = cats[sub_name]
-        get_or_create_category_supplier(db, sub_cat, kennedy, is_featured=True, rank=1)
-        get_or_create_category_supplier(db, sub_cat, digikey, is_featured=False, rank=2)
+    # Microcontrollers & Processors — Kennedy featured
+    mcu = cats["Microcontrollers & Processors"]
+    for sup, featured, rank in [
+        (kennedy, True, 1),
+        (digikey, False, 2),
+        (mouser, False, 3),
+        (arrow, False, 4),
+    ]:
+        get_or_create_category_supplier(db, mcu, sup, is_featured=featured, rank=rank)
 
-    # Electromechanical Components
-    em = cats["Electromechanical Components"]
+    # Analog ICs
+    analog = cats["Analog ICs"]
+    for sup, rank in [(digikey, 1), (mouser, 2), (avnet, 3), (arrow, 4)]:
+        get_or_create_category_supplier(db, analog, sup, rank=rank)
+
+    # Interface ICs
+    interface = cats["Interface ICs"]
     for sup, rank in [(digikey, 1), (mouser, 2), (avnet, 3), (tti, 4)]:
-        get_or_create_category_supplier(db, em, sup, rank=rank)
+        get_or_create_category_supplier(db, interface, sup, rank=rank)
 
-    # Optoelectronic Devices
-    opto = cats["Optoelectronic Devices"]
-    for sup, rank in [(digikey, 1), (mouser, 2), (future, 3), (arrow, 4)]:
-        get_or_create_category_supplier(db, opto, sup, rank=rank)
+    # Memory ICs
+    memory = cats["Memory ICs"]
+    for sup, rank in [(avnet, 1), (arrow, 2), (future, 3), (digikey, 4)]:
+        get_or_create_category_supplier(db, memory, sup, rank=rank)
 
-    # Circuit Protection Devices
-    cp = cats["Circuit Protection Devices"]
-    for sup, rank in [(avnet, 1), (digikey, 2), (tti, 3), (mouser, 4)]:
-        get_or_create_category_supplier(db, cp, sup, rank=rank)
+    # Logic ICs
+    logic = cats["Logic ICs"]
+    for sup, rank in [(digikey, 1), (mouser, 2), (avnet, 3), (arrow, 4)]:
+        get_or_create_category_supplier(db, logic, sup, rank=rank)
 
-    # Power Supply Products
-    ps = cats["Power Supply Products"]
-    for sup, rank in [(avnet, 1), (arrow, 2), (digikey, 3), (future, 4)]:
-        get_or_create_category_supplier(db, ps, sup, rank=rank)
-
-    # RF & Wireless
-    rf = cats["RF & Wireless"]
+    # RF & Wireless ICs
+    rf = cats["RF & Wireless ICs"]
     for sup, rank in [(mouser, 1), (digikey, 2), (avnet, 3), (arrow, 4)]:
         get_or_create_category_supplier(db, rf, sup, rank=rank)
 
-    # Sensors
-    sensors_cat = cats["Sensors"]
+    # Sensor ICs
+    sensor = cats["Sensor ICs"]
     for sup, rank in [(digikey, 1), (mouser, 2), (avnet, 3), (tti, 4)]:
-        get_or_create_category_supplier(db, sensors_cat, sup, rank=rank)
+        get_or_create_category_supplier(db, sensor, sup, rank=rank)
 
-    # Passive Components
-    passive = cats["Passive Components"]
-    for sup, rank in [(digikey, 1), (mouser, 2), (tti, 3), (avnet, 4)]:
-        get_or_create_category_supplier(db, passive, sup, rank=rank)
+    # Audio & Video ICs
+    av = cats["Audio & Video ICs"]
+    for sup, rank in [(digikey, 1), (mouser, 2), (future, 3), (arrow, 4)]:
+        get_or_create_category_supplier(db, av, sup, rank=rank)
 
-    # Discrete Semiconductors
-    discrete = cats["Discrete Semiconductors"]
-    for sup, rank in [(arrow, 1), (avnet, 2), (digikey, 3), (future, 4)]:
-        get_or_create_category_supplier(db, discrete, sup, rank=rank)
+    # Clock & Timing ICs
+    clock = cats["Clock & Timing ICs"]
+    for sup, rank in [(digikey, 1), (mouser, 2), (avnet, 3), (tti, 4)]:
+        get_or_create_category_supplier(db, clock, sup, rank=rank)
 
-    # Memory
-    memory_cat = cats["Memory"]
+    # Motor & Motion Control ICs
+    motor = cats["Motor & Motion Control ICs"]
+    for sup, rank in [(avnet, 1), (arrow, 2), (digikey, 3), (tti, 4)]:
+        get_or_create_category_supplier(db, motor, sup, rank=rank)
+
+    # Data Conversion ICs
+    dataconv = cats["Data Conversion ICs"]
+    for sup, rank in [(digikey, 1), (mouser, 2), (avnet, 3), (arrow, 4)]:
+        get_or_create_category_supplier(db, dataconv, sup, rank=rank)
+
+    # Security & Authentication ICs
+    security = cats["Security & Authentication ICs"]
+    for sup, rank in [(avnet, 1), (digikey, 2), (mouser, 3), (future, 4)]:
+        get_or_create_category_supplier(db, security, sup, rank=rank)
+
+    # Automotive ICs
+    auto = cats["Automotive ICs"]
     for sup, rank in [(avnet, 1), (arrow, 2), (future, 3), (digikey, 4)]:
-        get_or_create_category_supplier(db, memory_cat, sup, rank=rank)
+        get_or_create_category_supplier(db, auto, sup, rank=rank)
 
-    # Test & Measurement
-    tm_cat = cats["Test & Measurement"]
-    for sup, rank in [(digikey, 1), (mouser, 2), (avnet, 3)]:
-        get_or_create_category_supplier(db, tm_cat, sup, rank=rank)
-
-    # Cables & Wire
-    cables_cat = cats["Cables & Wire"]
-    for sup, rank in [(tti, 1), (digikey, 2), (mouser, 3), (avnet, 4)]:
-        get_or_create_category_supplier(db, cables_cat, sup, rank=rank)
-
-    # Development Tools
-    devtools_cat = cats["Development Tools"]
+    # Display & LED ICs
+    display = cats["Display & LED ICs"]
     for sup, rank in [(digikey, 1), (mouser, 2), (arrow, 3), (avnet, 4)]:
-        get_or_create_category_supplier(db, devtools_cat, sup, rank=rank)
-
-    # Industrial Automation
-    ia_cat = cats["Industrial Automation"]
-    for sup, rank in [(avnet, 1), (arrow, 2), (future, 3), (digikey, 4)]:
-        get_or_create_category_supplier(db, ia_cat, sup, rank=rank)
-
-    # Also associate Kennedy with Capacitors subcategory (for sponsor context below)
-    get_or_create_category_supplier(db, cats["Capacitors"], avnet, rank=1)
+        get_or_create_category_supplier(db, display, sup, rank=rank)
 
     # ------------------------------------------------------------------
-    # 5. Sponsors
+    # 4. Sponsors
     # ------------------------------------------------------------------
-    # Kennedy Electronics — gold sponsor for "Clock and Timing" category
+    # Kennedy Electronics — gold sponsor for "Power Management ICs (PMICs)"
     get_or_create_sponsor(
         db,
         supplier=kennedy,
-        category=cats["Clock and Timing"],
+        category=cats["Power Management ICs (PMICs)"],
         image_url="/images/sponsors/kennedy.jpg",
         description="Your premier semiconductor supplier in the Northeast",
         tier="gold",

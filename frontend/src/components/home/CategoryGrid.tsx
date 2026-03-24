@@ -21,7 +21,7 @@ export default function CategoryGrid({ categories, loading, error }: CategoryGri
 
         {loading ? (
           <div className={styles.grid}>
-            {Array.from({ length: 6 }).map((_, i) => (
+            {Array.from({ length: 8 }).map((_, i) => (
               <div key={i} className={styles.skeletonCard}>
                 <SkeletonLoader width="100%" height="24px" borderRadius="4px" />
                 <SkeletonLoader width="60%" height="16px" borderRadius="4px" />

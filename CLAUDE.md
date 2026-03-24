@@ -64,7 +64,7 @@ Browser → Nginx(:80)
 - SCSS design system: `_variables.scss` (colors, spacing), `_animations.scss` (keyframes), `_mixins.scss`
 
 ### Data Flow
-- Categories use self-referential `parent_id` for tree structure (3 levels deep)
+- Categories use self-referential `parent_id` for tree structure (2 levels deep)
 - `CategorySupplier` join table links suppliers to categories with `is_featured` + `rank`
 - Sponsors have XOR constraint: either `category_id` (category sponsor) or `keyword` (keyword sponsor)
 - Forms POST to API → API fires async webhook to n8n → n8n processes (email, logging)
@@ -93,7 +93,7 @@ transition={{ duration: 0.3, ease: 'easeInOut' as const }}
 All API routes prefixed with `/api/`. Router prefix set in each route file.
 
 ### Seed Data (idempotent)
-14 categories, ~67 subcategories, 7 suppliers, 2 sponsors. Seed checks for existing data before inserting.
+15 categories, 75 subcategories (5 per category, 2 levels deep), 7 suppliers, 2 sponsors. Seed checks for existing data before inserting.
 
 ## Gotchas
 

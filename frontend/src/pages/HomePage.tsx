@@ -16,7 +16,7 @@ export default function HomePage() {
       transition={{ duration: 0.3, ease: 'easeInOut' as const }}
     >
       <Navbar />
-      <HeroSection categories={categories} />
+      <HeroSection />
       <CategoryGrid categories={categories} loading={loading} error={error} />
       <Footer />
     </motion.div>
