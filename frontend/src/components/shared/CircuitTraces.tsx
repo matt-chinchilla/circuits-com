@@ -5,35 +5,35 @@ const T = (d: number) => ({ animationDelay: `${d}s` });
 const S = (o: number, w = 1) => ({ stroke: `rgba(201,168,76,${o})`, strokeWidth: w });
 const DASH = { strokeDasharray: 1200, strokeDashoffset: 1200 };
 
-// Electrons: [path, duration(s), delay(s), radius]
-// Each follows a major trace route across the board
+// Electrons: [path, duration(s), begin(s), radius]
+// begin = trace's T() animationDelay + ~4s (time for draw-circuit to make path visible)
 const ELECTRONS: [string, number, number, number][] = [
-  // Bundle 1 — IC1 left → left edge
-  ['M411 140 H380 L360 120 H200 L170 90 H0', 3, 0.8, 2],
-  ['M411 180 H398 L378 160 H240 L210 130 H0', 3.5, 2, 1.5],
-  // Bundle 2 — IC1 bottom → bottom edge
-  ['M450 229 V270 L430 290 V400', 2.5, 1.5, 1.8],
-  // Bundle 3 — IC1 right → IC2 left (chip-to-chip)
-  ['M519 145 H580 L600 125 H750 L770 110 H913', 4, 1, 2],
-  ['M519 175 H595 L615 155 H765 L785 140 H913', 4.5, 3, 1.5],
-  // Bundle 4 — IC1 top → top edge
-  ['M460 121 V90 L480 70 V20 L500 0', 2.5, 0.5, 1.8],
-  // Bundle 5 — IC2 right → right edge
-  ['M977 110 H1020 L1040 90 H1100 L1120 70 H1200', 3, 2.5, 2],
-  // Long horizontal — full-span edge-to-edge
-  ['M0 380 H200 L220 360 H400 L420 380 H620 L650 350 H800 L830 320 H950 L970 340 H1200', 6, 0, 2.2],
-  // Vertical long-run
-  ['M650 0 V60 L670 80 V160 L690 180 V400', 4, 1.2, 1.8],
-  // Cross-board horizontal
-  ['M550 300 H700 L720 280 H850 L870 260 H1000 L1020 240 H1200', 4.5, 2, 1.5],
-  // IC3 bottom → bottom edge
-  ['M150 327 V350 L170 370 H300 L320 390 V400', 3, 3.5, 1.8],
-  // Power rail — top edge (full width)
-  ['M0 10 H1200', 5, 0.3, 2],
-  // Power rail — bottom edge (full width, reverse direction for variety)
-  ['M1200 390 H0', 5.5, 1.8, 1.8],
-  // USB trace → IC1
-  ['M511 390 V380 L490 360 V340 L470 320 V275', 3, 2.8, 1.5],
+  // Bundle 1 — IC1 left → left edge (traces T=0.6, T=1.0)
+  ['M411 140 H380 L360 120 H200 L170 90 H0', 3, 4.6, 2],
+  ['M411 180 H398 L378 160 H240 L210 130 H0', 3.5, 5, 1.5],
+  // Bundle 2 — IC1 bottom → bottom edge (trace T=1.2)
+  ['M450 229 V270 L430 290 V400', 2.5, 5.2, 1.8],
+  // Bundle 3 — IC1 right → IC2 left (traces T=1.2, T=1.5)
+  ['M519 145 H580 L600 125 H750 L770 110 H913', 4, 5.2, 2],
+  ['M519 175 H595 L615 155 H765 L785 140 H913', 4.5, 5.5, 1.5],
+  // Bundle 4 — IC1 top → top edge (trace T=0.7)
+  ['M460 121 V90 L480 70 V20 L500 0', 2.5, 4.7, 1.8],
+  // Bundle 5 — IC2 right → right edge (trace T=3.0)
+  ['M977 110 H1020 L1040 90 H1100 L1120 70 H1200', 3, 7, 2],
+  // Long horizontal — full-span (trace T=3.8)
+  ['M0 380 H200 L220 360 H400 L420 380 H620 L650 350 H800 L830 320 H950 L970 340 H1200', 6, 7.8, 2.2],
+  // Vertical long-run (trace T=1.8)
+  ['M650 0 V60 L670 80 V160 L690 180 V400', 4, 5.8, 1.8],
+  // Cross-board horizontal (trace T=2.5)
+  ['M550 300 H700 L720 280 H850 L870 260 H1000 L1020 240 H1200', 4.5, 6.5, 1.5],
+  // IC3 bottom → bottom edge (trace T=3.5)
+  ['M150 327 V350 L170 370 H300 L320 390 V400', 3, 7.5, 1.8],
+  // Power rail — top edge (trace T=0)
+  ['M0 10 H1200', 5, 4, 2],
+  // Power rail — bottom edge (trace T=0.1)
+  ['M1200 390 H0', 5.5, 4.1, 1.8],
+  // USB trace → IC1 (trace T=3.3)
+  ['M511 390 V380 L490 360 V340 L470 320 V275', 3, 7.3, 1.5],
 ];
 
 export default function CircuitTraces() {
