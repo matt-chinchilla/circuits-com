@@ -66,7 +66,17 @@ export default function CategoryPage() {
             {loading ? (
               <SkeletonLoader width="120px" height="16px" borderRadius="4px" />
             ) : category ? (
-              <span className={styles.breadcrumbCurrent}>{category.name}</span>
+              <>
+                {category.parent && (
+                  <>
+                    <Link to={`/category/${category.parent.slug}`} className={styles.breadcrumbLink}>
+                      {category.parent.name}
+                    </Link>
+                    <span className={styles.breadcrumbSep} aria-hidden="true">/</span>
+                  </>
+                )}
+                <span className={styles.breadcrumbCurrent}>{category.name}</span>
+              </>
             ) : null}
           </nav>
 
@@ -93,11 +103,18 @@ export default function CategoryPage() {
                 </motion.h1>
                 {isParent && <LayoutSwitcher active={layout} onChange={setLayout} />}
               </div>
-              {!isParent && (
+              {category.children.length > 0 && (
                 <SubcategoryChips
                   subcategories={category.children}
                   parentSlug={category.slug}
                 />
+              )}
+              {!isParent && category.parent && (
+                <div className={styles.parentNav}>
+                  <Link to={`/category/${category.parent.slug}`} className={styles.parentLink}>
+                    &larr; All {category.parent.name}
+                  </Link>
+                </div>
               )}
             </>
           ) : null}

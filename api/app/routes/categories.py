@@ -25,6 +25,7 @@ def get_category(slug: str, db: Session = Depends(get_db)):
         slug=cat.slug,
         icon=cat.icon,
         children=cat.children,
+        parent=cat.parent,
         suppliers=result["suppliers"],
         sponsor=result["sponsor"],
     )

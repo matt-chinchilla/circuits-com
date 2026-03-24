@@ -24,7 +24,16 @@ class CategoryResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class ParentCategoryResponse(BaseModel):
+    id: UUID
+    name: str
+    slug: str
+    icon: str
+    model_config = ConfigDict(from_attributes=True)
+
+
 class CategoryDetailResponse(CategoryResponse):
+    parent: ParentCategoryResponse | None = None
     suppliers: list[SupplierResponse]
     sponsor: SponsorResponse | None
     model_config = ConfigDict(from_attributes=True)
