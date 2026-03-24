@@ -78,10 +78,20 @@ export default function CircuitTraces() {
       {[930,940,950,960].map((x, i) => (
         <rect key={`ic2t${i}`} x={x-1} y={93} width={2.5} height={7} rx={0.5} fill="rgba(218,190,65,0.1)" className={styles.trace} style={T(2.6 + i*0.05)} />
       ))}
+      {/* IC2 top pad traces → exit top edge */}
+      <path d="M930 93 V70 L920 50 V0" {...S(0.06, 0.7)} {...DASH} className={styles.trace} style={T(2.7)} />
+      <path d="M940 93 V65 L930 45 V0" {...S(0.05, 0.6)} {...DASH} className={styles.trace} style={T(2.8)} />
+      <path d="M950 93 V60 L960 40 V0" {...S(0.06, 0.7)} {...DASH} className={styles.trace} style={T(2.9)} />
+      <path d="M960 93 V55 L970 35 V0" {...S(0.05, 0.6)} {...DASH} className={styles.trace} style={T(3.0)} />
       {/* Bottom pads */}
       {[930,940,950,960].map((x, i) => (
         <rect key={`ic2b${i}`} x={x-1} y={150} width={2.5} height={7} rx={0.5} fill="rgba(218,190,65,0.1)" className={styles.trace} style={T(2.6 + i*0.05)} />
       ))}
+      {/* IC2 bottom pad traces → exit bottom */}
+      <path d="M930 157 V180 L920 200 V400" {...S(0.06, 0.7)} {...DASH} className={styles.trace} style={T(2.7)} />
+      <path d="M940 157 V185 L935 205 V400" {...S(0.05, 0.6)} {...DASH} className={styles.trace} style={T(2.8)} />
+      <path d="M950 157 V190 L960 210 V400" {...S(0.06, 0.7)} {...DASH} className={styles.trace} style={T(2.9)} />
+      <path d="M960 157 V195 L970 215 V400" {...S(0.05, 0.6)} {...DASH} className={styles.trace} style={T(3.0)} />
       {/* Left pads */}
       {[110,120,130,140].map((y, i) => (
         <rect key={`ic2l${i}`} x={913} y={y-1} width={7} height={2.5} rx={0.5} fill="rgba(218,190,65,0.1)" className={styles.trace} style={T(2.7 + i*0.05)} />
@@ -101,67 +111,12 @@ export default function CircuitTraces() {
           <rect x={x-1} y={320} width={2.5} height={7} rx={0.5} fill="rgba(218,190,65,0.09)" className={styles.trace} style={T(3.1 + i*0.04)} />
         </g>
       ))}
-
-      {/* ═══════════════════════════════════════════════════════════════════════
-          SMD Component Pads — pairs of rectangular pads (resistors/caps)
-          ═══════════════════════════════════════════════════════════════════════ */}
-      {/* SMD 1 — horizontal, near IC1 top */}
-      <rect x="445" y="82" width="8" height="5" rx={1} fill="rgba(218,190,65,0.12)" className={styles.trace} style={T(0.7)} />
-      <rect x="457" y="82" width="8" height="5" rx={1} fill="rgba(218,190,65,0.12)" className={styles.trace} style={T(0.7)} />
-      {/* SMD 2 */}
-      <rect x="530" y="155" width="8" height="5" rx={1} fill="rgba(218,190,65,0.1)" className={styles.trace} style={T(1.0)} />
-      <rect x="542" y="155" width="8" height="5" rx={1} fill="rgba(218,190,65,0.1)" className={styles.trace} style={T(1.0)} />
-      {/* SMD 3 */}
-      <rect x="370" y="175" width="5" height="8" rx={1} fill="rgba(218,190,65,0.1)" className={styles.trace} style={T(1.2)} />
-      <rect x="370" y="187" width="5" height="8" rx={1} fill="rgba(218,190,65,0.1)" className={styles.trace} style={T(1.2)} />
-      {/* SMD 4 — near IC2 */}
-      <rect x="870" y="118" width="7" height="4" rx={1} fill="rgba(218,190,65,0.1)" className={styles.trace} style={T(2.3)} />
-      <rect x="881" y="118" width="7" height="4" rx={1} fill="rgba(218,190,65,0.1)" className={styles.trace} style={T(2.3)} />
-      {/* SMD 5 */}
-      <rect x="1000" y="135" width="7" height="4" rx={1} fill="rgba(218,190,65,0.09)" className={styles.trace} style={T(3.2)} />
-      <rect x="1011" y="135" width="7" height="4" rx={1} fill="rgba(218,190,65,0.09)" className={styles.trace} style={T(3.2)} />
-      {/* SMD 6 — bottom area */}
-      <rect x="650" y="310" width="5" height="8" rx={1} fill="rgba(218,190,65,0.08)" className={styles.trace} style={T(3.8)} />
-      <rect x="650" y="322" width="5" height="8" rx={1} fill="rgba(218,190,65,0.08)" className={styles.trace} style={T(3.8)} />
-      {/* SMD 7 */}
-      <rect x="780" y="260" width="8" height="4" rx={1} fill="rgba(218,190,65,0.09)" className={styles.trace} style={T(3.5)} />
-      <rect x="792" y="260" width="8" height="4" rx={1} fill="rgba(218,190,65,0.09)" className={styles.trace} style={T(3.5)} />
-      {/* SMD 8 — far left */}
-      <rect x="60" y="160" width="7" height="4" rx={1} fill="rgba(218,190,65,0.08)" className={styles.trace} style={T(1.8)} />
-      <rect x="71" y="160" width="7" height="4" rx={1} fill="rgba(218,190,65,0.08)" className={styles.trace} style={T(1.8)} />
-      {/* SMD 9 — top center */}
-      <rect x="700" y="50" width="4" height="7" rx={1} fill="rgba(218,190,65,0.08)" className={styles.trace} style={T(2.0)} />
-      <rect x="700" y="61" width="4" height="7" rx={1} fill="rgba(218,190,65,0.08)" className={styles.trace} style={T(2.0)} />
-      {/* SMD 10 */}
-      <rect x="300" y="340" width="8" height="4" rx={1} fill="rgba(218,190,65,0.07)" className={styles.trace} style={T(4.2)} />
-      <rect x="312" y="340" width="8" height="4" rx={1} fill="rgba(218,190,65,0.07)" className={styles.trace} style={T(4.2)} />
-
-      {/* ═══════════════════════════════════════════════════════════════════════
-          Through-hole pad array — top-left edge connector
-          ═══════════════════════════════════════════════════════════════════════ */}
-      {[30,50,70,90,110,130].map((x, i) => (
-        <g key={`th${i}`}>
-          <circle cx={x} cy={40} r={4.5} fill="rgba(232,190,45,0.08)" stroke="rgba(232,190,45,0.2)" strokeWidth={1} className={styles.node} style={T(0.1 + i*0.15)} />
-          <circle cx={x} cy={40} r={1.5} fill="rgba(232,190,45,0.3)" className={styles.node} style={T(0.1 + i*0.15)} />
-        </g>
-      ))}
-      {/* Second row */}
-      {[30,50,70,90,110,130].map((x, i) => (
-        <g key={`th2${i}`}>
-          <circle cx={x} cy={60} r={4.5} fill="rgba(232,190,45,0.08)" stroke="rgba(232,190,45,0.2)" strokeWidth={1} className={styles.node} style={T(0.2 + i*0.15)} />
-          <circle cx={x} cy={60} r={1.5} fill="rgba(232,190,45,0.3)" className={styles.node} style={T(0.2 + i*0.15)} />
-        </g>
-      ))}
-
-      {/* ═══════════════════════════════════════════════════════════════════════
-          Through-hole pad array — right edge
-          ═══════════════════════════════════════════════════════════════════════ */}
-      {[200,220,240,260,280].map((y, i) => (
-        <g key={`thr${i}`}>
-          <circle cx={1170} cy={y} r={4} fill="rgba(232,190,45,0.06)" stroke="rgba(232,190,45,0.18)" strokeWidth={0.8} className={styles.node} style={T(3.5 + i*0.12)} />
-          <circle cx={1170} cy={y} r={1.5} fill="rgba(232,190,45,0.25)" className={styles.node} style={T(3.5 + i*0.12)} />
-        </g>
-      ))}
+      {/* IC3 top pad traces → connect upward to left-edge routing */}
+      <path d="M150 273 V250 L130 230 V200" {...S(0.05, 0.6)} {...DASH} className={styles.trace} style={T(3.1)} />
+      <path d="M160 273 V255 L150 240 H100 L80 220 V200" {...S(0.05, 0.6)} {...DASH} className={styles.trace} style={T(3.15)} />
+      <path d="M170 273 V258 L190 240 H220" {...S(0.05, 0.6)} {...DASH} className={styles.trace} style={T(3.2)} />
+      <path d="M180 273 V260 L200 245 H230 L250 225 V200" {...S(0.05, 0.6)} {...DASH} className={styles.trace} style={T(3.25)} />
+      <path d="M190 273 V262 L210 250 H260" {...S(0.05, 0.6)} {...DASH} className={styles.trace} style={T(3.3)} />
 
       {/* ═══════════════════════════════════════════════════════════════════════
           Parallel trace bundle 1 — IC1 left pads → exit left edge
@@ -272,29 +227,6 @@ export default function CircuitTraces() {
       ))}
 
       {/* ═══════════════════════════════════════════════════════════════════════
-          Ground plane fragments — low-opacity filled areas
-          ═══════════════════════════════════════════════════════════════════════ */}
-      <rect x="580" y="200" width="45" height="35" rx={2} fill="rgba(218,190,65,0.02)" stroke="rgba(218,190,65,0.04)" strokeWidth={0.5} className={styles.node} style={T(2.0)} />
-      <rect x="1050" y="150" width="35" height="45" rx={2} fill="rgba(218,190,65,0.02)" stroke="rgba(218,190,65,0.04)" strokeWidth={0.5} className={styles.node} style={T(3.6)} />
-      <rect x="200" y="320" width="50" height="30" rx={2} fill="rgba(218,190,65,0.015)" stroke="rgba(218,190,65,0.035)" strokeWidth={0.5} className={styles.node} style={T(3.2)} />
-
-      {/* ═══════════════════════════════════════════════════════════════════════
-          Decoupling caps near IC corners + pull-up resistor pads
-          ═══════════════════════════════════════════════════════════════════════ */}
-      <rect x="415" y="110" width="6" height="3" rx={0.5} fill="rgba(218,190,65,0.1)" className={styles.trace} style={T(0.5)} />
-      <rect x="425" y="110" width="6" height="3" rx={0.5} fill="rgba(218,190,65,0.1)" className={styles.trace} style={T(0.5)} />
-      <rect x="499" y="110" width="6" height="3" rx={0.5} fill="rgba(218,190,65,0.1)" className={styles.trace} style={T(0.6)} />
-      <rect x="509" y="110" width="6" height="3" rx={0.5} fill="rgba(218,190,65,0.1)" className={styles.trace} style={T(0.6)} />
-      <rect x="915" y="85" width="5" height="3" rx={0.5} fill="rgba(218,190,65,0.08)" className={styles.trace} style={T(2.4)} />
-      <rect x="923" y="85" width="5" height="3" rx={0.5} fill="rgba(218,190,65,0.08)" className={styles.trace} style={T(2.4)} />
-      <rect x="345" y="95" width="3" height="6" rx={0.5} fill="rgba(218,190,65,0.08)" className={styles.trace} style={T(0.9)} />
-      <rect x="345" y="105" width="3" height="6" rx={0.5} fill="rgba(218,190,65,0.08)" className={styles.trace} style={T(0.9)} />
-      <rect x="355" y="95" width="3" height="6" rx={0.5} fill="rgba(218,190,65,0.08)" className={styles.trace} style={T(0.9)} />
-      <rect x="355" y="105" width="3" height="6" rx={0.5} fill="rgba(218,190,65,0.08)" className={styles.trace} style={T(0.9)} />
-      <rect x="365" y="95" width="3" height="6" rx={0.5} fill="rgba(218,190,65,0.08)" className={styles.trace} style={T(1.0)} />
-      <rect x="365" y="105" width="3" height="6" rx={0.5} fill="rgba(218,190,65,0.08)" className={styles.trace} style={T(1.0)} />
-
-      {/* ═══════════════════════════════════════════════════════════════════════
           BGA Package — grid of solder balls (center-right, 740,260)
           ═══════════════════════════════════════════════════════════════════════ */}
       <rect x="730" y="250" width="44" height="44" rx={2} {...S(0.08, 0.6)} fill="rgba(218,190,65,0.015)" className={styles.trace} style={T(2.2)} />
@@ -306,6 +238,8 @@ export default function CircuitTraces() {
       {/* BGA fan-out traces → exit bottom */}
       <path d="M740 294 V320 L730 340 V400" {...S(0.06, 0.7)} {...DASH} className={styles.trace} style={T(2.8)} />
       <path d="M760 294 V330 L770 350 V400" {...S(0.05, 0.6)} {...DASH} className={styles.trace} style={T(2.9)} />
+      <path d="M750 294 V315 L740 335 H700 L680 355 V400" {...S(0.05, 0.6)} {...DASH} className={styles.trace} style={T(2.85)} />
+      <path d="M770 294 V310 L780 330 H820 L840 350 V400" {...S(0.05, 0.6)} {...DASH} className={styles.trace} style={T(2.95)} />
 
       {/* ═══════════════════════════════════════════════════════════════════════
           Crystal Oscillator — rectangular can with 4 pads (590,40)
@@ -319,6 +253,9 @@ export default function CircuitTraces() {
       {/* Traces from crystal → exit top or connect to IC1 top bundle */}
       <path d="M580 26 V0" {...S(0.06, 0.7)} {...DASH} className={styles.trace} style={T(1.8)} />
       <path d="M600 50 V72 L580 92 V121" {...S(0.06, 0.7)} {...DASH} className={styles.trace} style={T(1.8)} />
+      {/* Additional crystal pad traces */}
+      <path d="M600 26 V0" {...S(0.06, 0.7)} {...DASH} className={styles.trace} style={T(1.8)} />
+      <path d="M580 50 V72 L560 92 V121" {...S(0.06, 0.7)} {...DASH} className={styles.trace} style={T(1.8)} />
 
       {/* ═══════════════════════════════════════════════════════════════════════
           SOT-23 Transistors — 3-pad triangular footprint
@@ -365,6 +302,9 @@ export default function CircuitTraces() {
       {/* Diode 2 at (200, 155) — vertical */}
       <path d="M193 145 L200 160 L207 145 Z" {...S(0.08, 0.8)} fill="rgba(218,190,65,0.03)" className={styles.trace} style={T(1.4)} />
       <line x1="193" y1="160" x2="207" y2="160" {...S(0.08, 0.8)} className={styles.trace} style={T(1.4)} />
+      {/* Diode 2 traces */}
+      <path d="M200 145 V120 L180 100 H0" {...S(0.05, 0.6)} {...DASH} className={styles.trace} style={T(1.5)} />
+      <path d="M200 165 V190 L220 210 V240" {...S(0.05, 0.6)} {...DASH} className={styles.trace} style={T(1.5)} />
 
       {/* ═══════════════════════════════════════════════════════════════════════
           Electrolytic Capacitor — circle with polarity mark (620, 240)
@@ -375,19 +315,6 @@ export default function CircuitTraces() {
       {/* Leads */}
       <path d="M620 230 V200 L640 180 V160 L670 130 V80" {...S(0.06, 0.7)} {...DASH} className={styles.trace} style={T(2.2)} />
       <path d="M620 250 V280 L640 300 V400" {...S(0.06, 0.7)} {...DASH} className={styles.trace} style={T(2.2)} />
-
-      {/* ═══════════════════════════════════════════════════════════════════════
-          Test Points — single exposed circular pads
-          ═══════════════════════════════════════════════════════════════════════ */}
-      {[
-        [50, 290, 'TP1'], [560, 270, 'TP2'], [900, 50, 'TP3'],
-        [1100, 300, 'TP4'], [400, 350, 'TP5'],
-      ].map(([x, y, label]) => (
-        <g key={label as string}>
-          <circle cx={x as number} cy={y as number} r={3.5} fill="rgba(232,190,45,0.1)" stroke="rgba(232,190,45,0.22)" strokeWidth={1} className={styles.node} style={T(2.5)} />
-          <circle cx={x as number} cy={y as number} r={1} fill="rgba(232,190,45,0.35)" className={styles.node} style={T(2.5)} />
-        </g>
-      ))}
 
       {/* ═══════════════════════════════════════════════════════════════════════
           Fiducial Markers — target circles at board corners
