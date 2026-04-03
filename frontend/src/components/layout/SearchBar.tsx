@@ -80,7 +80,7 @@ export default function SearchBar({ variant = 'hero', initialQuery = '' }: Searc
           onFocus={() => {
             if (variant === 'hero' && hasResults) setOpen(true);
           }}
-          placeholder={variant === 'nav' ? 'Search components...' : 'Search by keywords, part numbers, categories...'}
+          placeholder={variant === 'nav' ? 'Search Circuits...' : 'Search Circuits...'}
           className={styles.searchInput}
           aria-label="Search query"
           aria-autocomplete="list"

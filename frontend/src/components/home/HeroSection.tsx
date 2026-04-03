@@ -9,10 +9,10 @@ export default function HeroSection() {
       <CircuitTraces />
       <div className={styles.content}>
         <h1 className={styles.heading}>
-          The Integrated Circuits &amp; Electronic Components Directory
+          The Integrated Circuits Directory
         </h1>
         <p className={styles.subtitle}>
-          Find the Best Supplier in every category
+          Circuits All The Time
         </p>
         <SearchBar />
         <div className={styles.quickLinks}>
