@@ -3,7 +3,9 @@ import type { Category, CategoryDetail } from '../types/category';
 import type { Supplier } from '../types/supplier';
 import type { Sponsor } from '../types/sponsor';
 
-const client = axios.create({ baseURL: '/api' });
+export const API_BASE_URL = '/api';
+
+const client = axios.create({ baseURL: API_BASE_URL });
 
 export interface SearchResults {
   categories: Category[];

@@ -53,6 +53,7 @@
   align-items: center;
   gap: 12px;
   padding: 12px 16px;
+  min-height: $admin-btn-height;
   border-radius: 6px;
   color: $admin-sidebar-text;
   text-decoration: none;
@@ -108,7 +109,7 @@
 }
 
 .userRole {
-  font-size: 14px;
+  font-size: $admin-font-small;
   color: $admin-sidebar-text;
   text-transform: capitalize;
 }

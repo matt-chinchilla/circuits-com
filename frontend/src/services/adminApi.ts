@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { API_BASE_URL } from './api';
 import type {
   AuthResponse,
   UserInfo,
@@ -13,7 +14,7 @@ import type {
   BatchImportResult,
 } from '../types/admin';
 
-const adminClient = axios.create({ baseURL: '/api' });
+const adminClient = axios.create({ baseURL: API_BASE_URL });
 
 adminClient.interceptors.request.use((config) => {
   const token = localStorage.getItem('admin_token');
@@ -28,7 +29,6 @@ adminClient.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       localStorage.removeItem('admin_token');
-      window.location.href = '/admin/login';
     }
     return Promise.reject(error);
   }

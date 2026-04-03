@@ -16,7 +16,7 @@ interface DataTableProps<T> {
   emptyMessage?: string;
 }
 
-export default function DataTable<T extends Record<string, unknown>>({
+export default function DataTable<T extends { id: string | number } & Record<string, unknown>>({
   columns,
   data,
   onRowClick,
@@ -65,6 +65,11 @@ export default function DataTable<T extends Record<string, unknown>>({
     );
   }
 
+  const sortAriaFor = (key: string): 'ascending' | 'descending' | 'none' => {
+    if (sortKey !== key) return 'none';
+    return sortDir === 'asc' ? 'ascending' : 'descending';
+  };
+
   return (
     <div className={styles.wrapper}>
       <table className={styles.table}>
@@ -75,6 +80,19 @@ export default function DataTable<T extends Record<string, unknown>>({
                 key={col.key}
                 className={`${styles.th} ${col.sortable ? styles.sortable : ''}`}
                 onClick={col.sortable ? () => handleSort(col.key) : undefined}
+                tabIndex={col.sortable ? 0 : undefined}
+                onKeyDown={
+                  col.sortable
+                    ? (e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          handleSort(col.key);
+                        }
+                      }
+                    : undefined
+                }
+                role={col.sortable ? 'columnheader' : undefined}
+                aria-sort={col.sortable ? sortAriaFor(col.key) : undefined}
               >
                 {col.label}
                 {col.sortable && sortKey === col.key && (
@@ -87,9 +105,9 @@ export default function DataTable<T extends Record<string, unknown>>({
           </tr>
         </thead>
         <tbody>
-          {sorted.map((row, i) => (
+          {sorted.map((row) => (
             <tr
-              key={i}
+              key={row.id}
               className={`${styles.row} ${onRowClick ? styles.clickableRow : ''}`}
               onClick={onRowClick ? () => onRowClick(row) : undefined}
             >

@@ -23,12 +23,16 @@ export default function ConfirmDialog({
   danger,
 }: ConfirmDialogProps) {
   const confirmRef = useRef<HTMLButtonElement>(null);
+  const cancelRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    if (open && confirmRef.current) {
+    if (!open) return;
+    if (danger && cancelRef.current) {
+      cancelRef.current.focus();
+    } else if (confirmRef.current) {
       confirmRef.current.focus();
     }
-  }, [open]);
+  }, [open, danger]);
 
   useEffect(() => {
     if (!open) return;
@@ -58,7 +62,7 @@ export default function ConfirmDialog({
           {message}
         </p>
         <div className={styles.actions}>
-          <button className={styles.cancelBtn} onClick={onCancel}>
+          <button ref={cancelRef} className={styles.cancelBtn} onClick={onCancel}>
             {cancelLabel}
           </button>
           <button

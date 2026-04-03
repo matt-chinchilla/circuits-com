@@ -48,7 +48,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(() => {
     localStorage.removeItem('admin_token');
     setUser(null);
-    window.location.href = '/admin/login';
   }, []);
 
   return (

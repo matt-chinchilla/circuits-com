@@ -1,8 +1,10 @@
-// Admin dashboard sizing — designed for older users
+// Admin dashboard sizing — designed for older users (60+)
+// Intentionally isolated from main site variables for independent theming.
+// $admin-sidebar-active mirrors $executive-blue (#0a4a2e) from main _variables.scss.
 $admin-font-base: 18px;
 $admin-font-heading: 28px;
 $admin-font-subheading: 22px;
-$admin-font-small: 16px; // nothing smaller than 16px
+$admin-font-small: 16px; // FLOOR — nothing smaller than 16px anywhere in admin
 $admin-btn-height: 48px;
 $admin-card-min-height: 80px;
 $admin-input-height: 48px;
@@ -15,8 +17,11 @@ $admin-padding: 24px;
 $admin-bg: #f5f7fa;
 $admin-sidebar-bg: #1a2332;
 $admin-sidebar-text: #c8d6e5;
-$admin-sidebar-active: #0a4a2e;
+$admin-sidebar-active: #0a4a2e; // mirrors $executive-blue
 $admin-card-bg: #ffffff;
+$admin-text-primary: #111827;
+$admin-text-secondary: #6b7280; // WCAG AA on white (4.6:1)
+$admin-text-muted: #4b5563; // safe for headers/labels (7:1)
 $admin-success: #27ae60;
 $admin-warning: #f39c12;
 $admin-danger: #e74c3c;
