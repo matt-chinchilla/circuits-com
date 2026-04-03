@@ -11,6 +11,8 @@ dependencies = [
     "pydantic-settings>=2.7.0",
     "httpx>=0.28.0",
     "email-validator>=2.0.0",
+    "sqladmin>=0.20.0",
+    "itsdangerous>=2.2.0",
 ]
 
 [project.optional-dependencies]

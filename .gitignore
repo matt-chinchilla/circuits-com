@@ -40,3 +40,4 @@ yarn-error.log*
 .claude.local.md
 .claude/settings.local.json
 .superpowers/
+.remember/

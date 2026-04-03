@@ -25,6 +25,9 @@ services:
     environment:
       DATABASE_URL: postgresql://circuits:circuits@db:5432/circuits
       N8N_WEBHOOK_BASE_URL: http://n8n:5678
+      ADMIN_USERNAME: john
+      ADMIN_PASSWORD: circuits2026
+      ADMIN_SECRET_KEY: change-me-in-production
 
   frontend:
     build: ./frontend
