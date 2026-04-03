@@ -1,0 +1,70 @@
+@use '../../styles/admin/variables' as *;
+
+.page {
+  max-width: 1400px;
+}
+
+.title {
+  font-size: $admin-font-heading;
+  font-weight: 700;
+  color: #111827;
+  margin: 0 0 8px;
+}
+
+.subtitle {
+  font-size: $admin-font-base;
+  color: #6b7280;
+  margin: 0 0 28px;
+}
+
+.typeBadge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.typeCategory {
+  background: #ede9fe;
+  color: #6d28d9;
+}
+
+.typeKeyword {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.tierBadge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.tierGold {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.tierSilver {
+  background: #f3f4f6;
+  color: #4b5563;
+}
+
+.tierBronze {
+  background: #fed7aa;
+  color: #9a3412;
+}
+
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 300px;
+  font-size: $admin-font-base;
+  color: #6b7280;
+}

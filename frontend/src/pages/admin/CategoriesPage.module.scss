@@ -1,0 +1,142 @@
+@use '../../styles/admin/variables' as *;
+
+.page {
+  max-width: 1200px;
+}
+
+.title {
+  font-size: $admin-font-heading;
+  font-weight: 700;
+  color: #111827;
+  margin: 0 0 8px;
+}
+
+.subtitle {
+  font-size: $admin-font-base;
+  color: #6b7280;
+  margin: 0 0 28px;
+}
+
+.treeCard {
+  background: $admin-card-bg;
+  border-radius: $admin-border-radius;
+  padding: $admin-padding;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.parentRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 0;
+  border-bottom: 1px solid #e5e7eb;
+  cursor: pointer;
+  user-select: none;
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  &:hover {
+    background: #f9fafb;
+  }
+}
+
+.expandIcon {
+  font-size: 14px;
+  width: 24px;
+  text-align: center;
+  color: #6b7280;
+  transition: transform 200ms ease;
+  flex-shrink: 0;
+}
+
+.expanded {
+  transform: rotate(90deg);
+}
+
+.categoryIcon {
+  font-size: 22px;
+  width: 28px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.categoryName {
+  font-size: $admin-font-base;
+  font-weight: 600;
+  color: #111827;
+  flex: 1;
+}
+
+.categorySlug {
+  font-size: $admin-font-small;
+  color: #9ca3af;
+  font-family: monospace;
+}
+
+.categoryCount {
+  font-size: $admin-font-small;
+  color: #6b7280;
+  min-width: 100px;
+  text-align: right;
+}
+
+.childrenContainer {
+  padding-left: 64px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.childRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid #f3f4f6;
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.childIcon {
+  font-size: 18px;
+  width: 24px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.childName {
+  font-size: $admin-font-base;
+  color: #374151;
+  flex: 1;
+}
+
+.childSlug {
+  font-size: $admin-font-small;
+  color: #9ca3af;
+  font-family: monospace;
+}
+
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 300px;
+  font-size: $admin-font-base;
+  color: #6b7280;
+}
+
+.empty {
+  font-size: $admin-font-base;
+  color: #9ca3af;
+  text-align: center;
+  padding: 40px;
+}
+
+.readOnlyNote {
+  font-size: $admin-font-small;
+  color: #9ca3af;
+  font-style: italic;
+  margin: 0 0 20px;
+}

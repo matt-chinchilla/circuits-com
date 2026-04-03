@@ -1,0 +1,79 @@
+@use '../../styles/admin/variables' as *;
+
+.page {
+  max-width: 1400px;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.titleGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.title {
+  font-size: $admin-font-heading;
+  font-weight: 700;
+  color: #111827;
+  margin: 0;
+}
+
+.addBtn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: $admin-btn-height;
+  padding: 0 28px;
+  font-size: $admin-font-base;
+  font-weight: 600;
+  border: none;
+  border-radius: $admin-border-radius;
+  background: $admin-sidebar-active;
+  color: #ffffff;
+  cursor: pointer;
+  text-decoration: none;
+  transition: opacity 150ms ease;
+
+  &:hover {
+    opacity: 0.9;
+  }
+}
+
+.searchBar {
+  margin-bottom: 20px;
+}
+
+.searchInput {
+  width: 100%;
+  max-width: 480px;
+  height: $admin-input-height;
+  padding: 0 20px;
+  font-size: $admin-font-base;
+  border: 2px solid #d1d5db;
+  border-radius: $admin-border-radius;
+  background: $admin-card-bg;
+  color: #111827;
+  outline: none;
+  transition: border-color 150ms ease;
+
+  &:focus {
+    border-color: $admin-info;
+  }
+
+  &::placeholder {
+    color: #9ca3af;
+  }
+}
+
+.revenue {
+  color: $admin-sidebar-active;
+  font-weight: 600;
+}

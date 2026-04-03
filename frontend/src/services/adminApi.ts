@@ -5,13 +5,14 @@ import type {
   UserInfo,
   DashboardStats,
   ActivityItem,
-  RevenueMonth,
+  RevenueDataPoint,
   PopularData,
   Part,
   PartDetail,
   PaginatedResponse,
   AdminSupplier,
   BatchImportResult,
+  AdminCategory,
 } from '../types/admin';
 
 const adminClient = axios.create({ baseURL: API_BASE_URL });
@@ -44,16 +45,16 @@ export const adminApi = {
     adminClient.get<UserInfo>('/auth/me').then((r) => r.data),
 
   getStats: () =>
-    adminClient.get<DashboardStats>('/admin/stats').then((r) => r.data),
+    adminClient.get<DashboardStats>('/dashboard/stats').then((r) => r.data),
 
   getActivity: () =>
-    adminClient.get<ActivityItem[]>('/admin/activity').then((r) => r.data),
+    adminClient.get<ActivityItem[]>('/dashboard/activity').then((r) => r.data),
 
   getRevenue: () =>
-    adminClient.get<RevenueMonth[]>('/admin/revenue').then((r) => r.data),
+    adminClient.get<RevenueDataPoint[]>('/dashboard/revenue').then((r) => r.data),
 
   getPopular: () =>
-    adminClient.get<PopularData>('/admin/popular').then((r) => r.data),
+    adminClient.get<PopularData>('/dashboard/popular').then((r) => r.data),
 
   getParts: (params: {
     page?: number;
@@ -62,38 +63,38 @@ export const adminApi = {
     supplier_id?: string;
   }) =>
     adminClient
-      .get<PaginatedResponse<Part>>('/admin/parts', { params })
+      .get<PaginatedResponse<Part>>('/parts/', { params })
       .then((r) => r.data),
 
   getPart: (id: string) =>
-    adminClient.get<PartDetail>(`/admin/parts/${id}`).then((r) => r.data),
+    adminClient.get<PartDetail>(`/parts/${id}`).then((r) => r.data),
 
   createPart: (data: Partial<PartDetail>) =>
-    adminClient.post<Part>('/admin/parts', data).then((r) => r.data),
+    adminClient.post<Part>('/parts/', data).then((r) => r.data),
 
   updatePart: (id: string, data: Partial<PartDetail>) =>
-    adminClient.put<Part>(`/admin/parts/${id}`, data).then((r) => r.data),
+    adminClient.put<Part>(`/parts/${id}`, data).then((r) => r.data),
 
   deletePart: (id: string) =>
-    adminClient.delete(`/admin/parts/${id}`).then((r) => r.data),
+    adminClient.delete(`/parts/${id}`).then((r) => r.data),
 
-  batchImportParts: (data: Record<string, unknown>[]) =>
+  batchImportParts: (supplierId: string, data: Record<string, unknown>[]) =>
     adminClient
-      .post<BatchImportResult>('/admin/parts/import', { parts: data })
+      .post<BatchImportResult>('/parts/batch', { supplier_id: supplierId, parts: data })
       .then((r) => r.data),
 
   getSuppliers: () =>
-    adminClient.get<AdminSupplier[]>('/admin/suppliers').then((r) => r.data),
+    adminClient.get<AdminSupplier[]>('/suppliers/').then((r) => r.data),
 
   getSupplier: (id: string) =>
-    adminClient.get<AdminSupplier>(`/admin/suppliers/${id}`).then((r) => r.data),
+    adminClient.get<AdminSupplier>(`/suppliers/${id}`).then((r) => r.data),
 
   createSupplier: (data: Partial<AdminSupplier>) =>
-    adminClient.post<AdminSupplier>('/admin/suppliers', data).then((r) => r.data),
+    adminClient.post<AdminSupplier>('/suppliers/', data).then((r) => r.data),
 
   updateSupplier: (id: string, data: Partial<AdminSupplier>) =>
     adminClient
-      .put<AdminSupplier>(`/admin/suppliers/${id}`, data)
+      .put<AdminSupplier>(`/suppliers/${id}`, data)
       .then((r) => r.data),
 
   getSupplierParts: (
@@ -101,6 +102,9 @@ export const adminApi = {
     params: { page?: number; search?: string }
   ) =>
     adminClient
-      .get<PaginatedResponse<Part>>(`/admin/suppliers/${id}/parts`, { params })
+      .get<PaginatedResponse<Part>>(`/suppliers/${id}/parts`, { params })
       .then((r) => r.data),
+
+  getCategories: () =>
+    adminClient.get<AdminCategory[]>('/categories/').then((r) => r.data),
 };

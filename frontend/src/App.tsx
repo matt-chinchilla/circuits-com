@@ -8,7 +8,17 @@ import ContactPage from './pages/ContactPage'
 import AboutPage from './pages/AboutPage'
 import KeywordSponsorPage from './pages/KeywordSponsorPage'
 import LoginPage from './pages/admin/LoginPage'
-import PlaceholderPage from './pages/admin/PlaceholderPage'
+import DashboardPage from './pages/admin/DashboardPage'
+import SuppliersPage from './pages/admin/SuppliersPage'
+import SupplierDetailPage from './pages/admin/SupplierDetailPage'
+import SupplierFormPage from './pages/admin/SupplierFormPage'
+import PartsPage from './pages/admin/PartsPage'
+import PartDetailPage from './pages/admin/PartDetailPage'
+import PartFormPage from './pages/admin/PartFormPage'
+import ImportPage from './pages/admin/ImportPage'
+import ReportsPage from './pages/admin/ReportsPage'
+import CategoriesPage from './pages/admin/CategoriesPage'
+import SponsorsPage from './pages/admin/SponsorsPage'
 import AdminLayout from './components/admin/AdminLayout'
 import ProtectedRoute from './components/admin/ProtectedRoute'
 
@@ -26,13 +36,19 @@ function App() {
             <ProtectedRoute>
               <AdminLayout>
                 <Routes>
-                  <Route index element={<PlaceholderPage title="Dashboard" />} />
-                  <Route path="suppliers" element={<PlaceholderPage title="Suppliers" />} />
-                  <Route path="parts" element={<PlaceholderPage title="Parts" />} />
-                  <Route path="import" element={<PlaceholderPage title="Import" />} />
-                  <Route path="reports" element={<PlaceholderPage title="Reports" />} />
-                  <Route path="categories" element={<PlaceholderPage title="Categories" />} />
-                  <Route path="sponsors" element={<PlaceholderPage title="Sponsors" />} />
+                  <Route index element={<DashboardPage />} />
+                  <Route path="suppliers" element={<SuppliersPage />} />
+                  <Route path="suppliers/new" element={<SupplierFormPage />} />
+                  <Route path="suppliers/:id" element={<SupplierDetailPage />} />
+                  <Route path="suppliers/:id/edit" element={<SupplierFormPage />} />
+                  <Route path="parts" element={<PartsPage />} />
+                  <Route path="parts/new" element={<PartFormPage />} />
+                  <Route path="parts/:id" element={<PartDetailPage />} />
+                  <Route path="parts/:id/edit" element={<PartFormPage />} />
+                  <Route path="import" element={<ImportPage />} />
+                  <Route path="reports" element={<ReportsPage />} />
+                  <Route path="categories" element={<CategoriesPage />} />
+                  <Route path="sponsors" element={<SponsorsPage />} />
                 </Routes>
               </AdminLayout>
             </ProtectedRoute>

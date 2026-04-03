@@ -1,0 +1,268 @@
+@use '../../styles/admin/variables' as *;
+
+.page {
+  max-width: 800px;
+}
+
+.title {
+  font-size: $admin-font-heading;
+  font-weight: 700;
+  color: #111827;
+  margin: 0 0 8px;
+}
+
+.subtitle {
+  font-size: $admin-font-base;
+  color: #6b7280;
+  margin: 0 0 28px;
+}
+
+.steps {
+  display: flex;
+  gap: 0;
+  margin-bottom: 32px;
+}
+
+.step {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 20px;
+  background: $admin-card-bg;
+  border: 2px solid #e5e7eb;
+  font-size: $admin-font-small;
+  font-weight: 600;
+  color: #9ca3af;
+  cursor: default;
+
+  &:first-child {
+    border-radius: $admin-border-radius 0 0 $admin-border-radius;
+  }
+
+  &:last-child {
+    border-radius: 0 $admin-border-radius $admin-border-radius 0;
+  }
+
+  &:not(:first-child) {
+    border-left: none;
+  }
+}
+
+.stepActive {
+  background: $admin-sidebar-active;
+  border-color: $admin-sidebar-active;
+  color: #ffffff;
+}
+
+.stepDone {
+  background: #ecfdf5;
+  border-color: $admin-success;
+  color: $admin-success;
+}
+
+.stepNumber {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: $admin-font-small;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.2);
+  flex-shrink: 0;
+}
+
+.stepActive .stepNumber {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.stepDone .stepNumber {
+  background: $admin-success;
+  color: #ffffff;
+}
+
+.formCard {
+  background: $admin-card-bg;
+  border-radius: $admin-border-radius;
+  padding: 32px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  margin-bottom: 24px;
+}
+
+.fieldGroup {
+  margin-bottom: 24px;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+.label {
+  display: block;
+  font-size: $admin-font-base;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 8px;
+}
+
+.required {
+  color: $admin-danger;
+}
+
+.input {
+  width: 100%;
+  height: $admin-input-height;
+  padding: 0 20px;
+  font-size: $admin-font-base;
+  border: 2px solid #d1d5db;
+  border-radius: $admin-border-radius;
+  background: #ffffff;
+  color: #111827;
+  outline: none;
+  transition: border-color 150ms ease;
+  box-sizing: border-box;
+
+  &:focus {
+    border-color: $admin-info;
+  }
+
+  &::placeholder {
+    color: #9ca3af;
+  }
+}
+
+.inputError {
+  border-color: $admin-danger;
+}
+
+.textarea {
+  width: 100%;
+  min-height: 120px;
+  padding: 14px 20px;
+  font-size: $admin-font-base;
+  border: 2px solid #d1d5db;
+  border-radius: $admin-border-radius;
+  background: #ffffff;
+  color: #111827;
+  outline: none;
+  resize: vertical;
+  font-family: inherit;
+  transition: border-color 150ms ease;
+  box-sizing: border-box;
+
+  &:focus {
+    border-color: $admin-info;
+  }
+}
+
+.errorMsg {
+  font-size: $admin-font-small;
+  color: $admin-danger;
+  margin-top: 6px;
+}
+
+.reviewGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.reviewItem {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.reviewLabel {
+  font-size: $admin-font-small;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.reviewValue {
+  font-size: $admin-font-base;
+  color: #111827;
+}
+
+.reviewFull {
+  grid-column: 1 / -1;
+}
+
+.actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.backBtn {
+  height: $admin-btn-height;
+  padding: 0 28px;
+  font-size: $admin-font-base;
+  font-weight: 600;
+  border: 2px solid #d1d5db;
+  border-radius: $admin-border-radius;
+  background: #ffffff;
+  color: #374151;
+  cursor: pointer;
+  transition: background 150ms ease;
+
+  &:hover {
+    background: #f3f4f6;
+  }
+}
+
+.nextBtn {
+  height: $admin-btn-height;
+  padding: 0 32px;
+  font-size: $admin-font-base;
+  font-weight: 600;
+  border: none;
+  border-radius: $admin-border-radius;
+  background: $admin-sidebar-active;
+  color: #ffffff;
+  cursor: pointer;
+  transition: opacity 150ms ease;
+
+  &:hover:not(:disabled) {
+    opacity: 0.9;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+.toast {
+  position: fixed;
+  bottom: 32px;
+  right: 32px;
+  padding: 16px 28px;
+  border-radius: $admin-border-radius;
+  font-size: $admin-font-base;
+  font-weight: 600;
+  color: #ffffff;
+  z-index: 1100;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+}
+
+.toastSuccess {
+  background: $admin-success;
+}
+
+.toastError {
+  background: $admin-danger;
+}
+
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 300px;
+  font-size: $admin-font-base;
+  color: #6b7280;
+}

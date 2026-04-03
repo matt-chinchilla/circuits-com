@@ -1,0 +1,61 @@
+@use '../../styles/admin/variables' as *;
+
+.page {
+  max-width: 1400px;
+}
+
+.title {
+  font-size: $admin-font-heading;
+  font-weight: 700;
+  color: #111827;
+  margin: 0 0 8px;
+}
+
+.subtitle {
+  font-size: $admin-font-base;
+  color: #6b7280;
+  margin: 0 0 28px;
+}
+
+.chartsGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+.chartCard {
+  background: $admin-card-bg;
+  border-radius: $admin-border-radius;
+  padding: $admin-padding;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.chartCardFull {
+  grid-column: 1 / -1;
+}
+
+.chartTitle {
+  font-size: $admin-font-subheading;
+  font-weight: 700;
+  color: #111827;
+  margin: 0 0 20px;
+}
+
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  font-size: $admin-font-base;
+  color: #6b7280;
+}
+
+.error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: $admin-border-radius;
+  padding: $admin-padding;
+  font-size: $admin-font-base;
+  color: $admin-danger;
+  text-align: center;
+}

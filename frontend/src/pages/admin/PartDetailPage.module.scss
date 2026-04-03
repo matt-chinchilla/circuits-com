@@ -1,0 +1,208 @@
+@use '../../styles/admin/variables' as *;
+
+.page {
+  max-width: 1200px;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 28px;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.titleGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.title {
+  font-size: $admin-font-heading;
+  font-weight: 700;
+  color: #111827;
+  margin: 0;
+}
+
+.headerActions {
+  display: flex;
+  gap: 12px;
+}
+
+.editBtn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: $admin-btn-height;
+  padding: 0 24px;
+  font-size: $admin-font-base;
+  font-weight: 600;
+  border: none;
+  border-radius: $admin-border-radius;
+  background: $admin-info;
+  color: #ffffff;
+  cursor: pointer;
+  text-decoration: none;
+  transition: opacity 150ms ease;
+
+  &:hover {
+    opacity: 0.9;
+  }
+}
+
+.deleteBtn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: $admin-btn-height;
+  padding: 0 24px;
+  font-size: $admin-font-base;
+  font-weight: 600;
+  border: none;
+  border-radius: $admin-border-radius;
+  background: $admin-danger;
+  color: #ffffff;
+  cursor: pointer;
+  transition: opacity 150ms ease;
+
+  &:hover {
+    opacity: 0.9;
+  }
+}
+
+.infoCard {
+  background: $admin-card-bg;
+  border-radius: $admin-border-radius;
+  padding: $admin-padding;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  margin-bottom: 28px;
+}
+
+.infoGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
+}
+
+.infoItem {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.infoLabel {
+  font-size: $admin-font-small;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.infoValue {
+  font-size: $admin-font-base;
+  color: #111827;
+  word-break: break-word;
+
+  a {
+    color: $admin-info;
+    text-decoration: none;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+}
+
+.fullWidth {
+  grid-column: 1 / -1;
+}
+
+.sectionTitle {
+  font-size: $admin-font-subheading;
+  font-weight: 700;
+  color: #111827;
+  margin: 0 0 16px;
+}
+
+.listingsSection {
+  margin-top: 8px;
+}
+
+.priceBreaks {
+  margin-top: 8px;
+  padding: 12px 16px;
+  background: #f9fafb;
+  border-radius: 6px;
+}
+
+.priceBreakTitle {
+  font-size: $admin-font-small;
+  font-weight: 600;
+  color: #6b7280;
+  margin: 0 0 8px;
+}
+
+.priceBreakList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.priceBreakItem {
+  font-size: $admin-font-small;
+  color: #374151;
+  background: #ffffff;
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 1px solid #e5e7eb;
+}
+
+.stockGood {
+  color: $admin-success;
+  font-weight: 600;
+}
+
+.stockLow {
+  color: $admin-warning;
+  font-weight: 600;
+}
+
+.stockOut {
+  color: $admin-danger;
+  font-weight: 600;
+}
+
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  font-size: $admin-font-base;
+  color: #6b7280;
+}
+
+.error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: $admin-border-radius;
+  padding: $admin-padding;
+  font-size: $admin-font-base;
+  color: $admin-danger;
+  text-align: center;
+}
+
+.toast {
+  position: fixed;
+  bottom: 32px;
+  right: 32px;
+  padding: 16px 28px;
+  border-radius: $admin-border-radius;
+  font-size: $admin-font-base;
+  font-weight: 600;
+  color: #ffffff;
+  background: $admin-success;
+  z-index: 1100;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+}

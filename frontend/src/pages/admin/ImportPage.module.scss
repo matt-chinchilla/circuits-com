@@ -1,0 +1,447 @@
+@use '../../styles/admin/variables' as *;
+
+.page {
+  max-width: 1000px;
+}
+
+.title {
+  font-size: $admin-font-heading;
+  font-weight: 700;
+  color: #111827;
+  margin: 0 0 8px;
+}
+
+.subtitle {
+  font-size: $admin-font-base;
+  color: #6b7280;
+  margin: 0 0 28px;
+}
+
+.steps {
+  display: flex;
+  gap: 0;
+  margin-bottom: 32px;
+}
+
+.step {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  background: $admin-card-bg;
+  border: 2px solid #e5e7eb;
+  font-size: $admin-font-small;
+  font-weight: 600;
+  color: #9ca3af;
+  cursor: default;
+
+  &:first-child {
+    border-radius: $admin-border-radius 0 0 $admin-border-radius;
+  }
+
+  &:last-child {
+    border-radius: 0 $admin-border-radius $admin-border-radius 0;
+  }
+
+  &:not(:first-child) {
+    border-left: none;
+  }
+}
+
+.stepActive {
+  background: $admin-sidebar-active;
+  border-color: $admin-sidebar-active;
+  color: #ffffff;
+}
+
+.stepDone {
+  background: #ecfdf5;
+  border-color: $admin-success;
+  color: $admin-success;
+}
+
+.stepNumber {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: $admin-font-small;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.2);
+  flex-shrink: 0;
+}
+
+.stepActive .stepNumber {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.stepDone .stepNumber {
+  background: $admin-success;
+  color: #ffffff;
+}
+
+.card {
+  background: $admin-card-bg;
+  border-radius: $admin-border-radius;
+  padding: 32px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  margin-bottom: 24px;
+}
+
+.dropzone {
+  border: 3px dashed #d1d5db;
+  border-radius: $admin-border-radius;
+  padding: 60px 40px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 200ms ease, background 200ms ease;
+
+  &:hover {
+    border-color: $admin-info;
+    background: #f0f9ff;
+  }
+}
+
+.dropzoneActive {
+  border-color: $admin-info;
+  background: #f0f9ff;
+}
+
+.dropIcon {
+  font-size: 48px;
+  margin-bottom: 16px;
+  display: block;
+}
+
+.dropText {
+  font-size: $admin-font-base;
+  color: #374151;
+  margin: 0 0 8px;
+  font-weight: 600;
+}
+
+.dropHint {
+  font-size: $admin-font-small;
+  color: #9ca3af;
+  margin: 0;
+}
+
+.fileInfo {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px;
+  background: #ecfdf5;
+  border-radius: $admin-border-radius;
+  margin-top: 20px;
+}
+
+.fileIcon {
+  font-size: 28px;
+}
+
+.fileDetails {
+  flex: 1;
+}
+
+.fileName {
+  font-size: $admin-font-base;
+  font-weight: 600;
+  color: #111827;
+  margin: 0 0 4px;
+}
+
+.fileSize {
+  font-size: $admin-font-small;
+  color: #6b7280;
+  margin: 0;
+}
+
+.removeFile {
+  height: 40px;
+  padding: 0 16px;
+  font-size: $admin-font-small;
+  font-weight: 600;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #374151;
+  cursor: pointer;
+
+  &:hover {
+    background: #f3f4f6;
+  }
+}
+
+.mappingTitle {
+  font-size: $admin-font-subheading;
+  font-weight: 700;
+  color: #111827;
+  margin: 0 0 20px;
+}
+
+.supplierField {
+  margin-bottom: 24px;
+}
+
+.label {
+  display: block;
+  font-size: $admin-font-base;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 8px;
+}
+
+.required {
+  color: $admin-danger;
+}
+
+.select {
+  width: 100%;
+  max-width: 400px;
+  height: $admin-input-height;
+  padding: 0 16px;
+  font-size: $admin-font-base;
+  border: 2px solid #d1d5db;
+  border-radius: $admin-border-radius;
+  background: #ffffff;
+  color: #111827;
+  outline: none;
+  cursor: pointer;
+
+  &:focus {
+    border-color: $admin-info;
+  }
+}
+
+.mappingGrid {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 12px;
+  align-items: center;
+}
+
+.mappingHeader {
+  font-size: $admin-font-small;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.csvColumn {
+  font-size: $admin-font-base;
+  color: #111827;
+  font-weight: 500;
+  padding: 10px 0;
+}
+
+.mappingArrow {
+  font-size: 20px;
+  color: #9ca3af;
+  text-align: center;
+}
+
+.mappingSelect {
+  height: 42px;
+  padding: 0 12px;
+  font-size: $admin-font-small;
+  border: 2px solid #d1d5db;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #111827;
+  outline: none;
+  cursor: pointer;
+
+  &:focus {
+    border-color: $admin-info;
+  }
+}
+
+.previewTitle {
+  font-size: $admin-font-subheading;
+  font-weight: 700;
+  color: #111827;
+  margin: 0 0 8px;
+}
+
+.previewSubtitle {
+  font-size: $admin-font-small;
+  color: #6b7280;
+  margin: 0 0 20px;
+}
+
+.previewTable {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.errorRow {
+  background: #fef2f2;
+}
+
+.errorCell {
+  color: $admin-danger;
+  font-weight: 600;
+}
+
+.resultTitle {
+  font-size: $admin-font-subheading;
+  font-weight: 700;
+  color: #111827;
+  margin: 0 0 20px;
+}
+
+.resultStats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.resultStat {
+  background: #f9fafb;
+  border-radius: $admin-border-radius;
+  padding: 20px;
+  text-align: center;
+}
+
+.resultStatValue {
+  font-size: 32px;
+  font-weight: 700;
+  color: #111827;
+  margin: 0 0 4px;
+}
+
+.resultStatLabel {
+  font-size: $admin-font-small;
+  color: #6b7280;
+  margin: 0;
+}
+
+.resultStatSuccess .resultStatValue {
+  color: $admin-success;
+}
+
+.resultStatError .resultStatValue {
+  color: $admin-danger;
+}
+
+.errorList {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: $admin-border-radius;
+  padding: 20px;
+}
+
+.errorListTitle {
+  font-size: $admin-font-base;
+  font-weight: 600;
+  color: $admin-danger;
+  margin: 0 0 12px;
+}
+
+.errorListItems {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.errorListItem {
+  font-size: $admin-font-small;
+  color: #7f1d1d;
+}
+
+.actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.backBtn {
+  height: $admin-btn-height;
+  padding: 0 28px;
+  font-size: $admin-font-base;
+  font-weight: 600;
+  border: 2px solid #d1d5db;
+  border-radius: $admin-border-radius;
+  background: #ffffff;
+  color: #374151;
+  cursor: pointer;
+  transition: background 150ms ease;
+
+  &:hover {
+    background: #f3f4f6;
+  }
+}
+
+.nextBtn {
+  height: $admin-btn-height;
+  padding: 0 32px;
+  font-size: $admin-font-base;
+  font-weight: 600;
+  border: none;
+  border-radius: $admin-border-radius;
+  background: $admin-sidebar-active;
+  color: #ffffff;
+  cursor: pointer;
+  transition: opacity 150ms ease;
+
+  &:hover:not(:disabled) {
+    opacity: 0.9;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+.doneBtn {
+  height: $admin-btn-height;
+  padding: 0 32px;
+  font-size: $admin-font-base;
+  font-weight: 600;
+  border: none;
+  border-radius: $admin-border-radius;
+  background: $admin-success;
+  color: #ffffff;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  transition: opacity 150ms ease;
+
+  &:hover {
+    opacity: 0.9;
+  }
+}
+
+.importing {
+  text-align: center;
+  padding: 40px;
+}
+
+.importingText {
+  font-size: $admin-font-base;
+  color: #6b7280;
+  margin: 16px 0 0;
+}
+
+.spinner {
+  font-size: 40px;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
