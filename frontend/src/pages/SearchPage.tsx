@@ -15,7 +15,7 @@ const cardVariants = {
   visible: (i: number) => ({
     opacity: 1,
     y: 0,
-    transition: { delay: i * 0.06, duration: 0.35, ease: 'easeOut' as const },
+    transition: { delay: i * 0.06, duration: 0.155, ease: 'easeOut' as const },
   }),
 };
 
@@ -60,7 +60,7 @@ export default function SearchPage() {
       initial={{ opacity: 0, x: 20 }}
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
-      transition={{ duration: 0.3, ease: 'easeInOut' }}
+      transition={{ duration: 0.15, ease: 'easeInOut' }}
     >
       <Navbar />
 

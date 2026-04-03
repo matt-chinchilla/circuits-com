@@ -12,26 +12,26 @@ export interface SearchResults {
 
 export const api = {
   getCategories: () =>
-    client.get<Category[]>('/categories').then(r => r.data),
+    client.get<Category[]>('/categories/').then(r => r.data),
 
   getCategory: (slug: string) =>
-    client.get<CategoryDetail>(`/categories/${slug}`).then(r => r.data),
+    client.get<CategoryDetail>(`/categories/${slug}/`).then(r => r.data),
 
   search: (q: string) =>
-    client.get<SearchResults>('/search', { params: { q } }).then(r => r.data),
+    client.get<SearchResults>('/search/', { params: { q } }).then(r => r.data),
 
   getSuppliers: () =>
-    client.get<Supplier[]>('/suppliers').then(r => r.data),
+    client.get<Supplier[]>('/suppliers/').then(r => r.data),
 
   getSponsorByKeyword: (keyword: string) =>
-    client.get<Sponsor>(`/sponsors/keyword/${keyword}`).then(r => r.data),
+    client.get<Sponsor>(`/sponsors/keyword/${keyword}/`).then(r => r.data),
 
   submitContact: (data: Record<string, string>) =>
-    client.post('/contact', data),
+    client.post('/contact/', data),
 
   submitJoin: (data: Record<string, unknown>) =>
-    client.post('/join', data),
+    client.post('/join/', data),
 
   submitKeywordRequest: (data: Record<string, string>) =>
-    client.post('/keyword-request', data),
+    client.post('/keyword-request/', data),
 };
