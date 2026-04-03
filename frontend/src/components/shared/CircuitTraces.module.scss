@@ -12,14 +12,12 @@
 
 .trace {
   animation: draw-circuit 6s ease-out forwards;
-  filter: drop-shadow(0 0 1.5px rgba(218, 190, 65, 0.5));
 }
 
 .node {
-  animation: node-glow 4s ease-in-out infinite;
-  filter: drop-shadow(0 0 2px rgba(232, 190, 45, 0.6));
+  opacity: 0.4;
 }
 
 .electron {
-  filter: drop-shadow(0 0 2px rgba(255, 220, 50, 0.9));
+  opacity: 0.9;
 }
