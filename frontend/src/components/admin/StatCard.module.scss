@@ -1,0 +1,73 @@
+@use '../../styles/admin/variables' as *;
+
+.card {
+  background: $admin-card-bg;
+  border-radius: $admin-border-radius;
+  padding: $admin-padding;
+  min-height: $admin-card-min-height;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.clickable {
+  cursor: pointer;
+  transition: box-shadow 200ms ease;
+
+  &:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  }
+
+  &:focus-visible {
+    outline: 2px solid $admin-info;
+    outline-offset: 2px;
+  }
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.label {
+  font-size: $admin-font-small;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.icon {
+  font-size: 24px;
+  line-height: 1;
+}
+
+.value {
+  font-size: 32px;
+  font-weight: 700;
+  color: #111827;
+  line-height: 1.2;
+}
+
+.trend {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: $admin-font-small;
+}
+
+.trendUp {
+  color: $admin-success;
+}
+
+.trendDown {
+  color: $admin-danger;
+}
+
+.trendValue {
+  font-weight: 600;
+}
+
+.trendLabel {
+  color: #9ca3af;
+}

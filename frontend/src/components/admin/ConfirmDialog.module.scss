@@ -1,0 +1,88 @@
+@use '../../styles/admin/variables' as *;
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 24px;
+}
+
+.dialog {
+  background: $admin-card-bg;
+  border-radius: $admin-border-radius;
+  padding: 32px;
+  max-width: 480px;
+  width: 100%;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+}
+
+.title {
+  font-size: $admin-font-heading;
+  font-weight: 700;
+  color: #111827;
+  margin: 0 0 12px;
+}
+
+.message {
+  font-size: $admin-font-base;
+  color: #4b5563;
+  line-height: 1.6;
+  margin: 0 0 28px;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.cancelBtn {
+  height: $admin-btn-height;
+  padding: 0 24px;
+  font-size: $admin-font-base;
+  font-weight: 600;
+  border: 2px solid #d1d5db;
+  border-radius: $admin-border-radius;
+  background: white;
+  color: #374151;
+  cursor: pointer;
+  transition: background 150ms ease;
+
+  &:hover {
+    background: #f3f4f6;
+  }
+}
+
+.confirmBtn {
+  height: $admin-btn-height;
+  padding: 0 24px;
+  font-size: $admin-font-base;
+  font-weight: 600;
+  border: none;
+  border-radius: $admin-border-radius;
+  background: $admin-success;
+  color: white;
+  cursor: pointer;
+  transition: opacity 150ms ease;
+
+  &:hover {
+    opacity: 0.9;
+  }
+
+  &:focus-visible {
+    outline: 2px solid $admin-success;
+    outline-offset: 2px;
+  }
+}
+
+.danger {
+  background: $admin-danger;
+
+  &:focus-visible {
+    outline-color: $admin-danger;
+  }
+}

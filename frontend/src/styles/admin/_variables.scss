@@ -1,0 +1,23 @@
+// Admin dashboard sizing — designed for older users
+$admin-font-base: 18px;
+$admin-font-heading: 28px;
+$admin-font-subheading: 22px;
+$admin-font-small: 16px; // nothing smaller than 16px
+$admin-btn-height: 48px;
+$admin-card-min-height: 80px;
+$admin-input-height: 48px;
+$admin-sidebar-width: 260px;
+$admin-topbar-height: 64px;
+$admin-border-radius: 8px;
+$admin-padding: 24px;
+
+// Admin colors
+$admin-bg: #f5f7fa;
+$admin-sidebar-bg: #1a2332;
+$admin-sidebar-text: #c8d6e5;
+$admin-sidebar-active: #0a4a2e;
+$admin-card-bg: #ffffff;
+$admin-success: #27ae60;
+$admin-warning: #f39c12;
+$admin-danger: #e74c3c;
+$admin-info: #3498db;
