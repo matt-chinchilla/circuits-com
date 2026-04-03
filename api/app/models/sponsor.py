@@ -1,5 +1,7 @@
 import uuid
-from sqlalchemy import Column, String, Text, ForeignKey, CheckConstraint
+from datetime import datetime, timezone
+
+from sqlalchemy import Column, Date, DateTime, String, Text, ForeignKey, CheckConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from app.db.session import Base
@@ -15,6 +17,19 @@ class Sponsor(Base):
     image_url = Column(String(500), nullable=True)
     description = Column(Text, nullable=True)
     tier = Column(String(10), default="gold")
+    start_date = Column(Date, nullable=True)
+    end_date = Column(Date, nullable=True)
+    created_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=True,
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        nullable=True,
+    )
 
     __table_args__ = (
         CheckConstraint(

@@ -1,5 +1,7 @@
 import uuid
-from sqlalchemy import Column, String, Integer, ForeignKey
+from datetime import datetime, timezone
+
+from sqlalchemy import Column, DateTime, String, Integer, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from app.db.session import Base
@@ -14,6 +16,17 @@ class Category(Base):
     icon = Column(String(10), default="⚡")
     parent_id = Column(UUID(as_uuid=True), ForeignKey("categories.id"), nullable=True)
     sort_order = Column(Integer, default=0)
+    created_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=True,
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        nullable=True,
+    )
 
     children = relationship("Category", back_populates="parent", lazy="selectin")
     parent = relationship("Category", back_populates="children", remote_side=[id])

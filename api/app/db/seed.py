@@ -1,21 +1,36 @@
-"""Seed script — populate categories, suppliers, category_suppliers, and sponsors.
+"""Seed script — populate categories, suppliers, category_suppliers, sponsors,
+admin user, parts, part listings, price breaks, and revenue.
 
 Run with:
     python -m app.db.seed
 
 The script is idempotent: it uses get-or-create semantics keyed on slug (categories)
-and name (suppliers), so it is safe to run multiple times.
+and name (suppliers/users), so it is safe to run multiple times.
 """
 
 from __future__ import annotations
 
+import random
 import re
+from datetime import date, timedelta
+from decimal import Decimal
 from typing import Optional
 
+import bcrypt
 from sqlalchemy.orm import Session
 
 from app.db.session import SessionLocal
-from app.models import Category, CategorySupplier, Sponsor, Supplier
+from app.models import (
+    Category,
+    CategorySupplier,
+    Part,
+    PartListing,
+    PriceBreak,
+    Revenue,
+    Sponsor,
+    Supplier,
+    User,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -452,7 +467,223 @@ def seed(db: Session) -> None:
     )
 
     db.commit()
+    print("Seed: categories, suppliers, sponsors done.")
+
+    # ------------------------------------------------------------------
+    # 5. Admin user
+    # ------------------------------------------------------------------
+    _seed_admin_user(db)
+
+    # ------------------------------------------------------------------
+    # 6. Parts, listings, price breaks
+    # ------------------------------------------------------------------
+    _seed_parts(db, cats, suppliers)
+
+    # ------------------------------------------------------------------
+    # 7. Revenue placeholder data (12 months)
+    # ------------------------------------------------------------------
+    _seed_revenue(db, suppliers)
+
+    db.commit()
     print("Seed completed successfully.")
+
+
+# ---------------------------------------------------------------------------
+# Admin user
+# ---------------------------------------------------------------------------
+
+def _seed_admin_user(db: Session) -> None:
+    existing = db.query(User).filter(User.username == "john").first()
+    if existing:
+        return
+    hashed = bcrypt.hashpw("circuits2026".encode(), bcrypt.gensalt()).decode()
+    db.add(User(username="john", password_hash=hashed, role="admin"))
+    db.flush()
+    print("Seed: admin user created.")
+
+
+# ---------------------------------------------------------------------------
+# Parts and listings
+# ---------------------------------------------------------------------------
+
+# Realistic IC part numbers by category keyword
+_PART_CATALOG: list[tuple[str, list[tuple[str, str, str]]]] = [
+    ("Power Management", [
+        ("LM7805CT", "Texas Instruments", "5V 1.5A Linear Voltage Regulator"),
+        ("TPS65217C", "Texas Instruments", "Power Management IC for AM335x"),
+        ("LT3045", "Analog Devices", "20V 500mA Ultralow Noise LDO"),
+        ("MP2307DN", "Monolithic Power", "3A 23V Step-Down Converter"),
+        ("BQ24195", "Texas Instruments", "4.5A Single-Cell USB Charger IC"),
+    ]),
+    ("Microcontrollers", [
+        ("STM32F407VGT6", "STMicroelectronics", "ARM Cortex-M4 168MHz MCU"),
+        ("ATMEGA328P-PU", "Microchip", "8-bit AVR MCU 32KB Flash"),
+        ("ESP32-WROOM-32E", "Espressif", "Wi-Fi+BT MCU Module"),
+        ("RP2040", "Raspberry Pi", "Dual-Core ARM Cortex-M0+ MCU"),
+        ("PIC18F4550", "Microchip", "USB 2.0 Full-Speed MCU"),
+    ]),
+    ("Analog", [
+        ("LM358N", "Texas Instruments", "Dual Operational Amplifier"),
+        ("AD8221ARZ", "Analog Devices", "Precision Instrumentation Amplifier"),
+        ("OPA2134PA", "Texas Instruments", "Audio Dual Op-Amp"),
+        ("MCP6002", "Microchip", "1MHz Low-Power Dual Op-Amp"),
+        ("LM393N", "Texas Instruments", "Dual Differential Comparator"),
+    ]),
+    ("Interface", [
+        ("MAX232CPE", "Maxim Integrated", "Dual RS-232 Driver/Receiver"),
+        ("FT232RL", "FTDI", "USB to Serial UART IC"),
+        ("SN65HVD230", "Texas Instruments", "3.3V CAN Bus Transceiver"),
+        ("CP2102N", "Silicon Labs", "USB to UART Bridge Controller"),
+        ("TXB0108PWR", "Texas Instruments", "8-Bit Bidirectional Level Shifter"),
+    ]),
+    ("Memory", [
+        ("AT24C256", "Microchip", "256Kbit I2C Serial EEPROM"),
+        ("W25Q128JV", "Winbond", "128Mbit Serial NOR Flash"),
+        ("IS62WV25616", "ISSI", "256K x 16 High-Speed SRAM"),
+        ("MT48LC16M16A2", "Micron", "256Mbit SDRAM"),
+        ("S25FL512S", "Infineon", "512Mbit SPI NOR Flash"),
+    ]),
+    ("Logic", [
+        ("SN74HC595N", "Texas Instruments", "8-Bit Shift Register"),
+        ("CD4017BE", "Texas Instruments", "Decade Counter/Divider"),
+        ("SN74LS00N", "Texas Instruments", "Quad 2-Input NAND Gate"),
+        ("74HC245", "NXP", "Octal Bus Transceiver"),
+        ("SN74HC138N", "Texas Instruments", "3-to-8 Line Decoder"),
+    ]),
+    ("RF", [
+        ("CC2541F256", "Texas Instruments", "Bluetooth Low Energy SoC"),
+        ("SI4463", "Silicon Labs", "High-Performance RF Transceiver"),
+        ("UBLOX-NEO-6M", "u-blox", "GPS Receiver Module"),
+        ("NRF24L01P", "Nordic Semi", "2.4GHz RF Transceiver"),
+        ("SX1276", "Semtech", "LoRa Long Range Transceiver"),
+    ]),
+    ("Sensor", [
+        ("BME280", "Bosch", "Humidity/Pressure/Temperature Sensor"),
+        ("MPU6050", "InvenSense", "6-Axis Accelerometer + Gyroscope"),
+        ("LM35DZ", "Texas Instruments", "Precision Temperature Sensor"),
+        ("ADXL345", "Analog Devices", "3-Axis Digital Accelerometer"),
+        ("BMP390", "Bosch", "High-Performance Barometric Pressure Sensor"),
+    ]),
+    ("Audio", [
+        ("MAX98357A", "Maxim Integrated", "I2S Class D Mono Amplifier"),
+        ("WM8731", "Cirrus Logic", "Portable Internet Audio CODEC"),
+        ("TPA3116D2", "Texas Instruments", "50W Stereo Class-D Amplifier"),
+        ("PCM5102A", "Texas Instruments", "32-bit 384kHz DAC"),
+        ("ICS43434", "TDK", "Multi-Mode Digital Microphone"),
+    ]),
+    ("Clock", [
+        ("DS3231SN", "Maxim Integrated", "Extremely Accurate RTC"),
+        ("SI5351A", "Silicon Labs", "I2C Programmable Clock Generator"),
+        ("NE555P", "Texas Instruments", "Precision Timer IC"),
+        ("DS1307Z", "Maxim Integrated", "64 x 8 Serial RTC"),
+        ("LMK00105", "Texas Instruments", "1:5 LVCMOS Clock Buffer"),
+    ]),
+]
+
+
+def _seed_parts(
+    db: Session,
+    cats: dict[str, Category],
+    suppliers: dict[str, Supplier],
+) -> None:
+    if db.query(Part).first():
+        return
+
+    random.seed(42)  # reproducible placeholder data
+    supplier_list = list(suppliers.values())
+
+    for cat_keyword, parts_data in _PART_CATALOG:
+        # Find matching top-level category
+        matching_cat = None
+        for cat_name, cat_obj in cats.items():
+            if cat_keyword.lower() in cat_name.lower() and cat_obj.parent_id is None:
+                matching_cat = cat_obj
+                break
+
+        for mpn, manufacturer, description in parts_data:
+            part = Part(
+                mpn=mpn,
+                description=description,
+                manufacturer_name=manufacturer,
+                category_id=matching_cat.id if matching_cat else None,
+            )
+            db.add(part)
+            db.flush()
+
+            # 2-4 distributor listings per part
+            num_listings = random.randint(2, 4)
+            chosen_suppliers = random.sample(
+                supplier_list, min(num_listings, len(supplier_list))
+            )
+            for sup in chosen_suppliers:
+                base_price = Decimal(str(round(random.uniform(0.15, 45.00), 4)))
+                listing = PartListing(
+                    part_id=part.id,
+                    supplier_id=sup.id,
+                    sku=f"{sup.name[:3].upper()}-{mpn}",
+                    stock_quantity=random.randint(0, 50000),
+                    lead_time_days=random.choice([0, 1, 3, 7, 14, 21]),
+                    unit_price=base_price,
+                )
+                db.add(listing)
+                db.flush()
+
+                # Price breaks: qty 10, 100, 1000
+                for qty, discount in [(10, 0.95), (100, 0.85), (1000, 0.70)]:
+                    db.add(PriceBreak(
+                        listing_id=listing.id,
+                        min_quantity=qty,
+                        unit_price=Decimal(str(round(float(base_price) * discount, 4))),
+                    ))
+
+    db.flush()
+    print(f"Seed: {db.query(Part).count()} parts, {db.query(PartListing).count()} listings created.")
+
+
+# ---------------------------------------------------------------------------
+# Revenue placeholder (12 months)
+# ---------------------------------------------------------------------------
+
+def _seed_revenue(db: Session, suppliers: dict[str, Supplier]) -> None:
+    if db.query(Revenue).first():
+        return
+
+    random.seed(99)
+    today = date.today()
+    supplier_list = list(suppliers.values())
+
+    for months_ago in range(12, 0, -1):
+        period_start = (today.replace(day=1) - timedelta(days=30 * months_ago)).replace(day=1)
+        # Last day of month
+        if period_start.month == 12:
+            period_end = period_start.replace(year=period_start.year + 1, month=1, day=1) - timedelta(days=1)
+        else:
+            period_end = period_start.replace(month=period_start.month + 1, day=1) - timedelta(days=1)
+
+        for sup in supplier_list:
+            # Sponsorship revenue (not all suppliers every month)
+            if random.random() > 0.4:
+                db.add(Revenue(
+                    supplier_id=sup.id,
+                    type="sponsorship",
+                    amount=Decimal(str(random.choice([250, 500, 750, 1000, 1500]))),
+                    description=f"Monthly sponsorship - {sup.name}",
+                    period_start=period_start,
+                    period_end=period_end,
+                ))
+            # Listing fees (smaller, more frequent)
+            if random.random() > 0.3:
+                db.add(Revenue(
+                    supplier_id=sup.id,
+                    type="listing_fee",
+                    amount=Decimal(str(random.choice([50, 100, 150, 200]))),
+                    description=f"Listing fee - {sup.name}",
+                    period_start=period_start,
+                    period_end=period_end,
+                ))
+
+    db.flush()
+    print(f"Seed: {db.query(Revenue).count()} revenue records created.")
 
 
 # ---------------------------------------------------------------------------

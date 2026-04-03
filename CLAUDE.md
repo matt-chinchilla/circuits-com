@@ -33,6 +33,17 @@ npm run build                      # Production build
 npx tsc --noEmit                   # Type check
 ```
 
+### Deployment
+```bash
+./deploy.sh                # Full deploy (push key + pull + rebuild)
+./deploy.sh --frontend     # Frontend-only (faster)
+./deploy.sh --reseed       # Full deploy + clear & reseed DB
+./deploy.sh --status       # Check container status
+./deploy.sh --logs         # Tail container logs
+./deploy.sh --cert-renew   # Renew Let's Encrypt certificate
+```
+> Requires: AWS CLI configured, VPN connected (WireGuard), SSH key at ~/.ssh/id_ed25519, changes committed and pushed.
+
 > No ESLint or Prettier configured. TypeScript strict mode (`noUnusedLocals`, `noUnusedParameters`) is the only static analysis. Frontend has no tests — only the API has a pytest suite.
 
 ## Architecture
@@ -40,9 +51,10 @@ npx tsc --noEmit                   # Type check
 5 Docker containers orchestrated by docker-compose.yml:
 
 ```
-Browser → Nginx(:80)
+Browser → Nginx(:80/:443)
   ├── /        → Frontend(:3000) — Vite React SPA
-  └── /api/*   → API(:8000)     — FastAPI
+  ├── /api/*   → API(:8000)     — FastAPI
+  └── /admin   → API(:8000)     — SQLAdmin panel
                     ↕
               PostgreSQL(:5432)
                     ↕
@@ -53,7 +65,9 @@ Browser → Nginx(:80)
 - FastAPI app in `app/main.py`, mounts 5 routers (categories, suppliers, search, forms, sponsors)
 - Models: Category (self-referential tree), Supplier, CategorySupplier (join), Sponsor (XOR constraint: category_id OR keyword)
 - Services layer: `category_service.py`, `search_service.py`
-- Config via pydantic-settings: `DATABASE_URL`, `N8N_WEBHOOK_BASE_URL`, `CORS_ORIGINS`
+- SQLAdmin panel at `/admin` with 4 views: Supplier, Category, CategorySupplier ("Category Assignment"), Sponsor
+- Admin auth: session-based via `AdminAuth` class in `app/admin.py`
+- Config via pydantic-settings: `DATABASE_URL`, `N8N_WEBHOOK_BASE_URL`, `CORS_ORIGINS`, `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `ADMIN_SECRET_KEY`
 - Entrypoint runs: alembic migrate → seed → uvicorn
 
 ### Frontend (frontend/)
@@ -85,9 +99,9 @@ All pages wrap content in `motion.div` with consistent transition:
 initial={{ opacity: 0, x: 20 }}
 animate={{ opacity: 1, x: 0 }}
 exit={{ opacity: 0, x: -20 }}
-transition={{ duration: 0.3, ease: 'easeInOut' as const }}
+transition={{ duration: 0.15, ease: 'easeInOut' as const }}
 ```
-`App.tsx` uses `AnimatePresence` + `useLocation` for exit animations.
+`App.tsx` uses `AnimatePresence mode="popLayout"` + `useLocation` for crossfade transitions.
 
 ### API Route Convention
 All API routes prefixed with `/api/`. Router prefix set in each route file.
@@ -106,12 +120,16 @@ All API routes prefixed with `/api/`. Router prefix set in each route file.
 - n8n workflows need SMTP credentials at runtime for email nodes; they have `continueOnFail: true` for demo mode
 - Frontend Dockerfile has 3 stages: `dev` (Vite), `build`, `prod` (nginx) — docker-compose.yml targets dev by default
 - Frontend prod stage serves on port 80 (nginx), dev stage on port 3000 (Vite)
+- Never animate CSS `drop-shadow()` filters — causes severe scroll lag; use static shadows only
+- `AnimatePresence mode="popLayout"` for crossfade page transitions (not `mode="wait"` which blocks)
+- `/api/health` endpoint exists for health checks
+- ProxyHeadersMiddleware trusts all hosts — required for admin panel HTTPS URL generation behind nginx
 
 ## Brand Colors
 
 ```
-$executive-blue: #274C77  (headers, hero backgrounds)
-$nav-blue: #0F78A9        (nav strip, links, accents)
+$executive-blue: #0a4a2e  (PCB dark green — headers, hero backgrounds)
+$nav-blue: #44bd13        (bright green — nav strip, links, accents)
 $sponsor-gold: #a88d2e    (sponsor blocks, premium CTAs)
 $surface: #eef1f5         (page backgrounds)
 ```

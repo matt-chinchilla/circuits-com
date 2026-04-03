@@ -1,5 +1,7 @@
 import uuid
-from sqlalchemy import Column, String, Text, Boolean, Integer, ForeignKey
+from datetime import datetime, timezone
+
+from sqlalchemy import Column, DateTime, String, Text, Boolean, Integer, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from app.db.session import Base
@@ -15,6 +17,17 @@ class Supplier(Base):
     email = Column(String(200))
     description = Column(Text, nullable=True)
     logo_url = Column(String(500), nullable=True)
+    created_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=True,
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        nullable=True,
+    )
 
     category_associations = relationship("CategorySupplier", back_populates="supplier", lazy="selectin")
 
