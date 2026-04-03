@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 from app.config import settings
-from app.routes import categories, suppliers, search, forms, sponsors
+from app.routes import categories, suppliers, search, forms, sponsors, auth, dashboard, parts
 from app.admin import setup_admin
 
 app = FastAPI(title="Circuits.com API", version="0.1.0")
@@ -21,6 +21,9 @@ app.include_router(suppliers.router)
 app.include_router(search.router)
 app.include_router(forms.router)
 app.include_router(sponsors.router)
+app.include_router(auth.router)
+app.include_router(dashboard.router)
+app.include_router(parts.router)
 
 
 setup_admin(app)
