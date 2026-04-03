@@ -43,10 +43,12 @@
 }
 
 .value {
+  font-family: $admin-font-mono;
   font-size: 32px;
   font-weight: 700;
   color: #111827;
   line-height: 1.2;
+  letter-spacing: -0.02em;
 }
 
 .trend {

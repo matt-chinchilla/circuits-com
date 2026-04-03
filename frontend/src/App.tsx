@@ -20,7 +20,9 @@ import ReportsPage from './pages/admin/ReportsPage'
 import CategoriesPage from './pages/admin/CategoriesPage'
 import SponsorsPage from './pages/admin/SponsorsPage'
 import AdminLayout from './components/admin/AdminLayout'
+import DemoToggle from './components/admin/DemoToggle'
 import ProtectedRoute from './components/admin/ProtectedRoute'
+import { DemoProvider } from './contexts/DemoContext'
 
 function App() {
   const location = useLocation()
@@ -28,33 +30,36 @@ function App() {
   // Admin routes live outside AnimatePresence — admin has its own layout
   if (location.pathname.startsWith('/admin')) {
     return (
-      <Routes>
-        <Route path="/admin/login" element={<LoginPage />} />
-        <Route
-          path="/admin/*"
-          element={
-            <ProtectedRoute>
-              <AdminLayout>
-                <Routes>
-                  <Route index element={<DashboardPage />} />
-                  <Route path="suppliers" element={<SuppliersPage />} />
-                  <Route path="suppliers/new" element={<SupplierFormPage />} />
-                  <Route path="suppliers/:id" element={<SupplierDetailPage />} />
-                  <Route path="suppliers/:id/edit" element={<SupplierFormPage />} />
-                  <Route path="parts" element={<PartsPage />} />
-                  <Route path="parts/new" element={<PartFormPage />} />
-                  <Route path="parts/:id" element={<PartDetailPage />} />
-                  <Route path="parts/:id/edit" element={<PartFormPage />} />
-                  <Route path="import" element={<ImportPage />} />
-                  <Route path="reports" element={<ReportsPage />} />
-                  <Route path="categories" element={<CategoriesPage />} />
-                  <Route path="sponsors" element={<SponsorsPage />} />
-                </Routes>
-              </AdminLayout>
-            </ProtectedRoute>
-          }
-        />
-      </Routes>
+      <DemoProvider>
+        <Routes>
+          <Route path="/admin/login" element={<LoginPage />} />
+          <Route
+            path="/admin/*"
+            element={
+              <ProtectedRoute>
+                <AdminLayout>
+                  <Routes>
+                    <Route index element={<DashboardPage />} />
+                    <Route path="suppliers" element={<SuppliersPage />} />
+                    <Route path="suppliers/new" element={<SupplierFormPage />} />
+                    <Route path="suppliers/:id" element={<SupplierDetailPage />} />
+                    <Route path="suppliers/:id/edit" element={<SupplierFormPage />} />
+                    <Route path="parts" element={<PartsPage />} />
+                    <Route path="parts/new" element={<PartFormPage />} />
+                    <Route path="parts/:id" element={<PartDetailPage />} />
+                    <Route path="parts/:id/edit" element={<PartFormPage />} />
+                    <Route path="import" element={<ImportPage />} />
+                    <Route path="reports" element={<ReportsPage />} />
+                    <Route path="categories" element={<CategoriesPage />} />
+                    <Route path="sponsors" element={<SponsorsPage />} />
+                  </Routes>
+                  <DemoToggle />
+                </AdminLayout>
+              </ProtectedRoute>
+            }
+          />
+        </Routes>
+      </DemoProvider>
     )
   }
 

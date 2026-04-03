@@ -54,7 +54,7 @@ def upgrade() -> None:
     op.create_table(
         "parts",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
-        sa.Column("mpn", sa.String(100), nullable=False, index=True),
+        sa.Column("sku", sa.String(100), nullable=False, index=True),
         sa.Column("description", sa.Text(), nullable=True),
         sa.Column("manufacturer_name", sa.String(200), nullable=False),
         sa.Column(

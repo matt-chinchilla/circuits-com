@@ -59,7 +59,7 @@ export interface PartListing {
 
 export interface Part {
   id: string;
-  mpn: string;
+  sku: string;
   manufacturer_name: string;
   description: string | null;
   category_id: string | null;

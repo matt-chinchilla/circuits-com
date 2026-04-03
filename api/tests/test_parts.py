@@ -28,14 +28,14 @@ class TestListParts:
         assert resp.status_code == 200
         data = resp.json()
         assert data["total"] == 1
-        assert data["items"][0]["mpn"] == "LM7805CT"
+        assert data["items"][0]["sku"] == "LM7805CT"
 
     def test_list_parts_search_by_description(self, client, seeded_db):
         resp = client.get("/api/parts/?search=Cortex")
         assert resp.status_code == 200
         data = resp.json()
         assert data["total"] == 1
-        assert data["items"][0]["mpn"] == "STM32F407VGT6"
+        assert data["items"][0]["sku"] == "STM32F407VGT6"
 
     def test_list_parts_with_category_filter(self, client, seeded_db):
         category_id = str(seeded_db["child"].id)
@@ -65,13 +65,13 @@ class TestCreatePart:
     def test_create_part(self, client, seeded_db):
         headers = _auth_header(client)
         resp = client.post("/api/parts/", json={
-            "mpn": "NE555P",
+            "sku": "NE555P",
             "description": "Timer IC",
             "manufacturer_name": "Texas Instruments",
         }, headers=headers)
         assert resp.status_code == 200
         data = resp.json()
-        assert data["mpn"] == "NE555P"
+        assert data["sku"] == "NE555P"
         assert data["manufacturer_name"] == "Texas Instruments"
         assert data["id"] is not None
 
@@ -79,7 +79,7 @@ class TestCreatePart:
         headers = _auth_header(client)
         cat_id = str(seeded_db["child"].id)
         resp = client.post("/api/parts/", json={
-            "mpn": "NE556P",
+            "sku": "NE556P",
             "manufacturer_name": "TI",
             "category_id": cat_id,
             "lifecycle_status": "active",
@@ -89,7 +89,7 @@ class TestCreatePart:
 
     def test_create_part_requires_auth(self, client, seeded_db):
         resp = client.post("/api/parts/", json={
-            "mpn": "NE555P",
+            "sku": "NE555P",
             "manufacturer_name": "TI",
         })
         assert resp.status_code == 401
@@ -101,7 +101,7 @@ class TestGetPartDetail:
         resp = client.get(f"/api/parts/{part_id}")
         assert resp.status_code == 200
         data = resp.json()
-        assert data["mpn"] == "LM7805CT"
+        assert data["sku"] == "LM7805CT"
         assert "listings" in data
         assert len(data["listings"]) == 2
         # Check listing structure
@@ -133,8 +133,8 @@ class TestUpdatePart:
         }, headers=headers)
         assert resp.status_code == 200
         assert resp.json()["description"] == "Updated description"
-        # mpn unchanged
-        assert resp.json()["mpn"] == "LM7805CT"
+        # sku unchanged
+        assert resp.json()["sku"] == "LM7805CT"
 
     def test_update_part_requires_auth(self, client, seeded_db):
         part_id = str(seeded_db["part1"].id)
@@ -186,15 +186,15 @@ class TestBatchImport:
             "supplier_id": supplier_id,
             "parts": [
                 {
-                    "mpn": "BATCH001",
+                    "sku": "BATCH001",
                     "manufacturer_name": "Batch Corp",
                     "description": "Batch part 1",
                     "unit_price": 1.50,
-                    "sku": "B001",
+                    "listing_sku": "B001",
                     "stock_quantity": 100,
                 },
                 {
-                    "mpn": "BATCH002",
+                    "sku": "BATCH002",
                     "manufacturer_name": "Batch Corp",
                     "description": "Batch part 2",
                 },
@@ -212,7 +212,7 @@ class TestBatchImport:
             "supplier_id": supplier_id,
             "parts": [
                 {
-                    "mpn": "",
+                    "sku": "",
                     "manufacturer_name": "Corp",
                 },
             ],

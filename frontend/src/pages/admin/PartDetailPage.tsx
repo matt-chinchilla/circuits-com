@@ -71,13 +71,13 @@ export default function PartDetailPage() {
         items={[
           { label: 'Dashboard', href: '/admin' },
           { label: 'Parts', href: '/admin/parts' },
-          { label: part.mpn },
+          { label: part.sku },
         ]}
       />
 
       <div className={styles.header}>
         <div className={styles.titleGroup}>
-          <h1 className={styles.title}>{part.mpn}</h1>
+          <h1 className={styles.title}>{part.sku}</h1>
         </div>
         <div className={styles.headerActions}>
           <Link to={`/admin/parts/${id}/edit`} className={styles.editBtn}>
@@ -175,7 +175,7 @@ export default function PartDetailPage() {
       <ConfirmDialog
         open={confirmDelete}
         title="Delete Part"
-        message={`Are you sure you want to delete "${part.mpn}"? This action cannot be undone and will also remove all associated listings.`}
+        message={`Are you sure you want to delete "${part.sku}"? This action cannot be undone and will also remove all associated listings.`}
         confirmLabel="Delete"
         onConfirm={handleDelete}
         onCancel={() => setConfirmDelete(false)}

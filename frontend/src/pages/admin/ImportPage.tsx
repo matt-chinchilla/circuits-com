@@ -11,7 +11,7 @@ const STEPS = ['Upload', 'Map Columns', 'Preview', 'Confirm'];
 
 const FIELD_OPTIONS = [
   { value: '', label: '-- Skip --' },
-  { value: 'mpn', label: 'MPN (required)' },
+  { value: 'sku', label: 'SKU (required)' },
   { value: 'manufacturer_name', label: 'Manufacturer (required)' },
   { value: 'description', label: 'Description' },
   { value: 'category_id', label: 'Category ID' },
@@ -22,7 +22,7 @@ const FIELD_OPTIONS = [
 
 function guessMapping(header: string): string {
   const h = header.toLowerCase().trim();
-  if (h === 'mpn' || h === 'part_number' || h === 'part number') return 'mpn';
+  if (h === 'sku' || h === 'mpn' || h === 'part_number' || h === 'part number') return 'sku';
   if (h.includes('manufacturer') || h === 'mfr') return 'manufacturer_name';
   if (h.includes('desc')) return 'description';
   if (h === 'category_id' || h === 'category') return 'category_id';
@@ -100,7 +100,7 @@ export default function ImportPage() {
   }
 
   const canProceedToPreview =
-    Object.values(mapping).includes('mpn') && Object.values(mapping).includes('manufacturer_name');
+    Object.values(mapping).includes('sku') && Object.values(mapping).includes('manufacturer_name');
 
   async function handleImport() {
     if (!supplierId) return;

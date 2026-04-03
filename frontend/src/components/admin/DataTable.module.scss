@@ -10,6 +10,7 @@
 .table {
   width: 100%;
   border-collapse: collapse;
+  font-family: $admin-font-display;
   font-size: $admin-font-base;
 }
 
@@ -58,6 +59,14 @@
   padding: 16px 20px;
   color: #111827;
   vertical-align: middle;
+}
+
+.tdMono {
+  padding: 16px 20px;
+  color: #111827;
+  vertical-align: middle;
+  font-family: $admin-font-mono;
+  letter-spacing: -0.01em;
 }
 
 .loading,

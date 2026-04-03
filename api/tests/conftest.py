@@ -166,7 +166,7 @@ def seeded_db(db):
     # Create parts
     part1 = Part(
         id=uuid.uuid4(),
-        mpn="LM7805CT",
+        sku="LM7805CT",
         description="5V 1.5A Linear Voltage Regulator",
         manufacturer_name="Texas Instruments",
         category_id=child.id,
@@ -174,7 +174,7 @@ def seeded_db(db):
     )
     part2 = Part(
         id=uuid.uuid4(),
-        mpn="STM32F407VGT6",
+        sku="STM32F407VGT6",
         description="ARM Cortex-M4 168MHz MCU",
         manufacturer_name="STMicroelectronics",
         category_id=child.id,

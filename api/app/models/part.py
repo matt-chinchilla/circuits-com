@@ -12,7 +12,7 @@ class Part(Base):
     __tablename__ = "parts"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    mpn = Column(String(100), nullable=False, index=True)
+    sku = Column(String(100), nullable=False, index=True)
     description = Column(Text, nullable=True)
     manufacturer_name = Column(String(200), nullable=False)
     category_id = Column(

@@ -4,19 +4,42 @@
   max-width: 1400px;
 }
 
+.header {
+  margin-bottom: 28px;
+}
+
 .title {
   font-size: $admin-font-heading;
   font-weight: 700;
-  color: #111827;
+  color: $admin-text-primary;
   margin: 0 0 8px;
 }
 
 .subtitle {
   font-size: $admin-font-base;
-  color: #6b7280;
-  margin: 0 0 28px;
+  color: $admin-text-secondary;
+  margin: 0;
 }
 
+.statsGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+  margin-bottom: 32px;
+}
+
+.sectionHeader {
+  margin-bottom: 16px;
+}
+
+.sectionTitle {
+  font-size: $admin-font-subheading;
+  font-weight: 700;
+  color: $admin-text-primary;
+  margin: 0;
+}
+
+// Type badges
 .typeBadge {
   display: inline-block;
   padding: 4px 12px;
@@ -36,6 +59,7 @@
   color: #92400e;
 }
 
+// Tier badges
 .tierBadge {
   display: inline-block;
   padding: 4px 12px;
@@ -60,11 +84,91 @@
   color: #9a3412;
 }
 
+// Status badges
+.statusBadge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.statusActive {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.statusExpired {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+// Empty state
+.emptyState {
+  background: $admin-card-bg;
+  border-radius: $admin-border-radius;
+  padding: 64px $admin-padding;
+  text-align: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  border: 2px dashed #e5e7eb;
+  margin-bottom: 28px;
+}
+
+.emptyTitle {
+  font-size: $admin-font-subheading;
+  font-weight: 600;
+  color: $admin-text-primary;
+  margin: 0 0 8px;
+}
+
+.emptyDescription {
+  font-size: $admin-font-base;
+  color: $admin-text-secondary;
+  margin: 0;
+}
+
+// Info card
+.infoCard {
+  background: $admin-card-bg;
+  border-radius: $admin-border-radius;
+  padding: $admin-padding;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  margin-top: 28px;
+  border-left: 4px solid $admin-info;
+}
+
+.infoTitle {
+  font-size: $admin-font-base;
+  font-weight: 700;
+  color: $admin-text-primary;
+  margin: 0 0 12px;
+}
+
+.infoText {
+  font-size: $admin-font-small;
+  color: $admin-text-secondary;
+  margin: 0 0 8px;
+  line-height: 1.6;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+
+  code {
+    background: #f3f4f6;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: $admin-font-mono;
+    font-size: 14px;
+  }
+}
+
 .loading {
   display: flex;
   align-items: center;
   justify-content: center;
   min-height: 300px;
   font-size: $admin-font-base;
-  color: #6b7280;
+  color: $admin-text-secondary;
 }

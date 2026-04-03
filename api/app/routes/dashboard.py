@@ -12,6 +12,13 @@ from app.services.auth_service import get_current_user
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
 
+@router.get("/demo-status")
+def get_demo_status(db: Session = Depends(get_db)):
+    """Returns whether demo data exists (parts > 0 means demo mode is available)."""
+    parts_count = db.query(Part).count()
+    return {"demo_available": parts_count > 0, "parts_count": parts_count}
+
+
 @router.get("/stats")
 def get_stats(
     db: Session = Depends(get_db),
@@ -46,7 +53,7 @@ def get_activity(
     for p in recent_parts:
         items.append({
             "type": "part_added",
-            "description": f"Part {p.mpn} ({p.manufacturer_name}) added",
+            "description": f"Part {p.sku} ({p.manufacturer_name}) added",
             "created_at": p.created_at.isoformat() if p.created_at else None,
         })
 

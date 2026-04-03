@@ -24,7 +24,7 @@ def _to_uuid(val: str) -> uuid.UUID:
 # --- Pydantic schemas ---
 
 class PartCreate(BaseModel):
-    mpn: str
+    sku: str
     description: str | None = None
     manufacturer_name: str
     category_id: str | None = None
@@ -33,7 +33,7 @@ class PartCreate(BaseModel):
 
 
 class PartUpdate(BaseModel):
-    mpn: str | None = None
+    sku: str | None = None
     description: str | None = None
     manufacturer_name: str | None = None
     category_id: str | None = None
@@ -42,11 +42,11 @@ class PartUpdate(BaseModel):
 
 
 class BatchPartItem(BaseModel):
-    mpn: str
+    sku: str
     description: str | None = None
     manufacturer_name: str
     category_id: str | None = None
-    sku: str | None = None
+    listing_sku: str | None = None
     stock_quantity: int | None = None
     unit_price: float | None = None
 
@@ -61,7 +61,7 @@ class BatchImportRequest(BaseModel):
 def part_to_dict(part: Part) -> dict:
     return {
         "id": str(part.id),
-        "mpn": part.mpn,
+        "sku": part.sku,
         "description": part.description,
         "manufacturer_name": part.manufacturer_name,
         "category_id": str(part.category_id) if part.category_id else None,
@@ -109,7 +109,7 @@ def list_parts(
     if search:
         pattern = f"%{search}%"
         query = query.filter(
-            or_(Part.mpn.ilike(pattern), Part.description.ilike(pattern))
+            or_(Part.sku.ilike(pattern), Part.description.ilike(pattern))
         )
 
     if category_id:
@@ -123,7 +123,7 @@ def list_parts(
     total = query.count()
     pages = max(1, (total + per_page - 1) // per_page)
     offset = (page - 1) * per_page
-    items = query.order_by(Part.mpn).offset(offset).limit(per_page).all()
+    items = query.order_by(Part.sku).offset(offset).limit(per_page).all()
 
     return {
         "items": [part_to_dict(p) for p in items],
@@ -141,7 +141,7 @@ def create_part(
 ):
     part = Part(
         id=uuid.uuid4(),
-        mpn=body.mpn,
+        sku=body.sku,
         description=body.description,
         manufacturer_name=body.manufacturer_name,
         category_id=_to_uuid(body.category_id) if body.category_id else None,
@@ -222,12 +222,12 @@ def batch_import(
 
     for idx, item in enumerate(body.parts):
         try:
-            if not item.mpn or not item.manufacturer_name:
-                raise ValueError("mpn and manufacturer_name are required")
+            if not item.sku or not item.manufacturer_name:
+                raise ValueError("sku and manufacturer_name are required")
 
             part = Part(
                 id=uuid.uuid4(),
-                mpn=item.mpn,
+                sku=item.sku,
                 description=item.description,
                 manufacturer_name=item.manufacturer_name,
                 category_id=_to_uuid(item.category_id) if item.category_id else None,
@@ -241,7 +241,7 @@ def batch_import(
                     id=uuid.uuid4(),
                     part_id=part.id,
                     supplier_id=supplier.id,
-                    sku=item.sku,
+                    sku=item.listing_sku,
                     stock_quantity=item.stock_quantity or 0,
                     unit_price=Decimal(str(item.unit_price)),
                 )

@@ -88,7 +88,7 @@ class TestUserModel:
 class TestPartModel:
     def test_create_part(self, seeded_db, db):
         part = seeded_db["part1"]
-        assert part.mpn == "LM7805CT"
+        assert part.sku == "LM7805CT"
         assert part.manufacturer_name == "Texas Instruments"
         assert part.description == "5V 1.5A Linear Voltage Regulator"
         assert part.lifecycle_status == "active"
@@ -97,7 +97,7 @@ class TestPartModel:
     def test_part_default_lifecycle(self, db):
         from app.models import Part
 
-        part = Part(mpn="TEST123", manufacturer_name="Test Corp")
+        part = Part(sku="TEST123", manufacturer_name="Test Corp")
         db.add(part)
         db.commit()
         assert part.lifecycle_status == "active"
@@ -105,7 +105,7 @@ class TestPartModel:
     def test_part_nullable_fields(self, db):
         from app.models import Part
 
-        part = Part(mpn="BARE", manufacturer_name="Min Corp")
+        part = Part(sku="BARE", manufacturer_name="Min Corp")
         db.add(part)
         db.commit()
 
@@ -118,7 +118,7 @@ class TestPartModel:
         assert part.created_at is not None
         assert part.updated_at is not None
 
-    def test_part_requires_mpn(self, db):
+    def test_part_requires_sku(self, db):
         from app.models import Part
 
         part = Part(manufacturer_name="Test Corp")
@@ -130,7 +130,7 @@ class TestPartModel:
     def test_part_requires_manufacturer(self, db):
         from app.models import Part
 
-        part = Part(mpn="TEST123")
+        part = Part(sku="TEST123")
         db.add(part)
         with pytest.raises(Exception):
             db.commit()
@@ -164,7 +164,7 @@ class TestPartListingModel:
 
     def test_listing_part_relationship(self, seeded_db):
         listing = seeded_db["listing1"]
-        assert listing.part.mpn == "LM7805CT"
+        assert listing.part.sku == "LM7805CT"
 
     def test_listing_supplier_relationship(self, seeded_db):
         listing = seeded_db["listing1"]
@@ -345,21 +345,22 @@ class TestSeedIdempotency:
         assert count_after_first == count_after_second
         assert count_after_first > 0
 
-    def test_seed_creates_admin_user(self, db):
+    def test_seed_creates_admin_users(self, db):
         from app.db.seed import seed
 
         seed(db)
-        user = db.query(User).filter(User.username == "john").first()
-        assert user is not None
-        assert user.role == "admin"
-        assert bcrypt.checkpw("circuits2026".encode(), user.password_hash.encode())
+        for username in ("matthew", "mike", "john"):
+            user = db.query(User).filter(User.username == username).first()
+            assert user is not None
+            assert user.role == "admin"
+            assert bcrypt.checkpw("admin".encode(), user.password_hash.encode())
 
     def test_seed_creates_parts(self, db):
         from app.db.seed import seed
 
         seed(db)
         parts = db.query(Part).all()
-        assert len(parts) == 50  # 10 categories × 5 parts
+        assert len(parts) == 59  # 10 categories, variable parts per category
 
     def test_seed_creates_listings(self, db):
         from app.db.seed import seed

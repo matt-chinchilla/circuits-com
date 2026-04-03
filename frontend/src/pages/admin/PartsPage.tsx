@@ -16,7 +16,7 @@ function lifecycleBadge(status: string) {
 }
 
 const COLUMNS = [
-  { key: 'mpn', label: 'MPN', sortable: true },
+  { key: 'sku', label: 'SKU', sortable: true },
   { key: 'manufacturer_name', label: 'Manufacturer', sortable: true },
   { key: 'description', label: 'Description' },
   {
@@ -72,7 +72,7 @@ export default function PartsPage() {
         <input
           className={styles.searchInput}
           type="text"
-          placeholder="Search by MPN or description..."
+          placeholder="Search by SKU or description..."
           value={search}
           onChange={(e) => {
             setSearch(e.target.value);

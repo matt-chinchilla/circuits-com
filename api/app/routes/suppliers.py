@@ -143,13 +143,13 @@ def get_supplier_parts(
     total = query.count()
     pages = max(1, (total + per_page - 1) // per_page)
     offset = (page - 1) * per_page
-    items = query.order_by(Part.mpn).offset(offset).limit(per_page).all()
+    items = query.order_by(Part.sku).offset(offset).limit(per_page).all()
 
     return {
         "items": [
             {
                 "id": str(p.id),
-                "mpn": p.mpn,
+                "sku": p.sku,
                 "description": p.description,
                 "manufacturer_name": p.manufacturer_name,
                 "lifecycle_status": p.lifecycle_status,

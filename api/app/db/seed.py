@@ -328,6 +328,13 @@ def seed(db: Session) -> None:
             email="info@arrow.com",
             description="Global provider of electronic components",
         ),
+        dict(
+            name="Honeywell Sensing",
+            phone="800-537-6945",
+            website="automation.honeywell.com",
+            email="sensing@honeywell.com",
+            description="Global sensing and IoT solutions manufacturer",
+        ),
     ]
 
     suppliers: dict[str, Supplier] = {}
@@ -342,6 +349,7 @@ def seed(db: Session) -> None:
     kennedy = suppliers["Kennedy Electronics"]
     mouser = suppliers["Mouser Electronics"]
     arrow = suppliers["Arrow Electronics"]
+    honeywell = suppliers["Honeywell Sensing"]
 
     # ------------------------------------------------------------------
     # 3. CategorySupplier associations
@@ -405,7 +413,7 @@ def seed(db: Session) -> None:
 
     # Sensor ICs
     sensor = cats["Sensor ICs"]
-    for sup, rank in [(digikey, 1), (mouser, 2), (avnet, 3), (tti, 4)]:
+    for sup, rank in [(digikey, 1), (mouser, 2), (avnet, 3), (tti, 4), (honeywell, 5)]:
         get_or_create_category_supplier(db, sensor, sup, rank=rank)
 
     # Audio & Video ICs
@@ -493,13 +501,22 @@ def seed(db: Session) -> None:
 # ---------------------------------------------------------------------------
 
 def _seed_admin_user(db: Session) -> None:
-    existing = db.query(User).filter(User.username == "john").first()
-    if existing:
-        return
-    hashed = bcrypt.hashpw("circuits2026".encode(), bcrypt.gensalt()).decode()
-    db.add(User(username="john", password_hash=hashed, role="admin"))
+    admin_users = [
+        ("matthew", "admin"),
+        ("mike", "admin"),
+        ("john", "admin"),
+    ]
+    created = 0
+    for username, password in admin_users:
+        existing = db.query(User).filter(User.username == username).first()
+        if existing:
+            continue
+        hashed = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+        db.add(User(username=username, password_hash=hashed, role="admin"))
+        created += 1
     db.flush()
-    print("Seed: admin user created.")
+    if created:
+        print(f"Seed: {created} admin user(s) created.")
 
 
 # ---------------------------------------------------------------------------
@@ -563,6 +580,15 @@ _PART_CATALOG: list[tuple[str, list[tuple[str, str, str]]]] = [
         ("LM35DZ", "Texas Instruments", "Precision Temperature Sensor"),
         ("ADXL345", "Analog Devices", "3-Axis Digital Accelerometer"),
         ("BMP390", "Bosch", "High-Performance Barometric Pressure Sensor"),
+        ("HIH6130-021-001", "Honeywell", "HumidIcon Digital Humidity/Temp Sensor"),
+        ("HIH7120-021-001", "Honeywell", "HumidIcon Low-Power Humidity Sensor"),
+        ("MPRLS0025PA00001A", "Honeywell", "MicroPressure 25 PSI Absolute I2C Sensor"),
+        ("MPRLS0015PA0000SAB", "Honeywell", "MicroPressure 15 PSI Abs SPI Breakout Board"),
+        ("MPRLS0300YG00001BB", "Honeywell", "MicroPressure 300mmHg Gage I2C Breakout"),
+        ("ASDXRRX015PGAA5", "Honeywell", "Amplified 15 PSI Gage Pressure Sensor"),
+        ("SSCDANN015PGAA5", "Honeywell", "TruStability 15 PSI Digital Pressure Sensor"),
+        ("ABPDANT015PGAA5", "Honeywell", "Basic Board Mount 15 PSI Pressure Sensor"),
+        ("HSC-SANN015PG2A3", "Honeywell", "High Accuracy Compensated 15 PSI Pressure"),
     ]),
     ("Audio", [
         ("MAX98357A", "Maxim Integrated", "I2S Class D Mono Amplifier"),
@@ -600,9 +626,9 @@ def _seed_parts(
                 matching_cat = cat_obj
                 break
 
-        for mpn, manufacturer, description in parts_data:
+        for sku, manufacturer, description in parts_data:
             part = Part(
-                mpn=mpn,
+                sku=sku,
                 description=description,
                 manufacturer_name=manufacturer,
                 category_id=matching_cat.id if matching_cat else None,
@@ -620,7 +646,7 @@ def _seed_parts(
                 listing = PartListing(
                     part_id=part.id,
                     supplier_id=sup.id,
-                    sku=f"{sup.name[:3].upper()}-{mpn}",
+                    sku=f"{sup.name[:3].upper()}-{sku}",
                     stock_quantity=random.randint(0, 50000),
                     lead_time_days=random.choice([0, 1, 3, 7, 14, 21]),
                     unit_price=base_price,

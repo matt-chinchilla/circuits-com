@@ -10,7 +10,7 @@ import styles from './SupplierDetailPage.module.scss';
 type PartRow = Part & Record<string, unknown>;
 
 const PART_COLUMNS = [
-  { key: 'mpn', label: 'MPN', sortable: true },
+  { key: 'sku', label: 'SKU', sortable: true },
   { key: 'manufacturer_name', label: 'Manufacturer', sortable: true },
   { key: 'description', label: 'Description' },
   { key: 'lifecycle_status', label: 'Status' },

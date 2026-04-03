@@ -6,6 +6,7 @@ interface Column<T> {
   label: string;
   render?: (row: T) => React.ReactNode;
   sortable?: boolean;
+  mono?: boolean;
 }
 
 interface DataTableProps<T> {
@@ -112,7 +113,7 @@ export default function DataTable<T extends { id: string | number } & Record<str
               onClick={onRowClick ? () => onRowClick(row) : undefined}
             >
               {columns.map((col) => (
-                <td key={col.key} className={styles.td}>
+                <td key={col.key} className={col.mono ? styles.tdMono : styles.td}>
                   {col.render
                     ? col.render(row)
                     : (row[col.key] as React.ReactNode) ?? '\u2014'}

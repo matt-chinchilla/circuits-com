@@ -6,7 +6,7 @@ import type { AdminCategory } from '../../types/admin';
 import styles from './PartFormPage.module.scss';
 
 interface FormData {
-  mpn: string;
+  sku: string;
   manufacturer_name: string;
   description: string;
   category_id: string;
@@ -15,13 +15,13 @@ interface FormData {
 }
 
 interface FormErrors {
-  mpn?: string;
+  sku?: string;
   manufacturer_name?: string;
 }
 
 function emptyForm(): FormData {
   return {
-    mpn: '',
+    sku: '',
     manufacturer_name: '',
     description: '',
     category_id: '',
@@ -52,7 +52,7 @@ export default function PartFormPage() {
       .getPart(id)
       .then((p) => {
         setForm({
-          mpn: p.mpn,
+          sku: p.sku,
           manufacturer_name: p.manufacturer_name,
           description: p.description ?? '',
           category_id: p.category_id ?? '',
@@ -72,7 +72,7 @@ export default function PartFormPage() {
 
   function validate(): boolean {
     const e: FormErrors = {};
-    if (!form.mpn.trim()) e.mpn = 'MPN is required.';
+    if (!form.sku.trim()) e.sku = 'SKU is required.';
     if (!form.manufacturer_name.trim()) e.manufacturer_name = 'Manufacturer is required.';
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -83,7 +83,7 @@ export default function PartFormPage() {
     setSaving(true);
     try {
       const payload = {
-        mpn: form.mpn.trim(),
+        sku: form.sku.trim(),
         manufacturer_name: form.manufacturer_name.trim(),
         description: form.description.trim() || null,
         category_id: form.category_id || null,
@@ -114,7 +114,7 @@ export default function PartFormPage() {
     ? [
         { label: 'Dashboard', href: '/admin' },
         { label: 'Parts', href: '/admin/parts' },
-        { label: form.mpn || 'Edit', href: `/admin/parts/${id}` },
+        { label: form.sku || 'Edit', href: `/admin/parts/${id}` },
         { label: 'Edit' },
       ]
     : [
@@ -147,16 +147,16 @@ export default function PartFormPage() {
         <div className={styles.fieldRow}>
           <div className={styles.fieldGroup}>
             <label className={styles.label}>
-              MPN <span className={styles.required}>*</span>
+              SKU <span className={styles.required}>*</span>
             </label>
             <input
-              className={`${styles.input} ${errors.mpn ? styles.inputError : ''}`}
+              className={`${styles.input} ${errors.sku ? styles.inputError : ''}`}
               type="text"
-              value={form.mpn}
-              onChange={(e) => setForm({ ...form, mpn: e.target.value })}
+              value={form.sku}
+              onChange={(e) => setForm({ ...form, sku: e.target.value })}
               placeholder="e.g. ATmega328P-PU"
             />
-            {errors.mpn && <div className={styles.errorMsg}>{errors.mpn}</div>}
+            {errors.sku && <div className={styles.errorMsg}>{errors.sku}</div>}
           </div>
           <div className={styles.fieldGroup}>
             <label className={styles.label}>

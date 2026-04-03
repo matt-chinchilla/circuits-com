@@ -1,0 +1,62 @@
+@use '../../styles/admin/variables' as *;
+
+.toggle {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 900;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 24px;
+  font-family: $admin-font-display;
+  font-size: $admin-font-small;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15), 0 1px 4px rgba(0, 0, 0, 0.1);
+  transition: background 200ms ease, color 200ms ease, box-shadow 200ms ease;
+
+  &:hover {
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.2), 0 2px 6px rgba(0, 0, 0, 0.12);
+  }
+
+  &:focus-visible {
+    outline: 2px solid $admin-info;
+    outline-offset: 2px;
+  }
+}
+
+.on {
+  background: $admin-success;
+  color: #ffffff;
+}
+
+.off {
+  background: #6b7280;
+  color: #ffffff;
+}
+
+.indicator {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+
+  .on & {
+    background: rgba(255, 255, 255, 0.9);
+    box-shadow: 0 0 6px rgba(255, 255, 255, 0.5);
+  }
+
+  .off & {
+    background: rgba(255, 255, 255, 0.4);
+  }
+}
+
+.label {
+  white-space: nowrap;
+  line-height: 1;
+}

@@ -112,7 +112,7 @@ class TestGetSupplierParts:
         assert data["total"] >= 1
         # Verify structure
         item = data["items"][0]
-        assert "mpn" in item
+        assert "sku" in item
         assert "manufacturer_name" in item
 
     def test_get_supplier_parts_not_found(self, client, seeded_db):
