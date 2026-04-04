@@ -46,6 +46,11 @@ def search(db: Session, query: str) -> dict:
             .filter(PartListing.part_id == part.id)
             .scalar()
         )
+        category_icon = None
+        if part.category_id:
+            cat = db.query(Category).filter(Category.id == part.category_id).first()
+            if cat:
+                category_icon = cat.icon
         parts.append({
             "id": part.id,
             "sku": part.sku,
@@ -54,6 +59,7 @@ def search(db: Session, query: str) -> dict:
             "lifecycle_status": part.lifecycle_status,
             "listings_count": listings_count or 0,
             "best_price": float(best_price_row) if best_price_row is not None else None,
+            "category_icon": category_icon,
         })
 
     return {"categories": categories, "suppliers": suppliers, "parts": parts}

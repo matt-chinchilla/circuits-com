@@ -65,10 +65,18 @@
   font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
   font-size: 0.85rem;
   transition: color $transition-fast;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 
   &:hover {
     text-decoration: underline;
   }
+}
+
+.partIcon {
+  font-size: 1rem;
+  line-height: 1;
 }
 
 .manufacturer {

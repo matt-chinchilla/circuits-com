@@ -60,10 +60,12 @@ class BatchImportRequest(BaseModel):
 
 def part_to_dict(part: Part, db: Session | None = None) -> dict:
     category_name = None
+    category_icon = None
     if part.category_id and db:
         cat = db.query(Category).filter(Category.id == part.category_id).first()
         if cat:
             category_name = cat.name
+            category_icon = cat.icon
     return {
         "id": str(part.id),
         "sku": part.sku,
@@ -71,6 +73,7 @@ def part_to_dict(part: Part, db: Session | None = None) -> dict:
         "manufacturer_name": part.manufacturer_name,
         "category_id": str(part.category_id) if part.category_id else None,
         "category_name": category_name,
+        "category_icon": category_icon,
         "datasheet_url": part.datasheet_url,
         "lifecycle_status": part.lifecycle_status,
         "created_at": part.created_at.isoformat() if part.created_at else None,

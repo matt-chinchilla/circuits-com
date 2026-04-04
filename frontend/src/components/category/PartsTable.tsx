@@ -69,6 +69,7 @@ export default function PartsTable({ parts }: PartsTableProps) {
             >
               <td className={styles.td}>
                 <Link to={`/part/${part.id}`} className={styles.skuLink}>
+                  {part.category_icon && <span className={styles.partIcon}>{part.category_icon}</span>}
                   {part.sku}
                 </Link>
               </td>

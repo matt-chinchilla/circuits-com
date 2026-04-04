@@ -6,6 +6,7 @@ export interface PublicPart {
   lifecycle_status: string;
   listings_count: number;
   best_price: number | null;
+  category_icon: string | null;
 }
 
 export interface PartListing {

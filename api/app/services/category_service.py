@@ -13,7 +13,7 @@ def get_all_categories(db: Session) -> list[Category]:
     )
 
 
-def _build_public_parts(db: Session, category_id) -> list[dict]:
+def _build_public_parts(db: Session, category_id, category_icon: str | None = None) -> list[dict]:
     """Query parts for a category with listings_count and best_price."""
     parts = (
         db.query(Part)
@@ -43,6 +43,7 @@ def _build_public_parts(db: Session, category_id) -> list[dict]:
             "lifecycle_status": part.lifecycle_status,
             "listings_count": listings_count or 0,
             "best_price": float(best_price_row) if best_price_row is not None else None,
+            "category_icon": category_icon,
         })
 
     return result
@@ -85,7 +86,7 @@ def get_category_by_slug(db: Session, slug: str) -> dict | None:
         }
 
     # Get parts for this category
-    parts = _build_public_parts(db, category.id)
+    parts = _build_public_parts(db, category.id, category.icon)
 
     return {
         "category": category,

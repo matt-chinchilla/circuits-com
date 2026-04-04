@@ -22,7 +22,7 @@ const COLUMNS = [
     key: 'category_name',
     label: 'Category',
     sortable: true,
-    render: (row: PartRow) => (row.category_name as string) || '\u2014',
+    render: (row: PartRow) => row.category_name ? `${(row.category_icon as string) || ''} ${row.category_name as string}`.trim() : '\u2014',
   },
   { key: 'description', label: 'Description' },
   {

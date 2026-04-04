@@ -64,6 +64,7 @@ export interface Part {
   description: string | null;
   category_id: string | null;
   category_name: string | null;
+  category_icon: string | null;
   datasheet_url: string | null;
   lifecycle_status: string;
   created_at: string | null;

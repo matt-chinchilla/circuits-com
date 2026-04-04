@@ -21,6 +21,7 @@ class PublicPartResponse(BaseModel):
     lifecycle_status: str
     listings_count: int
     best_price: float | None = None
+    category_icon: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
 

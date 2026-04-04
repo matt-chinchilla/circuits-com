@@ -175,7 +175,7 @@ export default function SearchPage() {
                 >
                   <Link to={`/part/${part.id}`} className={styles.resultCard}>
                     <span className={styles.cardIcon} aria-hidden="true">
-                      {'\u26A1'}
+                      {part.category_icon || '\u26A1'}
                     </span>
                     <div className={styles.cardBody}>
                       <p className={styles.cardName}>{part.sku}</p>
