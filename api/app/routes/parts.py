@@ -58,13 +58,19 @@ class BatchImportRequest(BaseModel):
 
 # --- Helpers ---
 
-def part_to_dict(part: Part) -> dict:
+def part_to_dict(part: Part, db: Session | None = None) -> dict:
+    category_name = None
+    if part.category_id and db:
+        cat = db.query(Category).filter(Category.id == part.category_id).first()
+        if cat:
+            category_name = cat.name
     return {
         "id": str(part.id),
         "sku": part.sku,
         "description": part.description,
         "manufacturer_name": part.manufacturer_name,
         "category_id": str(part.category_id) if part.category_id else None,
+        "category_name": category_name,
         "datasheet_url": part.datasheet_url,
         "lifecycle_status": part.lifecycle_status,
         "created_at": part.created_at.isoformat() if part.created_at else None,
@@ -126,7 +132,7 @@ def list_parts(
     items = query.order_by(Part.sku).offset(offset).limit(per_page).all()
 
     return {
-        "items": [part_to_dict(p) for p in items],
+        "items": [part_to_dict(p, db) for p in items],
         "total": total,
         "page": page,
         "pages": pages,
@@ -151,7 +157,7 @@ def create_part(
     db.add(part)
     db.commit()
     db.refresh(part)
-    return part_to_dict(part)
+    return part_to_dict(part, db)
 
 
 @router.get("/{part_id}")
@@ -160,7 +166,7 @@ def get_part(part_id: str, db: Session = Depends(get_db)):
     if not part:
         raise HTTPException(404, "Part not found")
 
-    result = part_to_dict(part)
+    result = part_to_dict(part, db)
     result["listings"] = [listing_to_dict(l) for l in part.listings]
     return result
 
@@ -184,7 +190,7 @@ def update_part(
 
     db.commit()
     db.refresh(part)
-    return part_to_dict(part)
+    return part_to_dict(part, db)
 
 
 @router.delete("/{part_id}")

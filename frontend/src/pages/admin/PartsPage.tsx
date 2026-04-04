@@ -18,6 +18,12 @@ function lifecycleBadge(status: string) {
 const COLUMNS = [
   { key: 'sku', label: 'SKU', sortable: true },
   { key: 'manufacturer_name', label: 'Manufacturer', sortable: true },
+  {
+    key: 'category_name',
+    label: 'Category',
+    sortable: true,
+    render: (row: PartRow) => (row.category_name as string) || '\u2014',
+  },
   { key: 'description', label: 'Description' },
   {
     key: 'lifecycle_status',

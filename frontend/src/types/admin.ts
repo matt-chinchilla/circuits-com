@@ -63,6 +63,7 @@ export interface Part {
   manufacturer_name: string;
   description: string | null;
   category_id: string | null;
+  category_name: string | null;
   datasheet_url: string | null;
   lifecycle_status: string;
   created_at: string | null;

@@ -2,6 +2,12 @@
 @use '../styles/mixins' as *;
 @use '../styles/animations';
 
+.page {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
 // ─── Category header ────────────────────────────────────────────────────────
 
 .categoryHeader {
@@ -123,6 +129,7 @@
   @include container;
   padding-top: 32px;
   padding-bottom: 48px;
+  flex: 1;
 }
 
 .contentInner {
