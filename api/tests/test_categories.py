@@ -41,6 +41,36 @@ def test_get_category_by_slug(client, seeded_db):
     assert data["sponsor"]["image_url"] == "/test.jpg"
 
 
+def test_get_category_includes_parts(client, seeded_db):
+    """GET /api/categories/clock-and-timing returns parts for that category."""
+    response = client.get("/api/categories/clock-and-timing")
+    assert response.status_code == 200
+    data = response.json()
+
+    assert "parts" in data
+    assert len(data["parts"]) == 2
+    part_skus = {p["sku"] for p in data["parts"]}
+    assert "LM7805CT" in part_skus
+    assert "STM32F407VGT6" in part_skus
+
+    # Check part structure
+    lm7805 = [p for p in data["parts"] if p["sku"] == "LM7805CT"][0]
+    assert lm7805["manufacturer_name"] == "Texas Instruments"
+    assert lm7805["lifecycle_status"] == "active"
+    assert lm7805["listings_count"] == 2
+    assert lm7805["best_price"] is not None
+
+
+def test_get_category_parent_has_no_parts(client, seeded_db):
+    """GET /api/categories/integrated-circuits returns empty parts for parent (parts are on child)."""
+    response = client.get("/api/categories/integrated-circuits")
+    assert response.status_code == 200
+    data = response.json()
+
+    assert "parts" in data
+    assert data["parts"] == []
+
+
 def test_get_category_not_found(client, seeded_db):
     """GET /api/categories/nonexistent returns 404."""
     response = client.get("/api/categories/nonexistent")

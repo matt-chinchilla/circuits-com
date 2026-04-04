@@ -5,6 +5,7 @@ import Navbar from '../components/layout/Navbar';
 import Footer from '../components/layout/Footer';
 import SubcategoryChips from '../components/category/SubcategoryChips';
 import SupplierTable from '../components/category/SupplierTable';
+import PartsTable from '../components/category/PartsTable';
 import SponsorBlock from '../components/category/SponsorBlock';
 import TopPartners from '../components/category/TopPartners';
 import LayoutSwitcher from '../components/category/LayoutSwitcher';
@@ -148,6 +149,15 @@ export default function CategoryPage() {
                 subcategories={category.children}
                 parentSlug={category.slug}
               />
+              {category.parts && category.parts.length > 0 && (
+                <section className={styles.partsSection}>
+                  <h2 className={styles.partsSectionTitle}>
+                    Parts in this Category
+                    <span className={styles.partsSectionCount}>({category.parts.length})</span>
+                  </h2>
+                  <PartsTable parts={category.parts} />
+                </section>
+              )}
             </div>
             <div className={styles.right}>
               <TopPartners suppliers={category.suppliers} />
@@ -159,6 +169,15 @@ export default function CategoryPage() {
           <div className={styles.contentInner}>
             <div className={styles.left}>
               <SupplierTable suppliers={category.suppliers} />
+              {category.parts && category.parts.length > 0 && (
+                <section className={styles.partsSection}>
+                  <h2 className={styles.partsSectionTitle}>
+                    Parts in this Category
+                    <span className={styles.partsSectionCount}>({category.parts.length})</span>
+                  </h2>
+                  <PartsTable parts={category.parts} />
+                </section>
+              )}
             </div>
             <div className={styles.right}>
               <SponsorBlock sponsor={category.sponsor} />

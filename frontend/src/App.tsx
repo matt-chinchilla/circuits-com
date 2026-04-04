@@ -7,6 +7,7 @@ import JoinPage from './pages/JoinPage'
 import ContactPage from './pages/ContactPage'
 import AboutPage from './pages/AboutPage'
 import KeywordSponsorPage from './pages/KeywordSponsorPage'
+import PartPage from './pages/PartPage'
 import LoginPage from './pages/admin/LoginPage'
 import DashboardPage from './pages/admin/DashboardPage'
 import SuppliersPage from './pages/admin/SuppliersPage'
@@ -73,6 +74,7 @@ function App() {
         <Route path="/contact" element={<ContactPage />} />
         <Route path="/about" element={<AboutPage />} />
         <Route path="/keyword/:keyword" element={<KeywordSponsorPage />} />
+        <Route path="/part/:id" element={<PartPage />} />
       </Routes>
     </AnimatePresence>
   )

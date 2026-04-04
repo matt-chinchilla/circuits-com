@@ -115,6 +115,36 @@
   margin: 2px 0 0;
 }
 
+// ─── Part card extras ───────────────────────────────────────────────────────
+
+.cardDescription {
+  font-size: 0.8rem;
+  color: $text-secondary;
+  margin: 4px 0 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cardFooter {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.cardPrice {
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: $executive-blue;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+}
+
+.cardDistributors {
+  font-size: 0.75rem;
+  color: $text-secondary;
+}
+
 // ─── Supplier card extras ───────────────────────────────────────────────────
 
 .featuredBadge {

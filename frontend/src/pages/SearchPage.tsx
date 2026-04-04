@@ -10,6 +10,11 @@ import type { SearchResults } from '../services/api';
 import CircuitTraces from '../components/shared/CircuitTraces';
 import styles from './SearchPage.module.scss';
 
+function formatPrice(price: number | null): string {
+  if (price === null || price === undefined) return '\u2014';
+  return `$${price.toFixed(2)}`;
+}
+
 const cardVariants = {
   hidden: { opacity: 0, y: 16 },
   visible: (i: number) => ({
@@ -40,7 +45,7 @@ export default function SearchPage() {
         if (!cancelled) setResults(data);
       })
       .catch(() => {
-        if (!cancelled) setResults({ categories: [], suppliers: [] });
+        if (!cancelled) setResults({ categories: [], suppliers: [], parts: [] });
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -53,7 +58,8 @@ export default function SearchPage() {
 
   const hasCategories = (results?.categories.length ?? 0) > 0;
   const hasSuppliers = (results?.suppliers.length ?? 0) > 0;
-  const hasResults = hasCategories || hasSuppliers;
+  const hasParts = (results?.parts?.length ?? 0) > 0;
+  const hasResults = hasCategories || hasSuppliers || hasParts;
 
   return (
     <motion.div
@@ -144,6 +150,45 @@ export default function SearchPage() {
                           {cat.children.length} subcategor{cat.children.length === 1 ? 'y' : 'ies'}
                         </p>
                       )}
+                    </div>
+                  </Link>
+                </motion.div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {!loading && hasParts && results && results.parts && (
+          <section className={styles.section}>
+            <h2 className={styles.sectionTitle}>
+              Parts
+              <span className={styles.sectionCount}>({results.parts.length})</span>
+            </h2>
+            <div className={styles.resultsGrid}>
+              {results.parts.map((part, i) => (
+                <motion.div
+                  key={part.id}
+                  custom={i + (results.categories?.length ?? 0)}
+                  initial="hidden"
+                  animate="visible"
+                  variants={cardVariants}
+                >
+                  <Link to={`/part/${part.id}`} className={styles.resultCard}>
+                    <span className={styles.cardIcon} aria-hidden="true">
+                      {'\u26A1'}
+                    </span>
+                    <div className={styles.cardBody}>
+                      <p className={styles.cardName}>{part.sku}</p>
+                      <p className={styles.cardMeta}>{part.manufacturer_name}</p>
+                      {part.description && (
+                        <p className={styles.cardDescription}>{part.description}</p>
+                      )}
+                      <div className={styles.cardFooter}>
+                        <span className={styles.cardPrice}>{formatPrice(part.best_price)}</span>
+                        <span className={styles.cardDistributors}>
+                          {part.listings_count} distributor{part.listings_count !== 1 ? 's' : ''}
+                        </span>
+                      </div>
                     </div>
                   </Link>
                 </motion.div>

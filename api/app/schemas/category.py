@@ -5,6 +5,7 @@ from pydantic import BaseModel, ConfigDict
 
 from .supplier import SupplierResponse
 from .sponsor import SponsorResponse
+from .part import PublicPartResponse
 
 
 class SubcategoryResponse(BaseModel):
@@ -36,6 +37,7 @@ class CategoryDetailResponse(CategoryResponse):
     parent: ParentCategoryResponse | None = None
     suppliers: list[SupplierResponse]
     sponsor: SponsorResponse | None
+    parts: list[PublicPartResponse] = []
     model_config = ConfigDict(from_attributes=True)
 
 

@@ -28,4 +28,5 @@ def get_category(slug: str, db: Session = Depends(get_db)):
         parent=cat.parent,
         suppliers=result["suppliers"],
         sponsor=result["sponsor"],
+        parts=result["parts"],
     )

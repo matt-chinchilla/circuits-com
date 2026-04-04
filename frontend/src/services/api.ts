@@ -2,6 +2,7 @@ import axios from 'axios';
 import type { Category, CategoryDetail } from '../types/category';
 import type { Supplier } from '../types/supplier';
 import type { Sponsor } from '../types/sponsor';
+import type { PublicPart, PartDetail } from '../types/part';
 
 export const API_BASE_URL = '/api';
 
@@ -10,6 +11,7 @@ const client = axios.create({ baseURL: API_BASE_URL });
 export interface SearchResults {
   categories: Category[];
   suppliers: Supplier[];
+  parts: PublicPart[];
 }
 
 export const api = {
@@ -36,4 +38,7 @@ export const api = {
 
   submitKeywordRequest: (data: Record<string, string>) =>
     client.post('/keyword-request/', data),
+
+  getPartDetail: (id: string) =>
+    client.get<PartDetail>(`/parts/${id}`).then(r => r.data),
 };

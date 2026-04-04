@@ -169,6 +169,29 @@
   gap: 2px;
 }
 
+// ─── Parts section ──────────────────────────────────────────────────────────
+
+.partsSection {
+  margin-top: 28px;
+}
+
+.partsSectionTitle {
+  font-family: $font-heading;
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: $text-primary;
+  margin: 0 0 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.partsSectionCount {
+  font-size: 0.85rem;
+  font-weight: 400;
+  color: $text-secondary;
+}
+
 // ─── Error ───────────────────────────────────────────────────────────────────
 
 .error {
