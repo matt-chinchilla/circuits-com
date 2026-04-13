@@ -20,7 +20,7 @@ set -euo pipefail
 # ============================================================================
 
 EC2_INSTANCE_ID="i-0d456bd12719e2176"
-EC2_IP="52.90.140.148"
+EC2_IP="100.55.235.167"
 EC2_USER="ec2-user"
 SSH_KEY="$HOME/.ssh/id_ed25519.pub"
 APP_DIR="/opt/circuits-com"
