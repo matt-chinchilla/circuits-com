@@ -42,7 +42,8 @@ npx tsc --noEmit                   # Type check
 ./deploy.sh --logs         # Tail container logs
 ./deploy.sh --cert-renew   # Renew Let's Encrypt certificate
 ```
-> Requires: AWS CLI configured, VPN connected (WireGuard), SSH key at ~/.ssh/id_ed25519, changes committed and pushed.
+> Requires: AWS CLI configured, SSH key at ~/.ssh/id_ed25519, changes committed and pushed. Uses EC2 Instance Connect (no VPN needed; ephemeral key has ~60s window so push+ssh runs as one command).
+> Production: t3.small EC2 (`i-0d456bd12719e2176`) with Elastic IP `100.55.235.167` (permanent across stop/start). Migrations + seed run automatically on api container startup via `docker-compose.prod.yml` entrypoint.
 
 > No ESLint or Prettier configured. TypeScript strict mode (`noUnusedLocals`, `noUnusedParameters`) is the only static analysis. Frontend has no tests — only the API has a pytest suite.
 
@@ -54,19 +55,22 @@ npx tsc --noEmit                   # Type check
 Browser → Nginx(:80/:443)
   ├── /        → Frontend(:3000) — Vite React SPA
   ├── /api/*   → API(:8000)     — FastAPI
-  └── /admin   → API(:8000)     — SQLAdmin panel
+  └── /admin*  → Frontend(:3000) — React admin SPA (in prod nginx)
                     ↕
               PostgreSQL(:5432)
                     ↕
                 n8n(:5678)       — Workflow automation
 ```
+> SQLAdmin still exists in `api/app/admin.py` and mounts at `/admin` on the API,
+> but is unreachable in prod since nginx routes `/admin` → frontend. Local dev only.
 
 ### API (api/)
 - FastAPI app in `app/main.py`, mounts 5 routers (categories, suppliers, search, forms, sponsors)
 - Models: Category (self-referential tree), Supplier, CategorySupplier (join), Sponsor (XOR constraint: category_id OR keyword)
 - Services layer: `category_service.py`, `search_service.py`
-- SQLAdmin panel at `/admin` with 4 views: Supplier, Category, CategorySupplier ("Category Assignment"), Sponsor
-- Admin auth: session-based via `AdminAuth` class in `app/admin.py`
+- SQLAdmin panel mounted at `/admin` on the API (only reachable in local dev — nginx routes `/admin` → frontend in prod)
+- **Real prod admin** lives in `frontend/src/pages/admin/` (React SPA): SuppliersPage, SupplierFormPage, Parts, Categories, Sponsors, Reports, Import
+- React admin auth: JWT in `localStorage.admin_token` via `frontend/src/services/adminApi.ts`; SQLAdmin auth (dev only): session via `AdminAuth` in `app/admin.py`
 - Config via pydantic-settings: `DATABASE_URL`, `N8N_WEBHOOK_BASE_URL`, `CORS_ORIGINS`, `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `ADMIN_SECRET_KEY`
 - Entrypoint runs: alembic migrate → seed → uvicorn
 
@@ -112,6 +116,12 @@ All API routes prefixed with `/api/`. Router prefix set in each route file.
 ## Gotchas
 
 - TypeScript strict mode: `noUnusedLocals` + `noUnusedParameters` — remove unused vars, don't prefix with `_`
+- **`/admin` in prod = React SPA, not SQLAdmin** — `nginx.ssl.conf` routes `/admin*` → frontend. Updating `app/admin.py` SQLAdmin views does NOT change what users see. Update `frontend/src/pages/admin/` instead.
+- **Adding a Supplier field requires 6 files**: model (`models/supplier.py`) + Alembic migration + `SupplierResponse`/`SupplierCreate`/`SupplierUpdate` + `supplier_to_dict` (`routes/suppliers.py`) + `AdminSupplier` TS type (`types/admin.ts`) + `SuppliersPage` COLUMNS + `SupplierFormPage` form/payload/review.
+- **`SupplierResponse` is shared by public AND admin endpoints** — fields added there appear in the unauthenticated `/api/suppliers/`. Use a separate auth-gated endpoint if a field must stay admin-only.
+- **EC2 t3.micro OOMs during `docker compose up --build`** — peak build memory (npm + pip + Docker layers) > 1 GB. Stay on t3.small (1.9 GB) or pre-build images off-host. If the box hangs, stop+start (not reboot) to clear the thrash.
+- Tests use SQLite via `Base.metadata.create_all` — schema generated from SQLAlchemy models, not Alembic. Adding a model column makes tests pass without a migration; the migration is only needed for prod Postgres.
+- After deploys, hard-refresh the browser (Ctrl+Shift+R) to pick up new Vite bundle — the JS bundle filename is hashed, but `index.html` itself can be cached.
 - Vite dev server proxies `/api` → `http://api:8000` — only works inside Docker network; for local dev without Docker, change proxy target
 - Framer Motion v12 requires `as const` on ease values (e.g., `'easeInOut' as const`) or tsc errors with string vs Easing type
 - Supplier `phone`/`website`/`email` are nullable (`str | None`) — templates must handle null
