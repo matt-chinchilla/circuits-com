@@ -27,6 +27,8 @@ n8n-data/
 # Testing
 /coverage
 *.db
+.hypothesis/
+.pytest_cache/
 
 # Debug logs
 npm-debug.log*
