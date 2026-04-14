@@ -33,10 +33,11 @@ class SupplierAdmin(ModelView, model=Supplier):
     name = "Supplier"
     name_plural = "Suppliers"
     icon = "fa-solid fa-building"
-    column_list = [Supplier.name, Supplier.phone, Supplier.email, Supplier.website]
-    column_searchable_list = [Supplier.name, Supplier.email]
+    column_list = [Supplier.name, Supplier.contact_name, Supplier.phone, Supplier.email, Supplier.website]
+    column_searchable_list = [Supplier.name, Supplier.email, Supplier.contact_name]
     column_sortable_list = [Supplier.name]
     column_default_sort = "name"
+    column_labels = {Supplier.contact_name: "Contact"}
     form_excluded_columns = [Supplier.category_associations]
 
 

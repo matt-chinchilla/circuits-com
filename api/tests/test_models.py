@@ -297,6 +297,30 @@ class TestTimestamps:
         assert sup.created_at is not None
         assert sup.updated_at is not None
 
+    def test_supplier_contact_name_persists(self, db):
+        from app.models import Supplier
+
+        sup = Supplier(
+            id=uuid.uuid4(),
+            name="ContactTest Corp",
+            contact_name="Jane Doe",
+        )
+        db.add(sup)
+        db.commit()
+
+        fetched = db.query(Supplier).filter(Supplier.id == sup.id).first()
+        assert fetched.contact_name == "Jane Doe"
+
+    def test_supplier_contact_name_is_optional(self, db):
+        from app.models import Supplier
+
+        sup = Supplier(id=uuid.uuid4(), name="No Contact Corp")
+        db.add(sup)
+        db.commit()
+
+        fetched = db.query(Supplier).filter(Supplier.id == sup.id).first()
+        assert fetched.contact_name is None
+
     def test_category_has_timestamps(self, seeded_db):
         cat = seeded_db["parent"]
         assert cat.created_at is not None

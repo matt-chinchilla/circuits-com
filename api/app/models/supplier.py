@@ -15,6 +15,7 @@ class Supplier(Base):
     phone = Column(String(20))
     website = Column(String(200))
     email = Column(String(200))
+    contact_name = Column(String(120), nullable=True)
     description = Column(Text, nullable=True)
     logo_url = Column(String(500), nullable=True)
     created_at = Column(
