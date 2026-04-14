@@ -10,6 +10,7 @@ type SupplierRow = AdminSupplier & Record<string, unknown>;
 
 const COLUMNS = [
   { key: 'name', label: 'Name', sortable: true },
+  { key: 'contact_name', label: 'Contact', sortable: true, render: (row: SupplierRow) => (row.contact_name as string) || '\u2014' },
   { key: 'email', label: 'Email', sortable: true },
   { key: 'phone', label: 'Phone' },
   {
@@ -47,7 +48,8 @@ export default function SuppliersPage() {
       (s) =>
         s.name.toLowerCase().includes(q) ||
         (s.email && s.email.toLowerCase().includes(q)) ||
-        (s.phone && s.phone.toLowerCase().includes(q))
+        (s.phone && s.phone.toLowerCase().includes(q)) ||
+        (s.contact_name && s.contact_name.toLowerCase().includes(q))
     );
   }, [suppliers, search]);
 
@@ -70,7 +72,7 @@ export default function SuppliersPage() {
         <input
           className={styles.searchInput}
           type="text"
-          placeholder="Search suppliers by name, email, or phone..."
+          placeholder="Search suppliers by name, contact, email, or phone..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />

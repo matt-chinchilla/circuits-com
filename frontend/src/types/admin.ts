@@ -90,6 +90,7 @@ export interface AdminSupplier {
   phone: string | null;
   website: string | null;
   email: string | null;
+  contact_name: string | null;
   description: string | null;
   logo_url: string | null;
   parts_count?: number;

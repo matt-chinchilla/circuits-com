@@ -8,6 +8,7 @@ class SupplierResponse(BaseModel):
     phone: str | None = None
     website: str | None = None
     email: str | None = None
+    contact_name: str | None = None
     description: str | None = None
     logo_url: str | None = None
     is_featured: bool = False

@@ -44,6 +44,38 @@ class TestCreateSupplier:
         })
         assert resp.status_code == 401
 
+    def test_create_supplier_with_contact_name(self, client, seeded_db):
+        headers = _auth_header(client)
+        resp = client.post("/api/suppliers/", json={
+            "name": "Contact Test Corp",
+            "contact_name": "Jane Doe",
+        }, headers=headers)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["contact_name"] == "Jane Doe"
+
+    def test_list_suppliers_includes_contact_name(self, client, seeded_db):
+        headers = _auth_header(client)
+        client.post("/api/suppliers/", json={
+            "name": "Listed Contact Corp",
+            "contact_name": "John Smith",
+        }, headers=headers)
+
+        resp = client.get("/api/suppliers/")
+        assert resp.status_code == 200
+        names = {s["name"]: s for s in resp.json()}
+        assert "Listed Contact Corp" in names
+        assert names["Listed Contact Corp"]["contact_name"] == "John Smith"
+
+    def test_update_supplier_contact_name(self, client, seeded_db):
+        headers = _auth_header(client)
+        supplier_id = str(seeded_db["supplier1"].id)
+        resp = client.put(f"/api/suppliers/{supplier_id}", json={
+            "contact_name": "New Salesperson",
+        }, headers=headers)
+        assert resp.status_code == 200
+        assert resp.json()["contact_name"] == "New Salesperson"
+
 
 class TestGetSupplierDetail:
     def test_get_supplier_detail(self, client, seeded_db):

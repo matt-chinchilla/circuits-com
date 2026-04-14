@@ -26,6 +26,7 @@ class SupplierCreate(BaseModel):
     phone: str | None = None
     website: str | None = None
     email: str | None = None
+    contact_name: str | None = None
     description: str | None = None
 
 
@@ -34,6 +35,7 @@ class SupplierUpdate(BaseModel):
     phone: str | None = None
     website: str | None = None
     email: str | None = None
+    contact_name: str | None = None
     description: str | None = None
 
 
@@ -44,6 +46,7 @@ def supplier_to_dict(supplier: Supplier) -> dict:
         "phone": supplier.phone,
         "website": supplier.website,
         "email": supplier.email,
+        "contact_name": supplier.contact_name,
         "description": supplier.description,
         "logo_url": supplier.logo_url,
     }
@@ -66,6 +69,7 @@ def create_supplier(
         phone=body.phone,
         website=body.website,
         email=body.email,
+        contact_name=body.contact_name,
         description=body.description,
     )
     db.add(supplier)

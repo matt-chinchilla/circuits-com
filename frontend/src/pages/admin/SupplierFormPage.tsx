@@ -8,6 +8,7 @@ interface FormData {
   name: string;
   email: string;
   phone: string;
+  contact_name: string;
   description: string;
   website: string;
 }
@@ -19,7 +20,7 @@ interface FormErrors {
 const STEPS = ['Company Info', 'Online Presence', 'Review'];
 
 function emptyForm(): FormData {
-  return { name: '', email: '', phone: '', description: '', website: '' };
+  return { name: '', email: '', phone: '', contact_name: '', description: '', website: '' };
 }
 
 export default function SupplierFormPage() {
@@ -43,6 +44,7 @@ export default function SupplierFormPage() {
           name: s.name,
           email: s.email ?? '',
           phone: s.phone ?? '',
+          contact_name: s.contact_name ?? '',
           description: s.description ?? '',
           website: s.website ?? '',
         });
@@ -81,6 +83,7 @@ export default function SupplierFormPage() {
         name: form.name.trim(),
         email: form.email.trim() || null,
         phone: form.phone.trim() || null,
+        contact_name: form.contact_name.trim() || null,
         description: form.description.trim() || null,
         website: form.website.trim() || null,
       };
@@ -175,6 +178,16 @@ export default function SupplierFormPage() {
               />
             </div>
             <div className={styles.fieldGroup}>
+              <label className={styles.label}>Contact (sales rep)</label>
+              <input
+                className={styles.input}
+                type="text"
+                value={form.contact_name}
+                onChange={(e) => setForm({ ...form, contact_name: e.target.value })}
+                placeholder="e.g. Jane Doe"
+              />
+            </div>
+            <div className={styles.fieldGroup}>
               <label className={styles.label}>Description</label>
               <textarea
                 className={styles.textarea}
@@ -214,6 +227,10 @@ export default function SupplierFormPage() {
             <div className={styles.reviewItem}>
               <span className={styles.reviewLabel}>Phone</span>
               <span className={styles.reviewValue}>{form.phone || '\u2014'}</span>
+            </div>
+            <div className={styles.reviewItem}>
+              <span className={styles.reviewLabel}>Contact</span>
+              <span className={styles.reviewValue}>{form.contact_name || '\u2014'}</span>
             </div>
             <div className={styles.reviewItem}>
               <span className={styles.reviewLabel}>Website</span>
