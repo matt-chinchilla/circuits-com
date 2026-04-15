@@ -44,6 +44,7 @@ npx tsc --noEmit                   # Type check
 ```
 > Requires: AWS CLI configured, SSH key at ~/.ssh/id_ed25519, changes committed and pushed. Uses EC2 Instance Connect (no VPN needed; ephemeral key has ~60s window so push+ssh runs as one command).
 > Production: t3.small EC2 (`i-0d456bd12719e2176`) with Elastic IP `100.55.235.167` (permanent across stop/start). Migrations + seed run automatically on api container startup via `docker-compose.prod.yml` entrypoint.
+> Domains: `circuits.com` is primary (John owns via Hover — A record `@` → EIP). `www.circuits.com` and legacy `circuits.matthew-chirichella.com` both 301 to apex. One Let's Encrypt SAN cert covers all three names; on-disk path is `/etc/letsencrypt/live/circuits.matthew-chirichella.com/` (kept via `--cert-name` during expand). Cert auto-renews via certbot systemd timer.
 
 > No ESLint or Prettier configured. TypeScript strict mode (`noUnusedLocals`, `noUnusedParameters`) is the only static analysis. Frontend has no tests — only the API has a pytest suite.
 
@@ -110,6 +111,9 @@ transition={{ duration: 0.15, ease: 'easeInOut' as const }}
 ### API Route Convention
 All API routes prefixed with `/api/`. Router prefix set in each route file.
 
+### Relative API URLs
+Frontend calls (`services/api.ts`, `services/adminApi.ts`) use relative paths — `/api/categories`, never `https://<host>/api/categories`. This is what let the circuits.com cutover be a 2-file change (nginx + deploy.sh) instead of sweeping every component. Don't introduce absolute URLs in frontend code.
+
 ### Seed Data (idempotent)
 15 categories, 75 subcategories (5 per category, 2 levels deep), 7 suppliers, 2 sponsors. Seed checks for existing data before inserting.
 
@@ -134,6 +138,9 @@ All API routes prefixed with `/api/`. Router prefix set in each route file.
 - `AnimatePresence mode="popLayout"` for crossfade page transitions (not `mode="wait"` which blocks)
 - `/api/health` endpoint exists for health checks
 - ProxyHeadersMiddleware trusts all hosts — required for admin panel HTTPS URL generation behind nginx
+- FastAPI 307-redirects missing-trailing-slash paths: `/api/suppliers` → `/api/suppliers/`. `curl` tests need `-L`; axios on the frontend follows transparently.
+- **Adding a new hostname** = (1) add to `server_name` in `nginx/nginx.ssl.conf`, (2) on EC2: stop nginx container → `sudo certbot certonly --standalone --expand --cert-name circuits.matthew-chirichella.com -d <every-hostname-the-cert-should-cover>` → start nginx. DNS must already resolve to the EIP before certbot runs (HTTP-01 challenge fetches over port 80).
+- Cert directory is `/etc/letsencrypt/live/circuits.matthew-chirichella.com/` even though `circuits.com` is primary — browsers match on SAN (Subject Alt Name), not Subject CN. Renaming the directory is purely cosmetic and would require updating nginx cert paths too. Don't do it unless there's a functional reason.
 
 ## Brand Colors
 
