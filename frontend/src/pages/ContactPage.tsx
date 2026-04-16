@@ -8,12 +8,20 @@ import { api } from '../services/api';
 import CircuitTraces from '../components/shared/CircuitTraces';
 import styles from './ContactPage.module.scss';
 
-const CONTACT_INFO = {
-  name: 'John Tietjen',
-  location: 'Holbrook, NY',
-  email: 'john@circuits.com',
-  phone: '631-495-0445',
-};
+const CONTACTS = [
+  {
+    name: 'John Tietjen',
+    title: 'Founder / CEO',
+    email: 'john@circuits.com',
+    phone: '631-495-0445',
+  },
+  {
+    name: 'Mike Kennedy, Ph.D',
+    title: 'Co-Founder / COO',
+    email: 'mike@circuits.com',
+    phone: '631-708-6040',
+  },
+] as const;
 
 export default function ContactPage() {
   const [name, setName] = useState('');
@@ -111,50 +119,42 @@ export default function ContactPage() {
             >
               <h2 className={styles.infoPanelTitle}>Get in Touch</h2>
 
-              <div className={styles.infoRow}>
-                <span className={styles.infoIcon} aria-hidden="true">👤</span>
-                <div className={styles.infoContent}>
-                  <p className={styles.infoLabel}>Contact</p>
-                  <p className={styles.infoValue}>{CONTACT_INFO.name}</p>
-                </div>
-              </div>
+              <div className={styles.contactList}>
+                {CONTACTS.map((contact, idx) => (
+                  <motion.div
+                    key={contact.email}
+                    className={styles.contactCard}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.35, delay: 0.15 + idx * 0.08 }}
+                  >
+                    <div className={styles.contactHeader}>
+                      <p className={styles.contactName}>{contact.name}</p>
+                      <p className={styles.contactTitle}>{contact.title}</p>
+                    </div>
 
-              <div className={styles.infoRow}>
-                <span className={styles.infoIcon} aria-hidden="true">📍</span>
-                <div className={styles.infoContent}>
-                  <p className={styles.infoLabel}>Location</p>
-                  <p className={styles.infoValue}>{CONTACT_INFO.location}</p>
-                </div>
-              </div>
-
-              <div className={styles.infoRow}>
-                <span className={styles.infoIcon} aria-hidden="true">✉️</span>
-                <div className={styles.infoContent}>
-                  <p className={styles.infoLabel}>Email</p>
-                  <p className={styles.infoValue}>
-                    <a
-                      href={`mailto:${CONTACT_INFO.email}`}
-                      className={styles.infoLink}
-                    >
-                      {CONTACT_INFO.email}
-                    </a>
-                  </p>
-                </div>
-              </div>
-
-              <div className={styles.infoRow}>
-                <span className={styles.infoIcon} aria-hidden="true">📞</span>
-                <div className={styles.infoContent}>
-                  <p className={styles.infoLabel}>Phone</p>
-                  <p className={styles.infoValue}>
-                    <a
-                      href={`tel:${CONTACT_INFO.phone}`}
-                      className={styles.infoLink}
-                    >
-                      {CONTACT_INFO.phone}
-                    </a>
-                  </p>
-                </div>
+                    <div className={styles.contactRows}>
+                      <div className={styles.infoRow}>
+                        <span className={styles.infoIcon} aria-hidden="true">✉️</span>
+                        <a
+                          href={`mailto:${contact.email}`}
+                          className={styles.infoLink}
+                        >
+                          {contact.email}
+                        </a>
+                      </div>
+                      <div className={styles.infoRow}>
+                        <span className={styles.infoIcon} aria-hidden="true">📞</span>
+                        <a
+                          href={`tel:${contact.phone}`}
+                          className={styles.infoLink}
+                        >
+                          {contact.phone}
+                        </a>
+                      </div>
+                    </div>
+                  </motion.div>
+                ))}
               </div>
             </motion.div>
 

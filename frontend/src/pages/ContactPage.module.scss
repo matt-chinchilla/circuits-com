@@ -69,41 +69,68 @@
   margin: 0 0 20px;
 }
 
-.infoRow {
+.contactList {
   display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  margin-bottom: 16px;
+  flex-direction: column;
+  gap: 22px;
 }
 
-.infoIcon {
-  font-size: 1.2rem;
-  flex-shrink: 0;
-  line-height: 1.4;
+.contactCard {
+  padding-bottom: 22px;
+  border-bottom: 1px solid rgba($text-primary, 0.08);
+
+  &:last-child {
+    padding-bottom: 0;
+    border-bottom: none;
+  }
 }
 
-.infoContent {
-  min-width: 0;
+.contactHeader {
+  margin-bottom: 12px;
 }
 
-.infoLabel {
-  font-size: 0.78rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: $text-secondary;
+.contactName {
+  font-family: $font-heading;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: $text-primary;
+  letter-spacing: -0.01em;
   margin: 0 0 2px;
 }
 
-.infoValue {
+.contactTitle {
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: $nav-blue;
+  margin: 0;
+}
+
+.contactRows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.infoRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   font-size: 0.95rem;
   color: $text-primary;
-  margin: 0;
+}
+
+.infoIcon {
+  font-size: 1.1rem;
+  flex-shrink: 0;
+  line-height: 1;
 }
 
 .infoLink {
   color: $nav-blue;
   text-decoration: none;
+  transition: color $transition-normal;
 
   &:hover {
     text-decoration: underline;
