@@ -45,95 +45,278 @@
 
 .grid {
   display: grid;
-  grid-template-columns: 1fr 1.4fr;
-  gap: 32px;
-  align-items: flex-start;
+  grid-template-columns: 1fr 1fr;
+  gap: 28px;
+  align-items: stretch;
 
   @include responsive($bp-tablet) {
     grid-template-columns: 1fr;
   }
 }
 
-// ─── Info panel ─────────────────────────────────────────────────────────────
+// ─── Info panel — the "Datasheet Card" ──────────────────────────────────────
+// PCB-grid backdrop, monospace designators, crop-mark corners on each contact
+// card, pulse-dot response-time footer with REV tag. Treats the two founders
+// as schematic components (U1, U2) in a component reference box.
 
 .infoPanel {
   @include card-base;
-  padding: 28px;
+  padding: 32px 30px 24px;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+
+  // PCB silkscreen grid — 24px cells, nav-blue at 3.5% opacity
+  background-image:
+    linear-gradient(rgba($nav-blue, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba($nav-blue, 0.035) 1px, transparent 1px);
+  background-size: 24px 24px;
+  background-position: -1px -1px;
+}
+
+// ─── Panel header ───────────────────────────────────────────────────────────
+
+.infoPanelHeader {
+  margin-bottom: 24px;
+  position: relative;
+  z-index: 1;
 }
 
 .infoPanelTitle {
   font-family: $font-heading;
-  font-size: 1.15rem;
+  font-size: 1.45rem;
   font-weight: 700;
   color: $text-primary;
-  margin: 0 0 20px;
+  letter-spacing: -0.015em;
+  margin: 0 0 8px;
+  line-height: 1.15;
 }
+
+.infoPanelDek {
+  font-size: 0.9rem;
+  color: $text-secondary;
+  margin: 0;
+  line-height: 1.5;
+  max-width: 32ch;
+}
+
+// ─── Contact list ───────────────────────────────────────────────────────────
 
 .contactList {
   display: flex;
   flex-direction: column;
-  gap: 22px;
+  gap: 14px;
+  position: relative;
+  z-index: 1;
+  flex: 1;
 }
 
 .contactCard {
-  padding-bottom: 22px;
-  border-bottom: 1px solid rgba($text-primary, 0.08);
+  position: relative;
+  padding: 20px 20px 18px;
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(3px);
+  border: 1px solid rgba($text-primary, 0.08);
+  border-radius: 4px;
+  transition:
+    transform $transition-normal,
+    border-color $transition-normal,
+    box-shadow $transition-normal;
 
-  &:last-child {
-    padding-bottom: 0;
-    border-bottom: none;
+  // Datasheet crop-mark corners — sit inside the border (no seam collision)
+  &::before,
+  &::after {
+    content: '';
+    position: absolute;
+    width: 9px;
+    height: 9px;
+    transition: opacity $transition-normal;
+    opacity: 0.8;
+    pointer-events: none;
   }
+
+  // Top-left corner
+  &::before {
+    top: 5px;
+    left: 5px;
+    border-top: 1.5px solid $nav-blue;
+    border-left: 1.5px solid $nav-blue;
+  }
+
+  // Bottom-right corner
+  &::after {
+    bottom: 5px;
+    right: 5px;
+    border-bottom: 1.5px solid $nav-blue;
+    border-right: 1.5px solid $nav-blue;
+  }
+
+  &:hover {
+    transform: translateY(-2px);
+    border-color: rgba($text-primary, 0.16);
+    box-shadow: 0 8px 22px -12px rgba($executive-blue, 0.35);
+
+    &::before,
+    &::after {
+      opacity: 1;
+    }
+  }
+}
+
+// Quiet monospace designator — sits like a part-number label, not a chip
+.cardDesignator {
+  position: absolute;
+  top: 14px;
+  right: 18px;
+  font-family: $font-mono;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: $text-secondary;
+  opacity: 0.7;
+  line-height: 1;
 }
 
 .contactHeader {
   margin-bottom: 12px;
+  padding-right: 44px; // leave room for the U1/U2 designator
 }
 
 .contactName {
   font-family: $font-heading;
-  font-size: 1.05rem;
+  font-size: 1.08rem;
   font-weight: 700;
   color: $text-primary;
   letter-spacing: -0.01em;
-  margin: 0 0 2px;
+  margin: 0 0 3px;
+  line-height: 1.2;
 }
 
 .contactTitle {
-  font-size: 0.78rem;
-  font-weight: 600;
+  font-size: 0.72rem;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: $nav-blue;
+  letter-spacing: 0.1em;
+  // Executive-blue = PCB dark green: on-brand AND passes WCAG AA at this size
+  color: $executive-blue;
   margin: 0;
 }
 
 .contactRows {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 2px;
+  margin-top: 4px;
 }
 
-.infoRow {
-  display: flex;
+.contactLineItem {
+  display: grid;
+  grid-template-columns: 20px 1fr 16px;
   align-items: center;
-  gap: 10px;
-  font-size: 0.95rem;
+  gap: 12px;
+  min-height: 44px; // WCAG 2.5.5 / Apple HIG touch-target minimum
+  padding: 10px 8px;
+  margin: 0 -8px;
+  border-radius: 4px;
+  font-size: 0.92rem;
   color: $text-primary;
+  text-decoration: none;
+  transition:
+    background $transition-normal,
+    color $transition-normal;
+
+  &:hover,
+  &:focus-visible {
+    background: rgba($nav-blue, 0.08);
+    color: $executive-blue;
+
+    .infoArrow {
+      opacity: 1;
+      transform: translateX(2px);
+    }
+  }
+
+  &:focus-visible {
+    outline: 2px solid $nav-blue;
+    outline-offset: 2px;
+  }
 }
 
 .infoIcon {
-  font-size: 1.1rem;
-  flex-shrink: 0;
+  font-size: 1rem;
   line-height: 1;
+  color: $text-secondary;
+  text-align: center;
 }
 
-.infoLink {
-  color: $nav-blue;
-  text-decoration: none;
-  transition: color $transition-normal;
+.infoText {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
 
-  &:hover {
-    text-decoration: underline;
+.infoArrow {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: $nav-blue;
+  opacity: 0;
+  transition:
+    opacity $transition-normal,
+    transform $transition-normal;
+}
+
+// ─── Response-time footer ───────────────────────────────────────────────────
+
+.responseFooter {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 20px 0 0;
+  padding-top: 16px;
+  border-top: 1px dashed rgba($text-primary, 0.14);
+  font-size: 0.82rem;
+  color: $text-secondary;
+  line-height: 1.3;
+  position: relative;
+  z-index: 1;
+}
+
+// Static indicator (replaced the live-status pulse — not conceptually a
+// datasheet motif; acts as a visual anchor for the footer line)
+.statusDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: $executive-blue;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 2px rgba($nav-blue, 0.18);
+}
+
+.responseText {
+  flex: 1;
+}
+
+// ─── Reduced-motion respect ────────────────────────────────────────────────
+// WCAG 2.3.3 — disable entrance + hover translations for users with
+// prefers-reduced-motion enabled.
+
+@media (prefers-reduced-motion: reduce) {
+  .contactCard {
+    &:hover {
+      transform: none;
+    }
+  }
+
+  .contactLineItem {
+    &:hover,
+    &:focus-visible {
+      .infoArrow {
+        transform: none;
+      }
+    }
   }
 }
 

@@ -117,45 +117,74 @@ export default function ContactPage() {
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.4, delay: 0.1 }}
             >
-              <h2 className={styles.infoPanelTitle}>Get in Touch</h2>
+              <div className={styles.infoPanelHeader}>
+                <h2 className={styles.infoPanelTitle}>Get in Touch</h2>
+                <p className={styles.infoPanelDek}>
+                  Two founders, two direct lines. No gatekeepers.
+                </p>
+              </div>
 
               <div className={styles.contactList}>
                 {CONTACTS.map((contact, idx) => (
-                  <motion.div
+                  <motion.article
                     key={contact.email}
                     className={styles.contactCard}
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.35, delay: 0.15 + idx * 0.08 }}
+                    transition={{ duration: 0.35, delay: 0.12 + idx * 0.05 }}
+                    aria-labelledby={`contact-name-${idx}`}
                   >
+                    <span className={styles.cardDesignator} aria-hidden="true">
+                      U{idx + 1}
+                    </span>
+
                     <div className={styles.contactHeader}>
-                      <p className={styles.contactName}>{contact.name}</p>
+                      <h3
+                        id={`contact-name-${idx}`}
+                        className={styles.contactName}
+                      >
+                        {contact.name}
+                      </h3>
                       <p className={styles.contactTitle}>{contact.title}</p>
                     </div>
 
                     <div className={styles.contactRows}>
-                      <div className={styles.infoRow}>
-                        <span className={styles.infoIcon} aria-hidden="true">✉️</span>
-                        <a
-                          href={`mailto:${contact.email}`}
-                          className={styles.infoLink}
-                        >
-                          {contact.email}
-                        </a>
-                      </div>
-                      <div className={styles.infoRow}>
-                        <span className={styles.infoIcon} aria-hidden="true">📞</span>
-                        <a
-                          href={`tel:${contact.phone}`}
-                          className={styles.infoLink}
-                        >
-                          {contact.phone}
-                        </a>
-                      </div>
+                      <a
+                        className={styles.contactLineItem}
+                        href={`mailto:${contact.email}`}
+                        aria-label={`Email ${contact.name} at ${contact.email}`}
+                        title={contact.email}
+                      >
+                        <span className={styles.infoIcon} aria-hidden="true">✉</span>
+                        <span className={styles.infoText}>{contact.email}</span>
+                        <span className={styles.infoArrow} aria-hidden="true">→</span>
+                      </a>
+                      <a
+                        className={styles.contactLineItem}
+                        href={`tel:${contact.phone}`}
+                        aria-label={`Call ${contact.name} at ${contact.phone}`}
+                      >
+                        <span className={styles.infoIcon} aria-hidden="true">☎</span>
+                        <span className={styles.infoText}>{contact.phone}</span>
+                        <span className={styles.infoArrow} aria-hidden="true">→</span>
+                      </a>
                     </div>
-                  </motion.div>
+                  </motion.article>
                 ))}
               </div>
+
+              <motion.p
+                className={styles.responseFooter}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.4, delay: 0.28 }}
+                aria-label="Expected response time"
+              >
+                <span className={styles.statusDot} aria-hidden="true" />
+                <span className={styles.responseText}>
+                  Typically responds within 1 business day
+                </span>
+              </motion.p>
             </motion.div>
 
             <motion.form
