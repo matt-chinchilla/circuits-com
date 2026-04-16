@@ -66,6 +66,7 @@
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  justify-content: space-between;
 
   // PCB silkscreen grid — 24px cells, nav-blue at 3.5% opacity
   background-image:
@@ -98,7 +99,7 @@
   color: $text-secondary;
   margin: 0;
   line-height: 1.5;
-  max-width: 32ch;
+  max-width: 40ch;
 }
 
 // ─── Contact list ───────────────────────────────────────────────────────────
@@ -109,7 +110,6 @@
   gap: 14px;
   position: relative;
   z-index: 1;
-  flex: 1;
 }
 
 .contactCard {
@@ -140,16 +140,16 @@
   &::before {
     top: 5px;
     left: 5px;
-    border-top: 1.5px solid $nav-blue;
-    border-left: 1.5px solid $nav-blue;
+    border-top: 2px solid $nav-blue;
+    border-left: 2px solid $nav-blue;
   }
 
   // Bottom-right corner
   &::after {
     bottom: 5px;
     right: 5px;
-    border-bottom: 1.5px solid $nav-blue;
-    border-right: 1.5px solid $nav-blue;
+    border-bottom: 2px solid $nav-blue;
+    border-right: 2px solid $nav-blue;
   }
 
   &:hover {
@@ -348,7 +348,7 @@
 }
 
 .required {
-  color: #c0392b;
+  color: $error-red;
   margin-left: 2px;
 }
 
@@ -366,8 +366,6 @@
   transition:
     border-color $transition-normal,
     box-shadow $transition-normal;
-  box-sizing: border-box;
-
   &:focus {
     border-color: $nav-blue;
     box-shadow: 0 0 0 3px rgba($nav-blue, 0.15);
@@ -393,15 +391,9 @@
   }
 }
 
-.actions {
-  margin-top: 24px;
-  display: flex;
-  justify-content: flex-end;
-}
-
 .formError {
   background: rgba(192, 57, 43, 0.08);
-  color: #c0392b;
+  color: $error-red;
   padding: 12px 16px;
   border-radius: 6px;
   font-size: 0.9rem;
@@ -414,7 +406,6 @@
   @include card-base;
   padding: 56px 32px;
   text-align: center;
-  grid-column: 1 / -1;
 }
 
 .successIcon {

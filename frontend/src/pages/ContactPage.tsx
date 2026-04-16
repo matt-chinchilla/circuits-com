@@ -21,7 +21,7 @@ const CONTACTS = [
     email: 'mike@circuits.com',
     phone: '631-708-6040',
   },
-] as const;
+];
 
 export default function ContactPage() {
   const [name, setName] = useState('');
@@ -63,7 +63,7 @@ export default function ContactPage() {
       initial={{ opacity: 0, x: 20 }}
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
-      transition={{ duration: 0.15, ease: 'easeInOut' }}
+      transition={{ duration: 0.15, ease: 'easeInOut' as const }}
     >
       <Navbar />
 
@@ -258,11 +258,14 @@ export default function ContactPage() {
                 />
               </div>
 
-              <div className={styles.actions}>
-                <GlowButton type="submit" variant="primary" disabled={submitting}>
-                  {submitting ? 'Sending...' : 'Send Message'}
-                </GlowButton>
-              </div>
+              <GlowButton
+                type="submit"
+                variant="primary"
+                disabled={submitting}
+                style={{ marginLeft: 'auto', marginTop: '24px' }}
+              >
+                {submitting ? 'Sending...' : 'Send Message'}
+              </GlowButton>
             </motion.form>
           </div>
         )}
