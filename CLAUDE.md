@@ -19,7 +19,7 @@ docker compose down -v             # Stop and remove volumes
 ### API (from api/)
 ```bash
 cd api && pip install -e ".[dev]"  # Install deps locally
-pytest tests/ -v                   # Run all 9 tests (SQLite in-memory)
+pytest tests/ -v                   # Run all tests (SQLite in-memory, ~108 tests)
 pytest tests/test_categories.py -v # Run single test file
 alembic upgrade head               # Run migrations
 python -m app.db.seed              # Seed database (idempotent)
@@ -82,6 +82,11 @@ Browser → Nginx(:80/:443)
 - API client: `frontend/src/services/api.ts` (axios, typed methods)
 - SCSS design system: `_variables.scss` (colors, spacing), `_animations.scss` (keyframes), `_mixins.scss`
 
+### Claude Code Automations (.claude/)
+- **Hooks** (settings.json): PreToolUse blocks .env/lock edits, warns on `api/app/admin.py` (SQLAdmin ≠ prod admin); PostToolUse auto-runs tsc on .ts/.tsx/.scss edits, pytest on .py edits
+- **Agents**: `deploy-preflight` (verifies instance size, git state, DNS, disk before deploy), `seo-auditor` (audits pages for meta/schema.org/crawlability)
+- **Skills**: `seo-writer` (generates title/meta/OG/JSON-LD bundles for category/supplier/part pages)
+
 ### Data Flow
 - Categories use self-referential `parent_id` for tree structure (2 levels deep)
 - `CategorySupplier` join table links suppliers to categories with `is_featured` + `rank`
@@ -113,6 +118,9 @@ All API routes prefixed with `/api/`. Router prefix set in each route file.
 
 ### Relative API URLs
 Frontend calls (`services/api.ts`, `services/adminApi.ts`) use relative paths — `/api/categories`, never `https://<host>/api/categories`. This is what let the circuits.com cutover be a 2-file change (nginx + deploy.sh) instead of sweeping every component. Don't introduce absolute URLs in frontend code.
+
+### Contact Page — Datasheet Card Motif
+The info panel deliberately mimics electronic datasheet styling: each founder is labeled U1/U2 in monospace (schematic component designators), cards have crop-mark corners (datasheet reference box framing), and the panel sits on a faint PCB grid (24px cells, $nav-blue at 3.5%). Don't flatten this to a generic card layout — the motif is the brand statement.
 
 ### Seed Data (idempotent)
 15 categories, 75 subcategories (5 per category, 2 levels deep), 7 suppliers, 2 sponsors. Seed checks for existing data before inserting.
@@ -149,4 +157,6 @@ $executive-blue: #0a4a2e  (PCB dark green — headers, hero backgrounds)
 $nav-blue: #44bd13        (bright green — nav strip, links, accents)
 $sponsor-gold: #a88d2e    (sponsor blocks, premium CTAs)
 $surface: #eef1f5         (page backgrounds)
+$error-red: #c0392b       (form validation, required field markers)
+$font-mono: JetBrains Mono stack  (designators, code-like labels)
 ```
