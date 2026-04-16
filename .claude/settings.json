@@ -8,6 +8,11 @@
             "type": "command",
             "command": "filepath=$(echo \"$TOOL_INPUT\" | jq -r '.file_path // empty'); if [[ \"$filepath\" == *.env* || \"$filepath\" == *package-lock.json ]]; then echo '{\"decision\":\"block\",\"reason\":\"Protected file — do not edit .env or lock files directly\"}'; fi",
             "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "filepath=$(echo \"$TOOL_INPUT\" | jq -r '.file_path // empty'); if [[ \"$filepath\" == *api/app/admin.py ]]; then echo '{\"decision\":\"ask\",\"reason\":\"api/app/admin.py is the SQLAdmin panel (DEV-ONLY — in prod nginx routes /admin to the React SPA, so SQLAdmin changes are invisible to users). For prod admin UI changes edit frontend/src/pages/admin/ instead (SuppliersPage.tsx, SupplierFormPage.tsx, Parts, Categories, Sponsors, Reports, Import). Proceed only if you truly mean to edit the dev-only panel.\"}'; fi",
+            "timeout": 5
           }
         ]
       }
