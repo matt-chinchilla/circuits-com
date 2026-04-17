@@ -177,6 +177,20 @@ The ARIA label should be explicit: either `"Enable alert"` / `"Disable alert"` b
 
 ---
 
+## 📊 Custom dashboard I built for the meeting
+
+`https://app.revenium.ai/dashboards/P8M0ELRjWtRdyPO` — titled *"Circuits.com 90-Day Executive View"*.
+
+Composed of 5 pre-built cards (screenshot: `scripts/revenium/screenshots/04-custom-dashboard.png`):
+
+1. **Cost / Customer** — bar chart, 5 distributor orgs
+2. **Customer Cost Over Time** — 30d line chart showing growth ramp per org
+3. **Costs by Model** — donut, clean 60% Sonnet / 40% Haiku split (Sonnet is ~40× more expensive per call but 10× fewer calls → surprising "the expensive feature is most of the bill" narrative)
+4. **Top Movers** — catches `claude-opus-4-6 -100%` (my real Claude Code usage tapered off), plus `claude-haiku-4-5` and `claude-sonnet-4-6` both at +52.8% (our seed growth)
+5. **Revenue / Customer** — intentionally left empty; shows the subscription-API-blocker gap directly. When that's unblocked, this would populate with the hypothetical P&L table above.
+
+---
+
 **Happy to walk through any of this live during the meeting.**
 
 *Screenshots: `scripts/revenium/screenshots/*.png` in the `feat/revenium-seeding` branch.*
