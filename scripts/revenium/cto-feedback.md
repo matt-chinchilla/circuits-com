@@ -127,6 +127,12 @@ A CTO/finance user can't make sense of a leaderboard of opaque IDs. The backend 
 
 **Quick fix (likely one JSON join):** `Top Movers` → lookup `organizations.name by id` and `products.name by externalId`.
 
+**Confirmed via API inspection 2026-04-17:** every org record has `name: 'Digi-Key Electronics'` and matching `label`. The fields exist at source; the analytics response simply doesn't include them. This is a one-JOIN fix on the reports service — but the report endpoint currently emits only `organizationId`, never `organizationName`.
+
+**Related cleanup blocker:** we created duplicate orgs during an early iteration run (before the `_embedded.organizationResourceList` idempotency fix). `DELETE /organizations/{id}` returns 400 `"Can't delete organizations with existing users. Remove other users first or transfer ownership."` Subscribers are shared across orgs by email (engineering@digikey.com is tied to BOTH the active and duplicate org records), so removing them to enable deletion would orphan the active org's subscription. Effective outcome: duplicate empty orgs persist in the dashboard with $0.00 bars.
+
+*Proposed API change:* support `DELETE /organizations/{id}?force=true` that cascades subscriber unlinking (not subscriber deletion — keep the user, just drop the org link). Current path makes cleanup of prototype data impractical.
+
 ---
 
 ## 🟡 P1 — Coverage Ratio math for sandbox tenants
