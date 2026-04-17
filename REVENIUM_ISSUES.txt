@@ -1,0 +1,508 @@
+REVENIUM PLATFORM — ISSUE LOG
+================================================================================
+Discovered while integrating circuits.com against tenant lm49Lv on 2026-04-17.
+
+Each issue below is formatted as a standalone GitHub-ready bug report. Copy the
+"TITLE" line into the issue title, and everything under "BODY" into the body.
+Target-repo recommendations are "best public fit" — several issues are backend
+bugs with no public repo and must go to support instead.
+
+STATUS LEGEND
+  P0 = blocks a common user workflow, reproducible, no workaround
+  P1 = degraded experience, reproducible, workaround exists
+  P2 = confusion / docs / UX paper cut
+
+WHERE TO FILE (summary)
+  - revenium/revenium-mcp ............ Python SDK-adjacent API issues
+  - revenium/revenium-python-sdk ..... Python SDK wrapping gaps
+  - revenium/.github ................. Org-wide docs (llms.txt, readme.io paths)
+  - revenium/revenium-cli ............ CLI or endpoint discovery
+  - (no public repo) ................. File via support.anthropic.com — wait,
+                                       Revenium support portal / email your AM
+                                       Listed here for tracking only
+
+================================================================================
+ISSUE 1 — Chart Builder throws HTTP 500 on /reports/chart-builder/available-data
+================================================================================
+SEVERITY   P0
+TARGET     no public repo (backend) — route to Revenium support
+DISCOVERED 2026-04-17 19:07:37 UTC (request-id e36737c2-87b3-4b17-84d8-d3b54452a53f)
+
+TITLE
+  Chart Builder: GET /profitstream/v2/api/reports/chart-builder/available-data
+  returns 500 "An unexpected error occurred, please contact Revenium support"
+
+HOW TO REPRODUCE
+  1. Log in at https://app.revenium.ai on the tenant lm49Lv
+  2. Navigate to https://app.revenium.ai/dashboards/chart-builder
+  3. Click the "Create Chart" button in the top-right of the table
+  4. Observe: the modal opens but shows the message
+     "No data available. Please try refreshing the page."
+  5. Open the browser DevTools Network tab and notice:
+       GET https://api.prod.ai.hcapp.io/profitstream/v2/api/reports/chart-builder/available-data?teamId=5Bndx5
+       Response: 500 Internal Server Error
+       Body: {"timestamp":"2026-04-17T19:07:37.720801063Z","status":500,
+              "error":"Internal Server Error",
+              "message":"An unexpected error occurred, please contact Revenium support",
+              "path":"/profitstream/v2/api/reports/chart-builder/available-data",
+              "details":{"error":"An unexpected error occurred, please contact Revenium support"}}
+       x-amzn-requestid: e36737c2-87b3-4b17-84d8-d3b54452a53f
+
+EXPECTED
+  200 OK with a JSON document describing the available metrics, entity types,
+  and grouping options that the Chart Builder UI needs to populate its
+  dropdowns.
+
+ACTUAL
+  500 server-side error. The "please contact Revenium support" body hides the
+  actual failure cause (permission, schema migration, missing dependency?) —
+  the customer can't self-diagnose.
+
+IMPACT
+  The entire custom-chart composition workflow is unreachable for this tenant.
+  The "My Dashboards → Add Chart" flow still works (uses a different code path
+  that returns the pre-built chart library), but "build-your-own" is broken.
+
+SUGGESTED FIX
+  Either (a) return a structured 500 body with enough context for support to
+  correlate to the specific failure, or (b) surface the real error message
+  behind a feature flag for admin-role users, or (c) fix whatever null/schema
+  case is triggering the failure on tenants without pre-existing chart
+  definitions.
+
+================================================================================
+ISSUE 2 — Performance dashboards show "Sample Data" despite real metering stream
+================================================================================
+SEVERITY   P0
+TARGET     no public repo (backend) — file via support
+DISCOVERED 2026-04-17
+
+TITLE
+  Performance tab displays Sample Data + "Connect your Data" CTA despite
+  104k+ metered AI completion events being ingested successfully
+
+HOW TO REPRODUCE
+  1. Submit 104,362 AI completion events via
+     https://api.revenium.ai/meter/v2/completions  (all 200, confirmed via
+     dashboards — see Costs & Revenue → Top Movers → Agents / Models, which
+     DO populate correctly)
+  2. Navigate to https://app.revenium.ai/performance/tasks
+  3. Observe EVERY card shows a "Sample Data" watermark:
+       - Task Throughput
+       - Task Volume By Type
+       - Task Completion Rate
+       - Task Completion Rate Over Time
+       - Duration by Task Type
+       - Duration Trends
+       - Time to First Token
+       - Time To First Token Trends
+  4. Each card includes a "Connect your Data" link routing to /home — the
+     onboarding page.
+
+EXPECTED
+  Performance cards should populate from the same `meter_ai_completion` stream
+  that powers Costs & Revenue dashboards.
+
+ACTUAL
+  Performance dashboards are disconnected from the metering stream. They look
+  like an entirely separate pipeline that the customer never opted into.
+  "Connect your Data" doesn't explain WHICH additional pipeline is missing —
+  the customer has already connected metering and reasonably expects everything
+  downstream to light up.
+
+HYPOTHESIS
+  Performance appears to require a canonical `task_type` vocabulary.
+  The sample data shows `code_generation`, `code_review`, `research`, `testing`,
+  `deployment` — implying a pre-defined taxonomy. Our task_types
+  (`ai-component-search`, `ai-datasheet-summarizer`) don't match, so Performance
+  filters them out. This taxonomy isn't documented in llms.txt or readme.io.
+
+SUGGESTED FIX
+  (1) Document the canonical task_type enumeration.
+  (2) EITHER: populate Performance from any non-null task_type, not just the
+      canonical list.
+  (3) OR: when NO canonical task_types are present but completions ARE, show a
+      banner saying "Performance requires canonical task_types — here's the
+      list: [...]. You sent: [...]. Map one to the other."
+
+================================================================================
+ISSUE 3 — Analytics paths in llms.txt return 404; real host differs from docs
+================================================================================
+SEVERITY   P1
+TARGET     revenium/.github  (docs discrepancy, org-wide)
+DISCOVERED 2026-04-17
+
+TITLE
+  llms.txt and readme.io reference slugs imply /v2/api/analytics/* paths,
+  but actual reports live at api.prod.ai.hcapp.io/profitstream/v2/api/reports/*
+
+HOW TO REPRODUCE
+  1. Read docs.revenium.io/for-ai-agents (or the raw llms.txt)
+  2. Note the endpoint slug pattern, e.g. `get_api-v2-analytics-cost-by-agent`
+     which implies `/v2/api/analytics/cost-by-agent`
+  3. Run:
+       curl -H "x-api-key: $KEY" \
+         "https://api.revenium.ai/v2/api/analytics/cost-by-agent?tenantId=..."
+     → 404 (HTML error page)
+  4. Run variants:
+       /profitstream/v2/api/analytics/cost-by-agent → 404 (JSON)
+       /api/v2/analytics/cost-by-agent → 404 (HTML)
+  5. Discovered via browser DevTools that the working path is:
+       GET https://api.prod.ai.hcapp.io/profitstream/v2/api/reports/<slug>
+     served from a DIFFERENT hostname than api.revenium.ai.
+
+EXPECTED
+  Endpoint slugs in llms.txt should either (a) match the actual paths served,
+  or (b) the docs should cite the actual base URL explicitly.
+
+ACTUAL
+  An agent using llms.txt for endpoint discovery silently 404s on every
+  analytics call. No hint about the host/path mismatch.
+
+PROPOSED FIX
+  Option A: expose the reports service on api.revenium.ai under the advertised
+  path prefix (proxy rule or DNS alias).
+  Option B: regenerate llms.txt with the actual paths, and add a top-matter
+  note like:
+    # Revenium API hosts
+    #   Metering + admin:  https://api.revenium.ai
+    #   Reports/analytics: https://api.prod.ai.hcapp.io
+
+================================================================================
+ISSUE 4 — Customer / Product names render as raw IDs on Top Movers + Cost charts
+================================================================================
+SEVERITY   P1
+TARGET     no public repo (backend analytics service)
+DISCOVERED 2026-04-17
+
+TITLE
+  Cost-by-Customer + Top Movers + Cost-by-Product render organization /
+  product records as opaque internal IDs (e.g., l344j5, 5jXRdv, l334Kl)
+  instead of their `name` fields
+
+HOW TO REPRODUCE
+  1. Create orgs via
+     POST /profitstream/v2/api/organizations
+     with payload {"name": "Digi-Key Electronics", "tenantId": "..."}
+  2. Confirm via
+     GET /profitstream/v2/api/organizations
+     that EVERY record has `name: 'Digi-Key Electronics'` and `label: 'Digi-Key Electronics'`
+  3. Submit metered completions tagged with those orgs'
+     organization_id values.
+  4. Open https://app.revenium.ai/costs-revenue/top-movers
+  5. Observe the "Customers" section displays IDs like `l344j5`, not names.
+     The "Products" section does the same for product records (`l334Kl`, `5joBBD`).
+
+EXPECTED
+  Dashboards show the `name` field of each referenced organization / product.
+
+ACTUAL
+  Dashboards show the 6-character internal ID.
+
+ROOT CAUSE (confirmed via API inspection)
+  The source org records have `name` and `label` populated correctly. The
+  analytics (reports) service returns only `organizationId` / `productId` in
+  its aggregation output — it doesn't JOIN against the orgs / products tables
+  to include display names. Since the UI receives only IDs, it has nothing to
+  display but IDs.
+
+SUGGESTED FIX
+  In the reports service, denormalize `organizationName` (and `productName`)
+  into every aggregation response row. One JOIN, zero UI changes required.
+
+WORKAROUND
+  None client-side. Customers must reverse-lookup IDs manually.
+
+================================================================================
+ISSUE 5 — Subscription API reveals required fields progressively + ungreppable error
+================================================================================
+SEVERITY   P0 (for SDK builders)
+TARGET     revenium/revenium-python-sdk  (visibility)
+           revenium/revenium-mcp  (wraps the same API)
+           — actual fix is backend
+DISCOVERED 2026-04-17
+
+TITLE
+  POST /profitstream/v2/api/subscriptions returns
+  "Validation failed for one or more fields" one field at a time + ends with
+  ungreppable {"error": "List is empty."} with no field name
+
+HOW TO REPRODUCE
+  Step-by-step; each line is the next payload after fixing the prior error:
+
+  Attempt 1: {"name":"X","organization":{"id":"..."},"product":{"id":"..."}}
+             → 400 { details:
+                 "ownerId": "ownerId is a required field",
+                 "clientEmailAddress": "clientEmailAddress is a required field",
+                 "productId": "productId is a required field",
+                 "teamId": "teamId is a required field"
+               }
+             (four fields revealed at once — ok)
+
+  Attempt 2: + flat ownerId, clientEmailAddress, productId, teamId
+             → 400 { details: {"error": "List is empty."} }
+             (which list? no hint)
+
+  Attempt 3: probed each list field individually; discovered namedSubscribers
+             must be List<String> of emails, not objects
+             (type mismatch reveals the field name by accident)
+
+  Attempt 4: + namedSubscribers: ["engineering@digikey.com"]
+             → 400 { details: {"error": "List is empty."} } (SAME error!)
+             (so there's ANOTHER required list we haven't identified)
+
+EXPECTED
+  A single 400 response listing EVERY failing field, with enough detail that
+  a caller can fix all of them in one attempt. When a List field is empty,
+  the response should name the field.
+
+ACTUAL
+  The server reveals required fields progressively (one round-trip each),
+  and the final "List is empty." error is field-less — there are 8 candidate
+  list fields (namedSubscribers, namedOrganizations, credentials, quotas,
+  tags, additionalInvoiceRecipients, notificationAddressesOnCreation,
+  notificationAddressesOnQuotaThreshold) with no way to tell which.
+
+IMPACT
+  Subscription creation is practically impossible to reverse-engineer without
+  insider knowledge. All customer-level revenue dashboards (Revenue/Customer,
+  Profit Margin/Customer, Customer Profitability) remain empty as a result.
+
+SUGGESTED FIX
+  (1) Return ALL failing fields in a single validation response.
+  (2) When a list is required-non-empty, include the field name in the error.
+  (3) Add a "minimal working example" payload to the readme.io page for
+      /reference/create_subscription.
+
+================================================================================
+ISSUE 6 — Products API requires plan.name + teamId/ownerId in body, not docs
+================================================================================
+SEVERITY   P1
+TARGET     revenium/revenium-python-sdk  (visibility)
+DISCOVERED 2026-04-17
+
+TITLE
+  POST /profitstream/v2/api/products rejects payloads with "Invalid JSON
+  format" when plan.name is missing — top-level `name` is set; the error
+  message doesn't identify that `plan.name` is the required field
+
+HOW TO REPRODUCE
+  1. POST /profitstream/v2/api/products with:
+       { "name": "AI Component Search", "version": "1.0.0", "externalId": "x",
+         "teamId": "...", "ownerId": "...",
+         "plan": {"type": "SUBSCRIPTION", "currency": "USD", "period": "MONTH", "periodCount": 1} }
+  2. Response:
+       400 { "message": "Invalid JSON format",
+             "details": {"Missing required parameter": "name"} }
+  3. Confusion: top-level `name` IS present. The real missing field is
+     `plan.name`, which isn't called out in readme.io docs.
+  4. After adding plan.name: request succeeds.
+
+EXPECTED
+  Error message names the exact missing field (e.g., "plan.name is required").
+
+ACTUAL
+  Error message says "Missing required parameter: name" — ambiguous.
+
+ALSO
+  teamId and ownerId are required in the request BODY, not as query params.
+  This isn't made explicit in readme.io for /reference/create_product.
+  ownerId must be the USER ID (e.g., DZ484l), NOT the team ID — the docs
+  don't specify.
+
+================================================================================
+ISSUE 7 — Anomaly rule periodDuration = "DAILY" not "ONE_DAY"
+================================================================================
+SEVERITY   P2
+TARGET     revenium/.github  (docs) or revenium/revenium-mcp
+DISCOVERED 2026-04-17
+
+TITLE
+  POST /profitstream/v2/api/sources/ai/anomaly returns 404
+  "Could not find a tracking period for ONE_DAY" — but the docs suggest
+  ONE_MINUTE / FIVE_MINUTES / FIFTEEN_MINUTES / ONE_HOUR /
+  ONE_DAY / ONE_WEEK / ONE_MONTH / QUARTERLY as valid values
+
+HOW TO REPRODUCE
+  1. POST /profitstream/v2/api/sources/ai/anomaly with periodDuration=ONE_DAY
+     (a plausible value matching the ONE_MINUTE / ONE_HOUR pattern)
+  2. Response: 404 "Could not find a tracking period for ONE_DAY"
+  3. Try periodDuration=DAILY  → 200 OK
+
+EXPECTED
+  (a) The enum set is documented explicitly on readme.io /reference/create_ai_anomaly
+  (b) Invalid values return 400 with a list of valid options, not 404 with
+      "Could not find a tracking period".
+
+ACTUAL
+  Customer must guess the enum values; 404 status misleads debugging toward
+  URL path issues.
+
+================================================================================
+ISSUE 8 — List response shape: _embedded.<resource>ResourceList (not <resource>)
+================================================================================
+SEVERITY   P2
+TARGET     revenium/.github  (HAL docs) or revenium/revenium-python-sdk
+DISCOVERED 2026-04-17
+
+TITLE
+  GET /profitstream/v2/api/<resource> list responses nest records under
+  _embedded.<resource>ResourceList, not _embedded.<resource> — undocumented
+
+HOW TO REPRODUCE
+  1. GET /profitstream/v2/api/organizations
+  2. Notice response shape:
+       {"_embedded": {"organizationResourceList": [...]}}
+     NOT
+       {"_embedded": {"organizations": [...]}}
+  3. Same suffix pattern applies to /products (productResourceList),
+     /subscribers (subscriberResourceList), /subscriptions (subscriptionResourceList).
+
+EXPECTED
+  The HAL-style naming convention is documented on readme.io, OR the SDK
+  includes typed response models that abstract the naming.
+
+ACTUAL
+  Callers writing an idempotency check that reads `_embedded.organizations`
+  silently get `[]` and create duplicates on every run. (Happened to us — we
+  created 3× Digi-Key, 2× Mouser, etc., before discovering the naming.)
+
+FIX
+  Document the HAL convention at the top of the /reference/list_organizations
+  page. Ideally the docs' example response shows the actual key name.
+
+================================================================================
+ISSUE 9 — Delete organization blocked by shared subscribers (no force-cascade)
+================================================================================
+SEVERITY   P2
+TARGET     no public repo (backend)
+DISCOVERED 2026-04-17
+
+TITLE
+  DELETE /profitstream/v2/api/organizations/{id} cannot clean up duplicate
+  or prototype organizations when subscribers are shared by email across orgs
+
+HOW TO REPRODUCE
+  1. Accidentally create duplicate orgs (caused here by Issue 8's
+     silent-duplicate-on-every-run bug).
+  2. Try to clean up: DELETE /profitstream/v2/api/organizations/<dup_id>
+  3. Response:
+       400 { "message":
+             "Can't delete organizations with existing users. Remove other
+              users first or transfer ownership." }
+  4. Discover that the subscriber is SHARED across the duplicate and the
+     active org (both have `namedSubscribers: ["engineering@digikey.com"]`
+     pointing to the same subscriber ID).
+  5. Deleting the subscriber to unblock DELETE would orphan the ACTIVE org's
+     subscription — collateral damage.
+  6. Customer is stuck with orphaned duplicates visible in all dashboards.
+
+EXPECTED
+  Either (a) DELETE supports a `?force=true` flag that detaches subscribers
+  without deleting them, or (b) a separate endpoint
+  POST /organizations/{id}/detach-subscribers that unlinks without deleting.
+
+ACTUAL
+  No non-destructive cleanup path exists.
+
+================================================================================
+ISSUE 10 — Session auth (Clerk JWT) and API-key auth have different permissions
+================================================================================
+SEVERITY   P2
+TARGET     revenium/.github  (docs)
+DISCOVERED 2026-04-17
+
+TITLE
+  ROLE_TENANT_ADMIN via API-key auth (x-api-key) can GET and POST against
+  /profitstream/v2/api/subscriptions, but the same role via Clerk JWT session
+  (browser login) returns 403 Forbidden
+
+HOW TO REPRODUCE
+  1. Log in at app.revenium.ai as a ROLE_TENANT_ADMIN user
+  2. In browser DevTools console run:
+       await fetch('/profitstream/v2/api/subscriptions?tenantId=lm49Lv&size=5',
+                   { credentials: 'include' })
+     → 403 Forbidden
+  3. From a terminal, run the equivalent call with the API key:
+       curl -H "x-api-key: hak_..." \
+         "https://api.revenium.ai/profitstream/v2/api/subscriptions?tenantId=..."
+     → 200 OK
+
+EXPECTED
+  Same role → same capabilities, regardless of auth mechanism.
+
+ACTUAL
+  API-key auth is MORE privileged than session auth for the same user. This
+  is surprising (typically the opposite is true) and the discrepancy isn't
+  documented.
+
+WHY IT MATTERS
+  Customers building internal tooling who test against the browser session
+  first will conclude the endpoint is broken or permissions-gated, when in
+  fact the API key works fine. Hours of wasted debug time.
+
+================================================================================
+ISSUE 11 — Coverage Ratio math is misleading for synthetic / demo tenants
+================================================================================
+SEVERITY   P2
+TARGET     no public repo (UI math)
+DISCOVERED 2026-04-17
+
+TITLE
+  Revenium Coverage Ratio on /overview/providers shows 186,927% for tenants
+  with synthetic metered data and real (but tiny) provider billing — should
+  offer a sandbox-mode suppression or per-event `environment` filter
+
+HOW TO REPRODUCE
+  1. Meter 104k synthetic AI completion events via meter_ai_completion,
+     each with a computed `total_cost` that sums to $130+
+  2. Make 2-3 real Anthropic calls via revenium-middleware-anthropic that
+     total $0.07 in actual Anthropic billing
+  3. Navigate to https://app.revenium.ai/overview/providers?range=30d
+  4. Observe:
+       Anthropic | Metered $130.15 | Billing $0.07 | Coverage 186,927.5%
+
+EXPECTED
+  Either (a) the dashboard has a "sandbox mode" tenant flag that suppresses
+  the billing cross-reference entirely, or (b) the ai_create_completion
+  params already have an `environment` field — use it to filter the Coverage
+  Ratio calculation to just the "production" events.
+
+ACTUAL
+  Synthetic data swamps the coverage denominator and produces nonsensical
+  percentages. Looks like a platform bug from the outside.
+
+================================================================================
+ISSUE 12 — Two tools named "revenium-metering" (Node CLI vs Python SDK)
+================================================================================
+SEVERITY   P2
+TARGET     revenium/.github  (naming / docs)
+           revenium/revenium-claude-code-sdk  (the Node CLI half)
+DISCOVERED 2026-04-17
+
+TITLE
+  Both /usr/bin/revenium-metering (Node CLI for Claude Code telemetry backfill)
+  and the `revenium_metering` Python pip package (general-purpose SDK) share
+  an identical user-facing name — customers conflate them
+
+HOW TO REPRODUCE
+  1. pip install revenium-mcp → transitively installs revenium_metering (Py)
+  2. npm install -g @revenium/claude-code-metering OR use the homebrew-tap
+     → installs /usr/bin/revenium-metering (Node)
+  3. Customer reads a doc saying "use `revenium-metering backfill`" and
+     runs it against their Python project, expecting general metering
+     support, and gets the Claude-Code-specific CLI behavior instead.
+
+SUGGESTED FIX
+  Rename one of them for unambiguous shell / import resolution. Suggested:
+    Node CLI   → `revenium-claude-code` (matches its actual scope)
+    Python SDK → keep `revenium-metering` (matches pypi name)
+
+================================================================================
+APPENDIX — Files for reference
+================================================================================
+  scripts/revenium/cto-feedback.md ...... detailed memo with the same issues + hypothetical P&L
+  scripts/revenium/revenium_seed/ ........ working seed code that hit every issue above
+  scripts/revenium/screenshots/ .......... screenshots of each Revenium UI state
+  .claude/agents/revenium-docs/ .......... scraped Revenium docs + nav tree
+  ~/.claude/agents/revenium-expert.md .... system-wide agent with all this knowledge
