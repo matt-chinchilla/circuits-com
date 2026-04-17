@@ -38,6 +38,49 @@ So Performance consumes a different data pipeline than Costs & Revenue. The "Con
 
 ---
 
+## 🚨 P0 — Subscription creation is impossible to reverse-engineer from error messages
+
+Attempted to create 10 subscriptions (5 orgs × 2 products) programmatically to light up the **Revenue per Customer** and **Profit Margin per Customer** dashboards — both of which are currently empty for this tenant. Every attempt returned 400, with the server revealing missing fields one at a time. Full trail (each step fixed the previous error):
+
+| Attempt | Error details |
+|---|---|
+| 1. nested objects `organization: {id}`, `product: {id}` | `ownerId is a required field`, `clientEmailAddress is a required field`, `productId is a required field`, `teamId is a required field` |
+| 2. flat `ownerId`, `productId`, `teamId`, `clientEmailAddress` added | `{"error": "List is empty."}` — no hint which list |
+| 3. probed each list field separately | `namedSubscribers` accepts only `List<String>` (emails), not objects — but the actual empty-list error was somewhere else |
+| 4. added `namedSubscribers: ["engineering@digikey.com"]` + all other lists empty | still 400 `"Invalid request"` with same `"List is empty."` detail |
+
+Two real problems here:
+
+1. **Error messages reveal fields one at a time.** A 400 with "Validation failed for one or more fields" should list ALL failing fields, not just the first set. Every fix-and-retry cycle burns a round-trip.
+2. **`"List is empty."` is not debuggable.** Which list? The schema has `namedSubscribers`, `namedOrganizations`, `credentials`, `quotas`, `tags`, `additionalInvoiceRecipients`, `notificationAddressesOnCreation`, `notificationAddressesOnQuotaThreshold` — 8 candidate lists. The error should name the field.
+
+Also: the `POST /profitstream/v2/api/subscriptions` endpoint is not covered by the Python SDK (it only wraps the `/meter/v2/*` endpoints), so there's no typed client to lean on. Customers building revenue-tracking end up reverse-engineering Spring Boot validation errors by probe.
+
+**WIP code:** `scripts/revenium/revenium_seed/seed_subscriptions.py` captures the attempted payload shape — will work once the `"List is empty"` error specifies which list.
+
+**Customer-impact diff:** without subscriptions, the Customers tab shows "UNCLASSIFIED $0.00" under Revenue-per-Customer (screenshot `02-costs-revenue-customers.png`). That's the single most important dashboard for the "per-customer P&L" conversation. It's reachable data — just blocked by the schema.
+
+---
+
+## 💰 Hypothetical per-customer P&L (what the Revenue dashboards WOULD show)
+
+Captured here because the subscription API is blocked (see above). This is the narrative I'd want the Revenue and Profit-Margin dashboards to tell:
+
+**Assumption set:** circuits.com markets AI search + summarizer at a **3× gross margin** over raw token cost, billed monthly per subscriber. Based on actual 90-day metered spend from our seed:
+
+| Customer | 90d cost (metered) | 90d revenue @ 3× | Gross margin | Note |
+|---|---|---|---|---|
+| Digi-Key Electronics | $117.21 | $351.63 | $234.42 (66.7%) | Largest account by margin |
+| Mouser Electronics | $116.67 | $350.01 | $233.34 (66.7%) | |
+| Arrow Electronics | $115.44 | $346.32 | $230.88 (66.7%) | |
+| Newark Electronics | $115.14 | $345.42 | $230.28 (66.7%) | Skewed by day-60 anomaly |
+| RS Components | $114.96 | $344.88 | $229.92 (66.7%) | |
+| **Total** | **$579.42** | **$1,738.26** | **$1,158.84** | ARR projection: **$6,953** |
+
+At these rates, each new distributor customer contributes **~$2,317/year ARR** with **~66.7% gross margin** before overhead. The Day-60 Newark anomaly would have temporarily pushed their margin below the SLA floor — exactly the scenario the cost anomaly rule is designed to catch.
+
+---
+
 ## 🚨 P1 — `llms.txt` analytics endpoint paths return 404
 
 Your public `llms.txt` at `https://docs.revenium.io/~gitbook/mcp` (and exposed at `docs.revenium.io/for-ai-agents`) lists endpoints like:
