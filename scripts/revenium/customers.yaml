@@ -1,0 +1,26 @@
+customers:
+  - slug: digikey
+    name: Digi-Key Electronics
+    website: https://www.digikey.com
+    contact_email: engineering@digikey.com
+    description: "Global distributor of semiconductors and electronic components to engineering teams."
+  - slug: mouser
+    name: Mouser Electronics
+    website: https://www.mouser.com
+    contact_email: engineering@mouser.com
+    description: "Authorized distributor of semiconductors and electronic components for design engineers."
+  - slug: arrow
+    name: Arrow Electronics
+    website: https://www.arrow.com
+    contact_email: engineering@arrow.com
+    description: "Global provider of electronic components and enterprise computing solutions for OEMs."
+  - slug: newark
+    name: Newark Electronics
+    website: https://www.newark.com
+    contact_email: engineering@newark.com
+    description: "North American distributor of electronic components, test equipment, and maintenance products."
+  - slug: rs-components
+    name: RS Components
+    website: https://www.rs-online.com
+    contact_email: engineering@rs-online.com
+    description: "Global distributor of electronic, industrial, and maintenance products for engineers."

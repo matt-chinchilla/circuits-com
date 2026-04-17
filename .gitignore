@@ -45,3 +45,7 @@ yarn-error.log*
 .remember/
 .firecrawl/
 api/circuits_api.egg-info/
+scripts/revenium/.env
+scripts/revenium/seed_run.log
+scripts/revenium/seed_state.json
+scripts/revenium/*.egg-info/

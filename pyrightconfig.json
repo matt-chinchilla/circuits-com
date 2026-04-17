@@ -1,0 +1,15 @@
+{
+  "include": ["api", "scripts/revenium"],
+  "exclude": [
+    "**/node_modules",
+    "**/__pycache__",
+    "**/.venv",
+    "**/build",
+    "frontend/**"
+  ],
+  "executionEnvironments": [
+    { "root": "scripts/revenium", "extraPaths": ["scripts/revenium"] },
+    { "root": "api", "extraPaths": ["api"] }
+  ],
+  "reportMissingImports": "warning"
+}

@@ -1,0 +1,21 @@
+products:
+  - key: ai-component-search
+    name: AI Component Search
+    description: "Semantic search over circuits.com's component catalog \u2014 accepts natural-language queries (e.g., 'low-power 3.3V LDO under $0.50') and returns ranked part matches."
+    model: claude-haiku-4-5-20251001
+    provider: anthropic
+    input_tokens_range: [500, 700]
+    output_tokens_range: [100, 200]
+    input_cost_per_mtok_usd: 0.25
+    output_cost_per_mtok_usd: 1.25
+    peak_daily_volume: 500
+  - key: ai-datasheet-summarizer
+    name: AI Datasheet Summarizer
+    description: "Plain-language summaries of component performance specs (voltage/current ratings, temperature range, key applications, known failure modes) extracted from manufacturer datasheets so buyers can evaluate a part in seconds without reading a 50-page PDF."
+    model: claude-sonnet-4-6
+    provider: anthropic
+    input_tokens_range: [6000, 10000]
+    output_tokens_range: [400, 700]
+    input_cost_per_mtok_usd: 3.00
+    output_cost_per_mtok_usd: 15.00
+    peak_daily_volume: 30

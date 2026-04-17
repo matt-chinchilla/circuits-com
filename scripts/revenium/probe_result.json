@@ -1,0 +1,30 @@
+{
+  "probed_at": "2026-04-17T18:41:19.914799Z",
+  "max_backdate_days_accepted": 90,
+  "attempts": [
+    {
+      "days_back": 7,
+      "status": "accepted",
+      "http_code": 200,
+      "error": null
+    },
+    {
+      "days_back": 30,
+      "status": "accepted",
+      "http_code": 200,
+      "error": null
+    },
+    {
+      "days_back": 60,
+      "status": "accepted",
+      "http_code": 200,
+      "error": null
+    },
+    {
+      "days_back": 90,
+      "status": "accepted",
+      "http_code": 200,
+      "error": null
+    }
+  ]
+}

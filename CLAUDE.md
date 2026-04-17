@@ -33,6 +33,18 @@ npm run build                      # Production build
 npx tsc --noEmit                   # Type check
 ```
 
+### Revenium seed (from scripts/revenium/)
+Seeds the Revenium tenant (`https://app.revenium.ai`) with demo circuits.com customer usage — 5 distributor orgs, 2 AI products, 90 days of backdated completions for the CTO meeting + future sales-tracking groundwork.
+```bash
+cd scripts/revenium && pip install -e ".[dev]"
+cp .env.example .env               # fill in REVENIUM_METERING_API_KEY / TENANT_ID / TEAM_ID / OWNER_ID / DEFAULT_PRODUCT_ID
+python -m revenium_seed probe      # canary: tests backdating lookback (~30s)
+python -m revenium_seed seed       # full seed: creates orgs/products + 90d completions (~20min, ~100k events)
+python -m revenium_seed verify     # readback (analytics paths incomplete — check app.revenium.ai/dashboards in browser)
+python -m revenium_seed reset --yes  # DESTRUCTIVE: deletes seeded orgs
+pytest tests/ -v                   # 16 pure-logic tests on generators.py
+```
+
 ### Deployment
 ```bash
 ./deploy.sh                # Full deploy (push key + pull + rebuild)
@@ -149,6 +161,20 @@ The info panel deliberately mimics electronic datasheet styling: each founder is
 - FastAPI 307-redirects missing-trailing-slash paths: `/api/suppliers` → `/api/suppliers/`. `curl` tests need `-L`; axios on the frontend follows transparently.
 - **Adding a new hostname** = (1) add to `server_name` in `nginx/nginx.ssl.conf`, (2) on EC2: stop nginx container → `sudo certbot certonly --standalone --expand --cert-name circuits.matthew-chirichella.com -d <every-hostname-the-cert-should-cover>` → start nginx. DNS must already resolve to the EIP before certbot runs (HTTP-01 challenge fetches over port 80).
 - Cert directory is `/etc/letsencrypt/live/circuits.matthew-chirichella.com/` even though `circuits.com` is primary — browsers match on SAN (Subject Alt Name), not Subject CN. Renaming the directory is purely cosmetic and would require updating nginx cert paths too. Don't do it unless there's a functional reason.
+
+## Revenium seed gotchas (scripts/revenium/)
+
+Learned the hard way while wiring the tenant seed. Capture now so the next time we extend it:
+- **Base URL is `https://api.revenium.ai`** (`.ai`), not `.io`. Docs live at `docs.revenium.io`; the API lives at `api.revenium.ai`. Both are correct.
+- **API key encodes the tenant ID.** `hak_<tenantId>_<hash>`. You can parse `REVENIUM_TENANT_ID` out of the key itself, but keeping it explicit in `.env` is safer.
+- **Two hierarchies, not one.** Products/sources belong to **teams** (`teamId`). Subscribers belong to **organizations** (`organizationIds` — plural array). Metering calls can reference both via `organization_id` + `subscription_id`.
+- **List responses nest under `_embedded.<resource>ResourceList`, not `_embedded.<resource>`.** E.g., `_embedded.organizationResourceList`, `_embedded.productResourceList`. Idempotency checks that look at the wrong key always create duplicates.
+- **`teamId` + `ownerId` are required in product-creation BODY, not query params.** `ownerId` is the user ID (from `/profitstream/v2/api/users/me`), not the team ID. `plan` must have its own `name` field (e.g., `"Plan for <product name>"`); `plan.type = "SUBSCRIPTION"` works.
+- **Anomaly rule `periodDuration` enum is `DAILY`, not `ONE_DAY`.** Other values follow the same pattern (HOURLY, WEEKLY, MONTHLY, QUARTERLY).
+- **`meter_ai_completion` accepts up-to-90-day-backdated timestamps** as of 2026-04 — `probe_result.json` captures the observed ceiling. If the server starts rejecting, re-run `python -m revenium_seed probe`.
+- **Revenium has TWO tools named `revenium-metering`.** `/usr/bin/revenium-metering` is a Node CLI for backfilling **Claude Code** telemetry specifically (different use case). `revenium_metering` (Python, v6.8+) is the Stainless-generated SDK we use for arbitrary metering. Don't confuse them.
+- **Analytics read endpoints (`/analytics/cost-by-*`) are NOT where the docs suggest.** `/v2/api/analytics/*`, `/profitstream/v2/api/analytics/*`, `/api/v2/analytics/*` all 404. Don't trust verify.py's analytics calls yet — confirm seed landed by opening `https://app.revenium.ai/dashboards` in a browser. Finding the real paths is a follow-up.
+- **Product creation uses the profitstream admin endpoint, which the Python SDK doesn't wrap.** We use `httpx.AsyncClient` for admin CRUD and `AsyncReveniumMetering` for metering only; they share the `x-api-key` header. Keep them separate.
 
 ## Brand Colors
 

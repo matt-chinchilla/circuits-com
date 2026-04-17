@@ -1,0 +1,7 @@
+{
+  "include": ["revenium_seed", "tests"],
+  "executionEnvironments": [
+    { "root": ".", "extraPaths": ["."] }
+  ],
+  "reportMissingImports": "warning"
+}
