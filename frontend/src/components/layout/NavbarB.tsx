@@ -1,8 +1,5 @@
-import { NavLink, Link, useSearchParams } from "react-router-dom";
-import styles from "./Navbar.module.scss";
-import NavbarA from "./NavbarA";
-import NavbarB from "./NavbarB";
-import NavbarC from "./NavbarC";
+import { NavLink, Link } from "react-router-dom";
+import styles from "./NavbarB.module.scss";
 
 const NAV_LINKS = [
   { to: "/", label: "Home" },
@@ -14,7 +11,7 @@ const NAV_LINKS = [
 const linkClassName = ({ isActive }: { isActive: boolean }) =>
   isActive ? `${styles.navLink} ${styles.active}` : styles.navLink;
 
-function NavbarBase() {
+export default function NavbarB() {
   return (
     <header className={styles.header}>
       <div className={styles.topStrip}>
@@ -41,15 +38,22 @@ function NavbarBase() {
           </div>
         </div>
       </div>
+      <div className={styles.catStrip}>
+        <div className={styles.catInner}>
+          <Link to="/search" className={styles.catBrowse}>
+            Browse Parts
+          </Link>
+          <input
+            className={styles.catSearchInput}
+            type="search"
+            placeholder="Search parts, suppliers, datasheets…"
+          />
+          <div className={styles.catMeta}>
+            <span className={styles.catMetaDot} />
+            15 categories · 7 suppliers · 59 parts
+          </div>
+        </div>
+      </div>
     </header>
   );
-}
-
-export default function Navbar() {
-  const [params] = useSearchParams();
-  const variant = params.get("nav");
-  if (variant === "A") return <NavbarA />;
-  if (variant === "B") return <NavbarB />;
-  if (variant === "C") return <NavbarC />;
-  return <NavbarBase />;
 }

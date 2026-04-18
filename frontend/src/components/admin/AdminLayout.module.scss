@@ -115,6 +115,38 @@
   text-transform: capitalize;
 }
 
+.backToSiteBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 16px;
+  font-size: $admin-font-small;
+  font-weight: 600;
+  color: #ffffff;
+  background: rgba(68, 189, 19, 0.12);
+  border: 1px solid rgba(68, 189, 19, 0.3);
+  border-radius: 6px;
+  text-decoration: none;
+  transition: background 150ms ease, border-color 150ms ease;
+
+  &:hover {
+    background: rgba(68, 189, 19, 0.22);
+    border-color: rgba(68, 189, 19, 0.55);
+    color: #ffffff;
+
+    .backArrow {
+      transform: translateX(-2px);
+    }
+  }
+}
+
+.backArrow {
+  font-size: 16px;
+  line-height: 1;
+  transition: transform 150ms ease;
+}
+
 .logoutBtn {
   padding: 10px 16px;
   font-size: $admin-font-small;

@@ -1,0 +1,62 @@
+@use "../../styles/variables" as *;
+
+.picker {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  z-index: 999;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 8px;
+  background: rgba(14, 17, 19, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  font-family: $font-mono;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  opacity: 0.35;
+  transition: opacity 160ms ease;
+
+  &:hover {
+    opacity: 1;
+  }
+}
+
+.label {
+  padding: 0 6px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.5);
+  white-space: nowrap;
+}
+
+.btn {
+  padding: 3px 10px;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.75);
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 999px;
+  cursor: pointer;
+  transition:
+    background 120ms ease,
+    color 120ms ease,
+    border-color 120ms ease;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+  }
+
+  &.active {
+    background: #44bd13;
+    color: #0e1113;
+    border-color: #44bd13;
+  }
+}

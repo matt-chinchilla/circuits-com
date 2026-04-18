@@ -1,17 +1,20 @@
-@use '../../styles/variables' as *;
-@use '../../styles/mixins' as *;
-@use '../../styles/animations';
+@use "sass:color";
+@use "../../styles/variables" as *;
+@use "../../styles/mixins" as *;
+@use "../../styles/animations";
 
 .header {
   position: sticky;
   top: 0;
   z-index: 100;
   width: 100%;
+  overflow-x: clip;
 }
 
 .topStrip {
+  position: relative;
   background-color: $nav-blue;
-  height: $nav-height;
+  min-height: $nav-height;
   display: flex;
   align-items: center;
 }
@@ -21,20 +24,17 @@
   width: 100%;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-}
-
-.navSearch {
-  flex: 1 1 0;
-  max-width: 420px;
-  margin: 0 24px;
-
-  @include responsive($bp-mobile) {
-    display: none;
-  }
+  justify-content: flex-end;
+  gap: 16px;
 }
 
 .brand {
+  position: absolute;
+  left: 20px;
+  top: 0;
+  bottom: 0;
+  display: inline-flex;
+  align-items: center;
   font-family: $font-heading;
   font-weight: 700;
   font-size: 1.1rem;
@@ -42,23 +42,54 @@
   letter-spacing: 0.02em;
   text-decoration: none;
   user-select: none;
+  white-space: nowrap;
 
   &:hover {
     color: #ffffff;
   }
 }
 
-.nav {
+.navSearch {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  transform: translateX(-50%);
   display: flex;
   align-items: center;
-  gap: 8px;
+  width: 100%;
+  max-width: 360px;
+
+  @include responsive($bp-desktop) {
+    display: none;
+  }
+}
+
+.navRight {
+  position: absolute;
+  right: 20px;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.navLinks {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+
+  @include responsive($bp-mobile) {
+    display: none;
+  }
 }
 
 .navLink {
   position: relative;
   display: inline-flex;
   align-items: center;
-  padding: 4px 12px;
+  padding: 4px 10px;
   font-family: $font-body;
   font-size: 0.875rem;
   font-weight: 500;
@@ -67,14 +98,16 @@
   transition: color $transition-fast;
 
   &::after {
-    content: '';
+    content: "";
     position: absolute;
     bottom: 0;
     left: 50%;
     width: 0;
     height: 2px;
     background: #ffffff;
-    transition: left 0.3s ease, width 0.3s ease;
+    transition:
+      left 0.3s ease,
+      width 0.3s ease;
   }
 
   &:hover {
@@ -93,5 +126,29 @@
       left: 0;
       width: 100%;
     }
+  }
+}
+
+.loginBtn {
+  flex-shrink: 0;
+  padding: 7px 16px;
+  font-family: $font-heading;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: #ffffff;
+  background-color: $executive-blue;
+  border: none;
+  border-radius: 5px;
+  text-decoration: none;
+  text-transform: uppercase;
+  white-space: nowrap;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+  transition: background-color $transition-fast;
+  cursor: pointer;
+
+  &:hover {
+    background-color: color.adjust($executive-blue, $lightness: -6%);
+    color: #ffffff;
   }
 }

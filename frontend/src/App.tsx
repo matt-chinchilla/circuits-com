@@ -23,6 +23,7 @@ import SponsorsPage from './pages/admin/SponsorsPage'
 import AdminLayout from './components/admin/AdminLayout'
 import DemoToggle from './components/admin/DemoToggle'
 import ProtectedRoute from './components/admin/ProtectedRoute'
+import NavVariantPicker from './components/layout/NavVariantPicker'
 import { DemoProvider } from './contexts/DemoContext'
 
 function App() {
@@ -65,18 +66,21 @@ function App() {
   }
 
   return (
-    <AnimatePresence mode="popLayout">
-      <Routes location={location} key={location.pathname}>
-        <Route path="/" element={<HomePage />} />
-        <Route path="/category/:slug" element={<CategoryPage />} />
-        <Route path="/search" element={<SearchPage />} />
-        <Route path="/join" element={<JoinPage />} />
-        <Route path="/contact" element={<ContactPage />} />
-        <Route path="/about" element={<AboutPage />} />
-        <Route path="/keyword/:keyword" element={<KeywordSponsorPage />} />
-        <Route path="/part/:id" element={<PartPage />} />
-      </Routes>
-    </AnimatePresence>
+    <>
+      <AnimatePresence mode="popLayout">
+        <Routes location={location} key={location.pathname}>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/category/:slug" element={<CategoryPage />} />
+          <Route path="/search" element={<SearchPage />} />
+          <Route path="/join" element={<JoinPage />} />
+          <Route path="/contact" element={<ContactPage />} />
+          <Route path="/about" element={<AboutPage />} />
+          <Route path="/keyword/:keyword" element={<KeywordSponsorPage />} />
+          <Route path="/part/:id" element={<PartPage />} />
+        </Routes>
+      </AnimatePresence>
+      <NavVariantPicker />
+    </>
   )
 }
 

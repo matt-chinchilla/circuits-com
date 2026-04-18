@@ -132,15 +132,14 @@
   border: none;
   border-radius: 0 6px 6px 0;
   cursor: pointer;
-  transition: background-color $transition-fast, transform $transition-fast;
+  transition: background-color $transition-fast, filter $transition-fast;
 
   &:hover {
     background-color: color.adjust($nav-blue, $lightness: -8%);
-    transform: scale(1.03);
   }
 
   &:active {
-    transform: scale(0.98);
+    filter: brightness(0.92);
   }
 }
 

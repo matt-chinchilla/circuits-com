@@ -122,6 +122,9 @@ Frontend calls (`services/api.ts`, `services/adminApi.ts`) use relative paths �
 ### Contact Page — Datasheet Card Motif
 The info panel deliberately mimics electronic datasheet styling: each founder is labeled U1/U2 in monospace (schematic component designators), cards have crop-mark corners (datasheet reference box framing), and the panel sits on a faint PCB grid (24px cells, $nav-blue at 3.5%). Don't flatten this to a generic card layout — the motif is the brand statement.
 
+### Navbar — Pinned-Edge Layout
+Brand (`left: 20px`) and nav+LOGIN group (`right: 20px`) are `position: absolute` on `.topStrip` — they escape `.inner`'s container max-width to stay pinned 20px from viewport edges at every width. Search bar (when rendered) is absolutely centered via `left: 50%; transform: translateX(-50%)`, hidden on `/` via `useLocation().pathname === '/'` (the hero search covers that). Do NOT reintroduce Grid or flex `space-between` for navbar horizontal positioning — the pin pattern is load-bearing.
+
 ### Seed Data (idempotent)
 15 categories, 75 subcategories (5 per category, 2 levels deep), 7 suppliers, 2 sponsors. Seed checks for existing data before inserting.
 
@@ -140,8 +143,7 @@ The info panel deliberately mimics electronic datasheet styling: each founder is
 - SQLite tests don't enforce CHECK constraints — the XOR sponsor constraint only works in PostgreSQL
 - `global.scss` uses deprecated Sass `darken()`/`lighten()` — use `@use 'sass:color'` + `color.adjust()` in new code
 - n8n workflows need SMTP credentials at runtime for email nodes; they have `continueOnFail: true` for demo mode
-- Frontend Dockerfile has 3 stages: `dev` (Vite), `build`, `prod` (nginx) — docker-compose.yml targets dev by default
-- Frontend prod stage serves on port 80 (nginx), dev stage on port 3000 (Vite)
+- **Frontend Dockerfile has 4 stages (`base`, `dev`, `build`, `prod`) and docker-compose.yml defaults to `prod`** (no `target:` → last stage). The container serves the hashed Vite bundle via nginx on container:80 (mapped to host:3000). No HMR — every SCSS/TSX edit requires `docker compose up --build -d frontend` (~20s) before it's visible at `localhost/`. To get HMR locally, add `target: dev` under the frontend service.
 - Never animate CSS `drop-shadow()` filters — causes severe scroll lag; use static shadows only
 - `AnimatePresence mode="popLayout"` for crossfade page transitions (not `mode="wait"` which blocks)
 - `/api/health` endpoint exists for health checks
@@ -149,6 +151,9 @@ The info panel deliberately mimics electronic datasheet styling: each founder is
 - FastAPI 307-redirects missing-trailing-slash paths: `/api/suppliers` → `/api/suppliers/`. `curl` tests need `-L`; axios on the frontend follows transparently.
 - **Adding a new hostname** = (1) add to `server_name` in `nginx/nginx.ssl.conf`, (2) on EC2: stop nginx container → `sudo certbot certonly --standalone --expand --cert-name circuits.matthew-chirichella.com -d <every-hostname-the-cert-should-cover>` → start nginx. DNS must already resolve to the EIP before certbot runs (HTTP-01 challenge fetches over port 80).
 - Cert directory is `/etc/letsencrypt/live/circuits.matthew-chirichella.com/` even though `circuits.com` is primary — browsers match on SAN (Subject Alt Name), not Subject CN. Renaming the directory is purely cosmetic and would require updating nginx cert paths too. Don't do it unless there's a functional reason.
+- **Avoid `grid-template-columns: 1fr auto 1fr` with asymmetric side-track content** — `1fr` is secretly `minmax(auto, 1fr)`, so a fat min-content track on one side breaks the "centered" middle. Use `position: absolute` on a `position: relative` parent instead. Still latent in `pages/admin/ImportPage.module.scss:.mappingGrid`, `DashboardPage.module.scss`, `ReportsPage.module.scss`, `SupplierFormPage.module.scss:.reviewGrid`.
+- **Admin login creds (local dev):** `matthew` / `mike` / `john` all with password `admin` (seeded by `api/app/db/seed.py:504`). The `ADMIN_USERNAME` / `ADMIN_PASSWORD` env vars in `docker-compose.yml` are for SQLAdmin (unreachable in prod), NOT the React admin panel login form.
+- **Breakpoint `$bp-desktop: 1199px`** exists in `frontend/src/styles/_variables.scss` alongside `$bp-mobile: 768px` and `$bp-tablet: 1024px` — use `@include responsive($bp-desktop)` rather than hardcoding widths.
 
 ## Brand Colors
 

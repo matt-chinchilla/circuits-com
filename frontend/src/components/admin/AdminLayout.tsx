@@ -1,4 +1,4 @@
-import { NavLink } from 'react-router-dom';
+import { NavLink, Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import styles from './AdminLayout.module.scss';
 import type { ReactNode } from 'react';
@@ -59,6 +59,10 @@ export default function AdminLayout({ children, role = 'admin' }: AdminLayoutPro
             <span className={styles.userName}>{user?.username ?? 'Admin'}</span>
             <span className={styles.userRole}>{user?.role ?? 'admin'}</span>
           </div>
+          <Link to="/" className={styles.backToSiteBtn}>
+            <span className={styles.backArrow} aria-hidden="true">←</span>
+            Back to Site
+          </Link>
           <button className={styles.logoutBtn} onClick={logout}>
             Sign Out
           </button>

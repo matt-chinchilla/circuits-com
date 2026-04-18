@@ -1,8 +1,5 @@
-import { NavLink, Link, useSearchParams } from "react-router-dom";
-import styles from "./Navbar.module.scss";
-import NavbarA from "./NavbarA";
-import NavbarB from "./NavbarB";
-import NavbarC from "./NavbarC";
+import { NavLink, Link } from "react-router-dom";
+import styles from "./NavbarA.module.scss";
 
 const NAV_LINKS = [
   { to: "/", label: "Home" },
@@ -14,13 +11,13 @@ const NAV_LINKS = [
 const linkClassName = ({ isActive }: { isActive: boolean }) =>
   isActive ? `${styles.navLink} ${styles.active}` : styles.navLink;
 
-function NavbarBase() {
+export default function NavbarA() {
   return (
     <header className={styles.header}>
       <div className={styles.topStrip}>
         <div className={styles.inner}>
           <Link to="/" className={styles.brand}>
-            Circuits.com
+            <span>Circuits</span>
           </Link>
           <div className={styles.navRight}>
             <nav className={styles.navLinks} aria-label="Main navigation">
@@ -43,13 +40,4 @@ function NavbarBase() {
       </div>
     </header>
   );
-}
-
-export default function Navbar() {
-  const [params] = useSearchParams();
-  const variant = params.get("nav");
-  if (variant === "A") return <NavbarA />;
-  if (variant === "B") return <NavbarB />;
-  if (variant === "C") return <NavbarC />;
-  return <NavbarBase />;
 }
