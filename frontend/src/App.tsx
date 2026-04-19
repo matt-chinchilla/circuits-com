@@ -23,6 +23,7 @@ import SponsorsPage from './pages/admin/SponsorsPage'
 import AdminLayout from './components/admin/AdminLayout'
 import DemoToggle from './components/admin/DemoToggle'
 import ProtectedRoute from './components/admin/ProtectedRoute'
+import Navbar from './components/layout/Navbar'
 import NavVariantPicker from './components/layout/NavVariantPicker'
 import ThemeBridge from './components/layout/ThemeBridge'
 import { DemoProvider } from './contexts/DemoContext'
@@ -69,6 +70,7 @@ function App() {
   return (
     <>
       <ThemeBridge />
+      <Navbar />
       <AnimatePresence mode="popLayout">
         <Routes location={location} key={location.pathname}>
           <Route path="/" element={<HomePage />} />

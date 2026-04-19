@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import Navbar from '../components/layout/Navbar';
 import Footer from '../components/layout/Footer';
 import SubcategoryChips from '../components/category/SubcategoryChips';
 import SupplierTable from '../components/category/SupplierTable';
@@ -57,7 +56,6 @@ export default function CategoryPage() {
       exit={{ opacity: 0, x: -20 }}
       transition={{ duration: 0.15, ease: 'easeInOut' as const }}
     >
-      <Navbar />
 
       <div className={styles.categoryHeader}>
         <CircuitTraces />

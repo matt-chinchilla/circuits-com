@@ -1,7 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import Navbar from '../components/layout/Navbar';
 import Footer from '../components/layout/Footer';
 import GlowButton from '../components/shared/GlowButton';
 import { api } from '../services/api';
@@ -90,7 +89,6 @@ export default function KeywordSponsorPage() {
         exit={{ opacity: 0, x: -20 }}
         transition={{ duration: 0.15, ease: 'easeInOut' }}
       >
-        <Navbar />
         <div className={styles.loading}>
           <div className={styles.spinner} />
           <p className={styles.loadingText}>Loading sponsor...</p>
@@ -110,7 +108,6 @@ export default function KeywordSponsorPage() {
         exit={{ opacity: 0, x: -20 }}
         transition={{ duration: 0.15, ease: 'easeInOut' }}
       >
-        <Navbar />
         <div className={styles.errorState}>
           <h1 className={styles.errorTitle}>Something went wrong</h1>
           <p className={styles.errorText}>{error}</p>
@@ -133,7 +130,6 @@ export default function KeywordSponsorPage() {
         exit={{ opacity: 0, x: -20 }}
         transition={{ duration: 0.15, ease: 'easeInOut' }}
       >
-        <Navbar />
 
         <div className={styles.notFound}>
           <motion.span
@@ -189,7 +185,6 @@ export default function KeywordSponsorPage() {
       exit={{ opacity: 0, x: -20 }}
       transition={{ duration: 0.15, ease: 'easeInOut' }}
     >
-      <Navbar />
 
       {/* Gold hero */}
       <section className={styles.hero}>

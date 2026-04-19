@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import Navbar from '../components/layout/Navbar';
 import Footer from '../components/layout/Footer';
 import SkeletonLoader from '../components/shared/SkeletonLoader';
 import CircuitTraces from '../components/shared/CircuitTraces';
@@ -64,7 +63,6 @@ export default function PartPage() {
       exit={{ opacity: 0, x: -20 }}
       transition={{ duration: 0.15, ease: 'easeInOut' as const }}
     >
-      <Navbar />
 
       <div className={styles.partHeader}>
         <CircuitTraces />

@@ -1,7 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import Navbar from '../components/layout/Navbar';
 import Footer from '../components/layout/Footer';
 import GlowButton from '../components/shared/GlowButton';
 import { useCategories } from '../hooks/useCategories';
@@ -68,7 +67,6 @@ export default function JoinPage() {
       exit={{ opacity: 0, x: -20 }}
       transition={{ duration: 0.15, ease: 'easeInOut' }}
     >
-      <Navbar />
 
       <div className={styles.pageHeader}>
         <CircuitTraces />

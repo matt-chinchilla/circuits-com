@@ -1,5 +1,4 @@
 import { motion } from 'framer-motion';
-import Navbar from '../components/layout/Navbar';
 import HeroSection from '../components/home/HeroSection';
 import CategoryGrid from '../components/home/CategoryGrid';
 import Footer from '../components/layout/Footer';
@@ -15,7 +14,6 @@ export default function HomePage() {
       exit={{ opacity: 0, x: -20 }}
       transition={{ duration: 0.15, ease: 'easeInOut' as const }}
     >
-      <Navbar />
       <HeroSection />
       <CategoryGrid categories={categories} loading={loading} error={error} />
       <Footer />

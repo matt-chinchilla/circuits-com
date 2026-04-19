@@ -1,6 +1,5 @@
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import Navbar from '../components/layout/Navbar';
 import Footer from '../components/layout/Footer';
 import GlowButton from '../components/shared/GlowButton';
 import CircuitTraces from '../components/shared/CircuitTraces';
@@ -44,7 +43,6 @@ export default function AboutPage() {
       exit={{ opacity: 0, x: -20 }}
       transition={{ duration: 0.15, ease: 'easeInOut' }}
     >
-      <Navbar />
 
       {/* Hero */}
       <section className={styles.hero}>

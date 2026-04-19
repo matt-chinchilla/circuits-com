@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import Navbar from '../components/layout/Navbar';
 import Footer from '../components/layout/Footer';
 import SearchBar from '../components/layout/SearchBar';
 import SkeletonLoader from '../components/shared/SkeletonLoader';
@@ -68,7 +67,6 @@ export default function SearchPage() {
       exit={{ opacity: 0, x: -20 }}
       transition={{ duration: 0.15, ease: 'easeInOut' }}
     >
-      <Navbar />
 
       <div className={styles.searchHeader}>
         <CircuitTraces />

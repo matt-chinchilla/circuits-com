@@ -13,7 +13,10 @@ export default function ThemeBridge() {
   const theme = key && KEY_TO_THEME[key] ? KEY_TO_THEME[key] : "base";
 
   useEffect(() => {
-    document.documentElement.dataset.theme = theme;
+    const root = document.documentElement;
+    if (root.dataset.theme !== theme) {
+      root.dataset.theme = theme;
+    }
   }, [theme]);
 
   return null;
