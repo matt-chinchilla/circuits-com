@@ -12,6 +12,10 @@
   --trace-color:     var(--theme-pcb-trace);
   --trace-glow:      var(--theme-pcb-dot-glow);
   --electron-color:  var(--theme-nav-text-hover);
+  // Opacity buckets chosen to emulate the pre-refactor range (0.01–0.03 for
+  // body fills, 0.07–0.12 for body strokes, 0.08–0.25 for pads). Flattening
+  // is imperceptible on dark boards at these levels but may need per-theme
+  // retuning if a future theme has a significantly lighter `--theme-pcb-trace`.
   --ic-body-fill:    color-mix(in srgb, var(--theme-pcb-trace) 3%,  transparent);
   --ic-body-stroke:  color-mix(in srgb, var(--theme-pcb-trace) 15%, transparent);
   --ic-pad-fill:     color-mix(in srgb, var(--theme-pcb-trace) 30%, transparent);

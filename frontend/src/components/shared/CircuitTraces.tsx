@@ -12,7 +12,10 @@ const S = (o: number, w = 1) => ({
   strokeWidth: w,
 });
 
-// IC body stroke — uses --ic-body-stroke (softer than main trace color)
+// IC body stroke + fill — uses --ic-body-stroke and --ic-body-fill tokens
+// (softer than main trace color). Fill is theme-uniform across all IC packages;
+// per-IC variation (e.g., thermal pads brighter than signal pads) is achieved
+// via fillOpacity on individual <rect>s, not by diverging the token.
 const IC = (w = 1) => ({ stroke: 'var(--ic-body-stroke)', strokeWidth: w, fill: 'var(--ic-body-fill)' });
 
 const DASH = { strokeDasharray: 1200, strokeDashoffset: 1200 };
