@@ -76,3 +76,72 @@
     }
   }
 }
+
+// ─── Per-theme hero background textures + nav/hero shadow-gap seam ────────
+
+:global([data-theme="steel"]) .hero {
+  background-image:
+    linear-gradient(
+      180deg,
+      rgba(14, 17, 19, 0.30) 0%,
+      rgba(14, 17, 19, 0) 20%,
+      rgba(14, 17, 19, 0) 80%,
+      rgba(14, 17, 19, 0.20) 100%
+    ),
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.04) 0%,
+      rgba(255, 255, 255, 0) 18%
+    );
+  background-color: $executive-blue;
+}
+
+:global([data-theme="schematic"]) .hero {
+  background-image:
+    linear-gradient(
+      180deg,
+      rgba(20, 26, 30, 0.10) 0%,
+      rgba(20, 26, 30, 0) 15%,
+      rgba(20, 26, 30, 0) 75%,
+      rgba(20, 26, 30, 0.15) 100%
+    ),
+    repeating-linear-gradient(
+      0deg,
+      transparent 0 27px,
+      rgba(255, 255, 255, 0.025) 27px 28px
+    );
+  background-color: $executive-blue;
+}
+
+:global([data-theme="pcb"]) .hero {
+  background-image:
+    radial-gradient(
+      ellipse 70% 45% at 50% 50%,
+      transparent 60%,
+      rgba(6, 20, 10, 0.35) 100%
+    ),
+    repeating-linear-gradient(
+      0deg,
+      transparent 0 23px,
+      color-mix(in srgb, var(--theme-accent) 3.5%, transparent) 23px 24px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      transparent 0 23px,
+      color-mix(in srgb, var(--theme-accent) 3.5%, transparent) 23px 24px
+    );
+  background-color: $executive-blue;
+}
+
+// 8px shadow-gap recessing the hero under the navbar. Not applied on base.
+:global([data-theme="steel"]) .hero::before,
+:global([data-theme="schematic"]) .hero::before,
+:global([data-theme="pcb"]) .hero::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 8px;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.45) 0%, transparent 100%);
+  pointer-events: none;
+  z-index: 0;
+}
