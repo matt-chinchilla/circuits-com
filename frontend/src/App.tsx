@@ -85,7 +85,7 @@ function App() {
         </Routes>
       </AnimatePresence>
       <NavVariantPicker />
-      <HeroColorTuner />
+      {import.meta.env.DEV && <HeroColorTuner />}
     </>
   )
 }

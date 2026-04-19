@@ -326,8 +326,8 @@ export default function CircuitTraces() {
         [690,180,3],    [840,80,2.5], [320,390,2.5], [770,110,3],  [120,140,2.5],
       ].map(([cx, cy, r], i) => (
         <g key={`via${i}`}>
-          <circle cx={cx} cy={cy} r={r as number} fill="rgba(232,190,45,0.08)" stroke="rgba(232,190,45,0.2)" strokeWidth={0.8} className={styles.node} style={T(0.2 + i * 0.13)} />
-          <circle cx={cx} cy={cy} r={(r as number) * 0.4} fill="rgba(232,190,45,0.3)" className={styles.node} style={T(0.2 + i * 0.13)} />
+          <circle cx={cx} cy={cy} r={r as number} fill="var(--node-color)" fillOpacity={0.08} stroke="var(--node-color)" strokeOpacity={0.2} strokeWidth={0.8} className={styles.node} style={T(0.2 + i * 0.13)} />
+          <circle cx={cx} cy={cy} r={(r as number) * 0.4} fill="var(--node-color)" fillOpacity={0.3} className={styles.node} style={T(0.2 + i * 0.13)} />
         </g>
       ))}
 
@@ -337,7 +337,7 @@ export default function CircuitTraces() {
       <rect x="730" y="250" width="44" height="44" rx={2} {...IC(0.6)} className={styles.trace} style={T(2.2)} />
       {[0,1,2,3].map(row =>
         [0,1,2,3].map(col => (
-          <circle key={`bga${row}${col}`} cx={740 + col*10} cy={260 + row*10} r={2} fill="rgba(232,190,45,0.2)" className={styles.node} style={T(2.3 + (row*4+col)*0.04)} />
+          <circle key={`bga${row}${col}`} cx={740 + col*10} cy={260 + row*10} r={2} fill="var(--node-color)" fillOpacity={0.2} className={styles.node} style={T(2.3 + (row*4+col)*0.04)} />
         ))
       )}
 
@@ -378,7 +378,7 @@ export default function CircuitTraces() {
         <g key={`fid${i}`}>
           <circle cx={x} cy={y} r={6} fill="none" {...S(0.06, 0.5)} className={styles.node} style={T(0.1)} />
           <circle cx={x} cy={y} r={3} fill="none" {...S(0.08, 0.5)} className={styles.node} style={T(0.1)} />
-          <circle cx={x} cy={y} r={1.2} fill="rgba(232,190,45,0.25)" className={styles.node} style={T(0.1)} />
+          <circle cx={x} cy={y} r={1.2} fill="var(--node-color)" fillOpacity={0.25} className={styles.node} style={T(0.1)} />
         </g>
       ))}
 

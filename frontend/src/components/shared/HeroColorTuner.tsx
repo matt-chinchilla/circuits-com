@@ -53,9 +53,9 @@ function clearAll(): void {
   }
 }
 
+// Dev-mode guard is applied at the mount site in App.tsx — this component
+// itself doesn't self-gate. Keeps all hooks unconditional (Rules of Hooks).
 export default function HeroColorTuner() {
-  if (!import.meta.env.DEV) return null;
-
   const [values, setValues] = useState<Record<Slot, number>>({
     "ic-body-fill": readInitial("ic-body-fill"),
     "ic-body-stroke": readInitial("ic-body-stroke"),

@@ -9,9 +9,13 @@
   contain: layout style paint;
 
   // Default (alternate-theme) token values. Base overrides below.
-  --trace-color:     var(--theme-pcb-trace);
-  --trace-glow:      var(--theme-pcb-dot-glow);
+  // Fallbacks to `transparent` guard against a future theme omitting any of
+  // --theme-pcb-trace / --theme-pcb-dot-glow: invisible is a safer silent
+  // failure mode than inheriting currentColor (opaque dark text color).
+  --trace-color:     var(--theme-pcb-trace, transparent);
+  --trace-glow:      var(--theme-pcb-dot-glow, transparent);
   --electron-color:  var(--theme-nav-text-hover);
+  --node-color:      var(--theme-pcb-trace, transparent);
   // Opacity buckets chosen to emulate the pre-refactor range (0.01–0.03 for
   // body fills, 0.07–0.12 for body strokes, 0.08–0.25 for pads). Flattening
   // is imperceptible on dark boards at these levels but may need per-theme
@@ -30,6 +34,9 @@
   // Electrons pre-change were amber (255,220,80), not gold — preserved exactly
   // so base theme renders with no perceptible electron hue shift.
   --electron-color:  rgba(255, 220, 80, 0.9);
+  // Vias / BGA balls / fiducials used their own slightly-warmer amber
+  // (232,190,45) pre-refactor. Restore exactly.
+  --node-color:      rgba(232, 190, 45, 1);
   --ic-body-fill:    rgba(218, 190, 65, 0.02);
   --ic-body-stroke:  rgba(218, 190, 65, 0.12);
   --ic-pad-fill:     rgba(218, 190, 65, 0.25);
