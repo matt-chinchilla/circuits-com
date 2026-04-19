@@ -93,7 +93,7 @@
       rgba(255, 255, 255, 0.04) 0%,
       rgba(255, 255, 255, 0) 18%
     );
-  background-color: $executive-blue;
+  background-color: var(--theme-nav-bg);
 }
 
 :global([data-theme="schematic"]) .hero {
@@ -110,7 +110,7 @@
       transparent 0 27px,
       rgba(255, 255, 255, 0.025) 27px 28px
     );
-  background-color: $executive-blue;
+  background-color: var(--theme-nav-bg);
 }
 
 :global([data-theme="pcb"]) .hero {
@@ -130,7 +130,7 @@
       transparent 0 23px,
       color-mix(in srgb, var(--theme-accent) 3.5%, transparent) 23px 24px
     );
-  background-color: $executive-blue;
+  background-color: var(--theme-nav-bg);
 }
 
 // 8px shadow-gap recessing the hero under the navbar. Not applied on base.
