@@ -27,6 +27,82 @@
   border-bottom: var(--theme-nav-bottom-border, none);
 }
 
+// ─── Per-theme background textures ─────────────────────────────────────
+// Each theme gets a distinct surface treatment overlaid on --theme-nav-bg.
+// Keeps the character of the original three variants: steel gradient,
+// schematic pinstripe, pcb grid + copper bottom trace.
+
+:global([data-theme="steel"]) .topStrip {
+  background-image:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.04) 0%,
+      rgba(255, 255, 255, 0) 70%
+    ),
+    linear-gradient(
+      180deg,
+      rgba(14, 17, 19, 0.92),
+      rgba(14, 17, 19, 0.88)
+    );
+  background-color: var(--theme-nav-bg);
+}
+
+:global([data-theme="schematic"]) .topStrip {
+  background-image:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, transparent 40%),
+    repeating-linear-gradient(
+      90deg,
+      transparent 0 3px,
+      rgba(255, 255, 255, 0.012) 3px 4px
+    );
+  background-color: var(--theme-nav-bg);
+}
+
+:global([data-theme="pcb"]) .topStrip {
+  background-image:
+    repeating-linear-gradient(
+      0deg,
+      transparent 0 23px,
+      rgba(255, 255, 255, 0.025) 23px 24px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      transparent 0 23px,
+      rgba(255, 255, 255, 0.025) 23px 24px
+    ),
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.04) 0%,
+      rgba(0, 0, 0, 0.06) 100%
+    );
+  background-color: var(--theme-nav-bg);
+  box-shadow:
+    inset 0 1px 0 rgba(232, 239, 228, 0.08),
+    inset 0 -1px 0 rgba(196, 155, 93, 0.55);
+}
+
+// PCB copper-trace bottom accent — never present on other themes
+:global([data-theme="pcb"]) .topStrip::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -2px;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    transparent 0,
+    #c49b5d 8%,
+    #dbb67e 50%,
+    #c49b5d 92%,
+    transparent 100%
+  );
+  box-shadow:
+    0 1px 0 rgba(0, 0, 0, 0.35),
+    0 0 6px rgba(196, 155, 93, 0.25);
+  pointer-events: none;
+}
+
 .brand {
   position: absolute;
   left: 20px;
