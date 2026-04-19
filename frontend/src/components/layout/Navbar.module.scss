@@ -105,7 +105,7 @@
 
 .brand {
   position: absolute;
-  left: 20px;
+  left: 28px;
   top: 0;
   bottom: 0;
   display: inline-flex;
@@ -201,18 +201,18 @@
 
 .navRight {
   position: absolute;
-  right: 20px;
+  right: 28px;
   top: 0;
   bottom: 0;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 18px;
 }
 
 .navLinks {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 10px;
 
   @include responsive($bp-mobile) {
     display: none;
@@ -290,7 +290,7 @@
 
 .loginBtn {
   flex-shrink: 0;
-  padding: 7px 16px;
+  padding: 8px 20px;
   font-family: $font-heading;
   font-size: 0.75rem;
   font-weight: 700;
@@ -315,7 +315,7 @@
 }
 
 :global([data-theme="pcb"]) .loginBtn {
-  padding: 7px 14px;
+  padding: 8px 18px;
   font-family: $font-mono;
   font-size: 0.7rem;
   letter-spacing: 0.18em;
