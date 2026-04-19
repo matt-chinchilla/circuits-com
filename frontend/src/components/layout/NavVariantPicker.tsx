@@ -39,6 +39,14 @@ export default function NavVariantPicker() {
             const next = new URLSearchParams(params);
             if (!key) next.delete("nav");
             else next.set("nav", key);
+            // Overwrite localStorage immediately so clicking Base
+            // (which clears the URL param) isn't shadowed by the
+            // previously persisted non-base choice.
+            try {
+              localStorage.setItem(STORAGE_KEY, theme);
+            } catch {
+              // localStorage disabled — URL param will still drive it
+            }
             setParams(next, { replace: true });
           }}
         >
