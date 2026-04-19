@@ -23,7 +23,9 @@
 :global(:root[data-theme="base"]) .circuitTraces,
 :global(:root:not([data-theme])) .circuitTraces {
   --trace-color:     rgba(218, 190, 65, 1);
-  --electron-color:  rgba(218, 190, 65, 0.9);
+  // Electrons pre-change were amber (255,220,80), not gold — preserved exactly
+  // so base theme renders with no perceptible electron hue shift.
+  --electron-color:  rgba(255, 220, 80, 0.9);
   --ic-body-fill:    rgba(218, 190, 65, 0.02);
   --ic-body-stroke:  rgba(218, 190, 65, 0.12);
   --ic-pad-fill:     rgba(218, 190, 65, 0.25);
