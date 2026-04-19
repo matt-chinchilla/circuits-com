@@ -7,20 +7,37 @@
   height: 100%;
   pointer-events: none;
   contain: layout style paint;
-  transition: filter 300ms ease;
+
+  // Default (alternate-theme) token values. Base overrides below.
+  --trace-color:     var(--theme-pcb-trace);
+  --trace-glow:      var(--theme-pcb-dot-glow);
+  --electron-color:  var(--theme-nav-text-hover);
+  --ic-body-fill:    color-mix(in srgb, var(--theme-pcb-trace) 3%,  transparent);
+  --ic-body-stroke:  color-mix(in srgb, var(--theme-pcb-trace) 15%, transparent);
+  --ic-pad-fill:     color-mix(in srgb, var(--theme-pcb-trace) 30%, transparent);
 }
 
-// Only apply the hue-rotate when a non-base theme is active. On base, no
-// filter at all → no GPU layer promotion, no per-frame filter pipeline
-// cost during the draw-circuit animation.
-:global([data-theme="steel"]) .circuitTraces,
-:global([data-theme="schematic"]) .circuitTraces,
-:global([data-theme="pcb"]) .circuitTraces {
-  filter: hue-rotate(var(--theme-trace-hue-shift, 0deg));
+// Base theme carve-out: restore the pre-refactor hardcoded gold values
+// and suppress the shared trace-glow filter. CSS `filter: none` beats
+// the SVG `filter="url(#traceGlow)"` presentation attribute.
+:global(:root[data-theme="base"]) .circuitTraces,
+:global(:root:not([data-theme])) .circuitTraces {
+  --trace-color:     rgba(218, 190, 65, 1);
+  --electron-color:  rgba(218, 190, 65, 0.9);
+  --ic-body-fill:    rgba(218, 190, 65, 0.02);
+  --ic-body-stroke:  rgba(218, 190, 65, 0.12);
+  --ic-pad-fill:     rgba(218, 190, 65, 0.25);
+
+  .traceGroup { filter: none; }
 }
 
 .trace {
   animation: draw-circuit 6s ease-out forwards;
+}
+
+.traceGroup {
+  // Container for the animated trace paths. The shared trace-glow filter
+  // is applied here (once) via filter="url(#traceGlow)" in CircuitTraces.tsx.
 }
 
 .node {
