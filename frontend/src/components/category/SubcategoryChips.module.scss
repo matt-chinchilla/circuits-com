@@ -32,7 +32,7 @@
 
   &.active {
     background: rgba(255, 255, 255, 0.95);
-    color: var(--theme-cta-bg);
+    color: $executive-blue;
     border-color: transparent;
     font-weight: 600;
   }

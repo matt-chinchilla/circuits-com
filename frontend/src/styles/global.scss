@@ -22,11 +22,11 @@ body {
 }
 
 a {
-  color: $nav-blue;
+  color: var(--theme-accent);
   text-decoration: none;
-  transition: color $transition-fast;
+  transition: color $transition-fast, filter $transition-fast;
   &:hover {
-    color: darken($nav-blue, 10%);
+    filter: brightness(0.88);
   }
 }
 

@@ -235,7 +235,7 @@ export default function PartPage() {
                       <dd className={styles.detailValue}>{part.category_name}</dd>
                     </div>
                   )}
-                  {part.best_price !== null && (
+                  {part.best_price != null && (
                     <div className={styles.detailItem}>
                       <dt className={styles.detailLabel}>Best Price</dt>
                       <dd className={`${styles.detailValue} ${styles.detailPrice}`}>
