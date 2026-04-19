@@ -25,6 +25,7 @@ import DemoToggle from './components/admin/DemoToggle'
 import ProtectedRoute from './components/admin/ProtectedRoute'
 import Navbar from './components/layout/Navbar'
 import NavVariantPicker from './components/layout/NavVariantPicker'
+import HeroColorTuner from './components/shared/HeroColorTuner'
 import ThemeBridge from './components/layout/ThemeBridge'
 import { DemoProvider } from './contexts/DemoContext'
 
@@ -84,6 +85,7 @@ function App() {
         </Routes>
       </AnimatePresence>
       <NavVariantPicker />
+      <HeroColorTuner />
     </>
   )
 }
