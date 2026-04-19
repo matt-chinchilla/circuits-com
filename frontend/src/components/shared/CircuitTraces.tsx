@@ -63,8 +63,14 @@ export default function CircuitTraces() {
       preserveAspectRatio="xMidYMid slice"
     >
       <defs>
-        <filter id="traceGlow" x="-10%" y="-10%" width="120%" height="120%">
-          <feGaussianBlur stdDeviation="1.5" result="blur" />
+        {/* Low-σ blur: at this viewBox scale (1200×400, strokes 0.6–2 units)
+            stdDeviation=1.5 was inflating the filter region by ~±4.5 units,
+            forcing a re-rasterization of ~600k pixels every frame during
+            the 6s draw-circuit animation. 0.5 preserves a subtle glow while
+            keeping the filter region tight. Mobile opts out entirely via
+            the media query in CircuitTraces.module.scss. */}
+        <filter id="traceGlow" x="-5%" y="-5%" width="110%" height="110%">
+          <feGaussianBlur stdDeviation="0.5" result="blur" />
           <feFlood floodColor="var(--trace-glow)" floodOpacity="0.6" />
           <feComposite in2="blur" operator="in" result="glowColor" />
           <feMerge>

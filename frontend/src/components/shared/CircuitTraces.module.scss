@@ -53,6 +53,16 @@
   // is applied here (once) via filter="url(#traceGlow)" in CircuitTraces.tsx.
 }
 
+// Mobile opt-out: SVG Gaussian blur on animating SourceGraphic falls back to
+// CPU raster on Chrome Android / iOS WebKit, causing 6–10s of frame drops
+// during the draw-circuit animation. Disabling the filter on narrow viewports
+// keeps the theme color tint (stroke is already var(--trace-color)) at zero
+// frame cost. Visual loss on mobile: the subtle halo is gone; traces stay
+// sharp in their theme color. See CLAUDE.md "Gotchas" for background.
+@media (max-width: 768px) {
+  .traceGroup { filter: none; }
+}
+
 .node {
   opacity: 0.4;
 }

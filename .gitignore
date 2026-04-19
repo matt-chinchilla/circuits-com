@@ -30,6 +30,8 @@ n8n-data/
 /coverage
 *.db
 .hypothesis/
+# Chrome DevTools performance traces — can be regenerated, too large to commit
+tests/visual/perf-trace-*.json
 .pytest_cache/
 
 # Debug logs
