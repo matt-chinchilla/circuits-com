@@ -184,11 +184,15 @@
 }
 
 .navSearch {
+  // 2026-04-19 Tier-4 #11 perf: auto-margin absolute centering instead of
+  // left: 50% + translateX(-50%). The transform variant promotes a
+  // compositor layer and lands at fractional pixels when parent width is
+  // odd, causing GPU glyph re-raster. `inset: 0; margin-inline: auto` on
+  // a fixed-max-width absolute element centers via the cascade's own
+  // horizontal-auto distribution — zero transform, integer-pixel position.
   position: absolute;
-  left: 50%;
-  top: 0;
-  bottom: 0;
-  transform: translateX(-50%);
+  inset: 0;
+  margin-inline: auto;
   display: flex;
   align-items: center;
   width: 100%;

@@ -114,6 +114,11 @@
 }
 
 :global([data-theme="pcb"]) .hero {
+  // 2026-04-19 Tier-4 #10 perf: dropped the 90deg repeating-linear-gradient.
+  // Two overlapping orthogonal grids (horizontal + vertical) were painting
+  // ~2x the fine-line rasterization for a marginal visual detail. Keeping
+  // only the horizontal stripe grid preserves the PCB-substrate aesthetic
+  // while halving the initial-paint cost on this theme.
   background-image:
     radial-gradient(
       ellipse 70% 45% at 50% 50%,
@@ -122,11 +127,6 @@
     ),
     repeating-linear-gradient(
       0deg,
-      transparent 0 23px,
-      color-mix(in srgb, var(--theme-accent) 3.5%, transparent) 23px 24px
-    ),
-    repeating-linear-gradient(
-      90deg,
       transparent 0 23px,
       color-mix(in srgb, var(--theme-accent) 3.5%, transparent) 23px 24px
     );

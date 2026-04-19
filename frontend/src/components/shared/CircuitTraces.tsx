@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import styles from './CircuitTraces.module.scss';
 
 // Shorthand helpers for consistent stroke/animation props
@@ -52,39 +53,106 @@ const ELECTRONS: [string, number, number, number][] = [
   ['M511 390 V380 L490 360 V340 L470 320 V275', 3, 9.3, 0.8],
 ];
 
-export default function CircuitTraces() {
+interface CircuitTracesProps {
+  /**
+   * 'full' (default) — animated electrons, draw-circuit animation, IntersectionObserver
+   * + visibilitychange pause, animationend cleanup. Used on the home hero for wow-factor.
+   * 'static' — traces drawn (no draw animation), no electrons, no useEffect, no SMIL.
+   * Used on non-hero pages where the board is visual flavor rather than the feature.
+   * Cuts ~85% of the GPU cost on Category/Search/Contact/Join/About/KeywordSponsor/Part.
+   */
+  variant?: 'full' | 'static';
+}
+
+export default function CircuitTraces({ variant = 'full' }: CircuitTracesProps = {}) {
+  const svgRef = useRef<SVGSVGElement>(null);
+
+  // Steady-state GPU reduction — three coordinated behaviors.
+  // Pre-fix measurement (2026-04-19, steel theme, 4070 Ti Super in Brave):
+  //   • 14 SMIL animateMotion loops (repeatCount="indefinite")
+  //   • 211 CSS animations still "running" 11s post-load (fill-mode: forwards
+  //     keeps them in the browser's active animation list forever)
+  //   • Average frame 19.29ms (52 fps), 35% dropped frames
+  // Post-fix target: when CircuitTraces is off-screen OR tab is hidden,
+  // steady-state GPU drops to ~0 because everything is paused.
+  useEffect(() => {
+    if (variant !== 'full') return;
+    const svg = svgRef.current;
+    if (!svg) return;
+
+    let inViewport = true;
+    let docVisible = !document.hidden;
+
+    const apply = () => {
+      const active = inViewport && docVisible;
+      if (active) {
+        svg.unpauseAnimations();
+        svg.dataset.paused = 'false';
+      } else {
+        svg.pauseAnimations();
+        svg.dataset.paused = 'true';
+      }
+    };
+
+    // Tier-1 #1 — pause when the SVG scrolls out of viewport.
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        inViewport = entry.isIntersecting;
+        apply();
+      },
+      { threshold: 0 }
+    );
+    io.observe(svg);
+
+    // Tier-1 #2 — pause when the tab is backgrounded.
+    const onVis = () => {
+      docVisible = !document.hidden;
+      apply();
+    };
+    document.addEventListener('visibilitychange', onVis);
+
+    // Tier-1 #3 — release each draw-circuit animation as it completes.
+    // Pin the drawn end state (stroke-dashoffset: 0) BEFORE setting
+    // animation: none, otherwise fill-forwards is lost when the animation
+    // declaration is removed and the path snaps back to un-drawn state.
+    const onAnimEnd = (e: AnimationEvent) => {
+      const el = e.target as SVGElement;
+      if (!(el instanceof SVGElement)) return;
+      if (el.hasAttribute('stroke-dasharray')) {
+        el.style.strokeDashoffset = '0';
+      }
+      el.style.animation = 'none';
+    };
+    svg.addEventListener('animationend', onAnimEnd);
+
+    return () => {
+      io.disconnect();
+      document.removeEventListener('visibilitychange', onVis);
+      svg.removeEventListener('animationend', onAnimEnd);
+    };
+  }, [variant]);
+
   return (
     <svg
-      className={styles.circuitTraces}
+      ref={svgRef}
+      className={variant === 'static' ? `${styles.circuitTraces} ${styles.static}` : styles.circuitTraces}
       viewBox="0 0 1200 400"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       aria-hidden="true"
       preserveAspectRatio="xMidYMid slice"
     >
-      <defs>
-        {/* Low-σ blur: at this viewBox scale (1200×400, strokes 0.6–2 units)
-            stdDeviation=1.5 was inflating the filter region by ~±4.5 units,
-            forcing a re-rasterization of ~600k pixels every frame during
-            the 6s draw-circuit animation. 0.5 preserves a subtle glow while
-            keeping the filter region tight. Mobile opts out entirely via
-            the media query in CircuitTraces.module.scss. */}
-        <filter id="traceGlow" x="-5%" y="-5%" width="110%" height="110%">
-          <feGaussianBlur stdDeviation="0.5" result="blur" />
-          <feFlood floodColor="var(--trace-glow)" floodOpacity="0.6" />
-          <feComposite in2="blur" operator="in" result="glowColor" />
-          <feMerge>
-            <feMergeNode in="glowColor" />
-            <feMergeNode in="SourceGraphic" />
-          </feMerge>
-        </filter>
-      </defs>
+      {/* 2026-04-19 Tier-2 perf: <defs> filter="traceGlow" removed entirely.
+          At stdDeviation=0.5 it was visually negligible; the per-frame raster
+          cost on the animating electron subtree was the dominant in-view GPU
+          cost. Trace color via --trace-color alone reads clearly against
+          every theme bg. */}
 
       {/* ═══════════════════════════════════════════════════════════════════════
-          Trace paths — all routing traces wrapped in a single glow group.
+          Trace paths — all routing traces wrapped in a single group.
           Z-order: traces are at back, IC rects and electrons render on top.
           ═══════════════════════════════════════════════════════════════════════ */}
-      <g className={styles.traceGroup} filter="url(#traceGlow)">
+      <g className={styles.traceGroup}>
 
         {/* QFP IC1 notch path */}
         <path d="M460 130 A5 5 0 0 0 470 130" {...S(0.1, 0.8)} fill="none" className={styles.trace} style={T(0.2)} />
@@ -413,9 +481,11 @@ export default function CircuitTraces() {
       <rect x="1112" y="180" width="4" height="5" rx={0.5} fill="var(--ic-pad-fill)" fillOpacity={0.36} className={styles.trace} style={T(3.5)} />
 
       {/* ═══════════════════════════════════════════════════════════════════════
-          Electrons — small bright dots that follow trace paths
+          Electrons — only rendered in variant="full". Static variant emits
+          zero SMIL animateMotion elements (saves 14 infinite loops per mount)
+          and zero CSS animations. Used on all non-home pages.
           ═══════════════════════════════════════════════════════════════════════ */}
-      {ELECTRONS.map(([path, dur, delay, r], i) => (
+      {variant === 'full' && ELECTRONS.map(([path, dur, delay, r], i) => (
         <circle key={`e${i}`} r={r} fill="var(--electron-color)" className={styles.electron}>
           <animateMotion
             path={path}

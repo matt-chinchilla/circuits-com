@@ -58,7 +58,7 @@ export default function CategoryPage() {
     >
 
       <div className={styles.categoryHeader}>
-        <CircuitTraces />
+        <CircuitTraces variant="static" />
         <div className={styles.headerInner}>
           <nav className={styles.breadcrumb} aria-label="Breadcrumb">
             <Link to="/" className={styles.breadcrumbLink}>Home</Link>

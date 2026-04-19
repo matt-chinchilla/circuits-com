@@ -69,7 +69,7 @@ export default function JoinPage() {
     >
 
       <div className={styles.pageHeader}>
-        <CircuitTraces />
+        <CircuitTraces variant="static" />
         <div className={styles.headerInner}>
           <motion.h1
             className={styles.title}

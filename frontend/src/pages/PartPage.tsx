@@ -65,7 +65,7 @@ export default function PartPage() {
     >
 
       <div className={styles.partHeader}>
-        <CircuitTraces />
+        <CircuitTraces variant="static" />
         <div className={styles.headerInner}>
           <nav className={styles.breadcrumb} aria-label="Breadcrumb">
             <Link to="/" className={styles.breadcrumbLink}>Home</Link>

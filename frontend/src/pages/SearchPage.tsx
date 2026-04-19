@@ -69,7 +69,7 @@ export default function SearchPage() {
     >
 
       <div className={styles.searchHeader}>
-        <CircuitTraces />
+        <CircuitTraces variant="static" />
         <div className={styles.headerInner}>
           <h1 className={styles.title}>
             {q ? (

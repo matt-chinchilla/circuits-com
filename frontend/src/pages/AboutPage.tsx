@@ -46,7 +46,7 @@ export default function AboutPage() {
 
       {/* Hero */}
       <section className={styles.hero}>
-        <CircuitTraces />
+        <CircuitTraces variant="static" />
         <div className={styles.heroInner}>
           <motion.h1
             className={styles.heroTitle}

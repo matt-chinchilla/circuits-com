@@ -188,7 +188,7 @@ export default function KeywordSponsorPage() {
 
       {/* Gold hero */}
       <section className={styles.hero}>
-        <CircuitTraces />
+        <CircuitTraces variant="static" />
         <div className={styles.heroInner}>
           <motion.span
             className={styles.badge}
