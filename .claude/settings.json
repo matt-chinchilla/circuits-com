@@ -15,6 +15,16 @@
             "timeout": 5
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "command=$(echo \"$TOOL_INPUT\" | jq -r '.command // empty'); bash .claude/scripts/migration-safety-check.sh \"$command\"",
+            "timeout": 5
+          }
+        ]
       }
     ],
     "PostToolUse": [
@@ -30,6 +40,11 @@
             "type": "command",
             "command": "filepath=$(echo \"$TOOL_INPUT\" | jq -r '.file_path // empty'); if [[ \"$filepath\" == */api/*.py || \"$filepath\" == */tests/*.py ]]; then cd api && python -m pytest tests/ -q 2>&1 | tail -15; fi",
             "timeout": 30
+          },
+          {
+            "type": "command",
+            "command": "filepath=$(echo \"$TOOL_INPUT\" | jq -r '.file_path // empty'); if [[ \"$filepath\" == */api/*.py && \"$filepath\" != */alembic/versions/*.py ]]; then cd api && python -m ruff format \"$filepath\" 2>&1 | tail -3; python -m ruff check --fix \"$filepath\" 2>&1 | tail -5; fi",
+            "timeout": 10
           },
           {
             "type": "command",
