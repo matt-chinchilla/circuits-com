@@ -86,19 +86,19 @@ check_prerequisites() {
 
 deploy_all() {
     echo "Deploying all services..."
-    run_remote "cd $APP_DIR && sudo git pull && $COMPOSE_CMD up --build -d"
+    run_remote "cd $APP_DIR && sudo git pull && $COMPOSE_CMD up --build -d && sudo docker image prune -f && sudo docker builder prune -f --filter until=72h"
     green "All services rebuilt and restarted."
 }
 
 deploy_frontend() {
     echo "Deploying frontend only..."
-    run_remote "cd $APP_DIR && sudo git pull && $COMPOSE_CMD up --build -d frontend && $COMPOSE_CMD restart nginx"
+    run_remote "cd $APP_DIR && sudo git pull && $COMPOSE_CMD up --build -d frontend && $COMPOSE_CMD restart nginx && sudo docker image prune -f && sudo docker builder prune -f --filter until=72h"
     green "Frontend rebuilt, nginx restarted."
 }
 
 deploy_reseed() {
     echo "Deploying all services + clearing and reseeding database..."
-    run_remote "cd $APP_DIR && sudo git pull && $COMPOSE_CMD up --build -d"
+    run_remote "cd $APP_DIR && sudo git pull && $COMPOSE_CMD up --build -d && sudo docker image prune -f && sudo docker builder prune -f --filter until=72h"
     echo "Clearing database..."
     run_remote "sudo docker exec circuits-com-db-1 psql -U circuits -d circuits -c 'TRUNCATE sponsors, category_suppliers, categories, suppliers CASCADE;'"
     echo "Reseeding..."
