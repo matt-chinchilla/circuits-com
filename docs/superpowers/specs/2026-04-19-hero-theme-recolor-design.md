@@ -20,6 +20,7 @@ The **base** theme is intentionally left unchanged (pristine brand default, firs
 - A shadow-gap `::before` on `.hero` at the nav/hero boundary, creating visual distinction between navbar and hero.
 - Removal of the now-dead `filter: hue-rotate()` + `transition: filter 300ms ease` in `CircuitTraces.module.scss`.
 - A **dev-only** `HeroColorTuner` floating panel that lets the author slide contrast values and read off the resulting percentages to paste back into SCSS.
+- **Pytest-based visual / layout / perf regression tests** via `pytest-playwright`, covering every theme. Three assertion families: (a) visibility — hero, SVG traces, heading, search render at non-zero size on every theme; (b) layout — bounding boxes match expected coords (brand ≤30px from left, LOGIN ≤30px from right, SVG fills `.hero`, seam `::before` = 8px); (c) perf — no long tasks >50ms during initial paint, draw-circuit animation completes within 6s ± 100ms, theme-switch repaint <100ms.
 
 ### Out of scope
 
@@ -215,6 +216,55 @@ Follows `NavVariantPicker.module.scss` aesthetic: fixed position bottom-right, b
 
 Add `<HeroColorTuner />` as a sibling of `<NavVariantPicker />`. Since the tuner returns `null` in prod, this is a no-op in prod builds.
 
+### 7. `tests/visual/pyproject.toml` (new)
+
+Declares the visual-test harness as its own minimal Python project (not folded into `api/` to keep API and frontend test concerns separate).
+
+```toml
+[project]
+name = "circuits-visual-tests"
+version = "0.1.0"
+requires-python = ">=3.12"
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+  "pytest-playwright>=0.5",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["."]
+addopts = "-v --browser chromium --headed=false"
+```
+
+### 8. `tests/visual/conftest.py` (new)
+
+Pytest fixtures for:
+- `live_server_url` — returns `http://localhost` (assumes docker compose is up).
+- `theme_urls` — a parametrized fixture yielding `(theme_name, url_with_query)` for the 4 themes: `base` (no query), `steel` (`?nav=A`), `schematic` (`?nav=B`), `pcb` (`?nav=C`).
+- Playwright `browser`, `context`, `page` fixtures are provided by `pytest-playwright` automatically.
+- A `wait_for_animation_end` helper that hooks the `draw-circuit` animation's `animationend` event.
+
+### 9. `tests/visual/test_visibility.py` (new)
+
+Per-theme visibility assertions: `.hero` non-zero rect; `<svg>` present with ≥140 `<path>` descendants; heading font-size ≥16px; contrast ratio ≥4.5:1 (computed via `page.evaluate` of a small color-contrast function); search bar + 2 quick links rendered.
+
+### 10. `tests/visual/test_layout.py` (new)
+
+Per-viewport × per-theme layout assertions: brand ≤30px from left, LOGIN ≤30px from right, SVG fills hero exactly, shadow-gap `::before` has height=8 on alternate themes, absent on base.
+
+### 11. `tests/visual/test_perf.py` (new)
+
+Per-theme perf assertions: no long tasks >50ms in first 3s; `draw-circuit` duration 6000ms ± 100ms; theme-switch repaint <100ms. Uses `page.evaluate` with `PerformanceObserver` and Performance entries.
+
+### 12. `tests/visual/baselines/` (new, screenshots committed)
+
+One PNG per theme per viewport, captured on first successful run. Subsequent runs compare against these with tolerance.
+
+### 13. `CLAUDE.md` (modify, append one section)
+
+Add a "Visual Regression Tests" paragraph under "Commands" explaining how to run `cd tests/visual && pytest -v` and under "Gotchas" noting that tests require `docker compose up -d` first (they hit `http://localhost`, not an in-process server).
+
 ### Files NOT touched
 
 - `frontend/src/styles/_themes.scss` — no new tokens.
@@ -290,9 +340,37 @@ Additionally:
   - Draw animation runs at 60fps (no dropped frames)
   - Style-recalc on theme switch <5ms
 
-### Regression tests (pytest)
+### Regression tests (pytest-playwright)
 
-Not applicable — zero API/backend changes. Frontend has no unit test suite per CLAUDE.md. TypeScript + manual verification are the only gates.
+**New test infrastructure.** Until this spec, the frontend had no automated test suite — TypeScript + manual verification were the only gates. This is reversed here: a `pytest-playwright` suite is added specifically to protect the visual refactor and catch future regressions on visibility, layout anchoring, and runtime lag.
+
+**Tooling rationale.** `pytest-playwright` bridges the user's familiar pytest harness to a real headless browser, the only environment that can verify visibility (render dimensions), layout (bounding boxes), and perf (long-task timing, animation frame rate). Alternatives considered and rejected:
+- **Playwright native TS runner** — idiomatic for frontend but diverges from the pytest-first mental model.
+- **Vitest + testing-library** — unit-level only; cannot assert layout or perf against a running nginx stack.
+- **HTTP-only tests (`requests`, `httpx`)** — cannot probe visual rendering or runtime lag.
+
+**Test harness location.** New `tests/visual/` at project root (not under `api/`, since these tests cover the frontend + full-stack assembled site, not API logic). `tests/visual/pyproject.toml` declares `pytest-playwright` as a dev dep. Tests assume the full Docker stack is up (`docker compose up -d`); a `conftest.py` fixture points Playwright at `http://localhost` and iterates the 4 theme variants via `?nav=A|B|C|(absent)` URL params.
+
+**Three test families.**
+
+1. **`test_visibility.py`** — per theme: `.hero` has non-zero bounding rect; `.circuitTraces` svg is present with ≥140 descendant `<path>` elements; hero heading computed font-size ≥16px and contrast ratio ≥4.5:1 against its background; search bar and both quick links render.
+
+2. **`test_layout.py`** — at viewports [1280×720, 768×1024, 375×812]:
+   - Navbar brand bounding rect: `left ≤ 30` across all themes.
+   - LOGIN button bounding rect: `right ≥ viewport_width - 30` across all themes.
+   - `.circuitTraces` fills `.hero` exactly (identical `getBoundingClientRect`).
+   - Shadow-gap `::before` on `steel / schematic / pcb` themes: height == 8, top == 0, width == hero width.
+   - Base theme: no `::before` rendered.
+
+3. **`test_perf.py`** — per theme:
+   - `page.evaluate("performance.getEntriesByType('longtask')")` returns no entry >50ms during the first 3s after navigation.
+   - `draw-circuit` animation duration measured via `animation-end` event: 6000ms ± 100ms tolerance.
+   - Theme switch (click `NavVariantPicker` button → next paint): <100ms via `page.evaluate(PerformanceObserver)` on `'paint'` entries.
+   - Lighthouse score via Playwright Lighthouse plugin: Performance ≥90 on every theme (run separately, not per commit; this is a local-dev smoke gate).
+
+**Run command.** `cd tests/visual && uv pip install -e . && pytest -v` (or the project's preferred Python install path; details nailed down in the implementation plan).
+
+**Baseline screenshots** are captured on the first run per theme (`tests/visual/baselines/*.png`) and compared via `playwright.expect(page).to_have_screenshot(…)` on subsequent runs with a small pixel-diff tolerance to absorb anti-aliasing drift. Baselines are committed to the repo.
 
 ### Cross-validation agents (post-implementation)
 
@@ -309,15 +387,17 @@ Per the user's original request for "cross-validation agents to make sure nothin
 - Per-theme tuning tokens in `_themes.scss` for IC opacities (defer until HeroColorTuner proves a specific theme needs divergent values; if one theme lands on 35% while others stay at 30%, we introduce `--theme-ic-pad-opacity` then).
 - A Storybook or component playground around `CircuitTraces`. `HeroColorTuner` fills this role at 1/100th the setup cost.
 - Migrating the SCSS modules architecture, Framer Motion usage, or theme system to any alternative (next-themes, Tailwind, Emotion — all explicitly rejected in the package audit).
-- Adding unit tests for `CircuitTraces`. Zero frontend tests exist in the project; this work does not change that convention.
+- **Unit** tests for `CircuitTraces` internals (React component testing in isolation). The Playwright suite covers behavior against the real running stack; a separate vitest/jsdom harness is not warranted for this work.
 
 ## Implementation sequencing
 
 The implementation plan (next step — `writing-plans` skill) will break this into parallelizable chunks. Preview:
 
-- **Phase 1 (parallel):** SCSS token block refactor; SVG `<filter>` addition; HeroSection textures; shadow-gap `::before`.
+- **Phase 0 (sequential, TDD gate):** Author the pytest-playwright test suite FIRST (`test_visibility.py`, `test_layout.py`, `test_perf.py`) against the current pre-refactor hero. These tests MUST PASS on base theme (which doesn't change) and FAIL on steel/schematic/pcb themes (because the expected per-theme behaviors don't exist yet). This is the "red" in red-green-refactor.
+- **Phase 1 (parallel):** SCSS token block refactor; SVG `<filter>` + `<g class="traceGroup">` addition; HeroSection textures; shadow-gap `::before`.
 - **Phase 2 (parallel):** `CircuitTraces.tsx` attribute rewrite (uses tokens from Phase 1); HeroColorTuner component + SCSS.
-- **Phase 3 (sequential):** `App.tsx` tuner mount; manual theme walkthrough.
-- **Phase 4 (parallel cross-validators):** code-reviewer, codebase-diagnostician, comment-analyzer, chrome-devtools visual + perf.
+- **Phase 3 (sequential):** `App.tsx` tuner mount; capture baseline screenshots (first successful run auto-writes PNGs).
+- **Phase 4 (sequential, TDD gate):** Rerun full test suite — all three families must pass for all four themes.
+- **Phase 5 (parallel cross-validators):** code-reviewer, codebase-diagnostician, comment-analyzer, chrome-devtools visual + perf walkthrough.
 
 Handoff to `writing-plans` skill occurs after user approves this spec.
