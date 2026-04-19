@@ -30,6 +30,16 @@
             "type": "command",
             "command": "filepath=$(echo \"$TOOL_INPUT\" | jq -r '.file_path // empty'); if [[ \"$filepath\" == */api/*.py || \"$filepath\" == */tests/*.py ]]; then cd api && python -m pytest tests/ -q 2>&1 | tail -15; fi",
             "timeout": 30
+          },
+          {
+            "type": "command",
+            "command": "filepath=$(echo \"$TOOL_INPUT\" | jq -r '.file_path // empty'); bash .claude/scripts/scss-lint.sh \"$filepath\"",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "filepath=$(echo \"$TOOL_INPUT\" | jq -r '.file_path // empty'); bash .claude/scripts/frontend-rebuild.sh \"$filepath\"",
+            "timeout": 5
           }
         ]
       }
