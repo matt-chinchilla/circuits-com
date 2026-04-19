@@ -23,6 +23,8 @@ n8n-data/
 # IDE & OS
 .DS_Store
 *.pem
+.vscode/
+.idea/
 
 # Testing
 /coverage
