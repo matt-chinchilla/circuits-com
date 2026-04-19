@@ -16,6 +16,15 @@ docker compose up --build          # Start all 5 services (db, api, frontend, n8
 docker compose down -v             # Stop and remove volumes
 ```
 
+### Visual baselines (from /)
+```bash
+# Baselines at tests/visual/baselines/ — captured via chrome-devtools-mcp,
+# 4 PNGs (one per theme at desktop viewport). Refresh when theme visuals
+# change by navigating each URL (?nav=A|B|C|(none)) and using the MCP
+# take_screenshot tool, saving into tests/visual/baselines/<theme>-post-<taskN>.png.
+```
+> No pytest suite — verification is agent-driven via chrome-devtools-mcp.
+
 ### API (from api/)
 ```bash
 cd api && pip install -e ".[dev]"  # Install deps locally
@@ -86,6 +95,7 @@ Browser → Nginx(:80/:443)
 - **Hooks** (settings.json): PreToolUse blocks .env/lock edits, warns on `api/app/admin.py` (SQLAdmin ≠ prod admin); PostToolUse auto-runs tsc on .ts/.tsx/.scss edits, pytest on .py edits
 - **Agents**: `deploy-preflight` (verifies instance size, git state, DNS, disk before deploy), `seo-auditor` (audits pages for meta/schema.org/crawlability)
 - **Skills**: `seo-writer` (generates title/meta/OG/JSON-LD bundles for category/supplier/part pages)
+- **HeroColorTuner** (`frontend/src/components/shared/HeroColorTuner.tsx`) — dev-only floating slider panel (bottom-right) gated by `import.meta.env.DEV`. Lets you tune the 3 IC opacity tokens (`--ic-body-fill`, `--ic-body-stroke`, `--ic-pad-fill`) live and read off `color-mix()` strings to paste into SCSS. Sibling of `NavVariantPicker`. Persists to `localStorage.circuits.tuner.*`. Does NOT render in prod (returns `null`).
 
 ### Data Flow
 - Categories use self-referential `parent_id` for tree structure (2 levels deep)
@@ -117,6 +127,8 @@ transition={{ duration: 0.15, ease: 'easeInOut' as const }}
 
 ### Theme System
 4 themes (`base`, `steel`, `schematic`, `pcb`) defined in `frontend/src/styles/_themes.scss` as CSS custom properties (`--theme-*`) scoped to `[data-theme]` on `<html>`. `ThemeBridge.tsx` resolves theme from (URL `?nav=A|B|C` → `localStorage.circuits.nav.theme` → `"base"`) and writes `data-theme`. `NavVariantPicker.tsx` is the floating preview pill; clicking a variant writes the URL param AND localStorage synchronously. Adding a theme = new block in `_themes.scss` + entry in `KEY_TO_THEME` (ThemeBridge) + `VARIANTS` (picker). The theme cascades site-wide because every site-level accent uses `var(--theme-accent)` / `var(--theme-cta-bg)` instead of `$nav-blue` / `$executive-blue` directly.
+
+**Hero SVG token cascade** — `CircuitTraces.module.scss` defines 6 CSS custom properties on `.circuitTraces` (`--trace-color`, `--trace-glow`, `--electron-color`, `--ic-body-fill`, `--ic-body-stroke`, `--ic-pad-fill`) derived via `color-mix()` from existing theme tokens. The base theme has a carve-out block that restores pre-refactor hardcoded rgba values AND suppresses the shared glow filter via `.traceGroup { filter: none; }` (CSS beats SVG presentation attributes). The `<g className={styles.traceGroup} filter="url(#traceGlow)">` wrapper in `CircuitTraces.tsx` applies the glow ONCE to the group's merged output — NEVER apply `filter="url(#…)"` per-path (140× cost). New themes only need to set `--theme-pcb-trace`, `--theme-pcb-dot-glow`, and `--theme-nav-text-hover` — all 6 hero tokens track automatically via `color-mix`.
 
 ### API Route Convention
 All API routes prefixed with `/api/`. Router prefix set in each route file.
@@ -163,6 +175,7 @@ Brand (`left: 20px`) and nav+LOGIN group (`right: 20px`) are `position: absolute
 - **Sub-pixel text blur from `transform: translate*(-50%)` centering** — elements positioned via `top: 50%; transform: translateY(-50%)` land at fractional pixels when parent/child heights are odd, and the transform promotes them to a GPU composite layer that re-rasterizes glyphs at the subpixel boundary. Use `top: 0; bottom: 0; display: flex; align-items: center` for integer-pixel vertical centering.
 - **`filter: hue-rotate(0deg)` is NOT free** — the filter property promotes the element to its own compositor layer and runs the pipeline every frame even at 0deg. Gate theme-hue filters behind non-default themes via `[data-theme="steel"] { filter: ... }`, not unconditionally on the base selector.
 - **URL-param-absent ≠ explicit-default intent** — a picker that clears a URL param to signal "go back to default" will be shadowed by stale localStorage if localStorage is used for persistence. On the default-button click, synchronously write the default value to localStorage BEFORE `setParams`. Otherwise ThemeBridge reads "no URL param → localStorage had `pcb` → apply `pcb`" and the click appears dead.
+- **Apply SVG `<filter>` at a `<g>` wrapper, not per-element** — `filter="url(#glow)"` on each of 140 `<path>` elements = 140 CPU filter rasterizations per paint. Same filter on ONE wrapping `<g>` = 1 rasterization of the merged output. See `CircuitTraces.tsx` `.traceGroup` for the pattern.
 
 ## Brand Colors
 
