@@ -113,6 +113,11 @@ transition={{ duration: 0.15, ease: 'easeInOut' as const }}
 ```
 `App.tsx` uses `AnimatePresence mode="popLayout"` + `useLocation` for crossfade transitions.
 
+**Navbar is hoisted OUT of `AnimatePresence`** — it's a sibling of `AnimatePresence` in `App.tsx`, not a descendant of any page's `motion.div`. Keeping the navbar inside a transforming ancestor caused sub-pixel text blur during the 150ms `x: 20 → 0` slide (especially on the PCB theme's monospace nav). Do not add `<Navbar />` inside a page component.
+
+### Theme System
+4 themes (`base`, `steel`, `schematic`, `pcb`) defined in `frontend/src/styles/_themes.scss` as CSS custom properties (`--theme-*`) scoped to `[data-theme]` on `<html>`. `ThemeBridge.tsx` resolves theme from (URL `?nav=A|B|C` → `localStorage.circuits.nav.theme` → `"base"`) and writes `data-theme`. `NavVariantPicker.tsx` is the floating preview pill; clicking a variant writes the URL param AND localStorage synchronously. Adding a theme = new block in `_themes.scss` + entry in `KEY_TO_THEME` (ThemeBridge) + `VARIANTS` (picker). The theme cascades site-wide because every site-level accent uses `var(--theme-accent)` / `var(--theme-cta-bg)` instead of `$nav-blue` / `$executive-blue` directly.
+
 ### API Route Convention
 All API routes prefixed with `/api/`. Router prefix set in each route file.
 
@@ -154,6 +159,10 @@ Brand (`left: 20px`) and nav+LOGIN group (`right: 20px`) are `position: absolute
 - **Avoid `grid-template-columns: 1fr auto 1fr` with asymmetric side-track content** — `1fr` is secretly `minmax(auto, 1fr)`, so a fat min-content track on one side breaks the "centered" middle. Use `position: absolute` on a `position: relative` parent instead. Still latent in `pages/admin/ImportPage.module.scss:.mappingGrid`, `DashboardPage.module.scss`, `ReportsPage.module.scss`, `SupplierFormPage.module.scss:.reviewGrid`.
 - **Admin login creds (local dev):** `matthew` / `mike` / `john` all with password `admin` (seeded by `api/app/db/seed.py:504`). The `ADMIN_USERNAME` / `ADMIN_PASSWORD` env vars in `docker-compose.yml` are for SQLAdmin (unreachable in prod), NOT the React admin panel login form.
 - **Breakpoint `$bp-desktop: 1199px`** exists in `frontend/src/styles/_variables.scss` alongside `$bp-mobile: 768px` and `$bp-tablet: 1024px` — use `@include responsive($bp-desktop)` rather than hardcoding widths.
+- **Buttons inherit `line-height: 1.6`** from `body` in `global.scss`. In a height-constrained row (navbar, toolbar) this makes buttons overflow the row. Fix: explicit `line-height: 1` on the button + control height via padding. Caught the LOGIN pill rendering at 37px inside a 36px navbar.
+- **Sub-pixel text blur from `transform: translate*(-50%)` centering** — elements positioned via `top: 50%; transform: translateY(-50%)` land at fractional pixels when parent/child heights are odd, and the transform promotes them to a GPU composite layer that re-rasterizes glyphs at the subpixel boundary. Use `top: 0; bottom: 0; display: flex; align-items: center` for integer-pixel vertical centering.
+- **`filter: hue-rotate(0deg)` is NOT free** — the filter property promotes the element to its own compositor layer and runs the pipeline every frame even at 0deg. Gate theme-hue filters behind non-default themes via `[data-theme="steel"] { filter: ... }`, not unconditionally on the base selector.
+- **URL-param-absent ≠ explicit-default intent** — a picker that clears a URL param to signal "go back to default" will be shadowed by stale localStorage if localStorage is used for persistence. On the default-button click, synchronously write the default value to localStorage BEFORE `setParams`. Otherwise ThemeBridge reads "no URL param → localStorage had `pcb` → apply `pcb`" and the click appears dead.
 
 ## Brand Colors
 
