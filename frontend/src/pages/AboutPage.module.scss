@@ -97,8 +97,8 @@
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  background: $nav-blue;
-  color: #ffffff;
+  background: var(--theme-accent);
+  color: var(--theme-accent-on-text);
   font-size: 0.8rem;
   font-weight: 700;
 }

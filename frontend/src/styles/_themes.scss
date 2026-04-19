@@ -1,0 +1,139 @@
+// Theme CSS custom properties — applied via [data-theme] attribute on <html>.
+// Default (no attribute OR data-theme="base") is the current bright-green identity.
+// Three alternate themes (steel, schematic, pcb) are selected via ?nav=A|B|C in
+// the URL; a ThemeBridge component syncs the query param to the attribute.
+//
+// Usage from component SCSS:
+//   color: var(--theme-accent);
+//   background: var(--theme-nav-bg);
+// SCSS variables like $nav-blue still work for base-only or gradient math —
+// prefer CSS vars anywhere a theme should repaint live.
+
+@mixin theme-base-tokens {
+  --theme-nav-bg: #44bd13;
+  --theme-nav-text: rgba(255, 255, 255, 0.9);
+  --theme-nav-text-hover: #ffffff;
+  --theme-nav-border: rgba(255, 255, 255, 0.12);
+
+  --theme-accent: #44bd13;
+  --theme-accent-soft: rgba(68, 189, 19, 0.1);
+  --theme-accent-glow: rgba(68, 189, 19, 0.35);
+  --theme-accent-on-text: #ffffff;
+
+  --theme-cta-bg: #0a4a2e;
+  --theme-cta-text: #ffffff;
+  --theme-cta-hover-bg: #083b24;
+  --theme-cta-shadow: rgba(0, 0, 0, 0.15);
+
+  --theme-surface-bg: #eef1f5;
+  --theme-card-bg: #ffffff;
+  --theme-text-primary: #1a1f23;
+  --theme-text-secondary: #6b7076;
+
+  --theme-pcb-trace: #dabe41;
+  --theme-pcb-dot: #e8be2d;
+  --theme-pcb-dot-glow: rgba(218, 190, 65, 0.5);
+
+  --theme-brand-font: "Inter", system-ui, -apple-system, sans-serif;
+  --theme-brand-suffix: "";
+  --theme-nav-bottom-border: none;
+}
+
+:root,
+:root[data-theme="base"] {
+  @include theme-base-tokens;
+}
+
+// ─── Steel Rail — dark graphite, muted, white pill LOGIN with green flip ───
+:root[data-theme="steel"] {
+  --theme-trace-hue-shift: 60deg; // gold -> muted green
+  --theme-nav-bg: #0e1113;
+  --theme-nav-text: rgba(244, 245, 247, 0.62);
+  --theme-nav-text-hover: #f4f5f7;
+  --theme-nav-border: rgba(255, 255, 255, 0.06);
+
+  --theme-accent: #44bd13;
+  --theme-accent-soft: rgba(68, 189, 19, 0.12);
+  --theme-accent-glow: rgba(68, 189, 19, 0.4);
+  --theme-accent-on-text: #0e1113;
+
+  --theme-cta-bg: #f4f5f7;
+  --theme-cta-text: #0e1113;
+  --theme-cta-hover-bg: #44bd13;
+  --theme-cta-shadow: rgba(0, 0, 0, 0.4);
+
+  --theme-surface-bg: #f5f7fa;
+  --theme-card-bg: #ffffff;
+  --theme-text-primary: #1a1f23;
+  --theme-text-secondary: #6b7076;
+
+  --theme-pcb-trace: #3a8a1a;
+  --theme-pcb-dot: #44bd13;
+  --theme-pcb-dot-glow: rgba(68, 189, 19, 0.55);
+
+  --theme-brand-font: "JetBrains Mono", "SF Mono", Menlo, monospace;
+  --theme-nav-bottom-border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+// ─── Schematic Command Bar — graphite brand rail, bone-accent CTA ───
+:root[data-theme="schematic"] {
+  --theme-trace-hue-shift: 80deg; // gold -> bright green
+  --theme-nav-bg: #141a1e;
+  --theme-nav-text: rgba(255, 255, 255, 0.68);
+  --theme-nav-text-hover: #ffffff;
+  --theme-nav-border: rgba(255, 255, 255, 0.06);
+
+  --theme-accent: #44bd13;
+  --theme-accent-soft: rgba(68, 189, 19, 0.15);
+  --theme-accent-glow: rgba(68, 189, 19, 0.5);
+  --theme-accent-on-text: #0c1216;
+
+  --theme-cta-bg: #44bd13;
+  --theme-cta-text: #0c1216;
+  --theme-cta-hover-bg: #3ca810;
+  --theme-cta-shadow: rgba(0, 0, 0, 0.25);
+
+  --theme-surface-bg: #f4f2ec;
+  --theme-card-bg: #ffffff;
+  --theme-text-primary: #1a1f23;
+  --theme-text-secondary: #6b7076;
+
+  --theme-pcb-trace: #44bd13;
+  --theme-pcb-dot: #44bd13;
+  --theme-pcb-dot-glow: rgba(68, 189, 19, 0.75);
+
+  --theme-brand-font: "JetBrains Mono", "SF Mono", Menlo, monospace;
+  --theme-nav-bottom-border: 1px solid #000;
+}
+
+// ─── Solder-Mask Rail — PCB substrate + copper ───
+:root[data-theme="pcb"] {
+  --theme-trace-hue-shift: -15deg; // gold -> warm copper
+  --theme-nav-bg: #063a23;
+  --theme-nav-text: rgba(232, 239, 228, 0.72);
+  --theme-nav-text-hover: #ffffff;
+  --theme-nav-border: rgba(255, 255, 255, 0.06);
+
+  --theme-accent: #c49b5d;
+  --theme-accent-soft: rgba(196, 155, 93, 0.15);
+  --theme-accent-glow: rgba(196, 155, 93, 0.4);
+  --theme-accent-on-text: #063a23;
+
+  --theme-cta-bg: #c49b5d;
+  --theme-cta-text: #063a23;
+  --theme-cta-hover-bg: #d4ab6d;
+  --theme-cta-shadow: rgba(0, 0, 0, 0.35);
+
+  --theme-surface-bg: #eef1f5;
+  --theme-card-bg: #ffffff;
+  --theme-text-primary: #1a1f23;
+  --theme-text-secondary: #6b7076;
+
+  --theme-pcb-trace: #c49b5d;
+  --theme-pcb-dot: #c49b5d;
+  --theme-pcb-dot-glow: rgba(196, 155, 93, 0.4);
+
+  --theme-brand-font: "Inter", system-ui, -apple-system, sans-serif;
+  --theme-brand-suffix: "/ REV-A";
+  --theme-nav-bottom-border: 2px solid #c49b5d;
+}

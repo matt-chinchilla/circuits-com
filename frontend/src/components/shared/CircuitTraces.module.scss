@@ -8,6 +8,13 @@
   pointer-events: none;
   will-change: transform;
   contain: layout style paint;
+
+  // Theme-responsive hue shift on the gold base color (~hsl(48, 67%, 55%)).
+  // Each theme sets --theme-trace-hue-shift; default 0 keeps the original
+  // gold untouched. Preserves all per-element opacity and glow intact —
+  // only the hue rotates.
+  filter: hue-rotate(var(--theme-trace-hue-shift, 0deg));
+  transition: filter 300ms ease;
 }
 
 .trace {

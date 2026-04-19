@@ -23,8 +23,8 @@
   box-shadow: $shadow-sm;
 
   &:hover {
-    border-color: rgba($nav-blue, 0.3);
-    background-color: rgba($nav-blue, 0.04);
+    border-color: var(--theme-accent);
+    background-color: var(--theme-accent-soft);
     transform: translateY(-1px);
   }
 }

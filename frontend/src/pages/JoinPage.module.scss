@@ -86,8 +86,8 @@
   box-sizing: border-box;
 
   &:focus {
-    border-color: $nav-blue;
-    box-shadow: 0 0 0 3px rgba($nav-blue, 0.15);
+    border-color: var(--theme-accent);
+    box-shadow: 0 0 0 3px var(--theme-accent-soft);
   }
 
   &::placeholder {

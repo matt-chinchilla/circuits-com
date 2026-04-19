@@ -3,6 +3,12 @@
 @use "../../styles/mixins" as *;
 @use "../../styles/animations";
 
+// Single themed navbar. Visual chrome (colors, fonts, dot, suffix, bottom
+// border) comes from CSS custom properties defined in `_themes.scss` and
+// scoped by `[data-theme]` on <html>. Layout is identical across themes:
+// brand pinned 20px from viewport left, nav+LOGIN pinned 20px from right,
+// search bar absolutely centered between them when visible.
+
 .header {
   position: sticky;
   top: 0;
@@ -13,19 +19,12 @@
 
 .topStrip {
   position: relative;
-  background-color: $nav-blue;
   min-height: $nav-height;
+  background: var(--theme-nav-bg);
   display: flex;
   align-items: center;
-}
-
-.inner {
-  @include container;
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 16px;
+  transition: background-color 250ms ease;
+  border-bottom: var(--theme-nav-bottom-border, none);
 }
 
 .brand {
@@ -35,17 +34,76 @@
   bottom: 0;
   display: inline-flex;
   align-items: center;
-  font-family: $font-heading;
+  gap: 10px;
+  font-family: var(--theme-brand-font);
   font-weight: 700;
-  font-size: 1.1rem;
-  color: #ffffff;
+  font-size: 1.05rem;
   letter-spacing: 0.02em;
+  color: var(--theme-nav-text-hover);
   text-decoration: none;
   user-select: none;
   white-space: nowrap;
 
   &:hover {
-    color: #ffffff;
+    color: var(--theme-nav-text-hover);
+  }
+}
+
+.brandDot {
+  display: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--theme-pcb-dot);
+  box-shadow: 0 0 6px var(--theme-pcb-dot-glow);
+  animation: pulseLed 2.4s ease-in-out infinite;
+}
+
+:global([data-theme="steel"]) .brandDot,
+:global([data-theme="schematic"]) .brandDot {
+  display: inline-block;
+}
+
+:global([data-theme="pcb"]) .brandDot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  background: radial-gradient(
+    circle at 35% 30%,
+    #e2c088 0%,
+    var(--theme-pcb-dot) 60%,
+    #8f6d3b 100%
+  );
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.35),
+    0 0 4px var(--theme-pcb-dot-glow);
+  animation: none;
+}
+
+.brandSuffix {
+  display: none;
+  font-family: $font-mono;
+  font-weight: 500;
+  font-size: 0.65rem;
+  letter-spacing: 0.1em;
+  color: var(--theme-accent);
+}
+
+:global([data-theme="pcb"]) .brandSuffix {
+  display: inline;
+
+  @media (max-width: 480px) {
+    display: none;
+  }
+}
+
+@keyframes pulseLed {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
   }
 }
 
@@ -72,13 +130,13 @@
   bottom: 0;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 
 .navLinks {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
 
   @include responsive($bp-mobile) {
     display: none;
@@ -89,11 +147,11 @@
   position: relative;
   display: inline-flex;
   align-items: center;
-  padding: 4px 10px;
+  padding: 4px 12px;
   font-family: $font-body;
   font-size: 0.875rem;
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--theme-nav-text);
   text-decoration: none;
   transition: color $transition-fast;
 
@@ -104,14 +162,14 @@
     left: 50%;
     width: 0;
     height: 2px;
-    background: #ffffff;
+    background: var(--theme-nav-text-hover);
     transition:
       left 0.3s ease,
       width 0.3s ease;
   }
 
   &:hover {
-    color: #ffffff;
+    color: var(--theme-nav-text-hover);
 
     &::after {
       left: 0;
@@ -120,13 +178,38 @@
   }
 
   &.active {
-    color: #ffffff;
+    color: var(--theme-nav-text-hover);
 
     &::after {
       left: 0;
       width: 100%;
     }
   }
+}
+
+:global([data-theme="pcb"]) .navLink {
+  font-family: $font-mono;
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+:global([data-theme="pcb"]) .navLink::after {
+  left: 50%;
+  right: 50%;
+  bottom: 2px;
+  width: auto;
+  transition:
+    left 180ms ease,
+    right 180ms ease;
+  background: var(--theme-accent);
+}
+
+:global([data-theme="pcb"]) .navLink:hover::after,
+:global([data-theme="pcb"]) .navLink.active::after {
+  left: 8px;
+  right: 8px;
+  width: auto;
 }
 
 .loginBtn {
@@ -136,19 +219,50 @@
   font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.05em;
-  color: #ffffff;
-  background-color: $executive-blue;
-  border: none;
+  color: var(--theme-cta-text);
+  background: var(--theme-cta-bg);
+  border: 1px solid transparent;
   border-radius: 5px;
   text-decoration: none;
   text-transform: uppercase;
   white-space: nowrap;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
-  transition: background-color $transition-fast;
+  box-shadow: 0 1px 4px var(--theme-cta-shadow);
+  transition:
+    background-color $transition-fast,
+    color $transition-fast;
   cursor: pointer;
 
   &:hover {
-    background-color: color.adjust($executive-blue, $lightness: -6%);
-    color: #ffffff;
+    background: var(--theme-cta-hover-bg);
+    color: var(--theme-cta-text);
   }
+}
+
+:global([data-theme="pcb"]) .loginBtn {
+  padding: 7px 14px;
+  font-family: $font-mono;
+  font-size: 0.7rem;
+  letter-spacing: 0.18em;
+  background: linear-gradient(180deg, #dbb67e 0%, #c49b5d 55%, #9d7b41 100%);
+  border: 1px solid #8f6d3b;
+  border-radius: 2px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.25),
+    0 1px 2px rgba(0, 0, 0, 0.35);
+  transition: filter $transition-fast;
+
+  &:hover {
+    background: linear-gradient(180deg, #dbb67e 0%, #c49b5d 55%, #9d7b41 100%);
+    filter: brightness(1.08);
+  }
+
+  &:active {
+    filter: brightness(0.95);
+  }
+}
+
+:global([data-theme="steel"]) .loginBtn:hover {
+  background: var(--theme-accent);
+  color: #0e1113;
 }

@@ -24,6 +24,7 @@ import AdminLayout from './components/admin/AdminLayout'
 import DemoToggle from './components/admin/DemoToggle'
 import ProtectedRoute from './components/admin/ProtectedRoute'
 import NavVariantPicker from './components/layout/NavVariantPicker'
+import ThemeBridge from './components/layout/ThemeBridge'
 import { DemoProvider } from './contexts/DemoContext'
 
 function App() {
@@ -67,6 +68,7 @@ function App() {
 
   return (
     <>
+      <ThemeBridge />
       <AnimatePresence mode="popLayout">
         <Routes location={location} key={location.pathname}>
           <Route path="/" element={<HomePage />} />

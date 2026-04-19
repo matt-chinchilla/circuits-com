@@ -38,8 +38,8 @@
   }
 
   &.featured {
-    border-left: 3px solid $nav-blue;
-    background: rgba($nav-blue, 0.03);
+    border-left: 3px solid var(--theme-accent);
+    background: var(--theme-accent-soft);
   }
 }
 
@@ -60,12 +60,12 @@
   transition: color $transition-fast;
 
   &:hover {
-    color: $nav-blue;
+    color: var(--theme-accent);
   }
 }
 
 .website {
-  color: $nav-blue;
+  color: var(--theme-accent);
   text-decoration: none;
   font-weight: 500;
   transition: color $transition-fast;

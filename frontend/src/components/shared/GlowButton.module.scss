@@ -52,25 +52,29 @@
   }
 }
 
-// ─── Primary (nav-blue) ─────────────────────────────────────────────────────
+// ─── Primary (theme accent) ─────────────────────────────────────────────────
 
 .primary {
-  background: $nav-blue;
-  color: #ffffff;
+  background: var(--theme-accent);
+  color: var(--theme-accent-on-text);
 
   &::before {
+    // Simple brightness-based sheen — replaces the old color.adjust() gradient
+    // so this button repaints correctly for every theme (base, steel,
+    // schematic, pcb). The filter lightens the underlying fill at the diagonal
+    // midpoint to give the same "polished" sheen as the previous gradient.
     background: linear-gradient(
       135deg,
-      color.adjust($nav-blue, $lightness: 8%) 0%,
-      $nav-blue 50%,
-      color.adjust($nav-blue, $lightness: -4%) 100%
+      rgba(255, 255, 255, 0.18) 0%,
+      rgba(255, 255, 255, 0) 50%,
+      rgba(0, 0, 0, 0.12) 100%
     );
   }
 
   &:not(:disabled):hover {
     box-shadow:
-      0 0 14px rgba($nav-blue, 0.45),
-      0 4px 12px rgba($nav-blue, 0.3);
+      0 0 14px var(--theme-accent-glow),
+      0 4px 12px var(--theme-accent-glow);
   }
 }
 

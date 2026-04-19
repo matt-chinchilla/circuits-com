@@ -35,7 +35,7 @@
   transition: background-color $transition-fast;
 
   &:hover {
-    background-color: rgba($nav-blue, 0.05);
+    background-color: var(--theme-accent-soft);
   }
 }
 
@@ -44,8 +44,8 @@
   font-family: $font-heading;
   font-size: 0.75rem;
   font-weight: 700;
-  color: $nav-blue;
-  background: rgba($nav-blue, 0.08);
+  color: var(--theme-accent);
+  background: var(--theme-accent-soft);
   width: 28px;
   height: 28px;
   border-radius: 50%;
@@ -85,12 +85,12 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: $nav-blue;
+  color: var(--theme-accent);
   text-decoration: none;
   font-size: 1rem;
   transition: background-color $transition-fast;
 
   &:hover {
-    background-color: rgba($nav-blue, 0.1);
+    background-color: var(--theme-accent-soft);
   }
 }

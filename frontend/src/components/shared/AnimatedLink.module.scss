@@ -7,10 +7,10 @@
   font-family: $font-body;
   font-size: 0.875rem;
   font-weight: 500;
-  color: $nav-blue;
+  color: var(--theme-accent);
   text-decoration: none;
   border-radius: 20px;
-  border: 1px solid rgba($nav-blue, 0.25);
+  border: 1px solid var(--theme-accent-soft);
   overflow: hidden;
   transition: color $transition-normal, box-shadow $transition-normal;
 
@@ -18,7 +18,7 @@
     content: '';
     position: absolute;
     inset: 0;
-    background: $nav-blue;
+    background: var(--theme-accent);
     transform: scaleX(0);
     transform-origin: left;
     transition: transform $transition-normal;
@@ -26,8 +26,8 @@
   }
 
   &:hover {
-    color: #ffffff;
-    box-shadow: 0 0 12px rgba($nav-blue, 0.3);
+    color: var(--theme-accent-on-text);
+    box-shadow: 0 0 12px var(--theme-accent-glow);
 
     &::before {
       transform: scaleX(1);
