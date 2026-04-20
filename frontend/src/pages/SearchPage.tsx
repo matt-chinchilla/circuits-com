@@ -6,7 +6,6 @@ import SearchBar from '../components/layout/SearchBar';
 import SkeletonLoader from '../components/shared/SkeletonLoader';
 import { api } from '../services/api';
 import type { SearchResults } from '../services/api';
-import CircuitTraces from '../components/shared/CircuitTraces';
 import styles from './SearchPage.module.scss';
 
 function formatPrice(price: number | null): string {
@@ -69,7 +68,6 @@ export default function SearchPage() {
     >
 
       <div className={styles.searchHeader}>
-        <CircuitTraces variant="static" />
         <div className={styles.headerInner}>
           <h1 className={styles.title}>
             {q ? (

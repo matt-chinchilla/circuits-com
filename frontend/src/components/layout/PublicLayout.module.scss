@@ -1,0 +1,102 @@
+@use '../../styles/variables' as *;
+
+// Persistent hero backdrop — mounts once for the session and sits behind
+// every public route's content. Replaces the $executive-blue + per-theme
+// background rules that used to live duplicated across HeroSection.module.scss
+// and 7 inner-page wrappers (the drift that caused project_hero_cross_page_gap).
+// CircuitTraces lives inside and swaps between 'full' (home) and 'static'
+// (inner pages) via a prop — no remount.
+//
+// Positioning: top: $nav-height starts the backdrop exactly where the sticky
+// Navbar ends (Navbar z-index: 100 pins the top 36px of viewport); height
+// matches the home hero (min-height: 420px from HeroSection.module.scss). This
+// keeps the shadow-gap ::before visible at the top of the backdrop rather than
+// hidden under the Navbar, AND prevents dark-themed backdrop from bleeding
+// below the home hero into the page body. Inner pages have ~140px headers;
+// their bare content area below that sits on body $surface (backdrop ends
+// above it). .outletWrap at z-index: 1 with transparent bg lets the backdrop
+// show through pages' transparent hero wrappers.
+.backdrop {
+  position: absolute;
+  top: $nav-height;
+  left: 0;
+  right: 0;
+  height: 420px;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+  // Base theme — matches HeroSection pre-refactor.
+  background: $executive-blue;
+}
+
+// Alt-theme backdrops — verbatim from the old HeroSection.module.scss so the
+// visual output is byte-identical on home and newly consistent on inner pages.
+:global([data-theme="steel"]) .backdrop {
+  background-image:
+    linear-gradient(
+      180deg,
+      rgba(14, 17, 19, 0.30) 0%,
+      rgba(14, 17, 19, 0) 20%,
+      rgba(14, 17, 19, 0) 80%,
+      rgba(14, 17, 19, 0.20) 100%
+    ),
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.04) 0%,
+      rgba(255, 255, 255, 0) 18%
+    );
+  background-color: var(--theme-nav-bg);
+}
+
+:global([data-theme="schematic"]) .backdrop {
+  background-image:
+    linear-gradient(
+      180deg,
+      rgba(20, 26, 30, 0.10) 0%,
+      rgba(20, 26, 30, 0) 15%,
+      rgba(20, 26, 30, 0) 75%,
+      rgba(20, 26, 30, 0.15) 100%
+    ),
+    repeating-linear-gradient(
+      0deg,
+      transparent 0 27px,
+      rgba(255, 255, 255, 0.025) 27px 28px
+    );
+  background-color: var(--theme-nav-bg);
+}
+
+:global([data-theme="pcb"]) .backdrop {
+  background-image:
+    radial-gradient(
+      ellipse 70% 45% at 50% 50%,
+      transparent 60%,
+      rgba(6, 20, 10, 0.35) 100%
+    ),
+    repeating-linear-gradient(
+      0deg,
+      transparent 0 23px,
+      color-mix(in srgb, var(--theme-accent) 3.5%, transparent) 23px 24px
+    );
+  background-color: var(--theme-nav-bg);
+}
+
+// 8px shadow-gap recessing the backdrop under the navbar (alt themes only —
+// base had no shadow pre-refactor, preserved).
+:global([data-theme="steel"]) .backdrop::before,
+:global([data-theme="schematic"]) .backdrop::before,
+:global([data-theme="pcb"]) .backdrop::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 8px;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.45) 0%, transparent 100%);
+  pointer-events: none;
+}
+
+// Outlet layer. Transparent so the backdrop region shows through pages' hero
+// wrappers (which now have no bg of their own). z-index: 1 establishes a
+// stacking context above the backdrop so page content renders in front.
+.outletWrap {
+  position: relative;
+  z-index: 1;
+}

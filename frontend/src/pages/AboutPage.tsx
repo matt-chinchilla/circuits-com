@@ -2,7 +2,6 @@ import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import Footer from '../components/layout/Footer';
 import GlowButton from '../components/shared/GlowButton';
-import CircuitTraces from '../components/shared/CircuitTraces';
 import styles from './AboutPage.module.scss';
 
 const STEPS = [
@@ -46,7 +45,6 @@ export default function AboutPage() {
 
       {/* Hero */}
       <section className={styles.hero}>
-        <CircuitTraces variant="static" />
         <div className={styles.heroInner}>
           <motion.h1
             className={styles.heroTitle}

@@ -3,7 +3,6 @@ import { useParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import Footer from '../components/layout/Footer';
 import SkeletonLoader from '../components/shared/SkeletonLoader';
-import CircuitTraces from '../components/shared/CircuitTraces';
 import { api } from '../services/api';
 import type { PartDetail } from '../types/part';
 import styles from './PartPage.module.scss';
@@ -65,7 +64,6 @@ export default function PartPage() {
     >
 
       <div className={styles.partHeader}>
-        <CircuitTraces variant="static" />
         <div className={styles.headerInner}>
           <nav className={styles.breadcrumb} aria-label="Breadcrumb">
             <Link to="/" className={styles.breadcrumbLink}>Home</Link>

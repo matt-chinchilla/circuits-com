@@ -4,7 +4,6 @@ import { Link } from 'react-router-dom';
 import Footer from '../components/layout/Footer';
 import GlowButton from '../components/shared/GlowButton';
 import { api } from '../services/api';
-import CircuitTraces from '../components/shared/CircuitTraces';
 import styles from './ContactPage.module.scss';
 
 const CONTACTS = [
@@ -66,7 +65,6 @@ export default function ContactPage() {
     >
 
       <div className={styles.pageHeader}>
-        <CircuitTraces variant="static" />
         <div className={styles.headerInner}>
           <motion.h1
             className={styles.title}

@@ -5,7 +5,6 @@ import Footer from '../components/layout/Footer';
 import GlowButton from '../components/shared/GlowButton';
 import { useCategories } from '../hooks/useCategories';
 import { api } from '../services/api';
-import CircuitTraces from '../components/shared/CircuitTraces';
 import styles from './JoinPage.module.scss';
 
 export default function JoinPage() {
@@ -69,7 +68,6 @@ export default function JoinPage() {
     >
 
       <div className={styles.pageHeader}>
-        <CircuitTraces variant="static" />
         <div className={styles.headerInner}>
           <motion.h1
             className={styles.title}

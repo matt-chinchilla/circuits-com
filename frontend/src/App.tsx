@@ -1,6 +1,5 @@
 import { lazy, Suspense } from 'react'
 import { Routes, Route, useLocation } from 'react-router-dom'
-import { AnimatePresence } from 'framer-motion'
 
 // 2026-04-19 Tier-3 #7 perf: Home stays eager (LCP target; must render
 // on first paint). All other routes lazy-loaded — each gets its own
@@ -39,10 +38,10 @@ import Navbar from './components/layout/Navbar'
 import NavVariantPicker from './components/layout/NavVariantPicker'
 import HeroColorTuner from './components/shared/HeroColorTuner'
 import ThemeBridge from './components/layout/ThemeBridge'
+import PublicLayout from './components/layout/PublicLayout'
 import { DemoProvider } from './contexts/DemoContext'
 
-// Minimal Suspense fallback while a lazy route chunk fetches. Reserves
-// ~420px (hero height) so scroll position is stable during the swap.
+// Admin fallback (PublicLayout provides the equivalent on public routes).
 const RouteFallback = () => <div style={{ minHeight: 420 }} aria-busy="true" />
 
 function App() {
@@ -86,24 +85,27 @@ function App() {
     )
   }
 
+  // Public routes nest under PublicLayout — the persistent backdrop +
+  // CircuitTraces + AnimatePresence + Suspense live inside PublicLayout,
+  // so PublicLayout itself never unmounts during public navigation. That
+  // keeps CircuitTraces mounted once for the session (variant flips on
+  // route change via useLocation inside PublicLayout).
   return (
     <>
       <ThemeBridge />
       <Navbar />
-      <AnimatePresence mode="popLayout">
-        <Suspense fallback={<RouteFallback />}>
-          <Routes location={location} key={location.pathname}>
-            <Route path="/" element={<HomePage />} />
-            <Route path="/category/:slug" element={<CategoryPage />} />
-            <Route path="/search" element={<SearchPage />} />
-            <Route path="/join" element={<JoinPage />} />
-            <Route path="/contact" element={<ContactPage />} />
-            <Route path="/about" element={<AboutPage />} />
-            <Route path="/keyword/:keyword" element={<KeywordSponsorPage />} />
-            <Route path="/part/:id" element={<PartPage />} />
-          </Routes>
-        </Suspense>
-      </AnimatePresence>
+      <Routes>
+        <Route element={<PublicLayout />}>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/category/:slug" element={<CategoryPage />} />
+          <Route path="/search" element={<SearchPage />} />
+          <Route path="/join" element={<JoinPage />} />
+          <Route path="/contact" element={<ContactPage />} />
+          <Route path="/about" element={<AboutPage />} />
+          <Route path="/keyword/:keyword" element={<KeywordSponsorPage />} />
+          <Route path="/part/:id" element={<PartPage />} />
+        </Route>
+      </Routes>
       <NavVariantPicker />
       {import.meta.env.DEV && <HeroColorTuner />}
     </>

@@ -2,9 +2,13 @@
 @use '../../styles/mixins' as *;
 @use '../../styles/animations';
 
+// Hero LAYOUT only. The themed backdrop (background color + per-theme
+// gradients + shadow-gap ::before) lives in PublicLayout.module.scss now,
+// rendered ONCE for the whole public route tree. This section is transparent
+// so the persistent backdrop shows through.
+
 .hero {
   position: relative;
-  background: $executive-blue;
   width: 100%;
   overflow: hidden;
   padding: 80px 20px 60px;
@@ -75,73 +79,4 @@
       box-shadow: 0 0 12px rgba(255, 255, 255, 0.2);
     }
   }
-}
-
-// ─── Per-theme hero background textures + nav/hero shadow-gap seam ────────
-
-:global([data-theme="steel"]) .hero {
-  background-image:
-    linear-gradient(
-      180deg,
-      rgba(14, 17, 19, 0.30) 0%,
-      rgba(14, 17, 19, 0) 20%,
-      rgba(14, 17, 19, 0) 80%,
-      rgba(14, 17, 19, 0.20) 100%
-    ),
-    linear-gradient(
-      180deg,
-      rgba(255, 255, 255, 0.04) 0%,
-      rgba(255, 255, 255, 0) 18%
-    );
-  background-color: var(--theme-nav-bg);
-}
-
-:global([data-theme="schematic"]) .hero {
-  background-image:
-    linear-gradient(
-      180deg,
-      rgba(20, 26, 30, 0.10) 0%,
-      rgba(20, 26, 30, 0) 15%,
-      rgba(20, 26, 30, 0) 75%,
-      rgba(20, 26, 30, 0.15) 100%
-    ),
-    repeating-linear-gradient(
-      0deg,
-      transparent 0 27px,
-      rgba(255, 255, 255, 0.025) 27px 28px
-    );
-  background-color: var(--theme-nav-bg);
-}
-
-:global([data-theme="pcb"]) .hero {
-  // 2026-04-19 Tier-4 #10 perf: dropped the 90deg repeating-linear-gradient.
-  // Two overlapping orthogonal grids (horizontal + vertical) were painting
-  // ~2x the fine-line rasterization for a marginal visual detail. Keeping
-  // only the horizontal stripe grid preserves the PCB-substrate aesthetic
-  // while halving the initial-paint cost on this theme.
-  background-image:
-    radial-gradient(
-      ellipse 70% 45% at 50% 50%,
-      transparent 60%,
-      rgba(6, 20, 10, 0.35) 100%
-    ),
-    repeating-linear-gradient(
-      0deg,
-      transparent 0 23px,
-      color-mix(in srgb, var(--theme-accent) 3.5%, transparent) 23px 24px
-    );
-  background-color: var(--theme-nav-bg);
-}
-
-// 8px shadow-gap recessing the hero under the navbar. Not applied on base.
-:global([data-theme="steel"]) .hero::before,
-:global([data-theme="schematic"]) .hero::before,
-:global([data-theme="pcb"]) .hero::before {
-  content: "";
-  position: absolute;
-  inset: 0 0 auto 0;
-  height: 8px;
-  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.45) 0%, transparent 100%);
-  pointer-events: none;
-  z-index: 0;
 }
