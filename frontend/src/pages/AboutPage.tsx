@@ -59,27 +59,26 @@ const ABOUT_WHY = [
   },
 ] as const
 
-// Fires once when the element first scrolls into view. The returned `seen`
-// flag toggles a className on the section so the cards' staggered fade-in
-// transition kicks off in pure CSS (delay = calc(var(--i) * 120ms)).
-function useInView<T extends Element>(threshold = 0.25) {
+// Triggers the staggered card fade-in on mount. Previously gated by an
+// IntersectionObserver to defer the animation until the section scrolled
+// into view — but IO callbacks fire unreliably when AnimatePresence is
+// transforming the entering page's motion.div, so the `seen` flag would
+// stay false and the content stayed at opacity:0 indefinitely (visible bug:
+// stats stuck at "0", why-grid invisible until theme switch forced a repaint
+// that re-fired the queued IO callbacks). The fade-in still animates because
+// React renders one frame with seen=false (CSS opacity:0) then setTimeout
+// flips to seen=true (CSS opacity:1 with transition) — browser interpolates.
+// Trade-off: animation always plays on mount, not when the section enters
+// viewport. Acceptable since the alternative is content silently never
+// appearing on certain navigation paths.
+function useInView<T extends Element>() {
   const ref = useRef<T | null>(null)
   const [seen, setSeen] = useState(false)
 
   useEffect(() => {
-    const node = ref.current
-    if (!node || seen) return
-    const io = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((e) => {
-          if (e.isIntersecting) setSeen(true)
-        })
-      },
-      { threshold },
-    )
-    io.observe(node)
-    return () => io.disconnect()
-  }, [seen, threshold])
+    const t = setTimeout(() => setSeen(true), 50)
+    return () => clearTimeout(t)
+  }, [])
 
   return [ref, seen] as const
 }
@@ -87,19 +86,20 @@ function useInView<T extends Element>(threshold = 0.25) {
 interface StatTickerProps {
   value: string
   suffix: string
-  seen: boolean
 }
 
-// Animates 0 → value over ~1.1s with easeOutCubic when first scrolled in.
+// Animates 0 → value over ~1.1s with easeOutCubic on mount.
 // Detects float values (e.g. "13.8") to keep one decimal place; integer
 // values use locale formatting so "13800" would render as "13,800".
-function StatTicker({ value, suffix, seen }: StatTickerProps) {
+// Previously gated by a `seen` prop wired to the parent's IntersectionObserver
+// — but IO didn't fire reliably during AnimatePresence transitions, leaving
+// the value stuck at "0" forever. Always-on-mount is reliable.
+function StatTicker({ value, suffix }: StatTickerProps) {
   const [n, setN] = useState(0)
   const num = parseFloat(value)
   const isFloat = value.includes('.')
 
   useEffect(() => {
-    if (!seen) return
     const start = performance.now()
     const dur = 1100
     let raf = 0
@@ -111,7 +111,7 @@ function StatTicker({ value, suffix, seen }: StatTickerProps) {
     }
     raf = requestAnimationFrame(step)
     return () => cancelAnimationFrame(raf)
-  }, [seen, num])
+  }, [num])
 
   const display = isFloat ? n.toFixed(1) : Math.round(n).toLocaleString()
   return (
@@ -123,9 +123,9 @@ function StatTicker({ value, suffix, seen }: StatTickerProps) {
 }
 
 export default function AboutPage() {
-  const [stepsRef, stepsSeen] = useInView<HTMLElement>(0.2)
-  const [statsRef, statsSeen] = useInView<HTMLElement>(0.3)
-  const [whyRef, whySeen] = useInView<HTMLElement>(0.2)
+  const [stepsRef, stepsSeen] = useInView<HTMLElement>()
+  const [statsRef, statsSeen] = useInView<HTMLElement>()
+  const [whyRef, whySeen] = useInView<HTMLElement>()
 
   return (
     <motion.div
@@ -186,7 +186,7 @@ export default function AboutPage() {
         <div className={styles.aboutStatsGrid}>
           {ABOUT_STATS.map((s) => (
             <div key={s.label} className={styles.aboutStat}>
-              <StatTicker value={s.num} suffix={s.suffix} seen={statsSeen} />
+              <StatTicker value={s.num} suffix={s.suffix} />
               <span className={styles.aboutStatLabel}>{s.label}</span>
             </div>
           ))}
