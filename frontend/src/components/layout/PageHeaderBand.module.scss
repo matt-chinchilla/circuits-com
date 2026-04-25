@@ -2,20 +2,85 @@
 @use '../../styles/mixins' as *;
 @use '../../styles/animations';
 
-// Slim hero band for inner pages (About / Join / Contact). Transparent so
-// PublicLayout's persistent CircuitTraces backdrop shows through. The dark
-// radial vignette in PublicLayout already handles the legibility-on-traces
-// problem — this component just provides typography on a transparent layer.
+// Slim hero band for inner pages (About / Join / Contact).
+//
+// Owns its own themed dark background — does NOT rely on PublicLayout's
+// backdrop showing through. Each page's body wrapper (.aboutPage,
+// .joinPage > .page, .contactPage) applies a light --theme-surface-bg that
+// covers the PublicLayout backdrop, so PageHeaderBand has to bring its own
+// dark canvas; otherwise the white title + subtitle render on the light
+// page bg and become invisible (port-time regression caught 2026-04-25).
+//
+// Base theme uses $executive-blue (matches HeroSection convention); alt
+// themes use --theme-nav-bg + per-theme background-image gradients lifted
+// verbatim from PublicLayout.module.scss so the band reads as a continuation
+// of the navbar.
 
 .band {
   position: relative;
   padding: 72px 20px 56px;
   isolation: isolate;
-  // No background — PublicLayout backdrop owns the visual layer.
+  overflow: hidden;
+  // Base theme — dark green PCB substrate (matches home hero pre-2026-04-25).
+  background: $executive-blue;
 
   @include responsive($bp-mobile) {
     padding: 48px 20px 40px;
   }
+}
+
+// ─── Per-theme background overlays ────────────────────────────────────────
+// Lifted from PublicLayout.module.scss so the band reads identically to the
+// home hero on each alt theme. background-color uses --theme-nav-bg so the
+// nav and band are visually continuous (no seam between them).
+
+:global([data-theme="steel"]) .band {
+  background-image:
+    linear-gradient(
+      180deg,
+      rgba(14, 17, 19, 0.30) 0%,
+      rgba(14, 17, 19, 0) 20%,
+      rgba(14, 17, 19, 0) 80%,
+      rgba(14, 17, 19, 0.20) 100%
+    ),
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.04) 0%,
+      rgba(255, 255, 255, 0) 18%
+    );
+  background-color: var(--theme-nav-bg);
+}
+
+:global([data-theme="schematic"]) .band {
+  background-image:
+    linear-gradient(
+      180deg,
+      rgba(20, 26, 30, 0.10) 0%,
+      rgba(20, 26, 30, 0) 15%,
+      rgba(20, 26, 30, 0) 75%,
+      rgba(20, 26, 30, 0.15) 100%
+    ),
+    repeating-linear-gradient(
+      0deg,
+      transparent 0 27px,
+      rgba(255, 255, 255, 0.025) 27px 28px
+    );
+  background-color: var(--theme-nav-bg);
+}
+
+:global([data-theme="pcb"]) .band {
+  background-image:
+    radial-gradient(
+      ellipse 70% 45% at 50% 50%,
+      transparent 60%,
+      rgba(6, 20, 10, 0.35) 100%
+    ),
+    repeating-linear-gradient(
+      0deg,
+      transparent 0 23px,
+      color-mix(in srgb, var(--theme-accent) 3.5%, transparent) 23px 24px
+    );
+  background-color: var(--theme-nav-bg);
 }
 
 .inner {
