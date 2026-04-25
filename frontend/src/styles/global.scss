@@ -2,6 +2,27 @@
 @use 'themes';
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500&display=swap');
 
+// Brand colors as CSS custom properties — aliases to the SCSS $vars in
+// _variables.scss. Lets ported design rules reference `var(--executive-blue)`,
+// `var(--fg2)`, etc. directly without find-replace to SCSS syntax. Themed
+// colors (--theme-*) live in _themes.scss; these are theme-invariant brand
+// colors used by ported design-system rules from the Claude Design bundle.
+:root {
+  --executive-blue:    #{$executive-blue};
+  --nav-blue:          #{$nav-blue};
+  --sponsor-gold:      #{$sponsor-gold};
+  --sponsor-gold-light: #{$sponsor-gold-light};
+  --surface:           #{$surface};
+  --card-white:        #{$card-white};
+  --footer-dark:       #{$footer-dark};
+  --error-red:         #{$error-red};
+
+  // Foreground text aliases (bundle uses --fg1/--fg2/--fg3 idiom).
+  --fg1: #{$text-primary};
+  --fg2: #{$text-secondary};
+  --fg3: #9ca3af;
+}
+
 * {
   margin: 0;
   padding: 0;

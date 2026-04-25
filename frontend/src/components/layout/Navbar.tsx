@@ -20,6 +20,7 @@ export default function Navbar() {
       <div className={styles.topStrip}>
         <Link to="/" className={styles.brand}>
           <span className={styles.brandDot} aria-hidden="true" />
+          <span className={styles.brandSquare} aria-hidden="true" />
           Circuits.com
           <span className={styles.brandSuffix} aria-hidden="true">
             / REV-A

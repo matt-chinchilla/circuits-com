@@ -2,176 +2,383 @@
 @use '../styles/mixins' as *;
 @use '../styles/animations';
 
-// ─── Hero banner ────────────────────────────────────────────────────────────
+// AboutPage — ported from 2026-04-25 Claude Design bundle (Phase 5a).
+// Sections: (1) PageHeaderBand handles the hero — not styled here.
+// (2) .howSection — 3 step cards in grid, marching-ants SVG arrow connectors,
+//     IntersectionObserver-driven .seen fade-in with staggered --i delay.
+// (3) .statsSection — full-bleed dark gradient strip, PCB silkscreen grid
+//     overlay, 4 stat tiles with rAF-tickered tabular numerals.
+// (4) .whySection — 2-col grid of value-prop cards with hover lift.
+// (5) .ctaSection — title + sub + two buttons (primary + ghost).
 
-.hero {
-  padding: 56px 20px 64px;
-  text-align: center;
+// ─── Page root ──────────────────────────────────────────────────────────────
 
-  @include responsive($bp-mobile) {
-    padding: 40px 20px 48px;
-  }
+.aboutPage {
+  background: var(--theme-surface-bg);
 }
 
-.heroInner {
-  @include container;
-  max-width: 720px;
-  position: relative;
-  z-index: 1;
+// ─── Section primitives (shared) ────────────────────────────────────────────
+
+.aboutSection {
+  padding: 64px 20px;
+  max-width: 1180px;
+  margin: 0 auto;
 }
 
-.heroTitle {
+.aboutSectionTitle {
   font-family: $font-heading;
-  font-size: 2.4rem;
+  font-size: 1.8rem;
   font-weight: 700;
-  color: #ffffff;
-  margin: 0 0 16px;
-  line-height: 1.2;
-
-  @include responsive($bp-mobile) {
-    font-size: 1.75rem;
-  }
+  color: var(--fg1);
+  margin: 0 0 8px;
+  text-align: center;
+  line-height: 1.15;
 }
 
-.heroSubtitle {
-  color: rgba(255, 255, 255, 0.75);
-  font-size: 1.1rem;
-  line-height: 1.6;
-  margin: 0;
-
-  @include responsive($bp-mobile) {
-    font-size: 0.95rem;
-  }
+.aboutSectionDek {
+  font-size: 1rem;
+  color: var(--fg2);
+  text-align: center;
+  margin: 0 auto 40px;
+  max-width: 60ch;
 }
 
-// ─── How it works ───────────────────────────────────────────────────────────
+// ─── (2) How it works — step cards w/ marching-ants connectors ────────────
 
-.howSection {
-  @include container;
-  padding-top: 56px;
+.aboutHow {
+  padding-top: 72px;
   padding-bottom: 56px;
-  text-align: center;
 }
 
-.sectionTitle {
-  font-family: $font-heading;
-  font-size: 1.6rem;
-  font-weight: 700;
-  color: $text-primary;
-  margin: 0 0 40px;
-}
-
-.stepsGrid {
+.aboutSteps {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 32px;
+  gap: 24px;
+  position: relative;
 
-  @include responsive($bp-mobile) {
+  @include responsive($bp-tablet) {
     grid-template-columns: 1fr;
-    gap: 24px;
   }
 }
 
-.stepCard {
-  @include card-base;
-  padding: 32px 24px;
+.aboutStep {
+  position: relative;
+  background: #fff;
+  border-radius: 10px;
+  padding: 32px 24px 28px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  border: 1px solid rgba(0, 0, 0, 0.05);
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 14px;
-  @include hover-lift;
+  gap: 12px;
+  text-align: left;
+  opacity: 0;
+  transform: translateY(16px);
+  transition: opacity 0.5s ease, transform 0.5s ease, box-shadow 0.25s ease;
+  transition-delay: calc(var(--i) * 120ms);
+
+  &:hover {
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.1);
+  }
 }
 
-.stepIcon {
-  font-size: 2.5rem;
+.aboutHow.seen .aboutStep {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.aboutStepNum {
+  font-family: $font-mono;
+  font-size: 0.72rem;
+  letter-spacing: 0.18em;
+  color: var(--theme-accent);
+  font-weight: 700;
+}
+
+.aboutStepIcon {
+  font-size: 2.2rem;
   line-height: 1;
 }
 
-.stepNumber {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: var(--theme-accent);
-  color: var(--theme-accent-on-text);
-  font-size: 0.8rem;
-  font-weight: 700;
-}
-
-.stepTitle {
+.aboutStepTitle {
   font-family: $font-heading;
-  font-size: 1.1rem;
-  font-weight: 600;
-  color: $text-primary;
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--fg1);
   margin: 0;
 }
 
-.stepDescription {
-  font-size: 0.9rem;
-  color: $text-secondary;
-  line-height: 1.5;
+.aboutStepDesc {
+  font-size: 0.95rem;
+  color: var(--fg2);
+  line-height: 1.55;
   margin: 0;
 }
 
-// ─── Arrow connector (desktop only) ────────────────────────────────────────
+.aboutStepConnector {
+  position: absolute;
+  top: 50%;
+  right: -18px;
+  width: 36px;
+  height: 12px;
+  transform: translateY(-50%);
+  display: block;
+  pointer-events: none;
 
-.stepConnector {
-  display: none; // connectors live inside the grid but are purely visual on larger screens
-}
+  @include responsive($bp-tablet) {
+    display: none;
+  }
 
-// ─── Value proposition ──────────────────────────────────────────────────────
+  svg {
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+  }
 
-.valueSection {
-  background: $surface;
-  padding: 56px 20px;
-}
-
-.valueInner {
-  @include container;
-  max-width: 800px;
-  text-align: center;
-}
-
-.valueTitle {
-  font-family: $font-heading;
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: $text-primary;
-  margin: 0 0 20px;
-}
-
-.valueText {
-  font-size: 1rem;
-  color: $text-secondary;
-  line-height: 1.7;
-  margin: 0 0 16px;
-
-  &:last-of-type {
-    margin-bottom: 0;
+  line,
+  polyline {
+    stroke: var(--theme-accent);
+    fill: none;
+    stroke-width: 1.5;
+    stroke-dasharray: 4 4;
+    animation: arrow-march 1.4s linear infinite;
   }
 }
 
-// ─── CTA section ────────────────────────────────────────────────────────────
+@keyframes arrow-march {
+  to {
+    stroke-dashoffset: -16;
+  }
+}
 
-.ctaSection {
-  @include container;
-  padding-top: 56px;
-  padding-bottom: 64px;
+// ─── (3) Stats strip — full-bleed gradient, PCB grid, mono labels ─────────
+
+.aboutStats {
+  background: linear-gradient(
+    180deg,
+    var(--executive-blue) 0%,
+    color-mix(in srgb, var(--executive-blue) 88%, #000) 100%
+  );
+  max-width: none;
+  padding: 44px 20px;
+  position: relative;
+  overflow: hidden;
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(color-mix(in srgb, var(--theme-accent) 12%, transparent) 1px, transparent 1px),
+      linear-gradient(90deg, color-mix(in srgb, var(--theme-accent) 12%, transparent) 1px, transparent 1px);
+    background-size: 32px 32px;
+    background-position: -1px -1px;
+    opacity: 0.5;
+    pointer-events: none;
+  }
+}
+
+[data-theme='steel'] .aboutStats,
+[data-theme='schematic'] .aboutStats,
+[data-theme='pcb'] .aboutStats {
+  background: var(--theme-nav-bg);
+}
+
+.aboutStatsGrid {
+  position: relative;
+  z-index: 1;
+  max-width: 1100px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  text-align: center;
+
+  @include responsive($bp-mobile) {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.aboutStat {
+  padding: 16px 8px;
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+
+  &:first-child {
+    border-left: none;
+  }
+
+  @include responsive($bp-mobile) {
+    border-left: none;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+
+    &:nth-child(-n + 2) {
+      border-top: none;
+    }
+  }
+}
+
+.aboutStatNum {
+  display: block;
+  font-family: $font-heading;
+  font-size: 2.6rem;
+  font-weight: 700;
+  color: var(--theme-accent);
+  line-height: 1;
+  margin-bottom: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.aboutStatLabel {
+  font-family: $font-mono;
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+// ─── (4) Why grid — 4 value-prop cards, 2-col, hover lift ─────────────────
+
+.aboutWhyInner {
   text-align: center;
 }
 
-.ctaTitle {
-  font-family: $font-heading;
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: $text-primary;
-  margin: 0 0 12px;
+.aboutWhyLead {
+  font-size: 1.05rem;
+  color: var(--fg2);
+  line-height: 1.65;
+  max-width: 70ch;
+  margin: 0 auto 36px;
 }
 
-.ctaSubtitle {
+.aboutWhyGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
+  text-align: left;
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity 0.6s ease, transform 0.6s ease;
+
+  @include responsive($bp-mobile) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.aboutWhy.seen .aboutWhyGrid {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.aboutWhyCard {
+  background: #fff;
+  border-radius: 10px;
+  padding: 24px 26px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  transition: transform 0.25s, box-shadow 0.25s;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.08);
+  }
+
+  h3 {
+    font-family: $font-heading;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--fg1);
+    margin: 0 0 8px;
+  }
+
+  p {
+    font-size: 0.95rem;
+    color: var(--fg2);
+    line-height: 1.55;
+    margin: 0;
+  }
+}
+
+.aboutWhyIcon {
+  display: inline-block;
+  font-size: 1.6rem;
+  margin-bottom: 10px;
+  line-height: 1;
+}
+
+// ─── (5) CTA — title + sub + two buttons ──────────────────────────────────
+
+.aboutCta {
+  text-align: center;
+  padding-top: 24px;
+  padding-bottom: 80px;
+}
+
+.aboutCtaSub {
   font-size: 1rem;
-  color: $text-secondary;
-  margin: 0 0 28px;
+  color: var(--fg2);
+  max-width: 56ch;
+  margin: 0 auto 24px;
+}
+
+.aboutCtaActions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+// Glow buttons — port of bundle .glow-btn / .glow-btn-gold / .glow-btn-ghost.
+// Lifted to module scope so the CTA section's <Link> children can be styled
+// without depending on a sitewide .glow-btn rule.
+.glowBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 22px;
+  font-family: inherit;
+  font-size: 0.92rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  border: 1.5px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  transition:
+    transform 200ms ease,
+    box-shadow 200ms ease,
+    background-color 200ms,
+    color 200ms,
+    border-color 200ms;
+  text-decoration: none;
+  line-height: 1;
+}
+
+.glowBtnGold {
+  background: var(--sponsor-gold);
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(168, 141, 46, 0.35);
+
+  &:hover {
+    background: var(--sponsor-gold-light);
+    transform: translateY(-1px);
+    box-shadow: 0 8px 22px rgba(196, 165, 58, 0.45);
+  }
+}
+
+.glowBtnGhost {
+  background: transparent;
+  color: var(--fg1);
+  border-color: rgba(0, 0, 0, 0.18);
+
+  &:hover {
+    background: var(--theme-accent-soft);
+    color: var(--theme-accent);
+    border-color: var(--theme-accent);
+  }
+}
+
+[data-theme='steel'] .glowBtnGhost,
+[data-theme='schematic'] .glowBtnGhost,
+[data-theme='pcb'] .glowBtnGhost {
+  border-color: rgba(0, 0, 0, 0.18);
+  color: var(--fg1);
 }

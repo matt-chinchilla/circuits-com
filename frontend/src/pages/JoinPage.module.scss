@@ -2,62 +2,352 @@
 @use '../styles/mixins' as *;
 @use '../styles/animations';
 
-// ─── Page header ────────────────────────────────────────────────────────────
+// JoinPage layout — ported from 2026-04-25 Claude design bundle.
+//
+// Section breakdown:
+//   1. .page              — outer surface wash + vertical padding
+//   2. .grid              — sticky 360px aside + form, single-col under 980px
+//   3. .aside             — benefits list + tier picker (sticky on desktop)
+//      .benefits, .bullet, .asideTitle, .asideSub
+//      .tiers, .tier, .tierHead, .tierName, .tierPrice, .tierTag, .tierPerks
+//   4. .form              — white card holding the application form
+//   5. .progress          — animated completion bar w/ shimmer overlay
+//   6. .fset / .legend / .legNum  — fieldset section wrappers w/ mono badge
+//   7. .row, .field, .label, .input, .textarea, .fhint  — form fields + live-validation hints
+//   8. .catGrid, .catChip, .catIcon, .catName, .catMark  — chip-grid category multi-select
+//   9. .terms, .actions   — terms checkbox + footer button row
+//  10. .success / .successCard / .successMark / .successReceipt — post-submit state
 
-.pageHeader {
-  padding: 32px 20px 36px;
+// ─── Page surface ───────────────────────────────────────────────────────────
+
+.page {
+  background: var(--theme-surface-bg, #{$surface});
+  padding: 36px 20px 64px;
 }
 
-.headerInner {
-  @include container;
-  position: relative;
-  z-index: 1;
-}
+.grid {
+  max-width: 1180px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 360px 1fr;
+  gap: 28px;
+  align-items: flex-start;
 
-.title {
-  font-family: $font-heading;
-  font-size: 2rem;
-  font-weight: 700;
-  color: #ffffff;
-  margin: 0 0 6px;
-
-  @include responsive($bp-mobile) {
-    font-size: 1.5rem;
+  @include responsive(980px) {
+    grid-template-columns: 1fr;
   }
 }
 
-.subtitle {
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 1rem;
+// ─── Aside ──────────────────────────────────────────────────────────────────
+
+.aside {
+  position: sticky;
+  top: 56px;
+  background: #ffffff;
+  border-radius: 10px;
+  padding: 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+
+  @include responsive(980px) {
+    position: static;
+  }
+}
+
+.asideTitle {
+  font-family: $font-heading;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--fg1, #{$text-primary});
+  margin: 0 0 12px;
+}
+
+.asideSub {
+  font-family: $font-mono;
+  font-size: 0.72rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--fg2, #{$text-secondary});
+  margin: 24px 0 12px;
+}
+
+.benefits {
+  list-style: none;
+  padding: 0;
   margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
 }
 
-// ─── Content ────────────────────────────────────────────────────────────────
+.benefitItem {
+  display: flex;
+  gap: 12px;
+  font-size: 0.92rem;
+  color: var(--fg2, #{$text-secondary});
+  line-height: 1.5;
 
-.content {
-  @include container;
-  padding-top: 36px;
-  padding-bottom: 56px;
-  max-width: 680px;
+  strong {
+    color: var(--fg1, #{$text-primary});
+    font-weight: 600;
+  }
 }
 
-// ─── Form ───────────────────────────────────────────────────────────────────
+.bullet {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--theme-accent-soft);
+  color: var(--theme-accent);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.95rem;
+}
+
+// ─── Tier picker ────────────────────────────────────────────────────────────
+
+.tiers {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.tier {
+  position: relative;
+  display: block;
+  padding: 14px 16px;
+  border: 1.5px solid rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  background: #ffffff;
+  cursor: pointer;
+  transition:
+    border-color 200ms,
+    box-shadow 200ms,
+    transform 200ms;
+
+  input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  &:hover {
+    border-color: var(--theme-accent);
+  }
+}
+
+.tierActive {
+  border-color: var(--theme-accent);
+  box-shadow: 0 0 0 3px var(--theme-accent-soft);
+}
+
+.tierFeatured::before {
+  content: '★ POPULAR';
+  position: absolute;
+  top: -10px;
+  right: 12px;
+  font-family: $font-mono;
+  font-size: 0.62rem;
+  letter-spacing: 0.12em;
+  padding: 3px 8px;
+  border-radius: 3px;
+  background: var(--sponsor-gold, #{$sponsor-gold});
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.tierHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tierName {
+  font-family: $font-heading;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--fg1, #{$text-primary});
+}
+
+.tierPrice {
+  font-family: $font-mono;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--theme-accent);
+}
+
+.tierTag {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--fg2, #{$text-secondary});
+  margin-top: 2px;
+  margin-bottom: 8px;
+}
+
+.tierPerks {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+
+  li {
+    position: relative;
+    font-size: 0.84rem;
+    color: var(--fg2, #{$text-secondary});
+    padding-left: 16px;
+    line-height: 1.4;
+
+    &::before {
+      content: '›';
+      position: absolute;
+      left: 4px;
+      color: var(--theme-accent);
+      font-weight: 700;
+    }
+  }
+}
+
+// ─── Form card ──────────────────────────────────────────────────────────────
 
 .form {
-  @include card-base;
-  padding: 32px;
+  background: #ffffff;
+  border-radius: 10px;
+  padding: 28px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  border: 1px solid rgba(0, 0, 0, 0.06);
 }
 
-.fieldGroup {
-  margin-bottom: 20px;
+// ─── Progress bar ───────────────────────────────────────────────────────────
+
+.progress {
+  position: relative;
+  height: 8px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.06);
+  margin-bottom: 24px;
+  overflow: hidden;
+}
+
+.progressBar {
+  position: relative;
+  height: 100%;
+  border-radius: 4px;
+  background: linear-gradient(
+    90deg,
+    var(--theme-accent),
+    color-mix(in srgb, var(--theme-accent) 70%, #ffffff)
+  );
+  transition: width 0.4s ease;
+  overflow: hidden;
+}
+
+.progressShimmer {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.5) 50%,
+    transparent 100%
+  );
+  animation: progressShimmer 1.6s ease-in-out infinite;
+}
+
+@keyframes progressShimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.progressLabel {
+  position: absolute;
+  right: 0;
+  top: -22px;
+  font-family: $font-mono;
+  font-size: 0.66rem;
+  letter-spacing: 0.14em;
+  color: var(--fg2, #{$text-secondary});
+}
+
+// ─── Error banner ───────────────────────────────────────────────────────────
+
+.error {
+  background: rgba(192, 57, 43, 0.08);
+  color: #c0392b;
+  padding: 10px 14px;
+  border-radius: 6px;
+  font-size: 0.88rem;
+  margin-bottom: 18px;
+  border-left: 3px solid #c0392b;
+}
+
+// ─── Fieldset sections ──────────────────────────────────────────────────────
+
+.fset {
+  border: none;
+  padding: 0;
+  margin: 0 0 28px;
+}
+
+.legend {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: $font-heading;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--fg1, #{$text-primary});
+  margin-bottom: 14px;
+  padding: 0;
+}
+
+.legNum {
+  font-family: $font-mono;
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  color: var(--theme-accent);
+  background: var(--theme-accent-soft);
+  padding: 4px 8px;
+  border-radius: 3px;
+  font-weight: 700;
+}
+
+.fhelp {
+  font-size: 0.88rem;
+  color: var(--fg2, #{$text-secondary});
+  margin: -6px 0 14px;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-bottom: 14px;
+
+  @include responsive(580px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
 }
 
 .label {
-  display: block;
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   font-weight: 600;
-  color: $text-primary;
-  margin-bottom: 6px;
+  color: var(--fg1, #{$text-primary});
 }
 
 .required {
@@ -66,103 +356,276 @@
 }
 
 .input,
-.textarea,
-.multiSelect {
+.textarea {
   width: 100%;
   padding: 10px 14px;
-  font-family: $font-body;
+  font-family: inherit;
   font-size: 0.95rem;
-  color: $text-primary;
-  background: $surface;
+  color: var(--fg1, #{$text-primary});
+  background: var(--surface, #{$surface});
   border: 2px solid transparent;
   border-radius: 6px;
   outline: none;
   transition:
-    border-color $transition-normal,
-    box-shadow $transition-normal;
+    border-color 150ms,
+    box-shadow 150ms;
   box-sizing: border-box;
 
   &:focus {
     border-color: var(--theme-accent);
     box-shadow: 0 0 0 3px var(--theme-accent-soft);
   }
+}
 
-  &::placeholder {
-    color: $text-secondary;
-  }
+.inputValid {
+  border-color: #1f9e5d;
+}
+
+.inputInvalid {
+  border-color: #c0392b;
 }
 
 .textarea {
   min-height: 100px;
   resize: vertical;
+  font-family: inherit;
 }
 
-.multiSelect {
-  min-height: 120px;
-  cursor: pointer;
-
-  option {
-    padding: 4px 2px;
-  }
+.fhint {
+  font-size: 0.74rem;
+  color: var(--fg2, #{$text-secondary});
+  align-self: flex-end;
 }
 
-.fieldHint {
-  font-size: 0.78rem;
-  color: $text-secondary;
-  margin-top: 4px;
+.fhintOk {
+  color: #1f9e5d;
 }
 
-.row {
+.fhintBad {
+  color: #c0392b;
+}
+
+.fhintMono {
+  font-family: $font-mono;
+}
+
+// ─── Category chip grid ─────────────────────────────────────────────────────
+
+.catGrid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin-bottom: 8px;
 
-  @include responsive($bp-mobile) {
+  @include responsive(580px) {
     grid-template-columns: 1fr;
   }
 }
 
-.actions {
-  margin-top: 28px;
-  display: flex;
-  justify-content: flex-end;
-}
-
-// ─── Error ──────────────────────────────────────────────────────────────────
-
-.formError {
-  background: rgba(192, 57, 43, 0.08);
-  color: #c0392b;
-  padding: 12px 16px;
+.catChip {
+  display: grid;
+  grid-template-columns: 28px 1fr 22px;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  font-family: inherit;
+  font-size: 0.86rem;
+  color: var(--fg1, #{$text-primary});
+  background: var(--surface, #{$surface});
+  border: 1.5px solid transparent;
   border-radius: 6px;
-  font-size: 0.9rem;
-  margin-bottom: 20px;
+  cursor: pointer;
+  transition:
+    border-color 150ms,
+    background 150ms,
+    color 150ms;
+  text-align: left;
+
+  &:hover {
+    border-color: var(--theme-accent);
+  }
 }
 
-// ─── Success overlay ────────────────────────────────────────────────────────
+.catChipOn {
+  background: var(--theme-accent-soft);
+  border-color: var(--theme-accent);
+  color: var(--theme-cta-bg);
+}
+
+.catIcon {
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.catName {
+  line-height: 1.25;
+}
+
+.catMark {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.85rem;
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--fg2, #{$text-secondary});
+  transition:
+    background 150ms,
+    color 150ms;
+
+  .catChipOn & {
+    background: var(--theme-accent);
+    color: var(--theme-accent-on-text, #ffffff);
+  }
+}
+
+// ─── Terms + actions ────────────────────────────────────────────────────────
+
+.terms {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 0.88rem;
+  color: var(--fg2, #{$text-secondary});
+  line-height: 1.4;
+  cursor: pointer;
+  margin-top: 8px;
+
+  input {
+    margin-top: 3px;
+    cursor: pointer;
+  }
+}
+
+.termsLink {
+  color: var(--theme-accent);
+  text-decoration: underline;
+}
+
+.actions {
+  margin-top: 8px;
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+// ─── Success state ──────────────────────────────────────────────────────────
 
 .success {
-  @include card-base;
-  padding: 56px 32px;
-  text-align: center;
+  padding: 40px 0;
+  display: flex;
+  justify-content: center;
 }
 
-.successIcon {
-  font-size: 4rem;
-  display: block;
+.successCard {
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 40px 36px;
+  max-width: 520px;
+  width: 100%;
+  text-align: center;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  animation: popIn 0.5s cubic-bezier(0.18, 0.89, 0.32, 1.28) both;
+}
+
+@keyframes popIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.successMark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--theme-accent);
+  color: var(--theme-accent-on-text, #ffffff);
+  font-size: 2rem;
+  font-weight: 700;
   margin-bottom: 16px;
+  box-shadow: 0 0 0 8px var(--theme-accent-soft);
+  animation: successPulse 1.6s ease-in-out infinite;
+}
+
+@keyframes successPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 8px var(--theme-accent-soft);
+  }
+  50% {
+    box-shadow: 0 0 0 14px transparent;
+  }
 }
 
 .successTitle {
   font-family: $font-heading;
-  font-size: 1.6rem;
-  font-weight: 700;
-  color: $text-primary;
+  font-size: 1.4rem;
   margin: 0 0 8px;
+  color: var(--fg1, #{$text-primary});
 }
 
-.successSubtitle {
-  color: $text-secondary;
-  font-size: 1rem;
-  margin: 0 0 24px;
+.successText {
+  font-size: 0.95rem;
+  color: var(--fg2, #{$text-secondary});
+  line-height: 1.55;
+  margin: 0 0 18px;
+
+  code {
+    background: var(--surface, #{$surface});
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 0.85rem;
+    font-family: $font-mono;
+  }
+}
+
+.successReceipt {
+  text-align: left;
+  background: var(--surface, #{$surface});
+  border-radius: 6px;
+  padding: 14px 16px;
+  margin: 0 0 22px;
+  font-size: 0.78rem;
+  font-family: $font-mono;
+
+  > div {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 0;
+    border-bottom: 1px dashed rgba(0, 0, 0, 0.08);
+
+    &:last-child {
+      border-bottom: none;
+    }
+
+    span:first-child {
+      letter-spacing: 0.16em;
+      color: var(--fg2, #{$text-secondary});
+    }
+  }
+}
+
+.successOk {
+  color: #1f9e5d;
+  font-weight: 700;
+}
+
+.successActions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
 }

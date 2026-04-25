@@ -15,6 +15,11 @@ class JoinForm(BaseModel):
     phone: str
     website: str | None = None
     categories_of_interest: list[str] = []
+    # Sponsorship tier picked in the JoinPage form ('silver' | 'gold' | 'platinum').
+    # Optional so older callers without the field still validate; n8n receives it
+    # in the webhook payload when present so the success-receipt UI's chosen tier
+    # actually reaches the team's intake pipeline.
+    tier: str | None = None
     message: str | None = None
 
 

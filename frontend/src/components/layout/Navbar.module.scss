@@ -135,8 +135,31 @@
   animation: pulseLed 2.4s ease-in-out infinite;
 }
 
-:global([data-theme="steel"]) .brandDot,
-:global([data-theme="schematic"]) .brandDot {
+:global([data-theme="steel"]) .brandDot {
+  display: inline-block;
+}
+
+// Base theme — show a white pulsing dot (was missing pre-2026-04-25 design import).
+:global(:root[data-theme="base"]) .brandDot,
+:global(:root:not([data-theme])) .brandDot {
+  display: inline-block;
+  background: #ffffff;
+  box-shadow: 0 0 6px rgba(255, 255, 255, 0.6);
+}
+
+// Rounded-square outline icon — shown only on schematic theme (replaces dot).
+// Schematic-symbol vibe: hollow box with green outline + soft glow.
+.brandSquare {
+  display: none;
+  width: 12px;
+  height: 12px;
+  border: 1.5px solid #44bd13;
+  border-radius: 2px;
+  background: rgba(68, 189, 19, 0.15);
+  box-shadow: 0 0 8px rgba(68, 189, 19, 0.35);
+}
+
+:global([data-theme="schematic"]) .brandSquare {
   display: inline-block;
 }
 

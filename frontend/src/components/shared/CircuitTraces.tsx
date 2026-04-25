@@ -336,6 +336,71 @@ export default function CircuitTraces({ variant = 'full' }: CircuitTracesProps =
       </g>
 
       {/* ═══════════════════════════════════════════════════════════════════════
+          Edge connectors + headers — terminate trace bundles at real components
+          (CN1/CN2 left/right, CN3/CN4 bottom, J1/J2 top). Drawn after the trace
+          group so connector bodies sit visually atop the trace ends, making
+          signals appear to enter the connector pads. Density bump from the
+          2026-04-25 design import — replaces the prior "traces ending at
+          nowhere" look with proper PCB termination.
+          ═══════════════════════════════════════════════════════════════════════ */}
+
+      {/* CN1 — LEFT edge connector */}
+      <rect x={28} y={80} width={30} height={170} rx={1.5} {...IC(0.7)} className={styles.trace} style={T(0.15)} />
+      {Array.from({ length: 10 }, (_, i) => {
+        const py = 80 + (170 / 11) * (i + 1);
+        return <rect key={`cn1p${i}`} x={24} y={py - 1.25} width={5} height={2.5} rx={0.5} fill="var(--ic-pad-fill)" fillOpacity={0.4} className={styles.trace} style={T(0.18 + i * 0.03)} />;
+      })}
+
+      {/* CN2 — RIGHT edge connector */}
+      <rect x={1142} y={55} width={30} height={190} rx={1.5} {...IC(0.7)} className={styles.trace} style={T(0.15)} />
+      {Array.from({ length: 12 }, (_, i) => {
+        const py = 55 + (190 / 13) * (i + 1);
+        return <rect key={`cn2p${i}`} x={1171} y={py - 1.25} width={5} height={2.5} rx={0.5} fill="var(--ic-pad-fill)" fillOpacity={0.4} className={styles.trace} style={T(0.18 + i * 0.03)} />;
+      })}
+
+      {/* CN3 — BOTTOM-LEFT edge connector */}
+      <rect x={250} y={360} width={260} height={14} rx={1.5} {...IC(0.7)} className={styles.trace} style={T(0.2)} />
+      {Array.from({ length: 14 }, (_, i) => (
+        <rect key={`cn3p${i}`} x={260 + i * 18 - 1.25} y={374} width={2.5} height={5} rx={0.5} fill="var(--ic-pad-fill)" fillOpacity={0.4} className={styles.trace} style={T(0.3 + i * 0.02)} />
+      ))}
+
+      {/* CN4 — BOTTOM-RIGHT edge connector */}
+      <rect x={620} y={360} width={220} height={14} rx={1.5} {...IC(0.7)} className={styles.trace} style={T(0.2)} />
+      {Array.from({ length: 12 }, (_, i) => (
+        <rect key={`cn4p${i}`} x={630 + i * 18 - 1.25} y={374} width={2.5} height={5} rx={0.5} fill="var(--ic-pad-fill)" fillOpacity={0.4} className={styles.trace} style={T(0.3 + i * 0.02)} />
+      ))}
+
+      {/* J1 — TOP header */}
+      <rect x={380} y={16} width={260} height={14} rx={1.5} {...IC(0.7)} className={styles.trace} style={T(0.2)} />
+      {Array.from({ length: 14 }, (_, i) => (
+        <rect key={`j1p${i}`} x={390 + i * 18 - 1.25} y={11} width={2.5} height={5} rx={0.5} fill="var(--ic-pad-fill)" fillOpacity={0.4} className={styles.trace} style={T(0.3 + i * 0.02)} />
+      ))}
+
+      {/* J2 — TOP-RIGHT header */}
+      <rect x={900} y={16} width={180} height={14} rx={1.5} {...IC(0.7)} className={styles.trace} style={T(0.2)} />
+      {Array.from({ length: 10 }, (_, i) => (
+        <rect key={`j2p${i}`} x={910 + i * 18 - 1.25} y={11} width={2.5} height={5} rx={0.5} fill="var(--ic-pad-fill)" fillOpacity={0.4} className={styles.trace} style={T(0.3 + i * 0.02)} />
+      ))}
+
+      {/* Decoupling caps (0402 chips) around IC1 corners */}
+      {([[405, 116], [525, 116], [405, 234], [525, 234]] as const).map(([cx, cy], i) => (
+        <g key={`cap${i}`}>
+          <rect x={cx - 5} y={cy - 2.5} width={10} height={5} rx={0.5} {...IC(0.5)} className={styles.trace} style={T(0.5)} />
+          <rect x={cx - 5} y={cy - 2.5} width={2} height={5} fill="var(--ic-pad-fill)" fillOpacity={0.4} className={styles.trace} style={T(0.5)} />
+          <rect x={cx + 3} y={cy - 2.5} width={2} height={5} fill="var(--ic-pad-fill)" fillOpacity={0.4} className={styles.trace} style={T(0.5)} />
+        </g>
+      ))}
+
+      {/* Chip resistors (0603 R) along major traces */}
+      {([[340, 120], [690, 80], [870, 220], [280, 240], [1030, 240]] as const).map(([cx, cy], i) => (
+        <g key={`res${i}`}>
+          <rect x={cx - 6} y={cy - 3} width={12} height={6} rx={0.5} {...IC(0.5)} className={styles.trace} style={T(0.8 + i * 0.1)} />
+          <rect x={cx - 6} y={cy - 3} width={2.5} height={6} fill="var(--ic-pad-fill)" fillOpacity={0.4} className={styles.trace} style={T(0.8 + i * 0.1)} />
+          <rect x={cx + 3.5} y={cy - 3} width={2.5} height={6} fill="var(--ic-pad-fill)" fillOpacity={0.4} className={styles.trace} style={T(0.8 + i * 0.1)} />
+        </g>
+      ))}
+
+      {/* ═══════════════════════════════════════════════════════════════════════
           QFP IC Package 1 — large, center-left (body at 420,130 → 510,220)
           ═══════════════════════════════════════════════════════════════════════ */}
       <rect x="420" y="130" width="90" height="90" rx="2" {...IC(1)} className={styles.trace} style={T(0.2)} />
