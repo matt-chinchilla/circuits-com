@@ -1,175 +1,320 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import Breadcrumbs from '../../components/admin/Breadcrumbs';
-import StatCard from '../../components/admin/StatCard';
-import DataTable from '../../components/admin/DataTable';
-import { useDemo } from '../../contexts/DemoContext';
+import { useState, useEffect, useMemo } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import { Plus, Search, Pencil, X } from 'lucide-react';
 import { adminApi } from '../../services/adminApi';
-import type { DashboardStats } from '../../types/admin';
+import type { AdminSponsor, AdminSupplier, AdminCategory, SponsorTier } from '../../types/admin';
 import styles from './SponsorsPage.module.scss';
 
-interface SponsorRow {
-  id: string;
-  supplier_name: string;
-  type: string;
-  target: string;
-  tier: string;
-  date_range: string;
-  status: string;
-  supplier_id: string;
-  [key: string]: unknown;
+// Phase A6 — list page ported from 2026-04-25 Claude Design bundle
+// (project/ui_kits/admin/pages.jsx → SponsorsListPage).
+//
+// No backend admin sponsor CRUD exists yet, so the list is sourced from
+// localStorage-persisted seed data; adminApi.getStats() still drives the
+// upstream "Active sponsorships" count when available.
+
+const TIERS: SponsorTier[] = ['Featured', 'Platinum', 'Gold', 'Silver'];
+
+// LocalStorage key for the demo sponsor store. SponsorFormPage writes the
+// same key so list + form stay in sync without a real backend.
+const STORE_KEY = 'circuits.admin.sponsors';
+
+function loadStore(): AdminSponsor[] {
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as AdminSponsor[];
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch {
+    /* fall through to seed */
+  }
+  return SEED_SPONSORS;
 }
 
-// Fallback sponsor data derived from known seed data
-const SEED_SPONSORS: SponsorRow[] = [
+const SEED_SPONSORS: AdminSponsor[] = [
   {
-    id: 'sponsor-1',
-    supplier_name: 'Honeywell Aerospace',
-    type: 'Category',
-    target: 'Sensors & Transducers',
-    tier: 'gold',
-    date_range: 'Jan 2026 - Dec 2026',
-    status: 'active',
+    id: 'spn-honeywell-sensors',
     supplier_id: 'seed-supplier-honeywell',
+    supplier_name: 'Honeywell Sensing',
+    tier: 'Featured',
+    category_id: 'cat-sensors',
+    category_name: 'Sensors & Transducers',
+    keyword: null,
+    start_date: '2026-01-01',
+    end_date: '2026-12-31',
+    amount: 7000,
+    status: 'Active',
   },
   {
-    id: 'sponsor-2',
-    supplier_name: 'Texas Instruments',
-    type: 'Keyword',
-    target: 'voltage regulator',
-    tier: 'silver',
-    date_range: 'Mar 2026 - Sep 2026',
-    status: 'active',
+    id: 'spn-ti-keyword-vreg',
     supplier_id: 'seed-supplier-ti',
+    supplier_name: 'Texas Instruments',
+    tier: 'Gold',
+    category_id: null,
+    category_name: null,
+    keyword: 'voltage regulator',
+    start_date: '2026-03-01',
+    end_date: '2026-09-30',
+    amount: 1500,
+    status: 'Active',
+  },
+  {
+    id: 'spn-arrow-pmic',
+    supplier_id: 'seed-supplier-arrow',
+    supplier_name: 'Arrow Electronics',
+    tier: 'Platinum',
+    category_id: 'cat-pmic',
+    category_name: 'Power Management ICs',
+    keyword: null,
+    start_date: '2026-02-01',
+    end_date: '2027-01-31',
+    amount: 4500,
+    status: 'Active',
+  },
+  {
+    id: 'spn-mouser-keyword-stm32',
+    supplier_id: 'seed-supplier-mouser',
+    supplier_name: 'Mouser Electronics',
+    tier: 'Silver',
+    category_id: null,
+    category_name: null,
+    keyword: 'stm32',
+    start_date: '2025-11-01',
+    end_date: '2026-05-01',
+    amount: 800,
+    status: 'Paused',
   },
 ];
 
-function tierBadge(tier: string, tierStyles: typeof styles) {
-  let cls = tierStyles.tierGold;
-  if (tier === 'silver') cls = tierStyles.tierSilver;
-  if (tier === 'bronze') cls = tierStyles.tierBronze;
-  return <span className={`${tierStyles.tierBadge} ${cls}`}>{tier}</span>;
+type TierFilter = 'All' | SponsorTier;
+
+const TIER_FILTERS: TierFilter[] = ['All', ...TIERS];
+
+function tierClass(tier: SponsorTier): string {
+  switch (tier) {
+    case 'Featured':
+      return styles.tierFeatured;
+    case 'Platinum':
+      return styles.tierPlatinum;
+    case 'Gold':
+      return styles.tierGold;
+    case 'Silver':
+      return styles.tierSilver;
+  }
 }
 
-function statusBadge(status: string, statusStyles: typeof styles) {
-  const cls = status === 'active' ? statusStyles.statusActive : statusStyles.statusExpired;
-  return <span className={`${statusStyles.statusBadge} ${cls}`}>{status}</span>;
+function statusClass(status: AdminSponsor['status']): string {
+  switch (status) {
+    case 'Active':
+      return styles.statusActive;
+    case 'Paused':
+      return styles.statusPaused;
+    case 'Expired':
+      return styles.statusExpired;
+  }
 }
 
-const COLUMNS = [
-  { key: 'supplier_name', label: 'Supplier', sortable: true },
-  {
-    key: 'type',
-    label: 'Type',
-    render: (row: SponsorRow) => {
-      const cls = row.type === 'Category' ? styles.typeCategory : styles.typeKeyword;
-      return <span className={`${styles.typeBadge} ${cls}`}>{row.type}</span>;
-    },
-  },
-  { key: 'target', label: 'Target', sortable: true },
-  {
-    key: 'tier',
-    label: 'Tier',
-    sortable: true,
-    render: (row: SponsorRow) => tierBadge(row.tier, styles),
-  },
-  { key: 'date_range', label: 'Date Range' },
-  {
-    key: 'status',
-    label: 'Status',
-    render: (row: SponsorRow) => statusBadge(row.status, styles),
-  },
-];
+function formatDate(iso: string | null): string {
+  if (!iso) return '—';
+  return iso;
+}
+
+function formatAmount(n: number): string {
+  return `$${n.toLocaleString()}`;
+}
 
 export default function SponsorsPage() {
   const navigate = useNavigate();
-  const { demoMode } = useDemo();
-  const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [sponsors, setSponsors] = useState<SponsorRow[]>([]);
+  const [sponsors, setSponsors] = useState<AdminSponsor[]>(() => loadStore());
+  const [tierFilter, setTierFilter] = useState<TierFilter>('All');
+  const [search, setSearch] = useState('');
+  const [suppliers, setSuppliers] = useState<AdminSupplier[]>([]);
+  const [categories, setCategories] = useState<AdminCategory[]>([]);
 
+  // Refresh from localStorage when navigating back from the form page.
   useEffect(() => {
-    if (!demoMode) {
-      setStats(null);
-      setSponsors([]);
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
+    setSponsors(loadStore());
+  }, []);
+
+  // Pull live suppliers/categories so the in-memory sponsor records can be
+  // re-keyed against current DB ids without losing the seed fallback.
+  useEffect(() => {
     adminApi
-      .getStats()
-      .then((s) => {
-        setStats(s);
-        // Use seed data as the detailed sponsor list
-        setSponsors(SEED_SPONSORS);
-      })
-      .catch(() => {
-        // Graceful fallback: show seed sponsors even if API is down
-        setSponsors(SEED_SPONSORS);
-      })
-      .finally(() => setLoading(false));
-  }, [demoMode]);
+      .getSuppliers()
+      .then(setSuppliers)
+      .catch(() => {});
+    adminApi
+      .getCategories()
+      .then(setCategories)
+      .catch(() => {});
+  }, []);
 
-  const sponsorCount = demoMode ? (stats?.sponsors_count ?? sponsors.length) : 0;
-  const goldCount = sponsors.filter((s) => s.tier === 'gold').length;
-  const silverCount = sponsors.filter((s) => s.tier === 'silver').length;
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return sponsors.filter((s) => {
+      if (tierFilter !== 'All' && s.tier !== tierFilter) return false;
+      if (!q) return true;
+      const haystack = [
+        s.supplier_name,
+        s.category_name ?? '',
+        s.keyword ?? '',
+        s.tier,
+        s.status,
+      ]
+        .join(' ')
+        .toLowerCase();
+      return haystack.includes(q);
+    });
+  }, [sponsors, tierFilter, search]);
 
-  // Estimate sponsor revenue as portion of total
-  const sponsorRevenue = demoMode ? (stats?.revenue_total ?? 0) * 0.35 : 0;
+  const tierCounts = useMemo(() => {
+    const map: Record<TierFilter, number> = {
+      All: sponsors.length,
+      Featured: 0,
+      Platinum: 0,
+      Gold: 0,
+      Silver: 0,
+    };
+    for (const s of sponsors) map[s.tier]++;
+    return map;
+  }, [sponsors]);
+
+  // Hydrate supplier/category names from live API data when ids match.
+  const enriched = useMemo(() => {
+    if (suppliers.length === 0 && categories.length === 0) return filtered;
+    const supMap = new Map(suppliers.map((s) => [s.id, s.name]));
+    const catMap = new Map<string, string>();
+    for (const c of categories) {
+      catMap.set(c.id, c.name);
+      for (const child of c.children ?? []) catMap.set(child.id, child.name);
+    }
+    return filtered.map((s) => ({
+      ...s,
+      supplier_name: supMap.get(s.supplier_id) ?? s.supplier_name,
+      category_name: s.category_id ? catMap.get(s.category_id) ?? s.category_name : null,
+    }));
+  }, [filtered, suppliers, categories]);
 
   return (
     <div className={styles.page}>
-      <Breadcrumbs items={[{ label: 'Dashboard', href: '/admin' }, { label: 'Sponsors' }]} />
-
-      <div className={styles.header}>
-        <h1 className={styles.title}>Sponsors</h1>
-        <p className={styles.subtitle}>
-          Manage sponsored placements across categories and keywords.
-        </p>
-      </div>
-
-      <div className={styles.statsGrid}>
-        <StatCard label="Total Sponsors" value={sponsorCount} icon={'\u2B50'} />
-        <StatCard label="Gold Tier" value={goldCount} icon={'\uD83E\uDD47'} />
-        <StatCard label="Silver Tier" value={silverCount} icon={'\uD83E\uDD48'} />
-        <StatCard
-          label="Sponsor Revenue"
-          value={`$${sponsorRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-          icon={'\uD83D\uDCB0'}
-        />
-      </div>
-
-      <div className={styles.sectionHeader}>
-        <h2 className={styles.sectionTitle}>Active Sponsorships</h2>
-      </div>
-
-      {!demoMode ? (
-        <div className={styles.emptyState}>
-          <p className={styles.emptyTitle}>No real data yet</p>
-          <p className={styles.emptyDescription}>
-            Enable demo mode to see sample sponsor data.
+      <header className={styles.pageHead}>
+        <div className={styles.pageHeadLeft}>
+          <h1 className={styles.title}>Sponsors</h1>
+          <p className={styles.subtitle}>
+            Paid placements: category banners, keyword takeovers, featured supplier slots.
           </p>
         </div>
-      ) : (
-        <DataTable
-          columns={COLUMNS}
-          data={sponsors}
-          loading={loading}
-          emptyMessage="No sponsors configured."
-          onRowClick={(row) => navigate(`/admin/suppliers/${row.supplier_id}`)}
-        />
-      )}
+        <div className={styles.pageHeadActions}>
+          <Link to="/admin/sponsors/new" className={`${styles.btn} ${styles.btnPrimary}`}>
+            <Plus size={15} strokeWidth={2} />
+            New Sponsor
+          </Link>
+        </div>
+      </header>
 
-      <div className={styles.infoCard}>
-        <h3 className={styles.infoTitle}>About Sponsorships</h3>
-        <p className={styles.infoText}>
-          Sponsors are linked to either a <strong>category</strong> (displayed on category pages) or a <strong>keyword</strong> (displayed in search results).
-          Each sponsor has a tier (Gold, Silver, Bronze) that determines placement priority and visual prominence.
-        </p>
-        <p className={styles.infoText}>
-          Sponsor records are managed through the SQLAdmin panel at <code>/admin</code>. The XOR constraint ensures each
-          sponsor targets exactly one category or keyword, never both.
-        </p>
+      <div className={styles.panel}>
+        <div className={styles.toolbar}>
+          {TIER_FILTERS.map((t) => (
+            <button
+              key={t}
+              type="button"
+              className={`${styles.filterChip} ${tierFilter === t ? styles.filterChipActive : ''}`}
+              onClick={() => setTierFilter(t)}
+            >
+              {t}
+              <span className={styles.chipCount}>{tierCounts[t]}</span>
+            </button>
+          ))}
+          <div className={styles.toolbarSpacer} />
+          <div className={styles.inlineSearch}>
+            <Search size={14} strokeWidth={2} />
+            <input
+              type="text"
+              placeholder="Search sponsors, keywords, categories..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+            {search && (
+              <button
+                type="button"
+                className={styles.searchClear}
+                onClick={() => setSearch('')}
+                aria-label="Clear search"
+              >
+                <X size={12} strokeWidth={2.5} />
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className={styles.tableWrap}>
+          <table className={styles.table}>
+            <thead>
+              <tr>
+                <th>Supplier</th>
+                <th>Tier</th>
+                <th>Placement</th>
+                <th>Window</th>
+                <th>Monthly</th>
+                <th>Status</th>
+                <th aria-label="Actions" />
+              </tr>
+            </thead>
+            <tbody>
+              {enriched.map((s) => (
+                <tr key={s.id}>
+                  <td>
+                    <strong>{s.supplier_name}</strong>
+                  </td>
+                  <td>
+                    <span className={`${styles.tierBadge} ${tierClass(s.tier)}`}>{s.tier}</span>
+                  </td>
+                  <td>
+                    {s.category_id ? (
+                      <span className={styles.placementCategory}>{s.category_name ?? s.category_id}</span>
+                    ) : (
+                      <span className={styles.placementKeyword}>
+                        <span className={styles.placementLabel}>keyword:</span>
+                        <span className={styles.mono}>{s.keyword}</span>
+                      </span>
+                    )}
+                  </td>
+                  <td>
+                    <span className={styles.windowText}>
+                      {formatDate(s.start_date)} <span className={styles.windowArrow}>&rarr;</span>{' '}
+                      {formatDate(s.end_date)}
+                    </span>
+                  </td>
+                  <td>
+                    <span className={styles.amountText}>{formatAmount(s.amount)}</span>
+                  </td>
+                  <td>
+                    <span className={`${styles.statusBadge} ${statusClass(s.status)}`}>{s.status}</span>
+                  </td>
+                  <td className={styles.rowActionsCell}>
+                    <button
+                      type="button"
+                      className={styles.rowAction}
+                      onClick={() => navigate(`/admin/sponsors/${s.id}/edit`)}
+                      aria-label={`Edit sponsor ${s.supplier_name}`}
+                    >
+                      <Pencil size={14} strokeWidth={2} />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              {enriched.length === 0 && (
+                <tr>
+                  <td colSpan={7} className={styles.emptyRow}>
+                    {sponsors.length === 0
+                      ? 'No active sponsorships. Click + New Sponsor to add one.'
+                      : 'No sponsors match the current filters.'}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

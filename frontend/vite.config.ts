@@ -24,17 +24,15 @@ export default defineConfig({
     },
   },
   // 2026-04-19 Tier-3 #8 perf: split heavy vendor libs into their own chunks
-  // so they don't bloat the main bundle. Recharts (~400 KB) only renders in
-  // admin/Reports — with admin routes lazy-loaded in App.tsx, recharts lives
-  // inside the admin chunk naturally. The manualChunks hint here also pulls
-  // framer-motion + react-router-dom into their own chunks so public-route
-  // visitors get better cache utilization across deploys (app code changes
-  // don't invalidate vendor chunks).
+  // so they don't bloat the main bundle. (Recharts ~400KB was previously
+  // here for admin/Reports — Phase A7 2026-04-25 replaced it with hand-rolled
+  // native SVG charts, dropping the dep entirely.) framer-motion + router
+  // stay isolated so public-route visitors get better cache utilization
+  // across deploys (app code changes don't invalidate vendor chunks).
   build: {
     rollupOptions: {
       output: {
         manualChunks: {
-          recharts: ['recharts'],
           framer: ['framer-motion'],
           router: ['react-router-dom'],
         },

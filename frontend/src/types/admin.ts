@@ -117,3 +117,26 @@ export interface AdminCategory {
     icon: string;
   }>;
 }
+
+// Sponsors (admin)
+// XOR constraint: exactly one of category_id or keyword must be set.
+export type SponsorTier = 'Featured' | 'Platinum' | 'Gold' | 'Silver';
+export type SponsorStatus = 'Active' | 'Paused' | 'Expired';
+
+export interface AdminSponsor {
+  id: string;
+  supplier_id: string;
+  supplier_name: string;
+  tier: SponsorTier;
+  category_id: string | null;
+  category_name: string | null;
+  keyword: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  amount: number;
+  status: SponsorStatus;
+  description?: string | null;
+  image_url?: string | null;
+  phone?: string | null;
+  website?: string | null;
+}

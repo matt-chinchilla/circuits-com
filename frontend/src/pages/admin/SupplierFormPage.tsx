@@ -1,26 +1,37 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { ArrowLeft, Check } from 'lucide-react';
 import Breadcrumbs from '../../components/admin/Breadcrumbs';
 import { adminApi } from '../../services/adminApi';
 import styles from './SupplierFormPage.module.scss';
 
+// Single-page form (Identity + Contact + Description panels) — port of
+// bundle's SupplierForm. Validation mirrors the bundle: name required,
+// website optional, email syntactic check.
+
 interface FormData {
   name: string;
+  description: string;
+  website: string;
   email: string;
   phone: string;
   contact_name: string;
-  description: string;
-  website: string;
 }
 
 interface FormErrors {
   name?: string;
+  email?: string;
 }
 
-const STEPS = ['Company Info', 'Online Presence', 'Review'];
-
 function emptyForm(): FormData {
-  return { name: '', email: '', phone: '', contact_name: '', description: '', website: '' };
+  return {
+    name: '',
+    description: '',
+    website: '',
+    email: '',
+    phone: '',
+    contact_name: '',
+  };
 }
 
 export default function SupplierFormPage() {
@@ -28,11 +39,11 @@ export default function SupplierFormPage() {
   const navigate = useNavigate();
   const isEdit = Boolean(id);
 
-  const [step, setStep] = useState(0);
   const [form, setForm] = useState<FormData>(emptyForm());
   const [errors, setErrors] = useState<FormErrors>({});
   const [saving, setSaving] = useState(false);
   const [loadingExisting, setLoadingExisting] = useState(isEdit);
+  const [existingName, setExistingName] = useState('');
   const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
 
   useEffect(() => {
@@ -40,13 +51,14 @@ export default function SupplierFormPage() {
     adminApi
       .getSupplier(id)
       .then((s) => {
+        setExistingName(s.name);
         setForm({
           name: s.name,
+          description: s.description ?? '',
+          website: s.website ?? '',
           email: s.email ?? '',
           phone: s.phone ?? '',
           contact_name: s.contact_name ?? '',
-          description: s.description ?? '',
-          website: s.website ?? '',
         });
       })
       .catch(() => setToast({ type: 'error', msg: 'Failed to load supplier.' }))
@@ -55,24 +67,20 @@ export default function SupplierFormPage() {
 
   useEffect(() => {
     if (!toast) return;
-    const t = setTimeout(() => setToast(null), 4000);
+    const t = setTimeout(() => setToast(null), 3500);
     return () => clearTimeout(t);
   }, [toast]);
 
+  function set<K extends keyof FormData>(key: K, value: FormData[K]) {
+    setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
   function validate(): boolean {
     const e: FormErrors = {};
-    if (!form.name.trim()) e.name = 'Company name is required.';
+    if (!form.name.trim()) e.name = 'Required';
+    if (form.email.trim() && !form.email.includes('@')) e.email = 'Invalid email';
     setErrors(e);
     return Object.keys(e).length === 0;
-  }
-
-  function handleNext() {
-    if (step === 0 && !validate()) return;
-    setStep((s) => Math.min(s + 1, STEPS.length - 1));
-  }
-
-  function handleBack() {
-    setStep((s) => Math.max(s - 1, 0));
   }
 
   async function handleSubmit() {
@@ -81,20 +89,20 @@ export default function SupplierFormPage() {
     try {
       const payload = {
         name: form.name.trim(),
+        description: form.description.trim() || null,
+        website: form.website.trim() || null,
         email: form.email.trim() || null,
         phone: form.phone.trim() || null,
         contact_name: form.contact_name.trim() || null,
-        description: form.description.trim() || null,
-        website: form.website.trim() || null,
       };
       if (isEdit && id) {
         await adminApi.updateSupplier(id, payload);
         setToast({ type: 'success', msg: 'Supplier updated successfully.' });
-        setTimeout(() => navigate(`/admin/suppliers/${id}`), 1200);
+        setTimeout(() => navigate(`/admin/suppliers/${id}`), 900);
       } else {
         const created = await adminApi.createSupplier(payload);
-        setToast({ type: 'success', msg: 'Supplier created successfully.' });
-        setTimeout(() => navigate(`/admin/suppliers/${created.id}`), 1200);
+        setToast({ type: 'success', msg: `Created ${created.name}.` });
+        setTimeout(() => navigate(`/admin/suppliers/${created.id}`), 900);
       }
     } catch {
       setToast({ type: 'error', msg: 'Failed to save supplier. Please try again.' });
@@ -103,15 +111,20 @@ export default function SupplierFormPage() {
     }
   }
 
+  function handleCancel() {
+    if (isEdit && id) navigate(`/admin/suppliers/${id}`);
+    else navigate('/admin/suppliers');
+  }
+
   if (loadingExisting) {
-    return <div className={styles.loading}>Loading supplier...</div>;
+    return <div className={styles.loading}>Loading supplier&hellip;</div>;
   }
 
   const breadcrumbs = isEdit
     ? [
         { label: 'Dashboard', href: '/admin' },
         { label: 'Suppliers', href: '/admin/suppliers' },
-        { label: form.name || 'Edit', href: `/admin/suppliers/${id}` },
+        { label: existingName || 'Edit', href: `/admin/suppliers/${id}` },
         { label: 'Edit' },
       ]
     : [
@@ -120,151 +133,165 @@ export default function SupplierFormPage() {
         { label: 'New Supplier' },
       ];
 
+  const pageTitle = isEdit ? `Edit ${existingName || 'Supplier'}` : 'New Supplier';
+  const pageSub = isEdit
+    ? 'Update the directory entry for this distributor.'
+    : 'Add a distributor or manufacturer to the directory.';
+  const submitLabel = isEdit ? 'Save changes' : 'Create supplier';
+  const backLabel = isEdit ? 'Back to supplier' : 'Suppliers';
+
   return (
     <div className={styles.page}>
       <Breadcrumbs items={breadcrumbs} />
 
-      <h1 className={styles.title}>{isEdit ? 'Edit Supplier' : 'Add New Supplier'}</h1>
-      <p className={styles.subtitle}>
-        {isEdit ? 'Update supplier information.' : 'Fill out the details to register a new supplier.'}
-      </p>
-
-      <div className={styles.steps}>
-        {STEPS.map((label, i) => (
-          <div
-            key={label}
-            className={`${styles.step} ${i === step ? styles.stepActive : ''} ${i < step ? styles.stepDone : ''}`}
-          >
-            <span className={styles.stepNumber}>{i < step ? '\u2713' : i + 1}</span>
-            {label}
-          </div>
-        ))}
+      <div className={styles.pageHead}>
+        <button type="button" className={styles.backLink} onClick={handleCancel}>
+          <ArrowLeft size={14} strokeWidth={2} />
+          {backLabel}
+        </button>
+        <h1 className={styles.title}>{pageTitle}</h1>
+        <p className={styles.subtitle}>{pageSub}</p>
       </div>
 
-      <div className={styles.formCard}>
-        {step === 0 && (
-          <>
-            <div className={styles.fieldGroup}>
-              <label className={styles.label}>
-                Company Name <span className={styles.required}>*</span>
+      <form
+        className={styles.formGrid}
+        onSubmit={(e) => {
+          e.preventDefault();
+          handleSubmit();
+        }}
+      >
+        <section className={styles.panel}>
+          <header className={styles.panelHead}>
+            <h3 className={styles.panelTitle}>Identity</h3>
+          </header>
+          <div className={styles.panelBody}>
+            <div className={styles.field}>
+              <label className={styles.fieldLabel} htmlFor="sup-name">
+                Company name <span className={styles.fieldReq}>*</span>
               </label>
               <input
+                id="sup-name"
+                type="text"
                 className={`${styles.input} ${errors.name ? styles.inputError : ''}`}
-                type="text"
                 value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                placeholder="e.g. Acme Electronics"
+                onChange={(e) => set('name', e.target.value)}
+                placeholder="e.g. Mouser Electronics"
               />
-              {errors.name && <div className={styles.errorMsg}>{errors.name}</div>}
+              {errors.name && <div className={styles.fieldError}>{errors.name}</div>}
             </div>
-            <div className={styles.fieldGroup}>
-              <label className={styles.label}>Email</label>
-              <input
-                className={styles.input}
-                type="email"
-                value={form.email}
-                onChange={(e) => setForm({ ...form, email: e.target.value })}
-                placeholder="contact@example.com"
-              />
-            </div>
-            <div className={styles.fieldGroup}>
-              <label className={styles.label}>Phone</label>
-              <input
-                className={styles.input}
-                type="tel"
-                value={form.phone}
-                onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                placeholder="+1 (555) 123-4567"
-              />
-            </div>
-            <div className={styles.fieldGroup}>
-              <label className={styles.label}>Contact (sales rep)</label>
-              <input
-                className={styles.input}
-                type="text"
-                value={form.contact_name}
-                onChange={(e) => setForm({ ...form, contact_name: e.target.value })}
-                placeholder="e.g. Jane Doe"
-              />
-            </div>
-            <div className={styles.fieldGroup}>
-              <label className={styles.label}>Description</label>
+
+            <div className={styles.field}>
+              <label className={styles.fieldLabel} htmlFor="sup-desc">
+                Description
+              </label>
               <textarea
+                id="sup-desc"
                 className={styles.textarea}
                 value={form.description}
-                onChange={(e) => setForm({ ...form, description: e.target.value })}
-                placeholder="Brief description of the company..."
+                onChange={(e) => set('description', e.target.value)}
+                placeholder="Global authorized distributor with same-day shipping…"
+                rows={3}
               />
-            </div>
-          </>
-        )}
-
-        {step === 1 && (
-          <>
-            <div className={styles.fieldGroup}>
-              <label className={styles.label}>Website</label>
-              <input
-                className={styles.input}
-                type="url"
-                value={form.website}
-                onChange={(e) => setForm({ ...form, website: e.target.value })}
-                placeholder="https://www.example.com"
-              />
-            </div>
-          </>
-        )}
-
-        {step === 2 && (
-          <div className={styles.reviewGrid}>
-            <div className={styles.reviewItem}>
-              <span className={styles.reviewLabel}>Company Name</span>
-              <span className={styles.reviewValue}>{form.name || '\u2014'}</span>
-            </div>
-            <div className={styles.reviewItem}>
-              <span className={styles.reviewLabel}>Email</span>
-              <span className={styles.reviewValue}>{form.email || '\u2014'}</span>
-            </div>
-            <div className={styles.reviewItem}>
-              <span className={styles.reviewLabel}>Phone</span>
-              <span className={styles.reviewValue}>{form.phone || '\u2014'}</span>
-            </div>
-            <div className={styles.reviewItem}>
-              <span className={styles.reviewLabel}>Contact</span>
-              <span className={styles.reviewValue}>{form.contact_name || '\u2014'}</span>
-            </div>
-            <div className={styles.reviewItem}>
-              <span className={styles.reviewLabel}>Website</span>
-              <span className={styles.reviewValue}>{form.website || '\u2014'}</span>
-            </div>
-            <div className={`${styles.reviewItem} ${styles.reviewFull}`}>
-              <span className={styles.reviewLabel}>Description</span>
-              <span className={styles.reviewValue}>{form.description || '\u2014'}</span>
+              <div className={styles.fieldHint}>One sentence shown in supplier cards.</div>
             </div>
           </div>
-        )}
-      </div>
+        </section>
 
-      <div className={styles.actions}>
-        {step > 0 ? (
-          <button className={styles.backBtn} onClick={handleBack}>
-            Back
+        <section className={styles.panel}>
+          <header className={styles.panelHead}>
+            <h3 className={styles.panelTitle}>Contact</h3>
+          </header>
+          <div className={styles.panelBody}>
+            <div className={styles.formRow2}>
+              <div className={styles.field}>
+                <label className={styles.fieldLabel} htmlFor="sup-website">
+                  Website
+                </label>
+                <input
+                  id="sup-website"
+                  type="url"
+                  className={`${styles.input} ${styles.inputMono}`}
+                  value={form.website}
+                  onChange={(e) => set('website', e.target.value)}
+                  placeholder="example.com"
+                />
+              </div>
+              <div className={styles.field}>
+                <label className={styles.fieldLabel} htmlFor="sup-phone">
+                  Phone
+                </label>
+                <input
+                  id="sup-phone"
+                  type="tel"
+                  className={`${styles.input} ${styles.inputMono}`}
+                  value={form.phone}
+                  onChange={(e) => set('phone', e.target.value)}
+                  placeholder="800-000-0000"
+                />
+              </div>
+            </div>
+
+            <div className={styles.formRow2}>
+              <div className={styles.field}>
+                <label className={styles.fieldLabel} htmlFor="sup-email">
+                  Email
+                </label>
+                <input
+                  id="sup-email"
+                  type="email"
+                  className={`${styles.input} ${styles.inputMono} ${
+                    errors.email ? styles.inputError : ''
+                  }`}
+                  value={form.email}
+                  onChange={(e) => set('email', e.target.value)}
+                  placeholder="sales@example.com"
+                />
+                {errors.email && <div className={styles.fieldError}>{errors.email}</div>}
+              </div>
+              <div className={styles.field}>
+                <label className={styles.fieldLabel} htmlFor="sup-contact">
+                  Contact (sales rep)
+                </label>
+                <input
+                  id="sup-contact"
+                  type="text"
+                  className={styles.input}
+                  value={form.contact_name}
+                  onChange={(e) => set('contact_name', e.target.value)}
+                  placeholder="e.g. Jane Doe"
+                />
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <div className={styles.formActions}>
+          <button
+            type="button"
+            className={`${styles.btn} ${styles.btnGhost}`}
+            onClick={handleCancel}
+            disabled={saving}
+          >
+            Cancel
           </button>
-        ) : (
-          <div />
-        )}
-        {step < STEPS.length - 1 ? (
-          <button className={styles.nextBtn} onClick={handleNext}>
-            Next
+          <button
+            type="submit"
+            className={`${styles.btn} ${styles.btnPrimary}`}
+            disabled={saving}
+          >
+            <Check size={14} strokeWidth={2} />
+            {saving ? 'Saving…' : submitLabel}
           </button>
-        ) : (
-          <button className={styles.nextBtn} onClick={handleSubmit} disabled={saving}>
-            {saving ? 'Saving...' : isEdit ? 'Update Supplier' : 'Create Supplier'}
-          </button>
-        )}
-      </div>
+        </div>
+      </form>
 
       {toast && (
-        <div className={`${styles.toast} ${toast.type === 'success' ? styles.toastSuccess : styles.toastError}`}>
+        <div
+          className={`${styles.toast} ${
+            toast.type === 'success' ? styles.toastSuccess : styles.toastError
+          }`}
+          role="status"
+        >
           {toast.msg}
         </div>
       )}

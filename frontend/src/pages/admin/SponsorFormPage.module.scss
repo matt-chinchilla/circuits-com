@@ -1,0 +1,402 @@
+@use '../../styles/variables' as *;
+
+// Phase A6 — Sponsor New/Edit form styling, ported from
+// design-import/circuits-com-design-system/project/ui_kits/admin/styles.css
+// (sections: .form-grid, .panel, .form-row-2, .form-actions, .seg-control,
+// .field, .text-input, .select, .toast, .modal). Shares admin tokens with
+// AdminLayout.module.scss via var(--a-*).
+
+.page {
+  max-width: 920px;
+}
+
+// ─── Page head ──────────────────────────────────────────────────────────────
+
+.pageHead {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.backLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--a-fg3);
+  text-decoration: none;
+  margin-bottom: 8px;
+  transition: color 150ms ease;
+
+  &:hover {
+    color: var(--a-primary);
+  }
+}
+
+.title {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--a-fg1);
+  letter-spacing: -0.02em;
+  margin: 0 0 4px;
+}
+
+.subtitle {
+  font-size: 14px;
+  color: var(--a-fg3);
+  margin: 0;
+}
+
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 240px;
+  color: var(--a-fg3);
+  font-size: 14px;
+}
+
+// ─── Form grid ──────────────────────────────────────────────────────────────
+
+.formGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+// ─── Panels ─────────────────────────────────────────────────────────────────
+
+.panel {
+  background: var(--a-card);
+  border-radius: var(--a-radius);
+  box-shadow: var(--a-shadow-sm);
+  border: 1px solid var(--a-border-soft);
+  overflow: hidden;
+}
+
+.panelHead {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--a-border-soft);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.panelTitle {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--a-fg1);
+  margin: 0;
+}
+
+.panelBody {
+  padding: 16px 20px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+// ─── Field primitives ───────────────────────────────────────────────────────
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fieldLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--a-fg2);
+  letter-spacing: 0.02em;
+}
+
+.fieldReq {
+  color: var(--a-danger);
+  margin-left: 4px;
+}
+
+.fieldHint {
+  font-size: 12px;
+  color: var(--a-fg4);
+  margin: 4px 0 0;
+}
+
+.fieldError {
+  font-size: 12px;
+  color: var(--a-danger);
+  font-weight: 500;
+}
+
+.formRow2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+
+  // Stack at narrow widths (admin layout never goes below ~720px content
+  // area, but this keeps the form usable in the docked sidebar mode).
+  @media (max-width: 760px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+// ─── Inputs ─────────────────────────────────────────────────────────────────
+
+.textInput,
+.textArea,
+.select {
+  font-family: inherit;
+  font-size: 14px;
+  color: var(--a-fg1);
+  background: #ffffff;
+  border: 1px solid var(--a-border);
+  border-radius: 6px;
+  padding: 9px 12px;
+  outline: none;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+  width: 100%;
+  line-height: 1.4;
+}
+
+.textInput:focus,
+.textArea:focus,
+.select:focus {
+  border-color: var(--a-primary);
+  box-shadow: 0 0 0 3px rgba(10, 74, 46, 0.08);
+}
+
+.textInput.mono,
+.select.mono {
+  font-family: $font-mono;
+  font-size: 13px;
+}
+
+.textArea {
+  resize: vertical;
+  min-height: 72px;
+  line-height: 1.5;
+}
+
+.selectWrap {
+  position: relative;
+
+  &::after {
+    content: '';
+    position: absolute;
+    right: 14px;
+    top: 50%;
+    width: 8px;
+    height: 8px;
+    border-right: 1.5px solid var(--a-fg3);
+    border-bottom: 1.5px solid var(--a-fg3);
+    transform: translateY(-70%) rotate(45deg);
+    pointer-events: none;
+  }
+}
+
+.select {
+  appearance: none;
+  padding-right: 32px;
+  cursor: pointer;
+}
+
+// ─── Segmented control (Placement type radio) ───────────────────────────────
+
+.segControl {
+  display: inline-flex;
+  border: 1px solid var(--a-border);
+  border-radius: 6px;
+  background: var(--a-bg);
+  padding: 3px;
+  gap: 2px;
+  width: fit-content;
+}
+
+.segBtn {
+  border: none;
+  background: transparent;
+  padding: 7px 16px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--a-fg2);
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.segBtn:hover {
+  color: var(--a-fg1);
+}
+
+.segBtnOn {
+  background: #ffffff;
+  color: var(--a-primary);
+  box-shadow: var(--a-shadow-sm);
+  font-weight: 600;
+}
+
+// ─── Form actions ───────────────────────────────────────────────────────────
+
+.formActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0;
+}
+
+.formActionsSpacer {
+  flex: 1;
+}
+
+// ─── Buttons ────────────────────────────────────────────────────────────────
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background-color 150ms ease, transform 150ms ease, box-shadow 250ms ease;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btnPrimary {
+  background: var(--a-primary);
+  color: #ffffff;
+
+  &:hover:not(:disabled) {
+    background: var(--a-primary-hover);
+  }
+}
+
+.btnGhost {
+  background: #ffffff;
+  color: var(--a-fg1);
+  border-color: var(--a-border);
+
+  &:hover {
+    background: var(--a-border-soft);
+  }
+}
+
+.btnDanger {
+  background: var(--a-danger);
+  color: #ffffff;
+
+  &:hover:not(:disabled) {
+    background: #a3271a;
+  }
+}
+
+// ─── Toast ──────────────────────────────────────────────────────────────────
+
+.toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 18px;
+  background: var(--a-fg1);
+  color: #ffffff;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  animation: toastIn 250ms cubic-bezier(0.2, 0.9, 0.3, 1);
+
+  svg {
+    color: var(--a-accent);
+  }
+}
+
+@keyframes toastIn {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+// ─── Delete confirm modal ───────────────────────────────────────────────────
+
+.modalBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(15, 20, 25, 0.6);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: backdropIn 150ms ease;
+}
+
+@keyframes backdropIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.modal {
+  background: #ffffff;
+  border-radius: 10px;
+  padding: 24px;
+  max-width: 440px;
+  width: 90%;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  animation: modalIn 200ms cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+@keyframes modalIn {
+  from {
+    transform: translateY(10px) scale(0.98);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+.modalTitle {
+  margin: 0 0 8px;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--a-fg1);
+}
+
+.modalBody {
+  margin: 0 0 20px;
+  font-size: 14px;
+  color: var(--a-fg2);
+  line-height: 1.5;
+}
+
+.modalActions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}

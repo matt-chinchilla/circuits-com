@@ -1,208 +1,575 @@
-@use '../../styles/admin/variables' as *;
+@use '../../styles/variables' as *;
+
+// PartDetailPage — ported from 2026-04-25 Claude Design bundle (Phase A5).
+// Bundle structure: .page-head with back link + actions, then .detail-grid
+// (1fr 320px) — main panel = .kv-list of part fields, sidebar panel = mini
+// stats (best price, distributor count). Listings render below in a panel.
+
+// ─── Local admin tokens (intentionally un-themed) ──────────────────────────
+$a-bg: #f5f7fa;
+$a-card: #ffffff;
+$a-border: #e5e7eb;
+$a-border-soft: #f0f2f5;
+$a-fg1: #111827;
+$a-fg2: #4b5563;
+$a-fg3: #6b7280;
+$a-fg4: #9ca3af;
+$a-primary: $executive-blue;
+$a-primary-hover: #083b24;
+$a-danger: $error-red;
+$a-ok: #15803d;
+$a-radius: 8px;
+$a-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
 
 .page {
-  max-width: 1200px;
-}
-
-.header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 28px;
-  flex-wrap: wrap;
-  gap: 16px;
-}
-
-.titleGroup {
   display: flex;
   flex-direction: column;
-  gap: 8px;
 }
 
-.title {
-  font-size: $admin-font-heading;
-  font-weight: 700;
-  color: #111827;
-  margin: 0;
-}
+// ─── Page head ─────────────────────────────────────────────────────────────
 
-.headerActions {
+.pageHead {
   display: flex;
-  gap: 12px;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
 }
 
-.editBtn {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  height: $admin-btn-height;
-  padding: 0 24px;
-  font-size: $admin-font-base;
-  font-weight: 600;
-  border: none;
-  border-radius: $admin-border-radius;
-  background: $admin-info;
-  color: #ffffff;
-  cursor: pointer;
-  text-decoration: none;
-  transition: opacity 150ms ease;
-
-  &:hover {
-    opacity: 0.9;
-  }
-}
-
-.deleteBtn {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  height: $admin-btn-height;
-  padding: 0 24px;
-  font-size: $admin-font-base;
-  font-weight: 600;
-  border: none;
-  border-radius: $admin-border-radius;
-  background: $admin-danger;
-  color: #ffffff;
-  cursor: pointer;
-  transition: opacity 150ms ease;
-
-  &:hover {
-    opacity: 0.9;
-  }
-}
-
-.infoCard {
-  background: $admin-card-bg;
-  border-radius: $admin-border-radius;
-  padding: $admin-padding;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-  margin-bottom: 28px;
-}
-
-.infoGrid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 20px;
-}
-
-.infoItem {
+.pageHeadLeft {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  min-width: 0;
 }
 
-.infoLabel {
-  font-size: $admin-font-small;
-  font-weight: 600;
-  color: #6b7280;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
+.backLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: $a-fg3;
+  cursor: pointer;
+  margin-bottom: 8px;
+  text-decoration: none;
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: inherit;
+  transition: color 150ms;
 
-.infoValue {
-  font-size: $admin-font-base;
-  color: #111827;
-  word-break: break-word;
+  &:hover {
+    color: $a-primary;
+  }
 
-  a {
-    color: $admin-info;
-    text-decoration: none;
-
-    &:hover {
-      text-decoration: underline;
-    }
+  svg {
+    width: 14px;
+    height: 14px;
+    stroke-width: 2;
   }
 }
 
-.fullWidth {
-  grid-column: 1 / -1;
+.titleRow {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
 }
 
-.sectionTitle {
-  font-size: $admin-font-subheading;
+.title {
+  font-family: $font-mono;
+  font-size: 26px;
   font-weight: 700;
-  color: #111827;
-  margin: 0 0 16px;
+  color: $a-fg1;
+  letter-spacing: -0.01em;
+  margin: 0;
+  word-break: break-all;
 }
+
+.subtitle {
+  font-size: 14px;
+  color: $a-fg3;
+  margin: 0;
+}
+
+.pageHeadActions {
+  display: flex;
+  gap: 8px;
+}
+
+// ─── Buttons ───────────────────────────────────────────────────────────────
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background-color 150ms, transform 150ms;
+
+  svg {
+    width: 15px;
+    height: 15px;
+    stroke-width: 2;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+.btnPrimary {
+  background: $a-primary;
+  color: #ffffff;
+
+  &:hover:not(:disabled) {
+    background: $a-primary-hover;
+  }
+}
+
+.btnGhost {
+  background: #ffffff;
+  color: $a-fg1;
+  border-color: $a-border;
+
+  &:hover:not(:disabled) {
+    background: $a-border-soft;
+  }
+}
+
+.btnDangerGhost {
+  background: #ffffff;
+  color: $a-danger;
+  border-color: rgba(192, 57, 43, 0.3);
+
+  &:hover:not(:disabled) {
+    background: rgba(192, 57, 43, 0.06);
+  }
+}
+
+// ─── Detail grid (main + sidebar) ──────────────────────────────────────────
+
+.detailGrid {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 20px;
+  align-items: flex-start;
+
+  @media (max-width: 1100px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+// ─── Panel ─────────────────────────────────────────────────────────────────
+
+.panel {
+  background: $a-card;
+  border-radius: $a-radius;
+  box-shadow: $a-shadow-sm;
+  overflow: hidden;
+}
+
+.panelHead {
+  padding: 16px 20px;
+  border-bottom: 1px solid $a-border-soft;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.panelTitle {
+  font-size: 16px;
+  font-weight: 700;
+  color: $a-fg1;
+  margin: 0;
+}
+
+.panelBody {
+  padding: 16px 20px 20px;
+}
+
+// ─── KV list ───────────────────────────────────────────────────────────────
+
+.kvList {
+  padding: 8px 0;
+  margin: 0;
+
+  > div {
+    display: grid;
+    grid-template-columns: 140px 1fr;
+    gap: 12px;
+    padding: 10px 20px;
+    border-bottom: 1px solid $a-border-soft;
+    align-items: baseline;
+
+    &:last-child {
+      border-bottom: none;
+    }
+  }
+
+  dt {
+    font-size: 12px;
+    font-weight: 600;
+    color: $a-fg3;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin: 0;
+  }
+
+  dd {
+    margin: 0;
+    font-size: 14px;
+    color: $a-fg1;
+    word-break: break-word;
+  }
+}
+
+.mono {
+  font-family: $font-mono;
+  font-size: 13px;
+  color: $a-primary;
+  font-weight: 600;
+}
+
+.datasheetLink {
+  color: $a-primary;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+
+  &:hover {
+    text-decoration: underline;
+  }
+
+  svg {
+    width: 12px;
+    height: 12px;
+    stroke-width: 2;
+  }
+}
+
+// ─── Status badges ────────────────────────────────────────────────────────
+
+.statusBadge {
+  display: inline-block;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border-radius: 4px;
+  border: 1px solid transparent;
+}
+
+.statusActive {
+  color: #15803d;
+  background: rgba(34, 197, 94, 0.12);
+  border-color: rgba(34, 197, 94, 0.3);
+}
+
+.statusNrnd {
+  color: #a16207;
+  background: rgba(234, 179, 8, 0.12);
+  border-color: rgba(234, 179, 8, 0.3);
+}
+
+.statusObsolete {
+  color: #b91c1c;
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+// ─── Sidebar mini-stats ────────────────────────────────────────────────────
+
+.miniStats {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.miniStat {
+  padding: 16px 20px;
+  border-bottom: 1px solid $a-border-soft;
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.miniStatLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: $a-fg3;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 6px;
+}
+
+.miniStatValue {
+  font-family: $font-mono;
+  font-size: 22px;
+  font-weight: 700;
+  color: $a-fg1;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+
+.miniStatHint {
+  font-size: 12px;
+  color: $a-fg4;
+  margin-top: 4px;
+}
+
+// ─── Listings (distributor rows) ───────────────────────────────────────────
 
 .listingsSection {
-  margin-top: 8px;
+  margin-top: 20px;
+}
+
+.listingRow {
+  display: grid;
+  grid-template-columns: 36px 1fr auto auto auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 20px;
+  border-bottom: 1px solid $a-border-soft;
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.listingIcon {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(10, 74, 46, 0.10);
+  color: $a-primary;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.listingText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+
+  b {
+    font-size: 14px;
+    font-weight: 600;
+    color: $a-fg1;
+    line-height: 1.3;
+  }
+
+  span {
+    font-size: 12px;
+    color: $a-fg3;
+    font-family: $font-mono;
+  }
+}
+
+.listingPrice {
+  font-family: $font-mono;
+  font-size: 14px;
+  font-weight: 700;
+  color: $a-primary;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.listingStock {
+  font-family: $font-mono;
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.stockGood {
+  color: $a-ok;
+}
+
+.stockLow {
+  color: #d97706;
+}
+
+.stockOut {
+  color: $a-danger;
+}
+
+.listingLead {
+  font-size: 12px;
+  color: $a-fg3;
+  font-family: $font-mono;
+  text-align: right;
+  white-space: nowrap;
 }
 
 .priceBreaks {
-  margin-top: 8px;
-  padding: 12px 16px;
-  background: #f9fafb;
+  margin: 8px 20px 16px;
+  padding: 10px 14px;
+  background: $a-bg;
   border-radius: 6px;
 }
 
-.priceBreakTitle {
-  font-size: $admin-font-small;
-  font-weight: 600;
-  color: #6b7280;
-  margin: 0 0 8px;
+.priceBreakLabel {
+  font-size: 11px;
+  font-weight: 700;
+  color: $a-fg3;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 6px;
 }
 
 .priceBreakList {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
 }
 
 .priceBreakItem {
-  font-size: $admin-font-small;
-  color: #374151;
+  font-family: $font-mono;
+  font-size: 12px;
+  color: $a-fg2;
   background: #ffffff;
-  padding: 4px 10px;
+  padding: 3px 9px;
   border-radius: 4px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid $a-border;
 }
 
-.stockGood {
-  color: $admin-success;
-  font-weight: 600;
+.emptyListings {
+  padding: 24px 20px;
+  text-align: center;
+  color: $a-fg3;
+  font-size: 14px;
 }
 
-.stockLow {
-  color: $admin-warning;
-  font-weight: 600;
-}
-
-.stockOut {
-  color: $admin-danger;
-  font-weight: 600;
-}
+// ─── Loading / error ───────────────────────────────────────────────────────
 
 .loading {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 400px;
-  font-size: $admin-font-base;
-  color: #6b7280;
+  padding: 48px;
+  text-align: center;
+  color: $a-fg3;
+  font-size: 14px;
 }
 
 .error {
-  background: #fef2f2;
-  border: 1px solid #fecaca;
-  border-radius: $admin-border-radius;
-  padding: $admin-padding;
-  font-size: $admin-font-base;
-  color: $admin-danger;
+  padding: 24px;
+  background: rgba(192, 57, 43, 0.06);
+  border: 1px solid rgba(192, 57, 43, 0.3);
+  border-radius: $a-radius;
+  color: $a-danger;
+  font-size: 14px;
   text-align: center;
 }
+
+// ─── Modal (delete confirm) ───────────────────────────────────────────────
+
+.modalBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(15, 20, 25, 0.6);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: backdropIn 150ms ease;
+}
+
+@keyframes backdropIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.modal {
+  background: #ffffff;
+  border-radius: 10px;
+  padding: 24px;
+  max-width: 440px;
+  width: 90%;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  animation: modalIn 200ms cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+@keyframes modalIn {
+  from {
+    transform: translateY(10px) scale(0.98);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+.modalTitle {
+  margin: 0 0 8px;
+  font-size: 17px;
+  font-weight: 700;
+  color: $a-fg1;
+}
+
+.modalBody {
+  margin: 0 0 20px;
+  font-size: 14px;
+  color: $a-fg2;
+  line-height: 1.5;
+}
+
+.modalActions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.btnDanger {
+  background: $a-danger;
+  color: #ffffff;
+
+  &:hover:not(:disabled) {
+    background: #a3271a;
+  }
+}
+
+// ─── Toast ─────────────────────────────────────────────────────────────────
 
 .toast {
   position: fixed;
   bottom: 32px;
   right: 32px;
-  padding: 16px 28px;
-  border-radius: $admin-border-radius;
-  font-size: $admin-font-base;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 18px;
+  border-radius: $a-radius;
+  font-size: 14px;
   font-weight: 600;
   color: #ffffff;
-  background: $admin-success;
+  background: $a-ok;
   z-index: 1100;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+
+  svg {
+    width: 16px;
+    height: 16px;
+    stroke-width: 3;
+  }
 }

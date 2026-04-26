@@ -1,61 +1,627 @@
-@use '../../styles/admin/variables' as *;
+@use '../../styles/variables' as *;
 
-.page {
-  max-width: 1400px;
+// ReportsPage — ported from 2026-04-25 Claude Design bundle (Phase A7).
+// Replaces Recharts (~400KB) with hand-rolled native SVG charts:
+//   - ReportsRevenueChart  — stacked area chart w/ hover tooltip
+//   - RevenueDonut         — animated donut + KPI center
+//   - HBarChart            — animated horizontal bar list
+//
+// Layout sections (top → bottom):
+// (1) .pageHead    — title + subtitle + range seg + Export PDF ghost
+// (2) .reportTabs  — Analytics | Exports | Saved tabs
+// (3) .repKpiRow   — 4 KPI cards w/ staggered fade-in
+// (4) .chartsGrid  — full-width revenue chart + donut + 2 bar charts
+// (5) .reportsGrid — Exports tab: report download cards
+
+// ─── (1) Page head ──────────────────────────────────────────────────────────
+
+.pageHead {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
 }
 
-.title {
-  font-size: $admin-font-heading;
+.pageHeadLeft {
+  h1 {
+    font-size: 26px;
+    font-weight: 700;
+    color: #111827;
+    letter-spacing: -0.02em;
+    margin: 0 0 4px;
+  }
+  p {
+    font-size: 14px;
+    color: #6b7280;
+    margin: 0;
+  }
+}
+
+.pageHeadActions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+// segmented btn group (range picker: 30d | 90d | 12m | All)
+.seg {
+  display: inline-flex;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  background: #f0f2f5;
+  padding: 2px;
+  gap: 2px;
+}
+
+.segBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: none;
+  background: transparent;
+  padding: 6px 10px;
+  cursor: pointer;
+  font: 500 12px/1 inherit;
+  color: #6b7280;
+  border-radius: 4px;
+  transition: all 120ms;
+
+  &:hover {
+    color: #111827;
+  }
+
+  &.on {
+    background: #ffffff;
+    color: #{$executive-blue};
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+    font-weight: 600;
+  }
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.btnGhost {
+  background: #ffffff;
+  color: #111827;
+  border-color: #e5e7eb;
+
+  &:hover {
+    background: #f0f2f5;
+  }
+}
+
+.btnSm {
+  padding: 6px 12px;
+  font-size: 12px;
+}
+
+// ─── (2) Tabs ───────────────────────────────────────────────────────────────
+
+.reportTabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid #f0f2f5;
+}
+
+.rtTab {
+  border: none;
+  background: transparent;
+  padding: 10px 16px;
+  cursor: pointer;
+  font: 500 13px/1 inherit;
+  color: #6b7280;
+  position: relative;
+  transition: color 120ms;
+
+  &:hover {
+    color: #111827;
+  }
+
+  &.on {
+    color: #{$executive-blue};
+    font-weight: 600;
+
+    &::after {
+      content: '';
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: -1px;
+      height: 2px;
+      background: #{$executive-blue};
+    }
+  }
+}
+
+// ─── (3) KPI row ────────────────────────────────────────────────────────────
+
+.repKpiRow {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  margin-bottom: 16px;
+
+  @media (max-width: 1100px) {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.repKpi {
+  background: #ffffff;
+  border-radius: 8px;
+  padding: 16px 18px;
+  border: 1px solid #f0f2f5;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  animation: kpiIn 400ms cubic-bezier(0.4, 0, 0.2, 1) backwards;
+
+  &:nth-child(1) {
+    animation-delay: 0ms;
+  }
+  &:nth-child(2) {
+    animation-delay: 60ms;
+  }
+  &:nth-child(3) {
+    animation-delay: 120ms;
+  }
+  &:nth-child(4) {
+    animation-delay: 180ms;
+  }
+}
+
+@keyframes kpiIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.repKpiLabel {
+  font-size: 12px;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.repKpiVal {
+  font-size: 26px;
   font-weight: 700;
   color: #111827;
-  margin: 0 0 8px;
+  margin-top: 4px;
+  font-family: $font-mono;
+  font-variant-numeric: tabular-nums;
 }
 
-.subtitle {
-  font-size: $admin-font-base;
-  color: #6b7280;
-  margin: 0 0 28px;
+.repKpiDelta {
+  font-size: 12px;
+  margin-top: 4px;
+  font-weight: 600;
+
+  &.up {
+    color: #{$executive-blue};
+  }
+  &.down {
+    color: #{$error-red};
+  }
+  &.neutral {
+    color: #6b7280;
+  }
 }
+
+// ─── (4) Charts grid ────────────────────────────────────────────────────────
 
 .chartsGrid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 24px;
+  grid-template-columns: 2fr 1fr;
+  gap: 16px;
+
+  @media (max-width: 1100px) {
+    grid-template-columns: 1fr;
+  }
 }
 
 .chartCard {
-  background: $admin-card-bg;
-  border-radius: $admin-border-radius;
-  padding: $admin-padding;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  background: #ffffff;
+  border-radius: 8px;
+  border: 1px solid #f0f2f5;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  padding: 20px;
+  animation: kpiIn 500ms 200ms cubic-bezier(0.4, 0, 0.2, 1) backwards;
 }
 
-.chartCardFull {
+.chartFull {
   grid-column: 1 / -1;
 }
 
-.chartTitle {
-  font-size: $admin-font-subheading;
-  font-weight: 700;
-  color: #111827;
-  margin: 0 0 20px;
+.chartHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  gap: 12px;
 }
+
+.chartTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0;
+}
+
+.chartSub {
+  font-size: 11px;
+  color: #6b7280;
+}
+
+.chartWrap {
+  width: 100%;
+  position: relative;
+}
+
+.chart {
+  display: block;
+  width: 100%;
+  height: 280px;
+}
+
+.chartLegend {
+  display: flex;
+  gap: 18px;
+  justify-content: center;
+  padding-top: 8px;
+  font-size: 12px;
+  color: #4b5563;
+
+  .dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+    vertical-align: middle;
+    margin-right: 6px;
+  }
+
+  .dash {
+    display: inline-block;
+    width: 14px;
+    height: 2px;
+    vertical-align: middle;
+    margin-right: 6px;
+  }
+}
+
+// ─── Revenue stacked-area chart animations ──────────────────────────────────
+
+.revArea {
+  animation: revFade 700ms cubic-bezier(0.4, 0, 0.2, 1) backwards;
+}
+
+.revLine {
+  stroke-dasharray: 1500;
+  stroke-dashoffset: 1500;
+  animation: revLineDraw 1200ms 200ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@keyframes revFade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes revLineDraw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+// Hover tooltip
+.revTip {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 11px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  pointer-events: none;
+}
+
+.revTipTitle {
+  font-weight: 600;
+  color: #111827;
+  font-family: $font-mono;
+  margin-bottom: 4px;
+}
+
+.revTipRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #4b5563;
+
+  .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 2px;
+    flex: 0 0 auto;
+  }
+
+  b {
+    margin-left: auto;
+    font-family: $font-mono;
+    color: #111827;
+    font-weight: 600;
+  }
+}
+
+.revTipTotal {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid #f0f2f5;
+  display: flex;
+  justify-content: space-between;
+  color: #4b5563;
+
+  b {
+    font-family: $font-mono;
+    color: #111827;
+  }
+}
+
+// ─── Donut chart ────────────────────────────────────────────────────────────
+
+.donutWrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.donut {
+  width: 180px;
+  height: 180px;
+}
+
+.donutArc {
+  stroke-dasharray: 0 999;
+  animation: donutGrow 900ms 100ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.sArc {
+  animation-delay: 100ms;
+}
+
+.lArc {
+  animation-delay: 350ms;
+}
+
+@keyframes donutGrow {
+  from {
+    stroke-dashoffset: 380;
+  }
+}
+
+.donutLegend {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.donutRow {
+  display: grid;
+  grid-template-columns: 14px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: #f0f2f5;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #4b5563;
+
+  .dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+  }
+
+  .pct {
+    color: #111827;
+    font-weight: 600;
+    font-family: $font-mono;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+// ─── Horizontal bar chart ───────────────────────────────────────────────────
+
+.hbarList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 4px 0;
+}
+
+.hbarRow {
+  display: grid;
+  grid-template-columns: 220px 1fr 50px;
+  align-items: center;
+  gap: 12px;
+
+  @media (max-width: 700px) {
+    grid-template-columns: 140px 1fr 40px;
+  }
+}
+
+.hbarLabel {
+  font-size: 12px;
+  color: #4b5563;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hbarTrack {
+  height: 18px;
+  background: #f0f2f5;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.hbarFill {
+  height: 100%;
+  border-radius: 4px;
+  width: 0;
+  animation: hbarGrow 800ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@keyframes hbarGrow {
+  from {
+    width: 0 !important;
+  }
+}
+
+.hbarVal {
+  font-size: 11px;
+  color: #111827;
+  font-weight: 600;
+  text-align: right;
+  font-family: $font-mono;
+  font-variant-numeric: tabular-nums;
+}
+
+// ─── (5) Reports grid (Exports / Saved tab) ─────────────────────────────────
+
+.reportsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
+}
+
+.reportCard {
+  background: #ffffff;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  border: 1px solid #f0f2f5;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition:
+    box-shadow 200ms,
+    transform 200ms;
+
+  &:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    transform: translateY(-2px);
+  }
+}
+
+.reportHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+
+  h3 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 700;
+    color: #111827;
+  }
+}
+
+.reportDesc {
+  margin: 0;
+  font-size: 13px;
+  color: #6b7280;
+  line-height: 1.45;
+}
+
+.reportFoot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 10px;
+  border-top: 1px solid #f0f2f5;
+  margin-top: 4px;
+}
+
+.reportMeta {
+  font-size: 12px;
+  color: #9ca3af;
+  font-family: $font-mono;
+  font-variant-numeric: tabular-nums;
+}
+
+.fmt {
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  border-radius: 3px;
+  font-family: $font-mono;
+}
+
+.fmtPdf {
+  background: rgba(192, 57, 43, 0.1);
+  color: #{$error-red};
+}
+
+.fmtCsv {
+  background: rgba(10, 74, 46, 0.1);
+  color: #{$executive-blue};
+}
+
+.fmtXlsx {
+  background: rgba(21, 128, 61, 0.1);
+  color: #15803d;
+}
+
+// ─── Loading / error states ─────────────────────────────────────────────────
 
 .loading {
   display: flex;
   align-items: center;
   justify-content: center;
   min-height: 400px;
-  font-size: $admin-font-base;
+  font-size: 14px;
   color: #6b7280;
 }
 
 .error {
   background: #fef2f2;
   border: 1px solid #fecaca;
-  border-radius: $admin-border-radius;
-  padding: $admin-padding;
-  font-size: $admin-font-base;
-  color: $admin-danger;
+  border-radius: 8px;
+  padding: 20px;
+  font-size: 14px;
+  color: #{$error-red};
   text-align: center;
+}
+
+.empty {
+  padding: 40px 20px;
+  text-align: center;
+  color: #6b7280;
+  font-size: 13px;
 }

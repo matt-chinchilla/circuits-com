@@ -1,124 +1,303 @@
-@use '../../styles/admin/variables' as *;
+@use '../../styles/variables' as *;
+
+// PartsPage — ported from 2026-04-25 Claude Design bundle (Phase A5).
+// Mirrors the bundle's `.panel`, `.a-toolbar`, `.filter-chip`, `.inline-search`,
+// and `.a-table` rules in CSS Modules camelCase. Wraps in AdminLayout `.content`,
+// so no own page padding.
+
+// ─── Local admin tokens (intentionally un-themed) ──────────────────────────
+$a-bg: #f5f7fa;
+$a-card: #ffffff;
+$a-border: #e5e7eb;
+$a-border-soft: #f0f2f5;
+$a-fg1: #111827;
+$a-fg2: #4b5563;
+$a-fg3: #6b7280;
+$a-fg4: #9ca3af;
+$a-primary: $executive-blue;
+$a-primary-hover: #083b24;
+$a-radius: 8px;
+$a-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
 
 .page {
-  max-width: 1400px;
-}
-
-.header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 24px;
-  flex-wrap: wrap;
-  gap: 16px;
-}
-
-.titleGroup {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 0;
 }
 
-.title {
-  font-size: $admin-font-heading;
-  font-weight: 700;
-  color: #111827;
-  margin: 0;
-}
+// ─── Page head ─────────────────────────────────────────────────────────────
 
-.headerActions {
+.pageHead {
   display: flex;
-  gap: 12px;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
   flex-wrap: wrap;
 }
 
-.addBtn {
+.pageHeadLeft {
   display: flex;
+  flex-direction: column;
+  gap: 4px;
+
+  h1 {
+    font-size: 26px;
+    font-weight: 700;
+    color: $a-fg1;
+    letter-spacing: -0.02em;
+    margin: 0;
+  }
+
+  p {
+    font-size: 14px;
+    color: $a-fg3;
+    margin: 0;
+  }
+}
+
+.pageHeadActions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+// ─── Buttons ───────────────────────────────────────────────────────────────
+
+.btn {
+  display: inline-flex;
   align-items: center;
   gap: 8px;
-  height: $admin-btn-height;
-  padding: 0 24px;
-  font-size: $admin-font-base;
+  padding: 9px 16px;
+  font-family: inherit;
+  font-size: 14px;
   font-weight: 600;
-  border: none;
-  border-radius: $admin-border-radius;
-  background: $admin-sidebar-active;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background-color 150ms, transform 150ms, box-shadow 250ms;
+
+  svg {
+    width: 15px;
+    height: 15px;
+    stroke-width: 2;
+  }
+}
+
+.btnPrimary {
+  background: $a-primary;
   color: #ffffff;
-  cursor: pointer;
-  text-decoration: none;
-  transition: opacity 150ms ease;
 
   &:hover {
-    opacity: 0.9;
+    background: $a-primary-hover;
   }
 }
 
-.importBtn {
+.btnGhost {
+  background: #ffffff;
+  color: $a-fg1;
+  border-color: $a-border;
+
+  &:hover {
+    background: $a-border-soft;
+  }
+}
+
+// ─── Panel container (holds toolbar + table) ───────────────────────────────
+
+.panel {
+  background: $a-card;
+  border-radius: $a-radius;
+  box-shadow: $a-shadow-sm;
+  overflow: hidden;
+}
+
+// ─── Toolbar: filter chips + inline search ─────────────────────────────────
+
+.toolbar {
   display: flex;
   align-items: center;
-  gap: 8px;
-  height: $admin-btn-height;
-  padding: 0 24px;
-  font-size: $admin-font-base;
-  font-weight: 600;
-  border: 2px solid #d1d5db;
-  border-radius: $admin-border-radius;
-  background: $admin-card-bg;
-  color: #374151;
-  cursor: pointer;
-  text-decoration: none;
-  transition: background 150ms ease;
-
-  &:hover {
-    background: #f3f4f6;
-  }
-}
-
-.filters {
-  display: flex;
-  gap: 12px;
-  margin-bottom: 20px;
+  gap: 10px;
+  padding: 14px 20px;
+  border-bottom: 1px solid $a-border-soft;
   flex-wrap: wrap;
 }
 
-.searchInput {
-  width: 320px;
-  height: $admin-input-height;
-  padding: 0 20px;
-  font-size: $admin-font-base;
-  border: 2px solid #d1d5db;
-  border-radius: $admin-border-radius;
-  background: $admin-card-bg;
-  color: #111827;
-  outline: none;
-  transition: border-color 150ms ease;
-
-  &:focus {
-    border-color: $admin-info;
-  }
-
-  &::placeholder {
-    color: #9ca3af;
-  }
-}
-
-.filterSelect {
-  height: $admin-input-height;
-  padding: 0 16px;
-  font-size: $admin-font-base;
-  border: 2px solid #d1d5db;
-  border-radius: $admin-border-radius;
-  background: $admin-card-bg;
-  color: #111827;
-  outline: none;
+.filterChip {
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: $a-fg2;
+  background: #ffffff;
+  border: 1px solid $a-border;
+  border-radius: 20px;
   cursor: pointer;
-  min-width: 180px;
-  transition: border-color 150ms ease;
+  font-family: inherit;
+  transition: background-color 150ms, color 150ms, border-color 150ms;
 
-  &:focus {
-    border-color: $admin-info;
+  &:hover:not(.filterChipActive) {
+    border-color: $a-primary;
+    color: $a-primary;
   }
 }
+
+.filterChipActive {
+  background: $a-primary;
+  color: #ffffff;
+  border-color: $a-primary;
+}
+
+.toolbarSpacer {
+  flex: 1;
+}
+
+.inlineSearch {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: #ffffff;
+  border: 1px solid $a-border;
+  border-radius: 6px;
+  min-width: 240px;
+  transition: border-color 150ms, box-shadow 150ms;
+
+  &:focus-within {
+    border-color: $a-primary;
+    box-shadow: 0 0 0 3px rgba(10, 74, 46, 0.08);
+  }
+
+  svg {
+    width: 14px;
+    height: 14px;
+    color: $a-fg4;
+    flex-shrink: 0;
+  }
+
+  input {
+    flex: 1;
+    border: none;
+    outline: none;
+    background: transparent;
+    font-family: inherit;
+    font-size: 13px;
+    color: $a-fg1;
+
+    &::placeholder {
+      color: $a-fg4;
+    }
+  }
+}
+
+.toolbarCount {
+  font-size: 13px;
+  color: $a-fg3;
+  white-space: nowrap;
+}
+
+// ─── Table ─────────────────────────────────────────────────────────────────
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+
+  thead {
+    background: $a-bg;
+  }
+
+  th {
+    text-align: left;
+    padding: 10px 20px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: $a-fg3;
+    border-bottom: 1px solid $a-border;
+  }
+
+  td {
+    padding: 12px 20px;
+    font-size: 14px;
+    color: $a-fg1;
+    border-bottom: 1px solid $a-border-soft;
+  }
+
+  tr:last-child td {
+    border-bottom: none;
+  }
+
+  tbody tr {
+    cursor: pointer;
+    transition: background-color 150ms, transform 150ms;
+  }
+
+  tbody tr:hover td {
+    background: #fbfcfd;
+  }
+}
+
+.mono {
+  font-family: $font-mono;
+  font-size: 13px;
+  color: $a-primary;
+  font-weight: 600;
+}
+
+.muted {
+  color: $a-fg3;
+  font-size: 13px;
+}
+
+// ─── Status badges (matching public PartPage classes) ─────────────────────
+
+.statusBadge {
+  display: inline-block;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border-radius: 4px;
+  border: 1px solid transparent;
+}
+
+.statusActive {
+  color: #15803d;
+  background: rgba(34, 197, 94, 0.12);
+  border-color: rgba(34, 197, 94, 0.3);
+}
+
+.statusNrnd {
+  color: #a16207;
+  background: rgba(234, 179, 8, 0.12);
+  border-color: rgba(234, 179, 8, 0.3);
+}
+
+.statusObsolete {
+  color: #b91c1c;
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+// ─── Empty / loading states ────────────────────────────────────────────────
+
+.emptyRow td {
+  text-align: center;
+  padding: 32px 20px;
+  color: $a-fg3;
+  font-size: 14px;
+}
+
+.loading {
+  padding: 32px;
+  text-align: center;
+  color: $a-fg3;
+  font-size: 14px;
+}
+
+// ─── Pagination ────────────────────────────────────────────────────────────
 
 .pagination {
   display: flex;
@@ -129,19 +308,20 @@
 }
 
 .pageBtn {
-  height: $admin-btn-height;
-  padding: 0 20px;
-  font-size: $admin-font-small;
+  padding: 8px 16px;
+  font-family: inherit;
+  font-size: 13px;
   font-weight: 600;
-  border: 2px solid #d1d5db;
-  border-radius: $admin-border-radius;
-  background: $admin-card-bg;
-  color: #374151;
+  background: #ffffff;
+  color: $a-fg2;
+  border: 1px solid $a-border;
+  border-radius: 6px;
   cursor: pointer;
-  transition: background 150ms ease;
+  transition: background-color 150ms, color 150ms;
 
   &:hover:not(:disabled) {
-    background: #f3f4f6;
+    background: $a-border-soft;
+    color: $a-fg1;
   }
 
   &:disabled {
@@ -151,30 +331,7 @@
 }
 
 .pageInfo {
-  font-size: $admin-font-small;
-  color: #6b7280;
-}
-
-.lifecycleBadge {
-  display: inline-block;
-  padding: 4px 12px;
-  border-radius: 20px;
-  font-size: 14px;
-  font-weight: 600;
-  text-transform: capitalize;
-}
-
-.lifecycleActive {
-  background: #ecfdf5;
-  color: $admin-success;
-}
-
-.lifecycleNrnd {
-  background: #fef3c7;
-  color: #92400e;
-}
-
-.lifecycleObsolete {
-  background: #fef2f2;
-  color: $admin-danger;
+  font-size: 13px;
+  color: $a-fg3;
+  font-family: $font-mono;
 }

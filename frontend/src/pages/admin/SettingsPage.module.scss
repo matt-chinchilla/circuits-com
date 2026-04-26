@@ -1,0 +1,710 @@
+@use '../../styles/variables' as *;
+
+// Phase A9 — Settings page styling, ported from
+// design-import/circuits-com-design-system/project/ui_kits/admin/styles.css
+// (sections: settings-layout/settings-side/settings-tab, theme-grid/theme-tile,
+// notif-row, danger-panel/danger-row, panel/panel-head). Reads admin tokens
+// via var(--a-*) defined at the .admin scope in AdminLayout.module.scss.
+
+.page {
+  max-width: 1100px;
+}
+
+// ─── Page head ──────────────────────────────────────────────────────────────
+
+.pageHead {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.pageHeadLeft {
+  min-width: 0;
+}
+
+.title {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--a-fg1);
+  letter-spacing: -0.02em;
+  margin: 0 0 4px;
+}
+
+.subtitle {
+  font-size: 14px;
+  color: var(--a-fg3);
+  margin: 0;
+}
+
+// ─── Layout (200px sticky side + main column) ──────────────────────────────
+
+.settingsLayout {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 24px;
+  align-items: flex-start;
+
+  @media (max-width: 900px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.settingsSide {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  position: sticky;
+  top: 88px; // sit just under the topbar (64px) + a small gap
+
+  @media (max-width: 900px) {
+    position: static;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 4px;
+  }
+}
+
+.settingsTab {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 14px;
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--a-fg2);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 150ms ease, color 150ms ease;
+
+  svg {
+    flex-shrink: 0;
+  }
+
+  &:hover {
+    background: var(--a-border-soft);
+    color: var(--a-fg1);
+  }
+}
+
+.settingsTabActive {
+  background: rgba(10, 74, 46, 0.08);
+  color: var(--a-primary);
+  font-weight: 600;
+
+  &:hover {
+    background: rgba(10, 74, 46, 0.10);
+  }
+}
+
+.settingsTabDanger {
+  color: $error-red;
+
+  &:hover:not(.settingsTabActive) {
+    background: rgba(192, 57, 43, 0.06);
+    color: $error-red;
+  }
+
+  &.settingsTabActive {
+    background: rgba(192, 57, 43, 0.08);
+    color: $error-red;
+  }
+}
+
+.settingsMain {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+
+// ─── Panel ──────────────────────────────────────────────────────────────────
+
+.panel {
+  background: var(--a-card);
+  border-radius: var(--a-radius);
+  box-shadow: var(--a-shadow-sm);
+  border: 1px solid var(--a-border-soft);
+  overflow: hidden;
+}
+
+.panelHead {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--a-border-soft);
+}
+
+.panelTitle {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--a-fg1);
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.panelHint {
+  font-size: 13px;
+  color: var(--a-fg3);
+  margin: 4px 0 0;
+}
+
+.panelBody {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+// ─── Form primitives ────────────────────────────────────────────────────────
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fieldLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--a-fg2);
+  letter-spacing: 0.02em;
+}
+
+.fieldHint {
+  font-size: 12px;
+  color: var(--a-fg4);
+  margin: -2px 0 6px;
+  line-height: 1.5;
+}
+
+.fieldError {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--a-danger);
+  background: rgba(192, 57, 43, 0.06);
+  border: 1px solid rgba(192, 57, 43, 0.2);
+  border-radius: 6px;
+  padding: 8px 12px;
+}
+
+.formRow2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+
+  @media (max-width: 720px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.textInput,
+.select {
+  font-family: inherit;
+  font-size: 14px;
+  color: var(--a-fg1);
+  background: #ffffff;
+  border: 1px solid var(--a-border);
+  border-radius: 6px;
+  padding: 9px 12px;
+  outline: none;
+  width: 100%;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+
+  &:focus {
+    border-color: var(--a-primary);
+    box-shadow: 0 0 0 3px rgba(10, 74, 46, 0.08);
+  }
+}
+
+.textInputMono {
+  font-family: $font-mono;
+  font-size: 13px;
+}
+
+.select {
+  appearance: none;
+  cursor: pointer;
+  padding-right: 32px;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'/%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+}
+
+.actionsRow {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+// ─── Toggle pill ───────────────────────────────────────────────────────────
+
+.toggleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 8px 0;
+}
+
+.toggleTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--a-fg1);
+  margin-bottom: 2px;
+}
+
+.toggleSub {
+  font-size: 13px;
+  color: var(--a-fg3);
+  line-height: 1.5;
+}
+
+.togglePill {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  border-radius: 10px;
+  background: #cbd5e1;
+  border: none;
+  cursor: pointer;
+  flex-shrink: 0;
+  padding: 0;
+  transition: background-color 200ms ease;
+}
+
+.togglePillOn {
+  background: var(--a-primary);
+
+  .toggleKnob {
+    transform: translateX(16px);
+  }
+}
+
+.toggleKnob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  transition: transform 200ms cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+// ─── Theme grid ────────────────────────────────────────────────────────────
+
+.themeGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-top: 4px;
+
+  @media (max-width: 720px) {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.themeTile {
+  position: relative;
+  border: 2px solid var(--a-border);
+  border-radius: 8px;
+  padding: 10px;
+  background: #ffffff;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: center;
+  transition: border-color 200ms ease, box-shadow 200ms ease, transform 200ms ease;
+
+  &:hover {
+    border-color: var(--a-primary);
+    transform: translateY(-1px);
+  }
+}
+
+.themeTileActive {
+  border-color: var(--a-primary);
+  box-shadow: 0 0 0 3px rgba(10, 74, 46, 0.08);
+}
+
+.themeSwatch {
+  height: 64px;
+  border-radius: 5px;
+  display: flex;
+  align-items: flex-start;
+  padding: 8px;
+}
+
+.themeLed {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  // currentColor → matches whatever background-color is set inline; the box
+  // shadow uses currentColor for the LED glow halo.
+  box-shadow: 0 0 8px currentColor;
+}
+
+.themeName {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--a-fg1);
+  margin-top: 8px;
+}
+
+.themeCheck {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--a-primary);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+// ─── Account: last sign-in display ─────────────────────────────────────────
+
+.lastLogin {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 9px 12px;
+  background: var(--a-bg);
+  border: 1px solid var(--a-border-soft);
+  border-radius: 6px;
+}
+
+.lastLoginIp {
+  font-size: 12px;
+  color: var(--a-fg3);
+}
+
+.mono {
+  font-family: $font-mono;
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  color: var(--a-fg1);
+  font-weight: 600;
+}
+
+// ─── Notifications list ────────────────────────────────────────────────────
+
+.notifList {
+  display: flex;
+  flex-direction: column;
+  padding: 4px 0;
+}
+
+.notifRow {
+  display: grid;
+  grid-template-columns: 1fr minmax(280px, 360px);
+  gap: 24px;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--a-border-soft);
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  @media (max-width: 720px) {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+}
+
+.notifText {
+  min-width: 0;
+}
+
+.notifTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--a-fg1);
+  margin-bottom: 2px;
+}
+
+.notifSub {
+  font-size: 13px;
+  color: var(--a-fg3);
+  line-height: 1.5;
+}
+
+.notifControls {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.notifEmailToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--a-fg2);
+  cursor: pointer;
+  user-select: none;
+
+  input[type='checkbox'] {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--a-primary);
+    cursor: pointer;
+    margin: 0;
+  }
+}
+
+.notifWebhookInput {
+  font-family: $font-mono;
+  font-size: 12px;
+  color: var(--a-fg1);
+  background: #ffffff;
+  border: 1px solid var(--a-border);
+  border-radius: 6px;
+  padding: 6px 10px;
+  outline: none;
+  width: 100%;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+
+  &::placeholder {
+    color: var(--a-fg4);
+    font-family: inherit;
+    font-style: italic;
+  }
+
+  &:focus {
+    border-color: var(--a-primary);
+    box-shadow: 0 0 0 3px rgba(10, 74, 46, 0.08);
+  }
+}
+
+// ─── Integrations: API key / webhook rows ──────────────────────────────────
+
+.keyList {
+  display: flex;
+  flex-direction: column;
+}
+
+.keyRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--a-border-soft);
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.keyMeta {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.keyLabel {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--a-fg1);
+}
+
+.keyValue {
+  font-family: $font-mono;
+  font-size: 12px;
+  color: var(--a-fg3);
+  word-break: break-all;
+}
+
+.keyMetaRight {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.keyDate {
+  font-family: $font-mono;
+  font-size: 11px;
+  color: var(--a-fg4);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.emptyHint {
+  padding: 24px 20px;
+  text-align: center;
+  color: var(--a-fg3);
+  font-size: 13px;
+}
+
+// ─── Danger zone ───────────────────────────────────────────────────────────
+
+.dangerPanel {
+  border: 1px solid rgba(192, 57, 43, 0.25);
+  background: linear-gradient(180deg, rgba(192, 57, 43, 0.02), transparent 80%);
+}
+
+.dangerTitle {
+  color: $error-red;
+}
+
+.dangerBody {
+  padding: 4px 0;
+}
+
+.dangerRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--a-border-soft);
+
+  & > div:first-child {
+    min-width: 0;
+    flex: 1;
+  }
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  @media (max-width: 720px) {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+}
+
+.dangerRowSevere {
+  background: rgba(192, 57, 43, 0.04);
+  border-top: 1px solid rgba(192, 57, 43, 0.2);
+  border-bottom-left-radius: var(--a-radius);
+  border-bottom-right-radius: var(--a-radius);
+}
+
+.dangerRowTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--a-fg1);
+  margin-bottom: 2px;
+}
+
+.dangerRowSub {
+  font-size: 13px;
+  color: var(--a-fg3);
+  line-height: 1.5;
+
+  strong {
+    color: $error-red;
+    font-weight: 600;
+  }
+}
+
+// ─── Buttons ───────────────────────────────────────────────────────────────
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background-color 150ms ease, transform 150ms ease, box-shadow 250ms ease, opacity 150ms ease;
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+.btnPrimary {
+  background: var(--a-primary);
+  color: #ffffff;
+
+  &:hover:not(:disabled) {
+    background: var(--a-primary-hover);
+  }
+}
+
+.btnGhost {
+  background: #ffffff;
+  color: var(--a-fg1);
+  border-color: var(--a-border);
+
+  &:hover:not(:disabled) {
+    background: var(--a-border-soft);
+  }
+}
+
+.btnDanger {
+  background: $error-red;
+  color: #ffffff;
+
+  &:hover:not(:disabled) {
+    background: #a3271a;
+  }
+}
+
+.btnSm {
+  padding: 6px 12px;
+  font-size: 12px;
+}
+
+// ─── Toast (auto-dismiss after 2.5s) ───────────────────────────────────────
+
+.toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 18px;
+  background: var(--a-fg1);
+  color: #ffffff;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  animation: toastIn 250ms cubic-bezier(0.2, 0.9, 0.3, 1);
+
+  svg {
+    color: var(--a-accent);
+    flex-shrink: 0;
+  }
+}
+
+@keyframes toastIn {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}

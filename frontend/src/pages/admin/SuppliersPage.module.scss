@@ -1,10 +1,17 @@
+@use '../../styles/variables' as *;
 @use '../../styles/admin/variables' as *;
+
+// Suppliers list — port of 2026-04-25 Claude Design bundle .sup-* rules.
+// Three-column card grid, lettermark logo on gold gradient, tier pills.
+// Admin scope is intentionally un-themed — uses SCSS brand tokens directly.
 
 .page {
   max-width: 1400px;
 }
 
-.header {
+// ─── Page head (title + actions) ────────────────────────────────────────────
+
+.pageHead {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
@@ -13,67 +20,325 @@
   gap: 16px;
 }
 
-.titleGroup {
+.pageHeadLeft {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
+  min-width: 0;
 }
 
 .title {
-  font-size: $admin-font-heading;
+  font-size: 28px;
   font-weight: 700;
-  color: #111827;
+  color: $admin-text-primary;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+.subtitle {
+  font-size: 13px;
+  color: #6b7280;
   margin: 0;
 }
 
-.addBtn {
+.pageHeadActions {
+  display: flex;
+  gap: 8px;
+}
+
+// ─── Buttons (admin chrome) ─────────────────────────────────────────────────
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background-color 150ms, color 150ms;
+}
+
+.btnPrimary {
+  background: $executive-blue;
+  color: #ffffff;
+
+  &:hover {
+    background: #083b24;
+  }
+}
+
+.btnGhost {
+  background: #ffffff;
+  color: $admin-text-primary;
+  border-color: #e5e7eb;
+
+  &:hover {
+    background: #f0f2f5;
+  }
+}
+
+// ─── Panel + toolbar ────────────────────────────────────────────────────────
+
+.panel {
+  background: #ffffff;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.toolbar {
   display: flex;
   align-items: center;
   gap: 8px;
-  height: $admin-btn-height;
-  padding: 0 28px;
-  font-size: $admin-font-base;
-  font-weight: 600;
-  border: none;
-  border-radius: $admin-border-radius;
-  background: $admin-sidebar-active;
-  color: #ffffff;
+  padding: 14px 20px;
+  border-bottom: 1px solid #f0f2f5;
+  flex-wrap: wrap;
+}
+
+.filterChip {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #6b7280;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 16px;
   cursor: pointer;
-  text-decoration: none;
-  transition: opacity 150ms ease;
+  font-family: inherit;
+  transition: background-color 150ms, color 150ms, border-color 150ms;
 
   &:hover {
-    opacity: 0.9;
+    background: #f0f2f5;
+    color: $admin-text-primary;
   }
 }
 
-.searchBar {
-  margin-bottom: 20px;
+.filterChipActive {
+  background: rgba(10, 74, 46, 0.08);
+  color: $executive-blue;
+  border-color: rgba(10, 74, 46, 0.18);
+
+  &:hover {
+    background: rgba(10, 74, 46, 0.12);
+    color: $executive-blue;
+  }
 }
 
-.searchInput {
-  width: 100%;
-  max-width: 480px;
-  height: $admin-input-height;
-  padding: 0 20px;
-  font-size: $admin-font-base;
-  border: 2px solid #d1d5db;
-  border-radius: $admin-border-radius;
-  background: $admin-card-bg;
-  color: #111827;
-  outline: none;
-  transition: border-color 150ms ease;
+.toolbarSpacer {
+  flex: 1;
+}
 
-  &:focus {
-    border-color: $admin-info;
-  }
+.inlineSearch {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: #f5f7fa;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  min-width: 240px;
 
-  &::placeholder {
+  svg {
     color: #9ca3af;
+    flex-shrink: 0;
+  }
+
+  input {
+    flex: 1;
+    border: none;
+    background: transparent;
+    outline: none;
+    font-family: inherit;
+    font-size: 13px;
+    color: $admin-text-primary;
+    min-width: 0;
+
+    &::placeholder {
+      color: #9ca3af;
+    }
   }
 }
 
-.revenue {
-  color: $admin-sidebar-active;
-  font-weight: 600;
+.toolbarCount {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+// ─── Sup-grid (3-col cards) ─────────────────────────────────────────────────
+
+.supGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  padding: 20px;
+
+  @media (max-width: 1100px) {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  @media (max-width: 720px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.supCard {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  cursor: pointer;
+  transition: box-shadow 200ms ease, transform 200ms ease, border-color 200ms ease;
+
+  &:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    transform: translateY(-2px);
+    border-color: rgba(10, 74, 46, 0.2);
+  }
+}
+
+.supHead {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.supLogo {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #a88d2e, #c4a53a);
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 18px;
+  font-family: $admin-font-display;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.supHeadBody {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.supName {
+  font-size: 15px;
+  font-weight: 700;
+  color: $admin-text-primary;
+  margin: 0;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.supTierRow {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.supDesc {
+  font-size: 13px;
+  color: #6b7280;
+  line-height: 1.45;
+  margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.supMeta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 8px;
+  margin-top: auto;
+  border-top: 1px solid #f0f2f5;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.mono {
+  font-family: $admin-font-mono;
+}
+
+// ─── Tier pills ─────────────────────────────────────────────────────────────
+
+.supTier {
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border-radius: 3px;
+  font-family: $admin-font-display;
+  white-space: nowrap;
+}
+
+.tierFeatured {
+  background: rgba(168, 141, 46, 0.15);
+  color: #92773a;
+}
+
+.tierPlatinum {
+  background: rgba(75, 85, 99, 0.12);
+  color: #4b5563;
+}
+
+.tierGold {
+  background: rgba(217, 119, 6, 0.12);
+  color: #d97706;
+}
+
+.tierSilver {
+  background: rgba(148, 163, 184, 0.18);
+  color: #475569;
+}
+
+.tierAuthorized {
+  background: rgba(21, 128, 61, 0.10);
+  color: #15803d;
+}
+
+.empty {
+  grid-column: 1 / -1;
+  padding: 40px;
+  text-align: center;
+  color: #6b7280;
+  font-size: 14px;
+}
+
+// ─── Loading / error ────────────────────────────────────────────────────────
+
+.loading,
+.error {
+  padding: 48px;
+  text-align: center;
+  font-size: 14px;
+}
+
+.loading {
+  color: #6b7280;
+}
+
+.error {
+  color: $error-red;
 }

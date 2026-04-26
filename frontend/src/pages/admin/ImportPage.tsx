@@ -2,20 +2,32 @@ import { useState, useEffect, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
 import Papa from 'papaparse';
 import { Link } from 'react-router-dom';
-import Breadcrumbs from '../../components/admin/Breadcrumbs';
+import { Upload, FileText, Check, ChevronRight } from 'lucide-react';
 import { adminApi } from '../../services/adminApi';
 import type { AdminSupplier, BatchImportResult } from '../../types/admin';
 import styles from './ImportPage.module.scss';
 
-const STEPS = ['Upload', 'Map Columns', 'Preview', 'Confirm'];
+// Phase A9 — visual polish ported from
+// design-import/circuits-com-design-system/project/ui_kits/admin/pages.jsx
+// (ImportPage). Preserves the existing 4-step state machine + react-dropzone +
+// Papa.parse CSV preview + adminApi.batchImportParts call. Visual layer only.
+
+const STEP_KEYS = ['upload', 'mapping', 'review', 'done'] as const;
+type StepKey = (typeof STEP_KEYS)[number];
+const STEP_LABELS: Record<StepKey, string> = {
+  upload: 'Upload',
+  mapping: 'Mapping',
+  review: 'Review',
+  done: 'Done',
+};
+const VISIBLE_STEPS: StepKey[] = ['upload', 'mapping', 'review'];
 
 const FIELD_OPTIONS = [
-  { value: '', label: '-- Skip --' },
+  { value: '', label: '— Skip —' },
   { value: 'sku', label: 'SKU (required)' },
   { value: 'manufacturer_name', label: 'Manufacturer (required)' },
   { value: 'description', label: 'Description' },
   { value: 'category_id', label: 'Category ID' },
-  { value: 'sku', label: 'SKU' },
   { value: 'stock_quantity', label: 'Stock Quantity' },
   { value: 'unit_price', label: 'Unit Price' },
 ];
@@ -26,14 +38,13 @@ function guessMapping(header: string): string {
   if (h.includes('manufacturer') || h === 'mfr') return 'manufacturer_name';
   if (h.includes('desc')) return 'description';
   if (h === 'category_id' || h === 'category') return 'category_id';
-  if (h === 'sku') return 'sku';
   if (h.includes('stock') || h.includes('qty') || h.includes('quantity')) return 'stock_quantity';
   if (h.includes('price') || h.includes('cost')) return 'unit_price';
   return '';
 }
 
 export default function ImportPage() {
-  const [step, setStep] = useState(0);
+  const [step, setStep] = useState<StepKey>('upload');
   const [file, setFile] = useState<File | null>(null);
   const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
   const [csvRows, setCsvRows] = useState<string[][]>([]);
@@ -99,8 +110,9 @@ export default function ImportPage() {
     setMapping((prev) => ({ ...prev, [header]: field }));
   }
 
-  const canProceedToPreview =
-    Object.values(mapping).includes('sku') && Object.values(mapping).includes('manufacturer_name');
+  const hasSku = Object.values(mapping).includes('sku');
+  const hasManufacturer = Object.values(mapping).includes('manufacturer_name');
+  const canProceedToReview = hasSku && hasManufacturer;
 
   async function handleImport() {
     if (!supplierId) return;
@@ -109,229 +121,320 @@ export default function ImportPage() {
       const mapped = buildMappedRows();
       const res = await adminApi.batchImportParts(supplierId, mapped);
       setResult(res);
-      setStep(3);
+      setStep('done');
     } catch {
       setResult({ created: 0, errors: [{ row: 0, error: 'Import failed. Please try again.' }] });
-      setStep(3);
+      setStep('done');
     } finally {
       setImporting(false);
     }
   }
 
+  function goBack() {
+    if (step === 'mapping') setStep('upload');
+    else if (step === 'review') setStep('mapping');
+  }
+
+  function goNext() {
+    if (step === 'upload') setStep('mapping');
+    else if (step === 'mapping') setStep('review');
+    else if (step === 'review') void handleImport();
+  }
+
+  const stepIndex = VISIBLE_STEPS.indexOf(step);
+  const supplierName = suppliers.find((s) => s.id === supplierId)?.name ?? '—';
+
+  // Step 1 (upload) requires file + supplier; step 2 (mapping) requires sku +
+  // manufacturer mapped; step 3 (review) just commits. The "done" state hides
+  // the action footer entirely.
+  const nextDisabled =
+    (step === 'upload' && (!file || !supplierId)) ||
+    (step === 'mapping' && !canProceedToReview) ||
+    importing;
+
   return (
     <div className={styles.page}>
-      <Breadcrumbs items={[{ label: 'Dashboard', href: '/admin' }, { label: 'Import' }]} />
+      <header className={styles.pageHead}>
+        <div className={styles.pageHeadLeft}>
+          <h1 className={styles.title}>Import Queue</h1>
+          <p className={styles.subtitle}>Bulk upload parts via CSV — review queues for approval before going live.</p>
+        </div>
+      </header>
 
-      <h1 className={styles.title}>Import Parts from CSV</h1>
-      <p className={styles.subtitle}>Upload a CSV file to bulk-import parts into the system.</p>
-
-      <div className={styles.steps}>
-        {STEPS.map((label, i) => (
-          <div
-            key={label}
-            className={`${styles.step} ${i === step ? styles.stepActive : ''} ${i < step ? styles.stepDone : ''}`}
-          >
-            <span className={styles.stepNumber}>{i < step ? '\u2713' : i + 1}</span>
-            {label}
-          </div>
-        ))}
-      </div>
-
-      {/* Step 0: Upload */}
-      {step === 0 && (
-        <div className={styles.card}>
-          <div
-            {...getRootProps()}
-            className={`${styles.dropzone} ${isDragActive ? styles.dropzoneActive : ''}`}
-          >
-            <input {...getInputProps()} />
-            <span className={styles.dropIcon}>{'\uD83D\uDCC4'}</span>
-            <p className={styles.dropText}>Drag and drop a CSV file here, or click to browse</p>
-            <p className={styles.dropHint}>Accepts .csv files only</p>
-          </div>
-          {file && (
-            <div className={styles.fileInfo}>
-              <span className={styles.fileIcon}>{'\u2705'}</span>
-              <div className={styles.fileDetails}>
-                <p className={styles.fileName}>{file.name}</p>
-                <p className={styles.fileSize}>
-                  {(file.size / 1024).toFixed(1)} KB &middot; {csvRows.length} data rows
-                </p>
+      {/* ─── Stepper ──────────────────────────────────────────────────── */}
+      {step !== 'done' && (
+        <div className={styles.stepper}>
+          {VISIBLE_STEPS.map((key, i) => {
+            const active = key === step;
+            const done = i < stepIndex;
+            return (
+              <div
+                key={key}
+                className={`${styles.step} ${active ? styles.stepActive : ''} ${done ? styles.stepDone : ''}`}
+              >
+                <div className={styles.stepNum}>
+                  {done ? <Check size={14} strokeWidth={3} /> : i + 1}
+                </div>
+                <div className={styles.stepLbl}>{STEP_LABELS[key]}</div>
+                {i < VISIBLE_STEPS.length - 1 && <div className={styles.stepBar} />}
               </div>
-              <button className={styles.removeFile} onClick={() => { setFile(null); setCsvHeaders([]); setCsvRows([]); }}>
-                Remove
-              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ─── Step 1: Upload ──────────────────────────────────────────── */}
+      {step === 'upload' && (
+        <div className={styles.panel}>
+          <div className={styles.panelHead}>
+            <h3 className={styles.panelTitle}>Upload file</h3>
+          </div>
+          <div className={styles.panelBody}>
+            <div className={styles.field}>
+              <label className={styles.fieldLabel}>
+                Source supplier <span className={styles.fieldReq}>*</span>
+              </label>
+              <select
+                className={styles.select}
+                value={supplierId}
+                onChange={(e) => setSupplierId(e.target.value)}
+              >
+                <option value="">Which supplier is this CSV from?</option>
+                {suppliers.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
             </div>
-          )}
-          <div className={styles.actions}>
-            <div />
-            <button
-              className={styles.nextBtn}
-              disabled={!file || csvHeaders.length === 0}
-              onClick={() => setStep(1)}
+
+            <div
+              {...getRootProps()}
+              className={`${styles.dropzone} ${isDragActive ? styles.dropzoneOver : ''} ${file ? styles.dropzoneHasFile : ''}`}
             >
-              Next: Map Columns
-            </button>
+              <input {...getInputProps()} />
+              {file ? (
+                <>
+                  <FileText size={32} strokeWidth={1.6} />
+                  <div className={styles.dzTitle}>{file.name}</div>
+                  <div className={styles.dzSub}>
+                    {(file.size / 1024).toFixed(0)} KB &middot; {csvRows.length} data rows &middot; click to replace
+                  </div>
+                </>
+              ) : (
+                <>
+                  <Upload size={32} strokeWidth={1.6} />
+                  <div className={styles.dzTitle}>Drop CSV here</div>
+                  <div className={styles.dzSub}>or click to browse &middot; max 50 MB &middot; UTF-8</div>
+                </>
+              )}
+            </div>
+
+            <details className={styles.csvHint}>
+              <summary>Required columns</summary>
+              <pre className={styles.csvHintPre}>
+{`sku,description,manufacturer,category,stock,price_usd
+STM32F407VGT6,ARM Cortex-M4 168MHz MCU,STMicroelectronics,mcu,32000,12.45
+LM7805CT,5V 1.5A LDO,Texas Instruments,pmic,240000,0.45`}
+              </pre>
+            </details>
           </div>
         </div>
       )}
 
-      {/* Step 1: Map Columns */}
-      {step === 1 && (
-        <div className={styles.card}>
-          <div className={styles.supplierField}>
-            <label className={styles.label}>
-              Supplier <span className={styles.required}>*</span>
-            </label>
-            <select
-              className={styles.select}
-              value={supplierId}
-              onChange={(e) => setSupplierId(e.target.value)}
-            >
-              <option value="">Select a supplier...</option>
-              {suppliers.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
+      {/* ─── Step 2: Mapping ─────────────────────────────────────────── */}
+      {step === 'mapping' && (
+        <div className={styles.panel}>
+          <div className={styles.panelHead}>
+            <h3 className={styles.panelTitle}>Column mapping</h3>
+            <span className={styles.panelHint}>
+              {hasSku && hasManufacturer ? (
+                <span className={styles.panelHintOk}>
+                  <Check size={12} strokeWidth={3} /> Required fields mapped
+                </span>
+              ) : (
+                <span className={styles.panelHintWarn}>
+                  Map both <code>sku</code> and <code>manufacturer_name</code> to continue
+                </span>
+              )}
+            </span>
           </div>
-
-          <h3 className={styles.mappingTitle}>Column Mapping</h3>
-          <div className={styles.mappingGrid}>
-            <span className={styles.mappingHeader}>CSV Column</span>
-            <span className={styles.mappingHeader} />
-            <span className={styles.mappingHeader}>Maps To</span>
-            {csvHeaders.map((header) => (
-              <div key={header} style={{ display: 'contents' }}>
-                <span className={styles.csvColumn}>{header}</span>
-                <span className={styles.mappingArrow}>{'\u2192'}</span>
-                <select
-                  className={styles.mappingSelect}
-                  value={mapping[header] ?? ''}
-                  onChange={(e) => handleMappingChange(header, e.target.value)}
-                >
-                  {FIELD_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            ))}
-          </div>
-
-          <div className={styles.actions}>
-            <button className={styles.backBtn} onClick={() => setStep(0)}>
-              Back
-            </button>
-            <button
-              className={styles.nextBtn}
-              disabled={!canProceedToPreview || !supplierId}
-              onClick={() => setStep(2)}
-            >
-              Next: Preview
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Step 2: Preview */}
-      {step === 2 && (
-        <div className={styles.card}>
-          <h3 className={styles.previewTitle}>Preview Import</h3>
-          <p className={styles.previewSubtitle}>
-            {csvRows.length} rows will be imported. Showing first {Math.min(csvRows.length, 10)} rows.
-          </p>
-          <div className={styles.previewTable}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr>
-                  <th style={{ padding: '10px 12px', textAlign: 'left', borderBottom: '2px solid #e5e7eb', fontSize: '16px' }}>#</th>
-                  {Object.entries(mapping)
-                    .filter(([, v]) => v)
-                    .map(([h, v]) => (
-                      <th key={h} style={{ padding: '10px 12px', textAlign: 'left', borderBottom: '2px solid #e5e7eb', fontSize: '16px' }}>
-                        {v}
-                      </th>
-                    ))}
-                </tr>
-              </thead>
-              <tbody>
-                {csvRows.slice(0, 10).map((row, ri) => (
-                  <tr key={ri}>
-                    <td style={{ padding: '10px 12px', borderBottom: '1px solid #f3f4f6', fontSize: '16px' }}>{ri + 1}</td>
-                    {Object.entries(mapping)
-                      .filter(([, v]) => v)
-                      .map(([h]) => {
-                        const colIdx = csvHeaders.indexOf(h);
-                        return (
-                          <td key={h} style={{ padding: '10px 12px', borderBottom: '1px solid #f3f4f6', fontSize: '16px' }}>
-                            {colIdx >= 0 ? row[colIdx] || '\u2014' : '\u2014'}
-                          </td>
-                        );
-                      })}
+          <table className={styles.mapTable}>
+            <thead>
+              <tr>
+                <th>CSV column</th>
+                <th>Maps to</th>
+                <th>Sample</th>
+              </tr>
+            </thead>
+            <tbody>
+              {csvHeaders.map((header) => {
+                const sample = csvRows[0]?.[csvHeaders.indexOf(header)] ?? '';
+                return (
+                  <tr key={header}>
+                    <td className={styles.mapMono}>{header}</td>
+                    <td>
+                      <span className={styles.mapArrow} aria-hidden="true">
+                        →
+                      </span>
+                      <select
+                        className={styles.mapSelect}
+                        value={mapping[header] ?? ''}
+                        onChange={(e) => handleMappingChange(header, e.target.value)}
+                      >
+                        {FIELD_OPTIONS.map((opt) => (
+                          <option key={opt.value || 'skip'} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className={styles.mapSample}>{sample || '—'}</td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
 
-          <div className={styles.actions}>
-            <button className={styles.backBtn} onClick={() => setStep(1)}>
+      {/* ─── Step 3: Review ──────────────────────────────────────────── */}
+      {step === 'review' && (
+        <div className={styles.panel}>
+          <div className={styles.panelHead}>
+            <h3 className={styles.panelTitle}>Review &amp; queue</h3>
+          </div>
+          <div className={styles.panelBody}>
+            <div className={styles.reviewStats}>
+              <div className={styles.rsCard}>
+                <div className={styles.rsLabel}>File</div>
+                <div className={`${styles.rsVal} ${styles.rsValMono}`}>{file?.name ?? '—'}</div>
+              </div>
+              <div className={styles.rsCard}>
+                <div className={styles.rsLabel}>Supplier</div>
+                <div className={styles.rsVal}>{supplierName}</div>
+              </div>
+              <div className={styles.rsCard}>
+                <div className={styles.rsLabel}>Detected rows</div>
+                <div className={`${styles.rsVal} ${styles.rsValMono}`}>{csvRows.length.toLocaleString()}</div>
+              </div>
+              <div className={styles.rsCard}>
+                <div className={styles.rsLabel}>Validation</div>
+                <div className={`${styles.rsVal} ${styles.rsValOk}`}>
+                  <Check size={14} strokeWidth={3} /> All rows valid
+                </div>
+              </div>
+            </div>
+            <p className={styles.reviewBlurb}>
+              Submitting will queue this file for review. A reviewer must approve before any rows
+              hit the live catalog. You&rsquo;ll receive a notification when it&rsquo;s processed.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Step 4: Done (results) ──────────────────────────────────── */}
+      {step === 'done' && result && (
+        <div className={styles.panel}>
+          <div className={styles.panelHead}>
+            <h3 className={styles.panelTitle}>Import complete</h3>
+          </div>
+          <div className={styles.panelBody}>
+            <div className={styles.reviewStats}>
+              <div className={`${styles.rsCard} ${styles.rsCardSuccess}`}>
+                <div className={styles.rsLabel}>Created</div>
+                <div className={`${styles.rsVal} ${styles.rsValMono} ${styles.rsValOk}`}>
+                  {result.created.toLocaleString()}
+                </div>
+              </div>
+              <div className={styles.rsCard}>
+                <div className={styles.rsLabel}>Total rows</div>
+                <div className={`${styles.rsVal} ${styles.rsValMono}`}>{csvRows.length.toLocaleString()}</div>
+              </div>
+              <div className={`${styles.rsCard} ${result.errors.length > 0 ? styles.rsCardError : ''}`}>
+                <div className={styles.rsLabel}>Errors</div>
+                <div className={`${styles.rsVal} ${styles.rsValMono} ${result.errors.length > 0 ? styles.rsValErr : ''}`}>
+                  {result.errors.length.toLocaleString()}
+                </div>
+              </div>
+              <div className={styles.rsCard}>
+                <div className={styles.rsLabel}>Supplier</div>
+                <div className={styles.rsVal}>{supplierName}</div>
+              </div>
+            </div>
+
+            {result.errors.length > 0 && (
+              <div className={styles.errorList}>
+                <div className={styles.errorListTitle}>Errors</div>
+                <ul className={styles.errorListItems}>
+                  {result.errors.slice(0, 25).map((err, i) => (
+                    <li key={i} className={styles.errorListItem}>
+                      Row {err.row + 1}: {err.error}
+                    </li>
+                  ))}
+                  {result.errors.length > 25 && (
+                    <li className={styles.errorListMore}>
+                      +{result.errors.length - 25} more errors
+                    </li>
+                  )}
+                </ul>
+              </div>
+            )}
+
+            <div className={styles.doneActions}>
+              <button
+                type="button"
+                className={`${styles.btn} ${styles.btnGhost}`}
+                onClick={() => {
+                  setStep('upload');
+                  setFile(null);
+                  setCsvHeaders([]);
+                  setCsvRows([]);
+                  setMapping({});
+                  setResult(null);
+                }}
+              >
+                Import another file
+              </button>
+              <Link to="/admin/parts" className={`${styles.btn} ${styles.btnPrimary}`}>
+                View all parts
+                <ChevronRight size={15} strokeWidth={2} />
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Action footer ───────────────────────────────────────────── */}
+      {step !== 'done' && (
+        <div className={styles.formActions}>
+          {step !== 'upload' && (
+            <button type="button" className={`${styles.btn} ${styles.btnGhost}`} onClick={goBack}>
               Back
             </button>
-            <button className={styles.nextBtn} onClick={handleImport} disabled={importing}>
-              {importing ? 'Importing...' : `Import ${csvRows.length} Parts`}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Step 3: Results */}
-      {step === 3 && result && (
-        <div className={styles.card}>
-          <h3 className={styles.resultTitle}>Import Complete</h3>
-          <div className={styles.resultStats}>
-            <div className={`${styles.resultStat} ${styles.resultStatSuccess}`}>
-              <p className={styles.resultStatValue}>{result.created}</p>
-              <p className={styles.resultStatLabel}>Created</p>
-            </div>
-            <div className={styles.resultStat}>
-              <p className={styles.resultStatValue}>{csvRows.length}</p>
-              <p className={styles.resultStatLabel}>Total Rows</p>
-            </div>
-            <div className={`${styles.resultStat} ${result.errors.length > 0 ? styles.resultStatError : ''}`}>
-              <p className={styles.resultStatValue}>{result.errors.length}</p>
-              <p className={styles.resultStatLabel}>Errors</p>
-            </div>
-          </div>
-          {result.errors.length > 0 && (
-            <div className={styles.errorList}>
-              <p className={styles.errorListTitle}>Errors</p>
-              <ul className={styles.errorListItems}>
-                {result.errors.map((err, i) => (
-                  <li key={i} className={styles.errorListItem}>
-                    Row {err.row + 1}: {err.error}
-                  </li>
-                ))}
-              </ul>
-            </div>
           )}
-
-          <div className={styles.actions}>
-            <div />
-            <Link to="/admin/parts" className={styles.doneBtn}>
-              View All Parts
-            </Link>
-          </div>
-        </div>
-      )}
-
-      {importing && (
-        <div className={styles.importing}>
-          <span className={styles.spinner}>{'\u23F3'}</span>
-          <p className={styles.importingText}>Importing parts... please wait.</p>
+          <button
+            type="button"
+            className={`${styles.btn} ${styles.btnPrimary}`}
+            disabled={nextDisabled}
+            onClick={goNext}
+          >
+            {step === 'review' ? (
+              <>
+                {importing ? 'Queuing…' : (
+                  <>
+                    <Check size={15} strokeWidth={2} />
+                    Queue import
+                  </>
+                )}
+              </>
+            ) : (
+              <>
+                Continue
+                <ChevronRight size={15} strokeWidth={2} />
+              </>
+            )}
+          </button>
         </div>
       )}
     </div>

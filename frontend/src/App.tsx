@@ -30,9 +30,10 @@ const ImportPage = lazy(() => import('./pages/admin/ImportPage'))
 const ReportsPage = lazy(() => import('./pages/admin/ReportsPage'))
 const CategoriesPage = lazy(() => import('./pages/admin/CategoriesPage'))
 const SponsorsPage = lazy(() => import('./pages/admin/SponsorsPage'))
+const SponsorFormPage = lazy(() => import('./pages/admin/SponsorFormPage'))
+const SettingsPage = lazy(() => import('./pages/admin/SettingsPage'))
 
 import AdminLayout from './components/admin/AdminLayout'
-import DemoToggle from './components/admin/DemoToggle'
 import ProtectedRoute from './components/admin/ProtectedRoute'
 import Navbar from './components/layout/Navbar'
 import NavVariantPicker from './components/layout/NavVariantPicker'
@@ -73,8 +74,10 @@ function App() {
                       <Route path="reports" element={<ReportsPage />} />
                       <Route path="categories" element={<CategoriesPage />} />
                       <Route path="sponsors" element={<SponsorsPage />} />
+                      <Route path="sponsors/new" element={<SponsorFormPage />} />
+                      <Route path="sponsors/:id/edit" element={<SponsorFormPage />} />
+                      <Route path="settings" element={<SettingsPage />} />
                     </Routes>
-                    <DemoToggle />
                   </AdminLayout>
                 </ProtectedRoute>
               }

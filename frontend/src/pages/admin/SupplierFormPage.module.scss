@@ -1,131 +1,150 @@
+@use '../../styles/variables' as *;
 @use '../../styles/admin/variables' as *;
 
+// Supplier form (new + edit) — port of bundle's .form-grid pattern.
+// Stacked panels (Identity / Contact / Settings) → full-width form-actions row.
+
 .page {
-  max-width: 800px;
+  max-width: 880px;
+}
+
+// ─── Page head ──────────────────────────────────────────────────────────────
+
+.pageHead {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 24px;
+}
+
+.backLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #6b7280;
+  text-decoration: none;
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-family: inherit;
+  margin-bottom: 4px;
+  transition: color 150ms ease;
+  align-self: flex-start;
+
+  &:hover {
+    color: $executive-blue;
+  }
 }
 
 .title {
-  font-size: $admin-font-heading;
+  font-size: 28px;
   font-weight: 700;
-  color: #111827;
-  margin: 0 0 8px;
+  color: $admin-text-primary;
+  margin: 0;
+  letter-spacing: -0.01em;
 }
 
 .subtitle {
-  font-size: $admin-font-base;
+  font-size: 13px;
   color: #6b7280;
-  margin: 0 0 28px;
+  margin: 0;
 }
 
-.steps {
+// ─── Form grid ──────────────────────────────────────────────────────────────
+
+.formGrid {
   display: flex;
-  gap: 0;
-  margin-bottom: 32px;
+  flex-direction: column;
+  gap: 16px;
 }
 
-.step {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  gap: 10px;
+.panel {
+  background: #ffffff;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.panelHead {
   padding: 14px 20px;
-  background: $admin-card-bg;
-  border: 2px solid #e5e7eb;
-  font-size: $admin-font-small;
-  font-weight: 600;
-  color: #9ca3af;
-  cursor: default;
-
-  &:first-child {
-    border-radius: $admin-border-radius 0 0 $admin-border-radius;
-  }
-
-  &:last-child {
-    border-radius: 0 $admin-border-radius $admin-border-radius 0;
-  }
-
-  &:not(:first-child) {
-    border-left: none;
-  }
+  border-bottom: 1px solid #f0f2f5;
 }
 
-.stepActive {
-  background: $admin-sidebar-active;
-  border-color: $admin-sidebar-active;
-  color: #ffffff;
-}
-
-.stepDone {
-  background: #ecfdf5;
-  border-color: $admin-success;
-  color: $admin-success;
-}
-
-.stepNumber {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: $admin-font-small;
+.panelTitle {
+  font-size: 14px;
   font-weight: 700;
-  background: rgba(255, 255, 255, 0.2);
-  flex-shrink: 0;
+  color: $admin-text-primary;
+  margin: 0;
+  letter-spacing: -0.005em;
 }
 
-.stepActive .stepNumber {
-  background: rgba(255, 255, 255, 0.25);
+.panelBody {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
-.stepDone .stepNumber {
-  background: $admin-success;
-  color: #ffffff;
-}
+.formRow2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
 
-.formCard {
-  background: $admin-card-bg;
-  border-radius: $admin-border-radius;
-  padding: 32px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-  margin-bottom: 24px;
-}
-
-.fieldGroup {
-  margin-bottom: 24px;
-
-  &:last-child {
-    margin-bottom: 0;
+  @media (max-width: 640px) {
+    grid-template-columns: 1fr;
   }
 }
 
-.label {
-  display: block;
-  font-size: $admin-font-base;
+// ─── Field primitive ────────────────────────────────────────────────────────
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.fieldLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
   font-weight: 600;
   color: #374151;
-  margin-bottom: 8px;
 }
 
-.required {
-  color: $admin-danger;
+.fieldReq {
+  color: $error-red;
+}
+
+.fieldHint {
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.fieldError {
+  font-size: 12px;
+  color: $error-red;
 }
 
 .input {
   width: 100%;
-  height: $admin-input-height;
-  padding: 0 20px;
-  font-size: $admin-font-base;
-  border: 2px solid #d1d5db;
-  border-radius: $admin-border-radius;
+  height: 38px;
+  padding: 0 12px;
+  font-size: 14px;
+  font-family: inherit;
+  color: $admin-text-primary;
   background: #ffffff;
-  color: #111827;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
   outline: none;
-  transition: border-color 150ms ease;
   box-sizing: border-box;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
 
   &:focus {
-    border-color: $admin-info;
+    border-color: $executive-blue;
+    box-shadow: 0 0 0 3px rgba(10, 74, 46, 0.08);
   }
 
   &::placeholder {
@@ -133,102 +152,77 @@
   }
 }
 
+.inputMono {
+  font-family: $admin-font-mono;
+  font-size: 13px;
+}
+
 .inputError {
-  border-color: $admin-danger;
+  border-color: $error-red;
+
+  &:focus {
+    border-color: $error-red;
+    box-shadow: 0 0 0 3px rgba(192, 57, 43, 0.10);
+  }
 }
 
 .textarea {
   width: 100%;
-  min-height: 120px;
-  padding: 14px 20px;
-  font-size: $admin-font-base;
-  border: 2px solid #d1d5db;
-  border-radius: $admin-border-radius;
+  min-height: 92px;
+  padding: 10px 12px;
+  font-size: 14px;
+  font-family: inherit;
+  color: $admin-text-primary;
   background: #ffffff;
-  color: #111827;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
   outline: none;
   resize: vertical;
-  font-family: inherit;
-  transition: border-color 150ms ease;
   box-sizing: border-box;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
 
   &:focus {
-    border-color: $admin-info;
+    border-color: $executive-blue;
+    box-shadow: 0 0 0 3px rgba(10, 74, 46, 0.08);
+  }
+
+  &::placeholder {
+    color: #9ca3af;
   }
 }
 
-.errorMsg {
-  font-size: $admin-font-small;
-  color: $admin-danger;
-  margin-top: 6px;
-}
+// ─── Form actions ───────────────────────────────────────────────────────────
 
-.reviewGrid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 20px;
-}
-
-.reviewItem {
+.formActions {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 8px;
+  flex-wrap: wrap;
 }
 
-.reviewLabel {
-  font-size: $admin-font-small;
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  font-family: inherit;
+  font-size: 14px;
   font-weight: 600;
-  color: #6b7280;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.reviewValue {
-  font-size: $admin-font-base;
-  color: #111827;
-}
-
-.reviewFull {
-  grid-column: 1 / -1;
-}
-
-.actions {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.backBtn {
-  height: $admin-btn-height;
-  padding: 0 28px;
-  font-size: $admin-font-base;
-  font-weight: 600;
-  border: 2px solid #d1d5db;
-  border-radius: $admin-border-radius;
-  background: #ffffff;
-  color: #374151;
+  line-height: 1;
+  border-radius: 6px;
+  border: 1px solid transparent;
   cursor: pointer;
-  transition: background 150ms ease;
-
-  &:hover {
-    background: #f3f4f6;
-  }
+  text-decoration: none;
+  transition: background-color 150ms, color 150ms;
 }
 
-.nextBtn {
-  height: $admin-btn-height;
-  padding: 0 32px;
-  font-size: $admin-font-base;
-  font-weight: 600;
-  border: none;
-  border-radius: $admin-border-radius;
-  background: $admin-sidebar-active;
+.btnPrimary {
+  background: $executive-blue;
   color: #ffffff;
-  cursor: pointer;
-  transition: opacity 150ms ease;
 
   &:hover:not(:disabled) {
-    opacity: 0.9;
+    background: #083b24;
   }
 
   &:disabled {
@@ -237,13 +231,28 @@
   }
 }
 
+.btnGhost {
+  background: #ffffff;
+  color: $admin-text-primary;
+  border-color: #e5e7eb;
+
+  &:hover {
+    background: #f0f2f5;
+  }
+}
+
+// ─── Toast ──────────────────────────────────────────────────────────────────
+
 .toast {
   position: fixed;
-  bottom: 32px;
-  right: 32px;
-  padding: 16px 28px;
-  border-radius: $admin-border-radius;
-  font-size: $admin-font-base;
+  bottom: 24px;
+  right: 24px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 18px;
+  border-radius: 6px;
+  font-size: 13px;
   font-weight: 600;
   color: #ffffff;
   z-index: 1100;
@@ -251,18 +260,20 @@
 }
 
 .toastSuccess {
-  background: $admin-success;
+  background: #15803d;
 }
 
 .toastError {
-  background: $admin-danger;
+  background: $error-red;
 }
+
+// ─── States ─────────────────────────────────────────────────────────────────
 
 .loading {
   display: flex;
   align-items: center;
   justify-content: center;
   min-height: 300px;
-  font-size: $admin-font-base;
+  font-size: 14px;
   color: #6b7280;
 }
