@@ -1,0 +1,86 @@
+@use '../../styles/variables' as *;
+
+// Persistent PCB backdrop — sits behind every public page's hero/band area.
+// position: absolute (not fixed) so it scrolls with the page; height: 420px
+// matches the home hero's min-height so home shows the full SVG and inner-page
+// bands (~272px tall) show the top portion. The bottom 148px on inner pages
+// gets covered by the page's body wrapper (which has --theme-surface-bg).
+
+.backdrop {
+  position: absolute;
+  top: $nav-height;
+  left: 0;
+  right: 0;
+  height: 420px;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+  background: $executive-blue;
+}
+
+// Per-theme substrate gradients — lifted verbatim from the previous in-place
+// implementation so visual output is byte-identical to home pre-refactor on
+// every alt theme. background-color uses --theme-nav-bg so the navbar and
+// backdrop read as one continuous dark strip.
+
+:global([data-theme="steel"]) .backdrop {
+  background-image:
+    linear-gradient(
+      180deg,
+      rgba(14, 17, 19, 0.30) 0%,
+      rgba(14, 17, 19, 0) 20%,
+      rgba(14, 17, 19, 0) 80%,
+      rgba(14, 17, 19, 0.20) 100%
+    ),
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.04) 0%,
+      rgba(255, 255, 255, 0) 18%
+    );
+  background-color: var(--theme-nav-bg);
+}
+
+:global([data-theme="schematic"]) .backdrop {
+  background-image:
+    linear-gradient(
+      180deg,
+      rgba(20, 26, 30, 0.10) 0%,
+      rgba(20, 26, 30, 0) 15%,
+      rgba(20, 26, 30, 0) 75%,
+      rgba(20, 26, 30, 0.15) 100%
+    ),
+    repeating-linear-gradient(
+      0deg,
+      transparent 0 27px,
+      rgba(255, 255, 255, 0.025) 27px 28px
+    );
+  background-color: var(--theme-nav-bg);
+}
+
+:global([data-theme="pcb"]) .backdrop {
+  background-image:
+    radial-gradient(
+      ellipse 70% 45% at 50% 50%,
+      transparent 60%,
+      rgba(6, 20, 10, 0.35) 100%
+    ),
+    repeating-linear-gradient(
+      0deg,
+      transparent 0 23px,
+      color-mix(in srgb, var(--theme-accent) 3.5%, transparent) 23px 24px
+    );
+  background-color: var(--theme-nav-bg);
+}
+
+// 8px shadow-gap recessing the backdrop under the navbar (alt themes only —
+// base had no shadow pre-refactor, preserved).
+:global([data-theme="steel"]) .backdrop::before,
+:global([data-theme="schematic"]) .backdrop::before,
+:global([data-theme="pcb"]) .backdrop::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 8px;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.45) 0%, transparent 100%);
+  pointer-events: none;
+}

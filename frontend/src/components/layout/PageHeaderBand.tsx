@@ -8,10 +8,13 @@ interface PageHeaderBandProps {
   subtitle: string
 }
 
-// Slim themed hero band rendered above About / Join / Contact page bodies.
-// Sits on top of PublicLayout's persistent CircuitTraces backdrop — its bg
-// is transparent, so the board shows through. Provides per-page title +
-// subtitle + a JetBrains-Mono REV tag styled like a datasheet label.
+// Slim themed header band rendered above About / Join / Contact page bodies.
+// LAYOUT ONLY — the dark substrate + animated CircuitTraces SVG live in the
+// persistent <BackdropLayer /> at App.tsx level. .band is transparent so the
+// same SVG that's behind the home hero shines through here too: same colors,
+// same animation state (electrons keep looping across navigation, draw-in
+// only fires once per session). .inner has z-index: 2 so the white title +
+// REV-A tag render above the backdrop.
 export default function PageHeaderBand({ page, title, subtitle }: PageHeaderBandProps) {
   return (
     <section

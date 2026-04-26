@@ -1,55 +1,58 @@
-import { lazy, Suspense } from 'react'
-import { Routes, Route, useLocation } from 'react-router-dom'
+import { lazy, Suspense } from "react";
+import { Routes, Route, useLocation } from "react-router-dom";
 
 // 2026-04-19 Tier-3 #7 perf: Home stays eager (LCP target; must render
 // on first paint). All other routes lazy-loaded — each gets its own
 // Vite chunk, shrinking the initial bundle and pushing work off the
 // critical path for the home-page visitor.
-import HomePage from './pages/HomePage'
+import HomePage from "./pages/HomePage";
 
-const CategoryPage = lazy(() => import('./pages/CategoryPage'))
-const SearchPage = lazy(() => import('./pages/SearchPage'))
-const JoinPage = lazy(() => import('./pages/JoinPage'))
-const ContactPage = lazy(() => import('./pages/ContactPage'))
-const AboutPage = lazy(() => import('./pages/AboutPage'))
-const KeywordSponsorPage = lazy(() => import('./pages/KeywordSponsorPage'))
-const PartPage = lazy(() => import('./pages/PartPage'))
+const CategoryPage = lazy(() => import("./pages/CategoryPage"));
+const SearchPage = lazy(() => import("./pages/SearchPage"));
+const JoinPage = lazy(() => import("./pages/JoinPage"));
+const ContactPage = lazy(() => import("./pages/ContactPage"));
+const AboutPage = lazy(() => import("./pages/AboutPage"));
+const KeywordSponsorPage = lazy(() => import("./pages/KeywordSponsorPage"));
+const PartPage = lazy(() => import("./pages/PartPage"));
 
 // Admin chunk — all admin routes lazy. Recharts (~400 KB) lives inside
 // admin/Reports; with these routes lazy it won't ship to public-page
 // visitors. See vite.config.ts manualChunks for extra chunk hints.
-const LoginPage = lazy(() => import('./pages/admin/LoginPage'))
-const DashboardPage = lazy(() => import('./pages/admin/DashboardPage'))
-const SuppliersPage = lazy(() => import('./pages/admin/SuppliersPage'))
-const SupplierDetailPage = lazy(() => import('./pages/admin/SupplierDetailPage'))
-const SupplierFormPage = lazy(() => import('./pages/admin/SupplierFormPage'))
-const PartsPage = lazy(() => import('./pages/admin/PartsPage'))
-const PartDetailPage = lazy(() => import('./pages/admin/PartDetailPage'))
-const PartFormPage = lazy(() => import('./pages/admin/PartFormPage'))
-const ImportPage = lazy(() => import('./pages/admin/ImportPage'))
-const ReportsPage = lazy(() => import('./pages/admin/ReportsPage'))
-const CategoriesPage = lazy(() => import('./pages/admin/CategoriesPage'))
-const SponsorsPage = lazy(() => import('./pages/admin/SponsorsPage'))
-const SponsorFormPage = lazy(() => import('./pages/admin/SponsorFormPage'))
-const SettingsPage = lazy(() => import('./pages/admin/SettingsPage'))
+const LoginPage = lazy(() => import("./pages/admin/LoginPage"));
+const DashboardPage = lazy(() => import("./pages/admin/DashboardPage"));
+const SuppliersPage = lazy(() => import("./pages/admin/SuppliersPage"));
+const SupplierDetailPage = lazy(
+  () => import("./pages/admin/SupplierDetailPage"),
+);
+const SupplierFormPage = lazy(() => import("./pages/admin/SupplierFormPage"));
+const PartsPage = lazy(() => import("./pages/admin/PartsPage"));
+const PartDetailPage = lazy(() => import("./pages/admin/PartDetailPage"));
+const PartFormPage = lazy(() => import("./pages/admin/PartFormPage"));
+const ImportPage = lazy(() => import("./pages/admin/ImportPage"));
+const ReportsPage = lazy(() => import("./pages/admin/ReportsPage"));
+const CategoriesPage = lazy(() => import("./pages/admin/CategoriesPage"));
+const SponsorsPage = lazy(() => import("./pages/admin/SponsorsPage"));
+const SponsorFormPage = lazy(() => import("./pages/admin/SponsorFormPage"));
+const SettingsPage = lazy(() => import("./pages/admin/SettingsPage"));
 
-import AdminLayout from './components/admin/AdminLayout'
-import ProtectedRoute from './components/admin/ProtectedRoute'
-import Navbar from './components/layout/Navbar'
-import NavVariantPicker from './components/layout/NavVariantPicker'
-import HeroColorTuner from './components/shared/HeroColorTuner'
-import ThemeBridge from './components/layout/ThemeBridge'
-import PublicLayout from './components/layout/PublicLayout'
-import { DemoProvider } from './contexts/DemoContext'
+import AdminLayout from "./components/admin/AdminLayout";
+import ProtectedRoute from "./components/admin/ProtectedRoute";
+import Navbar from "./components/layout/Navbar";
+import NavVariantPicker from "./components/layout/NavVariantPicker";
+import HeroColorTuner from "./components/shared/HeroColorTuner";
+import ThemeBridge from "./components/layout/ThemeBridge";
+import PublicLayout from "./components/layout/PublicLayout";
+import BackdropLayer from "./components/layout/BackdropLayer";
+import { DemoProvider } from "./contexts/DemoContext";
 
 // Admin fallback (PublicLayout provides the equivalent on public routes).
-const RouteFallback = () => <div style={{ minHeight: 420 }} aria-busy="true" />
+const RouteFallback = () => <div style={{ minHeight: 420 }} aria-busy="true" />;
 
 function App() {
-  const location = useLocation()
+  const location = useLocation();
 
   // Admin routes live outside AnimatePresence — admin has its own layout
-  if (location.pathname.startsWith('/admin')) {
+  if (location.pathname.startsWith("/admin")) {
     return (
       <DemoProvider>
         <Suspense fallback={<RouteFallback />}>
@@ -63,9 +66,18 @@ function App() {
                     <Routes>
                       <Route index element={<DashboardPage />} />
                       <Route path="suppliers" element={<SuppliersPage />} />
-                      <Route path="suppliers/new" element={<SupplierFormPage />} />
-                      <Route path="suppliers/:id" element={<SupplierDetailPage />} />
-                      <Route path="suppliers/:id/edit" element={<SupplierFormPage />} />
+                      <Route
+                        path="suppliers/new"
+                        element={<SupplierFormPage />}
+                      />
+                      <Route
+                        path="suppliers/:id"
+                        element={<SupplierDetailPage />}
+                      />
+                      <Route
+                        path="suppliers/:id/edit"
+                        element={<SupplierFormPage />}
+                      />
                       <Route path="parts" element={<PartsPage />} />
                       <Route path="parts/new" element={<PartFormPage />} />
                       <Route path="parts/:id" element={<PartDetailPage />} />
@@ -74,8 +86,14 @@ function App() {
                       <Route path="reports" element={<ReportsPage />} />
                       <Route path="categories" element={<CategoriesPage />} />
                       <Route path="sponsors" element={<SponsorsPage />} />
-                      <Route path="sponsors/new" element={<SponsorFormPage />} />
-                      <Route path="sponsors/:id/edit" element={<SponsorFormPage />} />
+                      <Route
+                        path="sponsors/new"
+                        element={<SponsorFormPage />}
+                      />
+                      <Route
+                        path="sponsors/:id/edit"
+                        element={<SponsorFormPage />}
+                      />
                       <Route path="settings" element={<SettingsPage />} />
                     </Routes>
                   </AdminLayout>
@@ -85,18 +103,22 @@ function App() {
           </Routes>
         </Suspense>
       </DemoProvider>
-    )
+    );
   }
 
-  // Public routes nest under PublicLayout — the persistent backdrop +
-  // CircuitTraces + AnimatePresence + Suspense live inside PublicLayout,
-  // so PublicLayout itself never unmounts during public navigation. That
-  // keeps CircuitTraces mounted once for the session (variant flips on
-  // route change via useLocation inside PublicLayout).
+  // Public routes. <BackdropLayer /> mounts ONCE here — above <Routes> — so
+  // the persistent <CircuitTraces variant="full" /> SVG inside it never
+  // remounts on navigation. Same DOM node, same animation state, same colors
+  // visible behind home's hero AND every band-using inner page (about, join,
+  // contact). Pages render at z-index 1 (PublicLayout's outletWrap) above the
+  // backdrop's z-index 0; their hero/band areas are transparent so the
+  // backdrop shows through, and their light --theme-surface-bg sits on a body
+  // wrapper that starts below the band area.
   return (
     <>
       <ThemeBridge />
       <Navbar />
+      <BackdropLayer />
       <Routes>
         <Route element={<PublicLayout />}>
           <Route path="/" element={<HomePage />} />
@@ -112,7 +134,7 @@ function App() {
       <NavVariantPicker />
       {import.meta.env.DEV && <HeroColorTuner />}
     </>
-  )
+  );
 }
 
-export default App
+export default App;

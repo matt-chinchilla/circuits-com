@@ -141,6 +141,15 @@ export default function AboutPage() {
         subtitle="The trusted directory for integrated circuits — connecting buyers, suppliers, and engineers since 2003."
       />
 
+      {/*
+        Body wrapper carries the light --theme-surface-bg. The persistent
+        <BackdropLayer /> at App.tsx level extends 420px below the navbar; the
+        band area above this body wrapper is transparent so the SVG shows
+        through, then this wrapper covers the lower portion of the backdrop
+        and provides the page surface for body content.
+      */}
+      <div className={styles.aboutBody}>
+
       {/* (2) How it works — staggered card fade-in + marching-ants connectors */}
       <section
         ref={stepsRef}
@@ -235,6 +244,8 @@ export default function AboutPage() {
           </Link>
         </div>
       </section>
+
+      </div>
 
       <Footer />
     </motion.div>

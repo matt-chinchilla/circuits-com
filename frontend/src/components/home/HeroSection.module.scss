@@ -2,21 +2,19 @@
 @use '../../styles/mixins' as *;
 @use '../../styles/animations';
 
-// Hero LAYOUT only. The themed backdrop (background color + per-theme
-// gradients + shadow-gap ::before) lives in PublicLayout.module.scss now,
-// rendered ONCE for the whole public route tree. This section is transparent
-// so the persistent backdrop shows through.
+// Home hero LAYOUT only. Transparent — the dark substrate + per-theme
+// gradients + <CircuitTraces /> SVG all live in <BackdropLayer /> at App.tsx
+// level. min-height: 420px matches BackdropLayer's height so page content
+// starts below the backdrop region.
 
 .hero {
   position: relative;
   width: 100%;
-  overflow: hidden;
   padding: 80px 20px 60px;
   display: flex;
   align-items: center;
   justify-content: center;
   min-height: 420px;
-  contain: layout style paint;
 }
 
 // ─── Content ──────────────────────────────────────────────────────────────────
