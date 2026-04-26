@@ -13,7 +13,20 @@
 
 // ─── Page root ──────────────────────────────────────────────────────────────
 
+// Transparent — the persistent BackdropLayer (mounted at App.tsx level) shows
+// through the band area at the top of the page. The light --theme-surface-bg
+// lives on the .aboutBody wrapper below the band so it doesn't cover the
+// backdrop SVG.
 .aboutPage {
+  // intentionally no background
+}
+
+// Body wrapper for content sections below the PageHeaderBand. Carries the
+// light theme-aware surface bg. Starts at flow position ~272px from the top
+// of motion.div (the band's height), which on inner pages is exactly where
+// the persistent backdrop should stop being visible. The wrapper covers the
+// lower 148px of the 420px backdrop and continues below.
+.aboutBody {
   background: var(--theme-surface-bg);
 }
 
