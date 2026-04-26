@@ -4,13 +4,32 @@ from app.models import Category, CategorySupplier, Supplier, Sponsor, Part, Part
 
 
 def get_all_categories(db: Session) -> list[Category]:
-    """Return top-level categories with children eager-loaded."""
-    return (
+    """Top-level categories with children eager-loaded; stamps `parts_count`
+    on each (own + child rows aggregated client-side from a single query).
+
+    Test seed attaches parts to the subcategory, prod seed to the top-level —
+    keeping the count keyed by `category_id` works for both.
+    """
+    cats = (
         db.query(Category)
         .filter(Category.parent_id.is_(None))
         .order_by(Category.sort_order)
         .all()
     )
+
+    counts: dict = {
+        row[0]: row[1]
+        for row in db.query(Part.category_id, func.count(Part.id))
+        .group_by(Part.category_id)
+        .all()
+    }
+
+    for cat in cats:
+        cat.parts_count = int(counts.get(cat.id, 0))
+        for child in cat.children or []:
+            child.parts_count = int(counts.get(child.id, 0))
+
+    return cats
 
 
 def _build_public_parts(db: Session, category_id, category_icon: str | None = None) -> list[dict]:

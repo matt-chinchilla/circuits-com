@@ -34,6 +34,16 @@
   font-size: 13px;
   color: #6b7280;
   margin: 0;
+
+  .mono {
+    color: #111827;
+    font-weight: 600;
+  }
+}
+
+.mono {
+  font-family: 'JetBrains Mono', monospace;
+  color: #374151;
 }
 
 .headActions {
@@ -191,35 +201,46 @@
   }
 }
 
-/* ── Tree card ──────────────────────────────────────────────── */
-.treeCard {
-  background: #fff;
-  border-radius: $admin-border-radius;
-  padding: 8px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
-  border: 1px solid #e5e7eb;
+/* ── Hybrid tile-tree ───────────────────────────────────────
+ * Top-level categories are cards with horizontal headers; expanding a card
+ * reveals its subcategories as a grid of tiles below. When all are expanded,
+ * the page reads like a tree; when collapsed, like a stacked tile view.
+ * Subcategory tiles ARE the Link — no separate "View" anchor row, so name
+ * and slug get their own lines (no horizontal cramping).
+ */
+.treeStack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
-.treeNode {
-  & + & {
-    border-top: 1px solid #f3f4f6;
+.catBlock {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: $admin-border-radius;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  overflow: hidden;
+  transition: box-shadow 200ms, border-color 200ms;
+
+  &.open {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+    border-color: #d1d5db;
   }
 }
 
-.treeParent {
+.catBlockHead {
   width: 100%;
   display: grid;
-  grid-template-columns: 18px 28px 1fr auto auto auto;
+  grid-template-columns: 18px 32px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
   background: transparent;
   border: none;
   cursor: pointer;
-  padding: 14px 12px;
+  padding: 16px 18px;
   text-align: left;
   font: inherit;
   color: inherit;
-  border-radius: 6px;
   transition: background 120ms;
 
   &:hover {
@@ -227,7 +248,11 @@
   }
 }
 
-.treeCaret {
+.catBlock.open .catBlockHead {
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.headCaret {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -235,53 +260,65 @@
   transition: transform 200ms cubic-bezier(0.4, 0, 0.2, 1);
 
   svg {
-    width: 12px;
-    height: 12px;
+    width: 14px;
+    height: 14px;
   }
 }
 
-.treeParent.open .treeCaret {
+.catBlock.open .headCaret {
   transform: rotate(90deg);
   color: #0a4a2e;
 }
 
-.treeIcon {
-  font-size: 22px;
+.headIcon {
+  font-size: 26px;
   line-height: 1;
   text-align: center;
 }
 
-.treeName {
-  font-size: 14px;
+.headTitle {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.headName {
+  font-size: 15px;
   font-weight: 600;
   color: #111827;
-  text-align: left;
+  letter-spacing: -0.005em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.treeSlug {
-  font-size: 11px;
+.headSlug {
+  font: 11px/1 'JetBrains Mono', monospace;
   color: #9ca3af;
-  font-family: 'JetBrains Mono', monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.treePill {
-  font: 500 11px/1 inherit;
-  color: #6b7280;
-  background: #f3f4f6;
-  padding: 4px 8px;
-  border-radius: 999px;
-  border: 1px solid #e5e7eb;
-  white-space: nowrap;
-}
-
-.treeMeta {
-  font-size: 12px;
-  color: #6b7280;
-  white-space: nowrap;
+.headStats {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  flex-shrink: 0;
+}
+
+.headPill {
+  font: 500 11px/1 inherit;
+  color: #6b7280;
+  background: #f3f4f6;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid #e5e7eb;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 
   .mono {
     font-family: 'JetBrains Mono', monospace;
@@ -289,118 +326,84 @@
   }
 }
 
-.dotSep {
-  color: #d1d5db;
-}
-
-.treeChildren {
-  overflow: hidden;
-  max-height: 0;
-  transition: max-height 280ms cubic-bezier(0.4, 0, 0.2, 1);
-
-  &.open {
-    max-height: 800px;
-    padding-bottom: 8px;
-  }
-}
-
-.treeChild {
+.subGrid {
   display: grid;
-  grid-template-columns: 18px 22px 1fr auto auto;
-  align-items: center;
-  gap: 12px;
-  margin-left: 24px;
-  padding: 10px 12px;
-  position: relative;
-  animation: treeChildIn 240ms cubic-bezier(0.4, 0, 0.2, 1) backwards;
-
-  &:nth-child(1) {
-    animation-delay: 30ms;
-  }
-  &:nth-child(2) {
-    animation-delay: 60ms;
-  }
-  &:nth-child(3) {
-    animation-delay: 90ms;
-  }
-  &:nth-child(4) {
-    animation-delay: 120ms;
-  }
-  &:nth-child(5) {
-    animation-delay: 150ms;
-  }
-
-  &:hover .childView {
-    opacity: 1;
-    background: rgba(68, 189, 19, 0.08);
-  }
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+  padding: 14px;
+  background: #fafbfc;
+  animation: subGridIn 220ms cubic-bezier(0.4, 0, 0.2, 1) backwards;
 }
 
-@keyframes treeChildIn {
+@keyframes subGridIn {
   from {
     opacity: 0;
-    transform: translateX(-6px);
+    transform: translateY(-4px);
   }
   to {
     opacity: 1;
-    transform: translateX(0);
+    transform: translateY(0);
   }
 }
 
-.treeRail {
-  position: absolute;
-  left: -12px;
-  top: -1px;
-  bottom: 50%;
-  width: 12px;
-  border-left: 1px solid #e5e7eb;
-  border-bottom: 1px solid #e5e7eb;
-  border-bottom-left-radius: 6px;
-}
-
-.childIcon {
-  font-size: 16px;
-  text-align: center;
-}
-
-.childName {
-  font-size: 13px;
-  color: #111827;
-}
-
-.childSlug {
-  font-size: 11px;
-  color: #9ca3af;
-  font-family: 'JetBrains Mono', monospace;
-  white-space: nowrap;
-}
-
-.childView {
-  font: 500 11px/1 'JetBrains Mono', monospace;
-  color: #0a4a2e;
+.subTile {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 14px;
+  display: grid;
+  grid-template-rows: 28px auto auto auto;
+  gap: 4px;
   text-decoration: none;
-  padding: 4px 8px;
-  border-radius: 4px;
-  opacity: 0;
-  transition: opacity 120ms;
-  white-space: nowrap;
+  color: inherit;
+  transition: border-color 180ms, box-shadow 180ms, transform 180ms;
+  cursor: pointer;
+
+  &:hover {
+    border-color: #44bd13;
+    box-shadow: 0 4px 10px rgba(68, 189, 19, 0.10);
+    transform: translateY(-1px);
+
+    .subView {
+      color: #0a4a2e;
+      transform: translateX(2px);
+    }
+  }
+
+  &:focus-visible {
+    outline: 2px solid #44bd13;
+    outline-offset: 2px;
+  }
 }
 
-.treeFeatured {
-  margin: 4px 0 0 24px;
-  padding: 8px 12px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
-  color: #92773a;
-  background: rgba(168, 141, 46, 0.08);
-  border-radius: 4px;
-  animation: treeChildIn 280ms 180ms cubic-bezier(0.4, 0, 0.2, 1) backwards;
+.subIcon {
+  font-size: 22px;
+  line-height: 1;
+}
 
-  .featuredStar {
-    color: #a88d2e;
-  }
+.subName {
+  font-size: 13px;
+  font-weight: 600;
+  color: #111827;
+  line-height: 1.3;
+}
+
+.subSlug {
+  font: 10px/1.3 'JetBrains Mono', monospace;
+  color: #9ca3af;
+  word-break: break-all;
+}
+
+.subView {
+  font: 600 11px/1 'JetBrains Mono', monospace;
+  color: #6b7280;
+  margin-top: 6px;
+  transition: color 150ms, transform 150ms;
+  align-self: end;
+}
+
+.dotSep {
+  color: #d1d5db;
 }
 
 .empty {

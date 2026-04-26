@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { Search, ChevronRight, List, Grid as GridIcon, Plus } from 'lucide-react';
 import Breadcrumbs from '../../components/admin/Breadcrumbs';
 import { adminApi } from '../../services/adminApi';
@@ -66,6 +67,13 @@ export default function CategoriesPage() {
 
   const visible = filtered.filter((c) => c._show);
   const totalSubs = categories.reduce((n, c) => n + (c.children?.length || 0), 0);
+  const totalParts = categories.reduce((n, c) => {
+    const childParts = (c.children || []).reduce(
+      (m, ch) => m + (ch.parts_count || 0),
+      0,
+    );
+    return n + (c.parts_count || 0) + childParts;
+  }, 0);
 
   if (loading) {
     return <div className={styles.loading}>Loading categories...</div>;
@@ -80,6 +88,8 @@ export default function CategoriesPage() {
           <h1 className={styles.title}>Categories</h1>
           <p className={styles.subtitle}>
             {categories.length} top-level categories &middot; {totalSubs} subcategories
+            &middot;{' '}
+            <span className={styles.mono}>{totalParts.toLocaleString()}</span> parts indexed
           </p>
         </div>
         <div className={styles.headActions}>
@@ -150,54 +160,66 @@ export default function CategoriesPage() {
             </span>
           </div>
 
-          <div className={styles.treeCard}>
+          <div className={styles.treeStack}>
             {visible.length === 0 && (
               <div className={styles.empty}>No categories match &ldquo;{query}&rdquo;</div>
             )}
             {visible.map((c) => {
               const isOpen = expanded.has(c.id) || !!c._forceOpen;
+              const childParts = c._children.reduce(
+                (n, ch) => n + (ch.parts_count || 0),
+                0,
+              );
+              const totalCatParts = (c.parts_count || 0) + childParts;
               return (
-                <div className={styles.treeNode} key={c.id}>
+                <article
+                  key={c.id}
+                  className={`${styles.catBlock} ${isOpen ? styles.open : ''}`}
+                >
                   <button
                     type="button"
-                    className={`${styles.treeParent} ${isOpen ? styles.open : ''}`}
+                    className={styles.catBlockHead}
                     onClick={() => toggle(c.id)}
                     aria-expanded={isOpen}
                   >
-                    <span className={styles.treeCaret}>
+                    <span className={styles.headCaret}>
                       <ChevronRight />
                     </span>
-                    <span className={styles.treeIcon}>{c.icon}</span>
-                    <span className={styles.treeName}>{c.name}</span>
-                    <span className={styles.treeSlug}>{c.slug}</span>
-                    <span className={styles.treePill}>
-                      {c._children.length} subcategories
+                    <span className={styles.headIcon}>{c.icon}</span>
+                    <span className={styles.headTitle}>
+                      <span className={styles.headName}>{c.name}</span>
+                      <span className={styles.headSlug}>{c.slug}</span>
                     </span>
-                    <span className={styles.treeMeta}>
-                      <span className={styles.mono}>{c._children.length}</span> subs
+                    <span className={styles.headStats}>
+                      <span className={styles.headPill}>
+                        <span className={styles.mono}>{c._children.length}</span> subs
+                      </span>
+                      <span className={styles.headPill}>
+                        <span className={styles.mono}>
+                          {totalCatParts.toLocaleString()}
+                        </span>{' '}
+                        parts
+                      </span>
                     </span>
                   </button>
 
-                  <div className={`${styles.treeChildren} ${isOpen ? styles.open : ''}`}>
-                    {isOpen &&
-                      c._children.map((s) => (
-                        <div className={styles.treeChild} key={s.id}>
-                          <span className={styles.treeRail} />
-                          <span className={styles.childIcon}>{s.icon}</span>
-                          <span className={styles.childName}>{s.name}</span>
-                          <span className={styles.childSlug}>{s.slug}</span>
-                          <a
-                            className={styles.childView}
-                            href={`/category/${c.slug}/${s.slug}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                          >
-                            View &rarr;
-                          </a>
-                        </div>
+                  {isOpen && (
+                    <div className={styles.subGrid}>
+                      {c._children.map((s) => (
+                        <Link
+                          key={s.id}
+                          to={`/category/${s.slug}`}
+                          className={styles.subTile}
+                        >
+                          <span className={styles.subIcon}>{s.icon}</span>
+                          <span className={styles.subName}>{s.name}</span>
+                          <span className={styles.subSlug}>{s.slug}</span>
+                          <span className={styles.subView}>View &rarr;</span>
+                        </Link>
                       ))}
-                  </div>
-                </div>
+                    </div>
+                  )}
+                </article>
               );
             })}
           </div>
@@ -206,16 +228,25 @@ export default function CategoriesPage() {
 
       {view === 'grid' && (
         <div className={styles.catGrid}>
-          {categories.map((c) => (
-            <div key={c.id} className={styles.catCard}>
-              <div className={styles.catIcon}>{c.icon}</div>
-              <div className={styles.catName}>{c.name}</div>
-              <div className={styles.catSlug}>{c.slug}</div>
-              <div className={styles.catStats}>
-                <span className={styles.mono}>{c.children?.length || 0}</span> subs
+          {categories.map((c) => {
+            const childParts = (c.children || []).reduce(
+              (n, ch) => n + (ch.parts_count || 0),
+              0,
+            );
+            const totalCatParts = (c.parts_count || 0) + childParts;
+            return (
+              <div key={c.id} className={styles.catCard}>
+                <div className={styles.catIcon}>{c.icon}</div>
+                <div className={styles.catName}>{c.name}</div>
+                <div className={styles.catSlug}>{c.slug}</div>
+                <div className={styles.catStats}>
+                  <span className={styles.mono}>{totalCatParts.toLocaleString()}</span> parts
+                  <span className={styles.dotSep}>&middot;</span>
+                  <span className={styles.mono}>{c.children?.length || 0}</span> subs
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
