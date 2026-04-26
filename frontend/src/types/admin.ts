@@ -110,11 +110,13 @@ export interface AdminCategory {
   name: string;
   slug: string;
   icon: string;
+  parts_count: number;
   children: Array<{
     id: string;
     name: string;
     slug: string;
     icon: string;
+    parts_count: number;
   }>;
 }
 

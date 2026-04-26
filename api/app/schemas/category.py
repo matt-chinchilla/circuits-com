@@ -13,6 +13,7 @@ class SubcategoryResponse(BaseModel):
     name: str
     slug: str
     icon: str
+    parts_count: int = 0
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -21,6 +22,7 @@ class CategoryResponse(BaseModel):
     name: str
     slug: str
     icon: str
+    parts_count: int = 0
     children: list[SubcategoryResponse]
     model_config = ConfigDict(from_attributes=True)
 
