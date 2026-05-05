@@ -97,6 +97,9 @@ export const adminApi = {
       .put<AdminSupplier>(`/suppliers/${id}`, data)
       .then((r) => r.data),
 
+  deleteSupplier: (id: string) =>
+    adminClient.delete(`/suppliers/${id}`).then((r) => r.data),
+
   getSupplierParts: (
     id: string,
     params: { page?: number; search?: string }

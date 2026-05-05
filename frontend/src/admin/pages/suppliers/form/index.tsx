@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Check } from 'lucide-react';
+import { ArrowLeft, Check, Trash2 } from 'lucide-react';
 import Breadcrumbs from '@admin/components/Breadcrumbs';
 import { adminApi } from '@admin/services/adminApi';
 import styles from './SupplierFormPage.module.scss';
@@ -42,6 +42,8 @@ export default function SupplierFormPage() {
   const [form, setForm] = useState<FormData>(emptyForm());
   const [errors, setErrors] = useState<FormErrors>({});
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [loadingExisting, setLoadingExisting] = useState(isEdit);
   const [existingName, setExistingName] = useState('');
   const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
@@ -104,7 +106,8 @@ export default function SupplierFormPage() {
         setToast({ type: 'success', msg: `Created ${created.name}.` });
         setTimeout(() => navigate(`/admin/suppliers/${created.id}`), 900);
       }
-    } catch {
+    } catch (err) {
+      console.error('[admin/supplier save]', err);
       setToast({ type: 'error', msg: 'Failed to save supplier. Please try again.' });
     } finally {
       setSaving(false);
@@ -114,6 +117,25 @@ export default function SupplierFormPage() {
   function handleCancel() {
     if (isEdit && id) navigate(`/admin/suppliers/${id}`);
     else navigate('/admin/suppliers');
+  }
+
+  async function handleDelete() {
+    if (!id) return;
+    setDeleting(true);
+    try {
+      await adminApi.deleteSupplier(id);
+      setToast({ type: 'success', msg: `Deleted ${existingName || 'supplier'}.` });
+      setShowDeleteConfirm(false);
+      setTimeout(() => navigate('/admin/suppliers'), 800);
+    } catch (err) {
+      // Surface the upstream axios failure for prod debugging — toast stays
+      // generic to avoid leaking 500-body internals to the user.
+      console.error('[admin/supplier delete]', err);
+      setToast({ type: 'error', msg: 'Failed to delete supplier. Please try again.' });
+      setShowDeleteConfirm(false);
+    } finally {
+      setDeleting(false);
+    }
   }
 
   if (loadingExisting) {
@@ -266,24 +288,78 @@ export default function SupplierFormPage() {
         </section>
 
         <div className={styles.formActions}>
+          {isEdit && (
+            <>
+              <button
+                type="button"
+                className={`${styles.btn} ${styles.btnDanger}`}
+                onClick={() => setShowDeleteConfirm(true)}
+                disabled={saving || deleting}
+              >
+                <Trash2 size={14} strokeWidth={2} />
+                Delete
+              </button>
+              <div className={styles.formActionsSpacer} />
+            </>
+          )}
           <button
             type="button"
             className={`${styles.btn} ${styles.btnGhost}`}
             onClick={handleCancel}
-            disabled={saving}
+            disabled={saving || deleting}
           >
             Cancel
           </button>
           <button
             type="submit"
             className={`${styles.btn} ${styles.btnPrimary}`}
-            disabled={saving}
+            disabled={saving || deleting}
           >
             <Check size={14} strokeWidth={2} />
             {saving ? 'Saving…' : submitLabel}
           </button>
         </div>
       </form>
+
+      {showDeleteConfirm && (
+        <div
+          className={styles.modalBackdrop}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="sup-delete-title"
+        >
+          <div className={styles.modal}>
+            <h3 className={styles.modalTitle} id="sup-delete-title">
+              Delete {existingName || 'this supplier'}?
+            </h3>
+            <p className={styles.modalBody}>
+              This permanently removes the supplier, every part listing and
+              price break, sponsorships, category links, and revenue records.
+              Linked admin users will be unlinked, not deleted. This action
+              cannot be undone.
+            </p>
+            <div className={styles.modalActions}>
+              <button
+                type="button"
+                className={`${styles.btn} ${styles.btnGhost}`}
+                onClick={() => setShowDeleteConfirm(false)}
+                disabled={deleting}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className={`${styles.btn} ${styles.btnDanger}`}
+                onClick={handleDelete}
+                disabled={deleting}
+              >
+                <Trash2 size={14} strokeWidth={2} />
+                {deleting ? 'Deleting…' : 'Delete supplier'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {toast && (
         <div

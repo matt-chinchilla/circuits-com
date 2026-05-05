@@ -2,89 +2,18 @@ import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Plus, Search, Pencil, X } from 'lucide-react';
 import { adminApi } from '@admin/services/adminApi';
+import { loadSponsors } from '@admin/services/sponsorStore';
 import type { AdminSponsor, AdminSupplier, AdminCategory, SponsorTier } from '@admin/types/admin';
 import styles from './SponsorsPage.module.scss';
 
 // Phase A6 — list page ported from 2026-04-25 Claude Design bundle
 // (project/ui_kits/admin/pages.jsx → SponsorsListPage).
 //
-// No backend admin sponsor CRUD exists yet, so the list is sourced from
-// localStorage-persisted seed data; adminApi.getStats() still drives the
-// upstream "Active sponsorships" count when available.
+// Persistence routed through @admin/services/sponsorStore so seed sponsors
+// materialize on first read (deleting a seed used to wipe the entire list
+// because the form page wrote [] over the implicit-seed fallback).
 
 const TIERS: SponsorTier[] = ['Featured', 'Platinum', 'Gold', 'Silver'];
-
-// LocalStorage key for the demo sponsor store. SponsorFormPage writes the
-// same key so list + form stay in sync without a real backend.
-const STORE_KEY = 'circuits.admin.sponsors';
-
-function loadStore(): AdminSponsor[] {
-  try {
-    const raw = localStorage.getItem(STORE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw) as AdminSponsor[];
-      if (Array.isArray(parsed)) return parsed;
-    }
-  } catch {
-    /* fall through to seed */
-  }
-  return SEED_SPONSORS;
-}
-
-const SEED_SPONSORS: AdminSponsor[] = [
-  {
-    id: 'spn-honeywell-sensors',
-    supplier_id: 'seed-supplier-honeywell',
-    supplier_name: 'Honeywell Sensing',
-    tier: 'Featured',
-    category_id: 'cat-sensors',
-    category_name: 'Sensors & Transducers',
-    keyword: null,
-    start_date: '2026-01-01',
-    end_date: '2026-12-31',
-    amount: 7000,
-    status: 'Active',
-  },
-  {
-    id: 'spn-ti-keyword-vreg',
-    supplier_id: 'seed-supplier-ti',
-    supplier_name: 'Texas Instruments',
-    tier: 'Gold',
-    category_id: null,
-    category_name: null,
-    keyword: 'voltage regulator',
-    start_date: '2026-03-01',
-    end_date: '2026-09-30',
-    amount: 1500,
-    status: 'Active',
-  },
-  {
-    id: 'spn-arrow-pmic',
-    supplier_id: 'seed-supplier-arrow',
-    supplier_name: 'Arrow Electronics',
-    tier: 'Platinum',
-    category_id: 'cat-pmic',
-    category_name: 'Power Management ICs',
-    keyword: null,
-    start_date: '2026-02-01',
-    end_date: '2027-01-31',
-    amount: 4500,
-    status: 'Active',
-  },
-  {
-    id: 'spn-mouser-keyword-stm32',
-    supplier_id: 'seed-supplier-mouser',
-    supplier_name: 'Mouser Electronics',
-    tier: 'Silver',
-    category_id: null,
-    category_name: null,
-    keyword: 'stm32',
-    start_date: '2025-11-01',
-    end_date: '2026-05-01',
-    amount: 800,
-    status: 'Paused',
-  },
-];
 
 type TierFilter = 'All' | SponsorTier;
 
@@ -125,16 +54,11 @@ function formatAmount(n: number): string {
 
 export default function SponsorsPage() {
   const navigate = useNavigate();
-  const [sponsors, setSponsors] = useState<AdminSponsor[]>(() => loadStore());
+  const [sponsors] = useState<AdminSponsor[]>(() => loadSponsors());
   const [tierFilter, setTierFilter] = useState<TierFilter>('All');
   const [search, setSearch] = useState('');
   const [suppliers, setSuppliers] = useState<AdminSupplier[]>([]);
   const [categories, setCategories] = useState<AdminCategory[]>([]);
-
-  // Refresh from localStorage when navigating back from the form page.
-  useEffect(() => {
-    setSponsors(loadStore());
-  }, []);
 
   // Pull live suppliers/categories so the in-memory sponsor records can be
   // re-keyed against current DB ids without losing the seed fallback.

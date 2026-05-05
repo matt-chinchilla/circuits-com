@@ -2,6 +2,11 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Check, ChevronLeft, Trash2 } from 'lucide-react';
 import { adminApi } from '@admin/services/adminApi';
+import {
+  deleteSponsor,
+  findSponsor,
+  upsertSponsor,
+} from '@admin/services/sponsorStore';
 import type {
   AdminSponsor,
   AdminSupplier,
@@ -19,8 +24,6 @@ import styles from './SponsorFormPage.module.scss';
 
 const TIERS: SponsorTier[] = ['Featured', 'Platinum', 'Gold', 'Silver'];
 const STATUSES: SponsorStatus[] = ['Active', 'Paused', 'Expired'];
-
-const STORE_KEY = 'circuits.admin.sponsors';
 
 type Placement = 'category' | 'keyword';
 
@@ -65,27 +68,6 @@ function emptyForm(): FormState {
   };
 }
 
-function readStore(): AdminSponsor[] {
-  try {
-    const raw = localStorage.getItem(STORE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw) as AdminSponsor[];
-      if (Array.isArray(parsed)) return parsed;
-    }
-  } catch {
-    /* ignore */
-  }
-  return [];
-}
-
-function writeStore(rows: AdminSponsor[]) {
-  try {
-    localStorage.setItem(STORE_KEY, JSON.stringify(rows));
-  } catch {
-    /* localStorage may be unavailable or full — non-fatal for the demo */
-  }
-}
-
 export default function SponsorFormPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -116,8 +98,7 @@ export default function SponsorFormPage() {
   // Hydrate form on edit
   useEffect(() => {
     if (!isEdit || !id) return;
-    const rows = readStore();
-    const existing = rows.find((r) => r.id === id);
+    const existing = findSponsor(id);
     if (existing) {
       setForm({
         supplier_id: existing.supplier_id,
@@ -212,12 +193,7 @@ export default function SponsorFormPage() {
     if (!validate()) return;
     setSaving(true);
     try {
-      const next = buildSponsor();
-      const rows = readStore();
-      const updated = isEdit
-        ? rows.map((r) => (r.id === next.id ? next : r))
-        : [next, ...rows];
-      writeStore(updated);
+      upsertSponsor(buildSponsor());
       setToast(isEdit ? 'Sponsorship updated' : 'Sponsorship created');
       // small delay so user sees toast confirmation
       setTimeout(() => navigate('/admin/sponsors'), 600);
@@ -228,8 +204,7 @@ export default function SponsorFormPage() {
 
   function handleDelete() {
     if (!id) return;
-    const rows = readStore().filter((r) => r.id !== id);
-    writeStore(rows);
+    deleteSponsor(id);
     setToast('Sponsorship deleted');
     setTimeout(() => navigate('/admin/sponsors'), 500);
   }

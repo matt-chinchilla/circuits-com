@@ -76,6 +76,7 @@ def get_or_create_supplier(
     email: Optional[str] = None,
     description: Optional[str] = None,
     logo_url: Optional[str] = None,
+    contact_name: Optional[str] = None,
 ) -> Supplier:
     obj = db.query(Supplier).filter(Supplier.name == name).first()
     if obj is None:
@@ -86,6 +87,7 @@ def get_or_create_supplier(
             email=email,
             description=description,
             logo_url=logo_url,
+            contact_name=contact_name,
         )
         db.add(obj)
         db.flush()
@@ -334,6 +336,46 @@ def seed(db: Session) -> None:
             website="automation.honeywell.com",
             email="sensing@honeywell.com",
             description="Global sensing and IoT solutions manufacturer",
+        ),
+        # Suppliers added via the prod admin UI (2026-05-05) — imported into
+        # the seed so a fresh local environment matches prod state. Some are
+        # smoke-test entries from when the team verified the add-supplier
+        # form; they're admin-deletable now that the Delete button shipped.
+        dict(
+            name="Oneonta Electronics",
+            phone="16314950445",
+            website="www.electronics.com",
+            email="abc@oneontaelectronics.com",
+            description="Leftly",
+            contact_name="Ed Pitlack",
+        ),
+        dict(
+            name="Thunder Electronics",
+            phone="631 472-1592",
+            email="Jedi4425@gmail.com",
+            contact_name="John King",
+        ),
+        dict(
+            name="States Electronics",
+            phone="5555551212",
+            website="https://www.tesla.com",
+            email="blue@gmail.com",
+            description="none",
+            contact_name="John Romano",
+        ),
+        dict(
+            name="Mike's Electric",
+            phone="16317086040",
+            website="www.circuits.com",
+            email="1859charlesdarwin@gmail.com",
+            description="Helloooooooooooo",
+        ),
+        dict(
+            name="Jo Jo's Circuits Circus",
+            phone="16317086040",
+            website="www.espn.com",
+            email="1859charlesdarwin@gmail.com",
+            description="A Circus of Circuits.",
         ),
     ]
 

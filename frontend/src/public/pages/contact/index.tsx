@@ -19,7 +19,7 @@ const CONTACTS = [
     des: "U1",
   },
   {
-    name: "Mike Kennedy, Ph.D",
+    name: "Mike Kennedy, PhD",
     title: "Co-Founder / COO",
     email: "mike@circuits.com",
     phone: "631-708-6040",

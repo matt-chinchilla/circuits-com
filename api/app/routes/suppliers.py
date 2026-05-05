@@ -6,8 +6,17 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.schemas import SupplierResponse
-from app.models import Supplier, Part, PartListing, Revenue, CategorySupplier, Category, User
+from app.models import (
+    Category,
+    CategorySupplier,
+    Part,
+    PartListing,
+    PriceBreak,
+    Revenue,
+    Sponsor,
+    Supplier,
+    User,
+)
 from app.services.auth_service import get_current_user
 
 router = APIRouter(prefix="/api/suppliers", tags=["suppliers"])
@@ -52,9 +61,33 @@ def supplier_to_dict(supplier: Supplier) -> dict:
     }
 
 
-@router.get("/", response_model=list[SupplierResponse])
+@router.get("/")
 def list_suppliers(db: Session = Depends(get_db)):
-    return db.query(Supplier).order_by(Supplier.name).all()
+    suppliers = db.query(Supplier).order_by(Supplier.name).all()
+
+    parts_counts: dict = {
+        row[0]: row[1]
+        for row in db.query(PartListing.supplier_id, func.count(PartListing.id))
+        .group_by(PartListing.supplier_id)
+        .all()
+    }
+
+    categories_by_supplier: dict = {}
+    for sup_id, cat_name in (
+        db.query(CategorySupplier.supplier_id, Category.name)
+        .join(Category, Category.id == CategorySupplier.category_id)
+        .all()
+    ):
+        categories_by_supplier.setdefault(sup_id, []).append(cat_name)
+
+    return [
+        {
+            **supplier_to_dict(s),
+            "parts_count": int(parts_counts.get(s.id, 0)),
+            "categories": categories_by_supplier.get(s.id, []),
+        }
+        for s in suppliers
+    ]
 
 
 @router.post("/")
@@ -126,6 +159,57 @@ def update_supplier(
     db.commit()
     db.refresh(supplier)
     return supplier_to_dict(supplier)
+
+
+@router.delete("/{supplier_id}")
+def delete_supplier(
+    supplier_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Cascade-delete a supplier and every dependent row.
+
+    PartListings (and their PriceBreaks), Sponsors, CategorySupplier links,
+    and Revenue rows are removed. Linked Users have `supplier_id` set to
+    NULL — admin/company-user accounts must survive.
+    """
+    supplier = db.query(Supplier).filter(Supplier.id == _to_uuid(supplier_id)).first()
+    if not supplier:
+        raise HTTPException(404, "Supplier not found")
+
+    listing_ids = [
+        row[0]
+        for row in db.query(PartListing.id)
+        .filter(PartListing.supplier_id == supplier.id)
+        .all()
+    ]
+    if listing_ids:
+        db.query(PriceBreak).filter(PriceBreak.listing_id.in_(listing_ids)).delete(
+            synchronize_session=False
+        )
+    db.query(PartListing).filter(PartListing.supplier_id == supplier.id).delete(
+        synchronize_session=False
+    )
+    db.query(Sponsor).filter(Sponsor.supplier_id == supplier.id).delete(
+        synchronize_session=False
+    )
+    db.query(CategorySupplier).filter(
+        CategorySupplier.supplier_id == supplier.id
+    ).delete(synchronize_session=False)
+    db.query(Revenue).filter(Revenue.supplier_id == supplier.id).delete(
+        synchronize_session=False
+    )
+    db.query(User).filter(User.supplier_id == supplier.id).update(
+        {User.supplier_id: None}, synchronize_session=False
+    )
+
+    # Bulk deletes bypass session sync; expire the supplier so the upcoming
+    # ORM delete doesn't try to NULL composite-PK columns on stale in-memory
+    # CategorySupplier rows (lazy="selectin" had loaded them).
+    db.expire(supplier)
+    db.delete(supplier)
+    db.commit()
+    return {"status": "ok"}
 
 
 @router.get("/{supplier_id}/parts")

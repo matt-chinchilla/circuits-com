@@ -1,15 +1,15 @@
-import { useMemo, useState, type FormEvent } from 'react';
-import { motion } from 'framer-motion';
-import { Link } from 'react-router-dom';
-import Footer from '@public/components/layout/Footer';
-import PageHeaderBand from '@public/components/layout/PageHeaderBand';
-import GlowButton from '@public/components/widgets/GlowButton';
-import { useCategories } from '@public/hooks/useCategories';
-import { api } from '@public/services/api';
-import styles from './JoinPage.module.scss';
+import { useMemo, useState, type FormEvent } from "react";
+import { motion } from "framer-motion";
+import { Link } from "react-router-dom";
+import Footer from "@public/components/layout/Footer";
+import PageHeaderBand from "@public/components/layout/PageHeaderBand";
+import GlowButton from "@public/components/widgets/GlowButton";
+import { useCategories } from "@public/hooks/useCategories";
+import { api } from "@public/services/api";
+import styles from "./JoinPage.module.scss";
 
 interface JoinTier {
-  id: 'silver' | 'gold' | 'platinum';
+  id: "silver" | "gold" | "platinum";
   name: string;
   price: string;
   tag: string;
@@ -19,40 +19,40 @@ interface JoinTier {
 
 const JOIN_TIERS: JoinTier[] = [
   {
-    id: 'silver',
-    name: 'Silver',
-    price: '$0',
-    tag: 'Free listing',
+    id: "silver",
+    name: "Silver",
+    price: "$0",
+    tag: "Free listing",
     perks: [
-      'Standard listing in your category',
-      'Up to 25 part numbers',
-      'Email-only contact link',
+      "Standard listing in your category",
+      "Up to 25 part numbers",
+      "Email-only contact link",
     ],
     featured: false,
   },
   {
-    id: 'gold',
-    name: 'Gold',
-    price: '$249/mo',
-    tag: 'Most chosen',
+    id: "gold",
+    name: "Gold",
+    price: "$249/mo",
+    tag: "Most chosen",
     perks: [
-      'Priority placement in category',
-      'Unlimited part numbers',
-      'Phone + website + email',
-      'Monthly traffic report',
+      "Priority placement in category",
+      "Unlimited part numbers",
+      "Phone + website + email",
+      "Monthly traffic report",
     ],
     featured: true,
   },
   {
-    id: 'platinum',
-    name: 'Platinum',
-    price: '$849/mo',
-    tag: 'Featured partner',
+    id: "platinum",
+    name: "Platinum",
+    price: "$849/mo",
+    tag: "Featured partner",
     perks: [
-      'Top-of-page sponsor block',
-      'Cross-category placement',
-      'Dedicated account manager',
-      'API for live stock sync',
+      "Top-of-page sponsor block",
+      "Cross-category placement",
+      "Dedicated account manager",
+      "API for live stock sync",
     ],
     featured: false,
   },
@@ -65,16 +65,16 @@ export default function JoinPage() {
   const { categories } = useCategories();
 
   // Real form state — preserved from prior version (POSTed to api.submitJoin).
-  const [companyName, setCompanyName] = useState('');
-  const [contactPerson, setContactPerson] = useState('');
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
-  const [website, setWebsite] = useState('');
+  const [companyName, setCompanyName] = useState("");
+  const [contactPerson, setContactPerson] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [website, setWebsite] = useState("");
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
-  const [message, setMessage] = useState('');
+  const [message, setMessage] = useState("");
 
   // Bundle additions — tier picker + terms checkbox.
-  const [tier, setTier] = useState<JoinTier['id']>('gold');
+  const [tier, setTier] = useState<JoinTier["id"]>("gold");
   const [agreedTerms, setAgreedTerms] = useState(false);
 
   const [submitting, setSubmitting] = useState(false);
@@ -122,19 +122,19 @@ export default function JoinPage() {
     setError(null);
 
     if (!companyName.trim() || !email.trim()) {
-      setError('Company name and email are required.');
+      setError("Company name and email are required.");
       return;
     }
     if (!emailOk) {
-      setError('Please enter a valid email.');
+      setError("Please enter a valid email.");
       return;
     }
     if (website && !websiteOk) {
-      setError('Website must start with http:// or https://');
+      setError("Website must start with http:// or https://");
       return;
     }
     if (!agreedTerms) {
-      setError('Please accept the listing terms.');
+      setError("Please accept the listing terms.");
       return;
     }
 
@@ -154,8 +154,8 @@ export default function JoinPage() {
     } catch (err) {
       // Log the upstream failure so production debugging has a trail; user-
       // facing message stays generic to avoid leaking API internals.
-      console.error('[JoinPage] api.submitJoin failed', err);
-      setError('Something went wrong. Please try again later.');
+      console.error("[JoinPage] api.submitJoin failed", err);
+      setError("Something went wrong. Please try again later.");
     } finally {
       setSubmitting(false);
     }
@@ -172,7 +172,7 @@ export default function JoinPage() {
       initial={{ opacity: 0, x: 20 }}
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
-      transition={{ duration: 0.15, ease: 'easeInOut' as const }}
+      transition={{ duration: 0.15, ease: "easeInOut" as const }}
     >
       <PageHeaderBand
         page="join"
@@ -188,14 +188,14 @@ export default function JoinPage() {
                 ✓
               </span>
               <h2 className={styles.successTitle}>
-                Welcome aboard, {companyName || 'partner'}.
+                Welcome aboard, {companyName || "partner"}.
               </h2>
               <p className={styles.successText}>
-                We&rsquo;ve received your application for the{' '}
-                <strong>{activeTier.name}</strong> tier across{' '}
-                <strong>{selectedCategories.length}</strong>{' '}
-                {selectedCategories.length === 1 ? 'category' : 'categories'}.
-                A founder will reach out at <code>{email}</code> within one
+                We&rsquo;ve received your application for the{" "}
+                <strong>{activeTier.name}</strong> tier across{" "}
+                <strong>{selectedCategories.length}</strong>{" "}
+                {selectedCategories.length === 1 ? "category" : "categories"}. A
+                founder will reach out at <code>{email}</code> within one
                 business day.
               </p>
               <div className={styles.successReceipt}>
@@ -209,7 +209,7 @@ export default function JoinPage() {
                 </div>
                 <div>
                   <span>CATS</span>
-                  <span>{selectedCategories.length || '—'}</span>
+                  <span>{selectedCategories.length || "—"}</span>
                 </div>
                 <div>
                   <span>STATUS</span>
@@ -246,8 +246,8 @@ export default function JoinPage() {
                     🔗
                   </span>
                   <div>
-                    <strong>Direct buy-links.</strong> Your store, your
-                    checkout — we never reroute the order.
+                    <strong>Direct buy-links.</strong> Your store, your checkout
+                    — we never reroute the order.
                   </div>
                 </li>
                 <li className={styles.benefitItem}>
@@ -275,11 +275,11 @@ export default function JoinPage() {
                 {JOIN_TIERS.map((t) => {
                   const cls = [
                     styles.tier,
-                    tier === t.id ? styles.tierActive : '',
-                    t.featured ? styles.tierFeatured : '',
+                    tier === t.id ? styles.tierActive : "",
+                    t.featured ? styles.tierFeatured : "",
                   ]
                     .filter(Boolean)
-                    .join(' ');
+                    .join(" ");
                   return (
                     <label key={t.id} className={cls}>
                       <input
@@ -306,11 +306,7 @@ export default function JoinPage() {
             </aside>
 
             {/* Form */}
-            <form
-              className={styles.form}
-              onSubmit={handleSubmit}
-              noValidate
-            >
+            <form className={styles.form} onSubmit={handleSubmit} noValidate>
               <div
                 className={styles.progress}
                 role="progressbar"
@@ -322,10 +318,7 @@ export default function JoinPage() {
                   className={styles.progressBar}
                   style={{ width: `${completion}%` }}
                 >
-                  <span
-                    className={styles.progressShimmer}
-                    aria-hidden="true"
-                  />
+                  <span className={styles.progressShimmer} aria-hidden="true" />
                 </div>
                 <span className={styles.progressLabel}>
                   APPLICATION · {completion}% COMPLETE
@@ -360,7 +353,7 @@ export default function JoinPage() {
                   </div>
                   <div className={styles.field}>
                     <label className={styles.label} htmlFor="join-contact">
-                      Contact person
+                      Contact person<span className={styles.required}>*</span>
                     </label>
                     <input
                       id="join-contact"
@@ -381,11 +374,11 @@ export default function JoinPage() {
                       id="join-email"
                       className={[
                         styles.input,
-                        email && !emailOk ? styles.inputInvalid : '',
-                        email && emailOk ? styles.inputValid : '',
+                        email && !emailOk ? styles.inputInvalid : "",
+                        email && emailOk ? styles.inputValid : "",
                       ]
                         .filter(Boolean)
-                        .join(' ')}
+                        .join(" ")}
                       type="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
@@ -397,17 +390,17 @@ export default function JoinPage() {
                         className={[
                           styles.fhint,
                           emailOk ? styles.fhintOk : styles.fhintBad,
-                        ].join(' ')}
+                        ].join(" ")}
                       >
                         {emailOk
-                          ? '✓ valid email'
-                          : 'must look like name@domain.tld'}
+                          ? "✓ valid email"
+                          : "must look like name@domain.tld"}
                       </span>
                     )}
                   </div>
                   <div className={styles.field}>
                     <label className={styles.label} htmlFor="join-phone">
-                      Phone
+                      Phone<span className={styles.required}>*</span>
                     </label>
                     <input
                       id="join-phone"
@@ -427,11 +420,11 @@ export default function JoinPage() {
                     id="join-website"
                     className={[
                       styles.input,
-                      website && !websiteOk ? styles.inputInvalid : '',
-                      website && websiteOk ? styles.inputValid : '',
+                      website && !websiteOk ? styles.inputInvalid : "",
+                      website && websiteOk ? styles.inputValid : "",
                     ]
                       .filter(Boolean)
-                      .join(' ')}
+                      .join(" ")}
                     type="url"
                     value={website}
                     onChange={(e) => setWebsite(e.target.value)}
@@ -452,8 +445,8 @@ export default function JoinPage() {
                   interest
                 </legend>
                 <p className={styles.fhelp}>
-                  Pick every category your company supplies parts in. We&rsquo;ll
-                  list you in each one.
+                  Pick every category your company supplies parts in.
+                  We&rsquo;ll list you in each one.
                 </p>
                 <div className={styles.catGrid}>
                   {categories.map((c) => {
@@ -462,12 +455,9 @@ export default function JoinPage() {
                       <button
                         type="button"
                         key={c.id}
-                        className={[
-                          styles.catChip,
-                          on ? styles.catChipOn : '',
-                        ]
+                        className={[styles.catChip, on ? styles.catChipOn : ""]
                           .filter(Boolean)
-                          .join(' ')}
+                          .join(" ")}
                         onClick={() => toggleCategory(c.slug)}
                         aria-pressed={on}
                       >
@@ -476,7 +466,7 @@ export default function JoinPage() {
                         </span>
                         <span className={styles.catName}>{c.name}</span>
                         <span className={styles.catMark} aria-hidden="true">
-                          {on ? '✓' : '+'}
+                          {on ? "✓" : "+"}
                         </span>
                       </button>
                     );
@@ -505,7 +495,9 @@ export default function JoinPage() {
                     maxLength={600}
                     placeholder="Tell us about your stock depth, lead times, or any specific categories you'd like to feature."
                   />
-                  <span className={styles.fhint} aria-live="polite">{message.length} / 600</span>
+                  <span className={styles.fhint} aria-live="polite">
+                    {message.length} / 600
+                  </span>
                 </div>
                 <label className={styles.terms}>
                   <input
@@ -514,12 +506,20 @@ export default function JoinPage() {
                     onChange={(e) => setAgreedTerms(e.target.checked)}
                   />
                   <span>
-                    I have authority to list this company and accept the{' '}
-                    <button type="button" className={styles.termsLink} onClick={(e) => e.preventDefault()}>
+                    I have authority to list this company and accept the{" "}
+                    <button
+                      type="button"
+                      className={styles.termsLink}
+                      onClick={(e) => e.preventDefault()}
+                    >
                       Listing Terms
-                    </button>{' '}
-                    and{' '}
-                    <button type="button" className={styles.termsLink} onClick={(e) => e.preventDefault()}>
+                    </button>{" "}
+                    and{" "}
+                    <button
+                      type="button"
+                      className={styles.termsLink}
+                      onClick={(e) => e.preventDefault()}
+                    >
                       Acceptable Use Policy
                     </button>
                     .
@@ -538,7 +538,7 @@ export default function JoinPage() {
                   variant="primary"
                   disabled={submitting}
                 >
-                  {submitting ? 'Submitting…' : 'Submit Application →'}
+                  {submitting ? "Submitting…" : "Submit Application →"}
                 </GlowButton>
               </div>
             </form>
