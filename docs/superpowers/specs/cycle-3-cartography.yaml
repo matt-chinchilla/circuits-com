@@ -1,0 +1,516 @@
+# Cycle 3 Cartography — Admin scope
+# Source: 3 parallel feature-dev:code-explorer agents (Task 3.1)
+# Generated: 2026-05-03 on `updates` branch, post-Cycle-2 SHA e80a18b
+
+# ============================================================
+# === Reader A: admin standalone pages =======================
+# ============================================================
+
+- path: pages/admin/LoginPage.tsx
+  kind: tsx
+  exports: [LoginPage (default)]
+  imports:
+    - {from: 'react', kind: external}
+    - {from: 'react-router-dom', kind: external}
+    - {from: '../../contexts/AuthContext', kind: relative, target: 'admin/contexts/AuthContext'}
+    - {from: './LoginPage.module.scss', kind: relative, target: 'admin/pages/login/LoginPage.module.scss'}
+  consumers: ['src/App.tsx (lazy, line 21)']
+  target_path: admin/pages/login/index.tsx
+
+- path: pages/admin/LoginPage.module.scss
+  kind: scss
+  imports:
+    - {from: '../../styles/admin/variables', kind: relative, target: 'admin/styles/_variables.scss'}
+  target_path: admin/pages/login/LoginPage.module.scss
+  flags: ['NEEDS @use rewrite to @admin/styles/variables']
+
+- path: pages/admin/DashboardPage.tsx
+  kind: tsx
+  exports: [DashboardPage (default)]
+  imports:
+    - {from: 'react', kind: external}
+    - {from: 'react-router-dom', kind: external}
+    - {from: 'lucide-react', kind: external}
+    - {from: '../../contexts/DemoContext', kind: relative, target: 'admin/contexts/DemoContext'}
+    - {from: '../../services/adminApi', kind: relative, target: 'admin/services/adminApi'}
+    - {from: '../../types/admin', kind: relative, target: 'admin/types/admin'}
+    - {from: './DashboardPage.module.scss', kind: relative, target: 'admin/pages/dashboard/DashboardPage.module.scss'}
+  consumers: ['src/App.tsx (lazy, line 22)']
+  target_path: admin/pages/dashboard/index.tsx
+
+- path: pages/admin/DashboardPage.module.scss
+  kind: scss
+  imports:
+    - {from: '@shared/styles/variables', kind: alias, target: '(unchanged — Cycle 1)'}
+  target_path: admin/pages/dashboard/DashboardPage.module.scss
+
+- path: pages/admin/ReportsPage.tsx
+  kind: tsx
+  exports: [ReportsPage (default)]
+  imports:
+    - {from: 'react', kind: external}
+    - {from: 'lucide-react', kind: external}
+    - {from: '../../contexts/DemoContext', kind: relative, target: 'admin/contexts/DemoContext'}
+    - {from: '../../services/adminApi', kind: relative, target: 'admin/services/adminApi'}
+    - {from: '../../types/admin', kind: relative, target: 'admin/types/admin'}
+    - {from: './ReportsPage.module.scss', kind: relative, target: 'admin/pages/reports/ReportsPage.module.scss'}
+  consumers: ['src/App.tsx (lazy, line 32)']
+  target_path: admin/pages/reports/index.tsx
+
+- path: pages/admin/ReportsPage.module.scss
+  kind: scss
+  imports:
+    - {from: '@shared/styles/variables', kind: alias, target: '(unchanged — Cycle 1)'}
+  target_path: admin/pages/reports/ReportsPage.module.scss
+
+- path: pages/admin/SettingsPage.tsx
+  kind: tsx
+  exports: [SettingsPage (default)]
+  imports:
+    - {from: 'react', kind: external}
+    - {from: 'lucide-react', kind: external}
+    - {from: '../../components/admin/ConfirmDialog', kind: relative, target: 'admin/components/ConfirmDialog'}
+    - {from: './SettingsPage.module.scss', kind: relative, target: 'admin/pages/settings/SettingsPage.module.scss'}
+  consumers: ['src/App.tsx (lazy, line 36)']
+  target_path: admin/pages/settings/index.tsx
+
+- path: pages/admin/SettingsPage.module.scss
+  kind: scss
+  imports:
+    - {from: '@shared/styles/variables', kind: alias, target: '(unchanged — Cycle 1)'}
+  target_path: admin/pages/settings/SettingsPage.module.scss
+
+- path: pages/admin/ImportPage.tsx
+  kind: tsx
+  exports: [ImportPage (default)]
+  imports:
+    - {from: 'react', kind: external}
+    - {from: 'react-dropzone', kind: external}
+    - {from: 'papaparse', kind: external}
+    - {from: 'react-router-dom', kind: external}
+    - {from: 'lucide-react', kind: external}
+    - {from: '../../services/adminApi', kind: relative, target: 'admin/services/adminApi'}
+    - {from: '../../types/admin', kind: relative, target: 'admin/types/admin'}
+    - {from: './ImportPage.module.scss', kind: relative, target: 'admin/pages/import/ImportPage.module.scss'}
+  consumers: ['src/App.tsx (lazy, line 31)']
+  target_path: admin/pages/import/index.tsx
+
+- path: pages/admin/ImportPage.module.scss
+  kind: scss
+  imports:
+    - {from: '@shared/styles/variables', kind: alias, target: '(unchanged — Cycle 1)'}
+  target_path: admin/pages/import/ImportPage.module.scss
+
+- path: pages/admin/CategoriesPage.tsx
+  kind: tsx
+  exports: [CategoriesPage (default)]
+  imports:
+    - {from: 'react', kind: external}
+    - {from: 'react-router-dom', kind: external}
+    - {from: 'lucide-react', kind: external}
+    - {from: '../../components/admin/Breadcrumbs', kind: relative, target: 'admin/components/Breadcrumbs'}
+    - {from: '../../services/adminApi', kind: relative, target: 'admin/services/adminApi'}
+    - {from: '../../types/admin', kind: relative, target: 'admin/types/admin'}
+    - {from: './CategoriesPage.module.scss', kind: relative, target: 'admin/pages/categories/CategoriesPage.module.scss'}
+  consumers: ['src/App.tsx (lazy, line 33)']
+  target_path: admin/pages/categories/index.tsx
+
+- path: pages/admin/CategoriesPage.module.scss
+  kind: scss
+  imports:
+    - {from: '../../styles/admin/variables', kind: relative, target: 'admin/styles/_variables.scss'}
+  target_path: admin/pages/categories/CategoriesPage.module.scss
+  flags: ['NEEDS @use rewrite to @admin/styles/variables']
+
+- path: pages/admin/PlaceholderPage.tsx
+  kind: tsx
+  exports: [PlaceholderPage (default)]
+  imports:
+    - {from: './PlaceholderPage.module.scss', kind: relative, target: 'admin/pages/placeholder/PlaceholderPage.module.scss'}
+  consumers: []
+  target_path: admin/pages/placeholder/index.tsx
+  flags: ['ORPHAN — no App.tsx route, no other consumers; user decides delete vs move-as-orphan']
+
+- path: pages/admin/PlaceholderPage.module.scss
+  kind: scss
+  imports:
+    - {from: '../../styles/admin/variables', kind: relative, target: 'admin/styles/_variables.scss'}
+  target_path: admin/pages/placeholder/PlaceholderPage.module.scss
+  flags: ['orphan; NEEDS @use rewrite to @admin/styles/variables']
+
+# ============================================================
+# === Reader B: entity-CRUD admin pages (Plan B nesting) =====
+# ============================================================
+
+- path: pages/admin/SuppliersPage.tsx
+  kind: tsx
+  exports: [SuppliersPage (default)]
+  imports:
+    - {from: 'react', kind: external}
+    - {from: 'react-router-dom', kind: external}
+    - {from: 'lucide-react', kind: external}
+    - {from: '../../components/admin/Breadcrumbs', kind: relative, target: 'admin/components/Breadcrumbs'}
+    - {from: '../../services/adminApi', kind: relative, target: 'admin/services/adminApi'}
+    - {from: '../../types/admin', kind: relative, target: 'admin/types/admin'}
+    - {from: './SuppliersPage.module.scss', kind: relative, target: 'admin/pages/suppliers/list/SuppliersPage.module.scss'}
+  consumers: ['src/App.tsx (lazy, line 23)']
+  target_path: admin/pages/suppliers/list/index.tsx
+
+- path: pages/admin/SuppliersPage.module.scss
+  kind: scss
+  imports:
+    - {from: '@shared/styles/variables', kind: alias}
+    - {from: '../../styles/admin/variables', kind: relative, target: 'admin/styles/_variables.scss'}
+  target_path: admin/pages/suppliers/list/SuppliersPage.module.scss
+  flags: ['NEEDS @use rewrite for the relative path']
+
+- path: pages/admin/SupplierFormPage.tsx
+  kind: tsx
+  exports: [SupplierFormPage (default)]
+  imports:
+    - {from: 'react', kind: external}
+    - {from: 'react-router-dom', kind: external}
+    - {from: 'lucide-react', kind: external}
+    - {from: '../../components/admin/Breadcrumbs', kind: relative, target: 'admin/components/Breadcrumbs'}
+    - {from: '../../services/adminApi', kind: relative, target: 'admin/services/adminApi'}
+    - {from: './SupplierFormPage.module.scss', kind: relative, target: 'admin/pages/suppliers/form/SupplierFormPage.module.scss'}
+  consumers: ['src/App.tsx (lazy, line 27) — used for both /admin/suppliers/new and /:id/edit']
+  target_path: admin/pages/suppliers/form/index.tsx
+
+- path: pages/admin/SupplierFormPage.module.scss
+  kind: scss
+  imports:
+    - {from: '@shared/styles/variables', kind: alias}
+    - {from: '../../styles/admin/variables', kind: relative, target: 'admin/styles/_variables.scss'}
+  target_path: admin/pages/suppliers/form/SupplierFormPage.module.scss
+  flags: ['NEEDS @use rewrite for the relative path']
+
+- path: pages/admin/SupplierDetailPage.tsx
+  kind: tsx
+  exports: [SupplierDetailPage (default)]
+  imports:
+    - {from: 'react', kind: external}
+    - {from: 'react-router-dom', kind: external}
+    - {from: 'lucide-react', kind: external}
+    - {from: '../../components/admin/Breadcrumbs', kind: relative, target: 'admin/components/Breadcrumbs'}
+    - {from: '../../services/adminApi', kind: relative, target: 'admin/services/adminApi'}
+    - {from: '../../types/admin', kind: relative, target: 'admin/types/admin'}
+    - {from: './SupplierDetailPage.module.scss', kind: relative, target: 'admin/pages/suppliers/detail/SupplierDetailPage.module.scss'}
+  consumers: ['src/App.tsx (lazy, line 24)']
+  target_path: admin/pages/suppliers/detail/index.tsx
+
+- path: pages/admin/SupplierDetailPage.module.scss
+  kind: scss
+  imports:
+    - {from: '@shared/styles/variables', kind: alias}
+    - {from: '../../styles/admin/variables', kind: relative, target: 'admin/styles/_variables.scss'}
+  target_path: admin/pages/suppliers/detail/SupplierDetailPage.module.scss
+  flags: ['NEEDS @use rewrite for the relative path']
+
+- path: pages/admin/PartsPage.tsx
+  kind: tsx
+  exports: [PartsPage (default)]
+  imports:
+    - {from: 'react', kind: external}
+    - {from: 'react-router-dom', kind: external}
+    - {from: 'lucide-react', kind: external}
+    - {from: '../../contexts/DemoContext', kind: relative, target: 'admin/contexts/DemoContext'}
+    - {from: '../../services/adminApi', kind: relative, target: 'admin/services/adminApi'}
+    - {from: '../../types/admin', kind: relative, target: 'admin/types/admin'}
+    - {from: './PartsPage.module.scss', kind: relative, target: 'admin/pages/parts/list/PartsPage.module.scss'}
+  consumers: ['src/App.tsx (lazy, line 28)']
+  target_path: admin/pages/parts/list/index.tsx
+
+- path: pages/admin/PartsPage.module.scss
+  kind: scss
+  imports:
+    - {from: '@shared/styles/variables', kind: alias}
+  target_path: admin/pages/parts/list/PartsPage.module.scss
+
+- path: pages/admin/PartFormPage.tsx
+  kind: tsx
+  exports: [PartFormPage (default)]
+  imports:
+    - {from: 'react', kind: external}
+    - {from: 'react-router-dom', kind: external}
+    - {from: 'lucide-react', kind: external}
+    - {from: '../../services/adminApi', kind: relative, target: 'admin/services/adminApi'}
+    - {from: '../../types/admin', kind: relative, target: 'admin/types/admin'}
+    - {from: './PartFormPage.module.scss', kind: relative, target: 'admin/pages/parts/form/PartFormPage.module.scss'}
+  consumers: ['src/App.tsx (lazy, line 30)']
+  target_path: admin/pages/parts/form/index.tsx
+
+- path: pages/admin/PartFormPage.module.scss
+  kind: scss
+  imports:
+    - {from: '@shared/styles/variables', kind: alias}
+  target_path: admin/pages/parts/form/PartFormPage.module.scss
+
+- path: pages/admin/PartDetailPage.tsx
+  kind: tsx
+  exports: [PartDetailPage (default)]
+  imports:
+    - {from: 'react', kind: external}
+    - {from: 'react-router-dom', kind: external}
+    - {from: 'lucide-react', kind: external}
+    - {from: '../../services/adminApi', kind: relative, target: 'admin/services/adminApi'}
+    - {from: '../../types/admin', kind: relative, target: 'admin/types/admin'}
+    - {from: './PartDetailPage.module.scss', kind: relative, target: 'admin/pages/parts/detail/PartDetailPage.module.scss'}
+  consumers: ['src/App.tsx (lazy, line 29)']
+  target_path: admin/pages/parts/detail/index.tsx
+
+- path: pages/admin/PartDetailPage.module.scss
+  kind: scss
+  imports:
+    - {from: '@shared/styles/variables', kind: alias}
+  target_path: admin/pages/parts/detail/PartDetailPage.module.scss
+
+- path: pages/admin/SponsorsPage.tsx
+  kind: tsx
+  exports: [SponsorsPage (default)]
+  imports:
+    - {from: 'react', kind: external}
+    - {from: 'react-router-dom', kind: external}
+    - {from: 'lucide-react', kind: external}
+    - {from: '../../services/adminApi', kind: relative, target: 'admin/services/adminApi'}
+    - {from: '../../types/admin', kind: relative, target: 'admin/types/admin'}
+    - {from: './SponsorsPage.module.scss', kind: relative, target: 'admin/pages/sponsors/list/SponsorsPage.module.scss'}
+  consumers: ['src/App.tsx (lazy, line 34)']
+  target_path: admin/pages/sponsors/list/index.tsx
+
+- path: pages/admin/SponsorsPage.module.scss
+  kind: scss
+  imports:
+    - {from: '@shared/styles/variables', kind: alias}
+  target_path: admin/pages/sponsors/list/SponsorsPage.module.scss
+
+- path: pages/admin/SponsorFormPage.tsx
+  kind: tsx
+  exports: [SponsorFormPage (default)]
+  imports:
+    - {from: 'react', kind: external}
+    - {from: 'react-router-dom', kind: external}
+    - {from: 'lucide-react', kind: external}
+    - {from: '../../services/adminApi', kind: relative, target: 'admin/services/adminApi'}
+    - {from: '../../types/admin', kind: relative, target: 'admin/types/admin'}
+    - {from: './SponsorFormPage.module.scss', kind: relative, target: 'admin/pages/sponsors/form/SponsorFormPage.module.scss'}
+  consumers: ['src/App.tsx (lazy, line 35)']
+  target_path: admin/pages/sponsors/form/index.tsx
+
+- path: pages/admin/SponsorFormPage.module.scss
+  kind: scss
+  imports:
+    - {from: '@shared/styles/variables', kind: alias}
+  target_path: admin/pages/sponsors/form/SponsorFormPage.module.scss
+
+# ============================================================
+# === Reader C: admin chrome + supporting code ===============
+# ============================================================
+
+- path: components/admin/AdminLayout.tsx
+  kind: tsx
+  exports: [AdminLayout (default)]
+  imports:
+    - {from: 'react', kind: external}
+    - {from: 'react-router-dom', kind: external}
+    - {from: 'lucide-react', kind: external}
+    - {from: '../../contexts/AuthContext', kind: relative, target: 'admin/contexts/AuthContext'}
+    - {from: '../../contexts/DemoContext', kind: relative, target: 'admin/contexts/DemoContext'}
+    - {from: './AdminLayout.module.scss', kind: relative, target: 'admin/components/AdminLayout.module.scss'}
+  consumers: ['src/App.tsx (eager, line 38)']
+  target_path: admin/components/AdminLayout.tsx
+
+- path: components/admin/AdminLayout.module.scss
+  kind: scss
+  imports:
+    - {from: '@shared/styles/variables', kind: alias, target: '(unchanged — Cycle 1)'}
+  target_path: admin/components/AdminLayout.module.scss
+
+- path: components/admin/Breadcrumbs.tsx
+  kind: tsx
+  exports: [Breadcrumbs (default)]
+  imports:
+    - {from: 'react-router-dom', kind: external}
+    - {from: './Breadcrumbs.module.scss', kind: relative, target: 'admin/components/Breadcrumbs.module.scss'}
+  consumers:
+    - 'pages/admin/SuppliersPage.tsx'
+    - 'pages/admin/SupplierFormPage.tsx'
+    - 'pages/admin/SupplierDetailPage.tsx'
+    - 'pages/admin/CategoriesPage.tsx'
+  target_path: admin/components/Breadcrumbs.tsx
+
+- path: components/admin/Breadcrumbs.module.scss
+  kind: scss
+  imports:
+    - {from: '../../styles/admin/variables', kind: relative, target: 'admin/styles/_variables.scss'}
+  target_path: admin/components/Breadcrumbs.module.scss
+  flags: ['NEEDS @use rewrite to @admin/styles/variables']
+
+- path: components/admin/ConfirmDialog.tsx
+  kind: tsx
+  exports: [ConfirmDialog (default)]
+  imports:
+    - {from: 'react', kind: external}
+    - {from: './ConfirmDialog.module.scss', kind: relative, target: 'admin/components/ConfirmDialog.module.scss'}
+  consumers: ['pages/admin/SettingsPage.tsx']
+  target_path: admin/components/ConfirmDialog.tsx
+
+- path: components/admin/ConfirmDialog.module.scss
+  kind: scss
+  imports:
+    - {from: '../../styles/admin/variables', kind: relative, target: 'admin/styles/_variables.scss'}
+  target_path: admin/components/ConfirmDialog.module.scss
+  flags: ['NEEDS @use rewrite to @admin/styles/variables']
+
+- path: components/admin/DataTable.tsx
+  kind: tsx
+  exports: [DataTable (default)]
+  imports:
+    - {from: 'react', kind: external}
+    - {from: './DataTable.module.scss', kind: relative, target: 'admin/components/DataTable.module.scss'}
+  consumers: []
+  target_path: admin/components/DataTable.tsx
+  flags: ['ORPHAN — zero consumers; user decides delete vs move-as-orphan']
+
+- path: components/admin/DataTable.module.scss
+  kind: scss
+  imports:
+    - {from: '../../styles/admin/variables', kind: relative, target: 'admin/styles/_variables.scss'}
+  target_path: admin/components/DataTable.module.scss
+  flags: ['orphan; NEEDS @use rewrite']
+
+- path: components/admin/DemoToggle.tsx
+  kind: tsx
+  exports: [DemoToggle (default)]
+  imports:
+    - {from: '../../contexts/DemoContext', kind: relative, target: 'admin/contexts/DemoContext'}
+    - {from: './DemoToggle.module.scss', kind: relative, target: 'admin/components/DemoToggle.module.scss'}
+  consumers: []
+  target_path: admin/components/DemoToggle.tsx
+  flags: ['ORPHAN — superseded by inline AdminLayout topbar; zero consumers']
+
+- path: components/admin/DemoToggle.module.scss
+  kind: scss
+  imports:
+    - {from: '../../styles/admin/variables', kind: relative, target: 'admin/styles/_variables.scss'}
+  target_path: admin/components/DemoToggle.module.scss
+  flags: ['orphan; NEEDS @use rewrite']
+
+- path: components/admin/ProtectedRoute.tsx
+  kind: tsx
+  exports: [ProtectedRoute (default)]
+  imports:
+    - {from: 'react-router-dom', kind: external}
+    - {from: '../../contexts/AuthContext', kind: relative, target: 'admin/contexts/AuthContext'}
+    - {from: 'react', kind: external}
+  consumers: ['src/App.tsx (eager, line 39)']
+  target_path: admin/components/ProtectedRoute.tsx
+  flags: ['no companion .module.scss']
+
+- path: components/admin/StatCard.tsx
+  kind: tsx
+  exports: [StatCard (default)]
+  imports:
+    - {from: './StatCard.module.scss', kind: relative, target: 'admin/components/StatCard.module.scss'}
+  consumers: []
+  target_path: admin/components/StatCard.tsx
+  flags: ['ORPHAN — zero consumers; user decides delete vs move-as-orphan']
+
+- path: components/admin/StatCard.module.scss
+  kind: scss
+  imports:
+    - {from: '../../styles/admin/variables', kind: relative, target: 'admin/styles/_variables.scss'}
+  target_path: admin/components/StatCard.module.scss
+  flags: ['orphan; NEEDS @use rewrite']
+
+- path: contexts/AuthContext.tsx
+  kind: tsx
+  exports: [AuthProvider (named), useAuth (named)]
+  imports:
+    - {from: 'react', kind: external}
+    - {from: '../services/adminApi', kind: relative, target: 'admin/services/adminApi'}
+    - {from: '../types/admin', kind: relative, target: 'admin/types/admin'}
+  consumers:
+    - 'src/main.tsx (line 4) — AuthProvider'
+    - 'src/components/admin/AdminLayout.tsx (line 18) — useAuth'
+    - 'src/components/admin/ProtectedRoute.tsx (line 2) — useAuth'
+    - 'src/pages/admin/LoginPage.tsx (line 4) — useAuth'
+  target_path: admin/contexts/AuthContext.tsx
+  flags: ['main.tsx import REQUIRES rewrite from ./contexts/AuthContext to @admin/contexts/AuthContext']
+
+- path: contexts/DemoContext.tsx
+  kind: tsx
+  exports: [DemoProvider (named), useDemo (named)]
+  imports: [{from: 'react', kind: external}]
+  consumers:
+    - 'src/App.tsx (line 46) — DemoProvider wraps admin Suspense+Routes'
+    - 'src/components/admin/AdminLayout.tsx (line 19) — useDemo'
+    - 'src/pages/admin/DashboardPage.tsx (line 4) — useDemo'
+    - 'src/pages/admin/PartsPage.tsx (line 4) — useDemo'
+    - 'src/pages/admin/ReportsPage.tsx (line 3) — useDemo'
+  target_path: admin/contexts/DemoContext.tsx
+
+- path: services/adminApi.ts
+  kind: ts
+  exports: [adminApi (named)]
+  imports:
+    - {from: 'axios', kind: external}
+    - {from: '@shared/services/constants', kind: alias, target: '(unchanged — alias is location-independent)'}
+    - {from: '../types/admin', kind: relative, target: 'admin/types/admin'}
+  consumers:
+    - 'src/contexts/AuthContext.tsx'
+    - 'src/pages/admin/* (all 13 admin pages)'
+  target_path: admin/services/adminApi.ts
+  flags: ['../types/admin relative path stays valid post-move (admin/services/ → ../types/ → admin/types/)']
+
+- path: styles/admin/_variables.scss
+  kind: scss
+  imports: []
+  consumers:
+    - 'src/components/admin/Breadcrumbs.module.scss'
+    - 'src/components/admin/ConfirmDialog.module.scss'
+    - 'src/components/admin/DataTable.module.scss'
+    - 'src/components/admin/DemoToggle.module.scss'
+    - 'src/components/admin/StatCard.module.scss'
+    - 'src/pages/admin/LoginPage.module.scss'
+    - 'src/pages/admin/CategoriesPage.module.scss'
+    - 'src/pages/admin/PlaceholderPage.module.scss'
+    - 'src/pages/admin/SuppliersPage.module.scss'
+    - 'src/pages/admin/SupplierFormPage.module.scss'
+    - 'src/pages/admin/SupplierDetailPage.module.scss'
+  target_path: admin/styles/_variables.scss
+  flags: ['11 consuming .module.scss files all need @use rewrite to @admin/styles/variables']
+
+- path: types/admin.ts
+  kind: ts
+  exports: [AuthResponse, UserInfo, DashboardStats, ActivityItem, RevenueDataPoint, PopularData, PriceBreak, PartListing, Part, PartDetail, PaginatedResponse, AdminSupplier, BatchImportResult, AdminCategory, SponsorTier, SponsorStatus, AdminSponsor]
+  imports: []
+  consumers:
+    - 'src/contexts/AuthContext.tsx'
+    - 'src/services/adminApi.ts'
+    - 'src/pages/admin/* (12 pages)'
+  target_path: admin/types/admin.ts
+
+# ============================================================
+# === Synthesizer notes (controller-added) ===================
+# ============================================================
+# 1. ADD @admin ALIAS — vite.config.ts + tsconfig.app.json. All cross-admin-subdir
+#    hops should use @admin/... (depth-independent, cleaner than relative).
+#
+# 2. main.tsx import — `import { AuthProvider } from './contexts/AuthContext'`
+#    becomes `import { AuthProvider } from '@admin/contexts/AuthContext'`.
+#
+# 3. App.tsx admin imports (~10 lazy() strings + 3 eager statics):
+#    - eager: AdminLayout, ProtectedRoute → @admin/components/...
+#    - eager: DemoProvider from contexts/DemoContext → @admin/contexts/DemoContext
+#    - lazy(): all 12 admin page strings → @admin/pages/<name>/[<sub>]
+#
+# 4. SCSS @use rewrites for styles/admin/_variables.scss consumers (11 files):
+#    Use depth-independent alias: @use '@admin/styles/variables' as *
+#    (Easier than computing per-file relative paths for Plan B nested vs standalone.)
+#
+# 5. ORPHAN files — 4 total: PlaceholderPage, DataTable, StatCard, DemoToggle.
+#    Recommend MOVE + FLAG (not delete) for user decision before merge.
+#    Same precedent as Cycle 2's useAnimateOnScroll.
+#
+# 6. Sponsors has NO detail/ subdir — only list/ and form/.

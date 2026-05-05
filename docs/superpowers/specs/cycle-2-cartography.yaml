@@ -1,0 +1,721 @@
+# Cycle 2 Cartography — Public scope
+# Source: 4 parallel feature-dev:code-explorer agents (Task 2.1)
+# Generated: 2026-05-03 on `updates` branch, post-Cycle-1 SHA f225a81
+
+# ============================================================
+# === Reader A: home/category/part page trees + components ===
+# ============================================================
+
+- path: pages/HomePage.tsx
+  kind: tsx
+  exports: [HomePage (default)]
+  imports:
+    - {from: 'framer-motion', kind: external, target: '(unchanged)'}
+    - {from: '../components/home/HeroSection', kind: relative, target: 'public/pages/home/components/HeroSection'}
+    - {from: '../components/home/CategoryGrid', kind: relative, target: 'public/pages/home/components/CategoryGrid'}
+    - {from: '../components/layout/Footer', kind: relative, target: 'public/components/layout/Footer'}
+    - {from: '../hooks/useCategories', kind: relative, target: 'public/hooks/useCategories'}
+  consumers:
+    - 'src/App.tsx (eager static import, line 8)'
+  target_path: public/pages/home/index.tsx
+  flags:
+    - LCP-critical (eager import in App.tsx — must not become lazy)
+    - has child components → keep components/ subfolder
+
+- path: pages/CategoryPage.tsx
+  kind: tsx
+  exports: [CategoryPage (default)]
+  imports:
+    - {from: 'react', kind: external, target: '(unchanged)'}
+    - {from: 'react-router-dom', kind: external, target: '(unchanged)'}
+    - {from: 'framer-motion', kind: external, target: '(unchanged)'}
+    - {from: '../components/layout/Footer', kind: relative, target: 'public/components/layout/Footer'}
+    - {from: '../components/category/SubcategoryChips', kind: relative, target: 'public/pages/category/components/SubcategoryChips'}
+    - {from: '../components/category/SupplierTable', kind: relative, target: 'public/pages/category/components/SupplierTable'}
+    - {from: '../components/category/PartsTable', kind: relative, target: 'public/pages/category/components/PartsTable'}
+    - {from: '../components/category/SponsorBlock', kind: relative, target: 'public/pages/category/components/SponsorBlock'}
+    - {from: '../components/category/TopPartners', kind: relative, target: 'public/pages/category/components/TopPartners'}
+    - {from: '../components/category/LayoutSwitcher', kind: relative, target: 'public/pages/category/components/LayoutSwitcher'}
+    - {from: '../components/category/layouts/GridLayout', kind: relative, target: 'public/pages/category/components/layouts/GridLayout'}
+    - {from: '../components/category/layouts/ListLayout', kind: relative, target: 'public/pages/category/components/layouts/ListLayout'}
+    - {from: '../components/category/layouts/CompactLayout', kind: relative, target: 'public/pages/category/components/layouts/CompactLayout'}
+    - {from: '../components/category/layouts/CardsLayout', kind: relative, target: 'public/pages/category/components/layouts/CardsLayout'}
+    - {from: '../components/shared/SkeletonLoader', kind: relative, target: 'public/components/widgets/SkeletonLoader'}
+    - {from: '../services/api', kind: relative, target: 'public/services/api'}
+    - {from: '../types/category', kind: relative, target: 'public/types/category'}
+    - {from: './CategoryPage.module.scss', kind: relative, target: 'public/pages/category/CategoryPage.module.scss'}
+  consumers:
+    - 'src/App.tsx (lazy, line 10)'
+  target_path: public/pages/category/index.tsx
+
+- path: pages/CategoryPage.module.scss
+  kind: scss
+  target_path: public/pages/category/CategoryPage.module.scss
+  flags: ['@shared @use already migrated by Cycle 1']
+
+- path: pages/PartPage.tsx
+  kind: tsx
+  exports: [PartPage (default)]
+  imports:
+    - {from: 'react', kind: external}
+    - {from: 'react-router-dom', kind: external}
+    - {from: 'framer-motion', kind: external}
+    - {from: '../components/layout/Footer', kind: relative, target: 'public/components/layout/Footer'}
+    - {from: '../components/shared/SkeletonLoader', kind: relative, target: 'public/components/widgets/SkeletonLoader'}
+    - {from: '../services/api', kind: relative, target: 'public/services/api'}
+    - {from: '../types/part', kind: relative, target: 'public/types/part'}
+    - {from: './PartPage.module.scss', kind: relative, target: 'public/pages/part/PartPage.module.scss'}
+  consumers:
+    - 'src/App.tsx (lazy, line 16)'
+  target_path: public/pages/part/index.tsx
+
+- path: pages/PartPage.module.scss
+  kind: scss
+  target_path: public/pages/part/PartPage.module.scss
+
+- path: components/home/HeroSection.tsx
+  kind: tsx
+  exports: [HeroSection (default)]
+  imports:
+    - {from: '../layout/SearchBar', kind: relative, target: 'public/components/layout/SearchBar'}
+    - {from: '../shared/AnimatedLink', kind: relative, target: 'public/components/widgets/AnimatedLink'}
+    - {from: './HeroSection.module.scss', kind: relative, target: 'public/pages/home/components/HeroSection.module.scss'}
+  consumers: ['pages/HomePage.tsx']
+  target_path: public/pages/home/components/HeroSection.tsx
+
+- path: components/home/HeroSection.module.scss
+  kind: scss
+  target_path: public/pages/home/components/HeroSection.module.scss
+
+- path: components/home/CategoryGrid.tsx
+  kind: tsx
+  exports: [CategoryGrid (default)]
+  imports:
+    - {from: './CategoryCard', kind: relative, target: 'public/pages/home/components/CategoryCard'}
+    - {from: '../shared/SkeletonLoader', kind: relative, target: 'public/components/widgets/SkeletonLoader'}
+    - {from: '../../types/category', kind: relative, target: 'public/types/category'}
+    - {from: './CategoryGrid.module.scss', kind: relative, target: 'public/pages/home/components/CategoryGrid.module.scss'}
+  consumers: ['pages/HomePage.tsx']
+  target_path: public/pages/home/components/CategoryGrid.tsx
+
+- path: components/home/CategoryGrid.module.scss
+  kind: scss
+  target_path: public/pages/home/components/CategoryGrid.module.scss
+
+- path: components/home/CategoryCard.tsx
+  kind: tsx
+  exports: [CategoryCard (default)]
+  imports:
+    - {from: 'react-router-dom', kind: external}
+    - {from: 'framer-motion', kind: external}
+    - {from: '../shared/AnimatedLink', kind: relative, target: 'public/components/widgets/AnimatedLink'}
+    - {from: '../../types/category', kind: relative, target: 'public/types/category'}
+    - {from: './CategoryCard.module.scss', kind: relative, target: 'public/pages/home/components/CategoryCard.module.scss'}
+  consumers: ['components/home/CategoryGrid.tsx']
+  target_path: public/pages/home/components/CategoryCard.tsx
+
+- path: components/home/CategoryCard.module.scss
+  kind: scss
+  target_path: public/pages/home/components/CategoryCard.module.scss
+
+- path: components/category/LayoutSwitcher.tsx
+  kind: tsx
+  exports: [LayoutSwitcher (default)]
+  imports:
+    - {from: './LayoutSwitcher.module.scss', kind: relative, target: 'public/pages/category/components/LayoutSwitcher.module.scss'}
+  consumers: ['pages/CategoryPage.tsx']
+  target_path: public/pages/category/components/LayoutSwitcher.tsx
+
+- path: components/category/LayoutSwitcher.module.scss
+  kind: scss
+  target_path: public/pages/category/components/LayoutSwitcher.module.scss
+
+- path: components/category/PartsTable.tsx
+  kind: tsx
+  exports: [PartsTable (default)]
+  imports:
+    - {from: 'react-router-dom', kind: external}
+    - {from: 'framer-motion', kind: external}
+    - {from: '../../types/part', kind: relative, target: 'public/types/part'}
+    - {from: './PartsTable.module.scss', kind: relative, target: 'public/pages/category/components/PartsTable.module.scss'}
+  consumers: ['pages/CategoryPage.tsx']
+  target_path: public/pages/category/components/PartsTable.tsx
+
+- path: components/category/PartsTable.module.scss
+  kind: scss
+  target_path: public/pages/category/components/PartsTable.module.scss
+
+- path: components/category/SponsorBlock.tsx
+  kind: tsx
+  exports: [SponsorBlock (default)]
+  imports:
+    - {from: 'framer-motion', kind: external}
+    - {from: '../../types/sponsor', kind: relative, target: 'public/types/sponsor'}
+    - {from: './SponsorBlock.module.scss', kind: relative, target: 'public/pages/category/components/SponsorBlock.module.scss'}
+  consumers: ['pages/CategoryPage.tsx']
+  target_path: public/pages/category/components/SponsorBlock.tsx
+
+- path: components/category/SponsorBlock.module.scss
+  kind: scss
+  target_path: public/pages/category/components/SponsorBlock.module.scss
+
+- path: components/category/SubcategoryChips.tsx
+  kind: tsx
+  exports: [SubcategoryChips (default)]
+  imports:
+    - {from: 'react', kind: external}
+    - {from: 'framer-motion', kind: external}
+    - {from: 'react-router-dom', kind: external}
+    - {from: '../../types/category', kind: relative, target: 'public/types/category'}
+    - {from: './SubcategoryChips.module.scss', kind: relative, target: 'public/pages/category/components/SubcategoryChips.module.scss'}
+  consumers: ['pages/CategoryPage.tsx']
+  target_path: public/pages/category/components/SubcategoryChips.tsx
+
+- path: components/category/SubcategoryChips.module.scss
+  kind: scss
+  target_path: public/pages/category/components/SubcategoryChips.module.scss
+
+- path: components/category/SupplierTable.tsx
+  kind: tsx
+  exports: [SupplierTable (default)]
+  imports:
+    - {from: 'framer-motion', kind: external}
+    - {from: '../../types/supplier', kind: relative, target: 'public/types/supplier'}
+    - {from: './SupplierTable.module.scss', kind: relative, target: 'public/pages/category/components/SupplierTable.module.scss'}
+  consumers: ['pages/CategoryPage.tsx']
+  target_path: public/pages/category/components/SupplierTable.tsx
+
+- path: components/category/SupplierTable.module.scss
+  kind: scss
+  target_path: public/pages/category/components/SupplierTable.module.scss
+
+- path: components/category/TopPartners.tsx
+  kind: tsx
+  exports: [TopPartners (default)]
+  imports:
+    - {from: 'framer-motion', kind: external}
+    - {from: '../../types/supplier', kind: relative, target: 'public/types/supplier'}
+    - {from: './TopPartners.module.scss', kind: relative, target: 'public/pages/category/components/TopPartners.module.scss'}
+  consumers: ['pages/CategoryPage.tsx']
+  target_path: public/pages/category/components/TopPartners.tsx
+
+- path: components/category/TopPartners.module.scss
+  kind: scss
+  target_path: public/pages/category/components/TopPartners.module.scss
+
+- path: components/category/layouts/GridLayout.tsx
+  kind: tsx
+  exports: [GridLayout (default)]
+  imports:
+    - {from: 'react-router-dom', kind: external}
+    - {from: 'framer-motion', kind: external}
+    - {from: '../../../types/category', kind: relative, target: 'public/types/category'}
+    - {from: './GridLayout.module.scss', kind: relative, target: 'public/pages/category/components/layouts/GridLayout.module.scss'}
+  consumers: ['pages/CategoryPage.tsx']
+  target_path: public/pages/category/components/layouts/GridLayout.tsx
+  flags: ['parentSlug prop accepted but unused — flag for /simplify Big-O pass']
+
+- path: components/category/layouts/GridLayout.module.scss
+  kind: scss
+  target_path: public/pages/category/components/layouts/GridLayout.module.scss
+
+- path: components/category/layouts/ListLayout.tsx
+  kind: tsx
+  exports: [ListLayout (default)]
+  imports:
+    - {from: 'react-router-dom', kind: external}
+    - {from: 'framer-motion', kind: external}
+    - {from: '../../../types/category', kind: relative, target: 'public/types/category'}
+    - {from: './ListLayout.module.scss', kind: relative, target: 'public/pages/category/components/layouts/ListLayout.module.scss'}
+  consumers: ['pages/CategoryPage.tsx']
+  target_path: public/pages/category/components/layouts/ListLayout.tsx
+  flags: ['parentSlug prop accepted but unused — flag for /simplify Big-O pass']
+
+- path: components/category/layouts/ListLayout.module.scss
+  kind: scss
+  target_path: public/pages/category/components/layouts/ListLayout.module.scss
+
+- path: components/category/layouts/CompactLayout.tsx
+  kind: tsx
+  exports: [CompactLayout (default)]
+  imports:
+    - {from: 'react-router-dom', kind: external}
+    - {from: 'framer-motion', kind: external}
+    - {from: '../../../types/category', kind: relative, target: 'public/types/category'}
+    - {from: './CompactLayout.module.scss', kind: relative, target: 'public/pages/category/components/layouts/CompactLayout.module.scss'}
+  consumers: ['pages/CategoryPage.tsx']
+  target_path: public/pages/category/components/layouts/CompactLayout.tsx
+  flags: ['parentSlug prop accepted but unused']
+
+- path: components/category/layouts/CompactLayout.module.scss
+  kind: scss
+  target_path: public/pages/category/components/layouts/CompactLayout.module.scss
+
+- path: components/category/layouts/CardsLayout.tsx
+  kind: tsx
+  exports: [CardsLayout (default)]
+  imports:
+    - {from: 'react-router-dom', kind: external}
+    - {from: 'framer-motion', kind: external}
+    - {from: '../../../types/category', kind: relative, target: 'public/types/category'}
+    - {from: './CardsLayout.module.scss', kind: relative, target: 'public/pages/category/components/layouts/CardsLayout.module.scss'}
+  consumers: ['pages/CategoryPage.tsx']
+  target_path: public/pages/category/components/layouts/CardsLayout.tsx
+  flags: ['parentSlug prop accepted but unused']
+
+- path: components/category/layouts/CardsLayout.module.scss
+  kind: scss
+  target_path: public/pages/category/components/layouts/CardsLayout.module.scss
+
+# =================================================
+# === Reader B: secondary public pages =============
+# =================================================
+
+- path: pages/AboutPage.tsx
+  kind: tsx
+  exports: [AboutPage (default)]
+  imports:
+    - {from: 'react', kind: external}
+    - {from: 'framer-motion', kind: external}
+    - {from: 'react-router-dom', kind: external}
+    - {from: '../components/layout/Footer', kind: relative, target: 'public/components/layout/Footer'}
+    - {from: '../components/layout/PageHeaderBand', kind: relative, target: 'public/components/layout/PageHeaderBand'}
+    - {from: './AboutPage.module.scss', kind: relative, target: 'public/pages/about/AboutPage.module.scss'}
+  consumers: ['src/App.tsx (lazy, line 14)']
+  target_path: public/pages/about/index.tsx
+
+- path: pages/AboutPage.module.scss
+  kind: scss
+  target_path: public/pages/about/AboutPage.module.scss
+
+- path: pages/ContactPage.tsx
+  kind: tsx
+  exports: [ContactPage (default)]
+  imports:
+    - {from: 'react', kind: external}
+    - {from: 'framer-motion', kind: external}
+    - {from: 'react-router-dom', kind: external}
+    - {from: '../components/layout/Footer', kind: relative, target: 'public/components/layout/Footer'}
+    - {from: '../components/layout/PageHeaderBand', kind: relative, target: 'public/components/layout/PageHeaderBand'}
+    - {from: '../services/api', kind: relative, target: 'public/services/api'}
+    - {from: './ContactPage.module.scss', kind: relative, target: 'public/pages/contact/ContactPage.module.scss'}
+  consumers: ['src/App.tsx (lazy, line 13)']
+  target_path: public/pages/contact/index.tsx
+
+- path: pages/ContactPage.module.scss
+  kind: scss
+  target_path: public/pages/contact/ContactPage.module.scss
+
+- path: pages/JoinPage.tsx
+  kind: tsx
+  exports: [JoinPage (default)]
+  imports:
+    - {from: 'react', kind: external}
+    - {from: 'framer-motion', kind: external}
+    - {from: 'react-router-dom', kind: external}
+    - {from: '../components/layout/Footer', kind: relative, target: 'public/components/layout/Footer'}
+    - {from: '../components/layout/PageHeaderBand', kind: relative, target: 'public/components/layout/PageHeaderBand'}
+    - {from: '../components/shared/GlowButton', kind: relative, target: 'public/components/widgets/GlowButton'}
+    - {from: '../hooks/useCategories', kind: relative, target: 'public/hooks/useCategories'}
+    - {from: '../services/api', kind: relative, target: 'public/services/api'}
+    - {from: './JoinPage.module.scss', kind: relative, target: 'public/pages/join/JoinPage.module.scss'}
+  consumers: ['src/App.tsx (lazy, line 12)']
+  target_path: public/pages/join/index.tsx
+
+- path: pages/JoinPage.module.scss
+  kind: scss
+  target_path: public/pages/join/JoinPage.module.scss
+
+- path: pages/SearchPage.tsx
+  kind: tsx
+  exports: [SearchPage (default)]
+  imports:
+    - {from: 'react', kind: external}
+    - {from: 'react-router-dom', kind: external}
+    - {from: 'framer-motion', kind: external}
+    - {from: '../components/layout/Footer', kind: relative, target: 'public/components/layout/Footer'}
+    - {from: '../components/layout/SearchBar', kind: relative, target: 'public/components/layout/SearchBar'}
+    - {from: '../components/shared/SkeletonLoader', kind: relative, target: 'public/components/widgets/SkeletonLoader'}
+    - {from: '../services/api', kind: relative, target: 'public/services/api'}
+    - {from: './SearchPage.module.scss', kind: relative, target: 'public/pages/search/SearchPage.module.scss'}
+  consumers: ['src/App.tsx (lazy, line 11)']
+  target_path: public/pages/search/index.tsx
+
+- path: pages/SearchPage.module.scss
+  kind: scss
+  target_path: public/pages/search/SearchPage.module.scss
+
+- path: pages/KeywordSponsorPage.tsx
+  kind: tsx
+  exports: [KeywordSponsorPage (default)]
+  imports:
+    - {from: 'react', kind: external}
+    - {from: 'react-router-dom', kind: external}
+    - {from: 'framer-motion', kind: external}
+    - {from: '../components/layout/Footer', kind: relative, target: 'public/components/layout/Footer'}
+    - {from: '../components/shared/GlowButton', kind: relative, target: 'public/components/widgets/GlowButton'}
+    - {from: '../services/api', kind: relative, target: 'public/services/api'}
+    - {from: '../types/sponsor', kind: relative, target: 'public/types/sponsor'}
+    - {from: './KeywordSponsorPage.module.scss', kind: relative, target: 'public/pages/keyword/KeywordSponsorPage.module.scss'}
+  consumers: ['src/App.tsx (lazy, line 15)']
+  target_path: public/pages/keyword/index.tsx
+
+- path: pages/KeywordSponsorPage.module.scss
+  kind: scss
+  target_path: public/pages/keyword/KeywordSponsorPage.module.scss
+
+# ====================================================
+# === Reader C: components/layout + components/shared ===
+# ====================================================
+
+- path: components/layout/Navbar.tsx
+  kind: tsx
+  exports: [Navbar (default)]
+  imports:
+    - {from: 'react-router-dom', kind: external}
+    - {from: './SearchBar', kind: relative, target: 'public/components/layout/SearchBar'}
+    - {from: './Navbar.module.scss', kind: relative, target: 'public/components/layout/Navbar.module.scss'}
+  consumers: ['src/App.tsx (eager, line 40)']
+  target_path: public/components/layout/Navbar.tsx
+
+- path: components/layout/Navbar.module.scss
+  kind: scss
+  target_path: public/components/layout/Navbar.module.scss
+
+- path: components/layout/Footer.tsx
+  kind: tsx
+  exports: [Footer (default)]
+  imports:
+    - {from: 'react-router-dom', kind: external}
+    - {from: './Footer.module.scss', kind: relative, target: 'public/components/layout/Footer.module.scss'}
+  consumers:
+    - 'src/pages/HomePage.tsx'
+    - 'src/pages/AboutPage.tsx'
+    - 'src/pages/ContactPage.tsx'
+    - 'src/pages/JoinPage.tsx'
+    - 'src/pages/KeywordSponsorPage.tsx'
+    - 'src/pages/SearchPage.tsx'
+    - 'src/pages/CategoryPage.tsx'
+    - 'src/pages/PartPage.tsx'
+  target_path: public/components/layout/Footer.tsx
+  flags: ['MASSIVE consumer count: imported by all 8 public pages']
+
+- path: components/layout/Footer.module.scss
+  kind: scss
+  target_path: public/components/layout/Footer.module.scss
+
+- path: components/layout/BackdropLayer.tsx
+  kind: tsx
+  exports: [BackdropLayer (default)]
+  imports:
+    - {from: '../shared/CircuitTraces', kind: relative, target: 'public/components/widgets/CircuitTraces'}
+    - {from: './BackdropLayer.module.scss', kind: relative, target: 'public/components/layout/BackdropLayer.module.scss'}
+  consumers: ['src/App.tsx (eager, line 45)']
+  target_path: public/components/layout/BackdropLayer.tsx
+  flags: ['imports CircuitTraces from shared/ — relative path must rewrite to widgets/ after rename']
+
+- path: components/layout/BackdropLayer.module.scss
+  kind: scss
+  target_path: public/components/layout/BackdropLayer.module.scss
+
+- path: components/layout/PageHeaderBand.tsx
+  kind: tsx
+  exports: [PageHeaderBand (default)]
+  imports:
+    - {from: 'framer-motion', kind: external}
+    - {from: './PageHeaderBand.module.scss', kind: relative, target: 'public/components/layout/PageHeaderBand.module.scss'}
+  consumers:
+    - 'src/pages/AboutPage.tsx'
+    - 'src/pages/ContactPage.tsx'
+    - 'src/pages/JoinPage.tsx'
+  target_path: public/components/layout/PageHeaderBand.tsx
+
+- path: components/layout/PageHeaderBand.module.scss
+  kind: scss
+  target_path: public/components/layout/PageHeaderBand.module.scss
+
+- path: components/layout/PublicLayout.tsx
+  kind: tsx
+  exports: [PublicLayout (default)]
+  imports:
+    - {from: 'react', kind: external}
+    - {from: 'react-router-dom', kind: external}
+    - {from: './PublicLayout.module.scss', kind: relative, target: 'public/components/layout/PublicLayout.module.scss'}
+  consumers: ['src/App.tsx (eager, Route element, line 44)']
+  target_path: public/components/layout/PublicLayout.tsx
+
+- path: components/layout/PublicLayout.module.scss
+  kind: scss
+  target_path: public/components/layout/PublicLayout.module.scss
+
+- path: components/layout/ThemeBridge.tsx
+  kind: tsx
+  exports: [ThemeBridge (default)]
+  imports:
+    - {from: 'react', kind: external}
+    - {from: 'react-router-dom', kind: external}
+  consumers: ['src/App.tsx (eager, line 43)']
+  target_path: public/components/layout/ThemeBridge.tsx
+  flags: ['no companion .module.scss']
+
+- path: components/layout/NavVariantPicker.tsx
+  kind: tsx
+  exports: [NavVariantPicker (default)]
+  imports:
+    - {from: 'react-router-dom', kind: external}
+    - {from: './NavVariantPicker.module.scss', kind: relative, target: 'public/components/layout/NavVariantPicker.module.scss'}
+  consumers: ['src/App.tsx (eager, line 41)']
+  target_path: public/components/layout/NavVariantPicker.tsx
+
+- path: components/layout/NavVariantPicker.module.scss
+  kind: scss
+  target_path: public/components/layout/NavVariantPicker.module.scss
+
+- path: components/layout/SearchBar.tsx
+  kind: tsx
+  exports: [SearchBar (default)]
+  imports:
+    - {from: 'react', kind: external}
+    - {from: 'react-router-dom', kind: external}
+    - {from: '../../hooks/useSearch', kind: relative, target: 'public/hooks/useSearch'}
+    - {from: './SearchBar.module.scss', kind: relative, target: 'public/components/layout/SearchBar.module.scss'}
+  consumers:
+    - 'components/layout/Navbar.tsx'
+    - 'src/pages/SearchPage.tsx'
+  target_path: public/components/layout/SearchBar.tsx
+
+- path: components/layout/SearchBar.module.scss
+  kind: scss
+  target_path: public/components/layout/SearchBar.module.scss
+
+- path: components/shared/CircuitTraces.tsx
+  kind: tsx
+  exports: [CircuitTraces (default)]
+  imports:
+    - {from: 'react', kind: external}
+    - {from: './CircuitTraces.module.scss', kind: relative, target: 'public/components/widgets/CircuitTraces.module.scss'}
+  consumers: ['components/layout/BackdropLayer.tsx']
+  target_path: public/components/widgets/CircuitTraces.tsx
+  flags: ['shared→widgets rename']
+
+- path: components/shared/CircuitTraces.module.scss
+  kind: scss
+  target_path: public/components/widgets/CircuitTraces.module.scss
+
+- path: components/shared/GlowButton.tsx
+  kind: tsx
+  exports: [GlowButton (default)]
+  imports:
+    - {from: 'react', kind: external}
+    - {from: './GlowButton.module.scss', kind: relative, target: 'public/components/widgets/GlowButton.module.scss'}
+  consumers:
+    - 'src/pages/JoinPage.tsx'
+    - 'src/pages/KeywordSponsorPage.tsx'
+  target_path: public/components/widgets/GlowButton.tsx
+  flags: ['shared→widgets rename']
+
+- path: components/shared/GlowButton.module.scss
+  kind: scss
+  target_path: public/components/widgets/GlowButton.module.scss
+
+- path: components/shared/AnimatedLink.tsx
+  kind: tsx
+  exports: [AnimatedLink (default)]
+  imports:
+    - {from: 'react-router-dom', kind: external}
+    - {from: 'react', kind: external}
+    - {from: './AnimatedLink.module.scss', kind: relative, target: 'public/components/widgets/AnimatedLink.module.scss'}
+  consumers:
+    - 'src/components/home/HeroSection.tsx'
+    - 'src/components/home/CategoryCard.tsx'
+  target_path: public/components/widgets/AnimatedLink.tsx
+  flags: ['shared→widgets rename']
+
+- path: components/shared/AnimatedLink.module.scss
+  kind: scss
+  target_path: public/components/widgets/AnimatedLink.module.scss
+
+- path: components/shared/SkeletonLoader.tsx
+  kind: tsx
+  exports: [SkeletonLoader (default)]
+  imports:
+    - {from: './SkeletonLoader.module.scss', kind: relative, target: 'public/components/widgets/SkeletonLoader.module.scss'}
+  consumers:
+    - 'src/pages/SearchPage.tsx'
+    - 'src/pages/CategoryPage.tsx'
+    - 'src/pages/PartPage.tsx'
+    - 'src/components/home/CategoryGrid.tsx'
+  target_path: public/components/widgets/SkeletonLoader.tsx
+  flags: ['shared→widgets rename']
+
+- path: components/shared/SkeletonLoader.module.scss
+  kind: scss
+  target_path: public/components/widgets/SkeletonLoader.module.scss
+
+- path: components/shared/HeroColorTuner.tsx
+  kind: tsx
+  exports: [HeroColorTuner (default)]
+  imports:
+    - {from: 'react', kind: external}
+    - {from: './HeroColorTuner.module.scss', kind: relative, target: 'public/components/widgets/HeroColorTuner.module.scss'}
+  consumers: ['src/App.tsx (eager, dev-only, line 42)']
+  target_path: public/components/widgets/HeroColorTuner.tsx
+  flags: ['dev-only (gated by import.meta.env.DEV at App.tsx mount); shared→widgets rename']
+
+- path: components/shared/HeroColorTuner.module.scss
+  kind: scss
+  target_path: public/components/widgets/HeroColorTuner.module.scss
+
+# ============================================================
+# === Reader D: hooks + services + types =====================
+# ============================================================
+
+- path: hooks/useCategories.ts
+  kind: ts
+  exports: [useCategories (named)]
+  imports:
+    - {from: 'react', kind: external}
+    - {from: '../services/api', kind: relative, target: 'public/services/api'}
+    - {from: '../types/category', kind: relative, target: 'public/types/category'}
+  consumers:
+    - 'src/pages/HomePage.tsx'
+    - 'src/pages/JoinPage.tsx'
+  target_path: public/hooks/useCategories.ts
+
+- path: hooks/useSearch.ts
+  kind: ts
+  exports: [useSearch (named)]
+  imports:
+    - {from: 'react', kind: external}
+    - {from: '../services/api', kind: relative, target: 'public/services/api'}
+  consumers: ['src/components/layout/SearchBar.tsx']
+  target_path: public/hooks/useSearch.ts
+
+- path: hooks/useAnimateOnScroll.ts
+  kind: ts
+  exports: [useAnimateOnScroll (named)]
+  imports: [{from: 'react', kind: external}]
+  consumers: []
+  target_path: public/hooks/useAnimateOnScroll.ts
+  flags: ['DEAD CODE CANDIDATE — zero consumers found across grep + cartography']
+
+- path: services/api.ts
+  kind: ts
+  exports:
+    - 'API_BASE_URL (named, const)'
+    - 'SearchResults (named, interface)'
+    - 'api (named, const object)'
+  imports:
+    - {from: 'axios', kind: external}
+    - {from: '../types/category', kind: relative, target: 'public/types/category'}
+    - {from: '../types/supplier', kind: relative, target: 'public/types/supplier'}
+    - {from: '../types/sponsor', kind: relative, target: 'public/types/sponsor'}
+    - {from: '../types/part', kind: relative, target: 'public/types/part'}
+  consumers:
+    - 'src/hooks/useCategories.ts'
+    - 'src/hooks/useSearch.ts'
+    - 'src/pages/CategoryPage.tsx'
+    - 'src/pages/SearchPage.tsx'
+    - 'src/pages/JoinPage.tsx'
+    - 'src/pages/ContactPage.tsx'
+    - 'src/pages/KeywordSponsorPage.tsx'
+    - 'src/pages/PartPage.tsx'
+    - 'src/services/adminApi.ts (CROSS-SCOPE — imports API_BASE_URL only)'
+  target_path: public/services/api.ts
+  flags:
+    - 'CROSS-SCOPE DEPENDENCY: adminApi.ts imports API_BASE_URL — must resolve in Cycle 2 or break Cycle 3'
+
+- path: types/category.ts
+  kind: ts
+  exports: ['Subcategory', 'Category', 'CategoryDetail']
+  imports:
+    - {from: './supplier', kind: relative, target: 'public/types/supplier'}
+    - {from: './sponsor', kind: relative, target: 'public/types/sponsor'}
+    - {from: './part', kind: relative, target: 'public/types/part'}
+  consumers:
+    - 'src/hooks/useCategories.ts'
+    - 'src/services/api.ts'
+    - 'src/pages/CategoryPage.tsx'
+    - 'src/components/home/CategoryCard.tsx'
+    - 'src/components/home/CategoryGrid.tsx'
+    - 'src/components/category/SubcategoryChips.tsx'
+    - 'src/components/category/layouts/GridLayout.tsx'
+    - 'src/components/category/layouts/ListLayout.tsx'
+    - 'src/components/category/layouts/CompactLayout.tsx'
+    - 'src/components/category/layouts/CardsLayout.tsx'
+  target_path: public/types/category.ts
+
+- path: types/part.ts
+  kind: ts
+  exports: ['PublicPart', 'PartListing', 'PartDetail']
+  imports: []
+  consumers:
+    - 'src/services/api.ts'
+    - 'src/types/category.ts'
+    - 'src/pages/PartPage.tsx'
+    - 'src/components/category/PartsTable.tsx'
+  target_path: public/types/part.ts
+
+- path: types/supplier.ts
+  kind: ts
+  exports: ['Supplier']
+  imports: []
+  consumers:
+    - 'src/services/api.ts'
+    - 'src/types/category.ts'
+    - 'src/components/category/SupplierTable.tsx'
+    - 'src/components/category/TopPartners.tsx'
+  target_path: public/types/supplier.ts
+
+- path: types/sponsor.ts
+  kind: ts
+  exports: ['Sponsor']
+  imports: []
+  consumers:
+    - 'src/services/api.ts'
+    - 'src/types/category.ts'
+    - 'src/pages/KeywordSponsorPage.tsx'
+    - 'src/components/category/SponsorBlock.tsx'
+  target_path: public/types/sponsor.ts
+
+# ============================================================
+# === App.tsx — controller-discovered cross-cutting changes ==
+# ============================================================
+# (App.tsx is the entry point that imports BOTH eager + lazy from the public scope.
+#  Synthesizer must enumerate the lazy() string substitutions for every public page.)
+
+- path: App.tsx
+  kind: tsx
+  flags:
+    - 'will need ~14 import_substitutions: 7 lazy() strings (CategoryPage, SearchPage, JoinPage, ContactPage, AboutPage, KeywordSponsorPage, PartPage) + 7 static imports (HomePage, AdminLayout, ProtectedRoute, Navbar, NavVariantPicker, HeroColorTuner, ThemeBridge, PublicLayout, BackdropLayer)'
+    - 'admin-related imports (AdminLayout, ProtectedRoute, lazy admin routes) NOT changed in Cycle 2 — they remain at their old paths until Cycle 3'
+
+# ============================================================
+# === main.tsx — also has a public-scope import to update ====
+# ============================================================
+# (Cycle 1 already migrated `./styles/global.scss` to `@shared/styles/global.scss`.
+#  In Cycle 2, main.tsx also imports AuthProvider from '../contexts/AuthContext' and
+#  App from './App'. AuthContext is admin-scope (deferred to Cycle 3); App stays at root.)
+
+- path: main.tsx
+  kind: tsx
+  flags:
+    - 'AuthContext import will need rewriting in Cycle 3 (admin scope move)'
+    - 'no Cycle 2 changes to main.tsx beyond what was already done in Cycle 1'
+
+# ============================================================
+# === Synthesizer notes (controller-added) ===================
+# ============================================================
+# 1. CROSS-SCOPE: adminApi.ts imports API_BASE_URL from api.ts. Three options:
+#    (a) inline the constant value in adminApi.ts ("/api" or whatever it is)
+#    (b) extract API_BASE_URL to shared/services/constants.ts in Cycle 2
+#    (c) leave adminApi.ts importing from @public/services/api temporarily
+#    Recommend (b) — architecturally cleanest; both scopes legitimately need the const.
+#
+# 2. DEAD CODE: useAnimateOnScroll.ts — zero consumers. User decides during approval.
+#
+# 3. PRE-EXISTING UNUSED PROP: parentSlug in 4 layout components. Flagged for /simplify
+#    in Task 2.6 — out of scope for the moves themselves.
+#
+# 4. SHARED→WIDGETS RENAME: 5 components move with directory rename. Every consumer's
+#    relative import needs to point at @public/components/widgets/X (not /shared/X).

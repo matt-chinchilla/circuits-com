@@ -5,45 +5,45 @@ import { Routes, Route, useLocation } from "react-router-dom";
 // on first paint). All other routes lazy-loaded — each gets its own
 // Vite chunk, shrinking the initial bundle and pushing work off the
 // critical path for the home-page visitor.
-import HomePage from "./pages/HomePage";
+import HomePage from "@public/pages/home";
 
-const CategoryPage = lazy(() => import("./pages/CategoryPage"));
-const SearchPage = lazy(() => import("./pages/SearchPage"));
-const JoinPage = lazy(() => import("./pages/JoinPage"));
-const ContactPage = lazy(() => import("./pages/ContactPage"));
-const AboutPage = lazy(() => import("./pages/AboutPage"));
-const KeywordSponsorPage = lazy(() => import("./pages/KeywordSponsorPage"));
-const PartPage = lazy(() => import("./pages/PartPage"));
+const CategoryPage = lazy(() => import("@public/pages/category"));
+const SearchPage = lazy(() => import("@public/pages/search"));
+const JoinPage = lazy(() => import("@public/pages/join"));
+const ContactPage = lazy(() => import("@public/pages/contact"));
+const AboutPage = lazy(() => import("@public/pages/about"));
+const KeywordSponsorPage = lazy(() => import("@public/pages/keyword"));
+const PartPage = lazy(() => import("@public/pages/part"));
 
 // Admin chunk — all admin routes lazy. Recharts (~400 KB) lives inside
 // admin/Reports; with these routes lazy it won't ship to public-page
 // visitors. See vite.config.ts manualChunks for extra chunk hints.
-const LoginPage = lazy(() => import("./pages/admin/LoginPage"));
-const DashboardPage = lazy(() => import("./pages/admin/DashboardPage"));
-const SuppliersPage = lazy(() => import("./pages/admin/SuppliersPage"));
+const LoginPage = lazy(() => import("@admin/pages/login"));
+const DashboardPage = lazy(() => import("@admin/pages/dashboard"));
+const SuppliersPage = lazy(() => import("@admin/pages/suppliers/list"));
 const SupplierDetailPage = lazy(
-  () => import("./pages/admin/SupplierDetailPage"),
+  () => import("@admin/pages/suppliers/detail"),
 );
-const SupplierFormPage = lazy(() => import("./pages/admin/SupplierFormPage"));
-const PartsPage = lazy(() => import("./pages/admin/PartsPage"));
-const PartDetailPage = lazy(() => import("./pages/admin/PartDetailPage"));
-const PartFormPage = lazy(() => import("./pages/admin/PartFormPage"));
-const ImportPage = lazy(() => import("./pages/admin/ImportPage"));
-const ReportsPage = lazy(() => import("./pages/admin/ReportsPage"));
-const CategoriesPage = lazy(() => import("./pages/admin/CategoriesPage"));
-const SponsorsPage = lazy(() => import("./pages/admin/SponsorsPage"));
-const SponsorFormPage = lazy(() => import("./pages/admin/SponsorFormPage"));
-const SettingsPage = lazy(() => import("./pages/admin/SettingsPage"));
+const SupplierFormPage = lazy(() => import("@admin/pages/suppliers/form"));
+const PartsPage = lazy(() => import("@admin/pages/parts/list"));
+const PartDetailPage = lazy(() => import("@admin/pages/parts/detail"));
+const PartFormPage = lazy(() => import("@admin/pages/parts/form"));
+const ImportPage = lazy(() => import("@admin/pages/import"));
+const ReportsPage = lazy(() => import("@admin/pages/reports"));
+const CategoriesPage = lazy(() => import("@admin/pages/categories"));
+const SponsorsPage = lazy(() => import("@admin/pages/sponsors/list"));
+const SponsorFormPage = lazy(() => import("@admin/pages/sponsors/form"));
+const SettingsPage = lazy(() => import("@admin/pages/settings"));
 
-import AdminLayout from "./components/admin/AdminLayout";
-import ProtectedRoute from "./components/admin/ProtectedRoute";
-import Navbar from "./components/layout/Navbar";
-import NavVariantPicker from "./components/layout/NavVariantPicker";
-import HeroColorTuner from "./components/shared/HeroColorTuner";
-import ThemeBridge from "./components/layout/ThemeBridge";
-import PublicLayout from "./components/layout/PublicLayout";
-import BackdropLayer from "./components/layout/BackdropLayer";
-import { DemoProvider } from "./contexts/DemoContext";
+import AdminLayout from "@admin/components/AdminLayout";
+import ProtectedRoute from "@admin/components/ProtectedRoute";
+import Navbar from "@public/components/layout/Navbar";
+import NavVariantPicker from "@public/components/layout/NavVariantPicker";
+import HeroColorTuner from "@public/components/widgets/HeroColorTuner";
+import ThemeBridge from "@public/components/layout/ThemeBridge";
+import PublicLayout from "@public/components/layout/PublicLayout";
+import BackdropLayer from "@public/components/layout/BackdropLayer";
+import { DemoProvider } from "@admin/contexts/DemoContext";
 
 // Admin fallback (PublicLayout provides the equivalent on public routes).
 const RouteFallback = () => <div style={{ minHeight: 420 }} aria-busy="true" />;

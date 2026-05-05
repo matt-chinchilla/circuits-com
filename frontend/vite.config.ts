@@ -6,7 +6,9 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './src'),
+      '@admin': path.resolve(__dirname, './src/admin'),
+      '@public': path.resolve(__dirname, './src/public'),
+      '@shared': path.resolve(__dirname, './src/shared'),
     },
   },
   css: {

@@ -1,0 +1,7 @@
+@use '@shared/styles/mixins' as *;
+@use '@shared/styles/animations';
+
+.skeleton {
+  @include skeleton-shimmer;
+  border-radius: 4px;
+}

@@ -1,0 +1,87 @@
+@use '@shared/styles/animations';
+
+.circuitTraces {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  contain: layout style paint;
+  // 2026-04-19 Tier-2 perf: tell the browser to skip rendering entirely when
+  // this element is scrolled off-screen (no layout, paint, or compositing).
+  // Combined with the IntersectionObserver + data-paused pause logic in
+  // CircuitTraces.tsx, this is belt-and-suspenders for off-screen GPU cost.
+  // contain-intrinsic-size reserves the 420px hero height so scroll position
+  // isn't disturbed when content-visibility "hides" this subtree.
+  content-visibility: auto;
+  contain-intrinsic-size: auto 420px;
+
+  // Default (alternate-theme) token values. Base overrides below.
+  // Fallbacks to `transparent` guard against a future theme omitting any of
+  // --theme-pcb-trace / --theme-pcb-dot-glow: invisible is a safer silent
+  // failure mode than inheriting currentColor (opaque dark text color).
+  --trace-color:     var(--theme-pcb-trace, transparent);
+  --trace-glow:      var(--theme-pcb-dot-glow, transparent);
+  --electron-color:  var(--theme-nav-text-hover);
+  --node-color:      var(--theme-pcb-trace, transparent);
+  // Opacity buckets chosen to emulate the pre-refactor range (0.01–0.03 for
+  // body fills, 0.07–0.12 for body strokes, 0.08–0.25 for pads). Flattening
+  // is imperceptible on dark boards at these levels but may need per-theme
+  // retuning if a future theme has a significantly lighter `--theme-pcb-trace`.
+  --ic-body-fill:    color-mix(in srgb, var(--theme-pcb-trace) 3%,  transparent);
+  --ic-body-stroke:  color-mix(in srgb, var(--theme-pcb-trace) 15%, transparent);
+  --ic-pad-fill:     color-mix(in srgb, var(--theme-pcb-trace) 30%, transparent);
+}
+
+// Base theme carve-out: restore the pre-refactor hardcoded gold values
+// and suppress the shared trace-glow filter. CSS `filter: none` beats
+// the SVG `filter="url(#traceGlow)"` presentation attribute.
+:global(:root[data-theme="base"]) .circuitTraces,
+:global(:root:not([data-theme])) .circuitTraces {
+  --trace-color:     rgba(218, 190, 65, 1);
+  // Electrons pre-change were amber (255,220,80), not gold — preserved exactly
+  // so base theme renders with no perceptible electron hue shift.
+  --electron-color:  rgba(255, 220, 80, 0.9);
+  // Vias / BGA balls / fiducials used their own slightly-warmer amber
+  // (232,190,45) pre-refactor. Restore exactly.
+  --node-color:      rgba(232, 190, 45, 1);
+  --ic-body-fill:    rgba(218, 190, 65, 0.02);
+  --ic-body-stroke:  rgba(218, 190, 65, 0.12);
+  --ic-pad-fill:     rgba(218, 190, 65, 0.25);
+}
+
+.trace {
+  animation: draw-circuit 6s ease-out forwards;
+}
+
+// 2026-04-19 Tier-3 #6 perf: static-variant CircuitTraces skips animation
+// entirely. Used on the 7 non-home pages (Category, Search, Contact, Join,
+// About, KeywordSponsor, Part) where the board is visual flavor — no
+// electrons, no draw-in, no useEffect pause logic. Cuts ~85% of the GPU
+// cost on those routes (no SMIL loops, no animated paths, no filter).
+// Tier 2 (2026-04-19) also removed the entire <defs> trace-glow filter;
+// stdDeviation=0.5 was visually negligible but cost a per-frame raster
+// of the animating electron subtree on desktop + mobile alike.
+.circuitTraces.static .trace {
+  animation: none;
+  stroke-dashoffset: 0;
+}
+
+// Pause ALL descendant CSS animations when <CircuitTraces /> is out of
+// viewport or its document is backgrounded. Combined with
+// svg.pauseAnimations() in the component effect (handles SMIL animateMotion
+// electrons), this drops steady-state GPU cost to ~0 when the hero is not
+// visible. See CircuitTraces.tsx useEffect for the wiring + baseline.
+.circuitTraces[data-paused="true"] .trace,
+.circuitTraces[data-paused="true"] .electron,
+.circuitTraces[data-paused="true"] .node {
+  animation-play-state: paused;
+}
+
+.node {
+  opacity: 0.4;
+}
+
+.electron {
+  opacity: 0.9;
+}

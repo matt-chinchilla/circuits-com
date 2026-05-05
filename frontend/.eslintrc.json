@@ -1,0 +1,49 @@
+{
+  "root": true,
+  "parser": "@typescript-eslint/parser",
+  "parserOptions": {
+    "ecmaVersion": 2022,
+    "sourceType": "module",
+    "ecmaFeatures": {
+      "jsx": true
+    },
+    "project": "./tsconfig.app.json"
+  },
+  "plugins": ["import"],
+  "settings": {
+    "import/parsers": {
+      "@typescript-eslint/parser": [".ts", ".tsx"]
+    },
+    "import/resolver": {
+      "typescript": {
+        "project": "./tsconfig.app.json"
+      },
+      "node": true
+    }
+  },
+  "rules": {
+    "import/no-restricted-paths": [
+      "error",
+      {
+        "zones": [
+          {
+            "target": "./src/admin",
+            "from": "./src/public",
+            "message": "admin/ may not import from public/. Cross-context imports must go via shared/. (See bounded-context spec at docs/superpowers/specs/2026-05-03-frontend-restructure-design.md)"
+          },
+          {
+            "target": "./src/public",
+            "from": "./src/admin",
+            "message": "public/ may not import from admin/. Cross-context imports must go via shared/."
+          },
+          {
+            "target": "./src/shared",
+            "from": ["./src/public", "./src/admin"],
+            "message": "shared/ must not depend on public/ or admin/. Reverse the dependency direction."
+          }
+        ]
+      }
+    ]
+  },
+  "ignorePatterns": ["dist/", "node_modules/", "*.config.ts", "*.config.js"]
+}
