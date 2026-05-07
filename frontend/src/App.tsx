@@ -34,6 +34,8 @@ const CategoriesPage = lazy(() => import("@admin/pages/categories"));
 const SponsorsPage = lazy(() => import("@admin/pages/sponsors/list"));
 const SponsorFormPage = lazy(() => import("@admin/pages/sponsors/form"));
 const SettingsPage = lazy(() => import("@admin/pages/settings"));
+const MessagesListPage = lazy(() => import("@admin/pages/messages/list"));
+const MessageDetailPage = lazy(() => import("@admin/pages/messages/detail"));
 
 import AdminLayout from "@admin/components/AdminLayout";
 import ProtectedRoute from "@admin/components/ProtectedRoute";
@@ -93,6 +95,11 @@ function App() {
                       <Route
                         path="sponsors/:id/edit"
                         element={<SponsorFormPage />}
+                      />
+                      <Route path="messages" element={<MessagesListPage />} />
+                      <Route
+                        path="messages/:id"
+                        element={<MessageDetailPage />}
                       />
                       <Route path="settings" element={<SettingsPage />} />
                     </Routes>

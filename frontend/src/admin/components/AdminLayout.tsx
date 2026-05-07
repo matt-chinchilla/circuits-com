@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { NavLink, Link, useLocation } from 'react-router-dom';
+import { useState, useEffect, useRef } from 'react';
+import { NavLink, Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
   Package,
@@ -14,9 +14,12 @@ import {
   Search,
   Bell,
   Plus,
+  Mail,
 } from 'lucide-react';
 import { useAuth } from '@admin/contexts/AuthContext';
 import { useDemo } from '@admin/contexts/DemoContext';
+import BellDropdown from '@admin/components/messages/BellDropdown';
+import { loadMessages, unreadCount } from '@admin/services/messageStore';
 import styles from './AdminLayout.module.scss';
 import type { ReactNode, ComponentType } from 'react';
 
@@ -44,6 +47,13 @@ const CATALOG_LINKS: SidebarLink[] = [
   { to: '/admin/reports', label: 'Reports', icon: BarChart3 },
 ];
 
+// Messages lives in its own "Communications" group between Catalog and System
+// (per the 2026-05-07 Claude Design handoff). When more inbound channels
+// arrive (e.g. SMS, support tickets) they belong here too.
+const COMMS_LINKS: SidebarLink[] = [
+  { to: '/admin/messages', label: 'Messages', icon: Mail, adminOnly: true },
+];
+
 const SYSTEM_LINKS: SidebarLink[] = [
   { to: '/admin/import', label: 'Import Queue', icon: Upload },
   { to: '/admin/settings', label: 'Settings', icon: SettingsIcon },
@@ -62,6 +72,7 @@ const TITLE_MAP: Record<string, string> = {
   '/admin/sponsors': 'Sponsors',
   '/admin/sponsors/new': 'New Sponsor',
   '/admin/reports': 'Reports',
+  '/admin/messages': 'Messages',
   '/admin/import': 'Import Queue',
   '/admin/settings': 'Settings',
 };
@@ -122,8 +133,30 @@ export default function AdminLayout({ children, role = 'admin' }: AdminLayoutPro
   const { user, logout } = useAuth();
   const { demoMode, toggleDemo } = useDemo();
   const location = useLocation();
+  const navigate = useNavigate();
   const [signOutOpen, setSignOutOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [bellOpen, setBellOpen] = useState(false);
+  const [unread, setUnread] = useState(() => unreadCount());
+  const [wiggle, setWiggle] = useState(false);
+  const prevUnread = useRef(unread);
+
+  // Refresh unread count when route changes — covers list/detail navigation
+  // that flips messages from new → read.
+  useEffect(() => {
+    setUnread(unreadCount());
+  }, [location.pathname]);
+
+  // Bell wiggle animation when an unread message appears (badge increments).
+  useEffect(() => {
+    if (unread > prevUnread.current) {
+      setWiggle(true);
+      const t = setTimeout(() => setWiggle(false), 1000);
+      return () => clearTimeout(t);
+    }
+    prevUnread.current = unread;
+    return undefined;
+  }, [unread]);
 
   // ⌘K / Ctrl+K opens the topbar search; Esc closes it.
   useEffect(() => {
@@ -133,6 +166,7 @@ export default function AdminLayout({ children, role = 'admin' }: AdminLayoutPro
         setSearchOpen(true);
       } else if (e.key === 'Escape') {
         setSearchOpen(false);
+        setBellOpen(false);
       }
     };
     window.addEventListener('keydown', onKey);
@@ -141,12 +175,15 @@ export default function AdminLayout({ children, role = 'admin' }: AdminLayoutPro
 
   const catalogVisible =
     role === 'admin' ? CATALOG_LINKS : CATALOG_LINKS.filter((l) => !l.adminOnly);
+  const commsVisible =
+    role === 'admin' ? COMMS_LINKS : COMMS_LINKS.filter((l) => !l.adminOnly);
 
   const initials = (user?.username || 'AD').slice(0, 2).toUpperCase();
   const title = pageTitle(location.pathname);
 
   function renderLink(link: SidebarLink) {
     const Icon = link.icon;
+    const showUnreadBadge = link.to === '/admin/messages' && unread > 0;
     return (
       <NavLink
         key={link.to}
@@ -156,7 +193,12 @@ export default function AdminLayout({ children, role = 'admin' }: AdminLayoutPro
       >
         <Icon size={18} strokeWidth={2} />
         <span>{link.label}</span>
-        {link.badge && <span className={styles.sideBadge}>{link.badge}</span>}
+        {showUnreadBadge && (
+          <span className={`${styles.sideBadge} ${styles.unreadBadge}`}>{unread}</span>
+        )}
+        {!showUnreadBadge && link.badge && (
+          <span className={styles.sideBadge}>{link.badge}</span>
+        )}
       </NavLink>
     );
   }
@@ -174,6 +216,13 @@ export default function AdminLayout({ children, role = 'admin' }: AdminLayoutPro
 
         <div className={styles.sideGroupLabel}>Catalog</div>
         {catalogVisible.map(renderLink)}
+
+        {commsVisible.length > 0 && (
+          <>
+            <div className={styles.sideGroupLabel}>Communications</div>
+            {commsVisible.map(renderLink)}
+          </>
+        )}
 
         <div className={styles.sideGroupLabel}>System</div>
         {SYSTEM_LINKS.map(renderLink)}
@@ -250,10 +299,35 @@ export default function AdminLayout({ children, role = 'admin' }: AdminLayoutPro
               </span>
             </button>
 
-            <button type="button" className={styles.iconBtn} title="Notifications" aria-label="Notifications">
-              <Bell size={16} strokeWidth={2} />
-              <span className={styles.iconBtnDot} />
-            </button>
+            <div className={styles.bellWrap}>
+              <button
+                type="button"
+                className={`${styles.iconBtn} ${wiggle ? styles.bellWiggle : ''}`}
+                title="Notifications"
+                aria-label="Notifications"
+                onClick={() => setBellOpen((b) => !b)}
+              >
+                <Bell size={16} strokeWidth={2} />
+                {unread > 0 && (
+                  <span className={styles.bellBadge}>{unread > 9 ? '9+' : unread}</span>
+                )}
+              </button>
+              {bellOpen && (
+                <BellDropdown
+                  messages={loadMessages()}
+                  unreadCount={unread}
+                  onClose={() => setBellOpen(false)}
+                  onOpenAll={() => {
+                    setBellOpen(false);
+                    navigate('/admin/messages');
+                  }}
+                  onOpen={(id) => {
+                    setBellOpen(false);
+                    navigate(`/admin/messages/${id}`);
+                  }}
+                />
+              )}
+            </div>
 
             <Link to="/admin/parts/new" className={`${styles.btn} ${styles.btnPrimary}`}>
               <Plus size={15} strokeWidth={2} />

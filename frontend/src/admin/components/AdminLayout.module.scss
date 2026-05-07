@@ -458,6 +458,77 @@
   background: var(--a-danger);
 }
 
+// Bell wrap + counted badge + wiggle on new arrival.
+.bellWrap {
+  position: relative;
+}
+
+.bellBadge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 9px;
+  background: var(--a-danger);
+  color: #ffffff;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid #ffffff;
+  letter-spacing: 0;
+  pointer-events: none;
+}
+
+.bellWiggle {
+  animation: bellWiggle 1s ease-in-out 1;
+}
+
+@keyframes bellWiggle {
+  0%, 100% {
+    transform: rotate(0);
+  }
+  20% {
+    transform: rotate(-12deg);
+  }
+  40% {
+    transform: rotate(10deg);
+  }
+  60% {
+    transform: rotate(-6deg);
+  }
+  80% {
+    transform: rotate(4deg);
+  }
+}
+
+// Sidebar Messages-unread badge variant — red, mono, pulses once on arrival.
+.unreadBadge {
+  background: var(--a-danger) !important;
+  color: #ffffff !important;
+  font-family: 'JetBrains Mono', monospace;
+  animation: msgBadgePulse 600ms ease-out 1;
+}
+
+@keyframes msgBadgePulse {
+  0% {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.2);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
 // ─── (4) Content ────────────────────────────────────────────────────────────
 
 .content {

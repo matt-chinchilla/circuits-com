@@ -1,0 +1,42 @@
+@use '@shared/styles/variables' as *;
+@use '@admin/styles/variables' as *;
+
+.kbdHint {
+  position: fixed;
+  bottom: 0;
+  left: $admin-sidebar-width;
+  right: 0;
+  height: 32px;
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  font-family: $admin-font-mono;
+  font-size: 11px;
+  color: #9ca3af;
+  background: $admin-card-bg;
+  border-top: 1px solid #f0f2f5;
+  opacity: 0;
+  transform: translateY(100%);
+  transition:
+    opacity 240ms,
+    transform 240ms;
+  z-index: 5;
+}
+
+.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.kbdHint kbd {
+  display: inline-block;
+  padding: 1px 5px;
+  margin: 0 2px;
+  font-family: $admin-font-mono;
+  font-size: 10px;
+  background: $admin-bg;
+  color: #4b5563;
+  border: 1px solid #e5e7eb;
+  border-radius: 3px;
+}

@@ -1,0 +1,448 @@
+@use '@shared/styles/variables' as *;
+@use '@admin/styles/variables' as *;
+
+// Page head
+.pageHead {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 24px;
+}
+
+.title {
+  font-size: 28px;
+  font-weight: 700;
+  color: $admin-text-primary;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+.subtitle {
+  font-size: 13px;
+  color: #6b7280;
+  margin: 0;
+}
+
+// Card panel
+.panel {
+  background: $admin-card-bg;
+  border-radius: $admin-border-radius;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+}
+
+// Toolbar — filter chips + sort + search
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 20px;
+  border-bottom: 1px solid #f0f2f5;
+  flex-wrap: wrap;
+}
+
+.chips {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.filterChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  background: transparent;
+  color: #4b5563;
+  border: 1px solid #e5e7eb;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 150ms;
+}
+
+.filterChip.active {
+  background: $executive-blue;
+  color: $admin-card-bg;
+  border-color: $executive-blue;
+}
+
+.filterChip:hover:not(.active) {
+  border-color: $executive-blue;
+  color: $executive-blue;
+}
+
+.chipCount {
+  font-family: $admin-font-mono;
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.06);
+  color: inherit;
+  font-weight: 700;
+}
+
+.filterChip.active .chipCount {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.tools {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+// Select dropdown
+.selectWrap {
+  position: relative;
+  min-width: 160px;
+}
+
+.select {
+  width: 100%;
+  height: 36px;
+  padding: 0 32px 0 12px;
+  font-family: inherit;
+  font-size: 13px;
+  color: $admin-text-primary;
+  background: $admin-card-bg;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  outline: none;
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg viewBox='0 0 12 12' width='10' height='10' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M2 4l4 4 4-4' fill='none' stroke='%236b7280' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+}
+
+.select:focus {
+  border-color: $executive-blue;
+  box-shadow: 0 0 0 3px rgba(10, 74, 46, 0.08);
+}
+
+// Inline search
+.search {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 320px;
+  height: 36px;
+  padding: 0 12px;
+  background: $admin-card-bg;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  transition:
+    border-color 150ms,
+    box-shadow 150ms;
+}
+
+.search:focus-within {
+  border-color: $executive-blue;
+  box-shadow: 0 0 0 3px rgba(10, 74, 46, 0.08);
+}
+
+.search svg {
+  color: #9ca3af;
+}
+
+.searchInput {
+  flex: 1;
+  border: none;
+  outline: none;
+  font-family: inherit;
+  font-size: 13px;
+  color: $admin-text-primary;
+  background: transparent;
+}
+
+.searchInput::placeholder {
+  color: #9ca3af;
+}
+
+// Table
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.row {
+  cursor: pointer;
+  transition: background-color 100ms;
+}
+
+.row td {
+  padding: 14px 12px;
+  border-bottom: 1px solid #f0f2f5;
+  vertical-align: middle;
+  position: relative;
+}
+
+.row:hover td {
+  background: #f0f2f5;
+}
+
+.isNew td {
+  background: #fafbfc;
+}
+
+.isNew:hover td {
+  background: #f0f2f5;
+}
+
+.isNew td:first-child {
+  border-left: 2px solid $error-red;
+}
+
+.isArc td {
+  opacity: 0.65;
+}
+
+.cDot {
+  padding-left: 18px !important;
+  padding-right: 4px !important;
+}
+
+.cDes {
+  padding-left: 0 !important;
+}
+
+.cTime {
+  color: #6b7280;
+  text-align: right;
+  padding-right: 18px !important;
+  font-family: $admin-font-mono;
+  font-size: 12px;
+}
+
+.cAct {
+  padding: 0 12px 0 0 !important;
+  text-align: right;
+}
+
+.cSubject {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cSender {
+  overflow: hidden;
+}
+
+.senderName {
+  font-size: 14px;
+  font-weight: 600;
+  color: $admin-text-primary;
+  display: inline-flex;
+  align-items: center;
+}
+
+.senderEmail {
+  font-family: $admin-font-mono;
+  font-size: 12px;
+  color: #6b7280;
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.subject {
+  font-size: 14px;
+  color: $admin-text-primary;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.isNew .subject {
+  font-weight: 600;
+}
+
+.row:not(.isNew) .subject {
+  color: #4b5563;
+}
+
+// PCB-grid hover background — subtle brand easter egg.
+.row::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(10, 74, 46, 0.5) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(10, 74, 46, 0.5) 1px, transparent 1px);
+  background-size: 24px 24px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 200ms;
+}
+
+.row:hover::after {
+  opacity: 0.04;
+}
+
+// Cluster headers (Today / Yesterday / etc.)
+.cluster td {
+  padding: 12px 18px 6px !important;
+  background: $admin-card-bg !important;
+  font-family: $admin-font-mono;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #9ca3af;
+  border-bottom: none;
+  position: sticky;
+  top: $admin-topbar-height;
+  z-index: 1;
+}
+
+// Empty state (filtered)
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 60px 20px;
+  color: #6b7280;
+  font-size: 14px;
+}
+
+.clearBtn {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 14px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  background: $admin-card-bg;
+  color: $admin-text-primary;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.clearBtn:hover {
+  background: $admin-bg;
+}
+
+// Per-row action menu
+.rowAction {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  border: none;
+  background: transparent;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 150ms;
+}
+
+.rowAction:hover {
+  background: #f0f2f5;
+  color: $admin-text-primary;
+}
+
+.menuBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+}
+
+.rowMenu {
+  position: absolute;
+  right: 8px;
+  top: 100%;
+  z-index: 30;
+  min-width: 180px;
+  background: $admin-card-bg;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12);
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  animation: menuIn 140ms ease-out;
+}
+
+@keyframes menuIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.rowMenu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 13px;
+  color: $admin-text-primary;
+  border-radius: 4px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.rowMenu button:hover {
+  background: #f0f2f5;
+}
+
+.rowMenu .danger {
+  color: $error-red;
+}
+
+.rowMenu .danger:hover {
+  background: rgba(192, 57, 43, 0.08);
+}
+
+.rowMenuSep {
+  height: 1px;
+  background: #f0f2f5;
+  margin: 4px 0;
+}
+
+// Toast
+.toast {
+  position: fixed;
+  bottom: 56px;
+  right: 24px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 18px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: $admin-card-bg;
+  background: #15803d;
+  z-index: 1100;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  animation: toastIn 200ms ease-out;
+}
+
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
