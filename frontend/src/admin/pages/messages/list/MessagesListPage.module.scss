@@ -163,11 +163,12 @@
   color: #9ca3af;
 }
 
-// Table
+// Table — auto layout. table-layout:fixed over-constrained the columns at
+// admin-sidebar-narrowed widths (subject got 0px). Auto layout lets the
+// browser size columns to content and gives subject the leftover space.
 .table {
   width: 100%;
   border-collapse: collapse;
-  table-layout: fixed;
 }
 
 .row {
@@ -232,14 +233,20 @@
 
 .cSender {
   overflow: hidden;
+  white-space: nowrap;
+  max-width: 280px;
 }
 
 .senderName {
   font-size: 14px;
   font-weight: 600;
   color: $admin-text-primary;
-  display: inline-flex;
+  display: flex;
   align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .senderEmail {

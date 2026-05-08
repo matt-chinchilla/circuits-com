@@ -381,9 +381,10 @@ export default function MessagesListPage() {
             <colgroup>
               <col style={{ width: 32 }} />
               <col style={{ width: 92 }} />
-              <col style={{ width: 110 }} />
+              <col style={{ width: 96 }} />
+              {/* sender + subject auto-size to content; subject grows last */}
               <col />
-              <col />
+              <col style={{ width: '100%' }} />
               <col style={{ width: 80 }} />
               <col style={{ width: 36 }} />
             </colgroup>
