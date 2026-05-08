@@ -15,6 +15,17 @@ services:
       sh -c "alembic upgrade head &&
              python -m app.db.seed &&
              uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4"
+    environment:
+      # Real SMTP creds come from /opt/circuits-com/.env on EC2.
+      # SMTP_HOST defaults to mail.hover.com on prod, but empty
+      # SMTP_PASSWORD still triggers demo mode — won't actually send
+      # until you populate the .env file.
+      SMTP_HOST: ${SMTP_HOST:-mail.hover.com}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-no-reply@circuits.com}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-no-reply@circuits.com}
+      NOTIFY_RECIPIENTS: ${NOTIFY_RECIPIENTS:-no-reply@circuits.com}
 
   frontend:
     build:

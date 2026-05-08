@@ -28,6 +28,14 @@ services:
       ADMIN_USERNAME: john
       ADMIN_PASSWORD: circuits2026
       ADMIN_SECRET_KEY: change-me-in-production
+      # SMTP — empty defaults trigger demo mode in app.services.email.
+      # Populate via .env on prod EC2 host (see CLAUDE.md gotcha).
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-no-reply@circuits.com}
+      NOTIFY_RECIPIENTS: ${NOTIFY_RECIPIENTS:-no-reply@circuits.com}
 
   frontend:
     build: ./frontend
