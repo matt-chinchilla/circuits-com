@@ -82,3 +82,39 @@ async def test_smtp_send_swallows_exceptions_and_logs(caplog, monkeypatch):
             await email_service._smtp_send(msg)  # must not raise
 
     assert any("SMTP send failed" in rec.message for rec in caplog.records)
+
+
+@pytest.mark.asyncio
+async def test_send_contact_notification_composes_correct_message(monkeypatch):
+    """Contact notification: To=NOTIFY_RECIPIENTS, Reply-To=applicant, body has fields."""
+    from app.schemas import ContactForm
+    from app.services import email as email_service
+
+    monkeypatch.setattr(email_service.settings, "NOTIFY_RECIPIENTS", ["alerts@circuits.com"])
+    monkeypatch.setattr(email_service.settings, "SMTP_FROM", "no-reply@circuits.com")
+    monkeypatch.setattr(email_service.settings, "SMTP_HOST", "mail.hover.com")
+    monkeypatch.setattr(email_service.settings, "SMTP_USERNAME", "x")
+    monkeypatch.setattr(email_service.settings, "SMTP_PASSWORD", "y")
+
+    form = ContactForm(
+        name="Tom Reilly",
+        email="t.reilly@gizmodo.com",
+        subject="Press inquiry",
+        message="Working on a comparison piece.",
+    )
+
+    with patch("app.services.email.aiosmtplib.send", new_callable=AsyncMock) as mock_send:
+        await email_service.send_contact_notification(form)
+
+    mock_send.assert_called_once()
+    msg = mock_send.call_args[0][0]
+    assert msg["From"] == "no-reply@circuits.com"
+    assert msg["To"] == "alerts@circuits.com"
+    assert msg["Reply-To"] == "t.reilly@gizmodo.com"
+    assert "Press inquiry" in msg["Subject"]
+    assert "Tom Reilly" in msg["Subject"]
+    body = msg.get_content()
+    assert "Tom Reilly" in body
+    assert "t.reilly@gizmodo.com" in body
+    assert "Press inquiry" in body
+    assert "Working on a comparison piece." in body

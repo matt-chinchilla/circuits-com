@@ -49,3 +49,43 @@ async def _smtp_send(message: EmailMessage) -> None:
             message["To"],
             message["Subject"],
         )
+
+
+def _build_notification(
+    *,
+    subject: str,
+    reply_to: str,
+    body: str,
+) -> EmailMessage:
+    """Compose a notification email (to NOTIFY_RECIPIENTS, with Reply-To)."""
+    msg = EmailMessage()
+    msg["From"] = settings.SMTP_FROM
+    msg["To"] = ", ".join(settings.NOTIFY_RECIPIENTS)
+    msg["Reply-To"] = reply_to
+    msg["Subject"] = subject
+    msg.set_content(body)
+    return msg
+
+
+async def send_contact_notification(form) -> None:
+    """Notify recipients that someone submitted the Contact form."""
+    body = (
+        "New contact submission via circuits.com:\n"
+        "\n"
+        f"Name:    {form.name}\n"
+        f"Email:   {form.email}\n"
+        f"Subject: {form.subject}\n"
+        "\n"
+        "Message:\n"
+        "---\n"
+        f"{form.message}\n"
+        "---\n"
+        "\n"
+        "Reply to this email to respond to the applicant directly.\n"
+    )
+    msg = _build_notification(
+        subject=f"[Circuits Contact] {form.subject} — {form.name}",
+        reply_to=form.email,
+        body=body,
+    )
+    await _smtp_send(msg)
