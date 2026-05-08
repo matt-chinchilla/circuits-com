@@ -1,5 +1,7 @@
+from typing import Annotated
+
 from pydantic import field_validator
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, NoDecode
 
 
 class Settings(BaseSettings):
@@ -18,25 +20,22 @@ class Settings(BaseSettings):
     SMTP_USERNAME: str | None = None
     SMTP_PASSWORD: str | None = None
     SMTP_FROM: str = "no-reply@circuits.com"
-    # Loopback default so initial testing sends to no-reply@ itself. Flip to
-    # ["john@circuits.com", "mike@circuits.com"] via env var override
-    # (NOTIFY_RECIPIENTS=john@circuits.com,mike@circuits.com) once verified.
-    NOTIFY_RECIPIENTS: list[str] = ["no-reply@circuits.com"]
+    # Annotated[..., NoDecode] tells pydantic-settings NOT to JSON-parse the
+    # env var first. The validator below then handles both JSON-list form
+    # AND comma-separated string form. Loopback default for testing; flip
+    # via NOTIFY_RECIPIENTS=john@circuits.com,mike@circuits.com once verified.
+    NOTIFY_RECIPIENTS: Annotated[list[str], NoDecode] = ["no-reply@circuits.com"]
 
-    @field_validator("NOTIFY_RECIPIENTS", "CORS_ORIGINS", mode="before")
+    @field_validator("NOTIFY_RECIPIENTS", mode="before")
     @classmethod
     def _split_csv(cls, v):
-        """Accept either a JSON list OR a comma-separated string from env vars.
-
-        pydantic-settings v2 only auto-parses JSON for list fields by default.
-        This validator lets compose set NOTIFY_RECIPIENTS=a@x.com,b@y.com
-        without forcing the operator to write JSON syntax in env vars.
-        """
+        """Accept either a JSON list OR a comma-separated string."""
         if isinstance(v, str):
             stripped = v.strip()
             if stripped.startswith("["):
-                # Let pydantic do its normal JSON parsing.
-                return v
+                import json
+
+                return json.loads(stripped)
             return [s.strip() for s in stripped.split(",") if s.strip()]
         return v
 

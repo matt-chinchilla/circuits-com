@@ -24,7 +24,10 @@ logger = logging.getLogger(__name__)
 async def _smtp_send(message: EmailMessage) -> None:
     """Send a prepared EmailMessage. Demo-mode aware. Catches SMTP errors."""
     if not settings.SMTP_HOST:
-        logger.info(
+        # WARNING level so it surfaces under uvicorn's default log config
+        # (which suppresses INFO from non-uvicorn loggers). Demo mode is a
+        # notable signal — operators want to see it without tweaking config.
+        logger.warning(
             "[email demo-mode] would send to=%s subject=%r",
             message["To"],
             message["Subject"],
