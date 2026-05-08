@@ -121,3 +121,24 @@ async def send_join_notification(form) -> None:
         body=body,
     )
     await _smtp_send(msg)
+
+
+async def send_join_autoreply(form) -> None:
+    """Confirm receipt of a Join submission to the applicant."""
+    body = (
+        f"Hi {form.contact_person},\n"
+        "\n"
+        f"Thanks for applying to list {form.company_name} on Circuits.com.\n"
+        "\n"
+        "John and Mike will review your submission and get back to you within\n"
+        "1-2 business days. If you have time-sensitive questions, you can reach\n"
+        "us directly at john@circuits.com or mike@circuits.com.\n"
+        "\n"
+        "- The Circuits.com Team\n"
+    )
+    msg = EmailMessage()
+    msg["From"] = settings.SMTP_FROM
+    msg["To"] = form.email
+    msg["Subject"] = "We received your application — Circuits.com"
+    msg.set_content(body)
+    await _smtp_send(msg)

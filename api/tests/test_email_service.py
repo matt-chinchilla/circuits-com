@@ -157,3 +157,35 @@ async def test_send_join_notification_includes_company_tier_categories(monkeypat
     assert "platinum" in body
     assert "Resistors" in body and "Capacitors" in body
     assert "priority placement" in body
+
+
+@pytest.mark.asyncio
+async def test_send_join_autoreply_addresses_applicant(monkeypatch):
+    """Join autoreply: To=applicant, From=no-reply, body greets contact_person."""
+    from app.schemas import JoinForm
+    from app.services import email as email_service
+
+    monkeypatch.setattr(email_service.settings, "SMTP_FROM", "no-reply@circuits.com")
+    monkeypatch.setattr(email_service.settings, "SMTP_HOST", "mail.hover.com")
+    monkeypatch.setattr(email_service.settings, "SMTP_USERNAME", "x")
+    monkeypatch.setattr(email_service.settings, "SMTP_PASSWORD", "y")
+
+    form = JoinForm(
+        company_name="Arrow Electronics",
+        contact_person="Jane Buyer",
+        email="jane@arrow.com",
+        phone="631-555-0143",
+        categories_of_interest=[],
+    )
+
+    with patch("app.services.email.aiosmtplib.send", new_callable=AsyncMock) as mock_send:
+        await email_service.send_join_autoreply(form)
+
+    msg = mock_send.call_args[0][0]
+    assert msg["From"] == "no-reply@circuits.com"
+    assert msg["To"] == "jane@arrow.com"
+    assert "Reply-To" not in msg  # auto-reply doesn't need one
+    assert "received" in msg["Subject"].lower() or "circuits" in msg["Subject"].lower()
+    body = msg.get_content()
+    assert "Jane Buyer" in body
+    assert "Arrow Electronics" in body
