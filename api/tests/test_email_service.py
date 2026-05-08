@@ -189,3 +189,36 @@ async def test_send_join_autoreply_addresses_applicant(monkeypatch):
     body = msg.get_content()
     assert "Jane Buyer" in body
     assert "Arrow Electronics" in body
+
+
+@pytest.mark.asyncio
+async def test_send_keyword_notification_includes_keyword(monkeypatch):
+    """Keyword notification: subject and body feature the keyword prominently."""
+    from app.schemas import KeywordRequestForm
+    from app.services import email as email_service
+
+    monkeypatch.setattr(email_service.settings, "NOTIFY_RECIPIENTS", ["alerts@circuits.com"])
+    monkeypatch.setattr(email_service.settings, "SMTP_FROM", "no-reply@circuits.com")
+    monkeypatch.setattr(email_service.settings, "SMTP_HOST", "mail.hover.com")
+    monkeypatch.setattr(email_service.settings, "SMTP_USERNAME", "x")
+    monkeypatch.setattr(email_service.settings, "SMTP_PASSWORD", "y")
+
+    form = KeywordRequestForm(
+        company_name="Vishay Intertechnology",
+        email="partnerships@vishay.com",
+        keyword="low-noise op-amps",
+        message="12-month commit OK.",
+    )
+
+    with patch("app.services.email.aiosmtplib.send", new_callable=AsyncMock) as mock_send:
+        await email_service.send_keyword_notification(form)
+
+    msg = mock_send.call_args[0][0]
+    assert msg["From"] == "no-reply@circuits.com"
+    assert msg["To"] == "alerts@circuits.com"
+    assert msg["Reply-To"] == "partnerships@vishay.com"
+    assert "low-noise op-amps" in msg["Subject"]
+    body = msg.get_content()
+    assert "Vishay Intertechnology" in body
+    assert "low-noise op-amps" in body
+    assert "12-month commit OK." in body

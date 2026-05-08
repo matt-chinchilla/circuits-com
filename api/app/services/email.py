@@ -142,3 +142,28 @@ async def send_join_autoreply(form) -> None:
     msg["Subject"] = "We received your application — Circuits.com"
     msg.set_content(body)
     await _smtp_send(msg)
+
+
+async def send_keyword_notification(form) -> None:
+    """Notify recipients of a new keyword-sponsorship request."""
+    extra_message = form.message or "(no message)"
+    body = (
+        "New keyword-sponsorship request via circuits.com:\n"
+        "\n"
+        f"Company: {form.company_name}\n"
+        f"Email:   {form.email}\n"
+        f"Keyword: {form.keyword}\n"
+        "\n"
+        "Message:\n"
+        "---\n"
+        f"{extra_message}\n"
+        "---\n"
+        "\n"
+        "Reply to this email to respond to the applicant directly.\n"
+    )
+    msg = _build_notification(
+        subject=f"[Circuits Keyword] {form.keyword} — {form.company_name}",
+        reply_to=form.email,
+        body=body,
+    )
+    await _smtp_send(msg)
