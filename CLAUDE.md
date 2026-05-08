@@ -77,9 +77,9 @@ Browser → Nginx(:80/:443)
 ### API (api/)
 - FastAPI app in `app/main.py`, mounts 5 routers (categories, suppliers, search, forms, sponsors)
 - Models: Category (self-referential tree), Supplier, CategorySupplier (join), Sponsor (XOR constraint: category_id OR keyword)
-- Services layer: `category_service.py`, `search_service.py`
+- Services layer: `category_service.py`, `search_service.py`, `email.py` (aiosmtplib + Hover SMTP, demo-mode-aware, called from `routes/forms.py` BackgroundTasks)
 - SQLAdmin panel mounted at `/admin` on the API (only reachable in local dev — nginx routes `/admin` → frontend in prod)
-- **Real prod admin** lives in `frontend/src/admin/pages/` (React SPA): suppliers/{list,form,detail}, parts/{list,form,detail}, sponsors/{list,form}, dashboard, categories, reports, settings, import
+- **Real prod admin** lives in `frontend/src/admin/pages/` (React SPA): suppliers/{list,form,detail}, parts/{list,form,detail}, sponsors/{list,form}, messages/{list,detail}, dashboard, categories, reports, settings, import
 - React admin auth: JWT in `localStorage.admin_token` via `frontend/src/admin/services/adminApi.ts`; SQLAdmin auth (dev only): session via `AdminAuth` in `app/admin.py`
 - Config via pydantic-settings: `DATABASE_URL`, `N8N_WEBHOOK_BASE_URL`, `CORS_ORIGINS`, `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `ADMIN_SECRET_KEY`
 - Entrypoint runs: alembic migrate → seed → uvicorn
@@ -87,7 +87,7 @@ Browser → Nginx(:80/:443)
 ### Frontend (frontend/)
 - React 19 + TypeScript + Vite + SCSS Modules + Framer Motion. **Bounded-context structure** (post-2026-05-03 restructure):
   - `src/public/` — public site: `pages/<name>/{index.tsx, <Name>Page.module.scss, components/}`; `components/layout/` (chrome); `components/widgets/` (CircuitTraces, GlowButton, AnimatedLink, SkeletonLoader, HeroColorTuner); `hooks/`; `services/api.ts`; `types/`
-  - `src/admin/` — admin SPA: `pages/<name>/` for standalone (login/dashboard/categories/reports/settings/import); `pages/<entity>/{list,form,detail}/` Plan B nesting for CRUD (suppliers, parts; sponsors has only list+form); `components/`; `contexts/`; `services/adminApi.ts`; `styles/_variables.scss`; `types/admin.ts`
+  - `src/admin/` — admin SPA: `pages/<name>/` for standalone (login/dashboard/categories/reports/settings/import); `pages/<entity>/{list,form,detail}/` Plan B nesting for CRUD (suppliers, parts; sponsors has only list+form); `pages/messages/{list,detail}/` for the inbox + type-branched detail; `components/` (chrome) + `components/messages/` (10 modules: chips, datasheet frame, bell dropdown, reply panel, type-branched bodies, activity log, inbox-zero, kbd-hint, helpers); `contexts/`; `services/adminApi.ts` + `services/sponsorStore.ts` + `services/messageStore.ts` (localStorage-backed CRUD, first-read materializes seed); `styles/_variables.scss`; `types/admin.ts` + `types/messages.ts`
   - `src/shared/` — cross-scope only: `styles/{_themes,_variables,_mixins,_animations,global}.scss`; `services/constants.ts` (exports `API_BASE_URL`, consumed by both public api.ts and admin adminApi.ts)
 - **Per-scope path aliases** (`vite.config.ts` + `tsconfig.app.json`): `@public/*`, `@admin/*`, `@shared/*`. The pre-2026-05-03 unused `@/*` alias was removed.
 - **ESLint boundary enforcement** (`frontend/.eslintrc.json`, `eslint-plugin-import` v8): admin/ may not import `@public/*`; public/ may not import `@admin/*`; shared/ may not import either. Run `cd frontend && npx eslint src/` (exit 0 = clean).
@@ -100,7 +100,7 @@ Browser → Nginx(:80/:443)
 - **Adding a new admin entity-CRUD set**: create `src/admin/pages/<entity>/{list, form, detail}/index.tsx` (3 sibling pages); add 3 lazy imports + 4 `<Route>` entries (`/<entity>`, `/<entity>/new`, `/<entity>/:id`, `/<entity>/:id/edit`).
 
 ### Admin layout (`frontend/src/admin/components/AdminLayout.tsx`)
-Owns the 240px Lucide-iconed sidebar (Catalog group: Dashboard / Parts / Suppliers / Categories / Sponsors / Reports — System group: Import Queue / Settings) + 64px sticky topbar (collapsible search w/ ⌘K + Demo Data toggle pill + Notifications + "+ New Part" CTA + Sign-Out confirm modal). Page components render the content area ONLY — never their own sidebar/topbar. The Demo Data toggle lives in the topbar — `<DemoToggle />` is NO LONGER rendered separately in `App.tsx` (was floating bottom-right pre-2026-04-25). Admin scope is intentionally un-themed (light surface, DM Sans chrome) per `reference_theme_system` memory.
+Owns the 240px Lucide-iconed sidebar (Catalog: Dashboard / Parts / Suppliers / Categories / Sponsors / Reports — **Communications: Messages** with live unread badge — System: Import Queue / Settings) + 64px sticky topbar (collapsible search w/ ⌘K + Demo Data toggle pill + **Notifications bell with counted red badge + 380px dropdown** + "+ New Part" CTA + Sign-Out confirm modal). Bell-badge + sidebar-Messages-badge stay synced via a `useEffect` keyed on `location.pathname` that re-reads `unreadCount()` after every route change. Page components render the content area ONLY — never their own sidebar/topbar. The Demo Data toggle lives in the topbar — `<DemoToggle />` is NO LONGER rendered separately in `App.tsx` (was floating bottom-right pre-2026-04-25). Admin scope is intentionally un-themed (light surface, DM Sans chrome) per `reference_theme_system` memory.
 
 ### Claude Code Automations (.claude/)
 - **Hooks** (settings.json):
@@ -117,7 +117,7 @@ Owns the 240px Lucide-iconed sidebar (Catalog group: Dashboard / Parts / Supplie
 - Categories use self-referential `parent_id` for tree structure (2 levels deep)
 - `CategorySupplier` join table links suppliers to categories with `is_featured` + `rank`
 - Sponsors have XOR constraint: either `category_id` (category sponsor) or `keyword` (keyword sponsor)
-- Forms POST to API → API fires async webhook to n8n → n8n processes (email, logging)
+- Forms POST to API → FastAPI `BackgroundTasks` schedule `app.services.email.send_*_notification` (and `send_join_autoreply` for Join) → `aiosmtplib` delivers via Hover SMTP. n8n container is still in compose for future workflows but no longer in the form path. Demo-mode default when `SMTP_HOST` unset (logs at WARNING level instead of sending) so prod is safe to deploy without the password.
 
 ## Key Patterns
 
