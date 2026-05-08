@@ -97,7 +97,7 @@ async def send_contact_notification(form) -> None:
 async def send_join_notification(form) -> None:
     """Notify recipients of a new supplier-onboarding submission."""
     categories = ", ".join(form.categories_of_interest) or "(none specified)"
-    tier = form.tier or "(no tier selected)"
+    tier_display = form.tier or "(no tier selected)"
     extra_message = form.message or "(no message)"
     website = form.website or "(none)"
     body = (
@@ -108,7 +108,7 @@ async def send_join_notification(form) -> None:
         f"Email:      {form.email}\n"
         f"Phone:      {form.phone}\n"
         f"Website:    {website}\n"
-        f"Tier:       {tier}\n"
+        f"Tier:       {tier_display}\n"
         f"Categories: {categories}\n"
         "\n"
         "Message:\n"
@@ -118,8 +118,11 @@ async def send_join_notification(form) -> None:
         "\n"
         "Reply to this email to respond to the applicant directly.\n"
     )
+    # Subject only shows tier when explicitly set — avoids "((no tier selected))"
+    # double-paren ugliness when applicants skip the optional field.
+    subject_tail = f" ({form.tier})" if form.tier else ""
     msg = _build_notification(
-        subject=f"[Circuits Join] {form.company_name} wants to list ({tier})",
+        subject=f"[Circuits Join] {form.company_name} wants to list{subject_tail}",
         reply_to=form.email,
         body=body,
     )
