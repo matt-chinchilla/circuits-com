@@ -118,3 +118,42 @@ async def test_send_contact_notification_composes_correct_message(monkeypatch):
     assert "t.reilly@gizmodo.com" in body
     assert "Press inquiry" in body
     assert "Working on a comparison piece." in body
+
+
+@pytest.mark.asyncio
+async def test_send_join_notification_includes_company_tier_categories(monkeypatch):
+    """Join notification: subject mentions company, body has tier + categories."""
+    from app.schemas import JoinForm
+    from app.services import email as email_service
+
+    monkeypatch.setattr(email_service.settings, "NOTIFY_RECIPIENTS", ["alerts@circuits.com"])
+    monkeypatch.setattr(email_service.settings, "SMTP_FROM", "no-reply@circuits.com")
+    monkeypatch.setattr(email_service.settings, "SMTP_HOST", "mail.hover.com")
+    monkeypatch.setattr(email_service.settings, "SMTP_USERNAME", "x")
+    monkeypatch.setattr(email_service.settings, "SMTP_PASSWORD", "y")
+
+    form = JoinForm(
+        company_name="Arrow Electronics",
+        contact_person="Jane Buyer",
+        email="jane@arrow.com",
+        phone="631-555-0143",
+        website="arrow.com",
+        categories_of_interest=["Resistors", "Capacitors"],
+        tier="platinum",
+        message="We'd like priority placement.",
+    )
+
+    with patch("app.services.email.aiosmtplib.send", new_callable=AsyncMock) as mock_send:
+        await email_service.send_join_notification(form)
+
+    msg = mock_send.call_args[0][0]
+    assert msg["From"] == "no-reply@circuits.com"
+    assert msg["To"] == "alerts@circuits.com"
+    assert msg["Reply-To"] == "jane@arrow.com"
+    assert "Arrow Electronics" in msg["Subject"]
+    body = msg.get_content()
+    assert "Arrow Electronics" in body
+    assert "Jane Buyer" in body
+    assert "platinum" in body
+    assert "Resistors" in body and "Capacitors" in body
+    assert "priority placement" in body

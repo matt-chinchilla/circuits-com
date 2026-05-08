@@ -89,3 +89,35 @@ async def send_contact_notification(form) -> None:
         body=body,
     )
     await _smtp_send(msg)
+
+
+async def send_join_notification(form) -> None:
+    """Notify recipients of a new supplier-onboarding submission."""
+    categories = ", ".join(form.categories_of_interest) or "(none specified)"
+    tier = form.tier or "(no tier selected)"
+    extra_message = form.message or "(no message)"
+    website = form.website or "(none)"
+    body = (
+        "New supplier-onboarding submission via circuits.com:\n"
+        "\n"
+        f"Company:    {form.company_name}\n"
+        f"Contact:    {form.contact_person}\n"
+        f"Email:      {form.email}\n"
+        f"Phone:      {form.phone}\n"
+        f"Website:    {website}\n"
+        f"Tier:       {tier}\n"
+        f"Categories: {categories}\n"
+        "\n"
+        "Message:\n"
+        "---\n"
+        f"{extra_message}\n"
+        "---\n"
+        "\n"
+        "Reply to this email to respond to the applicant directly.\n"
+    )
+    msg = _build_notification(
+        subject=f"[Circuits Join] {form.company_name} wants to list ({tier})",
+        reply_to=form.email,
+        body=body,
+    )
+    await _smtp_send(msg)
