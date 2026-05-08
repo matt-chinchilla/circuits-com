@@ -16,7 +16,7 @@ async def test_smtp_send_demo_mode_logs_does_not_call_smtp(caplog, monkeypatch):
     monkeypatch.setattr(email_service.settings, "SMTP_HOST", None)
 
     msg = EmailMessage()
-    msg["From"] = "no-reply@circuits.com"
+    msg["From"] = "no-reply@example.invalid"
     msg["To"] = "test@example.com"
     msg["Subject"] = "Demo mode probe"
     msg.set_content("Hello from the test suite.")
@@ -36,13 +36,13 @@ async def test_smtp_send_calls_aiosmtplib_when_host_configured(monkeypatch):
     """When SMTP_HOST is set, _smtp_send delegates to aiosmtplib.send."""
     from app.services import email as email_service
 
-    monkeypatch.setattr(email_service.settings, "SMTP_HOST", "mail.hover.com")
+    monkeypatch.setattr(email_service.settings, "SMTP_HOST", "smtp.example.invalid")
     monkeypatch.setattr(email_service.settings, "SMTP_PORT", 587)
-    monkeypatch.setattr(email_service.settings, "SMTP_USERNAME", "no-reply@circuits.com")
+    monkeypatch.setattr(email_service.settings, "SMTP_USERNAME", "no-reply@example.invalid")
     monkeypatch.setattr(email_service.settings, "SMTP_PASSWORD", "secret")
 
     msg = EmailMessage()
-    msg["From"] = "no-reply@circuits.com"
+    msg["From"] = "no-reply@example.invalid"
     msg["To"] = "test@example.com"
     msg["Subject"] = "Real send probe"
     msg.set_content("body")
@@ -52,9 +52,9 @@ async def test_smtp_send_calls_aiosmtplib_when_host_configured(monkeypatch):
 
     mock_send.assert_called_once()
     _, kwargs = mock_send.call_args
-    assert kwargs["hostname"] == "mail.hover.com"
+    assert kwargs["hostname"] == "smtp.example.invalid"
     assert kwargs["port"] == 587
-    assert kwargs["username"] == "no-reply@circuits.com"
+    assert kwargs["username"] == "no-reply@example.invalid"
     assert kwargs["password"] == "secret"
     assert kwargs["start_tls"] is True
 
@@ -64,12 +64,12 @@ async def test_smtp_send_swallows_exceptions_and_logs(caplog, monkeypatch):
     """SMTP failure must not propagate (we're inside a BackgroundTask)."""
     from app.services import email as email_service
 
-    monkeypatch.setattr(email_service.settings, "SMTP_HOST", "mail.hover.com")
+    monkeypatch.setattr(email_service.settings, "SMTP_HOST", "smtp.example.invalid")
     monkeypatch.setattr(email_service.settings, "SMTP_USERNAME", "user@x")
     monkeypatch.setattr(email_service.settings, "SMTP_PASSWORD", "pw")
 
     msg = EmailMessage()
-    msg["From"] = "no-reply@circuits.com"
+    msg["From"] = "no-reply@example.invalid"
     msg["To"] = "test@example.com"
     msg["Subject"] = "Failure probe"
     msg.set_content("body")
@@ -91,8 +91,8 @@ async def test_send_contact_notification_composes_correct_message(monkeypatch):
     from app.services import email as email_service
 
     monkeypatch.setattr(email_service.settings, "NOTIFY_RECIPIENTS", ["alerts@circuits.com"])
-    monkeypatch.setattr(email_service.settings, "SMTP_FROM", "no-reply@circuits.com")
-    monkeypatch.setattr(email_service.settings, "SMTP_HOST", "mail.hover.com")
+    monkeypatch.setattr(email_service.settings, "SMTP_FROM", "no-reply@example.invalid")
+    monkeypatch.setattr(email_service.settings, "SMTP_HOST", "smtp.example.invalid")
     monkeypatch.setattr(email_service.settings, "SMTP_USERNAME", "x")
     monkeypatch.setattr(email_service.settings, "SMTP_PASSWORD", "y")
 
@@ -108,7 +108,7 @@ async def test_send_contact_notification_composes_correct_message(monkeypatch):
 
     mock_send.assert_called_once()
     msg = mock_send.call_args[0][0]
-    assert msg["From"] == "no-reply@circuits.com"
+    assert msg["From"] == "no-reply@example.invalid"
     assert msg["To"] == "alerts@circuits.com"
     assert msg["Reply-To"] == "t.reilly@gizmodo.com"
     assert "Press inquiry" in msg["Subject"]
@@ -127,8 +127,8 @@ async def test_send_join_notification_includes_company_tier_categories(monkeypat
     from app.services import email as email_service
 
     monkeypatch.setattr(email_service.settings, "NOTIFY_RECIPIENTS", ["alerts@circuits.com"])
-    monkeypatch.setattr(email_service.settings, "SMTP_FROM", "no-reply@circuits.com")
-    monkeypatch.setattr(email_service.settings, "SMTP_HOST", "mail.hover.com")
+    monkeypatch.setattr(email_service.settings, "SMTP_FROM", "no-reply@example.invalid")
+    monkeypatch.setattr(email_service.settings, "SMTP_HOST", "smtp.example.invalid")
     monkeypatch.setattr(email_service.settings, "SMTP_USERNAME", "x")
     monkeypatch.setattr(email_service.settings, "SMTP_PASSWORD", "y")
 
@@ -147,7 +147,7 @@ async def test_send_join_notification_includes_company_tier_categories(monkeypat
         await email_service.send_join_notification(form)
 
     msg = mock_send.call_args[0][0]
-    assert msg["From"] == "no-reply@circuits.com"
+    assert msg["From"] == "no-reply@example.invalid"
     assert msg["To"] == "alerts@circuits.com"
     assert msg["Reply-To"] == "jane@arrow.com"
     assert "Arrow Electronics" in msg["Subject"]
@@ -165,8 +165,8 @@ async def test_send_join_autoreply_addresses_applicant(monkeypatch):
     from app.schemas import JoinForm
     from app.services import email as email_service
 
-    monkeypatch.setattr(email_service.settings, "SMTP_FROM", "no-reply@circuits.com")
-    monkeypatch.setattr(email_service.settings, "SMTP_HOST", "mail.hover.com")
+    monkeypatch.setattr(email_service.settings, "SMTP_FROM", "no-reply@example.invalid")
+    monkeypatch.setattr(email_service.settings, "SMTP_HOST", "smtp.example.invalid")
     monkeypatch.setattr(email_service.settings, "SMTP_USERNAME", "x")
     monkeypatch.setattr(email_service.settings, "SMTP_PASSWORD", "y")
 
@@ -182,7 +182,7 @@ async def test_send_join_autoreply_addresses_applicant(monkeypatch):
         await email_service.send_join_autoreply(form)
 
     msg = mock_send.call_args[0][0]
-    assert msg["From"] == "no-reply@circuits.com"
+    assert msg["From"] == "no-reply@example.invalid"
     assert msg["To"] == "jane@arrow.com"
     assert "Reply-To" not in msg  # auto-reply doesn't need one
     assert "received" in msg["Subject"].lower() or "circuits" in msg["Subject"].lower()
@@ -198,8 +198,8 @@ async def test_send_keyword_notification_includes_keyword(monkeypatch):
     from app.services import email as email_service
 
     monkeypatch.setattr(email_service.settings, "NOTIFY_RECIPIENTS", ["alerts@circuits.com"])
-    monkeypatch.setattr(email_service.settings, "SMTP_FROM", "no-reply@circuits.com")
-    monkeypatch.setattr(email_service.settings, "SMTP_HOST", "mail.hover.com")
+    monkeypatch.setattr(email_service.settings, "SMTP_FROM", "no-reply@example.invalid")
+    monkeypatch.setattr(email_service.settings, "SMTP_HOST", "smtp.example.invalid")
     monkeypatch.setattr(email_service.settings, "SMTP_USERNAME", "x")
     monkeypatch.setattr(email_service.settings, "SMTP_PASSWORD", "y")
 
@@ -214,7 +214,7 @@ async def test_send_keyword_notification_includes_keyword(monkeypatch):
         await email_service.send_keyword_notification(form)
 
     msg = mock_send.call_args[0][0]
-    assert msg["From"] == "no-reply@circuits.com"
+    assert msg["From"] == "no-reply@example.invalid"
     assert msg["To"] == "alerts@circuits.com"
     assert msg["Reply-To"] == "partnerships@vishay.com"
     assert "low-noise op-amps" in msg["Subject"]
