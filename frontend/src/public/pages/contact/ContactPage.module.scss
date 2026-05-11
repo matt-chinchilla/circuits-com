@@ -457,7 +457,11 @@
 
   &.on {
     background: var(--theme-accent-soft);
-    color: var(--theme-cta-bg);
+    // Executive-blue intentional — same WCAG-contrast reason as
+    // .contactLine:hover above. var(--theme-cta-bg) is the wrong token here:
+    // its role flips to a *background* color under alt themes (near-white /
+    // copper / bright green), failing contrast on the tinted background.
+    color: var(--executive-blue);
     border-color: var(--theme-accent);
     font-weight: 600;
   }

@@ -138,7 +138,7 @@ function App() {
           <Route path="/part/:id" element={<PartPage />} />
         </Route>
       </Routes>
-      <NavVariantPicker />
+      {import.meta.env.DEV && <NavVariantPicker />}
       {import.meta.env.DEV && <HeroColorTuner />}
     </>
   );
