@@ -234,7 +234,12 @@ export default function AdminLayout({ children, role = 'admin' }: AdminLayoutPro
 
   return (
     <div className={styles.admin}>
-      <aside id="admin-sidebar" className={sideClass}>
+      <aside
+        id="admin-sidebar"
+        className={sideClass}
+        aria-label="Admin navigation"
+        aria-hidden={!menuOpen ? undefined : false}
+      >
         <button
           type="button"
           className={styles.sideClose}
