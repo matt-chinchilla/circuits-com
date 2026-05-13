@@ -14,7 +14,7 @@
 Add mobile-responsive navigation chrome to both surfaces of Circuits.com so
 phones and small tablets are usable end-to-end:
 
-1. **Public site (≤760px)** — hamburger drawer in the 36px sticky `Navbar`.
+1. **Public site (≤768px)** — hamburger drawer in the 36px sticky `Navbar`.
    The four primary links (Home / About / Join / Contact) move into a
    slide-down full-width drawer; only the LOGIN button + burger remain in the
    strip. Brand mark shrinks; `/ REV-A` suffix hides.
@@ -58,9 +58,9 @@ React 19 + TypeScript + Vite + SCSS Modules + Framer Motion 12 +
 
 | Surface | Change |
 |---|---|
-| `frontend/src/shared/styles/_variables.scss` | Append 4 new `$bp-website-mobile/admin-tablet/admin-mobile/admin-compact` vars |
+| `frontend/src/shared/styles/_variables.scss` | Append 2 new `$bp-admin-mobile: 820px` and `$bp-admin-compact: 420px` vars. Reuse existing `$bp-mobile: 768px` (website hamburger threshold — user explicitly preferred standard 768) and `$bp-tablet: 1024px` (admin first-collapse). |
 | `frontend/src/public/components/layout/Navbar.tsx` | Add `menuOpen` state + 3 `useEffect`s + burger button + drawer markup + scrim div |
-| `frontend/src/public/components/layout/Navbar.module.scss` | Add `.navBurger`, `.navMobileScrim`, `.navMobileDrawer`, `.navMobileList`, `.navMobileLink`, `.navMobileArrow`, `.navMobileFoot` + `@media (max-width: 760px)` block (per-theme drawer bg via `[data-theme]`) |
+| `frontend/src/public/components/layout/Navbar.module.scss` | Add `.navBurger`, `.navMobileScrim`, `.navMobileDrawer`, `.navMobileList`, `.navMobileLink`, `.navMobileArrow`, `.navMobileFoot` + `@media (max-width: 768px)` (= `$bp-mobile`) block (per-theme drawer bg via `[data-theme]`) |
 | `frontend/src/admin/components/AdminLayout.tsx` | Add `menuOpen` state + 3 effects, import `Menu` from lucide, render topbar burger (left of `.pageTitle`), side-close X (inside `<aside>`), scrim div |
 | `frontend/src/admin/components/AdminLayout.module.scss` | Add `.topbarBurger`, `.sideClose`, `.sideScrim` + 3 media blocks (1024 / 820 / 420) — apply on `.admin`, `.side`, `.topbar`, `.topbarMid`, `.demoLabel`, `.demoState`, `.content`, etc. |
 | Per-page admin SCSS (Dashboard, Suppliers list, Parts list, Reports, Messages, Settings, Import) | Add `@media` rules per design's content-collapse spec (grids → 1 col, tables → h-scroll wrapper, toolbars → h-scroll strips, kv-list → 1 col, ring stacks above legend, toast full-width-bottom) |
@@ -148,11 +148,15 @@ Uses `useLocation()` from `react-router-dom`.
 
 ```scss
 // frontend/src/shared/styles/_variables.scss — append under existing Breakpoints
-$bp-website-mobile: 760px;  // hamburger drawer threshold for public navbar
-$bp-admin-tablet:   1024px; // admin stat panels + supplier grid first collapse
-$bp-admin-mobile:    820px; // admin sidebar→drawer, topbar reflow, table h-scroll
-$bp-admin-compact:   420px; // admin further compaction (KPI 1-col, demo-state text hides)
+$bp-admin-mobile:   820px; // admin sidebar→drawer, topbar reflow, table h-scroll
+$bp-admin-compact:  420px; // admin further compaction (KPI 1-col, demo-state text hides)
 ```
+
+Existing vars reused (no new alias needed):
+- `$bp-mobile: 768px` — website hamburger threshold (design said 760; user
+  preferred standard 768, so we use the existing var — no 8px dead zone since
+  `.navLinks` already hides at this exact threshold).
+- `$bp-tablet: 1024px` — admin first-collapse (stat panels, supplier grid 3→2).
 
 No other tokens added. All colors, shadows, radii, font sizes, z-indices come
 from existing `--theme-*` and `--a-*` CSS custom properties (see
@@ -187,7 +191,7 @@ Implementation is incomplete until every cell below passes. Captured as the
 
 ### Public site
 
-| Page | 375px (iPhone SE) | 430px (iPhone 15 Pro Max) | 760px boundary | 4 themes at 430px |
+| Page | 375px (iPhone SE) | 430px (iPhone 15 Pro Max) | 768px boundary | 4 themes at 430px |
 |---|---|---|---|---|
 | `/` | drawer opens/closes, hero adapts | drawer + hero | desktop ↔ mobile flip | base / steel / schematic / pcb |
 | `/about` | drawer + page legible | drawer + page legible | drawer flip | all themes |
@@ -222,6 +226,7 @@ Implementation is incomplete until every cell below passes. Captured as the
 ### Performance + a11y gates
 
 - [ ] Lighthouse a11y ≥ 95 at 430px on `/` and `/admin/login`
+- [ ] No layout dead-zone at the 768→1024 range (`.navLinks` hides at 768, hamburger appears at 768 — same threshold ✓)
 - [ ] No new long-animation-frame warnings in DevTools performance trace (mobile emulation, 4× CPU throttle) during drawer open/close
 - [ ] All drawer tap targets ≥ 44×44 (52px-min per design — pass)
 - [ ] `tsc --noEmit` clean
