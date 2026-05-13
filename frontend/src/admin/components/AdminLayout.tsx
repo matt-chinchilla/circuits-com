@@ -15,6 +15,8 @@ import {
   Bell,
   Plus,
   Mail,
+  Menu,
+  X,
 } from 'lucide-react';
 import { useAuth } from '@admin/contexts/AuthContext';
 import { useDemo } from '@admin/contexts/DemoContext';
@@ -139,13 +141,35 @@ export default function AdminLayout({ children, role = 'admin' }: AdminLayoutPro
   const [bellOpen, setBellOpen] = useState(false);
   const [unread, setUnread] = useState(() => unreadCount());
   const [wiggle, setWiggle] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const prevUnread = useRef(unread);
 
   // Refresh unread count when route changes — covers list/detail navigation
-  // that flips messages from new → read.
+  // that flips messages from new → read. Also auto-closes the mobile drawer.
   useEffect(() => {
     setUnread(unreadCount());
+    setMenuOpen(false);
   }, [location.pathname]);
+
+  // Body scroll lock while mobile drawer is open. Cleanup restores prev value.
+  useEffect(() => {
+    if (!menuOpen) return undefined;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [menuOpen]);
+
+  // Esc closes the mobile drawer (listener only attached while open).
+  useEffect(() => {
+    if (!menuOpen) return undefined;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMenuOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [menuOpen]);
 
   // Bell wiggle animation when an unread message appears (badge increments).
   useEffect(() => {
@@ -203,9 +227,22 @@ export default function AdminLayout({ children, role = 'admin' }: AdminLayoutPro
     );
   }
 
+  const sideClass = menuOpen ? `${styles.side} ${styles.isOpen}` : styles.side;
+  const scrimClass = menuOpen
+    ? `${styles.sideScrim} ${styles.isOpen}`
+    : styles.sideScrim;
+
   return (
     <div className={styles.admin}>
-      <aside className={styles.side}>
+      <aside id="admin-sidebar" className={sideClass}>
+        <button
+          type="button"
+          className={styles.sideClose}
+          onClick={() => setMenuOpen(false)}
+          aria-label="Close menu"
+        >
+          <X size={16} strokeWidth={2} />
+        </button>
         <Link to="/admin" className={styles.sideBrand}>
           <div className={styles.sideBrandMark}>C</div>
           <div>
@@ -253,8 +290,24 @@ export default function AdminLayout({ children, role = 'admin' }: AdminLayoutPro
         </div>
       </aside>
 
+      <div
+        className={scrimClass}
+        onClick={() => setMenuOpen(false)}
+        aria-hidden="true"
+      />
+
       <div className={styles.main}>
         <header className={styles.topbar}>
+          <button
+            type="button"
+            className={styles.topbarBurger}
+            onClick={() => setMenuOpen(true)}
+            aria-label="Open menu"
+            aria-expanded={menuOpen}
+            aria-controls="admin-sidebar"
+          >
+            <Menu size={18} strokeWidth={2} />
+          </button>
           <h1 className={styles.pageTitle}>{title}</h1>
 
           <div className={styles.topbarMid}>
@@ -331,7 +384,7 @@ export default function AdminLayout({ children, role = 'admin' }: AdminLayoutPro
 
             <Link to="/admin/parts/new" className={`${styles.btn} ${styles.btnPrimary}`}>
               <Plus size={15} strokeWidth={2} />
-              New Part
+              <span className={styles.btnLabel}>New Part</span>
             </Link>
           </div>
         </header>

@@ -634,3 +634,222 @@
   gap: 10px;
   justify-content: flex-end;
 }
+
+// ─── (6) Mobile chrome (2026-05-13 design bundle) ────────────────────────────
+// Topbar hamburger (shown <=820px), side-close X (inside .side when open),
+// and the dimming scrim that fades over the content while drawer is open.
+// All three are display: none by default; activated inside the
+// @media (max-width: $bp-admin-mobile) block at the bottom of this file.
+
+.topbarBurger {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: transparent;
+  border: 1px solid var(--a-border);
+  border-radius: 6px;
+  color: var(--a-fg1);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background-color 150ms, color 150ms, border-color 150ms;
+
+  &:hover {
+    background: var(--a-border-soft);
+    color: var(--a-primary);
+    border-color: var(--a-primary);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--a-primary);
+    outline-offset: 2px;
+  }
+
+  svg {
+    width: 18px;
+    height: 18px;
+    stroke-width: 2;
+  }
+}
+
+.sideClose {
+  display: none;
+  position: absolute;
+  top: 14px;
+  right: 12px;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: transparent;
+  border: 1px solid var(--a-border);
+  border-radius: 6px;
+  color: var(--a-fg2);
+  cursor: pointer;
+  transition: background-color 150ms, color 150ms;
+
+  &:hover {
+    background: var(--a-border-soft);
+    color: var(--a-fg1);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--a-primary);
+    outline-offset: 2px;
+  }
+
+  svg {
+    width: 16px;
+    height: 16px;
+    stroke-width: 2;
+  }
+}
+
+.sideScrim {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 20, 25, 0.5);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  z-index: 50;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 220ms ease;
+}
+
+.sideScrim.isOpen {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sideScrim {
+    transition: none;
+  }
+}
+
+// ─── Admin tablet (<=1024px) ─────────────────────────────────────────────────
+// Topbar gap/padding tightens. Per-page grid collapses (.aTwo, .supGrid 3->2)
+// live in the page-specific SCSS modules.
+
+@media (max-width: $bp-tablet) {
+  .topbar {
+    gap: 10px;
+    padding: 0 16px;
+  }
+
+  .topbarMid {
+    margin-left: 8px;
+  }
+}
+
+// ─── Admin mobile (<=820px) ──────────────────────────────────────────────────
+// Sidebar flips to off-canvas drawer. Topbar reflows (search to its own row).
+// Content padding tightens. Demo-toggle label + "New Part" label hide.
+
+@media (max-width: $bp-admin-mobile) {
+  .admin {
+    display: block;
+  }
+
+  .side {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    height: 100vh;
+    width: 280px;
+    max-width: 86vw;
+    transform: translateX(-100%);
+    transition: transform 260ms cubic-bezier(0.2, 0.9, 0.3, 1);
+    z-index: 60;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+    padding-top: 56px; // room for close X
+  }
+
+  .side.isOpen {
+    transform: translateX(0);
+  }
+
+  .sideClose {
+    display: inline-flex;
+  }
+
+  .sideScrim {
+    display: block;
+  }
+
+  .topbar {
+    flex-wrap: wrap;
+    height: auto;
+    min-height: var(--a-topbar-h);
+    padding: 10px 14px;
+    gap: 8px;
+  }
+
+  .topbarBurger {
+    display: inline-flex;
+    order: 1;
+  }
+
+  .pageTitle {
+    order: 2;
+    flex: 1;
+    font-size: 16px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+  }
+
+  .topbarMid {
+    order: 4;
+    width: 100%;
+    flex: 0 0 100%;
+    margin-left: 0;
+    margin-top: 4px;
+  }
+
+  .topbarRight {
+    order: 3;
+    flex-shrink: 0;
+    gap: 8px;
+    margin-left: 0;
+  }
+
+  // Demo Data: hide the label, keep the switch + ON/OFF chip
+  .demoLabel {
+    display: none;
+  }
+
+  // "New Part" CTA: hide label text, keep + icon (.btnLabel added in TSX)
+  .btnLabel {
+    display: none;
+  }
+
+  // Content padding shrinks
+  .content {
+    padding: 16px 14px 40px;
+  }
+}
+
+@media (max-width: $bp-admin-mobile) and (prefers-reduced-motion: reduce) {
+  .side {
+    transition: none;
+  }
+}
+
+// ─── Admin compact (<=420px) ─────────────────────────────────────────────────
+// Page title shrinks, ON/OFF text on demo toggle hides.
+
+@media (max-width: $bp-admin-compact) {
+  .pageTitle {
+    font-size: 15px;
+  }
+
+  .demoState {
+    display: none;
+  }
+}
