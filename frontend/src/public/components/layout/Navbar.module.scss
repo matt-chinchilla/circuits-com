@@ -370,3 +370,267 @@
   background: var(--theme-accent);
   color: #0e1113;
 }
+
+// ─── Mobile drawer trigger (hamburger) ────────────────────────────────────
+// Hidden by default; flips to inline-flex inside the @media (max-width:
+// $bp-mobile) block at the bottom of this file. Three lines morph into an
+// X when .isOpen is applied. Sits inside .navRight alongside .loginBtn.
+
+.navBurger {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 5px;
+  cursor: pointer;
+  flex-direction: column;
+  gap: 5px;
+  transition: background-color $transition-fast, border-color $transition-fast;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.32);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--theme-accent);
+    outline-offset: 2px;
+  }
+}
+
+.navBurgerLine {
+  display: block;
+  width: 18px;
+  height: 2px;
+  background: var(--theme-nav-text, #fff);
+  border-radius: 1px;
+  transition: transform 220ms ease, opacity 180ms ease;
+}
+
+.navBurger.isOpen .navBurgerLine:nth-child(1) {
+  transform: translateY(7px) rotate(45deg);
+}
+.navBurger.isOpen .navBurgerLine:nth-child(2) {
+  opacity: 0;
+}
+.navBurger.isOpen .navBurgerLine:nth-child(3) {
+  transform: translateY(-7px) rotate(-45deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .navBurgerLine {
+    transition: none;
+  }
+}
+
+// ─── Mobile drawer scrim ──────────────────────────────────────────────────
+// Fixed below the nav strip (so the strip stays clickable to dismiss).
+// Click anywhere on the scrim to close the drawer.
+
+.navMobileScrim {
+  display: none;
+  position: fixed;
+  inset: $nav-height 0 0 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 90;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 220ms ease;
+}
+
+.navMobileScrim.isOpen {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .navMobileScrim {
+    transition: none;
+  }
+}
+
+// ─── Mobile drawer ────────────────────────────────────────────────────────
+// Drops from below the sticky strip. Full width, scrollable, themed.
+
+.navMobileDrawer {
+  display: none;
+  position: fixed;
+  top: $nav-height;
+  left: 0;
+  right: 0;
+  max-height: calc(100vh - #{$nav-height});
+  overflow-y: auto;
+  z-index: 95;
+  background: var(--theme-nav-bg);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.28);
+  transform: translateY(-100%);
+  opacity: 0;
+  pointer-events: none;
+  transition: transform 220ms ease, opacity 220ms ease;
+}
+
+.navMobileDrawer.isOpen {
+  transform: translateY(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .navMobileDrawer {
+    transition: none;
+  }
+}
+
+// Per-theme drawer surface treatments. Mirror .topStrip's visual character
+// but simplified for the larger surface area of the drawer.
+
+:global([data-theme="steel"]) .navMobileDrawer {
+  background-image: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.04) 0%,
+    rgba(255, 255, 255, 0) 60%
+  );
+  background-color: var(--theme-nav-bg);
+}
+
+:global([data-theme="pcb"]) .navMobileDrawer {
+  background-image:
+    repeating-linear-gradient(
+      0deg,
+      transparent 0 23px,
+      rgba(255, 255, 255, 0.025) 23px 24px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      transparent 0 23px,
+      rgba(255, 255, 255, 0.025) 23px 24px
+    );
+  background-color: var(--theme-nav-bg);
+}
+
+.navMobileList {
+  list-style: none;
+  margin: 0;
+  padding: 8px 0;
+}
+
+.navMobileLink {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 52px;
+  padding: 16px 24px;
+  font-family: $font-body;
+  font-weight: 500;
+  font-size: 1rem;
+  color: var(--theme-nav-text);
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color $transition-fast, color $transition-fast;
+
+  &:hover,
+  &:active {
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--theme-nav-text-hover);
+  }
+
+  &.active {
+    background: rgba(255, 255, 255, 0.08);
+    font-weight: 600;
+    color: var(--theme-nav-text-hover);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--theme-accent);
+    outline-offset: -2px;
+  }
+}
+
+:global([data-theme="pcb"]) .navMobileLink {
+  font-family: $font-mono;
+  font-size: 0.82rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.navMobileArrow {
+  font-size: 1.4rem;
+  line-height: 1;
+  color: var(--theme-accent, rgba(255, 255, 255, 0.55));
+  font-weight: 400;
+}
+
+.navMobileFoot {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 16px 24px 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.navMobileFootBrand {
+  font-family: $font-body;
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--theme-nav-text);
+}
+
+.navMobileFootRev {
+  font-family: $font-mono;
+  font-size: 0.7rem;
+  letter-spacing: 0.14em;
+  color: var(--theme-accent, rgba(255, 255, 255, 0.55));
+}
+
+// ─── Mobile activation (<=768px) ──────────────────────────────────────────
+// Burger + scrim + drawer become visible. Brand shrinks and PCB / REV-A
+// suffix hides. Nav-right offset tightens to 16px so brand + login + burger
+// all fit at the smallest viewport (320px iPhone 5/SE 1st gen).
+
+@media (max-width: $bp-mobile) {
+  .topStrip {
+    min-height: 48px;
+  }
+
+  .brand {
+    left: 16px;
+    font-size: 0.95rem;
+  }
+
+  :global([data-theme="pcb"]) .brandSuffix {
+    display: none;
+  }
+
+  .navRight {
+    right: 16px;
+    gap: 8px;
+  }
+
+  .loginBtn {
+    padding: 6px 14px;
+    font-size: 0.7rem;
+  }
+
+  :global([data-theme="pcb"]) .loginBtn {
+    padding: 6px 12px;
+    font-size: 0.65rem;
+  }
+
+  .navBurger {
+    display: inline-flex;
+  }
+
+  .navMobileScrim {
+    display: block;
+  }
+
+  .navMobileDrawer {
+    display: block;
+  }
+}
