@@ -26,6 +26,14 @@ $bp-mobile: 768px;
 $bp-tablet: 1024px;
 $bp-desktop: 1199px;
 
+// Admin-specific mobile breakpoints (2026-05-13 Claude Design bundle).
+// 820 is the admin sidebar->drawer flip; 420 is the admin further-
+// compaction tier (KPI rows 1-col, demo-state text hides). Website
+// hamburger reuses $bp-mobile (768) and admin first-collapse reuses
+// $bp-tablet (1024) - no new vars needed for those.
+$bp-admin-mobile: 820px;
+$bp-admin-compact: 420px;
+
 // Shadows
 $shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
 $shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
