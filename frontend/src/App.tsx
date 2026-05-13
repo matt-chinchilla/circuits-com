@@ -14,6 +14,7 @@ const ContactPage = lazy(() => import("@public/pages/contact"));
 const AboutPage = lazy(() => import("@public/pages/about"));
 const KeywordSponsorPage = lazy(() => import("@public/pages/keyword"));
 const PartPage = lazy(() => import("@public/pages/part"));
+const PrivacyPage = lazy(() => import("@public/pages/privacy"));
 
 // Admin chunk — all admin routes lazy. Recharts (~400 KB) lives inside
 // admin/Reports; with these routes lazy it won't ship to public-page
@@ -136,6 +137,10 @@ function App() {
           <Route path="/about" element={<AboutPage />} />
           <Route path="/keyword/:keyword" element={<KeywordSponsorPage />} />
           <Route path="/part/:id" element={<PartPage />} />
+          {/* /privacy and /terms render the same consolidated legal page
+              (Claude Design's intent — see design-import/.../chat1.md). */}
+          <Route path="/privacy" element={<PrivacyPage />} />
+          <Route path="/terms" element={<PrivacyPage />} />
         </Route>
       </Routes>
       {import.meta.env.DEV && <NavVariantPicker />}
