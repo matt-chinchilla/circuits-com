@@ -605,3 +605,56 @@
   color: #6b7280;
   font-size: 13px;
 }
+
+// ─── Mobile (<=820px) ──────────────────────────────────────────────────────
+// Stats → 1 column; ring stacks above legend; activity row compresses.
+
+@media (max-width: $bp-admin-mobile) {
+  .stats {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .ringWrap {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    gap: 14px;
+  }
+
+  .activityRow {
+    grid-template-columns: 32px 1fr;
+    gap: 10px;
+    padding: 10px 14px;
+  }
+
+  .activityTime {
+    grid-column: 1 / -1;
+    padding-left: 42px;
+  }
+
+  .qaBar {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+    padding: 10px 12px;
+  }
+
+  .qaTitle {
+    flex-shrink: 0;
+  }
+
+  .qaBtn {
+    flex-shrink: 0;
+  }
+}
+
+@media (max-width: $bp-admin-compact) {
+  .stats {
+    grid-template-columns: 1fr;
+  }
+
+  .panelBody,
+  .panelHead {
+    padding: 12px 16px;
+  }
+}

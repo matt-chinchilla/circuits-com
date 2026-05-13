@@ -557,3 +557,47 @@
     background: var(--a-border-soft);
   }
 }
+
+// ─── Mobile (<=820px) ──────────────────────────────────────────────────────
+
+@media (max-width: $bp-admin-mobile) {
+  .mapTable {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+
+    thead,
+    tbody {
+      display: table;
+      width: 100%;
+      min-width: 720px;
+    }
+  }
+
+  .mapSelect {
+    min-width: 160px;
+  }
+
+  .stepper {
+    gap: 4px;
+    padding: 4px 0 16px;
+  }
+
+  .stepLbl {
+    display: none;
+  }
+
+  .stepBar {
+    margin: 0 8px;
+  }
+
+  .panelBody {
+    padding: 16px;
+  }
+}
+
+@media (max-width: $bp-admin-compact) {
+  .reviewStats {
+    grid-template-columns: 1fr;
+  }
+}

@@ -453,3 +453,39 @@
     transform: translateY(0);
   }
 }
+
+// ─── Mobile (<=820px) ──────────────────────────────────────────────────────
+// Table gets horizontal-scroll; toolbar wraps; sender column tightens.
+
+@media (max-width: $bp-admin-mobile) {
+  .table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+
+    thead,
+    tbody {
+      display: table;
+      width: 100%;
+      min-width: 720px;
+    }
+  }
+
+  .toolbar {
+    padding: 10px 12px;
+    gap: 8px;
+  }
+
+  .search {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .selectWrap {
+    min-width: 130px;
+  }
+
+  .cSender {
+    max-width: 200px;
+  }
+}

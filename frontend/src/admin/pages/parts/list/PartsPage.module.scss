@@ -335,3 +335,35 @@ $a-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
   color: $a-fg3;
   font-family: $font-mono;
 }
+
+// ─── Mobile (<=820px) ──────────────────────────────────────────────────────
+// Table gets horizontal-scroll; toolbar tightens; inline search becomes flex.
+
+@media (max-width: $bp-admin-mobile) {
+  .table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+
+    thead,
+    tbody {
+      display: table;
+      width: 100%;
+      min-width: 640px;
+    }
+  }
+
+  .toolbar {
+    padding: 10px 12px;
+    gap: 8px;
+  }
+
+  .inlineSearch {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .pageHead {
+    margin-bottom: 16px;
+  }
+}
