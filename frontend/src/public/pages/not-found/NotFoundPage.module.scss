@@ -1,0 +1,51 @@
+@use '@shared/styles/variables' as *;
+@use '@shared/styles/mixins' as *;
+
+// NotFoundPage — 404 fallback rendered at "*" inside the public Routes block.
+// Body wrapper carries var(--theme-surface-bg) per the c5eb07f-inverted rule:
+// motion.div parent stays transparent so PageHeaderBand area lets the persistent
+// BackdropLayer show through; this wrapper starts below the band and covers
+// only the lower portion of the viewport with the themed surface bg.
+
+.notFoundBody {
+  background: var(--theme-surface-bg);
+  padding: 80px 20px;
+  min-height: 60vh;
+}
+
+.inner {
+  max-width: 640px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.lede {
+  font-family: $font-body;
+  font-size: 1.05rem;
+  line-height: 1.6;
+  color: var(--fg2, #6b7280);
+  margin: 0 0 28px;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+
+.link {
+  font-family: $font-body;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--executive-blue);
+  text-decoration: none;
+  padding: 8px 4px;
+  border-bottom: 1px solid transparent;
+  transition: border-color $transition-fast, color $transition-fast;
+
+  &:hover {
+    border-bottom-color: var(--executive-blue);
+  }
+}

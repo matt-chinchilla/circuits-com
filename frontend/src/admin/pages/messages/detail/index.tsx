@@ -23,6 +23,7 @@ import {
   loadMessages,
   markRead,
   recordReply,
+  refreshMessages,
   toggleRead,
 } from '@admin/services/messageStore';
 import type { Message } from '@admin/types/messages';
@@ -35,6 +36,20 @@ export default function MessageDetailPage() {
   const [toast, setToast] = useState<string | null>(null);
 
   const m: Message | undefined = findMessage(id);
+
+  // Pull fresh messages from the API on mount + after the id changes (deep
+  // link case where the cache hasn't loaded yet). tick++ forces the
+  // findMessage() above to re-read the cache after the API resolves.
+  useEffect(() => {
+    let cancelled = false;
+    refreshMessages().then(() => {
+      if (cancelled) return;
+      setTick((t) => t + 1);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
 
   // Mark-on-open: 'new' messages flip to 'read' the moment the page mounts
   // (and any time the id changes). The list page picks this up via its own

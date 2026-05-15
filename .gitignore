@@ -49,3 +49,8 @@ yarn-error.log*
 .remember/
 .firecrawl/
 api/circuits_api.egg-info/
+
+# Design handoff extractions (not source code — 4.2 MB tarballs from Claude Design,
+# one per iteration: design-handoff, design-handoff-v2, etc.)
+design-handoff/
+design-handoff-v2/

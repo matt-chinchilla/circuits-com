@@ -52,29 +52,34 @@
   }
 }
 
-// ─── Primary (theme accent) ─────────────────────────────────────────────────
+// ─── Primary (theme CTA — light by default, theme-accent on hover) ─────────
+// V2 design parity (2026-05-14): the primary CTA reads as WHITE/near-white
+// at rest (--theme-cta-bg), then warms to the theme accent on hover
+// (--theme-cta-hover-bg) with a translateY(-1px) lift + amplified glow.
+// Matches design-handoff-v2/.../pages.css :: .glow-btn-primary.
 
 .primary {
-  background: var(--theme-accent);
-  color: var(--theme-accent-on-text);
+  background: var(--theme-cta-bg);
+  color: var(--theme-cta-text);
+  box-shadow: 0 4px 14px var(--theme-accent-glow);
 
   &::before {
-    // Simple brightness-based sheen — replaces the old color.adjust() gradient
-    // so this button repaints correctly for every theme (base, steel,
-    // schematic, pcb). The filter lightens the underlying fill at the diagonal
-    // midpoint to give the same "polished" sheen as the previous gradient.
+    // Subtle sheen on the light fill — same diagonal as before so the
+    // sweep highlight still reads on hover.
     background: linear-gradient(
       135deg,
       rgba(255, 255, 255, 0.18) 0%,
       rgba(255, 255, 255, 0) 50%,
-      rgba(0, 0, 0, 0.12) 100%
+      rgba(0, 0, 0, 0.08) 100%
     );
   }
 
   &:not(:disabled):hover {
+    background: var(--theme-cta-hover-bg);
+    transform: translateY(-1px);
     box-shadow:
-      0 0 14px var(--theme-accent-glow),
-      0 4px 12px var(--theme-accent-glow);
+      0 8px 22px var(--theme-accent-glow),
+      0 0 14px var(--theme-accent-glow);
   }
 }
 
@@ -97,5 +102,32 @@
     box-shadow:
       0 0 14px rgba($sponsor-gold, 0.45),
       0 4px 12px rgba($sponsor-gold, 0.3);
+  }
+}
+
+// ─── Ghost (transparent w/ theme-accent outline) ────────────────────────────
+// Used by the keyword-landing page for the secondary action in a button pair
+// (e.g. "Preview the landing card" beside a primary "Request this keyword").
+// Transparent fill; theme-accent border and text adopt on hover. Stays
+// readable on dark CTA strips by inheriting the strip's overrides
+// (see sponsorCtaStrip in KeywordLandingPage.module.scss).
+
+.ghost {
+  background: transparent;
+  // --executive-blue gives WCAG-AA contrast on white card bg across all 4
+  // themes (CLAUDE.md gotcha — theme-accent fails for small button text).
+  // Border keeps --theme-accent for the on-brand outline color.
+  color: var(--executive-blue);
+  border: 1.5px solid color-mix(in srgb, var(--theme-accent) 45%, transparent);
+
+  &:not(:disabled):hover {
+    background: var(--theme-accent-soft);
+    border-color: var(--theme-accent);
+    color: var(--executive-blue);
+
+    // Suppress the diagonal sheen — ghosts have no fill to sheen.
+    &::before {
+      opacity: 0;
+    }
   }
 }

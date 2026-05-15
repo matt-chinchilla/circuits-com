@@ -1,7 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
-import Footer from "@public/components/layout/Footer";
 import PageHeaderBand from "@public/components/layout/PageHeaderBand";
 import { api } from "@public/services/api";
 import styles from "./ContactPage.module.scss";
@@ -132,8 +131,6 @@ export default function ContactPage() {
             </Link>
           </motion.div>
         </div>
-
-        <Footer />
       </motion.div>
     );
   }
@@ -374,8 +371,6 @@ export default function ContactPage() {
           </motion.form>
         </div>
       </div>
-
-      <Footer />
     </motion.div>
   );
 }

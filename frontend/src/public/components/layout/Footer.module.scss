@@ -3,6 +3,11 @@
 @use '@shared/styles/animations';
 
 .footer {
+  // `margin-top: auto` pins the footer to the bottom of the PublicLayout
+  // flex column when content is shorter than the viewport. On long pages
+  // it has no effect and the footer floats naturally below content.
+  margin-top: auto;
+  flex-shrink: 0;
   background-color: $footer-dark;
   border-top: 1px solid rgba(255, 255, 255, 0.1);
   padding: 20px 0;

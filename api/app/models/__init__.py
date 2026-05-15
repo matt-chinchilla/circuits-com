@@ -5,6 +5,7 @@ from .user import User
 from .part import Part
 from .part_listing import PartListing, PriceBreak
 from .revenue import Revenue
+from .message import Message
 
 __all__ = [
     "Category",
@@ -16,4 +17,5 @@ __all__ = [
     "PartListing",
     "PriceBreak",
     "Revenue",
+    "Message",
 ]

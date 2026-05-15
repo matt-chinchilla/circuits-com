@@ -1,7 +1,6 @@
 import { motion } from "framer-motion";
 import HeroSection from "./components/HeroSection";
 import CategoryGrid from "./components/CategoryGrid";
-import Footer from "@public/components/layout/Footer";
 import { useCategories } from "@public/hooks/useCategories";
 
 export default function HomePage() {
@@ -16,7 +15,6 @@ export default function HomePage() {
     >
       <HeroSection />
       <CategoryGrid categories={categories} loading={loading} error={error} />
-      <Footer />
     </motion.div>
   );
 }

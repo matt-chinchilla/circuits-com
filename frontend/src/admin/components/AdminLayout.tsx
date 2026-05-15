@@ -21,7 +21,11 @@ import {
 import { useAuth } from '@admin/contexts/AuthContext';
 import { useDemo } from '@admin/contexts/DemoContext';
 import BellDropdown from '@admin/components/messages/BellDropdown';
-import { loadMessages, unreadCount } from '@admin/services/messageStore';
+import {
+  loadMessages,
+  refreshMessages,
+  unreadCount,
+} from '@admin/services/messageStore';
 import styles from './AdminLayout.module.scss';
 import type { ReactNode, ComponentType } from 'react';
 
@@ -146,8 +150,14 @@ export default function AdminLayout({ children, role = 'admin' }: AdminLayoutPro
 
   // Refresh unread count when route changes — covers list/detail navigation
   // that flips messages from new → read. Also auto-closes the mobile drawer.
+  // On every pathname transition (including initial mount), pull fresh
+  // messages from the API so the bell-count stays in sync with the DB even
+  // when the admin user is on a non-Messages page.
   useEffect(() => {
-    setUnread(unreadCount());
+    refreshMessages().then(() => {
+      setUnread(unreadCount());
+    });
+    setUnread(unreadCount()); // optimistic read from cache so the badge doesn't flicker
     setMenuOpen(false);
   }, [location.pathname]);
 

@@ -29,6 +29,7 @@ import {
   assignTo,
   loadMessages,
   markSpam,
+  refreshMessages,
   toggleRead,
 } from '@admin/services/messageStore';
 import type { Message } from '@admin/types/messages';
@@ -168,14 +169,35 @@ export default function MessagesListPage() {
   const [kbdHint, setKbdHint] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
-  // Track which messages were 'new' on first mount so the dot pulse fires
-  // exactly once per page-mount cycle (re-loading the list shouldn't replay
-  // the animation on the same row).
-  const freshIds = useRef(
-    new Set(messages.filter((m) => m.status === 'new').map((m) => m.id)),
-  ).current;
+  // Track which messages were 'new' on first server-load so the dot pulse
+  // fires exactly once per page-mount cycle. Populated lazily by the refresh
+  // effect below (cache may be empty on initial render before the API
+  // resolves).
+  const freshIds = useRef<Set<string>>(new Set()).current;
+  const freshIdsSeeded = useRef(false);
 
   const refresh = () => setMessages(loadMessages());
+
+  // Pull fresh messages from the API on mount, then seed freshIds from the
+  // first non-empty load. Subsequent local mutations (read/archive/etc.) hit
+  // the optimistic cache via refresh() — no need to re-fetch.
+  useEffect(() => {
+    let cancelled = false;
+    refreshMessages().then(() => {
+      if (cancelled) return;
+      const fresh = loadMessages();
+      if (!freshIdsSeeded.current) {
+        fresh
+          .filter((m) => m.status === 'new')
+          .forEach((m) => freshIds.add(m.id));
+        freshIdsSeeded.current = true;
+      }
+      setMessages(fresh);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [freshIds]);
 
   useEffect(() => {
     function onKey(e: globalThis.KeyboardEvent) {

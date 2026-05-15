@@ -4,6 +4,7 @@ import styles from './Footer.module.scss';
 const FOOTER_LINKS = [
   { to: '/', label: 'Home' },
   { to: '/about', label: 'About' },
+  { to: '/keyword', label: 'Sponsor a Keyword' },
   { to: '/contact', label: 'Contact' },
   { to: '/privacy', label: 'Privacy' },
   { to: '/terms', label: 'Terms' },

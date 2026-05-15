@@ -14,6 +14,15 @@ import type {
   BatchImportResult,
   AdminCategory,
 } from '@admin/types/admin';
+import type { Message, MessageStatus, AssignedTo } from '@admin/types/messages';
+
+// PATCH /api/admin/messages/{id} body — subset of MessageBase the admin UI can
+// mutate. Mirrors the contract Agent A is building in the backend.
+export interface MessageUpdate {
+  status?: MessageStatus;
+  assigned_to?: AssignedTo;
+  last_reply_body?: string;
+}
 
 const adminClient = axios.create({ baseURL: API_BASE_URL });
 
@@ -110,4 +119,15 @@ export const adminApi = {
 
   getCategories: () =>
     adminClient.get<AdminCategory[]>('/categories/').then((r) => r.data),
+
+  getMessages: () =>
+    adminClient.get<Message[]>('/admin/messages/').then((r) => r.data),
+
+  getMessage: (id: string) =>
+    adminClient.get<Message>(`/admin/messages/${id}`).then((r) => r.data),
+
+  updateMessage: (id: string, update: Partial<MessageUpdate>) =>
+    adminClient
+      .patch<Message>(`/admin/messages/${id}`, update)
+      .then((r) => r.data),
 };

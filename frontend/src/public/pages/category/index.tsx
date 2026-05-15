@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import Footer from '@public/components/layout/Footer';
 import SubcategoryChips from './components/SubcategoryChips';
 import SupplierTable from './components/SupplierTable';
 import PartsTable from './components/PartsTable';
@@ -182,8 +181,6 @@ export default function CategoryPage() {
           </div>
         ) : null}
       </div>
-
-      <Footer />
     </motion.div>
   );
 }

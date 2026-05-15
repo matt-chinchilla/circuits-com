@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
-import Footer from "@public/components/layout/Footer";
 import PageHeaderBand from "@public/components/layout/PageHeaderBand";
 import styles from "./PrivacyPage.module.scss";
 
@@ -342,8 +341,6 @@ export default function PrivacyPage() {
           </article>
         </div>
       </main>
-
-      <Footer />
     </motion.div>
   );
 }

@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import Footer from '@public/components/layout/Footer';
 import SkeletonLoader from '@public/components/widgets/SkeletonLoader';
 import { api } from '@public/services/api';
 import type { PartDetail } from '@public/types/part';
@@ -261,8 +260,6 @@ export default function PartPage() {
           </div>
         ) : null}
       </div>
-
-      <Footer />
     </motion.div>
   );
 }

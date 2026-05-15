@@ -1,10 +1,28 @@
+@use '@shared/styles/variables' as *;
+
+// PublicLayout shell — flex column that keeps Footer pinned to the viewport
+// bottom when content is short. min-height: 100vh - $nav-height because the
+// navbar is sticky (so it doesn't push content down at scroll-top, but on
+// pages shorter than the viewport the shell still needs that extra height to
+// fill the screen). Footer's `margin-top: auto` pushes it to the bottom of
+// the flex column. On long pages the Outlet stretches naturally and Footer
+// floats below content.
+.shell {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - #{$nav-height});
+}
+
 // PublicLayout's outlet wrapper. position: relative + z-index: 1 establishes
 // a stacking context ABOVE the persistent BackdropLayer (z-index: 0) so page
 // content renders in front of the backdrop SVG. Without this, static
 // (non-positioned) page elements would paint BEFORE the positioned backdrop
 // in CSS painting order — backdrop would cover page content.
-
+//
+// flex: 1 0 auto lets the wrapper grow to fill available space inside the
+// shell, pushing the sibling Footer down on short pages.
 .outletWrap {
   position: relative;
   z-index: 1;
+  flex: 1 0 auto;
 }

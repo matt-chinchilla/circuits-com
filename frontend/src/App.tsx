@@ -13,8 +13,10 @@ const JoinPage = lazy(() => import("@public/pages/join"));
 const ContactPage = lazy(() => import("@public/pages/contact"));
 const AboutPage = lazy(() => import("@public/pages/about"));
 const KeywordSponsorPage = lazy(() => import("@public/pages/keyword"));
+const KeywordLandingPage = lazy(() => import("@public/pages/keyword-landing"));
 const PartPage = lazy(() => import("@public/pages/part"));
 const PrivacyPage = lazy(() => import("@public/pages/privacy"));
+const NotFoundPage = lazy(() => import("@public/pages/not-found"));
 
 // Admin chunk — all admin routes lazy. Recharts (~400 KB) lives inside
 // admin/Reports; with these routes lazy it won't ship to public-page
@@ -135,12 +137,17 @@ function App() {
           <Route path="/join" element={<JoinPage />} />
           <Route path="/contact" element={<ContactPage />} />
           <Route path="/about" element={<AboutPage />} />
+          <Route path="/keyword" element={<KeywordLandingPage />} />
           <Route path="/keyword/:keyword" element={<KeywordSponsorPage />} />
           <Route path="/part/:id" element={<PartPage />} />
           {/* /privacy and /terms render the same consolidated legal page
               (Claude Design's intent — see design-import/.../chat1.md). */}
           <Route path="/privacy" element={<PrivacyPage />} />
           <Route path="/terms" element={<PrivacyPage />} />
+          {/* Catch-all 404. MUST stay last in the public Routes block.
+              Lives inside <Route element={<PublicLayout />}> so the persistent
+              BackdropLayer + Footer chrome render on the fallback too. */}
+          <Route path="*" element={<NotFoundPage />} />
         </Route>
       </Routes>
       {import.meta.env.DEV && <NavVariantPicker />}

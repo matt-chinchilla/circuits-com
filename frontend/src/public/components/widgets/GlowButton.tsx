@@ -2,7 +2,7 @@ import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import styles from './GlowButton.module.scss';
 
 interface GlowButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'gold';
+  variant?: 'primary' | 'gold' | 'ghost';
   children: ReactNode;
 }
 

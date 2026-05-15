@@ -1,0 +1,375 @@
+@use '@shared/styles/variables' as *;
+@use '@shared/styles/mixins' as *;
+
+// AvailabilityCheck — debounced check against /api/sponsors/keyword/<kw>/.
+// State-aware result card (idle/loading/available/taken/error) with left-
+// border accent that re-themes via CSS custom properties. Ported from
+// sponsor.css .avail-*.
+
+.avail {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 22px;
+}
+
+.availWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.availLabel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: $font-mono;
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+  color: var(--fg2, #6b7076);
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.availLabelRev {
+  font-family: $font-mono;
+  // --executive-blue gives WCAG-AA contrast across all 4 themes for small
+  // text (CLAUDE.md gotcha — theme-accent fails on the light surface bg).
+  color: var(--executive-blue);
+  letter-spacing: 0.18em;
+}
+
+// ─── Input row ───────────────────────────────────────────────────────────
+
+.availField {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto 1fr 36px;
+  align-items: center;
+  background: #fff;
+  border: 2px solid rgba(0, 0, 0, 0.08);
+  border-radius: 8px;
+  padding: 0 0 0 18px;
+  transition:
+    border-color 200ms,
+    box-shadow 200ms,
+    background 200ms;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  overflow: hidden;
+
+  &:focus-within {
+    border-color: var(--theme-accent);
+    box-shadow: 0 0 0 4px var(--theme-accent-soft);
+  }
+
+  @include responsive(580px) {
+    grid-template-columns: 1fr 36px;
+    padding-left: 14px;
+  }
+}
+
+.availField_available {
+  border-color: #1f9e5d;
+  box-shadow: 0 0 0 4px rgba(31, 158, 93, 0.14);
+}
+
+.availField_taken {
+  border-color: #c0392b;
+  box-shadow: 0 0 0 4px rgba(192, 57, 43, 0.1);
+}
+
+.availField_error {
+  border-color: #b45309;
+  box-shadow: 0 0 0 4px rgba(180, 83, 9, 0.1);
+}
+
+.availPre {
+  font-family: $font-mono;
+  font-size: 0.92rem;
+  color: var(--fg2, #6b7076);
+  letter-spacing: 0;
+  white-space: nowrap;
+
+  @include responsive(580px) {
+    display: none;
+  }
+}
+
+.availInput {
+  width: 100%;
+  padding: 16px 8px 16px 4px;
+  font-family: $font-mono;
+  font-size: 1.05rem;
+  color: var(--fg1, #1a1f23);
+  border: none;
+  outline: none;
+  background: transparent;
+  letter-spacing: 0.02em;
+
+  &::placeholder {
+    color: var(--fg3, #9ca3af);
+  }
+
+  @include responsive(580px) {
+    font-size: 0.96rem;
+    padding: 14px 6px;
+  }
+}
+
+.availStatusIco {
+  width: 36px;
+  height: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  color: var(--fg2, #6b7076);
+  border-left: 1px dashed rgba(0, 0, 0, 0.08);
+  align-self: stretch;
+  background: var(--surface, #eef1f5);
+
+  .availField_available & {
+    color: #1f9e5d;
+    font-weight: 700;
+    background: rgba(31, 158, 93, 0.1);
+  }
+
+  .availField_taken & {
+    color: #c0392b;
+    font-weight: 700;
+    background: rgba(192, 57, 43, 0.1);
+  }
+
+  .availField_error & {
+    color: #b45309;
+    font-weight: 700;
+    background: rgba(180, 83, 9, 0.1);
+  }
+}
+
+.availCaret {
+  color: var(--theme-accent);
+  font-size: 1.2rem;
+}
+
+.availSpinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid color-mix(in srgb, var(--theme-accent) 30%, transparent);
+  border-top-color: var(--theme-accent);
+  border-radius: 50%;
+  animation: avail-spin 0.9s linear infinite;
+}
+
+@keyframes avail-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+// ─── Help line with clickable example chips ──────────────────────────────
+
+.availHelp {
+  font-family: $font-mono;
+  font-size: 0.74rem;
+  color: var(--fg2, #6b7076);
+  letter-spacing: 0.04em;
+  line-height: 1.55;
+  text-transform: none;
+  margin: 4px 0 0;
+
+  code {
+    display: inline-block;
+    padding: 1px 6px;
+    margin: 0 2px;
+    background: var(--surface, #eef1f5);
+    border: 1px dashed rgba(0, 0, 0, 0.14);
+    border-radius: 3px;
+    font-size: 0.82rem;
+    // --executive-blue (#0a4a2e) gives WCAG-AA contrast on --surface in all
+    // 4 themes; --theme-cta-bg fails under steel (near-white).
+    color: var(--executive-blue);
+    cursor: pointer;
+    transition:
+      background 150ms,
+      color 150ms,
+      border-color 150ms;
+
+    &:hover {
+      background: var(--theme-accent-soft);
+      color: var(--theme-accent);
+      border-color: var(--theme-accent);
+    }
+  }
+}
+
+// ─── Result card ─────────────────────────────────────────────────────────
+
+.availResult {
+  position: relative;
+  min-height: 100px;
+}
+
+.availCard {
+  position: relative;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-left-width: 3px;
+  border-radius: 8px;
+  padding: 22px 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  animation: avail-card-in 0.35s cubic-bezier(0.18, 0.89, 0.32, 1.28) both;
+
+  h3 {
+    font-family: $font-heading;
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--fg1, #1a1f23);
+    margin: 0 0 8px;
+
+    code {
+      font-family: $font-mono;
+      background: var(--surface, #eef1f5);
+      padding: 1px 8px;
+      border-radius: 3px;
+      font-size: 0.95rem;
+      color: var(--theme-cta-bg);
+    }
+  }
+
+  p {
+    font-size: 0.94rem;
+    color: var(--fg2, #6b7076);
+    line-height: 1.55;
+    margin: 0;
+    max-width: 60ch;
+
+    code {
+      font-family: $font-mono;
+      background: var(--surface, #eef1f5);
+      padding: 1px 6px;
+      border-radius: 3px;
+    }
+  }
+
+  @include responsive(580px) {
+    padding: 18px 18px;
+  }
+}
+
+@keyframes avail-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.availCardTag {
+  display: inline-block;
+  font-family: $font-mono;
+  font-size: 0.66rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--fg2, #6b7076);
+  margin-bottom: 8px;
+}
+
+.availCard_idle {
+  border-left-color: rgba(0, 0, 0, 0.14);
+}
+
+.availCard_loading {
+  border-left-color: var(--theme-accent);
+
+  .availCardTag {
+    color: var(--theme-accent);
+  }
+}
+
+.availCard_available {
+  border-left-color: #1f9e5d;
+
+  .availCardTag {
+    color: #1f9e5d;
+  }
+
+  // Subtle animated trace beneath the heading on the "available" state — the
+  // background-position sweep is GPU-cheap (no transform/scale), so the
+  // CLAUDE.md no-animated-drop-shadow rule isn't at risk here.
+  &::after {
+    content: '';
+    position: absolute;
+    left: 24px;
+    right: 24px;
+    bottom: 70px;
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      color-mix(in srgb, #1f9e5d 60%, transparent),
+      transparent
+    );
+    background-size: 200% 100%;
+    animation: avail-trace 2.4s ease-in-out infinite;
+    pointer-events: none;
+  }
+}
+
+@keyframes avail-trace {
+  0% {
+    background-position: 100% 0;
+    opacity: 0;
+  }
+
+  10% {
+    opacity: 0.7;
+  }
+
+  90% {
+    opacity: 0.7;
+  }
+
+  100% {
+    background-position: -100% 0;
+    opacity: 0;
+  }
+}
+
+.availCard_taken {
+  border-left-color: #c0392b;
+
+  .availCardTag {
+    color: #c0392b;
+  }
+}
+
+.availCard_error {
+  border-left-color: #b45309;
+
+  .availCardTag {
+    color: #b45309;
+  }
+}
+
+// Footer button row.
+.availActions {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+  flex-wrap: wrap;
+}
+
+// Honour reduced-motion preference for the available-trace sweep + spinner.
+@media (prefers-reduced-motion: reduce) {
+  .availCard_available::after {
+    animation: none;
+  }
+
+  .availSpinner {
+    animation: none;
+  }
+}

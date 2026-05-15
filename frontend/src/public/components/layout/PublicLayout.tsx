@@ -1,5 +1,6 @@
 import { Suspense } from 'react'
 import { Outlet } from 'react-router-dom'
+import Footer from './Footer'
 import styles from './PublicLayout.module.scss'
 
 const RouteFallback = () => <div style={{ minHeight: 420 }} aria-busy="true" />
@@ -16,12 +17,21 @@ const RouteFallback = () => <div style={{ minHeight: 420 }} aria-busy="true" />
 // motion.div stuck at the previous child's exit-state values. Each page now
 // handles its own entrance animation via its own motion.div; route changes
 // are hard cuts (matches the design-import reference's behavior).
+//
+// `<Footer />` lives here (NOT inside each page) so it's a sibling of
+// <Outlet />. The .shell wrapper is a flex column with min-height: 100vh
+// minus the sticky navbar; Footer has margin-top: auto so it pins to the
+// viewport bottom on short pages and floats below content on long pages.
+// (Fixes the "footer mid-page on /keyword/:slug" regression — 2026-05-14.)
 export default function PublicLayout() {
   return (
-    <div className={styles.outletWrap}>
-      <Suspense fallback={<RouteFallback />}>
-        <Outlet />
-      </Suspense>
+    <div className={styles.shell}>
+      <div className={styles.outletWrap}>
+        <Suspense fallback={<RouteFallback />}>
+          <Outlet />
+        </Suspense>
+      </div>
+      <Footer />
     </div>
   )
 }
