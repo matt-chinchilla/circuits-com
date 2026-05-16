@@ -31,6 +31,15 @@
 
 html {
   scroll-behavior: smooth;
+  // Defense-in-depth against horizontal page scroll. No element on any page
+  // is allowed to push the document past viewport width — if a wide
+  // descendant (e.g., a table, an oversized SVG art layer like
+  // CircuitTraces, or a flex item that propagated min-content) tries to
+  // extend the layout, `overflow-x: clip` truncates it without creating a
+  // scrolling container. Unlike `overflow-x: hidden`, `clip` does NOT
+  // disturb `position: sticky` ancestors (Navbar, admin sidebar) — that's
+  // the explicit reason for choosing `clip` here.
+  overflow-x: clip;
 }
 
 body {
@@ -40,6 +49,7 @@ body {
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  overflow-x: clip;
 }
 
 a {

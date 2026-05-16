@@ -127,6 +127,17 @@
   padding-top: 32px;
   padding-bottom: 48px;
   flex: 1;
+  // Flex items default to `min-width: auto` which equals min-content of
+  // descendants — so a `<PartsTable>` inside would propagate its sum-of-
+  // columns width (~670px) up the flex chain and force `.content` past the
+  // mobile viewport. Two-part fix: `min-width: 0` breaks the intrinsic-min-
+  // content chain, and `width: 100%` forces explicit stretch to the parent
+  // (`align-items: stretch` default is unreliable when descendants have a
+  // larger min-content than the flex container). Together, these let the
+  // internal `overflow-x: auto` containers (`.popularScroll`, `.tableWrap`)
+  // actually clip wide tables instead of leaking width up.
+  min-width: 0;
+  width: 100%;
 }
 
 .contentInner {
