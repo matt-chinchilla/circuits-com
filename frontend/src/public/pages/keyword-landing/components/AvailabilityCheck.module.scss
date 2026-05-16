@@ -177,27 +177,33 @@
   text-transform: none;
   margin: 4px 0 0;
 
+  // V2 design parity (2026-05-16): clickable example chips ("rp2040",
+  // "low-noise op-amps", "ferrite-bead") now render as accent-tinted brand
+  // chips (theme-accent 16% bg + 50% border, fg1 text). Hover deepens the
+  // tint to 30% and adds a soft accent glow. Matches v2/sponsor.css :
+  // `.avail-help code` final override block (lines 1556+).
   code {
     display: inline-block;
-    padding: 1px 6px;
+    padding: 1px 8px;
     margin: 0 2px;
-    background: var(--surface, #eef1f5);
-    border: 1px dashed rgba(0, 0, 0, 0.14);
-    border-radius: 3px;
+    background: color-mix(in srgb, var(--theme-accent) 16%, transparent);
+    border: 1px solid color-mix(in srgb, var(--theme-accent) 50%, transparent);
+    border-radius: 4px;
+    font-family: $font-mono;
     font-size: 0.82rem;
-    // --executive-blue (#0a4a2e) gives WCAG-AA contrast on --surface in all
-    // 4 themes; --theme-cta-bg fails under steel (near-white).
-    color: var(--executive-blue);
+    color: var(--fg1, #1a1f23);
+    font-variant-numeric: tabular-nums;
     cursor: pointer;
     transition:
       background 150ms,
       color 150ms,
-      border-color 150ms;
+      border-color 150ms,
+      box-shadow 150ms;
 
     &:hover {
-      background: var(--theme-accent-soft);
-      color: var(--theme-accent);
+      background: color-mix(in srgb, var(--theme-accent) 30%, transparent);
       border-color: var(--theme-accent);
+      box-shadow: 0 0 12px var(--theme-accent-glow);
     }
   }
 }
@@ -219,6 +225,9 @@
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
   animation: avail-card-in 0.35s cubic-bezier(0.18, 0.89, 0.32, 1.28) both;
 
+  // V2 design parity (2026-05-16): code chips inside result cards use the
+  // unified brand-accent treatment (16% accent fill + 50% border + fg1
+  // text) — same as the help-line example chips but non-clickable.
   h3 {
     font-family: $font-heading;
     font-size: 1.2rem;
@@ -228,11 +237,13 @@
 
     code {
       font-family: $font-mono;
-      background: var(--surface, #eef1f5);
+      background: color-mix(in srgb, var(--theme-accent) 16%, transparent);
+      border: 1px solid color-mix(in srgb, var(--theme-accent) 50%, transparent);
       padding: 1px 8px;
-      border-radius: 3px;
+      border-radius: 4px;
       font-size: 0.95rem;
-      color: var(--theme-cta-bg);
+      color: var(--fg1, #1a1f23);
+      font-variant-numeric: tabular-nums;
     }
   }
 
@@ -245,9 +256,12 @@
 
     code {
       font-family: $font-mono;
-      background: var(--surface, #eef1f5);
-      padding: 1px 6px;
-      border-radius: 3px;
+      background: color-mix(in srgb, var(--theme-accent) 16%, transparent);
+      border: 1px solid color-mix(in srgb, var(--theme-accent) 50%, transparent);
+      padding: 1px 8px;
+      border-radius: 4px;
+      color: var(--fg1, #1a1f23);
+      font-variant-numeric: tabular-nums;
     }
   }
 

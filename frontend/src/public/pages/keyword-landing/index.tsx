@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { motion } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
 import GlowButton from '@public/components/widgets/GlowButton';
+import PageHeaderBand from '@public/components/layout/PageHeaderBand';
 import RequestModal from '@public/components/widgets/RequestModal';
 import { api } from '@public/services/api';
 import AvailabilityCheck from './components/AvailabilityCheck';
@@ -103,81 +104,35 @@ export default function KeywordLandingPage() {
       exit={{ opacity: 0, x: -20 }}
       transition={{ duration: 0.15, ease: 'easeInOut' as const }}
     >
-      {/* ── Section 1 · Datasheet spec block ─────────────────────────────
-         Sits OUTSIDE the .sponsorPageBody wrapper so the persistent
-         <BackdropLayer />'s PCB traces show through around the white spec
-         card (same window-onto-backdrop pattern as Contact's PageHeaderBand).
-         The card itself is opaque #fff, but the section padding around it
-         is transparent. */}
-      <section className={styles.sponsorSpec} aria-labelledby="sponsor-spec-title">
-        <div className={styles.sponsorSpecInner}>
-          <article className={styles.sponsorSpecCard}>
-            <span className={styles.sponsorSpecCrop} aria-hidden="true" />
-            <header className={styles.sponsorSpecHead}>
-              <span className={styles.sponsorSpecTag}>
-                DATASHEET · KEYWORD-SPONSORSHIP · /REV-A
-              </span>
-              <h2 id="sponsor-spec-title">The short version.</h2>
-              <p>
-                You pay to own a search term. When a buyer searches it on Circuits.com, your
-                sponsor card answers — logo, one paragraph, a buy-link, and a way to reach you.
-              </p>
-            </header>
-            <dl className={styles.sponsorSpecRows}>
-              <div>
-                <dt>PRODUCT</dt>
-                <dd>Keyword Sponsorship</dd>
-              </div>
-              <div>
-                <dt>AUDIENCE</dt>
-                <dd>Buyers searching for components you sell</dd>
-              </div>
-              <div>
-                <dt>PLACEMENT</dt>
-                <dd>
-                  <code>circuits.com/keyword/&lt;your-keyword&gt;</code>
-                </dd>
-              </div>
-              <div>
-                <dt>EXCLUSIVITY</dt>
-                <dd>One sponsor per keyword · variants bundle in</dd>
-              </div>
-              <div>
-                <dt>SLA</dt>
-                <dd>48 hours from request to live</dd>
-              </div>
-              <div>
-                <dt>COMMITMENT</dt>
-                <dd>Month-to-month, cancel before next cycle</dd>
-              </div>
-            </dl>
-            <footer className={styles.sponsorSpecFoot}>
-              <Link className={styles.sponsorSpecLink} to="/keyword/rp2040">
-                See a live example: <code>/keyword/rp2040</code> &rarr;
-              </Link>
-              <span className={styles.sponsorSpecFootRev}>
-                &copy; 2026 Circuits.com · APP-NOTE · KW-SP-001
-              </span>
-            </footer>
-          </article>
-        </div>
-      </section>
+      {/* ── PageHeaderBand · v2 design parity (2026-05-16) ──────────────────
+         Standard slim hero band that every inner page uses (About / Join /
+         Contact / Privacy / NotFound). Page="sponsor" → green REV-A tag
+         reads "REV-A · /SPONSOR". The band is transparent layout-only —
+         the dark substrate + animated CircuitTraces come from the
+         persistent <BackdropLayer /> at App.tsx level. Adding this slots
+         /keyword into the standard inner-page contract; previously the
+         page jumped straight into section 01 with no top-band signature. */}
+      <PageHeaderBand
+        page="sponsor"
+        title="Sponsor a Keyword"
+        subtitle="Own the search term your buyers actually type. One sponsor per keyword, live in 48 hours, month-to-month."
+      />
 
-      {/* ── Sections 2-5 body wrapper ─────────────────────────────────────
+      {/* ── Sections 01-05 body wrapper ───────────────────────────────────
          All light-surface sections live inside .sponsorPageBody, which
-         carries the --theme-surface-bg. The wrapper covers the lower
-         portion of the BackdropLayer, while the section-1 spec area above
-         stays transparent (window onto backdrop). Same pattern as About /
-         Contact pages — see CLAUDE.md "Inner-page light surface-bg" gotcha. */}
+         carries the --theme-surface-bg. The PageHeaderBand above already
+         serves as the PCB-window (transparent over the BackdropLayer), so
+         section 01 (availability) is now inside the body wrapper alongside
+         02-05 — matches v2 design's surface-bg-everywhere page layout. */}
       <div className={styles.sponsorPageBody}>
-        {/* ── Section 2 · Availability check ──────────────────────────── */}
+        {/* ── Section 01 · Availability check ──────────────────────────── */}
         <section
           className={`${styles.sponsorSection} ${styles.sponsorAvailSection}`}
           aria-labelledby="sponsor-avail-title"
         >
           <div className={styles.sponsorSectionInner}>
             <header className={styles.sponsorSectionHead}>
-              <span className={styles.sponsorSectionNum}>02</span>
+              <span className={styles.sponsorSectionNum}>01</span>
               <h2 id="sponsor-avail-title">Is your keyword open?</h2>
               <p>Type the term. We check live against the sponsor index — no spoilers, no waiting.</p>
             </header>
@@ -188,8 +143,64 @@ export default function KeywordLandingPage() {
             />
           </div>
         </section>
+        {/* ── Section 02 · Datasheet spec card ─────────────────────────
+           V2 design parity (2026-05-16): the spec card now uses the
+           shared .sponsorSectionHead pattern with a "02" badge, and the
+           title/dek live OUTSIDE the card. The card contains only the
+           datasheet dl rows and footer link. */}
+        <section className={styles.sponsorSection} aria-labelledby="sponsor-spec-title">
+          <div className={styles.sponsorSectionInner}>
+            <header className={styles.sponsorSectionHead}>
+              <span className={styles.sponsorSectionNum}>02</span>
+              <h2 id="sponsor-spec-title">The short version.</h2>
+              <p>
+                You pay to own a search term. When a buyer searches it on Circuits.com, your
+                sponsor card answers — logo, one paragraph, a buy-link, and a way to reach you.
+              </p>
+            </header>
+            <article className={styles.sponsorSpecCard}>
+              <span className={styles.sponsorSpecCrop} aria-hidden="true" />
+              <dl className={styles.sponsorSpecRows}>
+                <div>
+                  <dt>PRODUCT</dt>
+                  <dd>Keyword Sponsorship</dd>
+                </div>
+                <div>
+                  <dt>AUDIENCE</dt>
+                  <dd>Buyers searching for components you sell</dd>
+                </div>
+                <div>
+                  <dt>PLACEMENT</dt>
+                  <dd>
+                    <code>circuits.com/keyword/&lt;your-keyword&gt;</code>
+                  </dd>
+                </div>
+                <div>
+                  <dt>EXCLUSIVITY</dt>
+                  <dd>One sponsor per keyword · variants bundle in</dd>
+                </div>
+                <div>
+                  <dt>SLA</dt>
+                  <dd>48 hours from request to live</dd>
+                </div>
+                <div>
+                  <dt>COMMITMENT</dt>
+                  <dd>Month-to-month, cancel before next cycle</dd>
+                </div>
+              </dl>
+              <footer className={styles.sponsorSpecFoot}>
+                <Link className={styles.sponsorSpecLink} to="/keyword/rp2040">
+                  See a live example: <code>/keyword/rp2040</code> &rarr;
+                </Link>
+                <span className={styles.sponsorSpecFootRev}>
+                  &copy; 2026 Circuits.com · APP-NOTE · KW-SP-001
+                </span>
+              </footer>
+            </article>
+          </div>
+        </section>
 
-        {/* ── Section 3 · How it works (IC chip) ─────────────────────── */}
+        {/* ── Section 03 · How it works (IC chip) ─────────────────────── */}
         <section className={styles.sponsorSection} aria-labelledby="sponsor-how-title">
           <div className={styles.sponsorSectionInner}>
             <header className={styles.sponsorSectionHead}>
@@ -201,7 +212,7 @@ export default function KeywordLandingPage() {
           </div>
         </section>
 
-        {/* ── Section 4 · Tier cards ──────────────────────────────────── */}
+        {/* ── Section 04 · Tier cards ──────────────────────────────────── */}
         <section className={styles.sponsorSection} aria-labelledby="sponsor-tiers-title">
           <div className={styles.sponsorSectionInner}>
             <header className={styles.sponsorSectionHead}>
@@ -225,12 +236,12 @@ export default function KeywordLandingPage() {
                       <li key={p}>{p}</li>
                     ))}
                   </ul>
-                  <GlowButton
-                    variant={t.featured ? 'primary' : 'ghost'}
-                    onClick={() => setModalKw('(any)')}
-                  >
-                    {t.featured ? 'Choose ' : 'Start with '}
-                    {t.name}
+                  {/* V2 design parity (2026-05-16): ALL tier buttons use
+                     the primary variant + uniform "Choose {Name}" label.
+                     The featured Gold tier is distinguished by its outer
+                     ring + ★ MOST CHOSEN ribbon, not by the button style. */}
+                  <GlowButton variant="primary" onClick={() => setModalKw('(any)')}>
+                    Choose {t.name}
                   </GlowButton>
                 </article>
               ))}
@@ -238,7 +249,7 @@ export default function KeywordLandingPage() {
           </div>
         </section>
 
-        {/* ── Section 5 · FAQ ─────────────────────────────────────────── */}
+        {/* ── Section 05 · FAQ ─────────────────────────────────────────── */}
         <section className={styles.sponsorSection} aria-labelledby="sponsor-faq-title">
           <div className={`${styles.sponsorSectionInner} ${styles.sponsorFaqInner}`}>
             <header className={styles.sponsorSectionHead}>
