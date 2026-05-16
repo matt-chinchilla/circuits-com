@@ -565,65 +565,116 @@ def _seed_admin_user(db: Session) -> None:
 # Parts and listings
 # ---------------------------------------------------------------------------
 
-# Realistic IC part numbers by category keyword
+# Realistic IC part numbers keyed by the EXACT subcategory name (matches the
+# entries in `category_data` above). This drives per-subcategory placement
+# so /category/<sub-slug> pages show the parts that belong there, and the
+# PartPage breadcrumb resolves a full Parent → Subcategory → SKU lineage.
+#
+# 2026-05-16: switched from top-level keys ("Power Management", "Sensor"…)
+# to subcategory keys. The old layout placed all 59 parts on top-level
+# categories, leaving every subcategory page empty.
 _PART_CATALOG: list[tuple[str, list[tuple[str, str, str]]]] = [
-    ("Power Management", [
+    # Power Management ICs (PMICs)
+    ("Voltage Regulators (LDOs)", [
         ("LM7805CT", "Texas Instruments", "5V 1.5A Linear Voltage Regulator"),
-        ("TPS65217C", "Texas Instruments", "Power Management IC for AM335x"),
         ("LT3045", "Analog Devices", "20V 500mA Ultralow Noise LDO"),
+    ]),
+    ("DC-DC Converters (Buck/Boost)", [
+        ("TPS65217C", "Texas Instruments", "Power Management IC for AM335x"),
         ("MP2307DN", "Monolithic Power", "3A 23V Step-Down Converter"),
+    ]),
+    ("Battery Management ICs (BMS)", [
         ("BQ24195", "Texas Instruments", "4.5A Single-Cell USB Charger IC"),
     ]),
-    ("Microcontrollers", [
+    # Microcontrollers & Processors
+    ("32-bit Microcontrollers (ARM Cortex-M)", [
         ("STM32F407VGT6", "STMicroelectronics", "ARM Cortex-M4 168MHz MCU"),
-        ("ATMEGA328P-PU", "Microchip", "8-bit AVR MCU 32KB Flash"),
-        ("ESP32-WROOM-32E", "Espressif", "Wi-Fi+BT MCU Module"),
         ("RP2040", "Raspberry Pi", "Dual-Core ARM Cortex-M0+ MCU"),
+    ]),
+    ("8-bit Microcontrollers", [
+        ("ATMEGA328P-PU", "Microchip", "8-bit AVR MCU 32KB Flash"),
         ("PIC18F4550", "Microchip", "USB 2.0 Full-Speed MCU"),
     ]),
-    ("Analog", [
+    ("System-on-Chip (SoC)", [
+        ("ESP32-WROOM-32E", "Espressif", "Wi-Fi+BT MCU Module"),
+    ]),
+    # Analog ICs
+    ("Operational Amplifiers (Op-Amps)", [
         ("LM358N", "Texas Instruments", "Dual Operational Amplifier"),
-        ("AD8221ARZ", "Analog Devices", "Precision Instrumentation Amplifier"),
         ("OPA2134PA", "Texas Instruments", "Audio Dual Op-Amp"),
         ("MCP6002", "Microchip", "1MHz Low-Power Dual Op-Amp"),
+    ]),
+    ("Instrumentation Amplifiers", [
+        ("AD8221ARZ", "Analog Devices", "Precision Instrumentation Amplifier"),
+    ]),
+    ("Comparators", [
         ("LM393N", "Texas Instruments", "Dual Differential Comparator"),
     ]),
-    ("Interface", [
+    # Interface ICs
+    ("UART / USART Transceivers", [
         ("MAX232CPE", "Maxim Integrated", "Dual RS-232 Driver/Receiver"),
+    ]),
+    ("USB Interface ICs", [
         ("FT232RL", "FTDI", "USB to Serial UART IC"),
-        ("SN65HVD230", "Texas Instruments", "3.3V CAN Bus Transceiver"),
         ("CP2102N", "Silicon Labs", "USB to UART Bridge Controller"),
+    ]),
+    ("CAN / LIN Transceivers", [
+        ("SN65HVD230", "Texas Instruments", "3.3V CAN Bus Transceiver"),
+    ]),
+    ("Level Shifters", [
         ("TXB0108PWR", "Texas Instruments", "8-Bit Bidirectional Level Shifter"),
     ]),
-    ("Memory", [
+    # Memory ICs
+    ("EEPROM", [
         ("AT24C256", "Microchip", "256Kbit I2C Serial EEPROM"),
+    ]),
+    ("NOR Flash", [
         ("W25Q128JV", "Winbond", "128Mbit Serial NOR Flash"),
-        ("IS62WV25616", "ISSI", "256K x 16 High-Speed SRAM"),
-        ("MT48LC16M16A2", "Micron", "256Mbit SDRAM"),
         ("S25FL512S", "Infineon", "512Mbit SPI NOR Flash"),
     ]),
-    ("Logic", [
-        ("SN74HC595N", "Texas Instruments", "8-Bit Shift Register"),
-        ("CD4017BE", "Texas Instruments", "Decade Counter/Divider"),
+    ("SRAM", [
+        ("IS62WV25616", "ISSI", "256K x 16 High-Speed SRAM"),
+    ]),
+    ("DRAM", [
+        ("MT48LC16M16A2", "Micron", "256Mbit SDRAM"),
+    ]),
+    # Logic ICs
+    ("Logic Gates (AND, OR, NOT, etc.)", [
         ("SN74LS00N", "Texas Instruments", "Quad 2-Input NAND Gate"),
         ("74HC245", "NXP", "Octal Bus Transceiver"),
         ("SN74HC138N", "Texas Instruments", "3-to-8 Line Decoder"),
     ]),
-    ("RF", [
+    ("Shift Registers", [
+        ("SN74HC595N", "Texas Instruments", "8-Bit Shift Register"),
+    ]),
+    ("Counters", [
+        ("CD4017BE", "Texas Instruments", "Decade Counter/Divider"),
+    ]),
+    # RF & Wireless ICs
+    ("Bluetooth ICs", [
         ("CC2541F256", "Texas Instruments", "Bluetooth Low Energy SoC"),
+    ]),
+    ("RF Transceivers", [
         ("SI4463", "Silicon Labs", "High-Performance RF Transceiver"),
-        ("UBLOX-NEO-6M", "u-blox", "GPS Receiver Module"),
         ("NRF24L01P", "Nordic Semi", "2.4GHz RF Transceiver"),
         ("SX1276", "Semtech", "LoRa Long Range Transceiver"),
     ]),
-    ("Sensor", [
-        ("BME280", "Bosch", "Humidity/Pressure/Temperature Sensor"),
-        ("MPU6050", "InvenSense", "6-Axis Accelerometer + Gyroscope"),
+    ("GPS / GNSS Receivers", [
+        ("UBLOX-NEO-6M", "u-blox", "GPS Receiver Module"),
+    ]),
+    # Sensor ICs
+    ("Temperature Sensors", [
         ("LM35DZ", "Texas Instruments", "Precision Temperature Sensor"),
-        ("ADXL345", "Analog Devices", "3-Axis Digital Accelerometer"),
-        ("BMP390", "Bosch", "High-Performance Barometric Pressure Sensor"),
         ("HIH6130-021-001", "Honeywell", "HumidIcon Digital Humidity/Temp Sensor"),
         ("HIH7120-021-001", "Honeywell", "HumidIcon Low-Power Humidity Sensor"),
+    ]),
+    ("Accelerometers", [
+        ("MPU6050", "InvenSense", "6-Axis Accelerometer + Gyroscope"),
+        ("ADXL345", "Analog Devices", "3-Axis Digital Accelerometer"),
+    ]),
+    ("Pressure Sensors", [
+        ("BME280", "Bosch", "Humidity/Pressure/Temperature Sensor"),
+        ("BMP390", "Bosch", "High-Performance Barometric Pressure Sensor"),
         ("MPRLS0025PA00001A", "Honeywell", "MicroPressure 25 PSI Absolute I2C Sensor"),
         ("MPRLS0015PA0000SAB", "Honeywell", "MicroPressure 15 PSI Abs SPI Breakout Board"),
         ("MPRLS0300YG00001BB", "Honeywell", "MicroPressure 300mmHg Gage I2C Breakout"),
@@ -632,19 +683,29 @@ _PART_CATALOG: list[tuple[str, list[tuple[str, str, str]]]] = [
         ("ABPDANT015PGAA5", "Honeywell", "Basic Board Mount 15 PSI Pressure Sensor"),
         ("HSC-SANN015PG2A3", "Honeywell", "High Accuracy Compensated 15 PSI Pressure"),
     ]),
-    ("Audio", [
+    # Audio & Video ICs
+    ("Audio Amplifiers", [
         ("MAX98357A", "Maxim Integrated", "I2S Class D Mono Amplifier"),
-        ("WM8731", "Cirrus Logic", "Portable Internet Audio CODEC"),
         ("TPA3116D2", "Texas Instruments", "50W Stereo Class-D Amplifier"),
+    ]),
+    ("CODECs (Audio/Video)", [
+        ("WM8731", "Cirrus Logic", "Portable Internet Audio CODEC"),
         ("PCM5102A", "Texas Instruments", "32-bit 384kHz DAC"),
+    ]),
+    ("Microphone Preamplifiers", [
         ("ICS43434", "TDK", "Multi-Mode Digital Microphone"),
     ]),
-    ("Clock", [
+    # Clock & Timing ICs
+    ("Real-Time Clocks (RTC)", [
         ("DS3231SN", "Maxim Integrated", "Extremely Accurate RTC"),
-        ("SI5351A", "Silicon Labs", "I2C Programmable Clock Generator"),
-        ("NE555P", "Texas Instruments", "Precision Timer IC"),
         ("DS1307Z", "Maxim Integrated", "64 x 8 Serial RTC"),
+    ]),
+    ("Clock Generators", [
+        ("SI5351A", "Silicon Labs", "I2C Programmable Clock Generator"),
         ("LMK00105", "Texas Instruments", "1:5 LVCMOS Clock Buffer"),
+    ]),
+    ("Timer ICs", [
+        ("NE555P", "Texas Instruments", "Precision Timer IC"),
     ]),
 ]
 
@@ -660,20 +721,24 @@ def _seed_parts(
     random.seed(42)  # reproducible placeholder data
     supplier_list = list(suppliers.values())
 
-    for cat_keyword, parts_data in _PART_CATALOG:
-        # Find matching top-level category
-        matching_cat = None
-        for cat_name, cat_obj in cats.items():
-            if cat_keyword.lower() in cat_name.lower() and cat_obj.parent_id is None:
-                matching_cat = cat_obj
-                break
+    for subcategory_name, parts_data in _PART_CATALOG:
+        # Exact-match lookup against the subcategory's own name. The cats
+        # dict is keyed by name for both top-level and child rows, so this
+        # resolves directly to the subcategory we want — no parent_id filter,
+        # no substring matching ambiguity.
+        target_cat = cats.get(subcategory_name)
+        if target_cat is None:
+            raise RuntimeError(
+                f"_PART_CATALOG references unknown subcategory '{subcategory_name}'. "
+                f"Update category_data or fix the typo."
+            )
 
         for sku, manufacturer, description in parts_data:
             part = Part(
                 sku=sku,
                 description=description,
                 manufacturer_name=manufacturer,
-                category_id=matching_cat.id if matching_cat else None,
+                category_id=target_cat.id,
             )
             db.add(part)
             db.flush()

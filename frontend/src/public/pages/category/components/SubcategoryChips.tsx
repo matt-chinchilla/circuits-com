@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import type { Subcategory } from '@public/types/category';
@@ -6,23 +5,17 @@ import styles from './SubcategoryChips.module.scss';
 
 interface SubcategoryChipsProps {
   subcategories: Subcategory[];
-  parentSlug: string;
+  // The slug of the chip that should appear active. When rendered on a
+  // subcategory page, this is the current page's slug (passed from the
+  // CategoryPage so the URL stays the source of truth, not local state).
+  // Omit on parent pages — no chip starts active there.
+  activeSlug?: string | null;
 }
 
-export default function SubcategoryChips({ subcategories, parentSlug }: SubcategoryChipsProps) {
-  const [activeSlug, setActiveSlug] = useState<string | null>(null);
+export default function SubcategoryChips({ subcategories, activeSlug = null }: SubcategoryChipsProps) {
   const navigate = useNavigate();
 
   if (subcategories.length === 0) return null;
-
-  const handleClick = (sub: Subcategory) => {
-    if (activeSlug === sub.slug) {
-      setActiveSlug(null);
-    } else {
-      setActiveSlug(sub.slug);
-      navigate(`/category/${parentSlug}#${sub.slug}`);
-    }
-  };
 
   return (
     <div className={styles.chips}>
@@ -32,9 +25,10 @@ export default function SubcategoryChips({ subcategories, parentSlug }: Subcateg
           <motion.button
             key={sub.id}
             className={`${styles.chip} ${isActive ? styles.active : ''}`}
-            onClick={() => handleClick(sub)}
+            onClick={() => navigate(`/category/${sub.slug}`)}
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
+            aria-current={isActive ? 'page' : undefined}
           >
             {isActive && (
               <motion.span

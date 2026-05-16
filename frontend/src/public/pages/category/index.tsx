@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, useSearchParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import SubcategoryChips from './components/SubcategoryChips';
 import SupplierTable from './components/SupplierTable';
@@ -12,9 +12,15 @@ import ListLayout from './components/layouts/ListLayout';
 import CompactLayout from './components/layouts/CompactLayout';
 import CardsLayout from './components/layouts/CardsLayout';
 import SkeletonLoader from '@public/components/widgets/SkeletonLoader';
+import Pagination from '@public/components/widgets/Pagination';
 import { api } from '@public/services/api';
 import type { CategoryDetail } from '@public/types/category';
 import styles from './CategoryPage.module.scss';
+
+// "Popular Parts" is a curated highlight strip, not a full catalog grid.
+// 12 fits a screen comfortably and gives users a clear "click to see next
+// batch" rhythm. Scales linearly when the catalog grows to thousands.
+const POPULAR_PER_PAGE = 12;
 
 type LayoutMode = 'grid' | 'list' | 'compact' | 'cards';
 
@@ -27,6 +33,11 @@ const LAYOUT_COMPONENTS = {
 
 export default function CategoryPage() {
   const { slug } = useParams<{ slug: string }>();
+  // ?p=N drives Popular Parts pagination. Deep-linkable, and back/forward
+  // browser nav moves through pages naturally.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const popularPage = Math.max(1, parseInt(searchParams.get('p') || '1', 10) || 1);
+
   const [category, setCategory] = useState<CategoryDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -37,14 +48,28 @@ export default function CategoryPage() {
     setLoading(true);
     setError(null);
 
-    api.getCategory(slug)
+    api.getCategory(slug, popularPage, POPULAR_PER_PAGE)
       .then((data) => setCategory(data))
       .catch(() => setError('Failed to load category. Please try again later.'))
       .finally(() => setLoading(false));
-  }, [slug]);
+  }, [slug, popularPage]);
 
   const isParent = category && category.children.length > 0;
   const LayoutComponent = LAYOUT_COMPONENTS[layout];
+
+  const handlePopularPageChange = (next: number) => {
+    setSearchParams((prev) => {
+      const params = new URLSearchParams(prev);
+      if (next <= 1) params.delete('p');
+      else params.set('p', String(next));
+      return params;
+    });
+    // Scroll the page so the user lands at the section heading after page nav
+    // (without this they'd stay scrolled wherever they were).
+    setTimeout(() => {
+      document.getElementById('popular-parts')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 50);
+  };
 
   return (
     <motion.div
@@ -100,12 +125,18 @@ export default function CategoryPage() {
                 </motion.h1>
                 {isParent && <LayoutSwitcher active={layout} onChange={setLayout} />}
               </div>
-              {category.children.length > 0 && (
+              {category.children.length > 0 ? (
+                /* Parent page: show own subcategories, none active. */
+                <SubcategoryChips subcategories={category.children} />
+              ) : category.parent && category.parent.children.length > 0 ? (
+                /* Leaf page: show siblings (parent's children), mark current
+                   as active. Lets the user pivot to any sibling subcategory
+                   without going back to the parent. */
                 <SubcategoryChips
-                  subcategories={category.children}
-                  parentSlug={category.slug}
+                  subcategories={category.parent.children}
+                  activeSlug={category.slug}
                 />
-              )}
+              ) : null}
               {!isParent && category.parent && (
                 <div className={styles.parentNav}>
                   <Link to={`/category/${category.parent.slug}`} className={styles.parentLink}>
@@ -145,13 +176,25 @@ export default function CategoryPage() {
                 subcategories={category.children}
                 parentSlug={category.slug}
               />
-              {category.parts && category.parts.length > 0 && (
-                <section className={styles.partsSection}>
+              {category.popular_parts && category.popular_parts.total > 0 && (
+                <section className={styles.partsSection} id="popular-parts">
                   <h2 className={styles.partsSectionTitle}>
-                    Parts in this Category
-                    <span className={styles.partsSectionCount}>({category.parts.length})</span>
+                    Popular Parts
+                    <span className={styles.partsSectionCount}>
+                      ({category.popular_parts.total} across all subcategories)
+                    </span>
                   </h2>
-                  <PartsTable parts={category.parts} />
+                  {/* Scrollable wrapper so users can wheel through this page's
+                      results without scrolling the whole document. Mobile gets
+                      a shorter max-height to keep the section ergonomic. */}
+                  <div className={styles.popularScroll}>
+                    <PartsTable parts={category.popular_parts.items} />
+                  </div>
+                  <Pagination
+                    page={category.popular_parts.page}
+                    pages={category.popular_parts.pages}
+                    onChange={handlePopularPageChange}
+                  />
                 </section>
               )}
             </div>

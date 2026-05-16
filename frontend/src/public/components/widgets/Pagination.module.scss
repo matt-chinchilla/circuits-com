@@ -1,0 +1,97 @@
+@use '@shared/styles/variables' as *;
+@use '@shared/styles/mixins' as *;
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 16px 0 4px;
+  flex-wrap: wrap;
+  font-family: $font-body;
+}
+
+.navBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  background: #fff;
+  color: $text-primary;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background $transition-fast, border-color $transition-fast, color $transition-fast;
+  line-height: 1;
+
+  &:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--theme-accent) 8%, white);
+    border-color: color-mix(in srgb, var(--theme-accent) 35%, rgba(0, 0, 0, 0.12));
+    color: var(--executive-blue, #0a4a2e);
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+}
+
+.pageList {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+
+  @include responsive($bp-mobile) {
+    display: none; // collapse to the mobile indicator
+  }
+}
+
+.pageBtn {
+  min-width: 32px;
+  height: 32px;
+  padding: 0 8px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: $text-primary;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background $transition-fast, color $transition-fast, border-color $transition-fast;
+  line-height: 1;
+
+  &:hover:not(.active) {
+    background: color-mix(in srgb, var(--theme-accent) 10%, transparent);
+    color: var(--executive-blue, #0a4a2e);
+  }
+
+  &.active {
+    background: var(--theme-accent);
+    color: #fff;
+    border-color: var(--theme-accent);
+    cursor: default;
+  }
+}
+
+.ellipsis {
+  color: $text-secondary;
+  padding: 0 4px;
+  user-select: none;
+}
+
+.mobileIndicator {
+  display: none;
+  font-size: 0.875rem;
+  color: $text-secondary;
+  font-weight: 500;
+  padding: 0 4px;
+
+  @include responsive($bp-mobile) {
+    display: inline;
+  }
+}

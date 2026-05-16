@@ -73,10 +73,26 @@ export default function PartPage() {
               </>
             ) : part ? (
               <>
-                {part.category_name && (
+                {part.parent_category_name && part.parent_category_slug && (
                   <>
                     <span className={styles.breadcrumbSep} aria-hidden="true">/</span>
-                    <span className={styles.breadcrumbLink}>{part.category_name}</span>
+                    <Link
+                      to={`/category/${part.parent_category_slug}`}
+                      className={styles.breadcrumbLink}
+                    >
+                      {part.parent_category_name}
+                    </Link>
+                  </>
+                )}
+                {part.category_name && part.category_slug && (
+                  <>
+                    <span className={styles.breadcrumbSep} aria-hidden="true">/</span>
+                    <Link
+                      to={`/category/${part.category_slug}`}
+                      className={styles.breadcrumbLink}
+                    >
+                      {part.category_name}
+                    </Link>
                   </>
                 )}
                 <span className={styles.breadcrumbSep} aria-hidden="true">/</span>

@@ -196,6 +196,24 @@
   color: $text-secondary;
 }
 
+// Scrollable container for the Popular Parts table on parent category pages.
+// Mouse-wheel scrolls within the table area; once at top/bottom the page
+// scrolls naturally. Sized to comfortably fit 8-10 rows on desktop without
+// dominating the viewport, and shorter on mobile so the pagination remains
+// reachable without a long flick.
+.popularScroll {
+  max-height: 600px;
+  overflow-y: auto;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable;
+  border-radius: 8px;
+
+  @include responsive($bp-mobile) {
+    max-height: 420px;
+  }
+}
+
 // ─── Error ───────────────────────────────────────────────────────────────────
 
 .error {
