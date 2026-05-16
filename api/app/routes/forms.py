@@ -107,6 +107,8 @@ async def keyword_request(
             "company_name": form.company_name,
             "email": form.email,
             "keyword": form.keyword,
+            "name": form.name,
+            "tier": form.tier,
             "message": form.message,
         },
     )

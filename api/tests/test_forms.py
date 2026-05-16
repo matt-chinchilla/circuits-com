@@ -138,11 +138,20 @@ def test_join_form_optional_fields_none_persist_as_null(client, db):
 
 
 def test_keyword_request_valid_persists_message_and_schedules_notification(client, db):
-    """POST /api/keyword-request persists Message + schedules notification."""
+    """POST /api/keyword-request persists Message + schedules notification.
+
+    V2 design parity (2026-05-16): payload now carries `name` + `tier` alongside
+    the existing fields. The KeywordLandingPage's RequestModal collects both —
+    `name` is required (matches the form's required-attribute) and `tier`
+    reflects whichever Silver/Gold/Platinum the user picked, or None if they
+    skipped the picker and submitted from a non-tier-card entry point.
+    """
     payload = {
         "company_name": "Vishay",
         "email": "partnerships@vishay.com",
         "keyword": "low-noise op-amps",
+        "name": "Pat Partner",
+        "tier": "gold",
         "message": "12-month commit OK.",
     }
     with patch("app.routes.forms.send_keyword_notification", new_callable=AsyncMock) as mock_notify:
@@ -164,20 +173,25 @@ def test_keyword_request_valid_persists_message_and_schedules_notification(clien
         "company_name": "Vishay",
         "email": "partnerships@vishay.com",
         "keyword": "low-noise op-amps",
+        "name": "Pat Partner",
+        "tier": "gold",
         "message": "12-month commit OK.",
     }
 
     mock_notify.assert_called_once()
     sent_form = mock_notify.call_args[0][0]
     assert sent_form.keyword == "low-noise op-amps"
+    assert sent_form.name == "Pat Partner"
+    assert sent_form.tier == "gold"
 
 
-def test_keyword_request_optional_message_none_persists_as_null(client, db):
-    """KeywordRequestForm.message is optional — stored as JSON null when absent."""
+def test_keyword_request_optional_tier_and_message_persist_as_null(client, db):
+    """KeywordRequestForm.tier and .message are both optional — stored as JSON null when absent."""
     payload = {
         "company_name": "TI",
         "email": "x@ti.example.com",
         "keyword": "buck converter",
+        "name": "Riley TI",
     }
     with patch("app.routes.forms.send_keyword_notification", new_callable=AsyncMock):
         response = client.post("/api/keyword-request", json=payload)
@@ -185,6 +199,35 @@ def test_keyword_request_optional_message_none_persists_as_null(client, db):
     assert response.status_code == 200
     msg = db.query(Message).one()
     assert msg.payload["message"] is None
+    assert msg.payload["tier"] is None
+    assert msg.payload["name"] == "Riley TI"
+
+
+def test_keyword_request_invalid_tier_returns_422(client, db):
+    """KeywordRequestForm.tier is a Literal enum — bogus values must 422 at Pydantic."""
+    payload = {
+        "company_name": "Acme",
+        "email": "a@example.com",
+        "keyword": "rp2040",
+        "name": "Pat",
+        "tier": "platinum-plus",  # not in SponsorTier
+    }
+    response = client.post("/api/keyword-request", json=payload)
+    assert response.status_code == 422
+    assert db.query(Message).count() == 0
+
+
+def test_keyword_request_missing_name_returns_422(client, db):
+    """KeywordRequestForm requires `name` (mirrors the FE input's required attribute)."""
+    payload = {
+        "company_name": "Acme",
+        "email": "a@example.com",
+        "keyword": "rp2040",
+        # name missing - this is what's being tested
+    }
+    response = client.post("/api/keyword-request", json=payload)
+    assert response.status_code == 422
+    assert db.query(Message).count() == 0
 
 
 def test_seq_increments_across_three_contact_submissions(client, db):
@@ -225,6 +268,7 @@ def test_seq_shares_single_space_across_form_types(client, db):
         "company_name": "KCo",
         "email": "k@example.com",
         "keyword": "kw",
+        "name": "K",
     }
     with patch("app.routes.forms.send_contact_notification", new_callable=AsyncMock):
         with patch("app.routes.forms.send_join_notification", new_callable=AsyncMock):

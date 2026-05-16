@@ -1,6 +1,10 @@
 @use 'variables' as *;
 @use 'themes';
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500&display=swap');
+// Inter (heading font) + DM Sans (body font) + JetBrains Mono (designators).
+// Inter was added 2026-05-16 to fix the silent system-ui fallback flagged by
+// the Claude Design handoff — `_variables.scss` declared $font-heading:
+// 'Inter' but the @import previously only loaded DM Sans + JetBrains Mono.
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
 // Brand colors as CSS custom properties — aliases to the SCSS $vars in
 // _variables.scss. Lets ported design rules reference `var(--executive-blue)`,

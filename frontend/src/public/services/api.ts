@@ -41,8 +41,17 @@ export const api = {
   submitJoin: (data: Record<string, unknown>) =>
     client.post('/join/', data),
 
-  submitKeywordRequest: (data: Record<string, string>) =>
-    client.post('/keyword-request/', data),
+  submitKeywordRequest: (data: {
+    company_name: string;
+    email: string;
+    keyword: string;
+    // V2 design parity (2026-05-16): `name` is required and `tier` is optional
+    // ('silver' | 'gold' | 'platinum'). Both reach the backend's
+    // KeywordRequestForm and end up in the Message.payload + notify-email body.
+    name: string;
+    tier?: 'silver' | 'gold' | 'platinum' | null;
+    message?: string;
+  }) => client.post('/keyword-request/', data),
 
   getPartDetail: (id: string) =>
     client.get<PartDetail>(`/parts/${id}`).then(r => r.data),

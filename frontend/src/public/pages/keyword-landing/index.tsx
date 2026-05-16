@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
 import GlowButton from '@public/components/widgets/GlowButton';
 import PageHeaderBand from '@public/components/layout/PageHeaderBand';
-import RequestModal from '@public/components/widgets/RequestModal';
-import { api } from '@public/services/api';
+import RequestModal, { type RequestModalTier } from '@public/components/widgets/RequestModal';
+import { useKeywordRequestModal } from '@public/hooks/useKeywordRequestModal';
 import AvailabilityCheck from './components/AvailabilityCheck';
 import HowItWorksChip from './components/HowItWorksChip';
 import SponsorFAQ from './components/SponsorFAQ';
@@ -25,27 +25,16 @@ import styles from './KeywordLandingPage.module.scss';
 export default function KeywordLandingPage() {
   const navigate = useNavigate();
 
-  // Modal-state mirror of keyword/index.tsx's pattern. modalKw === null means
-  // closed; non-null means open with that keyword pre-filled.
+  // modalKw === null means closed; non-null means open with that keyword
+  // pre-filled. Tracking the keyword in the open-state lets a single source
+  // of truth drive both "is open" and "what to submit".
   const [modalKw, setModalKw] = useState<string | null>(null);
-  const [companyName, setCompanyName] = useState('');
-  const [email, setEmail] = useState('');
-  const [message, setMessage] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
+  const form = useKeywordRequestModal({ logTag: 'keyword-landing' });
 
   const closeModal = useCallback(() => {
     setModalKw(null);
-    // Reset after close animation completes (matches keyword/index.tsx).
-    setTimeout(() => {
-      setCompanyName('');
-      setEmail('');
-      setMessage('');
-      setFormError(null);
-      setSubmitted(false);
-    }, 200);
-  }, []);
+    setTimeout(form.resetAfterClose, 200);
+  }, [form.resetAfterClose]);
 
   // Body-scroll-lock + Esc-to-close while modal is open. Same state-machine
   // pattern as Navbar/AdminLayout drawers (CLAUDE.md "Mobile drawer
@@ -64,33 +53,13 @@ export default function KeywordLandingPage() {
     };
   }, [modalKw, closeModal]);
 
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault();
-    setFormError(null);
+  // Clicking a tier card on Section 04 pre-selects that tier AND opens the
+  // modal so the picker inside the modal already reflects the user's choice.
+  const handleTierCardClick = (tierId: RequestModalTier['id']) => {
+    form.setSelectedTier(tierId);
+    setModalKw('(any)');
+  };
 
-    if (!companyName.trim() || !email.trim()) {
-      setFormError('Company name and email are required.');
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      await api.submitKeywordRequest({
-        company_name: companyName.trim(),
-        email: email.trim(),
-        keyword: modalKw || '',
-        message: message.trim(),
-      });
-      setSubmitted(true);
-    } catch (err) {
-      console.error('[keyword-landing] keyword-request submit failed', err);
-      setFormError('Something went wrong. Please try again later.');
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  // Helpers wired into AvailabilityCheck.
   const handleRequest = (kw: string) => setModalKw(kw);
   const handleViewSponsor = (slug: string) => navigate(`/keyword/${slug}`);
 
@@ -221,30 +190,40 @@ export default function KeywordLandingPage() {
               <p>All tiers month-to-month. You can change at any time before the next cycle.</p>
             </header>
             <div className={styles.sponsorTiers}>
-              {SPONSOR_TIERS.map((t) => (
-                <article
-                  key={t.id}
-                  className={`${styles.sponsorTier} ${t.featured ? styles.featured : ''}`}
-                >
-                  <header className={styles.sponsorTierHead}>
-                    <span className={styles.sponsorTierName}>{t.name}</span>
-                    <span className={styles.sponsorTierPrice}>{t.price}</span>
-                  </header>
-                  <span className={styles.sponsorTierTag}>{t.tag}</span>
-                  <ul className={styles.sponsorTierPerks}>
-                    {t.perks.map((p) => (
-                      <li key={p}>{p}</li>
-                    ))}
-                  </ul>
-                  {/* V2 design parity (2026-05-16): ALL tier buttons use
-                     the primary variant + uniform "Choose {Name}" label.
-                     The featured Gold tier is distinguished by its outer
-                     ring + ★ MOST CHOSEN ribbon, not by the button style. */}
-                  <GlowButton variant="primary" onClick={() => setModalKw('(any)')}>
-                    Choose {t.name}
-                  </GlowButton>
-                </article>
-              ))}
+              {SPONSOR_TIERS.map((t) => {
+                const isSelected = form.selectedTier === t.id;
+                return (
+                  <article
+                    key={t.id}
+                    className={`${styles.sponsorTier} ${t.featured ? styles.featured : ''} ${
+                      isSelected ? styles.selected : ''
+                    }`}
+                  >
+                    <header className={styles.sponsorTierHead}>
+                      <span className={styles.sponsorTierName}>{t.name}</span>
+                      <span className={styles.sponsorTierPrice}>{t.price}</span>
+                    </header>
+                    <span className={styles.sponsorTierTag}>{t.tag}</span>
+                    <ul className={styles.sponsorTierPerks}>
+                      {t.perks.map((p) => (
+                        <li key={p}>{p}</li>
+                      ))}
+                    </ul>
+                    {/* V2 design parity (2026-05-16): ALL tier buttons use
+                       the primary variant + uniform "Choose {Name}" label.
+                       The featured Gold tier is distinguished by its outer
+                       ring + ★ MOST CHOSEN ribbon, not by the button style.
+                       aria-pressed announces selection state to AT users. */}
+                    <GlowButton
+                      variant="primary"
+                      onClick={() => handleTierCardClick(t.id)}
+                      aria-pressed={isSelected}
+                    >
+                      Choose {t.name}
+                    </GlowButton>
+                  </article>
+                );
+              })}
             </div>
           </div>
         </section>
@@ -290,20 +269,27 @@ export default function KeywordLandingPage() {
         </div>
       </section>
 
-      {/* Shared request modal */}
+      {/* Shared request modal — v2 design parity: receives Name + Tier
+         pre-selection so the in-modal picker mirrors whichever tier card the
+         user clicked, and the success-state receipt shows the chosen tier. */}
       <RequestModal
         open={modalKw !== null}
         keyword={modalKw || ''}
-        companyName={companyName}
-        email={email}
-        message={message}
-        submitting={submitting}
-        submitted={submitted}
-        formError={formError}
-        onCompanyNameChange={setCompanyName}
-        onEmailChange={setEmail}
-        onMessageChange={setMessage}
-        onSubmit={handleSubmit}
+        name={form.name}
+        companyName={form.companyName}
+        email={form.email}
+        message={form.message}
+        submitting={form.submitting}
+        submitted={form.submitted}
+        formError={form.formError}
+        tiers={SPONSOR_TIERS}
+        selectedTier={form.selectedTier}
+        onTierChange={form.setSelectedTier}
+        onNameChange={form.setName}
+        onCompanyNameChange={form.setCompanyName}
+        onEmailChange={form.setEmail}
+        onMessageChange={form.setMessage}
+        onSubmit={form.handleSubmit(modalKw || '')}
         onClose={closeModal}
       />
     </motion.main>

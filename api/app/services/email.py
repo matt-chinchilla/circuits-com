@@ -151,14 +151,23 @@ async def send_join_autoreply(form) -> None:
 
 
 async def send_keyword_notification(form) -> None:
-    """Notify recipients of a new keyword-sponsorship request."""
+    """Notify recipients of a new keyword-sponsorship request.
+
+    V2 design parity (2026-05-16): the body now lists Name + Tier alongside
+    the existing fields, and the subject appends ` (tier)` when the user picked
+    one in the modal's tier-preference selector. Mirrors the JoinForm pattern
+    so recipients can scan their inbox by tier without opening every email.
+    """
     extra_message = form.message or "(no message)"
+    tier_display = form.tier or "(no tier selected)"
     body = (
         "New keyword-sponsorship request via circuits.com:\n"
         "\n"
         f"Company: {form.company_name}\n"
+        f"Name:    {form.name}\n"
         f"Email:   {form.email}\n"
         f"Keyword: {form.keyword}\n"
+        f"Tier:    {tier_display}\n"
         "\n"
         "Message:\n"
         "---\n"
@@ -167,8 +176,12 @@ async def send_keyword_notification(form) -> None:
         "\n"
         "Reply to this email to respond to the applicant directly.\n"
     )
+    # Subject only shows tier when explicitly set — avoids the
+    # "((no tier selected))" double-paren ugliness, same convention as
+    # send_join_notification's subject_tail.
+    subject_tail = f" ({form.tier})" if form.tier else ""
     msg = _build_notification(
-        subject=f"[Circuits Keyword] {form.keyword} — {form.company_name}",
+        subject=f"[Circuits Keyword] {form.keyword} — {form.company_name}{subject_tail}",
         reply_to=form.email,
         body=body,
     )

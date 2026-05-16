@@ -1,9 +1,11 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import GlowButton from '@public/components/widgets/GlowButton';
 import RequestModal from '@public/components/widgets/RequestModal';
+import { useKeywordRequestModal } from '@public/hooks/useKeywordRequestModal';
 import { api } from '@public/services/api';
+import { SPONSOR_TIERS } from '@public/pages/keyword-landing/constants';
 import type { Sponsor } from '@public/types/sponsor';
 import styles from './KeywordSponsorPage.module.scss';
 
@@ -14,14 +16,8 @@ export default function KeywordSponsorPage() {
   const [notFound, setNotFound] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Modal state
   const [modalOpen, setModalOpen] = useState(false);
-  const [companyName, setCompanyName] = useState('');
-  const [email, setEmail] = useState('');
-  const [message, setMessage] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
+  const form = useKeywordRequestModal({ logTag: 'keyword/:keyword' });
 
   useEffect(() => {
     if (!keyword) return;
@@ -41,43 +37,33 @@ export default function KeywordSponsorPage() {
       .finally(() => setLoading(false));
   }, [keyword]);
 
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault();
-    setFormError(null);
-
-    if (!companyName.trim() || !email.trim()) {
-      setFormError('Company name and email are required.');
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      await api.submitKeywordRequest({
-        company_name: companyName.trim(),
-        email: email.trim(),
-        keyword: keyword || '',
-        message: message.trim(),
-      });
-      setSubmitted(true);
-    } catch (err) {
-      console.error('[keyword/:keyword] keyword-request submit failed', err);
-      setFormError('Something went wrong. Please try again later.');
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
   function closeModal() {
     setModalOpen(false);
-    // Reset form after close animation
-    setTimeout(() => {
-      setCompanyName('');
-      setEmail('');
-      setMessage('');
-      setFormError(null);
-      setSubmitted(false);
-    }, 200);
+    setTimeout(form.resetAfterClose, 200);
   }
+
+  const modal = (
+    <RequestModal
+      open={modalOpen}
+      keyword={keyword || ''}
+      name={form.name}
+      companyName={form.companyName}
+      email={form.email}
+      message={form.message}
+      submitting={form.submitting}
+      submitted={form.submitted}
+      formError={form.formError}
+      tiers={SPONSOR_TIERS}
+      selectedTier={form.selectedTier}
+      onTierChange={form.setSelectedTier}
+      onNameChange={form.setName}
+      onCompanyNameChange={form.setCompanyName}
+      onEmailChange={form.setEmail}
+      onMessageChange={form.setMessage}
+      onSubmit={form.handleSubmit(keyword || '')}
+      onClose={closeModal}
+    />
+  );
 
   // ─── Loading state ───────────────────────────────────────────────────────
 
@@ -152,22 +138,7 @@ export default function KeywordSponsorPage() {
           </GlowButton>
         </div>
 
-        {/* Request modal (shared) */}
-        <RequestModal
-          open={modalOpen}
-          keyword={keyword || ''}
-          companyName={companyName}
-          email={email}
-          message={message}
-          submitting={submitting}
-          submitted={submitted}
-          formError={formError}
-          onCompanyNameChange={setCompanyName}
-          onEmailChange={setEmail}
-          onMessageChange={setMessage}
-          onSubmit={handleSubmit}
-          onClose={closeModal}
-        />
+        {modal}
       </motion.div>
     );
   }
@@ -289,22 +260,7 @@ export default function KeywordSponsorPage() {
         </div>
       </section>
 
-      {/* Request modal */}
-      <RequestModal
-        open={modalOpen}
-        keyword={keyword || ''}
-        companyName={companyName}
-        email={email}
-        message={message}
-        submitting={submitting}
-        submitted={submitted}
-        formError={formError}
-        onCompanyNameChange={setCompanyName}
-        onEmailChange={setEmail}
-        onMessageChange={setMessage}
-        onSubmit={handleSubmit}
-        onClose={closeModal}
-      />
+      {modal}
     </motion.div>
   );
 }

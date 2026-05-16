@@ -207,6 +207,8 @@ async def test_send_keyword_notification_includes_keyword(monkeypatch):
         company_name="Vishay Intertechnology",
         email="partnerships@vishay.com",
         keyword="low-noise op-amps",
+        name="Pat Partner",
+        tier="gold",
         message="12-month commit OK.",
     )
 
@@ -222,3 +224,71 @@ async def test_send_keyword_notification_includes_keyword(monkeypatch):
     assert "Vishay Intertechnology" in body
     assert "low-noise op-amps" in body
     assert "12-month commit OK." in body
+
+
+@pytest.mark.asyncio
+async def test_send_keyword_notification_includes_name_and_tier(monkeypatch):
+    """V2 design parity (2026-05-16): name + tier appear in body, tier in subject tail."""
+    from app.schemas import KeywordRequestForm
+    from app.services import email as email_service
+
+    monkeypatch.setattr(email_service.settings, "NOTIFY_RECIPIENTS", ["alerts@circuits.com"])
+    monkeypatch.setattr(email_service.settings, "SMTP_FROM", "no-reply@example.invalid")
+    monkeypatch.setattr(email_service.settings, "SMTP_HOST", "smtp.example.invalid")
+    monkeypatch.setattr(email_service.settings, "SMTP_USERNAME", "x")
+    monkeypatch.setattr(email_service.settings, "SMTP_PASSWORD", "y")
+
+    form = KeywordRequestForm(
+        company_name="Acme Electronics",
+        email="jane@acme.example.com",
+        keyword="rp2040",
+        name="Jane Doe",
+        tier="gold",
+    )
+
+    with patch("app.services.email.aiosmtplib.send", new_callable=AsyncMock) as mock_send:
+        await email_service.send_keyword_notification(form)
+
+    msg = mock_send.call_args[0][0]
+    assert msg["Reply-To"] == "jane@acme.example.com"
+    assert "rp2040" in msg["Subject"]
+    # When tier is set, subject tail is " (gold)" — same convention as
+    # JoinForm. Asserting the exact parenthesized format (with leading space)
+    # pins the subject_tail contract; a bare `"gold" in subject` would pass
+    # trivially if keyword/company contained "gold" or if the format changed.
+    assert " (gold)" in msg["Subject"]
+    body = msg.get_content()
+    assert "Jane Doe" in body
+    assert "gold" in body
+
+
+@pytest.mark.asyncio
+async def test_send_keyword_notification_subject_omits_tier_when_unset(monkeypatch):
+    """When tier is None, subject has NO trailing ' (tier)' tail — mirrors send_join_notification."""
+    from app.schemas import KeywordRequestForm
+    from app.services import email as email_service
+
+    monkeypatch.setattr(email_service.settings, "NOTIFY_RECIPIENTS", ["alerts@circuits.com"])
+    monkeypatch.setattr(email_service.settings, "SMTP_FROM", "no-reply@example.invalid")
+    monkeypatch.setattr(email_service.settings, "SMTP_HOST", "smtp.example.invalid")
+    monkeypatch.setattr(email_service.settings, "SMTP_USERNAME", "x")
+    monkeypatch.setattr(email_service.settings, "SMTP_PASSWORD", "y")
+
+    form = KeywordRequestForm(
+        company_name="Acme",
+        email="a@acme.example.com",
+        keyword="esp32",
+        name="Sam",
+        # no tier
+    )
+
+    with patch("app.services.email.aiosmtplib.send", new_callable=AsyncMock) as mock_send:
+        await email_service.send_keyword_notification(form)
+
+    msg = mock_send.call_args[0][0]
+    subject = msg["Subject"]
+    assert "[Circuits Keyword]" in subject
+    assert "esp32" in subject
+    assert "Acme" in subject
+    # No parens means no tier tail
+    assert subject.count("(") == 0

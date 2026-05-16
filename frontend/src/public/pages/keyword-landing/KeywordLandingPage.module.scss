@@ -347,6 +347,29 @@
   }
 }
 
+// V2 design parity (2026-05-16): `.selected` is the user-chosen tier state.
+// Mirrors the design's `.sponsor-tier.selected` rule — a sharper accent ring
+// announces "this is your current pick" without conflicting with `.featured`
+// (which is purely the Gold ★ MOST CHOSEN cosmetic). Gold defaults to
+// `.selected` on mount so the recommended tier reads as the active choice;
+// clicking Silver or Platinum moves the ring without removing Gold's ribbon.
+.selected:not(.featured) {
+  border-color: var(--theme-accent);
+  box-shadow:
+    0 0 0 2px var(--theme-accent),
+    0 4px 14px rgba(0, 0, 0, 0.06);
+}
+
+.selected.featured {
+  // When Gold is the selected tier (default), keep the soft outer ring AND
+  // add an inner sharper accent so it reads as "featured + chosen" instead
+  // of a duplicated outer ring. Inset shadow gives the inner border treatment.
+  box-shadow:
+    0 0 0 3px var(--theme-accent-soft),
+    inset 0 0 0 1px var(--theme-accent),
+    0 4px 14px rgba(0, 0, 0, 0.06);
+}
+
 .featured {
   border-color: var(--theme-accent);
   box-shadow:
