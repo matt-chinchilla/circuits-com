@@ -197,7 +197,7 @@ export default function MessageDetailPage() {
                       : '—'}
                 </span>
               </KvMini>
-              {m.spam_score !== undefined && (
+              {m.spam_score != null && (
                 <KvMini label="Spam score">
                   <span
                     className={styles.kvMono}

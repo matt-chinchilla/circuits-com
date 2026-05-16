@@ -49,7 +49,12 @@ interface MessageBase {
   read_at?: string;
   responded_at?: string;
   assigned_to?: AssignedTo;
-  spam_score?: number; // 0-1, only surfaced if > 0.6
+  // 0-1, only surfaced if > 0.6. Type allows `null` because the backend
+  // serializes Python `None` as JSON `null` — `?:` alone catches only
+  // `undefined` and lets `null` slip through. Always guard with `!= null`
+  // (loose-equality catches both `null` and `undefined`) before calling
+  // numeric methods like `.toFixed()`.
+  spam_score?: number | null;
   last_reply_body?: string; // hydrated by the inline reply UI
 }
 

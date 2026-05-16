@@ -72,7 +72,11 @@ export function MessageStatusBadge({ status }: { status: MessageStatus }) {
   );
 }
 
-export function SpamScoreWarning({ score }: { score: number | undefined }) {
+export function SpamScoreWarning({ score }: { score: number | null | undefined }) {
+  // `!score` is intentional — it short-circuits on `null`, `undefined`, and
+  // 0 (a spam_score of 0 means "no spam signal", so the chip should be
+  // hidden anyway). Don't tighten this to `score == null` without rechecking
+  // the 0 case.
   if (!score || score <= 0.6) return null;
   return (
     <span

@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { Routes, Route, useLocation } from "react-router-dom";
 
 // 2026-04-19 Tier-3 #7 perf: Home stays eager (LCP target; must render
@@ -48,6 +48,7 @@ import HeroColorTuner from "@public/components/widgets/HeroColorTuner";
 import ThemeBridge from "@public/components/layout/ThemeBridge";
 import PublicLayout from "@public/components/layout/PublicLayout";
 import BackdropLayer from "@public/components/layout/BackdropLayer";
+import ErrorBoundary from "@shared/components/ErrorBoundary";
 import { DemoProvider } from "@admin/contexts/DemoContext";
 
 // Admin fallback (PublicLayout provides the equivalent on public routes).
@@ -56,7 +57,25 @@ const RouteFallback = () => <div style={{ minHeight: 420 }} aria-busy="true" />;
 function App() {
   const location = useLocation();
 
-  // Admin routes live outside AnimatePresence — admin has its own layout
+  // SPA scroll-restoration — reset to top on every route change so each
+  // page begins at its hero/band. React Router v6 doesn't do this by
+  // default (only browser-level loads reset scroll); without this, users
+  // landed mid-page when navigating from a scrolled position elsewhere.
+  // The hash exception preserves /privacy#section-X anchor navigation
+  // (the privacy page uses scrollIntoView({ block: "start" }) on its
+  // anchor targets — see CLAUDE.md "Adding a new public page" gotcha).
+  // Fires for public AND admin paths because the effect sits above the
+  // admin early-return below.
+  useEffect(() => {
+    if (location.hash) return;
+    window.scrollTo({ top: 0, left: 0 });
+  }, [location.pathname]);
+
+  // Admin routes live outside AnimatePresence — admin has its own layout.
+  // ErrorBoundary keyed on pathname so render crashes inside any admin page
+  // (e.g. the 2026-05-16 null spam_score → .toFixed() bug) surface a
+  // recoverable fallback instead of a blank screen; key change on nav auto-
+  // clears the error state when the user routes away.
   if (location.pathname.startsWith("/admin")) {
     return (
       <DemoProvider>
@@ -68,6 +87,7 @@ function App() {
               element={
                 <ProtectedRoute>
                   <AdminLayout>
+                    <ErrorBoundary key={location.pathname} scope="admin page">
                     <Routes>
                       <Route index element={<DashboardPage />} />
                       <Route path="suppliers" element={<SuppliersPage />} />
@@ -106,6 +126,7 @@ function App() {
                       />
                       <Route path="settings" element={<SettingsPage />} />
                     </Routes>
+                    </ErrorBoundary>
                   </AdminLayout>
                 </ProtectedRoute>
               }

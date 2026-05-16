@@ -1,0 +1,163 @@
+@use '@shared/styles/variables' as *;
+@use '@shared/styles/mixins' as *;
+
+// ErrorBoundary fallback — datasheet-style error card. Mirrors the
+// keyword-landing spec card motif (crop-mark corners, mono tag, PCB grid
+// backdrop) so the recovery view stays visually consistent with the rest of
+// the site even when the underlying page has crashed.
+
+.errorBoundary {
+  // Fills the available vertical space inside whatever flex/grid container
+  // wraps the ErrorBoundary so the fallback isn't visually orphaned at the
+  // top of a tall route shell.
+  min-height: 320px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 56px 20px;
+}
+
+.card {
+  position: relative;
+  background: var(--theme-card-bg, #fff);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-left: 3px solid #c0392b;
+  border-radius: 10px;
+  padding: 28px 32px 24px;
+  max-width: 560px;
+  width: 100%;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+
+  // Faint PCB grid — same motif as the keyword-landing spec card.
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(192, 57, 43, 0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(192, 57, 43, 0.04) 1px, transparent 1px);
+    background-size: 24px 24px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  > * {
+    position: relative;
+    z-index: 1;
+  }
+}
+
+.tag {
+  display: inline-block;
+  font-family: $font-mono;
+  font-size: 0.68rem;
+  letter-spacing: 0.18em;
+  color: #c0392b;
+  text-transform: uppercase;
+  padding: 3px 9px;
+  border: 1px solid rgba(192, 57, 43, 0.45);
+  background: rgba(192, 57, 43, 0.08);
+  border-radius: 3px;
+  margin-bottom: 14px;
+}
+
+.title {
+  font-family: $font-heading;
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--fg1, #1a1f23);
+  margin: 0 0 8px;
+  letter-spacing: -0.01em;
+}
+
+.body {
+  font-size: 0.95rem;
+  color: var(--fg2, #6b7076);
+  line-height: 1.55;
+  margin: 0 0 16px;
+  max-width: 58ch;
+}
+
+.details {
+  margin: 0 0 18px;
+
+  summary {
+    font-family: $font-mono;
+    font-size: 0.72rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--fg2, #6b7076);
+    cursor: pointer;
+    padding: 4px 0;
+
+    &:hover {
+      color: var(--fg1, #1a1f23);
+    }
+  }
+}
+
+.message {
+  font-family: $font-mono;
+  font-size: 0.82rem;
+  color: var(--fg1, #1a1f23);
+  background: var(--surface, #eef1f5);
+  border: 1px dashed rgba(0, 0, 0, 0.12);
+  border-radius: 4px;
+  padding: 10px 12px;
+  margin: 8px 0 0;
+  // Keep the stack message from blowing out the card width on long
+  // single-line errors (common for type errors).
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.btnPrimary,
+.btnGhost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 18px;
+  font-family: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  border-radius: 6px;
+  cursor: pointer;
+  border: 1.5px solid transparent;
+  transition:
+    transform 150ms,
+    background 150ms,
+    color 150ms,
+    border-color 150ms,
+    box-shadow 150ms;
+  line-height: 1;
+}
+
+.btnPrimary {
+  background: var(--theme-cta-bg, #0a4a2e);
+  color: var(--theme-cta-text, #fff);
+  box-shadow: 0 4px 14px var(--theme-accent-glow, rgba(68, 189, 19, 0.35));
+
+  &:hover {
+    background: var(--theme-cta-hover-bg, #44bd13);
+    transform: translateY(-1px);
+  }
+}
+
+.btnGhost {
+  background: transparent;
+  color: var(--executive-blue, #0a4a2e);
+  border-color: rgba(0, 0, 0, 0.18);
+
+  &:hover {
+    background: var(--theme-accent-soft, rgba(68, 189, 19, 0.1));
+    border-color: var(--theme-accent, #44bd13);
+  }
+}

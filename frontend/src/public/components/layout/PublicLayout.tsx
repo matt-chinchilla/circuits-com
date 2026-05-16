@@ -1,5 +1,6 @@
 import { Suspense } from 'react'
-import { Outlet } from 'react-router-dom'
+import { Outlet, useLocation } from 'react-router-dom'
+import ErrorBoundary from '@shared/components/ErrorBoundary'
 import Footer from './Footer'
 import styles from './PublicLayout.module.scss'
 
@@ -24,11 +25,20 @@ const RouteFallback = () => <div style={{ minHeight: 420 }} aria-busy="true" />
 // viewport bottom on short pages and floats below content on long pages.
 // (Fixes the "footer mid-page on /keyword/:slug" regression — 2026-05-14.)
 export default function PublicLayout() {
+  const location = useLocation()
   return (
     <div className={styles.shell}>
       <div className={styles.outletWrap}>
         <Suspense fallback={<RouteFallback />}>
-          <Outlet />
+          {/* ErrorBoundary keyed on pathname → render crashes inside any
+              public page surface a recoverable fallback (with a "Back"
+              button) instead of a blank screen. Key change on nav auto-
+              clears the boundary's error state when the user routes away.
+              Sits INSIDE .outletWrap so Navbar + Footer stay visible on
+              crash and the recovery card sits in normal page flow. */}
+          <ErrorBoundary key={location.pathname} scope="page">
+            <Outlet />
+          </ErrorBoundary>
         </Suspense>
       </div>
       <Footer />
