@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
 import PageHeaderBand from "@public/components/layout/PageHeaderBand";
 import GlowButton from "@public/components/widgets/GlowButton";
-import Icon from "@public/components/widgets/Icon";
+import Icon from "@shared/components/Icon";
 import { useCategories } from "@public/hooks/useCategories";
 import { api } from "@public/services/api";
 import styles from "./JoinPage.module.scss";

@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import type { PublicPart } from '@public/types/part';
-import Icon from '@public/components/widgets/Icon';
+import Icon from '@shared/components/Icon';
 import styles from './PartsTable.module.scss';
 
 interface PartsTableProps {

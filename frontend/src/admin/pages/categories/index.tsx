@@ -4,6 +4,7 @@ import { Search, ChevronRight, List, Grid as GridIcon, Plus } from 'lucide-react
 import Breadcrumbs from '@admin/components/Breadcrumbs';
 import { adminApi } from '@admin/services/adminApi';
 import type { AdminCategory } from '@admin/types/admin';
+import Icon from '@shared/components/Icon';
 import styles from './CategoriesPage.module.scss';
 
 type ViewMode = 'tree' | 'grid';
@@ -185,7 +186,7 @@ export default function CategoriesPage() {
                     <span className={styles.headCaret}>
                       <ChevronRight />
                     </span>
-                    <span className={styles.headIcon}>{c.icon}</span>
+                    <span className={styles.headIcon}><Icon name={c.icon} /></span>
                     <span className={styles.headTitle}>
                       <span className={styles.headName}>{c.name}</span>
                       <span className={styles.headSlug}>{c.slug}</span>
@@ -211,7 +212,7 @@ export default function CategoriesPage() {
                           to={`/category/${s.slug}`}
                           className={styles.subTile}
                         >
-                          <span className={styles.subIcon}>{s.icon}</span>
+                          <span className={styles.subIcon}><Icon name={s.icon} /></span>
                           <span className={styles.subName}>{s.name}</span>
                           <span className={styles.subSlug}>{s.slug}</span>
                           <span className={styles.subView}>View &rarr;</span>
@@ -236,7 +237,7 @@ export default function CategoriesPage() {
             const totalCatParts = (c.parts_count || 0) + childParts;
             return (
               <div key={c.id} className={styles.catCard}>
-                <div className={styles.catIcon}>{c.icon}</div>
+                <div className={styles.catIcon}><Icon name={c.icon} /></div>
                 <div className={styles.catName}>{c.name}</div>
                 <div className={styles.catSlug}>{c.slug}</div>
                 <div className={styles.catStats}>

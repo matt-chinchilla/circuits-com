@@ -1,7 +1,7 @@
 import { useRef, useState, useEffect, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useSearch } from '@public/hooks/useSearch';
-import Icon from '@public/components/widgets/Icon';
+import Icon from '@shared/components/Icon';
 import styles from './SearchBar.module.scss';
 
 interface SearchBarProps {

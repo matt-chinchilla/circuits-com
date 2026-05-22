@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import SearchBar from '@public/components/layout/SearchBar';
 import SkeletonLoader from '@public/components/widgets/SkeletonLoader';
 import GlowButton from '@public/components/widgets/GlowButton';
-import Icon from '@public/components/widgets/Icon';
+import Icon from '@shared/components/Icon';
 import { api } from '@public/services/api';
 import type { SearchResults } from '@public/services/api';
 import styles from './SearchPage.module.scss';

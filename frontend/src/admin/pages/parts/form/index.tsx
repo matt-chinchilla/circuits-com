@@ -103,16 +103,17 @@ export default function PartFormPage() {
     return () => clearTimeout(t);
   }, [toast]);
 
-  // Flatten category tree for select options
+  // Flatten category tree for select options.
+  // The cat.icon field carries a Phosphor name (e.g. "lightning") not an
+  // emoji glyph since the 2026-05-22 v4 swap — and HTML <option> renders
+  // text-only, so prefixing it would surface a literal "lightning ..." in
+  // the dropdown. Keep indentation prefix for parent/child hierarchy.
   const categoryOptions = useMemo(() => {
     const opts: Array<{ id: string; label: string }> = [];
     for (const cat of categories) {
-      opts.push({ id: cat.id, label: `${cat.icon ?? ''} ${cat.name}`.trim() });
+      opts.push({ id: cat.id, label: cat.name });
       for (const child of cat.children ?? []) {
-        opts.push({
-          id: child.id,
-          label: `  ${child.icon ?? ''} ${cat.name} › ${child.name}`.trim(),
-        });
+        opts.push({ id: child.id, label: `  ${cat.name} › ${child.name}` });
       }
     }
     return opts;

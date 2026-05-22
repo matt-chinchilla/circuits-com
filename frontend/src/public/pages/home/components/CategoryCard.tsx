@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import AnimatedLink from "@public/components/widgets/AnimatedLink";
-import Icon from "@public/components/widgets/Icon";
+import Icon from "@shared/components/Icon";
 import type { Category } from "@public/types/category";
 import styles from "./CategoryCard.module.scss";
 

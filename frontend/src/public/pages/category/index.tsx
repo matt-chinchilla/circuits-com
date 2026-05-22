@@ -13,7 +13,7 @@ import CompactLayout from './components/layouts/CompactLayout';
 import CardsLayout from './components/layouts/CardsLayout';
 import SkeletonLoader from '@public/components/widgets/SkeletonLoader';
 import Pagination from '@public/components/widgets/Pagination';
-import Icon from '@public/components/widgets/Icon';
+import Icon from '@shared/components/Icon';
 import { api } from '@public/services/api';
 import type { CategoryDetail } from '@public/types/category';
 import styles from './CategoryPage.module.scss';

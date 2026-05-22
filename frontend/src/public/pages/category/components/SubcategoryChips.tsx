@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import Icon from '@public/components/widgets/Icon';
+import Icon from '@shared/components/Icon';
 import type { Subcategory } from '@public/types/category';
 import styles from './SubcategoryChips.module.scss';
 

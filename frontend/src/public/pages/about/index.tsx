@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import PageHeaderBand from '@public/components/layout/PageHeaderBand'
-import Icon from '@public/components/widgets/Icon'
+import Icon from '@shared/components/Icon'
 import styles from './AboutPage.module.scss'
 
 const ABOUT_STEPS = [
