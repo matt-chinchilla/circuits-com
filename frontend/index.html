@@ -8,6 +8,14 @@
     <link rel="icon" href="/images/favicon.ico" type="image/x-icon">
     <link rel="shortcut icon" href="/images/favicon.ico" type="image/x-icon">
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Phosphor Light icon font — self-hosted to avoid CDN/firewall flakiness.
+         Files live under frontend/public/fonts/phosphor-light/ (style.css + woff2
+         + woff + ttf, ~ 1.2 MB committed). CSS uses relative ./Phosphor-Light.woff2
+         which Vite serves from the public/ root at the deployed path. font-display:
+         block (set in style.css) suppresses the FOUT — text-as-icon flash — while
+         the woff2 loads. -->
+    <link rel="preload" href="/fonts/phosphor-light/Phosphor-Light.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="stylesheet" href="/fonts/phosphor-light/style.css" />
     <title>Circuits.com — Electronic Components Directory</title>
   </head>
   <body>

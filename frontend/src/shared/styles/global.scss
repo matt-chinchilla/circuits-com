@@ -1,10 +1,11 @@
 @use 'variables' as *;
 @use 'themes';
-// Inter (heading font) + DM Sans (body font) + JetBrains Mono (designators).
-// Inter was added 2026-05-16 to fix the silent system-ui fallback flagged by
-// the Claude Design handoff — `_variables.scss` declared $font-heading:
-// 'Inter' but the @import previously only loaded DM Sans + JetBrains Mono.
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+// 2026-05-22 — Apple-sleek typography pass. Google Fonts @import removed:
+// the live site now resolves through the platform's native system stack
+// (SF Pro / Segoe UI / Inter fallback) per the v4 design handoff. No webfont
+// download = zero render-blocking + matches OS UI chrome users already see.
+// JetBrains Mono in particular was flagged as reading "code-editor bootcamp"
+// rather than the data-grade tone the brand wants.
 
 // Brand colors as CSS custom properties — aliases to the SCSS $vars in
 // _variables.scss. Lets ported design rules reference `var(--executive-blue)`,
@@ -75,6 +76,12 @@ h1, h2, h3, h4, h5, h6 {
   font-family: $font-heading;
   line-height: 1.3;
 }
+
+// SF Pro Display tightens nicely at hero scales — these tracks were
+// tuned against the live hero + page-header h1 (v4 design handoff,
+// 2026-05-22). Subtle enough not to fight per-component overrides.
+h1 { letter-spacing: -0.022em; }
+h2 { letter-spacing: -0.015em; }
 
 img {
   max-width: 100%;

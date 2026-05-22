@@ -16,10 +16,13 @@ $nav-height: 36px;
 $container-max: 1200px;
 $grid-gap: 20px;
 
-// Typography
-$font-heading: 'Inter', system-ui, -apple-system, sans-serif;
-$font-body: 'Inter', system-ui, -apple-system, sans-serif;
-$font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', Menlo, Consolas, monospace;
+// Typography — Apple-sleek native system stack (2026-05-22). SF Pro on
+// macOS/iOS, Segoe UI on Windows, Inter as web fallback for Linux/headless.
+// No webfont download; system font is always available and matches the OS
+// chrome users already see. Mono resolves through ui-monospace -> SF Mono.
+$font-heading: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', 'Inter', system-ui, sans-serif;
+$font-body:    -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', 'Inter', system-ui, sans-serif;
+$font-mono:    ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
 
 // Breakpoints
 $bp-mobile: 768px;

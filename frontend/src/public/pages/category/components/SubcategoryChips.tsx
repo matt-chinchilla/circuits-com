@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
+import Icon from '@public/components/widgets/Icon';
 import type { Subcategory } from '@public/types/category';
 import styles from './SubcategoryChips.module.scss';
 
@@ -38,7 +39,7 @@ export default function SubcategoryChips({ subcategories, activeSlug = null }: S
               />
             )}
             <span className={styles.label}>
-              {sub.icon && <span className={styles.icon}>{sub.icon}</span>}
+              {sub.icon && <span className={styles.icon}><Icon name={sub.icon} /></span>}
               {sub.name}
             </span>
           </motion.button>

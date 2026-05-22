@@ -3,9 +3,39 @@ import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
 import PageHeaderBand from "@public/components/layout/PageHeaderBand";
 import GlowButton from "@public/components/widgets/GlowButton";
+import Icon from "@public/components/widgets/Icon";
 import { useCategories } from "@public/hooks/useCategories";
 import { api } from "@public/services/api";
 import styles from "./JoinPage.module.scss";
+
+interface JoinBenefit {
+  icon: string;
+  title: string;
+  body: string;
+}
+
+const JOIN_BENEFITS: JoinBenefit[] = [
+  {
+    icon: "lightning",
+    title: "Buyer intent traffic.",
+    body: "Visitors arrive with a part number in hand.",
+  },
+  {
+    icon: "link",
+    title: "Direct buy-links.",
+    body: "Your store, your checkout — we never reroute the order.",
+  },
+  {
+    icon: "chart-line-up",
+    title: "Monthly traffic report.",
+    body: "See impressions, clicks, top parts (Gold + Platinum).",
+  },
+  {
+    icon: "wrench",
+    title: "Optional API sync.",
+    body: "Push live stock + price updates from your ERP (Platinum).",
+  },
+];
 
 interface JoinTier {
   id: "silver" | "gold" | "platinum";
@@ -231,42 +261,16 @@ export default function JoinPage() {
             <aside className={styles.aside}>
               <h2 className={styles.asideTitle}>Why list with us?</h2>
               <ul className={styles.benefits}>
-                <li className={styles.benefitItem}>
-                  <span className={styles.bullet} aria-hidden="true">
-                    ⚡
-                  </span>
-                  <div>
-                    <strong>Buyer intent traffic.</strong> Visitors arrive with
-                    a part number in hand.
-                  </div>
-                </li>
-                <li className={styles.benefitItem}>
-                  <span className={styles.bullet} aria-hidden="true">
-                    🔗
-                  </span>
-                  <div>
-                    <strong>Direct buy-links.</strong> Your store, your checkout
-                    — we never reroute the order.
-                  </div>
-                </li>
-                <li className={styles.benefitItem}>
-                  <span className={styles.bullet} aria-hidden="true">
-                    📈
-                  </span>
-                  <div>
-                    <strong>Monthly traffic report.</strong> See impressions,
-                    clicks, top parts (Gold + Platinum).
-                  </div>
-                </li>
-                <li className={styles.benefitItem}>
-                  <span className={styles.bullet} aria-hidden="true">
-                    🛠️
-                  </span>
-                  <div>
-                    <strong>Optional API sync.</strong> Push live stock + price
-                    updates from your ERP (Platinum).
-                  </div>
-                </li>
+                {JOIN_BENEFITS.map((b) => (
+                  <li key={b.title} className={styles.benefitItem}>
+                    <span className={styles.bullet} aria-hidden="true">
+                      <Icon name={b.icon} />
+                    </span>
+                    <div>
+                      <strong>{b.title}</strong> {b.body}
+                    </div>
+                  </li>
+                ))}
               </ul>
 
               <h3 className={styles.asideSub}>Pick a tier</h3>
@@ -461,7 +465,7 @@ export default function JoinPage() {
                         aria-pressed={on}
                       >
                         <span className={styles.catIcon} aria-hidden="true">
-                          {c.icon}
+                          <Icon name={c.icon} />
                         </span>
                         <span className={styles.catName}>{c.name}</span>
                         <span className={styles.catMark} aria-hidden="true">

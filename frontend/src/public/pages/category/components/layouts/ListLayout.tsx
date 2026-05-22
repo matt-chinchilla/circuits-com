@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import Icon from '@public/components/widgets/Icon';
 import type { Subcategory } from '@public/types/category';
 import styles from './ListLayout.module.scss';
 
@@ -19,7 +20,7 @@ export default function ListLayout({ subcategories }: ListLayoutProps) {
           transition={{ delay: i * 0.03, duration: 0.3, ease: 'easeOut' as const }}
         >
           <Link to={`/category/${sub.slug}`} className={`${styles.row} ${i % 2 === 1 ? styles.alt : ''}`}>
-            <span className={styles.icon} aria-hidden="true">{sub.icon}</span>
+            <span className={styles.icon} aria-hidden="true"><Icon name={sub.icon} /></span>
             <span className={styles.name}>{sub.name}</span>
             <span className={styles.chevron} aria-hidden="true">&rsaquo;</span>
           </Link>

@@ -56,7 +56,6 @@
 // V2 design parity (2026-05-14): the primary CTA reads as WHITE/near-white
 // at rest (--theme-cta-bg), then warms to the theme accent on hover
 // (--theme-cta-hover-bg) with a translateY(-1px) lift + amplified glow.
-// Matches design-handoff-v2/.../pages.css :: .glow-btn-primary.
 
 .primary {
   background: var(--theme-cta-bg);

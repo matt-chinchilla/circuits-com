@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import AnimatedLink from "@public/components/widgets/AnimatedLink";
+import Icon from "@public/components/widgets/Icon";
 import type { Category } from "@public/types/category";
 import styles from "./CategoryCard.module.scss";
 
@@ -33,7 +34,7 @@ export default function CategoryCard({ category, index }: CategoryCardProps) {
     >
       <div className={styles.header}>
         <span className={styles.icon} aria-hidden="true">
-          {category.icon}
+          <Icon name={category.icon} />
         </span>
         <h3 className={styles.name}>{category.name}</h3>
       </div>

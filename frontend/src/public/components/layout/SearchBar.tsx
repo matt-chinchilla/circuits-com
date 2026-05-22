@@ -1,6 +1,7 @@
 import { useRef, useState, useEffect, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useSearch } from '@public/hooks/useSearch';
+import Icon from '@public/components/widgets/Icon';
 import styles from './SearchBar.module.scss';
 
 interface SearchBarProps {
@@ -114,7 +115,7 @@ export default function SearchBar({ variant = 'hero', initialQuery = '' }: Searc
                   onClick={() => setOpen(false)}
                 >
                   <span className={styles.itemIcon} aria-hidden="true">
-                    {cat.icon}
+                    <Icon name={cat.icon} />
                   </span>
                   <span className={styles.itemLabel}>{cat.name}</span>
                 </Link>

@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import Icon from '@public/components/widgets/Icon';
 import type { Subcategory } from '@public/types/category';
 import styles from './GridLayout.module.scss';
 
@@ -20,7 +21,7 @@ export default function GridLayout({ subcategories }: GridLayoutProps) {
         >
           <Link to={`/category/${sub.slug}`} className={styles.tile}>
             <span className={styles.iconCircle} aria-hidden="true">
-              {sub.icon}
+              <Icon name={sub.icon} />
             </span>
             <span className={styles.name}>{sub.name}</span>
           </Link>

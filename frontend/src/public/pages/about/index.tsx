@@ -2,25 +2,26 @@ import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import PageHeaderBand from '@public/components/layout/PageHeaderBand'
+import Icon from '@public/components/widgets/Icon'
 import styles from './AboutPage.module.scss'
 
 const ABOUT_STEPS = [
   {
-    icon: '🔍',
+    icon: 'magnifying-glass',
     num: '01',
     title: 'Search',
     description:
       'Browse our curated directory of 15 component categories or search by manufacturer part number, keyword, or specification.',
   },
   {
-    icon: '📊',
+    icon: 'chart-bar',
     num: '02',
     title: 'Compare',
     description:
       'See live pricing and stock across every authorized distributor in one table. Sort by price, lead time, MOQ, or package.',
   },
   {
-    icon: '🤝',
+    icon: 'handshake',
     num: '03',
     title: 'Connect',
     description:
@@ -37,22 +38,22 @@ const ABOUT_STATS = [
 
 const ABOUT_WHY = [
   {
-    icon: '🎯',
+    icon: 'target',
     title: 'One table, every distributor',
     body: 'Stop opening seven tabs. We pull stock and pricing from Digi-Key, Mouser, Arrow, Avnet, Newark, RS, and Future side-by-side.',
   },
   {
-    icon: '📑',
+    icon: 'file-text',
     title: 'Datasheets, not marketing copy',
     body: "Every part page links to the manufacturer's authoritative datasheet. We surface the package, lifecycle status, and MOQ — not fluff.",
   },
   {
-    icon: '🚪',
+    icon: 'door-open',
     title: 'No gatekeeping',
     body: "Buy-links open the distributor in a new tab. No login walls, no quote forms, no waiting on a sales rep. You're in control of the relationship.",
   },
   {
-    icon: '⚙️',
+    icon: 'gear',
     title: 'Built by engineers',
     body: 'Founded by hardware folks who got tired of bouncing between distributor portals at 1 a.m. trying to BOM a board.',
   },
@@ -169,7 +170,7 @@ export default function AboutPage() {
                 {s.num}
               </span>
               <span className={styles.aboutStepIcon} aria-hidden="true">
-                {s.icon}
+                <Icon name={s.icon} />
               </span>
               <h3 className={styles.aboutStepTitle}>{s.title}</h3>
               <p className={styles.aboutStepDesc}>{s.description}</p>
@@ -217,7 +218,7 @@ export default function AboutPage() {
             {ABOUT_WHY.map((card) => (
               <article key={card.title} className={styles.aboutWhyCard}>
                 <span className={styles.aboutWhyIcon} aria-hidden="true">
-                  {card.icon}
+                  <Icon name={card.icon} />
                 </span>
                 <h3>{card.title}</h3>
                 <p>{card.body}</p>

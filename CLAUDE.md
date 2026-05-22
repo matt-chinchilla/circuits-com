@@ -280,5 +280,43 @@ $nav-blue: #44bd13        (bright green — nav strip, links, accents)
 $sponsor-gold: #a88d2e    (sponsor blocks, premium CTAs)
 $surface: #eef1f5         (page backgrounds)
 $error-red: #c0392b       (form validation, required field markers)
-$font-mono: JetBrains Mono stack  (designators, code-like labels)
+$font-mono: ui-monospace / SF Mono stack  (designators, code-like labels)
+```
+
+## Typography (Apple-sleek native stack, v4 handoff 2026-05-22)
+
+Public site + admin both render through the platform's native font stack — no webfont download. SCSS vars in `frontend/src/shared/styles/_variables.scss`:
+
+```scss
+$font-heading: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', 'Inter', system-ui, sans-serif;
+$font-body:    -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', 'Inter', system-ui, sans-serif;
+$font-mono:    ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+```
+
+`global.scss` has NO `@import url('fonts.googleapis...')` line — the Google Fonts CDN call was retired in the v4 swap. Inter remains as a Linux/headless fallback only (never downloaded). h1 letter-spacing `-0.022em`, h2 `-0.015em` — tracking that pairs with SF Pro Display at hero scales. `_themes.scss` interpolates these via `#{$font-heading}` for `--theme-brand-font` (base/pcb themes) and `#{$font-mono}` for steel/schematic — requires `@use 'variables' as *;` at top of `_themes.scss` (load-bearing — without it the interpolation throws "Undefined variable" at vite build).
+
+## Icon system (Phosphor Light on public, Lucide on admin)
+
+**Public site** uses **Phosphor Light** webfont, self-hosted at `frontend/public/fonts/phosphor-light/` (style.css + Phosphor-Light.woff2 + woff + ttf, ~1.2MB committed). CDN was tried first via unpkg but flakey under corporate networks — self-host eliminates that risk class. Loaded once in `frontend/index.html`:
+
+```html
+<link rel="preload" href="/fonts/phosphor-light/Phosphor-Light.woff2" as="font" type="font/woff2" crossorigin />
+<link rel="stylesheet" href="/fonts/phosphor-light/style.css" />
+```
+
+**Render via the `<Icon>` wrapper** at `frontend/src/public/components/widgets/Icon.tsx` — single point of truth for the `ph-light ph-{name}` class formula. Regex guard `/^[a-z][a-z0-9-]*$/` no-ops on null/empty/non-Phosphor names so stale emoji strings still rendered during a partial migration won't produce broken `ph-⚡` classes. **Don't inline `<i className="ph-light ph-...">` at call sites** — always import + use `<Icon name={x.icon} />`.
+
+The wrapper lives under `@public/` (not `@shared/`) because **admin uses Lucide**, not Phosphor — different icon system per scope. Per the ≥2-consumer rule, only promote to `@shared/` if a portal/customer scope ever also needs Phosphor.
+
+**Names live in `api/app/db/seed.py`** as Phosphor strings (e.g. `"lightning"`, `"arrows-counter-clockwise"`). The mapping was canonical with `design-handoff-v4 / ui_kits/website/data.js` — 15 top-level + 75 sub-categories = 90 strings. Adding a new category? Pick a Phosphor name from https://phosphoricons.com/ — `kebab-case`, no `ph-` prefix.
+
+**`Category.icon` column is `String(40)`** (was `String(10)` pre-2026-05-22 — too narrow for names like `arrows-counter-clockwise` which is 24 chars). Don't shrink. Alembic migration `005` widens it; regression test `test_category_icon_accepts_phosphor_name_length` in `api/tests/test_categories.py` pins the contract. Default value is `"lightning"`.
+
+**`getComputedStyle().content` returns empty `""` for Private Use Area characters (U+E000–F8FF)** which Phosphor uses for its glyph code points. This is a Chromium serializer quirk — **the glyph paints correctly**. When debugging icon-font rendering, take a screenshot; never rely on JS `content` introspection.
+
+**Don't render `{x.icon}` as a raw text-node** — it'll display the icon NAME as visible text (e.g. literally "battery-charging" in the SKU column) instead of the glyph. This is the easy regression. Grep for it before commits:
+
+```bash
+grep -rn ">{[a-zA-Z_]*\.icon}<\|>{[a-zA-Z_]*\.category_icon}<" frontend/src/public --include="*.tsx"
+# Should be empty. Any hit means a render-site swap was missed.
 ```

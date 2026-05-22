@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import type { PublicPart } from '@public/types/part';
+import Icon from '@public/components/widgets/Icon';
 import styles from './PartsTable.module.scss';
 
 interface PartsTableProps {
@@ -69,7 +70,7 @@ export default function PartsTable({ parts }: PartsTableProps) {
             >
               <td className={styles.td}>
                 <Link to={`/part/${part.id}`} className={styles.skuLink}>
-                  {part.category_icon && <span className={styles.partIcon}>{part.category_icon}</span>}
+                  {part.category_icon && <span className={styles.partIcon}><Icon name={part.category_icon} /></span>}
                   {part.sku}
                 </Link>
               </td>

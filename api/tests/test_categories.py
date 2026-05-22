@@ -75,3 +75,25 @@ def test_get_category_not_found(client, seeded_db):
     """GET /api/categories/nonexistent returns 404."""
     response = client.get("/api/categories/nonexistent")
     assert response.status_code == 404
+
+
+def test_category_icon_column_holds_phosphor_name_length():
+    """Regression guard for alembic 005: Category.icon column must be ≥24 chars.
+
+    The original String(10) column silently truncated Phosphor names like
+    'arrows-counter-clockwise' (24 chars) in Postgres. SQLite (used by the
+    test suite) ignores VARCHAR length constraints — so an end-to-end
+    round-trip test wouldn't catch a future shrink. We assert on the
+    column's declared metadata length directly, which is dialect-agnostic
+    and pins the schema regardless of DB engine.
+    """
+    from app.models.category import Category
+
+    longest_real_name = "arrows-counter-clockwise"  # 24 chars
+    declared_length = Category.__table__.c.icon.type.length
+    assert declared_length is not None, "Category.icon must declare an explicit length"
+    assert declared_length >= len(longest_real_name), (
+        f"Category.icon column is String({declared_length}), needs ≥{len(longest_real_name)} "
+        f"to hold the longest real Phosphor name {longest_real_name!r}. "
+        "Postgres would silently truncate. Update the model + add an alembic widen."
+    )

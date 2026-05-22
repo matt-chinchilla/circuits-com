@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import SearchBar from '@public/components/layout/SearchBar';
 import SkeletonLoader from '@public/components/widgets/SkeletonLoader';
 import GlowButton from '@public/components/widgets/GlowButton';
+import Icon from '@public/components/widgets/Icon';
 import { api } from '@public/services/api';
 import type { SearchResults } from '@public/services/api';
 import styles from './SearchPage.module.scss';
@@ -217,7 +218,7 @@ export default function SearchPage() {
                 >
                   <Link to={`/category/${cat.slug}`} className={styles.resultCard}>
                     <span className={styles.cardIcon} aria-hidden="true">
-                      {cat.icon}
+                      <Icon name={cat.icon} />
                     </span>
                     <div className={styles.cardBody}>
                       <p className={styles.cardName}>{cat.name}</p>
@@ -251,7 +252,7 @@ export default function SearchPage() {
                 >
                   <Link to={`/part/${part.id}`} className={styles.resultCard}>
                     <span className={styles.cardIcon} aria-hidden="true">
-                      {part.category_icon || '\u26A1'}
+                      <Icon name={part.category_icon ?? 'lightning'} />
                     </span>
                     <div className={styles.cardBody}>
                       <p className={styles.cardName}>{part.sku}</p>

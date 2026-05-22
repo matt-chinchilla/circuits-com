@@ -13,6 +13,7 @@ import CompactLayout from './components/layouts/CompactLayout';
 import CardsLayout from './components/layouts/CardsLayout';
 import SkeletonLoader from '@public/components/widgets/SkeletonLoader';
 import Pagination from '@public/components/widgets/Pagination';
+import Icon from '@public/components/widgets/Icon';
 import { api } from '@public/services/api';
 import type { CategoryDetail } from '@public/types/category';
 import styles from './CategoryPage.module.scss';
@@ -120,7 +121,7 @@ export default function CategoryPage() {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.4, ease: 'easeOut' as const }}
                 >
-                  {category.icon && <span className={styles.titleIcon}>{category.icon}</span>}
+                  {category.icon && <span className={styles.titleIcon}><Icon name={category.icon} /></span>}
                   {category.name}
                 </motion.h1>
                 {isParent && <LayoutSwitcher active={layout} onChange={setLayout} />}

@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import Icon from '@public/components/widgets/Icon';
 import type { Subcategory } from '@public/types/category';
 import styles from './CardsLayout.module.scss';
 
@@ -19,7 +20,7 @@ export default function CardsLayout({ subcategories }: CardsLayoutProps) {
           transition={{ delay: i * 0.05, duration: 0.35, ease: 'easeOut' as const }}
         >
           <Link to={`/category/${sub.slug}`} className={styles.card}>
-            <span className={styles.icon} aria-hidden="true">{sub.icon}</span>
+            <span className={styles.icon} aria-hidden="true"><Icon name={sub.icon} /></span>
             <div className={styles.info}>
               <span className={styles.name}>{sub.name}</span>
             </div>

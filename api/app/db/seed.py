@@ -49,7 +49,7 @@ def slugify(text: str) -> str:
 def get_or_create_category(
     db: Session,
     name: str,
-    icon: str = "⚡",
+    icon: str = "lightning",
     parent: Optional[Category] = None,
     sort_order: int = 0,
 ) -> Category:
@@ -159,111 +159,118 @@ def seed(db: Session) -> None:
     # 1. Categories and subcategories (15 top-level, 5 subs each)
     # ------------------------------------------------------------------
     # Format: (name, icon, [(sub_name, sub_icon), ...])
+    #
+    # 2026-05-22 — Apple-sleek icon pass: every `icon` value is now a
+    # Phosphor Light icon name (rendered as <i class="ph-light ph-{name}">
+    # by the frontend's <Icon> widget). Mapping is canonical with
+    # design-handoff-v4 / ui_kits/website/data.js. See alembic 005 for the
+    # column widening that supports the longer name strings (e.g.
+    # `arrows-counter-clockwise`, 24 chars).
     category_data: list[tuple[str, str, list[tuple[str, str]]]] = [
-        ("Power Management ICs (PMICs)", "⚡", [
-            ("Voltage Regulators (LDOs)", "🔋"),
-            ("DC-DC Converters (Buck/Boost)", "🔋"),
-            ("Battery Management ICs (BMS)", "🔋"),
-            ("Power Supervisors / Reset ICs", "⚡"),
-            ("LED Drivers", "💡"),
+        ("Power Management ICs (PMICs)", "lightning", [
+            ("Voltage Regulators (LDOs)", "battery-charging"),
+            ("DC-DC Converters (Buck/Boost)", "battery-charging-vertical"),
+            ("Battery Management ICs (BMS)", "battery-full"),
+            ("Power Supervisors / Reset ICs", "shield-warning"),
+            ("LED Drivers", "lightbulb"),
         ]),
-        ("Microcontrollers & Processors", "🖥️", [
-            ("8-bit Microcontrollers", "💻"),
-            ("32-bit Microcontrollers (ARM Cortex-M)", "💻"),
-            ("Application Processors", "🖥️"),
-            ("Digital Signal Processors (DSPs)", "📊"),
-            ("System-on-Chip (SoC)", "🔲"),
+        ("Microcontrollers & Processors", "cpu", [
+            ("8-bit Microcontrollers", "cpu"),
+            ("32-bit Microcontrollers (ARM Cortex-M)", "cpu"),
+            ("Application Processors", "computer-tower"),
+            ("Digital Signal Processors (DSPs)", "chart-line"),
+            ("System-on-Chip (SoC)", "squares-four"),
         ]),
-        ("Analog ICs", "〰️", [
-            ("Operational Amplifiers (Op-Amps)", "📈"),
-            ("Comparators", "⚖️"),
-            ("Analog Multiplexers / Switches", "🔀"),
-            ("Voltage References", "🎯"),
-            ("Instrumentation Amplifiers", "📐"),
+        ("Analog ICs", "wave-sine", [
+            ("Operational Amplifiers (Op-Amps)", "trend-up"),
+            ("Comparators", "scales"),
+            ("Analog Multiplexers / Switches", "shuffle"),
+            ("Voltage References", "target"),
+            ("Instrumentation Amplifiers", "ruler"),
         ]),
-        ("Interface ICs", "🔌", [
-            ("UART / USART Transceivers", "🔌"),
-            ("USB Interface ICs", "🔌"),
-            ("I2C / SPI Interface ICs", "🔌"),
-            ("CAN / LIN Transceivers", "🚗"),
-            ("Level Shifters", "↕️"),
+        ("Interface ICs", "plugs-connected", [
+            ("UART / USART Transceivers", "arrows-left-right"),
+            ("USB Interface ICs", "usb"),
+            ("I2C / SPI Interface ICs", "arrows-down-up"),
+            ("CAN / LIN Transceivers", "car-simple"),
+            ("Level Shifters", "arrows-vertical"),
         ]),
-        ("Memory ICs", "💾", [
-            ("EEPROM", "💾"),
-            ("NOR Flash", "💾"),
-            ("NAND Flash", "💾"),
-            ("SRAM", "💾"),
-            ("DRAM", "💾"),
+        ("Memory ICs", "hard-drives", [
+            ("EEPROM", "hard-drive"),
+            ("NOR Flash", "hard-drive"),
+            ("NAND Flash", "hard-drive"),
+            ("SRAM", "hard-drive"),
+            ("DRAM", "hard-drive"),
         ]),
-        ("Logic ICs", "🧮", [
-            ("Logic Gates (AND, OR, NOT, etc.)", "🔢"),
-            ("Flip-Flops / Latches", "🔲"),
-            ("Counters", "🔢"),
-            ("Shift Registers", "➡️"),
-            ("Programmable Logic (CPLDs / FPGAs)", "🔧"),
+        ("Logic ICs", "function", [
+            ("Logic Gates (AND, OR, NOT, etc.)", "function"),
+            ("Flip-Flops / Latches", "squares-four"),
+            ("Counters", "list-numbers"),
+            ("Shift Registers", "arrow-right"),
+            ("Programmable Logic (CPLDs / FPGAs)", "wrench"),
         ]),
-        ("RF & Wireless ICs", "📡", [
-            ("Bluetooth ICs", "📶"),
-            ("Wi-Fi ICs", "📶"),
-            ("RF Transceivers", "📻"),
-            ("GPS / GNSS Receivers", "🛰️"),
-            ("NFC / RFID ICs", "📱"),
+        ("RF & Wireless ICs", "wifi-high", [
+            ("Bluetooth ICs", "bluetooth"),
+            ("Wi-Fi ICs", "wifi-high"),
+            ("RF Transceivers", "broadcast"),
+            ("GPS / GNSS Receivers", "globe-hemisphere-west"),
+            ("NFC / RFID ICs", "device-mobile"),
         ]),
-        ("Sensor ICs", "🌡️", [
-            ("Temperature Sensors", "🌡️"),
-            ("Accelerometers", "📐"),
-            ("Gyroscopes", "🔄"),
-            ("Pressure Sensors", "🔵"),
-            ("Proximity / Light Sensors", "💡"),
+        ("Sensor ICs", "thermometer", [
+            ("Temperature Sensors", "thermometer"),
+            ("Accelerometers", "arrows-out-cardinal"),
+            ("Gyroscopes", "arrows-clockwise"),
+            ("Pressure Sensors", "gauge"),
+            ("Proximity / Light Sensors", "eye"),
         ]),
-        ("Audio & Video ICs", "🔊", [
-            ("Audio Amplifiers", "🔊"),
-            ("CODECs (Audio/Video)", "🎵"),
-            ("Video Processors", "🎬"),
-            ("HDMI / Display Interface ICs", "🖥️"),
-            ("Microphone Preamplifiers", "🎤"),
+        ("Audio & Video ICs", "speaker-high", [
+            ("Audio Amplifiers", "speaker-high"),
+            ("CODECs (Audio/Video)", "music-notes"),
+            ("Video Processors", "film-strip"),
+            ("HDMI / Display Interface ICs", "monitor"),
+            ("Microphone Preamplifiers", "microphone"),
         ]),
-        ("Clock & Timing ICs", "⏱️", [
-            ("Oscillators", "〰️"),
-            ("Real-Time Clocks (RTC)", "⏰"),
-            ("Clock Generators", "⏱️"),
-            ("PLL (Phase-Locked Loops)", "🔃"),
-            ("Timer ICs", "⏱️"),
+        ("Clock & Timing ICs", "clock", [
+            ("Oscillators", "wave-sine"),
+            ("Real-Time Clocks (RTC)", "alarm"),
+            ("Clock Generators", "clock"),
+            ("PLL (Phase-Locked Loops)", "arrows-counter-clockwise"),
+            ("Timer ICs", "timer"),
         ]),
-        ("Motor & Motion Control ICs", "⚙️", [
-            ("Motor Drivers (DC/Stepper/BLDC)", "⚙️"),
-            ("Servo Controllers", "🎮"),
-            ("Gate Drivers (MOSFET/IGBT)", "⚡"),
-            ("Motion Control ICs", "🏃"),
-            ("PWM Controllers", "📊"),
+        ("Motor & Motion Control ICs", "gear", [
+            ("Motor Drivers (DC/Stepper/BLDC)", "gear"),
+            ("Servo Controllers", "game-controller"),
+            ("Gate Drivers (MOSFET/IGBT)", "lightning"),
+            ("Motion Control ICs", "person-simple-run"),
+            ("PWM Controllers", "wave-square"),
         ]),
-        ("Data Conversion ICs", "🔄", [
-            ("Analog-to-Digital Converters (ADC)", "📊"),
-            ("Digital-to-Analog Converters (DAC)", "📉"),
-            ("Sigma-Delta Converters", "📈"),
-            ("Voltage-to-Frequency Converters", "〰️"),
-            ("Touchscreen Controllers", "📱"),
+        ("Data Conversion ICs", "arrows-clockwise", [
+            ("Analog-to-Digital Converters (ADC)", "chart-line"),
+            ("Digital-to-Analog Converters (DAC)", "chart-line-down"),
+            ("Sigma-Delta Converters", "trend-up"),
+            ("Voltage-to-Frequency Converters", "wave-sine"),
+            ("Touchscreen Controllers", "hand-pointing"),
         ]),
-        ("Security & Authentication ICs", "🔒", [
-            ("Secure Elements", "🔒"),
-            ("Cryptographic Coprocessors", "🔐"),
-            ("TPM (Trusted Platform Modules)", "🛡️"),
-            ("Hardware Encryption ICs", "🔑"),
-            ("ID / Authentication ICs", "🪪"),
+        ("Security & Authentication ICs", "lock-key", [
+            ("Secure Elements", "lock"),
+            ("Cryptographic Coprocessors", "lock-key"),
+            ("TPM (Trusted Platform Modules)", "shield"),
+            ("Hardware Encryption ICs", "key"),
+            ("ID / Authentication ICs", "identification-card"),
         ]),
-        ("Automotive ICs", "🚗", [
-            ("Automotive PMICs", "⚡"),
-            ("CAN / LIN Automotive ICs", "🔌"),
-            ("ADAS Processing ICs", "🖥️"),
-            ("Automotive Sensors", "🌡️"),
-            ("Infotainment Processors", "🎵"),
+        ("Automotive ICs", "car", [
+            ("Automotive PMICs", "lightning"),
+            ("CAN / LIN Automotive ICs", "plugs"),
+            ("ADAS Processing ICs", "cpu"),
+            ("Automotive Sensors", "thermometer"),
+            ("Infotainment Processors", "music-notes"),
         ]),
-        ("Display & LED ICs", "💡", [
-            ("LED Matrix Drivers", "💡"),
-            ("LCD Drivers", "🖥️"),
-            ("OLED Drivers", "✨"),
-            ("Backlight Controllers", "🔆"),
-            ("Display Timing Controllers (TCON)", "⏱️"),
+        ("Display & LED ICs", "monitor", [
+            ("LED Matrix Drivers", "grid-four"),
+            ("LCD Drivers", "monitor"),
+            ("OLED Drivers", "sparkle"),
+            ("Backlight Controllers", "sun-dim"),
+            ("Display Timing Controllers (TCON)", "timer"),
         ]),
     ]
 
