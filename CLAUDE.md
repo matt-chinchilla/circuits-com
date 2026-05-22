@@ -304,9 +304,9 @@ $font-mono:    ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, 'Libera
 <link rel="stylesheet" href="/fonts/phosphor-light/style.css" />
 ```
 
-**Render via the `<Icon>` wrapper** at `frontend/src/public/components/widgets/Icon.tsx` — single point of truth for the `ph-light ph-{name}` class formula. Regex guard `/^[a-z][a-z0-9-]*$/` no-ops on null/empty/non-Phosphor names so stale emoji strings still rendered during a partial migration won't produce broken `ph-⚡` classes. **Don't inline `<i className="ph-light ph-...">` at call sites** — always import + use `<Icon name={x.icon} />`.
+**Render via the `<Icon>` wrapper** at `frontend/src/shared/components/Icon.tsx` (promoted from `@public/` to `@shared/` on 2026-05-22 since admin needs to render the same Phosphor names that live in `Category.icon`) — single point of truth for the `ph-light ph-{name}` class formula. Regex guard `/^[a-z][a-z0-9-]*$/` no-ops on null/empty/non-Phosphor names so stale emoji strings still rendered during a partial migration won't produce broken `ph-⚡` classes. **Don't inline `<i className="ph-light ph-...">` at call sites** — always import + use `<Icon name={x.icon} />`.
 
-The wrapper lives under `@public/` (not `@shared/`) because **admin uses Lucide**, not Phosphor — different icon system per scope. Per the ≥2-consumer rule, only promote to `@shared/` if a portal/customer scope ever also needs Phosphor.
+The wrapper is in `@shared/` because BOTH public (chrome + category cards + parts tables) AND admin (Categories tree/grid views) render Phosphor data icons. Admin **chrome** (sidebar nav, topbar) still uses Lucide — the two coexist per scope-of-use, not per scope-of-file. `<option>` labels in admin select dropdowns are HTML-text-only — they cannot render glyphs at all, so drop any `${cat.icon}` prefix there (was the parts/form trap pre-fix).
 
 **Names live in `api/app/db/seed.py`** as Phosphor strings (e.g. `"lightning"`, `"arrows-counter-clockwise"`). The mapping was canonical with `design-handoff-v4 / ui_kits/website/data.js` — 15 top-level + 75 sub-categories = 90 strings. Adding a new category? Pick a Phosphor name from https://phosphoricons.com/ — `kebab-case`, no `ph-` prefix.
 
@@ -317,6 +317,9 @@ The wrapper lives under `@public/` (not `@shared/`) because **admin uses Lucide*
 **Don't render `{x.icon}` as a raw text-node** — it'll display the icon NAME as visible text (e.g. literally "battery-charging" in the SKU column) instead of the glyph. This is the easy regression. Grep for it before commits:
 
 ```bash
-grep -rn ">{[a-zA-Z_]*\.icon}<\|>{[a-zA-Z_]*\.category_icon}<" frontend/src/public --include="*.tsx"
+grep -rn ">{[a-zA-Z_]*\.icon}<\|>{[a-zA-Z_]*\.category_icon}<" frontend/src --include="*.tsx"
 # Should be empty. Any hit means a render-site swap was missed.
+# Sweep `frontend/src` (not just `/public`) — admin pages also render
+# category icons. The 2026-05-22 /admin/categories trap was a public-only
+# grep that missed admin/pages/categories/index.tsx + parts/form/index.tsx.
 ```
