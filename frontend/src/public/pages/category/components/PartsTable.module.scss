@@ -35,6 +35,16 @@
   }
 }
 
+// Mobile-fit columns: hide Manufacturer + Distributors at ≤$bp-mobile so the
+// remaining SKU + Best Price + Status fit a 430px viewport without horizontal
+// scroll. Full data is one tap away on the part detail page (SKU is the link).
+.thMobileHide,
+.tdMobileHide {
+  @include responsive($bp-mobile) {
+    display: none;
+  }
+}
+
 .row {
   border-bottom: 1px solid #eee;
   transition: transform $transition-fast, box-shadow $transition-fast;

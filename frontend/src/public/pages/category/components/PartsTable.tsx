@@ -50,9 +50,9 @@ export default function PartsTable({ parts }: PartsTableProps) {
         <thead>
           <tr className={styles.headerRow}>
             <th className={styles.th}>SKU</th>
-            <th className={styles.th}>Manufacturer</th>
+            <th className={`${styles.th} ${styles.thMobileHide}`}>Manufacturer</th>
             <th className={`${styles.th} ${styles.thDescription}`}>Description</th>
-            <th className={styles.th}>Distributors</th>
+            <th className={`${styles.th} ${styles.thMobileHide}`}>Distributors</th>
             <th className={styles.th}>Best Price</th>
             <th className={styles.th}>Status</th>
           </tr>
@@ -74,7 +74,7 @@ export default function PartsTable({ parts }: PartsTableProps) {
                   {part.sku}
                 </Link>
               </td>
-              <td className={styles.td}>
+              <td className={`${styles.td} ${styles.tdMobileHide}`}>
                 <span className={styles.manufacturer}>{part.manufacturer_name}</span>
               </td>
               <td className={`${styles.td} ${styles.tdDescription}`}>
@@ -82,7 +82,7 @@ export default function PartsTable({ parts }: PartsTableProps) {
                   {part.description || '\u2014'}
                 </span>
               </td>
-              <td className={styles.td}>
+              <td className={`${styles.td} ${styles.tdMobileHide}`}>
                 <span className={styles.count}>{part.listings_count}</span>
               </td>
               <td className={styles.td}>
