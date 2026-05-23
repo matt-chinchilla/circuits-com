@@ -1,6 +1,32 @@
 """Tests for parts CRUD routes."""
 
 
+def test_part_list_includes_best_price_and_total_stock(client, seeded_db):
+    """The admin Parts table needs best_price + total_stock columns. Without
+    these on the list response, the table would either render '—' for every
+    row (existing behavior) or require a per-row roundtrip to the detail
+    endpoint (N+1). seeded_db.part1 has 2 listings with prices 0.52 + 0.48
+    and stocks 15000 + 8000.
+    """
+    resp = client.get("/api/parts/")
+    assert resp.status_code == 200
+    items = resp.json()["items"]
+    # All items expose the fields (even if null for parts without listings)
+    for item in items:
+        assert "best_price" in item, "best_price must be on every Part list row"
+        assert "total_stock" in item, "total_stock must be on every Part list row"
+
+    # part1 (LM7805CT) has 2 listings: best is 0.48, total stock is 23000
+    lm7805 = next(p for p in items if p["sku"] == "LM7805CT")
+    assert lm7805["best_price"] == 0.48
+    assert lm7805["total_stock"] == 23000
+
+    # part2 (STM32F407VGT6) has no listings: both should be null
+    stm32 = next(p for p in items if p["sku"] == "STM32F407VGT6")
+    assert stm32["best_price"] is None
+    assert stm32["total_stock"] is None
+
+
 def test_part_to_dict_includes_parent_category_icon(db, seeded_db):
     """When a part lives on a subcategory, part_to_dict must surface the
     PARENT category's icon as parent_category_icon, in addition to the

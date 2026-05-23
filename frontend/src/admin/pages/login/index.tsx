@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, Link } from 'react-router-dom';
 import { useAuth } from '@admin/contexts/AuthContext';
+import Icon from '@shared/components/Icon';
 import styles from './LoginPage.module.scss';
 
 export default function LoginPage() {
@@ -38,6 +39,10 @@ export default function LoginPage() {
 
   return (
     <div className={styles.page}>
+      <Link to="/" className={styles.backLink}>
+        <Icon name="arrow-left" />
+        <span>Back to circuits.com</span>
+      </Link>
       <form className={styles.card} onSubmit={handleSubmit}>
         <div className={styles.header}>
           <span className={styles.logo}>{'\u26A1'}</span>

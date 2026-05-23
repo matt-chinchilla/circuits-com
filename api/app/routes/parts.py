@@ -77,6 +77,14 @@ def part_to_dict(part: Part, db: Session | None = None) -> dict:
                     parent_category_name = parent.name
                     parent_category_slug = parent.slug
                     parent_category_icon = parent.icon
+
+    # Aggregate over listings (lazy="selectin" auto-loads them, no N+1).
+    # best_price = MIN(unit_price), total_stock = SUM(stock_quantity).
+    # Both null when the part has zero listings.
+    listings = list(part.listings or [])
+    best_price = min((float(li.unit_price) for li in listings), default=None)
+    total_stock = sum((li.stock_quantity or 0) for li in listings) if listings else None
+
     return {
         "id": str(part.id),
         "sku": part.sku,
@@ -89,6 +97,8 @@ def part_to_dict(part: Part, db: Session | None = None) -> dict:
         "parent_category_name": parent_category_name,
         "parent_category_slug": parent_category_slug,
         "parent_category_icon": parent_category_icon,
+        "best_price": best_price,
+        "total_stock": total_stock,
         "datasheet_url": part.datasheet_url,
         "lifecycle_status": part.lifecycle_status,
         "created_at": part.created_at.isoformat() if part.created_at else None,

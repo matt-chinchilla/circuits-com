@@ -1,4 +1,5 @@
 @use '@shared/styles/variables' as *;
+@use 'sass:color';
 
 // PartsPage — ported from 2026-04-25 Claude Design bundle (Phase A5).
 // Mirrors the bundle's `.panel`, `.a-toolbar`, `.filter-chip`, `.inline-search`,
@@ -105,12 +106,25 @@ $a-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 // ─── Panel container (holds toolbar + table) ───────────────────────────────
-
+//
+// `overflow: visible` (NOT hidden) is load-bearing for the column-header
+// dropdown — the absolutely-positioned ColumnHeader panel extends below
+// the table bounds and would be clipped if this wrapper had overflow:hidden.
+// The rounded corners survive because the panel has no border, only shadow.
 .panel {
   background: $a-card;
   border-radius: $a-radius;
   box-shadow: $a-shadow-sm;
-  overflow: hidden;
+  overflow: visible;
+  // Round the table's first row corners to match the panel border-radius
+  // (since we lost the overflow:hidden clip).
+
+  .table thead th:first-child {
+    border-top-left-radius: $a-radius;
+  }
+  .table thead th:last-child {
+    border-top-right-radius: $a-radius;
+  }
 }
 
 // ─── Toolbar: filter chips + inline search ─────────────────────────────────
@@ -177,12 +191,18 @@ $a-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
 
   input {
     flex: 1;
+    // `min-width: 0` is the load-bearing rule. Without it, the input refuses
+    // to shrink below the placeholder text's intrinsic width (~150px), so
+    // the placeholder gets clipped to "Searc..." at narrow viewports. With
+    // it, the input shrinks gracefully; text-overflow handles the placeholder.
+    min-width: 0;
     border: none;
     outline: none;
     background: transparent;
     font-family: inherit;
     font-size: 13px;
     color: $a-fg1;
+    text-overflow: ellipsis;
 
     &::placeholder {
       color: $a-fg4;
@@ -358,6 +378,307 @@ $a-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
   font-family: $font-mono;
 }
 
+// ─── Column header dropdown (Excel pattern: sort + filter unified) ─────────
+//
+// The TH itself is the dropdown container. A button inside opens a panel
+// positioned absolutely below the header. Panel has:
+//   1. Sort section (↑/↓/× buttons)
+//   2. Filter section (text-multi checkboxes or bucket-numeric radio)
+// Visual signal in TH: small ▾ chevron when neutral, bold ▲/▼ when sorted,
+// green dot (●) when filtered — both visible if both states are active.
+
+.columnHeader {
+  position: relative;
+  padding: 0 !important;  // panel positions to TH edges; padding belongs on inner button
+  user-select: none;
+  background: $a-bg;
+}
+
+.columnHeaderActive {
+  background: rgba(10, 74, 46, 0.06);
+}
+
+.columnTrigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  width: 100%;
+  padding: 10px 20px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: $a-fg3;
+  transition: background-color 150ms, color 150ms;
+
+  &:hover {
+    background: color.adjust($a-bg, $lightness: -2%);
+    color: $a-primary;
+  }
+
+  .columnHeaderActive & {
+    color: $a-primary;
+  }
+}
+
+.columnLabel {
+  flex: 1;
+  text-align: left;
+}
+
+.columnIndicators {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 9px;
+  line-height: 1;
+}
+
+.filterDot {
+  color: $nav-blue;
+  font-size: 8px;
+  line-height: 1;
+}
+
+.sortIndicatorActive {
+  color: $a-primary;
+  font-weight: 700;
+}
+
+// Panel — positioned below the TH, opens with a small slide+fade.
+.columnPanel {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 30;
+  min-width: 240px;
+  max-width: 320px;
+  background: #ffffff;
+  border: 1px solid $a-border;
+  border-radius: 8px;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.14);
+  margin-top: 4px;
+  overflow: hidden;
+  text-transform: none;
+  letter-spacing: 0;
+  // Restore body-text styling for content inside (TH header is uppercase + small).
+  font-size: 13px;
+  font-weight: 400;
+  color: $a-fg1;
+  animation: columnPanelIn 160ms cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+@keyframes columnPanelIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.panelSection {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 0;
+}
+
+.sectionLabel {
+  padding: 4px 12px 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: $a-fg4;
+}
+
+.sectionDivider {
+  height: 1px;
+  background: $a-border-soft;
+}
+
+.panelBtn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+  color: $a-fg1;
+  text-align: left;
+  transition: background-color 120ms;
+
+  &:hover {
+    background: $a-border-soft;
+  }
+}
+
+.panelBtnActive {
+  background: rgba(10, 74, 46, 0.06);
+  color: $a-primary;
+  font-weight: 600;
+}
+
+.panelBtnClear {
+  color: $a-fg3;
+
+  &:hover {
+    color: $error-red;
+  }
+}
+
+.panelBtnGlyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  font-size: 14px;
+  font-weight: 600;
+  color: inherit;
+}
+
+.multiSearch {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-bottom: 1px solid $a-border-soft;
+
+  svg {
+    width: 14px;
+    height: 14px;
+    color: $a-fg4;
+    flex-shrink: 0;
+  }
+
+  input {
+    flex: 1;
+    border: none;
+    outline: none;
+    background: transparent;
+    font-family: inherit;
+    font-size: 13px;
+    color: $a-fg1;
+
+    &::placeholder {
+      color: $a-fg4;
+    }
+  }
+}
+
+.multiActions {
+  display: flex;
+  gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid $a-border-soft;
+
+  button {
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 500;
+    color: $a-primary;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+
+    &:hover:not(:disabled) {
+      background: $a-border-soft;
+    }
+
+    &:disabled {
+      color: $a-fg4;
+      cursor: not-allowed;
+    }
+  }
+}
+
+.multiList {
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.multiOption {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  font-size: 13px;
+  color: $a-fg1;
+  cursor: pointer;
+  user-select: none;
+
+  &:hover {
+    background: $a-border-soft;
+  }
+
+  input[type='checkbox'] {
+    cursor: pointer;
+    margin: 0;
+  }
+}
+
+.multiEmpty {
+  padding: 12px;
+  font-size: 12px;
+  color: $a-fg4;
+  text-align: center;
+}
+
+.singleOption {
+  display: block;
+  width: 100%;
+  padding: 6px 12px;
+  font-family: inherit;
+  font-size: 13px;
+  color: $a-fg1;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+
+  &:hover {
+    background: $a-border-soft;
+  }
+}
+
+.singleOptionActive {
+  color: $a-primary;
+  font-weight: 600;
+  background: rgba(10, 74, 46, 0.06);
+}
+
+.sortIndicator {
+  font-size: 9px;
+  line-height: 1;
+  min-width: 8px;
+  color: $a-fg4;
+}
+
+.thNumeric {
+  text-align: right;
+}
+
+.tdNumeric {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
 // ─── Mobile (<=820px) ──────────────────────────────────────────────────────
 // Table gets horizontal-scroll; toolbar tightens; inline search becomes flex.
 
@@ -387,5 +708,23 @@ $a-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
 
   .pageHead {
     margin-bottom: 16px;
+  }
+
+  // Hide Description + Best + Stock columns at mobile to keep SKU + Mfr +
+  // Category + Status on one row at narrow widths.
+  .thMobileHide,
+  .tdMobileHide {
+    display: none;
+  }
+
+  // Column dropdowns get wider in mobile so checkbox lists are tappable;
+  // anchor to right edge of header to avoid going off-screen on right cols.
+  .columnPanel {
+    min-width: 220px;
+    max-width: 90vw;
+  }
+
+  .columnTrigger {
+    padding: 10px 12px;
   }
 }

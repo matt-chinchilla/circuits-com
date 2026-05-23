@@ -69,6 +69,8 @@ export interface Part {
   parent_category_name: string | null;
   parent_category_slug?: string | null;
   parent_category_icon: string | null;
+  best_price: number | null;
+  total_stock: number | null;
   datasheet_url: string | null;
   lifecycle_status: string;
   created_at: string | null;
