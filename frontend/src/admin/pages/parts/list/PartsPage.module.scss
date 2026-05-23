@@ -250,6 +250,28 @@ $a-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
   font-size: 13px;
 }
 
+// Category cell — Phosphor icon prefix + ParentName (SubcategoryName) format.
+// Subcategory in dimmer color so the parent reads as primary lineage. Per
+// v5 design handoff 2026-05-23.
+.catCell {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 13px;
+  color: $a-fg2;
+
+  :global(i.ph-light) {
+    font-size: 16px;
+    color: $a-primary;
+    line-height: 1;
+  }
+}
+
+.catCellSub {
+  color: $a-fg3;
+  font-size: 12px;
+}
+
 // ─── Status badges (matching public PartPage classes) ─────────────────────
 
 .statusBadge {

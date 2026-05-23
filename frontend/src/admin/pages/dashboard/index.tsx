@@ -307,7 +307,7 @@ export default function DashboardPage() {
           deltaDir="up"
           hint="this month"
           series={series.suppliers}
-          color="#2563eb"
+          color="var(--a-blue)"
         />
         <Stat
           label="Monthly Revenue"
@@ -323,7 +323,7 @@ export default function DashboardPage() {
           value={spnValue}
           hint="paying tiers"
           series={series.pending}
-          color="#7c3aed"
+          color="var(--a-purple)"
         />
       </div>
 

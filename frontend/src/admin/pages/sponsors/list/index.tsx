@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { Plus, Search, Pencil, X } from 'lucide-react';
 import { adminApi } from '@admin/services/adminApi';
 import { loadSponsors } from '@admin/services/sponsorStore';
+import Icon from '@shared/components/Icon';
 import type { AdminSponsor, AdminSupplier, AdminCategory, SponsorTier } from '@admin/types/admin';
 import styles from './SponsorsPage.module.scss';
 
@@ -103,20 +104,30 @@ export default function SponsorsPage() {
     return map;
   }, [sponsors]);
 
-  // Hydrate supplier/category names from live API data when ids match.
-  const enriched = useMemo(() => {
-    if (suppliers.length === 0 && categories.length === 0) return filtered;
+  // Hydrate supplier/category names + icons from live API data when ids match.
+  // Icon map exists so the sponsor list can show a Phosphor glyph prefix on
+  // the placement cell (v5 design handoff 2026-05-23).
+  const { enriched, iconById } = useMemo(() => {
     const supMap = new Map(suppliers.map((s) => [s.id, s.name]));
     const catMap = new Map<string, string>();
+    const iconMap = new Map<string, string>();
     for (const c of categories) {
       catMap.set(c.id, c.name);
-      for (const child of c.children ?? []) catMap.set(child.id, child.name);
+      iconMap.set(c.id, c.icon);
+      for (const child of c.children ?? []) {
+        catMap.set(child.id, child.name);
+        iconMap.set(child.id, child.icon);
+      }
     }
-    return filtered.map((s) => ({
+    if (suppliers.length === 0 && categories.length === 0) {
+      return { enriched: filtered, iconById: iconMap };
+    }
+    const mapped = filtered.map((s) => ({
       ...s,
       supplier_name: supMap.get(s.supplier_id) ?? s.supplier_name,
       category_name: s.category_id ? catMap.get(s.category_id) ?? s.category_name : null,
     }));
+    return { enriched: mapped, iconById: iconMap };
   }, [filtered, suppliers, categories]);
 
   return (
@@ -195,7 +206,10 @@ export default function SponsorsPage() {
                   </td>
                   <td>
                     {s.category_id ? (
-                      <span className={styles.placementCategory}>{s.category_name ?? s.category_id}</span>
+                      <span className={styles.placementCategory}>
+                        <Icon name={s.category_icon ?? iconById.get(s.category_id) ?? null} />
+                        <span>{s.category_name ?? s.category_id}</span>
+                      </span>
                     ) : (
                       <span className={styles.placementKeyword}>
                         <span className={styles.placementLabel}>keyword:</span>

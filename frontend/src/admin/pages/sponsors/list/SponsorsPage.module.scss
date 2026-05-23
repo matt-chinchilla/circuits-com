@@ -249,8 +249,17 @@
 }
 
 .placementCategory {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
   font-size: 14px;
   color: var(--a-fg1);
+
+  :global(i.ph-light) {
+    font-size: 16px;
+    color: var(--a-primary);
+    line-height: 1;
+  }
 }
 
 .placementKeyword {

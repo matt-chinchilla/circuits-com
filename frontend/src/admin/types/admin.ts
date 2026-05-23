@@ -64,7 +64,11 @@ export interface Part {
   description: string | null;
   category_id: string | null;
   category_name: string | null;
+  category_slug?: string | null;
   category_icon: string | null;
+  parent_category_name: string | null;
+  parent_category_slug?: string | null;
+  parent_category_icon: string | null;
   datasheet_url: string | null;
   lifecycle_status: string;
   created_at: string | null;
@@ -132,6 +136,7 @@ export interface AdminSponsor {
   tier: SponsorTier;
   category_id: string | null;
   category_name: string | null;
+  category_icon?: string | null;
   keyword: string | null;
   start_date: string | null;
   end_date: string | null;

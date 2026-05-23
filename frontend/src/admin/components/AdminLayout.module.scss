@@ -35,6 +35,11 @@
   --a-primary: #{$executive-blue};
   --a-primary-hover: #083b24;
   --a-accent: #{$nav-blue};
+  // Chart palette (v5 design handoff 2026-05-23) — referenced by Dashboard
+  // sparklines + future report widgets. Promoted from inline hex literals
+  // so palette variants (e.g. high-contrast themes) can override centrally.
+  --a-blue: #2563eb;
+  --a-purple: #7c3aed;
   // Status
   --a-danger: #{$error-red};
   --a-warn: #d97706;
@@ -52,7 +57,7 @@
   min-height: 100vh;
   background: var(--a-bg);
   color: var(--a-fg1);
-  font-family: 'DM Sans', system-ui, sans-serif;
+  font-family: $font-body;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -138,6 +143,16 @@
 
   svg {
     flex-shrink: 0;
+  }
+
+  // Phosphor Light glyph (v5 admin handoff). Inherits color so the active
+  // state shifts hue alongside the label. 18px to match the prior Lucide
+  // visual weight at strokeWidth=2.
+  i.ph-light {
+    font-size: 18px;
+    color: inherit;
+    flex-shrink: 0;
+    line-height: 1;
   }
 }
 

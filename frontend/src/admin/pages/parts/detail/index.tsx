@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Edit, Trash2, ExternalLink, Check } from 'lucide-react';
 import { adminApi } from '@admin/services/adminApi';
+import Icon from '@shared/components/Icon';
 import type { PartDetail } from '@admin/types/admin';
 import styles from './PartDetailPage.module.scss';
 
@@ -122,7 +123,14 @@ export default function PartDetailPage() {
           </div>
           <p className={styles.subtitle}>
             {part.manufacturer_name}
-            {part.category_name ? ` · ${part.category_icon ?? ''} ${part.category_name}`.trim() : ''}
+            {(part.parent_category_name || part.category_name) && (
+              <>
+                {' · '}
+                <Icon name={part.parent_category_icon ?? part.category_icon} />{' '}
+                {part.parent_category_name ?? part.category_name}
+                {part.parent_category_name && part.category_name && ` (${part.category_name})`}
+              </>
+            )}
           </p>
         </div>
         <div className={styles.pageHeadActions}>
@@ -164,9 +172,19 @@ export default function PartDetailPage() {
             <div>
               <dt>Category</dt>
               <dd>
-                {part.category_name
-                  ? `${part.category_icon ?? ''} ${part.category_name}`.trim()
-                  : '—'}
+                {part.parent_category_name || part.category_name ? (
+                  <span className={styles.catCell}>
+                    <Icon name={part.parent_category_icon ?? part.category_icon} />
+                    <span>
+                      {part.parent_category_name ?? part.category_name}
+                      {part.parent_category_name && part.category_name && (
+                        <span className={styles.catCellSub}> ({part.category_name})</span>
+                      )}
+                    </span>
+                  </span>
+                ) : (
+                  '—'
+                )}
               </dd>
             </div>
             <div>

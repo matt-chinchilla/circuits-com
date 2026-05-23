@@ -1,69 +1,64 @@
 import { useState, useEffect, useRef } from 'react';
 import { NavLink, Link, useLocation, useNavigate } from 'react-router-dom';
-import {
-  LayoutDashboard,
-  Package,
-  Building2,
-  Layers,
-  Star,
-  BarChart3,
-  Upload,
-  Settings as SettingsIcon,
-  ExternalLink,
-  LogOut,
-  Search,
-  Bell,
-  Plus,
-  Mail,
-  Menu,
-  X,
-} from 'lucide-react';
+import { LogOut, Search, Bell, Plus, Menu, X } from 'lucide-react';
 import { useAuth } from '@admin/contexts/AuthContext';
 import { useDemo } from '@admin/contexts/DemoContext';
+import Icon from '@shared/components/Icon';
 import BellDropdown from '@admin/components/messages/BellDropdown';
+import { adminApi } from '@admin/services/adminApi';
 import {
   loadMessages,
   refreshMessages,
   unreadCount,
 } from '@admin/services/messageStore';
 import styles from './AdminLayout.module.scss';
-import type { ReactNode, ComponentType } from 'react';
+import type { ReactNode } from 'react';
 
 interface AdminLayoutProps {
   children: ReactNode;
   role?: 'admin' | 'company';
 }
 
+// Sidebar links use Phosphor Light names (v5 design handoff 2026-05-23).
+// `badgeKey` opts the link into the dynamic-count badge — see useEffect
+// below for the parts/suppliers/imports wiring.
+type BadgeKey = 'parts' | 'suppliers' | 'imports';
+
 interface SidebarLink {
   to: string;
   label: string;
-  icon: ComponentType<{ size?: number; strokeWidth?: number }>;
-  badge?: string;
+  icon: string;
+  badgeKey?: BadgeKey;
   adminOnly?: boolean;
 }
 
-// Two grouped sections per the 2026-04-25 design import — Catalog (data
-// surfaces) above the System group (operations) for visual hierarchy.
 const CATALOG_LINKS: SidebarLink[] = [
-  { to: '/admin', label: 'Dashboard', icon: LayoutDashboard },
-  { to: '/admin/parts', label: 'Parts', icon: Package },
-  { to: '/admin/suppliers', label: 'Suppliers', icon: Building2 },
-  { to: '/admin/categories', label: 'Categories', icon: Layers, adminOnly: true },
-  { to: '/admin/sponsors', label: 'Sponsors', icon: Star, adminOnly: true },
-  { to: '/admin/reports', label: 'Reports', icon: BarChart3 },
+  { to: '/admin', label: 'Dashboard', icon: 'gauge' },
+  { to: '/admin/parts', label: 'Parts', icon: 'package', badgeKey: 'parts' },
+  { to: '/admin/suppliers', label: 'Suppliers', icon: 'buildings', badgeKey: 'suppliers' },
+  { to: '/admin/categories', label: 'Categories', icon: 'squares-four', adminOnly: true },
+  { to: '/admin/sponsors', label: 'Sponsors', icon: 'star', adminOnly: true },
+  { to: '/admin/reports', label: 'Reports', icon: 'chart-bar' },
 ];
 
-// Messages lives in its own "Communications" group between Catalog and System
-// (per the 2026-05-07 Claude Design handoff). When more inbound channels
-// arrive (e.g. SMS, support tickets) they belong here too.
 const COMMS_LINKS: SidebarLink[] = [
-  { to: '/admin/messages', label: 'Messages', icon: Mail, adminOnly: true },
+  { to: '/admin/messages', label: 'Messages', icon: 'envelope', adminOnly: true },
 ];
 
 const SYSTEM_LINKS: SidebarLink[] = [
-  { to: '/admin/import', label: 'Import Queue', icon: Upload },
-  { to: '/admin/settings', label: 'Settings', icon: SettingsIcon },
+  { to: '/admin/import', label: 'Import Queue', icon: 'upload-simple', badgeKey: 'imports' },
+  { to: '/admin/settings', label: 'Settings', icon: 'gear-six' },
 ];
+
+// Demo magnitudes per v5 design data.jsx (hand-tuned to feel believable
+// against a real distributor catalog). Live mode reads stats from the API.
+const DEMO_BADGES = { parts: 2_487_302, suppliers: 8, imports: 3 } as const;
+
+function formatBadgeCount(n: number): string {
+  if (n >= 1e6) return `${(n / 1e6).toFixed(1)}M`;
+  if (n >= 1e3) return `${(n / 1e3).toFixed(1)}K`;
+  return String(n);
+}
 
 // Route → page-title map (drives the topbar h1). Falls back to "Admin" for
 // unmatched routes; dynamic id-style segments (/admin/parts/:id, etc.) are
@@ -146,7 +141,39 @@ export default function AdminLayout({ children, role = 'admin' }: AdminLayoutPro
   const [unread, setUnread] = useState(() => unreadCount());
   const [wiggle, setWiggle] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [partsCount, setPartsCount] = useState(0);
+  const [suppliersCount, setSuppliersCount] = useState(0);
   const prevUnread = useRef(unread);
+
+  // Sidebar badge counts. Demo mode = seeded magnitudes; live mode hits
+  // /api/dashboard/stats. Import-queue is always 0 in live mode (no
+  // backend yet) — badge hides when count is 0. The `cancelled` closure
+  // guards against a rapid demoMode toggle stomping demo magnitudes with
+  // a late API response.
+  useEffect(() => {
+    if (demoMode) {
+      setPartsCount(DEMO_BADGES.parts);
+      setSuppliersCount(DEMO_BADGES.suppliers);
+      return undefined;
+    }
+    let cancelled = false;
+    adminApi
+      .getStats()
+      .then((s) => {
+        if (cancelled) return;
+        setPartsCount(s.parts_count ?? 0);
+        setSuppliersCount(s.suppliers_count ?? 0);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        console.warn('[AdminLayout] dashboard stats fetch failed', err);
+        setPartsCount(0);
+        setSuppliersCount(0);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [demoMode]);
 
   // Refresh unread count when route changes — covers list/detail navigation
   // that flips messages from new → read. Also auto-closes the mobile drawer.
@@ -215,9 +242,20 @@ export default function AdminLayout({ children, role = 'admin' }: AdminLayoutPro
   const initials = (user?.username || 'AD').slice(0, 2).toUpperCase();
   const title = pageTitle(location.pathname);
 
+  function badgeValue(key: BadgeKey | undefined): string | null {
+    if (!key) return null;
+    if (key === 'parts') return partsCount > 0 ? formatBadgeCount(partsCount) : null;
+    if (key === 'suppliers') return suppliersCount > 0 ? String(suppliersCount) : null;
+    if (key === 'imports') {
+      // No live import-queue API yet; show only in demo mode, hide otherwise.
+      return demoMode ? String(DEMO_BADGES.imports) : null;
+    }
+    return null;
+  }
+
   function renderLink(link: SidebarLink) {
-    const Icon = link.icon;
     const showUnreadBadge = link.to === '/admin/messages' && unread > 0;
+    const dynamicBadge = badgeValue(link.badgeKey);
     return (
       <NavLink
         key={link.to}
@@ -225,13 +263,13 @@ export default function AdminLayout({ children, role = 'admin' }: AdminLayoutPro
         end={link.to === '/admin'}
         className={({ isActive }) => `${styles.sideItem} ${isActive ? styles.active : ''}`}
       >
-        <Icon size={18} strokeWidth={2} />
+        <Icon name={link.icon} />
         <span>{link.label}</span>
         {showUnreadBadge && (
           <span className={`${styles.sideBadge} ${styles.unreadBadge}`}>{unread}</span>
         )}
-        {!showUnreadBadge && link.badge && (
-          <span className={styles.sideBadge}>{link.badge}</span>
+        {!showUnreadBadge && dynamicBadge && (
+          <span className={styles.sideBadge}>{dynamicBadge}</span>
         )}
       </NavLink>
     );
@@ -283,7 +321,7 @@ export default function AdminLayout({ children, role = 'admin' }: AdminLayoutPro
 
         <div className={styles.sideBottom}>
           <Link to="/" className={`${styles.sideItem} ${styles.subtle}`}>
-            <ExternalLink size={18} strokeWidth={2} />
+            <Icon name="arrow-square-out" />
             <span>Back to Site</span>
           </Link>
           <button
@@ -291,7 +329,7 @@ export default function AdminLayout({ children, role = 'admin' }: AdminLayoutPro
             className={`${styles.sideItem} ${styles.subtle} ${styles.sideItemBtn}`}
             onClick={() => setSignOutOpen(true)}
           >
-            <LogOut size={18} strokeWidth={2} />
+            <Icon name="sign-out" />
             <span>Sign Out</span>
           </button>
         </div>

@@ -49,11 +49,11 @@ def slugify(text: str) -> str:
 def get_or_create_category(
     db: Session,
     name: str,
+    slug: str,
     icon: str = "lightning",
     parent: Optional[Category] = None,
     sort_order: int = 0,
 ) -> Category:
-    slug = slugify(name)
     obj = db.query(Category).filter(Category.slug == slug).first()
     if obj is None:
         obj = Category(
@@ -66,6 +66,125 @@ def get_or_create_category(
         db.add(obj)
         db.flush()
     return obj
+
+
+# Canonical taxonomy mirroring ui_kits/website/data.js (the website's
+# authoritative slug source). Slugs are EXPLICIT per-row — slugify(name)
+# would diverge (e.g. would produce 'voltage-regulators-ldos' instead of
+# the canonical 'ldo-regulators'; 'motor-motion-control-ics' instead of
+# 'motor-motion-ics'). The website's routes assume these short slugs; do
+# not change without updating the website data.js in lockstep.
+#
+# Tuple shape: (name, slug, icon, [(sub_name, sub_slug, sub_icon), ...]).
+# All icon strings are Phosphor Light names (rendered via the <Icon>
+# wrapper at frontend/src/shared/components/Icon.tsx).
+CATEGORY_DATA: list[tuple[str, str, str, list[tuple[str, str, str]]]] = [
+    ("Power Management ICs (PMICs)", "power-management-ics-pmics", "lightning", [
+        ("Voltage Regulators (LDOs)", "ldo-regulators", "battery-charging"),
+        ("DC-DC Converters (Buck/Boost)", "dc-dc-converters", "battery-charging-vertical"),
+        ("Battery Management ICs (BMS)", "battery-management", "battery-full"),
+        ("Power Supervisors / Reset ICs", "power-supervisors", "shield-warning"),
+        ("LED Drivers", "led-drivers", "lightbulb"),
+    ]),
+    ("Microcontrollers & Processors", "microcontrollers-processors", "cpu", [
+        ("8-bit Microcontrollers", "8bit-mcus", "cpu"),
+        ("32-bit Microcontrollers (ARM Cortex-M)", "32bit-mcus", "cpu"),
+        ("Application Processors", "app-processors", "computer-tower"),
+        ("Digital Signal Processors (DSPs)", "dsps", "chart-line"),
+        ("System-on-Chip (SoC)", "soc", "squares-four"),
+    ]),
+    ("Analog ICs", "analog-ics", "wave-sine", [
+        ("Operational Amplifiers (Op-Amps)", "op-amps", "trend-up"),
+        ("Comparators", "comparators", "scales"),
+        ("Analog Multiplexers / Switches", "analog-mux-switches", "shuffle"),
+        ("Voltage References", "voltage-references", "target"),
+        ("Instrumentation Amplifiers", "instrumentation-amps", "ruler"),
+    ]),
+    ("Interface ICs", "interface-ics", "plugs-connected", [
+        ("UART / USART Transceivers", "uart-usart", "arrows-left-right"),
+        ("USB Interface ICs", "usb-interface", "usb"),
+        ("I2C / SPI Interface ICs", "i2c-spi", "arrows-down-up"),
+        ("CAN / LIN Transceivers", "can-lin", "car-simple"),
+        ("Level Shifters", "level-shifters", "arrows-vertical"),
+    ]),
+    ("Memory ICs", "memory-ics", "hard-drives", [
+        ("EEPROM", "eeprom", "hard-drive"),
+        ("NOR Flash", "nor-flash", "hard-drive"),
+        ("NAND Flash", "nand-flash", "hard-drive"),
+        ("SRAM", "sram", "hard-drive"),
+        ("DRAM", "dram", "hard-drive"),
+    ]),
+    ("Logic ICs", "logic-ics", "function", [
+        ("Logic Gates (AND, OR, NOT, etc.)", "logic-gates", "function"),
+        ("Flip-Flops / Latches", "flip-flops-latches", "squares-four"),
+        ("Counters", "counters", "list-numbers"),
+        ("Shift Registers", "shift-registers", "arrow-right"),
+        ("Programmable Logic (CPLDs / FPGAs)", "cpld-fpga", "wrench"),
+    ]),
+    ("RF & Wireless ICs", "rf-wireless-ics", "wifi-high", [
+        ("Bluetooth ICs", "bluetooth", "bluetooth"),
+        ("Wi-Fi ICs", "wifi", "wifi-high"),
+        ("RF Transceivers", "rf-transceivers", "broadcast"),
+        ("GPS / GNSS Receivers", "gps-gnss", "globe-hemisphere-west"),
+        ("NFC / RFID ICs", "nfc-rfid", "device-mobile"),
+    ]),
+    ("Sensor ICs", "sensor-ics", "thermometer", [
+        ("Temperature Sensors", "temp-sensors", "thermometer"),
+        ("Accelerometers", "accelerometers", "arrows-out-cardinal"),
+        ("Gyroscopes", "gyroscopes", "arrows-clockwise"),
+        ("Pressure Sensors", "pressure-sensors", "gauge"),
+        ("Proximity / Light Sensors", "proximity-light", "eye"),
+    ]),
+    ("Audio & Video ICs", "audio-video-ics", "speaker-high", [
+        ("Audio Amplifiers", "audio-amps", "speaker-high"),
+        ("CODECs (Audio/Video)", "codecs", "music-notes"),
+        ("Video Processors", "video-processors", "film-strip"),
+        ("HDMI / Display Interface ICs", "hdmi-display", "monitor"),
+        ("Microphone Preamplifiers", "mic-preamps", "microphone"),
+    ]),
+    ("Clock & Timing ICs", "clock-timing-ics", "clock", [
+        ("Oscillators", "oscillators", "wave-sine"),
+        ("Real-Time Clocks (RTC)", "rtc", "alarm"),
+        ("Clock Generators", "clock-generators", "clock"),
+        ("PLL (Phase-Locked Loops)", "pll", "arrows-counter-clockwise"),
+        ("Timer ICs", "timer-ics", "timer"),
+    ]),
+    ("Motor & Motion Control ICs", "motor-motion-ics", "gear", [
+        ("Motor Drivers (DC/Stepper/BLDC)", "motor-drivers", "gear"),
+        ("Servo Controllers", "servo-controllers", "game-controller"),
+        ("Gate Drivers (MOSFET/IGBT)", "gate-drivers", "lightning"),
+        ("Motion Control ICs", "motion-control", "person-simple-run"),
+        ("PWM Controllers", "pwm-controllers", "wave-square"),
+    ]),
+    ("Data Conversion ICs", "data-conversion-ics", "arrows-clockwise", [
+        ("Analog-to-Digital Converters (ADC)", "adc", "chart-line"),
+        ("Digital-to-Analog Converters (DAC)", "dac", "chart-line-down"),
+        ("Sigma-Delta Converters", "sigma-delta", "trend-up"),
+        ("Voltage-to-Frequency Converters", "vf-converters", "wave-sine"),
+        ("Touchscreen Controllers", "touchscreen", "hand-pointing"),
+    ]),
+    ("Security & Authentication ICs", "security-auth-ics", "lock-key", [
+        ("Secure Elements", "secure-elements", "lock"),
+        ("Cryptographic Coprocessors", "crypto-coprocessors", "lock-key"),
+        ("TPM (Trusted Platform Modules)", "tpm", "shield"),
+        ("Hardware Encryption ICs", "hw-encryption", "key"),
+        ("ID / Authentication ICs", "id-auth", "identification-card"),
+    ]),
+    ("Automotive ICs", "automotive-ics", "car", [
+        ("Automotive PMICs", "auto-pmics", "lightning"),
+        ("CAN / LIN Automotive ICs", "auto-can-lin", "plugs"),
+        ("ADAS Processing ICs", "adas", "cpu"),
+        ("Automotive Sensors", "auto-sensors", "thermometer"),
+        ("Infotainment Processors", "infotainment", "music-notes"),
+    ]),
+    ("Display & LED ICs", "display-led-ics", "monitor", [
+        ("LED Matrix Drivers", "led-matrix", "grid-four"),
+        ("LCD Drivers", "lcd-drivers", "monitor"),
+        ("OLED Drivers", "oled-drivers", "sparkle"),
+        ("Backlight Controllers", "backlight", "sun-dim"),
+        ("Display Timing Controllers (TCON)", "tcon", "timer"),
+    ]),
+]
 
 
 def get_or_create_supplier(
@@ -156,131 +275,19 @@ def get_or_create_sponsor(
 
 def seed(db: Session) -> None:
     # ------------------------------------------------------------------
-    # 1. Categories and subcategories (15 top-level, 5 subs each)
+    # 1. Categories and subcategories — driven by module-level CATEGORY_DATA
     # ------------------------------------------------------------------
-    # Format: (name, icon, [(sub_name, sub_icon), ...])
-    #
-    # 2026-05-22 — Apple-sleek icon pass: every `icon` value is now a
-    # Phosphor Light icon name (rendered as <i class="ph-light ph-{name}">
-    # by the frontend's <Icon> widget). Mapping is canonical with
-    # design-handoff-v4 / ui_kits/website/data.js. See alembic 005 for the
-    # column widening that supports the longer name strings (e.g.
-    # `arrows-counter-clockwise`, 24 chars).
-    category_data: list[tuple[str, str, list[tuple[str, str]]]] = [
-        ("Power Management ICs (PMICs)", "lightning", [
-            ("Voltage Regulators (LDOs)", "battery-charging"),
-            ("DC-DC Converters (Buck/Boost)", "battery-charging-vertical"),
-            ("Battery Management ICs (BMS)", "battery-full"),
-            ("Power Supervisors / Reset ICs", "shield-warning"),
-            ("LED Drivers", "lightbulb"),
-        ]),
-        ("Microcontrollers & Processors", "cpu", [
-            ("8-bit Microcontrollers", "cpu"),
-            ("32-bit Microcontrollers (ARM Cortex-M)", "cpu"),
-            ("Application Processors", "computer-tower"),
-            ("Digital Signal Processors (DSPs)", "chart-line"),
-            ("System-on-Chip (SoC)", "squares-four"),
-        ]),
-        ("Analog ICs", "wave-sine", [
-            ("Operational Amplifiers (Op-Amps)", "trend-up"),
-            ("Comparators", "scales"),
-            ("Analog Multiplexers / Switches", "shuffle"),
-            ("Voltage References", "target"),
-            ("Instrumentation Amplifiers", "ruler"),
-        ]),
-        ("Interface ICs", "plugs-connected", [
-            ("UART / USART Transceivers", "arrows-left-right"),
-            ("USB Interface ICs", "usb"),
-            ("I2C / SPI Interface ICs", "arrows-down-up"),
-            ("CAN / LIN Transceivers", "car-simple"),
-            ("Level Shifters", "arrows-vertical"),
-        ]),
-        ("Memory ICs", "hard-drives", [
-            ("EEPROM", "hard-drive"),
-            ("NOR Flash", "hard-drive"),
-            ("NAND Flash", "hard-drive"),
-            ("SRAM", "hard-drive"),
-            ("DRAM", "hard-drive"),
-        ]),
-        ("Logic ICs", "function", [
-            ("Logic Gates (AND, OR, NOT, etc.)", "function"),
-            ("Flip-Flops / Latches", "squares-four"),
-            ("Counters", "list-numbers"),
-            ("Shift Registers", "arrow-right"),
-            ("Programmable Logic (CPLDs / FPGAs)", "wrench"),
-        ]),
-        ("RF & Wireless ICs", "wifi-high", [
-            ("Bluetooth ICs", "bluetooth"),
-            ("Wi-Fi ICs", "wifi-high"),
-            ("RF Transceivers", "broadcast"),
-            ("GPS / GNSS Receivers", "globe-hemisphere-west"),
-            ("NFC / RFID ICs", "device-mobile"),
-        ]),
-        ("Sensor ICs", "thermometer", [
-            ("Temperature Sensors", "thermometer"),
-            ("Accelerometers", "arrows-out-cardinal"),
-            ("Gyroscopes", "arrows-clockwise"),
-            ("Pressure Sensors", "gauge"),
-            ("Proximity / Light Sensors", "eye"),
-        ]),
-        ("Audio & Video ICs", "speaker-high", [
-            ("Audio Amplifiers", "speaker-high"),
-            ("CODECs (Audio/Video)", "music-notes"),
-            ("Video Processors", "film-strip"),
-            ("HDMI / Display Interface ICs", "monitor"),
-            ("Microphone Preamplifiers", "microphone"),
-        ]),
-        ("Clock & Timing ICs", "clock", [
-            ("Oscillators", "wave-sine"),
-            ("Real-Time Clocks (RTC)", "alarm"),
-            ("Clock Generators", "clock"),
-            ("PLL (Phase-Locked Loops)", "arrows-counter-clockwise"),
-            ("Timer ICs", "timer"),
-        ]),
-        ("Motor & Motion Control ICs", "gear", [
-            ("Motor Drivers (DC/Stepper/BLDC)", "gear"),
-            ("Servo Controllers", "game-controller"),
-            ("Gate Drivers (MOSFET/IGBT)", "lightning"),
-            ("Motion Control ICs", "person-simple-run"),
-            ("PWM Controllers", "wave-square"),
-        ]),
-        ("Data Conversion ICs", "arrows-clockwise", [
-            ("Analog-to-Digital Converters (ADC)", "chart-line"),
-            ("Digital-to-Analog Converters (DAC)", "chart-line-down"),
-            ("Sigma-Delta Converters", "trend-up"),
-            ("Voltage-to-Frequency Converters", "wave-sine"),
-            ("Touchscreen Controllers", "hand-pointing"),
-        ]),
-        ("Security & Authentication ICs", "lock-key", [
-            ("Secure Elements", "lock"),
-            ("Cryptographic Coprocessors", "lock-key"),
-            ("TPM (Trusted Platform Modules)", "shield"),
-            ("Hardware Encryption ICs", "key"),
-            ("ID / Authentication ICs", "identification-card"),
-        ]),
-        ("Automotive ICs", "car", [
-            ("Automotive PMICs", "lightning"),
-            ("CAN / LIN Automotive ICs", "plugs"),
-            ("ADAS Processing ICs", "cpu"),
-            ("Automotive Sensors", "thermometer"),
-            ("Infotainment Processors", "music-notes"),
-        ]),
-        ("Display & LED ICs", "monitor", [
-            ("LED Matrix Drivers", "grid-four"),
-            ("LCD Drivers", "monitor"),
-            ("OLED Drivers", "sparkle"),
-            ("Backlight Controllers", "sun-dim"),
-            ("Display Timing Controllers (TCON)", "timer"),
-        ]),
-    ]
-
+    # Slugs are EXPLICIT per row (canonical with ui_kits/website/data.js);
+    # see CATEGORY_DATA's docstring. cats dict is keyed by NAME for both
+    # top-level and subcategory rows so _PART_CATALOG can look up via the
+    # subcategory name without ambiguity.
     cats: dict[str, Category] = {}
-    for sort_order, (name, icon, subs) in enumerate(category_data):
-        cat = get_or_create_category(db, name, icon=icon, sort_order=sort_order)
+    for sort_order, (name, slug, icon, subs) in enumerate(CATEGORY_DATA):
+        cat = get_or_create_category(db, name, slug, icon=icon, sort_order=sort_order)
         cats[name] = cat
-        for sub_order, (sub_name, sub_icon) in enumerate(subs):
+        for sub_order, (sub_name, sub_slug, sub_icon) in enumerate(subs):
             sub = get_or_create_category(
-                db, sub_name, icon=sub_icon, parent=cat, sort_order=sub_order
+                db, sub_name, sub_slug, icon=sub_icon, parent=cat, sort_order=sub_order
             )
             cats[sub_name] = sub
 

@@ -64,20 +64,19 @@ def part_to_dict(part: Part, db: Session | None = None) -> dict:
     category_slug = None
     parent_category_name = None
     parent_category_slug = None
+    parent_category_icon = None
     if part.category_id and db:
         cat = db.query(Category).filter(Category.id == part.category_id).first()
         if cat:
             category_name = cat.name
             category_icon = cat.icon
             category_slug = cat.slug
-            # Surface the parent so PartPage can render the full
-            # "Home / Parent / Subcategory / SKU" breadcrumb when the part
-            # lives on a subcategory. Null for parts directly on a top-level.
             if cat.parent_id:
                 parent = db.query(Category).filter(Category.id == cat.parent_id).first()
                 if parent:
                     parent_category_name = parent.name
                     parent_category_slug = parent.slug
+                    parent_category_icon = parent.icon
     return {
         "id": str(part.id),
         "sku": part.sku,
@@ -89,6 +88,7 @@ def part_to_dict(part: Part, db: Session | None = None) -> dict:
         "category_icon": category_icon,
         "parent_category_name": parent_category_name,
         "parent_category_slug": parent_category_slug,
+        "parent_category_icon": parent_category_icon,
         "datasheet_url": part.datasheet_url,
         "lifecycle_status": part.lifecycle_status,
         "created_at": part.created_at.isoformat() if part.created_at else None,

@@ -97,3 +97,51 @@ def test_category_icon_column_holds_phosphor_name_length():
         f"to hold the longest real Phosphor name {longest_real_name!r}. "
         "Postgres would silently truncate. Update the model + add an alembic widen."
     )
+
+
+def test_seed_category_slugs_match_canonical_data_js():
+    """Regression: seed slugs match the canonical website data.js taxonomy.
+
+    Slugify(name) would produce 'motor-motion-control-ics' and
+    'security-authentication-ics' — but the website expects the shorter
+    'motor-motion-ics' / 'security-auth-ics'. Subcategory slugs also
+    diverge from slugify (e.g. 'ldo-regulators' not 'voltage-regulators-ldos',
+    '8bit-mcus' not '8-bit-microcontrollers'). The seed must use the
+    explicit per-row slug from CATEGORY_DATA, not auto-slugify(name).
+    """
+    from app.db.seed import CATEGORY_DATA
+
+    # Build {top_slug: {sub_slug, ...}} map for assertions
+    top_slugs: dict[str, set[str]] = {}
+    for _name, slug, _icon, subs in CATEGORY_DATA:
+        top_slugs[slug] = {sub_slug for _sn, sub_slug, _si in subs}
+
+    # Top-level overrides that don't match auto-slugify
+    assert "motor-motion-ics" in top_slugs, "Motor & Motion top-level must use canonical slug"
+    assert "security-auth-ics" in top_slugs, "Security & Auth top-level must use canonical slug"
+    assert "motor-motion-control-ics" not in top_slugs, "Old auto-slugify slug must not exist"
+    assert "security-authentication-ics" not in top_slugs, "Old auto-slugify slug must not exist"
+
+    # Selected subcategory overrides
+    pmic_subs = top_slugs["power-management-ics-pmics"]
+    assert "ldo-regulators" in pmic_subs
+    assert "dc-dc-converters" in pmic_subs
+    assert "battery-management" in pmic_subs
+    assert "voltage-regulators-ldos" not in pmic_subs, "Old auto-slugify sub must not exist"
+
+    mcu_subs = top_slugs["microcontrollers-processors"]
+    assert "8bit-mcus" in mcu_subs
+    assert "32bit-mcus" in mcu_subs
+    assert "8-bit-microcontrollers" not in mcu_subs
+
+    sensor_subs = top_slugs["sensor-ics"]
+    assert "pressure-sensors" in sensor_subs
+    assert "accelerometers" in sensor_subs
+    assert "proximity-light" in sensor_subs
+
+    # Sanity: every category has exactly 5 subs (matches data.js)
+    for slug, subs in top_slugs.items():
+        assert len(subs) == 5, f"Category {slug!r} has {len(subs)} subs, expected 5"
+
+    # Sanity: 15 top-level categories total
+    assert len(top_slugs) == 15, f"Expected 15 top-level categories, got {len(top_slugs)}"

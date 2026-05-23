@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { Plus, Upload, Download, Search } from 'lucide-react';
 import { useDemo } from '@admin/contexts/DemoContext';
 import { adminApi } from '@admin/services/adminApi';
+import Icon from '@shared/components/Icon';
 import type { Part, PaginatedResponse } from '@admin/types/admin';
 import styles from './PartsPage.module.scss';
 
@@ -141,9 +142,14 @@ export default function PartsPage() {
                   <td>{row.description ?? '—'}</td>
                   <td>{row.manufacturer_name}</td>
                   <td>
-                    <span className={styles.muted}>
-                      {row.category_icon ? `${row.category_icon} ` : ''}
-                      {row.category_name ?? '—'}
+                    <span className={styles.catCell}>
+                      <Icon name={row.parent_category_icon ?? row.category_icon} />
+                      <span>
+                        {row.parent_category_name ?? row.category_name ?? '—'}
+                        {row.parent_category_name && row.category_name && (
+                          <span className={styles.catCellSub}> ({row.category_name})</span>
+                        )}
+                      </span>
                     </span>
                   </td>
                   <td>{lifecycleBadge(row.lifecycle_status)}</td>

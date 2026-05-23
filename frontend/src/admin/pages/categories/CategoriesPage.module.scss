@@ -330,7 +330,9 @@
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 10px;
-  padding: 14px;
+  // 56px left indent aligns subgrid with the parent's icon column (catBlockHead
+  // padding 18px + caret 18px + gap 14px ≈ 50px). Per v5 design handoff.
+  padding: 14px 14px 14px 56px;
   background: #fafbfc;
   animation: subGridIn 220ms cubic-bezier(0.4, 0, 0.2, 1) backwards;
 }

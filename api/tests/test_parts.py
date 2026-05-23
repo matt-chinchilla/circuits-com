@@ -1,6 +1,33 @@
 """Tests for parts CRUD routes."""
 
 
+def test_part_to_dict_includes_parent_category_icon(db, seeded_db):
+    """When a part lives on a subcategory, part_to_dict must surface the
+    PARENT category's icon as parent_category_icon, in addition to the
+    existing parent_category_name / parent_category_slug.
+
+    The admin Parts table renders the top-level (parent) icon next to the
+    'Parent (Sub)' lineage per the v5 Claude Design handoff. Without
+    parent_category_icon, the table would either show the subcategory's
+    icon (wrong: too specific) or no icon at all (regression vs design).
+    """
+    from app.routes.parts import part_to_dict
+
+    part = seeded_db["part1"]  # attached to child category
+    result = part_to_dict(part, db)
+
+    # Existing fields still present
+    assert result["category_name"] == "Clock and Timing"
+    assert result["parent_category_name"] == "Integrated Circuits"
+    # New field: parent icon — must equal the PARENT's icon, not the child's
+    assert "parent_category_icon" in result, (
+        "part_to_dict must expose parent_category_icon so admin Parts table "
+        "can render the top-level Phosphor icon next to lineage."
+    )
+    assert result["parent_category_icon"] == "⚡"  # seeded parent icon
+    assert result["category_icon"] == "⏰"  # subcategory icon (unchanged)
+
+
 def _auth_header(client):
     resp = client.post("/api/auth/login", json={
         "username": "admin",

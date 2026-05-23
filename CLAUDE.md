@@ -78,7 +78,7 @@ Path aliases `@public/*` / `@admin/*` / `@shared/*` in `vite.config.ts` + `tscon
 **Form-message persistence**: `routes/forms.py` writes a `Message` row BEFORE scheduling email. Admin Messages API-backed via `GET/PATCH /api/admin/messages/`. `messageStore.refreshMessages()` on mount + route change.
 
 ### Admin layout (`AdminLayout.tsx`)
-240px Lucide sidebar + 64px sticky topbar (search w/ ⌘K + Demo toggle + Notifications bell with red badge + 380px dropdown + "+ New Part" + Sign-Out modal). Bell + sidebar-Messages badges synced via `useEffect` on `location.pathname`. Pages render content area only. Admin chrome is intentionally un-themed (light surface).
+240px Phosphor-Light sidebar (v5 2026-05-23: nav items use Phosphor names `gauge`/`package`/`buildings`/`squares-four`/`star`/`chart-bar`/`envelope`/`upload-simple`/`gear-six`/`arrow-square-out`/`sign-out`) + 64px sticky topbar (still Lucide: Search/Bell/Plus/Menu/X + Sign-Out modal's LogOut). Sidebar Parts/Suppliers/Import badges are dynamic: demo mode → seeded magnitudes (`DEMO_BADGES` constant in `AdminLayout.tsx`), live mode → `adminApi.getStats()`. Bell + sidebar-Messages badges synced via `useEffect` on `location.pathname`. Pages render content area only. Admin chrome is intentionally un-themed (light surface).
 
 ### Claude Code Automations (`.claude/`)
 - **Hooks** — PreToolUse blocks `.env`/lock edits, warns on `api/app/admin.py`, runs `migration-safety-check.sh` on commits. PostToolUse: tsc on .ts/.tsx/.scss; pytest on .py; ruff format+check on .py (excl. alembic); `scss-lint.sh`; `frontend-rebuild.sh` (flock-deduped).
@@ -136,7 +136,7 @@ Brand (`left: 20px`) + nav+LOGIN group (`right: 20px`) are `position: absolute` 
 `App.tsx`: `useEffect(() => { if (location.hash) return; window.scrollTo({top:0,left:0}); }, [location.pathname])`. Anchor nav preserved via `location.hash` skip.
 
 ### Seed data (idempotent)
-15 categories, 75 subcategories (5 each, 2 levels), 7 suppliers, 2 sponsors, 59 parts/179 listings/193 revenue. `get_or_create_*` skips existing rows.
+15 categories, 75 subcategories (5 each, 2 levels), 7 suppliers, 2 sponsors, 59 parts/179 listings/193 revenue. `get_or_create_*` skips existing rows. `CATEGORY_DATA` (module-level in `seed.py`) holds canonical taxonomy — slugs are EXPLICIT per row (mirror `ui_kits/website/data.js`). Notably `motor-motion-ics` / `security-auth-ics` / `ldo-regulators` / `8bit-mcus` / `32bit-mcus` etc. don't match `slugify(name)` — `get_or_create_category(name, slug, ...)` requires the slug arg now.
 
 ## Gotchas
 
@@ -156,6 +156,7 @@ Brand (`left: 20px`) + nav+LOGIN group (`right: 20px`) are `position: absolute` 
 - **Frontend Dockerfile has 4 stages** (base/dev/build/prod); compose defaults to `prod`. Container serves hashed Vite bundle via nginx, no HMR. SCSS/TSX edits need `docker compose up --build -d frontend` (~20s). For local HMR, add `target: dev`.
 - **API container has `build: ./api` with NO volume mount** — same trap. Edits don't reach a running container via `restart`. Use `up -d --build api`. Symptom: seed reports success but data reflects OLD code.
 - **`./deploy.sh --reseed` destructive scope** — TRUNCATEs `sponsors, category_suppliers, categories, suppliers CASCADE` → cascades to `users, parts, part_listings, price_breaks, revenue`. `messages` SURVIVES. Admin-UI rows outside seed.py ARE wiped.
+- **Category slug changes need `--reseed`** — `get_or_create_category` keys on slug. Renaming a slug in `CATEGORY_DATA` (e.g. `motor-motion-control-ics` → `motor-motion-ics`) makes the new entry MISS the existing row → seed CREATEs a duplicate alongside the old one (30 top-level cats instead of 15). Plain `./deploy.sh` won't fix it — must `--reseed`.
 - **Docker cache can serve stale frontend** — if behavior not visible: `docker compose build --no-cache frontend && docker compose up -d frontend`.
 - **Never animate CSS `drop-shadow()`** — scroll lag. Use static shadows.
 - **SVG `<filter>` on `<g>` whose children animate = CPU raster on mobile** — `feGaussianBlur` was the 2026-04-19 lag cause. `@media (max-width: 768px) { .traceGroup { filter: none; } }`. Apply at `<g>` wrapper, NEVER per-path.
@@ -182,7 +183,9 @@ Brand (`left: 20px`) + nav+LOGIN group (`right: 20px`) are `position: absolute` 
 - **`.outletWrap { position: relative; z-index: 1 }` is load-bearing** — without it, painting order puts BackdropLayer (z-index: 0) ON TOP of static page descendants.
 - **Verify SVG persistence across SPA nav with session-marker pattern** — `svg.dataset.sessionMarker = 'tag-' + Date.now()` before NavLink click, then `evaluate_script` after. Stronger than visual diff.
 - **Don't gate visible content on JS-added classes inside `AnimatePresence`** — IO callbacks fire unreliably mid-transform, leaving `opacity: 0` stuck. Default visible; trigger entrance via `setTimeout`.
-- **Admin sponsors localStorage-persisted, NOT API-backed** — key `circuits.admin.sponsors`. Use `@admin/services/sponsorStore.ts` (`loadSponsors / findSponsor / upsertSponsor / deleteSponsor`).
+- **Admin sponsors localStorage-persisted, NOT API-backed** — key `circuits.admin.sponsors`. Use `@admin/services/sponsorStore.ts` (`loadSponsors / findSponsor / upsertSponsor / deleteSponsor`). Seed-sponsor fake `category_id` values (`cat-pmic`, `cat-sensors`) never match live API category UUIDs — seeds carry their own `category_icon` field for the v5 Phosphor render.
+- **State-dep effect + async fetch needs cancel-flag** — pattern: `useEffect` keyed on a toggle (e.g. `[demoMode]`) firing `fetch()`. A late response can stomp the new synchronous state. Always `let cancelled = false; ...; return () => { cancelled = true; };` and gate `.then`/`.catch` on `if (cancelled) return;`. AdminLayout's badge fetch is the canonical example.
+- **`--a-blue` / `--a-purple` admin-scope tokens** — `AdminLayout.module.scss .admin` defines blue (`#2563eb`) + purple (`#7c3aed`) for Dashboard sparklines. Pass to React as `color="var(--a-blue)"`, NEVER inline hex (palette variants).
 - **Admin Supplier tier derived client-side** — `AdminSupplier` has no `tier` column. `SuppliersPage` derives Featured (≥200) / Platinum (≥100) / Gold (≥25) / Silver (else) from `parts_count`.
 - **Theme/route bug repro via SPA NavLink, NOT direct URL** — direct URL remounts everything.
 - **`dict(query(Col1, Col2).all())` mis-types under Pyright** — use `{row[0]: row[1] for row in query.all()}`.
@@ -222,7 +225,7 @@ $font-mono          ui-monospace / SF Mono (SKUs, prices, designators)
 
 ### Icon system
 
-Public + admin both render Phosphor Light data icons via `<Icon name={x.icon} />` at `@shared/components/Icon.tsx` (regex guard `/^[a-z][a-z0-9-]*$/` no-ops on non-Phosphor strings). Font self-hosted at `frontend/public/fonts/phosphor-light/` (CSS + woff2/woff/ttf, ~1.2MB), loaded once in `frontend/index.html`. Admin **chrome** (sidebar/topbar) uses Lucide — chrome ≠ data icon system.
+Public + admin both render Phosphor Light data icons via `<Icon name={x.icon} />` at `@shared/components/Icon.tsx` (regex guard `/^[a-z][a-z0-9-]*$/` no-ops on non-Phosphor strings). Font self-hosted at `frontend/public/fonts/phosphor-light/` (CSS + woff2/woff/ttf, ~1.2MB), loaded once in `frontend/index.html`. Admin **sidebar nav** uses Phosphor (v5 2026-05-23); topbar controls (Search/Bell/Plus/Menu) stay Lucide.
 
 Names live in `api/app/db/seed.py` (15 + 75 = 90 strings). New category: kebab-case Phosphor name from https://phosphoricons.com — no `ph-` prefix. `Category.icon` is `String(40)` (alembic 005); regression `test_category_icon_column_holds_phosphor_name_length` asserts column metadata length ≥24 (SQLite ignores VARCHAR len; metadata assertion is dialect-agnostic).
 

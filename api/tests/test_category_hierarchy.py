@@ -220,8 +220,9 @@ class TestSeedAssignsPartsToSubcategories:
         from app.db.seed import seed
         seed(db)
 
-        # Pick a known subcategory and assert it has parts directly attached
-        bms = db.query(Category).filter(Category.slug == "battery-management-ics-bms").first()
+        # Pick a known subcategory and assert it has parts directly attached.
+        # Slug is canonical with ui_kits/website/data.js — see CATEGORY_DATA.
+        bms = db.query(Category).filter(Category.slug == "battery-management").first()
         assert bms is not None, "Subcategory 'Battery Management ICs (BMS)' missing from seed"
         assert bms.parent_id is not None, "BMS should be a subcategory, not top-level"
 
