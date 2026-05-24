@@ -65,6 +65,33 @@ class TestCreateSupplier:
         data = resp.json()
         assert data["contact_name"] == "Jane Doe"
 
+    def test_create_supplier_accepts_bare_domain_website(self, client, seeded_db):
+        """The admin form treats `https://` as an input adornment — users
+        type "example.com" and the form auto-prepends the scheme. The
+        backend must accept BOTH shapes so the frontend can defer the
+        prepend to its own normalization step (or skip it entirely if a
+        legacy row already stored the bare form).
+        """
+        headers = _auth_header(client)
+        # Bare domain — exactly what the user types into the form's prefixed
+        # input. Mirrors the silent-block bug class from 2026-05-24.
+        bare = client.post(
+            "/api/suppliers/",
+            json={"name": "Bare Domain Co", "website": "bare-example.com"},
+            headers=headers,
+        )
+        assert bare.status_code == 200, bare.text
+        assert bare.json()["website"] == "bare-example.com"
+
+        # Scheme-prefixed — what the form normalizes to on blur.
+        prefixed = client.post(
+            "/api/suppliers/",
+            json={"name": "Prefixed Co", "website": "https://prefixed-example.com"},
+            headers=headers,
+        )
+        assert prefixed.status_code == 200, prefixed.text
+        assert prefixed.json()["website"] == "https://prefixed-example.com"
+
     def test_list_suppliers_includes_contact_name(self, client, seeded_db):
         headers = _auth_header(client)
         client.post("/api/suppliers/", json={

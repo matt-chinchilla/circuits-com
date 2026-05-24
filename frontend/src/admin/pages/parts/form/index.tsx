@@ -165,7 +165,17 @@ export default function PartFormPage() {
         manufacturer_name: form.manufacturer_name.trim(),
         description: form.description.trim() || null,
         category_id: form.category_id || null,
-        datasheet_url: form.datasheet_url.trim() || null,
+        // Auto-prepend scheme so a user pasting `acme.com/datasheet.pdf`
+        // ends up with a clickable absolute URL instead of a path the
+        // browser interprets as relative to the current page. Mirrors the
+        // Supplier form's prependScheme helper but kept local to avoid
+        // a cross-file import for a single one-shot transform.
+        datasheet_url: ((s: string) => {
+          const t = s.trim();
+          if (!t) return null;
+          if (/^[a-z][a-z0-9+.-]*:/i.test(t) || t.startsWith('//')) return t;
+          return `https://${t}`;
+        })(form.datasheet_url),
         lifecycle_status: form.lifecycle_status,
       };
       // Bundle the optional initial listing only when supplier context is
@@ -382,11 +392,15 @@ export default function PartFormPage() {
               <div className={styles.field}>
                 <label className={styles.fieldLabel}>Datasheet URL</label>
                 <input
-                  type="url"
+                  type="text"
+                  inputMode="url"
                   className={styles.input}
                   value={form.datasheet_url}
                   onChange={(e) => set('datasheet_url', e.target.value)}
                   placeholder="https://example.com/datasheet.pdf"
+                  autoCapitalize="off"
+                  autoCorrect="off"
+                  spellCheck={false}
                 />
                 <div className={styles.fieldHint}>
                   Public PDF link — engineers click through from the part detail page.

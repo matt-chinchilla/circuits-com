@@ -428,7 +428,16 @@ export default function JoinPage() {
                     ]
                       .filter(Boolean)
                       .join(" ")}
-                    type="url"
+                    // type="text" (NOT the HTML5 URL input) — the JS
+                    // `websiteOk` regex below + `noValidate` on the form
+                    // own validation. HTML5 url validation silently kills
+                    // submit for bare-domain strings; see admin pattern
+                    // guard at api/tests/test_no_type_url_form_input.py.
+                    type="text"
+                    inputMode="url"
+                    autoCapitalize="off"
+                    autoCorrect="off"
+                    spellCheck={false}
                     value={website}
                     onChange={(e) => setWebsite(e.target.value)}
                     placeholder="https://www.company.com"

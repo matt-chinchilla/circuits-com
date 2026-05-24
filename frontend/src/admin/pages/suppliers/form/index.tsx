@@ -34,6 +34,48 @@ function emptyForm(): FormData {
   };
 }
 
+// ─── Website + phone input helpers ──────────────────────────────────────────
+// Website: the form shows `https://` as a fixed prefix adornment so the user
+// types just `example.com`. Two normalizers handle the round-trip:
+//   - stripScheme()  — strip on hydrate so an existing https://acme.com row
+//                      displays as "acme.com" inside the prefixed input
+//   - prependScheme()— prepend on submit so the API always stores with scheme
+// Bare and prefixed forms are both accepted by the backend (regression test
+// test_create_supplier_accepts_bare_domain_website) so an existing legacy
+// row without scheme doesn't 422 on edit.
+function stripScheme(s: string): string {
+  return s.replace(/^https?:\/\//i, '');
+}
+
+function prependScheme(s: string): string {
+  const trimmed = s.trim();
+  if (!trimmed) return '';
+  // Treat anything already carrying a scheme (RFC 3986 `scheme:`) or a
+  // protocol-relative `//` prefix as already-schemed — otherwise pasting
+  // `mailto:sales@…`, `ftp://files…`, or `//acme.com` would get a literal
+  // `https://` prepended (e.g. `https:////acme.com`, broken on click).
+  if (/^[a-z][a-z0-9+.-]*:/i.test(trimmed) || trimmed.startsWith('//')) return trimmed;
+  return `https://${trimmed}`;
+}
+
+// Phone: shows live as `(123) 456-7890` while the user types. Strips the
+// US country-code "1" when input is 11 digits starting with "1" — so paste
+// from "+1 (800) 555-0000" / "1-800-555-0000" snaps to the right area code
+// instead of mangling to "(180) 055-5000". After the country-code strip,
+// anything beyond 10 digits is dropped (a true international number won't
+// fit US format anyway — defer non-US shapes to a follow-up).
+function formatPhoneInput(raw: string): string {
+  let digits = raw.replace(/\D/g, '');
+  if (digits.length === 11 && digits.startsWith('1')) {
+    digits = digits.slice(1);
+  }
+  digits = digits.slice(0, 10);
+  if (digits.length === 0) return '';
+  if (digits.length <= 3) return `(${digits}`;
+  if (digits.length <= 6) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
+  return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+}
+
 export default function SupplierFormPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -57,9 +99,12 @@ export default function SupplierFormPage() {
         setForm({
           name: s.name,
           description: s.description ?? '',
-          website: s.website ?? '',
+          // Strip scheme so it doesn't double-display in the prefixed input.
+          website: stripScheme(s.website ?? ''),
           email: s.email ?? '',
-          phone: s.phone ?? '',
+          // Normalize any incoming phone shape ("800-555-0000", "+1800555…")
+          // into the live (xxx) xxx-xxxx display the formatter expects.
+          phone: formatPhoneInput(s.phone ?? ''),
           contact_name: s.contact_name ?? '',
         });
       })
@@ -92,8 +137,11 @@ export default function SupplierFormPage() {
       const payload = {
         name: form.name.trim(),
         description: form.description.trim() || null,
-        website: form.website.trim() || null,
+        // Re-prepend the scheme on the way out so the API stores a full URL.
+        // Empty input → null (skipped) per the existing contract.
+        website: prependScheme(form.website) || null,
         email: form.email.trim() || null,
+        // Phone is already formatted (xxx) xxx-xxxx by the input handler.
         phone: form.phone.trim() || null,
         contact_name: form.contact_name.trim() || null,
       };
@@ -229,14 +277,30 @@ export default function SupplierFormPage() {
                 <label className={styles.fieldLabel} htmlFor="sup-website">
                   Website
                 </label>
-                <input
-                  id="sup-website"
-                  type="url"
-                  className={`${styles.input} ${styles.inputMono}`}
-                  value={form.website}
-                  onChange={(e) => set('website', e.target.value)}
-                  placeholder="example.com"
-                />
+                {/* `https://` lives as a fixed-prefix adornment so the
+                    user types just the host. Input is plain text — the
+                    HTML5 URL input type would silently kill form submit
+                    for bare-domain strings (see the 2026-05-24 supplier
+                    create-bug). prependScheme() adds the scheme back on
+                    submit. Backend accepts both shapes. */}
+                <div className={styles.prefixedInput}>
+                  <span className={styles.inputPrefix}>https://</span>
+                  <input
+                    id="sup-website"
+                    type="text"
+                    className={`${styles.input} ${styles.inputMono} ${styles.inputWithPrefix}`}
+                    // State invariant: `form.website` is always already
+                    // stripped (hydrate + onChange both strip on the way
+                    // in), so we render the bare value directly.
+                    value={form.website}
+                    onChange={(e) => set('website', stripScheme(e.target.value))}
+                    placeholder="example.com"
+                    inputMode="url"
+                    autoCapitalize="off"
+                    autoCorrect="off"
+                    spellCheck={false}
+                  />
+                </div>
               </div>
               <div className={styles.field}>
                 <label className={styles.fieldLabel} htmlFor="sup-phone">
@@ -244,11 +308,13 @@ export default function SupplierFormPage() {
                 </label>
                 <input
                   id="sup-phone"
-                  type="tel"
+                  type="text"
                   className={`${styles.input} ${styles.inputMono}`}
                   value={form.phone}
-                  onChange={(e) => set('phone', e.target.value)}
-                  placeholder="800-000-0000"
+                  onChange={(e) => set('phone', formatPhoneInput(e.target.value))}
+                  placeholder="(800) 000-0000"
+                  inputMode="tel"
+                  autoComplete="tel"
                 />
               </div>
             </div>

@@ -579,10 +579,14 @@ export default function SettingsPage() {
                           <span>Email</span>
                         </label>
                         <input
-                          type="url"
+                          type="text"
+                          inputMode="url"
                           className={styles.notifWebhookInput}
                           value={setting.webhook}
                           placeholder="Slack/webhook URL (optional)"
+                          autoCapitalize="off"
+                          autoCorrect="off"
+                          spellCheck={false}
                           onChange={(e) =>
                             updateNotification(n.k, { webhook: e.target.value })
                           }
@@ -682,7 +686,11 @@ export default function SettingsPage() {
                   <div className={styles.field}>
                     <label className={styles.fieldLabel}>Workspace webhook URL</label>
                     <input
-                      type="url"
+                      type="text"
+                      inputMode="url"
+                      autoCapitalize="off"
+                      autoCorrect="off"
+                      spellCheck={false}
                       className={styles.textInput}
                       value={integrations.slackWorkspace}
                       placeholder="https://hooks.slack.com/services/T…/B…/…"

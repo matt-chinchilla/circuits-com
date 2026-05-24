@@ -490,11 +490,15 @@ export default function SponsorFormPage() {
                 </label>
                 <input
                   id="image_url"
-                  type="url"
+                  type="text"
+                  inputMode="url"
                   className={styles.textInput}
                   value={form.image_url}
                   onChange={(e) => update('image_url', e.target.value)}
                   placeholder="https://example.com/banner.png"
+                  autoCapitalize="off"
+                  autoCorrect="off"
+                  spellCheck={false}
                 />
               </div>
               <div className={styles.field}>
@@ -503,11 +507,15 @@ export default function SponsorFormPage() {
                 </label>
                 <input
                   id="website"
-                  type="url"
+                  type="text"
+                  inputMode="url"
                   className={styles.textInput}
                   value={form.website}
                   onChange={(e) => update('website', e.target.value)}
                   placeholder="https://supplier.example"
+                  autoCapitalize="off"
+                  autoCorrect="off"
+                  spellCheck={false}
                 />
               </div>
             </div>
