@@ -220,6 +220,13 @@ export default function CategoriesPage() {
                       ))}
                     </div>
                   )}
+                  {isOpen && c.featured_supplier_name && (
+                    <div className={styles.treeFeatured}>
+                      <span className={styles.featuredStar}>&#9733;</span>
+                      <span>Featured supplier:</span>
+                      <strong>{c.featured_supplier_name}</strong>
+                    </div>
+                  )}
                 </article>
               );
             })}
@@ -245,6 +252,11 @@ export default function CategoriesPage() {
                   <span className={styles.dotSep}>&middot;</span>
                   <span className={styles.mono}>{c.children?.length || 0}</span> subs
                 </div>
+                {c.featured_supplier_name && (
+                  <div className={styles.catFeatured}>
+                    &#9733; Featured: {c.featured_supplier_name}
+                  </div>
+                )}
               </div>
             );
           })}

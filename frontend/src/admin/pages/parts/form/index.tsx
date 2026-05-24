@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft, Check, Trash2 } from 'lucide-react';
 import { adminApi } from '@admin/services/adminApi';
+import { consumePrefill, type PartPrefill } from '@admin/services/prefillBus';
 import type { AdminCategory } from '@admin/types/admin';
 import styles from './PartFormPage.module.scss';
 
@@ -20,6 +21,17 @@ interface FormErrors {
   sku?: string;
   manufacturer_name?: string;
 }
+
+// Initial-listing fields shown only when the form was opened with supplier
+// context (via the Supplier-detail Quick Actions panel). Lets sales staff
+// create the Part AND its first distributor listing in a single submit.
+interface InitialListing {
+  enabled: boolean;
+  stock_quantity: string;
+  unit_price: string;
+}
+
+const emptyListing: InitialListing = { enabled: true, stock_quantity: '', unit_price: '' };
 
 const LIFECYCLE_OPTIONS: Array<{ value: string; label: string }> = [
   { value: 'active', label: 'Active' },
@@ -60,7 +72,20 @@ export default function PartFormPage() {
   const navigate = useNavigate();
   const isEdit = Boolean(id);
 
-  const [form, setForm] = useState<FormData>(emptyForm());
+  // One-shot consume on first render so back-nav doesn't reapply stale data.
+  // Edit mode ignores the bus — prefill only seeds new-part forms.
+  const [prefill] = useState<PartPrefill | null>(() => (isEdit ? null : consumePrefill('part')));
+
+  const [form, setForm] = useState<FormData>(() => {
+    const base = emptyForm();
+    if (!prefill) return base;
+    return {
+      ...base,
+      manufacturer_name: prefill.manufacturer_name ?? base.manufacturer_name,
+      category_id: prefill.category_id ?? base.category_id,
+    };
+  });
+  const [listing, setListing] = useState<InitialListing>(emptyListing);
   const [errors, setErrors] = useState<FormErrors>({});
   const [categories, setCategories] = useState<AdminCategory[]>([]);
   const [saving, setSaving] = useState(false);
@@ -135,7 +160,7 @@ export default function PartFormPage() {
     if (!validate()) return;
     setSaving(true);
     try {
-      const payload = {
+      const payload: Record<string, unknown> = {
         sku: form.sku.trim(),
         manufacturer_name: form.manufacturer_name.trim(),
         description: form.description.trim() || null,
@@ -143,6 +168,18 @@ export default function PartFormPage() {
         datasheet_url: form.datasheet_url.trim() || null,
         lifecycle_status: form.lifecycle_status,
       };
+      // Bundle the optional initial listing only when supplier context is
+      // present AND the user kept the fieldset enabled. Backend treats the
+      // Part + PartListing as one transaction (see /api/parts/ POST).
+      if (!isEdit && prefill && listing.enabled) {
+        const stock = listing.stock_quantity.trim();
+        const price = listing.unit_price.trim();
+        payload.initial_listing = {
+          supplier_id: prefill.supplier_id,
+          stock_quantity: stock ? Number(stock) : 0,
+          unit_price: price ? Number(price) : 0,
+        };
+      }
       if (isEdit && id) {
         await adminApi.updatePart(id, payload);
         setToast({ type: 'success', msg: 'Part updated successfully.' });
@@ -182,7 +219,18 @@ export default function PartFormPage() {
     );
   }
 
-  const backHref = isEdit ? `/admin/parts/${id}` : '/admin/parts';
+  // When the form was opened from a Supplier Quick Action, Cancel should
+  // return to that supplier (not the parts list). Same rule for the back link.
+  const backHref = isEdit
+    ? `/admin/parts/${id}`
+    : prefill
+      ? `/admin/suppliers/${prefill.supplier_id}`
+      : '/admin/parts';
+  const backLabel = isEdit
+    ? 'Back to part'
+    : prefill
+      ? `Back to ${prefill.supplier_name}`
+      : 'Parts';
 
   return (
     <div className={styles.page}>
@@ -190,13 +238,20 @@ export default function PartFormPage() {
         <div className={styles.pageHeadLeft}>
           <Link to={backHref} className={styles.backLink}>
             <ArrowLeft />
-            {isEdit ? 'Back to part' : 'Parts'}
+            {backLabel}
           </Link>
           <h1 className={styles.title}>{isEdit ? `Edit ${form.sku || 'part'}` : 'New part'}</h1>
           <p className={styles.subtitle}>
-            {isEdit
-              ? 'Update part information and lifecycle status.'
-              : 'Add an individual SKU to the catalog.'}
+            {isEdit ? (
+              'Update part information and lifecycle status.'
+            ) : prefill ? (
+              <>
+                Adding to <strong>{prefill.supplier_name}</strong>’s catalog —
+                supplier + category pre-filled.
+              </>
+            ) : (
+              'Add an individual SKU to the catalog.'
+            )}
           </p>
         </div>
       </div>
@@ -340,6 +395,75 @@ export default function PartFormPage() {
             </div>
           </div>
         </div>
+
+        {/* Panel 4 (conditional): Initial listing for the supplier in context */}
+        {prefill && !isEdit && (
+          <div className={styles.panel}>
+            <div className={styles.panelHead}>
+              <h3 className={styles.panelTitle}>
+                Initial listing for {prefill.supplier_name}
+              </h3>
+              <label className={styles.listingToggle}>
+                <input
+                  type="checkbox"
+                  checked={listing.enabled}
+                  onChange={(e) =>
+                    setListing((prev) => ({ ...prev, enabled: e.target.checked }))
+                  }
+                />
+                <span>Create listing on save</span>
+              </label>
+            </div>
+            {listing.enabled && (
+              <div className={styles.panelBody}>
+                <div className={styles.formBody}>
+                  <div className={styles.formRow2}>
+                    <div className={styles.field}>
+                      <label className={styles.fieldLabel}>Stock quantity</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        className={`${styles.input} ${styles.inputMono}`}
+                        value={listing.stock_quantity}
+                        onChange={(e) =>
+                          setListing((prev) => ({
+                            ...prev,
+                            stock_quantity: e.target.value,
+                          }))
+                        }
+                        placeholder="10000"
+                      />
+                      <div className={styles.fieldHint}>
+                        Units in stock at {prefill.supplier_name}.
+                      </div>
+                    </div>
+                    <div className={styles.field}>
+                      <label className={styles.fieldLabel}>Unit price (USD)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.0001"
+                        className={`${styles.input} ${styles.inputMono}`}
+                        value={listing.unit_price}
+                        onChange={(e) =>
+                          setListing((prev) => ({
+                            ...prev,
+                            unit_price: e.target.value,
+                          }))
+                        }
+                        placeholder="0.48"
+                      />
+                      <div className={styles.fieldHint}>
+                        Per-unit price for single-quantity orders.
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Form actions */}
         <div className={styles.formActions}>

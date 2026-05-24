@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Check, ChevronLeft, Trash2 } from 'lucide-react';
 import { adminApi } from '@admin/services/adminApi';
+import { consumePrefill, type SponsorPrefill } from '@admin/services/prefillBus';
 import {
   deleteSponsor,
   findSponsor,
@@ -73,7 +74,21 @@ export default function SponsorFormPage() {
   const navigate = useNavigate();
   const isEdit = Boolean(id);
 
-  const [form, setForm] = useState<FormState>(emptyForm());
+  // One-shot consume from the Supplier-detail Quick Actions handoff.
+  const [prefill] = useState<SponsorPrefill | null>(() =>
+    isEdit ? null : consumePrefill('sponsor'),
+  );
+
+  const [form, setForm] = useState<FormState>(() => {
+    const base = emptyForm();
+    if (!prefill) return base;
+    return {
+      ...base,
+      supplier_id: prefill.supplier_id,
+      tier: prefill.tier ?? base.tier,
+      category_id: prefill.category_id ?? base.category_id,
+    };
+  });
   const [placement, setPlacement] = useState<Placement>('category');
   const [errors, setErrors] = useState<FormErrors>({});
   const [saving, setSaving] = useState(false);
@@ -222,15 +237,27 @@ export default function SponsorFormPage() {
       {/* Page head with back link */}
       <header className={styles.pageHead}>
         <div>
-          <Link to="/admin/sponsors" className={styles.backLink}>
+          <Link
+            to={prefill && !isEdit ? `/admin/suppliers/${prefill.supplier_id}` : '/admin/sponsors'}
+            className={styles.backLink}
+          >
             <ChevronLeft size={14} strokeWidth={2} />
-            Sponsors
+            {prefill && !isEdit ? `Back to ${prefill.supplier_name}` : 'Sponsors'}
           </Link>
           <h1 className={styles.title}>
             {isEdit ? 'Edit Sponsorship' : 'New Sponsor'}
           </h1>
           <p className={styles.subtitle}>
-            {isEdit ? 'Update placement, window, or status.' : 'Configure a paid placement.'}
+            {isEdit ? (
+              'Update placement, window, or status.'
+            ) : prefill ? (
+              <>
+                Sponsorship for <strong>{prefill.supplier_name}</strong> —
+                supplier + tier pre-filled.
+              </>
+            ) : (
+              'Configure a paid placement.'
+            )}
           </p>
         </div>
       </header>

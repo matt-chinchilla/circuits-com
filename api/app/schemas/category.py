@@ -14,6 +14,7 @@ class SubcategoryResponse(BaseModel):
     slug: str
     icon: str
     parts_count: int = 0
+    featured_supplier_name: str | None = None
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -24,6 +25,7 @@ class CategoryResponse(BaseModel):
     icon: str
     parts_count: int = 0
     children: list[SubcategoryResponse]
+    featured_supplier_name: str | None = None
     model_config = ConfigDict(from_attributes=True)
 
 

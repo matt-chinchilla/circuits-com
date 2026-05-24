@@ -94,6 +94,24 @@ $a-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
   max-width: 920px;
 }
 
+// Toggle inside the Initial Listing panel head — lets a user create the
+// Part without the listing if they only have catalog info, no pricing yet.
+.listingToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: $a-fg3;
+  cursor: pointer;
+  user-select: none;
+
+  input[type='checkbox'] {
+    cursor: pointer;
+    accent-color: $executive-blue;
+  }
+}
+
 .panel {
   background: $a-card;
   border-radius: $a-radius;

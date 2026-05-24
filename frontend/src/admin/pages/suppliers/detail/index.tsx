@@ -1,9 +1,11 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Edit, ExternalLink, Upload } from 'lucide-react';
+import { ArrowLeft, Edit, ExternalLink, Upload, Trash2 } from 'lucide-react';
 import Breadcrumbs from '@admin/components/Breadcrumbs';
 import { adminApi } from '@admin/services/adminApi';
+import { useDemo } from '@admin/contexts/DemoContext';
 import type { AdminSupplier, Part, PaginatedResponse } from '@admin/types/admin';
+import QuickActionsPanel from './QuickActionsPanel';
 import styles from './SupplierDetailPage.module.scss';
 
 type Tier = 'featured' | 'platinum' | 'gold' | 'silver';
@@ -34,11 +36,22 @@ function externalHref(url: string): string {
 export default function SupplierDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { demoMode } = useDemo();
   const [supplier, setSupplier] = useState<AdminSupplier | null>(null);
   const [parts, setParts] = useState<PaginatedResponse<Part> | null>(null);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  // Sync action stamps a fake "Last sync just now" hint after the simulated
+  // delta lands. Stays local until a real /sync endpoint exists.
+  const [lastSyncStamp, setLastSyncStamp] = useState<string | null>(null);
+  const [syncDelta, setSyncDelta] = useState<number | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  // Separate from the load-error sentinel so a failed delete shows a
+  // dismissible inline message in the modal instead of replacing the
+  // whole supplier view with the "supplier not found" fallback.
+  const [deleteError, setDeleteError] = useState('');
 
   useEffect(() => {
     if (!id) return;
@@ -53,6 +66,28 @@ export default function SupplierDetailPage() {
   }, [id, page]);
 
   const tier = useMemo(() => (supplier ? deriveTier(supplier) : null), [supplier]);
+
+  const handleDelete = async () => {
+    if (!supplier) return;
+    setDeleting(true);
+    setDeleteError('');
+    try {
+      await adminApi.deleteSupplier(supplier.id);
+      navigate('/admin/suppliers');
+    } catch (err) {
+      // Surface in the modal — don't replace the whole detail view with
+      // the load-error fallback. User stays on the page and can retry.
+      console.warn('[SupplierDetailPage] deleteSupplier failed', err);
+      setDeleteError('Failed to delete supplier. Please try again.');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const closeDeleteModal = () => {
+    setConfirmDelete(false);
+    setDeleteError('');
+  };
 
   if (loading) {
     return <div className={styles.loading}>Loading supplier details&hellip;</div>;
@@ -74,6 +109,7 @@ export default function SupplierDetailPage() {
   }
 
   const partRows = parts?.items ?? [];
+  const partsTotal = parts?.total ?? 0;
   const websiteHost = supplier.website ? stripScheme(supplier.website) : null;
 
   return (
@@ -116,12 +152,33 @@ export default function SupplierDetailPage() {
           )}
         </div>
         <div className={styles.pageHeadActions}>
-          <Link to={`/admin/suppliers/${supplier.id}/edit`} className={`${styles.btn} ${styles.btnPrimary}`}>
+          <button
+            type="button"
+            className={`${styles.btn} ${styles.btnDangerGhost}`}
+            onClick={() => setConfirmDelete(true)}
+          >
+            <Trash2 size={14} strokeWidth={2} />
+            Delete
+          </button>
+          <Link to={`/admin/suppliers/${supplier.id}/edit`} className={`${styles.btn} ${styles.btnGhost}`}>
             <Edit size={14} strokeWidth={2} />
-            Edit Supplier
+            Edit
           </Link>
         </div>
       </div>
+
+      {/* Hero quick-actions strip — full-width row of 4 prominent cards.
+          Sits where supplier-detail spends its most-clicked time. The
+          first card (Add part) replaces the prior header "Add Part"
+          button so the page CTA is the strip itself. */}
+      <QuickActionsPanel
+        supplier={supplier}
+        partRows={partRows}
+        onAfterSync={(delta) => {
+          setSyncDelta(delta);
+          setLastSyncStamp('just now');
+        }}
+      />
 
       <div className={styles.detailGrid}>
         <div className={styles.panel}>
@@ -166,10 +223,16 @@ export default function SupplierDetailPage() {
           <div className={`${styles.panel} ${styles.miniStat}`}>
             <div className={styles.miniStatLabel}>Parts in catalog</div>
             <div className={styles.miniStatValue}>
-              {(supplier.parts_count ?? 0).toLocaleString()}
+              {demoMode
+                ? ((supplier.parts_count ?? 0) + (syncDelta ?? 0)).toLocaleString()
+                : partsTotal.toLocaleString()}
             </div>
             <div className={styles.miniStatHint}>
-              {parts ? `${parts.total} listed in detail view` : 'Loading…'}
+              {demoMode
+                ? `Last sync ${lastSyncStamp ?? '6h ago'}`
+                : partsTotal > 0
+                  ? `${partsTotal} live SKU${partsTotal === 1 ? '' : 's'}`
+                  : 'No live listings yet'}
             </div>
           </div>
           <div className={`${styles.panel} ${styles.miniStat}`}>
@@ -193,7 +256,7 @@ export default function SupplierDetailPage() {
 
       <div className={`${styles.panel} ${styles.partsPanel}`}>
         <div className={styles.panelHead}>
-          <h3 className={styles.panelTitle}>Listed Parts ({parts?.total ?? 0})</h3>
+          <h3 className={styles.panelTitle}>Listed Parts ({partsTotal})</h3>
           <Link to="/admin/parts" className={styles.panelLink}>
             All parts &rarr;
           </Link>
@@ -258,6 +321,39 @@ export default function SupplierDetailPage() {
           </>
         )}
       </div>
+
+      {confirmDelete && (
+        <div className={styles.modalBackdrop} onClick={closeDeleteModal}>
+          <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
+            <h3 className={styles.modalTitle}>Delete {supplier.name}?</h3>
+            <p className={styles.modalBody}>
+              This removes the supplier from the directory, unlinks them from
+              any parts (PartListings), and deletes their sponsorships. This
+              action cannot be undone.
+            </p>
+            {deleteError && <div className={styles.modalError}>{deleteError}</div>}
+            <div className={styles.modalActions}>
+              <button
+                type="button"
+                className={`${styles.btn} ${styles.btnGhost}`}
+                onClick={closeDeleteModal}
+                disabled={deleting}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className={`${styles.btn} ${styles.btnDanger}`}
+                onClick={handleDelete}
+                disabled={deleting}
+              >
+                <Trash2 size={14} strokeWidth={2} />
+                {deleting ? 'Deleting…' : 'Delete supplier'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

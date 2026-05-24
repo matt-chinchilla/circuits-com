@@ -3,7 +3,9 @@ import { useDropzone } from 'react-dropzone';
 import Papa from 'papaparse';
 import { Link } from 'react-router-dom';
 import { Upload, FileText, Check, ChevronRight } from 'lucide-react';
+import Icon from '@shared/components/Icon';
 import { adminApi } from '@admin/services/adminApi';
+import { consumePrefill, type ImportPrefill } from '@admin/services/prefillBus';
 import type { AdminSupplier, BatchImportResult } from '@admin/types/admin';
 import styles from './ImportPage.module.scss';
 
@@ -49,7 +51,10 @@ export default function ImportPage() {
   const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
   const [csvRows, setCsvRows] = useState<string[][]>([]);
   const [mapping, setMapping] = useState<Record<string, string>>({});
-  const [supplierId, setSupplierId] = useState('');
+  // Pre-tag from Supplier-detail Quick Actions handoff. One-shot — preloads
+  // the supplier select so the user can drop a CSV without picking again.
+  const [prefill, setPrefill] = useState<ImportPrefill | null>(() => consumePrefill('import'));
+  const [supplierId, setSupplierId] = useState(() => prefill?.supplier_id ?? '');
   const [suppliers, setSuppliers] = useState<AdminSupplier[]>([]);
   const [importing, setImporting] = useState(false);
   const [result, setResult] = useState<BatchImportResult | null>(null);
@@ -160,6 +165,25 @@ export default function ImportPage() {
           <p className={styles.subtitle}>Bulk upload parts via CSV — review queues for approval before going live.</p>
         </div>
       </header>
+
+      {prefill && (
+        <div className={styles.prefillBanner}>
+          <Icon name="link" />
+          <span>
+            All rows will be tagged to <strong>{prefill.supplier_name}</strong>.
+          </span>
+          <button
+            type="button"
+            className={styles.prefillClear}
+            onClick={() => {
+              setPrefill(null);
+              setSupplierId('');
+            }}
+          >
+            Clear
+          </button>
+        </div>
+      )}
 
       {/* ─── Stepper ──────────────────────────────────────────────────── */}
       {step !== 'done' && (

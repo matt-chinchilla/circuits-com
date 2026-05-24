@@ -147,6 +147,125 @@ class TestCreatePart:
         })
         assert resp.status_code == 401
 
+    def test_create_part_with_initial_listing_creates_both(self, client, seeded_db):
+        """Supplier-detail Quick Actions handoff: POST /parts/ with an
+        `initial_listing` payload must atomically create the Part AND the
+        PartListing wired to the supplier. The list endpoint should then
+        surface the part's best_price + total_stock from the new listing.
+        """
+        headers = _auth_header(client)
+        supplier_id = str(seeded_db["supplier1"].id)
+        cat_id = str(seeded_db["child"].id)
+
+        resp = client.post(
+            "/api/parts/",
+            json={
+                "sku": "LM7805-NEW",
+                "manufacturer_name": "Texas Instruments",
+                "category_id": cat_id,
+                "initial_listing": {
+                    "supplier_id": supplier_id,
+                    "stock_quantity": 12500,
+                    "unit_price": 0.48,
+                },
+            },
+            headers=headers,
+        )
+        assert resp.status_code == 200, resp.text
+
+        # /parts/{id} returns listings — verify the wire-up
+        part_id = resp.json()["id"]
+        detail = client.get(f"/api/parts/{part_id}").json()
+        assert len(detail["listings"]) == 1
+        assert detail["listings"][0]["supplier_id"] == supplier_id
+        assert detail["listings"][0]["stock_quantity"] == 12500
+        assert float(detail["listings"][0]["unit_price"]) == 0.48
+
+    def test_create_part_with_unknown_supplier_in_listing_404s(self, client, seeded_db):
+        headers = _auth_header(client)
+        resp = client.post(
+            "/api/parts/",
+            json={
+                "sku": "BOGUS-1",
+                "manufacturer_name": "TI",
+                "initial_listing": {
+                    "supplier_id": "00000000-0000-0000-0000-000000000000",
+                    "stock_quantity": 1,
+                    "unit_price": 0.50,
+                },
+            },
+            headers=headers,
+        )
+        assert resp.status_code == 404
+
+    def test_create_part_with_sub_slug_persists_and_surfaces(self, client, seeded_db):
+        """The admin Quick-Add flow stores the canonical sub_slug pointer
+        on the Part directly so the list endpoint can render Parent (Sub)
+        labels without a Category.parent walk on every row.
+        """
+        headers = _auth_header(client)
+        cat_id = str(seeded_db["child"].id)
+        resp = client.post(
+            "/api/parts/",
+            json={
+                "sku": "SUB-SLUG-TEST",
+                "manufacturer_name": "TI",
+                "category_id": cat_id,
+                "sub_slug": "clock-and-timing",
+            },
+            headers=headers,
+        )
+        assert resp.status_code == 200, resp.text
+        # Detail endpoint surfaces sub_slug
+        detail = client.get(f"/api/parts/{resp.json()['id']}").json()
+        assert detail["sub_slug"] == "clock-and-timing"
+        # List endpoint also surfaces sub_slug on every row
+        listing = client.get("/api/parts/").json()
+        match = next(p for p in listing["items"] if p["sku"] == "SUB-SLUG-TEST")
+        assert match["sub_slug"] == "clock-and-timing"
+
+    def test_create_part_auto_derives_sub_slug_from_child_category(self, client, seeded_db):
+        """When category_id points at a child Category and sub_slug isn't
+        provided, the route stamps sub_slug = child.slug so the
+        denormalization stays consistent across CSV imports, admin UI, and
+        API-driven creates. Keeps the field in step with the alembic 006
+        backfill on existing rows.
+        """
+        headers = _auth_header(client)
+        cat_id = str(seeded_db["child"].id)  # child = "clock-and-timing"
+        resp = client.post(
+            "/api/parts/",
+            json={
+                "sku": "AUTO-SUB-SLUG-1",
+                "manufacturer_name": "TI",
+                "category_id": cat_id,
+                # sub_slug intentionally omitted — server should derive
+            },
+            headers=headers,
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["sub_slug"] == "clock-and-timing"
+
+    def test_create_part_does_not_derive_sub_slug_for_top_level_category(
+        self, client, seeded_db
+    ):
+        """Parts attached to a top-level (parent_id IS NULL) Category have
+        no subcategory, so sub_slug stays NULL.
+        """
+        headers = _auth_header(client)
+        parent_id = str(seeded_db["parent"].id)
+        resp = client.post(
+            "/api/parts/",
+            json={
+                "sku": "AUTO-SUB-SLUG-PARENT",
+                "manufacturer_name": "TI",
+                "category_id": parent_id,
+            },
+            headers=headers,
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["sub_slug"] is None
+
 
 class TestGetPartDetail:
     def test_get_part_detail(self, client, seeded_db):

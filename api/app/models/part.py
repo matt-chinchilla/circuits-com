@@ -18,6 +18,12 @@ class Part(Base):
     category_id = Column(
         UUID(as_uuid=True), ForeignKey("categories.id"), nullable=True
     )
+    # Denormalized subcategory slug — points at the parent category's
+    # subs[].slug (the canonical taxonomy in ui_kits/website/data.js).
+    # Stored here so /api/parts/ list responses don't need to join through
+    # Category each row to surface "Parent (Sub)" labels on the admin UI.
+    # Backfilled from category.parent.slug for existing rows via migration 006.
+    sub_slug = Column(String(80), nullable=True)
     datasheet_url = Column(String(500), nullable=True)
     lifecycle_status = Column(
         Enum("active", "nrnd", "obsolete", "unknown", name="lifecycle_status"),

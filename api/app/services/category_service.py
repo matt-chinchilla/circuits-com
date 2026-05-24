@@ -5,7 +5,8 @@ from app.models import Category, CategorySupplier, Supplier, Sponsor, Part, Part
 
 def get_all_categories(db: Session) -> list[Category]:
     """Top-level categories with children eager-loaded; stamps `parts_count`
-    on each (own + child rows aggregated client-side from a single query).
+    and `featured_supplier_name` on each (own + child rows aggregated
+    client-side from batched queries — two queries total, no N+1).
 
     Test seed attaches parts to the subcategory, prod seed to the top-level —
     keeping the count keyed by `category_id` works for both.
@@ -24,10 +25,24 @@ def get_all_categories(db: Session) -> list[Category]:
         .all()
     }
 
+    # Featured supplier per category — lowest rank among is_featured=true rows
+    # wins. ORDER BY rank DESC so the dict-comprehension's last-write semantics
+    # leave the highest-priority (lowest-rank) name in place. Single join.
+    featured_rows = (
+        db.query(CategorySupplier.category_id, Supplier.name, CategorySupplier.rank)
+        .join(Supplier, Supplier.id == CategorySupplier.supplier_id)
+        .filter(CategorySupplier.is_featured.is_(True))
+        .order_by(CategorySupplier.rank.desc())
+        .all()
+    )
+    featured_by_cat: dict = {row[0]: row[1] for row in featured_rows}
+
     for cat in cats:
         cat.parts_count = int(counts.get(cat.id, 0))
+        cat.featured_supplier_name = featured_by_cat.get(cat.id)
         for child in cat.children or []:
             child.parts_count = int(counts.get(child.id, 0))
+            child.featured_supplier_name = featured_by_cat.get(child.id)
 
     return cats
 

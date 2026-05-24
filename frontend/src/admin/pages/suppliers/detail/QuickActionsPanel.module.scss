@@ -1,0 +1,250 @@
+@use '@shared/styles/variables' as *;
+
+// Supplier-detail Quick Actions hero strip — full-width row of 4 prominent
+// cards directly below the page head. Replaces both the compact sidebar
+// list (v6) AND the header "Add Part" button (now lives in the first card).
+// Each card pre-populates a destination form with this supplier's context,
+// so bulk inventory work skips the repeated supplier/manufacturer/category
+// typing the sales team would otherwise face. The first card is the
+// primary action (filled green); the rest carry their own hue so the strip
+// reads as a palette of distinct workflows rather than 4 identical cards.
+
+.qaStrip {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin: 0 0 20px;
+}
+
+@media (max-width: 1100px) {
+  .qaStrip {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 600px) {
+  .qaStrip {
+    grid-template-columns: 1fr;
+  }
+}
+
+.qaCard {
+  display: grid;
+  grid-template-columns: 40px 1fr auto;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 18px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  text-align: left;
+  cursor: pointer;
+  color: $executive-blue;
+  font: inherit;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  transition: transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease,
+    background-color 150ms ease;
+
+  &:hover:not(:disabled) {
+    transform: translateY(-1px);
+    border-color: $executive-blue;
+    box-shadow: 0 4px 12px rgba(10, 74, 46, 0.10);
+  }
+
+  &:active:not(:disabled) {
+    transform: translateY(0);
+  }
+
+  &:disabled {
+    cursor: progress;
+    opacity: 0.65;
+  }
+}
+
+.qaCardIcon {
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 74, 46, 0.08); // var(--a-accent-soft) fallback
+  border-radius: 8px;
+  flex-shrink: 0;
+
+  :global(i.ph-light) {
+    font-size: 22px;
+    color: $executive-blue;
+    line-height: 1;
+  }
+}
+
+.qaCardBody {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.qaCardTitle {
+  font-size: 15px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.qaCardHint {
+  font-size: 12px;
+  color: #6b7280;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.qaCardChev {
+  font-size: 16px;
+  color: #9ca3af;
+  transition: transform 150ms ease, color 150ms ease;
+}
+
+.qaCard:hover .qaCardChev {
+  transform: translateX(3px);
+  color: $executive-blue;
+}
+
+// ─── Primary card — the page CTA (Add Part) ─────────────────────────────
+// Filled green background, white icon tile + text. Reads as the page's
+// most-used action without needing a separate header button.
+.qaCardPrimary {
+  background: var(--a-primary);
+  border-color: var(--a-primary);
+  color: #ffffff;
+
+  &:hover:not(:disabled) {
+    background: var(--a-primary-hover);
+    border-color: var(--a-primary-hover);
+    box-shadow: 0 6px 16px rgba(10, 74, 46, 0.22);
+  }
+
+  .qaCardIcon {
+    background: rgba(255, 255, 255, 0.16);
+
+    :global(i.ph-light) {
+      color: #ffffff;
+    }
+  }
+
+  .qaCardTitle {
+    color: #ffffff;
+  }
+
+  .qaCardHint {
+    color: rgba(255, 255, 255, 0.78);
+
+    strong,
+    b {
+      color: #ffffff;
+    }
+  }
+
+  .qaCardChev {
+    color: rgba(255, 255, 255, 0.7);
+  }
+
+  &:hover .qaCardChev {
+    color: #ffffff;
+  }
+}
+
+// ─── Tonal variants ────────────────────────────────────────────────────
+// Blue = data (Import CSV) · Gold = revenue (Sponsorship) · Purple = ops (Sync).
+// Same filled treatment as primary so the strip reads as one palette.
+
+.qaCardBlue {
+  background: var(--a-blue);
+  border-color: var(--a-blue);
+  color: #ffffff;
+
+  &:hover:not(:disabled) {
+    background: #1d4ed8;
+    border-color: #1d4ed8;
+    box-shadow: 0 6px 16px rgba(37, 99, 235, 0.22);
+  }
+
+  .qaCardIcon {
+    background: rgba(255, 255, 255, 0.16);
+
+    :global(i.ph-light) {
+      color: #ffffff;
+    }
+  }
+
+  .qaCardTitle { color: #ffffff; }
+  .qaCardHint  { color: rgba(255, 255, 255, 0.78); }
+  .qaCardChev  { color: rgba(255, 255, 255, 0.7); }
+
+  &:hover .qaCardChev { color: #ffffff; }
+}
+
+.qaCardGold {
+  background: var(--a-warn);
+  border-color: var(--a-warn);
+  color: #ffffff;
+
+  &:hover:not(:disabled) {
+    background: #b45309;
+    border-color: #b45309;
+    box-shadow: 0 6px 16px rgba(217, 119, 6, 0.22);
+  }
+
+  .qaCardIcon {
+    background: rgba(255, 255, 255, 0.18);
+
+    :global(i.ph-light) {
+      color: #ffffff;
+    }
+  }
+
+  .qaCardTitle { color: #ffffff; }
+  .qaCardHint  { color: rgba(255, 255, 255, 0.82); }
+  .qaCardChev  { color: rgba(255, 255, 255, 0.7); }
+
+  &:hover .qaCardChev { color: #ffffff; }
+}
+
+.qaCardPurple {
+  background: var(--a-purple);
+  border-color: var(--a-purple);
+  color: #ffffff;
+
+  &:hover:not(:disabled) {
+    background: #6d28d9;
+    border-color: #6d28d9;
+    box-shadow: 0 6px 16px rgba(124, 58, 237, 0.22);
+  }
+
+  .qaCardIcon {
+    background: rgba(255, 255, 255, 0.16);
+
+    :global(i.ph-light) {
+      color: #ffffff;
+    }
+  }
+
+  .qaCardTitle { color: #ffffff; }
+  .qaCardHint  { color: rgba(255, 255, 255, 0.78); }
+  .qaCardChev  { color: rgba(255, 255, 255, 0.7); }
+
+  &:hover .qaCardChev { color: #ffffff; }
+}
+
+.qaSpin {
+  animation: qaSpin 800ms linear infinite;
+}
+
+@keyframes qaSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}

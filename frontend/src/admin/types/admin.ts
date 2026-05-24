@@ -69,6 +69,9 @@ export interface Part {
   parent_category_name: string | null;
   parent_category_slug?: string | null;
   parent_category_icon: string | null;
+  // Denormalized pointer at the parent category's subs[].slug — null when
+  // the part is classified at top-level only (no subcategory).
+  sub_slug?: string | null;
   best_price: number | null;
   total_stock: number | null;
   datasheet_url: string | null;
@@ -117,12 +120,14 @@ export interface AdminCategory {
   slug: string;
   icon: string;
   parts_count: number;
+  featured_supplier_name?: string | null;
   children: Array<{
     id: string;
     name: string;
     slug: string;
     icon: string;
     parts_count: number;
+    featured_supplier_name?: string | null;
   }>;
 }
 

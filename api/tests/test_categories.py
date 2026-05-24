@@ -18,6 +18,24 @@ def test_list_categories(client, seeded_db):
     assert parent["children"][0]["slug"] == "clock-and-timing"
 
 
+def test_list_categories_includes_featured_supplier_name(client, seeded_db):
+    """Powers the admin Categories tree's ★ Featured Supplier banner.
+    conftest links Kennedy Electronics to clock-and-timing with is_featured=True.
+    The parent (integrated-circuits) has no featured CategorySupplier of its
+    own and should surface null.
+    """
+    response = client.get("/api/categories/")
+    data = response.json()
+    parent = data[0]
+    # No featured CategorySupplier rows on the parent — must be explicitly null
+    # (not absent — the frontend keys off the property)
+    assert "featured_supplier_name" in parent
+    assert parent["featured_supplier_name"] is None
+    # Child has is_featured=True for Kennedy Electronics
+    child = parent["children"][0]
+    assert child["featured_supplier_name"] == "Kennedy Electronics"
+
+
 def test_get_category_by_slug(client, seeded_db):
     """GET /api/categories/clock-and-timing returns detail with suppliers and sponsor."""
     response = client.get("/api/categories/clock-and-timing")

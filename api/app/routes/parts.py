@@ -23,13 +23,27 @@ def _to_uuid(val: str) -> uuid.UUID:
 
 # --- Pydantic schemas ---
 
+class InitialListing(BaseModel):
+    """Optional payload bundled with PartCreate so a new Part can be linked
+    to a Supplier atomically. Used by the Supplier-detail Quick Actions
+    "Add part" flow so sales staff land on one form, submit once, and get
+    both the Part row and a PartListing(part_id, supplier_id) wired in a
+    single transaction.
+    """
+    supplier_id: str
+    stock_quantity: int | None = None
+    unit_price: float | None = None
+
+
 class PartCreate(BaseModel):
     sku: str
     description: str | None = None
     manufacturer_name: str
     category_id: str | None = None
+    sub_slug: str | None = None
     datasheet_url: str | None = None
     lifecycle_status: str = "active"
+    initial_listing: InitialListing | None = None
 
 
 class PartUpdate(BaseModel):
@@ -37,6 +51,7 @@ class PartUpdate(BaseModel):
     description: str | None = None
     manufacturer_name: str | None = None
     category_id: str | None = None
+    sub_slug: str | None = None
     datasheet_url: str | None = None
     lifecycle_status: str | None = None
 
@@ -97,6 +112,7 @@ def part_to_dict(part: Part, db: Session | None = None) -> dict:
         "parent_category_name": parent_category_name,
         "parent_category_slug": parent_category_slug,
         "parent_category_icon": parent_category_icon,
+        "sub_slug": part.sub_slug,
         "best_price": best_price,
         "total_stock": total_stock,
         "datasheet_url": part.datasheet_url,
@@ -173,16 +189,48 @@ def create_part(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    # Auto-derive sub_slug when category_id resolves to a child category and
+    # the caller didn't provide one explicitly. Keeps the denormalization
+    # consistent across CSV-imported, admin-UI-created, and API-created rows
+    # — otherwise new rows would NULL where the backfill (migration 006)
+    # populated child-category slugs on existing rows.
+    derived_sub_slug = body.sub_slug
+    if derived_sub_slug is None and body.category_id:
+        cat = db.query(Category).filter(Category.id == _to_uuid(body.category_id)).first()
+        if cat is not None and cat.parent_id is not None:
+            derived_sub_slug = cat.slug
+
     part = Part(
         id=uuid.uuid4(),
         sku=body.sku,
         description=body.description,
         manufacturer_name=body.manufacturer_name,
         category_id=_to_uuid(body.category_id) if body.category_id else None,
+        sub_slug=derived_sub_slug,
         datasheet_url=body.datasheet_url,
         lifecycle_status=body.lifecycle_status,
     )
     db.add(part)
+    db.flush()
+
+    # When the Supplier-detail "Add part" flow hands off context, create the
+    # PartListing in the same transaction so the new part is immediately
+    # discoverable on the supplier's page. Mirrors /batch's wiring.
+    if body.initial_listing:
+        il = body.initial_listing
+        supplier = db.query(Supplier).filter(Supplier.id == _to_uuid(il.supplier_id)).first()
+        if not supplier:
+            db.rollback()
+            raise HTTPException(404, "Supplier for initial_listing not found")
+        listing = PartListing(
+            id=uuid.uuid4(),
+            part_id=part.id,
+            supplier_id=supplier.id,
+            stock_quantity=il.stock_quantity or 0,
+            unit_price=Decimal(str(il.unit_price)) if il.unit_price is not None else Decimal("0"),
+        )
+        db.add(listing)
+
     db.commit()
     db.refresh(part)
     return part_to_dict(part, db)

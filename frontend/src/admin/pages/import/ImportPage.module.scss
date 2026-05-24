@@ -10,6 +10,42 @@
   max-width: 960px;
 }
 
+// Banner shown when the page was opened via the Supplier-detail Quick
+// Actions "Import CSV" handoff — supplier is pre-tagged on every row.
+.prefillBanner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 16px;
+  padding: 10px 14px;
+  background: rgba(10, 74, 46, 0.06);
+  border: 1px solid rgba(10, 74, 46, 0.15);
+  border-radius: 8px;
+  font-size: 13px;
+  color: $executive-blue;
+
+  :global(i.ph-light) {
+    font-size: 18px;
+    color: $executive-blue;
+  }
+}
+
+.prefillClear {
+  margin-left: auto;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  color: $executive-blue;
+  cursor: pointer;
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
 // ─── Page head ──────────────────────────────────────────────────────────────
 
 .pageHead {
