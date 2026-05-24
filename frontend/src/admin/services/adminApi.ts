@@ -130,4 +130,16 @@ export const adminApi = {
     adminClient
       .patch<Message>(`/admin/messages/${id}`, update)
       .then((r) => r.data),
+
+  // Mark a supplier as the Featured Supplier on a category. Used by the
+  // guided-tour wizard so the demo supplier shows up in the live-site
+  // preview iframe. Upserts the CategorySupplier join row.
+  featureSupplierInCategory: (supplierId: string, categorySlug: string, rank = 1) =>
+    adminClient
+      .post('/admin/category-suppliers/feature', {
+        supplier_id: supplierId,
+        category_slug: categorySlug,
+        rank,
+      })
+      .then((r) => r.data),
 };

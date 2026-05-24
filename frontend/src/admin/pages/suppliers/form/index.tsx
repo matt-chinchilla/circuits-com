@@ -235,7 +235,7 @@ export default function SupplierFormPage() {
             <h3 className={styles.panelTitle}>Identity</h3>
           </header>
           <div className={styles.panelBody}>
-            <div className={styles.field}>
+            <div className={styles.field} data-field="name">
               <label className={styles.fieldLabel} htmlFor="sup-name">
                 Company name <span className={styles.fieldReq}>*</span>
               </label>
@@ -250,7 +250,7 @@ export default function SupplierFormPage() {
               {errors.name && <div className={styles.fieldError}>{errors.name}</div>}
             </div>
 
-            <div className={styles.field}>
+            <div className={styles.field} data-field="description">
               <label className={styles.fieldLabel} htmlFor="sup-desc">
                 Description
               </label>
@@ -273,7 +273,7 @@ export default function SupplierFormPage() {
           </header>
           <div className={styles.panelBody}>
             <div className={styles.formRow2}>
-              <div className={styles.field}>
+              <div className={styles.field} data-field="website">
                 <label className={styles.fieldLabel} htmlFor="sup-website">
                   Website
                 </label>
@@ -302,7 +302,7 @@ export default function SupplierFormPage() {
                   />
                 </div>
               </div>
-              <div className={styles.field}>
+              <div className={styles.field} data-field="phone">
                 <label className={styles.fieldLabel} htmlFor="sup-phone">
                   Phone
                 </label>
@@ -320,7 +320,7 @@ export default function SupplierFormPage() {
             </div>
 
             <div className={styles.formRow2}>
-              <div className={styles.field}>
+              <div className={styles.field} data-field="email">
                 <label className={styles.fieldLabel} htmlFor="sup-email">
                   Email
                 </label>
@@ -336,7 +336,7 @@ export default function SupplierFormPage() {
                 />
                 {errors.email && <div className={styles.fieldError}>{errors.email}</div>}
               </div>
-              <div className={styles.field}>
+              <div className={styles.field} data-field="contact_name">
                 <label className={styles.fieldLabel} htmlFor="sup-contact">
                   Contact (sales rep)
                 </label>
@@ -378,6 +378,7 @@ export default function SupplierFormPage() {
           </button>
           <button
             type="submit"
+            data-tour="submit-supplier"
             className={`${styles.btn} ${styles.btnPrimary}`}
             disabled={saving || deleting}
           >

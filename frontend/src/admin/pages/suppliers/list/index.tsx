@@ -91,7 +91,11 @@ export default function SuppliersPage() {
             <Upload size={16} strokeWidth={2} />
             Import CSV
           </Link>
-          <Link to="/admin/suppliers/new" className={`${styles.btn} ${styles.btnPrimary}`}>
+          <Link
+            to="/admin/suppliers/new"
+            data-tour="add-supplier"
+            className={`${styles.btn} ${styles.btnPrimary}`}
+          >
             <Plus size={16} strokeWidth={2} />
             Add Supplier
           </Link>
@@ -136,6 +140,7 @@ export default function SuppliersPage() {
             filtered.map(({ supplier, tier }) => (
               <article
                 key={supplier.id}
+                data-tour="supplier-card"
                 className={styles.supCard}
                 onClick={() => navigate(`/admin/suppliers/${supplier.id}`)}
                 role="button"

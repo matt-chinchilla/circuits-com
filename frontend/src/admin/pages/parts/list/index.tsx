@@ -458,7 +458,11 @@ export default function PartsPage() {
             <Download />
             Export
           </button>
-          <Link to="/admin/parts/new" className={`${styles.btn} ${styles.btnPrimary}`}>
+          <Link
+            to="/admin/parts/new"
+            data-tour="add-part"
+            className={`${styles.btn} ${styles.btnPrimary}`}
+          >
             <Plus />
             Add Part
           </Link>

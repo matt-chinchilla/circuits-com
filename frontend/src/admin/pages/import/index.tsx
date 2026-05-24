@@ -187,13 +187,14 @@ export default function ImportPage() {
 
       {/* ─── Stepper ──────────────────────────────────────────────────── */}
       {step !== 'done' && (
-        <div className={styles.stepper}>
+        <div className={styles.stepper} data-tour="import-stepper">
           {VISIBLE_STEPS.map((key, i) => {
             const active = key === step;
             const done = i < stepIndex;
             return (
               <div
                 key={key}
+                data-tour={active ? `import-step-${key}` : undefined}
                 className={`${styles.step} ${active ? styles.stepActive : ''} ${done ? styles.stepDone : ''}`}
               >
                 <div className={styles.stepNum}>
@@ -234,6 +235,8 @@ export default function ImportPage() {
 
             <div
               {...getRootProps()}
+              data-tour="csv-dropzone"
+              data-file-staged={file ? 'true' : undefined}
               className={`${styles.dropzone} ${isDragActive ? styles.dropzoneOver : ''} ${file ? styles.dropzoneHasFile : ''}`}
             >
               <input {...getInputProps()} />
@@ -359,8 +362,8 @@ LM7805CT,5V 1.5A LDO,Texas Instruments,pmic,240000,0.45`}
 
       {/* ─── Step 4: Done (results) ──────────────────────────────────── */}
       {step === 'done' && result && (
-        <div className={styles.panel}>
-          <div className={styles.panelHead}>
+        <div className={styles.panel} data-tour="import-step-done">
+          <div className={styles.panelHead} data-tour="import-done-summary">
             <h3 className={styles.panelTitle}>Import complete</h3>
           </div>
           <div className={styles.panelBody}>
@@ -439,6 +442,7 @@ LM7805CT,5V 1.5A LDO,Texas Instruments,pmic,240000,0.45`}
           )}
           <button
             type="button"
+            data-tour="import-continue"
             className={`${styles.btn} ${styles.btnPrimary}`}
             disabled={nextDisabled}
             onClick={goNext}

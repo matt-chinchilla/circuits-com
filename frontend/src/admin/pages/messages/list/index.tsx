@@ -64,7 +64,12 @@ function MessageRow({ m, onOpen, onAction, isFresh }: RowProps) {
     .join(' ');
 
   return (
-    <tr className={rowClass} onClick={() => onOpen(m.id)}>
+    <tr
+      className={rowClass}
+      data-msg-id={m.id}
+      data-msg-status={m.status}
+      onClick={() => onOpen(m.id)}
+    >
       <td className={styles.cDot}>
         <StatusDot status={m.status} isFresh={isFresh} />
       </td>

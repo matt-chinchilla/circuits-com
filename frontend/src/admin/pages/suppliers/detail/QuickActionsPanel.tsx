@@ -107,6 +107,7 @@ export default function QuickActionsPanel({ supplier, partRows, onAfterSync }: P
     <div className={styles.qaStrip}>
       <button
         type="button"
+        data-tour="qa-add-part"
         className={`${styles.qaCard} ${styles.qaCardPrimary}`}
         onClick={handleAddPart}
       >
@@ -125,6 +126,7 @@ export default function QuickActionsPanel({ supplier, partRows, onAfterSync }: P
 
       <button
         type="button"
+        data-tour="qa-import-csv"
         className={`${styles.qaCard} ${styles.qaCardBlue}`}
         onClick={handleImportCSV}
       >
@@ -142,6 +144,7 @@ export default function QuickActionsPanel({ supplier, partRows, onAfterSync }: P
 
       <button
         type="button"
+        data-tour="qa-add-sponsorship"
         className={`${styles.qaCard} ${styles.qaCardGold}`}
         onClick={handleAddSponsorship}
       >

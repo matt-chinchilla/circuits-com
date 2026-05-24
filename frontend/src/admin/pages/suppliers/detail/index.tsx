@@ -154,6 +154,7 @@ export default function SupplierDetailPage() {
         <div className={styles.pageHeadActions}>
           <button
             type="button"
+            data-tour="delete-supplier"
             className={`${styles.btn} ${styles.btnDangerGhost}`}
             onClick={() => setConfirmDelete(true)}
           >
@@ -323,7 +324,11 @@ export default function SupplierDetailPage() {
       </div>
 
       {confirmDelete && (
-        <div className={styles.modalBackdrop} onClick={closeDeleteModal}>
+        <div
+          className={styles.modalBackdrop}
+          data-modal="confirm-delete"
+          onClick={closeDeleteModal}
+        >
           <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
             <h3 className={styles.modalTitle}>Delete {supplier.name}?</h3>
             <p className={styles.modalBody}>
@@ -343,6 +348,7 @@ export default function SupplierDetailPage() {
               </button>
               <button
                 type="button"
+                data-modal-confirm="true"
                 className={`${styles.btn} ${styles.btnDanger}`}
                 onClick={handleDelete}
                 disabled={deleting}

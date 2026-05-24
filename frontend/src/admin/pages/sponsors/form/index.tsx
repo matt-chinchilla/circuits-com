@@ -291,7 +291,7 @@ export default function SponsorFormPage() {
               {errors.supplier_id && <div className={styles.fieldError}>{errors.supplier_id}</div>}
             </div>
 
-            <div className={styles.field}>
+            <div className={styles.field} data-field="tier">
               <label className={styles.fieldLabel} htmlFor="tier">
                 Tier <span className={styles.fieldReq}>*</span>
               </label>
@@ -425,7 +425,7 @@ export default function SponsorFormPage() {
             </div>
 
             <div className={styles.formRow2}>
-              <div className={styles.field}>
+              <div className={styles.field} data-field="amount">
                 <label className={styles.fieldLabel} htmlFor="amount">
                   Monthly amount (USD) <span className={styles.fieldReq}>*</span>
                 </label>
@@ -552,6 +552,7 @@ export default function SponsorFormPage() {
           </Link>
           <button
             type="submit"
+            data-tour="submit-sponsor"
             className={`${styles.btn} ${styles.btnPrimary}`}
             disabled={saving}
           >

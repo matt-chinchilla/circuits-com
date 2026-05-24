@@ -136,6 +136,7 @@ export default function PartDetailPage() {
         <div className={styles.pageHeadActions}>
           <button
             type="button"
+            data-tour="delete-part"
             className={`${styles.btn} ${styles.btnDangerGhost}`}
             onClick={() => setConfirmDelete(true)}
             disabled={deleting}
@@ -288,7 +289,11 @@ export default function PartDetailPage() {
       </div>
 
       {confirmDelete && (
-        <div className={styles.modalBackdrop} onClick={() => setConfirmDelete(false)}>
+        <div
+          className={styles.modalBackdrop}
+          data-modal="confirm-delete"
+          onClick={() => setConfirmDelete(false)}
+        >
           <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
             <h3 className={styles.modalTitle}>Delete {part.sku}?</h3>
             <p className={styles.modalBody}>
@@ -305,6 +310,7 @@ export default function PartDetailPage() {
               </button>
               <button
                 type="button"
+                data-modal-confirm="true"
                 className={`${styles.btn} ${styles.btnDanger}`}
                 onClick={handleDelete}
                 disabled={deleting}

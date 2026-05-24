@@ -82,6 +82,7 @@ export default function MessageReplyPanel({ m, onSend }: Props) {
 
       <textarea
         className={styles.replyText}
+        data-tour="reply-text"
         rows={6}
         placeholder={`Write a reply to ${senderName(m)}…`}
         value={body}
@@ -92,6 +93,7 @@ export default function MessageReplyPanel({ m, onSend }: Props) {
         <span className={styles.replyFrom}>From: no-reply@circuits.com</span>
         <button
           type="button"
+          data-tour="reply-send"
           className={styles.sendBtn}
           onClick={send}
           disabled={sending || !body.trim()}

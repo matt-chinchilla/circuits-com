@@ -275,7 +275,7 @@ export default function PartFormPage() {
           <div className={styles.panelBody}>
             <div className={styles.formBody}>
               <div className={styles.formRow2}>
-                <div className={styles.field}>
+                <div className={styles.field} data-field="sku">
                   <label className={styles.fieldLabel}>
                     SKU / Part number
                     <span className={styles.fieldReq}>*</span>
@@ -296,7 +296,7 @@ export default function PartFormPage() {
                     </div>
                   )}
                 </div>
-                <div className={styles.field}>
+                <div className={styles.field} data-field="manufacturer_name">
                   <label className={styles.fieldLabel}>
                     Manufacturer
                     <span className={styles.fieldReq}>*</span>
@@ -314,7 +314,7 @@ export default function PartFormPage() {
                 </div>
               </div>
 
-              <div className={styles.field}>
+              <div className={styles.field} data-field="description">
                 <label className={styles.fieldLabel}>Description</label>
                 <textarea
                   className={styles.textarea}
@@ -339,7 +339,7 @@ export default function PartFormPage() {
           <div className={styles.panelBody}>
             <div className={styles.formBody}>
               <div className={styles.formRow2}>
-                <div className={styles.field}>
+                <div className={styles.field} data-field="category_id">
                   <label className={styles.fieldLabel}>Category</label>
                   <div className={styles.selectWrap}>
                     <select
@@ -452,7 +452,7 @@ export default function PartFormPage() {
                         Units in stock at {prefill.supplier_name}.
                       </div>
                     </div>
-                    <div className={styles.field}>
+                    <div className={styles.field} data-field="initial_unit_price">
                       <label className={styles.fieldLabel}>Unit price (USD)</label>
                       <input
                         type="number"
@@ -499,6 +499,7 @@ export default function PartFormPage() {
           </Link>
           <button
             type="button"
+            data-tour="submit-part"
             className={`${styles.btn} ${styles.btnPrimary}`}
             onClick={handleSubmit}
             disabled={saving || deleting}

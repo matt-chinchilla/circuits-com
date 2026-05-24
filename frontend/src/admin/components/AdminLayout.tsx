@@ -11,6 +11,7 @@ import {
   refreshMessages,
   unreadCount,
 } from '@admin/services/messageStore';
+import { Wizard } from '@admin/wizard';
 import styles from './AdminLayout.module.scss';
 import type { ReactNode } from 'react';
 
@@ -30,24 +31,27 @@ interface SidebarLink {
   icon: string;
   badgeKey?: BadgeKey;
   adminOnly?: boolean;
+  // Anchor hook for the guided-tour wizard. Falls through to NavLink as
+  // data-tour="<value>" so flows can spotlight specific sidebar entries.
+  tour?: string;
 }
 
 const CATALOG_LINKS: SidebarLink[] = [
-  { to: '/admin', label: 'Dashboard', icon: 'gauge' },
-  { to: '/admin/parts', label: 'Parts', icon: 'package', badgeKey: 'parts' },
-  { to: '/admin/suppliers', label: 'Suppliers', icon: 'buildings', badgeKey: 'suppliers' },
-  { to: '/admin/categories', label: 'Categories', icon: 'squares-four', adminOnly: true },
-  { to: '/admin/sponsors', label: 'Sponsors', icon: 'star', adminOnly: true },
-  { to: '/admin/reports', label: 'Reports', icon: 'chart-bar' },
+  { to: '/admin', label: 'Dashboard', icon: 'gauge', tour: 'side-dashboard' },
+  { to: '/admin/parts', label: 'Parts', icon: 'package', badgeKey: 'parts', tour: 'side-parts' },
+  { to: '/admin/suppliers', label: 'Suppliers', icon: 'buildings', badgeKey: 'suppliers', tour: 'side-suppliers' },
+  { to: '/admin/categories', label: 'Categories', icon: 'squares-four', adminOnly: true, tour: 'side-categories' },
+  { to: '/admin/sponsors', label: 'Sponsors', icon: 'star', adminOnly: true, tour: 'side-sponsors' },
+  { to: '/admin/reports', label: 'Reports', icon: 'chart-bar', tour: 'side-reports' },
 ];
 
 const COMMS_LINKS: SidebarLink[] = [
-  { to: '/admin/messages', label: 'Messages', icon: 'envelope', adminOnly: true },
+  { to: '/admin/messages', label: 'Messages', icon: 'envelope', adminOnly: true, tour: 'side-messages' },
 ];
 
 const SYSTEM_LINKS: SidebarLink[] = [
-  { to: '/admin/import', label: 'Import Queue', icon: 'upload-simple', badgeKey: 'imports' },
-  { to: '/admin/settings', label: 'Settings', icon: 'gear-six' },
+  { to: '/admin/import', label: 'Import Queue', icon: 'upload-simple', badgeKey: 'imports', tour: 'side-import' },
+  { to: '/admin/settings', label: 'Settings', icon: 'gear-six', tour: 'side-settings' },
 ];
 
 // Demo magnitudes per v5 design data.jsx (hand-tuned to feel believable
@@ -261,6 +265,7 @@ export default function AdminLayout({ children, role = 'admin' }: AdminLayoutPro
         key={link.to}
         to={link.to}
         end={link.to === '/admin'}
+        data-tour={link.tour}
         className={({ isActive }) => `${styles.sideItem} ${isActive ? styles.active : ''}`}
       >
         <Icon name={link.icon} />
@@ -353,6 +358,7 @@ export default function AdminLayout({ children, role = 'admin' }: AdminLayoutPro
         <header className={styles.topbar}>
           <button
             type="button"
+            data-tour="open-mobile-menu"
             className={styles.topbarBurger}
             onClick={() => setMenuOpen(true)}
             aria-label="Open menu"
@@ -453,6 +459,11 @@ export default function AdminLayout({ children, role = 'admin' }: AdminLayoutPro
         }}
         onCancel={() => setSignOutOpen(false)}
       />
+
+      {/* Guided-tour wizard. Mounts as a sibling of {children} so it lives
+          inside the React Router context (useNavigate/useLocation work) but
+          outside the page's scroll container, so the FAB stays pinned. */}
+      <Wizard />
     </div>
   );
 }
