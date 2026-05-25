@@ -216,6 +216,48 @@ def test_spotlight_renders_click_blockers_around_target():
     )
 
 
+def test_preview_tip_swallows_click_propagation():
+    """Bug 2026-05-24: clicking "Got it" in the live-site preview tip
+    advanced the wizard TWICE — once via the button's onNext, once via
+    the click bubbling up to .previewBackdrop whose onClick is bound to
+    onClose (also wired to advance). Users skipped step 12 entirely and
+    landed on step 13's confirm-delete spotlight, which felt confusing
+    because the modal wasn't open yet.
+
+    Root cause: .previewTip is a sibling of .previewFrame and didn't have
+    a stopPropagation handler. .previewFrame does (so iframe clicks don't
+    dismiss the modal), but the tip needs its own.
+
+    This test enforces the stopPropagation handler exists on the tip so a
+    future refactor can't silently reintroduce the double-advance.
+    """
+    src = _read("frontend/src/admin/wizard/LivePreviewModal.tsx")
+
+    # Find the .previewTip className reference and inspect the window of
+    # source immediately around it. A naive `<div ...>` regex breaks here
+    # because the `=>` inside arrow-function attribute values contains a
+    # `>` that ends the match prematurely. A 200-char window covers the
+    # whole opening tag (className + optional onClick + any other attrs)
+    # in any reasonable formatting.
+    tip_marker_idx = src.find("styles.previewTip")
+    assert tip_marker_idx != -1, (
+        "LivePreviewModal.tsx must render a <div className={styles.previewTip}>. "
+        "Missing this would break the preview modal's tooltip card entirely."
+    )
+    # Window: 30 chars back (catches the `<div className=` prefix) to 250
+    # chars forward (covers any attribute set on the same opening tag).
+    window = src[max(0, tip_marker_idx - 30) : tip_marker_idx + 250]
+    assert "stopPropagation" in window, (
+        "LivePreviewModal's .previewTip <div> must include "
+        '`onClick={(e) => e.stopPropagation()}` (or equivalent). Without it, '
+        "clicks on the 'Got it' button bubble to the .previewBackdrop whose "
+        "onClick={onClose} fires a second advance() — the wizard skips step "
+        "12 and lands on step 13's confirm-delete spotlight with no modal "
+        "open. The matching guard lives at <div className={styles.previewFrame}>; "
+        "the tip needs the same."
+    )
+
+
 def test_modal_advance_skips_grace_window():
     """Bug 2026-05-24: the 450ms grace window in useAdvance was making
     the wizard feel sluggish when the user clicked Delete — modal opened

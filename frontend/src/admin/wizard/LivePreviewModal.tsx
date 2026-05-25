@@ -104,7 +104,13 @@ export default function LivePreviewModal({
           />
         )}
       </div>
-      <div className={styles.previewTip}>
+      {/* The tip sits OUTSIDE .previewFrame (positioned absolutely below it).
+          Without stopPropagation, clicks on the "Got it" button bubble up
+          to the .previewBackdrop which fires onClose — and since both
+          onClose and onNext are bound to advance() in WizardApp, the
+          wizard would advance twice and skip the next step. Matches the
+          guard on .previewFrame above. */}
+      <div className={styles.previewTip} onClick={(e) => e.stopPropagation()}>
         <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>{step.title}</div>
         <div>{body}</div>
         <button
