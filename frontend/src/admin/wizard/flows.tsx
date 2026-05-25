@@ -465,36 +465,38 @@ export const FLOWS: Flow[] = [
         body: (
           <>
             <p>UTF-8 CSV with this header — order matters:</p>
-            <table className="wiz-csv-grid">
-              <thead>
-                <tr>
-                  <th>sku</th>
-                  <th>description</th>
-                  <th>manufacturer</th>
-                  <th>category</th>
-                  <th>stock</th>
-                  <th>price_usd</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td>DEMO-CAP-100</td>
-                  <td>10uF X7R Cap</td>
-                  <td>Demo Co.</td>
-                  <td>pmic</td>
-                  <td>5000</td>
-                  <td>1.25</td>
-                </tr>
-                <tr>
-                  <td>DEMO-MCU-200</td>
-                  <td>ARM M0 MCU</td>
-                  <td>Demo Co.</td>
-                  <td>mcu</td>
-                  <td>3200</td>
-                  <td>2.85</td>
-                </tr>
-              </tbody>
-            </table>
+            <div className="wiz-csv-scroll">
+              <table className="wiz-csv-grid">
+                <thead>
+                  <tr>
+                    <th>sku</th>
+                    <th>description</th>
+                    <th>mfr</th>
+                    <th>cat</th>
+                    <th>stock</th>
+                    <th>price</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>DEMO-CAP-100</td>
+                    <td>10uF Cap</td>
+                    <td>Demo</td>
+                    <td>pmic</td>
+                    <td>5000</td>
+                    <td>1.25</td>
+                  </tr>
+                  <tr>
+                    <td>DEMO-MCU-200</td>
+                    <td>ARM M0</td>
+                    <td>Demo</td>
+                    <td>mcu</td>
+                    <td>3200</td>
+                    <td>2.85</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </>
         ),
         hint: 'The "Required columns" disclosure on the upload page has the same schema.',

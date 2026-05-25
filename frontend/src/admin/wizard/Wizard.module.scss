@@ -459,29 +459,34 @@
     border-radius: 4px;
     color: $executive-blue;
   }
-  :global(.wiz-csv-grid) {
-    width: 100%;
+  :global(.wiz-csv-scroll) {
     margin: 8px 0 4px;
-    border-collapse: collapse;
-    font-family: $font-mono;
-    font-size: 11px;
-    line-height: 1.3;
     border: 1px solid #d1d5db;
     border-radius: 6px;
     overflow: hidden;
+  }
+  :global(.wiz-csv-grid) {
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: collapse;
+    font-family: $font-mono;
+    font-size: 10px;
+    line-height: 1.3;
     th, td {
-      padding: 4px 6px;
+      padding: 3px 4px;
       border: 1px solid #e5e7eb;
       text-align: left;
+      overflow: hidden;
+      text-overflow: ellipsis;
       white-space: nowrap;
     }
     th {
       background: #f0fdf4;
       color: $executive-blue;
       font-weight: 600;
-      font-size: 10.5px;
+      font-size: 9.5px;
       text-transform: uppercase;
-      letter-spacing: 0.03em;
+      letter-spacing: 0.02em;
     }
     td {
       background: #fff;
