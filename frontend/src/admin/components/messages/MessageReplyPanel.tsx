@@ -80,14 +80,16 @@ export default function MessageReplyPanel({ m, onSend }: Props) {
         ))}
       </div>
 
-      <textarea
-        className={styles.replyText}
-        data-tour="reply-text"
-        rows={6}
-        placeholder={`Write a reply to ${senderName(m)}…`}
-        value={body}
-        onChange={(e) => setBody(e.target.value)}
-      />
+      <div data-field="reply_text">
+        <textarea
+          className={styles.replyText}
+          data-tour="reply-text"
+          rows={6}
+          placeholder={`Write a reply to ${senderName(m)}…`}
+          value={body}
+          onChange={(e) => setBody(e.target.value)}
+        />
+      </div>
 
       <div className={styles.replyFoot}>
         <span className={styles.replyFrom}>From: no-reply@circuits.com</span>

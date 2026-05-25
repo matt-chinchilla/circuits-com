@@ -304,6 +304,8 @@ export const FLOWS: Flow[] = [
             anything works.
           </>
         ),
+        suggested: '__auto_select__',
+        suggestedLabel: 'First available category',
         advance: { kind: 'value', fieldName: 'category_id', test: (v) => !!v && v.length > 1 },
       },
       {
@@ -647,7 +649,7 @@ export const FLOWS: Flow[] = [
         advance: { kind: 'route', test: (r) => /^messages\/.+/.test(r) },
       },
       {
-        selector: '[data-tour="reply-text"]',
+        fieldName: 'reply_text',
         title: 'Compose your reply',
         body: (
           <>

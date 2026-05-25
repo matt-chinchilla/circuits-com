@@ -80,6 +80,8 @@ EXPECTED_DATA_FIELD = {
     # Sponsor form
     "tier",
     "amount",
+    # Message reply
+    "reply_text",
 }
 
 
