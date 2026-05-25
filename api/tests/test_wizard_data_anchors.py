@@ -75,6 +75,7 @@ EXPECTED_DATA_FIELD = {
     "manufacturer_name",
     "category_id",
     "initial_unit_price",
+    "initial_stock_quantity",
     "lifecycle_status",
     "datasheet_url",
     # Sponsor form

@@ -236,7 +236,7 @@ export const FLOWS: Flow[] = [
     summary: "Use a supplier's Quick Actions to add a SKU with pre-filled context.",
     icon: 'package',
     accent: 'blue',
-    minutes: 2,
+    minutes: 3,
     steps: [
       {
         goto: 'suppliers',
@@ -307,6 +307,51 @@ export const FLOWS: Flow[] = [
         suggested: '__auto_select__',
         suggestedLabel: 'First available category',
         advance: { kind: 'value', fieldName: 'category_id', test: (v) => !!v && v.length > 1 },
+      },
+      {
+        fieldName: 'lifecycle_status',
+        title: 'Lifecycle status',
+        body: (
+          <>
+            Where the part sits in its production lifecycle. <i>Active</i> means in full production;{' '}
+            <i>NRND</i> and <i>EOL</i> flag parts winding down.
+          </>
+        ),
+        suggested: 'active',
+        suggestedLabel: 'Active (in production)',
+        advance: { kind: 'value', fieldName: 'lifecycle_status', test: (v) => !!v },
+      },
+      {
+        fieldName: 'datasheet_url',
+        title: 'Datasheet URL',
+        body: (
+          <>
+            Link to the manufacturer&apos;s PDF datasheet — engineers click through from the part
+            detail page.
+          </>
+        ),
+        suggested: 'ti.com/lit/ds/symlink/lm358.pdf',
+        advance: {
+          kind: 'value',
+          fieldName: 'datasheet_url',
+          test: (v) => v.includes('.') && v.length >= 5,
+        },
+      },
+      {
+        fieldName: 'initial_stock_quantity',
+        title: 'Stock quantity',
+        body: (
+          <>
+            How many units this supplier has in stock right now. This feeds the public-site stock
+            column and availability badges.
+          </>
+        ),
+        suggested: DEMO_PART.stock,
+        advance: {
+          kind: 'value',
+          fieldName: 'initial_stock_quantity',
+          test: (v) => Number(v) > 0,
+        },
       },
       {
         fieldName: 'initial_unit_price',

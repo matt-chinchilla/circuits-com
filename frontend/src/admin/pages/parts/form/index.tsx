@@ -432,7 +432,7 @@ export default function PartFormPage() {
               <div className={styles.panelBody}>
                 <div className={styles.formBody}>
                   <div className={styles.formRow2}>
-                    <div className={styles.field}>
+                    <div className={styles.field} data-field="initial_stock_quantity">
                       <label className={styles.fieldLabel}>Stock quantity</label>
                       <input
                         type="number"
