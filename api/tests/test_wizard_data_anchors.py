@@ -314,3 +314,69 @@ def test_modal_advance_skips_grace_window():
         f"modalGone branch calls `{modal_gone_call.group(1)}()` but must "
         f"call `{grace_free}()` for the same reason."
     )
+
+
+def test_wizard_cleans_up_demo_entities_on_exit():
+    """Bug 2026-05-25: running the add-supplier tutorial N times leaves N
+    orphaned "Demo Components Inc." suppliers in the database. The cleanup
+    steps (delete → confirm) only fire if the user follows through to
+    step 12. Exiting, refreshing, or starting a new flow at any earlier
+    point leaves the entity behind.
+
+    The fix uses localStorage tracking + best-effort API cleanup:
+      1. demoCleanup.ts — trackDemoEntity / cleanupAllDemoEntities
+      2. WizardApp.tsx — calls cleanup on exit AND flow-start
+
+    This test enforces both the module and the wiring exist.
+    """
+    cleanup_path = (
+        _REPO_ROOT / "frontend" / "src" / "admin" / "wizard" / "demoCleanup.ts"
+    )
+    assert cleanup_path.exists(), (
+        "demoCleanup.ts is missing from the wizard module. Without it, "
+        "exiting the add-supplier tutorial mid-flow leaves orphaned "
+        "suppliers in the database — one per tutorial run."
+    )
+
+    cleanup_src = cleanup_path.read_text(encoding="utf-8")
+    assert "cleanupAllDemoEntities" in cleanup_src, (
+        "demoCleanup.ts must export cleanupAllDemoEntities — the function "
+        "that best-effort-deletes all tracked demo entities."
+    )
+    assert "trackDemoEntity" in cleanup_src, (
+        "demoCleanup.ts must export trackDemoEntity — the function that "
+        "records a just-created entity ID in localStorage for later cleanup."
+    )
+
+    app_src = _read("frontend/src/admin/wizard/WizardApp.tsx")
+    assert "cleanupAllDemoEntities" in app_src, (
+        "WizardApp.tsx must import and call cleanupAllDemoEntities. Without "
+        "this wiring the cleanup module exists but never runs."
+    )
+    assert "trackDemoEntity" in app_src, (
+        "WizardApp.tsx must import and call trackDemoEntity to record the "
+        "entity ID when a demo supplier or part is created mid-flow."
+    )
+
+    # Cleanup must fire from BOTH exit and start — exit handles the
+    # immediate case, start catches orphans from refreshes/crashes.
+    exit_idx = app_src.find("exitFlow")
+    start_idx = app_src.find("startFlow")
+    assert exit_idx != -1 and start_idx != -1, (
+        "WizardApp.tsx must define both exitFlow and startFlow callbacks."
+    )
+
+    # exitFlow body must reference cleanup
+    exit_window = app_src[exit_idx : exit_idx + 200]
+    assert "cleanupAllDemoEntities" in exit_window, (
+        "exitFlow must call cleanupAllDemoEntities so that demo entities "
+        "are deleted when the user clicks Exit mid-tutorial."
+    )
+
+    # startFlow body must reference cleanup
+    start_window = app_src[start_idx : start_idx + 200]
+    assert "cleanupAllDemoEntities" in start_window, (
+        "startFlow must call cleanupAllDemoEntities so that orphaned "
+        "entities from a previous crashed/refreshed session are cleaned "
+        "up before creating new ones."
+    )

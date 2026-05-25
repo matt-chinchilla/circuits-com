@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import Fab from './Fab';
 import Menu from './Menu';
@@ -8,6 +8,7 @@ import LivePreviewModal from './LivePreviewModal';
 import { FLOWS, SAMPLE_CSV_TEXT } from './flows';
 import { autofillField, getRoute, navTo } from './helpers';
 import { useExposeGlobals } from './useExposeGlobals';
+import { cleanupAllDemoEntities, clearDemoEntity, trackDemoEntity } from './demoCleanup';
 import type { Flow, Step } from './types';
 
 const WELCOMED_KEY = 'wiz-welcomed';
@@ -77,13 +78,34 @@ export default function WizardApp() {
     navTo(target);
   }, [activeFlowId, stepIndex, step]);
 
+  // Track demo entity IDs created during flows so we can clean them up
+  // if the user exits early or refreshes. The previous route lets us detect
+  // the new→detail transition that signals entity creation.
+  const prevRouteRef = useRef(currentRoute);
+  useEffect(() => {
+    const prev = prevRouteRef.current;
+    prevRouteRef.current = currentRoute;
+    if (!activeFlowId) return;
+
+    if (activeFlowId === 'add-supplier' && prev === 'suppliers/new') {
+      const m = currentRoute.match(/^suppliers\/([^/]+)$/);
+      if (m) trackDemoEntity('supplier', m[1]);
+    }
+    if (activeFlowId === 'add-part-to-supplier' && prev === 'parts/new') {
+      const m = currentRoute.match(/^parts\/([^/]+)$/);
+      if (m) trackDemoEntity('part', m[1]);
+    }
+  }, [activeFlowId, currentRoute]);
+
   const startFlow = useCallback((flowId: string, resume: boolean) => {
+    cleanupAllDemoEntities();
     setActiveFlowId(flowId);
     if (!resume) setStepIndex(0);
     setMenuOpen(false);
   }, []);
 
   const exitFlow = useCallback(() => {
+    cleanupAllDemoEntities();
     setActiveFlowId(null);
     setStepIndex(0);
   }, []);
@@ -91,6 +113,11 @@ export default function WizardApp() {
   const advance = useCallback(() => {
     if (!activeFlow) return;
     if (stepIndex + 1 >= activeFlow.steps.length) {
+      // Flow completed normally — entity was already deleted by the user
+      // during the tutorial's cleanup steps. Clear tracking so next start
+      // doesn't fire a wasted 404.
+      if (activeFlow.id === 'add-supplier') clearDemoEntity('supplier');
+      if (activeFlow.id === 'add-part-to-supplier') clearDemoEntity('part');
       setActiveFlowId(null);
       setStepIndex(0);
     } else {
