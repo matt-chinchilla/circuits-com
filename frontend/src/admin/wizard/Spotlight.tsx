@@ -154,20 +154,63 @@ export default function Spotlight({
     }
   }, [selector, stepIndex]);
 
+  // Click discipline:
+  // - Annotation steps render a full-viewport dim with pointer-events:auto,
+  //   swallowing every click on the underlying app.
+  // - Spotlight steps render FOUR clickBlocker rectangles around the
+  //   spotlight rect — top / left / right / bottom strips that cover the
+  //   whole viewport EXCEPT the spotlight area. Clicks on the spotlight
+  //   pass through to the underlying button (no overlay covers it); clicks
+  //   anywhere else land on a blocker and get stopPropagation'd. This is
+  //   the surgical fix for the 2026-05-24 "clicks outside spotlight should
+  //   be blocked" bug — pointer-events:none on a single full-viewport dim
+  //   let every off-target click through.
+  // The blocker div has no default action (no form submit, no link nav),
+  // so stopPropagation alone is what's actually doing the work — it
+  // prevents the click from bubbling up to any underlying handler that
+  // could navigate or mutate state.
+  const swallow = (e: React.MouseEvent) => e.stopPropagation();
+
   return (
     <>
       <div className={`${styles.dim} ${isAnnotation ? styles.dimFull : ''}`} />
       {!isAnnotation && rect && (
-        <div
-          className={styles.spotlight}
-          style={{
-            top: rect.top,
-            left: rect.left,
-            width: rect.width,
-            height: rect.height,
-            borderRadius: rect.height > 60 ? 12 : 8,
-          }}
-        />
+        <>
+          {/* Top strip: from viewport top down to the spotlight top. */}
+          <div
+            className={styles.clickBlocker}
+            onClick={swallow}
+            style={{ top: 0, left: 0, right: 0, height: Math.max(0, rect.top) }}
+          />
+          {/* Left strip: spotlight-height tall, viewport-left to spotlight-left. */}
+          <div
+            className={styles.clickBlocker}
+            onClick={swallow}
+            style={{ top: rect.top, left: 0, width: Math.max(0, rect.left), height: rect.height }}
+          />
+          {/* Right strip: spotlight-height tall, spotlight-right to viewport-right. */}
+          <div
+            className={styles.clickBlocker}
+            onClick={swallow}
+            style={{ top: rect.top, left: rect.left + rect.width, right: 0, height: rect.height }}
+          />
+          {/* Bottom strip: from spotlight bottom down to viewport bottom. */}
+          <div
+            className={styles.clickBlocker}
+            onClick={swallow}
+            style={{ top: rect.top + rect.height, left: 0, right: 0, bottom: 0 }}
+          />
+          <div
+            className={styles.spotlight}
+            style={{
+              top: rect.top,
+              left: rect.left,
+              width: rect.width,
+              height: rect.height,
+              borderRadius: rect.height > 60 ? 12 : 8,
+            }}
+          />
+        </>
       )}
       <CoachCard
         step={step}

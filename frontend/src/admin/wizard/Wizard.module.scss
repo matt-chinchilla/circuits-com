@@ -332,6 +332,20 @@
   background: rgba(10, 20, 30, 0.55);
 }
 
+// Four rectangles positioned around the spotlight target. Each strip
+// covers a region OUTSIDE the spotlight rect; together they fill the
+// viewport except for the spotlight area. Clicks land on a strip and
+// get swallowed in JSX; clicks inside the spotlight rect have no overlay
+// above them and reach the underlying button. Transparent — the dimming
+// itself comes from the .spotlight box-shadow.
+.clickBlocker {
+  position: fixed;
+  pointer-events: auto;
+  background: transparent;
+  z-index: 9998;
+  cursor: not-allowed;
+}
+
 .spotlight {
   position: fixed;
   pointer-events: none;

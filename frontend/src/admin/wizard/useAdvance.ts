@@ -30,10 +30,20 @@ export function useAdvance(
     return () => clearTimeout(t);
   }, [stepKey, currentRoute, advance, onAdvance]);
 
-  // Polling advances: value/predicate/modal/modalGone. 450ms grace before
-  // any signal can fire — guards against stale-DOM false-positives carrying
-  // over from the previous step (half-torn-down modal, lingering input
-  // value, etc).
+  // Polling advances. Two timing modes:
+  //
+  // - `fire()` (graced): used by value/predicate. 450ms grace before any
+  //   signal can trigger — guards against stale-DOM false-positives
+  //   carrying over from the previous step (a half-torn-down modal, a
+  //   lingering input value with the previous step's content matching the
+  //   current step's predicate, etc).
+  //
+  // - `fireImmediate()` (grace-free): used by modal/modalGone. A
+  //   confirm-delete modal only appears because the user EXPLICITLY
+  //   clicked the spotlighted Delete button — there's no stale-modal
+  //   scenario to defend against. Applying the grace here makes the
+  //   wizard feel sluggish (~900ms perceived lag between Delete click
+  //   and the spotlight moving to the Confirm button). 2026-05-24 bug.
   useEffect(() => {
     if (!advance || advance.kind === 'manual' || advance.kind === 'route') return;
 
@@ -42,6 +52,11 @@ export function useAdvance(
     const fire = () => {
       if (fired) return;
       if (Date.now() - startedAt < 450) return;
+      fired = true;
+      setTimeout(onAdvance, 240);
+    };
+    const fireImmediate = () => {
+      if (fired) return;
       fired = true;
       setTimeout(onAdvance, 240);
     };
@@ -58,9 +73,9 @@ export function useAdvance(
         } else if (advance.kind === 'predicate') {
           if (advance.test()) fire();
         } else if (advance.kind === 'modal') {
-          if (document.querySelector('[data-modal="confirm-delete"]')) fire();
+          if (document.querySelector('[data-modal="confirm-delete"]')) fireImmediate();
         } else if (advance.kind === 'modalGone') {
-          if (!document.querySelector('[data-modal="confirm-delete"]')) fire();
+          if (!document.querySelector('[data-modal="confirm-delete"]')) fireImmediate();
         }
       } catch {
         // Bad selector etc. — swallow and keep polling.

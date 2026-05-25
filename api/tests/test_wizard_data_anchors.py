@@ -163,3 +163,112 @@ def test_modal_literal_selectors_present():
         "Delete-confirm buttons need `data-modal-confirm=\"true\"` so the "
         "wizard can find the confirm-cleanup target inside the modal."
     )
+
+
+# ── Source-level invariant tests ────────────────────────────────────────
+# These check structural properties of the wizard's own TypeScript without
+# spinning up a JSDOM runner. They're contract tests against the source —
+# brittle in a useful way: if anyone refactors the wizard's behaviour they
+# also have to update these, which means they have to think about why.
+
+
+def _read(relative: str) -> str:
+    return (_REPO_ROOT / relative).read_text(encoding="utf-8")
+
+
+def test_spotlight_renders_click_blockers_around_target():
+    """Bug 2026-05-24: users reported being able to click anywhere on the
+    page during a tour, including buttons unrelated to the highlighted
+    target. The spec is: clicks INSIDE the spotlight rect pass through to
+    the spotlighted element; clicks OUTSIDE are swallowed.
+
+    The implementation uses four `clickBlocker` divs positioned around
+    the spotlight rect — top/left/right/bottom. The spotlight area itself
+    has no overlay, so clicks reach the underlying button. This test
+    enforces the structure so it can't regress to the old pointer-events:
+    none-on-the-whole-dim approach (which let every click through).
+    """
+    spotlight_src = _read("frontend/src/admin/wizard/Spotlight.tsx")
+    # Must use the click-blocker primitive when a spotlight rect exists.
+    assert "clickBlocker" in spotlight_src, (
+        "Spotlight.tsx must render <div className={styles.clickBlocker}> "
+        "elements around the spotlight rect to block off-target clicks. "
+        "Without these the wizard becomes a purely-decorative overlay and "
+        "users can interact with anything on the page during a tour."
+    )
+
+    scss_src = _read("frontend/src/admin/wizard/Wizard.module.scss")
+    assert "clickBlocker" in scss_src, (
+        "Wizard.module.scss is missing the .clickBlocker class. The four "
+        "rectangles surrounding the spotlight must be styled with "
+        "pointer-events: auto so they actually swallow clicks."
+    )
+    # The blocker MUST have pointer-events: auto — that's the whole point.
+    blocker_rule = re.search(
+        r"\.clickBlocker\s*\{[^}]*pointer-events\s*:\s*auto[^}]*\}",
+        scss_src,
+        re.DOTALL,
+    )
+    assert blocker_rule, (
+        ".clickBlocker rule must include `pointer-events: auto`. Without "
+        "it the four rectangles around the spotlight would be invisible "
+        "AND click-through — defeating the entire purpose."
+    )
+
+
+def test_modal_advance_skips_grace_window():
+    """Bug 2026-05-24: the 450ms grace window in useAdvance was making
+    the wizard feel sluggish when the user clicked Delete — modal opened
+    in ~50ms but the wizard waited 450ms + 220ms poll + 240ms onAdvance
+    transition to react. Total ~900ms perceptual lag — users described
+    step 12 as "doesn't auto-move".
+
+    The grace existed to defend against stale-DOM false positives on
+    value/predicate polls. For modal/modalGone kinds it's unnecessary —
+    a confirm-delete modal only appears because the user EXPLICITLY
+    clicked the spotlighted Delete button. No stale-DOM scenario.
+
+    This test enforces that the modal branch fires WITHOUT consulting
+    the grace gate.
+    """
+    src = _read("frontend/src/admin/wizard/useAdvance.ts")
+    # Find both modal-kind branches (modal + modalGone). The regex captures
+    # the function name called when the modal predicate matches. Non-greedy
+    # `.+?` between the kind check and the call lets the predicate contain
+    # arbitrary parens / nested punctuation without breaking the match.
+    # Using `[^}]*` to grab the full branch body would silently miss any
+    # future refactor that nested braces — targeting the call directly
+    # keeps the assertion honest about what it's verifying.
+    modal_call = re.search(
+        r"advance\.kind\s*===\s*['\"]modal['\"]\s*\)\s*\{\s*if\s*\(.+?\)\s*(\w+)\(\);",
+        src,
+        re.DOTALL,
+    )
+    modal_gone_call = re.search(
+        r"advance\.kind\s*===\s*['\"]modalGone['\"]\s*\)\s*\{\s*if\s*\(.+?\)\s*(\w+)\(\);",
+        src,
+        re.DOTALL,
+    )
+    assert modal_call, (
+        "useAdvance.ts must contain a one-statement branch for "
+        "advance.kind === 'modal' calling the advance function directly. "
+        "Missing this means either the wizard's modal-detection polling is "
+        "gone OR the structure was refactored beyond what this guard recognises."
+    )
+    assert modal_gone_call, (
+        "useAdvance.ts must contain a one-statement branch for "
+        "advance.kind === 'modalGone' calling the advance function directly."
+    )
+    # Both branches must call the grace-FREE advance function. The grace
+    # was the canonical cause of the 2026-05-24 step-12 lag bug.
+    grace_free = "fireImmediate"
+    assert modal_call.group(1) == grace_free, (
+        f"modal branch calls `{modal_call.group(1)}()` but must call "
+        f"`{grace_free}()` — using the graced `fire()` reintroduces the "
+        f"~900ms lag between clicking Delete and the spotlight moving to "
+        f"the Confirm button."
+    )
+    assert modal_gone_call.group(1) == grace_free, (
+        f"modalGone branch calls `{modal_gone_call.group(1)}()` but must "
+        f"call `{grace_free}()` for the same reason."
+    )
