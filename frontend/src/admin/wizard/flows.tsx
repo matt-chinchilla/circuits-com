@@ -1,6 +1,10 @@
 import type { Flow } from './types';
 import { getStore, getRoute } from './helpers';
 
+function supplierNameFromPage(): string {
+  return document.querySelector('h1')?.textContent?.trim() || DEMO_SUPPLIER.name;
+}
+
 // Demo data — short, recognizably fake, easy for the user to spot and
 // delete at the end of each tour.
 export const DEMO_SUPPLIER = {
@@ -153,12 +157,12 @@ export const FLOWS: Flow[] = [
       {
         type: 'annotation',
         title: 'Meet your new supplier',
-        body: (
+        body: () => (
           <>
-            Here&apos;s the detail page for <b>{DEMO_SUPPLIER.name}</b>. The colored cards at the
-            top are <i>Quick Actions</i> — they pre-fill the Add-Part, Import-CSV, and Sponsorship
-            forms with this supplier&apos;s context. Below, you&apos;d see all the parts in their
-            catalog.
+            Here&apos;s the detail page for <b>{supplierNameFromPage()}</b>. The colored cards at
+            the top are <i>Quick Actions</i> — they pre-fill the Add-Part, Import-CSV, and
+            Sponsorship forms with this supplier&apos;s context. Below, you&apos;d see all the parts
+            in their catalog.
           </>
         ),
         hint: "No parts listed yet — that's what the next tour covers.",
@@ -168,9 +172,9 @@ export const FLOWS: Flow[] = [
         type: 'preview',
         preview: { page: 'category', arg: PREVIEW_CATEGORY_SLUG },
         title: 'See it on the live site',
-        body: (
+        body: () => (
           <>
-            This is the public-facing Circuits.com — note how <b>{DEMO_SUPPLIER.name}</b> now
+            This is the public-facing Circuits.com — note how <b>{supplierNameFromPage()}</b> now
             appears as the <i>Featured Supplier</i> in the category page sidebar. Adding through
             the admin propagates to the directory immediately.
           </>
@@ -189,10 +193,10 @@ export const FLOWS: Flow[] = [
         },
         selector: '[data-tour="delete-supplier"]',
         title: "Now let's clean up",
-        body: (
+        body: () => (
           <>
-            Demo data shouldn&apos;t outlive the tutorial. Click <b>Delete</b> in the header —
-            you&apos;ll get a confirmation dialog.
+            <b>{supplierNameFromPage()}</b> was just for the tutorial. Click <b>Delete</b> in the
+            header — you&apos;ll get a confirmation dialog.
           </>
         ),
         advance: { kind: 'modal' },
@@ -200,10 +204,10 @@ export const FLOWS: Flow[] = [
       {
         selector: '[data-modal-confirm="true"]',
         title: 'Confirm the delete',
-        body: (
+        body: () => (
           <>
-            Click <b>Confirm</b> to remove <b>{DEMO_SUPPLIER.name}</b>. The supplier is gone from
-            the directory, and from the public site, in the same beat.
+            Click <b>Confirm</b> to remove <b>{supplierNameFromPage()}</b>. The supplier is gone
+            from the directory, and from the public site, in the same beat.
           </>
         ),
         advance: { kind: 'route', test: (r) => r === 'suppliers' },

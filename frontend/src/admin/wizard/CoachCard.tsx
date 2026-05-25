@@ -27,9 +27,10 @@ const COACH_W = 360;
 // Renders the title, body, optional hint, optional "Try / Use it"
 // autofill chip, step pip-bar, and Exit / Next buttons.
 //
-// Next is ALWAYS clickable — auto-advance is a nicety, not a gate. The
-// button label flips between "Skip →" (action not yet detected) and
-// "Next ✓" (detected) so the user knows the wizard noticed their input.
+// Next is ALWAYS clickable — auto-advance is a nicety, not a gate.
+// Clicking Next on a step with suggested data auto-fills first, then
+// lets useAdvance handle the transition. No "Skip" label — the tutorial
+// should always demonstrate the action, not bypass it.
 export default function CoachCard({
   step,
   stepIndex,
@@ -141,7 +142,13 @@ export default function CoachCard({
           <button
             type="button"
             className={`${styles.btn} ${styles.btnPrimary}`}
-            onClick={onNext}
+            onClick={() => {
+              if (!detected && step.suggested) {
+                onAutofill(step);
+                return;
+              }
+              onNext();
+            }}
           >
             {isLast ? (
               <>
@@ -153,7 +160,7 @@ export default function CoachCard({
               </>
             ) : (
               <>
-                Skip <WI.ArrowRight />
+                Next <WI.ArrowRight />
               </>
             )}
           </button>

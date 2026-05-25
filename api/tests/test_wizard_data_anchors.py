@@ -316,6 +316,59 @@ def test_modal_advance_skips_grace_window():
     )
 
 
+def test_coach_card_never_renders_skip_label():
+    """Bug 2026-05-25: the Next button showed "Skip →" when the user hadn't
+    completed the step's action yet. Skipping invalidates the tutorial.
+
+    The fix: button always says "Next →" and auto-fills the suggested data
+    when clicked on a step with suggested values.
+    """
+    src = _read("frontend/src/admin/wizard/CoachCard.tsx")
+    # Check that "Skip" never appears as rendered JSX text. Comments are
+    # allowed to mention it for historical context. JSX text would appear
+    # as a bare word inside `<> ... </>` or after `>`.
+    skip_jsx = re.search(r">\s*Skip\b", src)
+    assert not skip_jsx, (
+        "CoachCard.tsx renders a 'Skip' label in JSX. The wizard "
+        "should always show 'Next' — clicking it auto-fills the step's "
+        "suggested data instead of bypassing the action."
+    )
+
+
+def test_supplier_annotation_steps_use_dynamic_name():
+    """Bug 2026-05-25: step 10/14 in the add-supplier flow always said
+    "Here's the detail page for Demo Components Inc." even when the user
+    entered a custom company name.
+
+    Root cause: the body used the static DEMO_SUPPLIER.name constant
+    instead of reading the actual supplier name from the DOM.
+
+    The fix: body is a function that calls supplierNameFromPage() to read
+    the h1 text on the current page.
+    """
+    src = _read("frontend/src/admin/wizard/flows.tsx")
+    assert "supplierNameFromPage" in src, (
+        "flows.tsx must define and use supplierNameFromPage() to read the "
+        "actual supplier name from the DOM. Without this, annotation and "
+        "preview steps hardcode 'Demo Components Inc.' even when the user "
+        "entered a custom name."
+    )
+
+    # The annotation step ("Meet your new supplier") must use the dynamic
+    # reader, not the static constant.
+    meet_idx = src.find("Meet your new supplier")
+    assert meet_idx != -1
+    window = src[meet_idx : meet_idx + 400]
+    assert "supplierNameFromPage" in window, (
+        "The 'Meet your new supplier' annotation step must use "
+        "supplierNameFromPage() instead of DEMO_SUPPLIER.name."
+    )
+    assert "DEMO_SUPPLIER.name" not in window, (
+        "The 'Meet your new supplier' step still references "
+        "DEMO_SUPPLIER.name — it must use supplierNameFromPage() instead."
+    )
+
+
 def test_wizard_cleans_up_demo_entities_on_exit():
     """Bug 2026-05-25: running the add-supplier tutorial N times leaves N
     orphaned "Demo Components Inc." suppliers in the database. The cleanup
