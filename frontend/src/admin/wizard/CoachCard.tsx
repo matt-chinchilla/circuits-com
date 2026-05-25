@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import styles from './Wizard.module.scss';
 import { WI } from './icons';
 import type { Flow, Step } from './types';
-import { getFieldValue } from './helpers';
+import { findEl, getFieldValue } from './helpers';
 
 export interface CoachPos {
   top: number;
@@ -146,6 +146,18 @@ export default function CoachCard({
               if (!detected && step.suggested) {
                 onAutofill(step);
                 return;
+              }
+              if (!detected && step.type !== 'annotation' && step.type !== 'preview') {
+                const sel = step.fieldName
+                  ? `[data-field="${step.fieldName}"]`
+                  : step.selector;
+                if (sel) {
+                  const el = findEl(sel);
+                  if (el instanceof HTMLElement) {
+                    el.click();
+                    return;
+                  }
+                }
               }
               onNext();
             }}
