@@ -759,8 +759,10 @@ export const FLOWS: Flow[] = [
 
   // ──────────────────────────────────────────────────────────────────────
   // Add a Part (no supplier context) — straight from the Parts page.
-  // bestPrice step is dropped per the data model: general parts don't
-  // have a price until a supplier lists them.
+  // Uses a real-world component (AMS1117-3.3 LDO regulator) so the
+  // tutorial demonstrates realistic data entry. bestPrice step is
+  // dropped per the data model: general parts don't have a price until
+  // a supplier lists them.
   // ──────────────────────────────────────────────────────────────────────
   {
     id: 'add-part-general',
@@ -768,7 +770,7 @@ export const FLOWS: Flow[] = [
     summary: 'Add a SKU directly from the Parts page — supplier picked separately later.',
     icon: 'package',
     accent: 'rose',
-    minutes: 2,
+    minutes: 3,
     steps: [
       {
         goto: '',
@@ -795,29 +797,79 @@ export const FLOWS: Flow[] = [
       {
         fieldName: 'sku',
         title: 'Part SKU',
-        body: <>Manufacturer part number. We&apos;ll use a clearly-fake tutorial SKU.</>,
-        suggested: 'DEMO-GEN-100',
+        body: (
+          <>
+            The manufacturer&apos;s part number — this is the universal identifier engineers search
+            by. We&apos;ll use a real-world component.
+          </>
+        ),
+        suggested: 'AMS1117-3.3',
         advance: { kind: 'value', fieldName: 'sku', test: (v) => v.trim().length >= 3 },
       },
       {
         fieldName: 'manufacturer_name',
         title: 'Manufacturer',
-        body: <>The chip&apos;s actual maker (not the distributor selling it).</>,
-        suggested: 'Demo Components Inc.',
+        body: (
+          <>
+            The IC maker — not the distributor. This part is made by Advanced Monolithic Systems.
+          </>
+        ),
+        suggested: 'Advanced Monolithic Systems',
         advance: { kind: 'value', fieldName: 'manufacturer_name', test: (v) => v.trim().length >= 2 },
       },
       {
         fieldName: 'description',
         title: 'Spec-string description',
-        body: <>BOM-order specs: voltage / current / package / role.</>,
-        suggested: 'Tutorial 3.3V 500mA LDO Regulator',
+        body: (
+          <>
+            Write specs the way an engineer reads a BOM line — leading parameters first, then
+            package.
+          </>
+        ),
+        suggested: '3.3V 1A Fixed Output LDO Regulator, SOT-223',
         advance: { kind: 'value', fieldName: 'description', test: (v) => v.trim().length >= 10 },
       },
       {
         fieldName: 'category_id',
         title: 'Category',
-        body: <>Pick any category from the dropdown.</>,
+        body: (
+          <>
+            Pick the category this part belongs to. The AMS1117 is a voltage regulator — choose the
+            closest match from the dropdown.
+          </>
+        ),
+        suggested: '__auto_select__',
+        suggestedLabel: 'First available category',
         advance: { kind: 'value', fieldName: 'category_id', test: (v) => !!v && v.length > 1 },
+      },
+      {
+        fieldName: 'lifecycle_status',
+        title: 'Lifecycle status',
+        body: (
+          <>
+            Where the part sits in its production lifecycle. <i>Active</i> = in production,{' '}
+            <i>NRND</i> = not recommended for new designs, <i>EOL</i> = end-of-life.
+          </>
+        ),
+        suggested: 'active',
+        suggestedLabel: 'Active (in production)',
+        advance: { kind: 'value', fieldName: 'lifecycle_status', test: (v) => !!v },
+      },
+      {
+        fieldName: 'datasheet_url',
+        title: 'Datasheet URL',
+        body: (
+          <>
+            Link to the manufacturer&apos;s PDF datasheet — engineers click through from the part
+            detail page.
+          </>
+        ),
+        suggested: 'ams.com/ams1117',
+        advance: {
+          kind: 'value',
+          fieldName: 'datasheet_url',
+          test: (v) => v.includes('.') && v.length >= 5,
+        },
       },
       {
         selector: '[data-tour="submit-part"]',
@@ -838,7 +890,7 @@ export const FLOWS: Flow[] = [
         title: 'Clean up',
         body: (
           <>
-            Click <b>Delete</b> and confirm to remove the tutorial SKU.
+            Click <b>Delete</b> and confirm to remove the tutorial part.
           </>
         ),
         advance: { kind: 'modal' },
@@ -846,7 +898,7 @@ export const FLOWS: Flow[] = [
       {
         selector: '[data-modal-confirm="true"]',
         title: 'Confirm delete',
-        body: <>Wipe the demo part.</>,
+        body: <>Remove the AMS1117 tutorial entry.</>,
         advance: { kind: 'route', test: (r) => r === 'parts' },
       },
       {

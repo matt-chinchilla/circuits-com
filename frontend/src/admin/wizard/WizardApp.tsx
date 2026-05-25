@@ -6,7 +6,7 @@ import WelcomeBubble from './WelcomeBubble';
 import Spotlight from './Spotlight';
 import LivePreviewModal from './LivePreviewModal';
 import { FLOWS, SAMPLE_CSV_TEXT } from './flows';
-import { autofillField, getRoute, navTo } from './helpers';
+import { autofillField, findFieldInput, getRoute, navTo } from './helpers';
 import { useExposeGlobals } from './useExposeGlobals';
 import { cleanupAllDemoEntities, clearDemoEntity, trackDemoEntity } from './demoCleanup';
 import type { Flow, Step } from './types';
@@ -127,9 +127,6 @@ export default function WizardApp() {
 
   const handleAutofill = useCallback((s: Step) => {
     if (s.suggested === '__sample_csv__') {
-      // Synthesize a File from the sample CSV text and feed it into the
-      // dropzone's hidden file input. ImportPage uses react-dropzone,
-      // which listens on the input's onChange via getInputProps().
       const file = new File([SAMPLE_CSV_TEXT], 'demo-import.csv', { type: 'text/csv' });
       const dz = document.querySelector('[data-tour="csv-dropzone"]');
       const fileInput = dz?.querySelector('input[type="file"]') as HTMLInputElement | null;
@@ -141,8 +138,16 @@ export default function WizardApp() {
       }
       return;
     }
-    if (s.type === 'spotlight' || s.type === undefined) {
-      if (s.fieldName && s.suggested != null) {
+    if (s.type !== 'annotation' && s.type !== 'preview' && s.fieldName) {
+      if (s.suggested === '__auto_select__') {
+        const el = findFieldInput(s.fieldName);
+        if (el instanceof HTMLSelectElement) {
+          const first = Array.from(el.options).find((o) => o.value && o.value !== '');
+          if (first) autofillField(s.fieldName, first.value);
+        }
+        return;
+      }
+      if (s.suggested != null) {
         autofillField(s.fieldName, s.suggested);
       }
     }

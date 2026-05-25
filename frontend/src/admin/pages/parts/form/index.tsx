@@ -357,7 +357,7 @@ export default function PartFormPage() {
                     <SelectCaret />
                   </div>
                 </div>
-                <div className={styles.field}>
+                <div className={styles.field} data-field="lifecycle_status">
                   <label className={styles.fieldLabel}>
                     Lifecycle status
                     <span className={styles.fieldReq}>*</span>
@@ -389,7 +389,7 @@ export default function PartFormPage() {
           </div>
           <div className={styles.panelBody}>
             <div className={styles.formBody}>
-              <div className={styles.field}>
+              <div className={styles.field} data-field="datasheet_url">
                 <label className={styles.fieldLabel}>Datasheet URL</label>
                 <input
                   type="text"
