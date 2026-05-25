@@ -464,17 +464,40 @@ export const FLOWS: Flow[] = [
         title: 'The required CSV format',
         body: (
           <>
-            <p>The file must be UTF-8 CSV with this header — order matters:</p>
-            <p>
-              <code>sku,description,manufacturer,category,stock,price_usd</code>
-            </p>
-            <p>Example row:</p>
-            <p>
-              <code>DEMO-CAP-100,Tutorial 10uF Cap,Demo Co.,pmic,5000,1.25</code>
-            </p>
+            <p>UTF-8 CSV with this header — order matters:</p>
+            <table className="wiz-csv-grid">
+              <thead>
+                <tr>
+                  <th>sku</th>
+                  <th>description</th>
+                  <th>manufacturer</th>
+                  <th>category</th>
+                  <th>stock</th>
+                  <th>price_usd</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>DEMO-CAP-100</td>
+                  <td>10uF X7R Cap</td>
+                  <td>Demo Co.</td>
+                  <td>pmic</td>
+                  <td>5000</td>
+                  <td>1.25</td>
+                </tr>
+                <tr>
+                  <td>DEMO-MCU-200</td>
+                  <td>ARM M0 MCU</td>
+                  <td>Demo Co.</td>
+                  <td>mcu</td>
+                  <td>3200</td>
+                  <td>2.85</td>
+                </tr>
+              </tbody>
+            </table>
           </>
         ),
-        hint: 'The "Required columns" disclosure on the upload page has the same schema — bookmark it.',
+        hint: 'The "Required columns" disclosure on the upload page has the same schema.',
         advance: { kind: 'manual' },
       },
       {
