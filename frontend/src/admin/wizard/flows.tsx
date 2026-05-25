@@ -92,18 +92,6 @@ export const FLOWS: Flow[] = [
         advance: { kind: 'value', fieldName: 'description', test: (v) => v.trim().length >= 12 },
       },
       {
-        fieldName: 'contact_name',
-        title: 'Primary contact?',
-        body: (
-          <>
-            This is the supplier-side person you&apos;d email when there&apos;s a price-sync
-            question or sponsorship decision to make.
-          </>
-        ),
-        suggested: DEMO_SUPPLIER.contactPerson,
-        advance: { kind: 'value', fieldName: 'contact_name', test: (v) => v.trim().length >= 2 },
-      },
-      {
         fieldName: 'website',
         title: 'Their website',
         body: (
@@ -136,6 +124,18 @@ export const FLOWS: Flow[] = [
         body: <>Where buyers should reach the supplier directly.</>,
         suggested: DEMO_SUPPLIER.email,
         advance: { kind: 'value', fieldName: 'email', test: (v) => /\S+@\S+\.\S+/.test(v) } },
+      {
+        fieldName: 'contact_name',
+        title: 'Primary contact?',
+        body: (
+          <>
+            This is the supplier-side person you&apos;d email when there&apos;s a price-sync
+            question or sponsorship decision to make.
+          </>
+        ),
+        suggested: DEMO_SUPPLIER.contactPerson,
+        advance: { kind: 'value', fieldName: 'contact_name', test: (v) => v.trim().length >= 2 },
+      },
       {
         selector: '[data-tour="submit-supplier"]',
         title: 'Save the supplier',
