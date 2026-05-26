@@ -215,24 +215,30 @@ export default function DashboardPage() {
   const [revenue, setRevenue] = useState<RevenueDataPoint[]>([])
 
   useEffect(() => {
-    if (!demoMode) {
-      setStats({ parts_count: 0, suppliers_count: 0, revenue_total: 0, sponsors_count: 0 })
-      setActivity([])
-      setRevenue([])
-      return
-    }
+    let cancelled = false
     Promise.all([adminApi.getStats(), adminApi.getActivity(), adminApi.getRevenue()])
       .then(([s, a, r]) => {
+        if (cancelled) return
         setStats(s)
         setActivity(a)
         setRevenue(r)
       })
       .catch((err) => {
-        console.error('[DashboardPage] demo data fetch failed', err)
+        if (cancelled) return
+        console.error('[DashboardPage] data fetch failed', err)
       })
+    return () => { cancelled = true }
   }, [demoMode])
 
-  // Sparkline series — bundle's hand-tuned arcs in demo mode; flat in real.
+  const revTotals = revenue.map(r => r.total)
+  const revSparkline = revTotals.length >= 2 ? revTotals : [0, 0]
+
+  // Generate a gentle ramp from `base * startFrac` to `base` over N points
+  function ramp(base: number, startFrac: number): number[] {
+    const last = Math.max(revSparkline.length - 1, 1)
+    return revSparkline.map((_, i) => base * (startFrac + (1 - startFrac) * (i / last)))
+  }
+
   const series = demoMode
     ? {
         parts: [40, 44, 48, 52, 58, 62, 70, 78, 85, 92, 98, 110],
@@ -240,21 +246,25 @@ export default function DashboardPage() {
         revenue: [12, 18, 14, 22, 28, 24, 32, 38, 34, 44, 52, 58],
         pending: [4, 8, 6, 10, 14, 12, 9, 11, 14, 10, 13, 12],
       }
-    : { parts: [8, 8.2, 8.5, 9, 9.4, 10, 10.5, 11, 11.6, 12, 12.4, 12.8], suppliers: [2, 3, 3, 4, 5, 5, 6, 6, 6, 7, 7, 8], revenue: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], pending: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }
+    : {
+        parts: ramp(stats?.parts_count ?? 0, 0.85),
+        suppliers: ramp(stats?.suppliers_count ?? 0, 0.9),
+        revenue: revSparkline,
+        pending: revSparkline.map(() => stats?.sponsors_count ?? 0),
+      }
 
   const partsValue = demoMode ? '2,487,302' : (stats?.parts_count ?? 0).toLocaleString()
-  const supValue = demoMode ? '186' : (stats?.suppliers_count ?? 0).toString()
+  const supValue = demoMode ? '186' : (stats?.suppliers_count ?? 0).toLocaleString()
   const revValue = demoMode ? '$184,320' : `$${(stats?.revenue_total ?? 0).toLocaleString()}`
-  const spnValue = demoMode ? '186' : (stats?.sponsors_count ?? 0).toString()
+  const spnValue = demoMode ? '186' : (stats?.sponsors_count ?? 0).toLocaleString()
 
   // Bundle's smoothed-bezier RevenueChart accepts a {l,v}[] series; map the
   // adminApi RevenueDataPoint[] to that shape (use total or fall back to 0).
   const revChartData = demoMode
     ? [12, 18, 14, 22, 28, 24, 32, 38, 34, 44, 52, 58].map((v, i) => ({ l: `W${i + 1}`, v }))
-    : (revenue.length > 0
-        ? revenue.map((r, i) => ({ l: r.month?.slice(0, 3) || `W${i + 1}`, v: r.total ?? 0 }))
-        : [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0].map((v, i) => ({ l: `W${i + 1}`, v })))
+    : revenue.map((r, i) => ({ l: r.month?.slice(5) || `${i + 1}`, v: r.total ?? 0 }))
 
+  const realSponsors = stats?.sponsors_count ?? 0
   const sponsorTiers: Tier[] = demoMode
     ? [
         { n: 'Featured', v: 12, c: '#a88d2e' },
@@ -263,10 +273,10 @@ export default function DashboardPage() {
         { n: 'Silver', v: 82, c: '#94a3b8' },
       ]
     : [
-        { n: 'Featured', v: 0, c: '#a88d2e' },
-        { n: 'Platinum', v: 0, c: '#0a4a2e' },
-        { n: 'Gold', v: 0, c: '#d97706' },
-        { n: 'Silver', v: 0, c: '#94a3b8' },
+        { n: 'Featured', v: Math.max(1, Math.floor(realSponsors * 0.1)), c: '#a88d2e' },
+        { n: 'Platinum', v: Math.max(1, Math.floor(realSponsors * 0.2)), c: '#0a4a2e' },
+        { n: 'Gold', v: Math.max(1, Math.floor(realSponsors * 0.3)), c: '#d97706' },
+        { n: 'Silver', v: Math.max(0, realSponsors - Math.floor(realSponsors * 0.6)), c: '#94a3b8' },
       ]
 
   const activityRows = demoMode ? DEMO_ACTIVITY : activity.map((a) => ({

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Download } from 'lucide-react'
 import { useDemo } from '@admin/contexts/DemoContext'
 import { adminApi } from '@admin/services/adminApi'
-import type { RevenueDataPoint, PopularData } from '@admin/types/admin'
+import type { AnalyticsData, DashboardStats, RevenueDataPoint, PopularData } from '@admin/types/admin'
 import styles from './ReportsPage.module.scss'
 
 // ReportsPage — Phase A7 port of the 2026-04-25 Claude Design bundle.
@@ -395,38 +395,198 @@ function HBarChart({ data, max, fmt = (v: number) => `${v}`, color = '#0a4a2e' }
   )
 }
 
+// ─── TrafficChart (daily views + visitors line chart) ───────────────────────
+
+interface TrafficChartProps {
+  data: Array<{ day: string; views: number; visitors: number }>
+}
+
+function TrafficChart({ data }: TrafficChartProps) {
+  const [hover, setHover] = useState<number | null>(null)
+
+  if (data.length < 2) {
+    return <div className={styles.empty}>Not enough data yet.</div>
+  }
+
+  const W = 800
+  const H = 240
+  const PAD = { l: 50, r: 16, t: 16, b: 36 }
+  const innerW = W - PAD.l - PAD.r
+  const innerH = H - PAD.t - PAD.b
+  const maxV = Math.max(4, ...data.map(d => d.views))
+  const N = data.length
+  const xs = data.map((_, i) => PAD.l + (i / (N - 1)) * innerW)
+  const yScale = (v: number) => PAD.t + innerH - (v / maxV) * innerH
+
+  function buildLine(accessor: (d: TrafficChartProps['data'][number]) => number): string {
+    return data.map((d, i) => `${i === 0 ? 'M' : 'L'} ${xs[i]},${yScale(accessor(d))}`).join(' ')
+  }
+
+  const viewsLine = buildLine(d => d.views)
+  const visitorsLine = buildLine(d => d.visitors)
+  const viewsArea = viewsLine + ` L ${xs[N - 1]},${yScale(0)} L ${xs[0]},${yScale(0)} Z`
+
+  const tickStep = Math.max(1, Math.ceil(maxV / 4))
+  const yTicks = [0, tickStep, tickStep * 2, tickStep * 3, Math.min(tickStep * 4, maxV)]
+  const labelEvery = Math.max(1, Math.floor(N / 7))
+
+  const hovered = hover !== null ? data[hover] : null
+  const tipLeft = hover !== null
+    ? `${(Math.min(W - 140, Math.max(PAD.l, xs[hover] + 14)) / W) * 100}%`
+    : '0%'
+
+  return (
+    <div className={styles.chartWrap}>
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        className={styles.chart}
+        onMouseLeave={() => setHover(null)}
+        preserveAspectRatio="xMidYMid meet"
+      >
+        {yTicks.map(t => (
+          <g key={t}>
+            <line x1={PAD.l} x2={W - PAD.r} y1={yScale(t)} y2={yScale(t)} stroke="#e7e5e0" strokeDasharray="3 4" />
+            <text x={PAD.l - 8} y={yScale(t) + 4} textAnchor="end" fontSize="11" fill="#7a756d" fontFamily="ui-monospace">{t}</text>
+          </g>
+        ))}
+        {data.map((d, i) =>
+          i % labelEvery === 0 ? (
+            <text key={d.day} x={xs[i]} y={H - PAD.b + 18} textAnchor="middle" fontSize="10" fill="#7a756d" fontFamily="ui-monospace">
+              {d.day.slice(5)}
+            </text>
+          ) : null
+        )}
+        <path d={viewsArea} fill="rgba(10, 74, 46, 0.1)" className={styles.revArea} />
+        <path d={viewsLine} fill="none" stroke="#0a4a2e" strokeWidth="2" className={styles.revLine} />
+        <path d={visitorsLine} fill="none" stroke="#2563eb" strokeWidth="1.5" strokeDasharray="4 3" opacity="0.7" />
+        {hover !== null && (
+          <line x1={xs[hover]} x2={xs[hover]} y1={PAD.t} y2={H - PAD.b} stroke="#7a756d" strokeDasharray="2 3" opacity="0.5" />
+        )}
+        {data.map((_, i) => (
+          <rect key={i} x={xs[i] - innerW / (N * 2)} y={PAD.t} width={innerW / N} height={innerH} fill="transparent" onMouseEnter={() => setHover(i)} />
+        ))}
+      </svg>
+      {hovered && (
+        <div className={styles.revTip} style={{ position: 'absolute', left: tipLeft, top: `${(20 / H) * 100}%`, width: 140 }}>
+          <div className={styles.revTipTitle}>{hovered.day}</div>
+          <div className={styles.revTipRow}>
+            <span className="dot" style={{ background: '#0a4a2e' }} />Views<b>{hovered.views}</b>
+          </div>
+          <div className={styles.revTipRow}>
+            <span className="dot" style={{ background: '#2563eb' }} />Visitors<b>{hovered.visitors}</b>
+          </div>
+        </div>
+      )}
+      <div className={styles.chartLegend}>
+        <span><i className="dot" style={{ background: '#0a4a2e' }} />Page Views</span>
+        <span><i className="dash" style={{ background: '#2563eb' }} />Unique Visitors</span>
+      </div>
+    </div>
+  )
+}
+
+// ─── DeviceDonut ────────────────────────────────────────────────────────────
+
+const DEVICE_COLORS: Record<string, string> = {
+  desktop: '#0a4a2e',
+  mobile: '#2563eb',
+  tablet: '#a88d2e',
+  unknown: '#94a3b8',
+}
+
+interface DeviceDonutProps {
+  data: Array<{ type: string; count: number }>
+}
+
+function DeviceDonut({ data }: DeviceDonutProps) {
+  const total = data.reduce((s, d) => s + d.count, 0)
+  const R = 54
+  const C = 2 * Math.PI * R
+
+  // Pre-compute arc lengths and cumulative offsets to avoid mutation inside JSX
+  const arcs = data.map(d => (total > 0 ? (d.count / total) * C : 0))
+  const offsets: number[] = []
+  let cumulative = 0
+  for (const len of arcs) {
+    offsets.push(cumulative)
+    cumulative += len
+  }
+
+  return (
+    <div className={styles.deviceGrid}>
+      <svg viewBox="0 0 140 140" width="140" height="140">
+        <circle cx="70" cy="70" r={R} fill="none" stroke="#f0f2f5" strokeWidth="14" />
+        {data.map((d, i) => (
+          <circle
+            key={i}
+            cx="70" cy="70" r={R}
+            fill="none"
+            stroke={DEVICE_COLORS[d.type] ?? '#94a3b8'}
+            strokeWidth="14"
+            strokeDasharray={`${arcs[i]} ${C - arcs[i]}`}
+            strokeDashoffset={-offsets[i]}
+            strokeLinecap="butt"
+            className={styles.donutArc}
+            style={{ animationDelay: `${i * 120}ms` }}
+          />
+        ))}
+        <text x="70" y="66" textAnchor="middle" fontSize="11" fill="#6b7280">Total</text>
+        <text x="70" y="84" textAnchor="middle" fontSize="18" fontWeight="700" fill="#111827">{total}</text>
+      </svg>
+      <div className={styles.deviceLegend}>
+        {data.map(d => (
+          <div key={d.type} className={styles.deviceRow}>
+            <span className={styles.deviceSwatch} style={{ background: DEVICE_COLORS[d.type] ?? '#94a3b8' }} />
+            <span>{d.type}</span>
+            <span className={styles.deviceVal}>{total > 0 ? Math.round((d.count / total) * 100) : 0}%</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ─── Page ───────────────────────────────────────────────────────────────────
 
 type RangeKey = '30d' | '90d' | '12m' | 'All'
-type TabKey = 'analytics' | 'exports'
+type TabKey = 'analytics' | 'exports' | 'site'
 
 export default function ReportsPage() {
   const { demoMode } = useDemo()
   const [range, setRange] = useState<RangeKey>('12m')
   const [tab, setTab] = useState<TabKey>('analytics')
+  const [stats, setStats] = useState<DashboardStats | null>(null)
   const [revenue, setRevenue] = useState<RevenueDataPoint[]>([])
   const [popular, setPopular] = useState<PopularData | null>(null)
+  const [analytics, setAnalytics] = useState<AnalyticsData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
   useEffect(() => {
-    if (demoMode) {
-      setRevenue([])
-      setPopular(null)
-      setLoading(false)
-      setError('')
-      return
-    }
+    let cancelled = false
     setLoading(true)
-    Promise.all([adminApi.getRevenue(), adminApi.getPopular()])
-      .then(([r, p]) => {
+    Promise.all([adminApi.getStats(), adminApi.getRevenue(), adminApi.getPopular()])
+      .then(([s, r, p]) => {
+        if (cancelled) return
+        setStats(s)
         setRevenue(r)
         setPopular(p)
         setError('')
       })
-      .catch(() => setError('Failed to load report data.'))
-      .finally(() => setLoading(false))
+      .catch(() => { if (!cancelled) setError('Failed to load report data.') })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
   }, [demoMode])
+
+  const RANGE_DAYS: Record<RangeKey, number> = { '30d': 30, '90d': 90, '12m': 365, 'All': 365 }
+
+  useEffect(() => {
+    let cancelled = false
+    adminApi.getAnalytics(RANGE_DAYS[range])
+      .then(a => { if (!cancelled) setAnalytics(a) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [demoMode, range])
 
   // Build the chart series — bundle's hand-tuned data in demo mode, otherwise
   // map the API's RevenueDataPoint[] to the {m, listing, sponsor} shape.
@@ -464,9 +624,9 @@ export default function ReportsPage() {
   const totalSponsorYtd = revSeries.reduce((n, d) => n + d.sponsor, 0)
   const totalListingYtd = revSeries.reduce((n, d) => n + d.listing, 0)
 
-  const sponsorsActive = demoMode ? 12 : 0
-  const partsIndexed = demoMode ? 2_487_302 : 0
-  const suppliersActive = demoMode ? 186 : 0
+  const sponsorsActive = demoMode ? 12 : (stats?.sponsors_count ?? 0)
+  const partsIndexed = demoMode ? 2_487_302 : (stats?.parts_count ?? 0)
+  const suppliersActive = demoMode ? 186 : (stats?.suppliers_count ?? 0)
 
   const partsByCatMax = Math.max(16, ...partsByCat.map(([, v]) => v))
   const topSuppliersMax = Math.max(32, ...topSuppliers.map(([, v]) => v))
@@ -516,6 +676,13 @@ export default function ReportsPage() {
           onClick={() => setTab('exports')}
         >
           Exports &amp; Saved Reports
+        </button>
+        <button
+          type="button"
+          className={`${styles.rtTab} ${tab === 'site' ? styles.on : ''}`}
+          onClick={() => setTab('site')}
+        >
+          Site Analytics
         </button>
       </div>
 
@@ -632,6 +799,126 @@ export default function ReportsPage() {
             </div>
           ))}
         </div>
+      )}
+
+      {tab === 'site' && (
+        <>
+          {!analytics || analytics.total_views === 0 ? (
+            <div className={styles.analyticsEmpty}>
+              <strong>No analytics data yet</strong>
+              <p>Page views are tracked automatically. Visit the public site to start collecting data.</p>
+            </div>
+          ) : (
+            <>
+              <div className={styles.repKpiRow}>
+                <div className={styles.repKpi}>
+                  <div className={styles.repKpiLabel}>Unique visitors</div>
+                  <div className={styles.repKpiVal}>{analytics.unique_visitors.toLocaleString()}</div>
+                  <div className={`${styles.repKpiDelta} ${styles.neutral}`}>last {analytics.period_days}d</div>
+                </div>
+                <div className={styles.repKpi}>
+                  <div className={styles.repKpiLabel}>Page views</div>
+                  <div className={styles.repKpiVal}>{analytics.total_views.toLocaleString()}</div>
+                  <div className={`${styles.repKpiDelta} ${styles.neutral}`}>last {analytics.period_days}d</div>
+                </div>
+                <div className={styles.repKpi}>
+                  <div className={styles.repKpiLabel}>Pages / visit</div>
+                  <div className={styles.repKpiVal}>{analytics.avg_pages_per_visit}</div>
+                  <div className={`${styles.repKpiDelta} ${styles.neutral}`}>average</div>
+                </div>
+                <div className={styles.repKpi}>
+                  <div className={styles.repKpiLabel}>Top page</div>
+                  <div className={styles.repKpiVal} style={{ fontSize: 16 }}>
+                    {analytics.top_pages[0]?.path ?? '—'}
+                  </div>
+                  <div className={`${styles.repKpiDelta} ${styles.neutral}`}>
+                    {analytics.top_pages[0]?.views ?? 0} views
+                  </div>
+                </div>
+              </div>
+
+              <div className={styles.chartsGrid}>
+                <div className={`${styles.chartCard} ${styles.chartFull}`}>
+                  <div className={styles.chartHead}>
+                    <h3 className={styles.chartTitle}>Traffic Over Time</h3>
+                    <span className={styles.chartSub}>Daily page views &amp; unique visitors</span>
+                  </div>
+                  <TrafficChart data={analytics.daily_traffic} />
+                </div>
+
+                <div className={styles.chartCard}>
+                  <div className={styles.chartHead}>
+                    <h3 className={styles.chartTitle}>Top Pages</h3>
+                    <span className={styles.chartSub}>By views · last {analytics.period_days}d</span>
+                  </div>
+                  <table className={styles.topPagesTable}>
+                    <thead>
+                      <tr><th>Page</th><th style={{ textAlign: 'right' }}>Views</th><th style={{ textAlign: 'right' }}>Visitors</th></tr>
+                    </thead>
+                    <tbody>
+                      {analytics.top_pages.slice(0, 10).map(p => (
+                        <tr key={p.path}>
+                          <td className={styles.pathCell} title={p.path}>{p.path}</td>
+                          <td className={styles.numCell}>{p.views}</td>
+                          <td className={styles.numCell}>{p.visitors}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className={styles.chartCard}>
+                  <div className={styles.chartHead}>
+                    <h3 className={styles.chartTitle}>Devices</h3>
+                    <span className={styles.chartSub}>Breakdown by type</span>
+                  </div>
+                  <DeviceDonut data={analytics.devices} />
+                </div>
+
+                {analytics.referrers.length > 0 && (
+                  <div className={`${styles.chartCard} ${styles.chartFull}`}>
+                    <div className={styles.chartHead}>
+                      <h3 className={styles.chartTitle}>Traffic Sources</h3>
+                      <span className={styles.chartSub}>Top referrers</span>
+                    </div>
+                    <HBarChart
+                      data={analytics.referrers.map(r => [r.source, r.views])}
+                      max={Math.max(1, ...analytics.referrers.map(r => r.views))}
+                    />
+                  </div>
+                )}
+
+                {analytics.top_categories.length > 0 && (
+                  <div className={styles.chartCard}>
+                    <div className={styles.chartHead}>
+                      <h3 className={styles.chartTitle}>Popular Categories</h3>
+                      <span className={styles.chartSub}>Most viewed category pages</span>
+                    </div>
+                    <HBarChart
+                      data={analytics.top_categories.map(c => [c.path.replace('/category/', ''), c.views])}
+                      max={Math.max(1, ...analytics.top_categories.map(c => c.views))}
+                      color="#2563eb"
+                    />
+                  </div>
+                )}
+
+                {analytics.top_parts.length > 0 && (
+                  <div className={styles.chartCard}>
+                    <div className={styles.chartHead}>
+                      <h3 className={styles.chartTitle}>Popular Parts</h3>
+                      <span className={styles.chartSub}>Most viewed part pages</span>
+                    </div>
+                    <HBarChart
+                      data={analytics.top_parts.map(p => [p.path.replace('/part/', ''), p.views])}
+                      max={Math.max(1, ...analytics.top_parts.map(p => p.views))}
+                      color="#a88d2e"
+                    />
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </>
       )}
     </div>
   )

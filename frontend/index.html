@@ -21,5 +21,25 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <script>
+    (function(){
+      if(location.pathname.startsWith('/admin'))return;
+      var sid=sessionStorage.getItem('_cid');
+      if(!sid){sid=crypto.randomUUID();sessionStorage.setItem('_cid',sid)}
+      var last='';
+      function t(p){
+        if(p===last)return;last=p;
+        var b=JSON.stringify({path:p,referrer:document.referrer||null,session_id:sid});
+        if(navigator.sendBeacon){navigator.sendBeacon('/api/track',new Blob([b],{type:'application/json'}))}
+        else{fetch('/api/track',{method:'POST',headers:{'Content-Type':'application/json'},body:b,keepalive:true}).catch(function(){})}
+      }
+      t(location.pathname);
+      var ps=history.pushState;
+      history.pushState=function(){ps.apply(this,arguments);t(location.pathname)};
+      var rs=history.replaceState;
+      history.replaceState=function(){rs.apply(this,arguments);t(location.pathname)};
+      window.addEventListener('popstate',function(){t(location.pathname)});
+    })();
+    </script>
   </body>
 </html>

@@ -16,9 +16,9 @@ import re
 from datetime import date, timedelta
 from decimal import Decimal
 from pathlib import Path
-from typing import Optional
 
 import bcrypt
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.db.session import SessionLocal
@@ -34,10 +34,10 @@ from app.models import (
     User,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def slugify(text: str) -> str:
     """Convert a human-readable name to a URL-safe slug."""
@@ -53,7 +53,7 @@ def get_or_create_category(
     name: str,
     slug: str,
     icon: str = "lightning",
-    parent: Optional[Category] = None,
+    parent: Category | None = None,
     sort_order: int = 0,
 ) -> Category:
     obj = db.query(Category).filter(Category.slug == slug).first()
@@ -81,123 +81,198 @@ def get_or_create_category(
 # All icon strings are Phosphor Light names (rendered via the <Icon>
 # wrapper at frontend/src/shared/components/Icon.tsx).
 CATEGORY_DATA: list[tuple[str, str, str, list[tuple[str, str, str]]]] = [
-    ("Power Management ICs (PMICs)", "power-management-ics-pmics", "lightning", [
-        ("Voltage Regulators (LDOs)", "ldo-regulators", "battery-charging"),
-        ("DC-DC Converters (Buck/Boost)", "dc-dc-converters", "battery-charging-vertical"),
-        ("Battery Management ICs (BMS)", "battery-management", "battery-full"),
-        ("Power Supervisors / Reset ICs", "power-supervisors", "shield-warning"),
-        ("LED Drivers", "led-drivers", "lightbulb"),
-    ]),
-    ("Microcontrollers & Processors", "microcontrollers-processors", "cpu", [
-        ("8-bit Microcontrollers", "8bit-mcus", "cpu"),
-        ("32-bit Microcontrollers (ARM Cortex-M)", "32bit-mcus", "cpu"),
-        ("Application Processors", "app-processors", "computer-tower"),
-        ("Digital Signal Processors (DSPs)", "dsps", "chart-line"),
-        ("System-on-Chip (SoC)", "soc", "squares-four"),
-    ]),
-    ("Analog ICs", "analog-ics", "wave-sine", [
-        ("Operational Amplifiers (Op-Amps)", "op-amps", "trend-up"),
-        ("Comparators", "comparators", "scales"),
-        ("Analog Multiplexers / Switches", "analog-mux-switches", "shuffle"),
-        ("Voltage References", "voltage-references", "target"),
-        ("Instrumentation Amplifiers", "instrumentation-amps", "ruler"),
-    ]),
-    ("Interface ICs", "interface-ics", "plugs-connected", [
-        ("UART / USART Transceivers", "uart-usart", "arrows-left-right"),
-        ("USB Interface ICs", "usb-interface", "usb"),
-        ("I2C / SPI Interface ICs", "i2c-spi", "arrows-down-up"),
-        ("CAN / LIN Transceivers", "can-lin", "car-simple"),
-        ("Level Shifters", "level-shifters", "arrows-vertical"),
-    ]),
-    ("Memory ICs", "memory-ics", "hard-drives", [
-        ("EEPROM", "eeprom", "hard-drive"),
-        ("NOR Flash", "nor-flash", "hard-drive"),
-        ("NAND Flash", "nand-flash", "hard-drive"),
-        ("SRAM", "sram", "hard-drive"),
-        ("DRAM", "dram", "hard-drive"),
-    ]),
-    ("Logic ICs", "logic-ics", "function", [
-        ("Logic Gates (AND, OR, NOT, etc.)", "logic-gates", "function"),
-        ("Flip-Flops / Latches", "flip-flops-latches", "squares-four"),
-        ("Counters", "counters", "list-numbers"),
-        ("Shift Registers", "shift-registers", "arrow-right"),
-        ("Programmable Logic (CPLDs / FPGAs)", "cpld-fpga", "wrench"),
-    ]),
-    ("RF & Wireless ICs", "rf-wireless-ics", "wifi-high", [
-        ("Bluetooth ICs", "bluetooth", "bluetooth"),
-        ("Wi-Fi ICs", "wifi", "wifi-high"),
-        ("RF Transceivers", "rf-transceivers", "broadcast"),
-        ("GPS / GNSS Receivers", "gps-gnss", "globe-hemisphere-west"),
-        ("NFC / RFID ICs", "nfc-rfid", "device-mobile"),
-    ]),
-    ("Sensor ICs", "sensor-ics", "thermometer", [
-        ("Temperature Sensors", "temp-sensors", "thermometer"),
-        ("Accelerometers", "accelerometers", "arrows-out-cardinal"),
-        ("Gyroscopes", "gyroscopes", "arrows-clockwise"),
-        ("Pressure Sensors", "pressure-sensors", "gauge"),
-        ("Proximity / Light Sensors", "proximity-light", "eye"),
-    ]),
-    ("Audio & Video ICs", "audio-video-ics", "speaker-high", [
-        ("Audio Amplifiers", "audio-amps", "speaker-high"),
-        ("CODECs (Audio/Video)", "codecs", "music-notes"),
-        ("Video Processors", "video-processors", "film-strip"),
-        ("HDMI / Display Interface ICs", "hdmi-display", "monitor"),
-        ("Microphone Preamplifiers", "mic-preamps", "microphone"),
-    ]),
-    ("Clock & Timing ICs", "clock-timing-ics", "clock", [
-        ("Oscillators", "oscillators", "wave-sine"),
-        ("Real-Time Clocks (RTC)", "rtc", "alarm"),
-        ("Clock Generators", "clock-generators", "clock"),
-        ("PLL (Phase-Locked Loops)", "pll", "arrows-counter-clockwise"),
-        ("Timer ICs", "timer-ics", "timer"),
-    ]),
-    ("Motor & Motion Control ICs", "motor-motion-ics", "gear", [
-        ("Motor Drivers (DC/Stepper/BLDC)", "motor-drivers", "gear"),
-        ("Servo Controllers", "servo-controllers", "game-controller"),
-        ("Gate Drivers (MOSFET/IGBT)", "gate-drivers", "lightning"),
-        ("Motion Control ICs", "motion-control", "person-simple-run"),
-        ("PWM Controllers", "pwm-controllers", "wave-square"),
-    ]),
-    ("Data Conversion ICs", "data-conversion-ics", "arrows-clockwise", [
-        ("Analog-to-Digital Converters (ADC)", "adc", "chart-line"),
-        ("Digital-to-Analog Converters (DAC)", "dac", "chart-line-down"),
-        ("Sigma-Delta Converters", "sigma-delta", "trend-up"),
-        ("Voltage-to-Frequency Converters", "vf-converters", "wave-sine"),
-        ("Touchscreen Controllers", "touchscreen", "hand-pointing"),
-    ]),
-    ("Security & Authentication ICs", "security-auth-ics", "lock-key", [
-        ("Secure Elements", "secure-elements", "lock"),
-        ("Cryptographic Coprocessors", "crypto-coprocessors", "lock-key"),
-        ("TPM (Trusted Platform Modules)", "tpm", "shield"),
-        ("Hardware Encryption ICs", "hw-encryption", "key"),
-        ("ID / Authentication ICs", "id-auth", "identification-card"),
-    ]),
-    ("Automotive ICs", "automotive-ics", "car", [
-        ("Automotive PMICs", "auto-pmics", "lightning"),
-        ("CAN / LIN Automotive ICs", "auto-can-lin", "plugs"),
-        ("ADAS Processing ICs", "adas", "cpu"),
-        ("Automotive Sensors", "auto-sensors", "thermometer"),
-        ("Infotainment Processors", "infotainment", "music-notes"),
-    ]),
-    ("Display & LED ICs", "display-led-ics", "monitor", [
-        ("LED Matrix Drivers", "led-matrix", "grid-four"),
-        ("LCD Drivers", "lcd-drivers", "monitor"),
-        ("OLED Drivers", "oled-drivers", "sparkle"),
-        ("Backlight Controllers", "backlight", "sun-dim"),
-        ("Display Timing Controllers (TCON)", "tcon", "timer"),
-    ]),
+    (
+        "Power Management ICs (PMICs)",
+        "power-management-ics-pmics",
+        "lightning",
+        [
+            ("Voltage Regulators (LDOs)", "ldo-regulators", "battery-charging"),
+            ("DC-DC Converters (Buck/Boost)", "dc-dc-converters", "battery-charging-vertical"),
+            ("Battery Management ICs (BMS)", "battery-management", "battery-full"),
+            ("Power Supervisors / Reset ICs", "power-supervisors", "shield-warning"),
+            ("LED Drivers", "led-drivers", "lightbulb"),
+        ],
+    ),
+    (
+        "Microcontrollers & Processors",
+        "microcontrollers-processors",
+        "cpu",
+        [
+            ("8-bit Microcontrollers", "8bit-mcus", "cpu"),
+            ("32-bit Microcontrollers (ARM Cortex-M)", "32bit-mcus", "cpu"),
+            ("Application Processors", "app-processors", "computer-tower"),
+            ("Digital Signal Processors (DSPs)", "dsps", "chart-line"),
+            ("System-on-Chip (SoC)", "soc", "squares-four"),
+        ],
+    ),
+    (
+        "Analog ICs",
+        "analog-ics",
+        "wave-sine",
+        [
+            ("Operational Amplifiers (Op-Amps)", "op-amps", "trend-up"),
+            ("Comparators", "comparators", "scales"),
+            ("Analog Multiplexers / Switches", "analog-mux-switches", "shuffle"),
+            ("Voltage References", "voltage-references", "target"),
+            ("Instrumentation Amplifiers", "instrumentation-amps", "ruler"),
+        ],
+    ),
+    (
+        "Interface ICs",
+        "interface-ics",
+        "plugs-connected",
+        [
+            ("UART / USART Transceivers", "uart-usart", "arrows-left-right"),
+            ("USB Interface ICs", "usb-interface", "usb"),
+            ("I2C / SPI Interface ICs", "i2c-spi", "arrows-down-up"),
+            ("CAN / LIN Transceivers", "can-lin", "car-simple"),
+            ("Level Shifters", "level-shifters", "arrows-vertical"),
+        ],
+    ),
+    (
+        "Memory ICs",
+        "memory-ics",
+        "hard-drives",
+        [
+            ("EEPROM", "eeprom", "hard-drive"),
+            ("NOR Flash", "nor-flash", "hard-drive"),
+            ("NAND Flash", "nand-flash", "hard-drive"),
+            ("SRAM", "sram", "hard-drive"),
+            ("DRAM", "dram", "hard-drive"),
+        ],
+    ),
+    (
+        "Logic ICs",
+        "logic-ics",
+        "function",
+        [
+            ("Logic Gates (AND, OR, NOT, etc.)", "logic-gates", "function"),
+            ("Flip-Flops / Latches", "flip-flops-latches", "squares-four"),
+            ("Counters", "counters", "list-numbers"),
+            ("Shift Registers", "shift-registers", "arrow-right"),
+            ("Programmable Logic (CPLDs / FPGAs)", "cpld-fpga", "wrench"),
+        ],
+    ),
+    (
+        "RF & Wireless ICs",
+        "rf-wireless-ics",
+        "wifi-high",
+        [
+            ("Bluetooth ICs", "bluetooth", "bluetooth"),
+            ("Wi-Fi ICs", "wifi", "wifi-high"),
+            ("RF Transceivers", "rf-transceivers", "broadcast"),
+            ("GPS / GNSS Receivers", "gps-gnss", "globe-hemisphere-west"),
+            ("NFC / RFID ICs", "nfc-rfid", "device-mobile"),
+        ],
+    ),
+    (
+        "Sensor ICs",
+        "sensor-ics",
+        "thermometer",
+        [
+            ("Temperature Sensors", "temp-sensors", "thermometer"),
+            ("Accelerometers", "accelerometers", "arrows-out-cardinal"),
+            ("Gyroscopes", "gyroscopes", "arrows-clockwise"),
+            ("Pressure Sensors", "pressure-sensors", "gauge"),
+            ("Proximity / Light Sensors", "proximity-light", "eye"),
+        ],
+    ),
+    (
+        "Audio & Video ICs",
+        "audio-video-ics",
+        "speaker-high",
+        [
+            ("Audio Amplifiers", "audio-amps", "speaker-high"),
+            ("CODECs (Audio/Video)", "codecs", "music-notes"),
+            ("Video Processors", "video-processors", "film-strip"),
+            ("HDMI / Display Interface ICs", "hdmi-display", "monitor"),
+            ("Microphone Preamplifiers", "mic-preamps", "microphone"),
+        ],
+    ),
+    (
+        "Clock & Timing ICs",
+        "clock-timing-ics",
+        "clock",
+        [
+            ("Oscillators", "oscillators", "wave-sine"),
+            ("Real-Time Clocks (RTC)", "rtc", "alarm"),
+            ("Clock Generators", "clock-generators", "clock"),
+            ("PLL (Phase-Locked Loops)", "pll", "arrows-counter-clockwise"),
+            ("Timer ICs", "timer-ics", "timer"),
+        ],
+    ),
+    (
+        "Motor & Motion Control ICs",
+        "motor-motion-ics",
+        "gear",
+        [
+            ("Motor Drivers (DC/Stepper/BLDC)", "motor-drivers", "gear"),
+            ("Servo Controllers", "servo-controllers", "game-controller"),
+            ("Gate Drivers (MOSFET/IGBT)", "gate-drivers", "lightning"),
+            ("Motion Control ICs", "motion-control", "person-simple-run"),
+            ("PWM Controllers", "pwm-controllers", "wave-square"),
+        ],
+    ),
+    (
+        "Data Conversion ICs",
+        "data-conversion-ics",
+        "arrows-clockwise",
+        [
+            ("Analog-to-Digital Converters (ADC)", "adc", "chart-line"),
+            ("Digital-to-Analog Converters (DAC)", "dac", "chart-line-down"),
+            ("Sigma-Delta Converters", "sigma-delta", "trend-up"),
+            ("Voltage-to-Frequency Converters", "vf-converters", "wave-sine"),
+            ("Touchscreen Controllers", "touchscreen", "hand-pointing"),
+        ],
+    ),
+    (
+        "Security & Authentication ICs",
+        "security-auth-ics",
+        "lock-key",
+        [
+            ("Secure Elements", "secure-elements", "lock"),
+            ("Cryptographic Coprocessors", "crypto-coprocessors", "lock-key"),
+            ("TPM (Trusted Platform Modules)", "tpm", "shield"),
+            ("Hardware Encryption ICs", "hw-encryption", "key"),
+            ("ID / Authentication ICs", "id-auth", "identification-card"),
+        ],
+    ),
+    (
+        "Automotive ICs",
+        "automotive-ics",
+        "car",
+        [
+            ("Automotive PMICs", "auto-pmics", "lightning"),
+            ("CAN / LIN Automotive ICs", "auto-can-lin", "plugs"),
+            ("ADAS Processing ICs", "adas", "cpu"),
+            ("Automotive Sensors", "auto-sensors", "thermometer"),
+            ("Infotainment Processors", "infotainment", "music-notes"),
+        ],
+    ),
+    (
+        "Display & LED ICs",
+        "display-led-ics",
+        "monitor",
+        [
+            ("LED Matrix Drivers", "led-matrix", "grid-four"),
+            ("LCD Drivers", "lcd-drivers", "monitor"),
+            ("OLED Drivers", "oled-drivers", "sparkle"),
+            ("Backlight Controllers", "backlight", "sun-dim"),
+            ("Display Timing Controllers (TCON)", "tcon", "timer"),
+        ],
+    ),
 ]
 
 
 def get_or_create_supplier(
     db: Session,
     name: str,
-    phone: Optional[str] = None,
-    website: Optional[str] = None,
-    email: Optional[str] = None,
-    description: Optional[str] = None,
-    logo_url: Optional[str] = None,
-    contact_name: Optional[str] = None,
+    phone: str | None = None,
+    website: str | None = None,
+    email: str | None = None,
+    description: str | None = None,
+    logo_url: str | None = None,
+    contact_name: str | None = None,
 ) -> Supplier:
     obj = db.query(Supplier).filter(Supplier.name == name).first()
     if obj is None:
@@ -245,10 +320,10 @@ def get_or_create_category_supplier(
 def get_or_create_sponsor(
     db: Session,
     supplier: Supplier,
-    category: Optional[Category] = None,
-    keyword: Optional[str] = None,
-    image_url: Optional[str] = None,
-    description: Optional[str] = None,
+    category: Category | None = None,
+    keyword: str | None = None,
+    image_url: str | None = None,
+    description: str | None = None,
     tier: str = "gold",
 ) -> Sponsor:
     query = db.query(Sponsor).filter(Sponsor.supplier_id == supplier.id)
@@ -274,6 +349,7 @@ def get_or_create_sponsor(
 # ---------------------------------------------------------------------------
 # Main seed function
 # ---------------------------------------------------------------------------
+
 
 def seed(db: Session) -> None:
     # ------------------------------------------------------------------
@@ -352,56 +428,356 @@ def seed(db: Session) -> None:
 
     # ---- Real distributors (user's top-50 list + existing broad-line) ----
     _real_suppliers: list[dict] = [
-        dict(name="Digi-Key Electronics", phone="800-344-4539", website="digikey.com", email="sales@digikey.com", description="Leading global electronic components distributor, 13.4M+ products in stock"),
-        dict(name="Mouser Electronics", phone="800-346-6873", website="mouser.com", email="sales@mouser.com", description="Global authorized distributor, 6.8M+ products from 1,200+ manufacturers"),
-        dict(name="Arrow Electronics", phone="800-777-2776", website="arrow.com", email="info@arrow.com", description="Global provider of electronic components and enterprise computing solutions"),
-        dict(name="Avnet", phone="480-643-2000", website="avnet.com", email="info@avnet.com", description="Global electronic components distributor and technology solutions provider"),
-        dict(name="TTI", phone="800-888-8884", website="ttiinc.com", email="sales@ttiinc.com", description="Specialist distributor of passive, connector, electromechanical, and discrete components"),
-        dict(name="Future Electronics", phone="800-388-8731", website="futureelectronics.com", email="info@futureelectronics.com", description="Global distributor of electronic components, full-service solutions"),
-        dict(name="Newark", phone="800-463-9275", website="newark.com", email="sales@newark.com", description="Broad-line distributor of electronic and industrial components, an Avnet company"),
-        dict(name="Farnell", phone="+44-330-587-1000", website="farnell.com", email="sales@farnell.com", description="European broad-line distributor of electronic components, an Avnet company"),
-        dict(name="RS", phone="+44-1536-444000", website="rs-online.com", email="sales@rs-online.com", description="Global distributor of electronics, electrical, and industrial components"),
-        dict(name="RS Americas", phone="866-433-5722", website="us.rs-online.com", email="sales@rsamericas.com", description="RS Group Americas division, formerly Allied Electronics & Automation"),
-        dict(name="RS APAC", phone="+65-6214-9933", website="rs-online.com", email="sales@rs-apac.com", description="RS Group Asia-Pacific division, broad-line distribution"),
-        dict(name="element14 APAC", phone="+65-6877-8787", website="element14.com", email="sales@element14.com", description="Asia-Pacific electronics distributor, a Premier Farnell / Avnet company"),
-        dict(name="DigiKey Marketplace", phone="800-344-4539", website="digikey.com/marketplace", email="marketplace@digikey.com", description="Third-party seller platform on Digi-Key for specialty and surplus components"),
-        dict(name="TME", phone="+48-42-235-9000", website="tme.eu", email="sales@tme.eu", description="Transfer Multisort Elektronik, major European electronic components distributor"),
-        dict(name="Conrad", phone="+49-9604-40-8787", website="conrad.com", email="info@conrad.com", description="European electronics and technology distributor based in Germany"),
-        dict(name="Distrelec", phone="+41-44-944-9911", website="distrelec.com", email="info@distrelec.com", description="Northern European high-service electronic components distributor"),
-        dict(name="Anglia", phone="+44-1945-474747", website="anglia-live.com", email="sales@anglia.com", description="UK-based electronic components distributor, strong in automotive and industrial"),
-        dict(name="Avnet Abacus", phone="+49-8121-777-02", website="avnet.com", email="abacus@avnet.com", description="Avnet European passive, interconnect, and electromechanical division"),
-        dict(name="Avnet Silica", phone="+49-8121-777-01", website="avnet.com", email="silica@avnet.com", description="Avnet European semiconductor distribution division"),
-        dict(name="EBV Elektronik", phone="+49-8121-774-0", website="ebv.com", email="info@ebv.com", description="European semiconductor specialist distributor, an Avnet company"),
-        dict(name="CoreStaff", phone="+81-3-3514-8400", website="corestaff.co.jp", email="info@corestaff.co.jp", description="Japanese electronic components distributor for the Asia-Pacific market"),
-        dict(name="Electro Sonic", phone="800-563-4795", website="e-sonic.com", email="sales@e-sonic.com", description="Canadian electronic components distributor, broad-line inventory"),
-        dict(name="TTI Asia", phone="+852-2375-2722", website="ttiasia.com", email="sales@ttiasia.com", description="TTI Asia-Pacific division specializing in passives, connectors, and discretes"),
-        dict(name="TTI Europe", phone="+49-8141-6102-0", website="ttieurope.com", email="sales@ttieurope.com", description="TTI European division, passive and connector specialist"),
-        dict(name="Heilind Europe", phone="+49-89-904-802-0", website="heilind.eu", email="sales@heilind.eu", description="European interconnect and electromechanical specialist distributor"),
-        dict(name="Galco", phone="800-575-5562", website="galco.com", email="sales@galco.com", description="Industrial electronics and automation distributor based in Madison Heights, MI"),
-        dict(name="Sager Electronics", phone="800-724-3780", website="sager.com", email="sales@sager.com", description="North American power and electromechanical components distributor"),
-        dict(name="Sager Power Systems", phone="800-724-3780", website="sager.com/power-systems", email="power@sager.com", description="Sager division specializing in power supplies, converters, and UPS systems"),
-        dict(name="Master Electronics", phone="800-346-6873", website="masterelectronics.com", email="sales@masterelectronics.com", description="Broad-line distributor specializing in mil-spec and hard-to-find components"),
-        dict(name="RFMW", phone="408-414-1450", website="rfmw.com", email="sales@rfmw.com", description="RF, microwave, and millimeter-wave component specialty distributor"),
-        dict(name="Richardson RFPD", phone="800-737-6937", website="richardsonrfpd.com", email="sales@richardsonrfpd.com", description="RF, wireless, power, and IoT specialty distributor, an Arrow company"),
-        dict(name="Pasternack", phone="949-261-1920", website="pasternack.com", email="sales@pasternack.com", description="RF, microwave, and millimeter-wave connector and component specialist"),
-        dict(name="PEI-Genesis", phone="800-734-4363", website="peigenesis.com", email="sales@peigenesis.com", description="Connector specialist: mil-spec, industrial, harsh-environment interconnect"),
-        dict(name="Powell Electronics", phone="800-235-7880", website="powellelectronics.com", email="sales@powellelectronics.com", description="Connector and relay specialist distributor for mil/aero and industrial"),
-        dict(name="FDH Electronics", phone="800-966-1014", website="fdhelectronics.com", email="sales@fdhelectronics.com", description="Military, aerospace, and hi-rel electronic components distributor"),
-        dict(name="Carlton-Bates", phone="800-643-7195", website="carlton-bates.com", email="sales@carlton-bates.com", description="Interconnect and passive component distributor, a Sonepar company"),
-        dict(name="Hawk Electronics", phone="800-432-7150", website="hawkelectronics.com", email="sales@hawkelectronics.com", description="Regional authorized distributor focused on design-in support"),
-        dict(name="Hisco", phone="800-444-7261", website="hisco.com", email="sales@hisco.com", description="Industrial and electronic supply distributor, adhesives and specialty materials"),
-        dict(name="IEC Supply", phone="800-323-3242", website="iecsupply.com", email="sales@iecsupply.com", description="Industrial and electronic component supply distributor"),
-        dict(name="MRO Supply", phone="800-541-3120", website="mrosupply.com", email="sales@mrosupply.com", description="Maintenance, repair, and operations supply distributor for industrial electronics"),
-        dict(name="Verical", phone="480-308-7004", website="verical.com", email="sales@verical.com", description="Online marketplace for electronic components, an Arrow Electronics company"),
-        dict(name="Onlinecomponents.com", phone="800-778-2028", website="onlinecomponents.com", email="sales@onlinecomponents.com", description="Authorized online distributor for electronic connectors and components"),
-        dict(name="Walker Industrial", phone="800-879-2553", website="walkerindustrial.com", email="sales@walkerindustrial.com", description="Electrical and industrial automation distributor"),
-        dict(name="Zoro", phone="855-289-9676", website="zoro.com", email="sales@zoro.com", description="Online industrial and electronic supply distributor, a Grainger company"),
-        dict(name="Tequipment", phone="800-832-4866", website="tequipment.net", email="sales@tequipment.net", description="Test and measurement equipment distributor"),
-        dict(name="TSI Solutions", phone="800-874-2004", website="tsisolutions.us", email="sales@tsisolutions.us", description="Electronic and electromechanical component distributor"),
-        dict(name="Omnical", phone="+1-514-336-3070", website="omnical.com", email="sales@omnical.com", description="Canadian electronic components distributor"),
-        dict(name="Airline Hydraulics", phone="800-999-7378", website="airlinehyd.com", email="sales@airlinehyd.com", description="Fluid power and motion control distributor with electronic sensing products"),
-        dict(name="Analog Devices", phone="781-329-4700", website="analog.com", email="sales@analog.com", description="Semiconductor manufacturer with direct sales of precision analog, mixed-signal, and DSP ICs"),
-        dict(name="Microchip Direct", phone="800-262-1640", website="microchipdirect.com", email="sales@microchipdirect.com", description="Factory-direct sales of Microchip MCUs, analog, FPGA, and connectivity ICs"),
+        dict(
+            name="Digi-Key Electronics",
+            phone="800-344-4539",
+            website="digikey.com",
+            email="sales@digikey.com",
+            description="Leading global electronic components distributor, 13.4M+ products in stock",
+        ),
+        dict(
+            name="Mouser Electronics",
+            phone="800-346-6873",
+            website="mouser.com",
+            email="sales@mouser.com",
+            description="Global authorized distributor, 6.8M+ products from 1,200+ manufacturers",
+        ),
+        dict(
+            name="Arrow Electronics",
+            phone="800-777-2776",
+            website="arrow.com",
+            email="info@arrow.com",
+            description="Global provider of electronic components and enterprise computing solutions",
+        ),
+        dict(
+            name="Avnet",
+            phone="480-643-2000",
+            website="avnet.com",
+            email="info@avnet.com",
+            description="Global electronic components distributor and technology solutions provider",
+        ),
+        dict(
+            name="TTI",
+            phone="800-888-8884",
+            website="ttiinc.com",
+            email="sales@ttiinc.com",
+            description="Specialist distributor of passive, connector, electromechanical, and discrete components",
+        ),
+        dict(
+            name="Future Electronics",
+            phone="800-388-8731",
+            website="futureelectronics.com",
+            email="info@futureelectronics.com",
+            description="Global distributor of electronic components, full-service solutions",
+        ),
+        dict(
+            name="Newark",
+            phone="800-463-9275",
+            website="newark.com",
+            email="sales@newark.com",
+            description="Broad-line distributor of electronic and industrial components, an Avnet company",
+        ),
+        dict(
+            name="Farnell",
+            phone="+44-330-587-1000",
+            website="farnell.com",
+            email="sales@farnell.com",
+            description="European broad-line distributor of electronic components, an Avnet company",
+        ),
+        dict(
+            name="RS",
+            phone="+44-1536-444000",
+            website="rs-online.com",
+            email="sales@rs-online.com",
+            description="Global distributor of electronics, electrical, and industrial components",
+        ),
+        dict(
+            name="RS Americas",
+            phone="866-433-5722",
+            website="us.rs-online.com",
+            email="sales@rsamericas.com",
+            description="RS Group Americas division, formerly Allied Electronics & Automation",
+        ),
+        dict(
+            name="RS APAC",
+            phone="+65-6214-9933",
+            website="rs-online.com",
+            email="sales@rs-apac.com",
+            description="RS Group Asia-Pacific division, broad-line distribution",
+        ),
+        dict(
+            name="element14 APAC",
+            phone="+65-6877-8787",
+            website="element14.com",
+            email="sales@element14.com",
+            description="Asia-Pacific electronics distributor, a Premier Farnell / Avnet company",
+        ),
+        dict(
+            name="DigiKey Marketplace",
+            phone="800-344-4539",
+            website="digikey.com/marketplace",
+            email="marketplace@digikey.com",
+            description="Third-party seller platform on Digi-Key for specialty and surplus components",
+        ),
+        dict(
+            name="TME",
+            phone="+48-42-235-9000",
+            website="tme.eu",
+            email="sales@tme.eu",
+            description="Transfer Multisort Elektronik, major European electronic components distributor",
+        ),
+        dict(
+            name="Conrad",
+            phone="+49-9604-40-8787",
+            website="conrad.com",
+            email="info@conrad.com",
+            description="European electronics and technology distributor based in Germany",
+        ),
+        dict(
+            name="Distrelec",
+            phone="+41-44-944-9911",
+            website="distrelec.com",
+            email="info@distrelec.com",
+            description="Northern European high-service electronic components distributor",
+        ),
+        dict(
+            name="Anglia",
+            phone="+44-1945-474747",
+            website="anglia-live.com",
+            email="sales@anglia.com",
+            description="UK-based electronic components distributor, strong in automotive and industrial",
+        ),
+        dict(
+            name="Avnet Abacus",
+            phone="+49-8121-777-02",
+            website="avnet.com",
+            email="abacus@avnet.com",
+            description="Avnet European passive, interconnect, and electromechanical division",
+        ),
+        dict(
+            name="Avnet Silica",
+            phone="+49-8121-777-01",
+            website="avnet.com",
+            email="silica@avnet.com",
+            description="Avnet European semiconductor distribution division",
+        ),
+        dict(
+            name="EBV Elektronik",
+            phone="+49-8121-774-0",
+            website="ebv.com",
+            email="info@ebv.com",
+            description="European semiconductor specialist distributor, an Avnet company",
+        ),
+        dict(
+            name="CoreStaff",
+            phone="+81-3-3514-8400",
+            website="corestaff.co.jp",
+            email="info@corestaff.co.jp",
+            description="Japanese electronic components distributor for the Asia-Pacific market",
+        ),
+        dict(
+            name="Electro Sonic",
+            phone="800-563-4795",
+            website="e-sonic.com",
+            email="sales@e-sonic.com",
+            description="Canadian electronic components distributor, broad-line inventory",
+        ),
+        dict(
+            name="TTI Asia",
+            phone="+852-2375-2722",
+            website="ttiasia.com",
+            email="sales@ttiasia.com",
+            description="TTI Asia-Pacific division specializing in passives, connectors, and discretes",
+        ),
+        dict(
+            name="TTI Europe",
+            phone="+49-8141-6102-0",
+            website="ttieurope.com",
+            email="sales@ttieurope.com",
+            description="TTI European division, passive and connector specialist",
+        ),
+        dict(
+            name="Heilind Europe",
+            phone="+49-89-904-802-0",
+            website="heilind.eu",
+            email="sales@heilind.eu",
+            description="European interconnect and electromechanical specialist distributor",
+        ),
+        dict(
+            name="Galco",
+            phone="800-575-5562",
+            website="galco.com",
+            email="sales@galco.com",
+            description="Industrial electronics and automation distributor based in Madison Heights, MI",
+        ),
+        dict(
+            name="Sager Electronics",
+            phone="800-724-3780",
+            website="sager.com",
+            email="sales@sager.com",
+            description="North American power and electromechanical components distributor",
+        ),
+        dict(
+            name="Sager Power Systems",
+            phone="800-724-3780",
+            website="sager.com/power-systems",
+            email="power@sager.com",
+            description="Sager division specializing in power supplies, converters, and UPS systems",
+        ),
+        dict(
+            name="Master Electronics",
+            phone="800-346-6873",
+            website="masterelectronics.com",
+            email="sales@masterelectronics.com",
+            description="Broad-line distributor specializing in mil-spec and hard-to-find components",
+        ),
+        dict(
+            name="RFMW",
+            phone="408-414-1450",
+            website="rfmw.com",
+            email="sales@rfmw.com",
+            description="RF, microwave, and millimeter-wave component specialty distributor",
+        ),
+        dict(
+            name="Richardson RFPD",
+            phone="800-737-6937",
+            website="richardsonrfpd.com",
+            email="sales@richardsonrfpd.com",
+            description="RF, wireless, power, and IoT specialty distributor, an Arrow company",
+        ),
+        dict(
+            name="Pasternack",
+            phone="949-261-1920",
+            website="pasternack.com",
+            email="sales@pasternack.com",
+            description="RF, microwave, and millimeter-wave connector and component specialist",
+        ),
+        dict(
+            name="PEI-Genesis",
+            phone="800-734-4363",
+            website="peigenesis.com",
+            email="sales@peigenesis.com",
+            description="Connector specialist: mil-spec, industrial, harsh-environment interconnect",
+        ),
+        dict(
+            name="Powell Electronics",
+            phone="800-235-7880",
+            website="powellelectronics.com",
+            email="sales@powellelectronics.com",
+            description="Connector and relay specialist distributor for mil/aero and industrial",
+        ),
+        dict(
+            name="FDH Electronics",
+            phone="800-966-1014",
+            website="fdhelectronics.com",
+            email="sales@fdhelectronics.com",
+            description="Military, aerospace, and hi-rel electronic components distributor",
+        ),
+        dict(
+            name="Carlton-Bates",
+            phone="800-643-7195",
+            website="carlton-bates.com",
+            email="sales@carlton-bates.com",
+            description="Interconnect and passive component distributor, a Sonepar company",
+        ),
+        dict(
+            name="Hawk Electronics",
+            phone="800-432-7150",
+            website="hawkelectronics.com",
+            email="sales@hawkelectronics.com",
+            description="Regional authorized distributor focused on design-in support",
+        ),
+        dict(
+            name="Hisco",
+            phone="800-444-7261",
+            website="hisco.com",
+            email="sales@hisco.com",
+            description="Industrial and electronic supply distributor, adhesives and specialty materials",
+        ),
+        dict(
+            name="IEC Supply",
+            phone="800-323-3242",
+            website="iecsupply.com",
+            email="sales@iecsupply.com",
+            description="Industrial and electronic component supply distributor",
+        ),
+        dict(
+            name="MRO Supply",
+            phone="800-541-3120",
+            website="mrosupply.com",
+            email="sales@mrosupply.com",
+            description="Maintenance, repair, and operations supply distributor for industrial electronics",
+        ),
+        dict(
+            name="Verical",
+            phone="480-308-7004",
+            website="verical.com",
+            email="sales@verical.com",
+            description="Online marketplace for electronic components, an Arrow Electronics company",
+        ),
+        dict(
+            name="Onlinecomponents.com",
+            phone="800-778-2028",
+            website="onlinecomponents.com",
+            email="sales@onlinecomponents.com",
+            description="Authorized online distributor for electronic connectors and components",
+        ),
+        dict(
+            name="Walker Industrial",
+            phone="800-879-2553",
+            website="walkerindustrial.com",
+            email="sales@walkerindustrial.com",
+            description="Electrical and industrial automation distributor",
+        ),
+        dict(
+            name="Zoro",
+            phone="855-289-9676",
+            website="zoro.com",
+            email="sales@zoro.com",
+            description="Online industrial and electronic supply distributor, a Grainger company",
+        ),
+        dict(
+            name="Tequipment",
+            phone="800-832-4866",
+            website="tequipment.net",
+            email="sales@tequipment.net",
+            description="Test and measurement equipment distributor",
+        ),
+        dict(
+            name="TSI Solutions",
+            phone="800-874-2004",
+            website="tsisolutions.us",
+            email="sales@tsisolutions.us",
+            description="Electronic and electromechanical component distributor",
+        ),
+        dict(
+            name="Omnical",
+            phone="+1-514-336-3070",
+            website="omnical.com",
+            email="sales@omnical.com",
+            description="Canadian electronic components distributor",
+        ),
+        dict(
+            name="Airline Hydraulics",
+            phone="800-999-7378",
+            website="airlinehyd.com",
+            email="sales@airlinehyd.com",
+            description="Fluid power and motion control distributor with electronic sensing products",
+        ),
+        dict(
+            name="Analog Devices",
+            phone="781-329-4700",
+            website="analog.com",
+            email="sales@analog.com",
+            description="Semiconductor manufacturer with direct sales of precision analog, mixed-signal, and DSP ICs",
+        ),
+        dict(
+            name="Microchip Direct",
+            phone="800-262-1640",
+            website="microchipdirect.com",
+            email="sales@microchipdirect.com",
+            description="Factory-direct sales of Microchip MCUs, analog, FPGA, and connectivity ICs",
+        ),
     ]
 
     supplier_data: list[dict] = _demo_suppliers + _real_suppliers
@@ -438,8 +814,13 @@ def seed(db: Session) -> None:
         get_or_create_category_supplier(db, pmic, sup, is_featured=featured, rank=rank)
 
     # Kennedy featured in PMIC subcategories
-    for sub_name in ["Voltage Regulators (LDOs)", "DC-DC Converters (Buck/Boost)",
-                     "Battery Management ICs (BMS)", "Power Supervisors / Reset ICs", "LED Drivers"]:
+    for sub_name in [
+        "Voltage Regulators (LDOs)",
+        "DC-DC Converters (Buck/Boost)",
+        "Battery Management ICs (BMS)",
+        "Power Supervisors / Reset ICs",
+        "LED Drivers",
+    ]:
         sub_cat = cats[sub_name]
         get_or_create_category_supplier(db, sub_cat, kennedy, is_featured=True, rank=1)
         get_or_create_category_supplier(db, sub_cat, digikey, is_featured=False, rank=2)
@@ -574,6 +955,7 @@ def seed(db: Session) -> None:
 # Admin user
 # ---------------------------------------------------------------------------
 
+
 def _seed_admin_user(db: Session) -> None:
     admin_users = [
         ("matthew", "admin"),
@@ -607,138 +989,234 @@ def _seed_admin_user(db: Session) -> None:
 # categories, leaving every subcategory page empty.
 _DEMO_CATALOG: list[tuple[str, list[tuple[str, str, str]]]] = [
     # Power Management ICs (PMICs)
-    ("Voltage Regulators (LDOs)", [
-        ("LM7805CT", "Texas Instruments", "5V 1.5A Linear Voltage Regulator"),
-        ("LT3045", "Analog Devices", "20V 500mA Ultralow Noise LDO"),
-    ]),
-    ("DC-DC Converters (Buck/Boost)", [
-        ("TPS65217C", "Texas Instruments", "Power Management IC for AM335x"),
-        ("MP2307DN", "Monolithic Power", "3A 23V Step-Down Converter"),
-    ]),
-    ("Battery Management ICs (BMS)", [
-        ("BQ24195", "Texas Instruments", "4.5A Single-Cell USB Charger IC"),
-    ]),
+    (
+        "Voltage Regulators (LDOs)",
+        [
+            ("LM7805CT", "Texas Instruments", "5V 1.5A Linear Voltage Regulator"),
+            ("LT3045", "Analog Devices", "20V 500mA Ultralow Noise LDO"),
+        ],
+    ),
+    (
+        "DC-DC Converters (Buck/Boost)",
+        [
+            ("TPS65217C", "Texas Instruments", "Power Management IC for AM335x"),
+            ("MP2307DN", "Monolithic Power", "3A 23V Step-Down Converter"),
+        ],
+    ),
+    (
+        "Battery Management ICs (BMS)",
+        [
+            ("BQ24195", "Texas Instruments", "4.5A Single-Cell USB Charger IC"),
+        ],
+    ),
     # Microcontrollers & Processors
-    ("32-bit Microcontrollers (ARM Cortex-M)", [
-        ("STM32F407VGT6", "STMicroelectronics", "ARM Cortex-M4 168MHz MCU"),
-        ("RP2040", "Raspberry Pi", "Dual-Core ARM Cortex-M0+ MCU"),
-    ]),
-    ("8-bit Microcontrollers", [
-        ("ATMEGA328P-PU", "Microchip", "8-bit AVR MCU 32KB Flash"),
-        ("PIC18F4550", "Microchip", "USB 2.0 Full-Speed MCU"),
-    ]),
-    ("System-on-Chip (SoC)", [
-        ("ESP32-WROOM-32E", "Espressif", "Wi-Fi+BT MCU Module"),
-    ]),
+    (
+        "32-bit Microcontrollers (ARM Cortex-M)",
+        [
+            ("STM32F407VGT6", "STMicroelectronics", "ARM Cortex-M4 168MHz MCU"),
+            ("RP2040", "Raspberry Pi", "Dual-Core ARM Cortex-M0+ MCU"),
+        ],
+    ),
+    (
+        "8-bit Microcontrollers",
+        [
+            ("ATMEGA328P-PU", "Microchip", "8-bit AVR MCU 32KB Flash"),
+            ("PIC18F4550", "Microchip", "USB 2.0 Full-Speed MCU"),
+        ],
+    ),
+    (
+        "System-on-Chip (SoC)",
+        [
+            ("ESP32-WROOM-32E", "Espressif", "Wi-Fi+BT MCU Module"),
+        ],
+    ),
     # Analog ICs
-    ("Operational Amplifiers (Op-Amps)", [
-        ("LM358N", "Texas Instruments", "Dual Operational Amplifier"),
-        ("OPA2134PA", "Texas Instruments", "Audio Dual Op-Amp"),
-        ("MCP6002", "Microchip", "1MHz Low-Power Dual Op-Amp"),
-    ]),
-    ("Instrumentation Amplifiers", [
-        ("AD8221ARZ", "Analog Devices", "Precision Instrumentation Amplifier"),
-    ]),
-    ("Comparators", [
-        ("LM393N", "Texas Instruments", "Dual Differential Comparator"),
-    ]),
+    (
+        "Operational Amplifiers (Op-Amps)",
+        [
+            ("LM358N", "Texas Instruments", "Dual Operational Amplifier"),
+            ("OPA2134PA", "Texas Instruments", "Audio Dual Op-Amp"),
+            ("MCP6002", "Microchip", "1MHz Low-Power Dual Op-Amp"),
+        ],
+    ),
+    (
+        "Instrumentation Amplifiers",
+        [
+            ("AD8221ARZ", "Analog Devices", "Precision Instrumentation Amplifier"),
+        ],
+    ),
+    (
+        "Comparators",
+        [
+            ("LM393N", "Texas Instruments", "Dual Differential Comparator"),
+        ],
+    ),
     # Interface ICs
-    ("UART / USART Transceivers", [
-        ("MAX232CPE", "Maxim Integrated", "Dual RS-232 Driver/Receiver"),
-    ]),
-    ("USB Interface ICs", [
-        ("FT232RL", "FTDI", "USB to Serial UART IC"),
-        ("CP2102N", "Silicon Labs", "USB to UART Bridge Controller"),
-    ]),
-    ("CAN / LIN Transceivers", [
-        ("SN65HVD230", "Texas Instruments", "3.3V CAN Bus Transceiver"),
-    ]),
-    ("Level Shifters", [
-        ("TXB0108PWR", "Texas Instruments", "8-Bit Bidirectional Level Shifter"),
-    ]),
+    (
+        "UART / USART Transceivers",
+        [
+            ("MAX232CPE", "Maxim Integrated", "Dual RS-232 Driver/Receiver"),
+        ],
+    ),
+    (
+        "USB Interface ICs",
+        [
+            ("FT232RL", "FTDI", "USB to Serial UART IC"),
+            ("CP2102N", "Silicon Labs", "USB to UART Bridge Controller"),
+        ],
+    ),
+    (
+        "CAN / LIN Transceivers",
+        [
+            ("SN65HVD230", "Texas Instruments", "3.3V CAN Bus Transceiver"),
+        ],
+    ),
+    (
+        "Level Shifters",
+        [
+            ("TXB0108PWR", "Texas Instruments", "8-Bit Bidirectional Level Shifter"),
+        ],
+    ),
     # Memory ICs
-    ("EEPROM", [
-        ("AT24C256", "Microchip", "256Kbit I2C Serial EEPROM"),
-    ]),
-    ("NOR Flash", [
-        ("W25Q128JV", "Winbond", "128Mbit Serial NOR Flash"),
-        ("S25FL512S", "Infineon", "512Mbit SPI NOR Flash"),
-    ]),
-    ("SRAM", [
-        ("IS62WV25616", "ISSI", "256K x 16 High-Speed SRAM"),
-    ]),
-    ("DRAM", [
-        ("MT48LC16M16A2", "Micron", "256Mbit SDRAM"),
-    ]),
+    (
+        "EEPROM",
+        [
+            ("AT24C256", "Microchip", "256Kbit I2C Serial EEPROM"),
+        ],
+    ),
+    (
+        "NOR Flash",
+        [
+            ("W25Q128JV", "Winbond", "128Mbit Serial NOR Flash"),
+            ("S25FL512S", "Infineon", "512Mbit SPI NOR Flash"),
+        ],
+    ),
+    (
+        "SRAM",
+        [
+            ("IS62WV25616", "ISSI", "256K x 16 High-Speed SRAM"),
+        ],
+    ),
+    (
+        "DRAM",
+        [
+            ("MT48LC16M16A2", "Micron", "256Mbit SDRAM"),
+        ],
+    ),
     # Logic ICs
-    ("Logic Gates (AND, OR, NOT, etc.)", [
-        ("SN74LS00N", "Texas Instruments", "Quad 2-Input NAND Gate"),
-        ("74HC245", "NXP", "Octal Bus Transceiver"),
-        ("SN74HC138N", "Texas Instruments", "3-to-8 Line Decoder"),
-    ]),
-    ("Shift Registers", [
-        ("SN74HC595N", "Texas Instruments", "8-Bit Shift Register"),
-    ]),
-    ("Counters", [
-        ("CD4017BE", "Texas Instruments", "Decade Counter/Divider"),
-    ]),
+    (
+        "Logic Gates (AND, OR, NOT, etc.)",
+        [
+            ("SN74LS00N", "Texas Instruments", "Quad 2-Input NAND Gate"),
+            ("74HC245", "NXP", "Octal Bus Transceiver"),
+            ("SN74HC138N", "Texas Instruments", "3-to-8 Line Decoder"),
+        ],
+    ),
+    (
+        "Shift Registers",
+        [
+            ("SN74HC595N", "Texas Instruments", "8-Bit Shift Register"),
+        ],
+    ),
+    (
+        "Counters",
+        [
+            ("CD4017BE", "Texas Instruments", "Decade Counter/Divider"),
+        ],
+    ),
     # RF & Wireless ICs
-    ("Bluetooth ICs", [
-        ("CC2541F256", "Texas Instruments", "Bluetooth Low Energy SoC"),
-    ]),
-    ("RF Transceivers", [
-        ("SI4463", "Silicon Labs", "High-Performance RF Transceiver"),
-        ("NRF24L01P", "Nordic Semi", "2.4GHz RF Transceiver"),
-        ("SX1276", "Semtech", "LoRa Long Range Transceiver"),
-    ]),
-    ("GPS / GNSS Receivers", [
-        ("UBLOX-NEO-6M", "u-blox", "GPS Receiver Module"),
-    ]),
+    (
+        "Bluetooth ICs",
+        [
+            ("CC2541F256", "Texas Instruments", "Bluetooth Low Energy SoC"),
+        ],
+    ),
+    (
+        "RF Transceivers",
+        [
+            ("SI4463", "Silicon Labs", "High-Performance RF Transceiver"),
+            ("NRF24L01P", "Nordic Semi", "2.4GHz RF Transceiver"),
+            ("SX1276", "Semtech", "LoRa Long Range Transceiver"),
+        ],
+    ),
+    (
+        "GPS / GNSS Receivers",
+        [
+            ("UBLOX-NEO-6M", "u-blox", "GPS Receiver Module"),
+        ],
+    ),
     # Sensor ICs
-    ("Temperature Sensors", [
-        ("LM35DZ", "Texas Instruments", "Precision Temperature Sensor"),
-        ("HIH6130-021-001", "Honeywell", "HumidIcon Digital Humidity/Temp Sensor"),
-        ("HIH7120-021-001", "Honeywell", "HumidIcon Low-Power Humidity Sensor"),
-    ]),
-    ("Accelerometers", [
-        ("MPU6050", "InvenSense", "6-Axis Accelerometer + Gyroscope"),
-        ("ADXL345", "Analog Devices", "3-Axis Digital Accelerometer"),
-    ]),
-    ("Pressure Sensors", [
-        ("BME280", "Bosch", "Humidity/Pressure/Temperature Sensor"),
-        ("BMP390", "Bosch", "High-Performance Barometric Pressure Sensor"),
-        ("MPRLS0025PA00001A", "Honeywell", "MicroPressure 25 PSI Absolute I2C Sensor"),
-        ("MPRLS0015PA0000SAB", "Honeywell", "MicroPressure 15 PSI Abs SPI Breakout Board"),
-        ("MPRLS0300YG00001BB", "Honeywell", "MicroPressure 300mmHg Gage I2C Breakout"),
-        ("ASDXRRX015PGAA5", "Honeywell", "Amplified 15 PSI Gage Pressure Sensor"),
-        ("SSCDANN015PGAA5", "Honeywell", "TruStability 15 PSI Digital Pressure Sensor"),
-        ("ABPDANT015PGAA5", "Honeywell", "Basic Board Mount 15 PSI Pressure Sensor"),
-        ("HSC-SANN015PG2A3", "Honeywell", "High Accuracy Compensated 15 PSI Pressure"),
-    ]),
+    (
+        "Temperature Sensors",
+        [
+            ("LM35DZ", "Texas Instruments", "Precision Temperature Sensor"),
+            ("HIH6130-021-001", "Honeywell", "HumidIcon Digital Humidity/Temp Sensor"),
+            ("HIH7120-021-001", "Honeywell", "HumidIcon Low-Power Humidity Sensor"),
+        ],
+    ),
+    (
+        "Accelerometers",
+        [
+            ("MPU6050", "InvenSense", "6-Axis Accelerometer + Gyroscope"),
+            ("ADXL345", "Analog Devices", "3-Axis Digital Accelerometer"),
+        ],
+    ),
+    (
+        "Pressure Sensors",
+        [
+            ("BME280", "Bosch", "Humidity/Pressure/Temperature Sensor"),
+            ("BMP390", "Bosch", "High-Performance Barometric Pressure Sensor"),
+            ("MPRLS0025PA00001A", "Honeywell", "MicroPressure 25 PSI Absolute I2C Sensor"),
+            ("MPRLS0015PA0000SAB", "Honeywell", "MicroPressure 15 PSI Abs SPI Breakout Board"),
+            ("MPRLS0300YG00001BB", "Honeywell", "MicroPressure 300mmHg Gage I2C Breakout"),
+            ("ASDXRRX015PGAA5", "Honeywell", "Amplified 15 PSI Gage Pressure Sensor"),
+            ("SSCDANN015PGAA5", "Honeywell", "TruStability 15 PSI Digital Pressure Sensor"),
+            ("ABPDANT015PGAA5", "Honeywell", "Basic Board Mount 15 PSI Pressure Sensor"),
+            ("HSC-SANN015PG2A3", "Honeywell", "High Accuracy Compensated 15 PSI Pressure"),
+        ],
+    ),
     # Audio & Video ICs
-    ("Audio Amplifiers", [
-        ("MAX98357A", "Maxim Integrated", "I2S Class D Mono Amplifier"),
-        ("TPA3116D2", "Texas Instruments", "50W Stereo Class-D Amplifier"),
-    ]),
-    ("CODECs (Audio/Video)", [
-        ("WM8731", "Cirrus Logic", "Portable Internet Audio CODEC"),
-        ("PCM5102A", "Texas Instruments", "32-bit 384kHz DAC"),
-    ]),
-    ("Microphone Preamplifiers", [
-        ("ICS43434", "TDK", "Multi-Mode Digital Microphone"),
-    ]),
+    (
+        "Audio Amplifiers",
+        [
+            ("MAX98357A", "Maxim Integrated", "I2S Class D Mono Amplifier"),
+            ("TPA3116D2", "Texas Instruments", "50W Stereo Class-D Amplifier"),
+        ],
+    ),
+    (
+        "CODECs (Audio/Video)",
+        [
+            ("WM8731", "Cirrus Logic", "Portable Internet Audio CODEC"),
+            ("PCM5102A", "Texas Instruments", "32-bit 384kHz DAC"),
+        ],
+    ),
+    (
+        "Microphone Preamplifiers",
+        [
+            ("ICS43434", "TDK", "Multi-Mode Digital Microphone"),
+        ],
+    ),
     # Clock & Timing ICs
-    ("Real-Time Clocks (RTC)", [
-        ("DS3231SN", "Maxim Integrated", "Extremely Accurate RTC"),
-        ("DS1307Z", "Maxim Integrated", "64 x 8 Serial RTC"),
-    ]),
-    ("Clock Generators", [
-        ("SI5351A", "Silicon Labs", "I2C Programmable Clock Generator"),
-        ("LMK00105", "Texas Instruments", "1:5 LVCMOS Clock Buffer"),
-    ]),
-    ("Timer ICs", [
-        ("NE555P", "Texas Instruments", "Precision Timer IC"),
-    ]),
+    (
+        "Real-Time Clocks (RTC)",
+        [
+            ("DS3231SN", "Maxim Integrated", "Extremely Accurate RTC"),
+            ("DS1307Z", "Maxim Integrated", "64 x 8 Serial RTC"),
+        ],
+    ),
+    (
+        "Clock Generators",
+        [
+            ("SI5351A", "Silicon Labs", "I2C Programmable Clock Generator"),
+            ("LMK00105", "Texas Instruments", "1:5 LVCMOS Clock Buffer"),
+        ],
+    ),
+    (
+        "Timer ICs",
+        [
+            ("NE555P", "Texas Instruments", "Precision Timer IC"),
+        ],
+    ),
 ]
 
 
@@ -777,9 +1255,7 @@ def _seed_parts(
 
             # 2-4 distributor listings per part
             num_listings = random.randint(2, 4)
-            chosen_suppliers = random.sample(
-                supplier_list, min(num_listings, len(supplier_list))
-            )
+            chosen_suppliers = random.sample(supplier_list, min(num_listings, len(supplier_list)))
             for sup in chosen_suppliers:
                 base_price = Decimal(str(round(random.uniform(0.15, 45.00), 4)))
                 listing = PartListing(
@@ -795,14 +1271,18 @@ def _seed_parts(
 
                 # Price breaks: qty 10, 100, 1000
                 for qty, discount in [(10, 0.95), (100, 0.85), (1000, 0.70)]:
-                    db.add(PriceBreak(
-                        listing_id=listing.id,
-                        min_quantity=qty,
-                        unit_price=Decimal(str(round(float(base_price) * discount, 4))),
-                    ))
+                    db.add(
+                        PriceBreak(
+                            listing_id=listing.id,
+                            min_quantity=qty,
+                            unit_price=Decimal(str(round(float(base_price) * discount, 4))),
+                        )
+                    )
 
     db.flush()
-    print(f"Seed: {db.query(Part).count()} parts, {db.query(PartListing).count()} listings created.")
+    print(
+        f"Seed: {db.query(Part).count()} parts, {db.query(PartListing).count()} listings created."
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -850,7 +1330,12 @@ _DISTRIBUTOR_TIERS: dict[str, list[str] | str] = {
     "Sager Electronics": ["power-management-ics-pmics", "motor-motion-ics", "sensor-ics"],
     "Sager Power Systems": ["power-management-ics-pmics"],
     "Carlton-Bates": ["interface-ics", "sensor-ics"],
-    "FDH Electronics": ["memory-ics", "logic-ics", "microcontrollers-processors", "data-conversion-ics"],
+    "FDH Electronics": [
+        "memory-ics",
+        "logic-ics",
+        "microcontrollers-processors",
+        "data-conversion-ics",
+    ],
     "Hawk Electronics": ["analog-ics", "power-management-ics-pmics", "microcontrollers-processors"],
     "Walker Industrial": ["motor-motion-ics", "sensor-ics", "power-management-ics-pmics"],
     "MRO Supply": ["sensor-ics", "motor-motion-ics"],
@@ -860,8 +1345,18 @@ _DISTRIBUTOR_TIERS: dict[str, list[str] | str] = {
     "Tequipment": ["data-conversion-ics", "sensor-ics"],
     "TSI Solutions": ["power-management-ics-pmics", "motor-motion-ics"],
     "Airline Hydraulics": ["sensor-ics"],
-    "Analog Devices": ["analog-ics", "data-conversion-ics", "power-management-ics-pmics", "sensor-ics"],
-    "Microchip Direct": ["microcontrollers-processors", "analog-ics", "memory-ics", "interface-ics"],
+    "Analog Devices": [
+        "analog-ics",
+        "data-conversion-ics",
+        "power-management-ics-pmics",
+        "sensor-ics",
+    ],
+    "Microchip Direct": [
+        "microcontrollers-processors",
+        "analog-ics",
+        "memory-ics",
+        "interface-ics",
+    ],
 }
 
 # Stock magnitude by distributor size
@@ -880,9 +1375,9 @@ _DEFAULT_STOCK = (500, 30000)
 
 
 def _eligible_suppliers(
-    suppliers: dict[str, "Supplier"],
+    suppliers: dict[str, Supplier],
     parent_slug: str,
-) -> list["Supplier"]:
+) -> list[Supplier]:
     """Return suppliers eligible to carry parts in a given top-level category."""
     eligible = []
     for name, sup in suppliers.items():
@@ -897,7 +1392,7 @@ def _eligible_suppliers(
 def _seed_real_catalog(
     db: Session,
     cats: dict[str, Category],
-    suppliers: dict[str, "Supplier"],
+    suppliers: dict[str, Supplier],
 ) -> None:
     """Seed real parts from JSON catalog files in catalog_data/."""
     catalog_dir = Path(__file__).parent / "catalog_data"
@@ -982,14 +1477,18 @@ def _seed_real_catalog(
                     total_listings += 1
 
                     for qty, discount in [(10, 0.95), (100, 0.85), (1000, 0.70), (5000, 0.58)]:
-                        db.add(PriceBreak(
-                            listing_id=listing.id,
-                            min_quantity=qty,
-                            unit_price=max(
-                                Decimal("0.01"),
-                                (unit_price * Decimal(str(discount))).quantize(Decimal("0.0001")),
-                            ),
-                        ))
+                        db.add(
+                            PriceBreak(
+                                listing_id=listing.id,
+                                min_quantity=qty,
+                                unit_price=max(
+                                    Decimal("0.01"),
+                                    (unit_price * Decimal(str(discount))).quantize(
+                                        Decimal("0.0001")
+                                    ),
+                                ),
+                            )
+                        )
 
                 if total_parts % 500 == 0:
                     db.flush()
@@ -1003,11 +1502,28 @@ def _seed_real_catalog(
 # Revenue placeholder (12 months)
 # ---------------------------------------------------------------------------
 
-_DEMO_SUPPLIER_NAMES = frozenset([
-    "Kennedy Electronics", "Honeywell Sensing", "Oneonta Electronics",
-    "Thunder Electronics", "States Electronics", "Mike's Electric",
-    "Jo Jo's Circuits Circus",
-])
+_DEMO_SUPPLIER_NAMES = frozenset(
+    [
+        "Kennedy Electronics",
+        "Honeywell Sensing",
+        "Oneonta Electronics",
+        "Thunder Electronics",
+        "States Electronics",
+        "Mike's Electric",
+        "Jo Jo's Circuits Circus",
+    ]
+)
+
+
+def _month_bounds(today: date, months_ago: int) -> tuple[date, date]:
+    period_start = (today.replace(day=1) - timedelta(days=30 * months_ago)).replace(day=1)
+    if period_start.month == 12:
+        period_end = period_start.replace(year=period_start.year + 1, month=1, day=1) - timedelta(
+            days=1
+        )
+    else:
+        period_end = period_start.replace(month=period_start.month + 1, day=1) - timedelta(days=1)
+    return period_start, period_end
 
 
 def _seed_revenue(db: Session, suppliers: dict[str, Supplier]) -> None:
@@ -1016,37 +1532,72 @@ def _seed_revenue(db: Session, suppliers: dict[str, Supplier]) -> None:
 
     random.seed(99)
     today = date.today()
-    supplier_list = [s for s in suppliers.values() if str(s.name) in _DEMO_SUPPLIER_NAMES]
 
+    listing_counts = {
+        str(row[0]): row[1]
+        for row in db.query(PartListing.supplier_id, func.count(PartListing.id))
+        .group_by(PartListing.supplier_id)
+        .all()
+    }
+
+    # (min_listings, sponsor_amounts, listing_amounts, sponsor_prob, listing_prob)
+    _REVENUE_TIERS: list[tuple[int, list[int], list[int], float, float]] = [
+        (1000, [2000, 3000, 4000, 5000], [500, 750, 1000, 1500], 0.85, 0.95),
+        (500, [1000, 1500, 2000, 2500], [300, 500, 750], 0.75, 0.9),
+        (100, [500, 750, 1000], [100, 200, 300], 0.5, 0.8),
+        (0, [100, 250, 500], [50, 75, 100], 0.3, 0.6),
+    ]
+    _DEMO_TIER = ([250, 500, 750, 1000, 1500], [50, 100, 150, 200], 0.6, 0.7)
+
+    all_suppliers = list(suppliers.values())
     for months_ago in range(12, 0, -1):
-        period_start = (today.replace(day=1) - timedelta(days=30 * months_ago)).replace(day=1)
-        # Last day of month
-        if period_start.month == 12:
-            period_end = period_start.replace(year=period_start.year + 1, month=1, day=1) - timedelta(days=1)
-        else:
-            period_end = period_start.replace(month=period_start.month + 1, day=1) - timedelta(days=1)
+        period_start, period_end = _month_bounds(today, months_ago)
 
-        for sup in supplier_list:
-            # Sponsorship revenue (not all suppliers every month)
-            if random.random() > 0.4:
-                db.add(Revenue(
-                    supplier_id=sup.id,
-                    type="sponsorship",
-                    amount=Decimal(str(random.choice([250, 500, 750, 1000, 1500]))),
-                    description=f"Monthly sponsorship - {sup.name}",
-                    period_start=period_start,
-                    period_end=period_end,
-                ))
-            # Listing fees (smaller, more frequent)
-            if random.random() > 0.3:
-                db.add(Revenue(
-                    supplier_id=sup.id,
-                    type="listing_fee",
-                    amount=Decimal(str(random.choice([50, 100, 150, 200]))),
-                    description=f"Listing fee - {sup.name}",
-                    period_start=period_start,
-                    period_end=period_end,
-                ))
+        for sup in all_suppliers:
+            lc = listing_counts.get(str(sup.id), 0)
+
+            if str(sup.name) in _DEMO_SUPPLIER_NAMES:
+                sponsor_amounts, listing_amounts, sponsor_prob, listing_prob = _DEMO_TIER
+            else:
+                fallback = _REVENUE_TIERS[-1]
+                sponsor_amounts, listing_amounts, sponsor_prob, listing_prob = (
+                    fallback[1],
+                    fallback[2],
+                    fallback[3],
+                    fallback[4],
+                )
+                for min_lc, s_amts, l_amts, s_prob, l_prob in _REVENUE_TIERS:
+                    if lc >= min_lc:
+                        sponsor_amounts, listing_amounts, sponsor_prob, listing_prob = (
+                            s_amts,
+                            l_amts,
+                            s_prob,
+                            l_prob,
+                        )
+                        break
+
+            if random.random() < sponsor_prob:
+                db.add(
+                    Revenue(
+                        supplier_id=sup.id,
+                        type="sponsorship",
+                        amount=Decimal(str(random.choice(sponsor_amounts))),
+                        description=f"Monthly sponsorship - {sup.name}",
+                        period_start=period_start,
+                        period_end=period_end,
+                    )
+                )
+            if random.random() < listing_prob:
+                db.add(
+                    Revenue(
+                        supplier_id=sup.id,
+                        type="listing_fee",
+                        amount=Decimal(str(random.choice(listing_amounts))),
+                        description=f"Listing fee - {sup.name}",
+                        period_start=period_start,
+                        period_end=period_end,
+                    )
+                )
 
     db.flush()
     print(f"Seed: {db.query(Revenue).count()} revenue records created.")

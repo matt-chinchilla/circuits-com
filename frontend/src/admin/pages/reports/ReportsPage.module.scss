@@ -598,6 +598,111 @@
   color: #15803d;
 }
 
+// ─── (6) Analytics tab ──────────────────────────────────────────────────────
+
+.topPagesTable {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 13px;
+
+  th {
+    text-align: left;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #6b7280;
+    padding: 8px 10px;
+    border-bottom: 1px solid #f0f2f5;
+  }
+
+  td {
+    padding: 8px 10px;
+    color: #111827;
+    border-bottom: 1px solid #f8f9fa;
+    vertical-align: middle;
+  }
+
+  tbody tr:hover {
+    background: #f8f9fb;
+  }
+}
+
+.pathCell {
+  font-family: $font-mono;
+  font-size: 12px;
+  color: #{$executive-blue};
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.numCell {
+  font-family: $font-mono;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  text-align: right;
+  font-size: 12px;
+}
+
+.deviceGrid {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.deviceLegend {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.deviceRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #4b5563;
+}
+
+.deviceSwatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.deviceVal {
+  margin-left: auto;
+  font-family: $font-mono;
+  font-weight: 600;
+  color: #111827;
+  font-variant-numeric: tabular-nums;
+  min-width: 32px;
+  text-align: right;
+}
+
+.analyticsEmpty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 300px;
+  gap: 12px;
+  color: #6b7280;
+  font-size: 14px;
+  text-align: center;
+
+  strong {
+    color: #111827;
+    font-size: 16px;
+  }
+}
+
 // ─── Loading / error states ─────────────────────────────────────────────────
 
 .loading {

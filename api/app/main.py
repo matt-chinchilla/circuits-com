@@ -5,6 +5,7 @@ from app.config import settings
 from app.routes import (
     admin_category_suppliers,
     admin_messages,
+    analytics,
     auth,
     categories,
     dashboard,
@@ -37,6 +38,7 @@ app.include_router(dashboard.router)
 app.include_router(parts.router)
 app.include_router(admin_messages.router)
 app.include_router(admin_category_suppliers.router)
+app.include_router(analytics.router)
 
 
 setup_admin(app)

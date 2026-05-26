@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { API_BASE_URL } from '@shared/services/constants';
 import type {
+  AnalyticsData,
   AuthResponse,
   UserInfo,
   DashboardStats,
@@ -64,6 +65,9 @@ export const adminApi = {
 
   getPopular: () =>
     adminClient.get<PopularData>('/dashboard/popular').then((r) => r.data),
+
+  getAnalytics: (days = 30) =>
+    adminClient.get<AnalyticsData>('/dashboard/analytics', { params: { days } }).then((r) => r.data),
 
   getParts: (params: {
     page?: number;

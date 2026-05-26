@@ -84,6 +84,21 @@ export interface PartDetail extends Part {
   listings: PartListing[];
 }
 
+// Analytics
+export interface AnalyticsData {
+  period_days: number;
+  total_views: number;
+  unique_visitors: number;
+  avg_pages_per_visit: number;
+  daily_traffic: Array<{ day: string; views: number; visitors: number }>;
+  top_pages: Array<{ path: string; views: number; visitors: number }>;
+  referrers: Array<{ source: string; views: number }>;
+  devices: Array<{ type: string; count: number }>;
+  browsers: Array<{ name: string; count: number }>;
+  top_parts: Array<{ path: string; views: number }>;
+  top_categories: Array<{ path: string; views: number }>;
+}
+
 // Pagination
 export interface PaginatedResponse<T> {
   items: T[];

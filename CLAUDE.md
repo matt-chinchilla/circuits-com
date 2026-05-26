@@ -96,7 +96,7 @@ Path aliases `@public/*` / `@admin/*` / `@shared/*` in `vite.config.ts` + `tscon
 
 ### Data flow
 - Forms POST → API → `BackgroundTasks` → `email.send_*_notification` via aiosmtplib (Hover SMTP). n8n still in compose for future workflows but NOT in form path.
-- Parts attach to subcategory in `seed.py` `_PART_CATALOG` (NOT top-level). Aggregates must roll up `own + sum(children)`.
+- Parts attach to subcategory in `seed.py` `_DEMO_CATALOG` (NOT top-level). Aggregates must roll up `own + sum(children)`.
 - Parent-category "Popular Parts" rollup: `category_service._build_popular_parts(db, parent_id, page, per_page)` — `WHERE category_id IN (self + children)`, GROUP BY part, ORDER BY SUM(stock) DESC. URL `?p=N` paginates. `<Pagination>` widget at `@public/components/widgets/Pagination.tsx`. Default `POPULAR_PER_PAGE=12`.
 
 ## Key Patterns
@@ -136,7 +136,7 @@ Brand (`left: 20px`) + nav+LOGIN group (`right: 20px`) are `position: absolute` 
 ### Footer + ErrorBoundary + overflow guard (all site-wide)
 - `<Footer />` mounted ONCE in `PublicLayout.tsx` (sibling of `<Outlet />`); layout flex column `min-height: calc(100vh - $nav-height)`; footer `margin-top: auto`. Don't import/render `<Footer />` in new pages. Theme-aware (`background: var(--theme-nav-bg)` + per-theme overrides).
 - `<ErrorBoundary key={location.pathname}>` wraps Outlet (public) + Routes (admin) at `@shared/components/ErrorBoundary.tsx`. Pathname-keyed so error state auto-clears on nav.
-- `html, body { overflow-x: clip }` in `global.scss`. Use `clip` NOT `hidden` (`clip` doesn't disturb `position: sticky` ancestors). Companion: `pages/category/CategoryPage.module.scss .content { min-width: 0; width: 100% }` breaks the flex min-content chain.
+- `html, body { overflow-x: clip }` in `global.scss`. Use `clip` NOT `hidden` (`clip` doesn't disturb `position: sticky` ancestors). Companion: `pages/category/CategoryPage.module.scss .contentWide { min-width: 0; width: 100% }` breaks the flex min-content chain.
 
 ### SPA scroll-to-top
 `App.tsx`: `useEffect(() => { if (location.hash) return; window.scrollTo({top:0,left:0}); }, [location.pathname])`. Anchor nav preserved via `location.hash` skip.
@@ -179,7 +179,8 @@ Brand (`left: 20px`) + nav+LOGIN group (`right: 20px`) are `position: absolute` 
 - **Mobile drawer state-machine** (Navbar.tsx + AdminLayout.tsx): `useState(menuOpen)` + 3 effects on `[menuOpen]` — body-scroll-lock (capture+restore `prev`), Esc keydown (attach only while open), `[location.pathname]` for auto-close. Drawer link `onClick` calls `setMenuOpen(false)` BEFORE NavLink navigates. Compositor-only animations (transform+opacity).
 - **Admin `<aside>` needs conditional `aria-hidden`**: `aria-hidden={!menuOpen ? undefined : false}` (no attr when closed, `"false"` when open). Public drawer's `aria-hidden={!menuOpen}` would set `"true"` at desktop where the admin sidebar IS visible.
 - **`backdrop-filter: blur(2px)` on a full-viewport scrim is OK on mobile** when scrim only animates opacity. Don't add to elements that translate/scale.
-- **Mobile data tables**: `display: block; overflow-x: auto` + `thead, tbody { display: table; min-width: <px> }`. Public PartsTable hides Manufacturer + Distributors + Description via `.thMobileHide` / `.tdMobileHide` at <768px so SKU + Price + Status fit 430px viewport.
+- **Mobile data tables**: PartsTable uses `border-collapse: separate; border-spacing: 0` + 12px corner cell radii. `overflow-x: auto` on `.tableWrap` at <$bp-tablet (1024px); `min-width: 540px` on table prevents column compression. ColumnHeader accepts `hideClass?: string` (not `mobileHide` boolean) — callers pass `styles.hideTablet` (Description, <1024px) or `styles.hideMobile` (Category, <768px). All 4 price columns always visible. Subcategory chips switch to 2-col grid on mobile (`grid-template-columns: 1fr 1fr`).
+- **`border-collapse: separate` for rounded table corners** — `collapse` ignores `border-radius` on cells. Use `separate` + `border-spacing: 0` + radii on corner th/td. Trap: borders on `<tr>` no longer render — move `border-bottom` to `.td` with `.row:last-child &` override.
 - **Buttons inherit `line-height: 1.6`** from body — overflows height-constrained rows. Fix: explicit `line-height: 1` + control height via padding.
 - **Sub-pixel text blur from `transform: translate*(-50%)`** — fractional pixels + GPU layer = subpixel glyph raster. Use `top: 0; bottom: 0; display: flex; align-items: center`.
 - **`filter: hue-rotate(0deg)` is NOT free** — promotes to compositor layer even at 0deg. Gate behind non-default themes.
