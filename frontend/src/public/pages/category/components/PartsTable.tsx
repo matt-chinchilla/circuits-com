@@ -66,7 +66,7 @@ export default function PartsTable({
               hasSearch search={skuSearch} setSearch={setSkuSearch}
             />
             <ColumnHeader
-              label="Description" sortKey="desc" mobileHide
+              label="Description" sortKey="desc" hideClass={styles.hideTablet}
               sort={sort} setSort={setSort}
             />
             <ColumnHeader
@@ -78,7 +78,7 @@ export default function PartsTable({
             />
             {showSubColumn && subSelected && setSubSelected && (
               <ColumnHeader
-                label="Category" sortKey="sub" mobileHide
+                label="Category" sortKey="sub" hideClass={styles.hideMobile}
                 sort={sort} setSort={setSort}
                 filterValues={subValues}
                 filterSelected={subSelected}
@@ -86,7 +86,7 @@ export default function PartsTable({
               />
             )}
             <ColumnHeader label="Qty 1" sortKey="qty1" numeric sort={sort} setSort={setSort} />
-            <ColumnHeader label="Qty 10" sortKey="qty10" numeric mobileHide sort={sort} setSort={setSort} />
+            <ColumnHeader label="Qty 10" sortKey="qty10" numeric sort={sort} setSort={setSort} />
             <ColumnHeader label="Qty 100" sortKey="qty100" numeric sort={sort} setSort={setSort} />
             <ColumnHeader label="Qty 1k" sortKey="qty1k" numeric sort={sort} setSort={setSort} />
           </tr>
@@ -126,7 +126,7 @@ export default function PartsTable({
               <td className={`${styles.td} ${styles.tdTier}`}>
                 <span className={styles.price}>{formatPrice(part.best_price)}</span>
               </td>
-              <td className={`${styles.td} ${styles.tdTier} ${styles.tdMobileHide}`}>
+              <td className={`${styles.td} ${styles.tdTier}`}>
                 <span className={styles.price}>{formatPrice(part.best_price_10)}</span>
               </td>
               <td className={`${styles.td} ${styles.tdTier}`}>

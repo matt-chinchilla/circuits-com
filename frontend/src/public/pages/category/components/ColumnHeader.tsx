@@ -10,7 +10,7 @@ interface ColumnHeaderProps {
   label: string;
   sortKey: string;
   numeric?: boolean;
-  mobileHide?: boolean;
+  hideClass?: string;
   sort: SortState;
   setSort: (s: SortState) => void;
   hasSearch?: boolean;
@@ -22,7 +22,7 @@ interface ColumnHeaderProps {
 }
 
 export default function ColumnHeader({
-  label, sortKey, numeric, mobileHide,
+  label, sortKey, numeric, hideClass,
   sort, setSort,
   hasSearch, search, setSearch,
   filterValues, filterSelected, setFilterSelected,
@@ -57,7 +57,7 @@ export default function ColumnHeader({
   return (
     <th
       ref={ref}
-      className={`${styles.colHead} ${isActive ? styles.colHeadActive : ''} ${mobileHide ? styles.mobileHide : ''} ${numeric ? styles.numeric : ''}`}
+      className={`${styles.colHead} ${isActive ? styles.colHeadActive : ''} ${hideClass ?? ''} ${numeric ? styles.numeric : ''}`}
       aria-sort={ariaSort}
     >
       <button

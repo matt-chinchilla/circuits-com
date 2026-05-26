@@ -3,27 +3,47 @@
 
 .tableWrap {
   @include card-base;
+  border-radius: 12px;
   overflow: visible;
+
+  @media (max-width: $bp-tablet) {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+
+    &::-webkit-scrollbar {
+      height: 4px;
+    }
+    &::-webkit-scrollbar-thumb {
+      background: rgba(0, 0, 0, 0.15);
+      border-radius: 2px;
+    }
+  }
 }
 
 .table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   font-family: $font-body;
   table-layout: auto;
+
+  @media (max-width: $bp-tablet) {
+    min-width: 540px;
+  }
+
+  thead tr th:first-child { border-top-left-radius: 12px; }
+  thead tr th:last-child { border-top-right-radius: 12px; }
+  tbody tr:last-child td:first-child { border-bottom-left-radius: 12px; }
+  tbody tr:last-child td:last-child { border-bottom-right-radius: 12px; }
 }
 
 .row {
-  border-bottom: 1px solid #eee;
   transition: background-color 120ms;
   cursor: default;
 
   &:hover {
     background: rgba(0, 0, 0, 0.015);
-  }
-
-  &:last-child {
-    border-bottom: none;
   }
 }
 
@@ -32,21 +52,20 @@
   font-size: 0.88rem;
   color: $text-primary;
   vertical-align: middle;
+  border-bottom: 1px solid #eee;
+
+  .row:last-child & {
+    border-bottom: none;
+  }
 }
 
 .tdDesc {
-  @media (max-width: $bp-mobile) {
+  @media (max-width: $bp-tablet) {
     display: none;
   }
 }
 
 .tdSub {
-  @media (max-width: $bp-mobile) {
-    display: none;
-  }
-}
-
-.tdMobileHide {
   @media (max-width: $bp-mobile) {
     display: none;
   }
@@ -129,11 +148,24 @@
 
 .empty {
   @include card-base;
+  border-radius: 12px;
   padding: 48px 24px;
   text-align: center;
   color: $text-secondary;
   font-size: 0.95rem;
   font-style: italic;
+}
+
+.hideTablet {
+  @media (max-width: $bp-tablet) {
+    display: none;
+  }
+}
+
+.hideMobile {
+  @media (max-width: $bp-mobile) {
+    display: none;
+  }
 }
 
 @media (max-width: 640px) {

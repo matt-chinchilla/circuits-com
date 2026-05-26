@@ -12,12 +12,6 @@
   color: var(--theme-accent, $nav-blue);
 }
 
-.mobileHide {
-  @media (max-width: $bp-mobile) {
-    display: none;
-  }
-}
-
 .numeric .trigger {
   justify-content: flex-start;
 }

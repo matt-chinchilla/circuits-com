@@ -158,6 +158,13 @@
   &::-webkit-scrollbar {
     display: none;
   }
+
+  @media (max-width: $bp-mobile) {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    overflow-x: visible;
+  }
 }
 
 .chip {
@@ -182,9 +189,13 @@
     color: #fff;
   }
 
-  @media (max-width: 640px) {
+  @media (max-width: $bp-mobile) {
+    justify-content: center;
+    white-space: normal;
+    text-align: center;
     font-size: 0.78rem;
-    padding: 5px 12px;
+    padding: 8px 10px;
+    line-height: 1.3;
   }
 }
 
