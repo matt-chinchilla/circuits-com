@@ -1,0 +1,1676 @@
+{
+  "audio-amps": [
+    {
+      "sku": "TPA3116D2DADR",
+      "manufacturer": "Texas Instruments",
+      "description": "50W Stereo Class-D Audio Amplifier, 4.5-26V, HTSSOP-32",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/tpa3116d2.pdf",
+      "lifecycle": "active",
+      "price_cents": 395
+    },
+    {
+      "sku": "TPA3118D2DAPR",
+      "manufacturer": "Texas Instruments",
+      "description": "30W Stereo/60W Mono Class-D Audio Amplifier, 4.5-26V, HTSSOP-32",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/tpa3118d2.pdf",
+      "lifecycle": "active",
+      "price_cents": 350
+    },
+    {
+      "sku": "TPA3128D2DAPR",
+      "manufacturer": "Texas Instruments",
+      "description": "30W Stereo Class-D Audio Amplifier, 4.5-26V, auto-recovery, HTSSOP-32",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/tpa3128d2.pdf",
+      "lifecycle": "active",
+      "price_cents": 380
+    },
+    {
+      "sku": "TPA3110D2RGZR",
+      "manufacturer": "Texas Instruments",
+      "description": "15W Stereo Filter-Free Class-D Audio Amplifier, 4.5-14.4V, QFN-24",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/tpa3110d2.pdf",
+      "lifecycle": "active",
+      "price_cents": 250
+    },
+    {
+      "sku": "TPA3255D2DDWR",
+      "manufacturer": "Texas Instruments",
+      "description": "315W Stereo/600W Mono Class-D Audio Amplifier, Ultra-HD, HSOP-44",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/tpa3255.pdf",
+      "lifecycle": "active",
+      "price_cents": 950
+    },
+    {
+      "sku": "TPA3245DDCR",
+      "manufacturer": "Texas Instruments",
+      "description": "100W/ch Stereo Class-D Audio Amplifier, Ultra-HD, HTSSOP-44",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/tpa3245.pdf",
+      "lifecycle": "active",
+      "price_cents": 650
+    },
+    {
+      "sku": "TPA2012D2RTJR",
+      "manufacturer": "Texas Instruments",
+      "description": "2.1W Stereo Filter-Free Class-D Audio Amplifier, QFN-20",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/tpa2012d2.pdf",
+      "lifecycle": "active",
+      "price_cents": 150
+    },
+    {
+      "sku": "TPA6130A2RTJR",
+      "manufacturer": "Texas Instruments",
+      "description": "138mW Stereo Headphone Amplifier, Class-AB, DirectPath, QFN-20",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/tpa6130a2.pdf",
+      "lifecycle": "active",
+      "price_cents": 195
+    },
+    {
+      "sku": "TPA6132A2RTJR",
+      "manufacturer": "Texas Instruments",
+      "description": "25mW Stereo Headphone Amplifier, DirectPath, pop-free, QFN-16",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/tpa6132a2.pdf",
+      "lifecycle": "active",
+      "price_cents": 145
+    },
+    {
+      "sku": "LM386N-1/NOPB",
+      "manufacturer": "Texas Instruments",
+      "description": "Low Voltage Audio Power Amplifier, 325mW, 4-12V, DIP-8",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/lm386.pdf",
+      "lifecycle": "active",
+      "price_cents": 95
+    },
+    {
+      "sku": "LM386MX-1/NOPB",
+      "manufacturer": "Texas Instruments",
+      "description": "Low Voltage Audio Power Amplifier, 325mW, SOIC-8",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/lm386.pdf",
+      "lifecycle": "active",
+      "price_cents": 85
+    },
+    {
+      "sku": "LM4862MX/NOPB",
+      "manufacturer": "Texas Instruments",
+      "description": "675mW Audio Power Amplifier, Class-AB, SOIC-8",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/lm4862.pdf",
+      "lifecycle": "active",
+      "price_cents": 75
+    },
+    {
+      "sku": "LM4871MX/NOPB",
+      "manufacturer": "Texas Instruments",
+      "description": "3W Audio Power Amplifier, Class-AB, Shutdown, SOIC-8",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/lm4871.pdf",
+      "lifecycle": "active",
+      "price_cents": 65
+    },
+    {
+      "sku": "MAX98357AETE+T",
+      "manufacturer": "Analog Devices (Maxim)",
+      "description": "3.2W Class-D Audio Amplifier with I2S DAC, Filter-Free, TQFN-16",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/MAX98357A-MAX98357B.pdf",
+      "lifecycle": "active",
+      "price_cents": 195
+    },
+    {
+      "sku": "MAX98357BETE+T",
+      "manufacturer": "Analog Devices (Maxim)",
+      "description": "3.2W Class-D Audio Amplifier with I2S DAC, PCM, TQFN-16",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/MAX98357A-MAX98357B.pdf",
+      "lifecycle": "active",
+      "price_cents": 210
+    },
+    {
+      "sku": "MAX9744ETH+T",
+      "manufacturer": "Analog Devices (Maxim)",
+      "description": "20W Stereo Class-D Audio Amplifier, spread-spectrum, analog/digital, TQFN-36",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/MAX9744.pdf",
+      "lifecycle": "active",
+      "price_cents": 450
+    },
+    {
+      "sku": "MAX98390BEWX+T",
+      "manufacturer": "Analog Devices (Maxim)",
+      "description": "20W Boosted Class-D Smart Amplifier, DSP, I2S, speaker protection, WLP-35",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/MAX98390.pdf",
+      "lifecycle": "active",
+      "price_cents": 595
+    },
+    {
+      "sku": "MAX98400BETX+T",
+      "manufacturer": "Analog Devices (Maxim)",
+      "description": "20W Stereo/40W Mono Class-DG Audio Amplifier, I2C, TQFN-40",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/MAX98400A-MAX98400B.pdf",
+      "lifecycle": "active",
+      "price_cents": 750
+    },
+    {
+      "sku": "TDA7492P",
+      "manufacturer": "STMicroelectronics",
+      "description": "25W+25W Class-D Audio Amplifier, 5-26V, DBS-36",
+      "datasheet_url": "https://www.st.com/resource/en/datasheet/tda7492p.pdf",
+      "lifecycle": "active",
+      "price_cents": 350
+    },
+    {
+      "sku": "TDA7498E",
+      "manufacturer": "STMicroelectronics",
+      "description": "160W+160W Class-D Audio Amplifier, 14-39V, PowerSSO-36",
+      "datasheet_url": "https://www.st.com/resource/en/datasheet/tda7498e.pdf",
+      "lifecycle": "active",
+      "price_cents": 750
+    },
+    {
+      "sku": "TS4990IST",
+      "manufacturer": "STMicroelectronics",
+      "description": "1W Filter-Free Class-D Mono Audio Amplifier, 2.4-5.5V, DFN-10",
+      "datasheet_url": "https://www.st.com/resource/en/datasheet/ts4990.pdf",
+      "lifecycle": "active",
+      "price_cents": 65
+    },
+    {
+      "sku": "TS4871EIJT",
+      "manufacturer": "STMicroelectronics",
+      "description": "1.4W Audio Power Amplifier, AB Class, pop-free, SOT-23-5",
+      "datasheet_url": "https://www.st.com/resource/en/datasheet/ts4871.pdf",
+      "lifecycle": "active",
+      "price_cents": 55
+    },
+    {
+      "sku": "SSM2603CPZ-REEL7",
+      "manufacturer": "Analog Devices",
+      "description": "Low-Power Audio Codec, 24-bit, 96kHz, I2C, headphone amp, LFCSP-28",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/SSM2603.pdf",
+      "lifecycle": "active",
+      "price_cents": 450
+    },
+    {
+      "sku": "SSM2518CPZ-REEL7",
+      "manufacturer": "Analog Devices",
+      "description": "2W Mono Class-D Audio Amplifier, I2S/TDM, I2C control, LFCSP-20",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/SSM2518.pdf",
+      "lifecycle": "active",
+      "price_cents": 295
+    },
+    {
+      "sku": "SSM2529CPZ-REEL7",
+      "manufacturer": "Analog Devices",
+      "description": "2W Mono PDM Class-D Audio Amplifier, I2C, filter-free, LFCSP-16",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/SSM2529.pdf",
+      "lifecycle": "active",
+      "price_cents": 250
+    },
+    {
+      "sku": "TFA9879HN/N1",
+      "manufacturer": "NXP",
+      "description": "2.65W Mono Class-D Audio Amplifier, I2C/I2S, HVQFN-32",
+      "datasheet_url": "https://www.nxp.com/docs/en/data-sheet/TFA9879.pdf",
+      "lifecycle": "active",
+      "price_cents": 195
+    },
+    {
+      "sku": "TFA9874HN/N2",
+      "manufacturer": "NXP",
+      "description": "Smart Audio Amplifier, 7.5W Class-D, I2S/I2C, speaker protection, HVQFN-36",
+      "datasheet_url": "https://www.nxp.com/docs/en/data-sheet/TFA9874.pdf",
+      "lifecycle": "active",
+      "price_cents": 395
+    },
+    {
+      "sku": "PAM8403DR",
+      "manufacturer": "Diodes Incorporated",
+      "description": "3W Stereo Filter-Free Class-D Audio Amplifier, 2.5-5.5V, SOP-16",
+      "datasheet_url": "https://www.diodes.com/assets/Datasheets/PAM8403.pdf",
+      "lifecycle": "active",
+      "price_cents": 45
+    },
+    {
+      "sku": "PAM8406DR",
+      "manufacturer": "Diodes Incorporated",
+      "description": "5W Stereo Class-D Audio Amplifier, 2.5-5.5V, SOP-16",
+      "datasheet_url": "https://www.diodes.com/assets/Datasheets/PAM8406.pdf",
+      "lifecycle": "active",
+      "price_cents": 55
+    },
+    {
+      "sku": "PAM8610",
+      "manufacturer": "Diodes Incorporated",
+      "description": "10W+10W Stereo Class-D Audio Amplifier, 7-15V, SOP-16",
+      "datasheet_url": "https://www.diodes.com/assets/Datasheets/PAM8610.pdf",
+      "lifecycle": "active",
+      "price_cents": 95
+    },
+    {
+      "sku": "PAM8302AASCR",
+      "manufacturer": "Diodes Incorporated",
+      "description": "2.5W Mono Class-D Audio Amplifier, filter-free, SOP-8",
+      "datasheet_url": "https://www.diodes.com/assets/Datasheets/PAM8302A.pdf",
+      "lifecycle": "active",
+      "price_cents": 35
+    },
+    {
+      "sku": "NS4168",
+      "manufacturer": "Nuvoton (Natlinear)",
+      "description": "3W Mono Class-D Audio Amplifier, I2S input, filter-free, MSOP-10",
+      "datasheet_url": "https://datasheet.lcsc.com/szlcsc/2005251035_Natlinear-NS4168_C532862.pdf",
+      "lifecycle": "active",
+      "price_cents": 30
+    },
+    {
+      "sku": "NS8002",
+      "manufacturer": "Nuvoton (Natlinear)",
+      "description": "3W Mono Class-AB Audio Amplifier, BTL, SOP-8",
+      "datasheet_url": "https://datasheet.lcsc.com/szlcsc/1812131534_Natlinear-NS8002_C106200.pdf",
+      "lifecycle": "active",
+      "price_cents": 22
+    },
+    {
+      "sku": "APA3161AI-TRL",
+      "manufacturer": "Anpec Electronics",
+      "description": "2.1W Mono Class-D Audio Amplifier, filter-free, SOT-23-5",
+      "datasheet_url": "https://datasheet.lcsc.com/szlcsc/2005261704_Anpec-Electronics-APA3161AI-TRL_C508694.pdf",
+      "lifecycle": "active",
+      "price_cents": 28
+    },
+    {
+      "sku": "CS8508E",
+      "manufacturer": "CRD (Chongqing Ruida)",
+      "description": "8W Mono Class-D Audio Amplifier, 3.6-8.5V, SOP-8",
+      "datasheet_url": "https://datasheet.lcsc.com/szlcsc/2006041102_CRD-Chongqing-Ruida-CS8508E_C420389.pdf",
+      "lifecycle": "active",
+      "price_cents": 38
+    },
+    {
+      "sku": "HT82V739",
+      "manufacturer": "Holtek",
+      "description": "Headphone Driver, DC-DC + BTL amp, pop-free, SSOP-16",
+      "datasheet_url": "https://www.holtek.com/webapi/49012/HT82V739v190.pdf",
+      "lifecycle": "active",
+      "price_cents": 85
+    },
+    {
+      "sku": "TPA3255D2PHPR",
+      "manufacturer": "Texas Instruments",
+      "description": "315W Stereo Class-D, PurePath Ultra-HD, Hybrid Modulation, PowerPAD-HTQFP-44",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/tpa3255.pdf",
+      "lifecycle": "active",
+      "price_cents": 895
+    },
+    {
+      "sku": "SSM3582CPZ-REEL7",
+      "manufacturer": "Analog Devices",
+      "description": "2x11W Smart Stereo Class-D Amplifier, I2S, DSP, LFCSP-40",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/SSM3582.pdf",
+      "lifecycle": "active",
+      "price_cents": 550
+    },
+    {
+      "sku": "MAX98306ETD+T",
+      "manufacturer": "Analog Devices (Maxim)",
+      "description": "3.7W Stereo Class-D Audio Amplifier, Filterless, Shutdown, TDFN-14",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/MAX98306.pdf",
+      "lifecycle": "active",
+      "price_cents": 195
+    },
+    {
+      "sku": "TPA2016D2RTJR",
+      "manufacturer": "Texas Instruments",
+      "description": "2.8W/ch Class-D with AGC/DRC/Compression, I2C, QFN-20",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/tpa2016d2.pdf",
+      "lifecycle": "active",
+      "price_cents": 250
+    },
+    {
+      "sku": "NCS20071SN2T1G",
+      "manufacturer": "onsemi",
+      "description": "Precision Low-Noise Audio Op-Amp, 3.2nV/rtHz, TSOP-5",
+      "datasheet_url": "https://www.onsemi.com/pdf/datasheet/ncs20071-d.pdf",
+      "lifecycle": "active",
+      "price_cents": 65
+    },
+    {
+      "sku": "NE5532ADR",
+      "manufacturer": "Texas Instruments",
+      "description": "Dual Low-Noise Audio Op-Amp, +/-22V, SOIC-8",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/ne5532a.pdf",
+      "lifecycle": "active",
+      "price_cents": 45
+    },
+    {
+      "sku": "OPA2134AIDR",
+      "manufacturer": "Texas Instruments",
+      "description": "Dual Audio FET-Input Op-Amp, low distortion, SOIC-8",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/opa2134.pdf",
+      "lifecycle": "active",
+      "price_cents": 295
+    },
+    {
+      "sku": "TDA2030A",
+      "manufacturer": "STMicroelectronics",
+      "description": "18W Hi-Fi Audio Amplifier/Driver, Class-AB, Pentawatt",
+      "datasheet_url": "https://www.st.com/resource/en/datasheet/tda2030a.pdf",
+      "lifecycle": "active",
+      "price_cents": 95
+    },
+    {
+      "sku": "TDA7293V",
+      "manufacturer": "STMicroelectronics",
+      "description": "120V 100W DMOS Audio Amplifier, Mute/Standby, Multiwatt-15",
+      "datasheet_url": "https://www.st.com/resource/en/datasheet/tda7293.pdf",
+      "lifecycle": "active",
+      "price_cents": 350
+    },
+    {
+      "sku": "STA350BWTR",
+      "manufacturer": "STMicroelectronics",
+      "description": "2.1ch Digital Audio System, Class-D, 3x80W, I2C, TQFP-64",
+      "datasheet_url": "https://www.st.com/resource/en/datasheet/sta350bw.pdf",
+      "lifecycle": "active",
+      "price_cents": 650
+    },
+    {
+      "sku": "TAS5760MDCAR",
+      "manufacturer": "Texas Instruments",
+      "description": "20W Stereo Class-D Audio Amplifier, I2S, I2C, HTSSOP-28",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/tas5760m.pdf",
+      "lifecycle": "active",
+      "price_cents": 350
+    },
+    {
+      "sku": "TAS5825MRGPR",
+      "manufacturer": "Texas Instruments",
+      "description": "30W Stereo Class-D with DSP, I2S/TDM, I2C, QFN-48",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/tas5825m.pdf",
+      "lifecycle": "active",
+      "price_cents": 495
+    },
+    {
+      "sku": "TPA3136D2DAPR",
+      "manufacturer": "Texas Instruments",
+      "description": "20W Stereo Class-D Audio Amplifier, 4.5-26V, HTSSOP-32",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/tpa3136d2.pdf",
+      "lifecycle": "active",
+      "price_cents": 295
+    },
+    {
+      "sku": "MAX98300ETG+T",
+      "manufacturer": "Analog Devices (Maxim)",
+      "description": "1.8W Mono Class-D Amplifier, filterless, clickless, TQFN-12",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/MAX98300.pdf",
+      "lifecycle": "active",
+      "price_cents": 125
+    }
+  ],
+  "codecs": [
+    {
+      "sku": "PCM5102APWR",
+      "manufacturer": "Texas Instruments",
+      "description": "112dB SNR Stereo Audio DAC, 32-bit/384kHz, I2S, TSSOP-20",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/pcm5102a.pdf",
+      "lifecycle": "active",
+      "price_cents": 295
+    },
+    {
+      "sku": "PCM5100APWR",
+      "manufacturer": "Texas Instruments",
+      "description": "100dB SNR Stereo Audio DAC, 32-bit/384kHz, I2S, TSSOP-20",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/pcm5100a.pdf",
+      "lifecycle": "active",
+      "price_cents": 195
+    },
+    {
+      "sku": "PCM5122PWR",
+      "manufacturer": "Texas Instruments",
+      "description": "112dB SNR Stereo Audio DAC, 32-bit/384kHz, I2C control, TSSOP-28",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/pcm5122.pdf",
+      "lifecycle": "active",
+      "price_cents": 395
+    },
+    {
+      "sku": "PCM5242PWR",
+      "manufacturer": "Texas Instruments",
+      "description": "112dB SNR Stereo Audio DAC with DSP, 32-bit/384kHz, I2C, TSSOP-28",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/pcm5242.pdf",
+      "lifecycle": "active",
+      "price_cents": 495
+    },
+    {
+      "sku": "PCM1794ADBR",
+      "manufacturer": "Texas Instruments",
+      "description": "127dB SNR Stereo Audio DAC, 24-bit/192kHz, current output, SSOP-28",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/pcm1794a.pdf",
+      "lifecycle": "active",
+      "price_cents": 1250
+    },
+    {
+      "sku": "PCM1792ADBR",
+      "manufacturer": "Texas Instruments",
+      "description": "132dB SNR Stereo Audio DAC, 24-bit/192kHz, I2S/DSD, SSOP-28",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/pcm1792a.pdf",
+      "lifecycle": "active",
+      "price_cents": 1950
+    },
+    {
+      "sku": "PCM1802DBR",
+      "manufacturer": "Texas Instruments",
+      "description": "105dB SNR Stereo Audio ADC, 24-bit/96kHz, SPI, SSOP-20",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/pcm1802.pdf",
+      "lifecycle": "active",
+      "price_cents": 395
+    },
+    {
+      "sku": "PCM1808PWR",
+      "manufacturer": "Texas Instruments",
+      "description": "99dB SNR Stereo Audio ADC, 24-bit/96kHz, TSSOP-14",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/pcm1808.pdf",
+      "lifecycle": "active",
+      "price_cents": 295
+    },
+    {
+      "sku": "PCM3168ADBR",
+      "manufacturer": "Texas Instruments",
+      "description": "6-ch DAC + 4-ch ADC, 24-bit/192kHz, 108/105dB SNR, I2S/TDM, TSSOP-64",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/pcm3168a.pdf",
+      "lifecycle": "active",
+      "price_cents": 1450
+    },
+    {
+      "sku": "TLV320AIC3204IRHBR",
+      "manufacturer": "Texas Instruments",
+      "description": "Low-Power Stereo Audio Codec, 24-bit, miniDSP, I2S/I2C, VQFN-32",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/tlv320aic3204.pdf",
+      "lifecycle": "active",
+      "price_cents": 395
+    },
+    {
+      "sku": "TLV320AIC3206IRGZR",
+      "manufacturer": "Texas Instruments",
+      "description": "Ultra-Low-Power Stereo Audio Codec, miniDSP, headphone amp, QFN-32",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/tlv320aic3206.pdf",
+      "lifecycle": "active",
+      "price_cents": 450
+    },
+    {
+      "sku": "TLV320AIC3110IRHBR",
+      "manufacturer": "Texas Instruments",
+      "description": "Low-Power Stereo Audio DAC, Class-D Amp, I2S/I2C, VQFN-32",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/tlv320aic3110.pdf",
+      "lifecycle": "active",
+      "price_cents": 350
+    },
+    {
+      "sku": "TLV320ADC3101IRHBR",
+      "manufacturer": "Texas Instruments",
+      "description": "Low-Power Stereo Audio ADC, 92dB SNR, I2S/I2C, VQFN-32",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/tlv320adc3101.pdf",
+      "lifecycle": "active",
+      "price_cents": 295
+    },
+    {
+      "sku": "WM8731SEDS/RV",
+      "manufacturer": "Cirrus Logic",
+      "description": "Portable Internet Audio Codec, 24-bit, ADC+DAC, I2S/I2C, SSOP-28",
+      "datasheet_url": "https://statics.cirrus.com/pubs/proDatasheet/WM8731_v5.0.pdf",
+      "lifecycle": "active",
+      "price_cents": 495
+    },
+    {
+      "sku": "WM8960CGEFL/RV",
+      "manufacturer": "Cirrus Logic",
+      "description": "Low-Power Stereo Codec, 24-bit, DAC+ADC+Speaker/HP amp, I2S/I2C, QFN-32",
+      "datasheet_url": "https://statics.cirrus.com/pubs/proDatasheet/WM8960_v5.0.pdf",
+      "lifecycle": "active",
+      "price_cents": 350
+    },
+    {
+      "sku": "WM8978GEFL/RV",
+      "manufacturer": "Cirrus Logic",
+      "description": "Stereo Codec with Speaker Driver, 24-bit, EQ, 3D, I2S/I2C, QFN-48",
+      "datasheet_url": "https://statics.cirrus.com/pubs/proDatasheet/WM8978_v4.5.pdf",
+      "lifecycle": "active",
+      "price_cents": 395
+    },
+    {
+      "sku": "CS4270-CZZ",
+      "manufacturer": "Cirrus Logic",
+      "description": "114dB Stereo Codec, 24-bit/192kHz, I2S/I2C, TSSOP-28",
+      "datasheet_url": "https://statics.cirrus.com/pubs/proDatasheet/CS4270_F3.pdf",
+      "lifecycle": "active",
+      "price_cents": 550
+    },
+    {
+      "sku": "CS4272-CZZ",
+      "manufacturer": "Cirrus Logic",
+      "description": "114dB Stereo Codec, 24-bit/192kHz, hardware mode, TSSOP-28",
+      "datasheet_url": "https://statics.cirrus.com/pubs/proDatasheet/CS4272_F3.pdf",
+      "lifecycle": "active",
+      "price_cents": 495
+    },
+    {
+      "sku": "CS42L42-CNZR",
+      "manufacturer": "Cirrus Logic",
+      "description": "Low-Power Audio Codec, headset detect, jack sense, USB/I2S, QFN-32",
+      "datasheet_url": "https://statics.cirrus.com/pubs/proDatasheet/CS42L42_F2.pdf",
+      "lifecycle": "active",
+      "price_cents": 295
+    },
+    {
+      "sku": "CS42L51-CNZ",
+      "manufacturer": "Cirrus Logic",
+      "description": "Low-Power Stereo Audio Codec, 24-bit, ADC+DAC, I2C, QFN-32",
+      "datasheet_url": "https://statics.cirrus.com/pubs/proDatasheet/CS42L51_F2.pdf",
+      "lifecycle": "active",
+      "price_cents": 250
+    },
+    {
+      "sku": "CS4334-KSZ",
+      "manufacturer": "Cirrus Logic",
+      "description": "Stereo Audio DAC, 24-bit, 96kHz, I2S, SOIC-8",
+      "datasheet_url": "https://statics.cirrus.com/pubs/proDatasheet/CS4334-35-38-39_F5.pdf",
+      "lifecycle": "active",
+      "price_cents": 195
+    },
+    {
+      "sku": "CS43130-CNZR",
+      "manufacturer": "Cirrus Logic",
+      "description": "130dB Hi-Fi DAC, 32-bit/384kHz, DSD256, headphone amp, QFN-36",
+      "datasheet_url": "https://statics.cirrus.com/pubs/proDatasheet/CS43130_F2.pdf",
+      "lifecycle": "active",
+      "price_cents": 1250
+    },
+    {
+      "sku": "CS43131-CNZR",
+      "manufacturer": "Cirrus Logic",
+      "description": "130dB Hi-Fi DAC, 32-bit/384kHz, DSD, USB, QFN-32",
+      "datasheet_url": "https://statics.cirrus.com/pubs/proDatasheet/CS43131_F2.pdf",
+      "lifecycle": "active",
+      "price_cents": 1150
+    },
+    {
+      "sku": "CS47L90-CWZR",
+      "manufacturer": "Cirrus Logic",
+      "description": "Smart Codec, quad-core DSP, 8 DAC/8 ADC, I2S/SLIMBus, WLCSP-115",
+      "datasheet_url": "https://statics.cirrus.com/pubs/proDatasheet/CS47L90_F1.pdf",
+      "lifecycle": "active",
+      "price_cents": 2450
+    },
+    {
+      "sku": "ADAU1701JSTZ-RL",
+      "manufacturer": "Analog Devices",
+      "description": "SigmaDSP Audio Processor, 28/56-bit, I2C, 2-in/4-out, LQFP-48",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/ADAU1701.pdf",
+      "lifecycle": "active",
+      "price_cents": 750
+    },
+    {
+      "sku": "ADAU1761BCPZ-R7",
+      "manufacturer": "Analog Devices",
+      "description": "Low-Power Stereo Codec, SigmaDSP, 24-bit, record/playback, LFCSP-32",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/ADAU1761.pdf",
+      "lifecycle": "active",
+      "price_cents": 650
+    },
+    {
+      "sku": "ADAU1772BCPZ",
+      "manufacturer": "Analog Devices",
+      "description": "Low-Power Codec, SigmaDSP, 4-ch ADC + 2-ch DAC, I2S, LFCSP-40",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/ADAU1772.pdf",
+      "lifecycle": "active",
+      "price_cents": 595
+    },
+    {
+      "sku": "ADAU1452WBCPZ",
+      "manufacturer": "Analog Devices",
+      "description": "SigmaDSP Audio Processor, 294MHz, 1024 instructions, I2S/TDM, LFCSP-72",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/ADAU1452.pdf",
+      "lifecycle": "active",
+      "price_cents": 1450
+    },
+    {
+      "sku": "ADAU1787BCBZ-RL",
+      "manufacturer": "Analog Devices",
+      "description": "Ultra-Low-Power Audio Codec, SigmaDSP, MEMS mic interface, WLCSP-25",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/adau1787.pdf",
+      "lifecycle": "active",
+      "price_cents": 450
+    },
+    {
+      "sku": "SGTL5000XNAA3R2",
+      "manufacturer": "NXP",
+      "description": "Ultra-Low-Power Audio Codec, 24-bit, I2S, headphone amp, QFN-32",
+      "datasheet_url": "https://www.nxp.com/docs/en/data-sheet/SGTL5000.pdf",
+      "lifecycle": "active",
+      "price_cents": 295
+    },
+    {
+      "sku": "ALC5640-CGT",
+      "manufacturer": "Realtek",
+      "description": "Low-Power Audio Codec, Class-D amp, I2S/I2C, headphone detect, QFN-48",
+      "datasheet_url": "https://www.realtek.com/en/products/computer-peripherals-ics/item/alc5640",
+      "lifecycle": "active",
+      "price_cents": 250
+    },
+    {
+      "sku": "ALC5682I-CGT",
+      "manufacturer": "Realtek",
+      "description": "Low-Power Audio Codec, USB-C, jack detect, I2S/I2C, QFN-40",
+      "datasheet_url": "https://www.realtek.com/en/products/computer-peripherals-ics/item/alc5682i",
+      "lifecycle": "active",
+      "price_cents": 295
+    },
+    {
+      "sku": "NAU88C10YG",
+      "manufacturer": "Nuvoton",
+      "description": "Ultra-Low-Power Mono Audio Codec, 24-bit, I2S/I2C, speaker+mic, QFN-32",
+      "datasheet_url": "https://www.nuvoton.com/export/resource-files/NAU88C10_Datasheet_Rev_2.2.pdf",
+      "lifecycle": "active",
+      "price_cents": 150
+    },
+    {
+      "sku": "NAU88L25YGC",
+      "manufacturer": "Nuvoton",
+      "description": "Stereo Audio Codec, 24-bit/192kHz, I2S/I2C, headphone amp, QFN-32",
+      "datasheet_url": "https://www.nuvoton.com/export/resource-files/NAU88L25_Datasheet_Rev_1.2.pdf",
+      "lifecycle": "active",
+      "price_cents": 195
+    },
+    {
+      "sku": "ES8388S",
+      "manufacturer": "Everest Semiconductor",
+      "description": "Low-Power Stereo Audio Codec, 24-bit, ADC+DAC, I2S/I2C, QFN-28",
+      "datasheet_url": "https://datasheet.lcsc.com/szlcsc/1912111437_Everest-semi-Everest-Semiconductor-ES8388S_C381070.pdf",
+      "lifecycle": "active",
+      "price_cents": 95
+    },
+    {
+      "sku": "ES8311",
+      "manufacturer": "Everest Semiconductor",
+      "description": "Low-Power Mono Audio Codec, 24-bit, ADC+DAC, I2S/I2C, QFN-20",
+      "datasheet_url": "https://datasheet.lcsc.com/szlcsc/2110251730_Everest-semi-Everest-Semiconductor-ES8311_C2895764.pdf",
+      "lifecycle": "active",
+      "price_cents": 65
+    },
+    {
+      "sku": "AK4556VT",
+      "manufacturer": "AKM (Asahi Kasei)",
+      "description": "106dB Stereo Codec, 24-bit/192kHz, I2S, VSOP-10",
+      "datasheet_url": "https://www.akm.com/content/dam/documents/products/audio/audio-codec/ak4556vt/ak4556vt-en-datasheet.pdf",
+      "lifecycle": "active",
+      "price_cents": 350
+    },
+    {
+      "sku": "AK4490REQ-V",
+      "manufacturer": "AKM (Asahi Kasei)",
+      "description": "120dB Premium DAC, 32-bit/768kHz, DSD, Velvet Sound, LQFP-44",
+      "datasheet_url": "https://www.akm.com/content/dam/documents/products/audio/audio-dac/ak4490req/ak4490req-en-datasheet.pdf",
+      "lifecycle": "active",
+      "price_cents": 2950
+    },
+    {
+      "sku": "DAC8552IDGKR",
+      "manufacturer": "Texas Instruments",
+      "description": "Dual 16-bit Voltage Output DAC, SPI, low power, VSSOP-8",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/dac8552.pdf",
+      "lifecycle": "active",
+      "price_cents": 395
+    },
+    {
+      "sku": "UDA1334ATS/N2",
+      "manufacturer": "NXP",
+      "description": "Low-Power Stereo Audio DAC, 24-bit/96kHz, I2S, SSOP-16",
+      "datasheet_url": "https://www.nxp.com/docs/en/data-sheet/UDA1334ATS.pdf",
+      "lifecycle": "active",
+      "price_cents": 195
+    },
+    {
+      "sku": "TLV320DAC3203IRHBR",
+      "manufacturer": "Texas Instruments",
+      "description": "Low-Power Stereo DAC, miniDSP, headphone amp, I2S, VQFN-32",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/tlv320dac3203.pdf",
+      "lifecycle": "active",
+      "price_cents": 295
+    },
+    {
+      "sku": "WM8994ECS/RV",
+      "manufacturer": "Cirrus Logic",
+      "description": "Ultra-Low-Power Audio Hub Codec, DAC+ADC+Class-W HP, SLIMBus, WLCSP-73",
+      "datasheet_url": "https://statics.cirrus.com/pubs/proDatasheet/WM8994_v4.6.pdf",
+      "lifecycle": "active",
+      "price_cents": 650
+    },
+    {
+      "sku": "MAX98089ETN+T",
+      "manufacturer": "Analog Devices (Maxim)",
+      "description": "Low-Power Stereo Audio Codec, I2S/PCM/SLIMBus, speaker/headphone, TQFN-42",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/MAX98089.pdf",
+      "lifecycle": "active",
+      "price_cents": 395
+    },
+    {
+      "sku": "DA7218-BFB2",
+      "manufacturer": "Renesas (Dialog)",
+      "description": "Low-Power Stereo Audio Codec, 100dB SNR, ANC, I2S/I2C, WLCSP-36",
+      "datasheet_url": "https://www.renesas.com/us/en/document/dst/da7218-datasheet",
+      "lifecycle": "active",
+      "price_cents": 250
+    },
+    {
+      "sku": "PCM512xDBR",
+      "manufacturer": "Texas Instruments",
+      "description": "112dB SNR Stereo DAC, 32-bit/384kHz, integrated PLL, I2S/I2C, TSSOP-28",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/pcm5121.pdf",
+      "lifecycle": "active",
+      "price_cents": 380
+    },
+    {
+      "sku": "CS35L41-CNZR",
+      "manufacturer": "Cirrus Logic",
+      "description": "Boosted Smart Amplifier, DSP, I2S/SoundWire, speaker protection, QFN-40",
+      "datasheet_url": "https://statics.cirrus.com/pubs/proDatasheet/CS35L41_F2.pdf",
+      "lifecycle": "active",
+      "price_cents": 595
+    },
+    {
+      "sku": "ES9038PRO-D",
+      "manufacturer": "ESS Technology",
+      "description": "Flagship 8-ch DAC, 140dB DNR, DSD512, HyperStream II, TQFP-64",
+      "datasheet_url": "https://www.esstech.com/wp-content/uploads/2023/01/ES9038PRO-Datasheet-v1.4.pdf",
+      "lifecycle": "active",
+      "price_cents": 4950
+    },
+    {
+      "sku": "ES9023P-D",
+      "manufacturer": "ESS Technology",
+      "description": "112dB Stereo Audio DAC, 24-bit/192kHz, I2S, SSOP-8, low power",
+      "datasheet_url": "https://www.esstech.com/wp-content/uploads/2023/01/ES9023P-Datasheet-v1.0.pdf",
+      "lifecycle": "active",
+      "price_cents": 395
+    }
+  ],
+  "video-processors": [
+    {
+      "sku": "ADV7513BSWZ-P",
+      "manufacturer": "Analog Devices",
+      "description": "165MHz HDMI Transmitter, 1080p, Audio Return Channel, LQFP-64",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/ADV7513.pdf",
+      "lifecycle": "active",
+      "price_cents": 750
+    },
+    {
+      "sku": "ADV7393BCPZ",
+      "manufacturer": "Analog Devices",
+      "description": "SD/HD Video Encoder, Component/S-Video/Composite, I2C, LFCSP-40",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/ADV7393.pdf",
+      "lifecycle": "active",
+      "price_cents": 550
+    },
+    {
+      "sku": "ADV7391BCPZ",
+      "manufacturer": "Analog Devices",
+      "description": "SD Video Encoder, Composite/S-Video, 10-bit DAC, I2C, LFCSP-32",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/ADV7390_7391.pdf",
+      "lifecycle": "active",
+      "price_cents": 395
+    },
+    {
+      "sku": "ADV7180BCPZ-RL",
+      "manufacturer": "Analog Devices",
+      "description": "SD Video Decoder, 10-bit, NTSC/PAL/SECAM, I2C, auto-detect, LFCSP-40",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/ADV7180.pdf",
+      "lifecycle": "active",
+      "price_cents": 695
+    },
+    {
+      "sku": "ADV7182ABCPZ",
+      "manufacturer": "Analog Devices",
+      "description": "SD Video Decoder, 10-bit, 12 analog inputs, I2C, LFCSP-64",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/ADV7182A.pdf",
+      "lifecycle": "active",
+      "price_cents": 850
+    },
+    {
+      "sku": "ADV7280ABCPZ-RL",
+      "manufacturer": "Analog Devices",
+      "description": "SD Video Decoder, 10-bit, NTSC/PAL, auto-detect, I2C, LFCSP-32",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/ADV7280A.pdf",
+      "lifecycle": "active",
+      "price_cents": 750
+    },
+    {
+      "sku": "ADV7611BSWZ-P",
+      "manufacturer": "Analog Devices",
+      "description": "HDMI 1.4 Receiver, 225MHz, 36-bit deep color, I2C, LQFP-100",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/ADV7611.pdf",
+      "lifecycle": "active",
+      "price_cents": 1250
+    },
+    {
+      "sku": "ADV7619KSVZ-P",
+      "manufacturer": "Analog Devices",
+      "description": "Dual HDMI 1.4 Receiver, 225MHz, 2-port, I2C, TQFP-100",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/ADV7619.pdf",
+      "lifecycle": "active",
+      "price_cents": 1650
+    },
+    {
+      "sku": "ADV7842KBCZ-5P",
+      "manufacturer": "Analog Devices",
+      "description": "Multi-Format Video Decoder, HDMI+Analog, 12-bit, I2C, BGA-256",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/ADV7842.pdf",
+      "lifecycle": "active",
+      "price_cents": 2450
+    },
+    {
+      "sku": "TVP5150AM1IPBSR",
+      "manufacturer": "Texas Instruments",
+      "description": "SD Video Decoder, NTSC/PAL/SECAM, I2C, 10-bit ADC, TQFP-32",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/tvp5150am1.pdf",
+      "lifecycle": "active",
+      "price_cents": 495
+    },
+    {
+      "sku": "TVP5150APBS",
+      "manufacturer": "Texas Instruments",
+      "description": "Ultra-Low-Power SD Video Decoder, NTSC/PAL, I2C, TQFP-32",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/tvp5150a.pdf",
+      "lifecycle": "nrnd",
+      "price_cents": 450
+    },
+    {
+      "sku": "TFP401APZP",
+      "manufacturer": "Texas Instruments",
+      "description": "PanelBus Digital Receiver/Deserializer, DVI, 165MHz, HTQFP-100",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/tfp401a.pdf",
+      "lifecycle": "active",
+      "price_cents": 895
+    },
+    {
+      "sku": "MAX9286GTN/V+T",
+      "manufacturer": "Analog Devices (Maxim)",
+      "description": "Quad GMSL Deserializer, 4-ch CSI-2 output, coax/STP, TQFN-56",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/MAX9286.pdf",
+      "lifecycle": "active",
+      "price_cents": 1950
+    },
+    {
+      "sku": "MAX96706GTJ/V+T",
+      "manufacturer": "Analog Devices (Maxim)",
+      "description": "GMSL Serializer, parallel-to-serial, coax, compact, TQFN-24",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/MAX96706.pdf",
+      "lifecycle": "active",
+      "price_cents": 750
+    },
+    {
+      "sku": "MAX96717FGTJ/V+T",
+      "manufacturer": "Analog Devices (Maxim)",
+      "description": "GMSL2 Serializer, CSI-2 input, coax, tunnel mode, TQFN-24",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/MAX96717F.pdf",
+      "lifecycle": "active",
+      "price_cents": 950
+    },
+    {
+      "sku": "TDA19988BHN/C1",
+      "manufacturer": "NXP",
+      "description": "HDMI Transmitter, 1080p60, CEC, HDCP 1.4, I2C, HVQFN-76",
+      "datasheet_url": "https://www.nxp.com/docs/en/data-sheet/TDA19988.pdf",
+      "lifecycle": "active",
+      "price_cents": 595
+    },
+    {
+      "sku": "GS2971AIBE3",
+      "manufacturer": "Microchip (Semtech)",
+      "description": "3G-SDI Receiver, HD/SD, equalized, SPI, BGA-121",
+      "datasheet_url": "https://www.microchip.com/en-us/product/gs2971a",
+      "lifecycle": "active",
+      "price_cents": 3500
+    },
+    {
+      "sku": "LIF-MD6000-6JN80I",
+      "manufacturer": "Lattice Semiconductor",
+      "description": "CrossLinkPlus FPGA, MIPI bridge, 6K LUT, Flash, csBGA-81",
+      "datasheet_url": "https://www.latticesemi.com/Products/FPGAandCPLD/CrossLinkPlus",
+      "lifecycle": "active",
+      "price_cents": 1250
+    },
+    {
+      "sku": "TC358762XBG",
+      "manufacturer": "Toshiba",
+      "description": "MIPI DSI-to-DPI Bridge, 720p, I2C, FBGA-40",
+      "datasheet_url": "https://toshiba.semicon-storage.com/info/TC358762XBG_datasheet_en_20150515.pdf",
+      "lifecycle": "active",
+      "price_cents": 450
+    },
+    {
+      "sku": "TC358775XBG",
+      "manufacturer": "Toshiba",
+      "description": "MIPI DSI to LVDS Bridge, 1080p, I2C, FBGA-64",
+      "datasheet_url": "https://toshiba.semicon-storage.com/info/TC358775XBG_datasheet_en_20180131.pdf",
+      "lifecycle": "active",
+      "price_cents": 595
+    },
+    {
+      "sku": "IT6263FN",
+      "manufacturer": "ITE Tech",
+      "description": "LVDS/TTL to HDMI Transmitter, 1080p, HDCP, I2C, QFN-76",
+      "datasheet_url": "https://www.ite.com.tw/en/product/view?mid=96",
+      "lifecycle": "active",
+      "price_cents": 550
+    },
+    {
+      "sku": "GV7601-IBE3",
+      "manufacturer": "Microchip (Semtech)",
+      "description": "SDI to HDMI Bridge, 3G/HD/SD-SDI, BGA-121",
+      "datasheet_url": "https://www.microchip.com/en-us/product/gv7601",
+      "lifecycle": "active",
+      "price_cents": 2950
+    },
+    {
+      "sku": "RTD2660",
+      "manufacturer": "Realtek",
+      "description": "LCD Controller/Scaler, VGA/HDMI/DVI input, LVDS output, QFP-128",
+      "datasheet_url": "https://www.realtek.com/en/products/video-audio-multimedia-ics/item/rtd2660",
+      "lifecycle": "active",
+      "price_cents": 450
+    },
+    {
+      "sku": "ADV7612BSWZ-P",
+      "manufacturer": "Analog Devices",
+      "description": "HDMI 2.0 Receiver, dual-port, 600MHz, 48-bit, I2C, LQFP-100",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/ADV7612.pdf",
+      "lifecycle": "active",
+      "price_cents": 1850
+    },
+    {
+      "sku": "SN65DP141RGZT",
+      "manufacturer": "Texas Instruments",
+      "description": "DisplayPort Redriver/Retimer, 8.1Gbps, 4-lane, I2C, VQFN-48",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/sn65dp141.pdf",
+      "lifecycle": "active",
+      "price_cents": 550
+    },
+    {
+      "sku": "CH7036B-BF",
+      "manufacturer": "Chrontel",
+      "description": "Display Controller/Scaler, VGA/LVDS/HDMI, I2C, QFP-128",
+      "datasheet_url": "https://www.chrontel.com/product/ch7036b",
+      "lifecycle": "active",
+      "price_cents": 650
+    },
+    {
+      "sku": "MAX9526AETP+T",
+      "manufacturer": "Analog Devices (Maxim)",
+      "description": "NTSC/PAL Video Decoder, 10-bit, I2C, composite/S-Video, TQFN-28",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/MAX9526.pdf",
+      "lifecycle": "active",
+      "price_cents": 395
+    },
+    {
+      "sku": "ADV7623KBCZ5P",
+      "manufacturer": "Analog Devices",
+      "description": "HDMI 2.0 Transceiver, 4K@60 Rx+Tx, HDCP 2.2, BGA-256",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/ADV7623.pdf",
+      "lifecycle": "active",
+      "price_cents": 3950
+    },
+    {
+      "sku": "ADV7623KBCZ5P-R7",
+      "manufacturer": "Analog Devices",
+      "description": "HDMI 2.0 Transceiver, Rx+Tx, 4K@60, HDCP 2.2, BGA-256",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/ADV7623.pdf",
+      "lifecycle": "active",
+      "price_cents": 3950
+    },
+    {
+      "sku": "MAX96712GTN/V+T",
+      "manufacturer": "Analog Devices (Maxim)",
+      "description": "Quad GMSL2 Deserializer, 4-ch CSI-2, automotive, TQFN-64",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/MAX96712.pdf",
+      "lifecycle": "active",
+      "price_cents": 2950
+    },
+    {
+      "sku": "TC358870XBG",
+      "manufacturer": "Toshiba",
+      "description": "HDMI 2.0 to MIPI DSI Bridge, 4K@30, I2C, FBGA-80",
+      "datasheet_url": "https://toshiba.semicon-storage.com/info/TC358870XBG_datasheet_en_20190401.pdf",
+      "lifecycle": "active",
+      "price_cents": 950
+    },
+    {
+      "sku": "SN65DSI84AZQNR",
+      "manufacturer": "Texas Instruments",
+      "description": "Dual MIPI DSI to LVDS Bridge, 1080p, 4-lane, BGA-36",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/sn65dsi84a.pdf",
+      "lifecycle": "active",
+      "price_cents": 595
+    },
+    {
+      "sku": "MAX96714FGTJ/V+T",
+      "manufacturer": "Analog Devices (Maxim)",
+      "description": "GMSL2 Serializer, parallel input, coax, compact, TQFN-24",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/MAX96714F.pdf",
+      "lifecycle": "active",
+      "price_cents": 850
+    },
+    {
+      "sku": "ADV7280WBCPZ-RL",
+      "manufacturer": "Analog Devices",
+      "description": "SD Video Decoder, 10-bit, NTSC/PAL, MIPI CSI-2 output, LFCSP-32",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/ADV7280A.pdf",
+      "lifecycle": "active",
+      "price_cents": 795
+    },
+    {
+      "sku": "IT6616FN-BX",
+      "manufacturer": "ITE Tech",
+      "description": "HDMI 2.0 Transmitter, 4K@60, HDR, HDCP 2.2, QFN-76",
+      "datasheet_url": "https://www.ite.com.tw/en/product/view?mid=96",
+      "lifecycle": "active",
+      "price_cents": 850
+    }
+  ],
+  "hdmi-display": [
+    {
+      "sku": "ADV7533BCPZ-R7",
+      "manufacturer": "Analog Devices",
+      "description": "Low-Power DSI-to-HDMI Bridge, 1080p, CEC, audio, I2C, LFCSP-49",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/ADV7533.pdf",
+      "lifecycle": "active",
+      "price_cents": 595
+    },
+    {
+      "sku": "ADV7535BCPZ-R7",
+      "manufacturer": "Analog Devices",
+      "description": "Low-Power MIPI DSI to HDMI/DVI Transmitter, 1080p60, LFCSP-64",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/ADV7535.pdf",
+      "lifecycle": "active",
+      "price_cents": 650
+    },
+    {
+      "sku": "ADV7625BBCZ5P",
+      "manufacturer": "Analog Devices",
+      "description": "HDMI 2.0 Transceiver, 4K@60, HDCP 2.2, ARC, CEC, BGA-256",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/ADV7625.pdf",
+      "lifecycle": "active",
+      "price_cents": 4250
+    },
+    {
+      "sku": "ADV7511WKSTZ-P",
+      "manufacturer": "Analog Devices",
+      "description": "225MHz HDMI 1.4 Transmitter, 1080p, 3D, CEC, I2C, LQFP-100",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/ADV7511W.pdf",
+      "lifecycle": "active",
+      "price_cents": 895
+    },
+    {
+      "sku": "TFP410PAP",
+      "manufacturer": "Texas Instruments",
+      "description": "PanelBus DVI Transmitter, 165MHz, 24-bit RGB/YCbCr, HTQFP-64",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/tfp410.pdf",
+      "lifecycle": "active",
+      "price_cents": 650
+    },
+    {
+      "sku": "SN75DP159RGZR",
+      "manufacturer": "Texas Instruments",
+      "description": "DP-to-TMDS Retimer, 6Gbps, 4-lane, level shifter, I2C, VQFN-48",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/sn75dp159.pdf",
+      "lifecycle": "active",
+      "price_cents": 395
+    },
+    {
+      "sku": "SN65DSI83ZQLR",
+      "manufacturer": "Texas Instruments",
+      "description": "MIPI DSI to LVDS Bridge, 135MHz pixel clock, 1-ch, BGA-36",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/sn65dsi83.pdf",
+      "lifecycle": "active",
+      "price_cents": 495
+    },
+    {
+      "sku": "SN65DSI84AZQLR",
+      "manufacturer": "Texas Instruments",
+      "description": "MIPI DSI to Dual-LVDS Bridge, 1080p60, 4-lane, BGA-36",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/sn65dsi84a.pdf",
+      "lifecycle": "active",
+      "price_cents": 595
+    },
+    {
+      "sku": "SN65DSI86IPAFR",
+      "manufacturer": "Texas Instruments",
+      "description": "MIPI DSI to eDP Bridge, 4-lane, 5.4Gbps, HBR2, BGA-64",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/sn65dsi86.pdf",
+      "lifecycle": "active",
+      "price_cents": 750
+    },
+    {
+      "sku": "SII9022ACTU",
+      "manufacturer": "Lattice Semiconductor",
+      "description": "HDMI Transmitter, 1080p, RGB/YCbCr, I2S audio, I2C, TQFP-64",
+      "datasheet_url": "https://www.latticesemi.com/Products/ASSP/SiI9022A",
+      "lifecycle": "active",
+      "price_cents": 495
+    },
+    {
+      "sku": "SII9136-3CTU",
+      "manufacturer": "Lattice Semiconductor",
+      "description": "MHL/HDMI Transmitter, 3D, CEC, HDCP, QFN-72",
+      "datasheet_url": "https://www.latticesemi.com/Products/ASSP/SiI9136",
+      "lifecycle": "nrnd",
+      "price_cents": 750
+    },
+    {
+      "sku": "SII9396CNUC",
+      "manufacturer": "Lattice Semiconductor",
+      "description": "HDMI 2.0 Transmitter, 4K@60, HDCP 2.2, CEC, BGA",
+      "datasheet_url": "https://www.latticesemi.com/Products/ASSP/SiI9396",
+      "lifecycle": "active",
+      "price_cents": 1450
+    },
+    {
+      "sku": "SII9678CTUC",
+      "manufacturer": "Lattice Semiconductor",
+      "description": "HDMI 2.0b Transmitter, MHL3, USB-C Alt Mode, 4K@60, BGA",
+      "datasheet_url": "https://www.latticesemi.com/Products/ASSP/SiI9678",
+      "lifecycle": "active",
+      "price_cents": 1850
+    },
+    {
+      "sku": "IT6613FN",
+      "manufacturer": "ITE Tech",
+      "description": "HDMI 1.4 Transmitter, 1080p, CEC, 3D, I2C, QFN-76",
+      "datasheet_url": "https://www.ite.com.tw/en/product/view?mid=96",
+      "lifecycle": "active",
+      "price_cents": 495
+    },
+    {
+      "sku": "IT66121FN",
+      "manufacturer": "ITE Tech",
+      "description": "HDMI 1.4 Transmitter, 225MHz, Deep Color, HDCP, QFN-64",
+      "datasheet_url": "https://www.ite.com.tw/en/product/view?mid=96",
+      "lifecycle": "active",
+      "price_cents": 395
+    },
+    {
+      "sku": "IT6801FN",
+      "manufacturer": "ITE Tech",
+      "description": "HDMI 1.4 Receiver, 225MHz, MHL, CEC, I2C, QFN-76",
+      "datasheet_url": "https://www.ite.com.tw/en/product/view?mid=101",
+      "lifecycle": "active",
+      "price_cents": 550
+    },
+    {
+      "sku": "PS8640-A0NTQGR4",
+      "manufacturer": "Parade Technologies",
+      "description": "MIPI DSI to eDP Bridge/Converter, 1-4 lane, I2C, QFN-48",
+      "datasheet_url": "https://www.paradetech.com/products/ps8640/",
+      "lifecycle": "active",
+      "price_cents": 650
+    },
+    {
+      "sku": "PS8742BTQFN28GTR2",
+      "manufacturer": "Parade Technologies",
+      "description": "USB-C/DP Alt Mode Crossbar Switch, 8.1Gbps, QFN-28",
+      "datasheet_url": "https://www.paradetech.com/products/ps8742b/",
+      "lifecycle": "active",
+      "price_cents": 395
+    },
+    {
+      "sku": "LT8912B",
+      "manufacturer": "Lontium",
+      "description": "MIPI DSI to LVDS/HDMI Bridge, 1080p60, I2C, QFN-64",
+      "datasheet_url": "https://www.lontiumsemi.com/uploads/LT8912B_Datasheet.pdf",
+      "lifecycle": "active",
+      "price_cents": 450
+    },
+    {
+      "sku": "LT9211",
+      "manufacturer": "Lontium",
+      "description": "MIPI DSI/CSI to LVDS/MIPI Bridge, dual-mode, I2C, QFN-64",
+      "datasheet_url": "https://www.lontiumsemi.com/uploads/LT9211_Datasheet.pdf",
+      "lifecycle": "active",
+      "price_cents": 395
+    },
+    {
+      "sku": "LT8618SXB",
+      "manufacturer": "Lontium",
+      "description": "RGB/BT to HDMI Converter, 1080p, embedded EDID, I2C, QFN-48",
+      "datasheet_url": "https://www.lontiumsemi.com/uploads/LT8618SXB_Datasheet.pdf",
+      "lifecycle": "active",
+      "price_cents": 350
+    },
+    {
+      "sku": "LT9611UXC",
+      "manufacturer": "Lontium",
+      "description": "Dual MIPI DSI to HDMI 2.0 Bridge, 4K@60Hz, I2C, QFN-76",
+      "datasheet_url": "https://www.lontiumsemi.com/uploads/LT9611UXC_Datasheet.pdf",
+      "lifecycle": "active",
+      "price_cents": 750
+    },
+    {
+      "sku": "TDP158RSBT",
+      "manufacturer": "Texas Instruments",
+      "description": "HDMI 2.0 Linear Redriver, 6Gbps, AC-coupled, DSBGA-20",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/tdp158.pdf",
+      "lifecycle": "active",
+      "price_cents": 195
+    },
+    {
+      "sku": "TS3DV642A0RUAR",
+      "manufacturer": "Texas Instruments",
+      "description": "12-ch TMDS/DisplayPort MUX, 6GHz, I2C, QFN-42",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/ts3dv642a.pdf",
+      "lifecycle": "active",
+      "price_cents": 295
+    },
+    {
+      "sku": "SN65LVDS93ADGGRQ1",
+      "manufacturer": "Texas Instruments",
+      "description": "LVDS Serializer, FlatLink, 65-135MHz, automotive, TSSOP-56",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/sn65lvds93a-q1.pdf",
+      "lifecycle": "active",
+      "price_cents": 450
+    },
+    {
+      "sku": "HDMI7041RTJR",
+      "manufacturer": "Texas Instruments",
+      "description": "HDMI 2.1 Quad-Port Switch, 48Gbps, low power, QFN-56",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/hdmi7041.pdf",
+      "lifecycle": "active",
+      "price_cents": 495
+    },
+    {
+      "sku": "ANX7625SFDR22-R",
+      "manufacturer": "Analogix",
+      "description": "MIPI DSI/DPI to DP/HDMI Bridge, 4K, USB-C Alt Mode, QFN-48",
+      "datasheet_url": "https://www.analogix.com/en/products/anx7625",
+      "lifecycle": "active",
+      "price_cents": 550
+    },
+    {
+      "sku": "CH7035B-BF",
+      "manufacturer": "Chrontel",
+      "description": "LVDS/VGA/DVO to HDMI/VGA Encoder, 1080p, I2C, QFP-100",
+      "datasheet_url": "https://www.chrontel.com/product/ch7035b",
+      "lifecycle": "active",
+      "price_cents": 495
+    },
+    {
+      "sku": "EP952M",
+      "manufacturer": "Explore Semiconductor",
+      "description": "HDMI 2.0 Repeater/Level Shifter, 6Gbps, I2C, QFN-40",
+      "datasheet_url": "https://www.epmi.com.tw/product/ep952m",
+      "lifecycle": "active",
+      "price_cents": 350
+    },
+    {
+      "sku": "PTN3460BS/F5",
+      "manufacturer": "NXP",
+      "description": "eDP to LVDS Bridge, 1-2 ch, SSC, I2C/OTP, HVQFN-56",
+      "datasheet_url": "https://www.nxp.com/docs/en/data-sheet/PTN3460.pdf",
+      "lifecycle": "active",
+      "price_cents": 450
+    },
+    {
+      "sku": "PI3HDX12211ZLEX",
+      "manufacturer": "Diodes Incorporated",
+      "description": "HDMI 2.0 Linear Redriver, 6Gbps, 4-ch, WLCSP-20",
+      "datasheet_url": "https://www.diodes.com/assets/Datasheets/PI3HDX12211.pdf",
+      "lifecycle": "active",
+      "price_cents": 195
+    },
+    {
+      "sku": "RTD2662",
+      "manufacturer": "Realtek",
+      "description": "LCD Scalar Controller, HDMI/DVI/VGA input, LVDS output, QFP-128",
+      "datasheet_url": "https://www.realtek.com/en/products/video-audio-multimedia-ics/item/rtd2662",
+      "lifecycle": "active",
+      "price_cents": 495
+    },
+    {
+      "sku": "CS5261DNR8G",
+      "manufacturer": "Capstone Semiconductor",
+      "description": "USB-C to HDMI 2.0 Bridge, 4K@60, USB PD 3.0, QFN-48",
+      "datasheet_url": "https://datasheet.lcsc.com/szlcsc/2205121530_Capstone-CS5261DNR8G_C2904853.pdf",
+      "lifecycle": "active",
+      "price_cents": 295
+    },
+    {
+      "sku": "PI3EQX12908A2ZDEX",
+      "manufacturer": "Diodes Incorporated",
+      "description": "HDMI 2.1 Redriver, 12Gbps FRL, 4-lane, I2C, QFN-24",
+      "datasheet_url": "https://www.diodes.com/assets/Datasheets/PI3EQX12908A2.pdf",
+      "lifecycle": "active",
+      "price_cents": 350
+    },
+    {
+      "sku": "ANX7688",
+      "manufacturer": "Analogix",
+      "description": "USB-C to HDMI/DP Bridge, 4K@30, USB3.1, PD, BGA",
+      "datasheet_url": "https://www.analogix.com/en/products/anx7688",
+      "lifecycle": "active",
+      "price_cents": 495
+    }
+  ],
+  "mic-preamps": [
+    {
+      "sku": "ICS-43434",
+      "manufacturer": "TDK InvenSense",
+      "description": "Digital MEMS Microphone, I2S, 65dB SNR, -26dBFS, bottom port, 3.5x2.65mm",
+      "datasheet_url": "https://invensense.tdk.com/wp-content/uploads/2016/02/DS-000069-ICS-43434-v1.2.pdf",
+      "lifecycle": "active",
+      "price_cents": 195
+    },
+    {
+      "sku": "ICS-40730",
+      "manufacturer": "TDK InvenSense",
+      "description": "Analog MEMS Microphone, high-AOP, 68dB SNR, bottom port, 3.35x2.5mm",
+      "datasheet_url": "https://invensense.tdk.com/wp-content/uploads/2021/03/DS-000506-ICS-40730-v1.1.pdf",
+      "lifecycle": "active",
+      "price_cents": 145
+    },
+    {
+      "sku": "ICS-40720",
+      "manufacturer": "TDK InvenSense",
+      "description": "Analog MEMS Microphone, 65dB SNR, low noise, bottom port, 3.35x2.5mm",
+      "datasheet_url": "https://invensense.tdk.com/wp-content/uploads/2021/03/DS-000505-ICS-40720-v1.0.pdf",
+      "lifecycle": "active",
+      "price_cents": 125
+    },
+    {
+      "sku": "ICS-52000",
+      "manufacturer": "TDK InvenSense",
+      "description": "Multi-Mode Digital MEMS Microphone, TDM, 65dB SNR, bottom port",
+      "datasheet_url": "https://invensense.tdk.com/wp-content/uploads/2021/03/DS-000378-ICS-52000-v1.2.pdf",
+      "lifecycle": "active",
+      "price_cents": 250
+    },
+    {
+      "sku": "ICS-41350",
+      "manufacturer": "TDK InvenSense",
+      "description": "Digital PDM MEMS Microphone, 69dB SNR, ultra-low noise, 3.5x2.65mm",
+      "datasheet_url": "https://invensense.tdk.com/wp-content/uploads/2021/04/DS-000450-ICS-41350-v1.0.pdf",
+      "lifecycle": "active",
+      "price_cents": 175
+    },
+    {
+      "sku": "INMP441ACEZ-R7",
+      "manufacturer": "TDK InvenSense",
+      "description": "Digital I2S MEMS Microphone, 61dB SNR, low power, bottom port",
+      "datasheet_url": "https://invensense.tdk.com/wp-content/uploads/2015/02/INMP441.pdf",
+      "lifecycle": "active",
+      "price_cents": 150
+    },
+    {
+      "sku": "ADMP441ACEZ-RL",
+      "manufacturer": "Analog Devices",
+      "description": "Digital I2S MEMS Microphone, 61dB SNR, omnidirectional, 4.72x3.76mm",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/ADMP441.pdf",
+      "lifecycle": "nrnd",
+      "price_cents": 250
+    },
+    {
+      "sku": "MAX9814ETD+T",
+      "manufacturer": "Analog Devices (Maxim)",
+      "description": "Microphone Amplifier with AGC, low-noise bias, 3 gain settings, TDFN-14",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/MAX9814.pdf",
+      "lifecycle": "active",
+      "price_cents": 250
+    },
+    {
+      "sku": "MAX4466EXK+T",
+      "manufacturer": "Analog Devices (Maxim)",
+      "description": "Microphone Preamplifier, adjustable gain, SOT-23-5",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/MAX4466.pdf",
+      "lifecycle": "active",
+      "price_cents": 95
+    },
+    {
+      "sku": "MAX9812LEXT+T",
+      "manufacturer": "Analog Devices (Maxim)",
+      "description": "Fixed-Gain Microphone Amplifier, 20dB, low noise, SOT-23-6",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/MAX9812.pdf",
+      "lifecycle": "active",
+      "price_cents": 75
+    },
+    {
+      "sku": "MAX9867ETJ+T",
+      "manufacturer": "Analog Devices (Maxim)",
+      "description": "Ultra-Low-Power Audio Codec + Mic Preamp, I2S/I2C, TQFN-28",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/MAX9867.pdf",
+      "lifecycle": "active",
+      "price_cents": 350
+    },
+    {
+      "sku": "OPA1692IRGTT",
+      "manufacturer": "Texas Instruments",
+      "description": "Dual Low-Distortion Audio Op-Amp, 4.5nV/rtHz, rail-to-rail, VQFN-10",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/opa1692.pdf",
+      "lifecycle": "active",
+      "price_cents": 250
+    },
+    {
+      "sku": "OPA1622IDRCR",
+      "manufacturer": "Texas Instruments",
+      "description": "High-Performance Audio Op-Amp, 2.8nV/rtHz, SOT-23-8",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/opa1622.pdf",
+      "lifecycle": "active",
+      "price_cents": 195
+    },
+    {
+      "sku": "TLV320ADC6140IRSBR",
+      "manufacturer": "Texas Instruments",
+      "description": "Quad-Channel ADC with Mic Preamp, 120dB DNR, TDM/I2S, QFN-36",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/tlv320adc6140.pdf",
+      "lifecycle": "active",
+      "price_cents": 595
+    },
+    {
+      "sku": "TLV320ADC5140IRSBR",
+      "manufacturer": "Texas Instruments",
+      "description": "Quad-Channel Burr-Brown ADC, 120dB DNR, PDM/TDM/I2S, QFN-36",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/tlv320adc5140.pdf",
+      "lifecycle": "active",
+      "price_cents": 550
+    },
+    {
+      "sku": "SPH0645LM4H-B",
+      "manufacturer": "Knowles",
+      "description": "I2S Digital MEMS Microphone, 65dB SNR, bottom port, 3.5x2.65mm",
+      "datasheet_url": "https://www.knowles.com/docs/default-source/default-document-library/sph0645lm4h-b.pdf",
+      "lifecycle": "active",
+      "price_cents": 195
+    },
+    {
+      "sku": "SPK0641HT4H-1",
+      "manufacturer": "Knowles",
+      "description": "Ultra-Low-Power PDM MEMS Microphone, always-on, 64dB SNR, 3.5x2.65mm",
+      "datasheet_url": "https://www.knowles.com/docs/default-source/default-document-library/spk0641ht4h-1.pdf",
+      "lifecycle": "active",
+      "price_cents": 175
+    },
+    {
+      "sku": "SPH0641LU4H-1",
+      "manufacturer": "Knowles",
+      "description": "Wideband PDM MEMS Microphone, 65dB SNR, top port, 3.5x2.65mm",
+      "datasheet_url": "https://www.knowles.com/docs/default-source/default-document-library/sph0641lu4h-1.pdf",
+      "lifecycle": "active",
+      "price_cents": 185
+    },
+    {
+      "sku": "SiSonic-SPM0687LR5H-1",
+      "manufacturer": "Knowles",
+      "description": "High-Performance MEMS Microphone, 68dB SNR, PDM, 3.35x2.5mm",
+      "datasheet_url": "https://www.knowles.com/docs/default-source/default-document-library/spm0687lr5h-1.pdf",
+      "lifecycle": "active",
+      "price_cents": 210
+    },
+    {
+      "sku": "IM69D130V01XTSA1",
+      "manufacturer": "Infineon",
+      "description": "High-Performance MEMS Microphone, 69dB SNR, PDM, low distortion, 4x3mm",
+      "datasheet_url": "https://www.infineon.com/dgdl/Infineon-IM69D130-DataSheet-v01_00-EN.pdf",
+      "lifecycle": "active",
+      "price_cents": 195
+    },
+    {
+      "sku": "IM73A135V01XTSA1",
+      "manufacturer": "Infineon",
+      "description": "Ultra-Low-Noise MEMS Microphone, 73dB SNR, analog, 3.5x2.65mm",
+      "datasheet_url": "https://www.infineon.com/dgdl/Infineon-IM73A135-DataSheet-v01_00-EN.pdf",
+      "lifecycle": "active",
+      "price_cents": 250
+    },
+    {
+      "sku": "MP34DT05TR-A",
+      "manufacturer": "STMicroelectronics",
+      "description": "MEMS Audio Sensor, PDM, 64dB SNR, omnidirectional, bottom port, HLGA-6",
+      "datasheet_url": "https://www.st.com/resource/en/datasheet/mp34dt05-a.pdf",
+      "lifecycle": "active",
+      "price_cents": 95
+    },
+    {
+      "sku": "MP34DT06JTR",
+      "manufacturer": "STMicroelectronics",
+      "description": "MEMS Audio Sensor, PDM, 66dB SNR, top port, HLGA-5",
+      "datasheet_url": "https://www.st.com/resource/en/datasheet/mp34dt06j.pdf",
+      "lifecycle": "active",
+      "price_cents": 85
+    },
+    {
+      "sku": "IMP34DT05TR",
+      "manufacturer": "STMicroelectronics",
+      "description": "Industrial MEMS Audio Sensor, PDM, 64dB SNR, -40 to 85C, HLGA-6",
+      "datasheet_url": "https://www.st.com/resource/en/datasheet/imp34dt05.pdf",
+      "lifecycle": "active",
+      "price_cents": 150
+    },
+    {
+      "sku": "MP23DB01HPTR",
+      "manufacturer": "STMicroelectronics",
+      "description": "MEMS Audio Sensor, high-AOP, PDM, 63.5dB SNR, HLGA-7",
+      "datasheet_url": "https://www.st.com/resource/en/datasheet/mp23db01hp.pdf",
+      "lifecycle": "active",
+      "price_cents": 125
+    },
+    {
+      "sku": "VM3000-D",
+      "manufacturer": "Vesper (Qualcomm)",
+      "description": "Piezoelectric MEMS Microphone, analog, waterproof IP57, 2.75x1.85mm",
+      "datasheet_url": "https://vespermems.com/wp-content/uploads/2022/08/VM3000-Datasheet-REV-B.pdf",
+      "lifecycle": "active",
+      "price_cents": 195
+    },
+    {
+      "sku": "VM3011-D",
+      "manufacturer": "Vesper (Qualcomm)",
+      "description": "Wake-on-Sound Piezo MEMS Microphone, PDM, ultra-low power, 3.76x2.95mm",
+      "datasheet_url": "https://vespermems.com/wp-content/uploads/2022/08/VM3011-Datasheet-REV-C.pdf",
+      "lifecycle": "active",
+      "price_cents": 250
+    },
+    {
+      "sku": "MSM261D3526H1CPM",
+      "manufacturer": "Goertek",
+      "description": "Digital PDM MEMS Microphone, 62dB SNR, bottom port, 3.5x2.65mm",
+      "datasheet_url": "https://datasheet.lcsc.com/szlcsc/2003131725_Goertek-MSM261D3526H1CPM_C422395.pdf",
+      "lifecycle": "active",
+      "price_cents": 45
+    },
+    {
+      "sku": "S15OB381-RT",
+      "manufacturer": "Goertek",
+      "description": "Analog MEMS Microphone, 60dB SNR, bottom port, 3.76x2.95mm",
+      "datasheet_url": "https://datasheet.lcsc.com/szlcsc/2106031730_Goertek-S15OB381-RT_C2688910.pdf",
+      "lifecycle": "active",
+      "price_cents": 35
+    },
+    {
+      "sku": "SSM2167-1RMZ-REEL7",
+      "manufacturer": "Analog Devices",
+      "description": "Low-Voltage Microphone Preamplifier with Compressor, MSOP-10",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/SSM2167.pdf",
+      "lifecycle": "active",
+      "price_cents": 195
+    },
+    {
+      "sku": "SSM2019BRNZ-R7",
+      "manufacturer": "Analog Devices",
+      "description": "Self-Contained Audio Preamplifier, low noise, 0.9nV/rtHz, SOIC-8",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/SSM2019.pdf",
+      "lifecycle": "active",
+      "price_cents": 295
+    },
+    {
+      "sku": "INA217AIDR",
+      "manufacturer": "Texas Instruments",
+      "description": "Low-Noise Microphone Preamplifier, instrumentation amp, 1.3nV/rtHz, SOIC-8",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/ina217.pdf",
+      "lifecycle": "active",
+      "price_cents": 395
+    },
+    {
+      "sku": "THAT1510P08-U",
+      "manufacturer": "THAT Corporation",
+      "description": "Low-Noise Microphone Preamplifier, InGenius, balanced, DIP-8",
+      "datasheet_url": "https://www.thatcorp.com/datashts/THAT1510_Datasheet.pdf",
+      "lifecycle": "active",
+      "price_cents": 450
+    },
+    {
+      "sku": "THAT1512P08-U",
+      "manufacturer": "THAT Corporation",
+      "description": "Low-Noise Microphone Preamplifier, InGenius, +48V phantom, DIP-8",
+      "datasheet_url": "https://www.thatcorp.com/datashts/THAT1512_Datasheet.pdf",
+      "lifecycle": "active",
+      "price_cents": 495
+    },
+    {
+      "sku": "PGA2505IDBR",
+      "manufacturer": "Texas Instruments",
+      "description": "Digitally Controlled Microphone Preamplifier, Burr-Brown, SPI, SSOP-16",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/pga2505.pdf",
+      "lifecycle": "active",
+      "price_cents": 750
+    },
+    {
+      "sku": "DRV632PWHP",
+      "manufacturer": "Texas Instruments",
+      "description": "DirectPath Stereo Line Driver, pop-free, click-free, HTSSOP-20",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/drv632.pdf",
+      "lifecycle": "active",
+      "price_cents": 195
+    },
+    {
+      "sku": "AK5704VN-E2",
+      "manufacturer": "AKM (Asahi Kasei)",
+      "description": "Multi-Channel ADC with Mic Preamp, 4-ch, PDM/I2S, 106dB SNR, LQFP-48",
+      "datasheet_url": "https://www.akm.com/content/dam/documents/products/audio/audio-adc/ak5704vn/ak5704vn-en-datasheet.pdf",
+      "lifecycle": "active",
+      "price_cents": 550
+    },
+    {
+      "sku": "CS53L30-CWZR",
+      "manufacturer": "Cirrus Logic",
+      "description": "Quad Digital Microphone Audio ADC, PDM, I2S/TDM, I2C, QFN-32",
+      "datasheet_url": "https://statics.cirrus.com/pubs/proDatasheet/CS53L30_F2.pdf",
+      "lifecycle": "active",
+      "price_cents": 350
+    },
+    {
+      "sku": "ADAU7118ACPZ",
+      "manufacturer": "Analog Devices",
+      "description": "8-ch PDM-to-I2S/TDM Converter, decimation filter, I2C, LFCSP-32",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/ADAU7118.pdf",
+      "lifecycle": "active",
+      "price_cents": 395
+    },
+    {
+      "sku": "ADAU7002ACPZ",
+      "manufacturer": "Analog Devices",
+      "description": "Stereo PDM-to-I2S/TDM Converter, decimation filter, LFCSP-16",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/ADAU7002.pdf",
+      "lifecycle": "active",
+      "price_cents": 250
+    }
+  ]
+}

@@ -1,0 +1,1980 @@
+{
+  "bluetooth": [
+    {
+      "sku": "nRF52832-QFAA-R7",
+      "manufacturer": "Nordic Semiconductor",
+      "description": "Bluetooth 5.0 SoC, ARM Cortex-M4F, 512KB Flash, 64KB RAM, QFN-48",
+      "datasheet_url": "https://infocenter.nordicsemi.com/pdf/nRF52832_PS_v1.8.pdf",
+      "lifecycle": "active",
+      "price_cents": 298
+    },
+    {
+      "sku": "nRF52832-CIAA-R7",
+      "manufacturer": "Nordic Semiconductor",
+      "description": "Bluetooth 5.0 SoC, ARM Cortex-M4F, 512KB Flash, WLCSP",
+      "datasheet_url": "https://infocenter.nordicsemi.com/pdf/nRF52832_PS_v1.8.pdf",
+      "lifecycle": "active",
+      "price_cents": 285
+    },
+    {
+      "sku": "nRF52840-QIAA-R7",
+      "manufacturer": "Nordic Semiconductor",
+      "description": "Bluetooth 5.0/Thread/Zigbee SoC, ARM Cortex-M4F, 1MB Flash, USB, QFN-73",
+      "datasheet_url": "https://infocenter.nordicsemi.com/pdf/nRF52840_PS_v1.7.pdf",
+      "lifecycle": "active",
+      "price_cents": 398
+    },
+    {
+      "sku": "nRF52840-QIAA-T",
+      "manufacturer": "Nordic Semiconductor",
+      "description": "Bluetooth 5.0/Thread/Zigbee SoC, 1MB Flash, USB, QFN-73, Tray",
+      "datasheet_url": "https://infocenter.nordicsemi.com/pdf/nRF52840_PS_v1.7.pdf",
+      "lifecycle": "active",
+      "price_cents": 385
+    },
+    {
+      "sku": "nRF52833-QIAA-R7",
+      "manufacturer": "Nordic Semiconductor",
+      "description": "Bluetooth 5.1 SoC, Direction Finding, ARM Cortex-M4F, 512KB Flash, QFN-40",
+      "datasheet_url": "https://infocenter.nordicsemi.com/pdf/nRF52833_PS_v1.6.pdf",
+      "lifecycle": "active",
+      "price_cents": 310
+    },
+    {
+      "sku": "nRF5340-QKAA-R7",
+      "manufacturer": "Nordic Semiconductor",
+      "description": "Dual-core Bluetooth 5.3 SoC, Cortex-M33 app+net, 1MB+256KB Flash, QFN-94",
+      "datasheet_url": "https://infocenter.nordicsemi.com/pdf/nRF5340_PS_v1.3.pdf",
+      "lifecycle": "active",
+      "price_cents": 495
+    },
+    {
+      "sku": "nRF5340-CLAA-R7",
+      "manufacturer": "Nordic Semiconductor",
+      "description": "Dual-core Bluetooth 5.3 SoC, Cortex-M33, WLCSP package",
+      "datasheet_url": "https://infocenter.nordicsemi.com/pdf/nRF5340_PS_v1.3.pdf",
+      "lifecycle": "active",
+      "price_cents": 480
+    },
+    {
+      "sku": "nRF52810-QFAA-R7",
+      "manufacturer": "Nordic Semiconductor",
+      "description": "Bluetooth 5.0 SoC, ARM Cortex-M4, 192KB Flash, 24KB RAM, QFN-32",
+      "datasheet_url": "https://infocenter.nordicsemi.com/pdf/nRF52810_PS_v1.4.pdf",
+      "lifecycle": "active",
+      "price_cents": 195
+    },
+    {
+      "sku": "nRF52811-QFAA-R7",
+      "manufacturer": "Nordic Semiconductor",
+      "description": "Bluetooth 5.1 Direction Finding SoC, 192KB Flash, QFN-32",
+      "datasheet_url": "https://infocenter.nordicsemi.com/pdf/nRF52811_PS_v1.1.pdf",
+      "lifecycle": "active",
+      "price_cents": 210
+    },
+    {
+      "sku": "nRF52820-QDAA-R7",
+      "manufacturer": "Nordic Semiconductor",
+      "description": "Bluetooth 5.1 SoC, USB, Direction Finding, 256KB Flash, QFN-32",
+      "datasheet_url": "https://infocenter.nordicsemi.com/pdf/nRF52820_PS_v1.2.pdf",
+      "lifecycle": "active",
+      "price_cents": 225
+    },
+    {
+      "sku": "CC2541F256RHAR",
+      "manufacturer": "Texas Instruments",
+      "description": "Bluetooth 4.0 Low Energy SoC, 8051 core, 256KB Flash, QFN-40",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/cc2541.pdf",
+      "lifecycle": "nrnd",
+      "price_cents": 295
+    },
+    {
+      "sku": "CC2541F128RHAR",
+      "manufacturer": "Texas Instruments",
+      "description": "Bluetooth 4.0 LE SoC, 8051 core, 128KB Flash, QFN-40",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/cc2541.pdf",
+      "lifecycle": "nrnd",
+      "price_cents": 260
+    },
+    {
+      "sku": "CC2640R2FRGZR",
+      "manufacturer": "Texas Instruments",
+      "description": "Bluetooth 5.0 Low Energy SoC, ARM Cortex-M3, 128KB Flash, VQFN-32",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/cc2640r2f.pdf",
+      "lifecycle": "active",
+      "price_cents": 295
+    },
+    {
+      "sku": "CC2642R1FRGZR",
+      "manufacturer": "Texas Instruments",
+      "description": "Bluetooth 5.1 SoC, ARM Cortex-M4F, 352KB Flash, VQFN-48",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/cc2642r.pdf",
+      "lifecycle": "active",
+      "price_cents": 340
+    },
+    {
+      "sku": "CC2652R1FRGZR",
+      "manufacturer": "Texas Instruments",
+      "description": "Multiprotocol Bluetooth 5.1/Thread/Zigbee SoC, Cortex-M4F, 352KB Flash",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/cc2652r.pdf",
+      "lifecycle": "active",
+      "price_cents": 395
+    },
+    {
+      "sku": "CC2652RB1FRGZR",
+      "manufacturer": "Texas Instruments",
+      "description": "Crystal-free Multiprotocol SoC, BLE 5.1/Thread/Zigbee, BAW resonator",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/cc2652rb.pdf",
+      "lifecycle": "active",
+      "price_cents": 420
+    },
+    {
+      "sku": "CC2340R5RKP",
+      "manufacturer": "Texas Instruments",
+      "description": "Bluetooth 5.3 Low Energy SoC, ARM Cortex-M0+, 512KB Flash, ultra-low power",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/cc2340r5.pdf",
+      "lifecycle": "active",
+      "price_cents": 195
+    },
+    {
+      "sku": "EFR32BG22C224F512GM32-C",
+      "manufacturer": "Silicon Labs",
+      "description": "Bluetooth 5.2 SoC, ARM Cortex-M33, 512KB Flash, QFN-32",
+      "datasheet_url": "https://www.silabs.com/documents/public/data-sheets/efr32bg22-datasheet.pdf",
+      "lifecycle": "active",
+      "price_cents": 275
+    },
+    {
+      "sku": "EFR32BG22C224F512IM40-C",
+      "manufacturer": "Silicon Labs",
+      "description": "Bluetooth 5.2 SoC, ARM Cortex-M33, 512KB Flash, QFN-40, Direction Finding",
+      "datasheet_url": "https://www.silabs.com/documents/public/data-sheets/efr32bg22-datasheet.pdf",
+      "lifecycle": "active",
+      "price_cents": 295
+    },
+    {
+      "sku": "EFR32BG24A020F1536GM48-B",
+      "manufacturer": "Silicon Labs",
+      "description": "Bluetooth 5.3 SoC, Cortex-M33, 1536KB Flash, AI/ML accelerator, QFN-48",
+      "datasheet_url": "https://www.silabs.com/documents/public/data-sheets/efr32bg24-datasheet.pdf",
+      "lifecycle": "active",
+      "price_cents": 380
+    },
+    {
+      "sku": "EFR32BG21A020F1024IM32-B",
+      "manufacturer": "Silicon Labs",
+      "description": "Bluetooth 5.0 SoC, Cortex-M33, 1MB Flash, Secure Vault, QFN-32",
+      "datasheet_url": "https://www.silabs.com/documents/public/data-sheets/efr32bg21-datasheet.pdf",
+      "lifecycle": "active",
+      "price_cents": 310
+    },
+    {
+      "sku": "EFR32BG13P632F512GM48-D",
+      "manufacturer": "Silicon Labs",
+      "description": "Bluetooth 5.0 SoC, Cortex-M4, 512KB Flash, QFN-48",
+      "datasheet_url": "https://www.silabs.com/documents/public/data-sheets/efr32bg13-datasheet.pdf",
+      "lifecycle": "active",
+      "price_cents": 295
+    },
+    {
+      "sku": "CYW20735B1KML1G",
+      "manufacturer": "Infineon",
+      "description": "Bluetooth 5.0 Dual-Mode SoC, ARM Cortex-M4, 1MB Flash, FBGA-62",
+      "datasheet_url": "https://www.infineon.com/dgdl/Infineon-CYW20735B1-DataSheet-v06_00-EN.pdf",
+      "lifecycle": "active",
+      "price_cents": 350
+    },
+    {
+      "sku": "CYW20719B2KML1G",
+      "manufacturer": "Infineon",
+      "description": "Bluetooth 5.0 BR/EDR/LE SoC, ARM Cortex-M4, Audio, FBGA-96",
+      "datasheet_url": "https://www.infineon.com/dgdl/Infineon-CYW20719-DataSheet-v06_00-EN.pdf",
+      "lifecycle": "active",
+      "price_cents": 395
+    },
+    {
+      "sku": "CYW43012C0KFFBG",
+      "manufacturer": "Infineon",
+      "description": "Wi-Fi + Bluetooth 5.0 Combo, 1x1 802.11a/b/g/n/ac, FBGA-100",
+      "datasheet_url": "https://www.infineon.com/dgdl/Infineon-CYW43012-DataSheet-v04_00-EN.pdf",
+      "lifecycle": "active",
+      "price_cents": 420
+    },
+    {
+      "sku": "CYW43438KUBG",
+      "manufacturer": "Infineon",
+      "description": "Wi-Fi 802.11b/g/n + Bluetooth 4.1 Combo, WLBGA-59, for IoT",
+      "datasheet_url": "https://www.infineon.com/dgdl/Infineon-CYW43438-DataSheet-v03_00-EN.pdf",
+      "lifecycle": "active",
+      "price_cents": 350
+    },
+    {
+      "sku": "DA14585-00000AT2",
+      "manufacturer": "Renesas (Dialog)",
+      "description": "Bluetooth 5.0 LE SoC, ARM Cortex-M0, 96KB RAM, OTP, WLCSP-34",
+      "datasheet_url": "https://www.renesas.com/us/en/document/dst/da14585-datasheet",
+      "lifecycle": "active",
+      "price_cents": 180
+    },
+    {
+      "sku": "DA14531-00000FX2",
+      "manufacturer": "Renesas (Dialog)",
+      "description": "SmartBond TINY Bluetooth 5.1 LE SoC, Cortex-M0+, FCGQFN-24, ultra-small",
+      "datasheet_url": "https://www.renesas.com/us/en/document/dst/da14531-datasheet",
+      "lifecycle": "active",
+      "price_cents": 120
+    },
+    {
+      "sku": "DA14695-00000HR2",
+      "manufacturer": "Renesas (Dialog)",
+      "description": "Bluetooth 5.1 LE SoC, Cortex-M33, 512KB RAM, LCD, USB, UFBGA-86",
+      "datasheet_url": "https://www.renesas.com/us/en/document/dst/da14695-datasheet",
+      "lifecycle": "active",
+      "price_cents": 395
+    },
+    {
+      "sku": "RN4870-I/RM120",
+      "manufacturer": "Microchip",
+      "description": "Bluetooth 5.0 Low Energy Module, UART, integrated antenna, 11.5x8mm",
+      "datasheet_url": "https://ww1.microchip.com/downloads/en/DeviceDoc/RN4870-71-Bluetooth-Low-Energy-Module-DS50002489.pdf",
+      "lifecycle": "active",
+      "price_cents": 450
+    },
+    {
+      "sku": "RN4871-I/RM130",
+      "manufacturer": "Microchip",
+      "description": "Bluetooth 5.0 LE Module, Embedded Scripting, integrated antenna",
+      "datasheet_url": "https://ww1.microchip.com/downloads/en/DeviceDoc/RN4870-71-Bluetooth-Low-Energy-Module-DS50002489.pdf",
+      "lifecycle": "active",
+      "price_cents": 465
+    },
+    {
+      "sku": "BM70BLES1FC2-0B02AA",
+      "manufacturer": "Microchip",
+      "description": "Bluetooth 4.2 LE Module, Standalone/Host mode, certified, 17.5x12.5mm",
+      "datasheet_url": "https://ww1.microchip.com/downloads/en/DeviceDoc/BM70-Bluetooth-Low-Energy-Module-DS60001372.pdf",
+      "lifecycle": "active",
+      "price_cents": 520
+    },
+    {
+      "sku": "IS1870-2S-020",
+      "manufacturer": "Microchip (ISSC)",
+      "description": "Bluetooth 5.0 LE SoC, ARM Cortex-M0, OTA, QFN-32",
+      "datasheet_url": "https://ww1.microchip.com/downloads/en/DeviceDoc/IS1870-Datasheet-DS70005397.pdf",
+      "lifecycle": "active",
+      "price_cents": 190
+    },
+    {
+      "sku": "QCC3003-0-133LFSP-MT-03-0",
+      "manufacturer": "Qualcomm",
+      "description": "Bluetooth 5.0 Audio SoC, Dual-mode, aptX HD, 120MHz Kalimba DSP",
+      "datasheet_url": "https://www.qualcomm.com/products/technology/bluetooth/qcc3000-series",
+      "lifecycle": "active",
+      "price_cents": 295
+    },
+    {
+      "sku": "QCC5144-0-158FCSP-TR-00-0",
+      "manufacturer": "Qualcomm",
+      "description": "Bluetooth 5.2 Audio SoC, ANC, aptX Adaptive, Dual DSP, QFN-56",
+      "datasheet_url": "https://www.qualcomm.com/products/technology/bluetooth/qcc5100-series",
+      "lifecycle": "active",
+      "price_cents": 485
+    },
+    {
+      "sku": "QCC3040-0-108WLNSP-MT-01-0",
+      "manufacturer": "Qualcomm",
+      "description": "Bluetooth 5.2 TWS SoC, TrueWireless Mirroring, aptX Adaptive",
+      "datasheet_url": "https://www.qualcomm.com/products/technology/bluetooth/qcc3000-series",
+      "lifecycle": "active",
+      "price_cents": 350
+    },
+    {
+      "sku": "QCC3083-0-128FBNSP-TR-01-0",
+      "manufacturer": "Qualcomm",
+      "description": "Bluetooth 5.3 Audio SoC, aptX Lossless, Snapdragon Sound",
+      "datasheet_url": "https://www.qualcomm.com/products/technology/bluetooth/qcc3000-series",
+      "lifecycle": "active",
+      "price_cents": 395
+    },
+    {
+      "sku": "RSL10-CAEN-DB01",
+      "manufacturer": "onsemi",
+      "description": "Bluetooth 5.0 LE SoC, ARM Cortex-M3, 62.5uA/MHz, QFN-48",
+      "datasheet_url": "https://www.onsemi.com/pdf/datasheet/rsl10-d.pdf",
+      "lifecycle": "active",
+      "price_cents": 245
+    },
+    {
+      "sku": "RSL15-QDAC-DB01",
+      "manufacturer": "onsemi",
+      "description": "Bluetooth 5.2 LE SoC, Cortex-M33, TrustZone, ultra-low-power, QFN-48",
+      "datasheet_url": "https://www.onsemi.com/pdf/datasheet/rsl15-d.pdf",
+      "lifecycle": "active",
+      "price_cents": 295
+    },
+    {
+      "sku": "BL654-DVK",
+      "manufacturer": "Laird Connectivity",
+      "description": "Bluetooth 5.0 Module, nRF52840, 1MB Flash, USB, NFC, certified",
+      "datasheet_url": "https://www.lairdconnect.com/wireless-modules/bluetooth-modules/bl654-series",
+      "lifecycle": "active",
+      "price_cents": 895
+    },
+    {
+      "sku": "BL653-SA-01",
+      "manufacturer": "Laird Connectivity",
+      "description": "Bluetooth 5.1 + NFC Module, Nordic nRF52833, integrated antenna",
+      "datasheet_url": "https://www.lairdconnect.com/wireless-modules/bluetooth-modules/bl653-series",
+      "lifecycle": "active",
+      "price_cents": 750
+    },
+    {
+      "sku": "NINA-B306-00B-00",
+      "manufacturer": "u-blox",
+      "description": "Bluetooth 5.0 Module, nRF52840, Open CPU, 10mm x 15mm",
+      "datasheet_url": "https://www.u-blox.com/en/docs/UBX-17052099",
+      "lifecycle": "active",
+      "price_cents": 680
+    },
+    {
+      "sku": "ANNA-B112-00B-00",
+      "manufacturer": "u-blox",
+      "description": "Bluetooth 5.0 Module, nRF52832, Stand-alone/Hosted, 6.5x6.5mm",
+      "datasheet_url": "https://www.u-blox.com/en/docs/UBX-18011230",
+      "lifecycle": "active",
+      "price_cents": 590
+    },
+    {
+      "sku": "BGM220PC22HNA",
+      "manufacturer": "Silicon Labs",
+      "description": "Bluetooth 5.2 Module, EFR32BG22, PCB antenna, 12.9x15.0mm, certified",
+      "datasheet_url": "https://www.silabs.com/documents/public/data-sheets/bgm220p-datasheet.pdf",
+      "lifecycle": "active",
+      "price_cents": 450
+    },
+    {
+      "sku": "BGM220SC22HNA",
+      "manufacturer": "Silicon Labs",
+      "description": "Bluetooth 5.2 Module, EFR32BG22, SiP, chip antenna, 8x8mm",
+      "datasheet_url": "https://www.silabs.com/documents/public/data-sheets/bgm220s-datasheet.pdf",
+      "lifecycle": "active",
+      "price_cents": 420
+    },
+    {
+      "sku": "ESP32-C3-MINI-1-N4",
+      "manufacturer": "Espressif",
+      "description": "Wi-Fi + Bluetooth 5.0 LE Module, RISC-V, 4MB Flash, 13.2x16.6mm",
+      "datasheet_url": "https://www.espressif.com/sites/default/files/documentation/esp32-c3-mini-1_datasheet_en.pdf",
+      "lifecycle": "active",
+      "price_cents": 185
+    },
+    {
+      "sku": "ESP32-H2-MINI-1-N4",
+      "manufacturer": "Espressif",
+      "description": "Bluetooth 5.3 LE + Thread/Zigbee Module, RISC-V, 4MB Flash",
+      "datasheet_url": "https://www.espressif.com/sites/default/files/documentation/esp32-h2-mini-1_datasheet_en.pdf",
+      "lifecycle": "active",
+      "price_cents": 175
+    },
+    {
+      "sku": "CC2564BRVMR",
+      "manufacturer": "Texas Instruments",
+      "description": "Bluetooth 4.0 Dual-Mode HCI Controller, BGA-77, ANT supported",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/cc2564b.pdf",
+      "lifecycle": "nrnd",
+      "price_cents": 510
+    },
+    {
+      "sku": "nRF21540-QDAA-R7",
+      "manufacturer": "Nordic Semiconductor",
+      "description": "Range extender for Bluetooth/802.15.4, +21dBm TX, integrated PA/LNA, QFN-16",
+      "datasheet_url": "https://infocenter.nordicsemi.com/pdf/nRF21540_PS_v1.2.pdf",
+      "lifecycle": "active",
+      "price_cents": 145
+    },
+    {
+      "sku": "nRF54L15-QFAA-R7",
+      "manufacturer": "Nordic Semiconductor",
+      "description": "Bluetooth 5.4 LE SoC, Cortex-M33, RISC-V, 1.5MB Flash, ultra-low power",
+      "datasheet_url": "https://infocenter.nordicsemi.com/pdf/nRF54L15_PS_v0.8.pdf",
+      "lifecycle": "active",
+      "price_cents": 350
+    },
+    {
+      "sku": "ATS2851",
+      "manufacturer": "Actions Technology",
+      "description": "Bluetooth 5.3 LE Audio SoC, Dual-core DSP, LC3/LC3plus codec, QFN-40",
+      "datasheet_url": "https://www.actions-semi.com/en/productinfo/2933272.html",
+      "lifecycle": "active",
+      "price_cents": 210
+    },
+    {
+      "sku": "RTL8761BFR",
+      "manufacturer": "Realtek",
+      "description": "Bluetooth 5.0 Dual-Mode Controller, HCI UART/USB, BGA-60",
+      "datasheet_url": "https://www.realtek.com/en/products/communications-networking-ics/item/rtl8761b",
+      "lifecycle": "active",
+      "price_cents": 195
+    },
+    {
+      "sku": "AS3933-BTST",
+      "manufacturer": "ams-OSRAM",
+      "description": "3-channel Low-Frequency Wake-up Receiver, 15-150kHz, SPI, TSSOP-16",
+      "datasheet_url": "https://ams.com/documents/20143/36005/AS3933_DS000411_3-00.pdf",
+      "lifecycle": "active",
+      "price_cents": 280
+    },
+    {
+      "sku": "CC2652P7RGZ",
+      "manufacturer": "Texas Instruments",
+      "description": "Multiprotocol BLE5.1/Thread/Zigbee SoC, +20dBm PA, Cortex-M4F, QFN-48",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/cc2652p7.pdf",
+      "lifecycle": "active",
+      "price_cents": 450
+    },
+    {
+      "sku": "KW45B41Z83AFTA",
+      "manufacturer": "NXP",
+      "description": "Bluetooth 5.3 LE SoC, Cortex-M33, EdgeLock, 1MB Flash, QFN-48",
+      "datasheet_url": "https://www.nxp.com/docs/en/data-sheet/KW45B41Z8.pdf",
+      "lifecycle": "active",
+      "price_cents": 310
+    },
+    {
+      "sku": "KW38A512VFT4",
+      "manufacturer": "NXP",
+      "description": "Bluetooth 5.0 LE SoC, Cortex-M0+, 512KB Flash, VFQFN-40",
+      "datasheet_url": "https://www.nxp.com/docs/en/data-sheet/KW38.pdf",
+      "lifecycle": "active",
+      "price_cents": 260
+    },
+    {
+      "sku": "STM32WB55RGV6",
+      "manufacturer": "STMicroelectronics",
+      "description": "Bluetooth 5.0/Thread/Zigbee SoC, Dual Cortex-M4/M0+, 1MB Flash, VFQFPN-68",
+      "datasheet_url": "https://www.st.com/resource/en/datasheet/stm32wb55rg.pdf",
+      "lifecycle": "active",
+      "price_cents": 450
+    },
+    {
+      "sku": "STM32WB5MMGH6TR",
+      "manufacturer": "STMicroelectronics",
+      "description": "Bluetooth 5.0/Thread Module, Dual Cortex-M4/M0+, 1MB Flash, LGA-86",
+      "datasheet_url": "https://www.st.com/resource/en/datasheet/stm32wb5mmg.pdf",
+      "lifecycle": "active",
+      "price_cents": 620
+    },
+    {
+      "sku": "STM32WBA52CGU6",
+      "manufacturer": "STMicroelectronics",
+      "description": "Bluetooth 5.3 LE SoC, Cortex-M33, TrustZone, 1MB Flash, UFQFPN-48",
+      "datasheet_url": "https://www.st.com/resource/en/datasheet/stm32wba52cg.pdf",
+      "lifecycle": "active",
+      "price_cents": 380
+    }
+  ],
+  "wifi": [
+    {
+      "sku": "ESP8266EX",
+      "manufacturer": "Espressif",
+      "description": "Wi-Fi 802.11b/g/n SoC, Tensilica L106 32-bit, 160MHz, QFN-32",
+      "datasheet_url": "https://www.espressif.com/sites/default/files/documentation/0a-esp8266ex_datasheet_en.pdf",
+      "lifecycle": "active",
+      "price_cents": 120
+    },
+    {
+      "sku": "ESP-WROOM-02D",
+      "manufacturer": "Espressif",
+      "description": "Wi-Fi 802.11b/g/n Module, ESP8266EX, 4MB Flash, PCB antenna, 18x20mm",
+      "datasheet_url": "https://www.espressif.com/sites/default/files/documentation/esp-wroom-02d_esp-wroom-02u_datasheet_en.pdf",
+      "lifecycle": "active",
+      "price_cents": 195
+    },
+    {
+      "sku": "ESP32-S3-WROOM-1-N16R8",
+      "manufacturer": "Espressif",
+      "description": "Wi-Fi + BLE5 Module, Xtensa Dual-core, 16MB Flash, 8MB PSRAM, 25.5x18mm",
+      "datasheet_url": "https://www.espressif.com/sites/default/files/documentation/esp32-s3-wroom-1_wroom-1u_datasheet_en.pdf",
+      "lifecycle": "active",
+      "price_cents": 395
+    },
+    {
+      "sku": "ESP32-S3-WROOM-1-N8",
+      "manufacturer": "Espressif",
+      "description": "Wi-Fi + BLE5 Module, Xtensa Dual-core, 8MB Flash, PCB antenna",
+      "datasheet_url": "https://www.espressif.com/sites/default/files/documentation/esp32-s3-wroom-1_wroom-1u_datasheet_en.pdf",
+      "lifecycle": "active",
+      "price_cents": 320
+    },
+    {
+      "sku": "ESP32-S3R8",
+      "manufacturer": "Espressif",
+      "description": "Wi-Fi + BLE5 SoC, Xtensa Dual-core 240MHz, 8MB PSRAM, QFN-56",
+      "datasheet_url": "https://www.espressif.com/sites/default/files/documentation/esp32-s3_datasheet_en.pdf",
+      "lifecycle": "active",
+      "price_cents": 280
+    },
+    {
+      "sku": "ESP32-C3FN4",
+      "manufacturer": "Espressif",
+      "description": "Wi-Fi + BLE5.0 SoC, RISC-V 160MHz, 4MB Flash, QFN-32",
+      "datasheet_url": "https://www.espressif.com/sites/default/files/documentation/esp32-c3_datasheet_en.pdf",
+      "lifecycle": "active",
+      "price_cents": 155
+    },
+    {
+      "sku": "ESP32-C6-MINI-1-N4",
+      "manufacturer": "Espressif",
+      "description": "Wi-Fi 6 + BLE5 + Thread Module, RISC-V, 4MB Flash, 13.2x16.6mm",
+      "datasheet_url": "https://www.espressif.com/sites/default/files/documentation/esp32-c6-mini-1_datasheet_en.pdf",
+      "lifecycle": "active",
+      "price_cents": 210
+    },
+    {
+      "sku": "ESP32-WROOM-32E-N4",
+      "manufacturer": "Espressif",
+      "description": "Wi-Fi + BT/BLE Module, Xtensa Dual-core, 4MB Flash, 25.5x18mm",
+      "datasheet_url": "https://www.espressif.com/sites/default/files/documentation/esp32-wroom-32e_esp32-wroom-32ue_datasheet_en.pdf",
+      "lifecycle": "active",
+      "price_cents": 260
+    },
+    {
+      "sku": "ESP32-WROVER-E-N16R8",
+      "manufacturer": "Espressif",
+      "description": "Wi-Fi + BT/BLE Module, Dual-core, 16MB Flash, 8MB PSRAM",
+      "datasheet_url": "https://www.espressif.com/sites/default/files/documentation/esp32-wrover-e_esp32-wrover-ie_datasheet_en.pdf",
+      "lifecycle": "active",
+      "price_cents": 420
+    },
+    {
+      "sku": "ESP32-C2-MINI-1-N4",
+      "manufacturer": "Espressif",
+      "description": "Wi-Fi 4 + BLE5.0 Module, RISC-V, 4MB Flash, cost-optimized, 13.2x12.5mm",
+      "datasheet_url": "https://www.espressif.com/sites/default/files/documentation/esp32-c2-mini-1_datasheet_en.pdf",
+      "lifecycle": "active",
+      "price_cents": 130
+    },
+    {
+      "sku": "QCA9377-3",
+      "manufacturer": "Qualcomm",
+      "description": "Wi-Fi 5 (802.11ac) + Bluetooth 4.2, 1x1 MU-MIMO, PCIe/SDIO/USB",
+      "datasheet_url": "https://www.qualcomm.com/products/technology/wi-fi/qca9377",
+      "lifecycle": "active",
+      "price_cents": 495
+    },
+    {
+      "sku": "QCA4020-0-00CSP73MT-TR",
+      "manufacturer": "Qualcomm",
+      "description": "Tri-radio SoC: Wi-Fi + BLE + 802.15.4, Cortex-M4F/M0+, CSP-73",
+      "datasheet_url": "https://www.qualcomm.com/products/internet-of-things/qca4020",
+      "lifecycle": "active",
+      "price_cents": 580
+    },
+    {
+      "sku": "QCA6174A-3",
+      "manufacturer": "Qualcomm",
+      "description": "Wi-Fi 5 (802.11ac) 2x2 MU-MIMO + Bluetooth 4.2, PCIe 2.0, BGA",
+      "datasheet_url": "https://www.qualcomm.com/products/technology/wi-fi/qca6174a",
+      "lifecycle": "active",
+      "price_cents": 650
+    },
+    {
+      "sku": "QCA6391",
+      "manufacturer": "Qualcomm",
+      "description": "Wi-Fi 6 (802.11ax) 2x2 + Bluetooth 5.1, OFDMA, MU-MIMO, BGA",
+      "datasheet_url": "https://www.qualcomm.com/products/technology/wi-fi/qca6391",
+      "lifecycle": "active",
+      "price_cents": 780
+    },
+    {
+      "sku": "RTL8720DN",
+      "manufacturer": "Realtek",
+      "description": "Wi-Fi 802.11a/b/g/n Dual-Band + BLE 5.0, Cortex-M33, QFN-68",
+      "datasheet_url": "https://www.realtek.com/en/products/communications-networking-ics/item/rtl8720dn",
+      "lifecycle": "active",
+      "price_cents": 350
+    },
+    {
+      "sku": "RTL8720CF",
+      "manufacturer": "Realtek",
+      "description": "Wi-Fi 4 + BLE 5.0 SoC, ARM Cortex-M4F, low-power IoT, QFN-48",
+      "datasheet_url": "https://www.realtek.com/en/products/communications-networking-ics/item/rtl8720cf",
+      "lifecycle": "active",
+      "price_cents": 280
+    },
+    {
+      "sku": "RTL8722DM",
+      "manufacturer": "Realtek",
+      "description": "Wi-Fi 802.11a/b/g/n + BLE 5.0 SoC, Dual Cortex-M33, 4MB Flash, QFN-68",
+      "datasheet_url": "https://www.realtek.com/en/products/communications-networking-ics/item/rtl8722dm",
+      "lifecycle": "active",
+      "price_cents": 395
+    },
+    {
+      "sku": "CC3200R1M2RGC",
+      "manufacturer": "Texas Instruments",
+      "description": "SimpleLink Wi-Fi SoC, ARM Cortex-M4, 256KB RAM, QFN-64",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/cc3200.pdf",
+      "lifecycle": "nrnd",
+      "price_cents": 695
+    },
+    {
+      "sku": "CC3235MODSF12MONR",
+      "manufacturer": "Texas Instruments",
+      "description": "SimpleLink Dual-Band Wi-Fi Module, Cortex-M4, 1MB RAM, antenna, certified",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/cc3235mods.pdf",
+      "lifecycle": "active",
+      "price_cents": 895
+    },
+    {
+      "sku": "CC3235SFRGZR",
+      "manufacturer": "Texas Instruments",
+      "description": "SimpleLink Dual-Band Wi-Fi SoC, Cortex-M4, Secure, Flash, QFN-64",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/cc3235sf.pdf",
+      "lifecycle": "active",
+      "price_cents": 650
+    },
+    {
+      "sku": "CC3120MODR1MRGCR",
+      "manufacturer": "Texas Instruments",
+      "description": "SimpleLink Wi-Fi Network Processor Module, integrated antenna, 21x14.8mm",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/cc3120mod.pdf",
+      "lifecycle": "active",
+      "price_cents": 780
+    },
+    {
+      "sku": "WF200C-G-LQFN-54",
+      "manufacturer": "Silicon Labs",
+      "description": "Wi-Fi 802.11b/g/n Transceiver, SPI/SDIO, WPA3, LQFN-54",
+      "datasheet_url": "https://www.silabs.com/documents/public/data-sheets/wf200-datasheet.pdf",
+      "lifecycle": "active",
+      "price_cents": 320
+    },
+    {
+      "sku": "SiWG917M111MGTBA",
+      "manufacturer": "Silicon Labs",
+      "description": "Wi-Fi 6 + BLE 5.4 SoC Module, Cortex-M4, 8MB Flash, Matter, 17x12mm",
+      "datasheet_url": "https://www.silabs.com/documents/public/data-sheets/siwg917-datasheet.pdf",
+      "lifecycle": "active",
+      "price_cents": 580
+    },
+    {
+      "sku": "MT7628KN",
+      "manufacturer": "MediaTek",
+      "description": "Wi-Fi 802.11n AP/Router SoC, MIPS24KEc 580MHz, 5-port Ethernet, BGA-176",
+      "datasheet_url": "https://www.mediatek.com/products/broadband-wifi/mt7628k-n-a",
+      "lifecycle": "active",
+      "price_cents": 520
+    },
+    {
+      "sku": "MT7688AN",
+      "manufacturer": "MediaTek",
+      "description": "Wi-Fi 802.11n IoT Gateway SoC, MIPS24KEc 580MHz, Linux/OpenWrt, BGA",
+      "datasheet_url": "https://www.mediatek.com/products/broadband-wifi/mt7688",
+      "lifecycle": "active",
+      "price_cents": 580
+    },
+    {
+      "sku": "MT7621AT",
+      "manufacturer": "MediaTek",
+      "description": "Dual-core MIPS1004KEc Router SoC, 880MHz, RGMII, PCIe, NAND, BGA-489",
+      "datasheet_url": "https://www.mediatek.com/products/broadband-wifi/mt7621",
+      "lifecycle": "active",
+      "price_cents": 850
+    },
+    {
+      "sku": "88W8997-NNB2",
+      "manufacturer": "NXP (Marvell)",
+      "description": "Wi-Fi 5 (802.11ac) 2x2 MU-MIMO + Bluetooth 4.2, SDIO 3.0/PCIe, BGA",
+      "datasheet_url": "https://www.nxp.com/docs/en/data-sheet/88W8997.pdf",
+      "lifecycle": "active",
+      "price_cents": 720
+    },
+    {
+      "sku": "88W8801-NMD2",
+      "manufacturer": "NXP (Marvell)",
+      "description": "Wi-Fi 802.11n 1x1 SoC, SDIO 2.0, low-power IoT, BGA-68",
+      "datasheet_url": "https://www.nxp.com/docs/en/data-sheet/88W8801.pdf",
+      "lifecycle": "active",
+      "price_cents": 350
+    },
+    {
+      "sku": "ATWINC1500-MR210PB1952",
+      "manufacturer": "Microchip",
+      "description": "Wi-Fi 802.11b/g/n IoT Module, SPI, certified, 21.7x14.7mm",
+      "datasheet_url": "https://ww1.microchip.com/downloads/en/DeviceDoc/ATWINC15x0-MR210xB-IEEE-802.11-b-g-n-SmartConnect-IoT-Module-DS70005304.pdf",
+      "lifecycle": "active",
+      "price_cents": 580
+    },
+    {
+      "sku": "ATWILC1000-MR110PB",
+      "manufacturer": "Microchip",
+      "description": "Wi-Fi 802.11b/g/n SPI/SDIO Controller, Linux host, QFN-40",
+      "datasheet_url": "https://ww1.microchip.com/downloads/en/DeviceDoc/ATWILC1000-IEEE802.11b-g-n-Link-Controller-Module-DS70005326.pdf",
+      "lifecycle": "active",
+      "price_cents": 420
+    },
+    {
+      "sku": "WFI32E01PE-I/SM",
+      "manufacturer": "Microchip",
+      "description": "Wi-Fi + BLE Module, PIC32MZ-W1, Cortex-M4F+RISC-V, certified",
+      "datasheet_url": "https://ww1.microchip.com/downloads/en/DeviceDoc/WFI32E01PE-Wi-Fi-Module-DS70005492.pdf",
+      "lifecycle": "active",
+      "price_cents": 695
+    },
+    {
+      "sku": "CYW43439KUBG",
+      "manufacturer": "Infineon",
+      "description": "Wi-Fi 802.11n + Bluetooth 5.0 Combo, WLBGA-49, used in RPi Pico W",
+      "datasheet_url": "https://www.infineon.com/dgdl/Infineon-CYW43439-DataSheet-v04_00-EN.pdf",
+      "lifecycle": "active",
+      "price_cents": 310
+    },
+    {
+      "sku": "CYW4373IUBG",
+      "manufacturer": "Infineon",
+      "description": "Wi-Fi 5 (802.11ac) 1x1 + Bluetooth 5.0, SDIO/PCIe, WLBGA",
+      "datasheet_url": "https://www.infineon.com/dgdl/Infineon-CYW4373-DataSheet-v04_00-EN.pdf",
+      "lifecycle": "active",
+      "price_cents": 520
+    },
+    {
+      "sku": "RTL8188FTV-VJ",
+      "manufacturer": "Realtek",
+      "description": "Wi-Fi 802.11b/g/n USB 2.0 Controller, 1T1R, 150Mbps, QFN-32",
+      "datasheet_url": "https://www.realtek.com/en/products/communications-networking-ics/item/rtl8188ftv",
+      "lifecycle": "active",
+      "price_cents": 195
+    },
+    {
+      "sku": "RTL8821CU",
+      "manufacturer": "Realtek",
+      "description": "Wi-Fi 5 + Bluetooth 4.2 USB Controller, 1x1 11ac, MU-MIMO, BGA",
+      "datasheet_url": "https://www.realtek.com/en/products/communications-networking-ics/item/rtl8821cu",
+      "lifecycle": "active",
+      "price_cents": 320
+    },
+    {
+      "sku": "RTL8852BE-CG",
+      "manufacturer": "Realtek",
+      "description": "Wi-Fi 6 + Bluetooth 5.0 PCIe Controller, 2x2 802.11ax, BGA",
+      "datasheet_url": "https://www.realtek.com/en/products/communications-networking-ics/item/rtl8852be",
+      "lifecycle": "active",
+      "price_cents": 580
+    },
+    {
+      "sku": "W5500-Q",
+      "manufacturer": "WIZnet",
+      "description": "Hardwired TCP/IP Ethernet Controller, SPI, 8 sockets, 32KB buffer, QFN-48",
+      "datasheet_url": "https://docs.wiznet.io/Product/iEthernet/W5500/datasheet",
+      "lifecycle": "active",
+      "price_cents": 195
+    },
+    {
+      "sku": "W5100S-Q",
+      "manufacturer": "WIZnet",
+      "description": "Hardwired TCP/IP Ethernet Controller, SPI/Parallel, 4 sockets, QFN-48",
+      "datasheet_url": "https://docs.wiznet.io/Product/iEthernet/W5100S/datasheet",
+      "lifecycle": "active",
+      "price_cents": 165
+    },
+    {
+      "sku": "W6100-Q",
+      "manufacturer": "WIZnet",
+      "description": "Hardwired TCP/IP v4/v6 Ethernet Controller, SPI, 8 sockets, QFN-48",
+      "datasheet_url": "https://docs.wiznet.io/Product/iEthernet/W6100/datasheet",
+      "lifecycle": "active",
+      "price_cents": 210
+    },
+    {
+      "sku": "NINA-W106-00B",
+      "manufacturer": "u-blox",
+      "description": "Wi-Fi + Bluetooth Module, ESP32, dual-band, 10.4x14.3mm, certified",
+      "datasheet_url": "https://www.u-blox.com/en/docs/UBX-17065507",
+      "lifecycle": "active",
+      "price_cents": 780
+    },
+    {
+      "sku": "NORA-W106-00B-00",
+      "manufacturer": "u-blox",
+      "description": "Wi-Fi 4 + Bluetooth 5.0 Module, ESP32-S3, 10.4x14.3mm, certified",
+      "datasheet_url": "https://www.u-blox.com/en/docs/UBX-22016490",
+      "lifecycle": "active",
+      "price_cents": 820
+    },
+    {
+      "sku": "CYW54907KUBG1G",
+      "manufacturer": "Infineon",
+      "description": "Wi-Fi 5 (802.11ac) 2x2 + BT 4.2, Cortex-R4, 640MHz, WLBGA",
+      "datasheet_url": "https://www.infineon.com/dgdl/Infineon-CYW54907-DataSheet-v03_00-EN.pdf",
+      "lifecycle": "active",
+      "price_cents": 950
+    },
+    {
+      "sku": "MT7663BSN",
+      "manufacturer": "MediaTek",
+      "description": "Wi-Fi 5 (802.11ac) + Bluetooth 5.0, 2x2 MU-MIMO, SDIO 3.0, BGA",
+      "datasheet_url": "https://www.mediatek.com/products/broadband-wifi/mt7663",
+      "lifecycle": "active",
+      "price_cents": 520
+    },
+    {
+      "sku": "MT7915DAN",
+      "manufacturer": "MediaTek",
+      "description": "Wi-Fi 6 (802.11ax) 4x4 DBDC AP SoC, PCIe 2.0, BGA",
+      "datasheet_url": "https://www.mediatek.com/products/broadband-wifi/mt7915",
+      "lifecycle": "active",
+      "price_cents": 1250
+    },
+    {
+      "sku": "IWR6843AOP",
+      "manufacturer": "Texas Instruments",
+      "description": "60GHz mmWave Sensor, Cortex-R4F+C674x DSP, 3TX/4RX, antenna-on-package",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/iwr6843aop.pdf",
+      "lifecycle": "active",
+      "price_cents": 2950
+    },
+    {
+      "sku": "NRF7002-QFAA-R7",
+      "manufacturer": "Nordic Semiconductor",
+      "description": "Wi-Fi 6 Companion IC, 2.4/5GHz, OFDMA, SPI/QSPI host, QFN-40",
+      "datasheet_url": "https://infocenter.nordicsemi.com/pdf/nRF7002_PS_v1.2.pdf",
+      "lifecycle": "active",
+      "price_cents": 350
+    },
+    {
+      "sku": "DA16200MOD-AAT2",
+      "manufacturer": "Renesas (Dialog)",
+      "description": "Ultra-low-power Wi-Fi Module, VirtualZero, ARM Cortex-M4F, certified",
+      "datasheet_url": "https://www.renesas.com/us/en/document/dst/da16200-module-datasheet",
+      "lifecycle": "active",
+      "price_cents": 650
+    },
+    {
+      "sku": "KW45Z41083AFTA",
+      "manufacturer": "NXP",
+      "description": "Wi-Fi 4 + Bluetooth 5.3 Companion IC, Cortex-M33, EdgeLock, QFN-48",
+      "datasheet_url": "https://www.nxp.com/docs/en/data-sheet/KW45Z41083.pdf",
+      "lifecycle": "active",
+      "price_cents": 395
+    },
+    {
+      "sku": "RTL8723DS",
+      "manufacturer": "Realtek",
+      "description": "Wi-Fi 802.11n + Bluetooth 4.2 Combo, SDIO, low power, QFN-44",
+      "datasheet_url": "https://www.realtek.com/en/products/communications-networking-ics/item/rtl8723ds",
+      "lifecycle": "active",
+      "price_cents": 280
+    }
+  ],
+  "rf-transceivers": [
+    {
+      "sku": "SX1276IMLTRT",
+      "manufacturer": "Semtech",
+      "description": "LoRa Transceiver, 137-1020MHz, +20dBm, 148dB link budget, SPI, QFN-28",
+      "datasheet_url": "https://semtech.my.salesforce.com/sfc/p/E0000000JelG/a/2R000000HT76/7Nkt_IfjE9mKm4lDsGLKJOHbB.MBffg7xLrWmlGB3Lg",
+      "lifecycle": "active",
+      "price_cents": 450
+    },
+    {
+      "sku": "SX1278IMLTRT",
+      "manufacturer": "Semtech",
+      "description": "LoRa Transceiver, 137-525MHz, +20dBm, 148dB link budget, SPI, QFN-28",
+      "datasheet_url": "https://semtech.my.salesforce.com/sfc/p/E0000000JelG/a/44000000MDnR/Et1KWLCuNkz1h.5ckMsxy1SD8hkNe.B.Y23GOmW0hkY",
+      "lifecycle": "active",
+      "price_cents": 420
+    },
+    {
+      "sku": "SX1262IMLTRT",
+      "manufacturer": "Semtech",
+      "description": "LoRa Transceiver, 150-960MHz, +22dBm, 170dB link budget, low power, QFN-24",
+      "datasheet_url": "https://semtech.my.salesforce.com/sfc/p/E0000000JelG/a/2R000000HSSk/yPVgPVgNmLxnXC32BwZGS0_o0SaLRFz4N2BJt5W2wpA",
+      "lifecycle": "active",
+      "price_cents": 380
+    },
+    {
+      "sku": "SX1261IMLTRT",
+      "manufacturer": "Semtech",
+      "description": "LoRa Transceiver, 150-960MHz, +15dBm, low power, SPI, QFN-24",
+      "datasheet_url": "https://semtech.my.salesforce.com/sfc/p/E0000000JelG/a/2R000000HSSk/yPVgPVgNmLxnXC32BwZGS0_o0SaLRFz4N2BJt5W2wpA",
+      "lifecycle": "active",
+      "price_cents": 340
+    },
+    {
+      "sku": "SX1268IMLTRT",
+      "manufacturer": "Semtech",
+      "description": "LoRa Transceiver, 410-810MHz, +22dBm, 170dB link budget, QFN-24",
+      "datasheet_url": "https://semtech.my.salesforce.com/sfc/p/E0000000JelG/a/2R000000HSSk/yPVgPVgNmLxnXC32BwZGS0_o0SaLRFz4N2BJt5W2wpA",
+      "lifecycle": "active",
+      "price_cents": 395
+    },
+    {
+      "sku": "SX1280IMLTRT",
+      "manufacturer": "Semtech",
+      "description": "2.4GHz LoRa/FLRC/GFSK Transceiver, +12.5dBm, Ranging, SPI, QFN-24",
+      "datasheet_url": "https://semtech.my.salesforce.com/sfc/p/E0000000JelG/a/2R000000Hlit/LC05rFJrJX4gf9OUsxrFjXLdZSFQ7TYk0M9S4fJWiDs",
+      "lifecycle": "active",
+      "price_cents": 320
+    },
+    {
+      "sku": "LR1110IMLTRT",
+      "manufacturer": "Semtech",
+      "description": "LoRa Edge Transceiver + Wi-Fi/GNSS Scanning, 150-960MHz, QFN-40",
+      "datasheet_url": "https://www.semtech.com/products/wireless-rf/lora-edge/lr1110",
+      "lifecycle": "active",
+      "price_cents": 580
+    },
+    {
+      "sku": "LR1121IMLTRT",
+      "manufacturer": "Semtech",
+      "description": "LoRa Edge 2.4GHz/Sub-GHz Transceiver, Satellite IoT, QFN-40",
+      "datasheet_url": "https://www.semtech.com/products/wireless-rf/lora-edge/lr1121",
+      "lifecycle": "active",
+      "price_cents": 620
+    },
+    {
+      "sku": "LLCC68IMLTRT",
+      "manufacturer": "Semtech",
+      "description": "LoRa Sub-GHz Transceiver, +22dBm, SF5-SF11, SPI, low-cost, QFN-24",
+      "datasheet_url": "https://www.semtech.com/products/wireless-rf/lora-connect/llcc68",
+      "lifecycle": "active",
+      "price_cents": 280
+    },
+    {
+      "sku": "nRF24L01P-R7",
+      "manufacturer": "Nordic Semiconductor",
+      "description": "2.4GHz ISM Transceiver, 2Mbps, Enhanced ShockBurst, SPI, QFN-20",
+      "datasheet_url": "https://infocenter.nordicsemi.com/pdf/nRF24L01P_PS_v1.0.pdf",
+      "lifecycle": "active",
+      "price_cents": 145
+    },
+    {
+      "sku": "nRF24AP2-1CHQ32-R7",
+      "manufacturer": "Nordic Semiconductor",
+      "description": "ANT/ANT+ 2.4GHz Wireless IC, single channel, SPI, QFN-32",
+      "datasheet_url": "https://infocenter.nordicsemi.com/pdf/nRF24AP2-1CH_PS_v1.1.pdf",
+      "lifecycle": "active",
+      "price_cents": 250
+    },
+    {
+      "sku": "SI4463-B1B-FMR",
+      "manufacturer": "Silicon Labs",
+      "description": "Sub-GHz EZRadioPRO Transceiver, 119-1050MHz, +20dBm, SPI, QFN-20",
+      "datasheet_url": "https://www.silabs.com/documents/public/data-sheets/Si4463-61-60.pdf",
+      "lifecycle": "active",
+      "price_cents": 295
+    },
+    {
+      "sku": "SI4362-B1B-FMR",
+      "manufacturer": "Silicon Labs",
+      "description": "Sub-GHz EZRadioPRO Receiver, 142-1050MHz, -126dBm sens., SPI, QFN-20",
+      "datasheet_url": "https://www.silabs.com/documents/public/data-sheets/Si4362.pdf",
+      "lifecycle": "active",
+      "price_cents": 245
+    },
+    {
+      "sku": "SI4460-B1B-FMR",
+      "manufacturer": "Silicon Labs",
+      "description": "Sub-GHz EZRadioPRO Transceiver, 119-1050MHz, +13dBm, SPI, QFN-20",
+      "datasheet_url": "https://www.silabs.com/documents/public/data-sheets/Si4460-61-64.pdf",
+      "lifecycle": "active",
+      "price_cents": 265
+    },
+    {
+      "sku": "SI4468-A2A-IMR",
+      "manufacturer": "Silicon Labs",
+      "description": "High-Performance Sub-GHz Transceiver, +20dBm, AES, HCSP, QFN-20",
+      "datasheet_url": "https://www.silabs.com/documents/public/data-sheets/Si4467-68.pdf",
+      "lifecycle": "active",
+      "price_cents": 310
+    },
+    {
+      "sku": "SI4438-B1B-FMR",
+      "manufacturer": "Silicon Labs",
+      "description": "Sub-GHz EZRadio Transceiver, 425-525MHz, +13dBm, low-cost, QFN-20",
+      "datasheet_url": "https://www.silabs.com/documents/public/data-sheets/Si4438.pdf",
+      "lifecycle": "active",
+      "price_cents": 195
+    },
+    {
+      "sku": "CC1101RGPR",
+      "manufacturer": "Texas Instruments",
+      "description": "Sub-1GHz Transceiver, 300-348/387-464/779-928MHz, FSK/GFSK/MSK/OOK, QFN-20",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/cc1101.pdf",
+      "lifecycle": "active",
+      "price_cents": 245
+    },
+    {
+      "sku": "CC1310F128RGZR",
+      "manufacturer": "Texas Instruments",
+      "description": "Sub-1GHz Wireless MCU, Cortex-M3+M0, 128KB Flash, Sensor Controller, VQFN-48",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/cc1310.pdf",
+      "lifecycle": "active",
+      "price_cents": 395
+    },
+    {
+      "sku": "CC1312R1F3RGZR",
+      "manufacturer": "Texas Instruments",
+      "description": "Sub-1GHz Wireless MCU, Cortex-M4F, 352KB Flash, long range, VQFN-48",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/cc1312r.pdf",
+      "lifecycle": "active",
+      "price_cents": 420
+    },
+    {
+      "sku": "CC1120RHBR",
+      "manufacturer": "Texas Instruments",
+      "description": "High-Performance Sub-1GHz Transceiver, Narrowband, -124dBm, VQFN-32",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/cc1120.pdf",
+      "lifecycle": "active",
+      "price_cents": 350
+    },
+    {
+      "sku": "CC1200RHBR",
+      "manufacturer": "Texas Instruments",
+      "description": "Low-Power High-Performance Sub-1GHz Transceiver, 169/434/868/915MHz",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/cc1200.pdf",
+      "lifecycle": "active",
+      "price_cents": 380
+    },
+    {
+      "sku": "CC1352P7RGZ",
+      "manufacturer": "Texas Instruments",
+      "description": "Multiband Sub-1GHz + 2.4GHz Wireless MCU, +20dBm PA, Cortex-M4F, QFN-48",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/cc1352p7.pdf",
+      "lifecycle": "active",
+      "price_cents": 495
+    },
+    {
+      "sku": "CC1352R1F3RGZR",
+      "manufacturer": "Texas Instruments",
+      "description": "Dual-Band Sub-1GHz + 2.4GHz Wireless MCU, Cortex-M4F, 352KB Flash",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/cc1352r.pdf",
+      "lifecycle": "active",
+      "price_cents": 450
+    },
+    {
+      "sku": "BGT24MTR11",
+      "manufacturer": "Infineon",
+      "description": "24GHz Radar Transceiver, FMCW, 1TX/1RX, industrial sensing, TSSOP-8",
+      "datasheet_url": "https://www.infineon.com/dgdl/Infineon-BGT24MTR11-DataSheet-v04_00-EN.pdf",
+      "lifecycle": "active",
+      "price_cents": 895
+    },
+    {
+      "sku": "BGT60TR13C",
+      "manufacturer": "Infineon",
+      "description": "60GHz Radar Transceiver MMIC, 3TX/4RX, FMCW, eWLB-36, gesture/presence",
+      "datasheet_url": "https://www.infineon.com/dgdl/Infineon-BGT60TR13C-DataSheet-v03_00-EN.pdf",
+      "lifecycle": "active",
+      "price_cents": 1250
+    },
+    {
+      "sku": "BGT24LTR11N16",
+      "manufacturer": "Infineon",
+      "description": "24GHz Doppler Radar Transceiver, motion detection, TSSOP-16",
+      "datasheet_url": "https://www.infineon.com/dgdl/Infineon-BGT24LTR11N16-DataSheet-v03_00-EN.pdf",
+      "lifecycle": "active",
+      "price_cents": 650
+    },
+    {
+      "sku": "ADF7242BCPZ",
+      "manufacturer": "Analog Devices",
+      "description": "2.4GHz IEEE 802.15.4/ISM Transceiver, SPI, integrated MAC, LFCSP-48",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/ADF7242.pdf",
+      "lifecycle": "active",
+      "price_cents": 395
+    },
+    {
+      "sku": "ADF7023BCPZ",
+      "manufacturer": "Analog Devices",
+      "description": "High-Performance Sub-GHz ISM Transceiver, 862-928MHz, LFCSP-40",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/ADF7023.pdf",
+      "lifecycle": "active",
+      "price_cents": 350
+    },
+    {
+      "sku": "ADF7021-NBCPZ",
+      "manufacturer": "Analog Devices",
+      "description": "Narrowband ISM Transceiver, 80-650/862-940MHz, FSK/GFSK, LFCSP-48",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/ADF7021-N.pdf",
+      "lifecycle": "active",
+      "price_cents": 495
+    },
+    {
+      "sku": "HMC1044LP3CE",
+      "manufacturer": "Analog Devices",
+      "description": "Programmable Harmonic Low-Pass Filter, DC-3GHz, 1-3-5-7th harmonic, QFN-16",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/HMC1044LP3CE.pdf",
+      "lifecycle": "active",
+      "price_cents": 750
+    },
+    {
+      "sku": "AT86RF215-ZUR",
+      "manufacturer": "Microchip",
+      "description": "Dual-Band Sub-GHz/2.4GHz Radio Transceiver, IEEE 802.15.4g, SPI, QFN-48",
+      "datasheet_url": "https://ww1.microchip.com/downloads/en/DeviceDoc/AT86RF215-Dual-Band-Sub-GHz-2.4-GHz-Radio-Transceiver-DS-DS70005310.pdf",
+      "lifecycle": "active",
+      "price_cents": 520
+    },
+    {
+      "sku": "AT86RF233-ZUR",
+      "manufacturer": "Microchip",
+      "description": "2.4GHz IEEE 802.15.4 Transceiver, -101dBm sens., SPI, QFN-32",
+      "datasheet_url": "https://ww1.microchip.com/downloads/en/DeviceDoc/AT86RF233-IEEE-802.15.4-Transceiver-DS-DS60001579.pdf",
+      "lifecycle": "active",
+      "price_cents": 310
+    },
+    {
+      "sku": "AT86RF212B-ZUR",
+      "manufacturer": "Microchip",
+      "description": "Sub-1GHz IEEE 802.15.4 Transceiver, 769-935MHz, SPI, QFN-32",
+      "datasheet_url": "https://ww1.microchip.com/downloads/en/DeviceDoc/AT86RF212B-IEEE-802.15.4-Sub-1GHz-Transceiver-DS-DS60001574.pdf",
+      "lifecycle": "active",
+      "price_cents": 280
+    },
+    {
+      "sku": "MRF89XAM8A-I/RM",
+      "manufacturer": "Microchip",
+      "description": "Sub-GHz FSK/OOK Transceiver Module, 868MHz, +12.5dBm, SPI",
+      "datasheet_url": "https://ww1.microchip.com/downloads/en/DeviceDoc/MRF89XAM8A-Ultra-Low-Power-Integrated-ISM-Band-Sub-GHz-Transceiver-Module-DS70005254.pdf",
+      "lifecycle": "active",
+      "price_cents": 350
+    },
+    {
+      "sku": "RFM95W-868S2",
+      "manufacturer": "HopeRF",
+      "description": "LoRa Transceiver Module, 868MHz, SX1276, +20dBm, SPI, 16x16mm",
+      "datasheet_url": "https://www.hoperf.com/data/upload/portal/20190801/RFM95W-V2.0.pdf",
+      "lifecycle": "active",
+      "price_cents": 395
+    },
+    {
+      "sku": "RFM69HCW-433S2",
+      "manufacturer": "HopeRF",
+      "description": "ISM Transceiver Module, 433MHz, FSK, +20dBm, AES-128, SPI, 16x16mm",
+      "datasheet_url": "https://www.hoperf.com/data/upload/portal/20190307/RFM69HCW-V1.1.pdf",
+      "lifecycle": "active",
+      "price_cents": 295
+    },
+    {
+      "sku": "CMT2300AW-ESR",
+      "manufacturer": "CMOSTEK",
+      "description": "Sub-1GHz ISM Transceiver, 240-960MHz, ultra-low power, SPI, QFN-16",
+      "datasheet_url": "https://www.cmostek.com/download/CMT2300AW_Datasheet_V1.24.pdf",
+      "lifecycle": "active",
+      "price_cents": 95
+    },
+    {
+      "sku": "SPIRIT1QTR",
+      "manufacturer": "STMicroelectronics",
+      "description": "Sub-1GHz Transceiver, 150-174/300-348/387-470/779-956MHz, SPI, QFN-20",
+      "datasheet_url": "https://www.st.com/resource/en/datasheet/spirit1.pdf",
+      "lifecycle": "nrnd",
+      "price_cents": 220
+    },
+    {
+      "sku": "S2-LP-QTR",
+      "manufacturer": "STMicroelectronics",
+      "description": "Ultra-Low-Power Sub-1GHz Transceiver, 150-960MHz, +16dBm, SPI, QFN-20",
+      "datasheet_url": "https://www.st.com/resource/en/datasheet/s2-lp.pdf",
+      "lifecycle": "active",
+      "price_cents": 195
+    },
+    {
+      "sku": "STM32WL55JCI6",
+      "manufacturer": "STMicroelectronics",
+      "description": "LoRa + Sub-GHz SoC, Dual Cortex-M4/M0+, 256KB Flash, UFBGA-73",
+      "datasheet_url": "https://www.st.com/resource/en/datasheet/stm32wl55jc.pdf",
+      "lifecycle": "active",
+      "price_cents": 520
+    },
+    {
+      "sku": "MKW41Z512VHT4",
+      "manufacturer": "NXP",
+      "description": "Thread/BLE/Zigbee MCU, Cortex-M0+, 512KB Flash, 2.4GHz, VFBGA-56",
+      "datasheet_url": "https://www.nxp.com/docs/en/data-sheet/MKW41Z512.pdf",
+      "lifecycle": "active",
+      "price_cents": 395
+    },
+    {
+      "sku": "A7105-CSR",
+      "manufacturer": "AMICCOM",
+      "description": "2.4GHz FSK/GFSK Transceiver, 500kbps, SPI, ultra-low power, QFN-16",
+      "datasheet_url": "https://www.amiccom.com.tw/download/A7105_Datasheet.pdf",
+      "lifecycle": "active",
+      "price_cents": 65
+    },
+    {
+      "sku": "AX5043-1-TA05",
+      "manufacturer": "onsemi (Axsem)",
+      "description": "Sub-GHz Narrowband Transceiver, 70-1050MHz, SPI, ultra-low power, QFN-28",
+      "datasheet_url": "https://www.onsemi.com/pdf/datasheet/ax5043-d.pdf",
+      "lifecycle": "active",
+      "price_cents": 280
+    },
+    {
+      "sku": "AX5243-1-TA05",
+      "manufacturer": "onsemi (Axsem)",
+      "description": "Sub-GHz Narrowband Transceiver, 27-1050MHz, SPI, wideband, QFN-28",
+      "datasheet_url": "https://www.onsemi.com/pdf/datasheet/ax5243-d.pdf",
+      "lifecycle": "active",
+      "price_cents": 310
+    },
+    {
+      "sku": "SX1231H-IMLTRT",
+      "manufacturer": "Semtech",
+      "description": "Sub-GHz ISM Transceiver, 290-340/424-510/862-1020MHz, +20dBm, QFN-24",
+      "datasheet_url": "https://www.semtech.com/products/wireless-rf/fsk-transceivers/sx1231h",
+      "lifecycle": "active",
+      "price_cents": 250
+    },
+    {
+      "sku": "ATA8510-GKQW-1",
+      "manufacturer": "Microchip",
+      "description": "UHF ASK/FSK Transceiver, 315/433/868/915MHz, 3D wake-up, QFN-32",
+      "datasheet_url": "https://ww1.microchip.com/downloads/en/DeviceDoc/Atmel-9371-Smart-RF-ATA8510-Datasheet.pdf",
+      "lifecycle": "active",
+      "price_cents": 320
+    },
+    {
+      "sku": "MAX41470ETB+T",
+      "manufacturer": "Analog Devices (Maxim)",
+      "description": "300MHz-960MHz ASK/OOK Receiver, -119dBm, SPI, TDFN-10",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/MAX41470.pdf",
+      "lifecycle": "active",
+      "price_cents": 195
+    },
+    {
+      "sku": "MAX41460EWL+T",
+      "manufacturer": "Analog Devices (Maxim)",
+      "description": "300MHz-960MHz ASK/FSK Transmitter, +13dBm, SPI, WLP-9",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/MAX41460-MAX41462.pdf",
+      "lifecycle": "active",
+      "price_cents": 125
+    },
+    {
+      "sku": "RA-01H",
+      "manufacturer": "Ai-Thinker",
+      "description": "LoRa Module, SX1262, 868MHz, +22dBm, SPI, 16x16mm",
+      "datasheet_url": "https://docs.ai-thinker.com/en/lora/man",
+      "lifecycle": "active",
+      "price_cents": 350
+    },
+    {
+      "sku": "E22-900T30S",
+      "manufacturer": "EBYTE",
+      "description": "LoRa Module, SX1262, 900MHz, +30dBm, UART, IPEX, 24x43mm",
+      "datasheet_url": "https://www.ebyte.com/en/downpdf.aspx?id=805",
+      "lifecycle": "active",
+      "price_cents": 695
+    },
+    {
+      "sku": "E32-433T30D",
+      "manufacturer": "EBYTE",
+      "description": "LoRa Module, SX1278, 433MHz, +30dBm (1W), UART, SMA, 24x43mm",
+      "datasheet_url": "https://www.ebyte.com/en/downpdf.aspx?id=108",
+      "lifecycle": "active",
+      "price_cents": 750
+    },
+    {
+      "sku": "RN2903A-I/RM104",
+      "manufacturer": "Microchip",
+      "description": "LoRaWAN Module, 915MHz, Class A/C, certified FCC/IC, UART, 17.8x26.7mm",
+      "datasheet_url": "https://ww1.microchip.com/downloads/en/DeviceDoc/RN2903A-LoRa-Technology-Module-Command-Reference-User-Guide-DS40001811.pdf",
+      "lifecycle": "active",
+      "price_cents": 1150
+    },
+    {
+      "sku": "RAK3172-SIP",
+      "manufacturer": "RAKwireless",
+      "description": "LoRa/LoRaWAN Module, STM32WLE5, 862-930MHz, 12x12mm SiP, certified",
+      "datasheet_url": "https://docs.rakwireless.com/Product-Categories/WisDuo/RAK3172-SiP/Datasheet/",
+      "lifecycle": "active",
+      "price_cents": 450
+    },
+    {
+      "sku": "SX1257IMLTRT",
+      "manufacturer": "Semtech",
+      "description": "LoRa Gateway Transceiver, 137-1020MHz, digital I/Q, SPI, QFN-28",
+      "datasheet_url": "https://www.semtech.com/products/wireless-rf/lora-gateways/sx1257",
+      "lifecycle": "active",
+      "price_cents": 650
+    },
+    {
+      "sku": "SX1303IMLTRT",
+      "manufacturer": "Semtech",
+      "description": "LoRa Gateway Baseband Processor, 8-ch concurrent demod, SPI, QFN-44",
+      "datasheet_url": "https://www.semtech.com/products/wireless-rf/lora-gateways/sx1303",
+      "lifecycle": "active",
+      "price_cents": 2450
+    },
+    {
+      "sku": "MAX2870ETJ+T",
+      "manufacturer": "Analog Devices (Maxim)",
+      "description": "23.5MHz-6GHz Fractional-N PLL/VCO, SPI, TQFN-32",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/MAX2870.pdf",
+      "lifecycle": "active",
+      "price_cents": 1350
+    },
+    {
+      "sku": "ADF4351BCPZ-RL7",
+      "manufacturer": "Analog Devices",
+      "description": "35MHz-4.4GHz Wideband Synthesizer with Integrated VCO, SPI, LFCSP-32",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/ADF4351.pdf",
+      "lifecycle": "active",
+      "price_cents": 1450
+    },
+    {
+      "sku": "ADF4252BCPZ",
+      "manufacturer": "Analog Devices",
+      "description": "Dual Fractional-N PLL, 4.0GHz/2.1GHz, SPI, LFCSP-32",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/ADF4252.pdf",
+      "lifecycle": "active",
+      "price_cents": 950
+    }
+  ],
+  "gps-gnss": [
+    {
+      "sku": "NEO-6M-0-001",
+      "manufacturer": "u-blox",
+      "description": "GPS Receiver Module, 50-channel, -161dBm, UART/I2C/SPI, 16x12.2mm",
+      "datasheet_url": "https://www.u-blox.com/en/docs/UBX-14002048",
+      "lifecycle": "nrnd",
+      "price_cents": 950
+    },
+    {
+      "sku": "NEO-M8N-0",
+      "manufacturer": "u-blox",
+      "description": "GPS/GLONASS/BeiDou/Galileo Receiver, 72-channel, -167dBm, 12.2x16mm",
+      "datasheet_url": "https://www.u-blox.com/en/docs/UBX-15031086",
+      "lifecycle": "active",
+      "price_cents": 1250
+    },
+    {
+      "sku": "NEO-M8P-2",
+      "manufacturer": "u-blox",
+      "description": "GNSS Module with RTK, GPS+GLONASS, 2.5cm CEP, UART/SPI/I2C, 12.2x16mm",
+      "datasheet_url": "https://www.u-blox.com/en/docs/UBX-15025193",
+      "lifecycle": "active",
+      "price_cents": 5500
+    },
+    {
+      "sku": "NEO-M9N-00B",
+      "manufacturer": "u-blox",
+      "description": "Multi-GNSS Module, 4 concurrent constellations, -167dBm, 12.2x16mm",
+      "datasheet_url": "https://www.u-blox.com/en/docs/UBX-20014609",
+      "lifecycle": "active",
+      "price_cents": 1850
+    },
+    {
+      "sku": "ZED-F9P-02B",
+      "manufacturer": "u-blox",
+      "description": "Multi-band GNSS RTK Module, L1+L2, 1cm+1ppm CEP, 17x22mm",
+      "datasheet_url": "https://www.u-blox.com/en/docs/UBX-21044850",
+      "lifecycle": "active",
+      "price_cents": 15900
+    },
+    {
+      "sku": "ZED-F9R-01B",
+      "manufacturer": "u-blox",
+      "description": "Multi-band GNSS + Dead Reckoning Module, IMU sensor fusion, 17x22mm",
+      "datasheet_url": "https://www.u-blox.com/en/docs/UBX-20039643",
+      "lifecycle": "active",
+      "price_cents": 12500
+    },
+    {
+      "sku": "MAX-M10S-00B",
+      "manufacturer": "u-blox",
+      "description": "Ultra-Low-Power GNSS Module, L1, 12mW tracking, 9.7x10.1mm",
+      "datasheet_url": "https://www.u-blox.com/en/docs/UBX-20035208",
+      "lifecycle": "active",
+      "price_cents": 1450
+    },
+    {
+      "sku": "SAM-M10Q-00B",
+      "manufacturer": "u-blox",
+      "description": "GNSS Antenna Module, integrated patch antenna, L1, 15.5x15.5mm",
+      "datasheet_url": "https://www.u-blox.com/en/docs/UBX-22013969",
+      "lifecycle": "active",
+      "price_cents": 2250
+    },
+    {
+      "sku": "CAM-M8Q-0",
+      "manufacturer": "u-blox",
+      "description": "GNSS Antenna Module, 72-ch, integrated patch, 9.6x14.0mm",
+      "datasheet_url": "https://www.u-blox.com/en/docs/UBX-15031086",
+      "lifecycle": "active",
+      "price_cents": 1850
+    },
+    {
+      "sku": "UBX-M8030-KT",
+      "manufacturer": "u-blox",
+      "description": "Multi-GNSS Receiver Chip, 72-channel, concurrent GPS+GLONASS+BeiDou, QFN-40",
+      "datasheet_url": "https://www.u-blox.com/en/docs/UBX-15015756",
+      "lifecycle": "active",
+      "price_cents": 850
+    },
+    {
+      "sku": "L76KB-A58",
+      "manufacturer": "Quectel",
+      "description": "GNSS Module, GPS+BeiDou+GLONASS, -165dBm, UART, 10.1x9.7mm",
+      "datasheet_url": "https://www.quectel.com/product/gnss-l76k",
+      "lifecycle": "active",
+      "price_cents": 650
+    },
+    {
+      "sku": "L80-R",
+      "manufacturer": "Quectel",
+      "description": "GPS Module with integrated patch antenna, -165dBm, UART, 16x16mm",
+      "datasheet_url": "https://www.quectel.com/product/gnss-l80-r",
+      "lifecycle": "active",
+      "price_cents": 1050
+    },
+    {
+      "sku": "L86-M33",
+      "manufacturer": "Quectel",
+      "description": "Multi-GNSS Antenna Module, GPS+GLONASS+Galileo+BeiDou, 18.4x18.4mm",
+      "datasheet_url": "https://www.quectel.com/product/gnss-l86",
+      "lifecycle": "active",
+      "price_cents": 1150
+    },
+    {
+      "sku": "LC29H-BS",
+      "manufacturer": "Quectel",
+      "description": "Dual-Band Multi-GNSS Module, L1+L5, RTK, -148dBm, 12.2x16mm",
+      "datasheet_url": "https://www.quectel.com/product/gnss-lc29h",
+      "lifecycle": "active",
+      "price_cents": 2450
+    },
+    {
+      "sku": "LC76G-PA",
+      "manufacturer": "Quectel",
+      "description": "Multi-GNSS Module, MediaTek AG3335, GPS+BeiDou+Galileo+GLONASS, UART",
+      "datasheet_url": "https://www.quectel.com/product/gnss-lc76g",
+      "lifecycle": "active",
+      "price_cents": 750
+    },
+    {
+      "sku": "L76-L",
+      "manufacturer": "Quectel",
+      "description": "Ultra-Compact GNSS Module, GPS+GLONASS+Galileo, 10.1x9.7mm",
+      "datasheet_url": "https://www.quectel.com/product/gnss-l76-l",
+      "lifecycle": "active",
+      "price_cents": 680
+    },
+    {
+      "sku": "MT3333AV",
+      "manufacturer": "MediaTek (Airoha)",
+      "description": "Multi-GNSS Chip, 5-constellation, UART/SPI/I2C, integrated LNA, QFN-44",
+      "datasheet_url": "https://www.mediatek.com/products/location-intelligence/mt3333",
+      "lifecycle": "active",
+      "price_cents": 450
+    },
+    {
+      "sku": "AG3335MN",
+      "manufacturer": "MediaTek (Airoha)",
+      "description": "Multi-GNSS Chip, L1+L5 Dual-Band, GPS+GLONASS+Galileo+BeiDou+QZSS, QFN-36",
+      "datasheet_url": "https://www.mediatek.com/products/location-intelligence/ag3335",
+      "lifecycle": "active",
+      "price_cents": 580
+    },
+    {
+      "sku": "STA8090FG",
+      "manufacturer": "STMicroelectronics",
+      "description": "Multi-constellation GNSS Receiver, Teseo III, 32-ch, ARM9, BGA-49",
+      "datasheet_url": "https://www.st.com/resource/en/datasheet/sta8090.pdf",
+      "lifecycle": "active",
+      "price_cents": 650
+    },
+    {
+      "sku": "STA8100GA",
+      "manufacturer": "STMicroelectronics",
+      "description": "Multi-GNSS Receiver, Teseo V, L1+L5, RTK-ready, Cortex-M4, UFBGA-49",
+      "datasheet_url": "https://www.st.com/resource/en/datasheet/sta8100.pdf",
+      "lifecycle": "active",
+      "price_cents": 950
+    },
+    {
+      "sku": "TESEO-LIV3FL",
+      "manufacturer": "STMicroelectronics",
+      "description": "Multi-GNSS Module, Teseo III, GPS+GLONASS+BeiDou+Galileo, 9.7x10.1mm",
+      "datasheet_url": "https://www.st.com/resource/en/datasheet/teseo-liv3f.pdf",
+      "lifecycle": "active",
+      "price_cents": 1150
+    },
+    {
+      "sku": "TESEO-LIV4FTR",
+      "manufacturer": "STMicroelectronics",
+      "description": "Multi-GNSS Module, Teseo V, L1+L5, 1.5m accuracy, 9.7x10.1mm",
+      "datasheet_url": "https://www.st.com/resource/en/datasheet/teseo-liv4f.pdf",
+      "lifecycle": "active",
+      "price_cents": 1450
+    },
+    {
+      "sku": "Venus838FLPx-L",
+      "manufacturer": "SkyTraq",
+      "description": "Multi-GNSS Receiver, GPS+GLONASS+BeiDou, 66-ch, -165dBm, QFN-40",
+      "datasheet_url": "https://www.skytraq.com.tw/homesite/Venus838FLPx.pdf",
+      "lifecycle": "active",
+      "price_cents": 550
+    },
+    {
+      "sku": "S1216F8-GL",
+      "manufacturer": "SkyTraq",
+      "description": "Multi-GNSS Module, GPS+GLONASS, integrated LNA, UART, 12x16mm",
+      "datasheet_url": "https://www.skytraq.com.tw/homesite/S1216F8-GL.pdf",
+      "lifecycle": "active",
+      "price_cents": 780
+    },
+    {
+      "sku": "ORG1510-MK05",
+      "manufacturer": "Origingps (Taoglas)",
+      "description": "Multi-GNSS Module with Antenna, GPS+GLONASS+BeiDou, 10x10mm, patch",
+      "datasheet_url": "https://origingps.com/product/org1510-mk05/",
+      "lifecycle": "active",
+      "price_cents": 1650
+    },
+    {
+      "sku": "PA1010D",
+      "manufacturer": "CDTop (Adafruit)",
+      "description": "Ultra-Compact GNSS Module, GPS+GLONASS+Galileo+QZSS, 10x10mm, UART+I2C",
+      "datasheet_url": "https://cdn-learn.adafruit.com/assets/assets/000/084/295/original/CD_PA1010D_Datasheet_v.03.pdf",
+      "lifecycle": "active",
+      "price_cents": 980
+    },
+    {
+      "sku": "UBX-G7020-KT",
+      "manufacturer": "u-blox",
+      "description": "GPS Receiver Chip, 56-channel, -162dBm, UART/SPI/I2C/DDC, QFN-40",
+      "datasheet_url": "https://www.u-blox.com/en/docs/UBX-14001676",
+      "lifecycle": "nrnd",
+      "price_cents": 450
+    },
+    {
+      "sku": "SAM-M8Q-0-10",
+      "manufacturer": "u-blox",
+      "description": "GNSS Antenna Module, concurrent GPS+GLONASS, integrated patch, 15.5x15.5mm",
+      "datasheet_url": "https://www.u-blox.com/en/docs/UBX-16012786",
+      "lifecycle": "active",
+      "price_cents": 1950
+    },
+    {
+      "sku": "MAX-M10M-00B",
+      "manufacturer": "u-blox",
+      "description": "GNSS Dead Reckoning Module, 3D sensor fusion, automotive, 9.7x10.1mm",
+      "datasheet_url": "https://www.u-blox.com/en/docs/UBX-22006780",
+      "lifecycle": "active",
+      "price_cents": 2850
+    },
+    {
+      "sku": "SIM68M",
+      "manufacturer": "SIMCom",
+      "description": "Multi-GNSS Module, GPS+GLONASS+BeiDou+Galileo, MTK, UART, 10.1x9.7mm",
+      "datasheet_url": "https://www.simcom.com/product/SIM68M.html",
+      "lifecycle": "active",
+      "price_cents": 580
+    },
+    {
+      "sku": "SIM28ML",
+      "manufacturer": "SIMCom",
+      "description": "GNSS Module, GPS, 66-channel, -165dBm, low power, UART, 10.1x9.7mm",
+      "datasheet_url": "https://www.simcom.com/product/SIM28ML.html",
+      "lifecycle": "active",
+      "price_cents": 480
+    },
+    {
+      "sku": "ATGM336H-5N",
+      "manufacturer": "ZHONGKE (Icofchina)",
+      "description": "Multi-GNSS Module, GPS+BeiDou, integrated antenna option, 9.7x10.1mm",
+      "datasheet_url": "https://www.icofchina.com/d/file/xiazai/2020-09-22/5ac498adad9f13e96e87f36e49f56bb2.pdf",
+      "lifecycle": "active",
+      "price_cents": 320
+    },
+    {
+      "sku": "BN-880Q",
+      "manufacturer": "Beitian",
+      "description": "GNSS + Compass Module, GPS+GLONASS+BeiDou, HMC5883L, UART, 28x28mm",
+      "datasheet_url": "https://www.beitian.com/products/BN-880Q.html",
+      "lifecycle": "active",
+      "price_cents": 1250
+    },
+    {
+      "sku": "GP-735T",
+      "manufacturer": "ADH Technology (USGlobalSat)",
+      "description": "GPS Module, SiRF Star IV, 48-channel, TTL, 35x36mm",
+      "datasheet_url": "https://cdn.sparkfun.com/datasheets/GPS/GP-735T-150210.pdf",
+      "lifecycle": "nrnd",
+      "price_cents": 2450
+    },
+    {
+      "sku": "ZOE-M8Q-0",
+      "manufacturer": "u-blox",
+      "description": "Super-Small GNSS SiP Module, 4.5x4.5mm, GPS+GLONASS+BeiDou+Galileo",
+      "datasheet_url": "https://www.u-blox.com/en/docs/UBX-17035164",
+      "lifecycle": "active",
+      "price_cents": 1250
+    },
+    {
+      "sku": "MIA-M10Q-00B",
+      "manufacturer": "u-blox",
+      "description": "Ultra-Low-Power GNSS SiP Module, 4.5x4.5mm, sub-mW tracking, L1",
+      "datasheet_url": "https://www.u-blox.com/en/docs/UBX-22017875",
+      "lifecycle": "active",
+      "price_cents": 1550
+    },
+    {
+      "sku": "L96-M33",
+      "manufacturer": "Quectel",
+      "description": "Multi-GNSS Module, 4-constellation, -165dBm, antenna detect, 15.0x15.0mm",
+      "datasheet_url": "https://www.quectel.com/product/gnss-l96",
+      "lifecycle": "active",
+      "price_cents": 980
+    },
+    {
+      "sku": "LC29D-T",
+      "manufacturer": "Quectel",
+      "description": "Dual-Band GNSS Module with Dead Reckoning, L1+L5, 6DOF IMU, 12.2x16mm",
+      "datasheet_url": "https://www.quectel.com/product/gnss-lc29d",
+      "lifecycle": "active",
+      "price_cents": 3250
+    },
+    {
+      "sku": "NEO-F10N-00B",
+      "manufacturer": "u-blox",
+      "description": "Multi-Band L1/L5 GNSS Module, F10 chipset, 12.2x16mm, 1.5m accuracy",
+      "datasheet_url": "https://www.u-blox.com/en/docs/UBX-22036256",
+      "lifecycle": "active",
+      "price_cents": 2150
+    },
+    {
+      "sku": "MAX-8Q-0",
+      "manufacturer": "u-blox",
+      "description": "Multi-GNSS Receiver, Concurrent GPS+GLONASS, -167dBm, SAW-less, LCC-24",
+      "datasheet_url": "https://www.u-blox.com/en/docs/UBX-15004274",
+      "lifecycle": "active",
+      "price_cents": 1050
+    }
+  ],
+  "nfc-rfid": [
+    {
+      "sku": "PN532/C106",
+      "manufacturer": "NXP",
+      "description": "NFC Controller, Read/Write/P2P/Card Emulation, I2C/SPI/HSU, HVQFN-40",
+      "datasheet_url": "https://www.nxp.com/docs/en/nxp/data-sheets/PN532_C1.pdf",
+      "lifecycle": "active",
+      "price_cents": 395
+    },
+    {
+      "sku": "PN5180A0HN/C3Y",
+      "manufacturer": "NXP",
+      "description": "High-Performance NFC Frontend, multi-protocol, DPC, HVQFN-40",
+      "datasheet_url": "https://www.nxp.com/docs/en/data-sheet/PN5180.pdf",
+      "lifecycle": "active",
+      "price_cents": 450
+    },
+    {
+      "sku": "PN7462AUHNY1",
+      "manufacturer": "NXP",
+      "description": "NFC Controller with MCU, ARM Cortex-M0+, 160KB Flash, HVQFN-64",
+      "datasheet_url": "https://www.nxp.com/docs/en/data-sheet/PN7462.pdf",
+      "lifecycle": "active",
+      "price_cents": 520
+    },
+    {
+      "sku": "NTAG213F",
+      "manufacturer": "NXP",
+      "description": "NTAG213 NFC Forum Type 2 Tag, 180 bytes, ISO 14443A, XQFN-4",
+      "datasheet_url": "https://www.nxp.com/docs/en/data-sheet/NTAG213_215_216.pdf",
+      "lifecycle": "active",
+      "price_cents": 28
+    },
+    {
+      "sku": "NTAG215",
+      "manufacturer": "NXP",
+      "description": "NFC Forum Type 2 Tag IC, 504 bytes, ISO 14443A, amiibo compatible",
+      "datasheet_url": "https://www.nxp.com/docs/en/data-sheet/NTAG213_215_216.pdf",
+      "lifecycle": "active",
+      "price_cents": 35
+    },
+    {
+      "sku": "NTAG216F",
+      "manufacturer": "NXP",
+      "description": "NFC Forum Type 2 Tag, 888 bytes, ISO 14443A, tamper detect, XQFN-4",
+      "datasheet_url": "https://www.nxp.com/docs/en/data-sheet/NTAG213_215_216.pdf",
+      "lifecycle": "active",
+      "price_cents": 42
+    },
+    {
+      "sku": "NT3H2111W0FHK",
+      "manufacturer": "NXP",
+      "description": "NTAG I2C Plus, NFC+I2C bridge, 1904 bytes, energy harvesting, XQFN-8",
+      "datasheet_url": "https://www.nxp.com/docs/en/data-sheet/NT3H2111_2211.pdf",
+      "lifecycle": "active",
+      "price_cents": 65
+    },
+    {
+      "sku": "NT3H2211W0FHKH",
+      "manufacturer": "NXP",
+      "description": "NTAG I2C Plus, NFC+I2C bridge, 1912 bytes, SRAM pass-through, XQFN-8",
+      "datasheet_url": "https://www.nxp.com/docs/en/data-sheet/NT3H2111_2211.pdf",
+      "lifecycle": "active",
+      "price_cents": 75
+    },
+    {
+      "sku": "MFRC52202HN1",
+      "manufacturer": "NXP",
+      "description": "MFRC522 NFC Reader/Writer, ISO 14443A/MIFARE, SPI/I2C/UART, HVQFN-32",
+      "datasheet_url": "https://www.nxp.com/docs/en/data-sheet/MFRC522.pdf",
+      "lifecycle": "active",
+      "price_cents": 250
+    },
+    {
+      "sku": "CLRC66301HNE",
+      "manufacturer": "NXP",
+      "description": "CLRC663 Multi-protocol NFC Frontend, ISO 14443/15693/18092, HVQFN-32",
+      "datasheet_url": "https://www.nxp.com/docs/en/data-sheet/CLRC663.pdf",
+      "lifecycle": "active",
+      "price_cents": 350
+    },
+    {
+      "sku": "CLRC66303HNE",
+      "manufacturer": "NXP",
+      "description": "CLRC663 Plus NFC Frontend, enhanced performance, HVQFN-32",
+      "datasheet_url": "https://www.nxp.com/docs/en/data-sheet/CLRC66303.pdf",
+      "lifecycle": "active",
+      "price_cents": 380
+    },
+    {
+      "sku": "MFRC63102HNE",
+      "manufacturer": "NXP",
+      "description": "MFRC631 Multi-protocol NFC Reader, MIFARE Plus/DESFire, HVQFN-32",
+      "datasheet_url": "https://www.nxp.com/docs/en/data-sheet/MFRC631.pdf",
+      "lifecycle": "active",
+      "price_cents": 310
+    },
+    {
+      "sku": "MF0ICU2T",
+      "manufacturer": "NXP",
+      "description": "MIFARE Ultralight C, 192 bytes, Triple DES authentication, ISO 14443A",
+      "datasheet_url": "https://www.nxp.com/docs/en/data-sheet/MF0ICU2.pdf",
+      "lifecycle": "active",
+      "price_cents": 38
+    },
+    {
+      "sku": "MF1S5035DAUD",
+      "manufacturer": "NXP",
+      "description": "MIFARE Classic EV1 4K, contactless smart card IC, ISO 14443A",
+      "datasheet_url": "https://www.nxp.com/docs/en/data-sheet/MF1S5035.pdf",
+      "lifecycle": "active",
+      "price_cents": 52
+    },
+    {
+      "sku": "ICODE-SLI-S",
+      "manufacturer": "NXP",
+      "description": "ICODE SLI-S Smart Label IC, ISO 15693, 2048-bit, 26-bit AFI",
+      "datasheet_url": "https://www.nxp.com/docs/en/data-sheet/SL2S2602.pdf",
+      "lifecycle": "active",
+      "price_cents": 45
+    },
+    {
+      "sku": "UCODE-9",
+      "manufacturer": "NXP",
+      "description": "UHF RAIN RFID Tag IC, EPC Gen2, -22.1dBm sensitivity, 128-bit EPC",
+      "datasheet_url": "https://www.nxp.com/docs/en/data-sheet/SL3S4021_31.pdf",
+      "lifecycle": "active",
+      "price_cents": 12
+    },
+    {
+      "sku": "ST25R3916-AQFT",
+      "manufacturer": "STMicroelectronics",
+      "description": "Multi-protocol NFC Reader, ISO 14443/15693/18092/EMVCo, AAT, QFN-32",
+      "datasheet_url": "https://www.st.com/resource/en/datasheet/st25r3916.pdf",
+      "lifecycle": "active",
+      "price_cents": 395
+    },
+    {
+      "sku": "ST25R3916B-AQFT",
+      "manufacturer": "STMicroelectronics",
+      "description": "NFC Universal Device, Multi-protocol, Automatic Antenna Tuning, QFN-32",
+      "datasheet_url": "https://www.st.com/resource/en/datasheet/st25r3916b.pdf",
+      "lifecycle": "active",
+      "price_cents": 420
+    },
+    {
+      "sku": "ST25R3911B-AQFT",
+      "manufacturer": "STMicroelectronics",
+      "description": "NFC/HF Reader IC, Capacitive Wake-up, ISO 14443A/B/15693, QFN-32",
+      "datasheet_url": "https://www.st.com/resource/en/datasheet/st25r3911b.pdf",
+      "lifecycle": "active",
+      "price_cents": 310
+    },
+    {
+      "sku": "ST25DV04K-IER6T3",
+      "manufacturer": "STMicroelectronics",
+      "description": "Dynamic NFC/RFID Tag, 4Kbit, I2C, energy harvesting, GPO, SO-8",
+      "datasheet_url": "https://www.st.com/resource/en/datasheet/st25dv04k.pdf",
+      "lifecycle": "active",
+      "price_cents": 85
+    },
+    {
+      "sku": "ST25DV16K-IER6T3",
+      "manufacturer": "STMicroelectronics",
+      "description": "Dynamic NFC/RFID Tag, 16Kbit, I2C, fast transfer mode, SO-8",
+      "datasheet_url": "https://www.st.com/resource/en/datasheet/st25dv16k.pdf",
+      "lifecycle": "active",
+      "price_cents": 110
+    },
+    {
+      "sku": "ST25DV64K-IER6T3",
+      "manufacturer": "STMicroelectronics",
+      "description": "Dynamic NFC/RFID Tag, 64Kbit, I2C, energy harvesting, mailbox, SO-8",
+      "datasheet_url": "https://www.st.com/resource/en/datasheet/st25dv64k.pdf",
+      "lifecycle": "active",
+      "price_cents": 150
+    },
+    {
+      "sku": "ST25TV02K-AX5U3",
+      "manufacturer": "STMicroelectronics",
+      "description": "NFC Forum Type 5 Tag, 2Kbit, tamper evidence, anti-counterfeit",
+      "datasheet_url": "https://www.st.com/resource/en/datasheet/st25tv02k.pdf",
+      "lifecycle": "active",
+      "price_cents": 32
+    },
+    {
+      "sku": "TRF7970ARHBR",
+      "manufacturer": "Texas Instruments",
+      "description": "Multi-protocol NFC/RFID Transceiver, ISO 14443/15693, SPI, VQFN-32",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/trf7970a.pdf",
+      "lifecycle": "active",
+      "price_cents": 350
+    },
+    {
+      "sku": "TRF7962ARHBR",
+      "manufacturer": "Texas Instruments",
+      "description": "NFC/RFID Reader, ISO 15693/14443B, parallel/SPI, VQFN-32",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/trf7962a.pdf",
+      "lifecycle": "active",
+      "price_cents": 295
+    },
+    {
+      "sku": "RF430FRL152HCRGER",
+      "manufacturer": "Texas Instruments",
+      "description": "NFC Sensor Transponder, ISO 15693, integrated 14-bit ADC/temp, VQFN-20",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/rf430frl152h.pdf",
+      "lifecycle": "active",
+      "price_cents": 180
+    },
+    {
+      "sku": "RF430CL331HCPWR",
+      "manufacturer": "Texas Instruments",
+      "description": "NFC Dynamic Tag, Type 4, I2C, 3KB SRAM, wake-up, TSSOP-14",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/rf430cl331h.pdf",
+      "lifecycle": "active",
+      "price_cents": 120
+    },
+    {
+      "sku": "RF430TAL152HCRGER",
+      "manufacturer": "Texas Instruments",
+      "description": "Temperature-Sensing NFC Transponder, ISO 15693, logging, VQFN-20",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/rf430tal152h.pdf",
+      "lifecycle": "active",
+      "price_cents": 195
+    },
+    {
+      "sku": "AS3953A-BQFT",
+      "manufacturer": "ams-OSRAM",
+      "description": "NFC/HF RFID Frontend, ISO 14443A, I2C/SPI, SFP interface, QFN-16",
+      "datasheet_url": "https://ams.com/documents/20143/36005/AS3953A_DS000421_5-00.pdf",
+      "lifecycle": "active",
+      "price_cents": 195
+    },
+    {
+      "sku": "AS3955-BTDT",
+      "manufacturer": "ams-OSRAM",
+      "description": "NFC Forum Tag Type 4, ISO 14443A, I2C, energy harvesting, TDFN-8",
+      "datasheet_url": "https://ams.com/documents/20143/36005/AS3955_DS000429_3-00.pdf",
+      "lifecycle": "active",
+      "price_cents": 125
+    },
+    {
+      "sku": "PN7150B0HN/C11EH",
+      "manufacturer": "NXP",
+      "description": "NFC Controller with integrated firmware, I2C host, HVQFN-40",
+      "datasheet_url": "https://www.nxp.com/docs/en/data-sheet/PN7150.pdf",
+      "lifecycle": "active",
+      "price_cents": 420
+    },
+    {
+      "sku": "SLE66CLX800PE",
+      "manufacturer": "Infineon",
+      "description": "Contactless Security Controller, 80KB EEPROM, ISO 14443, WLCSP",
+      "datasheet_url": "https://www.infineon.com/dgdl/Infineon-SLE66CLX800PE-DataSheet-v03_00-EN.pdf",
+      "lifecycle": "active",
+      "price_cents": 450
+    },
+    {
+      "sku": "SLE95250",
+      "manufacturer": "Infineon",
+      "description": "Embedded Security NFC Tag, NDEF, authentication, TSSOP-8",
+      "datasheet_url": "https://www.infineon.com/dgdl/Infineon-SLE95250-DataSheet-v01_00-EN.pdf",
+      "lifecycle": "active",
+      "price_cents": 85
+    },
+    {
+      "sku": "NAU-SRE-FEM-V2",
+      "manufacturer": "Impinj",
+      "description": "RAIN RFID Reader IC, Impinj E710, 4-port, PCIe, BGA",
+      "datasheet_url": "https://www.impinj.com/products/reader-chips/impinj-e710",
+      "lifecycle": "active",
+      "price_cents": 2950
+    },
+    {
+      "sku": "M24SR64-YMC6T/2",
+      "manufacturer": "STMicroelectronics",
+      "description": "Dynamic NFC/RFID Tag, NFC Forum Type 4, 64Kbit, I2C, GPO, SO-8",
+      "datasheet_url": "https://www.st.com/resource/en/datasheet/m24sr64-y.pdf",
+      "lifecycle": "nrnd",
+      "price_cents": 95
+    },
+    {
+      "sku": "NXH2281GKJ2",
+      "manufacturer": "NXP",
+      "description": "NTAG SmartSensor, NFC + temp sensor + energy harvesting, HXQFN-12",
+      "datasheet_url": "https://www.nxp.com/docs/en/data-sheet/NXH2281.pdf",
+      "lifecycle": "active",
+      "price_cents": 150
+    },
+    {
+      "sku": "EM4325-LQDA",
+      "manufacturer": "EM Microelectronic",
+      "description": "UHF RAIN RFID + NFC Sensor Tag, ISO 18000-63, temp sensor, QFN-16",
+      "datasheet_url": "https://www.emmicroelectronic.com/product/rfid-ics/em4325",
+      "lifecycle": "active",
+      "price_cents": 95
+    },
+    {
+      "sku": "MONZA-R6-P",
+      "manufacturer": "Impinj",
+      "description": "RAIN RFID Tag IC, 96-bit EPC, -20.5dBm sensitivity, SOT-886-3",
+      "datasheet_url": "https://www.impinj.com/products/tag-chips/impinj-monza-r6",
+      "lifecycle": "active",
+      "price_cents": 8
+    },
+    {
+      "sku": "NTAG424DNA-TTF",
+      "manufacturer": "NXP",
+      "description": "NTAG 424 DNA, NFC Forum Type 4 Tag, AES-128, SUN, tamper detection",
+      "datasheet_url": "https://www.nxp.com/docs/en/data-sheet/NT4H2421Gx.pdf",
+      "lifecycle": "active",
+      "price_cents": 68
+    },
+    {
+      "sku": "PN5190A0HNE",
+      "manufacturer": "NXP",
+      "description": "NFC Reader IC, Antenna Autonomous Operation, low power, HVQFN-40",
+      "datasheet_url": "https://www.nxp.com/docs/en/data-sheet/PN5190.pdf",
+      "lifecycle": "active",
+      "price_cents": 480
+    }
+  ]
+}

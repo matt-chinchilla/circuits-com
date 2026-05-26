@@ -17,9 +17,15 @@ def get_category(
     slug: str,
     popular_page: int = Query(1, ge=1, alias="popular_page"),
     popular_per_page: int = Query(20, ge=1, le=100, alias="popular_per_page"),
+    parts_page: int = Query(1, ge=1, alias="parts_page"),
+    parts_per_page: int = Query(20, ge=1, le=100, alias="parts_per_page"),
     db: Session = Depends(get_db),
 ):
-    result = get_category_by_slug(db, slug, popular_page=popular_page, popular_per_page=popular_per_page)
+    result = get_category_by_slug(
+        db, slug,
+        popular_page=popular_page, popular_per_page=popular_per_page,
+        parts_page=parts_page, parts_per_page=parts_per_page,
+    )
     if not result:
         raise HTTPException(404, "Category not found")
     # Build response that matches CategoryDetailResponse

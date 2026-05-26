@@ -6,10 +6,6 @@ import { adminApi } from '@admin/services/adminApi';
 import type { AdminSupplier } from '@admin/types/admin';
 import styles from './SuppliersPage.module.scss';
 
-// Bundle parity: each supplier card renders a tier pill. The real
-// AdminSupplier type doesn't yet carry a tier column, so we derive a
-// stable demo-friendly tier from parts_count buckets. When an explicit
-// tier field is added later, swap this for `s.tier`.
 type Tier = 'featured' | 'platinum' | 'gold' | 'silver';
 
 const TIERS: { key: 'all' | Tier; label: string }[] = [
@@ -27,11 +23,7 @@ const TIER_CLASS: Record<Tier, string> = {
   silver: styles.tierSilver,
 };
 
-function deriveTier(s: AdminSupplier): Tier {
-  const n = s.parts_count ?? 0;
-  if (n >= 200) return 'featured';
-  if (n >= 100) return 'platinum';
-  if (n >= 25) return 'gold';
+function deriveTier(_s: AdminSupplier): Tier {
   return 'silver';
 }
 

@@ -66,13 +66,15 @@ def test_get_category_includes_parts(client, seeded_db):
     data = response.json()
 
     assert "parts" in data
-    assert len(data["parts"]) == 2
-    part_skus = {p["sku"] for p in data["parts"]}
+    parts_page = data["parts"]
+    assert parts_page["total"] == 2
+    assert parts_page["page"] == 1
+    assert parts_page["pages"] == 1
+    part_skus = {p["sku"] for p in parts_page["items"]}
     assert "LM7805CT" in part_skus
     assert "STM32F407VGT6" in part_skus
 
-    # Check part structure
-    lm7805 = [p for p in data["parts"] if p["sku"] == "LM7805CT"][0]
+    lm7805 = [p for p in parts_page["items"] if p["sku"] == "LM7805CT"][0]
     assert lm7805["manufacturer_name"] == "Texas Instruments"
     assert lm7805["lifecycle_status"] == "active"
     assert lm7805["listings_count"] == 2
@@ -86,7 +88,8 @@ def test_get_category_parent_has_no_parts(client, seeded_db):
     data = response.json()
 
     assert "parts" in data
-    assert data["parts"] == []
+    assert data["parts"]["items"] == []
+    assert data["parts"]["total"] == 0
 
 
 def test_get_category_not_found(client, seeded_db):

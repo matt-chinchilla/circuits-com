@@ -10,10 +10,12 @@ and name (suppliers/users), so it is safe to run multiple times.
 
 from __future__ import annotations
 
+import json
 import random
 import re
 from datetime import date, timedelta
 from decimal import Decimal
+from pathlib import Path
 from typing import Optional
 
 import bcrypt
@@ -279,7 +281,7 @@ def seed(db: Session) -> None:
     # ------------------------------------------------------------------
     # Slugs are EXPLICIT per row (canonical with ui_kits/website/data.js);
     # see CATEGORY_DATA's docstring. cats dict is keyed by NAME for both
-    # top-level and subcategory rows so _PART_CATALOG can look up via the
+    # top-level and subcategory rows so _DEMO_CATALOG can look up via the
     # subcategory name without ambiguity.
     cats: dict[str, Category] = {}
     for sort_order, (name, slug, icon, subs) in enumerate(CATEGORY_DATA):
@@ -294,35 +296,8 @@ def seed(db: Session) -> None:
     # ------------------------------------------------------------------
     # 2. Suppliers
     # ------------------------------------------------------------------
-    supplier_data: list[dict] = [
-        dict(
-            name="Avnet",
-            phone="480-643-2000",
-            website="avnet.com",
-            email="info@avnet.com",
-            description="Global electronic components distributor",
-        ),
-        dict(
-            name="Digi-Key Electronics",
-            phone="800-344-4539",
-            website="digikey.com",
-            email="sales@digikey.com",
-            description="Leading global electronic components distributor",
-        ),
-        dict(
-            name="TTI",
-            phone="800-888-8884",
-            website="ttiinc.com",
-            email="sales@ttiinc.com",
-            description="Specialist distributor of electronic components",
-        ),
-        dict(
-            name="Future Electronics",
-            phone="800-388-8731",
-            website="futureelectronics.com",
-            email="info@futureelectronics.com",
-            description="Global distributor of electronic components",
-        ),
+    # ---- Demo / smoke-test suppliers (pre-existing) ----
+    _demo_suppliers: list[dict] = [
         dict(
             name="Kennedy Electronics",
             phone="631-555-5555",
@@ -331,30 +306,12 @@ def seed(db: Session) -> None:
             description="Semiconductor supplier based in Smithtown, NY",
         ),
         dict(
-            name="Mouser Electronics",
-            phone="800-346-6873",
-            website="mouser.com",
-            email="sales@mouser.com",
-            description="Global authorized distributor",
-        ),
-        dict(
-            name="Arrow Electronics",
-            phone="800-777-2776",
-            website="arrow.com",
-            email="info@arrow.com",
-            description="Global provider of electronic components",
-        ),
-        dict(
             name="Honeywell Sensing",
             phone="800-537-6945",
             website="automation.honeywell.com",
             email="sensing@honeywell.com",
             description="Global sensing and IoT solutions manufacturer",
         ),
-        # Suppliers added via the prod admin UI (2026-05-05) — imported into
-        # the seed so a fresh local environment matches prod state. Some are
-        # smoke-test entries from when the team verified the add-supplier
-        # form; they're admin-deletable now that the Delete button shipped.
         dict(
             name="Oneonta Electronics",
             phone="16314950445",
@@ -392,6 +349,62 @@ def seed(db: Session) -> None:
             description="A Circus of Circuits.",
         ),
     ]
+
+    # ---- Real distributors (user's top-50 list + existing broad-line) ----
+    _real_suppliers: list[dict] = [
+        dict(name="Digi-Key Electronics", phone="800-344-4539", website="digikey.com", email="sales@digikey.com", description="Leading global electronic components distributor, 13.4M+ products in stock"),
+        dict(name="Mouser Electronics", phone="800-346-6873", website="mouser.com", email="sales@mouser.com", description="Global authorized distributor, 6.8M+ products from 1,200+ manufacturers"),
+        dict(name="Arrow Electronics", phone="800-777-2776", website="arrow.com", email="info@arrow.com", description="Global provider of electronic components and enterprise computing solutions"),
+        dict(name="Avnet", phone="480-643-2000", website="avnet.com", email="info@avnet.com", description="Global electronic components distributor and technology solutions provider"),
+        dict(name="TTI", phone="800-888-8884", website="ttiinc.com", email="sales@ttiinc.com", description="Specialist distributor of passive, connector, electromechanical, and discrete components"),
+        dict(name="Future Electronics", phone="800-388-8731", website="futureelectronics.com", email="info@futureelectronics.com", description="Global distributor of electronic components, full-service solutions"),
+        dict(name="Newark", phone="800-463-9275", website="newark.com", email="sales@newark.com", description="Broad-line distributor of electronic and industrial components, an Avnet company"),
+        dict(name="Farnell", phone="+44-330-587-1000", website="farnell.com", email="sales@farnell.com", description="European broad-line distributor of electronic components, an Avnet company"),
+        dict(name="RS", phone="+44-1536-444000", website="rs-online.com", email="sales@rs-online.com", description="Global distributor of electronics, electrical, and industrial components"),
+        dict(name="RS Americas", phone="866-433-5722", website="us.rs-online.com", email="sales@rsamericas.com", description="RS Group Americas division, formerly Allied Electronics & Automation"),
+        dict(name="RS APAC", phone="+65-6214-9933", website="rs-online.com", email="sales@rs-apac.com", description="RS Group Asia-Pacific division, broad-line distribution"),
+        dict(name="element14 APAC", phone="+65-6877-8787", website="element14.com", email="sales@element14.com", description="Asia-Pacific electronics distributor, a Premier Farnell / Avnet company"),
+        dict(name="DigiKey Marketplace", phone="800-344-4539", website="digikey.com/marketplace", email="marketplace@digikey.com", description="Third-party seller platform on Digi-Key for specialty and surplus components"),
+        dict(name="TME", phone="+48-42-235-9000", website="tme.eu", email="sales@tme.eu", description="Transfer Multisort Elektronik, major European electronic components distributor"),
+        dict(name="Conrad", phone="+49-9604-40-8787", website="conrad.com", email="info@conrad.com", description="European electronics and technology distributor based in Germany"),
+        dict(name="Distrelec", phone="+41-44-944-9911", website="distrelec.com", email="info@distrelec.com", description="Northern European high-service electronic components distributor"),
+        dict(name="Anglia", phone="+44-1945-474747", website="anglia-live.com", email="sales@anglia.com", description="UK-based electronic components distributor, strong in automotive and industrial"),
+        dict(name="Avnet Abacus", phone="+49-8121-777-02", website="avnet.com", email="abacus@avnet.com", description="Avnet European passive, interconnect, and electromechanical division"),
+        dict(name="Avnet Silica", phone="+49-8121-777-01", website="avnet.com", email="silica@avnet.com", description="Avnet European semiconductor distribution division"),
+        dict(name="EBV Elektronik", phone="+49-8121-774-0", website="ebv.com", email="info@ebv.com", description="European semiconductor specialist distributor, an Avnet company"),
+        dict(name="CoreStaff", phone="+81-3-3514-8400", website="corestaff.co.jp", email="info@corestaff.co.jp", description="Japanese electronic components distributor for the Asia-Pacific market"),
+        dict(name="Electro Sonic", phone="800-563-4795", website="e-sonic.com", email="sales@e-sonic.com", description="Canadian electronic components distributor, broad-line inventory"),
+        dict(name="TTI Asia", phone="+852-2375-2722", website="ttiasia.com", email="sales@ttiasia.com", description="TTI Asia-Pacific division specializing in passives, connectors, and discretes"),
+        dict(name="TTI Europe", phone="+49-8141-6102-0", website="ttieurope.com", email="sales@ttieurope.com", description="TTI European division, passive and connector specialist"),
+        dict(name="Heilind Europe", phone="+49-89-904-802-0", website="heilind.eu", email="sales@heilind.eu", description="European interconnect and electromechanical specialist distributor"),
+        dict(name="Galco", phone="800-575-5562", website="galco.com", email="sales@galco.com", description="Industrial electronics and automation distributor based in Madison Heights, MI"),
+        dict(name="Sager Electronics", phone="800-724-3780", website="sager.com", email="sales@sager.com", description="North American power and electromechanical components distributor"),
+        dict(name="Sager Power Systems", phone="800-724-3780", website="sager.com/power-systems", email="power@sager.com", description="Sager division specializing in power supplies, converters, and UPS systems"),
+        dict(name="Master Electronics", phone="800-346-6873", website="masterelectronics.com", email="sales@masterelectronics.com", description="Broad-line distributor specializing in mil-spec and hard-to-find components"),
+        dict(name="RFMW", phone="408-414-1450", website="rfmw.com", email="sales@rfmw.com", description="RF, microwave, and millimeter-wave component specialty distributor"),
+        dict(name="Richardson RFPD", phone="800-737-6937", website="richardsonrfpd.com", email="sales@richardsonrfpd.com", description="RF, wireless, power, and IoT specialty distributor, an Arrow company"),
+        dict(name="Pasternack", phone="949-261-1920", website="pasternack.com", email="sales@pasternack.com", description="RF, microwave, and millimeter-wave connector and component specialist"),
+        dict(name="PEI-Genesis", phone="800-734-4363", website="peigenesis.com", email="sales@peigenesis.com", description="Connector specialist: mil-spec, industrial, harsh-environment interconnect"),
+        dict(name="Powell Electronics", phone="800-235-7880", website="powellelectronics.com", email="sales@powellelectronics.com", description="Connector and relay specialist distributor for mil/aero and industrial"),
+        dict(name="FDH Electronics", phone="800-966-1014", website="fdhelectronics.com", email="sales@fdhelectronics.com", description="Military, aerospace, and hi-rel electronic components distributor"),
+        dict(name="Carlton-Bates", phone="800-643-7195", website="carlton-bates.com", email="sales@carlton-bates.com", description="Interconnect and passive component distributor, a Sonepar company"),
+        dict(name="Hawk Electronics", phone="800-432-7150", website="hawkelectronics.com", email="sales@hawkelectronics.com", description="Regional authorized distributor focused on design-in support"),
+        dict(name="Hisco", phone="800-444-7261", website="hisco.com", email="sales@hisco.com", description="Industrial and electronic supply distributor, adhesives and specialty materials"),
+        dict(name="IEC Supply", phone="800-323-3242", website="iecsupply.com", email="sales@iecsupply.com", description="Industrial and electronic component supply distributor"),
+        dict(name="MRO Supply", phone="800-541-3120", website="mrosupply.com", email="sales@mrosupply.com", description="Maintenance, repair, and operations supply distributor for industrial electronics"),
+        dict(name="Verical", phone="480-308-7004", website="verical.com", email="sales@verical.com", description="Online marketplace for electronic components, an Arrow Electronics company"),
+        dict(name="Onlinecomponents.com", phone="800-778-2028", website="onlinecomponents.com", email="sales@onlinecomponents.com", description="Authorized online distributor for electronic connectors and components"),
+        dict(name="Walker Industrial", phone="800-879-2553", website="walkerindustrial.com", email="sales@walkerindustrial.com", description="Electrical and industrial automation distributor"),
+        dict(name="Zoro", phone="855-289-9676", website="zoro.com", email="sales@zoro.com", description="Online industrial and electronic supply distributor, a Grainger company"),
+        dict(name="Tequipment", phone="800-832-4866", website="tequipment.net", email="sales@tequipment.net", description="Test and measurement equipment distributor"),
+        dict(name="TSI Solutions", phone="800-874-2004", website="tsisolutions.us", email="sales@tsisolutions.us", description="Electronic and electromechanical component distributor"),
+        dict(name="Omnical", phone="+1-514-336-3070", website="omnical.com", email="sales@omnical.com", description="Canadian electronic components distributor"),
+        dict(name="Airline Hydraulics", phone="800-999-7378", website="airlinehyd.com", email="sales@airlinehyd.com", description="Fluid power and motion control distributor with electronic sensing products"),
+        dict(name="Analog Devices", phone="781-329-4700", website="analog.com", email="sales@analog.com", description="Semiconductor manufacturer with direct sales of precision analog, mixed-signal, and DSP ICs"),
+        dict(name="Microchip Direct", phone="800-262-1640", website="microchipdirect.com", email="sales@microchipdirect.com", description="Factory-direct sales of Microchip MCUs, analog, FPGA, and connectivity ICs"),
+    ]
+
+    supplier_data: list[dict] = _demo_suppliers + _real_suppliers
 
     suppliers: dict[str, Supplier] = {}
     for data in supplier_data:
@@ -539,12 +552,17 @@ def seed(db: Session) -> None:
     _seed_admin_user(db)
 
     # ------------------------------------------------------------------
-    # 6. Parts, listings, price breaks
+    # 6. Demo parts (59 synthetic entries)
     # ------------------------------------------------------------------
     _seed_parts(db, cats, suppliers)
 
     # ------------------------------------------------------------------
-    # 7. Revenue placeholder data (12 months)
+    # 7. Real catalog from JSON data files
+    # ------------------------------------------------------------------
+    _seed_real_catalog(db, cats, suppliers)
+
+    # ------------------------------------------------------------------
+    # 8. Revenue placeholder data (12 months)
     # ------------------------------------------------------------------
     _seed_revenue(db, suppliers)
 
@@ -587,7 +605,7 @@ def _seed_admin_user(db: Session) -> None:
 # 2026-05-16: switched from top-level keys ("Power Management", "Sensor"…)
 # to subcategory keys. The old layout placed all 59 parts on top-level
 # categories, leaving every subcategory page empty.
-_PART_CATALOG: list[tuple[str, list[tuple[str, str, str]]]] = [
+_DEMO_CATALOG: list[tuple[str, list[tuple[str, str, str]]]] = [
     # Power Management ICs (PMICs)
     ("Voltage Regulators (LDOs)", [
         ("LM7805CT", "Texas Instruments", "5V 1.5A Linear Voltage Regulator"),
@@ -735,7 +753,7 @@ def _seed_parts(
     random.seed(42)  # reproducible placeholder data
     supplier_list = list(suppliers.values())
 
-    for subcategory_name, parts_data in _PART_CATALOG:
+    for subcategory_name, parts_data in _DEMO_CATALOG:
         # Exact-match lookup against the subcategory's own name. The cats
         # dict is keyed by name for both top-level and child rows, so this
         # resolves directly to the subcategory we want — no parent_id filter,
@@ -743,7 +761,7 @@ def _seed_parts(
         target_cat = cats.get(subcategory_name)
         if target_cat is None:
             raise RuntimeError(
-                f"_PART_CATALOG references unknown subcategory '{subcategory_name}'. "
+                f"_DEMO_CATALOG references unknown subcategory '{subcategory_name}'. "
                 f"Update category_data or fix the typo."
             )
 
@@ -788,8 +806,209 @@ def _seed_parts(
 
 
 # ---------------------------------------------------------------------------
+# Real catalog from JSON files
+# ---------------------------------------------------------------------------
+
+# Distributor tiers — determines which suppliers get listings for which
+# category families. "broad" distributors carry everything; specialty
+# distributors only carry their mapped category slugs.
+_DISTRIBUTOR_TIERS: dict[str, list[str] | str] = {
+    "Digi-Key Electronics": "broad",
+    "Mouser Electronics": "broad",
+    "Arrow Electronics": "broad",
+    "Avnet": "broad",
+    "Newark": "broad",
+    "Farnell": "broad",
+    "RS": "broad",
+    "RS Americas": "broad",
+    "element14 APAC": "broad",
+    "Future Electronics": "broad",
+    "TME": "broad",
+    "Conrad": "broad",
+    "Distrelec": "broad",
+    "Anglia": "broad",
+    "Avnet Abacus": "broad",
+    "Avnet Silica": "broad",
+    "EBV Elektronik": "broad",
+    "CoreStaff": "broad",
+    "Electro Sonic": "broad",
+    "TTI": "broad",
+    "TTI Asia": "broad",
+    "TTI Europe": "broad",
+    "Master Electronics": "broad",
+    "Verical": "broad",
+    "DigiKey Marketplace": "broad",
+    "Onlinecomponents.com": "broad",
+    "Omnical": "broad",
+    "RFMW": ["rf-wireless-ics"],
+    "Richardson RFPD": ["rf-wireless-ics", "power-management-ics-pmics"],
+    "Pasternack": ["rf-wireless-ics"],
+    "PEI-Genesis": ["interface-ics", "automotive-ics"],
+    "Powell Electronics": ["interface-ics", "automotive-ics", "motor-motion-ics"],
+    "Heilind Europe": ["interface-ics", "sensor-ics", "automotive-ics"],
+    "Galco": ["power-management-ics-pmics", "motor-motion-ics", "sensor-ics"],
+    "Sager Electronics": ["power-management-ics-pmics", "motor-motion-ics", "sensor-ics"],
+    "Sager Power Systems": ["power-management-ics-pmics"],
+    "Carlton-Bates": ["interface-ics", "sensor-ics"],
+    "FDH Electronics": ["memory-ics", "logic-ics", "microcontrollers-processors", "data-conversion-ics"],
+    "Hawk Electronics": ["analog-ics", "power-management-ics-pmics", "microcontrollers-processors"],
+    "Walker Industrial": ["motor-motion-ics", "sensor-ics", "power-management-ics-pmics"],
+    "MRO Supply": ["sensor-ics", "motor-motion-ics"],
+    "Zoro": ["sensor-ics", "motor-motion-ics"],
+    "Hisco": ["sensor-ics"],
+    "IEC Supply": ["power-management-ics-pmics", "sensor-ics"],
+    "Tequipment": ["data-conversion-ics", "sensor-ics"],
+    "TSI Solutions": ["power-management-ics-pmics", "motor-motion-ics"],
+    "Airline Hydraulics": ["sensor-ics"],
+    "Analog Devices": ["analog-ics", "data-conversion-ics", "power-management-ics-pmics", "sensor-ics"],
+    "Microchip Direct": ["microcontrollers-processors", "analog-ics", "memory-ics", "interface-ics"],
+}
+
+# Stock magnitude by distributor size
+_STOCK_TIERS: dict[str, tuple[int, int]] = {
+    "Digi-Key Electronics": (5000, 150000),
+    "Mouser Electronics": (3000, 120000),
+    "Arrow Electronics": (5000, 200000),
+    "Avnet": (5000, 200000),
+    "Newark": (2000, 80000),
+    "Farnell": (2000, 80000),
+    "RS": (1000, 60000),
+    "Future Electronics": (3000, 100000),
+    "TME": (2000, 100000),
+}
+_DEFAULT_STOCK = (500, 30000)
+
+
+def _eligible_suppliers(
+    suppliers: dict[str, "Supplier"],
+    parent_slug: str,
+) -> list["Supplier"]:
+    """Return suppliers eligible to carry parts in a given top-level category."""
+    eligible = []
+    for name, sup in suppliers.items():
+        tier = _DISTRIBUTOR_TIERS.get(name)
+        if tier is None:
+            continue
+        if tier == "broad" or parent_slug in tier:
+            eligible.append(sup)
+    return eligible
+
+
+def _seed_real_catalog(
+    db: Session,
+    cats: dict[str, Category],
+    suppliers: dict[str, "Supplier"],
+) -> None:
+    """Seed real parts from JSON catalog files in catalog_data/."""
+    catalog_dir = Path(__file__).parent / "catalog_data"
+    if not catalog_dir.exists():
+        print("Seed: catalog_data/ not found, skipping real catalog.")
+        return
+
+    json_files = sorted(catalog_dir.glob("*.json"))
+    if not json_files:
+        print("Seed: no JSON files in catalog_data/, skipping real catalog.")
+        return
+
+    random.seed(7500)
+    slug_to_parent: dict[str, str] = {}
+    for cat_name, slug, cat_icon, subs in CATEGORY_DATA:
+        del cat_name, cat_icon
+        for sub_name, ss, sub_icon in subs:
+            del sub_name, sub_icon
+            slug_to_parent[ss] = slug
+
+    total_parts = 0
+    total_listings = 0
+
+    for jf in json_files:
+        data = json.loads(jf.read_text())
+        for sub_slug, parts_list in data.items():
+            target_cat = None
+            for cat in cats.values():
+                if str(cat.slug) == sub_slug:
+                    target_cat = cat
+                    break
+            if target_cat is None:
+                print(f"  WARNING: subcategory slug '{sub_slug}' not found, skipping.")
+                continue
+
+            parent_slug = slug_to_parent.get(sub_slug, "")
+            eligible = _eligible_suppliers(suppliers, parent_slug)
+            if not eligible:
+                eligible = list(suppliers.values())[:10]
+
+            for p in parts_list:
+                existing = db.query(Part).filter(Part.sku == p["sku"]).first()
+                if existing:
+                    continue
+
+                part = Part(
+                    sku=p["sku"],
+                    description=p.get("description", ""),
+                    manufacturer_name=p.get("manufacturer", ""),
+                    category_id=target_cat.id,
+                    sub_slug=sub_slug,
+                    datasheet_url=p.get("datasheet_url"),
+                    lifecycle_status=p.get("lifecycle", "active"),
+                )
+                db.add(part)
+                db.flush()
+                total_parts += 1
+
+                base_cents = p.get("price_cents", 500)
+                base_price = Decimal(base_cents) / 100
+
+                num_listings = min(random.randint(8, 15), len(eligible))
+                chosen = random.sample(eligible, num_listings)
+
+                for sup in chosen:
+                    spread = Decimal(str(round(random.uniform(0.80, 1.25), 4)))
+                    unit_price = max(
+                        Decimal("0.01"),
+                        (base_price * spread).quantize(Decimal("0.0001")),
+                    )
+                    stock_lo, stock_hi = _STOCK_TIERS.get(str(sup.name), _DEFAULT_STOCK)
+                    listing = PartListing(
+                        part_id=part.id,
+                        supplier_id=sup.id,
+                        sku=f"{sup.name[:3].upper()}-{p['sku']}",
+                        stock_quantity=random.randint(stock_lo, stock_hi),
+                        lead_time_days=random.choice([0, 0, 0, 1, 3, 7, 14]),
+                        unit_price=unit_price,
+                    )
+                    db.add(listing)
+                    db.flush()
+                    total_listings += 1
+
+                    for qty, discount in [(10, 0.95), (100, 0.85), (1000, 0.70), (5000, 0.58)]:
+                        db.add(PriceBreak(
+                            listing_id=listing.id,
+                            min_quantity=qty,
+                            unit_price=max(
+                                Decimal("0.01"),
+                                (unit_price * Decimal(str(discount))).quantize(Decimal("0.0001")),
+                            ),
+                        ))
+
+                if total_parts % 500 == 0:
+                    db.flush()
+                    print(f"  ... {total_parts} parts seeded so far")
+
+    db.flush()
+    print(f"Seed: {total_parts} real parts, {total_listings} listings created from catalog JSON.")
+
+
+# ---------------------------------------------------------------------------
 # Revenue placeholder (12 months)
 # ---------------------------------------------------------------------------
+
+_DEMO_SUPPLIER_NAMES = frozenset([
+    "Kennedy Electronics", "Honeywell Sensing", "Oneonta Electronics",
+    "Thunder Electronics", "States Electronics", "Mike's Electric",
+    "Jo Jo's Circuits Circus",
+])
+
 
 def _seed_revenue(db: Session, suppliers: dict[str, Supplier]) -> None:
     if db.query(Revenue).first():
@@ -797,7 +1016,7 @@ def _seed_revenue(db: Session, suppliers: dict[str, Supplier]) -> None:
 
     random.seed(99)
     today = date.today()
-    supplier_list = list(suppliers.values())
+    supplier_list = [s for s in suppliers.values() if str(s.name) in _DEMO_SUPPLIER_NAMES]
 
     for months_ago in range(12, 0, -1):
         period_start = (today.replace(day=1) - timedelta(days=30 * months_ago)).replace(day=1)

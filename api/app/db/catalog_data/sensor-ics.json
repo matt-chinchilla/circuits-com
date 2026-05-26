@@ -1,0 +1,1972 @@
+{
+  "temp-sensors": [
+    {
+      "sku": "LM35DZ/NOPB",
+      "manufacturer": "Texas Instruments",
+      "description": "Precision Centigrade Temperature Sensor, +10mV/C, 0-100C, TO-92",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/lm35.pdf",
+      "lifecycle": "active",
+      "price_cents": 120
+    },
+    {
+      "sku": "LM35CAZ/NOPB",
+      "manufacturer": "Texas Instruments",
+      "description": "Precision Centigrade Temperature Sensor, -40 to +110C, TO-92",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/lm35.pdf",
+      "lifecycle": "active",
+      "price_cents": 245
+    },
+    {
+      "sku": "TMP117MAIDRVR",
+      "manufacturer": "Texas Instruments",
+      "description": "High-Accuracy Digital Temperature Sensor, +/-0.1C, 16-bit, I2C, SOT-563",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/tmp117.pdf",
+      "lifecycle": "active",
+      "price_cents": 295
+    },
+    {
+      "sku": "TMP116NAIDRVR",
+      "manufacturer": "Texas Instruments",
+      "description": "High-Accuracy Digital Temperature Sensor, +/-0.2C, 16-bit, I2C, SOT-563",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/tmp116.pdf",
+      "lifecycle": "active",
+      "price_cents": 195
+    },
+    {
+      "sku": "TMP102AIDRLT",
+      "manufacturer": "Texas Instruments",
+      "description": "Digital Temperature Sensor, +/-0.5C, 12-bit, I2C/SMBus, SOT-563",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/tmp102.pdf",
+      "lifecycle": "active",
+      "price_cents": 145
+    },
+    {
+      "sku": "TMP1075DGKR",
+      "manufacturer": "Texas Instruments",
+      "description": "Digital Temperature Sensor, +/-1C, 12-bit, I2C, alert, VSSOP-8",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/tmp1075.pdf",
+      "lifecycle": "active",
+      "price_cents": 85
+    },
+    {
+      "sku": "TMP103AIYFDR",
+      "manufacturer": "Texas Instruments",
+      "description": "Low-Power Digital Temperature Sensor, +/-1C, I2C, 8-addr, DSBGA-4",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/tmp103.pdf",
+      "lifecycle": "active",
+      "price_cents": 65
+    },
+    {
+      "sku": "TMP112AIDRLT",
+      "manufacturer": "Texas Instruments",
+      "description": "Digital Temperature Sensor, +/-0.5C, 12-bit, I2C/SMBus, alert, SOT-563",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/tmp112.pdf",
+      "lifecycle": "active",
+      "price_cents": 130
+    },
+    {
+      "sku": "TMP006AIYZFR",
+      "manufacturer": "Texas Instruments",
+      "description": "Infrared Thermopile Sensor, contactless, I2C, DSBGA-8",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/tmp006.pdf",
+      "lifecycle": "nrnd",
+      "price_cents": 210
+    },
+    {
+      "sku": "TMP235A4DBZR",
+      "manufacturer": "Texas Instruments",
+      "description": "Analog Temperature Sensor, +/-0.5C, SOT-23-5, 10mV/C",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/tmp235.pdf",
+      "lifecycle": "active",
+      "price_cents": 68
+    },
+    {
+      "sku": "LMT01LPG",
+      "manufacturer": "Texas Instruments",
+      "description": "0.5C Accurate 2-Pin Temperature Sensor, pulse count output, TO-92S",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/lmt01.pdf",
+      "lifecycle": "active",
+      "price_cents": 115
+    },
+    {
+      "sku": "ADT7420UCPZ-R7",
+      "manufacturer": "Analog Devices",
+      "description": "High-Accuracy Digital Temperature Sensor, +/-0.25C, 16-bit, I2C, LFCSP-16",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/ADT7420.pdf",
+      "lifecycle": "active",
+      "price_cents": 420
+    },
+    {
+      "sku": "ADT7422BCPZ-RL",
+      "manufacturer": "Analog Devices",
+      "description": "Ultra-High-Accuracy Digital Temperature Sensor, +/-0.1C, 16-bit, I2C",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/ADT7422.pdf",
+      "lifecycle": "active",
+      "price_cents": 550
+    },
+    {
+      "sku": "ADT7310TRJZ-REEL7",
+      "manufacturer": "Analog Devices",
+      "description": "High-Accuracy Digital Temperature Sensor, +/-0.5C, 16-bit, SPI, SOT-23-8",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/ADT7310.pdf",
+      "lifecycle": "active",
+      "price_cents": 350
+    },
+    {
+      "sku": "AD590MF",
+      "manufacturer": "Analog Devices",
+      "description": "2-Terminal IC Temperature Transducer, 1uA/K, -55 to +150C, TO-52",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/AD590.pdf",
+      "lifecycle": "active",
+      "price_cents": 895
+    },
+    {
+      "sku": "AD592ANZ",
+      "manufacturer": "Analog Devices",
+      "description": "Current Output Temperature Transducer, +/-0.5C, 1uA/K, TO-92",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/AD592.pdf",
+      "lifecycle": "active",
+      "price_cents": 495
+    },
+    {
+      "sku": "MCP9808-E/MS",
+      "manufacturer": "Microchip",
+      "description": "High-Accuracy Digital Temperature Sensor, +/-0.25C, I2C, alert, MSOP-8",
+      "datasheet_url": "https://ww1.microchip.com/downloads/en/DeviceDoc/MCP9808-0.5C-Maximum-Accuracy-Digital-Temperature-Sensor-DS20005095.pdf",
+      "lifecycle": "active",
+      "price_cents": 95
+    },
+    {
+      "sku": "MCP9808T-E/MC",
+      "manufacturer": "Microchip",
+      "description": "High-Accuracy Digital Temperature Sensor, +/-0.25C, I2C, DFN-8",
+      "datasheet_url": "https://ww1.microchip.com/downloads/en/DeviceDoc/MCP9808-0.5C-Maximum-Accuracy-Digital-Temperature-Sensor-DS20005095.pdf",
+      "lifecycle": "active",
+      "price_cents": 88
+    },
+    {
+      "sku": "MCP9700AT-E/TT",
+      "manufacturer": "Microchip",
+      "description": "Low-Power Analog Temperature Sensor, 10mV/C, +/-2C, SOT-23-3",
+      "datasheet_url": "https://ww1.microchip.com/downloads/en/DeviceDoc/MCP9700-9700A-Data-Sheet-DS20001942.pdf",
+      "lifecycle": "active",
+      "price_cents": 28
+    },
+    {
+      "sku": "MCP9700T-E/TT",
+      "manufacturer": "Microchip",
+      "description": "Low-Power Analog Temperature Sensor, 10mV/C, +/-4C, SOT-23-3",
+      "datasheet_url": "https://ww1.microchip.com/downloads/en/DeviceDoc/MCP9700-9700A-Data-Sheet-DS20001942.pdf",
+      "lifecycle": "active",
+      "price_cents": 22
+    },
+    {
+      "sku": "TC74A0-3.3VCTTR",
+      "manufacturer": "Microchip",
+      "description": "Digital Temperature Sensor, +/-3C, 8-bit, I2C/SMBus, SOT-23-5",
+      "datasheet_url": "https://ww1.microchip.com/downloads/en/DeviceDoc/TC74-Data-Sheet-DS21462.pdf",
+      "lifecycle": "active",
+      "price_cents": 55
+    },
+    {
+      "sku": "MCP9600-I/MX",
+      "manufacturer": "Microchip",
+      "description": "Thermocouple EMF-to-Temperature Converter, I2C, +/-1.5C, QFN-20",
+      "datasheet_url": "https://ww1.microchip.com/downloads/en/DeviceDoc/MCP960X-Data-Sheet-20005426.pdf",
+      "lifecycle": "active",
+      "price_cents": 350
+    },
+    {
+      "sku": "EMC1414-1-ACZL-TR",
+      "manufacturer": "Microchip",
+      "description": "Quad Temperature Sensor, 1 internal + 3 external diodes, I2C, QFN-16",
+      "datasheet_url": "https://ww1.microchip.com/downloads/en/DeviceDoc/EMC1414-Quad-Temperature-Sensor-DS20005274.pdf",
+      "lifecycle": "active",
+      "price_cents": 195
+    },
+    {
+      "sku": "DS18B20+",
+      "manufacturer": "Analog Devices (Maxim)",
+      "description": "Programmable-Resolution 1-Wire Digital Thermometer, +/-0.5C, TO-92",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/DS18B20.pdf",
+      "lifecycle": "active",
+      "price_cents": 395
+    },
+    {
+      "sku": "DS18B20U+",
+      "manufacturer": "Analog Devices (Maxim)",
+      "description": "1-Wire Digital Thermometer, +/-0.5C, 9-12-bit, uSOP-8",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/DS18B20.pdf",
+      "lifecycle": "active",
+      "price_cents": 350
+    },
+    {
+      "sku": "DS18S20+",
+      "manufacturer": "Analog Devices (Maxim)",
+      "description": "1-Wire Digital Thermometer, +/-0.5C, 9-bit, parasitic power, TO-92",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/DS18S20.pdf",
+      "lifecycle": "nrnd",
+      "price_cents": 350
+    },
+    {
+      "sku": "MAX31855KASA+T",
+      "manufacturer": "Analog Devices (Maxim)",
+      "description": "K-Thermocouple-to-Digital Converter, +/-2C, SPI, 14-bit, SO-8",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/MAX31855.pdf",
+      "lifecycle": "active",
+      "price_cents": 450
+    },
+    {
+      "sku": "MAX31856MUD+T",
+      "manufacturer": "Analog Devices (Maxim)",
+      "description": "Precision Thermocouple-to-Digital Converter, +/-0.7C, SPI, all types, QFN-20",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/MAX31856.pdf",
+      "lifecycle": "active",
+      "price_cents": 650
+    },
+    {
+      "sku": "MAX31865ATP+T",
+      "manufacturer": "Analog Devices (Maxim)",
+      "description": "RTD-to-Digital Converter, 15-bit, PT100/PT1000, SPI, TQFN-20",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/MAX31865.pdf",
+      "lifecycle": "active",
+      "price_cents": 550
+    },
+    {
+      "sku": "MAX6675ISA+T",
+      "manufacturer": "Analog Devices (Maxim)",
+      "description": "K-Thermocouple-to-Digital Converter, 12-bit, 0-1024C, SPI, SO-8",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/MAX6675.pdf",
+      "lifecycle": "nrnd",
+      "price_cents": 350
+    },
+    {
+      "sku": "MAX30205MTA+T",
+      "manufacturer": "Analog Devices (Maxim)",
+      "description": "Clinical-Grade Temperature Sensor, +/-0.1C, I2C, TDFN-8",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/MAX30205.pdf",
+      "lifecycle": "active",
+      "price_cents": 320
+    },
+    {
+      "sku": "MAX31889EVSYS",
+      "manufacturer": "Analog Devices (Maxim)",
+      "description": "Ultra-High-Accuracy Digital Temperature Sensor, +/-0.025C, 1-Wire",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/MAX31889.pdf",
+      "lifecycle": "active",
+      "price_cents": 495
+    },
+    {
+      "sku": "STS40-AD1B-R",
+      "manufacturer": "Sensirion",
+      "description": "Digital Temperature Sensor, +/-0.2C, I2C, ultra-low power, DFN-4",
+      "datasheet_url": "https://sensirion.com/media/documents/1DA31AFD/65AD0064/Sensirion_Datasheet_STS4x.pdf",
+      "lifecycle": "active",
+      "price_cents": 195
+    },
+    {
+      "sku": "STS31-DIS-B",
+      "manufacturer": "Sensirion",
+      "description": "Digital Temperature Sensor, +/-0.2C, I2C, DFN-8, high accuracy",
+      "datasheet_url": "https://sensirion.com/media/documents/1DA31AFD/624C395C/Sensirion_Datasheet_STS3x-DIS.pdf",
+      "lifecycle": "active",
+      "price_cents": 280
+    },
+    {
+      "sku": "SHT40-AD1B-R2",
+      "manufacturer": "Sensirion",
+      "description": "Digital Humidity + Temperature Sensor, +/-0.2C, +/-1.8%RH, I2C, DFN-4",
+      "datasheet_url": "https://sensirion.com/media/documents/33FD6951/64E512E0/Sensirion_Datasheet_SHT4x.pdf",
+      "lifecycle": "active",
+      "price_cents": 245
+    },
+    {
+      "sku": "SHT31-DIS-B",
+      "manufacturer": "Sensirion",
+      "description": "Digital Humidity + Temperature Sensor, +/-0.3C, +/-2%RH, I2C, DFN-8",
+      "datasheet_url": "https://sensirion.com/media/documents/213E6A3B/63A5A569/Sensirion_Datasheet_SHT3x_DIS.pdf",
+      "lifecycle": "active",
+      "price_cents": 350
+    },
+    {
+      "sku": "HIH6130-021-001",
+      "manufacturer": "Honeywell",
+      "description": "Humidity + Temperature Sensor, +/-4%RH, I2C, SOIC-8, digital",
+      "datasheet_url": "https://prod-edam.honeywell.com/content/dam/honeywell-edam/sps/siot/en-us/products/sensors/humidity-with-temperature-sensors/hih6100-series/documents/sps-siot-hih6130-6131-series-product-sheet-009059-6-en-ciid-47364.pdf",
+      "lifecycle": "active",
+      "price_cents": 950
+    },
+    {
+      "sku": "HIH7130-021-001S",
+      "manufacturer": "Honeywell",
+      "description": "Humidity + Temperature Sensor, +/-3%RH, I2C, SIP, digital, hydrophobic filter",
+      "datasheet_url": "https://prod-edam.honeywell.com/content/dam/honeywell-edam/sps/siot/en-us/products/sensors/humidity-with-temperature-sensors/hih7100-series/documents/sps-siot-hih7130-7131-series-product-sheet-009076-3-en-ciid-49615.pdf",
+      "lifecycle": "active",
+      "price_cents": 1250
+    },
+    {
+      "sku": "STTS751-0DP3F",
+      "manufacturer": "STMicroelectronics",
+      "description": "Digital Temperature Sensor, +/-0.5C, 12-bit, I2C/SMBus, alert, DFN-6",
+      "datasheet_url": "https://www.st.com/resource/en/datasheet/stts751.pdf",
+      "lifecycle": "active",
+      "price_cents": 110
+    },
+    {
+      "sku": "STTS22HTR",
+      "manufacturer": "STMicroelectronics",
+      "description": "Ultra-Low-Power Temperature Sensor, +/-0.5C, I2C, UDFN-6",
+      "datasheet_url": "https://www.st.com/resource/en/datasheet/stts22h.pdf",
+      "lifecycle": "active",
+      "price_cents": 85
+    },
+    {
+      "sku": "BME280",
+      "manufacturer": "Bosch Sensortec",
+      "description": "Environmental Sensor, Temp/Humidity/Pressure, +/-1C, I2C/SPI, LGA-8",
+      "datasheet_url": "https://www.bosch-sensortec.com/media/boschsensortec/downloads/datasheets/bst-bme280-ds002.pdf",
+      "lifecycle": "active",
+      "price_cents": 350
+    },
+    {
+      "sku": "BME688",
+      "manufacturer": "Bosch Sensortec",
+      "description": "Environmental Sensor, Temp/Humidity/Pressure/Gas, AI, I2C/SPI, LGA-8",
+      "datasheet_url": "https://www.bosch-sensortec.com/media/boschsensortec/downloads/datasheets/bst-bme688-ds000.pdf",
+      "lifecycle": "active",
+      "price_cents": 650
+    },
+    {
+      "sku": "HDC1080DMBR",
+      "manufacturer": "Texas Instruments",
+      "description": "Digital Humidity + Temperature Sensor, +/-0.2C, +/-2%RH, I2C, WLCSP-6",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/hdc1080.pdf",
+      "lifecycle": "active",
+      "price_cents": 195
+    },
+    {
+      "sku": "HDC2080DMBR",
+      "manufacturer": "Texas Instruments",
+      "description": "Digital Humidity + Temperature Sensor, +/-0.2C, +/-2%RH, I2C, WLCSP-6",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/hdc2080.pdf",
+      "lifecycle": "active",
+      "price_cents": 175
+    },
+    {
+      "sku": "NCT75MNR2G",
+      "manufacturer": "onsemi",
+      "description": "Digital Temperature Sensor, +/-1C, I2C/SMBus, alert, SOIC-8",
+      "datasheet_url": "https://www.onsemi.com/pdf/datasheet/nct75-d.pdf",
+      "lifecycle": "active",
+      "price_cents": 55
+    },
+    {
+      "sku": "P3T1085UK0Z",
+      "manufacturer": "NXP",
+      "description": "I3C/I2C Temperature Sensor, +/-0.5C, 12-bit, alert, SOT-665-6",
+      "datasheet_url": "https://www.nxp.com/docs/en/data-sheet/P3T1085UK.pdf",
+      "lifecycle": "active",
+      "price_cents": 75
+    },
+    {
+      "sku": "MAX31820MCR+T",
+      "manufacturer": "Analog Devices (Maxim)",
+      "description": "1-Wire Ambient Temperature Sensor, +/-1.0C, uDFN-4",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/MAX31820.pdf",
+      "lifecycle": "active",
+      "price_cents": 195
+    },
+    {
+      "sku": "AS6221-AWLT-S",
+      "manufacturer": "ams-OSRAM",
+      "description": "High-Accuracy Digital Temperature Sensor, +/-0.09C, I2C, WLCSP-6",
+      "datasheet_url": "https://ams.com/documents/20143/36005/AS6221_DS000748_4-00.pdf",
+      "lifecycle": "active",
+      "price_cents": 145
+    },
+    {
+      "sku": "TMP114AIYDR",
+      "manufacturer": "Texas Instruments",
+      "description": "High-Accuracy Digital Temperature Sensor, +/-0.15C, I2C, SOT-23-6",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/tmp114.pdf",
+      "lifecycle": "active",
+      "price_cents": 180
+    },
+    {
+      "sku": "AHT20-F",
+      "manufacturer": "ASAIR (Aosong)",
+      "description": "Digital Temperature + Humidity Sensor, +/-0.3C, I2C, DFN-6",
+      "datasheet_url": "https://asairglobal.com/en/uploadfiles/2021/01/AHT20.pdf",
+      "lifecycle": "active",
+      "price_cents": 45
+    },
+    {
+      "sku": "SI7021-A20-GM1R",
+      "manufacturer": "Silicon Labs",
+      "description": "Digital Humidity + Temperature Sensor, +/-0.4C, +/-3%RH, I2C, DFN-6",
+      "datasheet_url": "https://www.silabs.com/documents/public/data-sheets/Si7021-A20.pdf",
+      "lifecycle": "active",
+      "price_cents": 195
+    },
+    {
+      "sku": "SI7051-A20-IMR",
+      "manufacturer": "Silicon Labs",
+      "description": "High-Accuracy Temperature Sensor, +/-0.1C, I2C, DFN-6",
+      "datasheet_url": "https://www.silabs.com/documents/public/data-sheets/Si7050-1-3-4-5-A20.pdf",
+      "lifecycle": "active",
+      "price_cents": 150
+    },
+    {
+      "sku": "TMP1826NAIDR",
+      "manufacturer": "Texas Instruments",
+      "description": "1-Wire Digital Temperature Sensor, +/-0.1C, NIST-traceable, SOT-23-6",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/tmp1826.pdf",
+      "lifecycle": "active",
+      "price_cents": 295
+    },
+    {
+      "sku": "SHTC3",
+      "manufacturer": "Sensirion",
+      "description": "Digital Humidity + Temperature Sensor, +/-0.2C, I2C, DFN-4, ultra-low power",
+      "datasheet_url": "https://sensirion.com/media/documents/643F9C8E/6164081E/Sensirion_Humidity_Sensors_SHTC3_Datasheet.pdf",
+      "lifecycle": "active",
+      "price_cents": 175
+    },
+    {
+      "sku": "MAX31723MUA+T",
+      "manufacturer": "Analog Devices (Maxim)",
+      "description": "Digital Thermometer, +/-0.5C, 12-bit, SPI, uMAX-8",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/MAX31723.pdf",
+      "lifecycle": "active",
+      "price_cents": 295
+    },
+    {
+      "sku": "TSYS02D",
+      "manufacturer": "TE Connectivity",
+      "description": "Digital Temperature Sensor, +/-0.1C, 16-bit, I2C, DFN-6",
+      "datasheet_url": "https://www.te.com/commerce/DocumentDelivery/DDEController?Action=showdoc&DocId=Data+Sheet%7FTSYS02D%7FA%7Fpdf%7FEnglish%7FENG_DS_TSYS02D_A.pdf",
+      "lifecycle": "active",
+      "price_cents": 280
+    },
+    {
+      "sku": "TSYS03",
+      "manufacturer": "TE Connectivity",
+      "description": "Digital Temperature Sensor, +/-0.1C, I2C, submersible housing option",
+      "datasheet_url": "https://www.te.com/commerce/DocumentDelivery/DDEController?Action=showdoc&DocId=Data+Sheet%7FTSYS03%7FA%7Fpdf%7FEnglish%7FENG_DS_TSYS03_A.pdf",
+      "lifecycle": "active",
+      "price_cents": 350
+    },
+    {
+      "sku": "ADT7461AARMZ-R7",
+      "manufacturer": "Analog Devices",
+      "description": "Dual Remote/Local Temperature Sensor, +/-1C, I2C/SMBus, MSOP-8",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/ADT7461A.pdf",
+      "lifecycle": "active",
+      "price_cents": 195
+    },
+    {
+      "sku": "LM75BDP",
+      "manufacturer": "NXP",
+      "description": "Digital Temperature Sensor, +/-2C, 11-bit, I2C/SMBus, alert, SO-8",
+      "datasheet_url": "https://www.nxp.com/docs/en/data-sheet/LM75B.pdf",
+      "lifecycle": "active",
+      "price_cents": 48
+    },
+    {
+      "sku": "PCT2075DP",
+      "manufacturer": "NXP",
+      "description": "I2C Temperature Sensor, +/-1C, 11-bit, programmable hysteresis, SO-8",
+      "datasheet_url": "https://www.nxp.com/docs/en/data-sheet/PCT2075.pdf",
+      "lifecycle": "active",
+      "price_cents": 55
+    },
+    {
+      "sku": "MLX90614ESF-BAA",
+      "manufacturer": "Melexis",
+      "description": "Infrared Thermometer, -70 to +380C, I2C, TO-39, factory calibrated",
+      "datasheet_url": "https://www.melexis.com/en/documents/documentation/datasheets/datasheet-mlx90614",
+      "lifecycle": "active",
+      "price_cents": 950
+    },
+    {
+      "sku": "MLX90632SLD-DCB-000-RE",
+      "manufacturer": "Melexis",
+      "description": "Medical-Grade Infrared Thermometer, +/-0.2C, I2C, QFN-16",
+      "datasheet_url": "https://www.melexis.com/en/documents/documentation/datasheets/datasheet-mlx90632",
+      "lifecycle": "active",
+      "price_cents": 1250
+    },
+    {
+      "sku": "AMG8833",
+      "manufacturer": "Panasonic",
+      "description": "Grid-EYE Infrared Array Sensor, 8x8 thermopile, I2C, 0-80C, SMD",
+      "datasheet_url": "https://cdn-learn.adafruit.com/assets/assets/000/043/261/original/Grid-EYE_SPECIFICATIONS.pdf",
+      "lifecycle": "active",
+      "price_cents": 1950
+    },
+    {
+      "sku": "STLM20W87F",
+      "manufacturer": "STMicroelectronics",
+      "description": "Ultra-Low-Current Analog Temperature Sensor, 2.4uA, SOT-23-5",
+      "datasheet_url": "https://www.st.com/resource/en/datasheet/stlm20.pdf",
+      "lifecycle": "active",
+      "price_cents": 55
+    },
+    {
+      "sku": "TMP61AIDBZR",
+      "manufacturer": "Texas Instruments",
+      "description": "Thermistor Replacement Analog Temperature Sensor, linear NTC, SOT-23-2",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/tmp61.pdf",
+      "lifecycle": "active",
+      "price_cents": 35
+    },
+    {
+      "sku": "MAX30208TAWSS+T",
+      "manufacturer": "Analog Devices (Maxim)",
+      "description": "Clinical-Grade Digital Temperature Sensor, +/-0.1C, I2C, TDFN-10",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/MAX30208.pdf",
+      "lifecycle": "active",
+      "price_cents": 395
+    }
+  ],
+  "accelerometers": [
+    {
+      "sku": "ADXL345BCCZ-RL7",
+      "manufacturer": "Analog Devices",
+      "description": "3-Axis Digital Accelerometer, +/-16g, 13-bit, I2C/SPI, LGA-14",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/ADXL345.pdf",
+      "lifecycle": "active",
+      "price_cents": 395
+    },
+    {
+      "sku": "ADXL355BCCZ",
+      "manufacturer": "Analog Devices",
+      "description": "Low-Noise 3-Axis MEMS Accelerometer, +/-8g, 20-bit, I2C/SPI, LGA-14",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/ADXL354_ADXL355.pdf",
+      "lifecycle": "active",
+      "price_cents": 1250
+    },
+    {
+      "sku": "ADXL362BCCZ-RL7",
+      "manufacturer": "Analog Devices",
+      "description": "Ultra-Low-Power 3-Axis Accelerometer, +/-8g, 12-bit, SPI, LGA-16",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/ADXL362.pdf",
+      "lifecycle": "active",
+      "price_cents": 395
+    },
+    {
+      "sku": "ADXL343BCCZ-RL7",
+      "manufacturer": "Analog Devices",
+      "description": "3-Axis Digital Accelerometer, +/-16g, I2C/SPI, low power, LGA-14",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/ADXL343.pdf",
+      "lifecycle": "active",
+      "price_cents": 295
+    },
+    {
+      "sku": "ADXL375BCCZ-RL7",
+      "manufacturer": "Analog Devices",
+      "description": "3-Axis High-G Digital Accelerometer, +/-200g, I2C/SPI, LGA-14",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/ADXL375.pdf",
+      "lifecycle": "active",
+      "price_cents": 495
+    },
+    {
+      "sku": "ADXL367BCCZ",
+      "manufacturer": "Analog Devices",
+      "description": "Ultra-Low-Power 3-Axis Accelerometer, +/-8g, 14-bit, SPI/I2C, LGA-14",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/ADXL367.pdf",
+      "lifecycle": "active",
+      "price_cents": 350
+    },
+    {
+      "sku": "ADXL372BCCZ-RL7",
+      "manufacturer": "Analog Devices",
+      "description": "Ultra-Low-Power 3-Axis Accelerometer, +/-200g, shock detect, SPI/I2C, LGA-14",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/ADXL372.pdf",
+      "lifecycle": "active",
+      "price_cents": 450
+    },
+    {
+      "sku": "LIS2DH12TR",
+      "manufacturer": "STMicroelectronics",
+      "description": "3-Axis Digital Accelerometer, +/-16g, 12-bit, I2C/SPI, LGA-12",
+      "datasheet_url": "https://www.st.com/resource/en/datasheet/lis2dh12.pdf",
+      "lifecycle": "active",
+      "price_cents": 85
+    },
+    {
+      "sku": "LIS3DHTR",
+      "manufacturer": "STMicroelectronics",
+      "description": "3-Axis Digital Accelerometer, +/-16g, 12-bit, I2C/SPI, ADC, LGA-16",
+      "datasheet_url": "https://www.st.com/resource/en/datasheet/lis3dh.pdf",
+      "lifecycle": "active",
+      "price_cents": 95
+    },
+    {
+      "sku": "LIS2DW12TR",
+      "manufacturer": "STMicroelectronics",
+      "description": "3-Axis Digital Accelerometer, +/-16g, 14-bit, I2C/SPI, ultra-low power, LGA-12",
+      "datasheet_url": "https://www.st.com/resource/en/datasheet/lis2dw12.pdf",
+      "lifecycle": "active",
+      "price_cents": 75
+    },
+    {
+      "sku": "LIS2DTW12TR",
+      "manufacturer": "STMicroelectronics",
+      "description": "3-Axis Accelerometer + Temperature, +/-16g, I2C/SPI, LGA-12",
+      "datasheet_url": "https://www.st.com/resource/en/datasheet/lis2dtw12.pdf",
+      "lifecycle": "active",
+      "price_cents": 95
+    },
+    {
+      "sku": "IIS2DLPCTR",
+      "manufacturer": "STMicroelectronics",
+      "description": "3-Axis Ultra-Low-Power Accelerometer, +/-16g, I2C/SPI, machine learning, LGA-12",
+      "datasheet_url": "https://www.st.com/resource/en/datasheet/iis2dlpc.pdf",
+      "lifecycle": "active",
+      "price_cents": 110
+    },
+    {
+      "sku": "H3LIS331DLTR",
+      "manufacturer": "STMicroelectronics",
+      "description": "3-Axis High-G Digital Accelerometer, +/-400g, I2C/SPI, LGA-16",
+      "datasheet_url": "https://www.st.com/resource/en/datasheet/h3lis331dl.pdf",
+      "lifecycle": "active",
+      "price_cents": 295
+    },
+    {
+      "sku": "MPU-6050",
+      "manufacturer": "TDK InvenSense",
+      "description": "6-Axis IMU, 3-Axis Accel (+/-16g) + 3-Axis Gyro, I2C, QFN-24",
+      "datasheet_url": "https://invensense.tdk.com/wp-content/uploads/2015/02/MPU-6000-Datasheet1.pdf",
+      "lifecycle": "nrnd",
+      "price_cents": 295
+    },
+    {
+      "sku": "ICM-20689",
+      "manufacturer": "TDK InvenSense",
+      "description": "6-Axis IMU, Accel +/-16g + Gyro +/-2000dps, SPI, QFN-24",
+      "datasheet_url": "https://invensense.tdk.com/wp-content/uploads/2021/03/DS-000252-ICM-20689-v2.0.pdf",
+      "lifecycle": "active",
+      "price_cents": 350
+    },
+    {
+      "sku": "ICM-42688-P",
+      "manufacturer": "TDK InvenSense",
+      "description": "6-Axis IMU, Accel +/-16g + Gyro +/-2000dps, I2C/SPI, LGA-14",
+      "datasheet_url": "https://invensense.tdk.com/wp-content/uploads/2022/09/DS-000347-ICM-42688-P-v1.7.pdf",
+      "lifecycle": "active",
+      "price_cents": 450
+    },
+    {
+      "sku": "ICM-20948",
+      "manufacturer": "TDK InvenSense",
+      "description": "9-Axis IMU, Accel+Gyro+Mag, DMP, I2C/SPI, QFN-24",
+      "datasheet_url": "https://invensense.tdk.com/wp-content/uploads/2021/03/DS-000189-ICM-20948-v1.5.pdf",
+      "lifecycle": "active",
+      "price_cents": 650
+    },
+    {
+      "sku": "IIM-42352",
+      "manufacturer": "TDK InvenSense",
+      "description": "Industrial 6-Axis IMU, +/-16g/+/-2000dps, SPI, LGA-14, -40 to 105C",
+      "datasheet_url": "https://invensense.tdk.com/wp-content/uploads/2022/11/DS-000443-IIM-42352-v1.2.pdf",
+      "lifecycle": "active",
+      "price_cents": 750
+    },
+    {
+      "sku": "BMA400",
+      "manufacturer": "Bosch Sensortec",
+      "description": "Ultra-Low-Power 3-Axis Accelerometer, +/-16g, 12-bit, I2C/SPI, LGA-12",
+      "datasheet_url": "https://www.bosch-sensortec.com/media/boschsensortec/downloads/datasheets/bst-bma400-ds000.pdf",
+      "lifecycle": "active",
+      "price_cents": 95
+    },
+    {
+      "sku": "BMA456",
+      "manufacturer": "Bosch Sensortec",
+      "description": "3-Axis Digital Accelerometer, +/-16g, 16-bit, I2C/SPI, step counter, LGA-12",
+      "datasheet_url": "https://www.bosch-sensortec.com/media/boschsensortec/downloads/datasheets/bst-bma456-ds000.pdf",
+      "lifecycle": "active",
+      "price_cents": 110
+    },
+    {
+      "sku": "BMA530",
+      "manufacturer": "Bosch Sensortec",
+      "description": "3-Axis Accelerometer, +/-16g, step/tap/activity, I2C/SPI, LGA-12",
+      "datasheet_url": "https://www.bosch-sensortec.com/media/boschsensortec/downloads/datasheets/bst-bma530-ds000.pdf",
+      "lifecycle": "active",
+      "price_cents": 85
+    },
+    {
+      "sku": "BMA580",
+      "manufacturer": "Bosch Sensortec",
+      "description": "3-Axis Accelerometer, +/-16g, I2C/SPI, advanced features, LGA-12",
+      "datasheet_url": "https://www.bosch-sensortec.com/media/boschsensortec/downloads/datasheets/bst-bma580-ds000.pdf",
+      "lifecycle": "active",
+      "price_cents": 95
+    },
+    {
+      "sku": "MMA8451QR1",
+      "manufacturer": "NXP",
+      "description": "3-Axis Digital Accelerometer, +/-8g, 14-bit, I2C, motion detect, QFN-16",
+      "datasheet_url": "https://www.nxp.com/docs/en/data-sheet/MMA8451Q.pdf",
+      "lifecycle": "active",
+      "price_cents": 195
+    },
+    {
+      "sku": "MMA8452QR1",
+      "manufacturer": "NXP",
+      "description": "3-Axis Digital Accelerometer, +/-8g, 12-bit, I2C, QFN-16",
+      "datasheet_url": "https://www.nxp.com/docs/en/data-sheet/MMA8452Q.pdf",
+      "lifecycle": "active",
+      "price_cents": 150
+    },
+    {
+      "sku": "FXLS8974CFR3",
+      "manufacturer": "NXP",
+      "description": "3-Axis Digital Accelerometer, +/-16g, 12-bit, I2C/SPI, ultra-low power",
+      "datasheet_url": "https://www.nxp.com/docs/en/data-sheet/FXLS8974CF.pdf",
+      "lifecycle": "active",
+      "price_cents": 85
+    },
+    {
+      "sku": "SCA3300-D01-1",
+      "manufacturer": "Murata",
+      "description": "3-Axis Industrial MEMS Accelerometer, +/-6g, SPI, ceramic, -40 to 125C",
+      "datasheet_url": "https://www.murata.com/products/sensor/accel/sca3300",
+      "lifecycle": "active",
+      "price_cents": 2950
+    },
+    {
+      "sku": "SCL3300-D01-1",
+      "manufacturer": "Murata",
+      "description": "3-Axis Inclinometer, +/-1.8g, 0.001deg resolution, SPI, ceramic",
+      "datasheet_url": "https://www.murata.com/products/sensor/inclinometer/scl3300",
+      "lifecycle": "active",
+      "price_cents": 3450
+    },
+    {
+      "sku": "KX134-1211",
+      "manufacturer": "Kionix (ROHM)",
+      "description": "3-Axis Digital Accelerometer, +/-64g, 16-bit, I2C/SPI, LGA-12",
+      "datasheet_url": "https://www.kionix.com/sites/default/files/KX134-1211-Technical-Reference-Manual-Rev-1.0.pdf",
+      "lifecycle": "active",
+      "price_cents": 195
+    },
+    {
+      "sku": "KX132-1211",
+      "manufacturer": "Kionix (ROHM)",
+      "description": "3-Axis Digital Accelerometer, +/-16g, 16-bit, I2C/SPI, LGA-12",
+      "datasheet_url": "https://www.kionix.com/sites/default/files/KX132-1211-Technical-Reference-Manual-Rev-5.0.pdf",
+      "lifecycle": "active",
+      "price_cents": 110
+    },
+    {
+      "sku": "MC3635",
+      "manufacturer": "MEMSIC",
+      "description": "3-Axis Digital Accelerometer, +/-16g, 14-bit, I2C/SPI, ultra-small, LGA-12",
+      "datasheet_url": "https://www.memsic.com/Public/Uploads/uploadfile/files/20220119/MC3635Datasheet(APS-045-0037v1.8).pdf",
+      "lifecycle": "active",
+      "price_cents": 75
+    },
+    {
+      "sku": "LSM6DSO32TR",
+      "manufacturer": "STMicroelectronics",
+      "description": "6-Axis IMU, Accel +/-32g + Gyro +/-2000dps, I2C/SPI, MLC, LGA-14",
+      "datasheet_url": "https://www.st.com/resource/en/datasheet/lsm6dso32.pdf",
+      "lifecycle": "active",
+      "price_cents": 350
+    },
+    {
+      "sku": "BMI088",
+      "manufacturer": "Bosch Sensortec",
+      "description": "6-Axis IMU, Accel +/-24g + Gyro +/-2000dps, I2C/SPI, drone-optimized, LGA-16",
+      "datasheet_url": "https://www.bosch-sensortec.com/media/boschsensortec/downloads/datasheets/bst-bmi088-ds001.pdf",
+      "lifecycle": "active",
+      "price_cents": 450
+    },
+    {
+      "sku": "ADXL313WACPZ-RL7",
+      "manufacturer": "Analog Devices",
+      "description": "3-Axis Digital Accelerometer, +/-4g, 13-bit, I2C/SPI, LFCSP-16",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/ADXL313.pdf",
+      "lifecycle": "active",
+      "price_cents": 195
+    },
+    {
+      "sku": "ADXL1002BCPZ",
+      "manufacturer": "Analog Devices",
+      "description": "1-Axis Wide-Bandwidth MEMS Accelerometer, +/-50g, analog, LFCSP-10",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/ADXL1002.pdf",
+      "lifecycle": "active",
+      "price_cents": 1850
+    },
+    {
+      "sku": "BHI260AP",
+      "manufacturer": "Bosch Sensortec",
+      "description": "AI Smart Sensor Hub + 6-Axis IMU, programmable, self-learning, BGA-30",
+      "datasheet_url": "https://www.bosch-sensortec.com/media/boschsensortec/downloads/datasheets/bst-bhi260ap-ds000.pdf",
+      "lifecycle": "active",
+      "price_cents": 550
+    },
+    {
+      "sku": "ISM330DHCXTR",
+      "manufacturer": "STMicroelectronics",
+      "description": "Industrial 6-Axis IMU, Accel +/-16g + Gyro +/-4000dps, MLC, LGA-14",
+      "datasheet_url": "https://www.st.com/resource/en/datasheet/ism330dhcx.pdf",
+      "lifecycle": "active",
+      "price_cents": 495
+    },
+    {
+      "sku": "LSM6DSOTR",
+      "manufacturer": "STMicroelectronics",
+      "description": "6-Axis IMU, Accel +/-16g + Gyro +/-2000dps, Machine Learning Core, LGA-14",
+      "datasheet_url": "https://www.st.com/resource/en/datasheet/lsm6dso.pdf",
+      "lifecycle": "active",
+      "price_cents": 295
+    },
+    {
+      "sku": "ICM-45686",
+      "manufacturer": "TDK InvenSense",
+      "description": "6-Axis IMU, Accel +/-32g + Gyro +/-4000dps, APEX motion, LGA-14",
+      "datasheet_url": "https://invensense.tdk.com/wp-content/uploads/2023/10/DS-000540-ICM-45686-v1.0.pdf",
+      "lifecycle": "active",
+      "price_cents": 350
+    },
+    {
+      "sku": "MIS2DH-TR",
+      "manufacturer": "STMicroelectronics",
+      "description": "3-Axis Digital Accelerometer, +/-16g, 12-bit, I2C/SPI, automotive, LGA-12",
+      "datasheet_url": "https://www.st.com/resource/en/datasheet/mis2dh.pdf",
+      "lifecycle": "active",
+      "price_cents": 120
+    }
+  ],
+  "gyroscopes": [
+    {
+      "sku": "ICM-42670-P",
+      "manufacturer": "TDK InvenSense",
+      "description": "6-Axis IMU, +/-2000dps + +/-16g, I2C/SPI, APEX, LGA-14",
+      "datasheet_url": "https://invensense.tdk.com/wp-content/uploads/2022/12/DS-000451-ICM-42670-P-v1.1.pdf",
+      "lifecycle": "active",
+      "price_cents": 295
+    },
+    {
+      "sku": "ICM-20602",
+      "manufacturer": "TDK InvenSense",
+      "description": "6-Axis IMU, +/-2000dps + +/-16g, SPI/I2C, QFN-16",
+      "datasheet_url": "https://invensense.tdk.com/wp-content/uploads/2021/03/DS-000176-ICM-20602-v1.1.pdf",
+      "lifecycle": "active",
+      "price_cents": 250
+    },
+    {
+      "sku": "ICM-40627",
+      "manufacturer": "TDK InvenSense",
+      "description": "6-Axis OIS IMU, +/-2000dps + +/-16g, I2C/SPI, for camera OIS, QFN-16",
+      "datasheet_url": "https://invensense.tdk.com/wp-content/uploads/2022/07/DS-000360-ICM-40627-v1.1.pdf",
+      "lifecycle": "active",
+      "price_cents": 350
+    },
+    {
+      "sku": "IIM-42351",
+      "manufacturer": "TDK InvenSense",
+      "description": "Industrial 3-Axis Gyroscope, +/-2000dps, SPI, LGA-14, -40 to 105C",
+      "datasheet_url": "https://invensense.tdk.com/wp-content/uploads/2022/11/DS-000442-IIM-42351-v1.2.pdf",
+      "lifecycle": "active",
+      "price_cents": 695
+    },
+    {
+      "sku": "LSM6DSO32XTR",
+      "manufacturer": "STMicroelectronics",
+      "description": "6-Axis IMU, +/-2000dps + +/-32g, I2C/SPI, MLC+FSM, LGA-14",
+      "datasheet_url": "https://www.st.com/resource/en/datasheet/lsm6dso32x.pdf",
+      "lifecycle": "active",
+      "price_cents": 395
+    },
+    {
+      "sku": "L3GD20HTR",
+      "manufacturer": "STMicroelectronics",
+      "description": "3-Axis Digital Gyroscope, +/-2000dps, 16-bit, I2C/SPI, LGA-16",
+      "datasheet_url": "https://www.st.com/resource/en/datasheet/l3gd20h.pdf",
+      "lifecycle": "nrnd",
+      "price_cents": 350
+    },
+    {
+      "sku": "LSM6DSV16XTR",
+      "manufacturer": "STMicroelectronics",
+      "description": "6-Axis IMU, +/-4000dps + +/-16g, I2C/SPI/I3C, Sensor Fusion, LGA-14",
+      "datasheet_url": "https://www.st.com/resource/en/datasheet/lsm6dsv16x.pdf",
+      "lifecycle": "active",
+      "price_cents": 350
+    },
+    {
+      "sku": "ISM330DLC",
+      "manufacturer": "STMicroelectronics",
+      "description": "Automotive 6-Axis IMU, +/-2000dps + +/-16g, I2C/SPI, AEC-Q100, LGA-14",
+      "datasheet_url": "https://www.st.com/resource/en/datasheet/ism330dlc.pdf",
+      "lifecycle": "active",
+      "price_cents": 350
+    },
+    {
+      "sku": "BMI160",
+      "manufacturer": "Bosch Sensortec",
+      "description": "6-Axis IMU, +/-2000dps + +/-16g, I2C/SPI, step counter, LGA-14",
+      "datasheet_url": "https://www.bosch-sensortec.com/media/boschsensortec/downloads/datasheets/bst-bmi160-ds000.pdf",
+      "lifecycle": "active",
+      "price_cents": 195
+    },
+    {
+      "sku": "BMI270",
+      "manufacturer": "Bosch Sensortec",
+      "description": "6-Axis IMU, +/-2000dps + +/-16g, I2C/SPI, wearable-optimized, LGA-14",
+      "datasheet_url": "https://www.bosch-sensortec.com/media/boschsensortec/downloads/datasheets/bst-bmi270-ds000.pdf",
+      "lifecycle": "active",
+      "price_cents": 250
+    },
+    {
+      "sku": "BMI323",
+      "manufacturer": "Bosch Sensortec",
+      "description": "6-Axis IMU, +/-2000dps + +/-16g, I2C/SPI/I3C, high-precision, LGA-12",
+      "datasheet_url": "https://www.bosch-sensortec.com/media/boschsensortec/downloads/datasheets/bst-bmi323-ds000.pdf",
+      "lifecycle": "active",
+      "price_cents": 195
+    },
+    {
+      "sku": "BMI085",
+      "manufacturer": "Bosch Sensortec",
+      "description": "6-Axis IMU, +/-2000dps + +/-16g, I2C/SPI, drone/robotics, LGA-16",
+      "datasheet_url": "https://www.bosch-sensortec.com/media/boschsensortec/downloads/datasheets/bst-bmi085-ds001.pdf",
+      "lifecycle": "active",
+      "price_cents": 395
+    },
+    {
+      "sku": "ADXRS290BCEZ",
+      "manufacturer": "Analog Devices",
+      "description": "Dual-Axis Digital Gyroscope, +/-100dps, SPI, ultra-low noise, LGA-16",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/ADXRS290.pdf",
+      "lifecycle": "active",
+      "price_cents": 1250
+    },
+    {
+      "sku": "ADIS16465-1BMLZ",
+      "manufacturer": "Analog Devices",
+      "description": "Precision 6-DOF IMU, +/-125dps + +/-8g, SPI, hermetic, BGA-36",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/ADIS16465.pdf",
+      "lifecycle": "active",
+      "price_cents": 19500
+    },
+    {
+      "sku": "ADIS16470AMLZ",
+      "manufacturer": "Analog Devices",
+      "description": "Precision 6-DOF IMU, +/-2000dps + +/-40g, SPI, MEMS, BGA-36",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/ADIS16470.pdf",
+      "lifecycle": "active",
+      "price_cents": 14500
+    },
+    {
+      "sku": "ADIS16507-1BMLZ",
+      "manufacturer": "Analog Devices",
+      "description": "Precision 6-DOF IMU, +/-125dps + +/-8g, SPI, calibrated, BGA-36",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/adis16507.pdf",
+      "lifecycle": "active",
+      "price_cents": 29500
+    },
+    {
+      "sku": "SCC2230-D08-05",
+      "manufacturer": "Murata",
+      "description": "Combined Gyroscope + Accelerometer, +/-300dps + +/-6g, SPI, ceramic",
+      "datasheet_url": "https://www.murata.com/products/sensor/gyro/scc2230",
+      "lifecycle": "active",
+      "price_cents": 4500
+    },
+    {
+      "sku": "SCC2130-D08-05",
+      "manufacturer": "Murata",
+      "description": "Combined Gyroscope + Accelerometer, +/-100dps + +/-2g, SPI, high precision",
+      "datasheet_url": "https://www.murata.com/products/sensor/gyro/scc2130",
+      "lifecycle": "active",
+      "price_cents": 5500
+    },
+    {
+      "sku": "FXAS21002CQR1",
+      "manufacturer": "NXP",
+      "description": "3-Axis Digital Gyroscope, +/-2000dps, I2C/SPI, QFN-24",
+      "datasheet_url": "https://www.nxp.com/docs/en/data-sheet/FXAS21002.pdf",
+      "lifecycle": "active",
+      "price_cents": 350
+    },
+    {
+      "sku": "A3G4250DTR",
+      "manufacturer": "STMicroelectronics",
+      "description": "3-Axis Digital Gyroscope, +/-245dps, I2C/SPI, automotive, LGA-16",
+      "datasheet_url": "https://www.st.com/resource/en/datasheet/a3g4250d.pdf",
+      "lifecycle": "active",
+      "price_cents": 395
+    },
+    {
+      "sku": "IAM-20680",
+      "manufacturer": "TDK InvenSense",
+      "description": "Automotive 6-Axis IMU, +/-2000dps + +/-16g, SPI/I2C, AEC-Q100, QFN-24",
+      "datasheet_url": "https://invensense.tdk.com/wp-content/uploads/2021/03/DS-000314-IAM-20680-v1.2.pdf",
+      "lifecycle": "active",
+      "price_cents": 495
+    },
+    {
+      "sku": "BMG250",
+      "manufacturer": "Bosch Sensortec",
+      "description": "3-Axis Gyroscope, +/-2000dps, I2C/SPI, small-footprint, LGA-14",
+      "datasheet_url": "https://www.bosch-sensortec.com/media/boschsensortec/downloads/datasheets/bst-bmg250-ds000.pdf",
+      "lifecycle": "active",
+      "price_cents": 195
+    },
+    {
+      "sku": "MAX21105EWL+T",
+      "manufacturer": "Analog Devices (Maxim)",
+      "description": "6-Axis IMU, +/-2000dps + +/-16g, I2C/SPI, FIFO, WLP-24",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/MAX21105.pdf",
+      "lifecycle": "active",
+      "price_cents": 350
+    },
+    {
+      "sku": "EWTS5G",
+      "manufacturer": "Panasonic",
+      "description": "Compact Angular Rate Sensor, +/-100dps, analog output, OIS, CSP-9",
+      "datasheet_url": "https://industrial.panasonic.com/cdbs/www-data/pdf/AUA0000/AUA0000CE2.pdf",
+      "lifecycle": "active",
+      "price_cents": 450
+    },
+    {
+      "sku": "LSM6DSR16XTR",
+      "manufacturer": "STMicroelectronics",
+      "description": "6-Axis IMU, +/-4000dps + +/-16g, I2C/SPI, MLC+FSM+ISPU, LGA-14",
+      "datasheet_url": "https://www.st.com/resource/en/datasheet/lsm6dsr16x.pdf",
+      "lifecycle": "active",
+      "price_cents": 395
+    },
+    {
+      "sku": "ASM330LHHXTR",
+      "manufacturer": "STMicroelectronics",
+      "description": "Automotive 6-Axis IMU, +/-4000dps + +/-16g, I2C/SPI, AEC-Q100, LGA-14",
+      "datasheet_url": "https://www.st.com/resource/en/datasheet/asm330lhhx.pdf",
+      "lifecycle": "active",
+      "price_cents": 450
+    },
+    {
+      "sku": "BMI055",
+      "manufacturer": "Bosch Sensortec",
+      "description": "6-Axis IMU, +/-2000dps + +/-16g, I2C/SPI, LGA-16",
+      "datasheet_url": "https://www.bosch-sensortec.com/media/boschsensortec/downloads/datasheets/bst-bmi055-ds000.pdf",
+      "lifecycle": "nrnd",
+      "price_cents": 295
+    },
+    {
+      "sku": "LSM9DS1TR",
+      "manufacturer": "STMicroelectronics",
+      "description": "9-Axis IMU, +/-2000dps + +/-16g + +/-16gauss, I2C/SPI, LGA-24",
+      "datasheet_url": "https://www.st.com/resource/en/datasheet/lsm9ds1.pdf",
+      "lifecycle": "active",
+      "price_cents": 450
+    },
+    {
+      "sku": "ICM-42605",
+      "manufacturer": "TDK InvenSense",
+      "description": "6-Axis IMU, +/-2000dps + +/-16g, I2C/SPI/I3C, APEX, LGA-14",
+      "datasheet_url": "https://invensense.tdk.com/wp-content/uploads/2022/08/DS-000292-ICM-42605-v1.8.pdf",
+      "lifecycle": "active",
+      "price_cents": 295
+    },
+    {
+      "sku": "BMI090L",
+      "manufacturer": "Bosch Sensortec",
+      "description": "6-Axis IMU, +/-2000dps + +/-24g, I2C/SPI, optical stabilization, LGA-16",
+      "datasheet_url": "https://www.bosch-sensortec.com/media/boschsensortec/downloads/datasheets/bst-bmi090l-ds000.pdf",
+      "lifecycle": "active",
+      "price_cents": 495
+    },
+    {
+      "sku": "IAM-20381",
+      "manufacturer": "TDK InvenSense",
+      "description": "Automotive 6-Axis IMU, +/-2000dps + +/-8g, SPI, AEC-Q100, LGA-14",
+      "datasheet_url": "https://invensense.tdk.com/wp-content/uploads/2023/02/DS-000439-IAM-20381-v1.0.pdf",
+      "lifecycle": "active",
+      "price_cents": 550
+    },
+    {
+      "sku": "ADXRS453BRGZ-RL",
+      "manufacturer": "Analog Devices",
+      "description": "Single-Axis Gyroscope, +/-300dps, SPI, TSSOP-16",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/ADXRS453.pdf",
+      "lifecycle": "active",
+      "price_cents": 2450
+    },
+    {
+      "sku": "ICM-42622",
+      "manufacturer": "TDK InvenSense",
+      "description": "6-Axis IMU, +/-2000dps + +/-16g, I2C/SPI, low noise, LGA-14",
+      "datasheet_url": "https://invensense.tdk.com/wp-content/uploads/2022/08/DS-000336-ICM-42622-v1.5.pdf",
+      "lifecycle": "active",
+      "price_cents": 350
+    },
+    {
+      "sku": "ISM330IS",
+      "manufacturer": "STMicroelectronics",
+      "description": "6-Axis IMU + ISPU, +/-2000dps + +/-16g, intelligent sensor, LGA-14",
+      "datasheet_url": "https://www.st.com/resource/en/datasheet/ism330is.pdf",
+      "lifecycle": "active",
+      "price_cents": 495
+    },
+    {
+      "sku": "BMI260",
+      "manufacturer": "Bosch Sensortec",
+      "description": "6-Axis IMU, +/-2000dps + +/-16g, I2C/SPI, gesture recognition, LGA-14",
+      "datasheet_url": "https://www.bosch-sensortec.com/media/boschsensortec/downloads/datasheets/bst-bmi260-ds000.pdf",
+      "lifecycle": "active",
+      "price_cents": 225
+    },
+    {
+      "sku": "ICM-42607-P",
+      "manufacturer": "TDK InvenSense",
+      "description": "6-Axis IMU, +/-2000dps + +/-16g, I2C/SPI, low power, LGA-14",
+      "datasheet_url": "https://invensense.tdk.com/wp-content/uploads/2023/06/DS-000555-ICM-42607-P-v1.0.pdf",
+      "lifecycle": "active",
+      "price_cents": 250
+    },
+    {
+      "sku": "LSM6DSV16BTR",
+      "manufacturer": "STMicroelectronics",
+      "description": "6-Axis IMU, +/-4000dps + +/-16g, I2C/SPI/I3C, ISPU, LGA-14",
+      "datasheet_url": "https://www.st.com/resource/en/datasheet/lsm6dsv16b.pdf",
+      "lifecycle": "active",
+      "price_cents": 350
+    },
+    {
+      "sku": "BMI355",
+      "manufacturer": "Bosch Sensortec",
+      "description": "6-Axis IMU, +/-2000dps + +/-16g, I2C/SPI/I3C, automotive, LGA-12",
+      "datasheet_url": "https://www.bosch-sensortec.com/media/boschsensortec/downloads/datasheets/bst-bmi355-ds000.pdf",
+      "lifecycle": "active",
+      "price_cents": 295
+    },
+    {
+      "sku": "ICM-42670-S",
+      "manufacturer": "TDK InvenSense",
+      "description": "6-Axis IMU, +/-2000dps + +/-16g, I2C/SPI, eSPI, LGA-14",
+      "datasheet_url": "https://invensense.tdk.com/wp-content/uploads/2023/04/DS-000549-ICM-42670-S-v1.0.pdf",
+      "lifecycle": "active",
+      "price_cents": 250
+    },
+    {
+      "sku": "LSM6DSO16ISTR",
+      "manufacturer": "STMicroelectronics",
+      "description": "6-Axis IMU, +/-2000dps + +/-16g, I2C/SPI/I3C, ISPU AI, LGA-14",
+      "datasheet_url": "https://www.st.com/resource/en/datasheet/lsm6dso16is.pdf",
+      "lifecycle": "active",
+      "price_cents": 450
+    }
+  ],
+  "pressure-sensors": [
+    {
+      "sku": "MPRLS0025PA00001A",
+      "manufacturer": "Honeywell",
+      "description": "MicroPressure Digital Sensor, 0-25 PSI, I2C, 5mm DIP, ported",
+      "datasheet_url": "https://prod-edam.honeywell.com/content/dam/honeywell-edam/sps/siot/en-us/products/sensors/pressure-sensors/micropressure-mpr-series/documents/sps-siot-mpr-series-datasheet-32332628-ciid-172626.pdf",
+      "lifecycle": "active",
+      "price_cents": 1250
+    },
+    {
+      "sku": "MPRLS0300YG00001BB",
+      "manufacturer": "Honeywell",
+      "description": "MicroPressure Digital Sensor, 0-300 mmHg, I2C, gel-coated",
+      "datasheet_url": "https://prod-edam.honeywell.com/content/dam/honeywell-edam/sps/siot/en-us/products/sensors/pressure-sensors/micropressure-mpr-series/documents/sps-siot-mpr-series-datasheet-32332628-ciid-172626.pdf",
+      "lifecycle": "active",
+      "price_cents": 1450
+    },
+    {
+      "sku": "ASDXRRX005PGAA5",
+      "manufacturer": "Honeywell",
+      "description": "TruStability Digital Pressure Sensor, 0-5 PSI gauge, I2C, DIP",
+      "datasheet_url": "https://prod-edam.honeywell.com/content/dam/honeywell-edam/sps/siot/en-us/products/sensors/pressure-sensors/trustability-ssc-series/documents/sps-siot-asdx-series-datasheet-32306254-ciid-120780.pdf",
+      "lifecycle": "active",
+      "price_cents": 2450
+    },
+    {
+      "sku": "SSCSRNN015PAAA5",
+      "manufacturer": "Honeywell",
+      "description": "TruStability SSC Digital Pressure Sensor, 0-15 PSI, I2C, SIP",
+      "datasheet_url": "https://prod-edam.honeywell.com/content/dam/honeywell-edam/sps/siot/en-us/products/sensors/pressure-sensors/trustability-ssc-series/documents/sps-siot-trustability-ssc-series-standard-accuracy-board-mount-pressure-sensors-50099533-a-en-ciid-151133.pdf",
+      "lifecycle": "active",
+      "price_cents": 1950
+    },
+    {
+      "sku": "SSCSRNN060MDAA5",
+      "manufacturer": "Honeywell",
+      "description": "TruStability SSC Digital Pressure Sensor, +/-60 mbar differential, I2C",
+      "datasheet_url": "https://prod-edam.honeywell.com/content/dam/honeywell-edam/sps/siot/en-us/products/sensors/pressure-sensors/trustability-ssc-series/documents/sps-siot-trustability-ssc-series-standard-accuracy-board-mount-pressure-sensors-50099533-a-en-ciid-151133.pdf",
+      "lifecycle": "active",
+      "price_cents": 1850
+    },
+    {
+      "sku": "ABPDANV060PGSA3",
+      "manufacturer": "Honeywell",
+      "description": "ABP2 Digital Pressure Sensor, 0-60 PSI gauge, I2C, DIP",
+      "datasheet_url": "https://prod-edam.honeywell.com/content/dam/honeywell-edam/sps/siot/en-us/products/sensors/pressure-sensors/basic-abp2-series/documents/sps-siot-abp2-series-datasheet-32357735-ciid-179893.pdf",
+      "lifecycle": "active",
+      "price_cents": 2250
+    },
+    {
+      "sku": "ABPMANN005PG2A3",
+      "manufacturer": "Honeywell",
+      "description": "ABP Basic Pressure Sensor, 0-5 PSI gauge, analog, SMT",
+      "datasheet_url": "https://prod-edam.honeywell.com/content/dam/honeywell-edam/sps/siot/en-us/products/sensors/pressure-sensors/board-mount-pressure-sensors/basic-abp-series/documents/sps-siot-basic-board-mount-pressure-abp-series-datasheet-32305128-ciid-155789.pdf",
+      "lifecycle": "active",
+      "price_cents": 1650
+    },
+    {
+      "sku": "HSCSRNN010BGAA5",
+      "manufacturer": "Honeywell",
+      "description": "TruStability HSC Digital Pressure Sensor, 0-10 bar gauge, I2C, SIP",
+      "datasheet_url": "https://prod-edam.honeywell.com/content/dam/honeywell-edam/sps/siot/en-us/products/sensors/pressure-sensors/trustability-hsc-series/documents/sps-siot-trustability-hsc-series-high-accuracy-board-mount-pressure-sensors-50099148-7-en-ciid-151131.pdf",
+      "lifecycle": "active",
+      "price_cents": 2850
+    },
+    {
+      "sku": "HSCSRNN001PDAA5",
+      "manufacturer": "Honeywell",
+      "description": "TruStability HSC Digital Pressure Sensor, +/-1 PSI differential, I2C",
+      "datasheet_url": "https://prod-edam.honeywell.com/content/dam/honeywell-edam/sps/siot/en-us/products/sensors/pressure-sensors/trustability-hsc-series/documents/sps-siot-trustability-hsc-series-high-accuracy-board-mount-pressure-sensors-50099148-7-en-ciid-151131.pdf",
+      "lifecycle": "active",
+      "price_cents": 2950
+    },
+    {
+      "sku": "BMP390L",
+      "manufacturer": "Bosch Sensortec",
+      "description": "Barometric Pressure Sensor, 300-1250 hPa, +/-0.5 hPa, I2C/SPI, LGA-10",
+      "datasheet_url": "https://www.bosch-sensortec.com/media/boschsensortec/downloads/datasheets/bst-bmp390-ds002.pdf",
+      "lifecycle": "active",
+      "price_cents": 250
+    },
+    {
+      "sku": "BMP280",
+      "manufacturer": "Bosch Sensortec",
+      "description": "Barometric Pressure Sensor, 300-1100 hPa, +/-1 hPa, I2C/SPI, LGA-8",
+      "datasheet_url": "https://www.bosch-sensortec.com/media/boschsensortec/downloads/datasheets/bst-bmp280-ds001.pdf",
+      "lifecycle": "active",
+      "price_cents": 195
+    },
+    {
+      "sku": "BMP581",
+      "manufacturer": "Bosch Sensortec",
+      "description": "High-Performance Barometric Pressure Sensor, +/-0.25 hPa, I2C/SPI, LGA-10",
+      "datasheet_url": "https://www.bosch-sensortec.com/media/boschsensortec/downloads/datasheets/bst-bmp581-ds004.pdf",
+      "lifecycle": "active",
+      "price_cents": 295
+    },
+    {
+      "sku": "BME680",
+      "manufacturer": "Bosch Sensortec",
+      "description": "Environmental Sensor, Pressure/Humidity/Temp/Gas, I2C/SPI, LGA-8",
+      "datasheet_url": "https://www.bosch-sensortec.com/media/boschsensortec/downloads/datasheets/bst-bme680-ds001.pdf",
+      "lifecycle": "active",
+      "price_cents": 550
+    },
+    {
+      "sku": "BMP388",
+      "manufacturer": "Bosch Sensortec",
+      "description": "Barometric Pressure Sensor, +/-0.5 hPa, I2C/SPI, drone altimetry, LGA-10",
+      "datasheet_url": "https://www.bosch-sensortec.com/media/boschsensortec/downloads/datasheets/bst-bmp388-ds001.pdf",
+      "lifecycle": "active",
+      "price_cents": 220
+    },
+    {
+      "sku": "BMP180",
+      "manufacturer": "Bosch Sensortec",
+      "description": "Digital Barometric Pressure Sensor, 300-1100 hPa, I2C, LGA-7",
+      "datasheet_url": "https://www.bosch-sensortec.com/media/boschsensortec/downloads/datasheets/bst-bmp180-ds000.pdf",
+      "lifecycle": "obsolete",
+      "price_cents": 195
+    },
+    {
+      "sku": "MS5611-01BA03",
+      "manufacturer": "TE Connectivity",
+      "description": "Barometric Pressure Sensor, 10-1200 mbar, 24-bit ADC, I2C/SPI, QFN-8",
+      "datasheet_url": "https://www.te.com/commerce/DocumentDelivery/DDEController?Action=showdoc&DocId=Data+Sheet%7FMS5611-01BA03%7FB3%7Fpdf%7FEnglish%7FENG_DS_MS5611-01BA03_B3.pdf",
+      "lifecycle": "active",
+      "price_cents": 450
+    },
+    {
+      "sku": "MS5637-02BA03",
+      "manufacturer": "TE Connectivity",
+      "description": "Barometric Pressure Sensor, 300-1200 mbar, ultra-compact, I2C, QFN-8",
+      "datasheet_url": "https://www.te.com/commerce/DocumentDelivery/DDEController?Action=showdoc&DocId=Data+Sheet%7FMS5637-02BA03%7FB%7Fpdf%7FEnglish%7FENG_DS_MS5637-02BA03_B.pdf",
+      "lifecycle": "active",
+      "price_cents": 395
+    },
+    {
+      "sku": "MS5837-30BA",
+      "manufacturer": "TE Connectivity",
+      "description": "Water Depth/Pressure Sensor, 0.2cm resolution, 30 bar max, I2C, gel-filled",
+      "datasheet_url": "https://www.te.com/commerce/DocumentDelivery/DDEController?Action=showdoc&DocId=Data+Sheet%7FMS5837-30BA%7FB1%7Fpdf%7FEnglish%7FENG_DS_MS5837-30BA_B1.pdf",
+      "lifecycle": "active",
+      "price_cents": 1250
+    },
+    {
+      "sku": "MS5803-14BA",
+      "manufacturer": "TE Connectivity",
+      "description": "Pressure Sensor, 0-14 bar, 24-bit ADC, I2C/SPI, gel-protected, QFN-8",
+      "datasheet_url": "https://www.te.com/commerce/DocumentDelivery/DDEController?Action=showdoc&DocId=Data+Sheet%7FMS5803-14BA%7FB%7Fpdf%7FEnglish%7FENG_DS_MS5803-14BA_B.pdf",
+      "lifecycle": "active",
+      "price_cents": 850
+    },
+    {
+      "sku": "MS5840-02BA",
+      "manufacturer": "TE Connectivity",
+      "description": "Miniature Barometric Pressure Sensor, 300-1200 mbar, I2C, 3.3x3.3mm",
+      "datasheet_url": "https://www.te.com/commerce/DocumentDelivery/DDEController?Action=showdoc&DocId=Data+Sheet%7FMS5840-02BA%7FB%7Fpdf%7FEnglish%7FENG_DS_MS5840-02BA_B.pdf",
+      "lifecycle": "active",
+      "price_cents": 495
+    },
+    {
+      "sku": "LPS22HHTR",
+      "manufacturer": "STMicroelectronics",
+      "description": "MEMS Pressure Sensor, 260-1260 hPa, +/-0.5 hPa, I2C/SPI, HLGA-10",
+      "datasheet_url": "https://www.st.com/resource/en/datasheet/lps22hh.pdf",
+      "lifecycle": "active",
+      "price_cents": 195
+    },
+    {
+      "sku": "LPS25HBTR",
+      "manufacturer": "STMicroelectronics",
+      "description": "MEMS Pressure Sensor, 260-1260 hPa, I2C/SPI, HLGA-10",
+      "datasheet_url": "https://www.st.com/resource/en/datasheet/lps25hb.pdf",
+      "lifecycle": "active",
+      "price_cents": 175
+    },
+    {
+      "sku": "LPS27HHWTR",
+      "manufacturer": "STMicroelectronics",
+      "description": "Water-Resistant MEMS Pressure Sensor, 260-1260 hPa, I2C/SPI, HLGA-10",
+      "datasheet_url": "https://www.st.com/resource/en/datasheet/lps27hhw.pdf",
+      "lifecycle": "active",
+      "price_cents": 250
+    },
+    {
+      "sku": "LPS28DFWTR",
+      "manufacturer": "STMicroelectronics",
+      "description": "Dual Full-Scale MEMS Pressure Sensor, 260-4060 hPa, I2C/SPI, HLGA-10",
+      "datasheet_url": "https://www.st.com/resource/en/datasheet/lps28dfw.pdf",
+      "lifecycle": "active",
+      "price_cents": 295
+    },
+    {
+      "sku": "LPS33WHTR",
+      "manufacturer": "STMicroelectronics",
+      "description": "Water-Resistant MEMS Pressure Sensor, 260-1260 hPa, I2C/SPI/I3C, HLGA-10",
+      "datasheet_url": "https://www.st.com/resource/en/datasheet/lps33w.pdf",
+      "lifecycle": "active",
+      "price_cents": 230
+    },
+    {
+      "sku": "ILPS22QSTR",
+      "manufacturer": "STMicroelectronics",
+      "description": "Automotive Pressure Sensor, 260-1260 hPa, I2C/SPI, AEC-Q100, HLGA-10",
+      "datasheet_url": "https://www.st.com/resource/en/datasheet/ilps22qs.pdf",
+      "lifecycle": "active",
+      "price_cents": 295
+    },
+    {
+      "sku": "DPS310XTSA1",
+      "manufacturer": "Infineon",
+      "description": "Digital Barometric Pressure Sensor, 300-1200 hPa, +/-0.6 hPa, I2C/SPI, LGA-8",
+      "datasheet_url": "https://www.infineon.com/dgdl/Infineon-DPS310-DataSheet-v01_02-EN.pdf",
+      "lifecycle": "active",
+      "price_cents": 150
+    },
+    {
+      "sku": "DPS368XTSA1",
+      "manufacturer": "Infineon",
+      "description": "Barometric Pressure Sensor, 300-1200 hPa, waterproof, I2C/SPI, LGA-8",
+      "datasheet_url": "https://www.infineon.com/dgdl/Infineon-DPS368-DataSheet-v01_00-EN.pdf",
+      "lifecycle": "active",
+      "price_cents": 175
+    },
+    {
+      "sku": "XENSIV-PAS-CO2",
+      "manufacturer": "Infineon",
+      "description": "PAS CO2 Sensor, 0-32000 ppm, photoacoustic, I2C/UART/PWM, SMD",
+      "datasheet_url": "https://www.infineon.com/dgdl/Infineon-XENSIV_PAS_CO2-DataSheet-v01_04-EN.pdf",
+      "lifecycle": "active",
+      "price_cents": 4500
+    },
+    {
+      "sku": "ICP-10111",
+      "manufacturer": "TDK InvenSense",
+      "description": "MEMS Barometric Pressure Sensor, +/-0.4 Pa, I2C, 2x2mm, LGA-10",
+      "datasheet_url": "https://invensense.tdk.com/wp-content/uploads/2021/08/DS-000411-ICP-10111-v1.0.pdf",
+      "lifecycle": "active",
+      "price_cents": 195
+    },
+    {
+      "sku": "ICP-20100",
+      "manufacturer": "TDK InvenSense",
+      "description": "MEMS Barometric Pressure Sensor, +/-1 Pa, I2C/SPI, LGA-10",
+      "datasheet_url": "https://invensense.tdk.com/wp-content/uploads/2021/08/DS-000465-ICP-20100-v1.0.pdf",
+      "lifecycle": "active",
+      "price_cents": 250
+    },
+    {
+      "sku": "ICP-10125",
+      "manufacturer": "TDK InvenSense",
+      "description": "Waterproof Barometric Pressure Sensor, +/-0.4 Pa, I2C, gel-coated",
+      "datasheet_url": "https://invensense.tdk.com/wp-content/uploads/2022/05/DS-000531-ICP-10125-v1.0.pdf",
+      "lifecycle": "active",
+      "price_cents": 295
+    },
+    {
+      "sku": "MPL3115A2S",
+      "manufacturer": "NXP",
+      "description": "Barometric Pressure/Altitude Sensor, 50-110 kPa, I2C, QFN-8",
+      "datasheet_url": "https://www.nxp.com/docs/en/data-sheet/MPL3115A2S.pdf",
+      "lifecycle": "active",
+      "price_cents": 250
+    },
+    {
+      "sku": "FXPS7250A4",
+      "manufacturer": "NXP",
+      "description": "Absolute Pressure Sensor, 15-115 kPa, analog, SOP-8, automotive",
+      "datasheet_url": "https://www.nxp.com/docs/en/data-sheet/FXPS7250A4.pdf",
+      "lifecycle": "active",
+      "price_cents": 395
+    },
+    {
+      "sku": "SDP31-500PA",
+      "manufacturer": "Sensirion",
+      "description": "Differential Pressure Sensor, +/-500 Pa, I2C, flow measurement",
+      "datasheet_url": "https://sensirion.com/media/documents/CCBEF8AF/636C19F7/Sensirion_Differential_Pressure_Sensors_SDP3x_Digital_Datasheet.pdf",
+      "lifecycle": "active",
+      "price_cents": 950
+    },
+    {
+      "sku": "SDP810-125PA",
+      "manufacturer": "Sensirion",
+      "description": "Differential Pressure Sensor, +/-125 Pa, I2C, manifold mount",
+      "datasheet_url": "https://sensirion.com/media/documents/AE647E0D/636C19E9/Sensirion_Differential_Pressure_Sensors_SDP8xx_Digital_Datasheet.pdf",
+      "lifecycle": "active",
+      "price_cents": 1450
+    },
+    {
+      "sku": "2SMPP-02",
+      "manufacturer": "Omron",
+      "description": "MEMS Gauge Pressure Sensor, 0-37 kPa, analog, SMT, 5x5mm",
+      "datasheet_url": "https://omronfs.omron.com/en_US/ecb/products/pdf/en-2smpb_02.pdf",
+      "lifecycle": "active",
+      "price_cents": 350
+    },
+    {
+      "sku": "MPXV7002DP",
+      "manufacturer": "NXP",
+      "description": "Differential Pressure Sensor, +/-2 kPa, analog, SOP-8, airspeed",
+      "datasheet_url": "https://www.nxp.com/docs/en/data-sheet/MPXV7002.pdf",
+      "lifecycle": "active",
+      "price_cents": 650
+    },
+    {
+      "sku": "MLX90817KDF-ABG-010-RE",
+      "manufacturer": "Melexis",
+      "description": "Absolute Pressure Sensor, 10 bar, ratiometric, SOP-8, automotive",
+      "datasheet_url": "https://www.melexis.com/en/documents/documentation/datasheets/datasheet-mlx90817",
+      "lifecycle": "active",
+      "price_cents": 550
+    },
+    {
+      "sku": "MS5525DSO-SB005GS",
+      "manufacturer": "TE Connectivity",
+      "description": "Digital Pressure Sensor, 0-5 bar, 24-bit ADC, I2C, gel-protected, QFN-8",
+      "datasheet_url": "https://www.te.com/commerce/DocumentDelivery/DDEController?Action=showdoc&DocId=Data+Sheet%7FMS5525DSO%7FB3%7Fpdf%7FEnglish%7FENG_DS_MS5525DSO_B3.pdf",
+      "lifecycle": "active",
+      "price_cents": 750
+    },
+    {
+      "sku": "SM9236-BCE-S-250-000",
+      "manufacturer": "TE Connectivity (SMI)",
+      "description": "Board-Level Pressure Sensor, 0-250 cmH2O, I2C, digital, SMT",
+      "datasheet_url": "https://www.te.com/commerce/DocumentDelivery/DDEController?Action=showdoc&DocId=Data+Sheet%7FSM9236%7FA%7Fpdf%7FEnglish%7FENG_DS_SM9236_A.pdf",
+      "lifecycle": "active",
+      "price_cents": 1150
+    },
+    {
+      "sku": "WSEN-PADS-2511020213301",
+      "manufacturer": "Wurth Elektronik",
+      "description": "MEMS Absolute Pressure Sensor, 26-126 kPa, I2C/SPI, LGA-10",
+      "datasheet_url": "https://www.we-online.com/components/products/datasheet/2511020213301.pdf",
+      "lifecycle": "active",
+      "price_cents": 195
+    },
+    {
+      "sku": "KP264XTMA1",
+      "manufacturer": "Infineon",
+      "description": "Tire Pressure Monitoring Sensor IC, TPMS, 100-900 kPa, SPI",
+      "datasheet_url": "https://www.infineon.com/dgdl/Infineon-KP264-DataSheet-v01_00-EN.pdf",
+      "lifecycle": "active",
+      "price_cents": 350
+    },
+    {
+      "sku": "SPL06-001",
+      "manufacturer": "Goertek",
+      "description": "Digital Barometric Pressure Sensor, 300-1100 hPa, I2C/SPI, LGA-8",
+      "datasheet_url": "https://datasheet.lcsc.com/szlcsc/2101201712_Goertek-SPL06-001_C2911129.pdf",
+      "lifecycle": "active",
+      "price_cents": 85
+    },
+    {
+      "sku": "HP206C",
+      "manufacturer": "HopeRF",
+      "description": "High-Accuracy Barometer/Altimeter, 300-1200 mbar, I2C, CSP-16",
+      "datasheet_url": "https://www.hoperf.com/data/upload/portal/20190801/HP206C.pdf",
+      "lifecycle": "active",
+      "price_cents": 195
+    },
+    {
+      "sku": "BMP585",
+      "manufacturer": "Bosch Sensortec",
+      "description": "Next-Gen Barometric Pressure Sensor, +/-0.2 hPa, I2C/SPI, LGA-10",
+      "datasheet_url": "https://www.bosch-sensortec.com/media/boschsensortec/downloads/datasheets/bst-bmp585-ds000.pdf",
+      "lifecycle": "active",
+      "price_cents": 350
+    },
+    {
+      "sku": "MS5803-01BA",
+      "manufacturer": "TE Connectivity",
+      "description": "Barometric Pressure Sensor, 10-1300 mbar, 24-bit, I2C/SPI, QFN-8",
+      "datasheet_url": "https://www.te.com/commerce/DocumentDelivery/DDEController?Action=showdoc&DocId=Data+Sheet%7FMS5803-01BA%7FB%7Fpdf%7FEnglish%7FENG_DS_MS5803-01BA_B.pdf",
+      "lifecycle": "active",
+      "price_cents": 550
+    },
+    {
+      "sku": "FBM320-01",
+      "manufacturer": "Formosa Measurement Technologies",
+      "description": "Barometric Pressure Sensor, 30-110 kPa, I2C, ultra-compact, 2x2mm",
+      "datasheet_url": "https://datasheet.lcsc.com/szlcsc/Formosa-Measurement-Technology-FBM320_C414199.pdf",
+      "lifecycle": "active",
+      "price_cents": 95
+    },
+    {
+      "sku": "LPS22DFTR",
+      "manufacturer": "STMicroelectronics",
+      "description": "Dual Full-Scale MEMS Pressure Sensor, 260-4060 hPa, I2C/SPI/I3C, HLGA-10",
+      "datasheet_url": "https://www.st.com/resource/en/datasheet/lps22df.pdf",
+      "lifecycle": "active",
+      "price_cents": 250
+    },
+    {
+      "sku": "BMP384",
+      "manufacturer": "Bosch Sensortec",
+      "description": "Barometric Pressure Sensor, +/-0.5 hPa, I2C/SPI, automotive, LGA-10",
+      "datasheet_url": "https://www.bosch-sensortec.com/media/boschsensortec/downloads/datasheets/bst-bmp384-ds003.pdf",
+      "lifecycle": "active",
+      "price_cents": 250
+    }
+  ],
+  "proximity-light": [
+    {
+      "sku": "VCNL4040M3OE-H3",
+      "manufacturer": "Vishay",
+      "description": "Proximity/Ambient Light Sensor, I2C, 200mm range, 16-bit ALS, SMD-4",
+      "datasheet_url": "https://www.vishay.com/docs/84274/vcnl4040.pdf",
+      "lifecycle": "active",
+      "price_cents": 150
+    },
+    {
+      "sku": "VCNL4200-G-P01",
+      "manufacturer": "Vishay",
+      "description": "Proximity/Ambient Light Sensor, I2C, 1500mm range, 16-bit, QFN-8",
+      "datasheet_url": "https://www.vishay.com/docs/84430/vcnl4200.pdf",
+      "lifecycle": "active",
+      "price_cents": 195
+    },
+    {
+      "sku": "VCNL36826S-G-P01",
+      "manufacturer": "Vishay",
+      "description": "Proximity Sensor, I2C, 200mm range, VCSEL, ultra-compact, CSP-4",
+      "datasheet_url": "https://www.vishay.com/docs/84908/vcnl36826s.pdf",
+      "lifecycle": "active",
+      "price_cents": 125
+    },
+    {
+      "sku": "VEML7700-TT",
+      "manufacturer": "Vishay",
+      "description": "High-Accuracy Ambient Light Sensor, I2C, 16-bit, 0.0036-120kLux, SMD-4",
+      "datasheet_url": "https://www.vishay.com/docs/84286/veml7700.pdf",
+      "lifecycle": "active",
+      "price_cents": 95
+    },
+    {
+      "sku": "VEML6030-GS15",
+      "manufacturer": "Vishay",
+      "description": "High-Accuracy Ambient Light Sensor, I2C, 16-bit, spectral resp., CSP-4",
+      "datasheet_url": "https://www.vishay.com/docs/84366/veml6030.pdf",
+      "lifecycle": "active",
+      "price_cents": 85
+    },
+    {
+      "sku": "VEML6075-GS06",
+      "manufacturer": "Vishay",
+      "description": "UVA/UVB Light Sensor, I2C, UV Index calc, OPLGA-4",
+      "datasheet_url": "https://www.vishay.com/docs/84304/veml6075.pdf",
+      "lifecycle": "active",
+      "price_cents": 110
+    },
+    {
+      "sku": "VEML3235SL-GS13",
+      "manufacturer": "Vishay",
+      "description": "Ambient Light Sensor, I2C, 16-bit, human-eye spectral, CSP-4",
+      "datasheet_url": "https://www.vishay.com/docs/84944/veml3235sl.pdf",
+      "lifecycle": "active",
+      "price_cents": 75
+    },
+    {
+      "sku": "VEML6040A3OG-CT",
+      "manufacturer": "Vishay",
+      "description": "RGBW Color Sensor, I2C, 16-bit per channel, SMD-4",
+      "datasheet_url": "https://www.vishay.com/docs/84276/veml6040.pdf",
+      "lifecycle": "active",
+      "price_cents": 120
+    },
+    {
+      "sku": "TMD26711",
+      "manufacturer": "ams-OSRAM",
+      "description": "Proximity Detector, I2C, IR LED, programmable threshold, ODFN-6",
+      "datasheet_url": "https://ams.com/documents/20143/36005/TMD2671_DS000366_2-00.pdf",
+      "lifecycle": "nrnd",
+      "price_cents": 195
+    },
+    {
+      "sku": "TMD27713",
+      "manufacturer": "ams-OSRAM",
+      "description": "Proximity/Ambient Light Sensor, I2C, gesture detect, QFN-8",
+      "datasheet_url": "https://ams.com/documents/20143/36005/TMD2771_DS000367_2-00.pdf",
+      "lifecycle": "active",
+      "price_cents": 250
+    },
+    {
+      "sku": "TSL25911FN",
+      "manufacturer": "ams-OSRAM",
+      "description": "High Dynamic Range Light Sensor, I2C, visible+IR, 600M:1 range, DFN-6",
+      "datasheet_url": "https://ams.com/documents/20143/36005/TSL2591_DS000338_6-00.pdf",
+      "lifecycle": "active",
+      "price_cents": 195
+    },
+    {
+      "sku": "TSL25721FN",
+      "manufacturer": "ams-OSRAM",
+      "description": "Ambient Light + Proximity Sensor, I2C, interrupt, DFN-6",
+      "datasheet_url": "https://ams.com/documents/20143/36005/TSL2572_DS000336_3-00.pdf",
+      "lifecycle": "active",
+      "price_cents": 175
+    },
+    {
+      "sku": "AS7341-DLGT",
+      "manufacturer": "ams-OSRAM",
+      "description": "11-Channel Spectral Color Sensor, I2C, visible+NIR, flicker detect, LGA-8",
+      "datasheet_url": "https://ams.com/documents/20143/36005/AS7341_DS000504_3-00.pdf",
+      "lifecycle": "active",
+      "price_cents": 395
+    },
+    {
+      "sku": "AS7265X",
+      "manufacturer": "ams-OSRAM",
+      "description": "18-Channel Spectral Sensor, I2C/UART, UV/VIS/NIR, 3 stacked dies",
+      "datasheet_url": "https://ams.com/documents/20143/36005/AS7265x_DS000612_1-00.pdf",
+      "lifecycle": "active",
+      "price_cents": 650
+    },
+    {
+      "sku": "TMD3725",
+      "manufacturer": "ams-OSRAM",
+      "description": "Proximity/Color/ALS Sensor, I2C, VCSEL, gesture detect, ODFN-8",
+      "datasheet_url": "https://ams.com/documents/20143/36005/TMD3725_DS000649_2-00.pdf",
+      "lifecycle": "active",
+      "price_cents": 295
+    },
+    {
+      "sku": "TCS34725FN",
+      "manufacturer": "ams-OSRAM",
+      "description": "Color Light-to-Digital Converter, I2C, IR blocking filter, DFN-6",
+      "datasheet_url": "https://ams.com/documents/20143/36005/TCS3472_DS000390_3-00.pdf",
+      "lifecycle": "active",
+      "price_cents": 175
+    },
+    {
+      "sku": "TSL2561FN",
+      "manufacturer": "ams-OSRAM",
+      "description": "Light-to-Digital Converter, I2C/SMBus, 2 photodiodes, DFN-6",
+      "datasheet_url": "https://ams.com/documents/20143/36005/TSL2561_DS000110_3-00.pdf",
+      "lifecycle": "nrnd",
+      "price_cents": 195
+    },
+    {
+      "sku": "TMF8801-1D",
+      "manufacturer": "ams-OSRAM",
+      "description": "Direct Time-of-Flight Sensor, I2C, 2500mm range, VCSEL, OLGA-12",
+      "datasheet_url": "https://ams.com/documents/20143/36005/TMF8801_DS000753_4-00.pdf",
+      "lifecycle": "active",
+      "price_cents": 395
+    },
+    {
+      "sku": "TMF8828-1D",
+      "manufacturer": "ams-OSRAM",
+      "description": "Multi-Zone Direct ToF Sensor, 3x3/8x8 zones, I2C, VCSEL, OLGA-12",
+      "datasheet_url": "https://ams.com/documents/20143/36005/TMF8828_DS001167_2-00.pdf",
+      "lifecycle": "active",
+      "price_cents": 650
+    },
+    {
+      "sku": "VL53L1X",
+      "manufacturer": "STMicroelectronics",
+      "description": "Time-of-Flight Ranging Sensor, 4m range, I2C, VCSEL 940nm, LGA-12",
+      "datasheet_url": "https://www.st.com/resource/en/datasheet/vl53l1x.pdf",
+      "lifecycle": "active",
+      "price_cents": 295
+    },
+    {
+      "sku": "VL53L4CX",
+      "manufacturer": "STMicroelectronics",
+      "description": "Multi-Zone Time-of-Flight Sensor, 6m range, I2C, VCSEL, LGA-12",
+      "datasheet_url": "https://www.st.com/resource/en/datasheet/vl53l4cx.pdf",
+      "lifecycle": "active",
+      "price_cents": 395
+    },
+    {
+      "sku": "VL53L5CX",
+      "manufacturer": "STMicroelectronics",
+      "description": "Multi-Zone Time-of-Flight Sensor, 8x8 array, 4m range, I2C, LGA-16",
+      "datasheet_url": "https://www.st.com/resource/en/datasheet/vl53l5cx.pdf",
+      "lifecycle": "active",
+      "price_cents": 550
+    },
+    {
+      "sku": "VL53L0X",
+      "manufacturer": "STMicroelectronics",
+      "description": "Time-of-Flight Ranging Sensor, 2m range, I2C, VCSEL, LGA-12",
+      "datasheet_url": "https://www.st.com/resource/en/datasheet/vl53l0x.pdf",
+      "lifecycle": "active",
+      "price_cents": 250
+    },
+    {
+      "sku": "VL6180X",
+      "manufacturer": "STMicroelectronics",
+      "description": "Proximity/Ambient Light Sensor, ToF, 100mm range, I2C, LGA-12",
+      "datasheet_url": "https://www.st.com/resource/en/datasheet/vl6180x.pdf",
+      "lifecycle": "active",
+      "price_cents": 295
+    },
+    {
+      "sku": "VL53L8CX",
+      "manufacturer": "STMicroelectronics",
+      "description": "Multi-Zone Time-of-Flight Sensor, 64 zones, 4m range, I2C/SPI, LGA-16",
+      "datasheet_url": "https://www.st.com/resource/en/datasheet/vl53l8cx.pdf",
+      "lifecycle": "active",
+      "price_cents": 650
+    },
+    {
+      "sku": "APDS-9960",
+      "manufacturer": "Broadcom",
+      "description": "Digital Proximity/Ambient Light/RGB/Gesture Sensor, I2C, QFN-8",
+      "datasheet_url": "https://docs.broadcom.com/doc/AV02-4191EN",
+      "lifecycle": "active",
+      "price_cents": 295
+    },
+    {
+      "sku": "APDS-9930",
+      "manufacturer": "Broadcom",
+      "description": "Digital Proximity/Ambient Light Sensor, I2C, QFN-8",
+      "datasheet_url": "https://docs.broadcom.com/doc/AV02-3190EN",
+      "lifecycle": "active",
+      "price_cents": 195
+    },
+    {
+      "sku": "GP2Y0A21YK0F",
+      "manufacturer": "Sharp",
+      "description": "IR Distance Sensor, 10-80cm range, analog output, through-hole",
+      "datasheet_url": "https://global.sharp/products/device/lineup/data/pdf/datasheet/gp2y0a21yk_e.pdf",
+      "lifecycle": "active",
+      "price_cents": 995
+    },
+    {
+      "sku": "GP2Y0A02YK0F",
+      "manufacturer": "Sharp",
+      "description": "IR Distance Sensor, 20-150cm range, analog output, through-hole",
+      "datasheet_url": "https://global.sharp/products/device/lineup/data/pdf/datasheet/gp2y0a02yk_e.pdf",
+      "lifecycle": "active",
+      "price_cents": 1250
+    },
+    {
+      "sku": "GP2Y0A41SK0F",
+      "manufacturer": "Sharp",
+      "description": "IR Distance Sensor, 4-30cm range, analog output, through-hole",
+      "datasheet_url": "https://global.sharp/products/device/lineup/data/pdf/datasheet/gp2y0a41sk_e.pdf",
+      "lifecycle": "active",
+      "price_cents": 850
+    },
+    {
+      "sku": "OPT3001DNPR",
+      "manufacturer": "Texas Instruments",
+      "description": "Ambient Light Sensor, I2C, human-eye response, 0.01-83kLux, USON-6",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/opt3001.pdf",
+      "lifecycle": "active",
+      "price_cents": 110
+    },
+    {
+      "sku": "OPT3002DNPR",
+      "manufacturer": "Texas Instruments",
+      "description": "Ambient Light Sensor, I2C, high-bright, 0.02-166kLux, USON-6",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/opt3002.pdf",
+      "lifecycle": "active",
+      "price_cents": 120
+    },
+    {
+      "sku": "OPT3004DNPR",
+      "manufacturer": "Texas Instruments",
+      "description": "Ambient Light Sensor, I2C, behind dark glass, 0.01-83kLux, USON-6",
+      "datasheet_url": "https://www.ti.com/lit/ds/symlink/opt3004.pdf",
+      "lifecycle": "active",
+      "price_cents": 130
+    },
+    {
+      "sku": "ISL29125IROZ-T7",
+      "manufacturer": "Renesas",
+      "description": "RGB Light Sensor with IR Blocking, I2C, 16-bit, DFN-6",
+      "datasheet_url": "https://www.renesas.com/us/en/document/dst/isl29125-datasheet",
+      "lifecycle": "active",
+      "price_cents": 175
+    },
+    {
+      "sku": "APDS-9301-020",
+      "manufacturer": "Broadcom",
+      "description": "Ambient Light Sensor, I2C, visible+IR diodes, ChipLED-6",
+      "datasheet_url": "https://docs.broadcom.com/doc/AV02-2315EN",
+      "lifecycle": "active",
+      "price_cents": 225
+    },
+    {
+      "sku": "MAX44009EDT+T",
+      "manufacturer": "Analog Devices (Maxim)",
+      "description": "Ambient Light Sensor, I2C, 0.045-188kLux, ultra-low power, WLP-6",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/MAX44009.pdf",
+      "lifecycle": "active",
+      "price_cents": 145
+    },
+    {
+      "sku": "SI1145-A11-GMR",
+      "manufacturer": "Silicon Labs",
+      "description": "UV/Ambient Light/Proximity Sensor, I2C, IR LED, DFN-10",
+      "datasheet_url": "https://www.silabs.com/documents/public/data-sheets/Si1145-46-47.pdf",
+      "lifecycle": "active",
+      "price_cents": 250
+    },
+    {
+      "sku": "SI1153-A11-GMR",
+      "manufacturer": "Silicon Labs",
+      "description": "UV/ALS/Proximity Sensor, I2C, 3 LED channels, DFN-10",
+      "datasheet_url": "https://www.silabs.com/documents/public/data-sheets/Si1153.pdf",
+      "lifecycle": "active",
+      "price_cents": 195
+    },
+    {
+      "sku": "BH1750FVI-TR",
+      "manufacturer": "ROHM",
+      "description": "Digital Ambient Light Sensor, I2C, 16-bit, 1-65535 lux, WSOF-6",
+      "datasheet_url": "https://www.rohm.com/datasheet/BH1750FVI",
+      "lifecycle": "active",
+      "price_cents": 95
+    },
+    {
+      "sku": "BH1745NUC-E2",
+      "manufacturer": "ROHM",
+      "description": "Digital Color Sensor, RGBC, I2C, 16-bit, WSON-8",
+      "datasheet_url": "https://www.rohm.com/datasheet/BH1745NUC",
+      "lifecycle": "active",
+      "price_cents": 110
+    },
+    {
+      "sku": "LTR-390UV-01",
+      "manufacturer": "Lite-On",
+      "description": "UV/Ambient Light Sensor, I2C, UVI, 13-20-bit, LGA-6",
+      "datasheet_url": "https://optoelectronics.liteon.com/upload/download/DS86-2015-0004/LTR-390UV_Final_-DS_V1%201.pdf",
+      "lifecycle": "active",
+      "price_cents": 75
+    },
+    {
+      "sku": "LTR-559ALS-01",
+      "manufacturer": "Lite-On",
+      "description": "Ambient Light + Proximity Sensor, I2C, 100mm range, ODFN-8",
+      "datasheet_url": "https://optoelectronics.liteon.com/upload/download/DS86-2013-0003/LTR-559ALS-01_DS_V1.pdf",
+      "lifecycle": "active",
+      "price_cents": 95
+    },
+    {
+      "sku": "TCS34087FN",
+      "manufacturer": "ams-OSRAM",
+      "description": "Multi-Spectral Color Sensor, XYZ, IR, flicker, I2C, DFN-8",
+      "datasheet_url": "https://ams.com/documents/20143/36005/TCS3408_DS001009_3-00.pdf",
+      "lifecycle": "active",
+      "price_cents": 295
+    },
+    {
+      "sku": "VCNL4035X01-GS08",
+      "manufacturer": "Vishay",
+      "description": "Proximity/Ambient Light Sensor, I2C, 200mm, gesture detect, CSP-8",
+      "datasheet_url": "https://www.vishay.com/docs/84888/vcnl4035x01.pdf",
+      "lifecycle": "active",
+      "price_cents": 175
+    },
+    {
+      "sku": "MAX30101EFD+T",
+      "manufacturer": "Analog Devices (Maxim)",
+      "description": "Pulse Oximeter + Heart-Rate Sensor, I2C, red+IR+green LED, OLGA-14",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/MAX30101.pdf",
+      "lifecycle": "active",
+      "price_cents": 495
+    },
+    {
+      "sku": "MAX30102EFD+T",
+      "manufacturer": "Analog Devices (Maxim)",
+      "description": "Pulse Oximeter + Heart-Rate Sensor, I2C, red+IR LED, OLGA-14",
+      "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/MAX30102.pdf",
+      "lifecycle": "active",
+      "price_cents": 450
+    },
+    {
+      "sku": "ISL76671AROZ-T7",
+      "manufacturer": "Renesas",
+      "description": "Low-Power Ambient Light Sensor, analog output, 0-64kLux, ODFN-4",
+      "datasheet_url": "https://www.renesas.com/us/en/document/dst/isl76671-datasheet",
+      "lifecycle": "active",
+      "price_cents": 55
+    },
+    {
+      "sku": "TSL2585DTR",
+      "manufacturer": "ams-OSRAM",
+      "description": "Ambient Light Sensor with UV-A Detection, I2C, DFN-6",
+      "datasheet_url": "https://ams.com/documents/20143/36005/TSL2585_DS001300_1-00.pdf",
+      "lifecycle": "active",
+      "price_cents": 150
+    },
+    {
+      "sku": "TEMT6000X01",
+      "manufacturer": "Vishay",
+      "description": "Ambient Light Sensor, analog, phototransistor, NPN, SMD-1206",
+      "datasheet_url": "https://www.vishay.com/docs/81579/temt6000.pdf",
+      "lifecycle": "active",
+      "price_cents": 35
+    },
+    {
+      "sku": "SFH5711",
+      "manufacturer": "ams-OSRAM",
+      "description": "Ambient Light Sensor, analog, logarithmic output, SMD, TO-5",
+      "datasheet_url": "https://ams.com/documents/20143/36005/SFH_5711_DS000133_3-00.pdf",
+      "lifecycle": "active",
+      "price_cents": 195
+    }
+  ]
+}

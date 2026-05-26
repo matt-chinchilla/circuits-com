@@ -1,6 +1,6 @@
 from sqlalchemy import func
 from sqlalchemy.orm import Session
-from app.models import Category, CategorySupplier, Supplier, Sponsor, Part, PartListing
+from app.models import Category, CategorySupplier, Supplier, Sponsor, Part, PartListing, PriceBreak
 
 
 def get_all_categories(db: Session) -> list[Category]:
@@ -47,40 +47,98 @@ def get_all_categories(db: Session) -> list[Category]:
     return cats
 
 
-def _build_public_parts(db: Session, category_id, category_icon: str | None = None) -> list[dict]:
-    """Query parts for a category with listings_count and best_price."""
+def _build_public_parts(
+    db: Session,
+    category_id,
+    category_icon: str | None = None,
+    page: int = 1,
+    per_page: int = 15,
+) -> dict:
+    """Paginated parts for a leaf category with per-tier best prices."""
+    per_page = min(per_page, 100)
+    total = (
+        db.query(func.count(Part.id))
+        .filter(Part.category_id == category_id)
+        .scalar()
+    ) or 0
+    pages = max(1, (total + per_page - 1) // per_page)
+    page = max(1, min(page, pages))
+
     parts = (
         db.query(Part)
         .filter(Part.category_id == category_id)
         .order_by(Part.sku)
-        .limit(50)
+        .offset((page - 1) * per_page)
+        .limit(per_page)
         .all()
     )
 
-    result = []
+    part_ids = [p.id for p in parts]
+    if not part_ids:
+        return {"items": [], "total": total, "page": page, "pages": pages, "per_page": per_page}
+
+    listing_stats = {
+        row[0]: row[1]
+        for row in db.query(PartListing.part_id, func.count(PartListing.id))
+        .filter(PartListing.part_id.in_(part_ids))
+        .group_by(PartListing.part_id)
+        .all()
+    }
+
+    base_prices = {
+        row[0]: row[1]
+        for row in db.query(PartListing.part_id, func.min(PartListing.unit_price))
+        .filter(PartListing.part_id.in_(part_ids))
+        .group_by(PartListing.part_id)
+        .all()
+    }
+
+    tier_prices: dict[str, dict[int, float | None]] = {}
+    for qty in (10, 100, 1000):
+        rows = (
+            db.query(
+                PartListing.part_id,
+                func.min(PriceBreak.unit_price),
+            )
+            .join(PriceBreak, PriceBreak.listing_id == PartListing.id)
+            .filter(
+                PartListing.part_id.in_(part_ids),
+                PriceBreak.min_quantity == qty,
+            )
+            .group_by(PartListing.part_id)
+            .all()
+        )
+        for row in rows:
+            pid_str = str(row[0])
+            price_val = row[1]
+            tier_prices.setdefault(pid_str, {})[qty] = float(price_val) if price_val is not None else None
+
+    items = []
     for part in parts:
-        listings_count = (
-            db.query(func.count(PartListing.id))
-            .filter(PartListing.part_id == part.id)
-            .scalar()
-        )
-        best_price_row = (
-            db.query(func.min(PartListing.unit_price))
-            .filter(PartListing.part_id == part.id)
-            .scalar()
-        )
-        result.append({
+        pid = str(part.id)
+        bp = base_prices.get(part.id)
+        tp = tier_prices.get(pid, {})
+        items.append({
             "id": part.id,
             "sku": part.sku,
             "description": part.description,
             "manufacturer_name": part.manufacturer_name,
             "lifecycle_status": part.lifecycle_status,
-            "listings_count": listings_count or 0,
-            "best_price": float(best_price_row) if best_price_row is not None else None,
+            "listings_count": listing_stats.get(part.id, 0),
+            "best_price": float(bp) if bp is not None else None,
+            "best_price_10": tp.get(10),
+            "best_price_100": tp.get(100),
+            "best_price_1000": tp.get(1000),
             "category_icon": category_icon,
         })
 
-    return result
+    return {
+        "items": items,
+        "total": total,
+        "page": page,
+        "pages": pages,
+        "per_page": per_page,
+    }
 
 
 def _build_popular_parts(
@@ -156,7 +214,7 @@ def _build_popular_parts(
             "best_price": float(best_price) if best_price is not None else None,
             "category_icon": cat_icon_by_id.get(part.category_id),
         }
-        for part, _total_stock, best_price, listings_count in rows
+        for part, _, best_price, listings_count in rows
     ]
     return {
         "items": items,
@@ -168,7 +226,12 @@ def _build_popular_parts(
 
 
 def get_category_by_slug(
-    db: Session, slug: str, popular_page: int = 1, popular_per_page: int = 20
+    db: Session,
+    slug: str,
+    popular_page: int = 1,
+    popular_per_page: int = 20,
+    parts_page: int = 1,
+    parts_per_page: int = 20,
 ) -> dict | None:
     """Return category with suppliers, sponsor, and parts."""
     category = db.query(Category).filter(Category.slug == slug).first()
@@ -205,8 +268,12 @@ def get_category_by_slug(
             "phone": sponsor_supplier.phone if sponsor_supplier else None,
         }
 
-    # Get parts for this category
-    parts = _build_public_parts(db, category.id, category.icon)
+    icon_val = getattr(category, "icon", None)
+    icon_str = str(icon_val) if icon_val is not None else None
+    parts = _build_public_parts(
+        db, category.id, icon_str,
+        page=parts_page, per_page=parts_per_page,
+    )
 
     # On a parent category page, surface a "Popular Parts" rollup spanning
     # all subcategories. Leaf pages skip this (their `parts` list IS the

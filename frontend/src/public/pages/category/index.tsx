@@ -22,6 +22,7 @@ import styles from './CategoryPage.module.scss';
 // 12 fits a screen comfortably and gives users a clear "click to see next
 // batch" rhythm. Scales linearly when the catalog grows to thousands.
 const POPULAR_PER_PAGE = 12;
+const PARTS_PER_PAGE = 15;
 
 type LayoutMode = 'grid' | 'list' | 'compact' | 'cards';
 
@@ -38,6 +39,7 @@ export default function CategoryPage() {
   // browser nav moves through pages naturally.
   const [searchParams, setSearchParams] = useSearchParams();
   const popularPage = Math.max(1, parseInt(searchParams.get('p') || '1', 10) || 1);
+  const partsPage = Math.max(1, parseInt(searchParams.get('pp') || '1', 10) || 1);
 
   const [category, setCategory] = useState<CategoryDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -49,11 +51,11 @@ export default function CategoryPage() {
     setLoading(true);
     setError(null);
 
-    api.getCategory(slug, popularPage, POPULAR_PER_PAGE)
+    api.getCategory(slug, popularPage, POPULAR_PER_PAGE, partsPage, PARTS_PER_PAGE)
       .then((data) => setCategory(data))
       .catch(() => setError('Failed to load category. Please try again later.'))
       .finally(() => setLoading(false));
-  }, [slug, popularPage]);
+  }, [slug, popularPage, partsPage]);
 
   const isParent = category && category.children.length > 0;
   const LayoutComponent = LAYOUT_COMPONENTS[layout];
@@ -65,10 +67,20 @@ export default function CategoryPage() {
       else params.set('p', String(next));
       return params;
     });
-    // Scroll the page so the user lands at the section heading after page nav
-    // (without this they'd stay scrolled wherever they were).
     setTimeout(() => {
       document.getElementById('popular-parts')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 50);
+  };
+
+  const handlePartsPageChange = (next: number) => {
+    setSearchParams((prev) => {
+      const params = new URLSearchParams(prev);
+      if (next <= 1) params.delete('pp');
+      else params.set('pp', String(next));
+      return params;
+    });
+    setTimeout(() => {
+      document.getElementById('category-parts')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 50);
   };
 
@@ -209,13 +221,18 @@ export default function CategoryPage() {
           <div className={styles.contentInner}>
             <div className={styles.left}>
               <SupplierTable suppliers={category.suppliers} />
-              {category.parts && category.parts.length > 0 && (
-                <section className={styles.partsSection}>
+              {category.parts && category.parts.total > 0 && (
+                <section className={styles.partsSection} id="category-parts">
                   <h2 className={styles.partsSectionTitle}>
                     Parts in this Category
-                    <span className={styles.partsSectionCount}>({category.parts.length})</span>
+                    <span className={styles.partsSectionCount}>({category.parts.total})</span>
                   </h2>
-                  <PartsTable parts={category.parts} />
+                  <PartsTable parts={category.parts.items} />
+                  <Pagination
+                    page={category.parts.page}
+                    pages={category.parts.pages}
+                    onChange={handlePartsPageChange}
+                  />
                 </section>
               )}
             </div>

@@ -19,10 +19,13 @@ export const api = {
   getCategories: () =>
     client.get<Category[]>('/categories/').then(r => r.data),
 
-  getCategory: (slug: string, popularPage = 1, popularPerPage = 20) =>
+  getCategory: (slug: string, popularPage = 1, popularPerPage = 20, partsPage = 1, partsPerPage = 20) =>
     client
       .get<CategoryDetail>(`/categories/${slug}/`, {
-        params: { popular_page: popularPage, popular_per_page: popularPerPage },
+        params: {
+          popular_page: popularPage, popular_per_page: popularPerPage,
+          parts_page: partsPage, parts_per_page: partsPerPage,
+        },
       })
       .then(r => r.data),
 

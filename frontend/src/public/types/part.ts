@@ -6,6 +6,9 @@ export interface PublicPart {
   lifecycle_status: string;
   listings_count: number;
   best_price: number | null;
+  best_price_10: number | null;
+  best_price_100: number | null;
+  best_price_1000: number | null;
   category_icon: string | null;
 }
 

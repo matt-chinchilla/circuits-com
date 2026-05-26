@@ -17,8 +17,8 @@ const rowVariants = {
   }),
 };
 
-function formatPrice(price: number | null): string {
-  if (price === null || price === undefined) return '\u2014';
+function formatPrice(price: number | null | undefined): string {
+  if (price == null) return '—';
   return `$${price.toFixed(2)}`;
 }
 
@@ -51,10 +51,20 @@ export default function PartsTable({ parts }: PartsTableProps) {
           <tr className={styles.headerRow}>
             <th className={styles.th}>SKU</th>
             <th className={`${styles.th} ${styles.thMobileHide}`}>Manufacturer</th>
-            <th className={`${styles.th} ${styles.thDescription}`}>Description</th>
-            <th className={`${styles.th} ${styles.thMobileHide}`}>Distributors</th>
-            <th className={styles.th}>Best Price</th>
-            <th className={styles.th}>Status</th>
+            <th className={`${styles.th} ${styles.thDescription} ${styles.thMobileHide}`}>Description</th>
+            <th className={styles.th}>
+              <span className={styles.priceHeader}>1+</span>
+            </th>
+            <th className={`${styles.th} ${styles.thMobileHide}`}>
+              <span className={styles.priceHeader}>10+</span>
+            </th>
+            <th className={`${styles.th} ${styles.thMobileHide}`}>
+              <span className={styles.priceHeader}>100+</span>
+            </th>
+            <th className={styles.th}>
+              <span className={styles.priceHeader}>1K+</span>
+            </th>
+            <th className={`${styles.th} ${styles.thMobileHide}`}>Status</th>
           </tr>
         </thead>
         <tbody>
@@ -77,18 +87,24 @@ export default function PartsTable({ parts }: PartsTableProps) {
               <td className={`${styles.td} ${styles.tdMobileHide}`}>
                 <span className={styles.manufacturer}>{part.manufacturer_name}</span>
               </td>
-              <td className={`${styles.td} ${styles.tdDescription}`}>
+              <td className={`${styles.td} ${styles.tdDescription} ${styles.tdMobileHide}`}>
                 <span className={styles.description}>
-                  {part.description || '\u2014'}
+                  {part.description || '—'}
                 </span>
-              </td>
-              <td className={`${styles.td} ${styles.tdMobileHide}`}>
-                <span className={styles.count}>{part.listings_count}</span>
               </td>
               <td className={styles.td}>
                 <span className={styles.price}>{formatPrice(part.best_price)}</span>
               </td>
+              <td className={`${styles.td} ${styles.tdMobileHide}`}>
+                <span className={styles.price}>{formatPrice(part.best_price_10)}</span>
+              </td>
+              <td className={`${styles.td} ${styles.tdMobileHide}`}>
+                <span className={styles.price}>{formatPrice(part.best_price_100)}</span>
+              </td>
               <td className={styles.td}>
+                <span className={styles.price}>{formatPrice(part.best_price_1000)}</span>
+              </td>
+              <td className={`${styles.td} ${styles.tdMobileHide}`}>
                 <span className={`${styles.statusBadge} ${statusClass(part.lifecycle_status)}`}>
                   {part.lifecycle_status}
                 </span>

@@ -13,13 +13,15 @@ export interface Category {
   children: Subcategory[];
 }
 
-export interface PopularPartsPage {
+export interface PartsPage {
   items: import('./part').PublicPart[];
   total: number;
   page: number;
   pages: number;
   per_page: number;
 }
+
+export type PopularPartsPage = PartsPage;
 
 export interface CategoryDetail extends Category {
   // Parent carries its own children (siblings of `this`) so subcategory pages
@@ -34,7 +36,7 @@ export interface CategoryDetail extends Category {
   } | null;
   suppliers: import('./supplier').Supplier[];
   sponsor: import('./sponsor').Sponsor | null;
-  parts: import('./part').PublicPart[];
+  parts: PartsPage;
   // Paginated rollup of parts across all subcategories of a parent category.
   // Powers the "Popular Parts" section. On leaf pages, items is empty.
   popular_parts: PopularPartsPage;

@@ -42,11 +42,7 @@ class ParentCategoryResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class PopularPartsPage(BaseModel):
-    """Paginated rollup of parts across a parent category's subcategories,
-    ranked by aggregate listing stock (popularity proxy). Designed to scale
-    to thousands of parts — frontend pages through 20 at a time by default.
-    """
+class PartsPage(BaseModel):
     items: list[PublicPartResponse] = []
     total: int = 0
     page: int = 1
@@ -55,15 +51,15 @@ class PopularPartsPage(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+PopularPartsPage = PartsPage
+
+
 class CategoryDetailResponse(CategoryResponse):
     parent: ParentCategoryResponse | None = None
     suppliers: list[SupplierResponse]
     sponsor: SponsorResponse | None
-    parts: list[PublicPartResponse] = []
-    # Pagination meta included so the frontend can render numbered controls
-    # (Google-style 1 / 2 / 3 / … / N) without an extra HEAD query.
-    # Only populated when the category has children — leaves keep .items = [].
-    popular_parts: PopularPartsPage = PopularPartsPage()
+    parts: PartsPage = PartsPage()
+    popular_parts: PartsPage = PartsPage()
     model_config = ConfigDict(from_attributes=True)
 
 

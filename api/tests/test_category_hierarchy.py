@@ -191,7 +191,7 @@ class TestSubcategoryGetsItsOwnParts:
         resp = client.get("/api/categories/ldos-2")
         assert resp.status_code == 200
         data = resp.json()
-        skus = {p["sku"] for p in data["parts"]}
+        skus = {p["sku"] for p in data["parts"]["items"]}
         assert skus == {"LM7805CT", "LT3045"}, (
             f"Subcategory endpoint missing parts; got {skus}"
         )
@@ -202,7 +202,7 @@ class TestSubcategoryGetsItsOwnParts:
         resp = client.get("/api/categories/power-mgmt-2")
         assert resp.status_code == 200
         data = resp.json()
-        parent_skus = {p["sku"] for p in data["parts"]}
+        parent_skus = {p["sku"] for p in data["parts"]["items"]}
         assert parent_skus == set(), (
             f"Parent endpoint shouldn't show subcat parts in `parts` list; got {parent_skus}"
         )
@@ -388,5 +388,4 @@ class TestPopularPartsRollupOnParent:
         # Leaf pages: popular_parts has the shape but empty items
         assert data["popular_parts"]["items"] == []
         assert data["popular_parts"]["total"] == 0
-        # The existing `parts` field still works for leaves
-        assert {p["sku"] for p in data["parts"]} == {"ABC"}
+        assert {p["sku"] for p in data["parts"]["items"]} == {"ABC"}
