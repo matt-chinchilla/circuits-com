@@ -77,6 +77,12 @@ Path aliases `@public/*` / `@admin/*` / `@shared/*` in `vite.config.ts` + `tscon
 
 **Form-message persistence**: `routes/forms.py` writes a `Message` row BEFORE scheduling email. Admin Messages API-backed via `GET/PATCH /api/admin/messages/`. `messageStore.refreshMessages()` on mount + route change.
 
+**Category page (public)**: Column-header sort/filter dropdowns (`ColumnHeader.tsx`) + sticky subcategory pill-bar + client-side filtering/sorting/pagination (25/page). LayoutSwitcher/Grid/List/Compact/Cards DELETED 2026-05-26. Parent pages fetch all parts (`per_page=500`) for client-side filter; leaf pages same pattern scoped to one subcategory. `?p=N` for pagination, `activeSub` state for subcategory chip filter.
+
+**Real catalog data**: 15 JSON files in `api/app/db/catalog_data/` (one per top-level category). `_seed_real_catalog()` reads JSON → creates Part/PartListing/PriceBreak rows. `_DEMO_CATALOG` (formerly `_PART_CATALOG`) kept for wizard demos. Revenue seeded only for `_DEMO_SUPPLIER_NAMES` (7 demo suppliers). Total: ~3,600 parts, ~41K listings, ~164K price breaks, 57 suppliers.
+
+**Per-quantity best prices**: `_build_public_parts` returns `best_price` (qty 1) + `best_price_10` / `best_price_100` / `best_price_1000` via batched PriceBreak queries. `PublicPartResponse` + `PublicPart` TS type carry all four fields. PartsTable renders Qty 1/10/100/1k columns.
+
 ### Admin layout (`AdminLayout.tsx`)
 240px Phosphor-Light sidebar (v5 2026-05-23: nav items use Phosphor names `gauge`/`package`/`buildings`/`squares-four`/`star`/`chart-bar`/`envelope`/`upload-simple`/`gear-six`/`arrow-square-out`/`sign-out`) + 64px sticky topbar (still Lucide: Search/Bell/Plus/Menu/X + Sign-Out modal's LogOut). Sidebar Parts/Suppliers/Import badges are dynamic: demo mode → seeded magnitudes (`DEMO_BADGES` constant in `AdminLayout.tsx`), live mode → `adminApi.getStats()`. Bell + sidebar-Messages badges synced via `useEffect` on `location.pathname`. Pages render content area only. Admin chrome is intentionally un-themed (light surface).
 
