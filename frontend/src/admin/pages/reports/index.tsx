@@ -565,6 +565,84 @@ function DeviceDonut({ data }: DeviceDonutProps) {
   )
 }
 
+// ─── DeviceTrendChart (multi-line: desktop/mobile/tablet over time) ─────────
+
+const DEVICE_LINES: Array<{ key: 'desktop' | 'mobile' | 'tablet'; color: string; label: string }> = [
+  { key: 'desktop', color: '#0a4a2e', label: 'Desktop' },
+  { key: 'mobile', color: '#2563eb', label: 'Mobile' },
+  { key: 'tablet', color: '#a88d2e', label: 'Tablet' },
+]
+
+function DeviceTrendChart({ data }: { data: Array<{ day: string; desktop: number; mobile: number; tablet: number }> }) {
+  const [hover, setHover] = useState<number | null>(null)
+
+  if (data.length === 0) {
+    return <div className={styles.empty}>No device trend data yet.</div>
+  }
+
+  const W = 800, H = 200
+  const PAD = { l: 40, r: 16, t: 12, b: 32 }
+  const innerW = W - PAD.l - PAD.r
+  const innerH = H - PAD.t - PAD.b
+  const maxV = Math.max(4, ...data.flatMap(d => [d.desktop, d.mobile, d.tablet]))
+  const N = data.length
+  const xs = N === 1
+    ? [PAD.l + innerW / 2]
+    : data.map((_, i) => PAD.l + (i / (N - 1)) * innerW)
+  const yScale = (v: number) => PAD.t + innerH - (v / maxV) * innerH
+
+  const tickStep = Math.max(1, Math.ceil(maxV / 3))
+  const yTicks = [0, tickStep, tickStep * 2, Math.min(tickStep * 3, maxV)]
+  const labelEvery = Math.max(1, Math.floor(N / 7))
+
+  const hovered = hover !== null ? data[hover] : null
+
+  return (
+    <div className={styles.chartWrap}>
+      <svg viewBox={`0 0 ${W} ${H}`} className={styles.chart} onMouseLeave={() => setHover(null)} preserveAspectRatio="xMidYMid meet" style={{ height: 200 }}>
+        {yTicks.map(t => (
+          <g key={t}>
+            <line x1={PAD.l} x2={W - PAD.r} y1={yScale(t)} y2={yScale(t)} stroke="#e7e5e0" strokeDasharray="3 4" />
+            <text x={PAD.l - 6} y={yScale(t) + 4} textAnchor="end" fontSize="10" fill="#7a756d" fontFamily="ui-monospace">{t}</text>
+          </g>
+        ))}
+        {data.map((d, i) =>
+          (i % labelEvery === 0 || N <= 3) ? (
+            <text key={d.day} x={xs[i]} y={H - PAD.b + 16} textAnchor="middle" fontSize="9" fill="#7a756d" fontFamily="ui-monospace">{d.day.slice(5)}</text>
+          ) : null
+        )}
+        {DEVICE_LINES.map(({ key, color }) => {
+          if (N < 2) return null
+          const line = data.map((d, i) => `${i === 0 ? 'M' : 'L'} ${xs[i]},${yScale(d[key])}`).join(' ')
+          return <path key={key} d={line} fill="none" stroke={color} strokeWidth="1.8" opacity="0.85" />
+        })}
+        {N === 1 && DEVICE_LINES.map(({ key, color }) => (
+          <circle key={key} cx={xs[0]} cy={yScale(data[0][key])} r={4} fill={color} stroke="#fff" strokeWidth="1.5" />
+        ))}
+        {N >= 2 && data.map((_, i) => (
+          <rect key={i} x={xs[i] - innerW / (N * 2)} y={PAD.t} width={innerW / N} height={innerH} fill="transparent" onMouseEnter={() => setHover(i)} />
+        ))}
+        {hover !== null && N >= 2 && (
+          <line x1={xs[hover]} x2={xs[hover]} y1={PAD.t} y2={H - PAD.b} stroke="#7a756d" strokeDasharray="2 3" opacity="0.5" />
+        )}
+      </svg>
+      {hovered && (
+        <div className={styles.revTip} style={{ position: 'absolute', left: `${(Math.min(W - 150, Math.max(PAD.l, xs[hover!] + 14)) / W) * 100}%`, top: '8%', width: 130 }}>
+          <div className={styles.revTipTitle}>{hovered.day}</div>
+          {DEVICE_LINES.map(({ key, color, label }) => (
+            <div key={key} className={styles.revTipRow}><span className="dot" style={{ background: color }} />{label}<b>{hovered[key]}</b></div>
+          ))}
+        </div>
+      )}
+      <div className={styles.chartLegend}>
+        {DEVICE_LINES.map(({ key, color, label }) => (
+          <span key={key}><i className="dot" style={{ background: color }} />{label}</span>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ─── Page ───────────────────────────────────────────────────────────────────
 
 type RangeKey = '30d' | '90d' | '12m' | 'All'
@@ -894,6 +972,15 @@ export default function ReportsPage() {
                     <span className={styles.chartSub}>Breakdown by type</span>
                   </div>
                   <DeviceDonut data={analytics.devices} />
+                  {analytics.daily_devices.length > 0 && (
+                    <>
+                      <div className={styles.chartHead} style={{ marginTop: 16 }}>
+                        <h3 className={styles.chartTitle}>Device Trend</h3>
+                        <span className={styles.chartSub}>Over time</span>
+                      </div>
+                      <DeviceTrendChart data={analytics.daily_devices} />
+                    </>
+                  )}
                 </div>
 
                 {analytics.referrers.length > 0 && (

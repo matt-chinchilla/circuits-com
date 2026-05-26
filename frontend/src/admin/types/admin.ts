@@ -97,6 +97,7 @@ export interface AnalyticsData {
   browsers: Array<{ name: string; count: number }>;
   top_parts: Array<{ path: string; views: number }>;
   top_categories: Array<{ path: string; views: number }>;
+  daily_devices: Array<{ day: string; desktop: number; mobile: number; tablet: number }>;
 }
 
 // Pagination

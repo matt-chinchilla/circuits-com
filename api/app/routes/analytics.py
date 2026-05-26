@@ -167,6 +167,27 @@ def get_analytics(
     top_parts = _top_by_prefix("/part/")
     top_categories = _top_by_prefix("/category/")
 
+    daily_by_device = (
+        db.query(
+            day_col.label("day"),
+            PageView.device_type,
+            view_count.label("count"),
+        )
+        .filter(recent)
+        .group_by(day_col, PageView.device_type)
+        .order_by(day_col)
+        .all()
+    )
+    device_trend: dict[str, dict[str, int]] = {}
+    for row in daily_by_device:
+        d = str(row.day)
+        if d not in device_trend:
+            device_trend[d] = {"day": d, "desktop": 0, "mobile": 0, "tablet": 0}
+        dtype = row.device_type or "desktop"
+        if dtype in device_trend[d]:
+            device_trend[d][dtype] = row.count
+    daily_devices = sorted(device_trend.values(), key=lambda x: x["day"])
+
     return {
         "period_days": days,
         "total_views": total_views,
@@ -184,4 +205,5 @@ def get_analytics(
         "browsers": [{"name": row.browser or "unknown", "count": row.count} for row in browsers],
         "top_parts": [{"path": row.path, "views": row.views} for row in top_parts],
         "top_categories": [{"path": row.path, "views": row.views} for row in top_categories],
+        "daily_devices": daily_devices,
     }
