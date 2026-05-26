@@ -16,9 +16,9 @@ def list_categories(db: Session = Depends(get_db)):
 def get_category(
     slug: str,
     popular_page: int = Query(1, ge=1, alias="popular_page"),
-    popular_per_page: int = Query(20, ge=1, le=100, alias="popular_per_page"),
+    popular_per_page: int = Query(20, ge=1, le=500, alias="popular_per_page"),
     parts_page: int = Query(1, ge=1, alias="parts_page"),
-    parts_per_page: int = Query(20, ge=1, le=100, alias="parts_per_page"),
+    parts_per_page: int = Query(20, ge=1, le=500, alias="parts_per_page"),
     db: Session = Depends(get_db),
 ):
     result = get_category_by_slug(

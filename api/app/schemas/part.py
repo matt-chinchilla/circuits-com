@@ -25,6 +25,7 @@ class PublicPartResponse(BaseModel):
     best_price_100: float | None = None
     best_price_1000: float | None = None
     category_icon: str | None = None
+    sub_slug: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
 

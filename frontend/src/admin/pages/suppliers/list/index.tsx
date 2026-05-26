@@ -23,7 +23,11 @@ const TIER_CLASS: Record<Tier, string> = {
   silver: styles.tierSilver,
 };
 
-function deriveTier(_s: AdminSupplier): Tier {
+function deriveTier(supplier: AdminSupplier): Tier {
+  const n = supplier.parts_count ?? 0;
+  if (n >= 200) return 'featured';
+  if (n >= 100) return 'platinum';
+  if (n >= 25) return 'gold';
   return 'silver';
 }
 

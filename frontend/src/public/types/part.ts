@@ -10,6 +10,7 @@ export interface PublicPart {
   best_price_100: number | null;
   best_price_1000: number | null;
   category_icon: string | null;
+  sub_slug: string | null;
 }
 
 export interface PartListing {

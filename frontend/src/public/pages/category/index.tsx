@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { useParams, useSearchParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import SubcategoryChips from './components/SubcategoryChips';
@@ -6,77 +6,166 @@ import SupplierTable from './components/SupplierTable';
 import PartsTable from './components/PartsTable';
 import SponsorBlock from './components/SponsorBlock';
 import TopPartners from './components/TopPartners';
-import LayoutSwitcher from './components/LayoutSwitcher';
-import GridLayout from './components/layouts/GridLayout';
-import ListLayout from './components/layouts/ListLayout';
-import CompactLayout from './components/layouts/CompactLayout';
-import CardsLayout from './components/layouts/CardsLayout';
 import SkeletonLoader from '@public/components/widgets/SkeletonLoader';
 import Pagination from '@public/components/widgets/Pagination';
 import Icon from '@shared/components/Icon';
 import { api } from '@public/services/api';
 import type { CategoryDetail } from '@public/types/category';
+import type { PublicPart } from '@public/types/part';
+import type { SortState } from './components/ColumnHeader';
 import styles from './CategoryPage.module.scss';
 
-// "Popular Parts" is a curated highlight strip, not a full catalog grid.
-// 12 fits a screen comfortably and gives users a clear "click to see next
-// batch" rhythm. Scales linearly when the catalog grows to thousands.
-const POPULAR_PER_PAGE = 12;
-const PARTS_PER_PAGE = 15;
+const PAGE_SIZE = 25;
 
-type LayoutMode = 'grid' | 'list' | 'compact' | 'cards';
-
-const LAYOUT_COMPONENTS = {
-  grid: GridLayout,
-  list: ListLayout,
-  compact: CompactLayout,
-  cards: CardsLayout,
-} as const;
+function sortParts(rows: PublicPart[], sort: SortState): PublicPart[] {
+  const dir = sort.dir === 'desc' ? -1 : 1;
+  return [...rows].sort((a, b) => {
+    switch (sort.col) {
+      case 'sku': return dir * a.sku.localeCompare(b.sku);
+      case 'desc': return dir * (a.description ?? '').localeCompare(b.description ?? '');
+      case 'mfg': return dir * a.manufacturer_name.localeCompare(b.manufacturer_name);
+      case 'sub': return dir * (a.sub_slug ?? '').localeCompare(b.sub_slug ?? '');
+      case 'qty1': return dir * ((a.best_price ?? 0) - (b.best_price ?? 0));
+      case 'qty10': return dir * ((a.best_price_10 ?? 0) - (b.best_price_10 ?? 0));
+      case 'qty100': return dir * ((a.best_price_100 ?? 0) - (b.best_price_100 ?? 0));
+      case 'qty1k': return dir * ((a.best_price_1000 ?? 0) - (b.best_price_1000 ?? 0));
+      default: return 0;
+    }
+  });
+}
 
 export default function CategoryPage() {
   const { slug } = useParams<{ slug: string }>();
-  // ?p=N drives Popular Parts pagination. Deep-linkable, and back/forward
-  // browser nav moves through pages naturally.
   const [searchParams, setSearchParams] = useSearchParams();
-  const popularPage = Math.max(1, parseInt(searchParams.get('p') || '1', 10) || 1);
-  const partsPage = Math.max(1, parseInt(searchParams.get('pp') || '1', 10) || 1);
+  const pageParam = Math.max(1, parseInt(searchParams.get('p') || '1', 10) || 1);
 
   const [category, setCategory] = useState<CategoryDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [layout, setLayout] = useState<LayoutMode>('grid');
+
+  const [sort, setSort] = useState<SortState>({ col: 'sku', dir: 'asc' });
+  const [skuSearch, setSkuSearch] = useState('');
+  const [mfgFilter, setMfgFilter] = useState<Set<string> | null>(null);
+  const [subFilter, setSubFilter] = useState<Set<string> | null>(null);
+  const [activeSub, setActiveSub] = useState<string | null>(null);
 
   useEffect(() => {
     if (!slug) return;
     setLoading(true);
     setError(null);
+    setSkuSearch('');
+    setMfgFilter(null);
+    setSubFilter(null);
+    setActiveSub(null);
+    setSort({ col: 'sku', dir: 'asc' });
 
-    api.getCategory(slug, popularPage, POPULAR_PER_PAGE, partsPage, PARTS_PER_PAGE)
+    api.getCategory(slug, 1, 500, 1, 500)
       .then((data) => setCategory(data))
       .catch(() => setError('Failed to load category. Please try again later.'))
       .finally(() => setLoading(false));
-  }, [slug, popularPage, partsPage]);
+  }, [slug]);
 
-  const isParent = category && category.children.length > 0;
-  const LayoutComponent = LAYOUT_COMPONENTS[layout];
+  const isParent = category != null && category.children.length > 0;
 
-  const handlePopularPageChange = (next: number) => {
-    setSearchParams((prev) => {
+  const activeSubInfo = useMemo(() => {
+    if (!activeSub || !category || !isParent) return null;
+    const child = category.children.find(c => c.slug === activeSub);
+    return child ?? null;
+  }, [activeSub, category, isParent]);
+
+  const displayName = activeSubInfo?.name ?? category?.name ?? '';
+  const displayIcon = activeSubInfo?.icon ?? category?.icon ?? '';
+
+  const allParts = useMemo(() => {
+    if (!category) return [];
+    if (isParent) return category.popular_parts?.items ?? [];
+    return category.parts?.items ?? [];
+  }, [category, isParent]);
+
+  const allMfgs = useMemo(() => {
+    const set = new Set<string>();
+    for (const p of allParts) if (p.manufacturer_name) set.add(p.manufacturer_name);
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [allParts]);
+
+  const allSubNames = useMemo(() => {
+    if (!category || !isParent) return [];
+    return category.children.map(s => s.name);
+  }, [category, isParent]);
+
+  const subSlugToName = useMemo(() => {
+    if (!category) return {};
+    const children = isParent ? category.children : (category.parent?.children ?? []);
+    return Object.fromEntries(children.map(s => [s.slug, s.name]));
+  }, [category, isParent]);
+
+  const subSlugToIcon = useMemo(() => {
+    if (!category) return {};
+    const children = isParent ? category.children : (category.parent?.children ?? []);
+    return Object.fromEntries(children.map(s => [s.slug, s.icon]));
+  }, [category, isParent]);
+
+  const subCounts = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const p of allParts) {
+      if (p.sub_slug) map.set(p.sub_slug, (map.get(p.sub_slug) ?? 0) + 1);
+    }
+    return map;
+  }, [allParts]);
+
+  useEffect(() => {
+    if (allMfgs.length > 0) setMfgFilter(new Set(allMfgs));
+  }, [allMfgs]);
+
+  useEffect(() => {
+    if (allSubNames.length > 0) setSubFilter(new Set(allSubNames));
+  }, [allSubNames]);
+
+  const filtered = useMemo(() => {
+    let rows = allParts;
+
+    if (activeSub) {
+      rows = rows.filter(p => p.sub_slug === activeSub);
+    }
+
+    const q = skuSearch.trim().toLowerCase();
+    if (q) {
+      rows = rows.filter(p =>
+        p.sku.toLowerCase().includes(q)
+        || (p.description ?? '').toLowerCase().includes(q)
+      );
+    }
+
+    if (mfgFilter && mfgFilter.size < allMfgs.length) {
+      rows = rows.filter(p => mfgFilter.has(p.manufacturer_name));
+    }
+
+    if (isParent && subFilter && subFilter.size < allSubNames.length) {
+      rows = rows.filter(p => subFilter.has(subSlugToName[p.sub_slug ?? ''] ?? ''));
+    }
+
+    return sortParts(rows, sort);
+  }, [allParts, activeSub, skuSearch, mfgFilter, subFilter, sort, allMfgs.length, allSubNames.length, subSlugToName, isParent]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const safePage = Math.min(pageParam, totalPages);
+  const visible = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+
+  const mountedRef = useRef(false);
+  useEffect(() => {
+    if (!mountedRef.current) { mountedRef.current = true; return; }
+    setSearchParams(prev => {
+      const params = new URLSearchParams(prev);
+      params.delete('p');
+      return params;
+    });
+  }, [activeSub, skuSearch, mfgFilter, subFilter, sort, setSearchParams]);
+
+  const handlePageChange = (next: number) => {
+    setSearchParams(prev => {
       const params = new URLSearchParams(prev);
       if (next <= 1) params.delete('p');
       else params.set('p', String(next));
-      return params;
-    });
-    setTimeout(() => {
-      document.getElementById('popular-parts')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 50);
-  };
-
-  const handlePartsPageChange = (next: number) => {
-    setSearchParams((prev) => {
-      const params = new URLSearchParams(prev);
-      if (next <= 1) params.delete('pp');
-      else params.set('pp', String(next));
       return params;
     });
     setTimeout(() => {
@@ -92,7 +181,6 @@ export default function CategoryPage() {
       exit={{ opacity: 0, x: -20 }}
       transition={{ duration: 0.15, ease: 'easeInOut' as const }}
     >
-
       <div className={styles.categoryHeader}>
         <div className={styles.headerInner}>
           <nav className={styles.breadcrumb} aria-label="Breadcrumb">
@@ -110,7 +198,21 @@ export default function CategoryPage() {
                     <span className={styles.breadcrumbSep} aria-hidden="true">/</span>
                   </>
                 )}
-                <span className={styles.breadcrumbCurrent}>{category.name}</span>
+                {isParent && activeSubInfo ? (
+                  <>
+                    <Link
+                      to={`/category/${category.slug}`}
+                      className={styles.breadcrumbLink}
+                      onClick={(e) => { e.preventDefault(); setActiveSub(null); }}
+                    >
+                      {category.name}
+                    </Link>
+                    <span className={styles.breadcrumbSep} aria-hidden="true">/</span>
+                    <span className={styles.breadcrumbCurrent}>{activeSubInfo.name}</span>
+                  </>
+                ) : (
+                  <span className={styles.breadcrumbCurrent}>{category.name}</span>
+                )}
               </>
             ) : null}
           </nav>
@@ -129,50 +231,77 @@ export default function CategoryPage() {
               <div className={styles.titleRow}>
                 <motion.h1
                   className={styles.title}
+                  key={displayName}
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.4, ease: 'easeOut' as const }}
                 >
-                  {category.icon && <span className={styles.titleIcon}><Icon name={category.icon} /></span>}
-                  {category.name}
+                  {displayIcon && <span className={styles.titleIcon}><Icon name={displayIcon} /></span>}
+                  {displayName}
                 </motion.h1>
-                {isParent && <LayoutSwitcher active={layout} onChange={setLayout} />}
               </div>
-              {category.children.length > 0 ? (
-                /* Parent page: show own subcategories, none active. */
-                <SubcategoryChips subcategories={category.children} />
-              ) : category.parent && category.parent.children.length > 0 ? (
-                /* Leaf page: show siblings (parent's children), mark current
-                   as active. Lets the user pivot to any sibling subcategory
-                   without going back to the parent. */
-                <SubcategoryChips
-                  subcategories={category.parent.children}
-                  activeSlug={category.slug}
-                />
-              ) : null}
-              {!isParent && category.parent && (
-                <div className={styles.parentNav}>
-                  <Link to={`/category/${category.parent.slug}`} className={styles.parentLink}>
-                    &larr; All {category.parent.name}
-                  </Link>
-                </div>
-              )}
+              <p className={styles.headerMeta}>
+                <span className={styles.headerMetaMono}>{filtered.length.toLocaleString()}</span> parts
+                {isParent && !activeSubInfo && (
+                  <>
+                    <span className={styles.headerDot}>&middot;</span>
+                    <span className={styles.headerMetaMono}>{category.children.length}</span> subcategories
+                  </>
+                )}
+              </p>
             </>
           ) : null}
         </div>
       </div>
 
-      <div className={styles.content}>
-        {error && (
-          <p className={styles.error}>{error}</p>
-        )}
+      {/* Sticky subcategory pill-bar */}
+      {!loading && category && (
+        <nav className={styles.stickySubnav} aria-label="Subcategories">
+          <div className={styles.subnavInner}>
+            <div className={styles.chipBar}>
+              {isParent ? (
+                <>
+                  <button
+                    className={`${styles.chip} ${activeSub === null ? styles.chipActive : ''}`}
+                    onClick={() => setActiveSub(null)}
+                  >
+                    <span>All</span>
+                    <span className={styles.chipCount}>{allParts.length.toLocaleString()}</span>
+                  </button>
+                  {category.children.map(s => (
+                    <button
+                      key={s.slug}
+                      className={`${styles.chip} ${activeSub === s.slug ? styles.chipActive : ''}`}
+                      onClick={() => setActiveSub(s.slug)}
+                    >
+                      <Icon name={s.icon} />
+                      <span>{s.name}</span>
+                      {(subCounts.get(s.slug) ?? 0) > 0 && (
+                        <span className={styles.chipCount}>{subCounts.get(s.slug)}</span>
+                      )}
+                    </button>
+                  ))}
+                </>
+              ) : category.parent && category.parent.children.length > 0 ? (
+                <SubcategoryChips
+                  subcategories={category.parent.children}
+                  activeSlug={category.slug}
+                />
+              ) : null}
+            </div>
+          </div>
+        </nav>
+      )}
+
+      <div className={styles.contentWide}>
+        {error && <p className={styles.error}>{error}</p>}
 
         {loading ? (
           <div className={styles.contentInner}>
             <div className={styles.left}>
               <div className={styles.tableSkeleton}>
                 <SkeletonLoader width="100%" height="40px" borderRadius="4px" />
-                {Array.from({ length: 5 }).map((_, i) => (
+                {Array.from({ length: 8 }).map((_, i) => (
                   <SkeletonLoader key={i} width="100%" height="48px" borderRadius="4px" />
                 ))}
               </div>
@@ -181,63 +310,41 @@ export default function CategoryPage() {
               <SkeletonLoader width="100%" height="280px" borderRadius="8px" />
             </div>
           </div>
-        ) : category && isParent ? (
-          /* Parent view: subcategory layouts + sidebar */
-          <div className={styles.contentInner}>
-            <div className={styles.left}>
-              <LayoutComponent
-                subcategories={category.children}
-                parentSlug={category.slug}
-              />
-              {category.popular_parts && category.popular_parts.total > 0 && (
-                <section className={styles.partsSection} id="popular-parts">
-                  <h2 className={styles.partsSectionTitle}>
-                    Popular Parts
-                    <span className={styles.partsSectionCount}>
-                      ({category.popular_parts.total} across all subcategories)
-                    </span>
-                  </h2>
-                  {/* Scrollable wrapper so users can wheel through this page's
-                      results without scrolling the whole document. Mobile gets
-                      a shorter max-height to keep the section ergonomic. */}
-                  <div className={styles.popularScroll}>
-                    <PartsTable parts={category.popular_parts.items} />
-                  </div>
-                  <Pagination
-                    page={category.popular_parts.page}
-                    pages={category.popular_parts.pages}
-                    onChange={handlePopularPageChange}
-                  />
-                </section>
-              )}
-            </div>
-            <div className={styles.right}>
-              <TopPartners suppliers={category.suppliers} />
-              <SponsorBlock sponsor={category.sponsor} />
-            </div>
-          </div>
         ) : category ? (
-          /* Leaf view: supplier table + sponsor */
           <div className={styles.contentInner}>
             <div className={styles.left}>
-              <SupplierTable suppliers={category.suppliers} />
-              {category.parts && category.parts.total > 0 && (
-                <section className={styles.partsSection} id="category-parts">
-                  <h2 className={styles.partsSectionTitle}>
-                    Parts in this Category
-                    <span className={styles.partsSectionCount}>({category.parts.total})</span>
-                  </h2>
-                  <PartsTable parts={category.parts.items} />
+              {!isParent && <SupplierTable suppliers={category.suppliers} />}
+
+              <section id="category-parts">
+                <PartsTable
+                  parts={visible}
+                  sort={sort}
+                  setSort={setSort}
+                  skuSearch={skuSearch}
+                  setSkuSearch={setSkuSearch}
+                  mfgValues={allMfgs}
+                  mfgSelected={mfgFilter ?? new Set(allMfgs)}
+                  setMfgSelected={setMfgFilter}
+                  subValues={isParent ? allSubNames : undefined}
+                  subSelected={isParent ? (subFilter ?? new Set(allSubNames)) : undefined}
+                  setSubSelected={isParent ? setSubFilter : undefined}
+                  subSlugToName={subSlugToName}
+                  subSlugToIcon={subSlugToIcon}
+                />
+
+                {filtered.length > PAGE_SIZE && (
                   <Pagination
-                    page={category.parts.page}
-                    pages={category.parts.pages}
-                    onChange={handlePartsPageChange}
+                    page={safePage}
+                    pages={totalPages}
+                    onChange={handlePageChange}
                   />
-                </section>
-              )}
+                )}
+              </section>
             </div>
             <div className={styles.right}>
               <SponsorBlock sponsor={category.sponsor} />
+              <div className={styles.sidebarGap} />
+              <TopPartners suppliers={category.suppliers} />
             </div>
           </div>
         ) : null}

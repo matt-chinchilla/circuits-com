@@ -7,43 +7,26 @@ interface TopPartnersProps {
 }
 
 export default function TopPartners({ suppliers }: TopPartnersProps) {
-  const featured = suppliers
-    .filter((s) => s.is_featured)
+  const top = [...suppliers]
     .sort((a, b) => a.rank - b.rank)
-    .slice(0, 7);
+    .slice(0, 5);
 
-  if (featured.length === 0) return null;
+  if (top.length === 0) return null;
 
   return (
     <motion.div
-      className={styles.topPartners}
+      className={styles.card}
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, ease: 'easeOut' as const }}
     >
-      <h3 className={styles.heading}>Top Partners</h3>
-      <ul className={styles.list}>
-        {featured.map((supplier, i) => (
-          <li key={supplier.id} className={styles.item}>
-            <span className={styles.rank}>#{i + 1}</span>
-            <div className={styles.info}>
-              <span className={styles.name}>{supplier.name}</span>
-              <span className={styles.badge}>Preferred Partner</span>
-            </div>
-            {supplier.website && (
-              <a
-                href={supplier.website}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={styles.link}
-                aria-label={`Visit ${supplier.name}`}
-              >
-                →
-              </a>
-            )}
-          </li>
-        ))}
-      </ul>
+      <h3 className={styles.title}>Top Distributors</h3>
+      {top.map((supplier) => (
+        <div key={supplier.id} className={styles.row}>
+          <span className={styles.label}>{supplier.name}</span>
+          <span className={styles.tier}>Silver</span>
+        </div>
+      ))}
     </motion.div>
   );
 }

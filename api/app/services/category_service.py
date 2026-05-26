@@ -55,7 +55,7 @@ def _build_public_parts(
     per_page: int = 15,
 ) -> dict:
     """Paginated parts for a leaf category with per-tier best prices."""
-    per_page = min(per_page, 100)
+    per_page = min(per_page, 500)
     total = (
         db.query(func.count(Part.id))
         .filter(Part.category_id == category_id)
@@ -130,6 +130,7 @@ def _build_public_parts(
             "best_price_100": tp.get(100),
             "best_price_1000": tp.get(1000),
             "category_icon": category_icon,
+            "sub_slug": part.sub_slug,
         })
 
     return {
@@ -156,7 +157,7 @@ def _build_popular_parts(
     Returns a dict matching `PopularPartsPage` schema (items + meta).
     """
     page = max(1, page)
-    per_page = max(1, min(per_page, 100))  # cap to prevent abuse
+    per_page = max(1, min(per_page, 500))  # cap to prevent abuse
 
     # Self + immediate children (2-level tree only — matches the seed shape).
     cat_id_rows = (
@@ -213,6 +214,7 @@ def _build_popular_parts(
             "listings_count": int(listings_count or 0),
             "best_price": float(best_price) if best_price is not None else None,
             "category_icon": cat_icon_by_id.get(part.category_id),
+            "sub_slug": part.sub_slug,
         }
         for part, _, best_price, listings_count in rows
     ]

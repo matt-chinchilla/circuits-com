@@ -1,54 +1,26 @@
 @use '@shared/styles/variables' as *;
 @use '@shared/styles/mixins' as *;
-@use '@shared/styles/animations';
 
 .tableWrap {
   @include card-base;
-  overflow: hidden;
-  overflow-x: auto;
+  overflow: visible;
 }
 
 .table {
   width: 100%;
   border-collapse: collapse;
   font-family: $font-body;
-}
-
-.headerRow {
-  background: #d5d5d5;
-}
-
-.th {
-  text-align: left;
-  padding: 12px 16px;
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: $text-primary;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  white-space: nowrap;
-}
-
-.thDescription {
-  @include responsive($bp-mobile) {
-    display: none;
-  }
-}
-
-// Mobile-fit columns: hide Manufacturer + Distributors at ≤$bp-mobile so the
-// remaining SKU + Best Price + Status fit a 430px viewport without horizontal
-// scroll. Full data is one tap away on the part detail page (SKU is the link).
-.thMobileHide,
-.tdMobileHide {
-  @include responsive($bp-mobile) {
-    display: none;
-  }
+  table-layout: auto;
 }
 
 .row {
   border-bottom: 1px solid #eee;
-  transition: transform $transition-fast, box-shadow $transition-fast;
+  transition: background-color 120ms;
   cursor: default;
+
+  &:hover {
+    background: rgba(0, 0, 0, 0.015);
+  }
 
   &:last-child {
     border-bottom: none;
@@ -56,15 +28,45 @@
 }
 
 .td {
-  padding: 14px 16px;
-  font-size: 0.9rem;
+  padding: 12px 14px;
+  font-size: 0.88rem;
   color: $text-primary;
   vertical-align: middle;
 }
 
-.tdDescription {
-  @include responsive($bp-mobile) {
+.tdDesc {
+  @media (max-width: $bp-mobile) {
     display: none;
+  }
+}
+
+.tdSub {
+  @media (max-width: $bp-mobile) {
+    display: none;
+  }
+}
+
+.tdMobileHide {
+  @media (max-width: $bp-mobile) {
+    display: none;
+  }
+}
+
+.tdTier {
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  width: 1%;
+  padding-left: 10px;
+  padding-right: 10px;
+}
+
+.tdTierLast {
+  background: rgba($nav-blue, 0.05);
+
+  .price {
+    color: var(--theme-accent, $nav-blue);
+    font-weight: 600;
   }
 }
 
@@ -72,9 +74,9 @@
   color: var(--theme-accent);
   text-decoration: none;
   font-weight: 600;
-  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-family: $font-mono;
   font-size: 0.85rem;
-  transition: color $transition-fast;
+  transition: color 120ms;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -91,6 +93,7 @@
 
 .manufacturer {
   font-weight: 500;
+  font-size: 0.85rem;
 }
 
 .description {
@@ -104,44 +107,24 @@
   max-width: 240px;
 }
 
-.count {
-  font-weight: 500;
-  color: $text-primary;
+.subCell {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+
+  i {
+    font-size: 0.95rem;
+    color: var(--theme-accent, $nav-blue);
+    flex-shrink: 0;
+  }
 }
 
 .price {
-  font-weight: 600;
-  color: $executive-blue;
-  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
-  font-size: 0.85rem;
-}
-
-.statusBadge {
-  display: inline-block;
-  padding: 2px 10px;
-  font-size: 0.72rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  border-radius: 4px;
-}
-
-.statusActive {
-  color: #15803d;
-  background: rgba(34, 197, 94, 0.12);
-  border: 1px solid rgba(34, 197, 94, 0.3);
-}
-
-.statusNrnd {
-  color: #a16207;
-  background: rgba(234, 179, 8, 0.12);
-  border: 1px solid rgba(234, 179, 8, 0.3);
-}
-
-.statusObsolete {
-  color: #b91c1c;
-  background: rgba(239, 68, 68, 0.12);
-  border: 1px solid rgba(239, 68, 68, 0.3);
+  font-weight: 500;
+  color: $text-primary;
+  font-family: $font-mono;
+  font-size: 0.82rem;
 }
 
 .empty {
@@ -150,4 +133,11 @@
   text-align: center;
   color: $text-secondary;
   font-size: 0.95rem;
+  font-style: italic;
+}
+
+@media (max-width: 640px) {
+  .td {
+    padding: 10px 8px;
+  }
 }

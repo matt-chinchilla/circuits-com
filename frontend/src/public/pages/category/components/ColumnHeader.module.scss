@@ -1,0 +1,264 @@
+@use '@shared/styles/variables' as *;
+
+.colHead {
+  position: relative;
+  padding: 0;
+  background: $surface;
+  border-bottom: 1px solid #e5e7eb;
+  vertical-align: middle;
+}
+
+.colHeadActive .trigger {
+  color: var(--theme-accent, $nav-blue);
+}
+
+.mobileHide {
+  @media (max-width: $bp-mobile) {
+    display: none;
+  }
+}
+
+.numeric .trigger {
+  justify-content: flex-start;
+}
+
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: $text-secondary;
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 120ms, color 120ms;
+  line-height: 1;
+
+  &:hover {
+    background: rgba(0, 0, 0, 0.04);
+    color: $text-primary;
+  }
+}
+
+.label {
+  white-space: nowrap;
+}
+
+.indicators {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--theme-accent, $nav-blue);
+  display: inline-block;
+}
+
+.sortIcon {
+  font-size: 0.7rem;
+  color: $text-secondary;
+  transition: color 120ms;
+}
+
+.sortIconActive {
+  color: var(--theme-accent, $nav-blue);
+}
+
+.popover {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 60;
+  min-width: 260px;
+  max-width: 320px;
+  margin-top: 4px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.05);
+  padding: 10px;
+  text-align: left;
+  font-family: $font-body;
+  animation: cpPopIn 140ms ease-out;
+}
+
+.popoverRight {
+  left: 0;
+}
+
+@keyframes cpPopIn {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.section {
+  padding: 8px 6px;
+
+  & + & {
+    border-top: 1px solid #f0f2f5;
+    margin-top: 4px;
+  }
+}
+
+.sectionLabel {
+  display: block;
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: $text-secondary;
+  margin-bottom: 6px;
+}
+
+.sectionHead {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 6px;
+
+  .sectionLabel {
+    margin-bottom: 0;
+    flex: 1;
+  }
+}
+
+.link {
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--theme-accent, $nav-blue);
+  background: none;
+  border: none;
+  padding: 2px 4px;
+  cursor: pointer;
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.sortRow {
+  display: flex;
+  gap: 6px;
+}
+
+.sortBtn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 8px 12px;
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: $text-primary;
+  background: #fafbfc;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 120ms;
+  line-height: 1;
+
+  &:hover {
+    border-color: var(--theme-accent, $nav-blue);
+    color: var(--theme-accent, $nav-blue);
+  }
+}
+
+.sortBtnOn {
+  background: var(--theme-accent, $nav-blue);
+  border-color: var(--theme-accent, $nav-blue);
+  color: #fff;
+}
+
+.sortArrow {
+  font-size: 0.7rem;
+}
+
+.searchInput {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 7px 10px;
+  font-family: inherit;
+  font-size: 0.85rem;
+  background: #fafbfc;
+  color: $text-primary;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  outline: none;
+  transition: all 120ms;
+
+  &:focus {
+    background: #fff;
+    border-color: var(--theme-accent, $nav-blue);
+    box-shadow: 0 0 0 3px rgba($nav-blue, 0.12);
+  }
+}
+
+.filterList {
+  max-height: 240px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  scrollbar-width: thin;
+
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.15);
+    border-radius: 3px;
+  }
+}
+
+.filterRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px;
+  border-radius: 5px;
+  font-size: 0.82rem;
+  color: $text-primary;
+  cursor: pointer;
+  transition: background-color 120ms;
+
+  &:hover {
+    background: #f4f6f9;
+  }
+
+  input[type='checkbox'] {
+    width: 14px;
+    height: 14px;
+    accent-color: var(--theme-accent, $nav-blue);
+    margin: 0;
+    flex-shrink: 0;
+  }
+}
+
+.filterLabel {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  flex: 1;
+}
