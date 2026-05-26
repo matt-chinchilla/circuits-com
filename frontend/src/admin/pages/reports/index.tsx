@@ -404,8 +404,8 @@ interface TrafficChartProps {
 function TrafficChart({ data }: TrafficChartProps) {
   const [hover, setHover] = useState<number | null>(null)
 
-  if (data.length < 2) {
-    return <div className={styles.empty}>Not enough data yet.</div>
+  if (data.length === 0) {
+    return <div className={styles.empty}>No traffic data yet.</div>
   }
 
   const W = 800
@@ -415,16 +415,10 @@ function TrafficChart({ data }: TrafficChartProps) {
   const innerH = H - PAD.t - PAD.b
   const maxV = Math.max(4, ...data.map(d => d.views))
   const N = data.length
-  const xs = data.map((_, i) => PAD.l + (i / (N - 1)) * innerW)
+  const xs = N === 1
+    ? [PAD.l + innerW / 2]
+    : data.map((_, i) => PAD.l + (i / (N - 1)) * innerW)
   const yScale = (v: number) => PAD.t + innerH - (v / maxV) * innerH
-
-  function buildLine(accessor: (d: TrafficChartProps['data'][number]) => number): string {
-    return data.map((d, i) => `${i === 0 ? 'M' : 'L'} ${xs[i]},${yScale(accessor(d))}`).join(' ')
-  }
-
-  const viewsLine = buildLine(d => d.views)
-  const visitorsLine = buildLine(d => d.visitors)
-  const viewsArea = viewsLine + ` L ${xs[N - 1]},${yScale(0)} L ${xs[0]},${yScale(0)} Z`
 
   const tickStep = Math.max(1, Math.ceil(maxV / 4))
   const yTicks = [0, tickStep, tickStep * 2, tickStep * 3, Math.min(tickStep * 4, maxV)]
@@ -434,6 +428,15 @@ function TrafficChart({ data }: TrafficChartProps) {
   const tipLeft = hover !== null
     ? `${(Math.min(W - 140, Math.max(PAD.l, xs[hover] + 14)) / W) * 100}%`
     : '0%'
+
+  let viewsLine = ''
+  let visitorsLine = ''
+  let viewsArea = ''
+  if (N >= 2) {
+    viewsLine = data.map((d, i) => `${i === 0 ? 'M' : 'L'} ${xs[i]},${yScale(d.views)}`).join(' ')
+    visitorsLine = data.map((d, i) => `${i === 0 ? 'M' : 'L'} ${xs[i]},${yScale(d.visitors)}`).join(' ')
+    viewsArea = viewsLine + ` L ${xs[N - 1]},${yScale(0)} L ${xs[0]},${yScale(0)} Z`
+  }
 
   return (
     <div className={styles.chartWrap}>
@@ -450,19 +453,35 @@ function TrafficChart({ data }: TrafficChartProps) {
           </g>
         ))}
         {data.map((d, i) =>
-          i % labelEvery === 0 ? (
+          i % labelEvery === 0 || N <= 3 ? (
             <text key={d.day} x={xs[i]} y={H - PAD.b + 18} textAnchor="middle" fontSize="10" fill="#7a756d" fontFamily="ui-monospace">
               {d.day.slice(5)}
             </text>
           ) : null
         )}
-        <path d={viewsArea} fill="rgba(10, 74, 46, 0.1)" className={styles.revArea} />
-        <path d={viewsLine} fill="none" stroke="#0a4a2e" strokeWidth="2" className={styles.revLine} />
-        <path d={visitorsLine} fill="none" stroke="#2563eb" strokeWidth="1.5" strokeDasharray="4 3" opacity="0.7" />
-        {hover !== null && (
+        {N >= 2 && (
+          <>
+            <path d={viewsArea} fill="rgba(10, 74, 46, 0.1)" className={styles.revArea} />
+            <path d={viewsLine} fill="none" stroke="#0a4a2e" strokeWidth="2" className={styles.revLine} />
+            <path d={visitorsLine} fill="none" stroke="#2563eb" strokeWidth="1.5" strokeDasharray="4 3" opacity="0.7" />
+          </>
+        )}
+        {data.map((d, i) => (
+          <g key={d.day}>
+            <circle cx={xs[i]} cy={yScale(d.views)} r={hover === i || N === 1 ? 5 : 3} fill="#0a4a2e" stroke="#fff" strokeWidth="2" />
+            <circle cx={xs[i]} cy={yScale(d.visitors)} r={hover === i || N === 1 ? 4 : 2.5} fill="#2563eb" stroke="#fff" strokeWidth="1.5" />
+            {N === 1 && (
+              <>
+                <text x={xs[i] + 10} y={yScale(d.views) - 8} fontSize="11" fill="#0a4a2e" fontWeight="600">{d.views} views</text>
+                <text x={xs[i] + 10} y={yScale(d.visitors) + 16} fontSize="11" fill="#2563eb" fontWeight="600">{d.visitors} visitors</text>
+              </>
+            )}
+          </g>
+        ))}
+        {hover !== null && N >= 2 && (
           <line x1={xs[hover]} x2={xs[hover]} y1={PAD.t} y2={H - PAD.b} stroke="#7a756d" strokeDasharray="2 3" opacity="0.5" />
         )}
-        {data.map((_, i) => (
+        {N >= 2 && data.map((_, i) => (
           <rect key={i} x={xs[i] - innerW / (N * 2)} y={PAD.t} width={innerW / N} height={innerH} fill="transparent" onMouseEnter={() => setHover(i)} />
         ))}
       </svg>
@@ -851,20 +870,22 @@ export default function ReportsPage() {
                     <h3 className={styles.chartTitle}>Top Pages</h3>
                     <span className={styles.chartSub}>By views · last {analytics.period_days}d</span>
                   </div>
-                  <table className={styles.topPagesTable}>
-                    <thead>
-                      <tr><th>Page</th><th style={{ textAlign: 'right' }}>Views</th><th style={{ textAlign: 'right' }}>Visitors</th></tr>
-                    </thead>
-                    <tbody>
-                      {analytics.top_pages.slice(0, 10).map(p => (
-                        <tr key={p.path}>
-                          <td className={styles.pathCell} title={p.path}>{p.path}</td>
-                          <td className={styles.numCell}>{p.views}</td>
-                          <td className={styles.numCell}>{p.visitors}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                  <div className={styles.tableScroll}>
+                    <table className={styles.topPagesTable}>
+                      <thead>
+                        <tr><th>Page</th><th style={{ textAlign: 'right' }}>Views</th><th style={{ textAlign: 'right' }}>Visitors</th></tr>
+                      </thead>
+                      <tbody>
+                        {analytics.top_pages.slice(0, 10).map(p => (
+                          <tr key={p.path}>
+                            <td className={styles.pathCell} title={p.path}>{p.path}</td>
+                            <td className={styles.numCell}>{p.views}</td>
+                            <td className={styles.numCell}>{p.visitors}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
 
                 <div className={styles.chartCard}>
