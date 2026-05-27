@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
+import { Helmet } from "react-helmet-async";
 import { Link } from "react-router-dom";
 import PageHeaderBand from "@public/components/layout/PageHeaderBand";
 import styles from "./PrivacyPage.module.scss";
@@ -209,6 +210,11 @@ export default function PrivacyPage() {
       exit={{ opacity: 0, x: -20 }}
       transition={{ duration: 0.15, ease: "easeInOut" as const }}
     >
+      <Helmet>
+        <title>Privacy Policy | Circuits.com</title>
+        <meta name="description" content="Circuits.com privacy policy — how we handle your data, cookies, and third-party services." />
+        <link rel="canonical" href="https://circuits.com/privacy" />
+      </Helmet>
       <PageHeaderBand
         page="privacy"
         title="Privacy Policy"

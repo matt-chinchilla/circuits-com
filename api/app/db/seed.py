@@ -48,6 +48,14 @@ def slugify(text: str) -> str:
     return text
 
 
+def slugify_sku(sku: str) -> str:
+    """Derive a URL-safe slug from a part SKU (e.g. ADP151AUJZ-3.3 -> adp151aujz-3-3)."""
+    slug = sku.lower()
+    slug = re.sub(r"[^a-z0-9]+", "-", slug)
+    slug = re.sub(r"-+", "-", slug)
+    return slug.strip("-")
+
+
 def get_or_create_category(
     db: Session,
     name: str,
@@ -263,6 +271,159 @@ CATEGORY_DATA: list[tuple[str, str, str, list[tuple[str, str, str]]]] = [
     ),
 ]
 
+# ---------------------------------------------------------------------------
+# SEO descriptions for the 15 parent categories — keyed by slug.
+# Seeded onto Category.description for search-engine visibility.
+# ---------------------------------------------------------------------------
+CATEGORY_DESCRIPTIONS: dict[str, str] = {
+    "power-management-ics-pmics": (
+        "Power Management ICs (PMICs) regulate, convert, and distribute electrical power"
+        " within electronic systems. This category covers linear voltage regulators (LDOs),"
+        " DC-DC converters including buck and boost topologies, battery management ICs for"
+        " single-cell and multi-cell packs, power supervisors with reset outputs, and LED"
+        " driver ICs. Common applications span portable devices, industrial automation,"
+        " automotive ECUs, and server power rails. Leading manufacturers include Texas"
+        " Instruments, Analog Devices, Monolithic Power Systems, ON Semiconductor,"
+        " and STMicroelectronics. Compare datasheets, pricing, and stock across"
+        " authorized distributors on Circuits.com."
+    ),
+    "microcontrollers-processors": (
+        "Microcontrollers and processors form the computational heart of embedded systems."
+        " Browse 8-bit MCUs from Microchip and Renesas, 32-bit ARM Cortex-M devices from"
+        " STMicroelectronics, NXP, and Infineon, application processors for Linux-class"
+        " workloads, digital signal processors (DSPs) for real-time audio and motor control,"
+        " and highly integrated systems-on-chip (SoCs) with built-in wireless such as the"
+        " Espressif ESP32 family. These components power IoT nodes, wearables, robotics,"
+        " automotive control modules, and consumer electronics. Compare prices and lead"
+        " times from authorized distributors."
+    ),
+    "analog-ics": (
+        "Analog ICs process continuous signals in amplification, filtering, and signal"
+        " conditioning applications. This category includes operational amplifiers (op-amps)"
+        " ranging from general-purpose to precision and low-noise grades, voltage comparators,"
+        " analog multiplexers and switches, precision voltage references, and instrumentation"
+        " amplifiers for sensor front-ends. Key manufacturers are Texas Instruments, Analog"
+        " Devices, Maxim Integrated, Microchip, and ON Semiconductor. Use Circuits.com to"
+        " compare specifications, unit pricing at volume, and real-time stock levels across"
+        " major distributors."
+    ),
+    "interface-ics": (
+        "Interface ICs bridge communication between processors, peripherals, and external"
+        " networks. This section covers UART and USART transceivers for legacy serial links,"
+        " USB controllers and bridges (FTDI, Silicon Labs), I2C and SPI bus expanders,"
+        " CAN and LIN transceivers for automotive and industrial fieldbus networks, and"
+        " bidirectional level shifters for mixed-voltage designs. These devices are essential"
+        " in automotive ECUs, industrial PLCs, medical instruments, and consumer gadgets."
+        " Manufacturers include Texas Instruments, Maxim Integrated, NXP, Microchip, and"
+        " STMicroelectronics."
+    ),
+    "memory-ics": (
+        "Memory ICs store data and instructions for microcontrollers, processors, and FPGAs."
+        " Browse EEPROMs for configuration storage, NOR flash for execute-in-place firmware,"
+        " NAND flash for high-density data logging, SRAM for low-latency cache and buffers,"
+        " and DRAM for large working-memory pools. Leading suppliers include Micron, Samsung,"
+        " Winbond, ISSI, Infineon, and Microchip. Circuits.com lets you compare pricing across"
+        " package types, densities, and speed grades from dozens of authorized distributors"
+        " worldwide."
+    ),
+    "logic-ics": (
+        "Logic ICs implement fundamental digital building blocks used in virtually every"
+        " electronic design. This category spans basic gates (AND, OR, NAND, NOR, XOR),"
+        " flip-flops and latches for state storage, counters for timing and sequencing,"
+        " shift registers for serial-to-parallel conversion, and programmable logic devices"
+        " including CPLDs and FPGAs. Major manufacturers are Texas Instruments, NXP, ON"
+        " Semiconductor, Lattice, and AMD-Xilinx. Compare pricing, package options, and"
+        " stock availability from top distributors."
+    ),
+    "rf-wireless-ics": (
+        "RF and wireless ICs enable radio communication across Bluetooth, Wi-Fi, LoRa,"
+        " cellular, and custom ISM-band protocols. Browse Bluetooth Low Energy SoCs,"
+        " Wi-Fi transceivers, sub-GHz RF transceivers for IoT, GPS and GNSS receiver"
+        " modules, and NFC/RFID reader ICs. These components are critical for connected"
+        " devices, asset tracking, smart home systems, and wearable health monitors."
+        " Key suppliers include Nordic Semiconductor, Espressif, Texas Instruments, Silicon"
+        " Labs, Semtech, and u-blox. Compare module specs, sensitivity, and pricing."
+    ),
+    "sensor-ics": (
+        "Sensor ICs convert physical phenomena into electrical signals for measurement"
+        " and control. This category includes temperature sensors (analog and digital),"
+        " MEMS accelerometers, gyroscopes, and IMUs for motion sensing, barometric and"
+        " differential pressure sensors, and proximity and ambient-light detectors."
+        " Applications range from industrial process monitoring and automotive ADAS to"
+        " consumer wearables and environmental monitoring stations. Leading manufacturers"
+        " are Bosch Sensortec, Honeywell, STMicroelectronics, TDK InvenSense, and TE"
+        " Connectivity."
+    ),
+    "audio-video-ics": (
+        "Audio and video ICs handle signal amplification, encoding, decoding, and"
+        " transmission for multimedia applications. Browse Class-D and Class-AB audio"
+        " amplifiers, audio and video CODECs, video processing and scaling ICs, HDMI"
+        " and DisplayPort interface controllers, and microphone preamplifiers with"
+        " digital output. These devices power Bluetooth speakers, soundbars, conferencing"
+        " systems, automotive infotainment, and professional AV equipment. Key manufacturers"
+        " include Texas Instruments, Cirrus Logic, Analog Devices, Maxim Integrated, and"
+        " Realtek."
+    ),
+    "clock-timing-ics": (
+        "Clock and timing ICs generate, distribute, and synchronize reference frequencies"
+        " throughout electronic systems. This category covers crystal oscillators and MEMS"
+        " oscillators, real-time clock (RTC) modules with battery backup, programmable"
+        " clock generators and buffers, phase-locked loops (PLLs) for frequency synthesis,"
+        " and classic timer ICs like the 555. Applications include telecom base stations,"
+        " data-center switches, GPS receivers, and precision instrumentation. Key"
+        " manufacturers are Silicon Labs, Texas Instruments, Microchip, Maxim Integrated,"
+        " and Renesas."
+    ),
+    "motor-motion-ics": (
+        "Motor and motion control ICs drive DC, stepper, and brushless DC motors in"
+        " industrial, automotive, and consumer applications. This section covers integrated"
+        " H-bridge motor drivers, servo controller ICs, MOSFET and IGBT gate drivers for"
+        " high-power switching, dedicated motion-control processors, and PWM controller ICs."
+        " These components are essential for robotics, CNC machines, electric vehicles,"
+        " HVAC blowers, and home appliances. Major manufacturers include Texas Instruments,"
+        " STMicroelectronics, Infineon, ON Semiconductor, and Allegro MicroSystems."
+    ),
+    "data-conversion-ics": (
+        "Data conversion ICs translate signals between the analog and digital domains."
+        " Browse analog-to-digital converters (ADCs) from successive-approximation to"
+        " delta-sigma architectures, digital-to-analog converters (DACs) for audio and"
+        " precision output, sigma-delta modulators, voltage-to-frequency converters, and"
+        " capacitive touchscreen controllers. These devices are critical in test and"
+        " measurement equipment, audio interfaces, medical imaging, and industrial control"
+        " loops. Leading suppliers are Analog Devices, Texas Instruments, Microchip, and"
+        " Maxim Integrated."
+    ),
+    "security-auth-ics": (
+        "Security and authentication ICs protect data, firmware, and hardware identity"
+        " in connected devices. This category includes secure element chips for key"
+        " storage, cryptographic coprocessors implementing AES, ECC, and RSA, trusted"
+        " platform modules (TPMs) for platform integrity, hardware encryption engines,"
+        " and ID/authentication ICs for accessory and consumable verification. These"
+        " components are deployed in payment terminals, IoT edge nodes, automotive ECUs,"
+        " and enterprise servers. Key manufacturers are Microchip, Infineon, NXP, STMicro,"
+        " and Maxim Integrated."
+    ),
+    "automotive-ics": (
+        "Automotive ICs meet the stringent reliability and temperature requirements of"
+        " vehicle electronics (AEC-Q100/Q200 qualified). Browse automotive-grade PMICs,"
+        " CAN and LIN transceivers for in-vehicle networking, ADAS processing ICs for"
+        " radar, lidar, and camera fusion, automotive sensor interfaces, and infotainment"
+        " processors. These devices are used in powertrain control, body electronics,"
+        " driver assistance systems, and in-cabin entertainment. Major suppliers include"
+        " NXP, Infineon, Texas Instruments, STMicroelectronics, Renesas, and ON Semiconductor."
+    ),
+    "display-led-ics": (
+        "Display and LED driver ICs control screens and lighting arrays across consumer,"
+        " industrial, and automotive applications. This category includes LED matrix"
+        " drivers for signage and indicators, LCD segment and TFT drivers, OLED driver"
+        " ICs for wearables and phones, backlight controller ICs with dimming support,"
+        " and display timing controllers (TCONs) for panels. These components enable"
+        " everything from smart-watch faces to automotive instrument clusters. Key"
+        " manufacturers include Texas Instruments, Maxim Integrated, Solomon Systech,"
+        " Rohm, and STMicroelectronics."
+    ),
+}
+
 
 def get_or_create_supplier(
     db: Session,
@@ -362,6 +523,9 @@ def seed(db: Session) -> None:
     cats: dict[str, Category] = {}
     for sort_order, (name, slug, icon, subs) in enumerate(CATEGORY_DATA):
         cat = get_or_create_category(db, name, slug, icon=icon, sort_order=sort_order)
+        if slug in CATEGORY_DESCRIPTIONS and not cat.description:
+            cat.description = CATEGORY_DESCRIPTIONS[slug]
+            db.flush()
         cats[name] = cat
         for sub_order, (sub_name, sub_slug, sub_icon) in enumerate(subs):
             sub = get_or_create_category(
@@ -1246,6 +1410,7 @@ def _seed_parts(
         for sku, manufacturer, description in parts_data:
             part = Part(
                 sku=sku,
+                slug=slugify_sku(sku),
                 description=description,
                 manufacturer_name=manufacturer,
                 category_id=target_cat.id,
@@ -1440,6 +1605,7 @@ def _seed_real_catalog(
 
                 part = Part(
                     sku=p["sku"],
+                    slug=slugify_sku(p["sku"]),
                     description=p.get("description", ""),
                     manufacturer_name=p.get("manufacturer", ""),
                     category_id=target_cat.id,

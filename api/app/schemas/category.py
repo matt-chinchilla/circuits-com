@@ -23,6 +23,7 @@ class CategoryResponse(BaseModel):
     name: str
     slug: str
     icon: str
+    description: str | None = None
     parts_count: int = 0
     children: list[SubcategoryResponse]
     featured_supplier_name: str | None = None

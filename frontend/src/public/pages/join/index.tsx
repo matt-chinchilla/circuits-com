@@ -1,5 +1,6 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { motion } from "framer-motion";
+import { Helmet } from "react-helmet-async";
 import { Link } from "react-router-dom";
 import PageHeaderBand from "@public/components/layout/PageHeaderBand";
 import GlowButton from "@public/components/widgets/GlowButton";
@@ -203,6 +204,11 @@ export default function JoinPage() {
       exit={{ opacity: 0, x: -20 }}
       transition={{ duration: 0.15, ease: "easeInOut" as const }}
     >
+      <Helmet>
+        <title>Join Circuits.com — List Your Components | Distributors Welcome</title>
+        <meta name="description" content="List your electronic components on Circuits.com. Reach engineers and buyers searching for ICs, MCUs, sensors, and more from 57+ distributors." />
+        <link rel="canonical" href="https://circuits.com/join" />
+      </Helmet>
       <PageHeaderBand
         page="join"
         title="Join Circuits.com"

@@ -1,9 +1,10 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-from sqlalchemy import Column, DateTime, String, Integer, ForeignKey
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
+
 from app.db.session import Base
 
 
@@ -19,17 +20,18 @@ class Category(Base):
     # truncate longer names in Postgres. Default flipped from "⚡" to the
     # Phosphor equivalent "lightning". See alembic/versions/005.
     icon = Column(String(40), default="lightning")
+    description = Column(Text, nullable=True)
     parent_id = Column(UUID(as_uuid=True), ForeignKey("categories.id"), nullable=True)
     sort_order = Column(Integer, default=0)
     created_at = Column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
         nullable=True,
     )
     updated_at = Column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
         nullable=True,
     )
 

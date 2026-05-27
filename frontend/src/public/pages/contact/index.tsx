@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { motion } from "framer-motion";
+import { Helmet } from "react-helmet-async";
 import { Link } from "react-router-dom";
 import PageHeaderBand from "@public/components/layout/PageHeaderBand";
 import { api } from "@public/services/api";
@@ -91,6 +92,11 @@ export default function ContactPage() {
         exit={{ opacity: 0, x: -20 }}
         transition={{ duration: 0.15, ease: "easeInOut" as const }}
       >
+        <Helmet>
+          <title>Contact Circuits.com — Get in Touch</title>
+          <meta name="description" content="Contact Circuits.com for questions about electronic component pricing, distributor listings, or partnership opportunities." />
+          <link rel="canonical" href="https://circuits.com/contact" />
+        </Helmet>
         <PageHeaderBand
           page="contact"
           title="Contact Us"

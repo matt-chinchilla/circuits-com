@@ -10,6 +10,7 @@ export interface Category {
   name: string;
   slug: string;
   icon: string;
+  description?: string | null;
   children: Subcategory[];
 }
 

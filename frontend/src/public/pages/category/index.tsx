@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
 import { useParams, useSearchParams, Link } from 'react-router-dom';
+import { Helmet } from 'react-helmet-async';
 import { motion } from 'framer-motion';
 import SubcategoryChips from './components/SubcategoryChips';
 import SupplierTable from './components/SupplierTable';
@@ -173,6 +174,28 @@ export default function CategoryPage() {
     }, 50);
   };
 
+  const categoryName = category?.name ?? '';
+  const metaDescription = category?.description
+    ?? `Compare prices for ${categoryName} components from top distributors on Circuits.com.`;
+
+  const collectionPageJsonLd = category ? {
+    '@context': 'https://schema.org',
+    '@type': 'CollectionPage',
+    name: categoryName,
+    description: category.description ?? metaDescription,
+    url: `https://circuits.com/category/${category.slug}`,
+  } : null;
+
+  const breadcrumbJsonLd = category?.parent ? {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://circuits.com/' },
+      { '@type': 'ListItem', position: 2, name: category.parent.name, item: `https://circuits.com/category/${category.parent.slug}` },
+      { '@type': 'ListItem', position: 3, name: categoryName },
+    ],
+  } : null;
+
   return (
     <motion.div
       className={styles.page}
@@ -181,6 +204,19 @@ export default function CategoryPage() {
       exit={{ opacity: 0, x: -20 }}
       transition={{ duration: 0.15, ease: 'easeInOut' as const }}
     >
+      {category && (
+        <Helmet>
+          <title>{categoryName} — Prices &amp; Distributors | Circuits.com</title>
+          <meta name="description" content={metaDescription} />
+          <link rel="canonical" href={`https://circuits.com/category/${category.slug}`} />
+          {collectionPageJsonLd && (
+            <script type="application/ld+json">{JSON.stringify(collectionPageJsonLd)}</script>
+          )}
+          {breadcrumbJsonLd && (
+            <script type="application/ld+json">{JSON.stringify(breadcrumbJsonLd)}</script>
+          )}
+        </Helmet>
+      )}
       <div className={styles.categoryHeader}>
         <div className={styles.headerInner}>
           <nav className={styles.breadcrumb} aria-label="Breadcrumb">
@@ -253,6 +289,15 @@ export default function CategoryPage() {
           ) : null}
         </div>
       </div>
+
+      {/* SEO description prose */}
+      {!loading && category?.description && !activeSubInfo && (
+        <div className={styles.descriptionBand}>
+          <div className={styles.descriptionInner}>
+            <p className={styles.descriptionText}>{category.description}</p>
+          </div>
+        </div>
+      )}
 
       {/* Sticky subcategory pill-bar */}
       {!loading && category && (

@@ -60,6 +60,7 @@ export interface PartListing {
 export interface Part {
   id: string;
   sku: string;
+  slug?: string | null;
   manufacturer_name: string;
   description: string | null;
   category_id: string | null;

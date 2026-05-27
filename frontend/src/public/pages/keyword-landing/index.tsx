@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
+import { Helmet } from 'react-helmet-async';
 import { Link, useNavigate } from 'react-router-dom';
 import GlowButton from '@public/components/widgets/GlowButton';
 import PageHeaderBand from '@public/components/layout/PageHeaderBand';
@@ -81,6 +82,11 @@ export default function KeywordLandingPage() {
          persistent <BackdropLayer /> at App.tsx level. Adding this slots
          /keyword into the standard inner-page contract; previously the
          page jumped straight into section 01 with no top-band signature. */}
+      <Helmet>
+        <title>Keyword Sponsorship — Promote Your Brand | Circuits.com</title>
+        <meta name="description" content="Sponsor a keyword on Circuits.com. Own the search term your buyers type — one sponsor per keyword, live in 48 hours, month-to-month." />
+        <link rel="canonical" href="https://circuits.com/keyword" />
+      </Helmet>
       <PageHeaderBand
         page="sponsor"
         title="Sponsor a Keyword"

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
+import { Helmet } from 'react-helmet-async'
 import { Link } from 'react-router-dom'
 import PageHeaderBand from '@public/components/layout/PageHeaderBand'
 import Icon from '@shared/components/Icon'
@@ -135,6 +136,11 @@ export default function AboutPage() {
       transition={{ duration: 0.15, ease: 'easeInOut' as const }}
       className={styles.aboutPage}
     >
+      <Helmet>
+        <title>About Circuits.com — Electronic Components Directory</title>
+        <meta name="description" content="Learn about Circuits.com — the electronic components directory connecting buyers, suppliers, and engineers. Compare prices from 57 distributors." />
+        <link rel="canonical" href="https://circuits.com/about" />
+      </Helmet>
       <PageHeaderBand
         page="about"
         title="About Circuits.com"

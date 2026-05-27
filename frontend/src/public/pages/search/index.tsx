@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { Helmet } from 'react-helmet-async';
 import SearchBar from '@public/components/layout/SearchBar';
 import SkeletonLoader from '@public/components/widgets/SkeletonLoader';
 import GlowButton from '@public/components/widgets/GlowButton';
@@ -76,6 +77,10 @@ export default function SearchPage() {
       transition={{ duration: 0.15, ease: 'easeInOut' }}
     >
 
+      <Helmet>
+        <title>{q ? `${q} — Search Results | Circuits.com` : 'Search Electronic Components | Circuits.com'}</title>
+        <meta name="robots" content="noindex, follow" />
+      </Helmet>
       <div className={styles.searchHeader}>
         <div className={styles.headerInner}>
           <h1 className={styles.title}>

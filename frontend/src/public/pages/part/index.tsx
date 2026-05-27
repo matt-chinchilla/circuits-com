@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Helmet } from 'react-helmet-async';
 import { useParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import SkeletonLoader from '@public/components/widgets/SkeletonLoader';
@@ -61,6 +62,23 @@ export default function PartPage() {
       exit={{ opacity: 0, x: -20 }}
       transition={{ duration: 0.15, ease: 'easeInOut' as const }}
     >
+      {part && (
+        <Helmet>
+          <title>{part.sku} by {part.manufacturer_name} — Buy from Distributors | Circuits.com</title>
+          <meta
+            name="description"
+            content={`${part.description || part.sku}. Compare prices from distributors.${part.best_price != null ? ` Best price: $${part.best_price.toFixed(2)}` : ''}`}
+          />
+          <link rel="canonical" href={`https://circuits.com/part/${part.slug ?? id}`} />
+          <script type="application/ld+json">{JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "Product",
+            "name": part.sku,
+            "description": part.description,
+            "brand": { "@type": "Brand", "name": part.manufacturer_name },
+          })}</script>
+        </Helmet>
+      )}
 
       <div className={styles.partHeader}>
         <div className={styles.headerInner}>

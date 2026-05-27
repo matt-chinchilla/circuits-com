@@ -1,3 +1,4 @@
+import re
 import uuid
 from decimal import Decimal
 
@@ -7,7 +8,7 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.models import Part, PartListing, PriceBreak, Supplier, User, Category
+from app.models import Category, Part, PartListing, PriceBreak, Supplier, User
 from app.services.auth_service import get_current_user
 
 router = APIRouter(prefix="/api/parts", tags=["parts"])
@@ -18,10 +19,19 @@ def _to_uuid(val: str) -> uuid.UUID:
     try:
         return uuid.UUID(val)
     except (ValueError, AttributeError):
-        raise HTTPException(404, "Not found")
+        raise HTTPException(404, "Not found") from None
+
+
+def slugify_sku(sku: str) -> str:
+    """Derive a URL-safe slug from a part SKU."""
+    slug = sku.lower()
+    slug = re.sub(r"[^a-z0-9]+", "-", slug)
+    slug = re.sub(r"-+", "-", slug)
+    return slug.strip("-")
 
 
 # --- Pydantic schemas ---
+
 
 class InitialListing(BaseModel):
     """Optional payload bundled with PartCreate so a new Part can be linked
@@ -30,6 +40,7 @@ class InitialListing(BaseModel):
     both the Part row and a PartListing(part_id, supplier_id) wired in a
     single transaction.
     """
+
     supplier_id: str
     stock_quantity: int | None = None
     unit_price: float | None = None
@@ -73,6 +84,7 @@ class BatchImportRequest(BaseModel):
 
 # --- Helpers ---
 
+
 def part_to_dict(part: Part, db: Session | None = None) -> dict:
     category_name = None
     category_icon = None
@@ -103,6 +115,7 @@ def part_to_dict(part: Part, db: Session | None = None) -> dict:
     return {
         "id": str(part.id),
         "sku": part.sku,
+        "slug": part.slug,
         "description": part.description,
         "manufacturer_name": part.manufacturer_name,
         "category_id": str(part.category_id) if part.category_id else None,
@@ -145,6 +158,7 @@ def listing_to_dict(listing: PartListing) -> dict:
 
 # --- Routes ---
 
+
 @router.get("/")
 def list_parts(
     page: int = Query(1, ge=1),
@@ -158,9 +172,7 @@ def list_parts(
 
     if search:
         pattern = f"%{search}%"
-        query = query.filter(
-            or_(Part.sku.ilike(pattern), Part.description.ilike(pattern))
-        )
+        query = query.filter(or_(Part.sku.ilike(pattern), Part.description.ilike(pattern)))
 
     if category_id:
         query = query.filter(Part.category_id == _to_uuid(category_id))
@@ -203,6 +215,7 @@ def create_part(
     part = Part(
         id=uuid.uuid4(),
         sku=body.sku,
+        slug=slugify_sku(body.sku),
         description=body.description,
         manufacturer_name=body.manufacturer_name,
         category_id=_to_uuid(body.category_id) if body.category_id else None,
@@ -236,6 +249,17 @@ def create_part(
     return part_to_dict(part, db)
 
 
+@router.get("/by-slug/{slug}")
+def get_part_by_slug(slug: str, db: Session = Depends(get_db)):
+    part = db.query(Part).filter(Part.slug == slug).first()
+    if not part:
+        raise HTTPException(404, "Part not found")
+
+    result = part_to_dict(part, db)
+    result["listings"] = [listing_to_dict(li) for li in part.listings]
+    return result
+
+
 @router.get("/{part_id}")
 def get_part(part_id: str, db: Session = Depends(get_db)):
     part = db.query(Part).filter(Part.id == _to_uuid(part_id)).first()
@@ -243,7 +267,7 @@ def get_part(part_id: str, db: Session = Depends(get_db)):
         raise HTTPException(404, "Part not found")
 
     result = part_to_dict(part, db)
-    result["listings"] = [listing_to_dict(l) for l in part.listings]
+    result["listings"] = [listing_to_dict(ls) for ls in part.listings]
     return result
 
 
@@ -310,6 +334,7 @@ def batch_import(
             part = Part(
                 id=uuid.uuid4(),
                 sku=item.sku,
+                slug=slugify_sku(item.sku),
                 description=item.description,
                 manufacturer_name=item.manufacturer_name,
                 category_id=_to_uuid(item.category_id) if item.category_id else None,

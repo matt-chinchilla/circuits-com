@@ -35,6 +35,7 @@ def get_category(
         name=cat.name,
         slug=cat.slug,
         icon=cat.icon,
+        description=cat.description,
         children=cat.children,
         parent=cat.parent,
         suppliers=result["suppliers"],

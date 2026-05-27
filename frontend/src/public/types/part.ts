@@ -1,6 +1,7 @@
 export interface PublicPart {
   id: string;
   sku: string;
+  slug?: string | null;
   description: string | null;
   manufacturer_name: string;
   lifecycle_status: string;

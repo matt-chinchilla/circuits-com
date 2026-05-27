@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { Helmet } from 'react-helmet-async';
 import GlowButton from '@public/components/widgets/GlowButton';
 import RequestModal from '@public/components/widgets/RequestModal';
 import { useKeywordRequestModal } from '@public/hooks/useKeywordRequestModal';
@@ -67,6 +68,12 @@ export default function KeywordSponsorPage() {
 
   // ─── Loading state ───────────────────────────────────────────────────────
 
+  const keywordHelmet = (
+    <Helmet>
+      <title>{keyword ? `${keyword} — Sponsored Results | Circuits.com` : 'Keyword Sponsorship | Circuits.com'}</title>
+    </Helmet>
+  );
+
   if (loading) {
     return (
       <motion.div
@@ -75,6 +82,7 @@ export default function KeywordSponsorPage() {
         exit={{ opacity: 0, x: -20 }}
         transition={{ duration: 0.15, ease: 'easeInOut' }}
       >
+        {keywordHelmet}
         <div className={styles.loading}>
           <div className={styles.spinner} />
           <p className={styles.loadingText}>Loading sponsor...</p>
