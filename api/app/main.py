@@ -12,6 +12,7 @@ from app.routes import (
     forms,
     parts,
     search,
+    sitemap,
     sponsors,
     suppliers,
 )
@@ -39,6 +40,7 @@ app.include_router(parts.router)
 app.include_router(admin_messages.router)
 app.include_router(admin_category_suppliers.router)
 app.include_router(analytics.router)
+app.include_router(sitemap.router)
 
 
 setup_admin(app)
