@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect } from "react";
+import { lazy, Suspense, useEffect, useRef } from "react";
 import { Routes, Route, useLocation } from "react-router-dom";
 
 // 2026-04-19 Tier-3 #7 perf: Home stays eager (LCP target; must render
@@ -70,6 +70,20 @@ function App() {
     if (location.hash) return;
     window.scrollTo({ top: 0, left: 0 });
   }, [location.pathname]);
+
+  const prefetched = useRef(false);
+  useEffect(() => {
+    if (prefetched.current) return;
+    prefetched.current = true;
+    const idle = window.requestIdleCallback ?? ((cb: () => void) => setTimeout(cb, 200));
+    idle(() => {
+      import("@public/pages/category");
+      import("@public/pages/search");
+      import("@public/pages/part");
+      import("@public/pages/about");
+      import("@public/pages/join");
+    });
+  }, []);
 
   // Admin routes live outside AnimatePresence — admin has its own layout.
   // ErrorBoundary keyed on pathname so render crashes inside any admin page

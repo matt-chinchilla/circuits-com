@@ -125,19 +125,11 @@
   top: $nav-height;
   z-index: 40;
   overflow: hidden;
-  background: $executive-blue;
-  border-top: 1px solid rgba(255, 255, 255, 0.04);
-  border-bottom: 1px solid rgba(0, 0, 0, 0.3);
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
-}
-
-[data-theme='steel'] .stickySubnav,
-[data-theme='schematic'] .stickySubnav {
-  background: var(--theme-nav-bg);
+  background: transparent;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 [data-theme='pcb'] .stickySubnav {
-  background: var(--theme-nav-bg);
   border-bottom: 2px solid var(--copper, #c49b5d);
 }
 
