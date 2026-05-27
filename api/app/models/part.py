@@ -13,7 +13,7 @@ class Part(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     sku = Column(String(100), nullable=False, index=True)
-    slug = Column(String(200), unique=True, nullable=True, index=True)
+    slug = Column(String(200), nullable=True, index=True)
     description = Column(Text, nullable=True)
     manufacturer_name = Column(String(200), nullable=False)
     category_id = Column(
