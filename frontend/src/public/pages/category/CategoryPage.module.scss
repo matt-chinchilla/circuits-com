@@ -138,6 +138,10 @@
   max-width: 1480px;
   margin: 0 auto;
   padding: 12px 28px;
+
+  @media (min-width: 1600px) {
+    max-width: 90vw;
+  }
 }
 
 .chipBar {
