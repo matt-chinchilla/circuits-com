@@ -238,7 +238,7 @@
 // ─── Content layout (wider for category pages) ──────────────────────────────
 
 .contentWide {
-  max-width: 1480px;
+  max-width: calc(1480px + 56px);
   margin: 0 auto;
   padding: 32px 28px 48px;
   flex: 1;
@@ -247,9 +247,9 @@
   box-sizing: border-box;
 
   @media (min-width: 1600px) {
-    max-width: 90vw;
-    padding-left: 40px;
-    padding-right: 40px;
+    max-width: calc(90vw + 56px);
+    padding-left: 28px;
+    padding-right: 28px;
   }
 
   @media (max-width: 640px) {
