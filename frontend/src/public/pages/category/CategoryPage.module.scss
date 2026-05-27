@@ -118,29 +118,6 @@
 
 // ─── SEO description band ───────────────────────────────────────────────────
 
-.descriptionBand {
-  background: var(--theme-surface-bg, $surface);
-  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
-  padding: 20px 28px;
-
-  @media (max-width: 640px) {
-    padding: 16px;
-  }
-}
-
-.descriptionInner {
-  max-width: 1480px;
-  margin: 0 auto;
-}
-
-.descriptionText {
-  margin: 0;
-  font-size: 0.92rem;
-  line-height: 1.65;
-  color: var(--fg2, #6b7280);
-  max-width: 900px;
-}
-
 // ─── Sticky subcategory pill-bar ─────────────────────────────────────────────
 
 .stickySubnav {

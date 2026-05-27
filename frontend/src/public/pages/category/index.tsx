@@ -290,15 +290,6 @@ export default function CategoryPage() {
         </div>
       </div>
 
-      {/* SEO description prose */}
-      {!loading && category?.description && !activeSubInfo && (
-        <div className={styles.descriptionBand}>
-          <div className={styles.descriptionInner}>
-            <p className={styles.descriptionText}>{category.description}</p>
-          </div>
-        </div>
-      )}
-
       {/* Sticky subcategory pill-bar */}
       {!loading && category && (
         <nav className={styles.stickySubnav} aria-label="Subcategories">
