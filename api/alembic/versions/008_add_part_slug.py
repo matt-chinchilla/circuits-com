@@ -16,10 +16,7 @@ depends_on = None
 
 def upgrade() -> None:
     op.add_column("parts", sa.Column("slug", sa.String(200), nullable=True))
-    op.create_index("ix_parts_slug", "parts", ["slug"], unique=True)
 
-    # Backfill: derive slug from SKU — lowercase, replace non-alphanumeric
-    # with hyphens, collapse runs, strip leading/trailing hyphens.
     op.execute(
         """
         UPDATE parts
@@ -31,6 +28,22 @@ def upgrade() -> None:
         )
         """
     )
+
+    op.execute(
+        """
+        UPDATE parts p
+        SET slug = slug || '-' || LEFT(CAST(p.id AS TEXT), 8)
+        FROM (
+            SELECT slug, MIN(CAST(id AS TEXT)) AS keep_id
+            FROM parts
+            GROUP BY slug
+            HAVING COUNT(*) > 1
+        ) dups
+        WHERE p.slug = dups.slug AND CAST(p.id AS TEXT) != dups.keep_id
+        """
+    )
+
+    op.create_index("ix_parts_slug", "parts", ["slug"], unique=True)
 
 
 def downgrade() -> None:
