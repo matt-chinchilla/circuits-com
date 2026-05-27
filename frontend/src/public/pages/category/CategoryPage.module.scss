@@ -21,6 +21,10 @@
   gap: 10px;
   position: relative;
   z-index: 1;
+
+  @media (min-width: 1600px) {
+    max-width: 90vw;
+  }
 }
 
 // ─── Breadcrumb ──────────────────────────────────────────────────────────────
@@ -243,6 +247,7 @@
   box-sizing: border-box;
 
   @media (min-width: 1600px) {
+    max-width: 90vw;
     padding-left: 40px;
     padding-right: 40px;
   }
