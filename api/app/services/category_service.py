@@ -1,6 +1,7 @@
 from sqlalchemy import func
 from sqlalchemy.orm import Session
-from app.models import Category, CategorySupplier, Supplier, Sponsor, Part, PartListing, PriceBreak
+
+from app.models import Category, CategorySupplier, Part, PartListing, PriceBreak, Sponsor, Supplier
 
 
 def get_all_categories(db: Session) -> list[Category]:
@@ -12,17 +13,12 @@ def get_all_categories(db: Session) -> list[Category]:
     keeping the count keyed by `category_id` works for both.
     """
     cats = (
-        db.query(Category)
-        .filter(Category.parent_id.is_(None))
-        .order_by(Category.sort_order)
-        .all()
+        db.query(Category).filter(Category.parent_id.is_(None)).order_by(Category.sort_order).all()
     )
 
     counts: dict = {
         row[0]: row[1]
-        for row in db.query(Part.category_id, func.count(Part.id))
-        .group_by(Part.category_id)
-        .all()
+        for row in db.query(Part.category_id, func.count(Part.id)).group_by(Part.category_id).all()
     }
 
     # Featured supplier per category — lowest rank among is_featured=true rows
@@ -56,11 +52,7 @@ def _build_public_parts(
 ) -> dict:
     """Paginated parts for a leaf category with per-tier best prices."""
     per_page = min(per_page, 500)
-    total = (
-        db.query(func.count(Part.id))
-        .filter(Part.category_id == category_id)
-        .scalar()
-    ) or 0
+    total = (db.query(func.count(Part.id)).filter(Part.category_id == category_id).scalar()) or 0
     pages = max(1, (total + per_page - 1) // per_page)
     page = max(1, min(page, pages))
 
@@ -111,27 +103,31 @@ def _build_public_parts(
         for row in rows:
             pid_str = str(row[0])
             price_val = row[1]
-            tier_prices.setdefault(pid_str, {})[qty] = float(price_val) if price_val is not None else None
+            tier_prices.setdefault(pid_str, {})[qty] = (
+                float(price_val) if price_val is not None else None
+            )
 
     items = []
     for part in parts:
         pid = str(part.id)
         bp = base_prices.get(part.id)
         tp = tier_prices.get(pid, {})
-        items.append({
-            "id": part.id,
-            "sku": part.sku,
-            "description": part.description,
-            "manufacturer_name": part.manufacturer_name,
-            "lifecycle_status": part.lifecycle_status,
-            "listings_count": listing_stats.get(part.id, 0),
-            "best_price": float(bp) if bp is not None else None,
-            "best_price_10": tp.get(10),
-            "best_price_100": tp.get(100),
-            "best_price_1000": tp.get(1000),
-            "category_icon": category_icon,
-            "sub_slug": part.sub_slug,
-        })
+        items.append(
+            {
+                "id": part.id,
+                "sku": part.sku,
+                "description": part.description,
+                "manufacturer_name": part.manufacturer_name,
+                "lifecycle_status": part.lifecycle_status,
+                "listings_count": listing_stats.get(part.id, 0),
+                "best_price": float(bp) if bp is not None else None,
+                "best_price_10": tp.get(10),
+                "best_price_100": tp.get(100),
+                "best_price_1000": tp.get(1000),
+                "category_icon": category_icon,
+                "sub_slug": part.sub_slug,
+            }
+        )
 
     return {
         "items": items,
@@ -142,9 +138,7 @@ def _build_public_parts(
     }
 
 
-def _build_popular_parts(
-    db: Session, parent_id, page: int = 1, per_page: int = 20
-) -> dict:
+def _build_popular_parts(db: Session, parent_id, page: int = 1, per_page: int = 20) -> dict:
     """Paginated rollup of parts across a parent category AND its immediate
     subcategories, ranked by aggregate stock across all listings.
 
@@ -185,11 +179,7 @@ def _build_popular_parts(
     )
 
     # Use a subquery for an accurate total when GROUP BY is involved
-    total = (
-        db.query(func.count(Part.id))
-        .filter(Part.category_id.in_(cat_ids))
-        .scalar()
-    ) or 0
+    total = (db.query(func.count(Part.id)).filter(Part.category_id.in_(cat_ids)).scalar()) or 0
     pages = max(1, (total + per_page - 1) // per_page)
     offset = (page - 1) * per_page
 
@@ -199,10 +189,31 @@ def _build_popular_parts(
     # icon in the table for visual context.
     cat_icon_by_id: dict = {
         row[0]: row[1]
-        for row in db.query(Category.id, Category.icon)
-        .filter(Category.id.in_(cat_ids))
-        .all()
+        for row in db.query(Category.id, Category.icon).filter(Category.id.in_(cat_ids)).all()
     }
+
+    part_ids = [part.id for part, _, _, _ in rows]
+    tier_prices: dict[str, dict[int, float | None]] = {}
+    for qty in (10, 100, 1000):
+        tier_rows = (
+            db.query(
+                PartListing.part_id,
+                func.min(PriceBreak.unit_price),
+            )
+            .join(PriceBreak, PriceBreak.listing_id == PartListing.id)
+            .filter(
+                PartListing.part_id.in_(part_ids),
+                PriceBreak.min_quantity == qty,
+            )
+            .group_by(PartListing.part_id)
+            .all()
+        )
+        for row in tier_rows:
+            pid_str = str(row[0])
+            price_val = row[1]
+            tier_prices.setdefault(pid_str, {})[qty] = (
+                float(price_val) if price_val is not None else None
+            )
 
     items = [
         {
@@ -213,6 +224,9 @@ def _build_popular_parts(
             "lifecycle_status": part.lifecycle_status,
             "listings_count": int(listings_count or 0),
             "best_price": float(best_price) if best_price is not None else None,
+            "best_price_10": tier_prices.get(str(part.id), {}).get(10),
+            "best_price_100": tier_prices.get(str(part.id), {}).get(100),
+            "best_price_1000": tier_prices.get(str(part.id), {}).get(1000),
             "category_icon": cat_icon_by_id.get(part.category_id),
             "sub_slug": part.sub_slug,
         }
@@ -273,8 +287,11 @@ def get_category_by_slug(
     icon_val = getattr(category, "icon", None)
     icon_str = str(icon_val) if icon_val is not None else None
     parts = _build_public_parts(
-        db, category.id, icon_str,
-        page=parts_page, per_page=parts_per_page,
+        db,
+        category.id,
+        icon_str,
+        page=parts_page,
+        per_page=parts_per_page,
     )
 
     # On a parent category page, surface a "Popular Parts" rollup spanning
@@ -285,7 +302,13 @@ def get_category_by_slug(
             db, category.id, page=popular_page, per_page=popular_per_page
         )
     else:
-        popular_parts = {"items": [], "total": 0, "page": 1, "pages": 1, "per_page": popular_per_page}
+        popular_parts = {
+            "items": [],
+            "total": 0,
+            "page": 1,
+            "pages": 1,
+            "per_page": popular_per_page,
+        }
 
     return {
         "category": category,
