@@ -16,10 +16,9 @@ export default defineConfig({
         runtimeCaching: [
           {
             urlPattern: /\/api\/categories(\/[^/?]+)?(\?.*)?$/,
-            handler: 'NetworkFirst',
+            handler: 'StaleWhileRevalidate',
             options: {
               cacheName: 'api-categories',
-              networkTimeoutSeconds: 3,
               expiration: {
                 maxEntries: 50,
                 maxAgeSeconds: 300,

@@ -125,9 +125,6 @@
 // ─── Sticky subcategory pill-bar ─────────────────────────────────────────────
 
 .stickySubnav {
-  position: sticky;
-  top: $nav-height;
-  z-index: 40;
   background: transparent;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
@@ -165,6 +162,7 @@
     grid-template-columns: 1fr 1fr;
     gap: 8px;
     overflow-x: visible;
+    padding: 0 4px;
   }
 }
 
