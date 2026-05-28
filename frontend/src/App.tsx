@@ -77,11 +77,12 @@ function App() {
     prefetched.current = true;
     const idle = window.requestIdleCallback ?? ((cb: () => void) => setTimeout(cb, 200));
     idle(() => {
-      import("@public/pages/category");
-      import("@public/pages/search");
-      import("@public/pages/part");
-      import("@public/pages/about");
-      import("@public/pages/join");
+      const p = (m: Promise<unknown>) => m.catch(() => {});
+      p(import("@public/pages/category"));
+      p(import("@public/pages/search"));
+      p(import("@public/pages/part"));
+      p(import("@public/pages/about"));
+      p(import("@public/pages/join"));
     });
   }, []);
 

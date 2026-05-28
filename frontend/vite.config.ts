@@ -1,9 +1,46 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { VitePWA } from 'vite-plugin-pwa'
 import path from 'path'
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    VitePWA({
+      registerType: 'autoUpdate',
+      manifest: false,
+      workbox: {
+        navigateFallback: null,
+        globPatterns: [],
+        cleanupOutdatedCaches: true,
+        runtimeCaching: [
+          {
+            urlPattern: /\/api\/categories(\/[^/?]+)?(\?.*)?$/,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'api-categories',
+              networkTimeoutSeconds: 3,
+              expiration: {
+                maxEntries: 50,
+                maxAgeSeconds: 300,
+              },
+            },
+          },
+          {
+            urlPattern: /\/api\/(?!admin|auth|dashboard|track)/,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'api-general',
+              expiration: {
+                maxEntries: 20,
+                maxAgeSeconds: 60,
+              },
+            },
+          },
+        ],
+      },
+    }),
+  ],
   resolve: {
     alias: {
       '@admin': path.resolve(__dirname, './src/admin'),

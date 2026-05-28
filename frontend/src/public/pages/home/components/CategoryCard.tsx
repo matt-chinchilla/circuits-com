@@ -25,6 +25,7 @@ export default function CategoryCard({ category, index }: CategoryCardProps) {
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.05, duration: 0.4, ease: "easeOut" }}
       whileHover={{ y: -4 }}
+      onMouseEnter={() => { import("@public/pages/category").catch(() => {}); }}
       onClick={handleCardClick}
       role="link"
       tabIndex={0}

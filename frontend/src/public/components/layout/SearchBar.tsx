@@ -112,6 +112,7 @@ export default function SearchBar({ variant = 'hero', initialQuery = '' }: Searc
                   to={`/category/${cat.slug}`}
                   className={styles.dropdownItem}
                   role="option"
+                  onMouseEnter={() => { import("@public/pages/category").catch(() => {}); }}
                   onClick={() => setOpen(false)}
                 >
                   <span className={styles.itemIcon} aria-hidden="true">

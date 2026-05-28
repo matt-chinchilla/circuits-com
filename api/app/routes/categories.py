@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.schemas import CategoryResponse, CategoryDetailResponse
@@ -8,13 +8,15 @@ router = APIRouter(prefix="/api/categories", tags=["categories"])
 
 
 @router.get("/", response_model=list[CategoryResponse])
-def list_categories(db: Session = Depends(get_db)):
+def list_categories(response: Response, db: Session = Depends(get_db)):
+    response.headers["Cache-Control"] = "public, max-age=60"
     return get_all_categories(db)
 
 
 @router.get("/{slug}", response_model=CategoryDetailResponse)
 def get_category(
     slug: str,
+    response: Response,
     popular_page: int = Query(1, ge=1, alias="popular_page"),
     popular_per_page: int = Query(20, ge=1, le=500, alias="popular_per_page"),
     parts_page: int = Query(1, ge=1, alias="parts_page"),
@@ -28,6 +30,7 @@ def get_category(
     )
     if not result:
         raise HTTPException(404, "Category not found")
+    response.headers["Cache-Control"] = "public, max-age=60"
     # Build response that matches CategoryDetailResponse
     cat = result["category"]
     return CategoryDetailResponse(
