@@ -15,7 +15,7 @@ export default defineConfig({
         cleanupOutdatedCaches: true,
         runtimeCaching: [
           {
-            urlPattern: /\/api\/categories(\/[^/?]+)?(\?.*)?$/,
+            urlPattern: /\/api\/categories(\/[^/?]+)?\/?(\?.*)?$/,
             handler: 'StaleWhileRevalidate',
             options: {
               cacheName: 'api-categories',

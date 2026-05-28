@@ -1,6 +1,7 @@
 import { useRef, useState, useEffect, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useSearch } from '@public/hooks/useSearch';
+import { api } from '@public/services/api';
 import Icon from '@shared/components/Icon';
 import styles from './SearchBar.module.scss';
 
@@ -112,7 +113,10 @@ export default function SearchBar({ variant = 'hero', initialQuery = '' }: Searc
                   to={`/category/${cat.slug}`}
                   className={styles.dropdownItem}
                   role="option"
-                  onMouseEnter={() => { import("@public/pages/category").catch(() => {}); }}
+                  onMouseEnter={() => {
+                    import("@public/pages/category").catch(() => {});
+                    api.prefetchCategory(cat.slug);
+                  }}
                   onClick={() => setOpen(false)}
                 >
                   <span className={styles.itemIcon} aria-hidden="true">

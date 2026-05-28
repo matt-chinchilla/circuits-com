@@ -160,7 +160,7 @@ export default function CategoryPage() {
       params.delete('p');
       return params;
     });
-  }, [activeSub, skuSearch, mfgFilter, subFilter, sort, setSearchParams]);
+  }, [activeSub, skuSearch, mfgFilter, subFilter, sort]);
 
   const handlePageChange = (next: number) => {
     setSearchParams(prev => {

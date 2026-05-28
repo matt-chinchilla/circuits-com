@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import AnimatedLink from "@public/components/widgets/AnimatedLink";
+import { api } from "@public/services/api";
 import Icon from "@shared/components/Icon";
 import type { Category } from "@public/types/category";
 import styles from "./CategoryCard.module.scss";
@@ -25,7 +26,10 @@ export default function CategoryCard({ category, index }: CategoryCardProps) {
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.05, duration: 0.4, ease: "easeOut" }}
       whileHover={{ y: -4 }}
-      onMouseEnter={() => { import("@public/pages/category").catch(() => {}); }}
+      onMouseEnter={() => {
+        import("@public/pages/category").catch(() => {});
+        api.prefetchCategory(category.slug);
+      }}
       onClick={handleCardClick}
       role="link"
       tabIndex={0}

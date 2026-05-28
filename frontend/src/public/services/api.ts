@@ -9,6 +9,10 @@ export { API_BASE_URL };
 
 const client = axios.create({ baseURL: API_BASE_URL });
 
+// Slugs already warmed via hover-prefetch this session — guards against
+// redundant network calls when a user hovers the same card repeatedly.
+const _prefetchedCategories = new Set<string>();
+
 export interface SearchResults {
   categories: Category[];
   suppliers: Supplier[];
@@ -28,6 +32,15 @@ export const api = {
         },
       })
       .then(r => r.data),
+
+  // Hover-prefetch the category's API data so the Service Worker caches it
+  // before the click. MUST mirror the category page's call
+  // (`getCategory(slug, 1, 500, 1, 500)`) exactly so the cached URL matches.
+  prefetchCategory: (slug: string) => {
+    if (_prefetchedCategories.has(slug)) return;
+    _prefetchedCategories.add(slug);
+    api.getCategory(slug, 1, 500, 1, 500).catch(() => {});
+  },
 
   search: (q: string) =>
     client.get<SearchResults>('/search/', { params: { q } }).then(r => r.data),

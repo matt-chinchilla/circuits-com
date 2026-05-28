@@ -14,13 +14,21 @@ export interface PublicPart {
   sub_slug: string | null;
 }
 
+export interface PriceBreak {
+  id: string;
+  min_quantity: number;
+  unit_price: number;
+}
+
 export interface PartListing {
   id: string;
   supplier_name: string;
+  supplier_website: string | null;
   sku: string | null;
   stock_quantity: number;
   unit_price: number;
   currency: string;
+  price_breaks: PriceBreak[];
 }
 
 export interface PartDetail extends PublicPart {

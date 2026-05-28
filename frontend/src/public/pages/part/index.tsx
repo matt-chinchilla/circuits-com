@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Helmet } from 'react-helmet-async';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import SkeletonLoader from '@public/components/widgets/SkeletonLoader';
 import { api } from '@public/services/api';
-import type { PartDetail } from '@public/types/part';
+import type { PartDetail, PartListing } from '@public/types/part';
 import styles from './PartPage.module.scss';
 
 const rowVariants = {
@@ -18,6 +18,49 @@ const rowVariants = {
 
 function formatPrice(price: number): string {
   return `$${price.toFixed(2)}`;
+}
+
+// Price at a given quantity tier. Qty 1 is the listing's base unit_price;
+// higher tiers come from the matching price break, falling back to base.
+function priceAtQty(listing: PartListing, qty: number): number {
+  if (qty === 1) return listing.unit_price;
+  const pb = listing.price_breaks?.find((b) => b.min_quantity === qty);
+  return pb ? pb.unit_price : listing.unit_price;
+}
+
+// Each distributor's search endpoint. Searching the exact manufacturer part
+// number (globally unique) reliably lands the user on that specific part —
+// the deep-link a sponsoring distributor is paying for. The trailing token is
+// the query param; the MPN is appended url-encoded.
+const DISTRIBUTOR_SEARCH: Record<string, string> = {
+  'digikey.com': 'https://www.digikey.com/en/products/result?keywords=',
+  'mouser.com': 'https://www.mouser.com/c/?q=',
+  'arrow.com': 'https://www.arrow.com/en/products/search?q=',
+  'avnet.com': 'https://www.avnet.com/shop/us/search/?term=',
+  'newark.com': 'https://www.newark.com/search?st=',
+  'farnell.com': 'https://www.farnell.com/search?st=',
+  'element14.com': 'https://www.element14.com/search?st=',
+  'rs-online.com': 'https://www.rs-online.com/web/c/?searchTerm=',
+  'distrelec.com': 'https://www.distrelec.com/en/search?q=',
+  'conrad.com': 'https://www.conrad.com/en/search.html?search=',
+  'futureelectronics.com': 'https://www.futureelectronics.com/en/search?q=',
+  'verical.com': 'https://www.verical.com/search/',
+  'microchipdirect.com': 'https://www.microchipdirect.com/product/search/all/',
+  'analog.com': 'https://www.analog.com/en/search.html?q=',
+};
+
+// Build a part-specific distributor URL from the supplier's domain + the MPN.
+// Known distributors use their real search endpoint (subdomains like
+// us.rs-online.com match the registrable domain); unknown ones get a generic
+// /search?q= path. Returns null when there's no website.
+function distributorUrl(website: string | null, mpn: string): string | null {
+  if (!website || !mpn) return null;
+  const domain = website.replace(/^https?:\/\//i, '').replace(/\/.*$/, '').toLowerCase();
+  const q = encodeURIComponent(mpn);
+  for (const [key, base] of Object.entries(DISTRIBUTOR_SEARCH)) {
+    if (domain === key || domain.endsWith('.' + key)) return base + q;
+  }
+  return `https://${domain.replace(/^www\./, '')}/search?q=${q}`;
 }
 
 function statusClass(status: string): string {
@@ -35,6 +78,7 @@ function statusClass(status: string): string {
 
 export default function PartPage() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [part, setPart] = useState<PartDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -82,6 +126,9 @@ export default function PartPage() {
 
       <div className={styles.partHeader}>
         <div className={styles.headerInner}>
+          <button type="button" className={styles.backBtn} onClick={() => navigate(-1)}>
+            ← Back
+          </button>
           <nav className={styles.breadcrumb} aria-label="Breadcrumb">
             <Link to="/" className={styles.breadcrumbLink}>Home</Link>
             {loading ? (
@@ -183,47 +230,72 @@ export default function PartPage() {
                         <th className={styles.th}>Supplier</th>
                         <th className={styles.th}>Supplier SKU</th>
                         <th className={styles.th}>Stock</th>
-                        <th className={styles.th}>Unit Price</th>
-                        <th className={styles.th}>Currency</th>
+                        <th className={styles.th}>Qty 1</th>
+                        <th className={styles.th}>Qty 10</th>
+                        <th className={styles.th}>Qty 100</th>
+                        <th className={styles.th}>Qty 1k</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {sortedListings.map((listing, i) => (
-                        <motion.tr
-                          key={listing.id}
-                          className={`${styles.row} ${listing.unit_price === bestPrice ? styles.bestRow : ''}`}
-                          custom={i}
-                          variants={rowVariants}
-                          initial="hidden"
-                          animate="visible"
-                          whileHover={{ y: -2, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                        >
-                          <td className={styles.td}>
-                            <span className={styles.supplierName}>{listing.supplier_name}</span>
-                            {listing.unit_price === bestPrice && (
-                              <span className={styles.bestBadge}>Best Price</span>
-                            )}
-                          </td>
-                          <td className={styles.td}>
-                            <span className={styles.listingSku}>
-                              {listing.sku || '\u2014'}
-                            </span>
-                          </td>
-                          <td className={styles.td}>
-                            <span className={styles.stock}>
-                              {listing.stock_quantity.toLocaleString()}
-                            </span>
-                          </td>
-                          <td className={styles.td}>
-                            <span className={styles.price}>
-                              {formatPrice(listing.unit_price)}
-                            </span>
-                          </td>
-                          <td className={styles.td}>
-                            <span className={styles.currency}>{listing.currency}</span>
-                          </td>
-                        </motion.tr>
-                      ))}
+                      {sortedListings.map((listing, i) => {
+                        const isBest = listing.unit_price === bestPrice;
+                        const url = distributorUrl(listing.supplier_website, part.sku);
+                        return (
+                          <motion.tr
+                            key={listing.id}
+                            className={`${styles.row} ${isBest ? styles.bestRow : ''} ${url ? styles.clickableRow : ''}`}
+                            custom={i}
+                            variants={rowVariants}
+                            initial="hidden"
+                            animate="visible"
+                            whileHover={{ y: -2, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                            onClick={url ? (e) => {
+                              if ((e.target as HTMLElement).closest('a')) return;
+                              window.open(url, '_blank', 'noopener,noreferrer');
+                            } : undefined}
+                            title={url ? `Buy from ${listing.supplier_name}` : undefined}
+                          >
+                            <td className={styles.td}>
+                              {url ? (
+                                <a
+                                  href={url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className={styles.supplierLink}
+                                >
+                                  {listing.supplier_name}
+                                  <span className={styles.externalIcon} aria-hidden="true">&#8599;</span>
+                                </a>
+                              ) : (
+                                <span className={styles.supplierName}>{listing.supplier_name}</span>
+                              )}
+                              {isBest && <span className={styles.bestBadge}>Best Price</span>}
+                            </td>
+                            <td className={styles.td}>
+                              <span className={styles.listingSku}>
+                                {listing.sku || '\u2014'}
+                              </span>
+                            </td>
+                            <td className={styles.td}>
+                              <span className={styles.stock}>
+                                {listing.stock_quantity.toLocaleString()}
+                              </span>
+                            </td>
+                            <td className={styles.td}>
+                              <span className={styles.price}>{formatPrice(priceAtQty(listing, 1))}</span>
+                            </td>
+                            <td className={styles.td}>
+                              <span className={styles.price}>{formatPrice(priceAtQty(listing, 10))}</span>
+                            </td>
+                            <td className={styles.td}>
+                              <span className={styles.price}>{formatPrice(priceAtQty(listing, 100))}</span>
+                            </td>
+                            <td className={styles.td}>
+                              <span className={styles.price}>{formatPrice(priceAtQty(listing, 1000))}</span>
+                            </td>
+                          </motion.tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>

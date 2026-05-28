@@ -286,8 +286,19 @@ class TestGetPartDetail:
         resp = client.get(f"/api/parts/{part_id}")
         data = resp.json()
         # listing1 (Avnet) has 3 price breaks
-        avnet_listing = [l for l in data["listings"] if l["supplier_name"] == "Avnet"][0]
+        avnet_listing = [x for x in data["listings"] if x["supplier_name"] == "Avnet"][0]
         assert len(avnet_listing["price_breaks"]) == 3
+
+    def test_get_part_detail_listings_include_supplier_website(self, client, seeded_db):
+        part_id = str(seeded_db["part1"].id)
+        resp = client.get(f"/api/parts/{part_id}")
+        assert resp.status_code == 200
+        data = resp.json()
+        for listing in data["listings"]:
+            assert "supplier_website" in listing
+        websites = {x["supplier_name"]: x["supplier_website"] for x in data["listings"]}
+        assert websites["Avnet"] == "avnet.com"
+        assert websites["Kennedy Electronics"] == "kennedy.com"
 
     def test_get_part_not_found(self, client, seeded_db):
         import uuid

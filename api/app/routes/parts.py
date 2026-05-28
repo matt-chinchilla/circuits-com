@@ -140,6 +140,7 @@ def listing_to_dict(listing: PartListing) -> dict:
         "id": str(listing.id),
         "supplier_id": str(listing.supplier_id),
         "supplier_name": listing.supplier.name if listing.supplier else None,
+        "supplier_website": listing.supplier.website if listing.supplier else None,
         "sku": listing.sku,
         "stock_quantity": listing.stock_quantity,
         "lead_time_days": listing.lead_time_days,
