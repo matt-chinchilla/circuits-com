@@ -175,7 +175,7 @@ Brand (`left: 20px`) + nav+LOGIN group (`right: 20px`) are `position: absolute` 
 - **`SupplierResponse` + `CategoryResponse` are shared by public AND admin endpoints** — fields appear in unauthenticated routes. Use separate auth-gated endpoints for admin-only fields.
 - **EC2 t3.micro OOMs on `docker compose up --build`** — stay on t3.small. If thrash: stop+start (not reboot).
 - **Tests use SQLite via `Base.metadata.create_all`** — schema from models, not Alembic. SQLite ignores `String(N)` length AND CHECK constraints. For schema-length contracts assert on metadata: `Model.__table__.c.col.type.length >= N`.
-- **After deploys, hard-refresh** (Ctrl/Cmd+Shift+R) — `index.html` cache.
+- **`index.html` is served `no-cache`** (`frontend/nginx.conf` `location /`) so browsers always revalidate the unhashed SPA entry and pick up new hashed-asset names after a rebuild/deploy — prevents the stale-HTML→404→"failed to preload the CSS" bug (2026-05-28). Hashed assets stay `immutable`. A one-time hard-refresh (Ctrl/Cmd+Shift+R) only clears copies cached *before* this fix. Guard: `api/tests/test_nginx_cache_headers.py`.
 - **Framer Motion v12 requires `as const` on ease**.
 - **Sponsor XOR Postgres-only** (SQLite skips CHECK). Enforce client-side in SponsorFormPage `validate()` AND `buildSponsor()`. Never both fields set or both empty.
 - **`global.scss` uses deprecated Sass `darken()`/`lighten()`** — new code uses `@use 'sass:color'` + `color.adjust()`.
