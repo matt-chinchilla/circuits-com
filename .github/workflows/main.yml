@@ -1,0 +1,28 @@
+name: Count Lines of Code
+
+on:
+  workflow_dispatch:
+
+jobs:
+  count-loc:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install cloc
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cloc
+
+      - name: Raw total line count
+        run: |
+          echo "Raw total lines:"
+          find . -type f \
+            -not -path '*/.git/*' \
+            -exec wc -l {} + | tail -n 1
+
+      - name: Code-only line count
+        run: |
+          echo "Code-only lines:"
+          cloc . --exclude-dir=.git,node_modules,dist,build,.next,coverage,venv,.venv,__pycache__
