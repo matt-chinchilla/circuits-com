@@ -91,7 +91,13 @@ Path aliases `@public/*` / `@admin/*` / `@shared/*` in `vite.config.ts` + `tscon
 
 **SEO layer**: `robots.txt` at `frontend/public/robots.txt`. Dynamic `sitemap.xml` via `GET /api/sitemap.xml` (proxied through nginx `location = /sitemap.xml`), ~3,713 URLs. `react-helmet-async` (`HelmetProvider` in `main.tsx`) gives per-page `<title>` + `<meta description>` + canonical + JSON-LD on all 10 public pages. Home has `WebSite` + `SearchAction` schema; category pages have `CollectionPage` + `BreadcrumbList`; part pages have `Product` schema. Static fallback OG/Twitter cards in `index.html`. HSTS header in `nginx.ssl.conf`. Gzip + `Cache-Control: immutable` on hashed assets in `frontend/nginx.conf`. Search page is `noindex, follow`.
 
-**Route prefetching**: `App.tsx` uses `requestIdleCallback` to eagerly `import()` the 5 most-visited route chunks (category, search, part, about, join) after initial render. JS modules are cached by the browser for instant SPA navigation.
+**Route prefetching**: `App.tsx` uses `requestIdleCallback` to eagerly `import()` the 5 most-visited route chunks (category, search, part, about, join) after initial render. JS modules are cached by the browser for instant SPA navigation. All `import()` calls use `.catch(() => {})` to suppress console noise when chunk hashes change after deploys.
+
+**Hover prefetch**: `CategoryCard.tsx` (home page) and `SearchBar.tsx` (nav dropdown) add `onMouseEnter={() => import("@public/pages/category").catch(() => {})}` so the category chunk loads ~200ms before click. NOT on `SubcategoryChips` — it lives inside the category chunk, so prefetch there is a no-op.
+
+**Service Worker (Workbox)**: `vite-plugin-pwa` in `vite.config.ts` generates a SW with runtime caching only (no precaching — nginx handles static assets). `NetworkFirst` with 3s timeout on `/api/categories/*` (cache name `api-categories`, 300s TTL). `NetworkFirst` on other public API routes, excluding `/api/admin|auth|dashboard|track`. `cleanupOutdatedCaches: true` evicts stale caches on SW update. `manifest: false` — no PWA install prompt. `navigateFallback: null` — SPA routing stays with nginx.
+
+**API Cache-Control**: `GET /api/categories/` and `GET /api/categories/{slug}` return `Cache-Control: public, max-age=60`. Header set AFTER 404 check on detail endpoint (HTTPException creates a new response, so pre-check headers don't leak). Browser caches JSON for 1 minute; SW provides the 5-minute layer.
 
 **Ultrawide responsive (>1600px)**: `.subnavInner`, `.headerInner`, and `.contentWide` all widen to `90vw` at viewports above 1600px. `.contentWide` uses `max-width: calc(90vw + 56px)` to account for its own padding so `.contentInner` aligns with `.chipBar`.
 
