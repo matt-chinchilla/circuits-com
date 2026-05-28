@@ -14,6 +14,7 @@ import type {
   AdminSupplier,
   BatchImportResult,
   AdminCategory,
+  AdminSponsor,
 } from '@admin/types/admin';
 import type { Message, MessageStatus, AssignedTo } from '@admin/types/messages';
 
@@ -24,6 +25,10 @@ export interface MessageUpdate {
   assigned_to?: AssignedTo;
   last_reply_body?: string;
 }
+
+// POST /api/admin/sponsors/ body — an AdminSponsor without the server-assigned
+// id. PATCH accepts any partial subset of these fields.
+export type SponsorCreate = Omit<AdminSponsor, 'id'>;
 
 const adminClient = axios.create({ baseURL: API_BASE_URL });
 
@@ -134,6 +139,20 @@ export const adminApi = {
     adminClient
       .patch<Message>(`/admin/messages/${id}`, update)
       .then((r) => r.data),
+
+  getSponsors: () =>
+    adminClient.get<AdminSponsor[]>('/admin/sponsors/').then((r) => r.data),
+
+  createSponsor: (data: SponsorCreate) =>
+    adminClient.post<AdminSponsor>('/admin/sponsors/', data).then((r) => r.data),
+
+  updateSponsor: (id: string, data: Partial<SponsorCreate>) =>
+    adminClient
+      .patch<AdminSponsor>(`/admin/sponsors/${id}`, data)
+      .then((r) => r.data),
+
+  deleteSponsor: (id: string) =>
+    adminClient.delete(`/admin/sponsors/${id}`).then((r) => r.data),
 
   // Mark a supplier as the Featured Supplier on a category. Used by the
   // guided-tour wizard so the demo supplier shows up in the live-site

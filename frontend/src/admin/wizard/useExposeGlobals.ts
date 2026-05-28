@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { loadSponsors } from '@admin/services/sponsorStore';
+import { cachedSponsors } from '@admin/services/sponsorStore';
 import { loadMessages } from '@admin/services/messageStore';
 import type { WizardStoreSnapshot } from './types';
 
@@ -10,10 +10,10 @@ import type { WizardStoreSnapshot } from './types';
 // be inside the React tree.
 //
 // __adminGetStore is intentionally narrow. Only sponsors + messages have
-// synchronous client caches; suppliers/parts/imports live on the API and
-// would require an async fetch to surface accurately. Flows that need
-// those signals use DOM-based polling instead (e.g. "wait until the new
-// row appears in the parts table").
+// synchronous client caches (last-fetched snapshots); suppliers/parts/imports
+// live on the API and would require an async fetch to surface accurately.
+// Flows that need those signals use DOM-based polling instead (e.g. "wait
+// until the new row appears in the parts table").
 //
 // Mount in AdminLayout once. The effect captures useNavigate() in the
 // closure and assigns it to window. Cleanup removes the binding on unmount.
@@ -30,7 +30,7 @@ export function useExposeGlobals(): void {
     };
 
     window.__adminGetStore = (): WizardStoreSnapshot => {
-      const sponsors = loadSponsors().map((s) => ({ id: s.id, tier: s.tier }));
+      const sponsors = cachedSponsors().map((s) => ({ id: s.id, tier: s.tier }));
       const messages = loadMessages().map((m) => ({ id: m.id, status: m.status }));
       return {
         suppliers: [],

@@ -148,8 +148,13 @@ export interface AdminCategory {
   }>;
 }
 
-// Sponsors (admin)
+// Sponsors (admin) — API-backed via adminApi (`/admin/sponsors/...`).
 // XOR constraint: exactly one of category_id or keyword must be set.
+//
+// `tier`/`status` are typed as string-literal unions for exhaustive badge
+// styling on the list page; the backend sends exactly these values. The
+// backend contract types them as plain strings, so the unions are a stricter
+// client-side narrowing — `status` is nullable to match the contract.
 export type SponsorTier = 'Featured' | 'Platinum' | 'Gold' | 'Silver';
 export type SponsorStatus = 'Active' | 'Paused' | 'Expired';
 
@@ -160,14 +165,12 @@ export interface AdminSponsor {
   tier: SponsorTier;
   category_id: string | null;
   category_name: string | null;
-  category_icon?: string | null;
+  category_icon: string | null;
   keyword: string | null;
   start_date: string | null;
   end_date: string | null;
-  amount: number;
-  status: SponsorStatus;
-  description?: string | null;
-  image_url?: string | null;
-  phone?: string | null;
-  website?: string | null;
+  amount: number | null;
+  status: SponsorStatus | null;
+  description: string | null;
+  image_url: string | null;
 }

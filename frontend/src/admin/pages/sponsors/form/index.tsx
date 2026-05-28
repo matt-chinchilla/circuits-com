@@ -22,6 +22,11 @@ import styles from './SponsorFormPage.module.scss';
 // (SponsorForm + SponsorNewPage + SponsorEditPage). The XOR placement
 // constraint (category_id XOR keyword) is enforced at submit time, mirroring
 // the backend Sponsor.__table_args__ CheckConstraint.
+//
+// Persistence is now API-backed (`@admin/services/sponsorStore` → adminApi).
+// The supplier + category selects pull live UUIDs from getSuppliers() /
+// getCategories() so the form submits REAL ids — the old localStorage seed
+// used fake `cat-*` ids that never matched the public-site categories.
 
 const TIERS: SponsorTier[] = ['Featured', 'Platinum', 'Gold', 'Silver'];
 const STATUSES: SponsorStatus[] = ['Active', 'Paused', 'Expired'];
@@ -39,8 +44,6 @@ interface FormState {
   status: SponsorStatus;
   description: string;
   image_url: string;
-  phone: string;
-  website: string;
 }
 
 interface FormErrors {
@@ -64,8 +67,6 @@ function emptyForm(): FormState {
     status: 'Active',
     description: '',
     image_url: '',
-    phone: '',
-    website: '',
   };
 }
 
@@ -110,28 +111,40 @@ export default function SponsorFormPage() {
       .catch(() => setCategories([]));
   }, []);
 
-  // Hydrate form on edit
+  // Hydrate form on edit — findSponsor is async (fetches from the API). Cancel
+  // flag guards against a late resolve after unmount / id change.
   useEffect(() => {
     if (!isEdit || !id) return;
-    const existing = findSponsor(id);
-    if (existing) {
-      setForm({
-        supplier_id: existing.supplier_id,
-        tier: existing.tier,
-        category_id: existing.category_id ?? '',
-        keyword: existing.keyword ?? '',
-        start_date: existing.start_date ?? '',
-        end_date: existing.end_date ?? '',
-        amount: String(existing.amount ?? ''),
-        status: existing.status,
-        description: existing.description ?? '',
-        image_url: existing.image_url ?? '',
-        phone: existing.phone ?? '',
-        website: existing.website ?? '',
+    let cancelled = false;
+    setLoading(true);
+    findSponsor(id)
+      .then((existing) => {
+        if (cancelled) return;
+        if (existing) {
+          setForm({
+            supplier_id: existing.supplier_id,
+            tier: existing.tier,
+            category_id: existing.category_id ?? '',
+            keyword: existing.keyword ?? '',
+            start_date: existing.start_date ?? '',
+            end_date: existing.end_date ?? '',
+            amount: existing.amount != null ? String(existing.amount) : '',
+            status: existing.status ?? 'Active',
+            description: existing.description ?? '',
+            image_url: existing.image_url ?? '',
+          });
+          setPlacement(existing.category_id ? 'category' : 'keyword');
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) console.error('[SponsorFormPage] load failed', err);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
       });
-      setPlacement(existing.category_id ? 'category' : 'keyword');
-    }
-    setLoading(false);
+    return () => {
+      cancelled = true;
+    };
   }, [id, isEdit]);
 
   // Auto-dismiss toast
@@ -145,13 +158,21 @@ export default function SponsorFormPage() {
     setForm((prev) => ({ ...prev, [key]: value }));
   }, []);
 
-  // Flat list of (category, sub) options for the placement select.
+  // Flat list of (category, sub) options for the placement select. `label` is
+  // the option text only; `name`/`icon` are kept separate so buildSponsor can
+  // submit a clean category_name + the Phosphor icon name (the <option> label
+  // would otherwise carry leading indent whitespace).
   const categoryOptions = useMemo(() => {
-    const out: Array<{ id: string; label: string }> = [];
+    const out: Array<{ id: string; label: string; name: string; icon: string | null }> = [];
     for (const c of categories) {
-      out.push({ id: c.id, label: `${c.icon ?? ''} ${c.name}`.trim() });
+      out.push({ id: c.id, label: c.name, name: c.name, icon: c.icon ?? null });
       for (const child of c.children ?? []) {
-        out.push({ id: child.id, label: `   ${child.icon ?? ''} ${child.name}`.trim() });
+        out.push({
+          id: child.id,
+          label: `— ${child.name}`,
+          name: child.name,
+          icon: child.icon ?? null,
+        });
       }
     }
     return out;
@@ -180,17 +201,20 @@ export default function SponsorFormPage() {
 
   function buildSponsor(): AdminSponsor {
     const supplier = suppliers.find((s) => s.id === form.supplier_id);
-    const category = form.category_id
-      ? categoryOptions.find((c) => c.id === form.category_id)
-      : null;
+    const category =
+      placement === 'category' && form.category_id
+        ? categoryOptions.find((c) => c.id === form.category_id)
+        : null;
     return {
-      id: id ?? `spn-${Date.now()}`,
+      // Empty id on create → the store POSTs; a real id on edit → PATCH.
+      id: id ?? '',
       supplier_id: form.supplier_id,
       supplier_name: supplier?.name ?? form.supplier_id,
       tier: form.tier,
       // XOR enforced here: exactly one of category_id / keyword is non-null.
       category_id: placement === 'category' ? form.category_id : null,
-      category_name: placement === 'category' ? category?.label.trim() ?? null : null,
+      category_name: category?.name ?? null,
+      category_icon: category?.icon ?? null,
       keyword: placement === 'keyword' ? form.keyword.trim() : null,
       start_date: form.start_date || null,
       end_date: form.end_date || null,
@@ -198,8 +222,6 @@ export default function SponsorFormPage() {
       status: form.status,
       description: form.description.trim() || null,
       image_url: form.image_url.trim() || null,
-      phone: form.phone.trim() || null,
-      website: form.website.trim() || null,
     };
   }
 
@@ -208,20 +230,29 @@ export default function SponsorFormPage() {
     if (!validate()) return;
     setSaving(true);
     try {
-      upsertSponsor(buildSponsor());
+      await upsertSponsor(buildSponsor());
       setToast(isEdit ? 'Sponsorship updated' : 'Sponsorship created');
       // small delay so user sees toast confirmation
       setTimeout(() => navigate('/admin/sponsors'), 600);
+    } catch (err) {
+      console.error('[SponsorFormPage] save failed', err);
+      setToast('Save failed — try again');
     } finally {
       setSaving(false);
     }
   }
 
-  function handleDelete() {
+  async function handleDelete() {
     if (!id) return;
-    deleteSponsor(id);
-    setToast('Sponsorship deleted');
-    setTimeout(() => navigate('/admin/sponsors'), 500);
+    setShowDeleteConfirm(false);
+    try {
+      await deleteSponsor(id);
+      setToast('Sponsorship deleted');
+      setTimeout(() => navigate('/admin/sponsors'), 500);
+    } catch (err) {
+      console.error('[SponsorFormPage] delete failed', err);
+      setToast('Delete failed — try again');
+    }
   }
 
   if (loading) {
@@ -467,7 +498,7 @@ export default function SponsorFormPage() {
         {/* ── Creative panel (optional metadata) ──────────────────────── */}
         <section className={styles.panel}>
           <header className={styles.panelHead}>
-            <h2 className={styles.panelTitle}>Creative &amp; contact</h2>
+            <h2 className={styles.panelTitle}>Creative</h2>
           </header>
           <div className={styles.panelBody}>
             <div className={styles.field}>
@@ -483,53 +514,21 @@ export default function SponsorFormPage() {
                 placeholder="Short pitch shown on the banner placement"
               />
             </div>
-            <div className={styles.formRow2}>
-              <div className={styles.field}>
-                <label className={styles.fieldLabel} htmlFor="image_url">
-                  Image URL
-                </label>
-                <input
-                  id="image_url"
-                  type="text"
-                  inputMode="url"
-                  className={styles.textInput}
-                  value={form.image_url}
-                  onChange={(e) => update('image_url', e.target.value)}
-                  placeholder="https://example.com/banner.png"
-                  autoCapitalize="off"
-                  autoCorrect="off"
-                  spellCheck={false}
-                />
-              </div>
-              <div className={styles.field}>
-                <label className={styles.fieldLabel} htmlFor="website">
-                  Website
-                </label>
-                <input
-                  id="website"
-                  type="text"
-                  inputMode="url"
-                  className={styles.textInput}
-                  value={form.website}
-                  onChange={(e) => update('website', e.target.value)}
-                  placeholder="https://supplier.example"
-                  autoCapitalize="off"
-                  autoCorrect="off"
-                  spellCheck={false}
-                />
-              </div>
-            </div>
             <div className={styles.field}>
-              <label className={styles.fieldLabel} htmlFor="phone">
-                Phone
+              <label className={styles.fieldLabel} htmlFor="image_url">
+                Image URL
               </label>
               <input
-                id="phone"
-                type="tel"
+                id="image_url"
+                type="text"
+                inputMode="url"
                 className={styles.textInput}
-                value={form.phone}
-                onChange={(e) => update('phone', e.target.value)}
-                placeholder="+1 (555) 123-4567"
+                value={form.image_url}
+                onChange={(e) => update('image_url', e.target.value)}
+                placeholder="https://example.com/banner.png"
+                autoCapitalize="off"
+                autoCorrect="off"
+                spellCheck={false}
               />
             </div>
           </div>

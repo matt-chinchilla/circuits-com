@@ -1,9 +1,10 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-from sqlalchemy import Column, Date, DateTime, String, Text, ForeignKey, CheckConstraint
+from sqlalchemy import CheckConstraint, Column, Date, DateTime, ForeignKey, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
+
 from app.db.session import Base
 
 
@@ -19,15 +20,17 @@ class Sponsor(Base):
     tier = Column(String(10), default="gold")
     start_date = Column(Date, nullable=True)
     end_date = Column(Date, nullable=True)
+    amount = Column(Numeric(10, 2), nullable=True)
+    status = Column(String(20), nullable=True)
     created_at = Column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
         nullable=True,
     )
     updated_at = Column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
         nullable=True,
     )
 

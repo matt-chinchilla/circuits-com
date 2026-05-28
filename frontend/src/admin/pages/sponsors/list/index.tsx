@@ -1,18 +1,20 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Plus, Search, Pencil, X } from 'lucide-react';
-import { adminApi } from '@admin/services/adminApi';
 import { loadSponsors } from '@admin/services/sponsorStore';
 import Icon from '@shared/components/Icon';
-import type { AdminSponsor, AdminSupplier, AdminCategory, SponsorTier } from '@admin/types/admin';
+import type { AdminSponsor, SponsorTier, SponsorStatus } from '@admin/types/admin';
 import styles from './SponsorsPage.module.scss';
 
 // Phase A6 — list page ported from 2026-04-25 Claude Design bundle
 // (project/ui_kits/admin/pages.jsx → SponsorsListPage).
 //
-// Persistence routed through @admin/services/sponsorStore so seed sponsors
-// materialize on first read (deleting a seed used to wipe the entire list
-// because the form page wrote [] over the implicit-seed fallback).
+// Persistence routed through @admin/services/sponsorStore, which is now
+// API-backed (`/api/admin/sponsors/`). Mirrors the Messages list: fetch on
+// mount via useEffect + state, with a cancel flag so a late response can't
+// stomp an unmounted component. The backend returns supplier_name /
+// category_name / category_icon directly, so no client-side id→name mapping
+// is needed anymore.
 
 const TIERS: SponsorTier[] = ['Featured', 'Platinum', 'Gold', 'Silver'];
 
@@ -33,7 +35,7 @@ function tierClass(tier: SponsorTier): string {
   }
 }
 
-function statusClass(status: AdminSponsor['status']): string {
+function statusClass(status: SponsorStatus | null): string {
   switch (status) {
     case 'Active':
       return styles.statusActive;
@@ -41,6 +43,8 @@ function statusClass(status: AdminSponsor['status']): string {
       return styles.statusPaused;
     case 'Expired':
       return styles.statusExpired;
+    default:
+      return '';
   }
 }
 
@@ -49,29 +53,37 @@ function formatDate(iso: string | null): string {
   return iso;
 }
 
-function formatAmount(n: number): string {
+function formatAmount(n: number | null): string {
+  if (n == null) return '—';
   return `$${n.toLocaleString()}`;
 }
 
 export default function SponsorsPage() {
   const navigate = useNavigate();
-  const [sponsors] = useState<AdminSponsor[]>(() => loadSponsors());
+  const [sponsors, setSponsors] = useState<AdminSponsor[]>([]);
+  const [loading, setLoading] = useState(true);
   const [tierFilter, setTierFilter] = useState<TierFilter>('All');
   const [search, setSearch] = useState('');
-  const [suppliers, setSuppliers] = useState<AdminSupplier[]>([]);
-  const [categories, setCategories] = useState<AdminCategory[]>([]);
 
-  // Pull live suppliers/categories so the in-memory sponsor records can be
-  // re-keyed against current DB ids without losing the seed fallback.
+  // Fetch sponsors from the API on mount. Cancel flag guards against a late
+  // response resolving after unmount (CLAUDE.md state-dep-effect pattern).
   useEffect(() => {
-    adminApi
-      .getSuppliers()
-      .then(setSuppliers)
-      .catch(() => {});
-    adminApi
-      .getCategories()
-      .then(setCategories)
-      .catch(() => {});
+    let cancelled = false;
+    loadSponsors()
+      .then((rows) => {
+        if (cancelled) return;
+        setSponsors(rows);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        console.error('[SponsorsPage] load failed', err);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const filtered = useMemo(() => {
@@ -103,32 +115,6 @@ export default function SponsorsPage() {
     for (const s of sponsors) map[s.tier]++;
     return map;
   }, [sponsors]);
-
-  // Hydrate supplier/category names + icons from live API data when ids match.
-  // Icon map exists so the sponsor list can show a Phosphor glyph prefix on
-  // the placement cell (v5 design handoff 2026-05-23).
-  const { enriched, iconById } = useMemo(() => {
-    const supMap = new Map(suppliers.map((s) => [s.id, s.name]));
-    const catMap = new Map<string, string>();
-    const iconMap = new Map<string, string>();
-    for (const c of categories) {
-      catMap.set(c.id, c.name);
-      iconMap.set(c.id, c.icon);
-      for (const child of c.children ?? []) {
-        catMap.set(child.id, child.name);
-        iconMap.set(child.id, child.icon);
-      }
-    }
-    if (suppliers.length === 0 && categories.length === 0) {
-      return { enriched: filtered, iconById: iconMap };
-    }
-    const mapped = filtered.map((s) => ({
-      ...s,
-      supplier_name: supMap.get(s.supplier_id) ?? s.supplier_name,
-      category_name: s.category_id ? catMap.get(s.category_id) ?? s.category_name : null,
-    }));
-    return { enriched: mapped, iconById: iconMap };
-  }, [filtered, suppliers, categories]);
 
   return (
     <div className={styles.page}>
@@ -196,7 +182,7 @@ export default function SponsorsPage() {
               </tr>
             </thead>
             <tbody>
-              {enriched.map((s) => (
+              {filtered.map((s) => (
                 <tr key={s.id}>
                   <td>
                     <strong>{s.supplier_name}</strong>
@@ -207,7 +193,7 @@ export default function SponsorsPage() {
                   <td>
                     {s.category_id ? (
                       <span className={styles.placementCategory}>
-                        <Icon name={s.category_icon ?? iconById.get(s.category_id) ?? null} />
+                        <Icon name={s.category_icon} />
                         <span>{s.category_name ?? s.category_id}</span>
                       </span>
                     ) : (
@@ -241,12 +227,14 @@ export default function SponsorsPage() {
                   </td>
                 </tr>
               ))}
-              {enriched.length === 0 && (
+              {filtered.length === 0 && (
                 <tr>
                   <td colSpan={7} className={styles.emptyRow}>
-                    {sponsors.length === 0
-                      ? 'No active sponsorships. Click + New Sponsor to add one.'
-                      : 'No sponsors match the current filters.'}
+                    {loading
+                      ? 'Loading sponsors…'
+                      : sponsors.length === 0
+                        ? 'No active sponsorships. Click + New Sponsor to add one.'
+                        : 'No sponsors match the current filters.'}
                   </td>
                 </tr>
               )}

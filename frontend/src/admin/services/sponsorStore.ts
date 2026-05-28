@@ -1,112 +1,56 @@
 import type { AdminSponsor } from '@admin/types/admin';
+import { adminApi, type SponsorCreate } from '@admin/services/adminApi';
 
-// Shared localStorage-backed store for the admin sponsors UI. Both list and
-// form pages route through here so the seed sponsors materialize on the very
-// first read — without it, deleting a seed sponsor (e.g. spn-honeywell-sensors)
-// silently writes [] to localStorage and the entire seed list disappears.
+// API-backed store for the admin sponsors UI. The pre-migration implementation
+// was localStorage-backed with a 4-row seed (and fake `cat-*` category ids that
+// never matched live DB UUIDs); persistence now lives on the backend
+// (`/api/admin/sponsors/...`) so admin sponsor edits reach the public site.
 //
-// When backend admin sponsor CRUD endpoints land, swap the persistence layer
-// here without touching either page (CLAUDE.md gotcha — list + form are
-// already split into sibling pages exactly so this swap is local).
+// Mirrors @admin/services/messageStore: a module-level CACHE keeps a SYNC
+// snapshot for the wizard's window.__adminGetStore() bridge, while the public
+// read/mutate functions are async and route through adminApi. Consumer pages
+// call loadSponsors() in a useEffect on mount to pull fresh server state.
 
-const STORE_KEY = 'circuits.admin.sponsors';
+let CACHE: AdminSponsor[] = [];
 
-export const SEED_SPONSORS: AdminSponsor[] = [
-  {
-    id: 'spn-honeywell-sensors',
-    supplier_id: 'seed-supplier-honeywell',
-    supplier_name: 'Honeywell Sensing',
-    tier: 'Featured',
-    category_id: 'cat-sensors',
-    category_name: 'Sensors & Transducers',
-    category_icon: 'thermometer',
-    keyword: null,
-    start_date: '2026-01-01',
-    end_date: '2026-12-31',
-    amount: 7000,
-    status: 'Active',
-  },
-  {
-    id: 'spn-ti-keyword-vreg',
-    supplier_id: 'seed-supplier-ti',
-    supplier_name: 'Texas Instruments',
-    tier: 'Gold',
-    category_id: null,
-    category_name: null,
-    keyword: 'voltage regulator',
-    start_date: '2026-03-01',
-    end_date: '2026-09-30',
-    amount: 1500,
-    status: 'Active',
-  },
-  {
-    id: 'spn-arrow-pmic',
-    supplier_id: 'seed-supplier-arrow',
-    supplier_name: 'Arrow Electronics',
-    tier: 'Platinum',
-    category_id: 'cat-pmic',
-    category_name: 'Power Management ICs',
-    category_icon: 'lightning',
-    keyword: null,
-    start_date: '2026-02-01',
-    end_date: '2027-01-31',
-    amount: 4500,
-    status: 'Active',
-  },
-  {
-    id: 'spn-mouser-keyword-stm32',
-    supplier_id: 'seed-supplier-mouser',
-    supplier_name: 'Mouser Electronics',
-    tier: 'Silver',
-    category_id: null,
-    category_name: null,
-    keyword: 'stm32',
-    start_date: '2025-11-01',
-    end_date: '2026-05-01',
-    amount: 800,
-    status: 'Paused',
-  },
-];
-
-function writeRaw(rows: AdminSponsor[]): void {
-  try {
-    localStorage.setItem(STORE_KEY, JSON.stringify(rows));
-  } catch {
-    /* localStorage may be unavailable or full — non-fatal for the demo */
-  }
+/** Last-fetched sponsors, for the wizard's synchronous store snapshot. */
+export function cachedSponsors(): AdminSponsor[] {
+  return CACHE;
 }
 
-export function loadSponsors(): AdminSponsor[] {
-  try {
-    const raw = localStorage.getItem(STORE_KEY);
-    if (raw !== null) {
-      const parsed = JSON.parse(raw) as AdminSponsor[];
-      if (Array.isArray(parsed)) return parsed;
-    }
-  } catch (err) {
-    // Corrupted localStorage payload — log so dev sees it, then fall through
-    // to materialization. A partial-write of a user's edits would be lost,
-    // but that's the same data that already failed to JSON.parse.
-    console.warn('[sponsorStore] corrupt data, re-seeding', err);
-  }
-  // First read: materialize the seed so subsequent operations (delete,
-  // upsert) operate against actual storage. Otherwise deleting a seed
-  // sponsor is a no-op against [] and the seed silently reappears.
-  writeRaw(SEED_SPONSORS);
-  return SEED_SPONSORS;
+/** Fetch all sponsors from the API and refresh the module cache. */
+export async function loadSponsors(): Promise<AdminSponsor[]> {
+  const rows = await adminApi.getSponsors();
+  CACHE = rows;
+  return rows;
 }
 
-export function findSponsor(id: string): AdminSponsor | undefined {
-  return loadSponsors().find((s) => s.id === id);
+/**
+ * Fetch a single sponsor by id. The backend has no detail endpoint in the
+ * contract, so we pull the list and find — the list is small (paid placements).
+ */
+export async function findSponsor(id: string): Promise<AdminSponsor | undefined> {
+  const rows = await loadSponsors();
+  return rows.find((s) => s.id === id);
 }
 
-export function upsertSponsor(next: AdminSponsor): void {
-  const rows = loadSponsors();
-  const idx = rows.findIndex((r) => r.id === next.id);
-  if (idx === -1) writeRaw([next, ...rows]);
-  else writeRaw(rows.map((r, i) => (i === idx ? next : r)));
+/**
+ * Create (POST) when `next` has no id, otherwise update (PATCH) the existing
+ * sponsor. The server returns the canonical row, which we splice into the cache
+ * so a subsequent cachedSponsors() read is fresh.
+ */
+export async function upsertSponsor(next: AdminSponsor): Promise<AdminSponsor> {
+  const { id, ...body } = next;
+  const saved = id
+    ? await adminApi.updateSponsor(id, body as Partial<SponsorCreate>)
+    : await adminApi.createSponsor(body as SponsorCreate);
+  const idx = CACHE.findIndex((s) => s.id === saved.id);
+  CACHE = idx === -1 ? [saved, ...CACHE] : CACHE.map((s, i) => (i === idx ? saved : s));
+  return saved;
 }
 
-export function deleteSponsor(id: string): void {
-  writeRaw(loadSponsors().filter((s) => s.id !== id));
+/** Delete a sponsor (DELETE) and drop it from the cache. */
+export async function deleteSponsor(id: string): Promise<void> {
+  await adminApi.deleteSponsor(id);
+  CACHE = CACHE.filter((s) => s.id !== id);
 }
