@@ -269,8 +269,15 @@ def get_category_by_slug(
         supplier.rank = rank
         suppliers.append(supplier)
 
-    # Get sponsor for this category
-    sponsor = db.query(Sponsor).filter(Sponsor.category_id == category.id).first()
+    # Get sponsor for this category — newest wins, so an admin adding a fresh
+    # sponsor supersedes an older one on the same category (a category can hold
+    # more than one Sponsor row; the public block shows the most recently added).
+    sponsor = (
+        db.query(Sponsor)
+        .filter(Sponsor.category_id == category.id)
+        .order_by(Sponsor.created_at.desc())
+        .first()
+    )
     sponsor_data = None
     if sponsor:
         sponsor_supplier = db.query(Supplier).filter(Supplier.id == sponsor.supplier_id).first()
