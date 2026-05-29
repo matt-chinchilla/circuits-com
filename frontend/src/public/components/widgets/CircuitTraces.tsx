@@ -21,13 +21,28 @@ const IC = (w = 1) => ({ stroke: 'var(--ic-body-stroke)', strokeWidth: w, fill: 
 
 const DASH = { strokeDasharray: 1200, strokeDashoffset: 1200 };
 
+// Edge-connector pin rows — shared by the pad <rect>s and the off-board outer stubs.
+const CN1_PINS = [90, 100, 110, 120, 130, 140, 150, 160, 180, 200];
+const CN2_PINS = [70, 80, 90, 110, 130, 150, 170, 190, 210, 240];
+// Only the through-connected CN2 pins continue off-board (the rest are unused
+// contacts); every CN1 pin is through-connected, so CN1 uses CN1_PINS directly.
+const CN2_OUTER = [70, 80, 90, 240];
+// Shared hide window for the two CN1-bound electrons (equal-length paths → same fractions).
+const CN1_HIDE = '0;0.8563;0.8663;0.9358;0.9458;1';
+
 // Electrons: [path, duration(s), begin(s), radius]
 // begin = trace's T() animationDelay + 6s (wait for draw-circuit to finish)
 // With animation: forwards, traces draw once and stay — electrons loop on visible paths
-const ELECTRONS: [string, number, number, number][] = [
+// [path, dur, delay, radius, hideKeyTimes?] — hideKeyTimes blanks the electron's
+// fill-opacity (values 1;1;0;0;1;1) while it crosses an edge-connector body, so it
+// vanishes "into" the connector and reappears on the far side. keyTimes are
+// arc-length fractions of the path (animateMotion's default paced calcMode makes
+// time-fraction == length-fraction): the inner 0;0 pair must span the FULL body
+// crossing, with a short fade just outside it.
+const ELECTRONS: [string, number, number, number, string?][] = [
   // Bundle 1 — IC1 left → left edge (traces T=0.6, T=1.0)
-  ['M411 140 H380 L360 120 H200 L170 90 H0', 3, 6.6, 1],
-  ['M411 180 H398 L378 160 H240 L210 130 H0', 3.5, 7, 0.8],
+  ['M411 140 H380 L360 120 H200 L170 90 H0', 3, 6.6, 1, CN1_HIDE],
+  ['M411 180 H398 L378 160 H240 L210 130 H0', 3.5, 7, 0.8, CN1_HIDE],
   // Bundle 2 — IC1 bottom → bottom edge (trace T=1.2)
   ['M450 229 V270 L430 290 V400', 2.5, 7.2, 0.9],
   // Bundle 3 — IC1 right → IC2 left (traces T=1.2, T=1.5)
@@ -36,13 +51,13 @@ const ELECTRONS: [string, number, number, number][] = [
   // Bundle 4 — IC1 top → top edge (trace T=0.7)
   ['M460 121 V90 L480 70 V20 L500 0', 2.5, 6.7, 0.9],
   // Bundle 5 — IC2 right → right edge (trace T=3.0)
-  ['M977 110 H1020 L1040 90 H1100 L1120 70 H1200', 3, 9, 1],
+  ['M977 110 H1020 L1040 90 H1100 L1120 70 H1200', 3, 9, 1, '0;0.7497;0.7597;0.8849;0.8949;1'],
   // Long horizontal — full-span (trace T=3.8)
   ['M0 380 H200 L220 360 H400 L420 380 H620 L650 350 H800 L830 320 H950 L970 340 H1200', 6, 9.8, 1.1],
   // Vertical long-run (trace T=1.8)
   ['M650 0 V60 L670 80 V160 L690 180 V400', 4, 7.8, 0.9],
   // Cross-board horizontal (trace T=2.5)
-  ['M550 300 H700 L720 280 H850 L870 260 H1000 L1020 240 H1200', 4.5, 8.5, 0.8],
+  ['M550 300 H700 L720 280 H850 L870 260 H1000 L1020 240 H1200', 4.5, 8.5, 0.8, '0;0.9043;0.9143;0.9587;0.9687;1'],
   // IC3 bottom → bottom edge (trace T=3.5)
   ['M150 327 V350 L170 370 H300 L320 390 V400', 3, 9.5, 0.9],
   // Power rail — top edge (trace T=0)
@@ -170,24 +185,24 @@ export default function CircuitTraces({ variant = 'full' }: CircuitTracesProps =
         <path d="M960 157 V195 L970 215 V400" {...S(0.05, 0.6)} {...DASH} className={styles.trace} style={T(3.0)} />
 
         {/* IC3 top pad traces → connect upward to left-edge routing */}
-        <path d="M150 273 V250 L130 230 V200" {...S(0.05, 0.6)} {...DASH} className={styles.trace} style={T(3.1)} />
+        <path d="M150 273 V250 L130 230 V220" {...S(0.05, 0.6)} {...DASH} className={styles.trace} style={T(3.1)} />
         <path d="M160 273 V255 L150 240 H100 L80 220 V200" {...S(0.05, 0.6)} {...DASH} className={styles.trace} style={T(3.15)} />
         <path d="M170 273 V258 L190 240 H220" {...S(0.05, 0.6)} {...DASH} className={styles.trace} style={T(3.2)} />
-        <path d="M180 273 V260 L200 245 H230 L250 225 V200" {...S(0.05, 0.6)} {...DASH} className={styles.trace} style={T(3.25)} />
+        <path d="M180 273 V260 L200 245 H230 L250 225 V220" {...S(0.05, 0.6)} {...DASH} className={styles.trace} style={T(3.25)} />
         <path d="M190 273 V262 L210 250 H260" {...S(0.05, 0.6)} {...DASH} className={styles.trace} style={T(3.3)} />
 
         {/* ═══════════════════════════════════════════════════════════════════════
             Parallel trace bundle 1 — IC1 left pads → exit left edge
             Every trace exits at x=0 (continues off-board)
             ═══════════════════════════════════════════════════════════════════════ */}
-        <path d="M411 140 H380 L360 120 H200 L170 90 H0" {...S(0.08, 1)} {...DASH} className={styles.trace} style={T(0.6)} />
-        <path d="M411 150 H385 L365 130 H210 L180 100 H0" {...S(0.07, 0.8)} {...DASH} className={styles.trace} style={T(0.7)} />
-        <path d="M411 160 H390 L370 140 H220 L190 110 H0" {...S(0.08, 1)} {...DASH} className={styles.trace} style={T(0.8)} />
-        <path d="M411 170 H395 L375 150 H230 L200 120 H0" {...S(0.06, 0.8)} {...DASH} className={styles.trace} style={T(0.9)} />
-        <path d="M411 180 H398 L378 160 H240 L210 130 H0" {...S(0.07, 0.8)} {...DASH} className={styles.trace} style={T(1.0)} />
-        <path d="M411 190 H396 L376 170 H250 L220 140 H0" {...S(0.06, 0.7)} {...DASH} className={styles.trace} style={T(1.1)} />
-        <path d="M411 200 H394 L374 180 H260 L230 150 H0" {...S(0.07, 0.8)} {...DASH} className={styles.trace} style={T(1.2)} />
-        <path d="M411 210 H392 L372 190 H270 L240 160 H0" {...S(0.06, 0.7)} {...DASH} className={styles.trace} style={T(1.3)} />
+        <path d="M411 140 H380 L360 120 H200 L170 90 H63" {...S(0.08, 1)} {...DASH} className={styles.trace} style={T(0.6)} />
+        <path d="M411 150 H385 L365 130 H210 L180 100 H63" {...S(0.07, 0.8)} {...DASH} className={styles.trace} style={T(0.7)} />
+        <path d="M411 160 H390 L370 140 H220 L190 110 H63" {...S(0.08, 1)} {...DASH} className={styles.trace} style={T(0.8)} />
+        <path d="M411 170 H395 L375 150 H230 L200 120 H63" {...S(0.06, 0.8)} {...DASH} className={styles.trace} style={T(0.9)} />
+        <path d="M411 180 H398 L378 160 H240 L210 130 H63" {...S(0.07, 0.8)} {...DASH} className={styles.trace} style={T(1.0)} />
+        <path d="M411 190 H396 L376 170 H250 L220 140 H63" {...S(0.06, 0.7)} {...DASH} className={styles.trace} style={T(1.1)} />
+        <path d="M411 200 H394 L374 180 H260 L230 150 H63" {...S(0.07, 0.8)} {...DASH} className={styles.trace} style={T(1.2)} />
+        <path d="M411 210 H392 L372 190 H270 L240 160 H63" {...S(0.06, 0.7)} {...DASH} className={styles.trace} style={T(1.3)} />
 
         {/* ═══════════════════════════════════════════════════════════════════════
             Parallel trace bundle 2 — IC1 bottom pads → exit bottom edge
@@ -222,9 +237,9 @@ export default function CircuitTraces({ variant = 'full' }: CircuitTracesProps =
         {/* ═══════════════════════════════════════════════════════════════════════
             Parallel trace bundle 5 — IC2 right → exit right edge
             ═══════════════════════════════════════════════════════════════════════ */}
-        <path d="M977 110 H1020 L1040 90 H1100 L1120 70 H1200" {...S(0.07, 0.8)} {...DASH} className={styles.trace} style={T(3.0)} />
-        <path d="M977 120 H1025 L1045 100 H1105 L1125 80 H1200" {...S(0.06, 0.7)} {...DASH} className={styles.trace} style={T(3.1)} />
-        <path d="M977 130 H1030 L1050 110 H1110 L1130 90 H1200" {...S(0.07, 0.8)} {...DASH} className={styles.trace} style={T(3.2)} />
+        <path d="M977 110 H1020 L1040 90 H1100 L1120 70 H1137" {...S(0.07, 0.8)} {...DASH} className={styles.trace} style={T(3.0)} />
+        <path d="M977 120 H1025 L1045 100 H1105 L1125 80 H1137" {...S(0.06, 0.7)} {...DASH} className={styles.trace} style={T(3.1)} />
+        <path d="M977 130 H1030 L1050 110 H1110 L1130 90 H1137" {...S(0.07, 0.8)} {...DASH} className={styles.trace} style={T(3.2)} />
         <path d="M977 140 H1035 L1055 160 H1115 L1135 180 V400" {...S(0.06, 0.7)} {...DASH} className={styles.trace} style={T(3.3)} />
 
         {/* ═══════════════════════════════════════════════════════════════════════
@@ -238,14 +253,14 @@ export default function CircuitTraces({ variant = 'full' }: CircuitTracesProps =
             Long-run routing traces — all exit viewBox edges
             ═══════════════════════════════════════════════════════════════════════ */}
         {/* Left-edge origins → connect to IC1 left bundle or IC3 */}
-        <path d="M0 120 H100 L120 140 H260 L280 160 H370" {...S(0.06, 0.8)} {...DASH} className={styles.trace} style={T(0.4)} />
-        <path d="M0 200 H80 L100 220 H250 L270 240 H380 L400 260 V280" {...S(0.07, 1)} {...DASH} className={styles.trace} style={T(1.5)} />
+        <path d="M63 120 H100 L120 140 H260 L280 160 H370" {...S(0.06, 0.8)} {...DASH} className={styles.trace} style={T(0.4)} />
+        <path d="M63 200 H80 L100 220 H250 L270 240 H380 L400 260 V280 H410" {...S(0.07, 1)} {...DASH} className={styles.trace} style={T(1.5)} />
         <path d="M0 340 H120 L140 320 H140" {...S(0.05, 0.7)} {...DASH} className={styles.trace} style={T(2.8)} />
 
         {/* Cross-board horizontals — edge to edge */}
         <path d="M0 300 H150 L170 280" {...S(0.05, 0.7)} {...DASH} className={styles.trace} style={T(2.6)} />
-        <path d="M550 300 H700 L720 280 H850 L870 260 H1000 L1020 240 H1200" {...S(0.06, 0.8)} {...DASH} className={styles.trace} style={T(2.5)} />
-        <path d="M560 320 H710 L730 300 H860 L880 280 H1010 L1030 260 H1200" {...S(0.05, 0.7)} {...DASH} className={styles.trace} style={T(2.6)} />
+        <path d="M560 300 H700 L720 280 H850 L870 260 H1000 L1020 240 H1137" {...S(0.06, 0.8)} {...DASH} className={styles.trace} style={T(2.5)} />
+        <path d="M560 300 V320 H710 L730 300 H860 L880 280 H1010 L1030 260 H1200" {...S(0.05, 0.7)} {...DASH} className={styles.trace} style={T(2.6)} />
         <path d="M0 380 H200 L220 360 H400 L420 380 H620 L650 350 H800 L830 320 H950 L970 340 H1200" {...S(0.06, 0.8)} {...DASH} className={styles.trace} style={T(3.8)} />
         <path d="M0 395 H180 L200 375 H380 L400 395 V400" {...S(0.05, 0.6)} {...DASH} className={styles.trace} style={T(4.0)} />
 
@@ -258,8 +273,8 @@ export default function CircuitTraces({ variant = 'full' }: CircuitTracesProps =
         <path d="M1090 0 V95 L1070 115 V245 L1090 265 V400" {...S(0.05, 0.6)} {...DASH} className={styles.trace} style={T(3.5)} />
 
         {/* Diagonal routing — connect IC regions or exit edges */}
-        <path d="M0 180 L130 250 H200 L230 280" {...S(0.05, 0.7)} {...DASH} className={styles.trace} style={T(2.0)} />
-        <path d="M800 200 L830 230 V300 L860 330 H1000 L1030 360 H1200" {...S(0.06, 0.8)} {...DASH} className={styles.trace} style={T(2.8)} />
+        <path d="M63 180 L130 250 H200 L230 280" {...S(0.05, 0.7)} {...DASH} className={styles.trace} style={T(2.0)} />
+        <path d="M840 200 H800 L830 230 V300 L860 330 H1000 L1030 360 H1200" {...S(0.06, 0.8)} {...DASH} className={styles.trace} style={T(2.8)} />
 
         {/* Power traces (wider) — full-span edge rails */}
         <path d="M0 10 H1200" {...S(0.04, 2)} {...DASH} className={styles.trace} style={T(0)} />
@@ -275,19 +290,19 @@ export default function CircuitTraces({ variant = 'full' }: CircuitTracesProps =
 
         {/* Crystal traces */}
         <path d="M580 26 V0" {...S(0.06, 0.7)} {...DASH} className={styles.trace} style={T(1.8)} />
-        <path d="M600 50 V72 L580 92 V121" {...S(0.06, 0.7)} {...DASH} className={styles.trace} style={T(1.8)} />
+        <path d="M600 50 V72 L580 92 V145" {...S(0.06, 0.7)} {...DASH} className={styles.trace} style={T(1.8)} />
         {/* Additional crystal pad traces */}
         <path d="M600 26 V0" {...S(0.06, 0.7)} {...DASH} className={styles.trace} style={T(1.8)} />
-        <path d="M580 50 V72 L560 92 V121" {...S(0.06, 0.7)} {...DASH} className={styles.trace} style={T(1.8)} />
+        <path d="M580 50 V72 L560 92 V155" {...S(0.06, 0.7)} {...DASH} className={styles.trace} style={T(1.8)} />
 
         {/* Transistor 1 traces */}
         <path d="M84 193 V180 L60 160" {...S(0.05, 0.6)} {...DASH} className={styles.trace} style={T(1.7)} />
-        <path d="M98 193 V180 L120 160 V140 H0" {...S(0.05, 0.6)} {...DASH} className={styles.trace} style={T(1.7)} />
-        <path d="M91 211 V230 L80 250 V280" {...S(0.05, 0.6)} {...DASH} className={styles.trace} style={T(1.8)} />
+        <path d="M98 193 V180 L120 160 V140 H63" {...S(0.05, 0.6)} {...DASH} className={styles.trace} style={T(1.7)} />
+        <path d="M91 211 V230 L80 250 V300" {...S(0.05, 0.6)} {...DASH} className={styles.trace} style={T(1.8)} />
 
         {/* Transistor 2 traces */}
-        <path d="M1034 303 V290 L1020 270 V240 H1200" {...S(0.05, 0.6)} {...DASH} className={styles.trace} style={T(3.7)} />
-        <path d="M1048 303 V290 L1060 270 V250 L1080 230 V200" {...S(0.05, 0.6)} {...DASH} className={styles.trace} style={T(3.7)} />
+        <path d="M1034 303 V290 L1020 270 V240 H1137" {...S(0.05, 0.6)} {...DASH} className={styles.trace} style={T(3.7)} />
+        <path d="M1048 303 V290 L1060 270 V250 L1080 230 V200 H1070" {...S(0.05, 0.6)} {...DASH} className={styles.trace} style={T(3.7)} />
         <path d="M1041 321 V340 L1060 360 V400" {...S(0.05, 0.6)} {...DASH} className={styles.trace} style={T(3.8)} />
 
         {/* Inductor / Coil — spiral symbol (350, 255) */}
@@ -302,14 +317,14 @@ export default function CircuitTraces({ variant = 'full' }: CircuitTracesProps =
         {/* Diode 1 at (850, 350) — horizontal */}
         <path d="M840 343 L855 350 L840 357 Z" {...S(0.09, 0.8)} fill="var(--ic-body-fill)" className={styles.trace} style={T(3.4)} />
         <line x1="855" y1="343" x2="855" y2="357" {...S(0.09, 0.8)} className={styles.trace} style={T(3.4)} />
-        <path d="M830 350 H840" {...S(0.06, 0.7)} {...DASH} className={styles.trace} style={T(3.4)} />
+        <path d="M800 350 H840" {...S(0.06, 0.7)} {...DASH} className={styles.trace} style={T(3.4)} />
         <path d="M855 350 H870 L890 370 V400" {...S(0.06, 0.7)} {...DASH} className={styles.trace} style={T(3.5)} />
 
         {/* Diode 2 at (200, 155) — vertical */}
         <path d="M193 145 L200 160 L207 145 Z" {...S(0.08, 0.8)} fill="var(--ic-body-fill)" className={styles.trace} style={T(1.4)} />
         <line x1="193" y1="160" x2="207" y2="160" {...S(0.08, 0.8)} className={styles.trace} style={T(1.4)} />
         {/* Diode 2 traces */}
-        <path d="M200 145 V120 L180 100 H0" {...S(0.05, 0.6)} {...DASH} className={styles.trace} style={T(1.5)} />
+        <path d="M200 145 V120 L180 100 H63" {...S(0.05, 0.6)} {...DASH} className={styles.trace} style={T(1.5)} />
         <path d="M200 165 V190 L220 210 V240" {...S(0.05, 0.6)} {...DASH} className={styles.trace} style={T(1.5)} />
 
         {/* Electrolytic Capacitor — circle body and leads (620, 240) */}
@@ -344,19 +359,32 @@ export default function CircuitTraces({ variant = 'full' }: CircuitTracesProps =
           nowhere" look with proper PCB termination.
           ═══════════════════════════════════════════════════════════════════════ */}
 
-      {/* CN1 — LEFT edge connector */}
+      {/* CN1 — LEFT edge connector (contacts on BOTH sides; board traces land on the inner row at x58) */}
       <rect x={28} y={80} width={30} height={170} rx={1.5} {...IC(0.7)} className={styles.trace} style={T(0.15)} />
-      {Array.from({ length: 10 }, (_, i) => {
-        const py = 80 + (170 / 11) * (i + 1);
-        return <rect key={`cn1p${i}`} x={24} y={py - 1.25} width={5} height={2.5} rx={0.5} fill="var(--ic-pad-fill)" fillOpacity={0.4} className={styles.trace} style={T(0.18 + i * 0.03)} />;
-      })}
+      {CN1_PINS.map((py, i) => (
+        <g key={`cn1p${i}`}>
+          <rect x={23} y={py - 1.25} width={5} height={2.5} rx={0.5} fill="var(--ic-pad-fill)" fillOpacity={0.4} className={styles.trace} style={T(0.18 + i * 0.03)} />
+          <rect x={58} y={py - 1.25} width={5} height={2.5} rx={0.5} fill="var(--ic-pad-fill)" fillOpacity={0.4} className={styles.trace} style={T(0.18 + i * 0.03)} />
+        </g>
+      ))}
 
-      {/* CN2 — RIGHT edge connector */}
+      {/* CN2 — RIGHT edge connector (contacts on BOTH sides; board traces land on the inner row at x1142) */}
       <rect x={1142} y={55} width={30} height={190} rx={1.5} {...IC(0.7)} className={styles.trace} style={T(0.15)} />
-      {Array.from({ length: 12 }, (_, i) => {
-        const py = 55 + (190 / 13) * (i + 1);
-        return <rect key={`cn2p${i}`} x={1171} y={py - 1.25} width={5} height={2.5} rx={0.5} fill="var(--ic-pad-fill)" fillOpacity={0.4} className={styles.trace} style={T(0.18 + i * 0.03)} />;
-      })}
+      {CN2_PINS.map((py, i) => (
+        <g key={`cn2p${i}`}>
+          <rect x={1137} y={py - 1.25} width={5} height={2.5} rx={0.5} fill="var(--ic-pad-fill)" fillOpacity={0.4} className={styles.trace} style={T(0.18 + i * 0.03)} />
+          <rect x={1172} y={py - 1.25} width={5} height={2.5} rx={0.5} fill="var(--ic-pad-fill)" fillOpacity={0.4} className={styles.trace} style={T(0.18 + i * 0.03)} />
+        </g>
+      ))}
+
+      {/* CN1 outer-side pass-through traces — connector contacts continue off-board to the left edge */}
+      {CN1_PINS.map((y, i) => (
+        <path key={`cn1o${i}`} d={`M23 ${y} H0`} {...S(0.05, 0.6)} {...DASH} className={styles.trace} style={T(0.2 + i * 0.03)} />
+      ))}
+      {/* CN2 outer-side pass-through traces — continue off-board to the right edge */}
+      {CN2_OUTER.map((y, i) => (
+        <path key={`cn2o${i}`} d={`M1177 ${y} H1200`} {...S(0.05, 0.6)} {...DASH} className={styles.trace} style={T(0.2 + i * 0.03)} />
+      ))}
 
       {/* CN3 — BOTTOM-LEFT edge connector */}
       <rect x={250} y={360} width={260} height={14} rx={1.5} {...IC(0.7)} className={styles.trace} style={T(0.2)} />
@@ -550,7 +578,7 @@ export default function CircuitTraces({ variant = 'full' }: CircuitTracesProps =
           zero SMIL animateMotion elements (saves 14 infinite loops per mount)
           and zero CSS animations. Used on all non-home pages.
           ═══════════════════════════════════════════════════════════════════════ */}
-      {variant === 'full' && ELECTRONS.map(([path, dur, delay, r], i) => (
+      {variant === 'full' && ELECTRONS.map(([path, dur, delay, r, hideKeyTimes], i) => (
         <circle key={`e${i}`} r={r} fill="var(--electron-color)" className={styles.electron}>
           <animateMotion
             path={path}
@@ -559,6 +587,16 @@ export default function CircuitTraces({ variant = 'full' }: CircuitTracesProps =
             repeatCount="indefinite"
             rotate="auto"
           />
+          {hideKeyTimes && (
+            <animate
+              attributeName="fill-opacity"
+              values="1;1;0;0;1;1"
+              keyTimes={hideKeyTimes}
+              dur={`${dur}s`}
+              begin={`${delay}s`}
+              repeatCount="indefinite"
+            />
+          )}
         </circle>
       ))}
     </svg>
