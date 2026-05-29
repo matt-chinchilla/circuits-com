@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import styles from './ColumnHeader.module.scss';
 
 export interface SortState {
@@ -28,23 +29,79 @@ export default function ColumnHeader({
   filterValues, filterSelected, setFilterSelected,
 }: ColumnHeaderProps) {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLTableCellElement>(null);
+  const [coords, setCoords] = useState<{ top: number; left: number }>({ top: -9999, left: -9999 });
+  const thRef = useRef<HTMLTableCellElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
 
+  // Outside-click / Escape close. The popover is portaled to <body>, so it is
+  // NOT a DOM descendant of the th — check both refs before closing.
   useEffect(() => {
     if (!open) return;
-    const onClick = (e: MouseEvent) => {
-      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+    const onPointer = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (thRef.current?.contains(t)) return;
+      if (popoverRef.current?.contains(t)) return;
+      setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
+      if (e.key === 'Escape') {
+        setOpen(false);
+        triggerRef.current?.focus();
+      }
     };
-    document.addEventListener('mousedown', onClick);
+    document.addEventListener('mousedown', onPointer);
     document.addEventListener('keydown', onKey);
     return () => {
-      document.removeEventListener('mousedown', onClick);
+      document.removeEventListener('mousedown', onPointer);
       document.removeEventListener('keydown', onKey);
     };
   }, [open]);
+
+  // Position the portaled popover from the trigger rect, clamped to the
+  // viewport, flipping above if there is no room below. Close on scroll/resize
+  // rather than tracking — the table itself scrolls horizontally, so a moving
+  // anchor would otherwise drift.
+  useLayoutEffect(() => {
+    if (!open) return;
+    const place = () => {
+      const trigger = triggerRef.current;
+      const pop = popoverRef.current;
+      if (!trigger) return;
+      const t = trigger.getBoundingClientRect();
+      const pw = pop?.offsetWidth ?? 280;
+      const ph = pop?.offsetHeight ?? 200;
+      let left = numeric ? t.right - pw : t.left;
+      left = Math.max(8, Math.min(left, window.innerWidth - pw - 8));
+      let top = t.bottom + 4;
+      if (top + ph > window.innerHeight - 8 && t.top - ph - 4 > 8) {
+        top = t.top - ph - 4;
+      }
+      // Keep the popover on-screen even when it fits neither below nor above
+      // (short window / tall filter list); .popover scrolls internally then.
+      top = Math.max(8, Math.min(top, window.innerHeight - ph - 8));
+      setCoords({ top, left });
+    };
+    place();
+    // Move focus into the dialog. preventScroll stops the browser scrolling the
+    // (briefly offscreen) popover into view, which would otherwise fire onClose.
+    popoverRef.current?.querySelector<HTMLElement>('input, button')?.focus({ preventScroll: true });
+
+    // Close on page/table scroll or resize so the fixed popover can't drift from
+    // its anchor — but ignore scrolls inside the popover's own filter list.
+    const onClose = (e: Event) => {
+      // e.target is `window` for window-level scrolls — not a Node, so guard
+      // before contains() (which throws on non-Node args).
+      if (e.type === 'scroll' && e.target instanceof Node && popoverRef.current?.contains(e.target)) return;
+      setOpen(false);
+    };
+    window.addEventListener('scroll', onClose, true);
+    window.addEventListener('resize', onClose);
+    return () => {
+      window.removeEventListener('scroll', onClose, true);
+      window.removeEventListener('resize', onClose);
+    };
+  }, [open, numeric]);
 
   const isActive = sort.col === sortKey;
   const sortDir = isActive ? sort.dir : null;
@@ -56,11 +113,12 @@ export default function ColumnHeader({
 
   return (
     <th
-      ref={ref}
+      ref={thRef}
       className={`${styles.colHead} ${isActive ? styles.colHeadActive : ''} ${hideClass ?? ''} ${numeric ? styles.numeric : ''}`}
       aria-sort={ariaSort}
     >
       <button
+        ref={triggerRef}
         type="button"
         className={styles.trigger}
         aria-haspopup="dialog"
@@ -75,8 +133,14 @@ export default function ColumnHeader({
           </span>
         </span>
       </button>
-      {open && (
-        <div className={`${styles.popover} ${numeric ? styles.popoverRight : ''}`} role="dialog" aria-label={`${label} sort and filter`}>
+      {open && createPortal(
+        <div
+          ref={popoverRef}
+          className={styles.popover}
+          role="dialog"
+          aria-label={`${label} sort and filter`}
+          style={{ position: 'fixed', top: coords.top, left: coords.left }}
+        >
           <div className={styles.section}>
             <div className={styles.sectionLabel}>Sort</div>
             <div className={styles.sortRow}>
@@ -108,7 +172,6 @@ export default function ColumnHeader({
                 placeholder={`Search ${label.toLowerCase()}…`}
                 value={search ?? ''}
                 onChange={e => setSearch(e.target.value)}
-                autoFocus
               />
             </div>
           )}
@@ -138,7 +201,8 @@ export default function ColumnHeader({
               </div>
             </div>
           )}
-        </div>
+        </div>,
+        document.body
       )}
     </th>
   );

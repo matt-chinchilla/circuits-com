@@ -4,7 +4,9 @@
 
 .tableWrap {
   @include card-base;
-  overflow: hidden;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  @include scrollbar-thin(6px);
 }
 
 .table {

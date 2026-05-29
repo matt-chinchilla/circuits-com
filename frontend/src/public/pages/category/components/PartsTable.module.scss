@@ -4,21 +4,12 @@
 .tableWrap {
   @include card-base;
   border-radius: 12px;
-  overflow: visible;
-
-  @media (max-width: $bp-tablet) {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: thin;
-
-    &::-webkit-scrollbar {
-      height: 4px;
-    }
-    &::-webkit-scrollbar-thumb {
-      background: rgba(0, 0, 0, 0.15);
-      border-radius: 2px;
-    }
-  }
+  // Scroll the table within its column instead of letting it bleed under the
+  // sidebar. The sort/filter popovers are portaled to <body> (ColumnHeader),
+  // so clipping here no longer hides them.
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  @include scrollbar-thin(6px);
 }
 
 .table {
@@ -59,8 +50,12 @@
   }
 }
 
+// Description is the lowest-value column (already ellipsis-clamped) — drop it
+// once the sidebar leaves too little room for all 8 columns, so the price
+// columns stay fully visible without horizontal scroll. ~1450px is where
+// `.left` can no longer hold the full table beside the 340px sponsor sidebar.
 .tdDesc {
-  @media (max-width: $bp-tablet) {
+  @media (max-width: 1449px) {
     display: none;
   }
 }
@@ -156,8 +151,8 @@
   font-style: italic;
 }
 
-.hideTablet {
-  @media (max-width: $bp-tablet) {
+.hideDesc {
+  @media (max-width: 1449px) {
     display: none;
   }
 }

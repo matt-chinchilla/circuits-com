@@ -57,3 +57,6 @@ design-handoff*/
 # Throwaway visual-verification screenshots from chrome-devtools-mcp runs
 tmp-screenshots/
 .tmp/
+
+# Playwright/Chrome-DevTools MCP artifacts (screenshots, traces) — regenerated
+.playwright-mcp/

@@ -1,136 +1,436 @@
 @use '@shared/styles/variables' as *;
 @use '@shared/styles/mixins' as *;
-@use '@shared/styles/animations';
 
-.sponsor {
-  background: linear-gradient(135deg, $sponsor-gold, $sponsor-gold-light);
-  border-radius: 8px;
-  padding: 28px 24px;
-  text-align: center;
+// ─── Board shell ─────────────────────────────────────────────────────────────
+// A premium sub-category sponsor rendered as a gold-finish (ENIG) PCB. Calm at
+// rest — a solder-mask gradient + faint silkscreen grid — with the "fun" held
+// back for the cursor flashlight, which reveals hidden components beneath the
+// beam. All compositor-friendly (gradients, opacity, transform); no SVG
+// filters, no animated drop-shadows.
+
+.card {
+  --accent: #e8c252; // gold (ENIG) — default / "gold" tier
+  --accent-deep: #a88d2e;
+
+  position: relative;
+  border-radius: 14px;
+  overflow: hidden;
+  isolation: isolate;
+  background: #0a1f17;
+  box-shadow:
+    0 10px 30px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+// Tier selectors are lowercase; SponsorBlock lowercases data-tier so both the
+// seed ('gold'/'silver') and admin ('Featured'/'Platinum'/'Gold'/'Silver')
+// casings match. 'gold' (and anything unknown) falls through to the default.
+.card[data-tier='silver'] {
+  --accent: #d7dee4;
+  --accent-deep: #9aa6b0;
+}
+
+.card[data-tier='platinum'] {
+  --accent: #eaf0f4;
+  --accent-deep: #aab8c2;
+}
+
+.card[data-tier='featured'] {
+  --accent: #f3cf5c;
+  --accent-deep: #b8902e;
+}
+
+// Static gold rim (rounded — uses the mask-cutout trick rather than
+// border-image so the corners stay round). Not animated → not flashy.
+.card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  border-radius: inherit;
+  padding: 1.5px;
+  background: linear-gradient(
+    150deg,
+    var(--accent),
+    rgba(255, 255, 255, 0.28) 28%,
+    var(--accent-deep) 62%,
+    var(--accent)
+  );
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+// Engines without mask-composite can't cut out the rim's centre — the gradient
+// would paint as a solid rectangle over the card content (z-index 4). Drop it
+// there; the card's own shadow still frames it.
+@supports not ((-webkit-mask-composite: xor) or (mask-composite: exclude)) {
+  .card::before {
+    display: none;
+  }
+}
+
+// ─── Layers ──────────────────────────────────────────────────────────────────
+
+.substrate {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background:
+    radial-gradient(130% 95% at 16% -12%, rgba(46, 86, 62, 0.6), transparent 55%),
+    radial-gradient(
+      120% 120% at 100% 118%,
+      color-mix(in srgb, var(--accent) 16%, transparent),
+      transparent 52%
+    ),
+    linear-gradient(158deg, #0d2c1e 0%, #0a1e16 50%, #0f3826 100%);
+}
+
+// Silkscreen dot grid, faded diagonally — resting PCB texture.
+.substrate::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(
+    color-mix(in srgb, var(--accent) 20%, transparent) 1px,
+    transparent 1.7px
+  );
+  background-size: 17px 17px;
+  opacity: 0.55;
+  -webkit-mask-image: linear-gradient(158deg, #000, transparent 78%);
+  mask-image: linear-gradient(158deg, #000, transparent 78%);
+}
+
+.cardEmpty .substrate {
+  filter: saturate(0.8);
+}
+
+// Hidden components — invisible at rest, revealed only inside the flashlight
+// beam. The beam is a radial mask centred on --mx/--my (written by JS, rAF-
+// batched). Default position is parked far offscreen so nothing leaks before
+// the first pointer move.
+.reveal {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  opacity: 0;
+  transition: opacity 260ms ease;
+  transform: translateZ(0); // own compositor layer → mask repaint stays local
+  --beam: 124px;
+  --beam-mask: radial-gradient(
+    circle var(--beam) at var(--mx, -9999px) var(--my, -9999px),
+    #000 0,
+    #000 36%,
+    transparent 74%
+  );
+  -webkit-mask-image: var(--beam-mask);
+  mask-image: var(--beam-mask);
+}
+
+// Warm "lamp" pool that brightens the copper beneath it (screen blend, scoped
+// by the card's isolation so it never washes out the text above).
+.lamp {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 260ms ease;
+  mix-blend-mode: screen;
+  background: radial-gradient(
+    circle 150px at var(--mx, -9999px) var(--my, -9999px),
+    color-mix(in srgb, var(--accent) 24%, transparent),
+    transparent 68%
+  );
+}
+
+.card[data-lit='true'] .reveal,
+.card[data-lit='true'] .lamp {
+  opacity: 1;
+}
+
+// The flashlight is a desktop pointing-device delight only. On touch / coarse
+// pointers (and reduced-motion) the layers are removed entirely, leaving a calm
+// static board with zero per-frame compositing cost.
+@media (hover: none), (pointer: coarse) {
+  .reveal,
+  .lamp {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal,
+  .lamp {
+    display: none;
+  }
+}
+
+// ─── PCB artwork (inside .reveal) ────────────────────────────────────────────
+
+.art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+// Copper routing.
+.traces {
+  stroke: color-mix(in srgb, var(--accent) 75%, transparent);
+}
+
+// Plated through-hole pads — group inherits accent fill; the inner hole punches
+// back to the substrate tone.
+.pads {
+  fill: var(--accent);
+}
+
+.padHole {
+  fill: #0b2017;
+}
+
+// Components: the group carries the copper fill+stroke; unclassed legs/pins
+// inherit it, while classed parts (bodies, bands) override. Inline-coloured
+// resistor bands keep their own fills (their attribute is a specified value, so
+// it wins over the inherited group value, and no CSS targets them).
+.comp {
+  fill: var(--accent);
+  stroke: var(--accent);
+  stroke-linecap: round;
+}
+
+.body {
+  fill: #112a1d;
+}
+
+.bodyTop {
+  fill: #1d4231;
+}
+
+.capStripe {
+  fill: #f4ecd6;
+  stroke: none;
+}
+
+.bandMetal {
+  fill: #cdd6dd; // metallic tolerance / cathode band
+  stroke: none;
+}
+
+.pin1 {
+  fill: var(--accent);
+  stroke: none;
+}
+
+// ─── Corner marks ────────────────────────────────────────────────────────────
+
+.fiducialTL,
+.fiducialBR {
+  position: absolute;
+  z-index: 2;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1.5px solid color-mix(in srgb, var(--accent) 42%, transparent);
+}
+
+.fiducialTL {
+  top: 12px;
+  left: 12px;
+}
+
+.fiducialBR {
+  right: 12px;
+  bottom: 12px;
+}
+
+.designator {
+  position: absolute;
+  left: 14px;
+  bottom: 11px;
+  z-index: 2;
+  font-family: $font-mono;
+  font-size: 0.6rem;
+  letter-spacing: 0.12em;
+  color: color-mix(in srgb, var(--accent) 58%, transparent);
+}
+
+// ─── Silkscreen content ──────────────────────────────────────────────────────
+
+.content {
+  position: relative;
+  z-index: 2;
+  padding: 26px 22px 30px;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 14px;
-  transition: filter $transition-normal;
-  @include gold-shimmer-border;
+  text-align: center;
 }
 
-.badge {
-  display: inline-block;
-  background: rgba(0, 0, 0, 0.15);
-  color: #ffffff;
-  font-family: $font-heading;
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  padding: 4px 14px;
-  border-radius: 20px;
-}
-
-.logoWrap {
-  width: 100px;
-  height: 100px;
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 50%;
-  display: flex;
+.kicker {
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  overflow: hidden;
+  gap: 7px;
+  font-family: $font-mono;
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--accent);
+  padding: 5px 13px;
+  border: 1px solid color-mix(in srgb, var(--accent) 32%, transparent);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.28);
+}
+
+// Logo medallion — a round gold pad (ENIG finish) with a dashed outer ring.
+.pad {
+  position: relative;
+  width: 86px;
+  height: 86px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: radial-gradient(circle at 50% 36%, #163220, #0a1d14);
+  box-shadow:
+    inset 0 0 0 2px color-mix(in srgb, var(--accent) 68%, transparent),
+    inset 0 0 16px rgba(0, 0, 0, 0.6),
+    0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
+.pad::after {
+  content: '';
+  position: absolute;
+  inset: -5px;
+  border-radius: 50%;
+  border: 1px dashed color-mix(in srgb, var(--accent) 42%, transparent);
 }
 
 .logo {
-  max-width: 80%;
-  max-height: 80%;
+  max-width: 58%;
+  max-height: 58%;
   object-fit: contain;
 }
 
-.name {
-  font-family: $font-heading;
-  font-size: 1.15rem;
-  font-weight: 700;
-  color: #ffffff;
-  margin: 0;
+.chipGlyph {
+  font-size: 2.1rem;
+  line-height: 1;
+  color: var(--accent);
 }
 
-.description {
-  font-size: 0.85rem;
-  color: rgba(255, 255, 255, 0.9);
-  line-height: 1.5;
+// Empty IC footprint for the open-slot placeholder — dashed outline + four
+// corner pads "awaiting" a component.
+.footprint {
+  position: relative;
+  width: 86px;
+  height: 86px;
+  border: 1.5px dashed color-mix(in srgb, var(--accent) 48%, transparent);
+  border-radius: 10px;
+
+  span {
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+    background: color-mix(in srgb, var(--accent) 68%, transparent);
+  }
+
+  span:nth-child(1) {
+    top: -6px;
+    left: -6px;
+  }
+  span:nth-child(2) {
+    top: -6px;
+    right: -6px;
+  }
+  span:nth-child(3) {
+    bottom: -6px;
+    left: -6px;
+  }
+  span:nth-child(4) {
+    bottom: -6px;
+    right: -6px;
+  }
+}
+
+.name,
+.title {
+  font-family: $font-heading;
+  font-size: 1.18rem;
+  font-weight: 700;
   margin: 0;
+  @include truncate;
+}
+
+.name {
+  color: #f4ecd6;
+}
+
+.title {
+  color: var(--accent);
+}
+
+.description,
+.text {
+  margin: 0;
+  max-width: 100%;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: rgba(244, 236, 214, 0.74);
+  @include line-clamp(3);
 }
 
 .details {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
-  margin-top: 4px;
+  gap: 10px;
+  width: 100%;
+  margin-top: 2px;
 }
 
-.detail {
-  color: #ffffff;
+.visit,
+.cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: $font-heading;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 9px 18px;
+  border-radius: 7px;
+  color: #0a1d14;
+  background: linear-gradient(135deg, var(--accent), var(--accent-deep));
   text-decoration: none;
-  font-size: 0.85rem;
-  font-weight: 500;
-  transition: opacity $transition-fast;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+  transition:
+    transform 150ms ease,
+    box-shadow 150ms ease;
 
   &:hover {
-    opacity: 0.8;
-    text-decoration: underline;
+    transform: translateY(-1px);
+    box-shadow: 0 5px 16px rgba(0, 0, 0, 0.42);
   }
 }
 
-.placeholder {
-  border: 2px dashed $sponsor-gold;
-  border-radius: 8px;
-  padding: 28px 24px;
-  text-align: center;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  background: rgba($sponsor-gold, 0.04);
-}
-
-.placeholderIcon {
-  font-size: 2rem;
-  color: $sponsor-gold;
-  opacity: 0.6;
-}
-
-.placeholderTitle {
-  font-family: $font-heading;
-  font-size: 1.1rem;
-  font-weight: 700;
-  color: $sponsor-gold;
-  margin: 0;
-}
-
-.placeholderText {
-  font-size: 0.85rem;
-  color: $text-secondary;
-  line-height: 1.5;
-  margin: 0;
-  max-width: 280px;
-}
-
-.placeholderCta {
-  display: inline-block;
-  margin-top: 4px;
-  padding: 8px 20px;
-  font-family: $font-heading;
+.phone {
+  font-family: $font-mono;
   font-size: 0.8rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  color: #ffffff;
-  background: $sponsor-gold;
-  border-radius: 6px;
+  color: rgba(244, 236, 214, 0.8);
   text-decoration: none;
-  transition: background-color $transition-fast, transform $transition-fast;
+  transition: color 150ms ease;
 
   &:hover {
-    background-color: $sponsor-gold-light;
-    transform: scale(1.03);
+    color: var(--accent);
   }
 }

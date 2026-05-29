@@ -1,4 +1,5 @@
 @use '@shared/styles/variables' as *;
+@use '@shared/styles/mixins' as *;
 
 // ReportsPage — ported from 2026-04-25 Claude Design bundle (Phase A7).
 // Replaces Recharts (~400KB) with hand-rolled native SVG charts:
@@ -122,11 +123,7 @@
   margin-bottom: 16px;
   border-bottom: 1px solid #f0f2f5;
   overflow-x: auto;
-  scrollbar-width: none;
-
-  &::-webkit-scrollbar {
-    display: none;
-  }
+  @include scrollbar-thin(4px, 2px);
 }
 
 .rtTab {

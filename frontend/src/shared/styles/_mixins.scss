@@ -48,3 +48,33 @@
     pointer-events: none;
   }
 }
+
+// Thin custom scrollbar for horizontal-scroll containers (data tables, tab bars).
+@mixin scrollbar-thin($height: 6px, $radius: 3px) {
+  scrollbar-width: thin;
+
+  &::-webkit-scrollbar {
+    height: $height;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.15);
+    border-radius: $radius;
+  }
+}
+
+// Single-line ellipsis. Includes min-width: 0 so it also truncates inside flex.
+@mixin truncate {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// Multi-line clamp (-webkit-box). Defaults to 3 lines.
+@mixin line-clamp($lines: 3) {
+  display: -webkit-box;
+  -webkit-line-clamp: $lines;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}

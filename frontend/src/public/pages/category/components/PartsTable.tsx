@@ -66,7 +66,7 @@ export default function PartsTable({
               hasSearch search={skuSearch} setSearch={setSkuSearch}
             />
             <ColumnHeader
-              label="Description" sortKey="desc" hideClass={styles.hideTablet}
+              label="Description" sortKey="desc" hideClass={styles.hideDesc}
               sort={sort} setSort={setSort}
             />
             <ColumnHeader
