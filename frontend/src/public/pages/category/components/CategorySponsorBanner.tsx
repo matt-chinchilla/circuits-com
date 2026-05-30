@@ -17,6 +17,32 @@ function lettermark(name: string): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
+/**
+ * Medallion: company logo when one is present AND loads cleanly, else the
+ * lettermark initials in a gold-ringed pad. The onError fallback handles
+ * the broken-URL case (e.g. seed sponsors carry placeholder paths like
+ * `/images/sponsors/kennedy.jpg` that don't exist as static assets) — the
+ * naive `imageUrl ? <img> : <mark>` ternary would otherwise render the
+ * browser's broken-image icon when the src 404s. We also trim the URL so
+ * whitespace-only strings drop to the lettermark immediately rather than
+ * round-tripping through a guaranteed-failed network request.
+ */
+function SponsorMedallion({ company, imageUrl }: { company: string; imageUrl: string | null }) {
+  const [failed, setFailed] = useState(false);
+  const src = imageUrl?.trim() || '';
+  if (!src || failed) {
+    return <span className={styles.mark}>{lettermark(company)}</span>;
+  }
+  return (
+    <img
+      src={src}
+      alt={`${company} logo`}
+      className={styles.logo}
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
 function CopyChip({ value, tone = 'dark' }: { value: string; tone?: 'dark' | 'light' }) {
   const [copied, setCopied] = useState(false);
   // Cancel the reset-timer on unmount AND on rapid re-click — otherwise a
@@ -273,11 +299,7 @@ export default function CategorySponsorBanner({
         <span className={styles.kicker}>&#9670; Category Sponsor</span>
         <div className={styles.idTop}>
           <span className={styles.pad}>
-            {sponsor.image_url ? (
-              <img src={sponsor.image_url} alt={`${company} logo`} className={styles.logo} />
-            ) : (
-              <span className={styles.mark}>{lettermark(company)}</span>
-            )}
+            <SponsorMedallion company={company} imageUrl={sponsor.image_url} />
           </span>
           <span className={styles.co}>
             <span className={styles.coName}>{company}</span>
