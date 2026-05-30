@@ -20,6 +20,16 @@
   box-shadow:
     0 10px 30px rgba(0, 0, 0, 0.3),
     inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  // Lets finger-drag drive the flashlight without stealing page scroll: pan-y
+  // means vertical swipes still scroll the page (so the card isn't a scroll
+  // dead-zone on phones), while horizontal / diagonal drags still fire
+  // pointermove until the browser commits to a scroll. Touch users get the
+  // beam on horizontal motion; pure vertical swipes just scroll past the card.
+  // Suppress iOS tap-highlight + long-press selection on the chrome so the
+  // touch reveal stays clean (.content re-enables text selection for copy).
+  touch-action: pan-y;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
 }
 
 // Tier selectors are lowercase; SponsorBlock lowercases data-tier so both the
@@ -121,7 +131,14 @@
   inset: 0;
   z-index: 1;
   opacity: 0;
-  transition: opacity 260ms ease;
+  // visibility:hidden at rest lets the compositor skip the layer entirely (no
+  // mask repaint / mix-blend backdrop sampling) — important now that the layer
+  // exists on touch too. Delay the visibility flip until the opacity fade-out
+  // finishes so the exit transition still plays.
+  visibility: hidden;
+  transition:
+    opacity 260ms ease,
+    visibility 0s linear 260ms;
   transform: translateZ(0); // own compositor layer → mask repaint stays local
   --beam: 124px;
   --beam-mask: radial-gradient(
@@ -142,7 +159,10 @@
   z-index: 1;
   pointer-events: none;
   opacity: 0;
-  transition: opacity 260ms ease;
+  visibility: hidden;
+  transition:
+    opacity 260ms ease,
+    visibility 0s linear 260ms;
   mix-blend-mode: screen;
   background: radial-gradient(
     circle 150px at var(--mx, -9999px) var(--my, -9999px),
@@ -154,18 +174,16 @@
 .card[data-lit='true'] .reveal,
 .card[data-lit='true'] .lamp {
   opacity: 1;
+  visibility: visible;
+  // Show immediately on lit; the fade-in plays via opacity.
+  transition:
+    opacity 260ms ease,
+    visibility 0s linear 0s;
 }
 
-// The flashlight is a desktop pointing-device delight only. On touch / coarse
-// pointers (and reduced-motion) the layers are removed entirely, leaving a calm
-// static board with zero per-frame compositing cost.
-@media (hover: none), (pointer: coarse) {
-  .reveal,
-  .lamp {
-    display: none;
-  }
-}
-
+// Reduced-motion users still get a calm static board with zero per-frame cost;
+// touch users now drive the flashlight by dragging a finger (see .card's
+// touch-action above + PcbCard's pointer handlers).
 @media (prefers-reduced-motion: reduce) {
   .reveal,
   .lamp {
@@ -274,6 +292,11 @@
   align-items: center;
   gap: 14px;
   text-align: center;
+  // Card chrome sets user-select:none for the touch-drag flashlight; re-enable
+  // selection inside the silkscreen content so the sponsor's phone, name, and
+  // description stay copy-pasteable (desktop drag-select + Android long-press).
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 .kicker {

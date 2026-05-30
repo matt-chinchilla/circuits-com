@@ -268,12 +268,14 @@ function PcbArt() {
 
 /**
  * The board shell: stacked layers (substrate texture, masked reveal, lamp
- * glow) plus the silkscreen content. The cursor flashlight only runs on
- * fine-pointer, motion-OK devices, and the gate is re-evaluated live (matchMedia
- * change) so plugging a mouse into a hybrid laptop — or toggling reduced-motion —
- * enables/disables it without a remount. CSS also display:none's the reveal/lamp
- * layers off those devices as defense-in-depth. The pointer rect is cached on
- * enter (invalidated on scroll/resize) so pointermove does no per-frame reflow.
+ * glow) plus the silkscreen content. The flashlight runs for BOTH mouse hover
+ * and finger drag — Pointer Events unify the two, so pointerenter/move/leave
+ * drive it for either. On touch we also setPointerCapture on pointerdown so the
+ * reveal keeps tracking when the finger drifts off the card. Gated only on
+ * prefers-reduced-motion (live via matchMedia change). The pointer rect is
+ * cached on enter (invalidated on scroll/resize) so pointermove does no
+ * per-frame reflow. The card carries touch-action:none so finger-drag isn't
+ * cancelled as a scroll gesture.
  */
 function PcbCard({
   empty,
@@ -291,17 +293,35 @@ function PcbCard({
     const el = ref.current;
     if (!el) return;
 
-    const fine = window.matchMedia('(hover: hover) and (pointer: fine)');
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
     let rect: DOMRect | null = null;
 
-    const onEnter = () => {
-      rect = el.getBoundingClientRect();
+    const onEnter = (e: PointerEvent) => {
+      if (!e.isPrimary) return;
+      const r = el.getBoundingClientRect();
+      rect = r;
+      // Seed --mx/--my synchronously so the very first painted frame of
+      // data-lit="true" already has the beam under the cursor/finger. Otherwise
+      // a tap-without-move (or the gap before the first pointermove rAF) would
+      // fade in a beam parked at the default -9999px and look like a no-op flash.
+      el.style.setProperty('--mx', `${e.clientX - r.left}px`);
+      el.style.setProperty('--my', `${e.clientY - r.top}px`);
       el.setAttribute('data-lit', 'true');
     };
-    const onLeave = () => el.setAttribute('data-lit', 'false');
+    const onLeave = (e: PointerEvent) => {
+      if (!e.isPrimary) return;
+      el.setAttribute('data-lit', 'false');
+    };
+    // Touch/pen pointerup: clear lit state explicitly (don't rely on the implicit
+    // leave-after-capture-release dance, which iOS Safari has historically been
+    // unreliable about). Skip mouse so cursor-still-hovering keeps the beam on.
+    const onUp = (e: PointerEvent) => {
+      if (!e.isPrimary || e.pointerType === 'mouse') return;
+      try { el.releasePointerCapture(e.pointerId); } catch { /* not captured */ }
+      el.setAttribute('data-lit', 'false');
+    };
     const onMove = (e: PointerEvent) => {
-      if (raf.current) return;
+      if (!e.isPrimary || raf.current) return;
       const r = rect ?? el.getBoundingClientRect();
       rect = r;
       const x = e.clientX - r.left;
@@ -311,6 +331,20 @@ function PcbCard({
         el.style.setProperty('--mx', `${x}px`);
         el.style.setProperty('--my', `${y}px`);
       });
+    };
+    // Touch + pen: capture the pointer on down so finger drift outside the card
+    // keeps the reveal tracking. Mouse doesn't need this (hover state tracks
+    // naturally) and capturing it would suppress hover-based pointerleave.
+    // CRITICAL: skip capture when the pointerdown lands on an interactive
+    // descendant — capture retargets pointerup (and the synthesized click) to
+    // the card, swallowing taps on the Visit Website / phone / Become-a-Sponsor
+    // links. The flashlight UX over the card substrate is preserved; only the
+    // CTAs opt out, and they're exactly where the user wants a real tap.
+    const onDown = (e: PointerEvent) => {
+      if (!e.isPrimary || e.pointerType === 'mouse') return;
+      const t = e.target as Element | null;
+      if (t?.closest('a, button, [role="button"], input, textarea, select, label')) return;
+      try { el.setPointerCapture(e.pointerId); } catch { /* unsupported */ }
     };
     const invalidate = () => {
       rect = null;
@@ -322,7 +356,17 @@ function PcbCard({
       attached = true;
       el.addEventListener('pointerenter', onEnter);
       el.addEventListener('pointerleave', onLeave);
+      // pointercancel: iOS Safari fires this (NOT pointerleave) when a system
+      // gesture preempts the touch — Control Center pull-down, incoming call,
+      // multi-finger zoom, etc. Without this, data-lit would stick "true" and
+      // the beam would freeze at the last finger position.
+      el.addEventListener('pointercancel', onLeave);
+      // pointerup belt-and-braces: under setPointerCapture some browsers (older
+      // iOS) don't reliably fire pointerleave on implicit release. onUp clears
+      // lit state directly for touch/pen.
+      el.addEventListener('pointerup', onUp);
       el.addEventListener('pointermove', onMove);
+      el.addEventListener('pointerdown', onDown);
       window.addEventListener('scroll', invalidate, true);
       window.addEventListener('resize', invalidate);
     };
@@ -331,20 +375,21 @@ function PcbCard({
       attached = false;
       el.removeEventListener('pointerenter', onEnter);
       el.removeEventListener('pointerleave', onLeave);
+      el.removeEventListener('pointercancel', onLeave);
+      el.removeEventListener('pointerup', onUp);
       el.removeEventListener('pointermove', onMove);
+      el.removeEventListener('pointerdown', onDown);
       window.removeEventListener('scroll', invalidate, true);
       window.removeEventListener('resize', invalidate);
       el.setAttribute('data-lit', 'false');
     };
 
-    const sync = () => (fine.matches && !reduced.matches ? attach() : detach());
+    const sync = () => (reduced.matches ? detach() : attach());
     sync();
-    fine.addEventListener('change', sync);
     reduced.addEventListener('change', sync);
 
     return () => {
       detach();
-      fine.removeEventListener('change', sync);
       reduced.removeEventListener('change', sync);
       if (raf.current) cancelAnimationFrame(raf.current);
     };
@@ -354,6 +399,8 @@ function PcbCard({
     <motion.div
       ref={ref}
       className={`${styles.card} ${empty ? styles.cardEmpty : ''}`}
+      role="region"
+      aria-label={empty ? 'Open sponsor slot' : 'Featured sponsor'}
       data-tier={(tier ?? 'gold').toLowerCase()}
       data-lit="false"
       initial={{ opacity: 0, y: 20 }}
