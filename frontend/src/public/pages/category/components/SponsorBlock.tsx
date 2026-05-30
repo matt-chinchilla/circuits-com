@@ -19,7 +19,7 @@ function PcbArt() {
     <svg
       className={styles.art}
       viewBox="0 0 300 360"
-      preserveAspectRatio="xMidYMid slice"
+      preserveAspectRatio="xMidYMid meet"
       aria-hidden="true"
     >
       {/*
