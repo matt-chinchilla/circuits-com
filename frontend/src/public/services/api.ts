@@ -23,15 +23,32 @@ export const api = {
   getCategories: () =>
     client.get<Category[]>('/categories/').then(r => r.data),
 
-  getCategory: (slug: string, popularPage = 1, popularPerPage = 20, partsPage = 1, partsPerPage = 20) =>
-    client
-      .get<CategoryDetail>(`/categories/${slug}/`, {
-        params: {
-          popular_page: popularPage, popular_per_page: popularPerPage,
-          parts_page: partsPage, parts_per_page: partsPerPage,
-        },
-      })
-      .then(r => r.data),
+  getCategory: async (slug: string, popularPage = 1, popularPerPage = 20, partsPage = 1, partsPerPage = 20) => {
+    // Reuse the index.html preload fetch (2026-05-30): the inline
+    // <script> in frontend/index.html fires the same URL at HTML parse
+    // time on direct loads of /category/<slug>. Reading its promise
+    // here means the React tree's first paint waits ~3 ms (network)
+    // instead of ~400 ms (chunks + mount + axios cold start).
+    const preload = typeof window !== 'undefined'
+      ? (window as unknown as { __categoryPreload?: { slug: string; promise: Promise<CategoryDetail | null> } }).__categoryPreload
+      : undefined;
+    if (
+      preload && preload.slug === slug
+      && popularPage === 1 && popularPerPage === 500
+      && partsPage === 1 && partsPerPage === 500
+    ) {
+      delete (window as unknown as { __categoryPreload?: unknown }).__categoryPreload;
+      const cached = await preload.promise;
+      if (cached) return cached;
+    }
+    const r = await client.get<CategoryDetail>(`/categories/${slug}/`, {
+      params: {
+        popular_page: popularPage, popular_per_page: popularPerPage,
+        parts_page: partsPage, parts_per_page: partsPerPage,
+      },
+    });
+    return r.data;
+  },
 
   // Hover-prefetch the category's API data so the Service Worker caches it
   // before the click. MUST mirror the category page's call

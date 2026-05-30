@@ -71,19 +71,30 @@ function App() {
     window.scrollTo({ top: 0, left: 0 });
   }, [location.pathname]);
 
+  // Route prefetch — defer until well after the current page's LCP so we
+  // don't compete with the active page's chunk + API loads for HTTP
+  // connections (2026-05-30 fix: at idle <500 ms these prefetches were
+  // queuing behind the category-page critical path on HTTP/1.1, pushing
+  // the API fetch out to ~419 ms). Two-stage delay: idle + 2.5 s timeout
+  // means we wait for both the browser-idle signal AND a hard 2.5 s
+  // floor, comfortably past LCP-good target (2.5 s) on slow devices.
   const prefetched = useRef(false);
   useEffect(() => {
     if (prefetched.current) return;
     prefetched.current = true;
-    const idle = window.requestIdleCallback ?? ((cb: () => void) => setTimeout(cb, 200));
-    idle(() => {
-      const p = (m: Promise<unknown>) => m.catch(() => {});
-      p(import("@public/pages/category"));
-      p(import("@public/pages/search"));
-      p(import("@public/pages/part"));
-      p(import("@public/pages/about"));
-      p(import("@public/pages/join"));
-    });
+    const start = () => {
+      const idle = window.requestIdleCallback ?? ((cb: () => void) => setTimeout(cb, 200));
+      idle(() => {
+        const p = (m: Promise<unknown>) => m.catch(() => {});
+        p(import("@public/pages/category"));
+        p(import("@public/pages/search"));
+        p(import("@public/pages/part"));
+        p(import("@public/pages/about"));
+        p(import("@public/pages/join"));
+      });
+    };
+    const id = window.setTimeout(start, 2500);
+    return () => window.clearTimeout(id);
   }, []);
 
   // Admin routes live outside AnimatePresence — admin has its own layout.

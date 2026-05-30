@@ -30,6 +30,28 @@
     <link rel="preload" href="/fonts/phosphor-light/Phosphor-Light.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="stylesheet" href="/fonts/phosphor-light/style.css" />
     <title>Circuits.com — Electronic Components Directory</title>
+    <script>
+    // Category-page LCP preload (2026-05-30): when the request URL is
+    // /category/<slug>, kick off the API fetch at HTML parse time so the
+    // response lands in the Service Worker cache before React mounts. The
+    // <Suspense> + useEffect chain otherwise can't fire the fetch until
+    // ~400 ms after navigation start. Stores the in-flight promise on
+    // window.__categoryPreload so api.ts can reuse it (avoids a duplicate
+    // origin fetch when the SW cache is cold). URL params MUST match
+    // api.getCategory's exact request (popular_per_page=500 etc).
+    (function(){
+      var m = location.pathname.match(/^\/category\/([^\/?#]+)/);
+      if (!m) return;
+      var slug = m[1];
+      var path = '/api/categories/' + slug + '/?popular_page=1&popular_per_page=500&parts_page=1&parts_per_page=500';
+      try {
+        window.__categoryPreload = {
+          slug: slug,
+          promise: fetch(path, { credentials: 'omit' }).then(function(r){ return r.ok ? r.json() : null; }).catch(function(){ return null; }),
+        };
+      } catch (_) { /* ignore — page will fetch through axios */ }
+    })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
