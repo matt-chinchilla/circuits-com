@@ -406,7 +406,6 @@ function PcbCard({
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, ease: 'easeOut' as const }}
-      whileHover={{ y: -3 }}
     >
       <div className={styles.substrate} aria-hidden="true" />
       <div className={styles.reveal} aria-hidden="true">

@@ -20,14 +20,14 @@
   box-shadow:
     0 10px 30px rgba(0, 0, 0, 0.3),
     inset 0 1px 0 rgba(255, 255, 255, 0.04);
-  // Lets finger-drag drive the flashlight without stealing page scroll: pan-y
-  // means vertical swipes still scroll the page (so the card isn't a scroll
-  // dead-zone on phones), while horizontal / diagonal drags still fire
-  // pointermove until the browser commits to a scroll. Touch users get the
-  // beam on horizontal motion; pure vertical swipes just scroll past the card.
-  // Suppress iOS tap-highlight + long-press selection on the chrome so the
-  // touch reveal stays clean (.content re-enables text selection for copy).
-  touch-action: pan-y;
+  // Full finger control over the beam: touch-action:none keeps the browser from
+  // claiming vertical drags as scroll, so pointermove fires in every direction
+  // and the flashlight tracks finger movement the same way it tracks the mouse.
+  // Trade-off: the card isn't a scroll surface (user scrolls by touching outside
+  // it) — verified on a real device as the preferred behavior. Suppress iOS
+  // tap-highlight + long-press selection on the chrome so the touch reveal
+  // stays clean (.content re-enables text selection for copy).
+  touch-action: none;
   -webkit-tap-highlight-color: transparent;
   user-select: none;
 }
