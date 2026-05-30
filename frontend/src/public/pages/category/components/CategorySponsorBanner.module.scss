@@ -56,6 +56,129 @@
   --cream-mut: rgba(244, 236, 214, 0.55);
 }
 
+// Light the reveal + lamp when the wiring in BoardShell flips data-lit="true".
+// Scoped INSIDE .board so it doesn't accidentally light other elements that
+// happen to carry data-lit. The data-lit attribute itself is set imperatively
+// in the useEffect (PointerEvents) — React doesn't need to re-render for the
+// fade to play.
+.board[data-lit='true'] {
+  .reveal,
+  .lamp {
+    opacity: 1;
+  }
+}
+
+// Touch and reduced-motion: hide the flashlight layers entirely. The board's
+// own substrate + content remain — only the cursor-tracking pieces are removed.
+// Matches the design's intent (banner is a desktop-rich / mobile-static piece;
+// the sidebar SponsorBlock is the drag-revealable one).
+@media (hover: none), (pointer: coarse) {
+  .reveal,
+  .lamp {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal,
+  .lamp {
+    display: none;
+  }
+}
+
+// ── PCB chrome layers: dot-grid substrate (always painted, subtle),
+//    flashlight reveal of hidden copper traces, and warm lamp glow.
+//    All three are decorative (aria-hidden) and z-stack below content.
+
+// Substrate: faint copper-dot grid masked by a diagonal fade so the
+// texture reads as PCB even at rest. z-index 0 — sits above the board's
+// own background gradients (painted by the .board rule) but below
+// content (.id z=2, .rail z=2) and chrome (.fid z=4, .rim z=5).
+.substrate {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: radial-gradient(
+      color-mix(in srgb, var(--gold) 20%, transparent) 1px,
+      transparent 1.7px
+    );
+    background-size: 17px 17px;
+    opacity: 0.5;
+    -webkit-mask-image: linear-gradient(120deg, #000, transparent 80%);
+    mask-image: linear-gradient(120deg, #000, transparent 80%);
+  }
+}
+
+// Reveal: hidden routed copper, painted only inside the cursor's beam via a
+// radial-gradient mask whose center is the live --mx/--my CSS vars. Opacity
+// fades in on data-lit="true" so the first frame post-enter doesn't pop.
+.reveal {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  opacity: 0;
+  transition: opacity 260ms ease;
+  transform: translateZ(0);
+  pointer-events: none;
+  --beam: 150px;
+  -webkit-mask-image: radial-gradient(
+    circle var(--beam) at var(--mx, -9999px) var(--my, -9999px),
+    #000 0,
+    #000 38%,
+    transparent 76%
+  );
+  mask-image: radial-gradient(
+    circle var(--beam) at var(--mx, -9999px) var(--my, -9999px),
+    #000 0,
+    #000 38%,
+    transparent 76%
+  );
+}
+
+// Lamp: warm gold glow centered at the same cursor point, screen-blended so
+// it brightens the dark substrate where the beam falls without washing out
+// the copper underneath.
+.lamp {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  opacity: 0;
+  transition: opacity 260ms ease;
+  mix-blend-mode: screen;
+  pointer-events: none;
+  background: radial-gradient(
+    circle 180px at var(--mx, -9999px) var(--my, -9999px),
+    color-mix(in srgb, var(--gold) 22%, transparent),
+    transparent 68%
+  );
+}
+
+// Hidden routed copper SVG (lives inside .reveal). Static geometry; the
+// mask above is what makes it "appear" under the beam.
+.art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.trace {
+  fill: none;
+  stroke: color-mix(in srgb, var(--gold) 70%, transparent);
+  stroke-width: 2;
+}
+.padCu {
+  fill: var(--gold);
+}
+.hole {
+  fill: var(--board-2);
+}
+
 // ── PCB chrome: gold rim (mask-composite cutout), fiducials, silkscreen.
 .rim {
   content: '';

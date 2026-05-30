@@ -52,6 +52,46 @@ function CopyChip({ value, tone = 'dark' }: { value: string; tone?: 'dark' | 'li
   );
 }
 
+/**
+ * Hidden routed copper revealed by the flashlight — wide banner aspect
+ * (1200x200, sliced). Ported from design handoff v3 csb-shared.jsx BoardArt.
+ * Painted on a CSS mask gated by --mx/--my, so the only per-frame work while
+ * tracking the cursor is the mask-window translation; the SVG geometry is
+ * static.
+ */
+function BoardArt() {
+  return (
+    <svg
+      className={styles.art}
+      viewBox="0 0 1200 200"
+      preserveAspectRatio="xMidYMid slice"
+      aria-hidden="true"
+    >
+      <g>
+        <path className={styles.trace} d="M40 40 H300 L320 60 H560 L580 40 H900 L920 60 H1160" />
+        <path className={styles.trace} d="M40 100 H180 L200 120 H420 L440 100 H760 L780 120 H1160" />
+        <path className={styles.trace} d="M40 160 H360 L380 140 H620 L640 160 H980 L1000 140 H1160" />
+        <path className={styles.trace} d="M300 40 V100 M560 60 V160 M900 40 V120 M180 100 V160 M760 100 V40 M980 140 V60" />
+      </g>
+      <g>
+        {(
+          [
+            [40, 40], [320, 60], [580, 40], [920, 60],
+            [40, 100], [200, 120], [440, 100], [780, 120],
+            [40, 160], [380, 140], [640, 160], [1000, 140],
+            [1160, 40], [1160, 100], [1160, 160],
+          ] as const
+        ).map(([cx, cy]) => (
+          <g key={`${cx}-${cy}`}>
+            <circle className={styles.padCu} cx={cx} cy={cy} r="6" />
+            <circle className={styles.hole} cx={cx} cy={cy} r="2.1" />
+          </g>
+        ))}
+      </g>
+    </svg>
+  );
+}
+
 function BoardShell({
   tier,
   empty,
@@ -61,16 +101,94 @@ function BoardShell({
   empty?: boolean;
   children: ReactNode;
 }) {
+  const boardRef = useRef<HTMLDivElement>(null);
+
+  /**
+   * Cursor flashlight — desktop-only (fine pointer + hover + motion allowed).
+   * Touch/coarse-pointer gets a `display: none` on .reveal/.lamp via media
+   * query, so we deliberately skip the touch-capture dance the sidebar
+   * SponsorBlock does (the design intends the banner as a desktop-rich /
+   * mobile-static piece, not a drag-revealable card).
+   *
+   * Per-frame work is bounded by a rAF lock; rect is cached on enter and
+   * invalidated on scroll/resize so pointermove never reflows.
+   */
+  useEffect(() => {
+    const el = boardRef.current;
+    if (!el) return;
+    const fine = window.matchMedia('(hover: hover) and (pointer: fine)');
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
+    let rect: DOMRect | null = null;
+    let raf = 0;
+
+    const onEnter = () => {
+      rect = el.getBoundingClientRect();
+      el.setAttribute('data-lit', 'true');
+    };
+    const onLeave = () => el.setAttribute('data-lit', 'false');
+    const onMove = (e: PointerEvent) => {
+      if (raf) return;
+      const r = rect ?? el.getBoundingClientRect();
+      rect = r;
+      const x = e.clientX - r.left;
+      const y = e.clientY - r.top;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        el.style.setProperty('--mx', `${x}px`);
+        el.style.setProperty('--my', `${y}px`);
+      });
+    };
+    const invalidate = () => { rect = null; };
+
+    let attached = false;
+    const attach = () => {
+      if (attached) return;
+      attached = true;
+      el.addEventListener('pointerenter', onEnter);
+      el.addEventListener('pointerleave', onLeave);
+      el.addEventListener('pointermove', onMove);
+      window.addEventListener('scroll', invalidate, true);
+      window.addEventListener('resize', invalidate);
+    };
+    const detach = () => {
+      if (!attached) return;
+      attached = false;
+      el.removeEventListener('pointerenter', onEnter);
+      el.removeEventListener('pointerleave', onLeave);
+      el.removeEventListener('pointermove', onMove);
+      window.removeEventListener('scroll', invalidate, true);
+      window.removeEventListener('resize', invalidate);
+      el.setAttribute('data-lit', 'false');
+    };
+
+    const sync = () => (fine.matches && !reduced.matches ? attach() : detach());
+    sync();
+    fine.addEventListener('change', sync);
+    reduced.addEventListener('change', sync);
+
+    return () => {
+      detach();
+      fine.removeEventListener('change', sync);
+      reduced.removeEventListener('change', sync);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, []);
+
   return (
     <motion.div
+      ref={boardRef}
       className={`${styles.board} ${empty ? styles.boardEmpty : ''}`}
       data-tier={(tier ?? 'gold').toLowerCase()}
+      data-lit="false"
       role="region"
       aria-label={empty ? 'Open category sponsor slot' : 'Featured category sponsor'}
       initial={{ opacity: 0, y: 14 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.45, ease: 'easeOut' as const }}
     >
+      <div className={styles.substrate} aria-hidden="true" />
+      <div className={styles.reveal} aria-hidden="true"><BoardArt /></div>
+      <div className={styles.lamp} aria-hidden="true" />
       <span className={styles.rim} aria-hidden="true" />
       <span className={`${styles.fid} ${styles.fidTL}`} aria-hidden="true" />
       <span className={`${styles.fid} ${styles.fidTR}`} aria-hidden="true" />
