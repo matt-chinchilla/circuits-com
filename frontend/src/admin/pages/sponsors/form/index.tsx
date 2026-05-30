@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Check, ChevronLeft, Trash2 } from 'lucide-react';
 import { adminApi } from '@admin/services/adminApi';
@@ -31,7 +31,13 @@ import styles from './SponsorFormPage.module.scss';
 const TIERS: SponsorTier[] = ['Featured', 'Platinum', 'Gold', 'Silver'];
 const STATUSES: SponsorStatus[] = ['Active', 'Paused', 'Expired'];
 
-type Placement = 'category' | 'keyword';
+// 3-way placement (2026-05-30): top-category vs subcategory was previously
+// folded into a single 'category' bucket with a flat `— `-prefixed dropdown,
+// which led to a sponsor meant for the parent landing on a child (e.g. PMICs →
+// LDOs). Splitting the bucket makes the admin pick the level explicitly. The
+// backend serialization stays the same — both buckets set category_id; only
+// the form UX is split.
+type Placement = 'top-category' | 'subcategory' | 'keyword';
 
 interface FormState {
   supplier_id: string;
@@ -90,7 +96,12 @@ export default function SponsorFormPage() {
       category_id: prefill.category_id ?? base.category_id,
     };
   });
-  const [placement, setPlacement] = useState<Placement>('category');
+  const [placement, setPlacement] = useState<Placement>('top-category');
+  // One-shot guard: on edit, the placement bucket is derived from the loaded
+  // existing.category_id against the loaded categories list. The derive must
+  // NOT re-fire when the user later picks a different category from the
+  // dropdown (that would clobber an explicit user choice). The ref pins it.
+  const placementDerivedRef = useRef(false);
   const [errors, setErrors] = useState<FormErrors>({});
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(isEdit);
@@ -133,7 +144,10 @@ export default function SponsorFormPage() {
             description: existing.description ?? '',
             image_url: existing.image_url ?? '',
           });
-          setPlacement(existing.category_id ? 'category' : 'keyword');
+          // Provisional bucket — the keyword/category split is unambiguous
+          // here; top-category vs subcategory is derived in the effect below
+          // once `categories` finishes loading.
+          setPlacement(existing.category_id ? 'top-category' : 'keyword');
         }
       })
       .catch((err) => {
@@ -158,18 +172,27 @@ export default function SponsorFormPage() {
     setForm((prev) => ({ ...prev, [key]: value }));
   }, []);
 
-  // Flat list of (category, sub) options for the placement select. `label` is
-  // the option text only; `name`/`icon` are kept separate so buildSponsor can
-  // submit a clean category_name + the Phosphor icon name (the <option> label
-  // would otherwise carry leading indent whitespace).
-  const categoryOptions = useMemo(() => {
+  // Top-level categories only — for the "Top-level category" placement select.
+  const topCategoryOptions = useMemo(
+    () =>
+      categories.map((c) => ({
+        id: c.id,
+        label: c.name,
+        name: c.name,
+        icon: c.icon ?? null,
+      })),
+    [categories],
+  );
+
+  // Subcategories only — labeled "Parent → Child" so admins can disambiguate
+  // duplicate sub-names across parents at a glance.
+  const subcategoryOptions = useMemo(() => {
     const out: Array<{ id: string; label: string; name: string; icon: string | null }> = [];
     for (const c of categories) {
-      out.push({ id: c.id, label: c.name, name: c.name, icon: c.icon ?? null });
       for (const child of c.children ?? []) {
         out.push({
           id: child.id,
-          label: `— ${child.name}`,
+          label: `${c.name} → ${child.name}`,
           name: child.name,
           icon: child.icon ?? null,
         });
@@ -178,13 +201,35 @@ export default function SponsorFormPage() {
     return out;
   }, [categories]);
 
+  // Union — used by buildSponsor for the name/icon lookup since either bucket
+  // submits the same category_id field.
+  const allCategoryOptions = useMemo(
+    () => [...topCategoryOptions, ...subcategoryOptions],
+    [topCategoryOptions, subcategoryOptions],
+  );
+
+  // On edit: once categories load, derive the precise placement bucket from
+  // the existing category_id. Fires AT MOST once (guarded by ref) so a user
+  // changing the dropdown later doesn't get their bucket clobbered.
+  useEffect(() => {
+    if (
+      !isEdit
+      || placementDerivedRef.current
+      || !form.category_id
+      || topCategoryOptions.length === 0
+    ) return;
+    const isTop = topCategoryOptions.some((c) => c.id === form.category_id);
+    setPlacement(isTop ? 'top-category' : 'subcategory');
+    placementDerivedRef.current = true;
+  }, [isEdit, form.category_id, topCategoryOptions]);
+
   function validate(): boolean {
     const e: FormErrors = {};
     if (!form.supplier_id) e.supplier_id = 'Required';
 
     // XOR placement validation — must satisfy backend CheckConstraint.
-    if (placement === 'category' && !form.category_id) {
-      e.category_id = 'Pick a category';
+    if ((placement === 'top-category' || placement === 'subcategory') && !form.category_id) {
+      e.category_id = placement === 'top-category' ? 'Pick a top-level category' : 'Pick a subcategory';
     }
     if (placement === 'keyword' && !form.keyword.trim()) {
       e.keyword = 'Enter a keyword';
@@ -201,9 +246,10 @@ export default function SponsorFormPage() {
 
   function buildSponsor(): AdminSponsor {
     const supplier = suppliers.find((s) => s.id === form.supplier_id);
+    const isCategoryPlacement = placement === 'top-category' || placement === 'subcategory';
     const category =
-      placement === 'category' && form.category_id
-        ? categoryOptions.find((c) => c.id === form.category_id)
+      isCategoryPlacement && form.category_id
+        ? allCategoryOptions.find((c) => c.id === form.category_id)
         : null;
     return {
       // Empty id on create → the store POSTs; a real id on edit → PATCH.
@@ -212,7 +258,7 @@ export default function SponsorFormPage() {
       supplier_name: supplier?.name ?? form.supplier_id,
       tier: form.tier,
       // XOR enforced here: exactly one of category_id / keyword is non-null.
-      category_id: placement === 'category' ? form.category_id : null,
+      category_id: isCategoryPlacement ? form.category_id : null,
       category_name: category?.name ?? null,
       category_icon: category?.icon ?? null,
       keyword: placement === 'keyword' ? form.keyword.trim() : null,
@@ -347,15 +393,29 @@ export default function SponsorFormPage() {
               <div className={styles.segControl} role="radiogroup" aria-label="Placement type">
                 <button
                   type="button"
-                  className={`${styles.segBtn} ${placement === 'category' ? styles.segBtnOn : ''}`}
+                  className={`${styles.segBtn} ${placement === 'top-category' ? styles.segBtnOn : ''}`}
                   onClick={() => {
-                    setPlacement('category');
+                    setPlacement('top-category');
                     update('keyword', '');
+                    update('category_id', '');
                   }}
                   role="radio"
-                  aria-checked={placement === 'category'}
+                  aria-checked={placement === 'top-category'}
                 >
                   Category sponsor
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.segBtn} ${placement === 'subcategory' ? styles.segBtnOn : ''}`}
+                  onClick={() => {
+                    setPlacement('subcategory');
+                    update('keyword', '');
+                    update('category_id', '');
+                  }}
+                  role="radio"
+                  aria-checked={placement === 'subcategory'}
+                >
+                  Subcategory sponsor
                 </button>
                 <button
                   type="button"
@@ -371,15 +431,17 @@ export default function SponsorFormPage() {
                 </button>
               </div>
               <p className={styles.fieldHint}>
-                Sponsors target exactly one placement &mdash; category banner or
-                keyword takeover, never both.
+                Category sponsors get the new banner above the parts table on the
+                top-level page; subcategory sponsors get the PCB-flashlight badge
+                in the sidebar on a specific child page; keyword sponsors trigger
+                on a search term.
               </p>
             </div>
 
-            {placement === 'category' ? (
+            {placement === 'top-category' && (
               <div className={styles.field}>
                 <label className={styles.fieldLabel} htmlFor="category_id">
-                  Category <span className={styles.fieldReq}>*</span>
+                  Top-level category <span className={styles.fieldReq}>*</span>
                 </label>
                 <div className={styles.selectWrap}>
                   <select
@@ -388,17 +450,47 @@ export default function SponsorFormPage() {
                     value={form.category_id}
                     onChange={(e) => update('category_id', e.target.value)}
                   >
-                    <option value="">Select category&hellip;</option>
-                    {categoryOptions.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.label}
-                      </option>
+                    <option value="">Select top-level category&hellip;</option>
+                    {topCategoryOptions.map((c) => (
+                      <option key={c.id} value={c.id}>{c.label}</option>
                     ))}
                   </select>
                 </div>
+                <p className={styles.fieldHint}>
+                  Auto-supersedes any existing active sponsor on this category
+                  (one banner slot per top-level page).
+                </p>
                 {errors.category_id && <div className={styles.fieldError}>{errors.category_id}</div>}
               </div>
-            ) : (
+            )}
+
+            {placement === 'subcategory' && (
+              <div className={styles.field}>
+                <label className={styles.fieldLabel} htmlFor="category_id">
+                  Subcategory <span className={styles.fieldReq}>*</span>
+                </label>
+                <div className={styles.selectWrap}>
+                  <select
+                    id="category_id"
+                    className={styles.select}
+                    value={form.category_id}
+                    onChange={(e) => update('category_id', e.target.value)}
+                  >
+                    <option value="">Select subcategory&hellip;</option>
+                    {subcategoryOptions.map((c) => (
+                      <option key={c.id} value={c.id}>{c.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <p className={styles.fieldHint}>
+                  Shown as the PCB-flashlight sidebar card on the chosen
+                  child page only.
+                </p>
+                {errors.category_id && <div className={styles.fieldError}>{errors.category_id}</div>}
+              </div>
+            )}
+
+            {placement === 'keyword' && (
               <div className={styles.field}>
                 <label className={styles.fieldLabel} htmlFor="keyword">
                   Keyword <span className={styles.fieldReq}>*</span>

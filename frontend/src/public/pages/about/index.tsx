@@ -137,7 +137,7 @@ export default function AboutPage() {
       className={styles.aboutPage}
     >
       <Helmet>
-        <title>About Circuits.com — Electronic Components Directory</title>
+        <title>About Circuits.com — The Integrated Circuits Directory</title>
         <meta name="description" content="Learn about Circuits.com — the electronic components directory connecting buyers, suppliers, and engineers. Compare prices from 57 distributors." />
         <link rel="canonical" href="https://circuits.com/about" />
       </Helmet>

@@ -1,0 +1,393 @@
+@use '../../../../shared/styles/variables' as *;
+@use '../../../../shared/styles/mixins' as *;
+
+// ── ENIG-gold tokens (kept local to this file — the SponsorBlock sidebar
+//    already owns its own gold; this banner reuses the same identity but with
+//    a horizontal grid). Per-tier overrides remap the gold scale.
+.board {
+  --gold: #e8c252;
+  --gold-bright: #f3cf5c;
+  --gold-deep: #a88d2e;
+  --board-1: #0d2c1e;
+  --board-2: #0a1e16;
+  --board-3: #0f3826;
+  --cream: #f4ecd6;
+  --cream-mut: rgba(244, 236, 214, 0.72);
+
+  position: relative;
+  isolation: isolate;
+  margin: 0 0 24px;
+  border-radius: 14px;
+  overflow: hidden;
+  background:
+    radial-gradient(130% 120% at 8% -20%, rgba(46, 86, 62, 0.55), transparent 55%),
+    radial-gradient(120% 160% at 100% 130%, color-mix(in srgb, var(--gold) 14%, transparent), transparent 55%),
+    linear-gradient(158deg, var(--board-1) 0%, var(--board-2) 52%, var(--board-3) 100%);
+  box-shadow:
+    0 12px 34px rgba(0, 0, 0, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  display: grid;
+  grid-template-columns: minmax(232px, 300px) 1fr;
+  align-items: stretch;
+
+  &[data-tier='silver'] {
+    --gold: #d7dee4;
+    --gold-bright: #eef2f5;
+    --gold-deep: #9aa6b0;
+  }
+  &[data-tier='platinum'] {
+    --gold: #eaf0f4;
+    --gold-bright: #ffffff;
+    --gold-deep: #aab8c2;
+  }
+  // 'gold' and 'featured' use the default
+
+  @media (max-width: 1080px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.boardEmpty {
+  // Slightly muted gold scale for the open-slot state so it reads as a
+  // placeholder, not a featured ad.
+  --gold: #b59736;
+  --gold-bright: #d4b35b;
+  --gold-deep: #876e22;
+  --cream-mut: rgba(244, 236, 214, 0.55);
+}
+
+// ── PCB chrome: gold rim (mask-composite cutout), fiducials, silkscreen.
+.rim {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  border-radius: inherit;
+  padding: 1.5px;
+  background: linear-gradient(
+    135deg,
+    var(--gold),
+    rgba(255, 255, 255, 0.3) 26%,
+    var(--gold-deep) 60%,
+    var(--gold)
+  );
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+.fid {
+  position: absolute;
+  z-index: 4;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1.5px solid color-mix(in srgb, var(--gold) 45%, transparent);
+  pointer-events: none;
+}
+.fidTL { top: 11px; left: 11px; }
+.fidTR { top: 11px; right: 11px; }
+.fidBL { bottom: 11px; left: 11px; }
+.fidBR { bottom: 11px; right: 11px; }
+
+.designator {
+  position: absolute;
+  z-index: 4;
+  bottom: 9px;
+  right: 18px;
+  font-family: $font-mono;
+  font-size: 0.58rem;
+  letter-spacing: 0.14em;
+  color: color-mix(in srgb, var(--gold) 60%, transparent);
+  pointer-events: none;
+}
+
+// ── Identity block (left column)
+.id {
+  position: relative;
+  z-index: 2;
+  padding: 22px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  justify-content: center;
+  border-right: 1px dashed color-mix(in srgb, var(--gold) 26%, transparent);
+
+  @media (max-width: 1080px) {
+    border-right: none;
+    border-bottom: 1px dashed color-mix(in srgb, var(--gold) 26%, transparent);
+  }
+}
+
+.kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  align-self: flex-start;
+  font-family: $font-mono;
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--gold);
+  padding: 4px 11px;
+  border: 1px solid color-mix(in srgb, var(--gold) 32%, transparent);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.28);
+  white-space: nowrap;
+}
+
+.idTop {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.pad {
+  position: relative;
+  flex: 0 0 auto;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: radial-gradient(circle at 50% 36%, #163220, #09190f);
+  box-shadow:
+    inset 0 0 0 2px color-mix(in srgb, var(--gold) 66%, transparent),
+    inset 0 0 14px rgba(0, 0, 0, 0.6),
+    0 2px 8px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+
+  &::after {
+    content: '';
+    position: absolute;
+    inset: -5px;
+    border-radius: 50%;
+    border: 1px dashed color-mix(in srgb, var(--gold) 40%, transparent);
+  }
+}
+
+.logo {
+  width: 80%;
+  height: 80%;
+  object-fit: contain;
+  display: block;
+}
+
+.mark {
+  font-family: $font-heading;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--gold);
+  line-height: 1;
+}
+
+.co {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.coName {
+  font-family: $font-heading;
+  font-size: 1.12rem;
+  font-weight: 700;
+  color: var(--cream);
+  line-height: 1.15;
+  @include truncate;
+}
+
+.coTag {
+  font-size: 0.78rem;
+  color: var(--cream-mut);
+  @include line-clamp(2);
+}
+
+.cta {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-family: $font-body;
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: #0a190f;
+  background: linear-gradient(180deg, var(--gold-bright), var(--gold));
+  border: 1px solid color-mix(in srgb, var(--gold-deep) 70%, transparent);
+  text-decoration: none;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
+
+  @media (hover: hover) {
+    &:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.22);
+    }
+  }
+}
+
+// ── Field rail (right column, 4 break-out pads)
+.rail {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  align-items: center;
+
+  @media (max-width: 1080px) {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  @media (max-width: 560px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.field {
+  position: relative;
+  padding: 22px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+
+  & + & {
+    border-left: 1px dashed color-mix(in srgb, var(--gold) 18%, transparent);
+
+    @media (max-width: 1080px) {
+      &:nth-child(3) {
+        border-left: none;
+      }
+      &:nth-child(3),
+      &:nth-child(4) {
+        border-top: 1px dashed color-mix(in srgb, var(--gold) 18%, transparent);
+      }
+    }
+    @media (max-width: 560px) {
+      border-left: none;
+      border-top: 1px dashed color-mix(in srgb, var(--gold) 18%, transparent);
+    }
+  }
+}
+
+.spine {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 1.5px;
+  z-index: 1;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--gold) 55%, transparent) 6%,
+    color-mix(in srgb, var(--gold) 55%, transparent) 94%,
+    transparent
+  );
+
+  @media (max-width: 1080px) {
+    display: none;
+  }
+}
+
+.pLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-family: $font-mono;
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--gold) 78%, var(--cream));
+}
+
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--gold);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--gold) 60%, transparent);
+}
+
+.pinNo {
+  margin-left: auto;
+  color: color-mix(in srgb, var(--gold) 45%, transparent);
+  letter-spacing: 0.12em;
+}
+
+.val {
+  font-size: 0.96rem;
+  color: var(--cream);
+  line-height: 1.3;
+  @include truncate;
+
+  a {
+    color: var(--cream);
+    text-decoration: none;
+    transition: color 0.15s;
+
+    @media (hover: hover) {
+      &:hover { color: var(--gold-bright); }
+    }
+  }
+}
+
+.valMono {
+  font-family: $font-mono;
+  font-size: 0.9rem;
+}
+
+.sub {
+  font-size: 0.76rem;
+  color: var(--cream-mut);
+}
+
+.rowFoot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+// ── Copy chip (P3/P4 affordance)
+.copyChip {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  font-family: $font-mono;
+  font-size: 0.66rem;
+  letter-spacing: 0.05em;
+  color: color-mix(in srgb, var(--gold) 80%, var(--cream));
+  background: rgba(0, 0, 0, 0.32);
+  border: 1px solid color-mix(in srgb, var(--gold) 28%, transparent);
+  border-radius: 999px;
+  cursor: pointer;
+  line-height: 1;
+
+  @media (hover: hover) {
+    &:hover {
+      background: rgba(0, 0, 0, 0.48);
+      color: var(--gold-bright);
+    }
+  }
+}
+
+.copyChipLight {
+  color: $executive-blue;
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.12);
+}

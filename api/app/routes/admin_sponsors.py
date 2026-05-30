@@ -100,6 +100,24 @@ def create_sponsor(
     if not supplier:
         raise HTTPException(status_code=404, detail="Supplier not found")
 
+    # Auto-supersede: at most one ACTIVE sponsor per category. If an existing
+    # active row already targets this category_id, mark it Expired before
+    # inserting the new one. Matches the public read path
+    # (category_service.get_category_detail orders by created_at DESC LIMIT 1):
+    # the new sponsor immediately becomes visible, the old row stays for the
+    # billing/audit trail.
+    if body.category_id is not None:
+        existing = (
+            db.query(Sponsor)
+            .filter(
+                Sponsor.category_id == body.category_id,
+                Sponsor.status != "Expired",
+            )
+            .all()
+        )
+        for old in existing:
+            old.status = "Expired"
+
     sponsor = Sponsor(
         id=uuid.uuid4(),
         supplier_id=body.supplier_id,

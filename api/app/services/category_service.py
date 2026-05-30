@@ -289,6 +289,8 @@ def get_category_by_slug(
             "tier": sponsor.tier,
             "website": sponsor_supplier.website if sponsor_supplier else None,
             "phone": sponsor_supplier.phone if sponsor_supplier else None,
+            "email": sponsor_supplier.email if sponsor_supplier else None,
+            "contact_name": sponsor_supplier.contact_name if sponsor_supplier else None,
         }
 
     icon_val = getattr(category, "icon", None)

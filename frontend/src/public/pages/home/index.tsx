@@ -27,7 +27,7 @@ export default function HomePage() {
       transition={{ duration: 0.15, ease: "easeInOut" as const }}
     >
       <Helmet>
-        <title>Electronic Components Directory — Compare Prices &amp; Distributors | Circuits.com</title>
+        <title>The Integrated Circuits Directory — Compare Prices &amp; Distributors | Circuits.com</title>
         <meta name="description" content="Compare prices and stock for 3,600+ electronic components from 57 distributors. ICs, MCUs, sensors, and more." />
         <link rel="canonical" href="https://circuits.com/" />
         <script type="application/ld+json">{WEBSITE_JSONLD}</script>

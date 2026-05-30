@@ -13,10 +13,10 @@ export default function HeroSection() {
     <section className={styles.hero}>
       <div className={styles.content}>
         <h1 className={styles.heading}>
-          Electronic Components Directory
+          The Integrated Circuits Directory
         </h1>
         <p className={styles.subtitle}>
-          Compare prices from 57 distributors — ICs, MCUs, sensors &amp; more
+          All Circuits, All The Time
         </p>
         <SearchBar />
         <div className={styles.quickLinks}>

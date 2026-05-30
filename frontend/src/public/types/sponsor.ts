@@ -9,4 +9,6 @@ export interface Sponsor {
   tier: string;
   website: string | null;
   phone: string | null;
+  email: string | null;
+  contact_name: string | null;
 }

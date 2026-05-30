@@ -6,6 +6,7 @@ import SubcategoryChips from './components/SubcategoryChips';
 import SupplierTable from './components/SupplierTable';
 import PartsTable from './components/PartsTable';
 import SponsorBlock from './components/SponsorBlock';
+import CategorySponsorBanner from './components/CategorySponsorBanner';
 import TopPartners from './components/TopPartners';
 import SkeletonLoader from '@public/components/widgets/SkeletonLoader';
 import Pagination from '@public/components/widgets/Pagination';
@@ -331,6 +332,14 @@ export default function CategoryPage() {
 
       <div className={styles.contentWide}>
         {error && <p className={styles.error}>{error}</p>}
+
+        {/* Category Sponsor banner — parent-category pages only. Always
+            rendered (empty-state when no sponsor) so the "your brand here"
+            slot is discoverable. Subcategory pages get the sidebar
+            SponsorBlock instead. */}
+        {!loading && category && isParent && !activeSubInfo && (
+          <CategorySponsorBanner sponsor={category.sponsor} categoryName={category.name} />
+        )}
 
         {loading ? (
           <div className={styles.contentInner}>

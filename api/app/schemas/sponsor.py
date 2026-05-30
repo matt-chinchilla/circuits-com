@@ -13,6 +13,8 @@ class SponsorResponse(BaseModel):
     tier: str
     website: str | None = None
     phone: str | None = None
+    email: str | None = None
+    contact_name: str | None = None
     model_config = ConfigDict(from_attributes=True)
 
 
