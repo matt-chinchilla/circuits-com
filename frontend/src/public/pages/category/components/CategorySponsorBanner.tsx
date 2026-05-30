@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useState, useRef, useEffect, type ReactNode } from 'react';
 import { motion } from 'framer-motion';
 import type { Sponsor } from '@public/types/sponsor';
 import styles from './CategorySponsorBanner.module.scss';
@@ -10,13 +10,23 @@ interface CategorySponsorBannerProps {
 
 function lettermark(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return '·';
+  // Empty/whitespace-only company → 'SP' so the pad doesn't render the
+  // literal middle-dot fallback that reads as a render error.
+  if (parts.length === 0) return 'SP';
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
 function CopyChip({ value, tone = 'dark' }: { value: string; tone?: 'dark' | 'light' }) {
   const [copied, setCopied] = useState(false);
+  // Cancel the reset-timer on unmount AND on rapid re-click — otherwise a
+  // route change within 1.4s of a copy fires setState on the unmounted
+  // component, and rapid double-clicks stack timeouts whose latest expiry
+  // races the user's perception of when the "Copied" affordance should clear.
+  const timerRef = useRef<number | null>(null);
+  useEffect(() => () => {
+    if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+  }, []);
   const onClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
@@ -24,7 +34,8 @@ function CopyChip({ value, tone = 'dark' }: { value: string; tone?: 'dark' | 'li
     navigator.clipboard.writeText(value).then(
       () => {
         setCopied(true);
-        window.setTimeout(() => setCopied(false), 1400);
+        if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+        timerRef.current = window.setTimeout(() => setCopied(false), 1400);
       },
       () => { /* clipboard denied — no-op, keep the link */ },
     );
@@ -130,9 +141,12 @@ export default function CategorySponsorBanner({
   const contactName = sponsor.contact_name || '—';
   const phone = sponsor.phone || '';
   const email = sponsor.email || '';
+  // Hide the CTA outright when there's neither email nor website. Falling
+  // back to href="#" scrolls the user to the top of the category page on
+  // tap — a noisy regression vs no-button.
   const ctaHref = email
     ? `mailto:${email}?subject=${encodeURIComponent(`Inquiry from circuits.com — ${categoryName || 'category page'}`)}`
-    : sponsor.website || '#';
+    : sponsor.website || null;
   const ctaIsExternal = !email && !!sponsor.website;
 
   return (
@@ -152,13 +166,15 @@ export default function CategorySponsorBanner({
             <span className={styles.coTag}>{blurb}</span>
           </span>
         </div>
-        <a
-          className={styles.cta}
-          href={ctaHref}
-          {...(ctaIsExternal ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
-        >
-          Contact rep &rarr;
-        </a>
+        {ctaHref && (
+          <a
+            className={styles.cta}
+            href={ctaHref}
+            {...(ctaIsExternal ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+          >
+            Contact rep &rarr;
+          </a>
+        )}
       </div>
       <div className={styles.rail}>
         <span className={styles.spine} aria-hidden="true" />
@@ -172,7 +188,7 @@ export default function CategorySponsorBanner({
         <div className={styles.field}>
           <span className={styles.pLabel}><span className={styles.dot} />Contact<span className={styles.pinNo}>P2</span></span>
           <span className={styles.val}>{contactName}</span>
-          <span className={styles.sub}>{sponsor.contact_name ? 'Sales rep' : 'Direct line'}</span>
+          <span className={styles.sub}>{sponsor.contact_name ? 'Sales rep' : 'Your sales rep'}</span>
         </div>
 
         <div className={styles.field}>

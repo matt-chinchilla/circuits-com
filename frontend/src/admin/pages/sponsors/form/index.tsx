@@ -97,11 +97,19 @@ export default function SponsorFormPage() {
     };
   });
   const [placement, setPlacement] = useState<Placement>('top-category');
-  // One-shot guard: on edit, the placement bucket is derived from the loaded
-  // existing.category_id against the loaded categories list. The derive must
-  // NOT re-fire when the user later picks a different category from the
-  // dropdown (that would clobber an explicit user choice). The ref pins it.
+  // One-shot guard: the placement bucket is derived from the loaded
+  // category_id against the loaded categories list — on edit (from the
+  // findSponsor hydration) AND on create with a prefilled category_id (from
+  // the Supplier-detail Quick Actions, where the prefilled id is almost
+  // always a subcategory). The derive must NOT re-fire when the user later
+  // picks a different category from the dropdown (that would clobber an
+  // explicit user choice). The ref pins it.
   const placementDerivedRef = useRef(false);
+  // Reset the one-shot guard whenever the routed id changes — without this,
+  // navigating /admin/sponsors/A/edit -> /admin/sponsors/B/edit (same
+  // SponsorFormPage component instance) re-hydrates the form for B but
+  // leaves the ref true from A's derive, so B's bucket stays at A's value.
+  useEffect(() => { placementDerivedRef.current = false; }, [id]);
   const [errors, setErrors] = useState<FormErrors>({});
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(isEdit);
@@ -208,20 +216,41 @@ export default function SponsorFormPage() {
     [topCategoryOptions, subcategoryOptions],
   );
 
-  // On edit: once categories load, derive the precise placement bucket from
-  // the existing category_id. Fires AT MOST once (guarded by ref) so a user
-  // changing the dropdown later doesn't get their bucket clobbered.
+  // Derive the precise placement bucket once: on edit (after findSponsor
+  // sets form.category_id) AND on create with a prefilled category_id
+  // (from Supplier-detail Quick Actions — the prefilled id is almost always
+  // a subcategory, since suppliers' parts attach to children). Without the
+  // create-path coverage, the initial useState placement='top-category'
+  // would mismatch a sub-prefilled id and the dropdown would render blank
+  // while validation silently passes on the wrong bucket.
   useEffect(() => {
     if (
-      !isEdit
-      || placementDerivedRef.current
+      placementDerivedRef.current
       || !form.category_id
       || topCategoryOptions.length === 0
     ) return;
     const isTop = topCategoryOptions.some((c) => c.id === form.category_id);
     setPlacement(isTop ? 'top-category' : 'subcategory');
     placementDerivedRef.current = true;
-  }, [isEdit, form.category_id, topCategoryOptions]);
+  }, [form.category_id, topCategoryOptions]);
+
+  // Consolidated placement switch. Clears BOTH XOR fields and ANY stale
+  // field errors so a failed-submit error message under the previous bucket
+  // doesn't render under the new bucket's field. The 3 inline onClick
+  // handlers previously diverged on what they cleared (the keyword button
+  // skipped clearing keyword), which is a subtle footgun across rapid
+  // bucket toggles.
+  const choosePlacement = useCallback((p: Placement) => {
+    setPlacement(p);
+    update('category_id', '');
+    update('keyword', '');
+    setErrors((prev) => {
+      const next = { ...prev };
+      delete next.category_id;
+      delete next.keyword;
+      return next;
+    });
+  }, [update]);
 
   function validate(): boolean {
     const e: FormErrors = {};
@@ -394,11 +423,7 @@ export default function SponsorFormPage() {
                 <button
                   type="button"
                   className={`${styles.segBtn} ${placement === 'top-category' ? styles.segBtnOn : ''}`}
-                  onClick={() => {
-                    setPlacement('top-category');
-                    update('keyword', '');
-                    update('category_id', '');
-                  }}
+                  onClick={() => choosePlacement('top-category')}
                   role="radio"
                   aria-checked={placement === 'top-category'}
                 >
@@ -407,11 +432,7 @@ export default function SponsorFormPage() {
                 <button
                   type="button"
                   className={`${styles.segBtn} ${placement === 'subcategory' ? styles.segBtnOn : ''}`}
-                  onClick={() => {
-                    setPlacement('subcategory');
-                    update('keyword', '');
-                    update('category_id', '');
-                  }}
+                  onClick={() => choosePlacement('subcategory')}
                   role="radio"
                   aria-checked={placement === 'subcategory'}
                 >
@@ -420,10 +441,7 @@ export default function SponsorFormPage() {
                 <button
                   type="button"
                   className={`${styles.segBtn} ${placement === 'keyword' ? styles.segBtnOn : ''}`}
-                  onClick={() => {
-                    setPlacement('keyword');
-                    update('category_id', '');
-                  }}
+                  onClick={() => choosePlacement('keyword')}
                   role="radio"
                   aria-checked={placement === 'keyword'}
                 >

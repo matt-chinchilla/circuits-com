@@ -21,4 +21,10 @@ def get_sponsor_by_keyword(keyword: str, db: Session = Depends(get_db)):
         tier=sponsor.tier,
         website=supplier.website if supplier else None,
         phone=supplier.phone if supplier else None,
+        # SponsorResponse gained `email` + `contact_name` in commit fddba35
+        # for the CategorySponsorBanner. The category route was updated;
+        # this keyword route was missed — Pydantic silently defaulted them
+        # to None for every keyword sponsor. Mirror category_service.
+        email=supplier.email if supplier else None,
+        contact_name=supplier.contact_name if supplier else None,
     )

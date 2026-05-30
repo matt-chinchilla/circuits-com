@@ -1,4 +1,4 @@
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.models import Category, CategorySupplier, Part, PartListing, PriceBreak, Sponsor, Supplier
@@ -269,12 +269,18 @@ def get_category_by_slug(
         supplier.rank = rank
         suppliers.append(supplier)
 
-    # Get sponsor for this category — newest wins, so an admin adding a fresh
-    # sponsor supersedes an older one on the same category (a category can hold
-    # more than one Sponsor row; the public block shows the most recently added).
+    # Get sponsor for this category — newest visible wins. The visible-status
+    # filter (Active OR legacy NULL) MUST match the admin write-path supersede
+    # in `routes/admin_sponsors._supersede_existing_for_category`, else an
+    # admin marking the current sponsor Expired (deliberately taking the
+    # slot down) would still see it surface here. Paused sponsors are also
+    # hidden — a deliberate hold should not appear on the public banner.
     sponsor = (
         db.query(Sponsor)
-        .filter(Sponsor.category_id == category.id)
+        .filter(
+            Sponsor.category_id == category.id,
+            or_(Sponsor.status == "Active", Sponsor.status.is_(None)),
+        )
         .order_by(Sponsor.created_at.desc())
         .first()
     )

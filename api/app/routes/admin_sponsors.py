@@ -18,6 +18,7 @@ keyword must be set, else 422.
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
@@ -79,6 +80,37 @@ def _parse_sponsor_id(sponsor_id: str) -> uuid.UUID:
         raise HTTPException(status_code=404, detail="Sponsor not found") from None
 
 
+def _supersede_existing_for_category(
+    db: Session,
+    category_id: uuid.UUID,
+    exclude_id: uuid.UUID | None = None,
+) -> None:
+    """Mark any existing visible sponsor for ``category_id`` as Expired.
+
+    Enforces "at most one Active sponsor per category" on EVERY write path
+    (POST + PATCH-with-category-id-change). The public read in
+    ``category_service.get_category_detail`` filters the same predicate, so
+    this guarantees the banner picks a single deterministic sponsor.
+
+    NULL is treated as Active: legacy seed rows (`db/seed.py`) omit the
+    ``status`` column entirely, leaving it NULL. SQL three-valued logic
+    means a naive ``status != 'Expired'`` filter SKIPS those rows (NULL !=
+    'Expired' → NULL, not TRUE), so the supersede silently leaves a
+    legacy row Active alongside the new one. ``or_(== 'Active', is_(None))``
+    catches both. ``Paused`` is preserved unchanged — it's a deliberate
+    lifecycle hold (billing dispute / contract pause), not a stale row, and
+    a future booking on the same slot should not wipe it.
+    """
+    q = db.query(Sponsor).filter(
+        Sponsor.category_id == category_id,
+        or_(Sponsor.status == "Active", Sponsor.status.is_(None)),
+    )
+    if exclude_id is not None:
+        q = q.filter(Sponsor.id != exclude_id)
+    for old in q.all():
+        old.status = "Expired"
+
+
 @router.get("/", response_model=list[AdminSponsorResponse])
 def list_sponsors(
     db: Session = Depends(get_db),
@@ -100,23 +132,8 @@ def create_sponsor(
     if not supplier:
         raise HTTPException(status_code=404, detail="Supplier not found")
 
-    # Auto-supersede: at most one ACTIVE sponsor per category. If an existing
-    # active row already targets this category_id, mark it Expired before
-    # inserting the new one. Matches the public read path
-    # (category_service.get_category_detail orders by created_at DESC LIMIT 1):
-    # the new sponsor immediately becomes visible, the old row stays for the
-    # billing/audit trail.
     if body.category_id is not None:
-        existing = (
-            db.query(Sponsor)
-            .filter(
-                Sponsor.category_id == body.category_id,
-                Sponsor.status != "Expired",
-            )
-            .all()
-        )
-        for old in existing:
-            old.status = "Expired"
+        _supersede_existing_for_category(db, body.category_id)
 
     sponsor = Sponsor(
         id=uuid.uuid4(),
@@ -156,6 +173,16 @@ def update_sponsor(
         new_category = update_data.get("category_id", sponsor.category_id)
         new_keyword = update_data.get("keyword", sponsor.keyword)
         _validate_xor(new_category, new_keyword)
+
+    # If this PATCH re-targets the sponsor to a (new, non-null) category,
+    # supersede whatever's currently sitting there. Without this the POST
+    # invariant ("at most one Active per category") is escapable via edit-
+    # then-move: open sponsor B on category Y, change its category_id to
+    # X via the form -> two Active sponsors on X. Exclude sponsor.id so the
+    # row being patched doesn't mark itself Expired.
+    new_category_id = update_data.get("category_id")
+    if new_category_id is not None and new_category_id != sponsor.category_id:
+        _supersede_existing_for_category(db, new_category_id, exclude_id=sponsor.id)
 
     for key, value in update_data.items():
         setattr(sponsor, key, value)
