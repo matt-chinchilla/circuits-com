@@ -174,6 +174,7 @@ All endpoints are prefixed with `/api`. Interactive docs at [http://localhost:80
 | `docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build` | Prod stack locally |
 | `docker compose logs --tail=50 -f` | Tail logs from all containers |
 | `docker compose exec -T api <cmd> < /dev/null` | Exec without consuming heredoc stdin (deploy.sh trap) |
+| `docker compose restart <svc>` | Restart a container — note: does **not** rebuild the image or re-read `.env` |
 
 ### API tooling
 
@@ -218,6 +219,9 @@ Requires AWS CLI configured, `~/.ssh/id_ed25519`, and `origin/master` pushed.
 | `./deploy.sh --status` | Container status snapshot on EC2 |
 | `./deploy.sh --logs` | Tail combined compose logs on EC2 |
 | `./deploy.sh --cert-renew` | Stop nginx → certbot renew → start nginx → verify |
+| `./deploy.sh --help` (or `-h`) | Print the usage header |
+
+**How it works:** every command (except `--status` / `--logs` / `--help`) first runs `check_prerequisites` (AWS CLI auth, SSH key present, git clean + pushed to `origin/master`), then pushes a temporary SSH key to the box via **EC2 Instance Connect** and runs the prod compose stack (`docker compose -f docker-compose.yml -f docker-compose.prod.yml`) remotely over SSH. Builds are deliberately scoped to `api frontend` — the `n8n` service is skipped to avoid re-extracting its ~313 MB base image, which would OOM the t3.small. Each deploy finishes with `docker image prune -f` to clear dangling layers, then `verify_site` curls all three domains and reports their HTTP status.
 
 ### Git workflow
 
