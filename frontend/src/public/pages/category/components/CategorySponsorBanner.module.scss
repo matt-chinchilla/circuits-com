@@ -1,9 +1,10 @@
 @use '../../../../shared/styles/variables' as *;
 @use '../../../../shared/styles/mixins' as *;
 
-// ── ENIG-gold tokens (kept local to this file — the SponsorBlock sidebar
-//    already owns its own gold; this banner reuses the same identity but with
-//    a horizontal grid). Per-tier overrides remap the gold scale.
+// ─── BOARD SHELL ────────────────────────────────────────────────────────────
+// Wide ENIG-gold PCB banner. Top strip holds the visible reference circuit
+// (J1/F1/L1/C1, Y1+caps, C3+U2, R3+D1); each net's trace flows DOWN into one
+// of four large IC chips below (rendered as styled .field divs).
 .board {
   --gold: #e8c252;
   --gold-bright: #f3cf5c;
@@ -13,6 +14,8 @@
   --board-3: #0f3826;
   --cream: #f4ecd6;
   --cream-mut: rgba(244, 236, 214, 0.72);
+  --plasma: #8fe3ff;
+  --illum: #fff8d8;
 
   position: relative;
   isolation: isolate;
@@ -20,80 +23,52 @@
   border-radius: 14px;
   overflow: hidden;
   background:
-    radial-gradient(130% 120% at 8% -20%, rgba(46, 86, 62, 0.55), transparent 55%),
+    radial-gradient(130% 110% at 8% -10%, rgba(46, 86, 62, 0.55), transparent 55%),
     radial-gradient(120% 160% at 100% 130%, color-mix(in srgb, var(--gold) 14%, transparent), transparent 55%),
     linear-gradient(158deg, var(--board-1) 0%, var(--board-2) 52%, var(--board-3) 100%);
   box-shadow:
-    0 12px 34px rgba(0, 0, 0, 0.28),
+    0 14px 36px rgba(0, 0, 0, 0.32),
     inset 0 1px 0 rgba(255, 255, 255, 0.05);
   display: grid;
-  grid-template-columns: minmax(232px, 300px) 1fr;
+  grid-template-columns: minmax(280px, 340px) 1fr;
   align-items: stretch;
+  // Banner 220px exact (user spec). Internal padding 6px (--rim-pad) keeps
+  // contents off the gold rim. Inside that 208px of usable height:
+  //   43px top — SVG component strip (pin rows overlay bottom 11px)
+  //   122px middle — chip silhouette (100 body + 11 top pin + 11 bot pin)
+  //   43px bottom — SVG output-side strip
+  // Total = 43 + 122 + 43 = 208px ✓ (fits 220 - 6 - 6 padding)
+  min-height: 220px;
+  max-height: 220px;
+  padding: 6px;
 
   &[data-tier='silver'] {
     --gold: #d7dee4;
-    --gold-bright: #eef2f5;
+    --gold-bright: #ffffff;
     --gold-deep: #9aa6b0;
+    --illum: #ffffff;
   }
   &[data-tier='platinum'] {
     --gold: #eaf0f4;
     --gold-bright: #ffffff;
     --gold-deep: #aab8c2;
+    --illum: #ffffff;
   }
-  // 'gold' and 'featured' use the default
 
   @media (max-width: 1080px) {
     grid-template-columns: 1fr;
+    min-height: 0;
   }
 }
 
 .boardEmpty {
-  // Slightly muted gold scale for the open-slot state so it reads as a
-  // placeholder, not a featured ad.
   --gold: #b59736;
-  --gold-bright: #d4b35b;
+  --gold-bright: #e6c757;
   --gold-deep: #876e22;
   --cream-mut: rgba(244, 236, 214, 0.55);
 }
 
-// Light the reveal + lamp when the wiring in BoardShell flips data-lit="true".
-// Scoped INSIDE .board so it doesn't accidentally light other elements that
-// happen to carry data-lit. The data-lit attribute itself is set imperatively
-// in the useEffect (PointerEvents) — React doesn't need to re-render for the
-// fade to play.
-.board[data-lit='true'] {
-  .reveal,
-  .lamp {
-    opacity: 1;
-  }
-}
-
-// Touch and reduced-motion: hide the flashlight layers entirely. The board's
-// own substrate + content remain — only the cursor-tracking pieces are removed.
-// Matches the design's intent (banner is a desktop-rich / mobile-static piece;
-// the sidebar SponsorBlock is the drag-revealable one).
-@media (hover: none), (pointer: coarse) {
-  .reveal,
-  .lamp {
-    display: none;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .reveal,
-  .lamp {
-    display: none;
-  }
-}
-
-// ── PCB chrome layers: dot-grid substrate (always painted, subtle),
-//    flashlight reveal of hidden copper traces, and warm lamp glow.
-//    All three are decorative (aria-hidden) and z-stack below content.
-
-// Substrate: faint copper-dot grid masked by a diagonal fade so the
-// texture reads as PCB even at rest. z-index 0 — sits above the board's
-// own background gradients (painted by the .board rule) but below
-// content (.id z=2, .rail z=2) and chrome (.fid z=4, .rim z=5).
+// ─── SUBSTRATE: copper-dot grid ─────────────────────────────────────────────
 .substrate {
   position: absolute;
   inset: 0;
@@ -115,35 +90,49 @@
   }
 }
 
-// Reveal: hidden routed copper, painted only inside the cursor's beam via a
-// radial-gradient mask whose center is the live --mx/--my CSS vars. Opacity
-// fades in on data-lit="true" so the first frame post-enter doesn't pop.
-.reveal {
+// ─── BOARD ART: SVG layer pinned to the TOP of the .rail only ──────────────
+// Positioned inside .rail so it never paints over the .id (sponsor brand)
+// column. Top strip = top 30px of .rail height; bottom strip = bottom 30px.
+.boardArt {
   position: absolute;
-  inset: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 43px;
   z-index: 1;
-  opacity: 0;
-  transition: opacity 260ms ease;
-  transform: translateZ(0);
   pointer-events: none;
-  --beam: 150px;
-  -webkit-mask-image: radial-gradient(
-    circle var(--beam) at var(--mx, -9999px) var(--my, -9999px),
-    #000 0,
-    #000 38%,
-    transparent 76%
-  );
-  mask-image: radial-gradient(
-    circle var(--beam) at var(--mx, -9999px) var(--my, -9999px),
-    #000 0,
-    #000 38%,
-    transparent 76%
-  );
+  transform: translateZ(0);
+
+  @media (max-width: 1080px) {
+    display: none;
+  }
 }
 
-// Lamp: warm gold glow centered at the same cursor point, screen-blended so
-// it brightens the dark substrate where the beam falls without washing out
-// the copper underneath.
+// Bottom strip — output side, mirrors top.
+.boardArtBottom {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 43px;
+  z-index: 1;
+  pointer-events: none;
+  transform: translateZ(0);
+
+  @media (max-width: 1080px) {
+    display: none;
+  }
+}
+
+.artBottom {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+// ─── LAMP: warm pool tracking the cursor (desktop only) ────────────────────
 .lamp {
   position: absolute;
   inset: 0;
@@ -153,33 +142,348 @@
   mix-blend-mode: screen;
   pointer-events: none;
   background: radial-gradient(
-    circle 180px at var(--mx, -9999px) var(--my, -9999px),
-    color-mix(in srgb, var(--gold) 22%, transparent),
-    transparent 68%
+    circle 220px at var(--mx, -9999px) var(--my, -9999px),
+    color-mix(in srgb, var(--gold) 28%, transparent),
+    transparent 70%
   );
 }
 
-// Hidden routed copper SVG (lives inside .reveal). Static geometry; the
-// mask above is what makes it "appear" under the beam.
+.board[data-lit='true'] .lamp {
+  opacity: 1;
+}
+
+@media (hover: none), (pointer: coarse), (prefers-reduced-motion: reduce) {
+  .lamp {
+    display: none;
+  }
+}
+
+// ─── SVG INTERNALS ──────────────────────────────────────────────────────────
 .art {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
+  pointer-events: none;
 }
-.trace {
-  fill: none;
-  stroke: color-mix(in srgb, var(--gold) 70%, transparent);
-  stroke-width: 2;
+
+.traces {
+  stroke: color-mix(in srgb, var(--gold) 60%, transparent);
+  transition: stroke 320ms ease;
 }
-.padCu {
-  fill: var(--gold);
+
+// Always-lit shared buses — they unify the demo into ONE board. The VCC bus
+// runs across the top, the GND bus across the bottom. Never per-net animated.
+.busVcc {
+  stroke: color-mix(in srgb, var(--gold) 78%, transparent);
 }
-.hole {
+
+.busGnd {
+  stroke: color-mix(in srgb, var(--gold) 52%, transparent);
+}
+
+// Inter-chip signal lines — slightly dimmer than primary traces so the eye
+// reads them as "this connects everything" without overpowering individual
+// component clusters.
+.busSignal {
+  stroke: color-mix(in srgb, var(--gold) 38%, transparent);
+}
+
+// Faint per-pin stubs — guarantee every chip pin has a visible trace going
+// out from it even when nothing is wired to it (vias / test points).
+.tracesFaint {
+  stroke: color-mix(in srgb, var(--gold) 28%, transparent);
+}
+
+.pads {
+  fill: color-mix(in srgb, var(--gold) 78%, transparent);
+}
+
+.padHole {
   fill: var(--board-2);
 }
 
-// ── PCB chrome: gold rim (mask-composite cutout), fiducials, silkscreen.
+.destPad {
+  fill: var(--gold-bright);
+  filter: brightness(1.2);
+}
+
+.spark {
+  stroke: var(--gold-bright);
+  stroke-linecap: round;
+  stroke-dasharray: 18 460;
+  stroke-dashoffset: 478;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.comp {
+  fill: var(--gold);
+  stroke: var(--gold);
+  stroke-linecap: round;
+}
+
+.compBody {
+  fill: #112a1d;
+  stroke: color-mix(in srgb, var(--gold) 70%, transparent);
+  stroke-width: 1;
+}
+
+.compBodyTop {
+  fill: #1d4231;
+  stroke: color-mix(in srgb, var(--gold) 70%, transparent);
+  stroke-width: 0.8;
+}
+
+.capStripe {
+  fill: #f4ecd6;
+  stroke: none;
+}
+
+.bandMetal {
+  fill: #cdd6dd;
+  stroke: none;
+}
+
+.pin1 {
+  fill: var(--gold);
+  stroke: none;
+}
+
+.refdes {
+  font-family: $font-mono;
+  font-size: 7px;
+  fill: color-mix(in srgb, var(--gold) 60%, transparent);
+  letter-spacing: 0.06em;
+  pointer-events: none;
+}
+
+.refdesOnBody {
+  font-family: $font-mono;
+  font-size: 9px;
+  fill: color-mix(in srgb, var(--cream) 70%, transparent);
+  letter-spacing: 0.06em;
+  pointer-events: none;
+}
+
+.refdesOnBodySmall {
+  font-family: $font-mono;
+  font-size: 6.5px;
+  fill: color-mix(in srgb, var(--gold) 65%, transparent);
+  letter-spacing: 0.1em;
+  pointer-events: none;
+}
+
+// ─── CLICKABLE COMPONENTS ───────────────────────────────────────────────────
+.clickable {
+  pointer-events: auto;
+  cursor: pointer;
+  outline: none;
+  transition: filter 200ms ease;
+}
+
+.clickable:hover .compBody,
+.clickable:focus-visible .compBody {
+  stroke: var(--gold-bright);
+  stroke-width: 1.5;
+}
+
+.clickable:hover {
+  filter: brightness(1.15);
+}
+
+// Focus ring via static stroke on the component body — drop-shadow on the
+// transitionable `filter` would be a perf trap (CLAUDE.md gotcha).
+.clickable:focus-visible {
+  filter: brightness(1.2);
+}
+
+.clickable:focus-visible .compBody {
+  stroke: var(--gold-bright);
+  stroke-width: 2;
+}
+
+// ─── PLASMA CAPACITOR (C1) ──────────────────────────────────────────────────
+.plasmaWrap {
+  // Real declaration so CSS modules emits the class (empty rules → undefined).
+  pointer-events: none;
+}
+
+.plasma {
+  transform: scaleY(0);
+  transform-box: fill-box;
+  transform-origin: center bottom;
+  opacity: 0.92;
+}
+
+.plasmaBlob {
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+[data-net='p1'][data-net-active='true'] .plasma {
+  animation: csb-plasma-fill 4500ms cubic-bezier(0.42, 0, 0.2, 1) forwards;
+}
+
+[data-net='p1'][data-net-active='true'] .plasmaBlob1 {
+  animation: csb-plasma-jitter-1 4500ms ease-in-out forwards;
+}
+[data-net='p1'][data-net-active='true'] .plasmaBlob2 {
+  animation: csb-plasma-jitter-2 4500ms ease-in-out forwards;
+}
+[data-net='p1'][data-net-active='true'] .plasmaBlob3 {
+  animation: csb-plasma-jitter-3 4500ms ease-in-out forwards;
+}
+
+@keyframes csb-plasma-fill {
+  0%   { transform: scaleY(0);    opacity: 0;    }
+  6%   { opacity: 0.92; }
+  35%  { transform: scaleY(1);    opacity: 0.95; }
+  75%  { transform: scaleY(1);    opacity: 0.95; }
+  100% { transform: scaleY(0);    opacity: 0;    }
+}
+
+@keyframes csb-plasma-jitter-1 {
+  0%, 100% { opacity: 0; transform: translate(0, 0); }
+  20%      { opacity: 0.85; transform: translate(4px, -5px); }
+  45%      { opacity: 0.9;  transform: translate(-3px, -8px); }
+  70%      { opacity: 0.85; transform: translate(5px, -3px); }
+  90%      { opacity: 0; }
+}
+
+@keyframes csb-plasma-jitter-2 {
+  0%, 100% { opacity: 0; transform: translate(0, 0); }
+  25%      { opacity: 0.9;  transform: translate(-4px, 6px); }
+  55%      { opacity: 0.95; transform: translate(3px, -4px); }
+  75%      { opacity: 0.85; transform: translate(-2px, 8px); }
+  92%      { opacity: 0; }
+}
+
+@keyframes csb-plasma-jitter-3 {
+  0%, 100% { opacity: 0; transform: translate(0, 0); }
+  18%      { opacity: 0.8;  transform: translate(3px, -6px); }
+  40%      { opacity: 0.9;  transform: translate(-4px, -2px); }
+  65%      { opacity: 0.85; transform: translate(5px, 4px); }
+  90%      { opacity: 0; }
+}
+
+// ─── CRYSTAL (Y1) — pulse cycle ─────────────────────────────────────────────
+.crystal {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.crystalHalo {
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  transform: scale(0.7);
+}
+
+[data-net='p2'][data-net-active='true'] .crystal {
+  animation: csb-crystal-pulse 4500ms ease-in-out forwards;
+}
+
+[data-net='p2'][data-net-active='true'] .crystalHalo {
+  animation: csb-crystal-halo 4500ms ease-out forwards;
+}
+
+@keyframes csb-crystal-pulse {
+  0%, 100% { transform: scale(1); }
+  6%   { transform: scale(1.06); }
+  12%  { transform: scale(1); }
+  18%  { transform: scale(1.06); }
+  24%  { transform: scale(1); }
+  35%  { transform: scale(1.08); }
+  42%  { transform: scale(1); }
+  55%  { transform: scale(1.06); }
+  62%  { transform: scale(1); }
+  75%  { transform: scale(1.04); }
+  82%  { transform: scale(1); }
+}
+
+@keyframes csb-crystal-halo {
+  0%   { opacity: 0; transform: scale(0.7); }
+  20%  { opacity: 0.9; transform: scale(1.1); }
+  75%  { opacity: 0.9; transform: scale(1.1); }
+  100% { opacity: 0; transform: scale(1.3); }
+}
+
+// ─── OP-AMP (U2) — output sine wave ─────────────────────────────────────────
+.opampWave {
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  opacity: 0;
+}
+
+[data-net='p3'][data-net-active='true'] .opampWave {
+  animation: csb-opamp-wave 4500ms ease-out forwards;
+}
+
+@keyframes csb-opamp-wave {
+  0%   { stroke-dashoffset: 100; opacity: 0; }
+  10%  { opacity: 1; }
+  55%  { stroke-dashoffset: 0;   opacity: 1; }
+  85%  { opacity: 1; }
+  100% { stroke-dashoffset: 0;   opacity: 0; }
+}
+
+// ─── LED (D1) — lens illuminates + halo fades in ───────────────────────────
+.ledLens {
+  fill: #2a190a;
+  stroke: color-mix(in srgb, var(--gold) 70%, transparent);
+  stroke-width: 0.8;
+  transition: fill 200ms ease;
+}
+
+.ledHalo {
+  opacity: 0;
+  mix-blend-mode: screen;
+  transform-box: fill-box;
+  transform-origin: center;
+  transform: scale(0.6);
+}
+
+[data-net='p4'][data-net-active='true'] .ledLens {
+  animation: csb-led-lens 4500ms ease-in-out forwards;
+}
+
+[data-net='p4'][data-net-active='true'] .ledHalo {
+  animation: csb-led-halo 4500ms ease-out forwards;
+}
+
+@keyframes csb-led-lens {
+  0%   { fill: #2a190a; }
+  18%  { fill: #fff2a8; }
+  72%  { fill: #fff2a8; }
+  100% { fill: #2a190a; }
+}
+
+@keyframes csb-led-halo {
+  0%   { opacity: 0; transform: scale(0.6); }
+  18%  { opacity: 1; transform: scale(1.1); }
+  72%  { opacity: 1; transform: scale(1.1); }
+  100% { opacity: 0; transform: scale(1.4); }
+}
+
+// ─── PER-NET ACTIVATION: trace brightening + spark travel ──────────────────
+.net[data-net-active='true'] .traces {
+  stroke: var(--gold-bright);
+}
+
+.net[data-net-active='true'] .spark {
+  animation: csb-spark-travel 1400ms cubic-bezier(0.42, 0, 0.3, 1) forwards;
+}
+
+@keyframes csb-spark-travel {
+  0%   { stroke-dashoffset: 478; opacity: 0; }
+  18%  { opacity: 1; }
+  85%  { opacity: 1; }
+  100% { stroke-dashoffset: 0;   opacity: 0; }
+}
+
+// ─── PCB CHROME: gold rim, fiducials, silkscreen designator ────────────────
 .rim {
   content: '';
   position: absolute;
@@ -204,6 +508,10 @@
   mask-composite: exclude;
   opacity: 0.85;
   pointer-events: none;
+}
+
+@supports not ((-webkit-mask-composite: xor) or (mask-composite: exclude)) {
+  .rim { display: none; }
 }
 
 .fid {
@@ -232,20 +540,21 @@
   pointer-events: none;
 }
 
-// ── Identity block (left column)
+// ─── IDENTITY BLOCK (left column — sponsor brand) ──────────────────────────
 .id {
   position: relative;
   z-index: 2;
-  padding: 22px 24px;
+  padding: 28px 28px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
   justify-content: center;
   border-right: 1px dashed color-mix(in srgb, var(--gold) 26%, transparent);
 
   @media (max-width: 1080px) {
     border-right: none;
     border-bottom: 1px dashed color-mix(in srgb, var(--gold) 26%, transparent);
+    padding: 24px 22px;
   }
 }
 
@@ -255,12 +564,12 @@
   gap: 7px;
   align-self: flex-start;
   font-family: $font-mono;
-  font-size: 0.62rem;
+  font-size: 0.64rem;
   font-weight: 600;
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--gold);
-  padding: 4px 11px;
+  padding: 5px 12px;
   border: 1px solid color-mix(in srgb, var(--gold) 32%, transparent);
   border-radius: 999px;
   background: rgba(0, 0, 0, 0.28);
@@ -270,14 +579,14 @@
 .idTop {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 16px;
 }
 
 .pad {
   position: relative;
   flex: 0 0 auto;
-  width: 56px;
-  height: 56px;
+  width: 62px;
+  height: 62px;
   border-radius: 50%;
   display: grid;
   place-items: center;
@@ -306,7 +615,7 @@
 
 .mark {
   font-family: $font-heading;
-  font-size: 1.5rem;
+  font-size: 1.6rem;
   font-weight: 700;
   color: var(--gold);
   line-height: 1;
@@ -315,23 +624,24 @@
 .co {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
   min-width: 0;
 }
 
 .coName {
   font-family: $font-heading;
-  font-size: 1.12rem;
+  font-size: 1.18rem;
   font-weight: 700;
   color: var(--cream);
-  line-height: 1.15;
+  line-height: 1.18;
   @include truncate;
 }
 
 .coTag {
-  font-size: 0.78rem;
+  font-size: 0.82rem;
   color: var(--cream-mut);
   @include line-clamp(2);
+  line-height: 1.4;
 }
 
 .cta {
@@ -339,11 +649,11 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  margin-top: 4px;
-  padding: 8px 14px;
+  margin-top: 6px;
+  padding: 9px 16px;
   border-radius: 8px;
   font-family: $font-body;
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   font-weight: 600;
   letter-spacing: 0.01em;
   color: #0a190f;
@@ -361,100 +671,298 @@
   }
 }
 
-// ── Field rail (right column, 4 break-out pads)
+// ─── FIELD RAIL: 4 sleek DIP-package IC chips on a continuous PCB ──────────
+// The rail itself is the PCB demo-board: it OWNS the SVG circuit (top strip
+// + bottom strip) so the components live exclusively above/below the chips
+// — the .id (sponsor brand) column to the left stays plain.
 .rail {
   position: relative;
   z-index: 2;
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  align-items: center;
+  align-items: stretch;
+  // Vertical budget breakdown (180px banner):
+  //   28px top — SVG top strip + chip top pin row (overlap)
+  //   124px middle — chip body
+  //   28px bottom — SVG bottom strip + chip bottom pin row (overlap)
+  // 43 (top SVG) + 11 (top pins overlap top strip) + 100 (chip body) + 11
+  // (bot pins overlap bottom strip) + 43 (bottom SVG) = 208px (inside the
+  // .board's 6px rim padding).
+  padding: 43px 14px 43px;
+  gap: 12px;
 
   @media (max-width: 1080px) {
     grid-template-columns: repeat(2, 1fr);
+    padding: 28px 18px 28px;
+    gap: 22px;
   }
   @media (max-width: 560px) {
     grid-template-columns: 1fr;
   }
 }
 
+// Each .field IS an IC chip — DIP package viewed from above. Sleek + skinny,
+// content centred (N/S) inside as advertising. Pin1 dot top-left, body notch
+// top-center, silkscreen text centred. Illumination transforms whole chip.
 .field {
   position: relative;
-  padding: 22px 20px;
+  z-index: 2;
+  padding: 14px 16px;
+  min-height: 100px;
+  border-radius: 7px;
   display: flex;
   flex-direction: column;
-  gap: 7px;
-  min-width: 0;
+  justify-content: center;
+  gap: 4px;
 
-  & + & {
-    border-left: 1px dashed color-mix(in srgb, var(--gold) 18%, transparent);
+  // IC body: dark plastic with subtle 45° highlight
+  background:
+    linear-gradient(165deg, rgba(255, 255, 255, 0.04) 0%, transparent 30%),
+    linear-gradient(150deg, #1a3d2a 0%, #0d2517 55%, #08180e 100%);
 
-    @media (max-width: 1080px) {
-      &:nth-child(3) {
-        border-left: none;
-      }
-      &:nth-child(3),
-      &:nth-child(4) {
-        border-top: 1px dashed color-mix(in srgb, var(--gold) 18%, transparent);
-      }
-    }
-    @media (max-width: 560px) {
-      border-left: none;
-      border-top: 1px dashed color-mix(in srgb, var(--gold) 18%, transparent);
-    }
+  box-shadow:
+    inset 0 0 0 1.5px color-mix(in srgb, var(--gold) 32%, transparent),
+    inset 0 0 14px rgba(0, 0, 0, 0.5),
+    0 4px 16px rgba(0, 0, 0, 0.4);
+
+  transition: background 400ms ease, box-shadow 400ms ease;
+
+  // Pin1 indicator dot top-left
+  &::before {
+    content: '';
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--gold);
+    box-shadow: 0 0 6px color-mix(in srgb, var(--gold) 70%, transparent);
+    z-index: 2;
+    transition: background 320ms ease, box-shadow 320ms ease;
+  }
+
+  // Body notch (orientation marker) top-center
+  &::after {
+    content: '';
+    position: absolute;
+    top: -1px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 22px;
+    height: 8px;
+    background: var(--board-1);
+    border-radius: 0 0 11px 11px;
+    border: 1px solid color-mix(in srgb, var(--gold) 32%, transparent);
+    border-top: none;
+    z-index: 2;
+    pointer-events: none;
   }
 }
 
-.spine {
+// Pin rows — gold tabs sticking up out of the chip body. Top row receives
+// traces from the components above; bottom row sources traces to the
+// components below. Two .chipPins variants flank the chip body so the
+// silhouette reads as a proper DIP package (pins on opposing edges).
+.chipPins {
   position: absolute;
-  left: 0;
-  right: 0;
-  top: 50%;
-  height: 1.5px;
-  z-index: 1;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    color-mix(in srgb, var(--gold) 55%, transparent) 6%,
-    color-mix(in srgb, var(--gold) 55%, transparent) 94%,
-    transparent
-  );
+  left: 12px;
+  right: 12px;
+  height: 11px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  pointer-events: none;
+  z-index: 3; // above SVG (z=1) and chip body (z=2) so pins read as "out of" the chip
+}
 
-  @media (max-width: 1080px) {
-    display: none;
+.chipPinsTop {
+  top: -11px;
+}
+
+.chipPinsBottom {
+  bottom: -11px;
+  align-items: flex-end;
+
+  .chipPin {
+    background: linear-gradient(
+      0deg,
+      color-mix(in srgb, var(--gold) 92%, transparent) 0%,
+      color-mix(in srgb, var(--gold-deep) 92%, transparent) 100%
+    );
+    border-radius: 1px 1px 2px 2px;
+    box-shadow: inset 0 1px 0 rgba(0, 0, 0, 0.35);
   }
 }
 
+.chipPin {
+  display: block;
+  width: 5px;
+  height: 11px;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--gold) 92%, transparent) 0%,
+    color-mix(in srgb, var(--gold-deep) 92%, transparent) 100%
+  );
+  border-radius: 2px 2px 1px 1px;
+  box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.35);
+  transition: background 320ms ease, box-shadow 320ms ease, filter 320ms ease;
+}
+
+// Illuminated state — full chip lights up. The animation runs over the full
+// NET_ENERGIZE_MS window: a brief 8% flash burst at the start (chip body goes
+// VERY bright so the user can't miss it), then settles into a sustained
+// "charged" hold, then fades out as the net discharges. Pure keyframe — no JS
+// per-frame after the initial click.
+.field[data-illuminated='true'] {
+  animation: csb-chip-charge 4500ms cubic-bezier(0.2, 0.6, 0.3, 1) forwards;
+
+  &::before {
+    background: var(--illum);
+    box-shadow:
+      0 0 14px var(--gold-bright),
+      0 0 28px color-mix(in srgb, var(--gold-bright) 55%, transparent);
+    animation: csb-dot-pulse 1100ms ease-in-out infinite;
+  }
+
+  .chipPin {
+    background: linear-gradient(
+      180deg,
+      var(--illum) 0%,
+      var(--gold-bright) 100%
+    );
+    box-shadow:
+      inset 0 -1px 0 rgba(0, 0, 0, 0.25),
+      0 0 10px var(--gold-bright),
+      0 0 20px color-mix(in srgb, var(--gold-bright) 60%, transparent);
+    filter: brightness(1.15);
+    animation: csb-pin-pulse 900ms ease-in-out infinite;
+  }
+
+  .pLabel {
+    color: var(--illum);
+    text-shadow: 0 0 12px var(--gold-bright);
+  }
+
+  .val,
+  .val a {
+    color: #ffffff;
+    text-shadow:
+      0 0 14px var(--gold-bright),
+      0 0 28px color-mix(in srgb, var(--gold-bright) 55%, transparent);
+  }
+
+  .pinNo {
+    color: var(--gold-bright);
+  }
+
+  .sub {
+    color: color-mix(in srgb, var(--cream) 70%, var(--gold-bright));
+  }
+}
+
+// Chip charge keyframes — drives the body background + box-shadow over the
+// full energize window. 0-8% = burst (very bright), 8-75% = charged hold,
+// 75-100% = discharge back to a near-rest tint (the data-illuminated attr
+// is then removed by the JS timeout, snapping the chip back to default).
+@keyframes csb-chip-charge {
+  0% {
+    background:
+      linear-gradient(165deg, rgba(255, 255, 255, 0.04), transparent 30%),
+      linear-gradient(150deg, #1a3d2a 0%, #0d2517 55%, #08180e 100%);
+    box-shadow:
+      inset 0 0 0 1.5px color-mix(in srgb, var(--gold) 32%, transparent),
+      inset 0 0 14px rgba(0, 0, 0, 0.5),
+      0 4px 16px rgba(0, 0, 0, 0.4);
+  }
+  8% {
+    background:
+      linear-gradient(165deg, rgba(255, 255, 255, 0.25), transparent 25%),
+      linear-gradient(150deg,
+        color-mix(in srgb, var(--gold-bright) 55%, #1a3d2a) 0%,
+        color-mix(in srgb, var(--gold-bright) 30%, #0d2517) 50%,
+        color-mix(in srgb, var(--gold-bright) 18%, #0c2316) 100%);
+    box-shadow:
+      inset 0 0 0 2px var(--illum),
+      inset 0 0 48px color-mix(in srgb, var(--gold-bright) 65%, transparent),
+      0 0 36px var(--gold-bright),
+      0 6px 36px color-mix(in srgb, var(--gold-bright) 60%, transparent);
+  }
+  75% {
+    background:
+      linear-gradient(165deg, rgba(255, 255, 255, 0.12), transparent 25%),
+      linear-gradient(150deg,
+        color-mix(in srgb, var(--gold-bright) 32%, #1a3d2a) 0%,
+        color-mix(in srgb, var(--gold-bright) 18%, #0d2517) 50%,
+        #0c2316 100%);
+    box-shadow:
+      inset 0 0 0 1.8px var(--gold-bright),
+      inset 0 0 40px color-mix(in srgb, var(--gold-bright) 42%, transparent),
+      0 6px 30px color-mix(in srgb, var(--gold-bright) 42%, transparent);
+  }
+  100% {
+    background:
+      linear-gradient(165deg, rgba(255, 255, 255, 0.04), transparent 30%),
+      linear-gradient(150deg, #1a3d2a 0%, #0d2517 55%, #08180e 100%);
+    box-shadow:
+      inset 0 0 0 1.5px color-mix(in srgb, var(--gold) 32%, transparent),
+      inset 0 0 14px rgba(0, 0, 0, 0.5),
+      0 4px 16px rgba(0, 0, 0, 0.4);
+  }
+}
+
+@keyframes csb-pin-pulse {
+  0%, 100% { filter: brightness(1.1); }
+  50%      { filter: brightness(1.45); }
+}
+
+@keyframes csb-dot-pulse {
+  0%, 100% { transform: scale(1);   filter: brightness(1); }
+  50%      { transform: scale(1.35); filter: brightness(1.3); }
+}
+
+// ─── Silkscreen text inside the chip ────────────────────────────────────────
 .pLabel {
   display: inline-flex;
   align-items: center;
   gap: 7px;
   font-family: $font-mono;
-  font-size: 0.6rem;
+  font-size: 0.62rem;
   font-weight: 600;
-  letter-spacing: 0.2em;
+  line-height: 1;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: color-mix(in srgb, var(--gold) 78%, var(--cream));
+  color: color-mix(in srgb, var(--gold) 82%, var(--cream));
+  transition: color 320ms ease, text-shadow 320ms ease;
 }
 
 .dot {
-  width: 7px;
-  height: 7px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   background: var(--gold);
   box-shadow: 0 0 8px color-mix(in srgb, var(--gold) 60%, transparent);
+  transition: background 320ms ease, box-shadow 320ms ease;
 }
 
 .pinNo {
   margin-left: auto;
-  color: color-mix(in srgb, var(--gold) 45%, transparent);
-  letter-spacing: 0.12em;
+  color: color-mix(in srgb, var(--gold) 50%, transparent);
+  letter-spacing: 0.14em;
+  transition: color 320ms ease;
 }
 
 .val {
-  font-size: 0.96rem;
+  font-size: 1.35rem;
+  font-weight: 600;
+  font-family: $font-heading;
   color: var(--cream);
-  line-height: 1.3;
+  line-height: 1.05;
+  transition: color 320ms ease, text-shadow 320ms ease;
   @include truncate;
+  min-width: 0;
+  flex: 1 1 auto;
+  margin-top: 0;
 
   a {
     color: var(--cream);
@@ -469,34 +977,53 @@
 
 .valMono {
   font-family: $font-mono;
-  font-size: 0.9rem;
+  font-size: 1.08rem;
 }
 
-.sub {
-  font-size: 0.76rem;
+.valEmpty {
+  font-style: italic;
   color: var(--cream-mut);
+  font-weight: 500;
 }
 
+// "Featured partner" / "Sales rep" / "Mon–Fri" / "Direct inbox" subtitle —
+// removed per the "Hero Sponsor Name" workflow recipe to free vertical room
+// for the larger val (1.35rem hero). Kept the class so JSX renders inertly.
+.sub {
+  display: none;
+}
+
+// Row hosting val + CopyChip side-by-side on Phone/Email chips. Was a
+// vertical "rowFoot" stack with sub-text + chip; now a single inline flex row
+// where val takes remaining width and CopyChip pins to the right.
 .rowFoot {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
+  min-width: 0;
+  flex: 1 1 auto;
+
+  .val {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
 }
 
-// ── Copy chip (P3/P4 affordance)
+// ─── COPY CHIP ─────────────────────────────────────────────────────────────
 .copyChip {
   appearance: none;
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 3px 8px;
+  flex: 0 0 auto;
+  height: 24px;
+  padding: 0 10px;
   font-family: $font-mono;
   font-size: 0.66rem;
   letter-spacing: 0.05em;
-  color: color-mix(in srgb, var(--gold) 80%, var(--cream));
+  color: color-mix(in srgb, var(--gold) 82%, var(--cream));
   background: rgba(0, 0, 0, 0.32);
-  border: 1px solid color-mix(in srgb, var(--gold) 28%, transparent);
+  border: 1px solid color-mix(in srgb, var(--gold) 32%, transparent);
   border-radius: 999px;
   cursor: pointer;
   line-height: 1;
@@ -509,8 +1036,36 @@
   }
 }
 
-.copyChipLight {
-  color: $executive-blue;
-  background: rgba(0, 0, 0, 0.04);
-  border-color: rgba(0, 0, 0, 0.12);
+// Reduced-motion users: kill all energize animations; chips still light up
+// statically via the same data-illuminated styles (no pulse/burst), so the
+// click-to-illuminate feedback is preserved.
+@media (prefers-reduced-motion: reduce) {
+  .plasma, .plasmaBlob, .crystal, .crystalHalo, .opampWave, .ledLens, .ledHalo, .spark, .dot, .chipPin {
+    animation: none !important;
+    transition: none !important;
+  }
+  [data-net-active='true'] .traces {
+    stroke: var(--gold-bright);
+  }
+  [data-net-active='true'] .plasma {
+    transform: scaleY(1);
+    opacity: 0.9;
+  }
+  [data-net-active='true'] .ledLens {
+    fill: #fff2a8;
+  }
+  // Static "charged" look — skip the burst-flash + discharge keyframe.
+  .field[data-illuminated='true'] {
+    animation: none !important;
+    background:
+      linear-gradient(165deg, rgba(255, 255, 255, 0.1), transparent 25%),
+      linear-gradient(150deg,
+        color-mix(in srgb, var(--gold-bright) 28%, #1a3d2a) 0%,
+        color-mix(in srgb, var(--gold-bright) 16%, #0d2517) 50%,
+        #0c2316 100%);
+    box-shadow:
+      inset 0 0 0 1.8px var(--gold-bright),
+      inset 0 0 36px color-mix(in srgb, var(--gold-bright) 38%, transparent),
+      0 6px 28px color-mix(in srgb, var(--gold-bright) 35%, transparent);
+  }
 }
