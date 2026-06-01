@@ -17,6 +17,17 @@
   --plasma: #8fe3ff;
   --illum: #fff8d8;
 
+  // v12 PCB-grammar tokens — three-tone hierarchy (pads / signals / silkscreen).
+  // Defined ONCE on .board so every SVG child resolves them with a single
+  // computed-style lookup, NOT one per-path (same perf lesson as CircuitTraces).
+  --csb-trace:       color-mix(in srgb, var(--gold) 65%, transparent);
+  --csb-trace-bus:   color-mix(in srgb, var(--gold) 85%, transparent);
+  --csb-ic-stroke:   color-mix(in srgb, var(--gold) 50%, transparent);
+  --csb-ic-fill:     color-mix(in srgb, var(--gold) 6%,  transparent);
+  --csb-pad-fill:    color-mix(in srgb, var(--gold) 75%, transparent);
+  --csb-node:        color-mix(in srgb, var(--gold) 70%, transparent);
+  --csb-silkscreen:  color-mix(in srgb, #f5e9c0 55%, transparent);
+
   position: relative;
   isolation: isolate;
   margin: 0 0 24px;
@@ -33,11 +44,12 @@
   grid-template-columns: minmax(280px, 340px) 1fr;
   align-items: stretch;
   // Banner 220px exact (user spec). Internal padding 6px (--rim-pad) keeps
-  // contents off the gold rim. Inside that 208px of usable height:
-  //   43px top — SVG component strip (pin rows overlay bottom 11px)
-  //   122px middle — chip silhouette (100 body + 11 top pin + 11 bot pin)
-  //   43px bottom — SVG output-side strip
-  // Total = 43 + 122 + 43 = 208px ✓ (fits 220 - 6 - 6 padding)
+  // contents off the gold rim. v12.2 geometry budget (component-forward):
+  //   6 (top pad) + 53 (top SVG) + 11 (chip top pin) + 80 (chip body)
+  //   + 11 (chip bot pin) + 53 (bot SVG) + 6 (bot pad) = 220px
+  // Both SVG strips fit cleanly within the banner — no overflow-clipping.
+  // v12.2: chip slimmed 100 → 80 to free vertical room for taller, more
+  // legible SMT footprints in the strips (53px each, was 43px).
   min-height: 220px;
   max-height: 220px;
   padding: 6px;
@@ -58,6 +70,10 @@
   @media (max-width: 1080px) {
     grid-template-columns: 1fr;
     min-height: 0;
+    // Unlock max-height so the stacked chip layout (4 chips × 55px + pins +
+    // padding + .id column) can self-size rather than overflow the locked
+    // 220px desktop cap.
+    max-height: none;
   }
 }
 
@@ -69,6 +85,12 @@
 }
 
 // ─── SUBSTRATE: copper-dot grid ─────────────────────────────────────────────
+// PERF (v11.1): replaced mask-image (which promoted the substrate to its own
+// compositor layer + required an alpha-buffer composition pass blending under
+// .lamp) with a stacked linear-gradient that bakes the diagonal fade directly
+// into the background. Same visual taper, but the substrate is now a single
+// flat raster tile the compositor can cache forever — no per-lamp-frame
+// uncacheable mask read.
 .substrate {
   position: absolute;
   inset: 0;
@@ -79,45 +101,55 @@
     content: '';
     position: absolute;
     inset: 0;
-    background-image: radial-gradient(
-      color-mix(in srgb, var(--gold) 20%, transparent) 1px,
-      transparent 1.7px
-    );
-    background-size: 17px 17px;
+    background:
+      linear-gradient(120deg, transparent, rgba(13, 44, 30, 0.85) 80%),
+      radial-gradient(
+        color-mix(in srgb, var(--gold) 20%, transparent) 1px,
+        transparent 1.7px
+      );
+    background-size: auto, 17px 17px;
     opacity: 0.5;
-    -webkit-mask-image: linear-gradient(120deg, #000, transparent 80%);
-    mask-image: linear-gradient(120deg, #000, transparent 80%);
   }
 }
 
 // ─── BOARD ART: SVG layer pinned to the TOP of the .rail only ──────────────
-// Positioned inside .rail so it never paints over the .id (sponsor brand)
-// column. Top strip = top 30px of .rail height; bottom strip = bottom 30px.
+// v12.2 geometry: top strip 53px (was 43), chip body 80px (was 100), bot strip
+// 53px (was 43). 220px budget preserved. ICs slimmed to free vertical room for
+// larger, more legible SMT footprints in the strips (per user feedback that
+// v12.1 components were too small to read/click).
 .boardArt {
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
-  height: 43px;
+  height: 53px;
   z-index: 1;
   pointer-events: none;
-  transform: translateZ(0);
+  // No translateZ promotion: SVG paths inside don't animate transforms
+  // (only stroke-dashoffset on .spark during energize, which is paint-only).
+  // Removing the unnecessary layer reduces GPU memory + one fewer surface
+  // the .lamp blend pass had to consume.
 
   @media (max-width: 1080px) {
     display: none;
   }
 }
 
-// Bottom strip — output side, mirrors top.
+// Bottom strip — v12.2 output side, symmetric in height to top (53px).
+// Budget: 6(top) + 53(topSVG) + 11(pins) + 80(chip) + 11(pins) + 53(botSVG)
+// + 6(bot) = 220px. Fits cleanly within the locked 220px banner.
+// Anchored at top:155px so chip bottom-pin tabs (rail y=144..155) butt the
+// top edge of this SVG (pins meet strip exactly at rail-y=155).
 .boardArtBottom {
   position: absolute;
   left: 0;
   right: 0;
-  bottom: 0;
-  height: 43px;
+  top: 155px;
+  bottom: auto;
+  height: 53px;
   z-index: 1;
   pointer-events: none;
-  transform: translateZ(0);
+  // No translateZ promotion (see .boardArt note above — same rationale).
 
   @media (max-width: 1080px) {
     display: none;
@@ -132,32 +164,6 @@
   pointer-events: none;
 }
 
-// ─── LAMP: warm pool tracking the cursor (desktop only) ────────────────────
-.lamp {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  opacity: 0;
-  transition: opacity 260ms ease;
-  mix-blend-mode: screen;
-  pointer-events: none;
-  background: radial-gradient(
-    circle 220px at var(--mx, -9999px) var(--my, -9999px),
-    color-mix(in srgb, var(--gold) 28%, transparent),
-    transparent 70%
-  );
-}
-
-.board[data-lit='true'] .lamp {
-  opacity: 1;
-}
-
-@media (hover: none), (pointer: coarse), (prefers-reduced-motion: reduce) {
-  .lamp {
-    display: none;
-  }
-}
-
 // ─── SVG INTERNALS ──────────────────────────────────────────────────────────
 .art {
   position: absolute;
@@ -167,111 +173,122 @@
   pointer-events: none;
 }
 
-.traces {
-  stroke: color-mix(in srgb, var(--gold) 60%, transparent);
-  transition: stroke 320ms ease;
-}
-
-// Always-lit shared buses — they unify the demo into ONE board. The VCC bus
-// runs across the top, the GND bus across the bottom. Never per-net animated.
+// Always-lit shared buses. v11 monochrome palette — all three buses share the
+// same gold tone, with power rails (VCC/GND) slightly brighter (75%) than the
+// inter-chip signal buses (55%) so the brightness gradient reads as PCB-photo
+// trace hierarchy without per-net hue distinguishing them.
 .busVcc {
-  stroke: color-mix(in srgb, var(--gold) 78%, transparent);
+  stroke: color-mix(in srgb, var(--gold) 75%, transparent);
 }
 
 .busGnd {
-  stroke: color-mix(in srgb, var(--gold) 52%, transparent);
+  stroke: color-mix(in srgb, var(--gold) 75%, transparent);
 }
 
-// Inter-chip signal lines — slightly dimmer than primary traces so the eye
-// reads them as "this connects everything" without overpowering individual
-// component clusters.
 .busSignal {
-  stroke: color-mix(in srgb, var(--gold) 38%, transparent);
+  stroke: color-mix(in srgb, var(--gold) 55%, transparent);
 }
 
-// Faint per-pin stubs — guarantee every chip pin has a visible trace going
-// out from it even when nothing is wired to it (vias / test points).
-.tracesFaint {
-  stroke: color-mix(in srgb, var(--gold) 28%, transparent);
+// v12 power bus — heaviest tier (PWR_IN rail toward CN2/right edge).
+.busPower {
+  stroke: var(--csb-trace-bus);
 }
 
-.pads {
-  fill: color-mix(in srgb, var(--gold) 78%, transparent);
+// v12 pin-drop trace — chip pin → bus vertical (with 45° chamfers). Carries
+// the mid-tone signal hierarchy (perceptibility boost vs v11's 28%).
+.pinDrop {
+  stroke: var(--csb-trace);
+  fill: none;
 }
 
-.padHole {
-  fill: var(--board-2);
+// v12.1 component-to-bus stub — short trace emitted by SMT helpers from a pad
+// to its connection point (bus line OR chip-drop endpoint). Slightly thinner
+// than pinDrop, slightly brighter than anchorStub — reads as "this component
+// is wired into the net" not "decorative".
+.componentStub {
+  stroke: color-mix(in srgb, var(--gold) 60%, transparent);
+  fill: none;
 }
 
-.destPad {
-  fill: var(--gold-bright);
-  filter: brightness(1.2);
+// v12 IC body outline class — applies to large component bodies (regulator,
+// crystal, MCU rect). Mid-tone stroke, FR4 body fill.
+.icOutline {
+  stroke: var(--csb-ic-stroke);
+  fill: var(--csb-ic-fill);
 }
 
-.spark {
-  stroke: var(--gold-bright);
-  stroke-linecap: round;
-  stroke-dasharray: 18 460;
-  stroke-dashoffset: 478;
-  opacity: 0;
+// v12 SMT outline (0402/0603/SOT-23/diode) — thinner body strokes.
+.smdOutline {
+  stroke: var(--csb-ic-stroke);
+  fill: var(--csb-ic-fill);
+}
+
+// v12 IC pads — bright exposed-copper rectangles.
+.icPad {
+  fill: var(--csb-pad-fill);
+}
+
+// v12 via — outer ring + inner copper. Two-tone (ring at 50%, inner at 75%).
+// Bare class needs ≥1 declaration so CSS Modules exports `styles.via` (CLAUDE.md
+// gotcha: empty SCSS rule → undefined CSS module class).
+.via {
   pointer-events: none;
 }
-
-.comp {
-  fill: var(--gold);
-  stroke: var(--gold);
-  stroke-linecap: round;
+.viaRing {
+  stroke: var(--csb-node);
+}
+.viaInner {
+  fill: var(--csb-node);
 }
 
-.compBody {
-  fill: #112a1d;
-  stroke: color-mix(in srgb, var(--gold) 70%, transparent);
-  stroke-width: 1;
+// v12 fiducial — concentric assembly marker rings.
+.fiducialRing {
+  stroke: var(--csb-node);
 }
 
-.compBodyTop {
-  fill: #1d4231;
-  stroke: color-mix(in srgb, var(--gold) 70%, transparent);
-  stroke-width: 0.8;
-}
-
-.capStripe {
-  fill: #f4ecd6;
-  stroke: none;
-}
-
-.bandMetal {
-  fill: #cdd6dd;
-  stroke: none;
-}
-
-.pin1 {
-  fill: var(--gold);
-  stroke: none;
-}
-
-.refdes {
+// v12 silkscreen text — designators + corner legend. Mono font, cool off-gold.
+.csbSilkscreen {
   font-family: $font-mono;
-  font-size: 7px;
-  fill: color-mix(in srgb, var(--gold) 60%, transparent);
-  letter-spacing: 0.06em;
-  pointer-events: none;
+  font-size: 4.5px;
+  letter-spacing: 0.05em;
+  fill: var(--csb-silkscreen);
+  font-weight: 500;
 }
 
-.refdesOnBody {
+// v12.2 component value text — smaller, fainter — sits under each footprint.
+.csbSilkscreenValue {
   font-family: $font-mono;
-  font-size: 9px;
-  fill: color-mix(in srgb, var(--cream) 70%, transparent);
-  letter-spacing: 0.06em;
-  pointer-events: none;
+  font-size: 3.2px;
+  fill: var(--csb-silkscreen);
+  opacity: 0.55;
+  letter-spacing: 0.04em;
 }
 
-.refdesOnBodySmall {
-  font-family: $font-mono;
-  font-size: 6.5px;
-  fill: color-mix(in srgb, var(--gold) 65%, transparent);
-  letter-spacing: 0.1em;
-  pointer-events: none;
+// v13+ animation hooks — base class needs ≥1 declaration so CSS Modules
+// exports `styles.capBody`/`styles.diodeBody`/`styles.resistorBody` (CLAUDE.md
+// gotcha: empty SCSS rule → undefined CSS module class). The attribute-
+// qualified rules below remain reserved for v13 fill/glow animations.
+.capBody,
+.diodeBody,
+.resistorBody {
+  transition: fill 200ms ease, stroke 200ms ease;
+}
+.capBody[data-energized='true'] { /* reserved for v13 — pad charge pulse */ }
+.diodeBody[data-energized='true'] { /* reserved for v13 — forward-bias glow */ }
+.resistorBody[data-energized='true'] { /* reserved for v13 — heat shimmer */ }
+
+// v12 SMT component group wrappers — purely semantic anchors for v13.
+// Non-empty declaration required so CSS Modules exports each class name.
+.csbCap,
+.csbResistor,
+.csbTransistor,
+.csbCrystal,
+.csbInductor,
+.csbDiode,
+.csbRegulator,
+.csbFiducial,
+.csbEdgeConn {
+  display: inline;
 }
 
 // ─── CLICKABLE COMPONENTS ───────────────────────────────────────────────────
@@ -282,205 +299,32 @@
   transition: filter 200ms ease;
 }
 
-.clickable:hover .compBody,
-.clickable:focus-visible .compBody {
-  stroke: var(--gold-bright);
-  stroke-width: 1.5;
-}
-
 .clickable:hover {
-  filter: brightness(1.15);
+  filter: brightness(1.20);
 }
 
-// Focus ring via static stroke on the component body — drop-shadow on the
-// transitionable `filter` would be a perf trap (CLAUDE.md gotcha).
+// Focus ring via brightness — drop-shadow on the transitionable `filter` would
+// be a perf trap (CLAUDE.md gotcha).
 .clickable:focus-visible {
   filter: brightness(1.2);
 }
 
-.clickable:focus-visible .compBody {
-  stroke: var(--gold-bright);
-  stroke-width: 2;
-}
-
-// ─── PLASMA CAPACITOR (C1) ──────────────────────────────────────────────────
-.plasmaWrap {
-  // Real declaration so CSS modules emits the class (empty rules → undefined).
-  pointer-events: none;
-}
-
-.plasma {
-  transform: scaleY(0);
-  transform-box: fill-box;
-  transform-origin: center bottom;
-  opacity: 0.92;
-}
-
-.plasmaBlob {
-  opacity: 0;
-  transform-box: fill-box;
-  transform-origin: center;
-}
-
-[data-net='p1'][data-net-active='true'] .plasma {
-  animation: csb-plasma-fill 4500ms cubic-bezier(0.42, 0, 0.2, 1) forwards;
-}
-
-[data-net='p1'][data-net-active='true'] .plasmaBlob1 {
-  animation: csb-plasma-jitter-1 4500ms ease-in-out forwards;
-}
-[data-net='p1'][data-net-active='true'] .plasmaBlob2 {
-  animation: csb-plasma-jitter-2 4500ms ease-in-out forwards;
-}
-[data-net='p1'][data-net-active='true'] .plasmaBlob3 {
-  animation: csb-plasma-jitter-3 4500ms ease-in-out forwards;
-}
-
-@keyframes csb-plasma-fill {
-  0%   { transform: scaleY(0);    opacity: 0;    }
-  6%   { opacity: 0.92; }
-  35%  { transform: scaleY(1);    opacity: 0.95; }
-  75%  { transform: scaleY(1);    opacity: 0.95; }
-  100% { transform: scaleY(0);    opacity: 0;    }
-}
-
-@keyframes csb-plasma-jitter-1 {
-  0%, 100% { opacity: 0; transform: translate(0, 0); }
-  20%      { opacity: 0.85; transform: translate(4px, -5px); }
-  45%      { opacity: 0.9;  transform: translate(-3px, -8px); }
-  70%      { opacity: 0.85; transform: translate(5px, -3px); }
-  90%      { opacity: 0; }
-}
-
-@keyframes csb-plasma-jitter-2 {
-  0%, 100% { opacity: 0; transform: translate(0, 0); }
-  25%      { opacity: 0.9;  transform: translate(-4px, 6px); }
-  55%      { opacity: 0.95; transform: translate(3px, -4px); }
-  75%      { opacity: 0.85; transform: translate(-2px, 8px); }
-  92%      { opacity: 0; }
-}
-
-@keyframes csb-plasma-jitter-3 {
-  0%, 100% { opacity: 0; transform: translate(0, 0); }
-  18%      { opacity: 0.8;  transform: translate(3px, -6px); }
-  40%      { opacity: 0.9;  transform: translate(-4px, -2px); }
-  65%      { opacity: 0.85; transform: translate(5px, 4px); }
-  90%      { opacity: 0; }
-}
-
-// ─── CRYSTAL (Y1) — pulse cycle ─────────────────────────────────────────────
-.crystal {
-  transform-box: fill-box;
-  transform-origin: center;
-}
-
-.crystalHalo {
-  opacity: 0;
-  transform-box: fill-box;
-  transform-origin: center;
-  transform: scale(0.7);
-}
-
-[data-net='p2'][data-net-active='true'] .crystal {
-  animation: csb-crystal-pulse 4500ms ease-in-out forwards;
-}
-
-[data-net='p2'][data-net-active='true'] .crystalHalo {
-  animation: csb-crystal-halo 4500ms ease-out forwards;
-}
-
-@keyframes csb-crystal-pulse {
-  0%, 100% { transform: scale(1); }
-  6%   { transform: scale(1.06); }
-  12%  { transform: scale(1); }
-  18%  { transform: scale(1.06); }
-  24%  { transform: scale(1); }
-  35%  { transform: scale(1.08); }
-  42%  { transform: scale(1); }
-  55%  { transform: scale(1.06); }
-  62%  { transform: scale(1); }
-  75%  { transform: scale(1.04); }
-  82%  { transform: scale(1); }
-}
-
-@keyframes csb-crystal-halo {
-  0%   { opacity: 0; transform: scale(0.7); }
-  20%  { opacity: 0.9; transform: scale(1.1); }
-  75%  { opacity: 0.9; transform: scale(1.1); }
-  100% { opacity: 0; transform: scale(1.3); }
-}
-
-// ─── OP-AMP (U2) — output sine wave ─────────────────────────────────────────
-.opampWave {
-  stroke-dasharray: 100;
-  stroke-dashoffset: 100;
-  opacity: 0;
-}
-
-[data-net='p3'][data-net-active='true'] .opampWave {
-  animation: csb-opamp-wave 4500ms ease-out forwards;
-}
-
-@keyframes csb-opamp-wave {
-  0%   { stroke-dashoffset: 100; opacity: 0; }
-  10%  { opacity: 1; }
-  55%  { stroke-dashoffset: 0;   opacity: 1; }
-  85%  { opacity: 1; }
-  100% { stroke-dashoffset: 0;   opacity: 0; }
-}
-
-// ─── LED (D1) — lens illuminates + halo fades in ───────────────────────────
-.ledLens {
-  fill: #2a190a;
-  stroke: color-mix(in srgb, var(--gold) 70%, transparent);
-  stroke-width: 0.8;
-  transition: fill 200ms ease;
-}
-
-.ledHalo {
-  opacity: 0;
-  mix-blend-mode: screen;
-  transform-box: fill-box;
-  transform-origin: center;
-  transform: scale(0.6);
-}
-
-[data-net='p4'][data-net-active='true'] .ledLens {
-  animation: csb-led-lens 4500ms ease-in-out forwards;
-}
-
-[data-net='p4'][data-net-active='true'] .ledHalo {
-  animation: csb-led-halo 4500ms ease-out forwards;
-}
-
-@keyframes csb-led-lens {
-  0%   { fill: #2a190a; }
-  18%  { fill: #fff2a8; }
-  72%  { fill: #fff2a8; }
-  100% { fill: #2a190a; }
-}
-
-@keyframes csb-led-halo {
-  0%   { opacity: 0; transform: scale(0.6); }
-  18%  { opacity: 1; transform: scale(1.1); }
-  72%  { opacity: 1; transform: scale(1.1); }
-  100% { opacity: 0; transform: scale(1.4); }
-}
-
-// ─── PER-NET ACTIVATION: trace brightening + spark travel ──────────────────
-.net[data-net-active='true'] .traces {
+// ─── PER-NET ACTIVATION: trace brightening ──────────────────────────────────
+.net[data-net-active='true'] .pinDrop {
   stroke: var(--gold-bright);
 }
 
-.net[data-net-active='true'] .spark {
-  animation: csb-spark-travel 1400ms cubic-bezier(0.42, 0, 0.3, 1) forwards;
+// v12: when a chip's data-net is active, brighten its pads + via inner copper
+// + IC body strokes so the entire private-route surface lights up. Shared
+// buses (outside any data-net) stay at their always-on tone — no flicker.
+.net[data-net-active='true'] .icPad,
+.net[data-net-active='true'] .viaInner {
+  fill: var(--gold-bright);
 }
 
-@keyframes csb-spark-travel {
-  0%   { stroke-dashoffset: 478; opacity: 0; }
-  18%  { opacity: 1; }
-  85%  { opacity: 1; }
-  100% { stroke-dashoffset: 0;   opacity: 0; }
+.net[data-net-active='true'] .icOutline,
+.net[data-net-active='true'] .smdOutline {
+  stroke: var(--gold-bright);
 }
 
 // ─── PCB CHROME: gold rim, fiducials, silkscreen designator ────────────────
@@ -678,26 +522,27 @@
 .rail {
   position: relative;
   z-index: 2;
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  align-items: stretch;
-  // Vertical budget breakdown (180px banner):
-  //   28px top — SVG top strip + chip top pin row (overlap)
-  //   124px middle — chip body
-  //   28px bottom — SVG bottom strip + chip bottom pin row (overlap)
-  // 43 (top SVG) + 11 (top pins overlap top strip) + 100 (chip body) + 11
-  // (bot pins overlap bottom strip) + 43 (bottom SVG) = 208px (inside the
-  // .board's 6px rim padding).
-  padding: 43px 14px 43px;
-  gap: 12px;
+  // DESKTOP: chips are ABSOLUTELY positioned at viewBox-fractional x coords
+  // (left: CHIP_X/1100 * 100% from the TSX), so they share a single
+  // percent-of-rail-width coordinate space with the SVG strips. This is what
+  // makes traces visibly terminate at the chip pin tabs at every rail width.
+  // Locked at 208px (= banner 220 - board padding 12) so the relative parent
+  // has a known height for absolute children.
+  height: 208px;
 
   @media (max-width: 1080px) {
-    grid-template-columns: repeat(2, 1fr);
-    padding: 28px 18px 28px;
+    // MOBILE: SVG strips are hidden — drop back to CSS grid stacking so the
+    // chips can self-arrange without coordinate-sharing concerns.
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    height: auto;
+    // 39px = 28 baseline + 11px clearance so the unclipped chip pin tabs
+    // don't overshoot the rail into the .board's gold rim on mobile.
+    padding: 39px 18px 39px;
     gap: 22px;
   }
   @media (max-width: 560px) {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
@@ -705,33 +550,65 @@
 // content centred (N/S) inside as advertising. Pin1 dot top-left, body notch
 // top-center, silkscreen text centred. Illumination transforms whole chip.
 .field {
-  position: relative;
+  // DESKTOP: absolutely positioned at viewBox-fractional x coordinate. The
+  // TSX passes `--cx-pct: ${CHIP_X[i]/11}%` (= CHIP_X/1100*100) and
+  // `--cw-pct: ${240/11}%` (chip body width 240 viewBox units) so the chip's
+  // horizontal extent maps 1:1 with the SVG strips above and below.
+  position: absolute;
   z-index: 2;
-  padding: 14px 16px;
-  min-height: 100px;
+  top: 64px;
+  left: var(--cx-pct);
+  width: var(--cw-pct, 21.818%);
+  transform: translateX(-50%);
+  // v12.2: chip body slimmed from 100→80px (user gave permission to thin ICs
+  // so the SMT footprints in the SVG strips have meaningful vertical room).
+  // Sponsor text still legible at this height; gain redirected to strips.
+  height: 80px;
+  min-width: 0;
+  // Asymmetric padding: 32px left clears the 9px Pin1 dot at left:12px (dot
+  // ends x=21) and leaves a 11px gap before pLabel anchors at x=28 → text
+  // starts at x=32. Intentional DIP-package asymmetry, not a centering bug.
+  padding: 8px 14px 8px 32px;
   border-radius: 7px;
   display: flex;
   flex-direction: column;
+  align-items: stretch;
   justify-content: center;
-  gap: 4px;
+  gap: 0;
 
-  // IC body: dark plastic with subtle 45° highlight
+  // MOBILE: revert to in-flow grid cell — the .rail switches back to display:grid
+  // at this breakpoint and chips need to be relative-positioned children.
+  @media (max-width: 1080px) {
+    position: relative;
+    top: auto;
+    left: auto;
+    width: auto;
+    transform: none;
+  }
+
+  // IC body: dark epoxy plastic with a strong solder-mask-carve-out effect.
+  // The solid background BEHIND the chip uses a brighter tint than the PCB
+  // strips above/below — simulating the solder mask punched away to expose
+  // the chip footprint, giving text maximum contrast against the underlying
+  // copper + FR4 that the SVG strips paint.
   background:
-    linear-gradient(165deg, rgba(255, 255, 255, 0.04) 0%, transparent 30%),
-    linear-gradient(150deg, #1a3d2a 0%, #0d2517 55%, #08180e 100%);
+    linear-gradient(165deg, rgba(255, 255, 255, 0.06) 0%, transparent 28%),
+    linear-gradient(150deg, #1e4530 0%, #0f2c1b 50%, #091910 100%);
 
   box-shadow:
-    inset 0 0 0 1.5px color-mix(in srgb, var(--gold) 32%, transparent),
-    inset 0 0 14px rgba(0, 0, 0, 0.5),
-    0 4px 16px rgba(0, 0, 0, 0.4);
+    inset 0 0 0 1.5px color-mix(in srgb, var(--gold) 38%, transparent),
+    inset 0 0 18px rgba(0, 0, 0, 0.55),
+    0 4px 20px rgba(0, 0, 0, 0.45);
 
   transition: background 400ms ease, box-shadow 400ms ease;
 
-  // Pin1 indicator dot top-left
+  // Pin1 indicator dot — vertically aligned to the .pLabel baseline (both
+  // top:5 + 9px sizes share a center y, so the dot reads as a leading bullet
+  // for "Company"/"Contact"/"Phone"/"Email" rather than floating in the corner.
   &::before {
     content: '';
     position: absolute;
-    top: 12px;
+    top: 5px;
     left: 12px;
     width: 9px;
     height: 9px;
@@ -741,37 +618,23 @@
     z-index: 2;
     transition: background 320ms ease, box-shadow 320ms ease;
   }
-
-  // Body notch (orientation marker) top-center
-  &::after {
-    content: '';
-    position: absolute;
-    top: -1px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 22px;
-    height: 8px;
-    background: var(--board-1);
-    border-radius: 0 0 11px 11px;
-    border: 1px solid color-mix(in srgb, var(--gold) 32%, transparent);
-    border-top: none;
-    z-index: 2;
-    pointer-events: none;
-  }
 }
 
 // Pin rows — gold tabs sticking up out of the chip body. Top row receives
 // traces from the components above; bottom row sources traces to the
 // components below. Two .chipPins variants flank the chip body so the
 // silhouette reads as a proper DIP package (pins on opposing edges).
+// Pin rows span the chip body edge-to-edge (left:0 right:0). Each .chipPin is
+// absolutely positioned at the EXACT % of chip width that corresponds to its
+// SVG dx slot. Chip body width = 240vu (.field's --cw-pct). Pin at dx is at
+// (dx + 120) / 240 * 100% of chip width — which is also (CHIP_X+dx)/1100*100%
+// of rail width, the SAME formula the SVG component uses for its trace end.
+// Match guaranteed at every rail width.
 .chipPins {
   position: absolute;
-  left: 12px;
-  right: 12px;
+  left: 0;
+  right: 0;
   height: 11px;
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
   pointer-events: none;
   z-index: 3; // above SVG (z=1) and chip body (z=2) so pins read as "out of" the chip
 }
@@ -782,9 +645,10 @@
 
 .chipPinsBottom {
   bottom: -11px;
-  align-items: flex-end;
 
   .chipPin {
+    top: auto;
+    bottom: 0;
     background: linear-gradient(
       0deg,
       color-mix(in srgb, var(--gold) 92%, transparent) 0%,
@@ -796,7 +660,11 @@
 }
 
 .chipPin {
-  display: block;
+  position: absolute;
+  top: 0;
+  // left is provided via inline style from the TSX (per pin, per dx slot);
+  // translateX(-50%) centers the 5px-wide tab on that line.
+  transform: translateX(-50%);
   width: 5px;
   height: 11px;
   background: linear-gradient(
@@ -854,10 +722,6 @@
 
   .pinNo {
     color: var(--gold-bright);
-  }
-
-  .sub {
-    color: color-mix(in srgb, var(--cream) 70%, var(--gold-bright));
   }
 }
 
@@ -923,26 +787,31 @@
 
 // ─── Silkscreen text inside the chip ────────────────────────────────────────
 .pLabel {
+  // Lifted OUT of flex flow so .val becomes the sole flex child and the
+  // .field's justify-content:center vertically dead-centers it. pLabel band
+  // anchors top-right (left:28 clears Pin1 dot's right edge + 7px gap).
+  position: absolute;
+  top: 5px;
+  left: 28px;
+  right: 12px;
   display: inline-flex;
   align-items: center;
   gap: 7px;
   font-family: $font-mono;
-  font-size: 0.62rem;
+  font-size: 0.58rem;
   font-weight: 600;
   line-height: 1;
-  letter-spacing: 0.18em;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: color-mix(in srgb, var(--gold) 82%, var(--cream));
+  color: var(--cream);
+  // Crisp text-shadow lifts the label off the cluttered PCB underlay so the
+  // word reads cleanly even when component traces pass behind it.
+  text-shadow:
+    0 0 6px rgba(0, 0, 0, 0.55),
+    0 1px 0 rgba(0, 0, 0, 0.5);
   transition: color 320ms ease, text-shadow 320ms ease;
-}
-
-.dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--gold);
-  box-shadow: 0 0 8px color-mix(in srgb, var(--gold) 60%, transparent);
-  transition: background 320ms ease, box-shadow 320ms ease;
+  pointer-events: none;
+  z-index: 2;
 }
 
 .pinNo {
@@ -953,16 +822,23 @@
 }
 
 .val {
-  font-size: 1.35rem;
+  font-size: 1.1rem;
   font-weight: 600;
   font-family: $font-heading;
-  color: var(--cream);
+  color: #ffffff;
   line-height: 1.05;
+  text-align: left;
+  // Deeper text-shadow under .val (the largest, most-content-bearing element)
+  // because it competes directly with the densest PCB component zone.
+  text-shadow:
+    0 0 8px rgba(0, 0, 0, 0.65),
+    0 1px 0 rgba(0, 0, 0, 0.55);
   transition: color 320ms ease, text-shadow 320ms ease;
   @include truncate;
   min-width: 0;
-  flex: 1 1 auto;
-  margin-top: 0;
+  // flex:0 0 auto so .field's justify-content:center actually centers — with
+  // flex:1 the item stretches to fill the column and text top-aligns.
+  flex: 0 0 auto;
 
   a {
     color: var(--cream);
@@ -977,20 +853,17 @@
 
 .valMono {
   font-family: $font-mono;
-  font-size: 1.08rem;
+  font-size: 0.92rem;
 }
 
 .valEmpty {
   font-style: italic;
   color: var(--cream-mut);
   font-weight: 500;
-}
-
-// "Featured partner" / "Sales rep" / "Mon–Fri" / "Direct inbox" subtitle —
-// removed per the "Hero Sponsor Name" workflow recipe to free vertical room
-// for the larger val (1.35rem hero). Kept the class so JSX renders inertly.
-.sub {
-  display: none;
+  // Keep ellipsis-clip safety net so an oversized placeholder can't spill
+  // outside the chip (the parent .field no longer has overflow:hidden).
+  @include truncate;
+  min-width: 0;
 }
 
 // Row hosting val + CopyChip side-by-side on Phone/Email chips. Was a
@@ -1001,7 +874,9 @@
   align-items: center;
   gap: 8px;
   min-width: 0;
-  flex: 1 1 auto;
+  // flex:0 0 auto so the .field's justify-content:center actually centers
+  // this row vertically inside the 55px chip body (paired w/ .val above).
+  flex: 0 0 auto;
 
   .val {
     flex: 1 1 auto;
@@ -1040,19 +915,12 @@
 // statically via the same data-illuminated styles (no pulse/burst), so the
 // click-to-illuminate feedback is preserved.
 @media (prefers-reduced-motion: reduce) {
-  .plasma, .plasmaBlob, .crystal, .crystalHalo, .opampWave, .ledLens, .ledHalo, .spark, .dot, .chipPin {
+  .chipPin {
     animation: none !important;
     transition: none !important;
   }
-  [data-net-active='true'] .traces {
+  [data-net-active='true'] .pinDrop {
     stroke: var(--gold-bright);
-  }
-  [data-net-active='true'] .plasma {
-    transform: scaleY(1);
-    opacity: 0.9;
-  }
-  [data-net-active='true'] .ledLens {
-    fill: #fff2a8;
   }
   // Static "charged" look — skip the burst-flash + discharge keyframe.
   .field[data-illuminated='true'] {
