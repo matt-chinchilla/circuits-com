@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 from uuid import UUID
-
 from pydantic import BaseModel, ConfigDict
 
-from .part import PublicPartResponse
-from .sponsor import SponsorResponse
 from .supplier import SupplierResponse
+from .sponsor import SponsorResponse
+from .part import PublicPartResponse
 
 
 class SubcategoryResponse(BaseModel):
@@ -59,10 +58,7 @@ PopularPartsPage = PartsPage
 class CategoryDetailResponse(CategoryResponse):
     parent: ParentCategoryResponse | None = None
     suppliers: list[SupplierResponse]
-    # CSB v13 clean break: singular `sponsor` -> `top_sponsors`. Always
-    # present (empty list when none), length 0 or 1 today, with headroom
-    # for a future multi-sponsor banner.
-    top_sponsors: list[SponsorResponse] = []
+    sponsor: SponsorResponse | None
     parts: PartsPage = PartsPage()
     popular_parts: PartsPage = PartsPage()
     model_config = ConfigDict(from_attributes=True)

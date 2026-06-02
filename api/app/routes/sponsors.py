@@ -1,9 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-
 from app.db.session import get_db
-from app.models import Sponsor, Supplier
 from app.schemas import SponsorResponse
+from app.models import Sponsor, Supplier
 
 router = APIRouter(prefix="/api/sponsors", tags=["sponsors"])
 
@@ -21,20 +20,11 @@ def get_sponsor_by_keyword(keyword: str, db: Session = Depends(get_db)):
         description=sponsor.description,
         tier=sponsor.tier,
         website=supplier.website if supplier else None,
-        phone=sponsor.phone or (supplier.phone if supplier else None),
+        phone=supplier.phone if supplier else None,
         # SponsorResponse gained `email` + `contact_name` in commit fddba35
         # for the CategorySponsorBanner. The category route was updated;
         # this keyword route was missed — Pydantic silently defaulted them
         # to None for every keyword sponsor. Mirror category_service.
-        email=sponsor.email or (supplier.email if supplier else None),
-        contact_name=sponsor.contact_name or (supplier.contact_name if supplier else None),
-        # CSB v13 rep-contact block — None for legacy keyword sponsors until
-        # the admin form starts writing them; explicit pass-through keeps
-        # the response_model from silently dropping unannotated values.
-        role=sponsor.role,
-        hours=sponsor.hours,
-        division=sponsor.division,
-        partno=sponsor.partno,
-        lettermark=sponsor.lettermark,
-        blurb=sponsor.blurb,
+        email=supplier.email if supplier else None,
+        contact_name=supplier.contact_name if supplier else None,
     )

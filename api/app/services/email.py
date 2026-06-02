@@ -150,66 +150,6 @@ async def send_join_autoreply(form) -> None:
     await _smtp_send(msg)
 
 
-async def send_sponsor_rep_notification(sponsor_data: dict, payload: dict, request_id: str) -> None:
-    """Notify recipients that someone clicked "Talk to a Rep" on a sponsor banner.
-
-    Takes plain primitive dicts — NOT ORM instances. FastAPI's
-    `Depends(get_db)` finalizer can close the session before BackgroundTasks
-    fully execute on some Starlette versions; lazy-loading
-    `sponsor.supplier.name` from inside this function would raise
-    DetachedInstanceError which `_smtp_send`'s broad except would mask as a
-    silent "SMTP failed" with no email ever delivered. The route materializes
-    everything it needs before scheduling the task.
-
-    sponsor_data keys: company_name, contact_name, role, phone, email, hours, division
-    payload keys (mirror Message.payload JSON): name, email, note
-    """
-    requester_name = payload.get("name") or "(no name)"
-    requester_email = payload.get("email") or ""
-    note = payload.get("note") or "(no note)"
-
-    company_name = sponsor_data.get("company_name") or "(unknown sponsor)"
-    rep_name = sponsor_data.get("contact_name") or "(no rep name on file)"
-    rep_role = sponsor_data.get("role") or "(no role on file)"
-    rep_phone = sponsor_data.get("phone") or "(no phone on file)"
-    rep_email = sponsor_data.get("email") or "(no rep email on file)"
-    rep_hours = sponsor_data.get("hours") or "(no hours on file)"
-    division = sponsor_data.get("division") or "(no division on file)"
-
-    body = (
-        "New sponsor-rep request via circuits.com:\n"
-        "\n"
-        f"Request ID: {request_id}\n"
-        f"Sponsor:    {company_name}\n"
-        f"Division:   {division}\n"
-        "\n"
-        "Rep contact (forwarded from sponsor record):\n"
-        f"  Name:  {rep_name}\n"
-        f"  Role:  {rep_role}\n"
-        f"  Phone: {rep_phone}\n"
-        f"  Email: {rep_email}\n"
-        f"  Hours: {rep_hours}\n"
-        "\n"
-        "Requester:\n"
-        f"  Name:  {requester_name}\n"
-        f"  Email: {requester_email}\n"
-        "\n"
-        "Note:\n"
-        "---\n"
-        f"{note}\n"
-        "---\n"
-        "\n"
-        "Reply to this email to respond to the requester directly.\n"
-    )
-    subject_tail = f" ({sponsor_data['division']})" if sponsor_data.get("division") else ""
-    msg = _build_notification(
-        subject=f"[Sponsor Rep Request] {company_name}{subject_tail}",
-        reply_to=requester_email or settings.SMTP_FROM,
-        body=body,
-    )
-    await _smtp_send(msg)
-
-
 async def send_keyword_notification(form) -> None:
     """Notify recipients of a new keyword-sponsorship request.
 

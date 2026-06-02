@@ -50,17 +50,6 @@ def _serialize(sponsor: Sponsor) -> AdminSponsorResponse:
         end_date=sponsor.end_date,
         amount=sponsor.amount,
         status=sponsor.status,
-        # CSB v13 rep-contact block — forwarded explicitly because
-        # AdminSponsorResponse is hand-built (not from_attributes).
-        contact_name=sponsor.contact_name,
-        role=sponsor.role,
-        phone=sponsor.phone,
-        hours=sponsor.hours,
-        email=sponsor.email,
-        division=sponsor.division,
-        partno=sponsor.partno,
-        lettermark=sponsor.lettermark,
-        blurb=sponsor.blurb,
     )
 
 
@@ -158,15 +147,6 @@ def create_sponsor(
         end_date=body.end_date,
         amount=body.amount,
         status=body.status,
-        contact_name=body.contact_name,
-        role=body.role,
-        phone=body.phone,
-        hours=body.hours,
-        email=body.email,
-        division=body.division,
-        partno=body.partno,
-        lettermark=body.lettermark,
-        blurb=body.blurb,
     )
     db.add(sponsor)
     db.commit()

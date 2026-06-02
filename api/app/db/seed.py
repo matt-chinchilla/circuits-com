@@ -486,18 +486,6 @@ def get_or_create_sponsor(
     image_url: str | None = None,
     description: str | None = None,
     tier: str = "gold",
-    # CSB v13 rep-contact block — defaults None so existing callers stay
-    # untouched. Backfill of real values lives in the seed-update commit
-    # so this signature change can land before the data lands.
-    contact_name: str | None = None,
-    role: str | None = None,
-    phone: str | None = None,
-    hours: str | None = None,
-    email: str | None = None,
-    division: str | None = None,
-    partno: str | None = None,
-    lettermark: str | None = None,
-    blurb: str | None = None,
 ) -> Sponsor:
     query = db.query(Sponsor).filter(Sponsor.supplier_id == supplier.id)
     if category is not None:
@@ -513,15 +501,6 @@ def get_or_create_sponsor(
             image_url=image_url,
             description=description,
             tier=tier,
-            contact_name=contact_name,
-            role=role,
-            phone=phone,
-            hours=hours,
-            email=email,
-            division=division,
-            partno=partno,
-            lettermark=lettermark,
-            blurb=blurb,
         )
         db.add(obj)
         db.flush()
