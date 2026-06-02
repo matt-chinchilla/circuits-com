@@ -18,7 +18,9 @@ class Message(Base):
     __tablename__ = "messages"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    type = Column(String(20), nullable=False)  # 'contact'|'join'|'keyword'|'reply'
+    type = Column(
+        String(30), nullable=False
+    )  # 'contact'|'join'|'keyword'|'reply'|'sponsor_rep_request'
     status = Column(String(20), nullable=False, default="new")  # new|read|archived|responded
     seq = Column(Integer, unique=True, nullable=False, index=True)  # MSG-#### designator
     payload = Column(JSON, nullable=False)  # type-specific dict

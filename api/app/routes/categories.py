@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
+
 from app.db.session import get_db
-from app.schemas import CategoryResponse, CategoryDetailResponse
+from app.schemas import CategoryDetailResponse, CategoryResponse
 from app.services.category_service import get_all_categories, get_category_by_slug
 
 router = APIRouter(prefix="/api/categories", tags=["categories"])
@@ -24,9 +25,12 @@ def get_category(
     db: Session = Depends(get_db),
 ):
     result = get_category_by_slug(
-        db, slug,
-        popular_page=popular_page, popular_per_page=popular_per_page,
-        parts_page=parts_page, parts_per_page=parts_per_page,
+        db,
+        slug,
+        popular_page=popular_page,
+        popular_per_page=popular_per_page,
+        parts_page=parts_page,
+        parts_per_page=parts_per_page,
     )
     if not result:
         raise HTTPException(404, "Category not found")
@@ -42,7 +46,7 @@ def get_category(
         children=cat.children,
         parent=cat.parent,
         suppliers=result["suppliers"],
-        sponsor=result["sponsor"],
+        top_sponsors=result["top_sponsors"],
         parts=result["parts"],
         popular_parts=result["popular_parts"],
     )

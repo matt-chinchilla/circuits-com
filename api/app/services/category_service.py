@@ -275,6 +275,9 @@ def get_category_by_slug(
     # admin marking the current sponsor Expired (deliberately taking the
     # slot down) would still see it surface here. Paused sponsors are also
     # hidden — a deliberate hold should not appear on the public banner.
+    # CSB v13: newest non-Expired wins, returned as a LIST. Always length 0
+    # or 1 today; the multi-sponsor banner design uses the same shape so a
+    # future "top 3 sponsors" rollup needs zero schema churn.
     sponsor = (
         db.query(Sponsor)
         .filter(
@@ -284,20 +287,34 @@ def get_category_by_slug(
         .order_by(Sponsor.created_at.desc())
         .first()
     )
-    sponsor_data = None
+    top_sponsors: list[dict] = []
     if sponsor:
         sponsor_supplier = db.query(Supplier).filter(Supplier.id == sponsor.supplier_id).first()
-        sponsor_data = {
-            "id": sponsor.id,
-            "supplier_name": sponsor_supplier.name if sponsor_supplier else "",
-            "image_url": sponsor.image_url,
-            "description": sponsor.description,
-            "tier": sponsor.tier,
-            "website": sponsor_supplier.website if sponsor_supplier else None,
-            "phone": sponsor_supplier.phone if sponsor_supplier else None,
-            "email": sponsor_supplier.email if sponsor_supplier else None,
-            "contact_name": sponsor_supplier.contact_name if sponsor_supplier else None,
-        }
+        # Rep-contact block reads off the Sponsor row (NOT the Supplier) so
+        # one supplier can run different rep-coverage per category without
+        # cross-contaminating other listings. Falls back through to the
+        # Supplier-level contact when the per-sponsor field is null — keeps
+        # legacy/un-backfilled rows from blanking the banner.
+        top_sponsors.append(
+            {
+                "id": sponsor.id,
+                "supplier_name": sponsor_supplier.name if sponsor_supplier else "",
+                "image_url": sponsor.image_url,
+                "description": sponsor.description,
+                "tier": sponsor.tier,
+                "website": sponsor_supplier.website if sponsor_supplier else None,
+                "phone": sponsor.phone or (sponsor_supplier.phone if sponsor_supplier else None),
+                "email": sponsor.email or (sponsor_supplier.email if sponsor_supplier else None),
+                "contact_name": sponsor.contact_name
+                or (sponsor_supplier.contact_name if sponsor_supplier else None),
+                "role": sponsor.role,
+                "hours": sponsor.hours,
+                "division": sponsor.division,
+                "partno": sponsor.partno,
+                "lettermark": sponsor.lettermark,
+                "blurb": sponsor.blurb,
+            }
+        )
 
     icon_val = getattr(category, "icon", None)
     icon_str = str(icon_val) if icon_val is not None else None
@@ -328,7 +345,7 @@ def get_category_by_slug(
     return {
         "category": category,
         "suppliers": suppliers,
-        "sponsor": sponsor_data,
+        "top_sponsors": top_sponsors,
         "parts": parts,
         "popular_parts": popular_parts,
     }

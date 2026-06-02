@@ -37,7 +37,7 @@ def test_list_categories_includes_featured_supplier_name(client, seeded_db):
 
 
 def test_get_category_by_slug(client, seeded_db):
-    """GET /api/categories/clock-and-timing returns detail with suppliers and sponsor."""
+    """GET /api/categories/clock-and-timing returns detail with suppliers and top_sponsors."""
     response = client.get("/api/categories/clock-and-timing")
     assert response.status_code == 200
     data = response.json()
@@ -51,12 +51,16 @@ def test_get_category_by_slug(client, seeded_db):
     assert "Avnet" in supplier_names
     assert "Kennedy Electronics" in supplier_names
 
-    # Should have sponsor
-    assert "sponsor" in data
-    assert data["sponsor"] is not None
-    assert data["sponsor"]["supplier_name"] == "Kennedy Electronics"
-    assert data["sponsor"]["tier"] == "gold"
-    assert data["sponsor"]["image_url"] == "/test.jpg"
+    # CSB v13 clean break: sponsor → top_sponsors: list (length 0 or 1 today).
+    # Singular `sponsor` key MUST be absent.
+    assert "sponsor" not in data
+    assert "top_sponsors" in data
+    assert isinstance(data["top_sponsors"], list)
+    assert len(data["top_sponsors"]) == 1
+    sponsor = data["top_sponsors"][0]
+    assert sponsor["supplier_name"] == "Kennedy Electronics"
+    assert sponsor["tier"] == "gold"
+    assert sponsor["image_url"] == "/test.jpg"
 
 
 def test_get_category_includes_parts(client, seeded_db):

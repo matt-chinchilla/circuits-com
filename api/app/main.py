@@ -16,6 +16,7 @@ from app.routes import (
     parts,
     search,
     sitemap,
+    sponsor_rep_requests,
     sponsors,
     suppliers,
 )
@@ -36,6 +37,7 @@ app.include_router(suppliers.router)
 app.include_router(search.router)
 app.include_router(forms.router)
 app.include_router(sponsors.router)
+app.include_router(sponsor_rep_requests.router)
 app.include_router(auth.router)
 app.include_router(dashboard.router)
 app.include_router(parts.router)
