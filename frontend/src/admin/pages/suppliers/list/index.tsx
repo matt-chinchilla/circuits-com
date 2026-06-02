@@ -4,6 +4,7 @@ import { Plus, Search, Upload } from 'lucide-react';
 import Breadcrumbs from '@admin/components/Breadcrumbs';
 import { adminApi } from '@admin/services/adminApi';
 import type { AdminSupplier } from '@admin/types/admin';
+import { lettermark } from '@shared/utils/lettermark';
 import styles from './SuppliersPage.module.scss';
 
 type Tier = 'featured' | 'platinum' | 'gold' | 'silver';
@@ -29,10 +30,6 @@ function deriveTier(supplier: AdminSupplier): Tier {
   if (n >= 100) return 'platinum';
   if (n >= 25) return 'gold';
   return 'silver';
-}
-
-function lettermark(name: string): string {
-  return (name?.trim()?.[0] ?? '?').toUpperCase();
 }
 
 export default function SuppliersPage() {

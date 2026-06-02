@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Check, Trash2 } from 'lucide-react';
 import Breadcrumbs from '@admin/components/Breadcrumbs';
 import { adminApi } from '@admin/services/adminApi';
+import { prependScheme } from '@shared/utils/url';
 import styles from './SupplierFormPage.module.scss';
 
 // Single-page form (Identity + Contact + Description panels) — port of
@@ -36,26 +37,13 @@ function emptyForm(): FormData {
 
 // ─── Website + phone input helpers ──────────────────────────────────────────
 // Website: the form shows `https://` as a fixed prefix adornment so the user
-// types just `example.com`. Two normalizers handle the round-trip:
-//   - stripScheme()  — strip on hydrate so an existing https://acme.com row
-//                      displays as "acme.com" inside the prefixed input
-//   - prependScheme()— prepend on submit so the API always stores with scheme
-// Bare and prefixed forms are both accepted by the backend (regression test
-// test_create_supplier_accepts_bare_domain_website) so an existing legacy
-// row without scheme doesn't 422 on edit.
+// types just `example.com`. stripScheme strips on hydrate; prependScheme
+// (shared in @shared/utils/url) prepends on submit so the API always stores
+// with scheme. Bare and prefixed forms are both accepted by the backend
+// (test_create_supplier_accepts_bare_domain_website) so legacy rows without
+// scheme don't 422 on edit.
 function stripScheme(s: string): string {
   return s.replace(/^https?:\/\//i, '');
-}
-
-function prependScheme(s: string): string {
-  const trimmed = s.trim();
-  if (!trimmed) return '';
-  // Treat anything already carrying a scheme (RFC 3986 `scheme:`) or a
-  // protocol-relative `//` prefix as already-schemed — otherwise pasting
-  // `mailto:sales@…`, `ftp://files…`, or `//acme.com` would get a literal
-  // `https://` prepended (e.g. `https:////acme.com`, broken on click).
-  if (/^[a-z][a-z0-9+.-]*:/i.test(trimmed) || trimmed.startsWith('//')) return trimmed;
-  return `https://${trimmed}`;
 }
 
 // Phone: shows live as `(123) 456-7890` while the user types. Strips the

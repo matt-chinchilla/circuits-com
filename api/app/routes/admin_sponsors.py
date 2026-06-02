@@ -79,34 +79,61 @@ def _validate_xor(category_id: uuid.UUID | None, keyword: str | None) -> None:
         )
 
 
-def _validate_tier_placement(tier: str | None, category_id: uuid.UUID | None) -> None:
-    """Category placement is reserved for the Featured tier.
+def _validate_tier_placement(
+    db: Session, tier: str | None, category_id: uuid.UUID | None
+) -> None:
+    """Enforce the tier ↔ category-level placement rule.
 
-    Product rule (2026-06-02): Silver / Gold / Platinum sponsors are
-    keyword-only — they buy presence on a keyword's sponsor page.
-    Featured is the category-level partnership tier and is the only
-    one that can attach to a category (lands on PreferredPartnersBanner).
+    Product rule (2026-06-02, softened):
 
-    Returns 422 on:
-      - Silver/Gold/Platinum + category_id (the bug class — must use keyword)
-      - Featured + keyword     (Featured is category-only)
+      - Featured tier may ONLY attach to a top-level category
+        (``parent_id IS NULL``). Featured + child OR Featured + keyword
+        → 422. Featured lands on the PreferredPartnersBanner, which is
+        a top-level surface only.
+
+      - Silver / Gold / Platinum may attach to:
+          * a CHILD category (the "Subcategory Sponsor" single-slot
+            surface), OR
+          * a keyword (multi-sponsor per keyword landing page).
+        Non-Featured + top-level category → 422 (top-level is the
+        Featured tier's promise).
 
     The admin form greys out the wrong combinations; this guard catches
     a hand-crafted POST that bypasses the UI.
+
+    Resolves the Category row (404 if missing) so we can check
+    ``parent_id``. Done at the validator level rather than in the route
+    body so POST and PATCH share one lookup path.
     """
     has_category = category_id is not None
-    if _is_featured(tier):
-        if not has_category:
-            raise HTTPException(
-                status_code=422,
-                detail="Featured tier is category-only — keyword placement not allowed.",
-            )
-    else:
-        if has_category:
-            raise HTTPException(
-                status_code=422,
-                detail="Category placement requires Featured tier.",
-            )
+    featured = _is_featured(tier)
+
+    if featured and not has_category:
+        raise HTTPException(
+            status_code=422,
+            detail="Featured tier is category-only — keyword placement not allowed.",
+        )
+
+    if not has_category:
+        # Non-Featured + keyword is fine; nothing else to check.
+        return
+
+    cat = db.query(Category).filter(Category.id == category_id).first()
+    if cat is None:
+        raise HTTPException(status_code=404, detail="Category not found")
+
+    is_top_level = cat.parent_id is None
+
+    if featured and not is_top_level:
+        raise HTTPException(
+            status_code=422,
+            detail="Featured tier must attach to a top-level category.",
+        )
+    if not featured and is_top_level:
+        raise HTTPException(
+            status_code=422,
+            detail="Top-level category placement requires the Featured tier.",
+        )
 
 
 def _upsert_category_supplier_featured(
@@ -221,21 +248,23 @@ def create_sponsor(
     current_user: User = Depends(get_current_user),
 ):
     _validate_xor(body.category_id, body.keyword)
-    _validate_tier_placement(body.tier, body.category_id)
+    _validate_tier_placement(db, body.tier, body.category_id)
 
     supplier = db.query(Supplier).filter(Supplier.id == body.supplier_id).first()
     if not supplier:
         raise HTTPException(status_code=404, detail="Supplier not found")
 
     # Tier-gated supersede: Featured allows MULTIPLE concurrent sponsors
-    # per category (banner shows them all). Lower tiers (keyword-only
-    # post 2026-06-02) never reach this branch since they can't carry
-    # category_id, but the explicit gate keeps the intent legible.
+    # per top-level category (banner shows them all). Non-Featured + child
+    # is the single Subcategory Sponsor slot, so supersede peers there.
+    # Non-Featured + keyword is multi-sponsor; no supersede.
     if body.category_id is not None and not _is_featured(body.tier):
         _supersede_existing_for_category(db, body.category_id)
 
-    # Featured + category → side-effect onto CategorySupplier so the
-    # PreferredPartnersBanner picks up the new partner immediately.
+    # Featured + top-level category → side-effect onto CategorySupplier
+    # so the PreferredPartnersBanner picks up the new partner immediately.
+    # (By contract, Featured can ONLY be top-level — validator above
+    # rejects child/keyword for Featured.)
     if _is_featured(body.tier) and body.category_id is not None:
         _upsert_category_supplier_featured(db, body.supplier_id, body.category_id)
 
@@ -283,11 +312,13 @@ def update_sponsor(
     if "category_id" in update_data or "keyword" in update_data:
         _validate_xor(new_category_id, new_keyword)
     if "category_id" in update_data or "tier" in update_data:
-        _validate_tier_placement(new_tier, new_category_id)
+        _validate_tier_placement(db, new_tier, new_category_id)
 
-    # If this PATCH re-targets a non-Featured sponsor to a new category,
-    # supersede whatever's currently sitting on that slot. Featured peers
-    # coexist (banner shows them all), so skip supersede for that tier.
+    # If this PATCH re-targets a non-Featured sponsor to a new category
+    # (necessarily a child category — top-level + non-Featured was
+    # rejected above), supersede whatever's currently sitting on that
+    # Subcategory Sponsor slot. Featured peers coexist on top-level
+    # categories (banner shows them all), so skip supersede there.
     if (
         "category_id" in update_data
         and new_category_id is not None
@@ -296,8 +327,8 @@ def update_sponsor(
     ):
         _supersede_existing_for_category(db, new_category_id, exclude_id=sponsor.id)
 
-    # Featured + category (newly or already): mirror the POST side-effect
-    # so the banner reflects the latest state.
+    # Featured + top-level category (newly or already): mirror the POST
+    # side-effect so the banner reflects the latest state.
     if _is_featured(new_tier) and new_category_id is not None:
         _upsert_category_supplier_featured(db, sponsor.supplier_id, new_category_id)
 

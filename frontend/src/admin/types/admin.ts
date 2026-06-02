@@ -130,6 +130,14 @@ export interface BatchImportResult {
   errors: Array<{ row: number; error: string }>;
 }
 
+// A Featured supplier on a category — id + name. The id lets the admin
+// "Unfeature" button target the exact CategorySupplier row (names alone
+// collide: Supplier.name has no unique constraint).
+export interface FeaturedSupplier {
+  id: string;
+  name: string;
+}
+
 // Categories (from public API)
 export interface AdminCategory {
   id: string;
@@ -138,6 +146,10 @@ export interface AdminCategory {
   icon: string;
   parts_count: number;
   featured_supplier_name?: string | null;
+  // All Featured CategorySuppliers for this category, ordered by rank ASC
+  // (lowest rank first). 2026-06-02: the admin tree renders the full list;
+  // `featured_supplier_name` is kept for back-compat and mirrors [0].name.
+  featured_suppliers?: FeaturedSupplier[];
   children: Array<{
     id: string;
     name: string;
@@ -145,6 +157,7 @@ export interface AdminCategory {
     icon: string;
     parts_count: number;
     featured_supplier_name?: string | null;
+    featured_suppliers?: FeaturedSupplier[];
   }>;
 }
 

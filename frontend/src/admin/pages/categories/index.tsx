@@ -1,9 +1,9 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { Search, ChevronRight, List, Grid as GridIcon, Plus } from 'lucide-react';
 import Breadcrumbs from '@admin/components/Breadcrumbs';
 import { adminApi } from '@admin/services/adminApi';
-import type { AdminCategory } from '@admin/types/admin';
+import type { AdminCategory, FeaturedSupplier } from '@admin/types/admin';
 import Icon from '@shared/components/Icon';
 import styles from './CategoriesPage.module.scss';
 
@@ -15,12 +15,38 @@ interface FilteredCategory extends AdminCategory {
   _forceOpen?: boolean;
 }
 
+// Defensive: prefer the {id, name}[] array, fall back to the legacy single
+// name field if the API ships the array later than this code. The fallback
+// entry has no id (id: null) — the Unfeature button stays disabled for it
+// since we can't safely target a row without the supplier id.
+function resolveFeatured(c: {
+  featured_suppliers?: FeaturedSupplier[] | null;
+  featured_supplier_name?: string | null;
+}): Array<{ id: string | null; name: string }> {
+  if (c.featured_suppliers && c.featured_suppliers.length > 0) {
+    return c.featured_suppliers;
+  }
+  if (c.featured_supplier_name) return [{ id: null, name: c.featured_supplier_name }];
+  return [];
+}
+
 export default function CategoriesPage() {
   const [categories, setCategories] = useState<AdminCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [query, setQuery] = useState('');
   const [view, setView] = useState<ViewMode>('tree');
+  const [toast, setToast] = useState<string | null>(null);
+  const [unfeaturing, setUnfeaturing] = useState<string | null>(null);
+
+  const refetchCategories = useCallback(() => {
+    return adminApi
+      .getCategories()
+      .then((cats) => {
+        setCategories(cats);
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     adminApi
@@ -33,6 +59,33 @@ export default function CategoriesPage() {
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
+
+  // Auto-dismiss toast (matches SponsorFormPage pattern)
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 2400);
+    return () => clearTimeout(t);
+  }, [toast]);
+
+  // Unfeature targets the exact CategorySupplier row by supplier id — the
+  // id rides on each featured_suppliers entry, so there's no name→id lookup
+  // (and no same-name collision). Keyed by `id@slug` for the busy spinner.
+  const handleUnfeature = useCallback(
+    async (supplierId: string, supplierName: string, categorySlug: string) => {
+      const key = `${supplierId}@${categorySlug}`;
+      setUnfeaturing(key);
+      try {
+        await adminApi.unfeatureSupplierInCategory(supplierId, categorySlug);
+        await refetchCategories();
+        setToast(`Unfeatured ${supplierName}`);
+      } catch {
+        setToast(`Failed to unfeature ${supplierName}`);
+      } finally {
+        setUnfeaturing(null);
+      }
+    },
+    [refetchCategories],
+  );
 
   function toggle(id: string) {
     setExpanded((prev) => {
@@ -220,13 +273,45 @@ export default function CategoriesPage() {
                       ))}
                     </div>
                   )}
-                  {isOpen && c.featured_supplier_name && (
-                    <div className={styles.treeFeatured}>
-                      <span className={styles.featuredStar}>&#9733;</span>
-                      <span>Featured supplier:</span>
-                      <strong>{c.featured_supplier_name}</strong>
-                    </div>
-                  )}
+                  {isOpen && (() => {
+                    const featured = resolveFeatured(c);
+                    if (featured.length === 0) return null;
+                    return (
+                      <div className={styles.treeFeatured}>
+                        <div className={styles.treeFeaturedHeader}>
+                          <span className={styles.featuredStar}>&#9733;</span>
+                          <span>Featured suppliers</span>
+                        </div>
+                        {featured.map((sup) => {
+                          const busy = !!sup.id && unfeaturing === `${sup.id}@${c.slug}`;
+                          return (
+                            <div
+                              key={`${c.id}-${sup.id ?? sup.name}`}
+                              className={styles.treeFeaturedRow}
+                            >
+                              <span className={styles.featuredStar}>&#9733;</span>
+                              <span className={styles.treeFeaturedName}>{sup.name}</span>
+                              <button
+                                type="button"
+                                className={styles.unfeatureBtn}
+                                onClick={() =>
+                                  sup.id && handleUnfeature(sup.id, sup.name, c.slug)
+                                }
+                                disabled={busy || !sup.id}
+                                title={
+                                  sup.id
+                                    ? `Remove ${sup.name} from Featured on ${c.name}`
+                                    : 'Supplier id unavailable'
+                                }
+                              >
+                                {busy ? 'Unfeaturing…' : 'Unfeature'}
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
                 </article>
               );
             })}
@@ -252,16 +337,22 @@ export default function CategoriesPage() {
                   <span className={styles.dotSep}>&middot;</span>
                   <span className={styles.mono}>{c.children?.length || 0}</span> subs
                 </div>
-                {c.featured_supplier_name && (
-                  <div className={styles.catFeatured}>
-                    &#9733; Featured: {c.featured_supplier_name}
-                  </div>
-                )}
+                {(() => {
+                  const featured = resolveFeatured(c);
+                  if (featured.length === 0) return null;
+                  return (
+                    <div className={styles.catFeatured}>
+                      &#9733; Featured: {featured.map((s) => s.name).join(', ')}
+                    </div>
+                  );
+                })()}
               </div>
             );
           })}
         </div>
       )}
+
+      {toast && <div className={styles.toast} role="status">{toast}</div>}
     </div>
   );
 }

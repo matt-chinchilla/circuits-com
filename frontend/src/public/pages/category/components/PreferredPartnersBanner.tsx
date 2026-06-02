@@ -17,6 +17,8 @@ import type { Supplier } from '@public/types/supplier';
 import { useEntrance } from '@public/hooks/useEntrance';
 import CircuitTraces from '@public/components/widgets/CircuitTraces';
 import CopyAffordance from '@public/components/CopyAffordance';
+import { prependScheme } from '@shared/utils/url';
+import { lettermark } from '@shared/utils/lettermark';
 import styles from './PreferredPartnersBanner.module.scss';
 
 interface PreferredPartnersBannerProps {
@@ -25,23 +27,6 @@ interface PreferredPartnersBannerProps {
 }
 
 const NET_ENERGIZE_MS = 1500;
-
-function lettermark(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return 'SP';
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[1][0]).toUpperCase();
-}
-
-// RFC 3986–aware: prepend https:// unless already-schemed or protocol-relative.
-// Mirrors admin/pages/suppliers/form.prependScheme — kept local for now; promote
-// to @shared/utils/url.ts once a 3rd consumer needs it (parts form is the next).
-function prependScheme(s: string): string {
-  const trimmed = s.trim();
-  if (!trimmed) return '';
-  if (/^[a-z][a-z0-9+.-]*:/i.test(trimmed) || trimmed.startsWith('//')) return trimmed;
-  return `https://${trimmed}`;
-}
 
 function displayHostname(url: string): string {
   try {

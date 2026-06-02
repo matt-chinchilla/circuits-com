@@ -29,6 +29,7 @@ n8n-data/
 # Testing
 /coverage
 *.db
+*.db-journal
 .hypothesis/
 # Chrome DevTools performance traces — can be regenerated, too large to commit
 tests/visual/perf-trace-*.json

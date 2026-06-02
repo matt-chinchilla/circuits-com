@@ -1,11 +1,26 @@
 from __future__ import annotations
 
 from uuid import UUID
+
 from pydantic import BaseModel, ConfigDict
 
-from .supplier import SupplierResponse
-from .sponsor import SponsorResponse
 from .part import PublicPartResponse
+from .sponsor import SponsorResponse
+from .supplier import SupplierResponse
+
+
+class FeaturedSupplier(BaseModel):
+    """A Featured supplier on a category (id + name).
+
+    Carries the supplier id alongside the name so the admin categories tree's
+    "Unfeature" button can target the exact CategorySupplier row. Names alone
+    are ambiguous — Supplier.name has no unique constraint, so two distinct
+    suppliers can share a name and collide in a name-keyed lookup.
+    """
+
+    id: UUID
+    name: str
+    model_config = ConfigDict(from_attributes=True)
 
 
 class SubcategoryResponse(BaseModel):
@@ -15,6 +30,11 @@ class SubcategoryResponse(BaseModel):
     icon: str
     parts_count: int = 0
     featured_supplier_name: str | None = None
+    # All Featured CategorySuppliers for this category, ordered by rank ASC
+    # (lowest rank = highest priority). 2026-06-02: a category may have many
+    # Featured suppliers; `featured_supplier_name` is kept for back-compat
+    # and mirrors `featured_suppliers[0].name`.
+    featured_suppliers: list[FeaturedSupplier] = []
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -27,6 +47,7 @@ class CategoryResponse(BaseModel):
     parts_count: int = 0
     children: list[SubcategoryResponse]
     featured_supplier_name: str | None = None
+    featured_suppliers: list[FeaturedSupplier] = []
     model_config = ConfigDict(from_attributes=True)
 
 

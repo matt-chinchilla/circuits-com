@@ -3,6 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Edit, Trash2, ExternalLink, Check } from 'lucide-react';
 import { adminApi } from '@admin/services/adminApi';
 import Icon from '@shared/components/Icon';
+import { lettermark } from '@shared/utils/lettermark';
 import type { PartDetail } from '@admin/types/admin';
 import styles from './PartDetailPage.module.scss';
 
@@ -22,15 +23,6 @@ function stockClass(qty: number): string {
   if (qty >= 100) return styles.stockGood;
   if (qty > 0) return styles.stockLow;
   return styles.stockOut;
-}
-
-// ─── Supplier lettermark (initials) ────────────────────────────────────────
-
-function lettermark(name: string | null | undefined): string {
-  if (!name) return '?';
-  const parts = name.trim().split(/\s+/);
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[1][0]).toUpperCase();
 }
 
 export default function PartDetailPage() {

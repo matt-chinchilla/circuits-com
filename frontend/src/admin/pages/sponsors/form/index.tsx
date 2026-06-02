@@ -15,7 +15,20 @@ import type {
   SponsorTier,
   SponsorStatus,
 } from '@admin/types/admin';
+import Icon from '@shared/components/Icon';
 import styles from './SponsorFormPage.module.scss';
+
+// Tier visual palette — Featured renders as a "shiny" royal-purple gradient,
+// the matte tiers (Platinum/Gold/Silver) get flat fills. Reused for both
+// the select trigger CSS data-attribute and the inline-styled <option>
+// rows so the open dropdown reflects the same colors in Chromium/Firefox
+// (Safari ignores option backgrounds — accepted).
+const TIER_OPTION_STYLE: Record<SponsorTier, { background: string; color: string }> = {
+  Featured: { background: '#6b46c1', color: '#ffffff' },
+  Platinum: { background: '#cbd5e1', color: '#0f172a' },
+  Gold: { background: '#d4a017', color: '#1a1505' },
+  Silver: { background: '#94a3b8', color: '#0f172a' },
+};
 
 // Phase A6 — Sponsor New/Edit form, ported from
 // design-import/circuits-com-design-system/project/ui_kits/admin/pages.jsx
@@ -244,13 +257,15 @@ export default function SponsorFormPage() {
     setPlacement(p);
     update('category_id', '');
     update('keyword', '');
-    // Category placements require the Featured tier (2026-06-02 rule);
-    // auto-bump from Gold→Featured so the user doesn't have to. The
-    // reverse direction (Featured→category cleared) doesn't auto-downgrade
-    // — we keep the user's chosen tier since Featured + keyword is a 422
-    // anyway, which the tier-select onChange handles.
-    if ((p === 'top-category' || p === 'subcategory') && form.tier !== 'Featured') {
+    // Product rule (2026-06-02 revised): Featured is reserved for the
+    // top-level Category placement (Preferred Partners banner). Silver /
+    // Gold / Platinum apply to subcategory or keyword. Auto-correct the
+    // tier in both directions so the form stays in a legal state without
+    // the user having to round-trip through the tier select.
+    if (p === 'top-category' && form.tier !== 'Featured') {
       update('tier', 'Featured');
+    } else if ((p === 'subcategory' || p === 'keyword') && form.tier === 'Featured') {
+      update('tier', 'Gold');
     }
     setErrors((prev) => {
       const next = { ...prev };
@@ -308,7 +323,7 @@ export default function SponsorFormPage() {
     };
   }
 
-  async function handleSubmit(e?: React.FormEvent) {
+  async function handleSubmit(e?: React.FormEvent<HTMLFormElement>) {
     e?.preventDefault();
     if (!validate()) return;
     setSaving(true);
@@ -329,6 +344,26 @@ export default function SponsorFormPage() {
     if (!id) return;
     setShowDeleteConfirm(false);
     try {
+      // Featured sponsors attach to a top-level category and side-effect-
+      // feature the supplier on CategorySupplier (see admin_sponsors.py
+      // `_upsert_category_supplier_featured`). Deleting the Sponsor row
+      // alone would leave the supplier visible on the Preferred Partners
+      // banner. Mirror the side-effect on the way out: unfeature first,
+      // then delete. Best-effort — a failure here shouldn't block the
+      // user's primary intent (sponsor delete).
+      if (form.tier === 'Featured' && form.category_id) {
+        const cat = categories.find((c) => c.id === form.category_id);
+        if (cat && form.supplier_id) {
+          try {
+            await adminApi.unfeatureSupplierInCategory(form.supplier_id, cat.slug);
+          } catch (cleanupErr) {
+            console.warn(
+              '[SponsorFormPage] unfeature cleanup failed (continuing delete)',
+              cleanupErr,
+            );
+          }
+        }
+      }
       await deleteSponsor(id);
       setToast('Sponsorship deleted');
       setTimeout(() => navigate('/admin/sponsors'), 500);
@@ -409,7 +444,7 @@ export default function SponsorFormPage() {
               <label className={styles.fieldLabel} htmlFor="tier">
                 Tier <span className={styles.fieldReq}>*</span>
               </label>
-              <div className={styles.selectWrap}>
+              <div className={styles.selectWrap} data-tier={form.tier}>
                 <select
                   id="tier"
                   className={styles.select}
@@ -417,18 +452,20 @@ export default function SponsorFormPage() {
                   onChange={(e) => {
                     const next = e.target.value as SponsorTier;
                     update('tier', next);
-                    // Product rule (2026-06-02): only Featured sponsors
-                    // can attach to a category. Switching away from
-                    // Featured while a category placement is selected
-                    // would 422 on save — auto-flip to keyword so the
-                    // form stays in a legal state.
-                    if (next !== 'Featured' && placement !== 'keyword') {
-                      choosePlacement('keyword');
+                    // Product rule (2026-06-02 revised): Featured is the
+                    // only tier that can attach to a top-level category;
+                    // Silver/Gold/Platinum are subcategory- or keyword-
+                    // scoped. Auto-flip placement so the form stays in a
+                    // legal state without forcing a second click.
+                    if (next === 'Featured' && placement !== 'top-category') {
+                      choosePlacement('top-category');
+                    } else if (next !== 'Featured' && placement === 'top-category') {
+                      choosePlacement('subcategory');
                     }
                   }}
                 >
                   {TIERS.map((t) => (
-                    <option key={t} value={t}>
+                    <option key={t} value={t} style={TIER_OPTION_STYLE[t]}>
                       {t}
                     </option>
                   ))}
@@ -447,9 +484,9 @@ export default function SponsorFormPage() {
                   aria-checked={placement === 'top-category'}
                   disabled={form.tier !== 'Featured'}
                   aria-disabled={form.tier !== 'Featured'}
-                  title={form.tier !== 'Featured' ? 'Category placement requires the Featured tier' : undefined}
+                  title={form.tier !== 'Featured' ? 'Top-level Category placement requires the Featured tier' : undefined}
                 >
-                  Category sponsor
+                  Category Sponsor
                 </button>
                 <button
                   type="button"
@@ -457,11 +494,11 @@ export default function SponsorFormPage() {
                   onClick={() => choosePlacement('subcategory')}
                   role="radio"
                   aria-checked={placement === 'subcategory'}
-                  disabled={form.tier !== 'Featured'}
-                  aria-disabled={form.tier !== 'Featured'}
-                  title={form.tier !== 'Featured' ? 'Category placement requires the Featured tier' : undefined}
+                  disabled={form.tier === 'Featured'}
+                  aria-disabled={form.tier === 'Featured'}
+                  title={form.tier === 'Featured' ? 'Featured tier is reserved for top-level Category placement' : undefined}
                 >
-                  Subcategory sponsor
+                  Subcategory Sponsor
                 </button>
                 <button
                   type="button"
@@ -469,15 +506,17 @@ export default function SponsorFormPage() {
                   onClick={() => choosePlacement('keyword')}
                   role="radio"
                   aria-checked={placement === 'keyword'}
+                  disabled={form.tier === 'Featured'}
+                  aria-disabled={form.tier === 'Featured'}
+                  title={form.tier === 'Featured' ? 'Featured tier is reserved for top-level Category placement' : undefined}
                 >
-                  Keyword sponsor
+                  Keyword Sponsor
                 </button>
               </div>
               <p className={styles.fieldHint}>
-                <strong>Featured</strong> is the only tier that can attach to a
-                category — it adds the supplier to the Preferred Partners banner
-                and lets multiple Featured sponsors coexist per category.
-                Silver / Gold / Platinum are keyword-only.
+                <strong>Featured</strong> is for top-level Category placement
+                (Preferred Partners banner). Silver / Gold / Platinum apply to
+                subcategory or keyword placements.
               </p>
             </div>
 
@@ -486,19 +525,13 @@ export default function SponsorFormPage() {
                 <label className={styles.fieldLabel} htmlFor="category_id">
                   Top-level category <span className={styles.fieldReq}>*</span>
                 </label>
-                <div className={styles.selectWrap}>
-                  <select
-                    id="category_id"
-                    className={styles.select}
-                    value={form.category_id}
-                    onChange={(e) => update('category_id', e.target.value)}
-                  >
-                    <option value="">Select top-level category&hellip;</option>
-                    {topCategoryOptions.map((c) => (
-                      <option key={c.id} value={c.id}>{c.label}</option>
-                    ))}
-                  </select>
-                </div>
+                <IconSelect
+                  id="category_id"
+                  value={form.category_id}
+                  options={topCategoryOptions}
+                  onChange={(v) => update('category_id', v)}
+                  placeholder="Select top-level category…"
+                />
                 <p className={styles.fieldHint}>
                   Adds the supplier to the Preferred Partners banner on this
                   category. Multiple Featured sponsors can coexist — they all
@@ -513,19 +546,13 @@ export default function SponsorFormPage() {
                 <label className={styles.fieldLabel} htmlFor="category_id">
                   Subcategory <span className={styles.fieldReq}>*</span>
                 </label>
-                <div className={styles.selectWrap}>
-                  <select
-                    id="category_id"
-                    className={styles.select}
-                    value={form.category_id}
-                    onChange={(e) => update('category_id', e.target.value)}
-                  >
-                    <option value="">Select subcategory&hellip;</option>
-                    {subcategoryOptions.map((c) => (
-                      <option key={c.id} value={c.id}>{c.label}</option>
-                    ))}
-                  </select>
-                </div>
+                <IconSelect
+                  id="category_id"
+                  value={form.category_id}
+                  options={subcategoryOptions}
+                  onChange={(v) => update('category_id', v)}
+                  placeholder="Select subcategory…"
+                />
                 <p className={styles.fieldHint}>
                   Shown as the PCB-flashlight sidebar card on the chosen
                   child page only.
@@ -729,6 +756,185 @@ export default function SponsorFormPage() {
         <div className={styles.toast}>
           <Check size={16} strokeWidth={3} />
           {toast}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── IconSelect ─────────────────────────────────────────────────────────────
+// Custom listbox replacement for the top-level + subcategory `<select>` —
+// native `<select>` strips child markup, so the Phosphor `<Icon>` glyph
+// can only be rendered in a fully custom popover. Kept inline in this file
+// per the brief (the form is the only consumer).
+//
+// Behavior:
+//   • Outside-click + Esc closes the popover.
+//   • ArrowUp/ArrowDown moves the active row; Enter/Space selects.
+//   • Trigger button height/border matches `.select` so the form rhythm
+//     stays uniform across native and custom selects.
+//   • Keyboard nav guard mirrors PreferredPartnersBanner's chip pattern:
+//     gate row-onKeyDown on `e.target === e.currentTarget` so inner
+//     interactive descendants (none today, but defensive) keep their own
+//     keyboard handling.
+
+interface IconSelectOption {
+  id: string;
+  label: string;
+  name: string;
+  icon: string | null;
+}
+
+interface IconSelectProps {
+  id?: string;
+  value: string;
+  options: IconSelectOption[];
+  onChange: (value: string) => void;
+  placeholder?: string;
+}
+
+function IconSelect({ id, value, options, onChange, placeholder }: IconSelectProps) {
+  const [open, setOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState<number>(-1);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const btnRef = useRef<HTMLButtonElement | null>(null);
+  const popoverRef = useRef<HTMLDivElement | null>(null);
+  const selected = useMemo(
+    () => options.find((o) => o.id === value) ?? null,
+    [options, value],
+  );
+
+  // On open: reset activeIndex to the selected row (or 0) AND move focus into
+  // the listbox so the arrow-key handler (onListKey) actually receives events.
+  // Without the focus(), focus stays on the trigger button and ArrowUp/Down
+  // never reach the list — keyboard users could open the popover but not
+  // navigate it (the trigger only re-fires setOpen(true)).
+  useEffect(() => {
+    if (!open) return;
+    const idx = options.findIndex((o) => o.id === value);
+    setActiveIndex(idx >= 0 ? idx : 0);
+    popoverRef.current?.focus();
+  }, [open, options, value]);
+
+  // Outside-click + Esc close. Pointerdown is used (not click) so the
+  // popover closes before a synthesized click would re-open via the
+  // trigger's own onClick. Guard `e.target instanceof Node` per the
+  // CLAUDE.md scroll-close gotcha.
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: PointerEvent) => {
+      if (!(e.target instanceof Node)) return;
+      if (rootRef.current?.contains(e.target)) return;
+      setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setOpen(false);
+        btnRef.current?.focus();
+      }
+    };
+    document.addEventListener('pointerdown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('pointerdown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  function commit(idx: number) {
+    const opt = options[idx];
+    if (!opt) return;
+    onChange(opt.id);
+    setOpen(false);
+    btnRef.current?.focus();
+  }
+
+  function onTriggerKey(e: React.KeyboardEvent<HTMLButtonElement>) {
+    if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      setOpen(true);
+    }
+  }
+
+  function onListKey(e: React.KeyboardEvent<HTMLDivElement>) {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setActiveIndex((i) => Math.min(options.length - 1, i + 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setActiveIndex((i) => Math.max(0, i - 1));
+    } else if (e.key === 'Home') {
+      // APG listbox pattern: Home jumps to first. preventDefault stops the
+      // popover from also scrolling.
+      e.preventDefault();
+      setActiveIndex(0);
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      setActiveIndex(options.length - 1);
+    } else if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      if (activeIndex >= 0) commit(activeIndex);
+    }
+  }
+
+  // Stable option ids so the listbox can point aria-activedescendant at the
+  // active row (the container-focus pattern moves DOM focus to the listbox,
+  // not the option buttons, so SRs need activedescendant to announce the
+  // active option during arrow nav). Falls back to a constant base when the
+  // optional `id` prop is absent.
+  const optionBaseId = id ?? 'iconselect';
+  const activeOptionId = activeIndex >= 0 ? `${optionBaseId}-opt-${activeIndex}` : undefined;
+
+  return (
+    <div className={styles.selectWrap} ref={rootRef}>
+      <button
+        id={id}
+        ref={btnRef}
+        type="button"
+        className={styles.iconSelectBtn}
+        onClick={() => setOpen((o) => !o)}
+        onKeyDown={onTriggerKey}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+      >
+        {selected ? (
+          <>
+            <Icon name={selected.icon} />
+            <span className={styles.iconSelectLabel}>{selected.label}</span>
+          </>
+        ) : (
+          <span className={styles.iconSelectPlaceholder}>{placeholder ?? 'Select…'}</span>
+        )}
+      </button>
+      {open && (
+        <div
+          ref={popoverRef}
+          className={styles.iconSelectPopover}
+          role="listbox"
+          tabIndex={-1}
+          aria-label={placeholder ?? 'Options'}
+          aria-activedescendant={activeOptionId}
+          onKeyDown={onListKey}
+        >
+          {options.length === 0 ? (
+            <div className={styles.iconSelectEmpty}>No options</div>
+          ) : (
+            options.map((o, i) => (
+              <button
+                key={o.id}
+                id={`${optionBaseId}-opt-${i}`}
+                type="button"
+                role="option"
+                aria-selected={o.id === value}
+                className={`${styles.iconSelectOption} ${i === activeIndex ? styles.iconSelectOptionActive : ''}`}
+                onMouseEnter={() => setActiveIndex(i)}
+                onClick={() => commit(i)}
+              >
+                <Icon name={o.icon} />
+                <span className={styles.iconSelectLabel}>{o.label}</span>
+              </button>
+            ))
+          )}
         </div>
       )}
     </div>

@@ -22,23 +22,40 @@ def get_all_categories(db: Session) -> list[Category]:
     }
 
     # Featured supplier per category — lowest rank among is_featured=true rows
-    # wins. ORDER BY rank DESC so the dict-comprehension's last-write semantics
-    # leave the highest-priority (lowest-rank) name in place. Single join.
+    # wins. Single ORDER BY rank ASC query feeds both shapes:
+    #   - `featured_list_by_cat`: full ordered list of {id, name} (rank ASC,
+    #     lowest first) powering PreferredPartnersBanner + the admin tree's
+    #     multi-row view. Carries the supplier id so the admin "Unfeature"
+    #     button targets the exact row — names alone collide when two
+    #     suppliers share a name (Supplier.name has no unique constraint).
+    #   - `featured_by_cat`: legacy single name = `featured_suppliers[0].name`,
+    #     kept for back-compat with existing consumers.
     featured_rows = (
-        db.query(CategorySupplier.category_id, Supplier.name, CategorySupplier.rank)
+        db.query(CategorySupplier.category_id, Supplier.id, Supplier.name)
         .join(Supplier, Supplier.id == CategorySupplier.supplier_id)
         .filter(CategorySupplier.is_featured.is_(True))
-        .order_by(CategorySupplier.rank.desc())
+        .order_by(CategorySupplier.rank.asc())
         .all()
     )
-    featured_by_cat: dict = {row[0]: row[1] for row in featured_rows}
+    featured_list_by_cat: dict = {}
+    for cat_id, supplier_id, supplier_name in featured_rows:
+        featured_list_by_cat.setdefault(cat_id, []).append(
+            {"id": supplier_id, "name": supplier_name}
+        )
+    featured_by_cat: dict = {
+        cat_id: entries[0]["name"]
+        for cat_id, entries in featured_list_by_cat.items()
+        if entries
+    }
 
     for cat in cats:
         cat.parts_count = int(counts.get(cat.id, 0))
         cat.featured_supplier_name = featured_by_cat.get(cat.id)
+        cat.featured_suppliers = featured_list_by_cat.get(cat.id, [])
         for child in cat.children or []:
             child.parts_count = int(counts.get(child.id, 0))
             child.featured_supplier_name = featured_by_cat.get(child.id)
+            child.featured_suppliers = featured_list_by_cat.get(child.id, [])
 
     return cats
 

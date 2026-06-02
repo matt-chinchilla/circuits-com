@@ -16,7 +16,7 @@ export default function HeroSection() {
           The Integrated Circuits Directory
         </h1>
         <p className={styles.subtitle}>
-          All Circuits, All The Time
+          ALL CIRCUITS ALL THE TIME
         </p>
         <SearchBar />
         <div className={styles.quickLinks}>

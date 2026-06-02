@@ -9,6 +9,7 @@ SQLite, which ignores the model's CheckConstraint).
 """
 
 import uuid
+from decimal import Decimal
 
 from app.models import Sponsor
 
@@ -25,12 +26,13 @@ def _auth_header(client):
 def test_create_category_sponsor_then_list_shows_it(client, seeded_db, db):
     """POST a category sponsor, then GET list returns it (joined names).
 
-    Note: tier='Featured' is the only tier that accepts category_id
-    (2026-06-02 product rule — Silver/Gold/Platinum are keyword-only).
+    Note: tier='Featured' attaches ONLY to top-level categories
+    (2026-06-02 softened rule — Silver/Gold/Platinum are allowed on
+    child categories or keywords; top-level is Featured-only).
     """
     headers = _auth_header(client)
     supplier = seeded_db["supplier1"]
-    category = seeded_db["child"]
+    category = seeded_db["parent"]
 
     resp = client.post(
         "/api/admin/sponsors/",
@@ -68,7 +70,7 @@ def test_create_category_sponsor_then_list_shows_it(client, seeded_db, db):
 def test_create_status_defaults_to_active(client, seeded_db, db):
     headers = _auth_header(client)
     supplier = seeded_db["supplier1"]
-    category = seeded_db["child"]
+    category = seeded_db["parent"]  # Featured requires top-level (2026-06-02 rule)
 
     resp = client.post(
         "/api/admin/sponsors/",
@@ -111,27 +113,27 @@ def test_create_keyword_sponsor_persists(client, seeded_db, db):
 def test_patch_updates_a_field(client, seeded_db, db):
     """PATCH updates a single field and persists it.
 
-    Uses tier='Featured' because the seeded sponsor has a category_id and
-    the 2026-06-02 rule requires Featured tier for category-placed
-    sponsors. Amount is the field we actually care about asserting here.
+    Seeded sponsor is tier='gold' + category_id=child. Under the
+    2026-06-02 softened rule, non-Featured + child is the
+    "Subcategory Sponsor" slot — fully legal. We PATCH only the amount
+    so we don't trip the tier/placement validator.
     """
     headers = _auth_header(client)
     sponsor = seeded_db["sponsor"]
 
     resp = client.patch(
         f"/api/admin/sponsors/{sponsor.id}",
-        json={"tier": "Featured", "amount": "999.00"},
+        json={"amount": "999.00"},
         headers=headers,
     )
     assert resp.status_code == 200, resp.text
     data = resp.json()
-    assert data["tier"] == "Featured"
     assert data["amount"] == "999.00"
 
     # Reload from DB to confirm persistence.
     db.expire_all()
     row = db.query(Sponsor).filter(Sponsor.id == sponsor.id).first()
-    assert row.tier == "Featured"
+    assert row.amount == Decimal("999.00")
 
 
 def test_patch_unknown_id_returns_404(client, seeded_db):

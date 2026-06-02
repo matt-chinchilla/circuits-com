@@ -486,23 +486,104 @@
 }
 
 // Tree-view variant — renders inside .treeChildren just below the .subGrid.
-// 56px left margin aligns it under the parent category icon column.
+// 56px left margin aligns it under the parent category icon column. Now a
+// vertical stack: header row + one row per featured supplier with per-row
+// Unfeature button.
 .treeFeatured {
   margin: 8px 14px 4px 56px;
   padding: 8px 12px;
   display: flex;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  gap: 4px;
   font-size: 12px;
   color: #92773a;
   background: rgba(168, 141, 46, 0.08);
   border-radius: 4px;
 }
 
+.treeFeaturedHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding-bottom: 2px;
+}
+
+.treeFeaturedRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+}
+
+.treeFeaturedName {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+  color: #6b5520;
+}
+
+.unfeatureBtn {
+  height: 24px;
+  padding: 0 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #c0392b;
+  background: transparent;
+  border: 1px solid rgba(192, 57, 43, 0.35);
+  border-radius: 4px;
+  cursor: pointer;
+  line-height: 1;
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+
+  &:hover:not(:disabled) {
+    background: rgba(192, 57, 43, 0.08);
+    border-color: rgba(192, 57, 43, 0.55);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
 .featuredStar {
   color: #a88d2e;
   font-size: 13px;
   line-height: 1;
+}
+
+// Transient inline message — bottom-right, 2.4s auto-dismiss via parent
+// setState. Matches the SponsorFormPage toast pattern.
+.toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 1000;
+  padding: 10px 16px;
+  background: #1f2937;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  animation: toastIn 0.18s ease-out;
+}
+
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* ── Loading ────────────────────────────────────────────────── */
