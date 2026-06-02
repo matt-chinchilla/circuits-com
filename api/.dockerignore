@@ -1,0 +1,50 @@
+# Build context exclusions for the API image. Keeps __pycache__ + lint
+# caches + test fixtures + the local SQLite test.db out of the image so
+# `COPY . .` only ships actual source.
+
+# Python bytecode + per-package metadata
+**/__pycache__
+*.pyc
+*.pyo
+*.pyd
+*.egg-info
+.eggs
+
+# Lint / type-checker / test caches
+.pytest_cache
+.ruff_cache
+.mypy_cache
+.pyright
+.tox
+.coverage
+htmlcov
+
+# Local SQLite test database (regenerated per pytest run)
+test.db
+*.sqlite3
+
+# Virtual envs (uv installs --system in the image)
+.venv
+venv
+env
+
+# Tests + fixtures — image doesn't run pytest. CI/local does.
+tests
+conftest.py
+
+# Local dev env (never bake creds)
+.env
+.env.*
+!.env.example
+
+# Docs + git noise
+*.md
+LICENSE*
+CHANGELOG*
+.git
+.gitignore
+.gitattributes
+
+# OS noise
+.DS_Store
+Thumbs.db

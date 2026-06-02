@@ -1,0 +1,48 @@
+# Build context exclusions — keeps `docker build` context small so the
+# daemon doesn't waste seconds re-uploading 230MB of node_modules + the
+# .git tree + extracted design-handoff tarballs every rebuild. Before
+# this file landed, the frontend context was ~236MB; now it's ~5MB.
+#
+# Anything in here is invisible to COPY commands in the Dockerfile. Stage
+# `dev` mounts the host /app via compose so HMR still works regardless.
+
+# Heaviest exclusion — npm install re-creates node_modules from
+# package-lock.json inside the image, so we never want the host copy.
+node_modules
+.npm
+
+# Build artifacts (vite emits these locally) — image's `npm run build`
+# regenerates them.
+dist
+.vite
+
+# Editor / IDE / lint caches
+.eslintcache
+.cache
+.parcel-cache
+.turbo
+
+# Local dev databases or env files (never bake creds into images)
+.env
+.env.*
+!.env.example
+
+# Tests + their snapshots — image runs neither
+**/__tests__
+**/*.test.*
+**/*.spec.*
+
+# Source maps + sourcecode-only docs
+**/*.map
+*.md
+LICENSE*
+CHANGELOG*
+
+# OS noise
+.DS_Store
+Thumbs.db
+
+# Git tree — `COPY .` would otherwise pull the full history into context
+.git
+.gitignore
+.gitattributes

@@ -26,8 +26,8 @@ npx tsc --noEmit
 npx eslint src/                         # boundary enforcement (exit 0 = clean)
 
 # Deploy (requires AWS CLI + ~/.ssh/id_ed25519 + commits pushed)
-./deploy.sh                             # full deploy — CHASE with --frontend
-./deploy.sh --frontend                  # frontend rebuild + nginx restart (single step)
+./deploy.sh                             # full deploy — INCLUDES nginx restart since 2026-06-02
+./deploy.sh --frontend                  # frontend-only rebuild + nginx restart (faster path)
 ./deploy.sh --reseed                    # full deploy + clear/reseed DB (destructive)
 ./deploy.sh --status | --logs | --cert-renew
 ```
@@ -240,7 +240,8 @@ Brand (`left: 20px`) + nav+LOGIN (`right: 20px`) are `position: absolute` on `.t
 - **Docker cache can serve stale frontend** — if invisible: `build --no-cache frontend && up -d frontend`.
 - **`./deploy.sh --reseed` destructive scope** — TRUNCATEs `sponsors, category_suppliers, categories, suppliers CASCADE` → cascades to `users/parts/listings/breaks/revenue`. `messages` SURVIVES. Admin-UI rows outside seed.py ARE wiped.
 - **Category slug changes need `--reseed`** — `get_or_create_category` keys on slug; rename creates a duplicate. Plain `./deploy.sh` won't fix.
-- **`./deploy.sh` (no flag) does NOT restart nginx** → 502 (stale upstream DNS). Always chase with `--frontend`. Frontend-only: `--frontend` ALONE suffices. Run `deploy-preflight` agent before every deploy.
+- **`./deploy.sh` now restarts nginx automatically** (2026-06-02) — no more `--frontend` chase. Both `deploy_all` and `deploy_frontend` end with `restart nginx` so the cached upstream DNS gets refreshed. Still run `deploy-preflight` agent before every deploy.
+- **`.dockerignore` in `frontend/` + `api/`** (2026-06-02) — frontend context was 236MB (230MB `node_modules`); now ~5MB. Both Dockerfiles also gain `# syntax=docker/dockerfile:1.6` + BuildKit `--mount=type=cache` on `/root/.npm` (frontend) and `/root/.cache/{uv,pip}` (api). `deploy.sh` exports `DOCKER_BUILDKIT=1` for older Docker. Rebuild on unchanged deps is now near-instant.
 - **Deploying API → ~1-2 min of 502 on `/api/*`** — recreating api re-runs `alembic → seed → uvicorn`. HTML still 200. Check api logs (`Seeding database...`) before intervening.
 - **nginx HTTP/2 requires `http2 on;`** — `listen 443 ssl;` alone gives HTTP/1.1. All 3 SSL blocks in `nginx.ssl.conf` carry it. Verify: `curl -sI --http2 https://circuits.com/ -w '%{http_version}\n'` (want `2`).
 - **Category-page early preload couples `frontend/index.html` ↔ `api.ts`** — inline `<script>` on `/category/<slug>` stashes promise on `window.__categoryPreload`; `api.getCategory` consumes it. URL/param changes must update BOTH or api.ts skips. Direct-load only; SPA nav uses axios.

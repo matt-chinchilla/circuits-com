@@ -86,24 +86,32 @@ check_prerequisites() {
 
 deploy_all() {
     echo "Deploying all services..."
-    run_remote "cd $APP_DIR && sudo git pull && $COMPOSE_CMD build api frontend && $COMPOSE_CMD up -d && sudo docker image prune -f"
-    green "All services rebuilt and restarted."
+    # `up -d` recreates api + frontend, but nginx is unaffected and keeps
+    # its cached upstream DNS pointing at the OLD frontend container's IP
+    # → 502 on `/` until nginx is restarted. Folding the restart in here
+    # eliminates the `--frontend` chase that used to be required (which
+    # also incurred a wasteful second frontend build).
+    # DOCKER_BUILDKIT=1 enables BuildKit cache mounts in the Dockerfiles
+    # (~5-10× speedup on dep-install when package-lock/pyproject hasn't
+    # changed). Docker 23+ defaults to BuildKit; the export is belt+braces.
+    run_remote "cd $APP_DIR && sudo git pull && DOCKER_BUILDKIT=1 $COMPOSE_CMD build api frontend && $COMPOSE_CMD up -d && $COMPOSE_CMD restart nginx && sudo docker image prune -f"
+    green "All services rebuilt, nginx restarted."
 }
 
 deploy_frontend() {
     echo "Deploying frontend only..."
-    run_remote "cd $APP_DIR && sudo git pull && $COMPOSE_CMD build frontend && $COMPOSE_CMD up -d frontend && $COMPOSE_CMD restart nginx && sudo docker image prune -f"
+    run_remote "cd $APP_DIR && sudo git pull && DOCKER_BUILDKIT=1 $COMPOSE_CMD build frontend && $COMPOSE_CMD up -d frontend && $COMPOSE_CMD restart nginx && sudo docker image prune -f"
     green "Frontend rebuilt, nginx restarted."
 }
 
 deploy_reseed() {
     echo "Deploying all services + clearing and reseeding database..."
-    run_remote "cd $APP_DIR && sudo git pull && $COMPOSE_CMD build api frontend && $COMPOSE_CMD up -d && sudo docker image prune -f"
+    run_remote "cd $APP_DIR && sudo git pull && DOCKER_BUILDKIT=1 $COMPOSE_CMD build api frontend && $COMPOSE_CMD up -d && $COMPOSE_CMD restart nginx && sudo docker image prune -f"
     echo "Clearing database..."
     run_remote "sudo docker exec circuits-com-db-1 psql -U circuits -d circuits -c 'TRUNCATE sponsors, category_suppliers, categories, suppliers CASCADE;'"
     echo "Reseeding..."
     run_remote "sudo docker exec circuits-com-api-1 python -m app.db.seed"
-    green "All services rebuilt. Database cleared and reseeded."
+    green "All services rebuilt, nginx restarted. Database cleared and reseeded."
 }
 
 show_status() {
