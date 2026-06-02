@@ -183,3 +183,105 @@ def test_feature_requires_auth(client, seeded_db):
     # FastAPI security dependency surfaces 401 or 403 depending on the
     # auth scheme; both are acceptable here. 422 isn't (would mean schema).
     assert resp.status_code in (401, 403)
+
+
+# ── /unfeature companion (added 2026-06-02 for the v15 banner) ──────────────
+
+
+def test_unfeature_flips_existing_featured_row(client, seeded_db, db):
+    """Featuring then unfeaturing flips is_featured back to False
+    without deleting the join row."""
+    headers = _auth_header(client)
+    parent = seeded_db["parent"]
+    supplier1 = seeded_db["supplier1"]
+    payload = {
+        "supplier_id": str(supplier1.id),
+        "category_slug": parent.slug,
+    }
+
+    # Feature first.
+    client.post(
+        "/api/admin/category-suppliers/feature",
+        json=payload,
+        headers=headers,
+    )
+
+    # Then unfeature.
+    resp = client.post(
+        "/api/admin/category-suppliers/unfeature",
+        json=payload,
+        headers=headers,
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["is_featured"] is False
+
+    row = (
+        db.query(CategorySupplier)
+        .filter(
+            CategorySupplier.category_id == parent.id,
+            CategorySupplier.supplier_id == supplier1.id,
+        )
+        .first()
+    )
+    # Row preserved; only the flag changed.
+    assert row is not None
+    assert row.is_featured is False
+
+
+def test_unfeature_is_idempotent_when_row_missing(client, seeded_db, db):
+    """Calling unfeature against a pair that has no join row succeeds
+    and is a no-op — no new row is inserted."""
+    headers = _auth_header(client)
+    parent = seeded_db["parent"]
+    supplier2 = seeded_db["supplier2"]
+
+    before = db.query(CategorySupplier).count()
+    resp = client.post(
+        "/api/admin/category-suppliers/unfeature",
+        json={
+            "supplier_id": str(supplier2.id),
+            "category_slug": parent.slug,
+        },
+        headers=headers,
+    )
+    assert resp.status_code == 200
+    assert resp.json()["is_featured"] is False
+    after = db.query(CategorySupplier).count()
+    assert after == before
+
+
+def test_unfeature_404s_on_unknown_supplier(client, seeded_db):
+    headers = _auth_header(client)
+    resp = client.post(
+        "/api/admin/category-suppliers/unfeature",
+        json={
+            "supplier_id": str(uuid.uuid4()),
+            "category_slug": seeded_db["parent"].slug,
+        },
+        headers=headers,
+    )
+    assert resp.status_code == 404
+
+
+def test_unfeature_404s_on_unknown_category(client, seeded_db):
+    headers = _auth_header(client)
+    resp = client.post(
+        "/api/admin/category-suppliers/unfeature",
+        json={
+            "supplier_id": str(seeded_db["supplier1"].id),
+            "category_slug": "this-slug-does-not-exist",
+        },
+        headers=headers,
+    )
+    assert resp.status_code == 404
+
+
+def test_unfeature_requires_auth(client, seeded_db):
+    resp = client.post(
+        "/api/admin/category-suppliers/unfeature",
+        json={
+            "supplier_id": str(seeded_db["supplier1"].id),
+            "category_slug": seeded_db["parent"].slug,
+        },
+    )
+    assert resp.status_code in (401, 403)

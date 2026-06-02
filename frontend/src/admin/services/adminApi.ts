@@ -165,4 +165,15 @@ export const adminApi = {
         rank,
       })
       .then((r) => r.data),
+
+  // Inverse of featureSupplierInCategory. Sets is_featured=False on the
+  // CategorySupplier row (preserves the row itself). Idempotent — calling
+  // on an unfeatured / missing row still returns ok=true.
+  unfeatureSupplierInCategory: (supplierId: string, categorySlug: string) =>
+    adminClient
+      .post('/admin/category-suppliers/unfeature', {
+        supplier_id: supplierId,
+        category_slug: categorySlug,
+      })
+      .then((r) => r.data),
 };

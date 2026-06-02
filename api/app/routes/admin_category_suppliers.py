@@ -1,17 +1,19 @@
-"""Admin endpoint for featured-supplier toggling on categories.
+"""Admin endpoints for featured-supplier toggling on categories.
 
-Used by the guided-tour wizard so a newly-created demo supplier appears in
-the Featured Supplier slot on a public category page — proves to the
-admin user that data they enter propagates to the live site immediately.
+The `/feature` endpoint upserts a CategorySupplier row with
+`is_featured=True` so a supplier appears on the public category's
+Preferred Partners banner. The `/unfeature` companion (added 2026-06-02
+for the v15 banner add/remove flow) sets `is_featured=False` on an
+existing row — non-destructive, the row itself stays so any
+non-featured association the admin keeps (e.g. "ships these parts")
+isn't lost.
 
-Upserts a CategorySupplier row. is_featured=True + rank wins among
-candidates per category (category_service picks lowest rank by DESC order
-+ dict-last-write). Auth-gated like the rest of /admin/*.
+The original feature-only design served the guided-tour wizard, whose
+cleanup path is to delete the demo supplier and let cascade remove the
+join row. The v15 banner is the admin's everyday preferred-partners
+surface and needs symmetric add/remove without nuking the supplier.
 
-This endpoint is feature-ONLY by design — there's no "unfeature" variant
-because the wizard's cleanup path (delete the demo supplier) cascades the
-CategorySupplier row away naturally. A standalone unfeature endpoint
-would create a new state-management surface we don't need yet.
+Auth-gated like the rest of /admin/*.
 """
 
 import uuid
@@ -86,4 +88,56 @@ def feature_supplier(
         "category_slug": category.slug,
         "is_featured": True,
         "rank": body.rank,
+    }
+
+
+class UnfeatureRequest(BaseModel):
+    supplier_id: str
+    category_slug: str
+
+
+@router.post("/unfeature")
+def unfeature_supplier(
+    body: UnfeatureRequest,
+    db: Session = Depends(get_db),
+    _user=Depends(get_current_user),
+) -> dict:
+    """Set `is_featured=False` on the (category, supplier) join row.
+
+    Idempotent — a missing row or an already-unfeatured row returns
+    `ok=True` with `is_featured=False`. We do NOT delete the row so a
+    non-featured association (the supplier still sells parts in this
+    category) is preserved. 404 only if the supplier/category itself
+    can't be resolved (mirrors `/feature`).
+    """
+    try:
+        sup_uuid = uuid.UUID(body.supplier_id)
+    except (ValueError, TypeError):
+        raise HTTPException(404, "Supplier not found")
+
+    supplier = db.query(Supplier).filter(Supplier.id == sup_uuid).first()
+    if not supplier:
+        raise HTTPException(404, "Supplier not found")
+
+    category = db.query(Category).filter(Category.slug == body.category_slug).first()
+    if not category:
+        raise HTTPException(404, "Category not found")
+
+    existing = (
+        db.query(CategorySupplier)
+        .filter(
+            CategorySupplier.category_id == category.id,
+            CategorySupplier.supplier_id == supplier.id,
+        )
+        .first()
+    )
+    if existing:
+        existing.is_featured = False  # type: ignore[assignment]
+        db.commit()
+
+    return {
+        "ok": True,
+        "supplier_id": str(supplier.id),
+        "category_slug": category.slug,
+        "is_featured": False,
     }

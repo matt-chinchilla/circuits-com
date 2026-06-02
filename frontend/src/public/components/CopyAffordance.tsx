@@ -6,9 +6,12 @@ import styles from './CopyAffordance.module.scss';
 interface CopyAffordanceProps {
   text: string;
   tone?: 'dark' | 'light';
+  // compact: icon-only pill used by v15 Preferred Partners rows. Drops the
+  // "Copy"/"Copied" text label, tightens padding, switches to a round chip.
+  compact?: boolean;
 }
 
-export default function CopyAffordance({ text, tone = 'dark' }: CopyAffordanceProps) {
+export default function CopyAffordance({ text, tone = 'dark', compact = false }: CopyAffordanceProps) {
   const [copied, setCopied] = useState(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -38,17 +41,27 @@ export default function CopyAffordance({ text, tone = 'dark' }: CopyAffordancePr
     timeoutRef.current = setTimeout(() => setCopied(false), 1500);
   };
 
+  const cls = [
+    styles.copy,
+    tone === 'light' ? styles.copyLight : styles.copyDark,
+    compact ? styles.copyCompact : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+
   return (
     <button
       type="button"
-      className={styles.copy + ' ' + (tone === 'light' ? styles.copyLight : styles.copyDark)}
+      className={cls}
       data-copied={copied ? '1' : '0'}
       aria-label={`Copy ${text}`}
       title="Copy"
       onClick={copy}
     >
       <span className={styles.copyIco} aria-hidden="true">{copied ? '✓' : '⧉'}</span>
-      <span className={styles.copyTxt}>{copied ? 'Copied' : 'Copy'}</span>
+      {!compact && (
+        <span className={styles.copyTxt}>{copied ? 'Copied' : 'Copy'}</span>
+      )}
     </button>
   );
 }

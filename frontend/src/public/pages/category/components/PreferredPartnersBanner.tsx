@@ -1,29 +1,21 @@
 /**
- * PreferredPartnersBanner — CSB v14
+ * PreferredPartnersBanner — CSB v15
  *
- * Replaces v13's CategorySponsorBanner + SupplierTable. Renders the design-handoff-v9
- * "fixed-banner" Concept A: a single ENIG-gold PCB-themed rail of supplier chips
- * (one per featured supplier), with the cursor flashlight + click-to-energize
- * interactions ported from the SponsorBlock language.
+ * Bicameral banner: left identity block + right rail of supplier rows.
+ * Replaces v14's horizontal-scroll chip rail. Source: design-handoff-v10
+ * (Claude Design 9r_j6EMPd9tCcmHpyADZRA / preferred-partners.html).
  *
- * IMPORTANT DIFFERENCES from the v9 source:
- *   - No left identity block (.fbId / kicker / pad / CTA) — the rail spans the
- *     full banner width and contains ONE chip per featured supplier.
- *   - Chip count is dynamic (= number of featured suppliers). v9 had 4 fixed
- *     "field" chips (Company / Contact / Phone / Email) for a single sponsor;
- *     v14 has N chips, one per supplier.
- *   - Horizontal scroll instead of a 4-column grid (chips have `min-width: 280px`
- *     and the rail scrolls horizontally when they exceed the banner width).
- *   - Empty state returns null (TODO: design empty state for future).
+ * Per-row 5-column grid (medallion · Company · Sales Contact · Phone · Email)
+ * with a vertical copper bus in the left gutter of the rail (one via per row).
  *
- * Renders both for parent-category pages AND sub-category pages — the banner
- * self-gates on `suppliers.length === 0` so callers don't need an extra `isParent`
- * guard. SponsorBlock + TopPartners (sub-cat sidebar) are unchanged.
+ * Decisions baked in per user direction 2026-06-02:
+ *   - Always expanded (no dropdown toggle).
+ *   - Rep cell shows `contact_name` on a single line — no title row.
  */
 import { useEffect, useRef, useState } from 'react';
 import type { Supplier } from '@public/types/supplier';
-import { useFlashlight } from '@public/hooks/useFlashlight';
 import { useEntrance } from '@public/hooks/useEntrance';
+import CircuitTraces from '@public/components/widgets/CircuitTraces';
 import CopyAffordance from '@public/components/CopyAffordance';
 import styles from './PreferredPartnersBanner.module.scss';
 
@@ -41,16 +33,25 @@ function lettermark(name: string): string {
   return (parts[0][0] + parts[1][0]).toUpperCase();
 }
 
+// RFC 3986–aware: prepend https:// unless already-schemed or protocol-relative.
+// Mirrors admin/pages/suppliers/form.prependScheme — kept local for now; promote
+// to @shared/utils/url.ts once a 3rd consumer needs it (parts form is the next).
+function prependScheme(s: string): string {
+  const trimmed = s.trim();
+  if (!trimmed) return '';
+  if (/^[a-z][a-z0-9+.-]*:/i.test(trimmed) || trimmed.startsWith('//')) return trimmed;
+  return `https://${trimmed}`;
+}
+
 function displayHostname(url: string): string {
   try {
-    return new URL(url).hostname.replace(/^www\./, '');
+    return new URL(prependScheme(url)).hostname.replace(/^www\./, '');
   } catch {
     return url;
   }
 }
 
 function telHref(phone: string): string {
-  // Strip everything but digits + leading +, per RFC 3966.
   return `tel:${phone.replace(/[^0-9+]/g, '')}`;
 }
 
@@ -66,10 +67,6 @@ function SupplierLogo({ supplier }: { supplier: Supplier }) {
       alt={`${supplier.name} logo`}
       className={styles.fbLogo}
       onError={() => {
-        // Minimal observability — devtools surfaces this in the console so a
-        // broken supplier CDN is distinguishable from a legitimate no-logo
-        // path. The project has no centralized error sink (no Sentry/log
-        // service); upgrade to a real error sink when one exists.
         console.warn('[PreferredPartnersBanner] supplier logo failed to load', {
           supplier_id: supplier.id,
           name: supplier.name,
@@ -89,9 +86,6 @@ export default function PreferredPartnersBanner({
   const [activeIndices, setActiveIndices] = useState<Set<number>>(new Set());
   const timersRef = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
 
-  // Drain every pending energize timer on unmount so a chip-click within
-  // 1500ms of nav-away does not setState on an unmounted component. React 19
-  // swallows the stale-setState warning but the leak is still real.
   useEffect(
     () => () => {
       timersRef.current.forEach((handle) => clearTimeout(handle));
@@ -100,23 +94,13 @@ export default function PreferredPartnersBanner({
     [],
   );
 
-  // Defense-in-depth: a missing/non-array `suppliers` (API shape drift,
-  // future Pydantic strip) would explode `.filter().sort()` and the
-  // ErrorBoundary would catch it for the whole page. Cheap insurance.
   const list = Array.isArray(suppliers) ? suppliers : [];
-
-  // Filter to featured suppliers, sort by rank asc (lowest rank = highest priority).
   const featured = list
     .filter((s) => s.is_featured)
     .sort((a, b) => (a.rank ?? 0) - (b.rank ?? 0));
 
-  // Hook order MUST be stable — call BEFORE the empty-state early return.
-  useFlashlight(rootRef);
   useEntrance(rootRef, featured.length);
 
-  // TODO: design an empty state for the no-featured-suppliers case (the v9
-  // handoff has an "is-empty" tint we could lift, but the chip-per-supplier
-  // model doesn't have an obvious "0 chips" rendering yet).
   if (featured.length === 0) return null;
 
   const energize = (i: number) => {
@@ -146,13 +130,21 @@ export default function PreferredPartnersBanner({
     <div
       ref={rootRef}
       className={styles.fb}
-      data-lit="false"
       data-tier="featured"
+      data-expanded="true"
       role="region"
       aria-label={ariaLabel}
     >
-      <div className={styles.fbCircuit} aria-hidden="true" />
-      <div className={styles.fbLamp} aria-hidden="true" />
+      <div className={styles.fbCircuit} aria-hidden="true">
+        {/*
+          variant="static" — non-hero pages keep the gold trace lattice but skip
+          electrons + 6s draw-in + IntersectionObserver bookkeeping. CLAUDE.md
+          (Tier-3 #6 perf invariant 2026-04-19) names /category/* explicitly.
+          variant="full" here doubled animation cost vs. the BackdropLayer's
+          persistent full instance and was the smoking gun for hover-lag.
+        */}
+        <CircuitTraces variant="static" />
+      </div>
       <span className={styles.fbRim} aria-hidden="true" />
       <span className={`${styles.fbFid} ${styles.fbFidTl}`} aria-hidden="true" />
       <span className={`${styles.fbFid} ${styles.fbFidTr}`} aria-hidden="true" />
@@ -160,88 +152,125 @@ export default function PreferredPartnersBanner({
       <span className={`${styles.fbFid} ${styles.fbFidBr}`} aria-hidden="true" />
       <span className={styles.fbDes} aria-hidden="true">CS1 &middot; PREFERRED PARTNERS</span>
 
+      <div className={styles.fbId}>
+        <span className={styles.fbKicker}>◆ Preferred Partners</span>
+        <div className={styles.fbIdCount}>
+          <span className={styles.fbCountNum}>{featured.length}</span>
+          <span className={styles.fbCountLabel}>
+            Featured suppliers
+            {categoryName && <span>in {categoryName}</span>}
+          </span>
+        </div>
+        <p className={styles.fbIdTag}>
+          Authorized distributors sponsoring this category — ranked by partnership tier.
+        </p>
+        <a className={styles.fbCta} href="/keyword">
+          Become a partner →
+        </a>
+      </div>
+
       <div className={styles.fbRail}>
-        <div className={styles.fbBus} aria-hidden="true">
-          <span className={styles.fbBusLine} />
-          {featured.map((s, i) => (
-            <span
-              key={`via-${s.id}`}
-              className={`${styles.fbVia} ${activeIndices.has(i) ? styles.fbViaIsLive : ''}`}
-              style={{
-                left: `calc(${((i + 0.5) / featured.length) * 100}%)`,
-              }}
-            />
-          ))}
+        <div className={styles.fbHead} aria-hidden="true">
+          <span className={styles.fbHeadCell} />
+          <span className={styles.fbHeadCell}>Company</span>
+          <span className={styles.fbHeadCell}>Sales Contact</span>
+          <span className={styles.fbHeadCell}>Phone</span>
+          <span className={styles.fbHeadCell}>Email</span>
         </div>
 
-        {featured.map((s, i) => {
-          const isLive = activeIndices.has(i);
-          return (
-            <div
-              key={s.id}
-              data-enter
-              className={`${styles.fbChip} ${isLive ? styles.fbChipIsLive : ''}`}
-              onClick={() => energize(i)}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  energize(i);
-                }
-              }}
-              aria-label={`Energize ${s.name}`}
-            >
-              <span className={styles.fbRefdes}>U{i + 1}</span>
+        <div className={styles.fbStackScroll}>
+          <div className={styles.fbStack}>
+            <span className={styles.fbBusLine} aria-hidden="true" />
 
-              <div className={styles.fbLogoBlock}>
-                <SupplierLogo supplier={s} />
-              </div>
+            {featured.map((s, i) => {
+              const isLive = activeIndices.has(i);
+              // Refdes is positional (U1, U2 by stack order — silkscreen
+              // designator convention). Rank chip is the DB rank — when an
+              // admin unfeatures a higher-rank supplier, surviving rows keep
+              // their semantic rank instead of silently renumbering, which
+              // would contradict the subtitle "ranked by partnership tier".
+              const refdesIndex = i + 1;
+              const dbRank = s.rank ?? i + 1;
+              return (
+                <div
+                  key={s.id}
+                  data-enter
+                  className={`${styles.fbChip} ${isLive ? styles.fbChipIsLive : ''}`}
+                  onClick={() => energize(i)}
+                >
+                  <span
+                    className={`${styles.fbVia} ${isLive ? styles.fbViaIsLive : ''}`}
+                    aria-hidden="true"
+                  />
+                  <span className={styles.fbRefdes}>U{refdesIndex}</span>
 
-              <div className={styles.fbConame}>{s.name}</div>
+                  <div className={styles.fbLogoBlock}>
+                    <SupplierLogo supplier={s} />
+                  </div>
 
-              {s.phone && (
-                <div className={styles.fbFoot}>
-                  <a
-                    className={styles.fbSub}
-                    href={telHref(s.phone)}
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    {s.phone}
-                  </a>
-                  <CopyAffordance text={s.phone} tone="dark" />
+                  <div className={`${styles.fbCol} ${styles.fbColCompany}`}>
+                    <div className={styles.fbConame}>
+                      <span className={styles.fbConameTxt}>{s.name}</span>
+                      <span className={styles.fbRank}>#{dbRank}</span>
+                    </div>
+                    {s.website && (
+                      <a
+                        className={styles.fbSiteLink}
+                        href={prependScheme(s.website)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <span className={styles.fbSubIcon} aria-hidden="true">⊕</span>
+                        {displayHostname(s.website)}
+                      </a>
+                    )}
+                  </div>
+
+                  <div className={`${styles.fbCol} ${styles.fbColRep}`}>
+                    <span className={styles.fbRepName}>
+                      {s.contact_name || 'Sales team'}
+                    </span>
+                  </div>
+
+                  <div className={`${styles.fbCol} ${styles.fbColPhone}`}>
+                    {s.phone ? (
+                      <span className={styles.fbFoot}>
+                        <a
+                          className={styles.fbSub}
+                          href={telHref(s.phone)}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {s.phone}
+                        </a>
+                        <CopyAffordance text={s.phone} compact />
+                      </span>
+                    ) : (
+                      <span className={styles.fbEmpty}>—</span>
+                    )}
+                  </div>
+
+                  <div className={`${styles.fbCol} ${styles.fbColEmail}`}>
+                    {s.email ? (
+                      <span className={styles.fbFoot}>
+                        <a
+                          className={styles.fbSub}
+                          href={`mailto:${s.email}`}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {s.email}
+                        </a>
+                        <CopyAffordance text={s.email} compact />
+                      </span>
+                    ) : (
+                      <span className={styles.fbEmpty}>—</span>
+                    )}
+                  </div>
                 </div>
-              )}
-
-              {s.email && (
-                <div className={styles.fbFoot}>
-                  <a
-                    className={styles.fbSub}
-                    href={`mailto:${s.email}`}
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    {s.email}
-                  </a>
-                  <CopyAffordance text={s.email} tone="dark" />
-                </div>
-              )}
-
-              {s.website && (
-                <div className={styles.fbFoot}>
-                  <a
-                    className={styles.fbSub}
-                    href={s.website}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    {displayHostname(s.website)}
-                  </a>
-                </div>
-              )}
-            </div>
-          );
-        })}
+              );
+            })}
+          </div>
+        </div>
       </div>
     </div>
   );
