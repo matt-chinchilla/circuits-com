@@ -254,17 +254,35 @@ def get_category_by_slug(
     if not category:
         return None
 
-    # Get suppliers for this category via CategorySupplier join
+    # Get suppliers for this category via CategorySupplier join. On a parent
+    # category page, roll suppliers UP from all immediate children (mirrors
+    # the parts rollup in `_build_popular_parts`) — investor-facing parent
+    # banner needs the union of partners across the subtree. Dedup by
+    # supplier.id: prefer is_featured=True; among featured rows, prefer the
+    # lowest rank (highest priority). Sort final list by rank ascending.
+    cat_ids = [category.id] + [c.id for c in (category.children or [])]
     supplier_rows = (
         db.query(Supplier, CategorySupplier.is_featured, CategorySupplier.rank)
         .join(CategorySupplier, CategorySupplier.supplier_id == Supplier.id)
-        .filter(CategorySupplier.category_id == category.id)
-        .order_by(CategorySupplier.rank)
+        .filter(CategorySupplier.category_id.in_(cat_ids))
         .all()
     )
 
-    suppliers = []
+    best_by_supplier: dict = {}
     for supplier, is_featured, rank in supplier_rows:
+        existing = best_by_supplier.get(supplier.id)
+        if existing is None:
+            best_by_supplier[supplier.id] = (supplier, bool(is_featured), rank)
+            continue
+        _, existing_featured, existing_rank = existing
+        # Prefer featured over non-featured; among featured, prefer lowest rank.
+        if bool(is_featured) and not existing_featured:
+            best_by_supplier[supplier.id] = (supplier, True, rank)
+        elif bool(is_featured) == existing_featured and rank < existing_rank:
+            best_by_supplier[supplier.id] = (supplier, bool(is_featured), rank)
+
+    suppliers = []
+    for supplier, is_featured, rank in sorted(best_by_supplier.values(), key=lambda row: row[2]):
         supplier.is_featured = is_featured
         supplier.rank = rank
         suppliers.append(supplier)

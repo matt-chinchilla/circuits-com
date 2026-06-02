@@ -1,0 +1,514 @@
+@use '../../../../shared/styles/variables' as *;
+@use '../../../../shared/styles/mixins' as *;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PreferredPartnersBanner — CSB v14
+//
+// CSS-Modules port of design-handoff-v9/.../fixed-banner.css. Class names are
+// camelCase (CSS Modules don't allow BEM `--`); tokens are scoped to the .fb
+// root (NOT :root) so the banner can't leak its palette into other components.
+//
+// Key layout DIFFERENCES from the v9 source:
+//   - No 2-column grid. The .fb root is `display: block` and the .fbRail
+//     spans full width.
+//   - .fbRail is a horizontal flex strip with overflow-x: auto, since the
+//     chip count is dynamic (1..N suppliers, not a fixed 4-field grid).
+//   - Mobile (≤1080px) collapses to vertical flex.
+//
+// Performance gotcha (from CLAUDE.md / v11.2):
+//   - mix-blend-mode: screen on .fbLamp is CSS-gated to fine pointers + hover
+//     contexts; coarse pointers never paint it.
+//   - Every class has ≥1 declaration so CSS Modules exports the name (empty
+//     SCSS rule → undefined CSS module class is a documented gotcha).
+// ─────────────────────────────────────────────────────────────────────────────
+
+.fb {
+  // ── Design tokens (scoped to .fb — never bleed to :root) ─────────────────
+  --gold: #e8c252;
+  --gold-bright: #f3cf5c;
+  --gold-deep: #a88d2e;
+  --board-1: #0d2c1e;
+  --board-2: #0a1e16;
+  --board-3: #0f3826;
+  --cream: #f4ecd6;
+  --cream-mut: rgba(244, 236, 214, 0.72);
+
+  position: relative;
+  isolation: isolate;
+  font-family: $font-body;
+  border-radius: 14px;
+  overflow: hidden;
+  margin: 0 0 24px;
+  background:
+    radial-gradient(130% 120% at 8% -20%, rgba(46, 86, 62, 0.5), transparent 55%),
+    radial-gradient(120% 160% at 100% 130%, color-mix(in srgb, var(--gold) 12%, transparent), transparent 55%),
+    linear-gradient(158deg, var(--board-1) 0%, var(--board-2) 52%, var(--board-3) 100%);
+  box-shadow:
+    0 12px 34px rgba(0, 0, 0, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+
+  &[data-tier='silver'] {
+    --gold: #d7dee4;
+    --gold-bright: #eef2f5;
+    --gold-deep: #9aa6b0;
+  }
+
+  &[data-tier='platinum'] {
+    --gold: #eaf0f4;
+    --gold-bright: #ffffff;
+    --gold-deep: #aab8c2;
+  }
+}
+
+// ── Subtle copper-dot circuit substrate ────────────────────────────────────
+// Always-on, faint dot pattern, hidden under the central rail (where chip
+// content sits) by a soft radial mask. Pure paint — no animation.
+.fbCircuit {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.42;
+  background-image: radial-gradient(
+    color-mix(in srgb, var(--gold) 20%, transparent) 1px,
+    transparent 1.7px
+  );
+  background-size: 17px 17px;
+  -webkit-mask-image: radial-gradient(
+    120% 150% at 50% 50%, #000 38%, rgba(0, 0, 0, 0.35) 100%
+  );
+  mask-image: radial-gradient(
+    120% 150% at 50% 50%, #000 38%, rgba(0, 0, 0, 0.35) 100%
+  );
+}
+
+// ── Flashlight: gold radial that screen-blends OVER the whole stack ──────
+// `--mx` / `--my` set by useFlashlight. Gated to fine pointers via the media
+// query at the bottom of this file so coarse pointers never repaint it (the
+// mix-blend-mode is the documented v11.2 perf hot spot — see CLAUDE.md).
+.fbLamp {
+  position: absolute;
+  inset: 0;
+  z-index: 7;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 200ms ease;
+  mix-blend-mode: screen;
+  background: radial-gradient(
+    circle 180px at var(--mx, -9999px) var(--my, -9999px),
+    color-mix(in srgb, var(--gold-bright) 34%, transparent),
+    transparent 68%
+  );
+}
+
+.fb[data-lit='true'] .fbLamp {
+  opacity: 1;
+}
+
+// ── Gold rim outline ──────────────────────────────────────────────────────
+.fbRim {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  border-radius: inherit;
+  padding: 1.5px;
+  background: linear-gradient(
+    135deg,
+    var(--gold),
+    rgba(255, 255, 255, 0.3) 26%,
+    var(--gold-deep) 60%,
+    var(--gold)
+  );
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  opacity: 0.8;
+  pointer-events: none;
+}
+
+@supports not ((-webkit-mask-composite: xor) or (mask-composite: exclude)) {
+  .fbRim {
+    display: none;
+  }
+}
+
+// ── Fiducial corner dots ──────────────────────────────────────────────────
+.fbFid {
+  position: absolute;
+  z-index: 5;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1.5px solid color-mix(in srgb, var(--gold) 42%, transparent);
+  pointer-events: none;
+}
+
+.fbFidTl {
+  top: 11px;
+  left: 11px;
+}
+
+.fbFidTr {
+  top: 11px;
+  right: 11px;
+}
+
+.fbFidBl {
+  bottom: 11px;
+  left: 11px;
+}
+
+.fbFidBr {
+  bottom: 11px;
+  right: 11px;
+}
+
+// ── Silkscreen designator legend ──────────────────────────────────────────
+.fbDes {
+  position: absolute;
+  z-index: 5;
+  bottom: 9px;
+  right: 16px;
+  font-family: $font-mono;
+  font-size: 0.56rem;
+  letter-spacing: 0.14em;
+  color: color-mix(in srgb, var(--gold) 55%, transparent);
+  pointer-events: none;
+}
+
+// ── Rail — horizontal scrolling strip of supplier chips ──────────────────
+.fbRail {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  gap: 14px;
+  padding: 28px 22px 22px;
+  overflow-x: auto;
+  // Hide the horizontal scrollbar (taste — the chips visually trail off the
+  // edge already, no need for chrome). Wheel + touch scroll still work.
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--gold) 30%, transparent) transparent;
+
+  &::-webkit-scrollbar {
+    height: 6px;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--gold) 30%, transparent);
+    border-radius: 3px;
+  }
+}
+
+// ── Copper bus above the chips, with one via per chip ────────────────────
+// Spans full rail width (left/right matching the rail's padding). Each via
+// is absolutely positioned at `left: (i + 0.5) / N * 100%` from the TSX so
+// it sits over the center of its corresponding chip.
+.fbBus {
+  position: absolute;
+  left: 22px;
+  right: 22px;
+  top: 15px;
+  height: 14px;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.fbBusLine {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 6px;
+  height: 1.5px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--gold) 50%, transparent) 4%,
+    color-mix(in srgb, var(--gold) 50%, transparent) 96%,
+    transparent
+  );
+}
+
+.fbVia {
+  position: absolute;
+  top: 2px;
+  width: 9px;
+  height: 9px;
+  margin-left: -4.5px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 40%, var(--gold), var(--gold-deep));
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.35);
+
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 3px;
+    border-radius: 50%;
+    background: var(--board-2);
+  }
+}
+
+.fbViaIsLive {
+  animation: fb-via-glow 1500ms ease-out;
+}
+
+// ── Chip card — the IC silhouette holding one supplier's contact info ────
+.fbChip {
+  position: relative;
+  z-index: 2;
+  flex: 0 0 auto;
+  min-width: 280px;
+  max-width: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 18px 16px 16px;
+  border-radius: 8px;
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.035) 0%, transparent 34%),
+    linear-gradient(150deg, #143425 0%, #0c2417 60%, #08180e 100%);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--gold) 24%, transparent),
+    inset 0 0 18px rgba(0, 0, 0, 0.42),
+    0 3px 12px rgba(0, 0, 0, 0.32);
+  transition:
+    box-shadow 360ms ease,
+    background 360ms ease,
+    transform 0.12s ease;
+  cursor: pointer;
+  outline: none;
+
+  // Pin-1 dot — top-left orientation marker
+  &::before {
+    content: '';
+    position: absolute;
+    top: 11px;
+    left: 11px;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--gold);
+    box-shadow: 0 0 6px color-mix(in srgb, var(--gold) 55%, transparent);
+    transition: background 320ms ease, box-shadow 320ms ease;
+    z-index: 2;
+  }
+
+  // Short connector stub rising from the chip top edge toward the bus via
+  &::after {
+    content: '';
+    position: absolute;
+    top: -7px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 1.5px;
+    height: 7px;
+    background: color-mix(in srgb, var(--gold) 38%, transparent);
+  }
+
+  @media (hover: hover) {
+    &:hover {
+      transform: translateY(-1px);
+      box-shadow:
+        inset 0 0 0 1px color-mix(in srgb, var(--gold) 40%, transparent),
+        inset 0 0 18px rgba(0, 0, 0, 0.42),
+        0 6px 16px rgba(0, 0, 0, 0.36);
+    }
+  }
+
+  &:focus-visible {
+    box-shadow:
+      inset 0 0 0 1.5px var(--gold-bright),
+      inset 0 0 18px rgba(0, 0, 0, 0.42),
+      0 3px 12px rgba(0, 0, 0, 0.32);
+  }
+}
+
+.fbChipIsLive {
+  animation: fb-charge 1500ms cubic-bezier(0.2, 0.7, 0.3, 1);
+
+  &::before {
+    animation: fb-pad-pulse 1500ms ease-out;
+  }
+}
+
+.fbRefdes {
+  position: absolute;
+  top: 11px;
+  right: 13px;
+  font-family: $font-mono;
+  font-size: 0.56rem;
+  letter-spacing: 0.12em;
+  color: color-mix(in srgb, var(--gold) 50%, transparent);
+  pointer-events: none;
+}
+
+// ── Logo block (medallion-style) ──────────────────────────────────────────
+.fbLogoBlock {
+  position: relative;
+  align-self: flex-start;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  margin-left: 16px; // clear pin-1 dot
+  margin-top: 4px;
+  background: radial-gradient(circle at 50% 36%, #163220, #09190f);
+  box-shadow:
+    inset 0 0 0 2px color-mix(in srgb, var(--gold) 60%, transparent),
+    inset 0 0 12px rgba(0, 0, 0, 0.6),
+    0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
+.fbLogo {
+  width: 80%;
+  height: 80%;
+  object-fit: contain;
+  display: block;
+}
+
+.fbLettermark {
+  font-family: $font-heading;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--gold);
+  line-height: 1;
+}
+
+// ── Company name + contact rows ───────────────────────────────────────────
+.fbConame {
+  font-family: $font-heading;
+  font-size: 1.08rem;
+  font-weight: 700;
+  color: var(--cream);
+  line-height: 1.18;
+  margin-top: 2px;
+  text-wrap: balance;
+  transition: color 320ms ease, text-shadow 320ms ease;
+}
+
+.fbFoot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.fbSub {
+  font-size: 0.78rem;
+  color: var(--cream-mut);
+  line-height: 1.3;
+  text-decoration: none;
+  @include truncate;
+  min-width: 0;
+  transition: color 0.15s;
+
+  @media (hover: hover) {
+    &:hover {
+      color: var(--gold-bright);
+    }
+  }
+}
+
+// ── Live-state text brightening (mirrors v9 .fb-chip.is-live overrides) ──
+.fbChipIsLive .fbConame {
+  color: #ffffff;
+  text-shadow: 0 0 14px color-mix(in srgb, var(--gold-bright) 60%, transparent);
+}
+
+.fbChipIsLive .fbSub {
+  color: var(--gold-bright);
+}
+
+// ── Animations ────────────────────────────────────────────────────────────
+@keyframes fb-charge {
+  0% {
+    box-shadow:
+      inset 0 0 0 1px color-mix(in srgb, var(--gold) 24%, transparent),
+      inset 0 0 18px rgba(0, 0, 0, 0.42),
+      0 3px 12px rgba(0, 0, 0, 0.32);
+  }
+  18% {
+    box-shadow:
+      inset 0 0 0 1.6px var(--gold-bright),
+      inset 0 0 30px color-mix(in srgb, var(--gold-bright) 30%, transparent),
+      0 0 22px color-mix(in srgb, var(--gold-bright) 40%, transparent);
+  }
+  100% {
+    box-shadow:
+      inset 0 0 0 1px color-mix(in srgb, var(--gold) 24%, transparent),
+      inset 0 0 18px rgba(0, 0, 0, 0.42),
+      0 3px 12px rgba(0, 0, 0, 0.32);
+  }
+}
+
+@keyframes fb-pad-pulse {
+  0%, 100% {
+    background: var(--gold);
+    box-shadow: 0 0 6px color-mix(in srgb, var(--gold) 55%, transparent);
+  }
+  20% {
+    background: var(--cream);
+    box-shadow:
+      0 0 12px var(--gold-bright),
+      0 0 22px color-mix(in srgb, var(--gold-bright) 55%, transparent);
+  }
+}
+
+@keyframes fb-via-glow {
+  0%, 100% {
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.35);
+  }
+  20% {
+    box-shadow:
+      inset 0 0 0 1px rgba(0, 0, 0, 0.35),
+      0 0 12px var(--gold-bright);
+  }
+}
+
+// ── Responsive: mobile + coarse-pointer guards ────────────────────────────
+@media (max-width: 1080px) {
+  .fbRail {
+    flex-direction: column;
+    overflow-x: visible;
+    padding: 22px;
+  }
+
+  .fbBus {
+    display: none;
+  }
+
+  .fbChip {
+    min-width: 0;
+    max-width: 100%;
+    width: 100%;
+
+    &::after {
+      display: none;
+    }
+  }
+}
+
+// Coarse pointers + reduced-motion: kill the lamp + energize animations.
+// The lamp's `mix-blend-mode: screen` is the documented v11.2 CategorySponsorBanner
+// perf hot spot — never paint it on touch devices (where it can't track a cursor
+// anyway).
+@media (hover: none), (pointer: coarse), (prefers-reduced-motion: reduce) {
+  .fbLamp {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fbChipIsLive,
+  .fbChipIsLive::before,
+  .fbViaIsLive {
+    animation: none;
+  }
+}

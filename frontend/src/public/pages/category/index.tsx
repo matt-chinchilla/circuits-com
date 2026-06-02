@@ -3,10 +3,9 @@ import { useParams, useSearchParams, Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { motion } from 'framer-motion';
 import SubcategoryChips from './components/SubcategoryChips';
-import SupplierTable from './components/SupplierTable';
 import PartsTable from './components/PartsTable';
 import SponsorBlock from './components/SponsorBlock';
-import CategorySponsorBanner from './components/CategorySponsorBanner';
+import PreferredPartnersBanner from './components/PreferredPartnersBanner';
 import TopPartners from './components/TopPartners';
 import SkeletonLoader from '@public/components/widgets/SkeletonLoader';
 import Pagination from '@public/components/widgets/Pagination';
@@ -333,12 +332,15 @@ export default function CategoryPage() {
       <div className={styles.contentWide}>
         {error && <p className={styles.error}>{error}</p>}
 
-        {/* Category Sponsor banner — parent-category pages only. Always
-            rendered (empty-state when no sponsor) so the "your brand here"
-            slot is discoverable. Subcategory pages get the sidebar
-            SponsorBlock instead. */}
-        {!loading && category && isParent && !activeSubInfo && (
-          <CategorySponsorBanner sponsor={category.sponsor} categoryName={category.name} />
+        {/* Preferred Partners banner — v14. Renders for both parent + sub
+            category pages; the banner self-gates on `suppliers.length === 0`
+            (returns null when no featured suppliers) so we don't need an
+            extra isParent guard here. */}
+        {!loading && category && (
+          <PreferredPartnersBanner
+            suppliers={category.suppliers}
+            categoryName={category.name}
+          />
         )}
 
         {loading ? (
@@ -358,8 +360,6 @@ export default function CategoryPage() {
         ) : category ? (
           <div className={styles.contentInner}>
             <div className={styles.left}>
-              {!isParent && <SupplierTable suppliers={category.suppliers} />}
-
               <section id="category-parts">
                 <PartsTable
                   parts={visible}

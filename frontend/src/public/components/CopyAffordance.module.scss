@@ -1,0 +1,56 @@
+@use '../../shared/styles/variables' as *;
+
+// Click-to-copy affordance — ported from design-handoff-v9/.../banner.css .csb-copy block.
+// Token vars (--gold, --gold-bright, --gold-deep, --cream) are defined on the
+// ancestor .fb root that wraps this component — do NOT redefine here.
+
+.copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  font-family: $font-mono;
+  font-size: 0.58rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 5px;
+  background: transparent;
+  border: 1px solid;
+  opacity: 0.5;
+  transition: opacity 0.15s, color 0.15s, border-color 0.15s, background 0.15s;
+
+  &[data-copied="1"] {
+    opacity: 1;
+    color: #2fbf6f !important;
+    border-color: #2fbf6f !important;
+  }
+}
+
+.copyDark {
+  color: color-mix(in srgb, var(--gold) 75%, var(--cream));
+  border-color: color-mix(in srgb, var(--gold) 28%, transparent);
+
+  &:hover {
+    background: color-mix(in srgb, var(--gold) 14%, transparent);
+    border-color: var(--gold);
+  }
+}
+
+.copyLight {
+  color: var(--gold-deep);
+  border-color: color-mix(in srgb, var(--gold-deep) 35%, transparent);
+
+  &:hover {
+    background: color-mix(in srgb, var(--gold-deep) 8%, transparent);
+    border-color: var(--gold-deep);
+  }
+}
+
+.copyIco {
+  font-size: 0.8em;
+}
+
+.copyTxt {
+  display: inline-block;
+}
