@@ -568,3 +568,152 @@ def test_patch_to_subcategory_supersedes_peer_on_target(client, seeded_db, db):
     assert existing.status == "Expired", (
         f"Peer on target child should have been superseded, got {existing.status!r}"
     )
+
+
+# ── DELETE reverses the Featured side-effect (2026-06-02 "deleted sponsor ──────
+# ── still shows on the website" bug) ──────────────────────────────────────────
+
+
+def _category_supplier(db, category_id, supplier_id):
+    return (
+        db.query(CategorySupplier)
+        .filter(
+            CategorySupplier.category_id == category_id,
+            CategorySupplier.supplier_id == supplier_id,
+        )
+        .first()
+    )
+
+
+def test_delete_featured_sponsor_unfeatures_supplier_on_banner(client, seeded_db, db):
+    """Deleting a Featured sponsor reverses its CategorySupplier side-effect.
+
+    Regression for the bug where a deleted sponsorship kept showing on the
+    public PreferredPartnersBanner: ``create_sponsor`` (Featured + top-level)
+    upserts a ``CategorySupplier.is_featured=True`` row (the banner reads that
+    table), but ``delete_sponsor`` only removed the ``sponsors`` row — so the
+    supplier stayed on the banner forever. The fix unfeatures on delete.
+    """
+    headers = _auth_header(client)
+    sup = seeded_db["supplier1"]
+    cat = seeded_db["parent"]
+
+    r = _post_sponsor(client, headers, supplier_id=str(sup.id), category_id=str(cat.id))
+    assert r.status_code == 200, r.text
+    sponsor_id = r.json()["id"]
+
+    db.expire_all()
+    cs = _category_supplier(db, cat.id, sup.id)
+    assert cs is not None and cs.is_featured is True, "create should have featured the supplier"
+
+    dresp = client.delete(f"/api/admin/sponsors/{sponsor_id}", headers=headers)
+    assert dresp.status_code == 204
+
+    db.expire_all()
+    assert db.query(Sponsor).filter(Sponsor.id == uuid.UUID(sponsor_id)).first() is None
+    cs = _category_supplier(db, cat.id, sup.id)
+    # Row preserved (mirrors the /unfeature endpoint), flag reversed.
+    assert cs is not None, "the join row should be preserved, not deleted"
+    assert cs.is_featured is False, (
+        "a deleted Featured sponsor MUST drop the supplier off the banner"
+    )
+
+
+def test_delete_featured_sponsor_keeps_feature_when_peer_remains(client, seeded_db, db):
+    """Coexist guard: with two Featured sponsors for the same supplier+category,
+    deleting one leaves is_featured=True (the other still justifies the slot);
+    deleting the second flips it False."""
+    headers = _auth_header(client)
+    sup = seeded_db["supplier1"]
+    cat = seeded_db["parent"]
+
+    r1 = _post_sponsor(client, headers, supplier_id=str(sup.id), category_id=str(cat.id))
+    r2 = _post_sponsor(client, headers, supplier_id=str(sup.id), category_id=str(cat.id))
+    id1, id2 = r1.json()["id"], r2.json()["id"]
+
+    def is_featured():
+        db.expire_all()
+        cs = _category_supplier(db, cat.id, sup.id)
+        return cs.is_featured if cs else None
+
+    assert is_featured() is True
+
+    # Delete the first — a peer Featured sponsor remains → stay featured.
+    assert client.delete(f"/api/admin/sponsors/{id1}", headers=headers).status_code == 204
+    assert is_featured() is True, "a remaining peer Featured sponsor still justifies the banner slot"
+
+    # Delete the second — none remain → unfeature.
+    assert client.delete(f"/api/admin/sponsors/{id2}", headers=headers).status_code == 204
+    assert is_featured() is False, "with no Featured sponsor left, the supplier drops off the banner"
+
+
+def test_delete_featured_sponsor_ignores_expired_peer_when_unfeaturing(client, seeded_db, db):
+    """Only an Active (or NULL-legacy) Featured peer justifies keeping the
+    banner slot. An Expired/Paused Featured peer must NOT — otherwise a ghost
+    supplier lingers on the PreferredPartnersBanner with no live sponsorship,
+    the same bug class this fix targets. Matches the Active-or-NULL predicate
+    used by ``_supersede_existing_for_category`` and the public read.
+    """
+    headers = _auth_header(client)
+    sup = seeded_db["supplier1"]
+    cat = seeded_db["parent"]
+
+    r1 = _post_sponsor(client, headers, supplier_id=str(sup.id), category_id=str(cat.id))
+    r2 = _post_sponsor(client, headers, supplier_id=str(sup.id), category_id=str(cat.id))
+    active_id, peer_id = r1.json()["id"], r2.json()["id"]
+
+    # Expire the peer so the only remaining Featured sponsor is non-Active.
+    db.expire_all()
+    peer = db.query(Sponsor).filter(Sponsor.id == uuid.UUID(peer_id)).first()
+    peer.status = "Expired"
+    db.commit()
+
+    # Delete the Active sponsor → only an Expired Featured peer remains.
+    assert client.delete(f"/api/admin/sponsors/{active_id}", headers=headers).status_code == 204
+
+    db.expire_all()
+    cs = _category_supplier(db, cat.id, sup.id)
+    assert cs is not None and cs.is_featured is False, (
+        "an Expired Featured peer must NOT keep the supplier on the banner"
+    )
+
+
+def test_delete_non_featured_sponsor_leaves_category_supplier_untouched(client, seeded_db, db):
+    """Deleting a Silver/Gold/Platinum (subcategory) sponsor must NOT touch any
+    CategorySupplier.is_featured row — that side-effect only exists for Featured.
+    A supplier featured by seed/manual curation must stay featured."""
+    headers = _auth_header(client)
+    sup = seeded_db["supplier2"]
+    child = seeded_db["child"]
+
+    # Pre-existing manual/seed feature for this supplier on the child
+    # (get-or-create so we don't collide with any conftest-seeded row).
+    cs = _category_supplier(db, child.id, sup.id)
+    if cs is None:
+        db.add(CategorySupplier(category_id=child.id, supplier_id=sup.id, is_featured=True, rank=1))
+    else:
+        cs.is_featured = True
+    db.commit()
+
+    # Gold + child is a legal Subcategory Sponsor placement.
+    r = client.post(
+        "/api/admin/sponsors/",
+        json={
+            "supplier_id": str(sup.id),
+            "category_id": str(child.id),
+            "tier": "Gold",
+            "amount": "200.00",
+            "status": "Active",
+        },
+        headers=headers,
+    )
+    assert r.status_code == 200, r.text
+    sponsor_id = r.json()["id"]
+
+    assert client.delete(f"/api/admin/sponsors/{sponsor_id}", headers=headers).status_code == 204
+
+    db.expire_all()
+    cs = _category_supplier(db, child.id, sup.id)
+    assert cs is not None and cs.is_featured is True, (
+        "deleting a non-Featured sponsor must not unfeature a seed/manual feature"
+    )

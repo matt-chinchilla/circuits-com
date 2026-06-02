@@ -189,6 +189,57 @@ def _upsert_category_supplier_featured(
     )
 
 
+def _unfeature_after_delete(
+    db: Session,
+    supplier_id: uuid.UUID,
+    category_id: uuid.UUID,
+) -> None:
+    """Inverse of ``_upsert_category_supplier_featured`` for sponsor deletion.
+
+    When a Featured sponsor is deleted, drop the supplier off the
+    PreferredPartnersBanner by setting ``CategorySupplier.is_featured=False``
+    — UNLESS another Featured sponsor for the same ``(supplier, category)``
+    still justifies the slot (Featured peers coexist). Mirrors the
+    ``/unfeature`` endpoint: flip the flag, preserve the row (keeps rank +
+    association history).
+
+    Must be called AFTER the deleted sponsor has been flushed, so the
+    remaining-Featured check doesn't count the row being removed.
+
+    NOTE: an ``is_featured`` row created by seed/manual curation (not by a
+    Featured sponsor) is also cleared here if the supplier's last Featured
+    sponsor on this category is deleted — acceptable, since removing the
+    sponsorship is the admin's explicit intent.
+    """
+    # Only an Active (or NULL-legacy) Featured sponsor justifies keeping the
+    # banner slot — same predicate as _supersede_existing_for_category and the
+    # public category read. An Expired/Paused peer is not visible anywhere, so
+    # it must not keep a supplier on the banner (ghost-partner bug class).
+    remaining = (
+        db.query(Sponsor)
+        .filter(
+            Sponsor.supplier_id == supplier_id,
+            Sponsor.category_id == category_id,
+            or_(Sponsor.status == "Active", Sponsor.status.is_(None)),
+        )
+        .all()
+    )
+    if any(_is_featured(s.tier) for s in remaining):
+        return  # a live peer Featured sponsor still justifies the banner slot
+
+    cs = (
+        db.query(CategorySupplier)
+        .filter(
+            CategorySupplier.category_id == category_id,
+            CategorySupplier.supplier_id == supplier_id,
+        )
+        .first()
+    )
+    if cs is not None and cs.is_featured:
+        # ORM descriptor assignment — Pyright sees Column[bool] at type level.
+        cs.is_featured = False  # type: ignore[assignment]
+
+
 def _parse_sponsor_id(sponsor_id: str) -> uuid.UUID:
     """Path-param id → UUID. Bad id is treated as not-found (404).
 
@@ -349,5 +400,20 @@ def delete_sponsor(
     sponsor = db.query(Sponsor).filter(Sponsor.id == _parse_sponsor_id(sponsor_id)).first()
     if not sponsor:
         raise HTTPException(status_code=404, detail="Sponsor not found")
+
+    # Capture the Featured side-effect inputs BEFORE the row is gone, so we
+    # can reverse the CategorySupplier feature that create_sponsor set up.
+    # Without this the supplier stays on the PreferredPartnersBanner after
+    # the sponsor is deleted (the banner reads category_suppliers, not
+    # sponsors) — the "deleted sponsorship still shows on the website" bug.
+    was_featured = _is_featured(sponsor.tier)
+    supplier_id = sponsor.supplier_id
+    category_id = sponsor.category_id
+
     db.delete(sponsor)
+    # Flush so the deleted row isn't counted by the remaining-Featured check.
+    db.flush()
+    if was_featured and category_id is not None:
+        _unfeature_after_delete(db, supplier_id, category_id)
+
     db.commit()

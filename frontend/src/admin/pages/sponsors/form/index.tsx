@@ -344,26 +344,12 @@ export default function SponsorFormPage() {
     if (!id) return;
     setShowDeleteConfirm(false);
     try {
-      // Featured sponsors attach to a top-level category and side-effect-
-      // feature the supplier on CategorySupplier (see admin_sponsors.py
-      // `_upsert_category_supplier_featured`). Deleting the Sponsor row
-      // alone would leave the supplier visible on the Preferred Partners
-      // banner. Mirror the side-effect on the way out: unfeature first,
-      // then delete. Best-effort — a failure here shouldn't block the
-      // user's primary intent (sponsor delete).
-      if (form.tier === 'Featured' && form.category_id) {
-        const cat = categories.find((c) => c.id === form.category_id);
-        if (cat && form.supplier_id) {
-          try {
-            await adminApi.unfeatureSupplierInCategory(form.supplier_id, cat.slug);
-          } catch (cleanupErr) {
-            console.warn(
-              '[SponsorFormPage] unfeature cleanup failed (continuing delete)',
-              cleanupErr,
-            );
-          }
-        }
-      }
+      // The banner side-effect cleanup lives in the BACKEND now:
+      // DELETE /api/admin/sponsors/{id} unfeatures the supplier on its
+      // category iff no other Featured sponsor remains there (see
+      // admin_sponsors.py `_unfeature_after_delete`). The form no longer
+      // pre-unfeatures — doing so client-side skipped the coexist guard and
+      // could wrongly drop a supplier that still has a peer Featured sponsor.
       await deleteSponsor(id);
       setToast('Sponsorship deleted');
       setTimeout(() => navigate('/admin/sponsors'), 500);
