@@ -22,7 +22,7 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.models import Sponsor, Supplier, User
+from app.models import Category, CategorySupplier, Sponsor, Supplier, User
 from app.schemas.sponsor import (
     AdminSponsorCreate,
     AdminSponsorResponse,
@@ -31,6 +31,17 @@ from app.schemas.sponsor import (
 from app.services.auth_service import get_current_user
 
 router = APIRouter(prefix="/api/admin/sponsors", tags=["admin-sponsors"])
+
+
+def _is_featured(tier: str | None) -> bool:
+    """Case-insensitive check for the Featured tier.
+
+    Admin emits TitleCase ('Featured'); legacy seed rows are lowercase
+    ('gold'). Normalize at the comparison site rather than at write time
+    so existing data stays untouched (per CLAUDE.md "Sponsor tier
+    casing" gotcha).
+    """
+    return (tier or "").strip().lower() == "featured"
 
 
 def _serialize(sponsor: Sponsor) -> AdminSponsorResponse:
@@ -66,6 +77,89 @@ def _validate_xor(category_id: uuid.UUID | None, keyword: str | None) -> None:
             status_code=422,
             detail="Exactly one of category_id or keyword must be set.",
         )
+
+
+def _validate_tier_placement(tier: str | None, category_id: uuid.UUID | None) -> None:
+    """Category placement is reserved for the Featured tier.
+
+    Product rule (2026-06-02): Silver / Gold / Platinum sponsors are
+    keyword-only — they buy presence on a keyword's sponsor page.
+    Featured is the category-level partnership tier and is the only
+    one that can attach to a category (lands on PreferredPartnersBanner).
+
+    Returns 422 on:
+      - Silver/Gold/Platinum + category_id (the bug class — must use keyword)
+      - Featured + keyword     (Featured is category-only)
+
+    The admin form greys out the wrong combinations; this guard catches
+    a hand-crafted POST that bypasses the UI.
+    """
+    has_category = category_id is not None
+    if _is_featured(tier):
+        if not has_category:
+            raise HTTPException(
+                status_code=422,
+                detail="Featured tier is category-only — keyword placement not allowed.",
+            )
+    else:
+        if has_category:
+            raise HTTPException(
+                status_code=422,
+                detail="Category placement requires Featured tier.",
+            )
+
+
+def _upsert_category_supplier_featured(
+    db: Session,
+    supplier_id: uuid.UUID,
+    category_id: uuid.UUID,
+) -> None:
+    """Ensure the (supplier, category) join row exists with is_featured=True.
+
+    Side-effect of writing a Featured sponsor: PreferredPartnersBanner
+    reads ``category.suppliers`` filtered to ``is_featured=True``, so a
+    Featured sponsor that didn't land here would be invisible on the
+    banner (the 2026-06-02 reproduction).
+
+    Idempotent — flips an existing row's is_featured if it was False,
+    leaves an already-Featured row alone (don't churn rank). New rows
+    pick rank = max(rank for category) + 1 to avoid collisions with
+    existing featured peers, which the banner sorts by rank asc.
+    """
+    existing = (
+        db.query(CategorySupplier)
+        .filter(
+            CategorySupplier.category_id == category_id,
+            CategorySupplier.supplier_id == supplier_id,
+        )
+        .first()
+    )
+    if existing is not None:
+        # SQLAlchemy ORM descriptor assignment — Pyright sees Column[bool]
+        # at type level, but runtime intercepts these to emit UPDATE.
+        existing.is_featured = True  # type: ignore[assignment]
+        return
+
+    # Auto-rank: take next slot after the highest existing rank on this
+    # category so we never collide. The banner ORDER BYs rank asc, so a
+    # fresh max+1 puts the new row at the bottom of the featured list,
+    # which matches user expectation ("just added, lowest priority").
+    max_rank = (
+        db.query(CategorySupplier.rank)
+        .filter(CategorySupplier.category_id == category_id)
+        .order_by(CategorySupplier.rank.desc())
+        .first()
+    )
+    next_rank = (max_rank[0] if max_rank else 0) + 1
+
+    db.add(
+        CategorySupplier(
+            category_id=category_id,
+            supplier_id=supplier_id,
+            is_featured=True,
+            rank=next_rank,
+        )
+    )
 
 
 def _parse_sponsor_id(sponsor_id: str) -> uuid.UUID:
@@ -127,13 +221,23 @@ def create_sponsor(
     current_user: User = Depends(get_current_user),
 ):
     _validate_xor(body.category_id, body.keyword)
+    _validate_tier_placement(body.tier, body.category_id)
 
     supplier = db.query(Supplier).filter(Supplier.id == body.supplier_id).first()
     if not supplier:
         raise HTTPException(status_code=404, detail="Supplier not found")
 
-    if body.category_id is not None:
+    # Tier-gated supersede: Featured allows MULTIPLE concurrent sponsors
+    # per category (banner shows them all). Lower tiers (keyword-only
+    # post 2026-06-02) never reach this branch since they can't carry
+    # category_id, but the explicit gate keeps the intent legible.
+    if body.category_id is not None and not _is_featured(body.tier):
         _supersede_existing_for_category(db, body.category_id)
+
+    # Featured + category → side-effect onto CategorySupplier so the
+    # PreferredPartnersBanner picks up the new partner immediately.
+    if _is_featured(body.tier) and body.category_id is not None:
+        _upsert_category_supplier_featured(db, body.supplier_id, body.category_id)
 
     sponsor = Sponsor(
         id=uuid.uuid4(),
@@ -167,22 +271,35 @@ def update_sponsor(
 
     update_data = body.model_dump(exclude_unset=True)
 
-    # Re-validate XOR against the post-update state so a PATCH can't leave the
-    # row in an illegal both-set / neither-set configuration.
-    if "category_id" in update_data or "keyword" in update_data:
-        new_category = update_data.get("category_id", sponsor.category_id)
-        new_keyword = update_data.get("keyword", sponsor.keyword)
-        _validate_xor(new_category, new_keyword)
+    # Resolve post-update tier + placement so all guards see the same
+    # final state (handles partial PATCH where only one of tier/category_id
+    # is touched).
+    new_category_id = update_data.get("category_id", sponsor.category_id)
+    new_keyword = update_data.get("keyword", sponsor.keyword)
+    new_tier = update_data.get("tier", sponsor.tier)
 
-    # If this PATCH re-targets the sponsor to a (new, non-null) category,
-    # supersede whatever's currently sitting there. Without this the POST
-    # invariant ("at most one Active per category") is escapable via edit-
-    # then-move: open sponsor B on category Y, change its category_id to
-    # X via the form -> two Active sponsors on X. Exclude sponsor.id so the
-    # row being patched doesn't mark itself Expired.
-    new_category_id = update_data.get("category_id")
-    if new_category_id is not None and new_category_id != sponsor.category_id:
+    # Re-validate XOR + tier/placement invariants against the post-update
+    # state so a PATCH can't leave the row in an illegal config.
+    if "category_id" in update_data or "keyword" in update_data:
+        _validate_xor(new_category_id, new_keyword)
+    if "category_id" in update_data or "tier" in update_data:
+        _validate_tier_placement(new_tier, new_category_id)
+
+    # If this PATCH re-targets a non-Featured sponsor to a new category,
+    # supersede whatever's currently sitting on that slot. Featured peers
+    # coexist (banner shows them all), so skip supersede for that tier.
+    if (
+        "category_id" in update_data
+        and new_category_id is not None
+        and new_category_id != sponsor.category_id
+        and not _is_featured(new_tier)
+    ):
         _supersede_existing_for_category(db, new_category_id, exclude_id=sponsor.id)
+
+    # Featured + category (newly or already): mirror the POST side-effect
+    # so the banner reflects the latest state.
+    if _is_featured(new_tier) and new_category_id is not None:
+        _upsert_category_supplier_featured(db, sponsor.supplier_id, new_category_id)
 
     for key, value in update_data.items():
         setattr(sponsor, key, value)

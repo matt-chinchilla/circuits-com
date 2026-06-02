@@ -23,7 +23,11 @@ def _auth_header(client):
 
 
 def test_create_category_sponsor_then_list_shows_it(client, seeded_db, db):
-    """POST a category sponsor, then GET list returns it (joined names)."""
+    """POST a category sponsor, then GET list returns it (joined names).
+
+    Note: tier='Featured' is the only tier that accepts category_id
+    (2026-06-02 product rule — Silver/Gold/Platinum are keyword-only).
+    """
     headers = _auth_header(client)
     supplier = seeded_db["supplier1"]
     category = seeded_db["child"]
@@ -33,7 +37,7 @@ def test_create_category_sponsor_then_list_shows_it(client, seeded_db, db):
         json={
             "supplier_id": str(supplier.id),
             "category_id": str(category.id),
-            "tier": "platinum",
+            "tier": "Featured",
             "amount": "750.00",
             "status": "Active",
         },
@@ -47,7 +51,7 @@ def test_create_category_sponsor_then_list_shows_it(client, seeded_db, db):
     assert created["category_name"] == category.name
     assert created["category_icon"] == category.icon
     assert created["keyword"] is None
-    assert created["tier"] == "platinum"
+    assert created["tier"] == "Featured"
     assert created["amount"] == "750.00"
     assert created["status"] == "Active"
 
@@ -71,7 +75,7 @@ def test_create_status_defaults_to_active(client, seeded_db, db):
         json={
             "supplier_id": str(supplier.id),
             "category_id": str(category.id),
-            "tier": "gold",
+            "tier": "Featured",
         },
         headers=headers,
     )
@@ -105,24 +109,29 @@ def test_create_keyword_sponsor_persists(client, seeded_db, db):
 
 
 def test_patch_updates_a_field(client, seeded_db, db):
-    """PATCH updates a single field and persists it."""
+    """PATCH updates a single field and persists it.
+
+    Uses tier='Featured' because the seeded sponsor has a category_id and
+    the 2026-06-02 rule requires Featured tier for category-placed
+    sponsors. Amount is the field we actually care about asserting here.
+    """
     headers = _auth_header(client)
     sponsor = seeded_db["sponsor"]
 
     resp = client.patch(
         f"/api/admin/sponsors/{sponsor.id}",
-        json={"tier": "platinum", "amount": "999.00"},
+        json={"tier": "Featured", "amount": "999.00"},
         headers=headers,
     )
     assert resp.status_code == 200, resp.text
     data = resp.json()
-    assert data["tier"] == "platinum"
+    assert data["tier"] == "Featured"
     assert data["amount"] == "999.00"
 
     # Reload from DB to confirm persistence.
     db.expire_all()
     row = db.query(Sponsor).filter(Sponsor.id == sponsor.id).first()
-    assert row.tier == "platinum"
+    assert row.tier == "Featured"
 
 
 def test_patch_unknown_id_returns_404(client, seeded_db):

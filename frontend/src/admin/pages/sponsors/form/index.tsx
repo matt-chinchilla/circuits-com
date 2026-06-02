@@ -244,13 +244,21 @@ export default function SponsorFormPage() {
     setPlacement(p);
     update('category_id', '');
     update('keyword', '');
+    // Category placements require the Featured tier (2026-06-02 rule);
+    // auto-bump from Gold→Featured so the user doesn't have to. The
+    // reverse direction (Featured→category cleared) doesn't auto-downgrade
+    // — we keep the user's chosen tier since Featured + keyword is a 422
+    // anyway, which the tier-select onChange handles.
+    if ((p === 'top-category' || p === 'subcategory') && form.tier !== 'Featured') {
+      update('tier', 'Featured');
+    }
     setErrors((prev) => {
       const next = { ...prev };
       delete next.category_id;
       delete next.keyword;
       return next;
     });
-  }, [update]);
+  }, [update, form.tier]);
 
   function validate(): boolean {
     const e: FormErrors = {};
@@ -406,7 +414,18 @@ export default function SponsorFormPage() {
                   id="tier"
                   className={styles.select}
                   value={form.tier}
-                  onChange={(e) => update('tier', e.target.value as SponsorTier)}
+                  onChange={(e) => {
+                    const next = e.target.value as SponsorTier;
+                    update('tier', next);
+                    // Product rule (2026-06-02): only Featured sponsors
+                    // can attach to a category. Switching away from
+                    // Featured while a category placement is selected
+                    // would 422 on save — auto-flip to keyword so the
+                    // form stays in a legal state.
+                    if (next !== 'Featured' && placement !== 'keyword') {
+                      choosePlacement('keyword');
+                    }
+                  }}
                 >
                   {TIERS.map((t) => (
                     <option key={t} value={t}>
@@ -426,6 +445,9 @@ export default function SponsorFormPage() {
                   onClick={() => choosePlacement('top-category')}
                   role="radio"
                   aria-checked={placement === 'top-category'}
+                  disabled={form.tier !== 'Featured'}
+                  aria-disabled={form.tier !== 'Featured'}
+                  title={form.tier !== 'Featured' ? 'Category placement requires the Featured tier' : undefined}
                 >
                   Category sponsor
                 </button>
@@ -435,6 +457,9 @@ export default function SponsorFormPage() {
                   onClick={() => choosePlacement('subcategory')}
                   role="radio"
                   aria-checked={placement === 'subcategory'}
+                  disabled={form.tier !== 'Featured'}
+                  aria-disabled={form.tier !== 'Featured'}
+                  title={form.tier !== 'Featured' ? 'Category placement requires the Featured tier' : undefined}
                 >
                   Subcategory sponsor
                 </button>
@@ -449,10 +474,10 @@ export default function SponsorFormPage() {
                 </button>
               </div>
               <p className={styles.fieldHint}>
-                Category sponsors get the new banner above the parts table on the
-                top-level page; subcategory sponsors get the PCB-flashlight badge
-                in the sidebar on a specific child page; keyword sponsors trigger
-                on a search term.
+                <strong>Featured</strong> is the only tier that can attach to a
+                category — it adds the supplier to the Preferred Partners banner
+                and lets multiple Featured sponsors coexist per category.
+                Silver / Gold / Platinum are keyword-only.
               </p>
             </div>
 
@@ -475,8 +500,9 @@ export default function SponsorFormPage() {
                   </select>
                 </div>
                 <p className={styles.fieldHint}>
-                  Auto-supersedes any existing active sponsor on this category
-                  (one banner slot per top-level page).
+                  Adds the supplier to the Preferred Partners banner on this
+                  category. Multiple Featured sponsors can coexist — they all
+                  appear as ranked rows on the banner.
                 </p>
                 {errors.category_id && <div className={styles.fieldError}>{errors.category_id}</div>}
               </div>
