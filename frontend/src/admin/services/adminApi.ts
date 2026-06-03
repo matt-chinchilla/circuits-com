@@ -154,26 +154,21 @@ export const adminApi = {
   deleteSponsor: (id: string) =>
     adminClient.delete(`/admin/sponsors/${id}`).then((r) => r.data),
 
-  // Mark a supplier as the Featured Supplier on a category. Used by the
-  // guided-tour wizard so the demo supplier shows up in the live-site
-  // preview iframe. Upserts the CategorySupplier join row.
-  featureSupplierInCategory: (supplierId: string, categorySlug: string, rank = 1) =>
-    adminClient
-      .post('/admin/category-suppliers/feature', {
-        supplier_id: supplierId,
-        category_slug: categorySlug,
-        rank,
-      })
-      .then((r) => r.data),
-
-  // Inverse of featureSupplierInCategory. Sets is_featured=False on the
-  // CategorySupplier row (preserves the row itself). Idempotent — calling
-  // on an unfeatured / missing row still returns ok=true.
-  unfeatureSupplierInCategory: (supplierId: string, categorySlug: string) =>
-    adminClient
-      .post('/admin/category-suppliers/unfeature', {
-        supplier_id: supplierId,
-        category_slug: categorySlug,
-      })
-      .then((r) => r.data),
+  // "Feature" a supplier on a category = a Featured sponsorship on that
+  // (top-level) category — the single source of truth as of 2026-06-03
+  // (the standalone category-suppliers feature flag was removed). Used by the
+  // guided-tour wizard so the demo supplier shows up in the live-site preview.
+  // Best-effort: resolve the slug to a category id, then create the sponsorship
+  // (the caller swallows failures — e.g. a non-top-level slug or a duplicate).
+  featureSupplierInCategory: async (supplierId: string, categorySlug: string) => {
+    const cats = await adminApi.getCategories();
+    const cat = cats.find((c) => c.slug === categorySlug);
+    if (!cat) return null;
+    return adminApi.createSponsor({
+      supplier_id: supplierId,
+      category_id: cat.id,
+      tier: 'Featured',
+      status: 'Active',
+    } as SponsorCreate);
+  },
 };

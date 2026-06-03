@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Search, ChevronRight, List, Grid as GridIcon, Plus } from 'lucide-react';
 import Breadcrumbs from '@admin/components/Breadcrumbs';
@@ -38,16 +38,6 @@ export default function CategoriesPage() {
   const [query, setQuery] = useState('');
   const [view, setView] = useState<ViewMode>('tree');
   const [toast, setToast] = useState<string | null>(null);
-  const [unfeaturing, setUnfeaturing] = useState<string | null>(null);
-
-  const refetchCategories = useCallback(() => {
-    return adminApi
-      .getCategories()
-      .then((cats) => {
-        setCategories(cats);
-      })
-      .catch(() => {});
-  }, []);
 
   useEffect(() => {
     adminApi
@@ -67,26 +57,6 @@ export default function CategoriesPage() {
     const t = setTimeout(() => setToast(null), 2400);
     return () => clearTimeout(t);
   }, [toast]);
-
-  // Unfeature targets the exact CategorySupplier row by supplier id — the
-  // id rides on each featured_suppliers entry, so there's no name→id lookup
-  // (and no same-name collision). Keyed by `id@slug` for the busy spinner.
-  const handleUnfeature = useCallback(
-    async (supplierId: string, supplierName: string, categorySlug: string) => {
-      const key = `${supplierId}@${categorySlug}`;
-      setUnfeaturing(key);
-      try {
-        await adminApi.unfeatureSupplierInCategory(supplierId, categorySlug);
-        await refetchCategories();
-        setToast(`Unfeatured ${supplierName}`);
-      } catch {
-        setToast(`Failed to unfeature ${supplierName}`);
-      } finally {
-        setUnfeaturing(null);
-      }
-    },
-    [refetchCategories],
-  );
 
   function toggle(id: string) {
     setExpanded((prev) => {
@@ -283,33 +253,18 @@ export default function CategoriesPage() {
                           <span className={styles.featuredStar}>&#9733;</span>
                           <span>Featured suppliers</span>
                         </div>
-                        {featured.map((sup) => {
-                          const busy = !!sup.id && unfeaturing === `${sup.id}@${c.slug}`;
-                          return (
-                            <div
-                              key={`${c.id}-${sup.id ?? sup.name}`}
-                              className={styles.treeFeaturedRow}
-                            >
-                              <span className={styles.featuredStar}>&#9733;</span>
-                              <span className={styles.treeFeaturedName}>{sup.name}</span>
-                              <button
-                                type="button"
-                                className={styles.unfeatureBtn}
-                                onClick={() =>
-                                  sup.id && handleUnfeature(sup.id, sup.name, c.slug)
-                                }
-                                disabled={busy || !sup.id}
-                                title={
-                                  sup.id
-                                    ? `Remove ${sup.name} from Featured on ${c.name}`
-                                    : 'Supplier id unavailable'
-                                }
-                              >
-                                {busy ? 'Unfeaturing…' : 'Unfeature'}
-                              </button>
-                            </div>
-                          );
-                        })}
+                        {/* Read-only: featured suppliers are sourced from the
+                            sponsors table now. Add/remove a sponsorship from
+                            /admin/sponsors (single source of truth). */}
+                        {featured.map((sup) => (
+                          <div
+                            key={`${c.id}-${sup.id ?? sup.name}`}
+                            className={styles.treeFeaturedRow}
+                          >
+                            <span className={styles.featuredStar}>&#9733;</span>
+                            <span className={styles.treeFeaturedName}>{sup.name}</span>
+                          </div>
+                        ))}
                       </div>
                     );
                   })()}

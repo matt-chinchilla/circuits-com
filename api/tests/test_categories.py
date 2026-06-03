@@ -44,12 +44,14 @@ def test_get_category_by_slug(client, seeded_db):
     assert data["slug"] == "clock-and-timing"
     assert data["name"] == "Clock and Timing"
 
-    # Should have suppliers
+    # Preferred Partners = the category's SPONSORS (single source of truth as of
+    # 2026-06-03). Kennedy has a Gold sponsor on this subcategory; Avnet is
+    # associated (carries parts) but has NO sponsorship, so it is not on the
+    # banner.
     assert "suppliers" in data
-    assert len(data["suppliers"]) == 2
     supplier_names = {s["name"] for s in data["suppliers"]}
-    assert "Avnet" in supplier_names
-    assert "Kennedy Electronics" in supplier_names
+    assert supplier_names == {"Kennedy Electronics"}
+    assert data["suppliers"][0]["is_featured"] is True
 
     # Should have sponsor
     assert "sponsor" in data

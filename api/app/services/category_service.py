@@ -1,7 +1,26 @@
-from sqlalchemy import func, or_
+from sqlalchemy import case, func, or_
 from sqlalchemy.orm import Session
 
-from app.models import Category, CategorySupplier, Part, PartListing, PriceBreak, Sponsor, Supplier
+from app.models import Category, Part, PartListing, PriceBreak, Sponsor, Supplier
+
+
+def _active_sponsor():
+    """Visible-sponsor predicate: Active OR legacy NULL status (Paused/Expired
+    are hidden). Must match the admin write-path supersede."""
+    return or_(Sponsor.status == "Active", Sponsor.status.is_(None))
+
+
+def _tier_order():
+    """Order sponsorships by tier priority (Featured > Platinum > Gold > Silver)
+    for the ranked Preferred Partners list."""
+    t = func.lower(Sponsor.tier)
+    return case(
+        (t == "featured", 0),
+        (t == "platinum", 1),
+        (t == "gold", 2),
+        (t == "silver", 3),
+        else_=9,
+    )
 
 
 def get_all_categories(db: Session) -> list[Category]:
@@ -21,20 +40,20 @@ def get_all_categories(db: Session) -> list[Category]:
         for row in db.query(Part.category_id, func.count(Part.id)).group_by(Part.category_id).all()
     }
 
-    # Featured supplier per category — lowest rank among is_featured=true rows
-    # wins. Single ORDER BY rank ASC query feeds both shapes:
-    #   - `featured_list_by_cat`: full ordered list of {id, name} (rank ASC,
-    #     lowest first) powering PreferredPartnersBanner + the admin tree's
-    #     multi-row view. Carries the supplier id so the admin "Unfeature"
-    #     button targets the exact row — names alone collide when two
-    #     suppliers share a name (Supplier.name has no unique constraint).
-    #   - `featured_by_cat`: legacy single name = `featured_suppliers[0].name`,
-    #     kept for back-compat with existing consumers.
+    # A category's preferred partners = its active SPONSORSHIPS (the `sponsors`
+    # table is the single source of truth as of 2026-06-03 — Featured on a
+    # top-level category, Platinum/Gold on a child). Ordered by tier then
+    # recency; UNIQUE(supplier_id, category_id) means a supplier appears at most
+    # once per category, so no dedup is needed.
+    #   - `featured_list_by_cat`: ordered {id, name} list → PreferredPartnersBanner
+    #     + the admin tree. Carries the supplier id (names collide — no unique).
+    #   - `featured_by_cat`: legacy single name = `featured_suppliers[0].name`.
     featured_rows = (
-        db.query(CategorySupplier.category_id, Supplier.id, Supplier.name)
-        .join(Supplier, Supplier.id == CategorySupplier.supplier_id)
-        .filter(CategorySupplier.is_featured.is_(True))
-        .order_by(CategorySupplier.rank.asc())
+        db.query(Sponsor.category_id, Supplier.id, Supplier.name)
+        .join(Supplier, Supplier.id == Sponsor.supplier_id)
+        .filter(Sponsor.category_id.isnot(None))
+        .filter(_active_sponsor())
+        .order_by(Sponsor.category_id, _tier_order(), Sponsor.created_at)
         .all()
     )
     featured_list_by_cat: dict = {}
@@ -271,40 +290,24 @@ def get_category_by_slug(
     if not category:
         return None
 
-    # Get suppliers for this category via CategorySupplier join — the
-    # category's OWN rows only, NOT rolled up from children. Under the tier
-    # model (Featured = top-level / Subcategory Sponsor = child), a parent's
-    # Preferred Partners banner shows only its own top-level Featured sponsors;
-    # a child's Featured supplier belongs on that child's page, and must not
-    # surface on the parent (the 2026-06-02 "deleted Oneonta still shows on
-    # PMICs via the ldo-regulators rollup" bug). Parts still roll up to the
-    # parent (`_build_popular_parts`); suppliers do not. Dedup by supplier.id:
-    # prefer is_featured=True; among featured rows, lowest rank wins.
-    cat_ids = [category.id]
-    supplier_rows = (
-        db.query(Supplier, CategorySupplier.is_featured, CategorySupplier.rank)
-        .join(CategorySupplier, CategorySupplier.supplier_id == Supplier.id)
-        .filter(CategorySupplier.category_id.in_(cat_ids))
+    # Preferred Partners banner = this category's active SPONSORSHIPS (the
+    # `sponsors` table is the single source of truth as of 2026-06-03 — Featured
+    # on a top-level category, Platinum/Gold on a child). NOT rolled up from
+    # children (a child's sponsor belongs on the child's page). UNIQUE(supplier,
+    # category) means each supplier appears at most once → no dedup. Stamp
+    # is_featured + 1-based rank for the SupplierResponse the banner reads.
+    sponsor_suppliers = (
+        db.query(Supplier)
+        .join(Sponsor, Sponsor.supplier_id == Supplier.id)
+        .filter(Sponsor.category_id == category.id)
+        .filter(_active_sponsor())
+        .order_by(_tier_order(), Sponsor.created_at)
         .all()
     )
-
-    best_by_supplier: dict = {}
-    for supplier, is_featured, rank in supplier_rows:
-        existing = best_by_supplier.get(supplier.id)
-        if existing is None:
-            best_by_supplier[supplier.id] = (supplier, bool(is_featured), rank)
-            continue
-        _, existing_featured, existing_rank = existing
-        # Prefer featured over non-featured; among featured, prefer lowest rank.
-        if bool(is_featured) and not existing_featured:
-            best_by_supplier[supplier.id] = (supplier, True, rank)
-        elif bool(is_featured) == existing_featured and rank < existing_rank:
-            best_by_supplier[supplier.id] = (supplier, bool(is_featured), rank)
-
     suppliers = []
-    for supplier, is_featured, rank in sorted(best_by_supplier.values(), key=lambda row: row[2]):
-        supplier.is_featured = is_featured
-        supplier.rank = rank
+    for position, supplier in enumerate(sponsor_suppliers, start=1):
+        supplier.is_featured = True
+        supplier.rank = position
         suppliers.append(supplier)
 
     # Get sponsor for this category — newest visible wins. The visible-status

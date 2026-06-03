@@ -253,19 +253,23 @@ export default function SponsorFormPage() {
   // handlers previously diverged on what they cleared (the keyword button
   // skipped clearing keyword), which is a subtle footgun across rapid
   // bucket toggles.
-  const choosePlacement = useCallback((p: Placement) => {
+  const choosePlacement = useCallback((p: Placement, keepTier = false) => {
     setPlacement(p);
     update('category_id', '');
     update('keyword', '');
-    // Product rule (2026-06-02 revised): Featured is reserved for the
-    // top-level Category placement (Preferred Partners banner). Silver /
-    // Gold / Platinum apply to subcategory or keyword. Auto-correct the
-    // tier in both directions so the form stays in a legal state without
-    // the user having to round-trip through the tier select.
-    if (p === 'top-category' && form.tier !== 'Featured') {
-      update('tier', 'Featured');
-    } else if ((p === 'subcategory' || p === 'keyword') && form.tier === 'Featured') {
-      update('tier', 'Gold');
+    // Tier↔placement matrix (2026-06-03): Category=Featured only,
+    // Subcategory=Platinum/Gold only, Keyword=Silver/Gold/Platinum. Auto-correct
+    // the tier so the form stays legal without a round-trip through the select.
+    // `keepTier` skips this when the user just picked the tier (the tier-select
+    // onChange drives the placement, not the other way around).
+    if (!keepTier) {
+      if (p === 'top-category') {
+        if (form.tier !== 'Featured') update('tier', 'Featured');
+      } else if (p === 'subcategory') {
+        if (form.tier !== 'Platinum' && form.tier !== 'Gold') update('tier', 'Gold');
+      } else if (p === 'keyword') {
+        if (form.tier === 'Featured') update('tier', 'Gold');
+      }
     }
     setErrors((prev) => {
       const next = { ...prev };
@@ -438,15 +442,19 @@ export default function SponsorFormPage() {
                   onChange={(e) => {
                     const next = e.target.value as SponsorTier;
                     update('tier', next);
-                    // Product rule (2026-06-02 revised): Featured is the
-                    // only tier that can attach to a top-level category;
-                    // Silver/Gold/Platinum are subcategory- or keyword-
-                    // scoped. Auto-flip placement so the form stays in a
-                    // legal state without forcing a second click.
+                    // Flip placement to one valid for the new tier (matrix:
+                    // Featured→Category, Silver→Keyword, Platinum/Gold→stay
+                    // unless on the now-illegal top-level). keepTier=true so we
+                    // don't re-override the tier the user just chose.
                     if (next === 'Featured' && placement !== 'top-category') {
-                      choosePlacement('top-category');
-                    } else if (next !== 'Featured' && placement === 'top-category') {
-                      choosePlacement('subcategory');
+                      choosePlacement('top-category', true);
+                    } else if (next === 'Silver' && placement !== 'keyword') {
+                      choosePlacement('keyword', true);
+                    } else if (
+                      (next === 'Platinum' || next === 'Gold') &&
+                      placement === 'top-category'
+                    ) {
+                      choosePlacement('subcategory', true);
                     }
                   }}
                 >
@@ -480,9 +488,15 @@ export default function SponsorFormPage() {
                   onClick={() => choosePlacement('subcategory')}
                   role="radio"
                   aria-checked={placement === 'subcategory'}
-                  disabled={form.tier === 'Featured'}
-                  aria-disabled={form.tier === 'Featured'}
-                  title={form.tier === 'Featured' ? 'Featured tier is reserved for top-level Category placement' : undefined}
+                  disabled={form.tier === 'Featured' || form.tier === 'Silver'}
+                  aria-disabled={form.tier === 'Featured' || form.tier === 'Silver'}
+                  title={
+                    form.tier === 'Featured'
+                      ? 'Featured tier is reserved for top-level Category placement'
+                      : form.tier === 'Silver'
+                        ? 'Silver tier is for Keyword placement only'
+                        : undefined
+                  }
                 >
                   Subcategory Sponsor
                 </button>
@@ -500,9 +514,10 @@ export default function SponsorFormPage() {
                 </button>
               </div>
               <p className={styles.fieldHint}>
-                <strong>Featured</strong> is for top-level Category placement
-                (Preferred Partners banner). Silver / Gold / Platinum apply to
-                subcategory or keyword placements.
+                <strong>Featured</strong> → top-level Category (Preferred Partners
+                banner). <strong>Platinum / Gold</strong> → Subcategory.{' '}
+                <strong>Silver / Gold / Platinum</strong> → Keyword (Silver is
+                keyword-only).
               </p>
             </div>
 

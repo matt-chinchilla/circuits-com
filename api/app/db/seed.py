@@ -455,9 +455,11 @@ def get_or_create_category_supplier(
     db: Session,
     category: Category,
     supplier: Supplier,
-    is_featured: bool = False,
-    rank: int = 0,
+    is_featured: bool = False,  # vestigial since 2026-06-03 (columns dropped in
+    rank: int = 0,  # migration 011) — kept so existing callers don't break.
 ) -> CategorySupplier:
+    # Pure association now: "this distributor carries parts in this category."
+    # Featured/sponsored status lives ONLY in the `sponsors` table.
     obj = (
         db.query(CategorySupplier)
         .filter(
@@ -467,12 +469,7 @@ def get_or_create_category_supplier(
         .first()
     )
     if obj is None:
-        obj = CategorySupplier(
-            category_id=category.id,
-            supplier_id=supplier.id,
-            is_featured=is_featured,
-            rank=rank,
-        )
+        obj = CategorySupplier(category_id=category.id, supplier_id=supplier.id)
         db.add(obj)
         db.flush()
     return obj
@@ -1068,24 +1065,60 @@ def seed(db: Session) -> None:
     # ------------------------------------------------------------------
     # 4. Sponsors
     # ------------------------------------------------------------------
-    # Kennedy Electronics — gold sponsor for "Power Management ICs (PMICs)"
+    # Sponsorships are the single source of truth for the category page
+    # (2026-06-03). Tier↔placement: Featured = top-level category (Preferred
+    # Partners banner), Platinum/Gold = subcategory (Subcategory Sponsor),
+    # Silver/Gold/Platinum = keyword. The DB trigger rejects any other combo.
+
+    # Featured partners on top-level categories → Preferred Partners banner.
     get_or_create_sponsor(
         db,
         supplier=kennedy,
         category=cats["Power Management ICs (PMICs)"],
         image_url="/images/sponsors/kennedy.jpg",
         description="Your premier semiconductor supplier in the Northeast",
-        tier="gold",
+        tier="Featured",
+    )
+    get_or_create_sponsor(
+        db,
+        supplier=digikey,
+        category=cats["Power Management ICs (PMICs)"],
+        description="Broadline distributor — millions of parts in stock",
+        tier="Featured",
+    )
+    get_or_create_sponsor(
+        db,
+        supplier=kennedy,
+        category=cats["Microcontrollers & Processors"],
+        image_url="/images/sponsors/kennedy.jpg",
+        description="Your premier semiconductor supplier in the Northeast",
+        tier="Featured",
     )
 
-    # Avnet — silver sponsor for keyword "capacitors"
+    # Subcategory sponsors (Platinum/Gold) → the single Subcategory Sponsor slot.
+    for sub_name in [
+        "Voltage Regulators (LDOs)",
+        "DC-DC Converters (Buck/Boost)",
+        "Battery Management ICs (BMS)",
+        "Power Supervisors / Reset ICs",
+        "LED Drivers",
+    ]:
+        get_or_create_sponsor(
+            db,
+            supplier=kennedy,
+            category=cats[sub_name],
+            description="Authorized regional distributor",
+            tier="Gold",
+        )
+
+    # Keyword sponsor (Silver/Gold/Platinum) → keyword profile page.
     get_or_create_sponsor(
         db,
         supplier=avnet,
         keyword="capacitors",
         image_url="/images/sponsors/avnet.jpg",
         description="Industry-leading capacitor selection",
-        tier="silver",
+        tier="Silver",
     )
 
     db.commit()

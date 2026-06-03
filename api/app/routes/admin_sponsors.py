@@ -19,10 +19,11 @@ import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import or_
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.models import Category, CategorySupplier, Sponsor, Supplier, User
+from app.models import Category, Sponsor, Supplier, User
 from app.schemas.sponsor import (
     AdminSponsorCreate,
     AdminSponsorResponse,
@@ -82,168 +83,45 @@ def _validate_xor(category_id: uuid.UUID | None, keyword: str | None) -> None:
 def _validate_tier_placement(
     db: Session, tier: str | None, category_id: uuid.UUID | None
 ) -> None:
-    """Enforce the tier ↔ category-level placement rule.
+    """Enforce the tier ↔ placement matrix (2026-06-03 single-source model):
 
-    Product rule (2026-06-02, softened):
+      - Category (top-level, ``parent_id IS NULL``): **Featured** only.
+      - Subcategory (child): **Platinum / Gold** only.
+      - Keyword: **Silver / Gold / Platinum** (Featured is category-only).
 
-      - Featured tier may ONLY attach to a top-level category
-        (``parent_id IS NULL``). Featured + child OR Featured + keyword
-        → 422. Featured lands on the PreferredPartnersBanner, which is
-        a top-level surface only.
-
-      - Silver / Gold / Platinum may attach to:
-          * a CHILD category (the "Subcategory Sponsor" single-slot
-            surface), OR
-          * a keyword (multi-sponsor per keyword landing page).
-        Non-Featured + top-level category → 422 (top-level is the
-        Featured tier's promise).
-
-    The admin form greys out the wrong combinations; this guard catches
-    a hand-crafted POST that bypasses the UI.
-
-    Resolves the Category row (404 if missing) so we can check
-    ``parent_id``. Done at the validator level rather than in the route
-    body so POST and PATCH share one lookup path.
+    So Silver is keyword-exclusive and Featured is top-level-category-exclusive.
+    A Postgres trigger enforces the same rule at the DB level; this validator
+    gives a clean 422 (and covers SQLite tests, which skip the trigger). The
+    admin form greys out the wrong combinations; this catches a hand-crafted
+    POST. Resolves the Category (404 if missing) to read ``parent_id``.
     """
+    t = (tier or "").strip().lower()
     has_category = category_id is not None
-    featured = _is_featured(tier)
-
-    if featured and not has_category:
-        raise HTTPException(
-            status_code=422,
-            detail="Featured tier is category-only — keyword placement not allowed.",
-        )
 
     if not has_category:
-        # Non-Featured + keyword is fine; nothing else to check.
+        # Keyword placement — any paid tier except Featured.
+        if t == "featured":
+            raise HTTPException(
+                status_code=422,
+                detail="Featured tier is category-only — keyword placement not allowed.",
+            )
         return
 
     cat = db.query(Category).filter(Category.id == category_id).first()
     if cat is None:
         raise HTTPException(status_code=404, detail="Category not found")
 
-    is_top_level = cat.parent_id is None
-
-    if featured and not is_top_level:
+    if cat.parent_id is None:
+        if t != "featured":
+            raise HTTPException(
+                status_code=422,
+                detail="Top-level category placement requires the Featured tier.",
+            )
+    elif t not in ("platinum", "gold"):
         raise HTTPException(
             status_code=422,
-            detail="Featured tier must attach to a top-level category.",
+            detail="Subcategory placement requires the Platinum or Gold tier.",
         )
-    if not featured and is_top_level:
-        raise HTTPException(
-            status_code=422,
-            detail="Top-level category placement requires the Featured tier.",
-        )
-
-
-def _upsert_category_supplier_featured(
-    db: Session,
-    supplier_id: uuid.UUID,
-    category_id: uuid.UUID,
-) -> None:
-    """Ensure the (supplier, category) join row exists with is_featured=True.
-
-    Side-effect of writing a Featured sponsor: PreferredPartnersBanner
-    reads ``category.suppliers`` filtered to ``is_featured=True``, so a
-    Featured sponsor that didn't land here would be invisible on the
-    banner (the 2026-06-02 reproduction).
-
-    Idempotent — flips an existing row's is_featured if it was False,
-    leaves an already-Featured row alone (don't churn rank). New rows
-    pick rank = max(rank for category) + 1 to avoid collisions with
-    existing featured peers, which the banner sorts by rank asc.
-    """
-    existing = (
-        db.query(CategorySupplier)
-        .filter(
-            CategorySupplier.category_id == category_id,
-            CategorySupplier.supplier_id == supplier_id,
-        )
-        .first()
-    )
-    if existing is not None:
-        # SQLAlchemy ORM descriptor assignment — Pyright sees Column[bool]
-        # at type level, but runtime intercepts these to emit UPDATE.
-        existing.is_featured = True  # type: ignore[assignment]
-        return
-
-    # Auto-rank: next slot after the highest existing FEATURED rank on this
-    # category. Scoping the max to is_featured=True rows keeps the value a
-    # sensible count of featured partners — non-featured CategorySupplier rows
-    # (seed associations, or suppliers unfeatured but row-preserved) must NOT
-    # inflate it, else the Nth featured partner lands at rank > N (the
-    # 2026-06-03 "Pasternack shows #7" root cause). Banner ORDER BYs rank asc,
-    # so max+1 still puts the new row at the bottom (lowest priority).
-    max_rank = (
-        db.query(CategorySupplier.rank)
-        .filter(
-            CategorySupplier.category_id == category_id,
-            CategorySupplier.is_featured.is_(True),
-        )
-        .order_by(CategorySupplier.rank.desc())
-        .first()
-    )
-    next_rank = (max_rank[0] if max_rank else 0) + 1
-
-    db.add(
-        CategorySupplier(
-            category_id=category_id,
-            supplier_id=supplier_id,
-            is_featured=True,
-            rank=next_rank,
-        )
-    )
-
-
-def _unfeature_after_delete(
-    db: Session,
-    supplier_id: uuid.UUID,
-    category_id: uuid.UUID,
-) -> None:
-    """Inverse of ``_upsert_category_supplier_featured`` for sponsor deletion.
-
-    When a Featured sponsor is deleted, drop the supplier off the
-    PreferredPartnersBanner by setting ``CategorySupplier.is_featured=False``
-    — UNLESS another Featured sponsor for the same ``(supplier, category)``
-    still justifies the slot (Featured peers coexist). Mirrors the
-    ``/unfeature`` endpoint: flip the flag, preserve the row (keeps rank +
-    association history).
-
-    Must be called AFTER the deleted sponsor has been flushed, so the
-    remaining-Featured check doesn't count the row being removed.
-
-    NOTE: an ``is_featured`` row created by seed/manual curation (not by a
-    Featured sponsor) is also cleared here if the supplier's last Featured
-    sponsor on this category is deleted — acceptable, since removing the
-    sponsorship is the admin's explicit intent.
-    """
-    # Only an Active (or NULL-legacy) Featured sponsor justifies keeping the
-    # banner slot — same predicate as _supersede_existing_for_category and the
-    # public category read. An Expired/Paused peer is not visible anywhere, so
-    # it must not keep a supplier on the banner (ghost-partner bug class).
-    remaining = (
-        db.query(Sponsor)
-        .filter(
-            Sponsor.supplier_id == supplier_id,
-            Sponsor.category_id == category_id,
-            or_(Sponsor.status == "Active", Sponsor.status.is_(None)),
-        )
-        .all()
-    )
-    if any(_is_featured(s.tier) for s in remaining):
-        return  # a live peer Featured sponsor still justifies the banner slot
-
-    cs = (
-        db.query(CategorySupplier)
-        .filter(
-            CategorySupplier.category_id == category_id,
-            CategorySupplier.supplier_id == supplier_id,
-        )
-        .first()
-    )
-    if cs is not None and cs.is_featured:
-        # ORM descriptor assignment — Pyright sees Column[bool] at type level.
-        cs.is_featured = False  # type: ignore[assignment]
 
 
 def _parse_sponsor_id(sponsor_id: str) -> uuid.UUID:
@@ -318,13 +196,6 @@ def create_sponsor(
     if body.category_id is not None and not _is_featured(body.tier):
         _supersede_existing_for_category(db, body.category_id)
 
-    # Featured + top-level category → side-effect onto CategorySupplier
-    # so the PreferredPartnersBanner picks up the new partner immediately.
-    # (By contract, Featured can ONLY be top-level — validator above
-    # rejects child/keyword for Featured.)
-    if _is_featured(body.tier) and body.category_id is not None:
-        _upsert_category_supplier_featured(db, body.supplier_id, body.category_id)
-
     sponsor = Sponsor(
         id=uuid.uuid4(),
         supplier_id=body.supplier_id,
@@ -339,7 +210,16 @@ def create_sponsor(
         status=body.status,
     )
     db.add(sponsor)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # UNIQUE(supplier_id, category_id|keyword) — the company already
+        # sponsors this category/keyword (no duplicate placements).
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="This company already has a sponsorship for that category or keyword.",
+        ) from None
     db.refresh(sponsor)
     return _serialize(sponsor)
 
@@ -384,15 +264,17 @@ def update_sponsor(
     ):
         _supersede_existing_for_category(db, new_category_id, exclude_id=sponsor.id)
 
-    # Featured + top-level category (newly or already): mirror the POST
-    # side-effect so the banner reflects the latest state.
-    if _is_featured(new_tier) and new_category_id is not None:
-        _upsert_category_supplier_featured(db, sponsor.supplier_id, new_category_id)
-
     for key, value in update_data.items():
         setattr(sponsor, key, value)
 
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="This company already has a sponsorship for that category or keyword.",
+        ) from None
     db.refresh(sponsor)
     return _serialize(sponsor)
 
@@ -407,19 +289,8 @@ def delete_sponsor(
     if not sponsor:
         raise HTTPException(status_code=404, detail="Sponsor not found")
 
-    # Capture the Featured side-effect inputs BEFORE the row is gone, so we
-    # can reverse the CategorySupplier feature that create_sponsor set up.
-    # Without this the supplier stays on the PreferredPartnersBanner after
-    # the sponsor is deleted (the banner reads category_suppliers, not
-    # sponsors) — the "deleted sponsorship still shows on the website" bug.
-    was_featured = _is_featured(sponsor.tier)
-    supplier_id = sponsor.supplier_id
-    category_id = sponsor.category_id
-
+    # The banner reads the `sponsors` table directly now (2026-06-03
+    # single-source-of-truth), so deleting the row removes the company from the
+    # category page — no CategorySupplier reversal needed.
     db.delete(sponsor)
-    # Flush so the deleted row isn't counted by the remaining-Featured check.
-    db.flush()
-    if was_featured and category_id is not None:
-        _unfeature_after_delete(db, supplier_id, category_id)
-
     db.commit()

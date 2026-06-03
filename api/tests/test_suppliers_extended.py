@@ -244,14 +244,10 @@ class TestDeleteSupplier:
                     CategorySupplier(
                         category_id=extra_a.id,
                         supplier_id=seeded_db["supplier2"].id,
-                        is_featured=False,
-                        rank=2,
                     ),
                     CategorySupplier(
                         category_id=extra_b.id,
                         supplier_id=seeded_db["supplier2"].id,
-                        is_featured=False,
-                        rank=3,
                     ),
                 ]
             )

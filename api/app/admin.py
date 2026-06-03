@@ -59,10 +59,7 @@ class CategorySupplierAdmin(ModelView, model=CategorySupplier):
     column_list = [
         CategorySupplier.supplier,
         CategorySupplier.category,
-        CategorySupplier.is_featured,
-        CategorySupplier.rank,
     ]
-    column_sortable_list = [CategorySupplier.rank, CategorySupplier.is_featured]
 
 
 class SponsorAdmin(ModelView, model=Sponsor):

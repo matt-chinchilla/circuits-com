@@ -5,7 +5,6 @@ from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 from app.admin import setup_admin
 from app.config import settings
 from app.routes import (
-    admin_category_suppliers,
     admin_messages,
     admin_sponsors,
     analytics,
@@ -40,7 +39,6 @@ app.include_router(auth.router)
 app.include_router(dashboard.router)
 app.include_router(parts.router)
 app.include_router(admin_messages.router)
-app.include_router(admin_category_suppliers.router)
 app.include_router(admin_sponsors.router)
 app.include_router(analytics.router)
 app.include_router(sitemap.router)

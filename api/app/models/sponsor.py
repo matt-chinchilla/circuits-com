@@ -1,7 +1,17 @@
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import CheckConstraint, Column, Date, DateTime, ForeignKey, Numeric, String, Text
+from sqlalchemy import (
+    CheckConstraint,
+    Column,
+    Date,
+    DateTime,
+    ForeignKey,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
@@ -39,6 +49,13 @@ class Sponsor(Base):
             "(category_id IS NOT NULL AND keyword IS NULL) OR (category_id IS NULL AND keyword IS NOT NULL)",
             name="sponsor_category_or_keyword",
         ),
+        # Single source of truth + caps (2026-06-03): a company sponsors any given
+        # category at most once, and any given keyword at most once. NULLs are
+        # SQL-distinct, so a company's many keyword sponsors (category_id NULL) and
+        # its many category sponsors (keyword NULL) coexist freely — the caps
+        # (≤15 top-level + ≤75 child = the taxonomy size) fall out of this.
+        UniqueConstraint("supplier_id", "category_id", name="uq_sponsor_supplier_category"),
+        UniqueConstraint("supplier_id", "keyword", name="uq_sponsor_supplier_keyword"),
     )
 
     supplier = relationship("Supplier")

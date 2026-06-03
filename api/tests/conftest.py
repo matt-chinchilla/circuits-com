@@ -113,19 +113,11 @@ def seeded_db(db):
     db.add_all([supplier1, supplier2])
     db.flush()
 
-    # Link suppliers to child category
-    cs1 = CategorySupplier(
-        category_id=child.id,
-        supplier_id=supplier1.id,
-        is_featured=False,
-        rank=1,
-    )
-    cs2 = CategorySupplier(
-        category_id=child.id,
-        supplier_id=supplier2.id,
-        is_featured=True,
-        rank=0,
-    )
+    # Link suppliers to child category — pure association now (featured/sponsored
+    # status lives in the `sponsors` table). The Kennedy sponsor below (Gold on
+    # this child = a valid Subcategory Sponsor) is what surfaces on the banner.
+    cs1 = CategorySupplier(category_id=child.id, supplier_id=supplier1.id)
+    cs2 = CategorySupplier(category_id=child.id, supplier_id=supplier2.id)
     db.add_all([cs1, cs2])
     db.flush()
 
