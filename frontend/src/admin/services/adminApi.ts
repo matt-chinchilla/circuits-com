@@ -17,6 +17,7 @@ import type {
   AdminSponsor,
 } from '@admin/types/admin';
 import type { Message, MessageStatus, AssignedTo } from '@admin/types/messages';
+import { bustSponsorCaches } from '@admin/services/swCache';
 
 // PATCH /api/admin/messages/{id} body — subset of MessageBase the admin UI can
 // mutate. Mirrors the contract Agent A is building in the backend.
@@ -49,6 +50,20 @@ adminClient.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
+// Run a mutation, then purge the public sponsor SW caches before resolving, so
+// the public Preferred Partners banner + keyword pages reflect the change on the
+// next navigation. Applied to every mutation that can alter sponsor-derived
+// public data: sponsor create/update/delete, and supplier update/delete (delete
+// cascades to the sponsor row server-side; update changes the company
+// name/contact rendered in the banner). Centralizing here means no call site —
+// sponsorStore, the supplier pages, or the wizard's featureSupplierInCategory —
+// can forget to invalidate.
+async function bustingAfter<T>(mutation: Promise<T>): Promise<T> {
+  const value = await mutation;
+  await bustSponsorCaches();
+  return value;
+}
 
 export const adminApi = {
   login: (username: string, password: string) =>
@@ -110,13 +125,14 @@ export const adminApi = {
   createSupplier: (data: Partial<AdminSupplier>) =>
     adminClient.post<AdminSupplier>('/suppliers/', data).then((r) => r.data),
 
+  // update/delete supplier bust the sponsor caches: a sponsor-supplier's
+  // name/contact shows in the banner (update), and delete cascades to its
+  // sponsor row server-side (suppliers.py) — both change the public banner.
   updateSupplier: (id: string, data: Partial<AdminSupplier>) =>
-    adminClient
-      .put<AdminSupplier>(`/suppliers/${id}`, data)
-      .then((r) => r.data),
+    bustingAfter(adminClient.put<AdminSupplier>(`/suppliers/${id}`, data).then((r) => r.data)),
 
   deleteSupplier: (id: string) =>
-    adminClient.delete(`/suppliers/${id}`).then((r) => r.data),
+    bustingAfter(adminClient.delete(`/suppliers/${id}`).then((r) => r.data)),
 
   getSupplierParts: (
     id: string,
@@ -143,16 +159,16 @@ export const adminApi = {
   getSponsors: () =>
     adminClient.get<AdminSponsor[]>('/admin/sponsors/').then((r) => r.data),
 
+  // sponsor create/update/delete all bust the sponsor caches so the public
+  // banner reflects the change on next navigation.
   createSponsor: (data: SponsorCreate) =>
-    adminClient.post<AdminSponsor>('/admin/sponsors/', data).then((r) => r.data),
+    bustingAfter(adminClient.post<AdminSponsor>('/admin/sponsors/', data).then((r) => r.data)),
 
   updateSponsor: (id: string, data: Partial<SponsorCreate>) =>
-    adminClient
-      .patch<AdminSponsor>(`/admin/sponsors/${id}`, data)
-      .then((r) => r.data),
+    bustingAfter(adminClient.patch<AdminSponsor>(`/admin/sponsors/${id}`, data).then((r) => r.data)),
 
   deleteSponsor: (id: string) =>
-    adminClient.delete(`/admin/sponsors/${id}`).then((r) => r.data),
+    bustingAfter(adminClient.delete(`/admin/sponsors/${id}`).then((r) => r.data)),
 
   // "Feature" a supplier on a category = a Featured sponsorship on that
   // (top-level) category — the single source of truth as of 2026-06-03
@@ -160,6 +176,7 @@ export const adminApi = {
   // guided-tour wizard so the demo supplier shows up in the live-site preview.
   // Best-effort: resolve the slug to a category id, then create the sponsorship
   // (the caller swallows failures — e.g. a non-top-level slug or a duplicate).
+  // The cache bust happens via createSponsor above.
   featureSupplierInCategory: async (supplierId: string, categorySlug: string) => {
     const cats = await adminApi.getCategories();
     const cat = cats.find((c) => c.slug === categorySlug);

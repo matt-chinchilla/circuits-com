@@ -2,6 +2,7 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import path from 'path'
+import { SW_CACHE_API_CATEGORIES, SW_CACHE_API_GENERAL } from './src/shared/swCacheNames'
 
 export default defineConfig({
   plugins: [
@@ -18,10 +19,13 @@ export default defineConfig({
             urlPattern: /\/api\/categories(\/[^/?]+)?\/?(\?.*)?$/,
             handler: 'StaleWhileRevalidate',
             options: {
-              cacheName: 'api-categories',
+              cacheName: SW_CACHE_API_CATEGORIES,
               expiration: {
                 maxEntries: 50,
-                maxAgeSeconds: 300,
+                // 60s (was 300): bound SW staleness to match the no-cache API +
+                // purge-on-sponsor-mutation model, so an un-purged client (another
+                // tab or a different user) still self-heals within a minute.
+                maxAgeSeconds: 60,
               },
             },
           },
@@ -29,7 +33,7 @@ export default defineConfig({
             urlPattern: /\/api\/(?!admin|auth|dashboard|track)/,
             handler: 'NetworkFirst',
             options: {
-              cacheName: 'api-general',
+              cacheName: SW_CACHE_API_GENERAL,
               expiration: {
                 maxEntries: 20,
                 maxAgeSeconds: 60,

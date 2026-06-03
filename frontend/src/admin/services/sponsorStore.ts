@@ -10,6 +10,9 @@ import { adminApi, type SponsorCreate } from '@admin/services/adminApi';
 // snapshot for the wizard's window.__adminGetStore() bridge, while the public
 // read/mutate functions are async and route through adminApi. Consumer pages
 // call loadSponsors() in a useEffect on mount to pull fresh server state.
+//
+// Cache invalidation of the public SW caches happens inside adminApi
+// (create/update/deleteSponsor), so these store mutators inherit it for free.
 
 let CACHE: AdminSponsor[] = [];
 
