@@ -11,11 +11,21 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
-SQLALCHEMY_DATABASE_URL = "sqlite:///./test.db"
+# In-memory + StaticPool gives true per-test isolation: a single shared connection
+# backs one in-memory database for the engine's lifetime, so the per-function
+# create_all/drop_all fully resets state. The previous file-based
+# "sqlite:///./test.db" with the default multi-connection pool ACCUMULATED state
+# across the ~230-test run — after the heavy real-catalog seed (~3.6K parts), a
+# later query deserialized a UUID column as a float and uuid.UUID(<float>) raised
+# "'float' object has no attribute 'replace'". Both affected seed tests passed in
+# isolation; only the shared file DB made them flaky. In-memory also drops disk I/O.
+SQLALCHEMY_DATABASE_URL = "sqlite://"
 engine = create_engine(
     SQLALCHEMY_DATABASE_URL,
     connect_args={"check_same_thread": False},
+    poolclass=StaticPool,
 )
 
 
