@@ -49,7 +49,7 @@
       // /category/<parent>/<child>. The child slug is globally unique and is
       // what api.getCategory fetches, so preloading it (not the parent) keeps
       // the cache-hit alive for subcategory pages too (2026-06-03 nested URLs).
-      var m = location.pathname.match(/^\/category\/(?:[^\/?#]+\/)?([^\/?#]+)/);
+      var m = location.pathname.match(/^\/category\/(?:[^\/?#]+\/)*([^\/?#]+)/);
       if (!m) return;
       var slug = m[1];
       var path = '/api/categories/' + slug + '/?popular_page=1&popular_per_page=500&parts_page=1&parts_per_page=500';

@@ -87,9 +87,6 @@ export default function CategoryPage() {
   const needsCanonicalRedirect =
     !!category && !!canonicalPath && location.pathname !== canonicalPath;
 
-  const displayName = category?.name ?? '';
-  const displayIcon = category?.icon ?? '';
-
   const allParts = useMemo(() => {
     if (!category) return [];
     if (isParent) return category.popular_parts?.items ?? [];
@@ -288,13 +285,13 @@ export default function CategoryPage() {
               <div className={styles.titleRow}>
                 <motion.h1
                   className={styles.title}
-                  key={displayName}
+                  key={category.name}
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.4, ease: 'easeOut' as const }}
                 >
-                  {displayIcon && <span className={styles.titleIcon}><Icon name={displayIcon} /></span>}
-                  {displayName}
+                  {category.icon && <span className={styles.titleIcon}><Icon name={category.icon} /></span>}
+                  {category.name}
                 </motion.h1>
               </div>
               <p className={styles.headerMeta}>
