@@ -1,6 +1,7 @@
 import { useRef, useEffect, type ReactNode } from 'react';
 import { motion } from 'framer-motion';
 import type { Sponsor } from '@public/types/sponsor';
+import { prependScheme } from '@shared/utils/url';
 import styles from './SponsorBlock.module.scss';
 
 interface SponsorBlockProps {
@@ -464,7 +465,7 @@ export default function SponsorBlock({ sponsor }: SponsorBlockProps) {
 
       <div className={styles.details}>
         {sponsor.website && (
-          <a href={sponsor.website} target="_blank" rel="noopener noreferrer" className={styles.visit}>
+          <a href={prependScheme(sponsor.website)} target="_blank" rel="noopener noreferrer" className={styles.visit}>
             Visit Website &#8599;
           </a>
         )}

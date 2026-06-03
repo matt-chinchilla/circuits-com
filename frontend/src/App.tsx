@@ -179,7 +179,11 @@ function App() {
       <Routes>
         <Route element={<PublicLayout />}>
           <Route path="/" element={<HomePage />} />
+          {/* Flat = top-level category. Nested = subcategory under its parent
+              (the canonical sub URL). CategoryPage reads whichever param shape
+              matched and redirects flat child slugs → their nested canonical. */}
           <Route path="/category/:slug" element={<CategoryPage />} />
+          <Route path="/category/:parentSlug/:childSlug" element={<CategoryPage />} />
           <Route path="/search" element={<SearchPage />} />
           <Route path="/join" element={<JoinPage />} />
           <Route path="/contact" element={<ContactPage />} />

@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import AnimatedLink from "@public/components/widgets/AnimatedLink";
 import { api } from "@public/services/api";
 import Icon from "@shared/components/Icon";
+import { categoryPath } from "@shared/utils/categoryPath";
 import type { Category } from "@public/types/category";
 import styles from "./CategoryCard.module.scss";
 
@@ -48,7 +49,7 @@ export default function CategoryCard({ category, index }: CategoryCardProps) {
           {category.children.map((sub) => (
             <AnimatedLink
               key={sub.id}
-              to={`/category/${category.slug}#${sub.slug}`}
+              to={categoryPath(sub.slug, category.slug)}
               className={styles.pill}
             >
               {sub.name}

@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
-import { useParams, useSearchParams, Link } from 'react-router-dom';
+import { useParams, useSearchParams, useLocation, useNavigate, Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { motion } from 'framer-motion';
 import SubcategoryChips from './components/SubcategoryChips';
@@ -11,6 +11,7 @@ import SkeletonLoader from '@public/components/widgets/SkeletonLoader';
 import Pagination from '@public/components/widgets/Pagination';
 import Icon from '@shared/components/Icon';
 import { api } from '@public/services/api';
+import { categoryPath } from '@shared/utils/categoryPath';
 import type { CategoryDetail } from '@public/types/category';
 import type { PublicPart } from '@public/types/part';
 import type { SortState } from './components/ColumnHeader';
@@ -36,7 +37,19 @@ function sortParts(rows: PublicPart[], sort: SortState): PublicPart[] {
 }
 
 export default function CategoryPage() {
-  const { slug } = useParams<{ slug: string }>();
+  // Two route shapes feed this page: flat `/category/:slug` (top-level
+  // categories + legacy/bookmarked child URLs) and nested
+  // `/category/:parentSlug/:childSlug` (the canonical subcategory URL). The
+  // child slug is globally unique, so it alone drives the API fetch; parentSlug
+  // is only used to validate/canonicalize the URL (see redirect below).
+  const { slug: flatSlug, childSlug } = useParams<{
+    slug?: string;
+    parentSlug?: string;
+    childSlug?: string;
+  }>();
+  const slug = childSlug ?? flatSlug;
+  const location = useLocation();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const pageParam = Math.max(1, parseInt(searchParams.get('p') || '1', 10) || 1);
 
@@ -48,7 +61,6 @@ export default function CategoryPage() {
   const [skuSearch, setSkuSearch] = useState('');
   const [mfgFilter, setMfgFilter] = useState<Set<string> | null>(null);
   const [subFilter, setSubFilter] = useState<Set<string> | null>(null);
-  const [activeSub, setActiveSub] = useState<string | null>(null);
 
   useEffect(() => {
     if (!slug) return;
@@ -57,7 +69,6 @@ export default function CategoryPage() {
     setSkuSearch('');
     setMfgFilter(null);
     setSubFilter(null);
-    setActiveSub(null);
     setSort({ col: 'sku', dir: 'asc' });
 
     api.getCategory(slug, 1, 500, 1, 500)
@@ -68,14 +79,16 @@ export default function CategoryPage() {
 
   const isParent = category != null && category.children.length > 0;
 
-  const activeSubInfo = useMemo(() => {
-    if (!activeSub || !category || !isParent) return null;
-    const child = category.children.find(c => c.slug === activeSub);
-    return child ?? null;
-  }, [activeSub, category, isParent]);
+  // Canonical URL: subcategories live nested under their parent; top-level
+  // categories stay flat. Drives the redirect effect, <link rel="canonical">,
+  // JSON-LD, and the `busy` guard. Computed early so the pagination-reset
+  // effect below can skip itself while a redirect is pending.
+  const canonicalPath = category ? categoryPath(category.slug, category.parent?.slug) : null;
+  const needsCanonicalRedirect =
+    !!category && !!canonicalPath && location.pathname !== canonicalPath;
 
-  const displayName = activeSubInfo?.name ?? category?.name ?? '';
-  const displayIcon = activeSubInfo?.icon ?? category?.icon ?? '';
+  const displayName = category?.name ?? '';
+  const displayIcon = category?.icon ?? '';
 
   const allParts = useMemo(() => {
     if (!category) return [];
@@ -125,10 +138,6 @@ export default function CategoryPage() {
   const filtered = useMemo(() => {
     let rows = allParts;
 
-    if (activeSub) {
-      rows = rows.filter(p => p.sub_slug === activeSub);
-    }
-
     const q = skuSearch.trim().toLowerCase();
     if (q) {
       rows = rows.filter(p =>
@@ -146,7 +155,7 @@ export default function CategoryPage() {
     }
 
     return sortParts(rows, sort);
-  }, [allParts, activeSub, skuSearch, mfgFilter, subFilter, sort, allMfgs.length, allSubNames.length, subSlugToName, isParent]);
+  }, [allParts, skuSearch, mfgFilter, subFilter, sort, allMfgs.length, allSubNames.length, subSlugToName, isParent]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(pageParam, totalPages);
@@ -155,12 +164,17 @@ export default function CategoryPage() {
   const mountedRef = useRef(false);
   useEffect(() => {
     if (!mountedRef.current) { mountedRef.current = true; return; }
+    // Don't touch the URL while a canonical redirect is pending: setSearchParams
+    // pushes to the CURRENT (pre-redirect, flat) path and would clobber the
+    // flat→nested redirect (2026-06-03 — filter-population on load fires this
+    // effect and raced/reverted the redirect's replace).
+    if (needsCanonicalRedirect) return;
     setSearchParams(prev => {
       const params = new URLSearchParams(prev);
       params.delete('p');
       return params;
     });
-  }, [activeSub, skuSearch, mfgFilter, subFilter, sort]);
+  }, [skuSearch, mfgFilter, subFilter, sort, needsCanonicalRedirect]);
 
   const handlePageChange = (next: number) => {
     setSearchParams(prev => {
@@ -178,12 +192,12 @@ export default function CategoryPage() {
   const metaDescription = category?.description
     ?? `Compare prices for ${categoryName} components from top distributors on Circuits.com.`;
 
-  const collectionPageJsonLd = category ? {
+  const collectionPageJsonLd = category && canonicalPath ? {
     '@context': 'https://schema.org',
     '@type': 'CollectionPage',
     name: categoryName,
     description: category.description ?? metaDescription,
-    url: `https://circuits.com/category/${category.slug}`,
+    url: `https://circuits.com${canonicalPath}`,
   } : null;
 
   const breadcrumbJsonLd = category?.parent ? {
@@ -192,9 +206,30 @@ export default function CategoryPage() {
     itemListElement: [
       { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://circuits.com/' },
       { '@type': 'ListItem', position: 2, name: category.parent.name, item: `https://circuits.com/category/${category.parent.slug}` },
-      { '@type': 'ListItem', position: 3, name: categoryName },
+      { '@type': 'ListItem', position: 3, name: categoryName, item: `https://circuits.com${canonicalPath}` },
     ],
   } : null;
+
+  // Canonicalize the URL: a subcategory reached via the flat `/category/:slug`
+  // (legacy/bookmarked/search link) or via a wrong parent slug redirects to its
+  // true nested path. Top-level categories already match → no-op.
+  //
+  // Effect-based (NOT a render-phase `<Navigate>`): PublicLayout wraps the
+  // Outlet in `<ErrorBoundary key={location.pathname}>`, and the redirect
+  // changes the pathname — i.e. that key. A `<Navigate>` returned from render
+  // runs its navigate() in the rendered child's mount effect, which the keyed
+  // remount dropped before it fired (category loaded, page rendered empty, URL
+  // never changed — 2026-06-03). navigate() from this component's own stable
+  // effect commits reliably.
+  useEffect(() => {
+    if (needsCanonicalRedirect && canonicalPath) {
+      navigate(`${canonicalPath}${location.search}`, { replace: true });
+    }
+  }, [needsCanonicalRedirect, canonicalPath, location.search, navigate]);
+
+  // While a redirect is pending, show the skeleton (not the page content at the
+  // soon-to-be-replaced URL) so there's no flash of the wrong canonical.
+  const busy = loading || needsCanonicalRedirect;
 
   return (
     <motion.div
@@ -204,11 +239,11 @@ export default function CategoryPage() {
       exit={{ opacity: 0, x: -20 }}
       transition={{ duration: 0.15, ease: 'easeInOut' as const }}
     >
-      {category && (
+      {category && canonicalPath && (
         <Helmet>
           <title>{categoryName} — Prices &amp; Distributors | Circuits.com</title>
           <meta name="description" content={metaDescription} />
-          <link rel="canonical" href={`https://circuits.com/category/${category.slug}`} />
+          <link rel="canonical" href={`https://circuits.com${canonicalPath}`} />
           {collectionPageJsonLd && (
             <script type="application/ld+json">{JSON.stringify(collectionPageJsonLd)}</script>
           )}
@@ -222,7 +257,7 @@ export default function CategoryPage() {
           <nav className={styles.breadcrumb} aria-label="Breadcrumb">
             <Link to="/" className={styles.breadcrumbLink}>Home</Link>
             <span className={styles.breadcrumbSep} aria-hidden="true">/</span>
-            {loading ? (
+            {busy ? (
               <SkeletonLoader width="120px" height="16px" borderRadius="4px" />
             ) : category ? (
               <>
@@ -234,26 +269,12 @@ export default function CategoryPage() {
                     <span className={styles.breadcrumbSep} aria-hidden="true">/</span>
                   </>
                 )}
-                {isParent && activeSubInfo ? (
-                  <>
-                    <Link
-                      to={`/category/${category.slug}`}
-                      className={styles.breadcrumbLink}
-                      onClick={(e) => { e.preventDefault(); setActiveSub(null); }}
-                    >
-                      {category.name}
-                    </Link>
-                    <span className={styles.breadcrumbSep} aria-hidden="true">/</span>
-                    <span className={styles.breadcrumbCurrent}>{activeSubInfo.name}</span>
-                  </>
-                ) : (
-                  <span className={styles.breadcrumbCurrent}>{category.name}</span>
-                )}
+                <span className={styles.breadcrumbCurrent}>{category.name}</span>
               </>
             ) : null}
           </nav>
 
-          {loading ? (
+          {busy ? (
             <>
               <SkeletonLoader width="250px" height="32px" borderRadius="4px" />
               <div className={styles.skeletonChips}>
@@ -278,7 +299,7 @@ export default function CategoryPage() {
               </div>
               <p className={styles.headerMeta}>
                 <span className={styles.headerMetaMono}>{filtered.length.toLocaleString()}</span> parts
-                {isParent && !activeSubInfo && (
+                {isParent && (
                   <>
                     <span className={styles.headerDot}>&middot;</span>
                     <span className={styles.headerMetaMono}>{category.children.length}</span> subcategories
@@ -291,36 +312,43 @@ export default function CategoryPage() {
       </div>
 
       {/* Sticky subcategory pill-bar */}
-      {!loading && category && (
+      {!busy && category && (
         <nav className={styles.stickySubnav} aria-label="Subcategories">
           <div className={styles.subnavInner}>
             <div className={styles.chipBar}>
               {isParent ? (
                 <>
-                  <button
-                    className={`${styles.chip} ${activeSub === null ? styles.chipActive : ''}`}
-                    onClick={() => setActiveSub(null)}
+                  {/* On the parent page, "All" is the page you're on. The
+                      subcategory chips are real <Link>s to each child's nested
+                      page — crawlable anchors, middle-clickable, and the fix
+                      for the 2026-06-03 "subcategories only filter, never
+                      navigate / child pages unreachable" bug. */}
+                  <Link
+                    to={categoryPath(category.slug)}
+                    className={`${styles.chip} ${styles.chipActive}`}
+                    aria-current="page"
                   >
                     <span>All</span>
                     <span className={styles.chipCount}>{allParts.length.toLocaleString()}</span>
-                  </button>
+                  </Link>
                   {category.children.map(s => (
-                    <button
+                    <Link
                       key={s.slug}
-                      className={`${styles.chip} ${activeSub === s.slug ? styles.chipActive : ''}`}
-                      onClick={() => setActiveSub(s.slug)}
+                      to={categoryPath(s.slug, category.slug)}
+                      className={styles.chip}
                     >
                       <Icon name={s.icon} />
                       <span>{s.name}</span>
                       {(subCounts.get(s.slug) ?? 0) > 0 && (
                         <span className={styles.chipCount}>{subCounts.get(s.slug)}</span>
                       )}
-                    </button>
+                    </Link>
                   ))}
                 </>
               ) : category.parent && category.parent.children.length > 0 ? (
                 <SubcategoryChips
                   subcategories={category.parent.children}
+                  parentSlug={category.parent.slug}
                   activeSlug={category.slug}
                 />
               ) : null}
@@ -336,14 +364,14 @@ export default function CategoryPage() {
             category pages; the banner self-gates on `suppliers.length === 0`
             (returns null when no featured suppliers) so we don't need an
             extra isParent guard here. */}
-        {!loading && category && (
+        {!busy && category && (
           <PreferredPartnersBanner
             suppliers={category.suppliers}
             categoryName={category.name}
           />
         )}
 
-        {loading ? (
+        {busy ? (
           <div className={styles.contentInner}>
             <div className={styles.left}>
               <div className={styles.tableSkeleton}>

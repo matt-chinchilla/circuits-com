@@ -4,6 +4,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import SkeletonLoader from '@public/components/widgets/SkeletonLoader';
 import { api } from '@public/services/api';
+import { categoryPath } from '@shared/utils/categoryPath';
 import type { PartDetail, PartListing } from '@public/types/part';
 import styles from './PartPage.module.scss';
 
@@ -153,7 +154,7 @@ export default function PartPage() {
                   <>
                     <span className={styles.breadcrumbSep} aria-hidden="true">/</span>
                     <Link
-                      to={`/category/${part.category_slug}`}
+                      to={categoryPath(part.category_slug, part.parent_category_slug)}
                       className={styles.breadcrumbLink}
                     >
                       {part.category_name}

@@ -176,6 +176,7 @@
   transition: all 150ms;
   white-space: nowrap;
   line-height: 1;
+  text-decoration: none; // chips render as <Link> (<a>) — kill the underline
 
   &:hover {
     border-color: rgba(255, 255, 255, 0.7);

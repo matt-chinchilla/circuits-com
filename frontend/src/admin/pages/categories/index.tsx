@@ -5,6 +5,7 @@ import Breadcrumbs from '@admin/components/Breadcrumbs';
 import { adminApi } from '@admin/services/adminApi';
 import type { AdminCategory, FeaturedSupplier } from '@admin/types/admin';
 import Icon from '@shared/components/Icon';
+import { categoryPath } from '@shared/utils/categoryPath';
 import styles from './CategoriesPage.module.scss';
 
 type ViewMode = 'tree' | 'grid';
@@ -262,7 +263,7 @@ export default function CategoriesPage() {
                       {c._children.map((s) => (
                         <Link
                           key={s.id}
-                          to={`/category/${s.slug}`}
+                          to={categoryPath(s.slug, c.slug)}
                           className={styles.subTile}
                         >
                           <span className={styles.subIcon}><Icon name={s.icon} /></span>

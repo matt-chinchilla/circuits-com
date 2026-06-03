@@ -10,7 +10,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Circuits.com — Electronic components directory. Compare prices and stock for 3,600+ ICs, MCUs, sensors, and more from 57 distributors. Find datasheets, check availability, and buy PCB components." />
     <meta name="keywords" content="electronic components, buy ICs, circuit components, PCB parts, integrated circuits, microcontrollers, sensors, capacitors, resistors, distributor comparison, component pricing, datasheets" />
-    <link rel="canonical" href="https://circuits.com/" />
+    <!-- No static canonical: react-helmet-async sets a per-page canonical on
+         every indexable route. A hardcoded one here was emitted on EVERY page
+         (Helmet appends a 2nd rather than replacing a tag it doesn't own), so
+         every page advertised two canonicals — home + the real one. Absent =
+         self-referential, which is correct for the JS-less pre-hydration state
+         and the few routes without an explicit canonical (2026-06-03). -->
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Circuits.com" />
     <meta property="og:title" content="Circuits.com — The Integrated Circuits Directory" />
@@ -40,7 +45,11 @@
     // origin fetch when the SW cache is cold). URL params MUST match
     // api.getCategory's exact request (popular_per_page=500 etc).
     (function(){
-      var m = location.pathname.match(/^\/category\/([^\/?#]+)/);
+      // Capture the LAST path segment: flat /category/<slug> OR nested
+      // /category/<parent>/<child>. The child slug is globally unique and is
+      // what api.getCategory fetches, so preloading it (not the parent) keeps
+      // the cache-hit alive for subcategory pages too (2026-06-03 nested URLs).
+      var m = location.pathname.match(/^\/category\/(?:[^\/?#]+\/)?([^\/?#]+)/);
       if (!m) return;
       var slug = m[1];
       var path = '/api/categories/' + slug + '/?popular_page=1&popular_per_page=500&parts_page=1&parts_per_page=500';

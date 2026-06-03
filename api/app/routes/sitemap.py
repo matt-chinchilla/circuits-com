@@ -34,11 +34,28 @@ def sitemap_xml(db: Session = Depends(get_db)):
             f"<priority>{priority}</priority></url>"
         )
 
-    categories = db.query(Category.slug, Category.parent_id).all()
-    for slug, parent_id in categories:
-        priority = "0.8" if parent_id is None else "0.7"
+    # Subcategories live at the nested canonical URL /category/{parent}/{child};
+    # top-level categories stay flat. Emitting the flat child slug would
+    # advertise a URL that only client-side-redirects to the real one
+    # (duplicate content + wasted crawl budget). See test_sitemap.py.
+    categories = db.query(Category.id, Category.slug, Category.parent_id).all()
+    slug_by_id = {cat_id: slug for cat_id, slug, _ in categories}
+    for _cat_id, slug, parent_id in categories:
+        if parent_id is None:
+            loc = f"{base}/category/{slug}"
+            priority = "0.8"
+        else:
+            parent_slug = slug_by_id.get(parent_id)
+            # Orphaned child (parent row missing): fall back to the flat URL
+            # rather than emit a broken `/category/None/{slug}`.
+            loc = (
+                f"{base}/category/{parent_slug}/{slug}"
+                if parent_slug
+                else f"{base}/category/{slug}"
+            )
+            priority = "0.7"
         urls.append(
-            f"<url><loc>{base}/category/{slug}</loc>"
+            f"<url><loc>{loc}</loc>"
             f"<lastmod>{today}</lastmod>"
             f"<changefreq>weekly</changefreq>"
             f"<priority>{priority}</priority></url>"
