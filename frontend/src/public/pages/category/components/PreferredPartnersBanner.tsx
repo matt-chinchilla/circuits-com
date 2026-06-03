@@ -19,6 +19,7 @@ import CircuitTraces from '@public/components/widgets/CircuitTraces';
 import CopyAffordance from '@public/components/CopyAffordance';
 import { prependScheme } from '@shared/utils/url';
 import { lettermark } from '@shared/utils/lettermark';
+import { formatPhone } from '@shared/utils/phone';
 import styles from './PreferredPartnersBanner.module.scss';
 
 interface PreferredPartnersBannerProps {
@@ -226,9 +227,9 @@ export default function PreferredPartnersBanner({
                           href={telHref(s.phone)}
                           onClick={(e) => e.stopPropagation()}
                         >
-                          {s.phone}
+                          {formatPhone(s.phone)}
                         </a>
-                        <CopyAffordance text={s.phone} compact />
+                        <CopyAffordance text={formatPhone(s.phone)} compact />
                       </span>
                     ) : (
                       <span className={styles.fbEmpty}>—</span>

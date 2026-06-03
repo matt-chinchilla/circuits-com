@@ -271,13 +271,16 @@ def get_category_by_slug(
     if not category:
         return None
 
-    # Get suppliers for this category via CategorySupplier join. On a parent
-    # category page, roll suppliers UP from all immediate children (mirrors
-    # the parts rollup in `_build_popular_parts`) — investor-facing parent
-    # banner needs the union of partners across the subtree. Dedup by
-    # supplier.id: prefer is_featured=True; among featured rows, prefer the
-    # lowest rank (highest priority). Sort final list by rank ascending.
-    cat_ids = [category.id] + [c.id for c in (category.children or [])]
+    # Get suppliers for this category via CategorySupplier join — the
+    # category's OWN rows only, NOT rolled up from children. Under the tier
+    # model (Featured = top-level / Subcategory Sponsor = child), a parent's
+    # Preferred Partners banner shows only its own top-level Featured sponsors;
+    # a child's Featured supplier belongs on that child's page, and must not
+    # surface on the parent (the 2026-06-02 "deleted Oneonta still shows on
+    # PMICs via the ldo-regulators rollup" bug). Parts still roll up to the
+    # parent (`_build_popular_parts`); suppliers do not. Dedup by supplier.id:
+    # prefer is_featured=True; among featured rows, lowest rank wins.
+    cat_ids = [category.id]
     supplier_rows = (
         db.query(Supplier, CategorySupplier.is_featured, CategorySupplier.rank)
         .join(CategorySupplier, CategorySupplier.supplier_id == Supplier.id)

@@ -59,6 +59,37 @@ def test_get_category_by_slug(client, seeded_db):
     assert data["sponsor"]["image_url"] == "/test.jpg"
 
 
+def test_parent_category_does_not_roll_up_child_featured_suppliers(client, seeded_db):
+    """A parent category page shows only its OWN suppliers — a Featured
+    Subcategory Sponsor must NOT roll up onto the parent's Preferred Partners
+    banner.
+
+    Regression for the 2026-06-02 "deleted Oneonta still shows on PMICs" bug:
+    Oneonta was Featured on a PMICs *child* (ldo-regulators); the parent detail
+    endpoint rolled child suppliers up, so Oneonta surfaced on the PMICs parent
+    banner even after it was removed from PMICs itself.
+
+    conftest links BOTH suppliers to the child (clock-and-timing) and features
+    Kennedy there. The parent (integrated-circuits) has no own CategorySupplier
+    rows, so its detail `.suppliers` must be empty — no rollup.
+    """
+    # Parent: no own CategorySupplier rows → empty, no rollup from the child.
+    resp = client.get("/api/categories/integrated-circuits")
+    assert resp.status_code == 200
+    parent_suppliers = {s["name"] for s in resp.json()["suppliers"]}
+    assert "Kennedy Electronics" not in parent_suppliers, (
+        "a child-Featured supplier must NOT roll up to the parent banner"
+    )
+    assert parent_suppliers == set(), "parent shows only its own suppliers"
+
+    # Child still surfaces its own Featured supplier (leaf pages unchanged).
+    resp = client.get("/api/categories/clock-and-timing")
+    assert resp.status_code == 200
+    child_suppliers = resp.json()["suppliers"]
+    kennedy = next((s for s in child_suppliers if s["name"] == "Kennedy Electronics"), None)
+    assert kennedy is not None and kennedy["is_featured"] is True
+
+
 def test_get_category_includes_parts(client, seeded_db):
     """GET /api/categories/clock-and-timing returns parts for that category."""
     response = client.get("/api/categories/clock-and-timing")
