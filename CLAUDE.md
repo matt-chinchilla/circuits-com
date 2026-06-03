@@ -86,9 +86,7 @@ Aliases `@public/*` / `@admin/*` / `@shared/*` in `vite.config.ts` + `tsconfig.a
 
 **Route prefetching**: `App.tsx` uses `requestIdleCallback` to eager-import top 5 chunks. All `import()` calls `.catch(() => {})` to suppress post-deploy noise. **Hover prefetch** on `CategoryCard.tsx` + `SearchBar.tsx` via `onMouseEnter`.
 
-**Service Worker**: `vite-plugin-pwa` runtime-cache only (no precaching). `StaleWhileRevalidate` on `/api/categories/*` (300s); `NetworkFirst` on other public API. `cleanupOutdatedCaches: true`, `manifest: false`, `navigateFallback: null`.
-
-**API Cache-Control**: `GET /api/categories/` + `/api/categories/{slug}` return `public, max-age=60`. Set AFTER 404 check (HTTPException creates new response).
+**Service Worker**: `vite-plugin-pwa` runtime-cache only (no precaching). `StaleWhileRevalidate` on `/api/categories/*` (60s); `NetworkFirst` on other public API. `cleanupOutdatedCaches: true`, `manifest: false`, `navigateFallback: null`.
 
 **Ultrawide (>1600px)**: `.subnavInner`, `.headerInner`, `.contentWide` all widen to `90vw`. `.contentWide max-width: calc(90vw + 56px)` so `.contentInner` aligns with `.chipBar`.
 
@@ -254,7 +252,7 @@ Brand (`left: 20px`) + nav+LOGIN (`right: 20px`) are `position: absolute` on `.t
 - **Category preload couples `frontend/index.html` ↔ `api.ts`** — inline `<script>` stashes the fetch promise on `window.__categoryPreload`; `api.getCategory` reuses it (matching slug+params). Direct-load only; SPA nav = axios.
 - **`index.html` served `no-cache`** (`frontend/nginx.conf` `location /`) so browsers revalidate the SPA entry. Hashed assets stay `immutable`. Guard: `api/tests/test_nginx_cache_headers.py`.
 - **`sw.js` MUST NOT be cached immutable** — generic regex applies `immutable, 1y` to ALL js. Exact-match `location = /sw.js` + `/registerSW.js` with `no-cache` (exact wins over regex).
-- **SW API caching uses `StaleWhileRevalidate`** (not `NetworkFirst`) — SWR serves cache instantly + revalidates; 300s `maxAgeSeconds` bounds staleness after `--reseed`.
+- **Sponsor cache invalidation (inc1, 2026-06-03)** — category endpoints send `no-cache` (set AFTER the 404 check — HTTPException makes a new response; guard `test_cache_headers.py`); `bustSponsorCaches()` (`@admin/services/swCache.ts`, names from `@shared/swCacheNames.ts`) deletes the `api-categories`+`api-general` SW caches, wired in `adminApi` (`bustingAfter`) so EVERY sponsor mutation busts — create/update/deleteSponsor, update/deleteSupplier (delete cascades to the sponsor row; update changes banner fields), wizard `featureSupplierInCategory`. ETag/304 + cross-tab push deferred.
 - **Workbox `runtimeCaching` regex MUST allow trailing slash** — axios ends `/?params`. Need `\/?` before query: `/\/api\/categories(\/[^/?]+)?\/?(\?.*)?$/`.
 - **`global.scss` uses deprecated Sass `darken()`/`lighten()`** — new code uses `@use 'sass:color'` + `color.adjust()`.
 - **ProxyHeadersMiddleware trusts all hosts** — required for admin HTTPS URL gen behind nginx. FastAPI 307-redirects missing trailing slash (axios follows).
