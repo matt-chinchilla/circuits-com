@@ -717,3 +717,43 @@ def test_delete_non_featured_sponsor_leaves_category_supplier_untouched(client, 
     assert cs is not None and cs.is_featured is True, (
         "deleting a non-Featured sponsor must not unfeature a seed/manual feature"
     )
+
+
+def test_featured_rank_ignores_non_featured_rows(client, seeded_db, db):
+    """A new Featured supplier's auto-rank counts only FEATURED peers.
+
+    Regression for the 2026-06-03 "Pasternack shows #7" bug: PMICs had several
+    NON-featured CategorySupplier rows (seed associations + an unfeatured-but-
+    preserved Oneonta at rank 6), and `_upsert_category_supplier_featured` took
+    max(rank) over ALL rows, so the 3rd Featured partner landed at rank 7. The
+    max must be scoped to is_featured=True rows.
+    """
+    headers = _auth_header(client)
+    parent = seeded_db["parent"]
+    sup_featured = seeded_db["supplier1"]
+    sup_nonfeatured = seeded_db["supplier2"]
+
+    # A high-ranked NON-featured association on the parent (the inflater).
+    db.add(
+        CategorySupplier(
+            category_id=parent.id,
+            supplier_id=sup_nonfeatured.id,
+            is_featured=False,
+            rank=5,
+        )
+    )
+    db.commit()
+
+    # First Featured sponsor on the parent (top-level).
+    r = _post_sponsor(client, headers, supplier_id=str(sup_featured.id), category_id=str(parent.id))
+    assert r.status_code == 200, r.text
+
+    db.expire_all()
+    cs = _category_supplier(db, parent.id, sup_featured.id)
+    assert cs is not None and cs.is_featured is True
+    # Featured-relative: first Featured partner → rank 1, NOT 6 (5 + 1 over the
+    # non-featured row).
+    assert cs.rank == 1, (
+        f"first Featured supplier should be rank 1, got {cs.rank} "
+        "(a non-featured row wrongly inflated it)"
+    )

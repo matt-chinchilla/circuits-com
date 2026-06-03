@@ -167,13 +167,19 @@ def _upsert_category_supplier_featured(
         existing.is_featured = True  # type: ignore[assignment]
         return
 
-    # Auto-rank: take next slot after the highest existing rank on this
-    # category so we never collide. The banner ORDER BYs rank asc, so a
-    # fresh max+1 puts the new row at the bottom of the featured list,
-    # which matches user expectation ("just added, lowest priority").
+    # Auto-rank: next slot after the highest existing FEATURED rank on this
+    # category. Scoping the max to is_featured=True rows keeps the value a
+    # sensible count of featured partners — non-featured CategorySupplier rows
+    # (seed associations, or suppliers unfeatured but row-preserved) must NOT
+    # inflate it, else the Nth featured partner lands at rank > N (the
+    # 2026-06-03 "Pasternack shows #7" root cause). Banner ORDER BYs rank asc,
+    # so max+1 still puts the new row at the bottom (lowest priority).
     max_rank = (
         db.query(CategorySupplier.rank)
-        .filter(CategorySupplier.category_id == category_id)
+        .filter(
+            CategorySupplier.category_id == category_id,
+            CategorySupplier.is_featured.is_(True),
+        )
         .order_by(CategorySupplier.rank.desc())
         .first()
     )

@@ -171,12 +171,16 @@ export default function PreferredPartnersBanner({
             {featured.map((s, i) => {
               const isLive = activeIndices.has(i);
               // Refdes is positional (U1, U2 by stack order — silkscreen
-              // designator convention). Rank chip is the DB rank — when an
-              // admin unfeatures a higher-rank supplier, surviving rows keep
-              // their semantic rank instead of silently renumbering, which
-              // would contradict the subtitle "ranked by partnership tier".
+              // designator convention). Rank chip = sequential POSITION in the
+              // rank-sorted featured list (1..N), NOT the raw stored
+              // CategorySupplier.rank. The stored rank is only the sort key
+              // (it can have gaps — `_upsert_category_supplier_featured`
+              // assigns max+1 and unfeatured rows leave their value behind), so
+              // rendering it directly showed e.g. "#7" for the 3rd partner
+              // (2026-06-03 bug). Position is a clean counting op that still
+              // honors "ranked by partnership tier" (order is by rank asc).
               const refdesIndex = i + 1;
-              const dbRank = s.rank ?? i + 1;
+              const dbRank = i + 1;
               return (
                 <div
                   key={s.id}
