@@ -384,7 +384,11 @@ class TestSeedIdempotency:
 
         seed(db)
         parts = db.query(Part).all()
-        assert len(parts) == 59  # 10 categories, variable parts per category
+        # Seed creates 59 demo parts PLUS the real catalog (~3,555 from the JSON
+        # files). Assert the demo baseline is present; don't pin the catalog total
+        # — it shifts whenever the catalog JSON is regenerated. The old `== 59`
+        # predated the real catalog and broke on every reseed.
+        assert len(parts) >= 59
 
     def test_seed_creates_listings(self, db):
         from app.db.seed import seed
