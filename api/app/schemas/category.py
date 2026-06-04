@@ -86,3 +86,16 @@ class CategoryDetailResponse(CategoryResponse):
 
 
 CategoryDetailResponse.model_rebuild()
+
+
+class CategoryPartnersResponse(BaseModel):
+    """Preferred Partners banner payload for a TOP-LEVEL category (split out of
+    the heavy CategoryDetailResponse 2026-06-04 so the banner is a small,
+    cacheable, top-level artifact). `slug`/`name` are the RESOLVED top-level
+    category — a child slug resolves to its parent — so the banner shows the
+    same partners on every subpage."""
+
+    slug: str
+    name: str
+    partners: list[SupplierResponse] = []
+    model_config = ConfigDict(from_attributes=True)

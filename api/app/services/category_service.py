@@ -62,9 +62,7 @@ def get_all_categories(db: Session) -> list[Category]:
             {"id": supplier_id, "name": supplier_name}
         )
     featured_by_cat: dict = {
-        cat_id: entries[0]["name"]
-        for cat_id, entries in featured_list_by_cat.items()
-        if entries
+        cat_id: entries[0]["name"] for cat_id, entries in featured_list_by_cat.items() if entries
     }
 
     for cat in cats:
@@ -77,6 +75,38 @@ def get_all_categories(db: Session) -> list[Category]:
             child.featured_suppliers = featured_list_by_cat.get(child.id, [])
 
     return cats
+
+
+def get_category_partners(db: Session, slug: str) -> dict | None:
+    """Preferred Partners for the TOP-LEVEL category of `slug`.
+
+    Resolves a child slug to its top-level ancestor (2-level tree: a child's
+    `parent` IS the top level), so the banner shows the SAME partners on the
+    parent page and every subpage. Returns the resolved top-level identity plus
+    its active sponsors, tier-ordered. Unknown slug → None (route → 404).
+    """
+    category = db.query(Category).filter(Category.slug == slug).first()
+    if not category:
+        return None
+    # A child's parent IS the top level (2-level tree). `.parent` is a single
+    # lazy SELECT here (one object, not a loop) — not an N+1.
+    top = category if category.parent_id is None else category.parent
+
+    sponsor_suppliers = (
+        db.query(Supplier)
+        .join(Sponsor, Sponsor.supplier_id == Supplier.id)
+        .filter(Sponsor.category_id == top.id)
+        .filter(_active_sponsor())
+        .order_by(_tier_order(), Sponsor.created_at)
+        .all()
+    )
+    partners = []
+    for position, supplier in enumerate(sponsor_suppliers, start=1):
+        supplier.is_featured = True
+        supplier.rank = position
+        partners.append(supplier)
+
+    return {"slug": top.slug, "name": top.name, "partners": partners}
 
 
 def _build_public_parts(

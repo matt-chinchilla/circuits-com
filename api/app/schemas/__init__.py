@@ -1,4 +1,9 @@
-from .category import CategoryDetailResponse, CategoryResponse, SubcategoryResponse
+from .category import (
+    CategoryDetailResponse,
+    CategoryPartnersResponse,
+    CategoryResponse,
+    SubcategoryResponse,
+)
 from .forms import ContactForm, JoinForm, KeywordRequestForm
 from .part import PublicPartDetailResponse, PublicPartListingResponse, PublicPartResponse
 from .sponsor import (
@@ -10,9 +15,19 @@ from .sponsor import (
 from .supplier import SupplierResponse
 
 __all__ = [
-    "SubcategoryResponse", "CategoryResponse", "CategoryDetailResponse",
-    "SupplierResponse", "SponsorResponse",
-    "AdminSponsorCreate", "AdminSponsorResponse", "AdminSponsorUpdate",
-    "ContactForm", "JoinForm", "KeywordRequestForm",
-    "PublicPartListingResponse", "PublicPartResponse", "PublicPartDetailResponse",
+    "SubcategoryResponse",
+    "CategoryResponse",
+    "CategoryDetailResponse",
+    "CategoryPartnersResponse",
+    "SupplierResponse",
+    "SponsorResponse",
+    "AdminSponsorCreate",
+    "AdminSponsorResponse",
+    "AdminSponsorUpdate",
+    "ContactForm",
+    "JoinForm",
+    "KeywordRequestForm",
+    "PublicPartListingResponse",
+    "PublicPartResponse",
+    "PublicPartDetailResponse",
 ]
