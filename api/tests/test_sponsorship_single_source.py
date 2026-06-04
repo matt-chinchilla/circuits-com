@@ -126,7 +126,10 @@ def test_banner_reflects_sponsor_create_then_delete(client, seeded_db):
     sup, parent = seeded_db["supplier1"], seeded_db["parent"]  # Avnet, integrated-circuits
 
     def banner_names():
-        return {s["name"] for s in client.get(f"/api/categories/{parent.slug}").json()["suppliers"]}
+        return {
+            s["name"]
+            for s in client.get(f"/api/categories/{parent.slug}/partners").json()["partners"]
+        }
 
     assert "Avnet" not in banner_names()  # not a sponsor yet
 
@@ -210,8 +213,10 @@ def test_new_child_sponsor_supersedes_prior(client, seeded_db):
     r = _post(client, headers, supplier_id=str(avnet.id), category_id=str(child.id),
               tier="Gold", status="Active")
     assert r.status_code == 200, r.text
-    names = {s["name"] for s in client.get(f"/api/categories/{child.slug}").json()["suppliers"]}
-    assert names == {"Avnet"}, names  # Kennedy superseded → no longer visible
+    # The child's single-slot Subcategory Sponsor is SponsorBlock's `sponsor`
+    # (the banner is the top-level artifact now). Newest-visible wins.
+    sponsor = client.get(f"/api/categories/{child.slug}").json()["sponsor"]
+    assert sponsor is not None and sponsor["supplier_name"] == "Avnet", sponsor
 
 
 def test_featured_top_level_sponsors_coexist(client, seeded_db):
@@ -224,18 +229,21 @@ def test_featured_top_level_sponsors_coexist(client, seeded_db):
                  tier="Featured", status="Active").status_code == 200
     assert _post(client, headers, supplier_id=str(b.id), category_id=str(parent.id),
                  tier="Featured", status="Active").status_code == 200
-    names = {s["name"] for s in client.get(f"/api/categories/{parent.slug}").json()["suppliers"]}
+    names = {
+        s["name"]
+        for s in client.get(f"/api/categories/{parent.slug}/partners").json()["partners"]
+    }
     assert names == {"Avnet", "Kennedy Electronics"}, names
 
 
 # --- Read-side visibility: NULL = Active, Expired hidden -------------------
 
 def test_legacy_null_status_sponsor_visible(client, seeded_db):
-    """The seeded Kennedy sponsor has NULL status (legacy seed omits it). It must
-    still surface on the child banner — NULL is treated as Active."""
+    """The seeded Kennedy sponsor has NULL status (legacy). It must still surface
+    as the child's SponsorBlock sponsor — NULL is treated as Active."""
     child = seeded_db["child"]
-    names = {s["name"] for s in client.get(f"/api/categories/{child.slug}").json()["suppliers"]}
-    assert "Kennedy Electronics" in names
+    sponsor = client.get(f"/api/categories/{child.slug}").json()["sponsor"]
+    assert sponsor is not None and sponsor["supplier_name"] == "Kennedy Electronics"
 
 
 def test_expired_sponsor_hidden_from_banner(client, seeded_db):
@@ -246,7 +254,10 @@ def test_expired_sponsor_hidden_from_banner(client, seeded_db):
     r = _post(client, headers, supplier_id=str(avnet.id), category_id=str(parent.id),
               tier="Featured", status="Expired")
     assert r.status_code == 200, r.text
-    names = {s["name"] for s in client.get(f"/api/categories/{parent.slug}").json()["suppliers"]}
+    names = {
+        s["name"]
+        for s in client.get(f"/api/categories/{parent.slug}/partners").json()["partners"]
+    }
     assert "Avnet" not in names
 
 

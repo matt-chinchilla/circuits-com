@@ -315,30 +315,15 @@ def get_category_by_slug(
     parts_page: int = 1,
     parts_per_page: int = 20,
 ) -> dict | None:
-    """Return category with suppliers, sponsor, and parts."""
+    """Return category with sponsor and parts.
+
+    The Preferred Partners banner is no longer built here (2026-06-04) — it is a
+    TOP-LEVEL artifact served by `get_category_partners`. This returns only the
+    single SponsorBlock `sponsor` (newest visible) plus parts.
+    """
     category = db.query(Category).filter(Category.slug == slug).first()
     if not category:
         return None
-
-    # Preferred Partners banner = this category's active SPONSORSHIPS (the
-    # `sponsors` table is the single source of truth as of 2026-06-03 — Featured
-    # on a top-level category, Platinum/Gold on a child). NOT rolled up from
-    # children (a child's sponsor belongs on the child's page). UNIQUE(supplier,
-    # category) means each supplier appears at most once → no dedup. Stamp
-    # is_featured + 1-based rank for the SupplierResponse the banner reads.
-    sponsor_suppliers = (
-        db.query(Supplier)
-        .join(Sponsor, Sponsor.supplier_id == Supplier.id)
-        .filter(Sponsor.category_id == category.id)
-        .filter(_active_sponsor())
-        .order_by(_tier_order(), Sponsor.created_at)
-        .all()
-    )
-    suppliers = []
-    for position, supplier in enumerate(sponsor_suppliers, start=1):
-        supplier.is_featured = True
-        supplier.rank = position
-        suppliers.append(supplier)
 
     # Get sponsor for this category — newest visible wins. The visible-status
     # filter (Active OR legacy NULL) MUST match the admin write-path supersede
@@ -398,7 +383,6 @@ def get_category_by_slug(
 
     return {
         "category": category,
-        "suppliers": suppliers,
         "sponsor": sponsor_data,
         "parts": parts,
         "popular_parts": popular_parts,

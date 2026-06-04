@@ -12,10 +12,11 @@ from .supplier import SupplierResponse
 class FeaturedSupplier(BaseModel):
     """A Featured supplier on a category (id + name).
 
-    Carries the supplier id alongside the name so the admin categories tree's
-    "Unfeature" button can target the exact CategorySupplier row. Names alone
-    are ambiguous — Supplier.name has no unique constraint, so two distinct
-    suppliers can share a name and collide in a name-keyed lookup.
+    Carries the supplier id alongside the name so the admin categories tree can
+    unambiguously identify the sponsor — Supplier.name has no unique constraint,
+    so two distinct suppliers can share a name and collide in a name-keyed
+    lookup. (Featured status is sourced from the `sponsors` table as of
+    2026-06-03; the old CategorySupplier feature flag is gone.)
     """
 
     id: UUID
@@ -78,7 +79,6 @@ PopularPartsPage = PartsPage
 
 class CategoryDetailResponse(CategoryResponse):
     parent: ParentCategoryResponse | None = None
-    suppliers: list[SupplierResponse]
     sponsor: SponsorResponse | None
     parts: PartsPage = PartsPage()
     popular_parts: PartsPage = PartsPage()

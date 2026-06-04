@@ -15,13 +15,14 @@ from app.services.category_service import (
 
 router = APIRouter(prefix="/api/categories", tags=["categories"])
 
-# Sponsor/banner data (suppliers, sponsor, featured_supplier_name) is embedded in
-# these category responses, so they must reflect an admin sponsor add/delete
-# immediately. "no-cache" lets the browser STORE the body but forces revalidation
-# on every use, so a stale browser-cached copy can never mask a mutation. The
-# service worker (Cache Storage) stays the perf layer and is purged on mutation
-# (frontend admin/services/sponsorStore.ts); an ETag (next increment) will make
-# the forced revalidation a cheap 304 instead of a full re-fetch.
+# Sponsor/banner data (sponsor, featured_supplier_name) is embedded in these
+# category responses (the Preferred Partners list moved to the sibling
+# /{slug}/partners endpoint, 2026-06-04), so they must reflect an admin sponsor
+# add/delete immediately. "no-cache" lets the browser STORE the body but forces
+# revalidation on every use, so a stale browser-cached copy can never mask a
+# mutation. The service worker (Cache Storage) stays the perf layer and is purged
+# on mutation (frontend admin/services/swCache.ts); /partners carries an ETag so
+# its forced revalidation is a cheap 304 instead of a full re-fetch.
 _CATEGORY_CACHE_CONTROL = "no-cache"
 
 
@@ -93,7 +94,6 @@ def get_category(
         description=cat.description,
         children=cat.children,
         parent=cat.parent,
-        suppliers=result["suppliers"],
         sponsor=result["sponsor"],
         parts=result["parts"],
         popular_parts=result["popular_parts"],

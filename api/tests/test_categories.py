@@ -20,9 +20,9 @@ def test_list_categories(client, seeded_db):
 
 def test_list_categories_includes_featured_supplier_name(client, seeded_db):
     """Powers the admin Categories tree's ★ Featured Supplier banner.
-    conftest links Kennedy Electronics to clock-and-timing with is_featured=True.
-    The parent (integrated-circuits) has no featured CategorySupplier of its
-    own and should surface null.
+    conftest gives Kennedy Electronics a Gold sponsor on clock-and-timing (the
+    `sponsors` table is the source as of 2026-06-03 — not CategorySupplier).
+    The parent (integrated-circuits) has no sponsor of its own → surfaces null.
     """
     response = client.get("/api/categories/")
     data = response.json()
@@ -37,24 +37,19 @@ def test_list_categories_includes_featured_supplier_name(client, seeded_db):
 
 
 def test_get_category_by_slug(client, seeded_db):
-    """GET /api/categories/clock-and-timing returns detail with suppliers and sponsor."""
+    """GET /api/categories/clock-and-timing returns detail with sponsor (banner
+    moved to /partners as of 2026-06-04 — `suppliers` is gone from this payload)."""
     response = client.get("/api/categories/clock-and-timing")
     assert response.status_code == 200
     data = response.json()
     assert data["slug"] == "clock-and-timing"
     assert data["name"] == "Clock and Timing"
 
-    # Preferred Partners = the category's SPONSORS (single source of truth as of
-    # 2026-06-03). Kennedy has a Gold sponsor on this subcategory; Avnet is
-    # associated (carries parts) but has NO sponsorship, so it is not on the
-    # banner.
-    assert "suppliers" in data
-    supplier_names = {s["name"] for s in data["suppliers"]}
-    assert supplier_names == {"Kennedy Electronics"}
-    assert data["suppliers"][0]["is_featured"] is True
+    # `suppliers` no longer exists on the detail payload — the banner is a
+    # top-level artifact served by /api/categories/{slug}/partners.
+    assert "suppliers" not in data
 
-    # Should have sponsor
-    assert "sponsor" in data
+    # SponsorBlock's single sponsor (Kennedy Gold on this child) stays.
     assert data["sponsor"] is not None
     assert data["sponsor"]["supplier_name"] == "Kennedy Electronics"
     assert data["sponsor"]["tier"] == "gold"
@@ -62,34 +57,19 @@ def test_get_category_by_slug(client, seeded_db):
 
 
 def test_parent_category_does_not_roll_up_child_featured_suppliers(client, seeded_db):
-    """A parent category page shows only its OWN suppliers — a Featured
-    Subcategory Sponsor must NOT roll up onto the parent's Preferred Partners
-    banner.
+    """The partners banner shows a TOP-LEVEL category's OWN Featured sponsors —
+    never a child's sponsor rolled up. conftest features Kennedy on the CHILD
+    only and nothing on the parent, so the parent's /partners is empty, and the
+    child's /partners (resolving to the parent) is empty too."""
+    parent = client.get("/api/categories/integrated-circuits/partners")
+    assert parent.status_code == 200
+    assert parent.json()["partners"] == [], "no child→parent rollup onto the banner"
 
-    Regression for the 2026-06-02 "deleted Oneonta still shows on PMICs" bug:
-    Oneonta was Featured on a PMICs *child* (ldo-regulators); the parent detail
-    endpoint rolled child suppliers up, so Oneonta surfaced on the PMICs parent
-    banner even after it was removed from PMICs itself.
-
-    conftest links BOTH suppliers to the child (clock-and-timing) and features
-    Kennedy there. The parent (integrated-circuits) has no own CategorySupplier
-    rows, so its detail `.suppliers` must be empty — no rollup.
-    """
-    # Parent: no own CategorySupplier rows → empty, no rollup from the child.
-    resp = client.get("/api/categories/integrated-circuits")
-    assert resp.status_code == 200
-    parent_suppliers = {s["name"] for s in resp.json()["suppliers"]}
-    assert "Kennedy Electronics" not in parent_suppliers, (
-        "a child-Featured supplier must NOT roll up to the parent banner"
-    )
-    assert parent_suppliers == set(), "parent shows only its own suppliers"
-
-    # Child still surfaces its own Featured supplier (leaf pages unchanged).
-    resp = client.get("/api/categories/clock-and-timing")
-    assert resp.status_code == 200
-    child_suppliers = resp.json()["suppliers"]
-    kennedy = next((s for s in child_suppliers if s["name"] == "Kennedy Electronics"), None)
-    assert kennedy is not None and kennedy["is_featured"] is True
+    # Child resolves to the parent for the banner → also empty (no own Featured).
+    child = client.get("/api/categories/clock-and-timing/partners")
+    assert child.status_code == 200
+    assert child.json()["slug"] == "integrated-circuits"
+    assert child.json()["partners"] == []
 
 
 def test_get_category_includes_parts(client, seeded_db):
