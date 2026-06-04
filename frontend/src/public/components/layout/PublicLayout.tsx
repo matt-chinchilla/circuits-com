@@ -1,6 +1,7 @@
 import { Suspense } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
 import ErrorBoundary from '@shared/components/ErrorBoundary'
+import CategoryPartnersBanner from '@public/pages/category/components/CategoryPartnersBanner'
 import Footer from './Footer'
 import styles from './PublicLayout.module.scss'
 
@@ -29,6 +30,11 @@ export default function PublicLayout() {
   return (
     <div className={styles.shell}>
       <div className={styles.outletWrap}>
+        {/* Persistent Category Sponsors banner — sits OUTSIDE the pathname-keyed
+            ErrorBoundary so it does NOT remount on intra-category navigation
+            (it's a top-level artifact, identical across the subtree). Self-gates
+            to /category/* and to non-empty partners. */}
+        <CategoryPartnersBanner />
         <Suspense fallback={<RouteFallback />}>
           {/* ErrorBoundary keyed on pathname → render crashes inside any
               public page surface a recoverable fallback (with a "Back"

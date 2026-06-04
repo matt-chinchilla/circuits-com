@@ -41,3 +41,11 @@ export interface CategoryDetail extends Category {
   // Powers the "Popular Parts" section. On leaf pages, items is empty.
   popular_parts: PopularPartsPage;
 }
+
+export interface CategoryPartners {
+  // The resolved TOP-LEVEL category (a child slug resolves to its parent) and
+  // its Featured "Preferred Partners" — fed to the persistent banner.
+  slug: string;
+  name: string;
+  partners: import('./supplier').Supplier[];
+}

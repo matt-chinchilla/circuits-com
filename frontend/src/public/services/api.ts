@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { Category, CategoryDetail } from '@public/types/category';
+import type { Category, CategoryDetail, CategoryPartners } from '@public/types/category';
 import type { Supplier } from '@public/types/supplier';
 import type { Sponsor } from '@public/types/sponsor';
 import type { PublicPart, PartDetail } from '@public/types/part';
@@ -58,6 +58,11 @@ export const api = {
     _prefetchedCategories.add(slug);
     api.getCategory(slug, 1, 500, 1, 500).catch(() => {});
   },
+
+  // Top-level Category Sponsors banner (small, cacheable). No trailing slash —
+  // matches the route exactly; the endpoint resolves a child slug to its parent.
+  getCategoryPartners: (slug: string) =>
+    client.get<CategoryPartners>(`/categories/${slug}/partners`).then(r => r.data),
 
   search: (q: string) =>
     client.get<SearchResults>('/search/', { params: { q } }).then(r => r.data),
