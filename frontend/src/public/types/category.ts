@@ -35,7 +35,6 @@ export interface CategoryDetail extends Category {
     icon: string;
     children: Subcategory[];
   } | null;
-  suppliers: import('./supplier').Supplier[];
   sponsor: import('./sponsor').Sponsor | null;
   parts: PartsPage;
   // Paginated rollup of parts across all subcategories of a parent category.

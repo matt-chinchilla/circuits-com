@@ -5,8 +5,6 @@ import { motion } from 'framer-motion';
 import SubcategoryChips from './components/SubcategoryChips';
 import PartsTable from './components/PartsTable';
 import SponsorBlock from './components/SponsorBlock';
-import PreferredPartnersBanner from './components/PreferredPartnersBanner';
-import TopPartners from './components/TopPartners';
 import SkeletonLoader from '@public/components/widgets/SkeletonLoader';
 import Pagination from '@public/components/widgets/Pagination';
 import Icon from '@shared/components/Icon';
@@ -357,17 +355,6 @@ export default function CategoryPage() {
       <div className={styles.contentWide}>
         {error && <p className={styles.error}>{error}</p>}
 
-        {/* Preferred Partners banner — v14. Renders for both parent + sub
-            category pages; the banner self-gates on `suppliers.length === 0`
-            (returns null when no featured suppliers) so we don't need an
-            extra isParent guard here. */}
-        {!busy && category && (
-          <PreferredPartnersBanner
-            suppliers={category.suppliers}
-            categoryName={category.name}
-          />
-        )}
-
         {busy ? (
           <div className={styles.contentInner}>
             <div className={styles.left}>
@@ -413,8 +400,6 @@ export default function CategoryPage() {
             </div>
             <div className={styles.right}>
               <SponsorBlock sponsor={category.sponsor} />
-              <div className={styles.sidebarGap} />
-              <TopPartners suppliers={category.suppliers} />
             </div>
           </div>
         ) : null}
