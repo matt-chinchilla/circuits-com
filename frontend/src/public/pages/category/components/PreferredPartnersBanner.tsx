@@ -14,7 +14,6 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import type { Supplier } from '@public/types/supplier';
-import { useEntrance } from '@public/hooks/useEntrance';
 import CircuitTraces from '@public/components/widgets/CircuitTraces';
 import CopyAffordance from '@public/components/CopyAffordance';
 import { prependScheme } from '@shared/utils/url';
@@ -84,8 +83,6 @@ export default function PreferredPartnersBanner({
   const featured = list
     .filter((s) => s.is_featured)
     .sort((a, b) => (a.rank ?? 0) - (b.rank ?? 0));
-
-  useEntrance(rootRef, featured.length);
 
   if (featured.length === 0) return null;
 

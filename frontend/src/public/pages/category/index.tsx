@@ -230,9 +230,8 @@ export default function CategoryPage() {
   return (
     <motion.div
       className={styles.page}
-      initial={{ opacity: 0, x: 20 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: -20 }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
       transition={{ duration: 0.15, ease: 'easeInOut' as const }}
     >
       {category && canonicalPath && (
@@ -278,16 +277,10 @@ export default function CategoryPage() {
           ) : category ? (
             <>
               <div className={styles.titleRow}>
-                <motion.h1
-                  className={styles.title}
-                  key={category.name}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.4, ease: 'easeOut' as const }}
-                >
+                <h1 className={styles.title}>
                   {category.icon && <span className={styles.titleIcon}><Icon name={category.icon} /></span>}
                   {category.name}
-                </motion.h1>
+                </h1>
               </div>
               <p className={styles.headerMeta}>
                 <span className={styles.headerMetaMono}>{filtered.length.toLocaleString()}</span> parts
