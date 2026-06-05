@@ -13,14 +13,19 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-# In-memory + StaticPool gives true per-test isolation: a single shared connection
-# backs one in-memory database for the engine's lifetime, so the per-function
-# create_all/drop_all fully resets state. The previous file-based
-# "sqlite:///./test.db" with the default multi-connection pool ACCUMULATED state
-# across the ~230-test run — after the heavy real-catalog seed (~3.6K parts), a
-# later query deserialized a UUID column as a float and uuid.UUID(<float>) raised
-# "'float' object has no attribute 'replace'". Both affected seed tests passed in
-# isolation; only the shared file DB made them flaky. In-memory also drops disk I/O.
+# In-memory SQLite with a FRESH CONNECTION PER TEST (see the `db` fixture's
+# engine.dispose()). StaticPool keeps one connection alive — and an anonymous
+# in-memory DB lives only as long as its connection — so disposing the engine
+# before/after each test gives every test a brand-new connection (= brand-new
+# in-memory DB) with no leaked per-connection state.
+#
+# The earlier version relied on create_all/drop_all over ONE persistent shared
+# connection; that did NOT fully reset the connection, and a UUID column
+# intermittently deserialized as a float — uuid.UUID(<float>) raising
+# "'float' object has no attribute 'replace'" — in the seed-idempotency tests
+# during full-suite runs (order-dependent: passed in isolation). Per-test
+# disposal eliminates that contamination. (The original file-based
+# "sqlite:///./test.db" with a multi-connection pool was worse still.)
 SQLALCHEMY_DATABASE_URL = "sqlite://"
 engine = create_engine(
     SQLALCHEMY_DATABASE_URL,
@@ -57,13 +62,16 @@ from app.models import (  # noqa: E402
 
 @pytest.fixture(scope="function")
 def db():
+    # Dispose first so this test gets a brand-new connection (= brand-new
+    # in-memory DB), never the previous test's — see the engine comment above.
+    engine.dispose()
     Base.metadata.create_all(bind=engine)
     session = TestingSessionLocal()
     try:
         yield session
     finally:
         session.close()
-        Base.metadata.drop_all(bind=engine)
+        engine.dispose()
 
 
 @pytest.fixture(scope="function")
@@ -144,7 +152,7 @@ def seeded_db(db):
     db.flush()
 
     # Create admin user
-    hashed = bcrypt.hashpw("testpass123".encode(), bcrypt.gensalt()).decode()
+    hashed = bcrypt.hashpw(b"testpass123", bcrypt.gensalt()).decode()
     admin_user = User(
         id=uuid.uuid4(),
         username="admin",
@@ -209,12 +217,14 @@ def seeded_db(db):
 
     # Create price breaks
     for qty, price in [(10, "0.4940"), (100, "0.4420"), (1000, "0.3640")]:
-        db.add(PriceBreak(
-            id=uuid.uuid4(),
-            listing_id=listing1.id,
-            min_quantity=qty,
-            unit_price=Decimal(price),
-        ))
+        db.add(
+            PriceBreak(
+                id=uuid.uuid4(),
+                listing_id=listing1.id,
+                min_quantity=qty,
+                unit_price=Decimal(price),
+            )
+        )
     db.flush()
 
     # Create revenue records
