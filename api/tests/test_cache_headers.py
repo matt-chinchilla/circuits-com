@@ -28,3 +28,12 @@ def test_list_categories_cache_header(client, seeded_db):
 
 def test_get_category_cache_header(client, seeded_db):
     _assert_no_cache(client.get("/api/categories/clock-and-timing"))
+
+
+def test_get_partners_cache_header(client, seeded_db):
+    # The Preferred-Partners banner endpoint must also stay non-cacheable, and —
+    # unlike the list/detail routes — it carries a strong ETag for conditional
+    # GET (cheap 304 revalidation). Resolves clock-and-timing -> its parent.
+    r = client.get("/api/categories/clock-and-timing/partners")
+    _assert_no_cache(r)
+    assert r.headers.get("etag"), "partners endpoint must carry an ETag for conditional GET"

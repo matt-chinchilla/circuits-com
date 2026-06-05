@@ -51,6 +51,11 @@ export default function CategoryPartnersBanner() {
       .then((d) => {
         if (cancelled) return;
         setPartnersMemo(slug, d);
+        // Also memo under the RESOLVED top-level slug. A direct/bookmarked flat
+        // child URL (/category/<child>) keys by the child slug, then canonically
+        // redirects to /category/<parent>/<child> — without this second write
+        // that remount misses the memo and the banner pops in a second time.
+        if (d.slug !== slug) setPartnersMemo(d.slug, d);
         setData(d);
       })
       .catch(() => {
