@@ -16,7 +16,11 @@ export default defineConfig({
         cleanupOutdatedCaches: true,
         runtimeCaching: [
           {
-            urlPattern: /\/api\/categories(\/[^/?]+)?\/?(\?.*)?$/,
+            // Matches /api/categories, /api/categories/{slug}, AND
+            // /api/categories/{slug}/partners — so the Preferred-Partners banner
+            // endpoint lands in this StaleWhileRevalidate cache (served instantly
+            // cross-session, ETag-revalidated) and is swept by bustSponsorCaches.
+            urlPattern: /\/api\/categories(\/[^/?]+)?(\/partners)?\/?(\?.*)?$/,
             handler: 'StaleWhileRevalidate',
             options: {
               cacheName: SW_CACHE_API_CATEGORIES,
