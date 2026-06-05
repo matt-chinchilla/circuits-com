@@ -273,11 +273,7 @@ export default function CategoryPage() {
           {busy ? (
             <>
               <SkeletonLoader width="250px" height="32px" borderRadius="4px" />
-              <div className={styles.skeletonChips}>
-                <SkeletonLoader width="80px" height="32px" borderRadius="20px" />
-                <SkeletonLoader width="100px" height="32px" borderRadius="20px" />
-                <SkeletonLoader width="90px" height="32px" borderRadius="20px" />
-              </div>
+              <SkeletonLoader width="140px" height="16px" borderRadius="4px" />
             </>
           ) : category ? (
             <>
@@ -307,8 +303,22 @@ export default function CategoryPage() {
         </div>
       </div>
 
-      {/* Sticky subcategory pill-bar */}
-      {!busy && category && (
+      {/* Sticky subcategory pill-bar. During load a skeleton bar reserves the
+          SAME height (one row of pills) so the content below — banner + parts —
+          doesn't shift down when the real chips arrive (CLS fix 2026-06-04). */}
+      {busy ? (
+        <nav className={styles.stickySubnav} aria-label="Subcategories">
+          <div className={styles.subnavInner}>
+            <div className={styles.chipBar}>
+              <SkeletonLoader width="80px" height="32px" borderRadius="20px" />
+              <SkeletonLoader width="130px" height="32px" borderRadius="20px" />
+              <SkeletonLoader width="110px" height="32px" borderRadius="20px" />
+              <SkeletonLoader width="120px" height="32px" borderRadius="20px" />
+              <SkeletonLoader width="100px" height="32px" borderRadius="20px" />
+            </div>
+          </div>
+        </nav>
+      ) : category ? (
         <nav className={styles.stickySubnav} aria-label="Subcategories">
           <div className={styles.subnavInner}>
             <div className={styles.chipBar}>
@@ -351,7 +361,7 @@ export default function CategoryPage() {
             </div>
           </div>
         </nav>
-      )}
+      ) : null}
 
       <div className={styles.contentWide}>
         {error && <p className={styles.error}>{error}</p>}
