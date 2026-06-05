@@ -26,6 +26,17 @@ export default function SubcategoryChips({ subcategories, parentSlug, activeSlug
 
   return (
     <div className={styles.chips}>
+      {/* "All" returns to the parent's all-parts view — restores the parent
+          page's "All" chip on subcategory pages so the sub-nav is consistent. */}
+      <motion.button
+        key="__all__"
+        className={styles.chip}
+        onClick={() => navigate(categoryPath(parentSlug))}
+        whileHover={{ scale: 1.05 }}
+        whileTap={{ scale: 0.95 }}
+      >
+        <span className={styles.label}>All</span>
+      </motion.button>
       {subcategories.map((sub) => {
         const isActive = activeSlug === sub.slug;
         return (
