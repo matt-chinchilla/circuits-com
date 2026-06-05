@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import SubcategoryChips from './components/SubcategoryChips';
 import PartsTable from './components/PartsTable';
 import SponsorBlock from './components/SponsorBlock';
+import CategoryPartnersBanner from './components/CategoryPartnersBanner';
 import SkeletonLoader from '@public/components/widgets/SkeletonLoader';
 import Pagination from '@public/components/widgets/Pagination';
 import Icon from '@shared/components/Icon';
@@ -354,6 +355,12 @@ export default function CategoryPage() {
 
       <div className={styles.contentWide}>
         {error && <p className={styles.error}>{error}</p>}
+
+        {/* Preferred Partners banner — below the breadcrumb + sticky sub-nav, in
+            its original content-area position. Sourced from the TOP-LEVEL
+            category's /partners (via CategoryPartnersBanner), so it shows the
+            same partners on the parent page and every subpage. */}
+        <CategoryPartnersBanner />
 
         {busy ? (
           <div className={styles.contentInner}>

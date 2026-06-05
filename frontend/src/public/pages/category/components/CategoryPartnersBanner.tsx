@@ -5,16 +5,16 @@ import PreferredPartnersBanner from './PreferredPartnersBanner';
 import type { CategoryPartners } from '@public/types/category';
 
 /**
- * Persistent Preferred Partners banner. Mounted ONCE in PublicLayout (a sibling
- * of the pathname-keyed ErrorBoundary), so it survives intra-category navigation
- * without remounting — the banner is a TOP-LEVEL-category artifact, identical on
- * the parent page and every subpage.
+ * Preferred Partners banner — a TOP-LEVEL-category artifact (identical on the
+ * parent page and every subpage). Mounted inside CategoryPage's content area
+ * (below the breadcrumb + sticky sub-nav, so the page nav stays on top), which
+ * means it remounts on each subcategory nav; the data is cached (SW / HTTP), so
+ * the repeat fetch is cheap and there's no full reload.
  *
  * The first path segment after /category/ is the top-level slug in canonical
  * URLs; the endpoint resolves a child slug to its parent anyway, so a brief
- * pre-redirect flat-child URL still yields the correct banner. The fetch effect
- * keys on that slug, so navigating WITHIN a category (slug unchanged) never
- * refetches; only switching top-level categories does.
+ * pre-redirect flat-child URL still yields the correct banner. On a top-level
+ * switch the stale data is cleared (setData(null)) before the new fetch resolves.
  */
 function topLevelSlug(pathname: string): string | null {
   const m = pathname.match(/^\/category\/([^/]+)/);
