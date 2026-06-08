@@ -1,4 +1,4 @@
-import { useRef, useEffect, type ReactNode } from 'react';
+import { useRef, useEffect, useState, type ReactNode } from 'react';
 import { motion } from 'framer-motion';
 import type { Sponsor } from '@public/types/sponsor';
 import { prependScheme } from '@shared/utils/url';
@@ -7,6 +7,15 @@ import styles from './SponsorBlock.module.scss';
 interface SponsorBlockProps {
   sponsor: Sponsor | null;
 }
+
+// The float-in entrance plays only on the FIRST card of the session — including
+// the empty "open slot" card shown on a parent page, so it animates once on the
+// genuine first load into a category and never again. CategoryPage remounts on
+// every subcategory nav (pathname-keyed ErrorBoundary), which re-fired this 0.5s
+// float-in each time and read as "nauseating". After the first paint the card is
+// a top-loaded element rendered in its final position. Module-scoped: persists
+// across SPA nav, resets on a full page reload.
+let sponsorBlockHasAnimated = false;
 
 /**
  * Hidden through-hole + SMD components scattered across the board. They live
@@ -290,6 +299,14 @@ function PcbCard({
   const ref = useRef<HTMLDivElement>(null);
   const raf = useRef(0);
 
+  // Animate only the first card of the session; subsequent remounts render in
+  // place (initial={false} => mount straight at the `animate` state, no motion).
+  const [animateIn] = useState(() => {
+    if (sponsorBlockHasAnimated) return false;
+    sponsorBlockHasAnimated = true;
+    return true;
+  });
+
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
@@ -404,9 +421,9 @@ function PcbCard({
       aria-label={empty ? 'Open sponsor slot' : 'Featured sponsor'}
       data-tier={(tier ?? 'gold').toLowerCase()}
       data-lit="false"
-      initial={{ opacity: 0, y: 20 }}
+      initial={animateIn ? { opacity: 0, y: 20 } : false}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5, ease: 'easeOut' as const }}
+      transition={{ duration: animateIn ? 0.5 : 0, ease: 'easeOut' as const }}
     >
       <div className={styles.substrate} aria-hidden="true" />
       <div className={styles.reveal} aria-hidden="true">

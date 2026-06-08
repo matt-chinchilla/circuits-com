@@ -270,9 +270,15 @@ export default function CategoryPage() {
           </nav>
 
           {busy ? (
+            // Reserve the SAME height the loaded title (42px line-box at 2rem)
+            // and meta (24px) occupy, so the Preferred Partners banner below
+            // does NOT jump down ~23px when the real title resolves. The
+            // banner renders immediately (from the partners memo) while the
+            // title is still a skeleton, so an undersized skeleton shifted it
+            // ("snap" — measured CLS 2026-06-08). Mirrors the subnav CLS guard.
             <>
-              <SkeletonLoader width="250px" height="32px" borderRadius="4px" />
-              <SkeletonLoader width="140px" height="16px" borderRadius="4px" />
+              <SkeletonLoader width="250px" height="42px" borderRadius="4px" />
+              <SkeletonLoader width="140px" height="24px" borderRadius="4px" />
             </>
           ) : category ? (
             <>
@@ -302,12 +308,16 @@ export default function CategoryPage() {
       {busy ? (
         <nav className={styles.stickySubnav} aria-label="Subcategories">
           <div className={styles.subnavInner}>
+            {/* 6 pills (All + 5 siblings) at ~real chip widths so the skeleton
+                wraps to the SAME 2 rows as the loaded subnav (the .chipBar
+                min-height reserves the height; these fill it visually). */}
             <div className={styles.chipBar}>
-              <SkeletonLoader width="80px" height="32px" borderRadius="20px" />
-              <SkeletonLoader width="130px" height="32px" borderRadius="20px" />
-              <SkeletonLoader width="110px" height="32px" borderRadius="20px" />
-              <SkeletonLoader width="120px" height="32px" borderRadius="20px" />
-              <SkeletonLoader width="100px" height="32px" borderRadius="20px" />
+              <SkeletonLoader width="56px" height="30px" borderRadius="20px" />
+              <SkeletonLoader width="240px" height="30px" borderRadius="20px" />
+              <SkeletonLoader width="250px" height="30px" borderRadius="20px" />
+              <SkeletonLoader width="240px" height="30px" borderRadius="20px" />
+              <SkeletonLoader width="230px" height="30px" borderRadius="20px" />
+              <SkeletonLoader width="140px" height="30px" borderRadius="20px" />
             </div>
           </div>
         </nav>

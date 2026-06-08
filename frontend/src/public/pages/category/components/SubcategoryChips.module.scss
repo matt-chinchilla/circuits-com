@@ -6,7 +6,10 @@
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-  margin-top: 16px;
+  // No top margin: the chip row must sit at the same offset as the parent
+  // page's sub-nav (which renders chips directly, no wrapper) AND as the busy
+  // skeleton, so the sub-nav height is identical across parent / child / loading
+  // — otherwise the Preferred Partners banner below shifts on nav (2026-06-08).
 }
 
 .chip {
