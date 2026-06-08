@@ -10,6 +10,8 @@ import bcrypt
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, event
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -17,14 +19,7 @@ from sqlalchemy.pool import StaticPool
 # engine.dispose()). StaticPool keeps one connection alive — and an anonymous
 # in-memory DB lives only as long as its connection — so disposing the engine
 # before/after each test gives every test a brand-new connection (= brand-new
-# in-memory DB) with no leaked per-connection state.
-#
-# The earlier version relied on create_all/drop_all over ONE persistent shared
-# connection; that did NOT fully reset the connection, and a UUID column
-# intermittently deserialized as a float — uuid.UUID(<float>) raising
-# "'float' object has no attribute 'replace'" — in the seed-idempotency tests
-# during full-suite runs (order-dependent: passed in isolation). Per-test
-# disposal eliminates that contamination. (The original file-based
+# in-memory DB), i.e. clean per-test DATA ISOLATION. (The original file-based
 # "sqlite:///./test.db" with a multi-connection pool was worse still.)
 SQLALCHEMY_DATABASE_URL = "sqlite://"
 engine = create_engine(
@@ -32,6 +27,21 @@ engine = create_engine(
     connect_args={"check_same_thread": False},
     poolclass=StaticPool,
 )
+
+
+# `postgresql.UUID` renders as the bare type name "UUID" under SQLite, which
+# SQLite assigns NUMERIC affinity. ~1e-6 of uuid4 hex strings are also valid
+# float literals (e.g. "…e22" / a large exponent), so SQLite silently coerces
+# them to a float/inf on INSERT and then crashes uuid.UUID(hex=<float>) on read
+# with "'float' object has no attribute 'replace'". The seed mints ~420k uuids
+# per idempotency run → this hit ~34% of full-suite runs (a value-driven flake
+# long misread as order-dependent — the per-test dispose above is for data
+# isolation and never fixed it). Forcing CHAR(32) gives TEXT affinity, so UUIDs
+# are stored verbatim. SQLite-test-only; prod is PostgreSQL (native uuid).
+# Guarded by tests/test_uuid_sqlite_affinity.py.
+@compiles(UUID, "sqlite")
+def _compile_uuid_as_char_on_sqlite(element, compiler, **kw):
+    return "CHAR(32)"
 
 
 # SQLite doesn't enforce CHECK constraints by default; enable for parity
