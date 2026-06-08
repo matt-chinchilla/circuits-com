@@ -13,7 +13,7 @@ class PartListing(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     part_id = Column(
-        UUID(as_uuid=True), ForeignKey("parts.id"), nullable=False
+        UUID(as_uuid=True), ForeignKey("parts.id"), nullable=False, index=True
     )
     supplier_id = Column(
         UUID(as_uuid=True), ForeignKey("suppliers.id"), nullable=False
@@ -52,9 +52,9 @@ class PriceBreak(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     listing_id = Column(
-        UUID(as_uuid=True), ForeignKey("part_listings.id"), nullable=False
+        UUID(as_uuid=True), ForeignKey("part_listings.id"), nullable=False, index=True
     )
-    min_quantity = Column(Integer, nullable=False)
+    min_quantity = Column(Integer, nullable=False, index=True)
     unit_price = Column(Numeric(10, 4), nullable=False)
 
     listing = relationship("PartListing", back_populates="price_breaks")
