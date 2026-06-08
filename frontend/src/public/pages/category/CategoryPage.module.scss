@@ -35,7 +35,9 @@
   align-items: center;
   gap: 8px;
   font-size: 0.85rem;
-  animation: fade-in-up 0.4s ease both;
+  // No entrance animation: the breadcrumb renders synchronously from the session
+  // shell on sibling nav, so a per-mount fade-in-up just read as a "fly-in"
+  // every time (the page remounts per pathname). 2026-06-08.
 }
 
 .breadcrumbLink {

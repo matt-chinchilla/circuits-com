@@ -10,6 +10,7 @@ import SkeletonLoader from '@public/components/widgets/SkeletonLoader';
 import Pagination from '@public/components/widgets/Pagination';
 import Icon from '@shared/components/Icon';
 import { api } from '@public/services/api';
+import { getCategoryShell, setCategoryShell, type CategoryShell } from '@public/services/categoryShellMemo';
 import { categoryPath } from '@shared/utils/categoryPath';
 import type { CategoryDetail } from '@public/types/category';
 import type { PublicPart } from '@public/types/part';
@@ -85,6 +86,53 @@ export default function CategoryPage() {
   const canonicalPath = category ? categoryPath(category.slug, category.parent?.slug) : null;
   const needsCanonicalRedirect =
     !!category && !!canonicalPath && location.pathname !== canonicalPath;
+
+  // Top-level slug from the URL (first path segment) + whether this is a nested
+  // subcategory page. Drive the session "shell" memo so the breadcrumb, title,
+  // and chips render synchronously on a sibling nav instead of disappearing into
+  // a skeleton + re-animating on every remount (the page is pathname-keyed).
+  // NOTE: on the transient flat `/category/:childSlug` URL (pre-canonical-
+  // redirect) this is the CHILD slug; the `shell` memo below is category-data-
+  // primary in that state, so it doesn't rely on topSlug being the parent.
+  const topSlug = useMemo(() => {
+    const m = location.pathname.match(/^\/category\/([^/]+)/);
+    return m ? m[1] : null;
+  }, [location.pathname]);
+  const onChild = !!childSlug;
+
+  // Stable top-level identity + sibling list. Prefer freshly-loaded data; fall
+  // back to the session memo while a sibling-nav remount's own fetch is pending.
+  const shell: CategoryShell | null = useMemo(() => {
+    if (category) {
+      if (isParent) {
+        return { name: category.name, slug: category.slug, icon: category.icon, children: category.children };
+      }
+      if (category.parent) {
+        const p = category.parent;
+        return { name: p.name, slug: p.slug, icon: p.icon, children: p.children };
+      }
+    }
+    return (topSlug ? getCategoryShell(topSlug) : undefined) ?? null;
+  }, [category, isParent, topSlug]);
+
+  // The current page's label + icon (breadcrumb current crumb + page title): the
+  // matching sibling on a child page, the top-level itself on a parent page.
+  const currentSub = useMemo(() => {
+    if (!shell) return null;
+    if (onChild) return shell.children.find((c) => c.slug === childSlug) ?? null;
+    return { id: shell.slug, name: shell.name, slug: shell.slug, icon: shell.icon };
+  }, [shell, onChild, childSlug]);
+
+  // Display name/icon for the current crumb + the H1. Falls back to the loaded
+  // category if a deep-linked child slug isn't in the cached sibling list, so the
+  // title never silently blanks (currentSub null while shell is non-null).
+  const titleName = currentSub?.name ?? category?.name ?? '';
+  const titleIcon = currentSub?.icon ?? category?.icon ?? null;
+
+  // Persist the shell once real data lands, so the next sibling nav has it sync.
+  useEffect(() => {
+    if (shell && category) setCategoryShell(shell);
+  }, [shell, category]);
 
   const allParts = useMemo(() => {
     if (!category) return [];
@@ -252,80 +300,73 @@ export default function CategoryPage() {
           <nav className={styles.breadcrumb} aria-label="Breadcrumb">
             <Link to="/" className={styles.breadcrumbLink}>Home</Link>
             <span className={styles.breadcrumbSep} aria-hidden="true">/</span>
-            {busy ? (
-              <SkeletonLoader width="120px" height="16px" borderRadius="4px" />
-            ) : category ? (
+            {shell && !needsCanonicalRedirect ? (
               <>
-                {category.parent && (
+                {onChild && (
                   <>
-                    <Link to={`/category/${category.parent.slug}`} className={styles.breadcrumbLink}>
-                      {category.parent.name}
+                    <Link to={`/category/${shell.slug}`} className={styles.breadcrumbLink}>
+                      {shell.name}
                     </Link>
                     <span className={styles.breadcrumbSep} aria-hidden="true">/</span>
                   </>
                 )}
-                <span className={styles.breadcrumbCurrent}>{category.name}</span>
+                <span className={styles.breadcrumbCurrent}>{titleName}</span>
               </>
+            ) : busy ? (
+              <SkeletonLoader width="120px" height="16px" borderRadius="4px" />
             ) : null}
           </nav>
 
-          {busy ? (
-            // Reserve the SAME height the loaded title (42px line-box at 2rem)
-            // and meta (24px) occupy, so the Preferred Partners banner below
-            // does NOT jump down ~23px when the real title resolves. The
-            // banner renders immediately (from the partners memo) while the
-            // title is still a skeleton, so an undersized skeleton shifted it
-            // ("snap" — measured CLS 2026-06-08). Mirrors the subnav CLS guard.
-            <>
-              <SkeletonLoader width="250px" height="42px" borderRadius="4px" />
-              <SkeletonLoader width="140px" height="24px" borderRadius="4px" />
-            </>
-          ) : category ? (
+          {shell && !needsCanonicalRedirect ? (
             <>
               <div className={styles.titleRow}>
                 <h1 className={styles.title}>
-                  {category.icon && <span className={styles.titleIcon}><Icon name={category.icon} /></span>}
-                  {category.name}
+                  {titleIcon && <span className={styles.titleIcon}><Icon name={titleIcon} /></span>}
+                  {titleName}
                 </h1>
               </div>
-              <p className={styles.headerMeta}>
-                <span className={styles.headerMetaMono}>{filtered.length.toLocaleString()}</span> parts
-                {isParent && (
-                  <>
-                    <span className={styles.headerDot}>&middot;</span>
-                    <span className={styles.headerMetaMono}>{category.children.length}</span> subcategories
-                  </>
-                )}
-              </p>
+              {category ? (
+                <p className={styles.headerMeta}>
+                  <span className={styles.headerMetaMono}>{filtered.length.toLocaleString()}</span> parts
+                  {isParent && (
+                    <>
+                      <span className={styles.headerDot}>&middot;</span>
+                      <span className={styles.headerMetaMono}>{category.children.length}</span> subcategories
+                    </>
+                  )}
+                </p>
+              ) : (
+                // Title is instant from the shell; only the parts count waits on
+                // the fetch. 24px matches the loaded meta line so nothing shifts.
+                <SkeletonLoader width="140px" height="24px" borderRadius="4px" />
+              )}
+            </>
+          ) : busy ? (
+            // Cold (parent unknown): reserve the loaded title (42px) + meta (24px)
+            // heights so the banner below doesn't jump when content resolves.
+            <>
+              <SkeletonLoader width="250px" height="42px" borderRadius="4px" />
+              <SkeletonLoader width="140px" height="24px" borderRadius="4px" />
             </>
           ) : null}
         </div>
       </div>
 
-      {/* Sticky subcategory pill-bar. During load a skeleton bar reserves the
-          SAME height (one row of pills) so the content below — banner + parts —
-          doesn't shift down when the real chips arrive (CLS fix 2026-06-04). */}
-      {busy ? (
-        <nav className={styles.stickySubnav} aria-label="Subcategories">
-          <div className={styles.subnavInner}>
-            {/* 6 pills (All + 5 siblings) at ~real chip widths so the skeleton
-                wraps to the SAME 2 rows as the loaded subnav (the .chipBar
-                min-height reserves the height; these fill it visually). */}
-            <div className={styles.chipBar}>
-              <SkeletonLoader width="56px" height="30px" borderRadius="20px" />
-              <SkeletonLoader width="240px" height="30px" borderRadius="20px" />
-              <SkeletonLoader width="250px" height="30px" borderRadius="20px" />
-              <SkeletonLoader width="240px" height="30px" borderRadius="20px" />
-              <SkeletonLoader width="230px" height="30px" borderRadius="20px" />
-              <SkeletonLoader width="140px" height="30px" borderRadius="20px" />
-            </div>
-          </div>
-        </nav>
-      ) : category ? (
+      {/* Sticky subcategory pill-bar — renders synchronously from the session
+          shell on a sibling nav (no skeleton, no re-animation). The skeleton bar
+          (6 pills that wrap like the real chips) shows only on a cold first
+          visit to a parent whose shell isn't cached yet. */}
+      {shell && !needsCanonicalRedirect ? (
         <nav className={styles.stickySubnav} aria-label="Subcategories">
           <div className={styles.subnavInner}>
             <div className={styles.chipBar}>
-              {isParent ? (
+              {onChild ? (
+                <SubcategoryChips
+                  subcategories={shell.children}
+                  parentSlug={shell.slug}
+                  activeSlug={childSlug}
+                />
+              ) : (
                 <>
                   {/* On the parent page, "All" is the page you're on. The
                       subcategory chips are real <Link>s to each child's nested
@@ -333,17 +374,19 @@ export default function CategoryPage() {
                       for the 2026-06-03 "subcategories only filter, never
                       navigate / child pages unreachable" bug. */}
                   <Link
-                    to={categoryPath(category.slug)}
+                    to={categoryPath(shell.slug)}
                     className={`${styles.chip} ${styles.chipActive}`}
                     aria-current="page"
                   >
                     <span>All</span>
-                    <span className={styles.chipCount}>{allParts.length.toLocaleString()}</span>
+                    {allParts.length > 0 && (
+                      <span className={styles.chipCount}>{allParts.length.toLocaleString()}</span>
+                    )}
                   </Link>
-                  {category.children.map(s => (
+                  {shell.children.map((s) => (
                     <Link
                       key={s.slug}
-                      to={categoryPath(s.slug, category.slug)}
+                      to={categoryPath(s.slug, shell.slug)}
                       className={styles.chip}
                     >
                       <Icon name={s.icon} />
@@ -354,13 +397,23 @@ export default function CategoryPage() {
                     </Link>
                   ))}
                 </>
-              ) : category.parent && category.parent.children.length > 0 ? (
-                <SubcategoryChips
-                  subcategories={category.parent.children}
-                  parentSlug={category.parent.slug}
-                  activeSlug={category.slug}
-                />
-              ) : null}
+              )}
+            </div>
+          </div>
+        </nav>
+      ) : busy ? (
+        <nav className={styles.stickySubnav} aria-label="Subcategories">
+          <div className={styles.subnavInner}>
+            {/* 6 pills (All + 5 siblings) at ~real chip widths so the skeleton
+                wraps to the same rows as the loaded chips (no min-height — that
+                stretched single-row chips on wide screens, 2026-06-08). */}
+            <div className={styles.chipBar}>
+              <SkeletonLoader width="56px" height="30px" borderRadius="20px" />
+              <SkeletonLoader width="240px" height="30px" borderRadius="20px" />
+              <SkeletonLoader width="250px" height="30px" borderRadius="20px" />
+              <SkeletonLoader width="240px" height="30px" borderRadius="20px" />
+              <SkeletonLoader width="230px" height="30px" borderRadius="20px" />
+              <SkeletonLoader width="140px" height="30px" borderRadius="20px" />
             </div>
           </div>
         </nav>
