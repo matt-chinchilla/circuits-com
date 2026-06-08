@@ -37,3 +37,25 @@ def test_get_partners_cache_header(client, seeded_db):
     r = client.get("/api/categories/clock-and-timing/partners")
     _assert_no_cache(r)
     assert r.headers.get("etag"), "partners endpoint must carry an ETag for conditional GET"
+
+
+def test_get_category_etag_header(client, seeded_db):
+    # Detail route gains a strong content-hash ETag (conditional GET) so a warm
+    # re-nav revalidates as a cheap 304 instead of re-sending the full body.
+    # Stays no-cache (banner single-source freshness) — mirrors /partners.
+    r = client.get("/api/categories/clock-and-timing")
+    _assert_no_cache(r)
+    etag = r.headers.get("etag")
+    assert etag, "detail endpoint must carry an ETag for conditional GET"
+    assert not etag.startswith("W/"), f"ETag must be strong (content hash), got: {etag!r}"
+
+
+def test_get_category_304_on_matching_if_none_match(client, seeded_db):
+    # A warm re-navigation sends If-None-Match with the prior ETag; the server
+    # returns 304 with an empty body (no 23 KB re-transfer). Mirrors /partners.
+    first = client.get("/api/categories/clock-and-timing")
+    etag = first.headers["etag"]
+    second = client.get("/api/categories/clock-and-timing", headers={"If-None-Match": etag})
+    assert second.status_code == 304, f"expected 304, got {second.status_code}"
+    assert second.content == b"", f"304 body must be empty, got {second.content!r}"
+    assert second.headers["etag"] == etag, "304 must echo the same ETag"

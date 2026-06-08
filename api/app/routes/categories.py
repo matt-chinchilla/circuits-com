@@ -63,10 +63,10 @@ def get_partners(slug: str, request: Request, db: Session = Depends(get_db)):
     return _conditional_json(request, model, _CATEGORY_CACHE_CONTROL)
 
 
-@router.get("/{slug}", response_model=CategoryDetailResponse)
+@router.get("/{slug}")
 def get_category(
     slug: str,
-    response: Response,
+    request: Request,
     popular_page: int = Query(1, ge=1, alias="popular_page"),
     popular_per_page: int = Query(20, ge=1, le=500, alias="popular_per_page"),
     parts_page: int = Query(1, ge=1, alias="parts_page"),
@@ -83,10 +83,9 @@ def get_category(
     )
     if not result:
         raise HTTPException(404, "Category not found")
-    response.headers["Cache-Control"] = _CATEGORY_CACHE_CONTROL
     # Build response that matches CategoryDetailResponse
     cat = result["category"]
-    return CategoryDetailResponse(
+    model = CategoryDetailResponse(
         id=cat.id,
         name=cat.name,
         slug=cat.slug,
@@ -98,3 +97,4 @@ def get_category(
         parts=result["parts"],
         popular_parts=result["popular_parts"],
     )
+    return _conditional_json(request, model, _CATEGORY_CACHE_CONTROL)
