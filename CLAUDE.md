@@ -23,7 +23,7 @@ cd frontend && npm install
 npm run dev                             # Vite on :3000
 npm run build
 npx tsc --noEmit
-npx eslint src/                         # boundary enforcement (exit 0 = clean)
+npx eslint --ext .ts,.tsx src/          # boundary enforcement (exit 0=clean; --ext req'd, eslint 8)
 
 # Deploy (requires AWS CLI + ~/.ssh/id_ed25519 + commits pushed)
 ./deploy.sh                             # full deploy — INCLUDES nginx restart since 2026-06-02
