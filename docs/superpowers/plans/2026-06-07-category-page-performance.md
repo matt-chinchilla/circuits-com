@@ -685,6 +685,38 @@ git commit -m "perf(web): hover/focus-prefetch subcategory chips (warm next-page
 
 ---
 
+## Task 3.4 — Measured audit + brotli decision (RECORDED 2026-06-08)
+
+**Method:** Cold load of the worst-case PMICs parent (`/category/power-management-ics-pmics`, 320-part rollup) in a fresh isolated browser context (empty cache, no controlling SW), throttled to **Slow 4G + 4× CPU, 390×844 mobile**, via chrome-devtools-mcp. Local `/api` is not gzipped (Phase 0 lives in `nginx.ssl.conf` only), so the API figure below is the measured `gzip(-6)` of the per_page=500 body (24 KB) — the prod transfer.
+
+**Cold-load result (prod-projected transfer):**
+| Metric | Value |
+|---|---|
+| FCP | 3,264 ms |
+| **LCP** | **4,332 ms — element = `<h1>` page title** (system `$font-heading`, NOT the icon font) |
+| Main-thread long tasks | 7 / **550 ms** (JS parse/exec) |
+| TTFB | 4 ms (local; prod HTML is no-cache + tiny) |
+
+| Transfer | KB | % of total |
+|---|---|---|
+| JS (13 files, 600 KB decoded) | 181 | **46%** |
+| Phosphor-Light.woff2 (1 file, already-compressed woff2) | 152 | **39%** |
+| CSS (9 files) | 34 | 9% |
+| API JSON (gz, per_page=500) | 24 | 6% |
+| **TOTAL** | **391** | |
+| Brotli-addressable (JS+CSS) | 215 | est. saving ~39 KB (~18%) |
+
+**Decision: brotli NOT warranted now → Task 3.5 SKIPPED.** Rationale (per the Task 3.4 decision rule):
+- The brotli-addressable bytes (JS+CSS) would save ~39 KB (~10% of the 391 KB cold load, ~200–400 ms on Slow 4G) — **real but the smallest lever.**
+- The **single largest resource is the 155 KB Phosphor icon font, which is incompressible** (woff2) — brotli cannot touch it. Subsetting it to the ~90 icons actually used would save ~100+ KB, ~3× brotli's gain. **This is the #1 cold-load lever now.**
+- LCP (4,332 ms) is significantly gated by **main-thread parse/exec** (550 ms long tasks at 4×; worse on real low-end) — brotli does not reduce parse cost. Lever = code-split / shrink the 600 KB decoded JS.
+- The API JSON is already 24 KB via Phase 0 — no longer a gate.
+- Code-split boundaries are already reasonable (framer + router are isolated vendor chunks; the 356 KB-raw entry is the documented eager-HomePage-for-LCP tradeoff). The big entry is a chunking question, not a compression one.
+
+**Recorded bottlenecks for a FUTURE phase (priority order):** (1) **Phosphor font subsetting** (~100+ KB, the largest single lever, brotli-immune); (2) **main-thread JS parse** (550 ms — code-split / defer non-critical); (3) brotli precompressed-static as a smaller optional follow-up (~39 KB) once (1)+(2) land. None block this campaign.
+
+---
+
 ## Post-implementation
 - **Deploy** (owner-gated): `deploy-preflight` agent → `./deploy.sh` (restarts nginx) → run the Phase 0.4 wire checks → browser-prove the throttled-mobile cold load + 304 warm nav on prod.
 - **claude-md-improver**: persist the gzip-config-drift gotcha (edge vs inner nginx), the `/{slug}` ETag, the 5 new indexes + migration 012, the subcategory-chip prefetch, and the deferred-paging tripwire (~450 threshold).
