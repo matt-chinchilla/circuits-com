@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
+import { api } from '@public/services/api';
 import Icon from '@shared/components/Icon';
 import { categoryPath } from '@shared/utils/categoryPath';
 import type { Subcategory } from '@public/types/category';
@@ -32,6 +33,8 @@ export default function SubcategoryChips({ subcategories, parentSlug, activeSlug
         key="__all__"
         className={styles.chip}
         onClick={() => navigate(categoryPath(parentSlug))}
+        onMouseEnter={() => api.prefetchCategory(parentSlug)}
+        onFocus={() => api.prefetchCategory(parentSlug)}
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}
       >
@@ -44,6 +47,8 @@ export default function SubcategoryChips({ subcategories, parentSlug, activeSlug
             key={sub.id}
             className={`${styles.chip} ${isActive ? styles.active : ''}`}
             onClick={() => navigate(categoryPath(sub.slug, parentSlug))}
+            onMouseEnter={() => api.prefetchCategory(sub.slug)}
+            onFocus={() => api.prefetchCategory(sub.slug)}
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             aria-current={isActive ? 'page' : undefined}
