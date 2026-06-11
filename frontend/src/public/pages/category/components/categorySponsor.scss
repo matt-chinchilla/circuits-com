@@ -1,0 +1,757 @@
+/* ============================================================================
+   categorySponsor.scss — Platinum Category Sponsor board (.csbA) styling.
+
+   GLOBAL (un-hashed) stylesheet, imported as a side-effect by CategorySponsor.tsx.
+   RATIONALE: the canvas engine (csFx.ts) and the component read hard-coded class
+   strings (`board.querySelector('.csb-circuit svg')`, `classList`) and
+   `getComputedStyle` of `--board-*`/`--gold` tokens set on `.csb`/`.csbA`, plus
+   `[data-tier]`/`[data-pitch]`/`[data-drag]` attribute selectors. CSS-Module
+   class hashing would break ALL of those, so the `.csb*`/`.csbA*`/`.cs-band`
+   namespace is kept global. It is unique to these boards, so global scope is safe.
+
+   Ported 1:1 from the design prototype's category-sponsor.css (`.csb*`, `.csbA*`,
+   `.cs-band` rules). The Silver `.svp*` directory + `.tier-row*` layout are NOT
+   here — they ship with SilverPartners in Phase 4.
+
+   The gold identity is theme-independent; brand takeovers override the token set
+   inline (see csFx.brandVars). Tokens are PLAIN custom properties — NOT registered
+   via @property (registering them as <color> pinned the computed value to the
+   initial-value and made the inline brand override inert).
+   ========================================================================== */
+
+/* Band wrapper — aligns the banner to the same gutter as the wide content. */
+.cs-band {
+  width: 100%;
+  max-width: 1480px;
+  margin: 0 auto;
+  padding: 30px 28px 0;
+}
+@media (max-width: 640px) {
+  .cs-band {
+    padding: 24px 16px 0;
+  }
+}
+@media (min-width: 1600px) {
+  .cs-band {
+    padding-left: 40px;
+    padding-right: 40px;
+  }
+}
+
+/* Positioning context so the badge can straddle the board's top edge. */
+.csb-pos {
+  position: relative;
+}
+
+/* ── Brand-reactive tokens ──────────────────────────────────────────────
+   Intentionally PLAIN custom properties, NOT registered via @property. */
+.csb {
+  --gold: #e8c252;
+  --gold-bright: #f3cf5c;
+  --gold-deep: #b8902e;
+  --board-1: #0d2c1e;
+  --board-2: #0a1e16;
+  --board-3: #0f3826;
+  --cream: #f4ecd6;
+  --cream-mut: rgba(244, 236, 214, 0.72);
+  position: relative;
+  font-family: var(--font-body);
+}
+.csb[data-tier='silver'] {
+  --gold: #9db4c6;
+  --gold-bright: #d4e6f2;
+  --gold-deep: #6f8696;
+}
+.csb[data-tier='platinum'] {
+  --gold: #c5bfd6;
+  --gold-bright: #ece8f6;
+  --gold-deep: #8f86ac;
+}
+.csb[data-tier='gold'],
+.csb[data-tier='featured'] {
+  --gold: #e8c252;
+  --gold-bright: #f3cf5c;
+  --gold-deep: #b8902e;
+}
+/* The Category Sponsor banner is reserved for ONE Platinum customer: a slightly
+   purple-y silver replaces every gold accent (PCB leads + all banner text).
+   Higher source order than the tier rules, so it wins on equal specificity;
+   brand takeovers still override via inline vars. */
+.csb.csbA {
+  --gold: #c5bfd6;
+  --gold-bright: #ece8f6;
+  --gold-deep: #8f86ac;
+  --cream: #e7eaf3;
+  --cream-mut: rgba(205, 210, 226, 0.74);
+  /* Fixed platinum TEXT colors — the brand takeover recolors --gold/--board-*
+     (PCB leads, tiles, board) but NOT these, so on-screen text never shifts. */
+  --txt-accent: #c5bfd6;
+  --txt-strong: #ece8f6;
+}
+
+/* gold rim (mask-composite cutout — keeps round corners) */
+.csb-rim {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  border-radius: inherit;
+  padding: 1.5px;
+  background: linear-gradient(
+    135deg,
+    var(--gold),
+    rgba(255, 255, 255, 0.3) 26%,
+    var(--gold-deep) 60%,
+    var(--gold)
+  );
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  opacity: 0.85;
+  pointer-events: none;
+}
+@supports not ((-webkit-mask-composite: xor) or (mask-composite: exclude)) {
+  .csb-rim {
+    display: none;
+  }
+}
+
+/* Corner drill-holes — plated through-holes. */
+.csb-fid {
+  position: absolute;
+  z-index: 4;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: transparent;
+  border: 2px solid color-mix(in srgb, var(--gold) 78%, transparent);
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
+.csb-fid.tl {
+  top: 11px;
+  left: 11px;
+}
+.csb-fid.tr {
+  top: 11px;
+  right: 11px;
+}
+.csb-fid.bl {
+  bottom: 11px;
+  left: 11px;
+}
+.csb-fid.br {
+  bottom: 11px;
+  right: 11px;
+}
+.csb-des {
+  position: absolute;
+  z-index: 4;
+  bottom: 9px;
+  right: 16px;
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  letter-spacing: 0.14em;
+  color: color-mix(in srgb, var(--txt-accent) 60%, transparent);
+  pointer-events: none;
+}
+
+/* gold edge-connector fingers — REMOVED per review (kept class as no-op). */
+.csb-edge {
+  display: none;
+}
+
+/* ── Animated PCB background (CircuitTraces, gold/brand-tinted) ──────────
+   The project's CircuitTraces renders a bare <svg> (hashed module class, NOT a
+   `.traces` class), so the token overrides are scoped to `.csb .csb-circuit svg`
+   — the engine reads them off the SVG via getComputedStyle and inlines them on
+   the rasterized snapshot. */
+.csb .csb-circuit {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  opacity: 0.5;
+  pointer-events: none;
+}
+/* Banner's circuit is a SNAPSHOT SOURCE only (rasterized onto the canvas tile
+   field). Keep it laid out for serialization, but invisible. */
+.csbA .csb-circuit {
+  opacity: 0;
+}
+.csb .csb-circuit svg {
+  position: absolute;
+  inset: auto;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  min-width: 100%;
+  min-height: 100%;
+  width: auto;
+  height: auto;
+  aspect-ratio: 1200 / 400;
+  --trace-color: color-mix(in srgb, var(--gold) 60%, transparent);
+  --trace-glow: transparent;
+  --electron-color: color-mix(in srgb, var(--gold-bright) 92%, transparent);
+  --node-color: color-mix(in srgb, var(--gold) 70%, transparent);
+  --ic-body-fill: color-mix(in srgb, var(--gold) 4%, transparent);
+  --ic-body-stroke: color-mix(in srgb, var(--gold) 26%, transparent);
+  --ic-pad-fill: color-mix(in srgb, var(--gold) 38%, transparent);
+}
+
+/* ── Canvas tile field (the "alive" PCB base) ──────────────────────
+   ONE <canvas>, between the circuit (z0) and the content (z2). All per-tile
+   life (cursor lift, breathing, flip wave) is drawn here on a single GPU layer. */
+.csb-field {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  width: 100%;
+  height: 100%;
+}
+
+/* ── Energize light-sweep element — present but NOT triggered by the wave path
+   (the flip wave on the canvas IS the animation). Kept 1:1 with the prototype. */
+.csb-pulse {
+  position: absolute;
+  z-index: 6;
+  pointer-events: none;
+  left: var(--px, 12%);
+  top: var(--py, 50%);
+  width: 46px;
+  height: 46px;
+  margin: -23px 0 0 -23px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--gold-bright, #f3cf5c) 75%, transparent) 0%,
+    color-mix(in srgb, var(--gold) 42%, transparent) 38%,
+    transparent 72%
+  );
+  opacity: 0;
+  transform: scale(0);
+}
+.csbA.energize .csb-pulse {
+  animation: csb-pulse 900ms cubic-bezier(0.25, 0.6, 0.3, 1) forwards;
+}
+@keyframes csb-pulse {
+  0% {
+    opacity: 0.85;
+    transform: scale(0);
+  }
+  70% {
+    opacity: 0.32;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(42);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .csbA.energize .csb-pulse {
+    animation: none;
+  }
+}
+
+/* ── Top-center silkscreen badge — INSIDE the board ────────────────────
+   Same pill construction as the field headers; steady (non-pulsing) glow. */
+.csb-badge {
+  position: absolute;
+  top: 13px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 4;
+  pointer-events: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 11px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.32);
+  border: 1px solid color-mix(in srgb, var(--gold) 32%, transparent);
+}
+.csb-badge .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--gold);
+  flex: 0 0 auto;
+  box-shadow: 0 0 8px color-mix(in srgb, var(--gold) 60%, transparent);
+}
+.csb-badge-txt {
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--txt-strong);
+  text-shadow:
+    0 0 5px color-mix(in srgb, var(--txt-accent) 70%, transparent),
+    0 0 13px color-mix(in srgb, var(--txt-accent) 42%, transparent);
+}
+.csb-badge-dia {
+  font-size: 0.52rem;
+  color: var(--txt-accent);
+  line-height: 1;
+  text-shadow: 0 0 7px color-mix(in srgb, var(--txt-accent) 55%, transparent);
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   CATEGORY SPONSOR BOARD (.csbA)
+   ════════════════════════════════════════════════════════════════════════ */
+.csbA {
+  border-radius: 14px;
+  overflow: hidden;
+  isolation: isolate;
+  /* board surface is painted on .csb-field canvas; transparent here so
+     lifted-tile holes reveal the element BEHIND the banner */
+  background: transparent;
+  box-shadow:
+    0 12px 34px rgba(0, 0, 0, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  display: block;
+}
+/* The content plane — flat (NOT tilted). Holds the badge + the rail. The
+   always-animating CircuitTraces SVG + the canvas live OUTSIDE this plane so
+   neither forces a re-rasterize of the content. */
+.csb-surface {
+  position: relative;
+  z-index: 2;
+}
+.csbA-empty .csb-surface {
+  display: grid;
+  grid-template-columns: minmax(232px, 300px) 1fr;
+  align-items: stretch;
+}
+.csbA-id {
+  position: relative;
+  z-index: 2;
+  padding: 54px 24px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  justify-content: center;
+  border-right: 1px dashed color-mix(in srgb, var(--gold) 26%, transparent);
+}
+/* NO transform: translateZ() here (or on .csbA-rail) — a leftover translateZ
+   pushes the logo button behind its parent in 3D hit-testing so real clicks
+   miss and the wave never fires. Keep these transform-free. */
+.csbA-idtop {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+/* Logo pad (a button — click to energize/brand). */
+.csbA-pad {
+  position: relative;
+  z-index: 1;
+  flex: 0 0 auto;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: none;
+  cursor: pointer;
+  background: radial-gradient(
+    circle at 50% 36%,
+    color-mix(in srgb, var(--board-3) 80%, #fff 4%),
+    color-mix(in srgb, var(--board-2) 86%, #000)
+  );
+  box-shadow:
+    inset 0 0 0 2px color-mix(in srgb, var(--gold) 66%, transparent),
+    inset 0 0 14px rgba(0, 0, 0, 0.6),
+    0 2px 8px rgba(0, 0, 0, 0.35);
+  transition:
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
+}
+.csbA-pad:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 0 0 2px var(--gold),
+    inset 0 0 14px rgba(0, 0, 0, 0.6),
+    0 0 16px color-mix(in srgb, var(--gold) 45%, transparent);
+}
+.csbA-pad:focus-visible {
+  outline: 2px solid var(--gold-bright);
+  outline-offset: 3px;
+}
+.csb[data-pitch='true'] .csbA-pad {
+  cursor: default;
+  background: radial-gradient(circle at 50% 38%, #fdfdfb, #d8d8d0);
+}
+.csbA-logoimg {
+  width: 66%;
+  height: 66%;
+  object-fit: contain;
+  border-radius: 50%;
+}
+/* rotating solder-ring around the logo pad */
+.csbA-ring {
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  border: 1px dashed color-mix(in srgb, var(--gold) 45%, transparent);
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .csbA-ring {
+    animation: csb-ring-spin 26s linear infinite;
+  }
+}
+@keyframes csb-ring-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.csbA-mark {
+  font-family: var(--font-heading);
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--txt-accent);
+  line-height: 1;
+}
+.csbA-co {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.csbA-coname {
+  font-family: var(--font-heading);
+  font-size: 1.42rem;
+  font-weight: 700;
+  color: var(--txt-strong);
+  line-height: 1.12;
+  letter-spacing: -0.01em;
+}
+.csbA-cotag {
+  font-size: 0.78rem;
+  color: var(--cream-mut);
+}
+
+/* ── Four even divisions ───────────────────────────────────────────────── */
+.csbA-rail {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  align-items: start;
+}
+.csbA-field {
+  position: relative;
+  padding: 56px 22px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  border-radius: 8px;
+}
+.csbA-field + .csbA-field {
+  border-left: 1px dashed color-mix(in srgb, var(--gold) 18%, transparent);
+}
+.csbA-field:hover .csbA-plabel .dot {
+  box-shadow: 0 0 13px color-mix(in srgb, var(--gold) 95%, transparent);
+}
+.csbA-idcell {
+  gap: 13px;
+  justify-content: flex-start;
+}
+
+/* Field headers — every division gets the same pill stylization. */
+.csbA-plabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--txt-accent);
+  padding: 4px 11px;
+  border: 1px solid color-mix(in srgb, var(--gold) 32%, transparent);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.32);
+  white-space: nowrap;
+  width: max-content;
+  max-width: 100%;
+}
+.csbA-plabel .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--gold);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--gold) 60%, transparent);
+  flex: 0 0 auto;
+}
+.csbA-pinno {
+  margin-left: 4px;
+  color: color-mix(in srgb, var(--txt-accent) 50%, transparent);
+  letter-spacing: 0.12em;
+}
+.csbA-val {
+  font-size: 0.96rem;
+  color: var(--cream);
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.csbA-val.mono {
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+}
+.csbA-val a {
+  color: var(--cream);
+  text-decoration: none;
+  transition: color 0.15s;
+}
+.csbA-val a:hover {
+  color: var(--txt-strong);
+}
+.csbA-sub {
+  font-size: 0.76rem;
+  color: var(--cream-mut);
+}
+.csbA-fieldfoot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+/* "Become a sponsor" CTA (open slot) */
+.csbA-cta {
+  align-self: flex-start;
+  width: max-content;
+  font-family: var(--font-heading);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  padding: 8px 16px;
+  border-radius: 7px;
+  cursor: pointer;
+  color: #0a1d14;
+  border: none;
+  background: linear-gradient(135deg, var(--gold), var(--gold-deep));
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
+}
+.csbA-cta:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+}
+
+/* ── Open-slot (no sponsor) variant + logo drop target ─────────────────── */
+.csbA-empty .csbA-rail {
+  grid-template-columns: 1fr auto;
+}
+.csbA-emptymsg {
+  padding: 22px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.csbA-emptymsg h4 {
+  font-family: var(--font-heading);
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--cream);
+  margin: 0;
+}
+.csbA-emptymsg p {
+  font-size: 0.85rem;
+  color: var(--cream-mut);
+  margin: 0;
+  max-width: 60ch;
+  line-height: 1.5;
+}
+.csbA-emptycta {
+  padding: 22px 24px;
+  display: flex;
+  align-items: center;
+}
+.csbA-footprint {
+  position: relative;
+  flex: 0 0 auto;
+  width: 56px;
+  height: 56px;
+  border: 1.5px dashed color-mix(in srgb, var(--gold) 48%, transparent);
+  border-radius: 10px;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+.csbA-footprint span {
+  position: absolute;
+  width: 11px;
+  height: 11px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--gold) 66%, transparent);
+}
+.csbA-footprint span:nth-child(1) {
+  top: -5px;
+  left: -5px;
+}
+.csbA-footprint span:nth-child(2) {
+  top: -5px;
+  right: -5px;
+}
+.csbA-footprint span:nth-child(3) {
+  bottom: -5px;
+  left: -5px;
+}
+.csbA-footprint span:nth-child(4) {
+  bottom: -5px;
+  right: -5px;
+}
+.csbA-footprint i {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-style: normal;
+  font-size: 1.3rem;
+  line-height: 1;
+  color: color-mix(in srgb, var(--gold) 70%, transparent);
+  transition:
+    color 0.2s ease,
+    transform 0.2s ease;
+}
+.csbA-footprint:hover {
+  border-color: var(--gold);
+  box-shadow: 0 0 16px color-mix(in srgb, var(--gold) 35%, transparent);
+}
+.csbA-footprint:hover i {
+  color: var(--gold-bright);
+  transform: scale(1.15);
+}
+.csbA-footprint:focus-visible {
+  outline: 2px solid var(--gold-bright);
+  outline-offset: 3px;
+}
+.csb[data-drag='true'] {
+  box-shadow:
+    0 12px 34px rgba(0, 0, 0, 0.28),
+    0 0 0 2px var(--gold),
+    0 0 28px color-mix(in srgb, var(--gold) 40%, transparent);
+}
+.csb-pitch-reset {
+  position: absolute;
+  z-index: 6;
+  top: 9px;
+  right: 30px;
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--gold) 70%, var(--cream));
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid color-mix(in srgb, var(--gold) 30%, transparent);
+  border-radius: 5px;
+  padding: 3px 8px;
+  cursor: pointer;
+  opacity: 0.65;
+  transition:
+    opacity 0.15s ease,
+    border-color 0.15s ease;
+}
+.csb-pitch-reset:hover {
+  opacity: 1;
+  border-color: var(--gold);
+}
+
+/* ── Click-to-copy affordance (shared with the Silver directory) ─────────── */
+.csb-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 5px;
+  background: transparent;
+  color: color-mix(in srgb, var(--gold) 75%, var(--cream));
+  border: 1px solid color-mix(in srgb, var(--gold) 28%, transparent);
+  opacity: 0.5;
+  transition:
+    opacity 0.15s,
+    color 0.15s,
+    border-color 0.15s,
+    background 0.15s;
+}
+.csb-copy:hover {
+  background: color-mix(in srgb, var(--gold) 14%, transparent);
+  border-color: var(--gold);
+}
+.csbA-field:hover .csb-copy {
+  opacity: 1;
+}
+.csb-copy[data-copied='1'] {
+  opacity: 1;
+  color: #2fbf6f !important;
+  border-color: #2fbf6f !important;
+}
+.csb-copy-ico {
+  font-size: 0.8em;
+}
+
+/* ── Responsive (banner only — Silver/.svp + .tier-row ship in Phase 4) ──── */
+@media (max-width: 1080px) {
+  .csbA-empty .csb-surface {
+    grid-template-columns: 1fr;
+  }
+  .csbA-id {
+    border-right: none;
+    border-bottom: 1px dashed color-mix(in srgb, var(--gold) 26%, transparent);
+  }
+  .csbA-rail {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .csbA-field:nth-child(3) {
+    border-left: none;
+  }
+  .csbA-field:nth-child(3),
+  .csbA-field:nth-child(4) {
+    border-top: 1px dashed color-mix(in srgb, var(--gold) 18%, transparent);
+  }
+  .csbA-empty .csbA-rail {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 560px) {
+  .csbA-rail {
+    grid-template-columns: 1fr;
+  }
+  .csbA-field + .csbA-field {
+    border-left: none;
+    border-top: 1px dashed color-mix(in srgb, var(--gold) 18%, transparent);
+  }
+  .csb-badge {
+    padding: 4px 10px;
+  }
+  .csb-badge-txt {
+    font-size: 0.56rem;
+    letter-spacing: 0.2em;
+  }
+}
