@@ -434,6 +434,10 @@ def get_or_create_supplier(
     description: str | None = None,
     logo_url: str | None = None,
     contact_name: str | None = None,
+    contact_role: str | None = None,
+    coverage_hours: str | None = None,
+    brand_primary: str | None = None,
+    brand_secondary: str | None = None,
 ) -> Supplier:
     obj = db.query(Supplier).filter(Supplier.name == name).first()
     if obj is None:
@@ -445,6 +449,10 @@ def get_or_create_supplier(
             description=description,
             logo_url=logo_url,
             contact_name=contact_name,
+            contact_role=contact_role,
+            coverage_hours=coverage_hours,
+            brand_primary=brand_primary,
+            brand_secondary=brand_secondary,
         )
         db.add(obj)
         db.flush()
@@ -541,6 +549,11 @@ def seed(db: Session) -> None:
             website="kennedyelectronics.com",
             email="info@kennedyelectronics.com",
             description="Semiconductor supplier based in Smithtown, NY",
+            contact_name="Dan Kennedy",
+            contact_role="Sr. Field Sales Engineer",
+            coverage_hours="Mon-Fri - 8a-6p ET",
+            brand_primary="#0a4a2e",
+            brand_secondary="#44bd13",
         ),
         dict(
             name="Honeywell Sensing",
@@ -595,6 +608,11 @@ def seed(db: Session) -> None:
             website="digikey.com",
             email="sales@digikey.com",
             description="Leading global electronic components distributor, 13.4M+ products in stock",
+            contact_name="Robin Hayes",
+            contact_role="Distribution Account Manager",
+            coverage_hours="Mon-Fri - 7a-7p CT",
+            brand_primary="#cc0000",
+            brand_secondary="#ff5252",
         ),
         dict(
             name="Mouser Electronics",
@@ -602,6 +620,11 @@ def seed(db: Session) -> None:
             website="mouser.com",
             email="sales@mouser.com",
             description="Global authorized distributor, 6.8M+ products from 1,200+ manufacturers",
+            contact_name="Sam Rivera",
+            contact_role="Technical Sales Specialist",
+            coverage_hours="Mon-Fri - 7a-7p CT",
+            brand_primary="#005bab",
+            brand_secondary="#3399ff",
         ),
         dict(
             name="Arrow Electronics",
@@ -609,6 +632,11 @@ def seed(db: Session) -> None:
             website="arrow.com",
             email="info@arrow.com",
             description="Global provider of electronic components and enterprise computing solutions",
+            contact_name="Alex Morgan",
+            contact_role="Field Application Engineer",
+            coverage_hours="Mon-Fri - 8a-5p MT",
+            brand_primary="#333f48",
+            brand_secondary="#8a94a6",
         ),
         dict(
             name="Avnet",
@@ -616,6 +644,11 @@ def seed(db: Session) -> None:
             website="avnet.com",
             email="info@avnet.com",
             description="Global electronic components distributor and technology solutions provider",
+            contact_name="Jordan Avery",
+            contact_role="Sr. Field Sales Engineer",
+            coverage_hours="Mon-Fri - 8a-6p MT",
+            brand_primary="#c00000",
+            brand_secondary="#ff9e85",
         ),
         dict(
             name="TTI",
@@ -630,6 +663,11 @@ def seed(db: Session) -> None:
             website="futureelectronics.com",
             email="info@futureelectronics.com",
             description="Global distributor of electronic components, full-service solutions",
+            contact_name="Taylor Brooks",
+            contact_role="Inside Sales Representative",
+            coverage_hours="Mon-Fri - 8a-6p ET",
+            brand_primary="#e4002b",
+            brand_secondary="#ff7a8a",
         ),
         dict(
             name="Newark",
@@ -1071,23 +1109,46 @@ def seed(db: Session) -> None:
     # OR Silver = subcategory (the directory, many), Silver/Gold = keyword. The
     # DB trigger rejects any other combo.
 
-    # Platinum Category Sponsor (single-slot) on top-level categories.
-    get_or_create_sponsor(
-        db,
-        supplier=kennedy,
-        category=cats["Power Management ICs (PMICs)"],
-        image_url="/images/sponsors/kennedy.jpg",
-        description="Your premier semiconductor supplier in the Northeast",
-        tier="Platinum",
-    )
-    get_or_create_sponsor(
-        db,
-        supplier=kennedy,
-        category=cats["Microcontrollers & Processors"],
-        image_url="/images/sponsors/kennedy.jpg",
-        description="Your premier semiconductor supplier in the Northeast",
-        tier="Platinum",
-    )
+    # Platinum Category Sponsor (single-slot) on EVERY top-level category, so the
+    # animated Category Sponsor board is populated site-wide. Kennedy headlines
+    # the two flagship categories; the rest rotate across real distributors.
+    platinum_by_top: list[tuple[str, Supplier, str]] = [
+        (
+            "Power Management ICs (PMICs)",
+            kennedy,
+            "Your premier semiconductor supplier in the Northeast",
+        ),
+        (
+            "Microcontrollers & Processors",
+            kennedy,
+            "Your premier semiconductor supplier in the Northeast",
+        ),
+        ("Analog ICs", digikey, "13.4M+ products in stock, ships same day"),
+        ("Interface ICs", mouser, "Authorized distributor, newest products first"),
+        ("Memory ICs", avnet, "Global components distributor and design partner"),
+        ("Logic ICs", arrow, "Five Years Out — components to enterprise computing"),
+        ("RF & Wireless ICs", mouser, "Authorized distributor, newest products first"),
+        ("Sensor ICs", digikey, "13.4M+ products in stock, ships same day"),
+        ("Audio & Video ICs", future, "Full-service global components distributor"),
+        ("Clock & Timing ICs", avnet, "Global components distributor and design partner"),
+        (
+            "Motor & Motion Control ICs",
+            arrow,
+            "Five Years Out — components to enterprise computing",
+        ),
+        ("Data Conversion ICs", digikey, "13.4M+ products in stock, ships same day"),
+        ("Security & Authentication ICs", future, "Full-service global components distributor"),
+        ("Automotive ICs", avnet, "Global components distributor and design partner"),
+        ("Display & LED ICs", mouser, "Authorized distributor, newest products first"),
+    ]
+    for top_name, plat_supplier, blurb in platinum_by_top:
+        get_or_create_sponsor(
+            db,
+            supplier=plat_supplier,
+            category=cats[top_name],
+            description=blurb,
+            tier="Platinum",
+        )
 
     # Subcategory Gold sponsors (single slot) → SponsorBlock.
     for sub_name in [
