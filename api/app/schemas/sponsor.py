@@ -15,6 +15,15 @@ class SponsorResponse(BaseModel):
     phone: str | None = None
     email: str | None = None
     contact_name: str | None = None
+    # Sponsor-board fields, joined off the linked supplier (migration 014). The
+    # boards (Platinum/Gold/Silver) render these; the `/partners` + `/{slug}`
+    # routes build this model by hand (manual serialize, not response_model), so
+    # every field listed here must be stamped on the dict the service returns.
+    logo_url: str | None = None
+    contact_role: str | None = None
+    coverage_hours: str | None = None
+    brand_primary: str | None = None
+    brand_secondary: str | None = None
     model_config = ConfigDict(from_attributes=True)
 
 

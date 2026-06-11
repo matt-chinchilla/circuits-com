@@ -79,7 +79,12 @@ PopularPartsPage = PartsPage
 
 class CategoryDetailResponse(CategoryResponse):
     parent: ParentCategoryResponse | None = None
+    # `sponsor` = this child's newest visible GOLD sponsor (the single
+    # Subcategory Sponsor slot → SponsorBlock). `silver` = this child's visible
+    # SILVER sponsors (the multi-occupant directory → SilverPartners). Both are
+    # tier-filtered in category_service. (2026-06-11 tier-boards matrix.)
     sponsor: SponsorResponse | None
+    silver: list[SupplierResponse] = []
     parts: PartsPage = PartsPage()
     popular_parts: PartsPage = PartsPage()
     model_config = ConfigDict(from_attributes=True)
@@ -89,13 +94,15 @@ CategoryDetailResponse.model_rebuild()
 
 
 class CategoryPartnersResponse(BaseModel):
-    """Preferred Partners banner payload for a TOP-LEVEL category (split out of
-    the heavy CategoryDetailResponse 2026-06-04 so the banner is a small,
+    """Category Sponsor (Platinum) board payload for a TOP-LEVEL category (split
+    out of the heavy CategoryDetailResponse 2026-06-04 so it's a small,
     cacheable, top-level artifact). `slug`/`name` are the RESOLVED top-level
-    category — a child slug resolves to its parent — so the banner shows the
-    same partners on every subpage."""
+    category — a child slug resolves to its parent — so the same Platinum board
+    shows on every subpage. `platinum` is the single visible Platinum sponsor
+    (newest-wins); `None` → the board renders its Open-Placement state.
+    (2026-06-11 tier-boards matrix — was a multi-supplier `partners` list.)"""
 
     slug: str
     name: str
-    partners: list[SupplierResponse] = []
+    platinum: SponsorResponse | None = None
     model_config = ConfigDict(from_attributes=True)
