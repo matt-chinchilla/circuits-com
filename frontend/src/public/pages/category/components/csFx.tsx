@@ -21,7 +21,7 @@
 // by mountTileField().wave(). (The .csb-pulse element + keyframes are kept in
 // the stylesheet but never triggered, exactly as in the prototype.)
 
-import { createElement, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 
 interface Tile {
@@ -60,8 +60,7 @@ export function mountTileField(canvas: HTMLCanvasElement, board: HTMLElement): T
     tiles: Tile[] = [];
   let raf = 0,
     running = false,
-    visible = true,
-    t0 = performance.now();
+    visible = true;
   const cursor = { x: -9999, y: -9999, on: false };
   let waveState: { ox: number; oy: number; t0: number; maxR: number } | null = null; // expanding-ring color wave
   // Snapshot of the PRE-energize surface, kept so the new color can spread out
@@ -471,7 +470,6 @@ export function mountTileField(canvas: HTMLCanvasElement, board: HTMLElement): T
   const start = () => {
     if (!running && visible && !reducedMQ.matches) {
       running = true;
-      t0 = performance.now();
       raf = requestAnimationFrame(frame);
     }
   };
@@ -689,20 +687,20 @@ export const CsCopy = ({ text }: { text: string }): ReactElement => {
     clearTimeout(t.current);
     t.current = window.setTimeout(() => setCopied(false), 1500);
   };
-  // JSX-free (createElement) so this module stays a plain .ts file; behavior
-  // is identical to the prototype's <button>…</button>.
-  return createElement(
-    'button',
-    {
-      type: 'button',
-      className: 'csb-copy',
-      'data-copied': copied ? '1' : '0',
-      onClick: copy,
-      'aria-label': 'Copy ' + text,
-      title: 'Copy',
-    },
-    createElement('span', { className: 'csb-copy-ico', 'aria-hidden': 'true' }, copied ? '✓' : '⧉'),
-    createElement('span', { className: 'csb-copy-txt' }, copied ? 'Copied' : 'Copy'),
+  return (
+    <button
+      type="button"
+      className="csb-copy"
+      data-copied={copied ? '1' : '0'}
+      onClick={copy}
+      aria-label={'Copy ' + text}
+      title="Copy"
+    >
+      <span className="csb-copy-ico" aria-hidden="true">
+        {copied ? '✓' : '⧉'}
+      </span>
+      <span className="csb-copy-txt">{copied ? 'Copied' : 'Copy'}</span>
+    </button>
   );
 };
 
