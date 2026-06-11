@@ -1,7 +1,9 @@
-"""GET /api/categories/{slug}/partners — the top-level Category Sponsors banner.
+"""GET /api/categories/{slug}/partners — the top-level Category Sponsor banner.
 
 The banner is a TOP-LEVEL-category artifact: a child slug resolves to its parent,
-so every subpage shows the same partners. Featured sponsors only (top-level tier).
+so every subpage shows the same partners. Platinum sponsor only (top-level tier;
+2026-06-11 tier-boards matrix — was Featured). Platinum is single-slot, so a
+second Platinum on the same category supersedes the first.
 """
 
 
@@ -18,7 +20,7 @@ def _feature(client, headers, supplier_id, category_id):
         json={
             "supplier_id": str(supplier_id),
             "category_id": str(category_id),
-            "tier": "Featured",
+            "tier": "platinum",
             "status": "Active",
         },
         headers=headers,

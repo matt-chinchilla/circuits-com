@@ -26,9 +26,9 @@ def _auth_header(client):
 def test_create_category_sponsor_then_list_shows_it(client, seeded_db, db):
     """POST a category sponsor, then GET list returns it (joined names).
 
-    Note: tier='Featured' attaches ONLY to top-level categories
-    (2026-06-02 softened rule — Silver/Gold/Platinum are allowed on
-    child categories or keywords; top-level is Featured-only).
+    Note: tier='platinum' attaches ONLY to top-level categories
+    (2026-06-11 tier-boards matrix — Gold/Silver are the child tiers,
+    Silver/Gold are keyword tiers; top-level is Platinum-only).
     """
     headers = _auth_header(client)
     supplier = seeded_db["supplier1"]
@@ -39,7 +39,7 @@ def test_create_category_sponsor_then_list_shows_it(client, seeded_db, db):
         json={
             "supplier_id": str(supplier.id),
             "category_id": str(category.id),
-            "tier": "Featured",
+            "tier": "Platinum",
             "amount": "750.00",
             "status": "Active",
         },
@@ -53,7 +53,7 @@ def test_create_category_sponsor_then_list_shows_it(client, seeded_db, db):
     assert created["category_name"] == category.name
     assert created["category_icon"] == category.icon
     assert created["keyword"] is None
-    assert created["tier"] == "Featured"
+    assert created["tier"] == "Platinum"
     assert created["amount"] == "750.00"
     assert created["status"] == "Active"
 
@@ -70,14 +70,14 @@ def test_create_category_sponsor_then_list_shows_it(client, seeded_db, db):
 def test_create_status_defaults_to_active(client, seeded_db, db):
     headers = _auth_header(client)
     supplier = seeded_db["supplier1"]
-    category = seeded_db["parent"]  # Featured requires top-level (2026-06-02 rule)
+    category = seeded_db["parent"]  # Platinum requires top-level (2026-06-11 matrix)
 
     resp = client.post(
         "/api/admin/sponsors/",
         json={
             "supplier_id": str(supplier.id),
             "category_id": str(category.id),
-            "tier": "Featured",
+            "tier": "Platinum",
         },
         headers=headers,
     )

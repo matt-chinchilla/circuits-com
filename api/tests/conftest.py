@@ -143,13 +143,14 @@ def seeded_db(db):
 
     # Link suppliers to child category — pure association now (featured/sponsored
     # status lives in the `sponsors` table). The Kennedy sponsor below (Gold on
-    # this child = a valid Subcategory Sponsor) is what surfaces on the banner.
+    # this child = the single Subcategory Sponsor slot) is what surfaces on the
+    # SponsorBlock (2026-06-11 tier-boards matrix).
     cs1 = CategorySupplier(category_id=child.id, supplier_id=supplier1.id)
     cs2 = CategorySupplier(category_id=child.id, supplier_id=supplier2.id)
     db.add_all([cs1, cs2])
     db.flush()
 
-    # Create sponsor
+    # Create the child's Gold sponsor (single Subcategory Sponsor slot).
     sponsor = Sponsor(
         id=uuid.uuid4(),
         supplier_id=supplier2.id,
@@ -273,4 +274,65 @@ def seeded_db(db):
         "listing2": listing2,
         "revenue1": rev1,
         "revenue2": rev2,
+    }
+
+
+@pytest.fixture
+def tier_boards(db, seeded_db):
+    """Opt-in tier-boards data (2026-06-11): a fresh top-level category with a
+    single **Platinum** Category Sponsor, and a fresh subcategory with a
+    multi-occupant **Silver** directory (two coexisting sponsors).
+
+    Kept SEPARATE from ``seeded_db``'s parent/child so the many exact-count and
+    exact-sponsor-set assertions over the base fixture stay green; Phase 2's
+    read-path tests (Platinum board + Silver directory) request this explicitly.
+    Reuses ``seeded_db``'s suppliers as the sponsor companies.
+    """
+    parent2 = Category(id=uuid.uuid4(), name="Sensors", slug="sensors", icon="gauge", sort_order=99)
+    db.add(parent2)
+    db.flush()
+    child2 = Category(
+        id=uuid.uuid4(),
+        name="Temperature Sensors",
+        slug="temperature-sensors",
+        icon="thermometer",
+        parent_id=parent2.id,
+        sort_order=0,
+    )
+    db.add(child2)
+    db.flush()
+
+    platinum_sponsor = Sponsor(
+        id=uuid.uuid4(),
+        supplier_id=seeded_db["supplier1"].id,
+        category_id=parent2.id,
+        description="Platinum category sponsor",
+        tier="Platinum",
+        status="Active",
+    )
+    silver_sponsor1 = Sponsor(
+        id=uuid.uuid4(),
+        supplier_id=seeded_db["supplier1"].id,
+        category_id=child2.id,
+        description="Silver directory sponsor",
+        tier="Silver",
+        status="Active",
+    )
+    silver_sponsor2 = Sponsor(
+        id=uuid.uuid4(),
+        supplier_id=seeded_db["supplier2"].id,
+        category_id=child2.id,
+        description="Silver directory sponsor",
+        tier="Silver",
+        status="Active",
+    )
+    db.add_all([platinum_sponsor, silver_sponsor1, silver_sponsor2])
+    db.commit()
+
+    return {
+        "parent2": parent2,
+        "child2": child2,
+        "platinum_sponsor": platinum_sponsor,
+        "silver_sponsor1": silver_sponsor1,
+        "silver_sponsor2": silver_sponsor2,
     }

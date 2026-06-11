@@ -1066,25 +1066,19 @@ def seed(db: Session) -> None:
     # 4. Sponsors
     # ------------------------------------------------------------------
     # Sponsorships are the single source of truth for the category page
-    # (2026-06-03). Tier↔placement: Featured = top-level category (Preferred
-    # Partners banner), Platinum/Gold = subcategory (Subcategory Sponsor),
-    # Silver/Gold/Platinum = keyword. The DB trigger rejects any other combo.
+    # (2026-06-11 tier-boards matrix). Tier↔placement: Platinum = top-level
+    # category (single Category Sponsor board), Gold = subcategory (single slot)
+    # OR Silver = subcategory (the directory, many), Silver/Gold = keyword. The
+    # DB trigger rejects any other combo.
 
-    # Featured partners on top-level categories → Preferred Partners banner.
+    # Platinum Category Sponsor (single-slot) on top-level categories.
     get_or_create_sponsor(
         db,
         supplier=kennedy,
         category=cats["Power Management ICs (PMICs)"],
         image_url="/images/sponsors/kennedy.jpg",
         description="Your premier semiconductor supplier in the Northeast",
-        tier="Featured",
-    )
-    get_or_create_sponsor(
-        db,
-        supplier=digikey,
-        category=cats["Power Management ICs (PMICs)"],
-        description="Broadline distributor — millions of parts in stock",
-        tier="Featured",
+        tier="Platinum",
     )
     get_or_create_sponsor(
         db,
@@ -1092,10 +1086,10 @@ def seed(db: Session) -> None:
         category=cats["Microcontrollers & Processors"],
         image_url="/images/sponsors/kennedy.jpg",
         description="Your premier semiconductor supplier in the Northeast",
-        tier="Featured",
+        tier="Platinum",
     )
 
-    # Subcategory sponsors (Platinum/Gold) → the single Subcategory Sponsor slot.
+    # Subcategory Gold sponsors (single slot) → SponsorBlock.
     for sub_name in [
         "Voltage Regulators (LDOs)",
         "DC-DC Converters (Buck/Boost)",
@@ -1111,7 +1105,22 @@ def seed(db: Session) -> None:
             tier="Gold",
         )
 
-    # Keyword sponsor (Silver/Gold/Platinum) → keyword profile page.
+    # Subcategory Silver sponsors (the directory, multi-occupant) → SilverPartners.
+    # Several companies coexist on the same subcategory.
+    for sub_name, silver_suppliers in [
+        ("Voltage Regulators (LDOs)", [avnet, digikey, mouser]),
+        ("DC-DC Converters (Buck/Boost)", [arrow, future]),
+    ]:
+        for silver_supplier in silver_suppliers:
+            get_or_create_sponsor(
+                db,
+                supplier=silver_supplier,
+                category=cats[sub_name],
+                description="Stocking distributor",
+                tier="Silver",
+            )
+
+    # Keyword sponsor (Silver/Gold) → keyword profile page.
     get_or_create_sponsor(
         db,
         supplier=avnet,
