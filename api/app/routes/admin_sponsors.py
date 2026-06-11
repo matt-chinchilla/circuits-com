@@ -18,7 +18,7 @@ keyword must be set, else 422.
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -34,15 +34,17 @@ from app.services.auth_service import get_current_user
 router = APIRouter(prefix="/api/admin/sponsors", tags=["admin-sponsors"])
 
 
-def _is_featured(tier: str | None) -> bool:
-    """Case-insensitive check for the Featured tier.
+def _is_single_slot(tier: str | None, is_top_level: bool) -> bool:
+    """Single-occupant placements that supersede same-tier peers: Platinum on a
+    top-level category, Gold on a child. Silver (directory) and keyword
+    placements are multi-occupant — never supersede.
 
-    Admin emits TitleCase ('Featured'); legacy seed rows are lowercase
-    ('gold'). Normalize at the comparison site rather than at write time
-    so existing data stays untouched (per CLAUDE.md "Sponsor tier
-    casing" gotcha).
+    Casing-tolerant: admin emits TitleCase ('Platinum'), legacy seed rows are
+    lowercase ('gold'). Normalize at the comparison site (per CLAUDE.md "Sponsor
+    tier casing" gotcha).
     """
-    return (tier or "").strip().lower() == "featured"
+    t = (tier or "").strip().lower()
+    return (t == "platinum" and is_top_level) or (t == "gold" and not is_top_level)
 
 
 def _serialize(sponsor: Sponsor) -> AdminSponsorResponse:
@@ -126,14 +128,18 @@ def _parse_sponsor_id(sponsor_id: str) -> uuid.UUID:
 def _supersede_existing_for_category(
     db: Session,
     category_id: uuid.UUID,
+    tier: str,
     exclude_id: uuid.UUID | None = None,
 ) -> None:
-    """Mark any existing visible sponsor for ``category_id`` as Expired.
+    """Mark existing visible **same-tier** sponsors for ``category_id`` Expired.
 
-    Enforces "at most one Active sponsor per category" on EVERY write path
-    (POST + PATCH-with-category-id-change). The public read in
-    ``category_service.get_category_detail`` filters the same predicate, so
-    this guarantees the banner picks a single deterministic sponsor.
+    Enforces single-occupancy for the single-slot tiers (Platinum on a
+    top-level category, Gold on a child) on every write path (POST +
+    PATCH-with-category-id-change). Only callers that have confirmed a
+    single-slot placement via ``_is_single_slot`` invoke this, so it filters to
+    the SAME tier — a new Gold must not Expire the coexisting Silver directory
+    on the same child, and vice versa. The public read in
+    ``category_service`` mirrors the newest-visible-per-tier predicate.
 
     NULL is treated as Active: legacy seed rows (`db/seed.py`) omit the
     ``status`` column entirely, leaving it NULL. SQL three-valued logic
@@ -146,6 +152,7 @@ def _supersede_existing_for_category(
     """
     q = db.query(Sponsor).filter(
         Sponsor.category_id == category_id,
+        func.lower(func.coalesce(Sponsor.tier, "")) == (tier or "").strip().lower(),
         or_(Sponsor.status == "Active", Sponsor.status.is_(None)),
     )
     if exclude_id is not None:
@@ -176,12 +183,15 @@ def create_sponsor(
     if not supplier:
         raise HTTPException(status_code=404, detail="Supplier not found")
 
-    # Tier-gated supersede: Featured allows MULTIPLE concurrent sponsors
-    # per top-level category (banner shows them all). Non-Featured + child
-    # is the single Subcategory Sponsor slot, so supersede peers there.
-    # Non-Featured + keyword is multi-sponsor; no supersede.
-    if body.category_id is not None and not _is_featured(body.tier):
-        _supersede_existing_for_category(db, body.category_id)
+    # Tier-aware supersede: single-slot placements (Platinum on a top-level
+    # category, Gold on a child) Expire their same-tier peers so the board
+    # shows one. Silver (the subcategory directory) and keyword placements are
+    # multi-occupant — never supersede. Look up the category's parent_id to
+    # resolve top-level vs child.
+    if body.category_id is not None:
+        cat = db.query(Category).filter(Category.id == body.category_id).first()
+        if cat is not None and _is_single_slot(body.tier, cat.parent_id is None):
+            _supersede_existing_for_category(db, body.category_id, body.tier)
 
     sponsor = Sponsor(
         id=uuid.uuid4(),
@@ -238,18 +248,19 @@ def update_sponsor(
     if "category_id" in update_data or "tier" in update_data:
         _validate_tier_placement(db, new_tier, new_category_id)
 
-    # If this PATCH re-targets a non-Featured sponsor to a new category
-    # (necessarily a child category — top-level + non-Featured was
-    # rejected above), supersede whatever's currently sitting on that
-    # Subcategory Sponsor slot. Featured peers coexist on top-level
-    # categories (banner shows them all), so skip supersede there.
+    # If this PATCH re-targets the sponsor to a new category and it lands as a
+    # single-slot placement (Platinum on a top-level category, Gold on a
+    # child), Expire whatever same-tier sponsor is currently sitting on that
+    # slot. Silver (directory) + keyword are multi-occupant, so skip supersede
+    # there. Resolve parent_id from the target category (validated above).
     if (
         "category_id" in update_data
         and new_category_id is not None
         and new_category_id != sponsor.category_id
-        and not _is_featured(new_tier)
     ):
-        _supersede_existing_for_category(db, new_category_id, exclude_id=sponsor.id)
+        target_cat = db.query(Category).filter(Category.id == new_category_id).first()
+        if target_cat is not None and _is_single_slot(new_tier, target_cat.parent_id is None):
+            _supersede_existing_for_category(db, new_category_id, new_tier, exclude_id=sponsor.id)
 
     for key, value in update_data.items():
         setattr(sponsor, key, value)

@@ -15,7 +15,7 @@ import uuid
 import pytest
 from fastapi import HTTPException
 
-from app.models import Category
+from app.models import Category, Supplier
 from app.routes.admin_sponsors import _validate_tier_placement
 
 # --- fixtures (adapt conftest's db/client/seeded_db to this module's needs) ---
@@ -46,6 +46,40 @@ def child_category(db, top_category):
     return cat
 
 
+@pytest.fixture
+def two_suppliers(db):
+    """Two suppliers usable as sponsors."""
+    a = Supplier(id=uuid.uuid4(), name="Alpha Components", website="alpha.com")
+    b = Supplier(id=uuid.uuid4(), name="Beta Distribution", website="beta.com")
+    db.add_all([a, b])
+    db.flush()
+    return a, b
+
+
+@pytest.fixture
+def admin_user(db):
+    """Seed the admin login used by ``admin_client``."""
+    import bcrypt
+
+    from app.models import User
+
+    hashed = bcrypt.hashpw(b"testpass123", bcrypt.gensalt()).decode()
+    user = User(id=uuid.uuid4(), username="admin", password_hash=hashed, role="admin")
+    db.add(user)
+    db.flush()
+    return user
+
+
+@pytest.fixture
+def admin_client(client, admin_user):
+    """An authed TestClient: injects the admin Bearer token on every request."""
+    token = client.post(
+        "/api/auth/login", json={"username": "admin", "password": "testpass123"}
+    ).json()["token"]
+    client.headers.update({"Authorization": f"Bearer {token}"})
+    return client
+
+
 # --- Task 1.1: validator → new matrix ---------------------------------------
 
 
@@ -70,3 +104,45 @@ def test_keyword_rejects_platinum(db):
     with pytest.raises(HTTPException) as ei:
         _validate_tier_placement(db, "platinum", None)
     assert ei.value.status_code == 422
+
+
+# --- Task 1.2: tier-aware supersede -----------------------------------------
+
+
+def test_second_platinum_supersedes_first(admin_client, top_category, two_suppliers):
+    a, b = two_suppliers
+    r1 = admin_client.post(
+        "/api/admin/sponsors/",
+        json={"supplier_id": str(a.id), "category_id": str(top_category.id), "tier": "platinum"},
+    )
+    assert r1.status_code == 200, r1.text
+    r2 = admin_client.post(
+        "/api/admin/sponsors/",
+        json={"supplier_id": str(b.id), "category_id": str(top_category.id), "tier": "platinum"},
+    )
+    assert r2.status_code == 200, r2.text
+    active = [
+        s
+        for s in admin_client.get("/api/admin/sponsors/").json()
+        if s["category_id"] == str(top_category.id) and s["status"] != "Expired"
+    ]
+    assert len(active) == 1 and active[0]["supplier_id"] == str(b.id)
+
+
+def test_silver_does_not_supersede_and_coexists(admin_client, child_category, two_suppliers):
+    a, b = two_suppliers
+    r1 = admin_client.post(
+        "/api/admin/sponsors/",
+        json={"supplier_id": str(a.id), "category_id": str(child_category.id), "tier": "silver"},
+    )
+    r2 = admin_client.post(
+        "/api/admin/sponsors/",
+        json={"supplier_id": str(b.id), "category_id": str(child_category.id), "tier": "silver"},
+    )
+    assert r1.status_code == 200 and r2.status_code == 200, (r1.text, r2.text)
+    active = [
+        s
+        for s in admin_client.get("/api/admin/sponsors/").json()
+        if s["category_id"] == str(child_category.id) and s["status"] != "Expired"
+    ]
+    assert len(active) == 2
