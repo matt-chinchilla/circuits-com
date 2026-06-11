@@ -57,6 +57,17 @@ def two_suppliers(db):
 
 
 @pytest.fixture
+def three_suppliers(db):
+    """Three suppliers usable as sponsors (tier-change supersede scenarios)."""
+    a = Supplier(id=uuid.uuid4(), name="Alpha Components", website="alpha.com")
+    b = Supplier(id=uuid.uuid4(), name="Beta Distribution", website="beta.com")
+    c = Supplier(id=uuid.uuid4(), name="Gamma Supply", website="gamma.com")
+    db.add_all([a, b, c])
+    db.flush()
+    return a, b, c
+
+
+@pytest.fixture
 def admin_user(db):
     """Seed the admin login used by ``admin_client``."""
     import bcrypt
@@ -146,3 +157,78 @@ def test_silver_does_not_supersede_and_coexists(admin_client, child_category, tw
         if s["category_id"] == str(child_category.id) and s["status"] != "Expired"
     ]
     assert len(active) == 2
+
+
+def test_tier_only_patch_to_gold_supersedes_existing_gold(
+    admin_client, child_category, three_suppliers
+):
+    """Regression: a tier-only PATCH (Silver→Gold) on a child that already has a
+    Gold sponsor must Expire that pre-existing Gold — single-slot occupancy is
+    re-asserted on tier change, not just on category change."""
+    a, b, c = three_suppliers
+    # Pre-existing Gold on the child (supplier c).
+    gold = admin_client.post(
+        "/api/admin/sponsors/",
+        json={"supplier_id": str(c.id), "category_id": str(child_category.id), "tier": "gold"},
+    )
+    # A Silver on the same child (supplier a) — coexists initially.
+    silver = admin_client.post(
+        "/api/admin/sponsors/",
+        json={"supplier_id": str(a.id), "category_id": str(child_category.id), "tier": "silver"},
+    )
+    assert gold.status_code == 200 and silver.status_code == 200, (gold.text, silver.text)
+
+    # Promote the Silver row to Gold on the SAME child (tier-only PATCH).
+    patched = admin_client.patch(
+        f"/api/admin/sponsors/{silver.json()['id']}", json={"tier": "gold"}
+    )
+    assert patched.status_code == 200, patched.text
+
+    rows = admin_client.get("/api/admin/sponsors/").json()
+    by_id = {r["id"]: r for r in rows}
+    # The pre-existing Gold (supplier c) was superseded.
+    assert by_id[gold.json()["id"]]["status"] == "Expired"
+    # The patched row is the only Active Gold on this child.
+    active_gold = [
+        r
+        for r in rows
+        if r["category_id"] == str(child_category.id)
+        and (r["tier"] or "").lower() == "gold"
+        and r["status"] != "Expired"
+    ]
+    assert len(active_gold) == 1 and active_gold[0]["supplier_id"] == str(a.id)
+
+
+def test_tier_only_patch_to_silver_does_not_supersede(
+    admin_client, child_category, three_suppliers
+):
+    """Regression: downgrading a Gold child-sponsor to Silver (multi-occupant)
+    must NOT Expire other sponsors — a second coexisting Silver stays Active."""
+    a, b, _c = three_suppliers
+    # Gold on the child (supplier a).
+    gold = admin_client.post(
+        "/api/admin/sponsors/",
+        json={"supplier_id": str(a.id), "category_id": str(child_category.id), "tier": "gold"},
+    )
+    # A coexisting Silver on the same child (supplier b).
+    silver = admin_client.post(
+        "/api/admin/sponsors/",
+        json={"supplier_id": str(b.id), "category_id": str(child_category.id), "tier": "silver"},
+    )
+    assert gold.status_code == 200 and silver.status_code == 200, (gold.text, silver.text)
+
+    # Downgrade the Gold row to Silver (tier-only PATCH) — Silver never supersedes.
+    patched = admin_client.patch(
+        f"/api/admin/sponsors/{gold.json()['id']}", json={"tier": "silver"}
+    )
+    assert patched.status_code == 200, patched.text
+
+    active = [
+        r
+        for r in admin_client.get("/api/admin/sponsors/").json()
+        if r["category_id"] == str(child_category.id) and r["status"] != "Expired"
+    ]
+    # Both the (now-Silver) downgraded row and the pre-existing Silver coexist.
+    assert len(active) == 2
+    assert {r["supplier_id"] for r in active} == {str(a.id), str(b.id)}
+    assert all((r["tier"] or "").lower() == "silver" for r in active)

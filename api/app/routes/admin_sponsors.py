@@ -248,16 +248,12 @@ def update_sponsor(
     if "category_id" in update_data or "tier" in update_data:
         _validate_tier_placement(db, new_tier, new_category_id)
 
-    # If this PATCH re-targets the sponsor to a new category and it lands as a
-    # single-slot placement (Platinum on a top-level category, Gold on a
-    # child), Expire whatever same-tier sponsor is currently sitting on that
-    # slot. Silver (directory) + keyword are multi-occupant, so skip supersede
-    # there. Resolve parent_id from the target category (validated above).
-    if (
-        "category_id" in update_data
-        and new_category_id is not None
-        and new_category_id != sponsor.category_id
-    ):
+    # Re-assert single-slot occupancy after the update: if this PATCH lands the
+    # sponsor as a single-slot tier (Platinum on top-level / Gold on child) —
+    # whether by retargeting the category OR changing the tier — expire
+    # same-tier peers on that category. Silver/keyword are multi-occupant: never
+    # supersede. (Idempotent: supersede excludes self.)
+    if new_category_id is not None and ("category_id" in update_data or "tier" in update_data):
         target_cat = db.query(Category).filter(Category.id == new_category_id).first()
         if target_cat is not None and _is_single_slot(new_tier, target_cat.parent_id is None):
             _supersede_existing_for_category(db, new_category_id, new_tier, exclude_id=sponsor.id)
