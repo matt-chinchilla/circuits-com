@@ -80,48 +80,35 @@ def _validate_xor(category_id: uuid.UUID | None, keyword: str | None) -> None:
         )
 
 
-def _validate_tier_placement(
-    db: Session, tier: str | None, category_id: uuid.UUID | None
-) -> None:
-    """Enforce the tier ↔ placement matrix (2026-06-03 single-source model):
+def _validate_tier_placement(db: Session, tier: str | None, category_id: uuid.UUID | None) -> None:
+    """Enforce the tier ↔ placement matrix (2026-06-11 tier-boards model):
 
-      - Category (top-level, ``parent_id IS NULL``): **Featured** only.
-      - Subcategory (child): **Platinum / Gold** only.
-      - Keyword: **Silver / Gold / Platinum** (Featured is category-only).
+      - Category (top-level, ``parent_id IS NULL``): **Platinum** only (single
+        Category Sponsor board, supersede peers).
+      - Subcategory (child): **Gold** (single slot) or **Silver** (directory).
+      - Keyword: **Silver / Gold** (multi-sponsor; Platinum is top-level-only).
 
-    So Silver is keyword-exclusive and Featured is top-level-category-exclusive.
-    A Postgres trigger enforces the same rule at the DB level; this validator
-    gives a clean 422 (and covers SQLite tests, which skip the trigger). The
-    admin form greys out the wrong combinations; this catches a hand-crafted
-    POST. Resolves the Category (404 if missing) to read ``parent_id``.
+    So Platinum is top-level-category-exclusive and Silver is no longer
+    keyword-only (it's the subcategory directory tier too). A Postgres trigger
+    enforces the same rule at the DB level; this validator gives a clean 422
+    (and covers SQLite tests, which skip the trigger). The admin form greys out
+    the wrong combinations; this catches a hand-crafted POST. Resolves the
+    Category (404 if missing) to read ``parent_id``.
     """
     t = (tier or "").strip().lower()
     has_category = category_id is not None
-
     if not has_category:
-        # Keyword placement — any paid tier except Featured.
-        if t == "featured":
-            raise HTTPException(
-                status_code=422,
-                detail="Featured tier is category-only — keyword placement not allowed.",
-            )
+        if t not in ("silver", "gold"):
+            raise HTTPException(422, "Keyword placement requires the Silver or Gold tier.")
         return
-
     cat = db.query(Category).filter(Category.id == category_id).first()
     if cat is None:
-        raise HTTPException(status_code=404, detail="Category not found")
-
+        raise HTTPException(404, "Category not found")
     if cat.parent_id is None:
-        if t != "featured":
-            raise HTTPException(
-                status_code=422,
-                detail="Top-level category placement requires the Featured tier.",
-            )
-    elif t not in ("platinum", "gold"):
-        raise HTTPException(
-            status_code=422,
-            detail="Subcategory placement requires the Platinum or Gold tier.",
-        )
+        if t != "platinum":
+            raise HTTPException(422, "Top-level category placement requires the Platinum tier.")
+    elif t not in ("gold", "silver"):
+        raise HTTPException(422, "Subcategory placement requires the Gold or Silver tier.")
 
 
 def _parse_sponsor_id(sponsor_id: str) -> uuid.UUID:
