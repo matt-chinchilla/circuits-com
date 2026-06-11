@@ -122,8 +122,10 @@ def get_category_partners(db: Session, slug: str) -> dict | None:
     # Single visible Platinum sponsor — newest-wins (mirrors the write-side
     # single-slot supersede). Top-level placements are Platinum-only per the
     # matrix, but tier-filter explicitly so a legacy/mis-tiered row can't leak.
-    sponsor = (
-        db.query(Sponsor)
+    # Sponsor + Supplier in ONE join (no N+1 — this is a category-page hot path).
+    row = (
+        db.query(Sponsor, Supplier)
+        .join(Supplier, Supplier.id == Sponsor.supplier_id)
         .filter(
             Sponsor.category_id == top.id,
             func.lower(Sponsor.tier) == "platinum",
@@ -132,10 +134,7 @@ def get_category_partners(db: Session, slug: str) -> dict | None:
         .order_by(Sponsor.created_at.desc())
         .first()
     )
-    platinum = None
-    if sponsor:
-        supplier = db.query(Supplier).filter(Supplier.id == sponsor.supplier_id).first()
-        platinum = _sponsor_board_dict(sponsor, supplier)
+    platinum = _sponsor_board_dict(row[0], row[1]) if row else None
 
     return {"slug": top.slug, "name": top.name, "platinum": platinum}
 
@@ -363,8 +362,10 @@ def get_category_by_slug(
     # `routes/admin_sponsors._supersede_existing_for_category`, else an admin
     # marking the current sponsor Expired (deliberately taking the slot down)
     # would still surface it. Paused sponsors are hidden too.
-    sponsor = (
-        db.query(Sponsor)
+    # Sponsor + Supplier in ONE join (no N+1 — this is a category-page hot path).
+    gold_row = (
+        db.query(Sponsor, Supplier)
+        .join(Supplier, Supplier.id == Sponsor.supplier_id)
         .filter(
             Sponsor.category_id == category.id,
             func.lower(Sponsor.tier) == "gold",
@@ -373,10 +374,7 @@ def get_category_by_slug(
         .order_by(Sponsor.created_at.desc())
         .first()
     )
-    sponsor_data = None
-    if sponsor:
-        sponsor_supplier = db.query(Supplier).filter(Supplier.id == sponsor.supplier_id).first()
-        sponsor_data = _sponsor_board_dict(sponsor, sponsor_supplier)
+    sponsor_data = _sponsor_board_dict(gold_row[0], gold_row[1]) if gold_row else None
 
     # The Silver directory for this child (multi-occupant → SilverPartners).
     # Each shaped as a SupplierResponse dict (incl. the board contact_role).
