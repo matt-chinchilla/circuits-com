@@ -43,7 +43,8 @@ def test_partners_service_top_level_returns_featured(client, seeded_db, db):
     result = get_category_partners(db, parent.slug)
     assert result is not None
     assert result["slug"] == parent.slug
-    assert {s.name for s in result["partners"]} == {"Avnet"}
+    assert result["platinum"] is not None
+    assert result["platinum"]["supplier_name"] == "Avnet"
 
 
 def test_partners_service_child_resolves_to_parent(client, seeded_db, db):
@@ -55,10 +56,11 @@ def test_partners_service_child_resolves_to_parent(client, seeded_db, db):
 
     result = get_category_partners(db, child.slug)
     assert result is not None
-    # Child slug resolves to the parent's identity + the parent's partners.
+    # Child slug resolves to the parent's identity + the parent's Platinum board.
     assert result["slug"] == parent.slug
     assert result["name"] == parent.name
-    assert {s.name for s in result["partners"]} == {"Avnet"}
+    assert result["platinum"] is not None
+    assert result["platinum"]["supplier_name"] == "Avnet"
 
 
 def test_partners_service_unknown_slug_returns_none(db):
@@ -79,7 +81,7 @@ def test_partners_route_shape_and_no_cache(client, seeded_db):
     assert r.status_code == 200
     body = r.json()
     assert body["slug"] == parent.slug
-    assert {p["name"] for p in body["partners"]} == {"Avnet"}
+    assert body["platinum"] is not None and body["platinum"]["supplier_name"] == "Avnet"
     cc = r.headers["cache-control"].lower()
     assert "no-cache" in cc and "max-age" not in cc
     assert r.headers.get("etag")

@@ -58,7 +58,7 @@ def get_partners(slug: str, request: Request, db: Session = Depends(get_db)):
     if result is None:
         raise HTTPException(404, "Category not found")
     model = CategoryPartnersResponse(
-        slug=result["slug"], name=result["name"], partners=result["partners"]
+        slug=result["slug"], name=result["name"], platinum=result["platinum"]
     )
     return _conditional_json(request, model, _CATEGORY_CACHE_CONTROL)
 
@@ -94,6 +94,7 @@ def get_category(
         children=cat.children,
         parent=cat.parent,
         sponsor=result["sponsor"],
+        silver=result["silver"],
         parts=result["parts"],
         popular_parts=result["popular_parts"],
     )

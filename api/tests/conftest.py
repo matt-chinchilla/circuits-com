@@ -124,12 +124,19 @@ def seeded_db(db):
     db.flush()
 
     # Create suppliers
+    # Board fields (migration 014) set on both suppliers so the tier-board
+    # read-path tests can assert non-null contact_role/coverage_hours/brand_*.
     supplier1 = Supplier(
         id=uuid.uuid4(),
         name="Avnet",
         phone="480-643-2000",
         website="avnet.com",
         email="info@avnet.com",
+        contact_name="Jordan Avery",
+        contact_role="Sr. Field Sales Engineer",
+        coverage_hours="Mon-Fri 8a-6p CT",
+        brand_primary="#c00000",
+        brand_secondary="#ff9e85",
     )
     supplier2 = Supplier(
         id=uuid.uuid4(),
@@ -137,6 +144,11 @@ def seeded_db(db):
         phone="631-555-5555",
         website="kennedy.com",
         email="info@kennedy.com",
+        contact_name="Casey Kennedy",
+        contact_role="Distribution Account Manager",
+        coverage_hours="Mon-Fri 9a-5p ET",
+        brand_primary="#0a4a2e",
+        brand_secondary="#44bd13",
     )
     db.add_all([supplier1, supplier2])
     db.flush()

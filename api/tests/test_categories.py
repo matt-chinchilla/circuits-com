@@ -56,20 +56,20 @@ def test_get_category_by_slug(client, seeded_db):
     assert data["sponsor"]["image_url"] == "/test.jpg"
 
 
-def test_parent_category_does_not_roll_up_child_featured_suppliers(client, seeded_db):
-    """The partners banner shows a TOP-LEVEL category's OWN Featured sponsors —
-    never a child's sponsor rolled up. conftest features Kennedy on the CHILD
-    only and nothing on the parent, so the parent's /partners is empty, and the
-    child's /partners (resolving to the parent) is empty too."""
+def test_parent_category_does_not_roll_up_child_sponsor(client, seeded_db):
+    """The Platinum board shows a TOP-LEVEL category's OWN Platinum sponsor —
+    never a child's Gold sponsor rolled up. conftest sponsors Kennedy (Gold) on
+    the CHILD only and nothing on the parent, so the parent's /partners platinum
+    is null, and the child's /partners (resolving to the parent) is null too."""
     parent = client.get("/api/categories/integrated-circuits/partners")
     assert parent.status_code == 200
-    assert parent.json()["partners"] == [], "no child→parent rollup onto the banner"
+    assert parent.json()["platinum"] is None, "no child→parent rollup onto the board"
 
-    # Child resolves to the parent for the banner → also empty (no own Featured).
+    # Child resolves to the parent for the board → also null (no own Platinum).
     child = client.get("/api/categories/clock-and-timing/partners")
     assert child.status_code == 200
     assert child.json()["slug"] == "integrated-circuits"
-    assert child.json()["partners"] == []
+    assert child.json()["platinum"] is None
 
 
 def test_get_category_includes_parts(client, seeded_db):

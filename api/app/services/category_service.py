@@ -11,14 +11,14 @@ def _active_sponsor():
 
 
 def _tier_order():
-    """Order sponsorships by tier priority (Featured > Platinum > Gold > Silver)
-    for the ranked Preferred Partners list."""
+    """Order sponsorships by tier priority (Platinum > Gold > Silver) for the
+    ranked per-category sponsor list. 'featured' was dropped 2026-06-11 — the
+    tier-boards matrix maps the old top-level Featured onto Platinum."""
     t = func.lower(Sponsor.tier)
     return case(
-        (t == "featured", 0),
-        (t == "platinum", 1),
-        (t == "gold", 2),
-        (t == "silver", 3),
+        (t == "platinum", 0),
+        (t == "gold", 1),
+        (t == "silver", 2),
         else_=9,
     )
 
@@ -77,13 +77,40 @@ def get_all_categories(db: Session) -> list[Category]:
     return cats
 
 
+def _sponsor_board_dict(sponsor: Sponsor, supplier: Supplier | None) -> dict:
+    """Shape a Sponsor + its joined Supplier into the SponsorResponse dict the
+    boards consume. Carries every SponsorResponse field, including the board
+    fields (logo_url/contact_role/coverage_hours/brand_*) pulled off the
+    supplier. The /partners + /{slug} routes serialize this by hand (no
+    response_model), so every field listed on SponsorResponse must be present.
+    """
+    return {
+        "id": sponsor.id,
+        "supplier_name": supplier.name if supplier else "",
+        "image_url": sponsor.image_url,
+        "description": sponsor.description,
+        "tier": sponsor.tier,
+        "website": supplier.website if supplier else None,
+        "phone": supplier.phone if supplier else None,
+        "email": supplier.email if supplier else None,
+        "contact_name": supplier.contact_name if supplier else None,
+        "logo_url": supplier.logo_url if supplier else None,
+        "contact_role": supplier.contact_role if supplier else None,
+        "coverage_hours": supplier.coverage_hours if supplier else None,
+        "brand_primary": supplier.brand_primary if supplier else None,
+        "brand_secondary": supplier.brand_secondary if supplier else None,
+    }
+
+
 def get_category_partners(db: Session, slug: str) -> dict | None:
-    """Preferred Partners for the TOP-LEVEL category of `slug`.
+    """The Platinum Category Sponsor board for the TOP-LEVEL category of `slug`.
 
     Resolves a child slug to its top-level ancestor (2-level tree: a child's
-    `parent` IS the top level), so the banner shows the SAME partners on the
-    parent page and every subpage. Returns the resolved top-level identity plus
-    its active sponsors, tier-ordered. Unknown slug → None (route → 404).
+    `parent` IS the top level), so the same Platinum board shows on the parent
+    page and every subpage. Returns the resolved top-level identity plus its
+    single visible **Platinum** sponsor (newest-wins) as a rich `platinum` dict,
+    or `None` for `platinum` when unsold (board → Open-Placement). Unknown slug
+    → None (route → 404). (2026-06-11 tier-boards matrix — was a supplier list.)
     """
     category = db.query(Category).filter(Category.slug == slug).first()
     if not category:
@@ -92,21 +119,25 @@ def get_category_partners(db: Session, slug: str) -> dict | None:
     # lazy SELECT here (one object, not a loop) — not an N+1.
     top = category if category.parent_id is None else category.parent
 
-    sponsor_suppliers = (
-        db.query(Supplier)
-        .join(Sponsor, Sponsor.supplier_id == Supplier.id)
-        .filter(Sponsor.category_id == top.id)
-        .filter(_active_sponsor())
-        .order_by(_tier_order(), Sponsor.created_at)
-        .all()
+    # Single visible Platinum sponsor — newest-wins (mirrors the write-side
+    # single-slot supersede). Top-level placements are Platinum-only per the
+    # matrix, but tier-filter explicitly so a legacy/mis-tiered row can't leak.
+    sponsor = (
+        db.query(Sponsor)
+        .filter(
+            Sponsor.category_id == top.id,
+            func.lower(Sponsor.tier) == "platinum",
+            _active_sponsor(),
+        )
+        .order_by(Sponsor.created_at.desc())
+        .first()
     )
-    partners = []
-    for position, supplier in enumerate(sponsor_suppliers, start=1):
-        supplier.is_featured = True
-        supplier.rank = position
-        partners.append(supplier)
+    platinum = None
+    if sponsor:
+        supplier = db.query(Supplier).filter(Supplier.id == sponsor.supplier_id).first()
+        platinum = _sponsor_board_dict(sponsor, supplier)
 
-    return {"slug": top.slug, "name": top.name, "partners": partners}
+    return {"slug": top.slug, "name": top.name, "platinum": platinum}
 
 
 def _build_public_parts(
@@ -325,16 +356,18 @@ def get_category_by_slug(
     if not category:
         return None
 
-    # Get sponsor for this category — newest visible wins. The visible-status
-    # filter (Active OR legacy NULL) MUST match the admin write-path supersede
-    # in `routes/admin_sponsors._supersede_existing_for_category`, else an
-    # admin marking the current sponsor Expired (deliberately taking the
-    # slot down) would still see it surface here. Paused sponsors are also
-    # hidden — a deliberate hold should not appear on the public banner.
+    # The child's single Subcategory Sponsor slot → SponsorBlock. This is now
+    # the newest visible **Gold** sponsor (tier-filtered — Silver rows populate
+    # the directory below, not this slot). The visible-status filter (Active OR
+    # legacy NULL) MUST match the admin write-path supersede in
+    # `routes/admin_sponsors._supersede_existing_for_category`, else an admin
+    # marking the current sponsor Expired (deliberately taking the slot down)
+    # would still surface it. Paused sponsors are hidden too.
     sponsor = (
         db.query(Sponsor)
         .filter(
             Sponsor.category_id == category.id,
+            func.lower(Sponsor.tier) == "gold",
             or_(Sponsor.status == "Active", Sponsor.status.is_(None)),
         )
         .order_by(Sponsor.created_at.desc())
@@ -343,17 +376,35 @@ def get_category_by_slug(
     sponsor_data = None
     if sponsor:
         sponsor_supplier = db.query(Supplier).filter(Supplier.id == sponsor.supplier_id).first()
-        sponsor_data = {
-            "id": sponsor.id,
-            "supplier_name": sponsor_supplier.name if sponsor_supplier else "",
-            "image_url": sponsor.image_url,
-            "description": sponsor.description,
-            "tier": sponsor.tier,
-            "website": sponsor_supplier.website if sponsor_supplier else None,
-            "phone": sponsor_supplier.phone if sponsor_supplier else None,
-            "email": sponsor_supplier.email if sponsor_supplier else None,
-            "contact_name": sponsor_supplier.contact_name if sponsor_supplier else None,
+        sponsor_data = _sponsor_board_dict(sponsor, sponsor_supplier)
+
+    # The Silver directory for this child (multi-occupant → SilverPartners).
+    # Each shaped as a SupplierResponse dict (incl. the board contact_role).
+    silver_rows = (
+        db.query(Supplier)
+        .join(Sponsor, Sponsor.supplier_id == Supplier.id)
+        .filter(
+            Sponsor.category_id == category.id,
+            func.lower(Sponsor.tier) == "silver",
+            or_(Sponsor.status == "Active", Sponsor.status.is_(None)),
+        )
+        .order_by(Sponsor.created_at)
+        .all()
+    )
+    silver = [
+        {
+            "id": s.id,
+            "name": s.name,
+            "phone": s.phone,
+            "website": s.website,
+            "email": s.email,
+            "contact_name": s.contact_name,
+            "contact_role": s.contact_role,
+            "description": s.description,
+            "logo_url": s.logo_url,
         }
+        for s in silver_rows
+    ]
 
     icon_val = getattr(category, "icon", None)
     icon_str = str(icon_val) if icon_val is not None else None
@@ -384,6 +435,7 @@ def get_category_by_slug(
     return {
         "category": category,
         "sponsor": sponsor_data,
+        "silver": silver,
         "parts": parts,
         "popular_parts": popular_parts,
     }

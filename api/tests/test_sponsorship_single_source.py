@@ -218,13 +218,12 @@ def test_banner_reflects_sponsor_create_then_delete(client, seeded_db):
     headers = _auth(client)
     sup, parent = seeded_db["supplier1"], seeded_db["parent"]  # Avnet, integrated-circuits
 
-    def banner_names():
-        return {
-            s["name"]
-            for s in client.get(f"/api/categories/{parent.slug}/partners").json()["partners"]
-        }
+    def banner_name():
+        # The Platinum board is single-slot — `platinum` is one sponsor | null.
+        plat = client.get(f"/api/categories/{parent.slug}/partners").json()["platinum"]
+        return plat["supplier_name"] if plat else None
 
-    assert "Avnet" not in banner_names()  # not a sponsor yet
+    assert banner_name() != "Avnet"  # not a sponsor yet
 
     r = _post(
         client,
@@ -235,11 +234,11 @@ def test_banner_reflects_sponsor_create_then_delete(client, seeded_db):
         status="Active",
     )
     assert r.status_code == 200, r.text
-    assert "Avnet" in banner_names()
+    assert banner_name() == "Avnet"
 
     d = client.delete(f"/api/admin/sponsors/{r.json()['id']}", headers=headers)
     assert d.status_code == 204
-    assert "Avnet" not in banner_names()
+    assert banner_name() != "Avnet"
 
 
 # --- PATCH re-validates the matrix + uniqueness ----------------------------
@@ -339,8 +338,8 @@ def test_new_child_sponsor_supersedes_prior(client, seeded_db):
 def test_second_platinum_top_level_supersedes_first(client, seeded_db):
     """Platinum is a SINGLE-slot Category Sponsor board: a 2nd Platinum company
     on the SAME top-level category SUPERSEDES the 1st (only the newest shows) —
-    the contrast to the old multi-row Featured banner. (Phase 1 keeps the
-    `partners` list shape; the list now carries the single surviving Platinum.)"""
+    the contrast to the old multi-row Featured banner. The `/partners` board now
+    carries the single surviving Platinum as `platinum`."""
     headers = _auth(client)
     a, b, parent = seeded_db["supplier1"], seeded_db["supplier2"], seeded_db["parent"]
     assert (
@@ -365,10 +364,15 @@ def test_second_platinum_top_level_supersedes_first(client, seeded_db):
         ).status_code
         == 200
     )
-    names = {
-        s["name"] for s in client.get(f"/api/categories/{parent.slug}/partners").json()["partners"]
-    }
-    assert names == {"Kennedy Electronics"}, names
+    plat = client.get(f"/api/categories/{parent.slug}/partners").json()["platinum"]
+    assert plat is not None and plat["supplier_name"] == "Kennedy Electronics", plat
+    # The superseded first sponsor is Expired in the admin list (single-slot).
+    active = [
+        s
+        for s in client.get("/api/admin/sponsors/", headers=headers).json()
+        if s["category_id"] == str(parent.id) and s["status"] != "Expired"
+    ]
+    assert len(active) == 1 and active[0]["supplier_id"] == str(b.id), active
 
 
 # --- Read-side visibility: NULL = Active, Expired hidden -------------------
@@ -396,10 +400,8 @@ def test_expired_sponsor_hidden_from_banner(client, seeded_db):
         status="Expired",
     )
     assert r.status_code == 200, r.text
-    names = {
-        s["name"] for s in client.get(f"/api/categories/{parent.slug}/partners").json()["partners"]
-    }
-    assert "Avnet" not in names
+    plat = client.get(f"/api/categories/{parent.slug}/partners").json()["platinum"]
+    assert plat is None or plat["supplier_name"] != "Avnet"
 
 
 def test_subcategory_rejects_platinum(client, seeded_db):
