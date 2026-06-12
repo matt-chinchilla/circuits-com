@@ -84,11 +84,13 @@ export const api = {
     company_name: string;
     email: string;
     keyword: string;
-    // V2 design parity (2026-05-16): `name` is required and `tier` is optional
-    // ('silver' | 'gold' | 'platinum'). Both reach the backend's
-    // KeywordRequestForm and end up in the Message.payload + notify-email body.
+    // `name` is required; `tier` is optional and constrained to the keyword
+    // tier set ('silver' | 'gold'). Per the sponsor-tier-boards matrix
+    // (2026-06-11) Platinum is reserved for top-level Category Sponsor boards —
+    // the backend KeywordRequestForm.tier Literal rejects it (422). Both fields
+    // reach the Message.payload + notify-email body.
     name: string;
-    tier?: 'silver' | 'gold' | 'platinum' | null;
+    tier?: 'silver' | 'gold' | null;
     message?: string;
   }) => client.post('/keyword-request/', data),
 

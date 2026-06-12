@@ -204,17 +204,23 @@ def test_keyword_request_optional_tier_and_message_persist_as_null(client, db):
 
 
 def test_keyword_request_invalid_tier_returns_422(client, db):
-    """KeywordRequestForm.tier is a Literal enum — bogus values must 422 at Pydantic."""
-    payload = {
-        "company_name": "Acme",
-        "email": "a@example.com",
-        "keyword": "rp2040",
-        "name": "Pat",
-        "tier": "platinum-plus",  # not in SponsorTier
-    }
-    response = client.post("/api/keyword-request", json=payload)
-    assert response.status_code == 422
-    assert db.query(Message).count() == 0
+    """KeywordRequestForm.tier is a Literal enum — bogus values must 422 at Pydantic.
+
+    `platinum` is included here deliberately: per the sponsor-tier-boards matrix
+    (2026-06-11) Platinum is reserved for top-level Category Sponsor boards and
+    is no longer a valid keyword-request tier, so it now fails the Literal.
+    """
+    for bad_tier in ("platinum-plus", "platinum"):
+        payload = {
+            "company_name": "Acme",
+            "email": "a@example.com",
+            "keyword": "rp2040",
+            "name": "Pat",
+            "tier": bad_tier,  # not in SponsorTier (silver | gold)
+        }
+        response = client.post("/api/keyword-request", json=payload)
+        assert response.status_code == 422, f"tier={bad_tier!r} should 422"
+        assert db.query(Message).count() == 0
 
 
 def test_keyword_request_missing_name_returns_422(client, db):

@@ -2,12 +2,13 @@ from typing import Literal
 
 from pydantic import BaseModel, EmailStr
 
-# Tier enum shared between JoinForm and KeywordRequestForm. Constrains the
-# field to the three sponsorship tiers (matching `SPONSOR_TIERS` in
-# frontend/src/public/pages/keyword-landing/constants.ts) so a malformed
-# request fails fast at the Pydantic layer instead of silently propagating
-# into the notify-email body or the Message.payload JSON.
-SponsorTier = Literal["silver", "gold", "platinum"]
+# Keyword-request sponsorship tiers. Per the sponsor-tier-boards matrix
+# (2026-06-11) keyword placements accept only Silver or Gold — Platinum is
+# reserved for top-level Category Sponsor boards and is no longer a keyword
+# option. Constraining the field here fails a malformed request fast at the
+# Pydantic layer instead of silently propagating into the notify-email body
+# or the Message.payload JSON.
+SponsorTier = Literal["silver", "gold"]
 
 
 class ContactForm(BaseModel):
