@@ -74,7 +74,10 @@ export default function QuickActionsPanel({ supplier, partRows, onAfterSync }: P
     setPrefill('sponsor', {
       supplier_id: supplier.id,
       supplier_name: supplier.name,
-      tier: tierLabel,
+      // The supplier's catalog tier (Featured for the biggest distributors) is
+      // only a hint; sponsor tiers are Platinum/Gold/Silver, so map the merged
+      // Featured→Platinum. The sponsor form re-corrects it to match placement.
+      tier: tierLabel === 'Featured' ? 'Platinum' : tierLabel,
       category_id: smartCategoryId,
     });
     navigate('/admin/sponsors/new');
