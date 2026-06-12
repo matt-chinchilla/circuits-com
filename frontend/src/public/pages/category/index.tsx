@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import SubcategoryChips from './components/SubcategoryChips';
 import PartsTable from './components/PartsTable';
 import SponsorBlock from './components/SponsorBlock';
+import SilverPartners from './components/SilverPartners';
 import CategoryPartnersBanner from './components/CategoryPartnersBanner';
 import SkeletonLoader from '@public/components/widgets/SkeletonLoader';
 import Pagination from '@public/components/widgets/Pagination';
@@ -422,59 +423,72 @@ export default function CategoryPage() {
       <div className={styles.contentWide}>
         {error && <p className={styles.error}>{error}</p>}
 
-        {/* Preferred Partners banner — below the breadcrumb + sticky sub-nav, in
-            its original content-area position. Sourced from the TOP-LEVEL
-            category's /partners (via CategoryPartnersBanner), so it shows the
-            same partners on the parent page and every subpage. */}
+        {/* Platinum Category Sponsor band — below the breadcrumb + sticky sub-nav,
+            in the content-area top position. Sourced from the TOP-LEVEL category's
+            /partners (via CategoryPartnersBanner), so the SAME board shows on the
+            parent page and every subpage. Always present (Open-Placement fallback
+            when unsold). */}
         <CategoryPartnersBanner />
 
         {busy ? (
-          <div className={styles.contentInner}>
-            <div className={styles.left}>
-              <div className={styles.tableSkeleton}>
-                <SkeletonLoader width="100%" height="40px" borderRadius="4px" />
-                {Array.from({ length: 8 }).map((_, i) => (
-                  <SkeletonLoader key={i} width="100%" height="48px" borderRadius="4px" />
-                ))}
-              </div>
+          <>
+            {/* Tier-row skeleton reserves the real ~340px height so the always-
+                present band above doesn't snap down when content resolves. We
+                can't yet know parent-vs-child, so reserve the (taller) subpage
+                layout; on a parent it collapses to nothing once loaded. */}
+            <div className={styles.tierRowSkeleton} aria-hidden="true">
+              <SkeletonLoader width="100%" height="340px" borderRadius="14px" />
+              <SkeletonLoader width="100%" height="340px" borderRadius="8px" />
             </div>
-            <div className={styles.right}>
-              <SkeletonLoader width="100%" height="280px" borderRadius="8px" />
+            <div className={styles.tableSkeleton}>
+              <SkeletonLoader width="100%" height="40px" borderRadius="4px" />
+              {Array.from({ length: 8 }).map((_, i) => (
+                <SkeletonLoader key={i} width="100%" height="48px" borderRadius="4px" />
+              ))}
             </div>
-          </div>
+          </>
         ) : category ? (
-          <div className={styles.contentInner}>
-            <div className={styles.left}>
-              <section id="category-parts">
-                <PartsTable
-                  parts={visible}
-                  sort={sort}
-                  setSort={setSort}
-                  skuSearch={skuSearch}
-                  setSkuSearch={setSkuSearch}
-                  mfgValues={allMfgs}
-                  mfgSelected={mfgFilter ?? new Set(allMfgs)}
-                  setMfgSelected={setMfgFilter}
-                  subValues={isParent ? allSubNames : undefined}
-                  subSelected={isParent ? (subFilter ?? new Set(allSubNames)) : undefined}
-                  setSubSelected={isParent ? setSubFilter : undefined}
-                  subSlugToName={subSlugToName}
-                  subSlugToIcon={subSlugToIcon}
-                />
+          <>
+            {/* SUBPAGES ONLY: the tier row — Silver directory (main) beside the
+                Gold-tier SponsorBlock (aside). Parent pages skip it (no per-
+                subcategory Gold/Silver), so parts span full width directly. */}
+            {category.parent != null && (
+              <div className={styles.tierRow}>
+                <div className={styles.tierRowMain}>
+                  <SilverPartners suppliers={category.silver ?? []} categoryName={category.name} />
+                </div>
+                <aside className={styles.tierRowSide}>
+                  <SponsorBlock sponsor={category.sponsor} />
+                </aside>
+              </div>
+            )}
 
-                {filtered.length > PAGE_SIZE && (
-                  <Pagination
-                    page={safePage}
-                    pages={totalPages}
-                    onChange={handlePageChange}
-                  />
-                )}
-              </section>
-            </div>
-            <div className={styles.right}>
-              <SponsorBlock sponsor={category.sponsor} />
-            </div>
-          </div>
+            <section id="category-parts" className={styles.partsFull}>
+              <PartsTable
+                parts={visible}
+                sort={sort}
+                setSort={setSort}
+                skuSearch={skuSearch}
+                setSkuSearch={setSkuSearch}
+                mfgValues={allMfgs}
+                mfgSelected={mfgFilter ?? new Set(allMfgs)}
+                setMfgSelected={setMfgFilter}
+                subValues={isParent ? allSubNames : undefined}
+                subSelected={isParent ? (subFilter ?? new Set(allSubNames)) : undefined}
+                setSubSelected={isParent ? setSubFilter : undefined}
+                subSlugToName={subSlugToName}
+                subSlugToIcon={subSlugToIcon}
+              />
+
+              {filtered.length > PAGE_SIZE && (
+                <Pagination
+                  page={safePage}
+                  pages={totalPages}
+                  onChange={handlePageChange}
+                />
+              )}
+            </section>
+          </>
         ) : null}
       </div>
     </motion.div>

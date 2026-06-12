@@ -245,10 +245,15 @@
   }
 }
 
-.contentInner {
+// ─── Tier row (SUBPAGES ONLY): Silver directory + Gold SponsorBlock ─────────
+// Ported from the design's category-sponsor.css `.tier-row*` rules. The Silver
+// board (.svp, a GLOBAL class — see silverPartners.scss) absolutely fills its
+// main column so it matches the Gold card's height; the aside is a fixed rail.
+.tierRow {
   display: flex;
   gap: 28px;
-  align-items: flex-start;
+  align-items: stretch;
+  margin-bottom: 28px;
 
   @media (max-width: 900px) {
     flex-direction: column;
@@ -256,38 +261,95 @@
   }
 }
 
-.left {
+.tierRowMain {
   flex: 1 1 0;
   min-width: 0;
+  position: relative;
+  min-height: 340px;
+
+  // The Silver board fills the column so the row height tracks the Gold card.
+  > :global(.svp) {
+    position: absolute;
+    inset: 0;
+  }
 
   @media (max-width: 900px) {
-    flex: 1 1 auto;
-    width: 100%;
+    min-height: 0;
+
+    > :global(.svp) {
+      position: relative;
+      inset: auto;
+    }
+
+    // Cap the scroll area on mobile so the directory doesn't run on forever.
+    :global(.svp-scroll) {
+      max-height: 340px;
+    }
   }
 }
 
-.right {
-  flex: 0 0 320px;
+.tierRowSide {
+  flex: 0 0 calc(35% - 28px);
   min-width: 0;
-  position: sticky;
-  top: calc($nav-height + 72px);
+  display: flex;
+  flex-direction: column;
+
+  // Stretch the Gold card (SponsorBlock's hashed root) to the row height.
+  > * {
+    flex: 1;
+  }
 
   @media (min-width: 1280px) {
-    flex: 0 0 340px;
+    flex-basis: 340px;
   }
 
   @media (max-width: 900px) {
     flex: 0 0 auto;
-    width: 100%;
-    position: static;
-    top: auto;
 
     > * {
       max-width: 560px;
-      margin-left: auto;
-      margin-right: auto;
+      margin: 0 auto;
+      width: 100%;
     }
   }
+}
+
+// Tier-row skeleton: two side-by-side blocks reserving the real ~340px height so
+// the always-present Platinum band above doesn't snap down on load.
+.tierRowSkeleton {
+  display: flex;
+  gap: 28px;
+  align-items: stretch;
+  margin-bottom: 28px;
+
+  > :first-child {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  > :last-child {
+    flex: 0 0 calc(35% - 28px);
+    min-width: 0;
+
+    @media (min-width: 1280px) {
+      flex-basis: 340px;
+    }
+  }
+
+  @media (max-width: 900px) {
+    flex-direction: column;
+    gap: 24px;
+
+    > :last-child {
+      flex: 0 0 auto;
+    }
+  }
+}
+
+// Parts table spans the full content width (no more 2-column parts/sponsor split).
+.partsFull {
+  display: block;
+  min-width: 0;
 }
 
 // ─── Skeleton table ──────────────────────────────────────────────────────────
