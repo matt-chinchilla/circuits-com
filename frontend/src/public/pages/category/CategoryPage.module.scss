@@ -253,6 +253,10 @@
   display: flex;
   gap: 28px;
   align-items: stretch;
+  // Breathing room below the always-present Platinum band (the design separates
+  // the Category Sponsor board from the Gold/Silver tier row). Collapses with
+  // the band's 0 bottom margin → a clean 32px gap.
+  margin-top: 32px;
   margin-bottom: 28px;
 
   @media (max-width: 900px) {
@@ -320,6 +324,7 @@
   display: flex;
   gap: 28px;
   align-items: stretch;
+  margin-top: 32px; // match .tierRow so the busy skeleton reserves the gap (no snap)
   margin-bottom: 28px;
 
   > :first-child {
@@ -350,6 +355,9 @@
 .partsFull {
   display: block;
   min-width: 0;
+  // Gap below the Platinum band on PARENT pages (no tier row); on subpages this
+  // collapses with .tierRow's 28px bottom margin → a single 32px gap.
+  margin-top: 32px;
 }
 
 // ─── Skeleton table ──────────────────────────────────────────────────────────

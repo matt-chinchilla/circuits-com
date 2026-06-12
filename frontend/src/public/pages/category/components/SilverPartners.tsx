@@ -220,12 +220,14 @@ export default function SilverPartners({
       role="region"
       aria-label={categoryName ? 'Silver sponsors for ' + categoryName : 'Silver sponsors'}
     >
-      {/* variant="static" — the hero-only `full` instance lives in BackdropLayer;
-          shipping the 14 SMIL electron loops + 6s draw here would double cost on a
-          non-hero route (CLAUDE.md Tier-3 #6 perf invariant). static keeps the
-          visible gold-trace lattice (opacity .5 per the CSS). */}
+      {/* variant="full" — the Silver board keeps the design's ANIMATED PCB
+          (electrons travelling the gold traces, opacity .5 per the CSS) per
+          BANNER_SPEC §3. The old lag cause (the feGaussianBlur glow filter) was
+          removed, and `full`'s IntersectionObserver pauses the SMIL when the board
+          is off-screen, so this second instance stays cheap (measured 60fps idle
+          on the subpage; the hero backdrop is scrolled out by the time it shows). */}
       <div className="csb-circuit" aria-hidden="true">
-        <CircuitTraces variant="static" />
+        <CircuitTraces variant="full" />
       </div>
       <span className="csb-rim" aria-hidden="true"></span>
       <span className="csb-fid tl" aria-hidden="true"></span>
