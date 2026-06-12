@@ -17,6 +17,8 @@ interface FormData {
   email: string;
   phone: string;
   contact_name: string;
+  contact_role: string;
+  coverage_hours: string;
 }
 
 interface FormErrors {
@@ -32,6 +34,8 @@ function emptyForm(): FormData {
     email: '',
     phone: '',
     contact_name: '',
+    contact_role: '',
+    coverage_hours: '',
   };
 }
 
@@ -94,6 +98,8 @@ export default function SupplierFormPage() {
           // into the live (xxx) xxx-xxxx display the formatter expects.
           phone: formatPhoneInput(s.phone ?? ''),
           contact_name: s.contact_name ?? '',
+          contact_role: s.contact_role ?? '',
+          coverage_hours: s.coverage_hours ?? '',
         });
       })
       .catch(() => setToast({ type: 'error', msg: 'Failed to load supplier.' }))
@@ -132,6 +138,8 @@ export default function SupplierFormPage() {
         // Phone is already formatted (xxx) xxx-xxxx by the input handler.
         phone: form.phone.trim() || null,
         contact_name: form.contact_name.trim() || null,
+        contact_role: form.contact_role.trim() || null,
+        coverage_hours: form.coverage_hours.trim() || null,
       };
       if (isEdit && id) {
         await adminApi.updateSupplier(id, payload);
@@ -336,6 +344,37 @@ export default function SupplierFormPage() {
                   onChange={(e) => set('contact_name', e.target.value)}
                   placeholder="e.g. Jane Doe"
                 />
+              </div>
+            </div>
+
+            <div className={styles.formRow2}>
+              <div className={styles.field} data-field="contact_role">
+                <label className={styles.fieldLabel} htmlFor="sup-role">
+                  Job title
+                </label>
+                <input
+                  id="sup-role"
+                  type="text"
+                  className={styles.input}
+                  value={form.contact_role}
+                  onChange={(e) => set('contact_role', e.target.value)}
+                  placeholder="e.g. Field Sales Engineer"
+                />
+                <div className={styles.fieldHint}>Shown under the contact on sponsor boards.</div>
+              </div>
+              <div className={styles.field} data-field="coverage_hours">
+                <label className={styles.fieldLabel} htmlFor="sup-hours">
+                  Working hours
+                </label>
+                <input
+                  id="sup-hours"
+                  type="text"
+                  className={styles.input}
+                  value={form.coverage_hours}
+                  onChange={(e) => set('coverage_hours', e.target.value)}
+                  placeholder="e.g. Mon–Fri 8am–6pm ET"
+                />
+                <div className={styles.fieldHint}>Shown under the phone on sponsor boards.</div>
               </div>
             </div>
           </div>

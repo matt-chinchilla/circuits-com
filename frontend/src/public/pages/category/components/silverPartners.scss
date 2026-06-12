@@ -56,7 +56,13 @@
 .svp-headrow,
 .svp-chip {
   display: grid;
-  grid-template-columns: 64px 1.15fr 0.8fr 1.25fr 1.3fr;
+  // The leading designator column holds U{n} refdes (20px pad-left to clear the
+  // copper bus) + 9px gap + the 34px logo pad — ~77px of content. At 64px the pad
+  // overflowed and overlapped the company name ("logos too close to names"); the
+  // v12 design widens this column to 92px so the company name sits clear of the
+  // pad with comfortable breathing room. Header + chip share this grid → columns
+  // stay aligned.
+  grid-template-columns: 92px 1.15fr 0.8fr 1.25fr 1.3fr;
   column-gap: 10px;
   align-items: center;
 }
@@ -289,4 +295,90 @@
 }
 .svp-link:hover {
   color: var(--gold-bright);
+}
+
+/* ── Open "Advertise here" slot (.svp-slot) ───────────────────────────────
+   A simple placeholder filling an unsold Silver row so every subcategory shows a
+   full U1–U5 directory. Dashed/ghost treatment vs the solid sponsor chips; the
+   whole row is a button routing to Contact. */
+.svp-slot {
+  cursor: pointer;
+}
+.svp-slot .svp-via {
+  border-style: dashed;
+  opacity: 0.55;
+}
+.svp-slot:hover {
+  background: color-mix(in srgb, var(--gold) 6%, transparent);
+}
+.svp-slot:hover .svp-via {
+  border-color: var(--gold);
+  opacity: 1;
+}
+/* open land pad — a dashed footprint awaiting a "chip", with a + drop cue */
+.svp-pad.svp-pad-open {
+  background: transparent;
+  border: 1.5px dashed color-mix(in srgb, var(--gold) 42%, transparent);
+  box-shadow: none;
+}
+.svp-pad-open i {
+  font-style: normal;
+  font-size: 1rem;
+  line-height: 1;
+  color: color-mix(in srgb, var(--gold) 70%, transparent);
+}
+.svp-slot:hover .svp-pad-open {
+  border-color: var(--gold);
+}
+.svp-slot:hover .svp-pad-open i {
+  color: var(--gold-bright);
+}
+/* body spans the data columns (company→email) with a right-aligned CTA pill */
+.svp-slot-body {
+  grid-column: 2 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+.svp-slot-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.svp-slot-title {
+  font-family: var(--font-heading);
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: color-mix(in srgb, var(--cream) 72%, transparent);
+}
+.svp-slot-sub {
+  font-size: 0.74rem;
+  color: var(--cream-mut);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.svp-slot-cta {
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--gold-bright);
+  white-space: nowrap;
+  padding: 5px 11px;
+  border: 1px dashed color-mix(in srgb, var(--gold) 42%, transparent);
+  border-radius: 999px;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+.svp-slot:hover .svp-slot-cta {
+  background: color-mix(in srgb, var(--gold) 14%, transparent);
+  border-color: var(--gold);
 }

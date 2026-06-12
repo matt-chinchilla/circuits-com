@@ -1122,9 +1122,12 @@ def seed(db: Session) -> None:
     # OR Silver = subcategory (the directory, many), Silver/Gold = keyword. The
     # DB trigger rejects any other combo.
 
-    # Platinum Category Sponsor (single-slot) on EVERY top-level category, so the
-    # animated Category Sponsor board is populated site-wide. Kennedy headlines
-    # the two flagship categories; the rest rotate across real distributors.
+    # Platinum Category Sponsor (single-slot) on the TWO flagship categories only.
+    # The other 13 top-level categories are intentionally left UNSOLD so the
+    # Category Sponsor board renders its Open-Placement state ("Sponsor This
+    # Category" pitch) by default — that empty state is a designed surface, not a
+    # gap (matches the design's "Memory ICs" open example). Kennedy headlines both
+    # flagships. (To sell more categories in the demo, add rows here + reseed.)
     platinum_by_top: list[tuple[str, Supplier, str]] = [
         (
             "Power Management ICs (PMICs)",
@@ -1136,23 +1139,6 @@ def seed(db: Session) -> None:
             kennedy,
             "Your premier semiconductor supplier in the Northeast",
         ),
-        ("Analog ICs", digikey, "13.4M+ products in stock, ships same day"),
-        ("Interface ICs", mouser, "Authorized distributor, newest products first"),
-        ("Memory ICs", avnet, "Global components distributor and design partner"),
-        ("Logic ICs", arrow, "Five Years Out — components to enterprise computing"),
-        ("RF & Wireless ICs", mouser, "Authorized distributor, newest products first"),
-        ("Sensor ICs", digikey, "13.4M+ products in stock, ships same day"),
-        ("Audio & Video ICs", future, "Full-service global components distributor"),
-        ("Clock & Timing ICs", avnet, "Global components distributor and design partner"),
-        (
-            "Motor & Motion Control ICs",
-            arrow,
-            "Five Years Out — components to enterprise computing",
-        ),
-        ("Data Conversion ICs", digikey, "13.4M+ products in stock, ships same day"),
-        ("Security & Authentication ICs", future, "Full-service global components distributor"),
-        ("Automotive ICs", avnet, "Global components distributor and design partner"),
-        ("Display & LED ICs", mouser, "Authorized distributor, newest products first"),
     ]
     for top_name, plat_supplier, blurb in platinum_by_top:
         get_or_create_sponsor(

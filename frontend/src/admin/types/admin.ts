@@ -117,6 +117,8 @@ export interface AdminSupplier {
   website: string | null;
   email: string | null;
   contact_name: string | null;
+  contact_role: string | null;
+  coverage_hours: string | null;
   description: string | null;
   logo_url: string | null;
   parts_count?: number;

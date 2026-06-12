@@ -36,6 +36,10 @@ class SupplierCreate(BaseModel):
     website: str | None = None
     email: str | None = None
     contact_name: str | None = None
+    # Board fields (migration 014) — the rep's job title + coverage hours render
+    # under the Contact/Phone divisions of the sponsor boards.
+    contact_role: str | None = None
+    coverage_hours: str | None = None
     description: str | None = None
 
 
@@ -45,6 +49,8 @@ class SupplierUpdate(BaseModel):
     website: str | None = None
     email: str | None = None
     contact_name: str | None = None
+    contact_role: str | None = None
+    coverage_hours: str | None = None
     description: str | None = None
 
 
@@ -56,6 +62,8 @@ def supplier_to_dict(supplier: Supplier) -> dict:
         "website": supplier.website,
         "email": supplier.email,
         "contact_name": supplier.contact_name,
+        "contact_role": supplier.contact_role,
+        "coverage_hours": supplier.coverage_hours,
         "description": supplier.description,
         "logo_url": supplier.logo_url,
     }
@@ -103,6 +111,8 @@ def create_supplier(
         website=body.website,
         email=body.email,
         contact_name=body.contact_name,
+        contact_role=body.contact_role,
+        coverage_hours=body.coverage_hours,
         description=body.description,
     )
     db.add(supplier)

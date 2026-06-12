@@ -15,15 +15,21 @@
 // Framer Motion), visible-by-default (fill:none + positive delays).
 
 import { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import type { ReactElement } from 'react';
 import CircuitTraces from '@public/components/widgets/CircuitTraces';
 import type { PartnerSupplier } from '@public/types/sponsor';
 import { prependScheme } from '@shared/utils/url';
+import { formatPhone } from '@shared/utils/phone';
 import { CsCopy, csTelHref } from './csFx';
 import './categorySponsor.scss';
 import './silverPartners.scss';
 
 const SVP_ENERGIZE_MS = 1500;
+// Every subcategory shows at least this many Silver slots: real sponsors fill the
+// first rows (U1…Un), the remainder render as "Advertise here" placeholders so an
+// open directory reads as available inventory rather than an empty board.
+const SVP_SLOTS = 5;
 
 const svHost = (url: string): string => {
   try {
@@ -132,9 +138,9 @@ const SvChip = ({
       {s.phone && (
         <span className="svp-foot">
           <a className="svp-link mono" href={csTelHref(s.phone)} onClick={(e) => e.stopPropagation()}>
-            {s.phone}
+            {formatPhone(s.phone)}
           </a>
-          <CsCopy text={s.phone} />
+          <CsCopy text={formatPhone(s.phone)} />
         </span>
       )}
     </div>
@@ -151,6 +157,55 @@ const SvChip = ({
   </div>
 );
 
+// An OPEN Silver slot — a simple "Advertise here" placeholder filling an unsold
+// row so every subcategory shows a full U1–U5 directory. Mirrors the real chip's
+// grid (refdes + open land pad in the id column) with a body spanning the rest;
+// the whole row is a button routing to the Contact page.
+const SvSlotEmpty = ({
+  i,
+  categoryName,
+  onAdvertise,
+}: {
+  i: number;
+  categoryName: string;
+  onAdvertise: () => void;
+}): ReactElement => {
+  const where = categoryName || 'this subcategory';
+  return (
+    <div
+      data-enter
+      className="svp-chip svp-slot"
+      role="button"
+      tabIndex={0}
+      onClick={onAdvertise}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onAdvertise();
+        }
+      }}
+      aria-label={'Advertise in ' + where + ' — open Silver slot U' + (i + 1)}
+    >
+      <span className="svp-via" aria-hidden="true"></span>
+      <div className="svp-idcol">
+        <span className="svp-refdes">U{i + 1}</span>
+        <span className="svp-pad svp-pad-open" aria-hidden="true">
+          <i>+</i>
+        </span>
+      </div>
+      <div className="svp-slot-body">
+        <span className="svp-slot-text">
+          <span className="svp-slot-title">Advertise here</span>
+          <span className="svp-slot-sub">Feature your company in {where}</span>
+        </span>
+        <span className="svp-slot-cta" aria-hidden="true">
+          Get listed{' →'}
+        </span>
+      </div>
+    </div>
+  );
+};
+
 export interface SilverPartnersProps {
   suppliers: PartnerSupplier[];
   categoryName: string;
@@ -161,6 +216,7 @@ export default function SilverPartners({
   categoryName,
 }: SilverPartnersProps): ReactElement {
   const ref = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
   const [live, setLive] = useState<Set<number>>(() => new Set());
   const timers = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
   useEffect(
@@ -212,6 +268,15 @@ export default function SilverPartners({
   };
 
   const list = (suppliers || []).map(toChipData);
+  const emptyCount = Math.max(0, SVP_SLOTS - list.length);
+  // "Advertise here" placeholders route to the Contact page, prefilled with the
+  // subcategory context (lands as a Message), mirroring the Platinum open-slot CTA.
+  const advertise = () =>
+    navigate('/contact', {
+      state: {
+        prefillMessage: `I'd like to advertise in the ${categoryName} Silver partner directory.`,
+      },
+    });
   return (
     <div
       className="csb svp"
@@ -258,6 +323,17 @@ export default function SilverPartners({
             {list.map((s, i) => (
               <SvChip key={s.name + i} s={s} i={i} live={live.has(i)} onEnergize={energize} />
             ))}
+            {Array.from({ length: emptyCount }).map((_, k) => {
+              const slot = list.length + k;
+              return (
+                <SvSlotEmpty
+                  key={`slot${slot}`}
+                  i={slot}
+                  categoryName={categoryName}
+                  onAdvertise={advertise}
+                />
+              );
+            })}
           </div>
         </div>
       </div>

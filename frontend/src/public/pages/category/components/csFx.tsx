@@ -38,6 +38,8 @@ export interface TileField {
   clearCursor(): void;
   wave(ox: number, oy: number): void;
   refreshColor(): void;
+  setEmblem(img: HTMLImageElement, cx: number, cy: number, size: number): void;
+  clearEmblem(): void;
   destroy(): void;
 }
 
@@ -108,6 +110,24 @@ export function mountTileField(canvas: HTMLCanvasElement, board: HTMLElement): T
   };
   let circuitImg: HTMLImageElement | null = null; // rasterized snapshot of the REAL CircuitTraces vectors
 
+  // Optional emblem (e.g. the open-slot upload icon) composited INTO the board
+  // surface so it fragments into tiles exactly like the PCB when tiles rise.
+  let emblem: { img: HTMLImageElement; cx: number; cy: number; size: number } | null = null; // logical px
+  const drawEmblem = () => {
+    if (!emblem || !emblem.img || !emblem.img.complete || !emblem.img.naturalWidth) return;
+    const s = emblem.size,
+      px = Math.round(s * dpr);
+    const tc = document.createElement('canvas');
+    tc.width = px;
+    tc.height = px;
+    const tx = tc.getContext('2d') as CanvasRenderingContext2D;
+    tx.drawImage(emblem.img, 0, 0, px, px);
+    tx.globalCompositeOperation = 'source-in'; // tint to the live accent
+    tx.fillStyle = `rgba(${col.acc[0]},${col.acc[1]},${col.acc[2]},.92)`;
+    tx.fillRect(0, 0, px, px);
+    pg.drawImage(tc, emblem.cx - s / 2, emblem.cy - s / 2, s, s);
+  };
+
   // Freeze the actual CircuitTraces SVG (the pre-existing vectors) to a static
   // bitmap with its current accent colors inlined, then print it on the tiles.
   const snapshotCircuit = () => {
@@ -118,6 +138,16 @@ export function mountTileField(canvas: HTMLCanvasElement, board: HTMLElement): T
     }
     const cs = getComputedStyle(svg);
     const clone = svg.cloneNode(true) as SVGElement;
+    // The static-variant CircuitTraces draws its traces via the CSS-module rule
+    // `.circuitTraces.static .trace { stroke-dashoffset: 0 }`. That rule lives in
+    // a stylesheet the serialized standalone SVG can't carry, so each path would
+    // fall back to its `stroke-dashoffset="1200"` presentation attribute (fully
+    // un-drawn) → a blank snapshot: the board paints its dot-grid but NO traces.
+    // Neutralize the draw offset on the clone so the raster shows the full board.
+    clone.querySelectorAll('[stroke-dasharray]').forEach((p) => {
+      p.removeAttribute('stroke-dasharray');
+      p.removeAttribute('stroke-dashoffset');
+    });
     [
       '--trace-color',
       '--electron-color',
@@ -234,6 +264,7 @@ export function mountTileField(canvas: HTMLCanvasElement, board: HTMLElement): T
       pg.drawImage(circuitImg, (W - dw) / 2, (H - dh) / 2, dw, dh);
       pg.globalAlpha = 1;
     }
+    drawEmblem();
     pcbReady = true;
   };
 
@@ -557,6 +588,15 @@ export function mountTileField(canvas: HTMLCanvasElement, board: HTMLElement): T
       start();
     },
     refreshColor,
+    setEmblem(img, cx, cy, size) {
+      emblem = { img, cx, cy, size };
+      buildPCB();
+      start();
+    },
+    clearEmblem() {
+      emblem = null;
+      buildPCB();
+    },
     destroy() {
       stop();
       ro.disconnect();

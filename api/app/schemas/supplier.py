@@ -11,6 +11,7 @@ class SupplierResponse(BaseModel):
     email: str | None = None
     contact_name: str | None = None
     contact_role: str | None = None
+    coverage_hours: str | None = None
     description: str | None = None
     logo_url: str | None = None
     model_config = ConfigDict(from_attributes=True)

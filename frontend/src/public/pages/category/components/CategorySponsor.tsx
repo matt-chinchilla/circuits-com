@@ -23,8 +23,10 @@ import { useEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import CircuitTraces from '@public/components/widgets/CircuitTraces';
 import type { PlatinumSponsor } from '@public/types/sponsor';
+import { formatPhone } from '@shared/utils/phone';
 import { brandVars, CsCopy, csTelHref, extractBrandColors, mountTileField } from './csFx';
 import type { TileField } from './csFx';
+import uploadIcon from './upload-icon.png';
 import './categorySponsor.scss';
 
 interface BoardData {
@@ -225,6 +227,16 @@ const csLettermark = (name: string): string =>
     .join('')
     .toUpperCase() || '—';
 
+/* Sponsor logo with graceful fallback: a broken/missing image URL falls back to
+   the company lettermark (e.g. "KE") instead of the browser's broken-image
+   glyph. Keyed by `src` at the call site so the broken state resets when the
+   logo changes (sponsor swap / brand takeover). */
+const CsLogo = ({ src, alt, mark }: { src: string; alt: string; mark: string }): ReactElement => {
+  const [broken, setBroken] = useState(false);
+  if (broken) return <span className="csbA-mark">{mark}</span>;
+  return <img className="csbA-logoimg" src={src} alt={alt} onError={() => setBroken(true)} />;
+};
+
 // ─── Main component ──────────────────────────────────────────────────────
 export default function CategorySponsor({
   sponsor,
@@ -284,6 +296,46 @@ export default function CategorySponsor({
     : null;
 
   useCsEntrance(ref, (pitch && pitch.name) || (mapped && mapped.company) || 'empty');
+
+  // v12: composite the upload icon INTO the canvas board surface (open slot
+  // ONLY) so it fragments into the rising tiles exactly like the PCB — instead
+  // of sitting on top as one whole DOM element. The DOM <i> is hidden; this is
+  // the visible "drop here" emblem.
+  useEffect(() => {
+    if (sponsor || pitch) return; // only the empty/open-slot state
+    const board = ref.current;
+    const pad = padRef.current;
+    let cancelled = false;
+    let ro: ResizeObserver | null = null;
+    const img = new Image();
+    const apply = () => {
+      const field = fx.current?.field;
+      if (!field || !board || !pad || !img.complete || !img.naturalWidth) return;
+      const br = board.getBoundingClientRect();
+      const pr = pad.getBoundingClientRect();
+      field.setEmblem(img, pr.left + pr.width / 2 - br.left, pr.top + pr.height / 2 - br.top, 30);
+    };
+    img.onload = () => {
+      if (!cancelled) apply();
+    };
+    img.src = uploadIcon;
+    // Re-position the emblem when the board's own layout reflows. The field's
+    // internal ResizeObserver already redraws on resize but reuses the last
+    // coords — this RO recomputes the pad center. (No window-resize listener: a
+    // window resize only moves the pad if the board itself resizes, which this
+    // board-scoped RO already catches.)
+    if (board) {
+      ro = new ResizeObserver(() => apply());
+      ro.observe(board);
+    }
+    const t = window.setTimeout(apply, 360); // after layout settles
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+      ro?.disconnect();
+      fx.current?.field?.clearEmblem();
+    };
+  }, [sponsor, pitch]);
 
   const brand = branded
     ? mapped
@@ -370,7 +422,7 @@ export default function CategorySponsor({
           >
             <span className="csbA-ring" aria-hidden="true"></span>
             {s.logo ? (
-              <img className="csbA-logoimg" src={s.logo} alt={s.company + ' logo'} />
+              <CsLogo key={s.logo} src={s.logo} alt={s.company + ' logo'} mark={s.lettermark} />
             ) : (
               <span className="csbA-mark">{s.lettermark}</span>
             )}
@@ -392,11 +444,11 @@ export default function CategorySponsor({
           <span className="dot"></span>Phone<span className="csbA-pinno">P3</span>
         </span>
         <span className="csbA-val mono">
-          <a href={csTelHref(s.phone)}>{s.phone}</a>
+          <a href={csTelHref(s.phone)}>{formatPhone(s.phone)}</a>
         </span>
         <span className="csbA-fieldfoot">
           <span className="csbA-sub">{s.hours}</span>
-          <CsCopy text={s.phone} />
+          <CsCopy text={formatPhone(s.phone)} />
         </span>
       </div>
       <div className="csbA-field" data-enter>
@@ -489,7 +541,7 @@ export default function CategorySponsor({
                     <span></span>
                     <span></span>
                     <span></span>
-                    <i>+</i>
+                    <i aria-hidden="true"></i>
                   </button>
                   <span className="csbA-co">
                     <span className="csbA-coname">Open placement</span>

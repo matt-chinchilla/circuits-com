@@ -584,6 +584,7 @@
 }
 .csbA-footprint {
   position: relative;
+  z-index: 3;
   flex: 0 0 auto;
   width: 56px;
   height: 56px;
@@ -592,53 +593,58 @@
   background: transparent;
   cursor: pointer;
   padding: 0;
-  transition:
-    border-color 0.2s ease,
-    box-shadow 0.2s ease;
+  transition: border-color 0.2s ease;
 }
+/* Open-slot logo footprint = an empty SMD IC land pattern (QFP): rows of
+   gull-wing lead pads protruding from all four sides of the dashed chip body,
+   awaiting the sponsor's "chip" (their logo). The four spans are the four
+   lead-rows; the cloud-upload <i> is hidden — it's composited INTO the canvas
+   board surface (csFx.setEmblem) so it fragments into the rising tiles. */
 .csbA-footprint span {
   position: absolute;
-  width: 11px;
-  height: 11px;
-  border-radius: 3px;
-  background: color-mix(in srgb, var(--gold) 66%, transparent);
+  --pad: color-mix(in srgb, var(--gold) 72%, transparent);
+  border-radius: 1px;
 }
 .csbA-footprint span:nth-child(1) {
-  top: -5px;
-  left: -5px;
-}
-.csbA-footprint span:nth-child(2) {
-  top: -5px;
-  right: -5px;
+  // top leads
+  top: -6px;
+  left: 9px;
+  right: 9px;
+  height: 5px;
+  background: repeating-linear-gradient(to right, var(--pad) 0 3px, transparent 3px 8px);
 }
 .csbA-footprint span:nth-child(3) {
-  bottom: -5px;
-  left: -5px;
+  // bottom leads
+  bottom: -6px;
+  left: 9px;
+  right: 9px;
+  height: 5px;
+  background: repeating-linear-gradient(to right, var(--pad) 0 3px, transparent 3px 8px);
 }
 .csbA-footprint span:nth-child(4) {
-  bottom: -5px;
-  right: -5px;
+  // left leads
+  left: -6px;
+  top: 9px;
+  bottom: 9px;
+  width: 5px;
+  background: repeating-linear-gradient(to bottom, var(--pad) 0 3px, transparent 3px 8px);
+}
+.csbA-footprint span:nth-child(2) {
+  // right leads
+  right: -6px;
+  top: 9px;
+  bottom: 9px;
+  width: 5px;
+  background: repeating-linear-gradient(to bottom, var(--pad) 0 3px, transparent 3px 8px);
 }
 .csbA-footprint i {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  font-style: normal;
-  font-size: 1.3rem;
-  line-height: 1;
-  color: color-mix(in srgb, var(--gold) 70%, transparent);
-  transition:
-    color 0.2s ease,
-    transform 0.2s ease;
+  display: none;
+}
+.csbA-footprint:hover span {
+  --pad: color-mix(in srgb, var(--gold) 92%, transparent);
 }
 .csbA-footprint:hover {
   border-color: var(--gold);
-  box-shadow: 0 0 16px color-mix(in srgb, var(--gold) 35%, transparent);
-}
-.csbA-footprint:hover i {
-  color: var(--gold-bright);
-  transform: scale(1.15);
 }
 .csbA-footprint:focus-visible {
   outline: 2px solid var(--gold-bright);
