@@ -184,7 +184,7 @@ export const adminApi = {
     return adminApi.createSponsor({
       supplier_id: supplierId,
       category_id: cat.id,
-      tier: 'Featured',
+      tier: 'Platinum',
       status: 'Active',
     } as SponsorCreate);
   },

@@ -107,7 +107,7 @@ export default function SponsorFormPage() {
       category_id: prefill.category_id ?? base.category_id,
     };
   });
-  const [placement, setPlacement] = useState<Placement>('top-category');
+  const [placement, setPlacement] = useState<Placement>('subcategory');
   // One-shot guard: the placement bucket is derived from the loaded
   // category_id against the loaded categories list — on edit (from the
   // findSponsor hydration) AND on create with a prefilled category_id (from
