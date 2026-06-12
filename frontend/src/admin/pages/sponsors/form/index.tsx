@@ -346,12 +346,9 @@ export default function SponsorFormPage() {
     if (!id) return;
     setShowDeleteConfirm(false);
     try {
-      // The banner side-effect cleanup lives in the BACKEND now:
-      // DELETE /api/admin/sponsors/{id} unfeatures the supplier on its
-      // category iff no other Featured sponsor remains there (see
-      // admin_sponsors.py `_unfeature_after_delete`). The form no longer
-      // pre-unfeatures — doing so client-side skipped the coexist guard and
-      // could wrongly drop a supplier that still has a peer Featured sponsor.
+      // Delete is a pure cascade on the backend: DELETE /api/admin/sponsors/{id}
+      // removes the row, and the public banner reads the `sponsors` table
+      // directly, so the company simply disappears. No client-side pre-step.
       await deleteSponsor(id);
       setToast('Sponsorship deleted');
       setTimeout(() => navigate('/admin/sponsors'), 500);

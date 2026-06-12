@@ -369,7 +369,7 @@ def get_category_by_slug(
         .filter(
             Sponsor.category_id == category.id,
             func.lower(Sponsor.tier) == "gold",
-            or_(Sponsor.status == "Active", Sponsor.status.is_(None)),
+            _active_sponsor(),
         )
         .order_by(Sponsor.created_at.desc())
         .first()
@@ -384,7 +384,7 @@ def get_category_by_slug(
         .filter(
             Sponsor.category_id == category.id,
             func.lower(Sponsor.tier) == "silver",
-            or_(Sponsor.status == "Active", Sponsor.status.is_(None)),
+            _active_sponsor(),
         )
         .order_by(Sponsor.created_at)
         .all()

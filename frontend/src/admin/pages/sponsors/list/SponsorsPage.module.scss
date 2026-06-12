@@ -329,8 +329,7 @@
 
 // ─── Tier badges (bundle: .sup-tier) ────────────────────────────────────────
 //
-// Featured uses the sponsor-gold gradient — required by task spec.
-// Other tiers use solid soft tints from the bundle reference.
+// Tiers use solid soft tints from the bundle reference.
 
 .tierBadge {
   display: inline-block;
@@ -342,12 +341,6 @@
   border-radius: 3px;
   line-height: 1.4;
   white-space: nowrap;
-}
-
-.tierFeatured {
-  background: linear-gradient(135deg, $sponsor-gold, $sponsor-gold-light);
-  color: #ffffff;
-  box-shadow: 0 1px 2px rgba(168, 141, 46, 0.25);
 }
 
 .tierPlatinum {
