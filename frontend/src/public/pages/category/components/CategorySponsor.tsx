@@ -137,7 +137,10 @@ function useCsBoardFx(
       field && field.destroy();
       apiRef.current = null;
     };
-  }, [boardRef, canvasRef]);
+    // Refs have stable identity — mount the field once / tear down on unmount,
+    // matching the prototype's [] (listing the refs risks a re-mount that would
+    // start a second canvas loop before the first is destroyed).
+  }, []);
   return apiRef;
 }
 
