@@ -36,3 +36,21 @@ export interface PlatinumSponsor {
   brand_primary?: string | null;
   brand_secondary?: string | null;
 }
+
+/**
+ * A Silver-tier directory supplier. Mirrors one element of the API's
+ * `/categories/{slug}` → `silver: SupplierResponse[]` (a child category's Silver
+ * sponsors, joined to their Supplier). Same null-on-the-wire caveat as
+ * PlatinumSponsor — every optional field is `?: T | null`, read with `!= null`.
+ */
+export interface PartnerSupplier {
+  id: string;
+  name: string;
+  phone?: string | null;
+  website?: string | null;
+  email?: string | null;
+  contact_name?: string | null;
+  contact_role?: string | null;
+  description?: string | null;
+  logo_url?: string | null;
+}
