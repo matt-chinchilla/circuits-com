@@ -18,13 +18,11 @@ import type {
 import Icon from '@shared/components/Icon';
 import styles from './SponsorFormPage.module.scss';
 
-// Tier visual palette — Featured renders as a "shiny" royal-purple gradient,
-// the matte tiers (Platinum/Gold/Silver) get flat fills. Reused for both
-// the select trigger CSS data-attribute and the inline-styled <option>
-// rows so the open dropdown reflects the same colors in Chromium/Firefox
+// Tier visual palette — the three tiers (Platinum/Gold/Silver) get flat fills.
+// Reused for both the select trigger CSS data-attribute and the inline-styled
+// <option> rows so the open dropdown reflects the same colors in Chromium/Firefox
 // (Safari ignores option backgrounds — accepted).
 const TIER_OPTION_STYLE: Record<SponsorTier, { background: string; color: string }> = {
-  Featured: { background: '#6b46c1', color: '#ffffff' },
   Platinum: { background: '#cbd5e1', color: '#0f172a' },
   Gold: { background: '#d4a017', color: '#1a1505' },
   Silver: { background: '#94a3b8', color: '#0f172a' },
@@ -41,7 +39,7 @@ const TIER_OPTION_STYLE: Record<SponsorTier, { background: string; color: string
 // getCategories() so the form submits REAL ids — the old localStorage seed
 // used fake `cat-*` ids that never matched the public-site categories.
 
-const TIERS: SponsorTier[] = ['Featured', 'Platinum', 'Gold', 'Silver'];
+const TIERS: SponsorTier[] = ['Platinum', 'Gold', 'Silver'];
 const STATUSES: SponsorStatus[] = ['Active', 'Paused', 'Expired'];
 
 // 3-way placement (2026-05-30): top-category vs subcategory was previously
@@ -257,18 +255,18 @@ export default function SponsorFormPage() {
     setPlacement(p);
     update('category_id', '');
     update('keyword', '');
-    // Tier↔placement matrix (2026-06-03): Category=Featured only,
-    // Subcategory=Platinum/Gold only, Keyword=Silver/Gold/Platinum. Auto-correct
-    // the tier so the form stays legal without a round-trip through the select.
+    // Tier↔placement matrix (2026-06-11): Category=Platinum only,
+    // Subcategory=Gold/Silver only, Keyword=Silver/Gold. Auto-correct the tier
+    // so the form stays legal without a round-trip through the select.
     // `keepTier` skips this when the user just picked the tier (the tier-select
     // onChange drives the placement, not the other way around).
     if (!keepTier) {
       if (p === 'top-category') {
-        if (form.tier !== 'Featured') update('tier', 'Featured');
+        if (form.tier !== 'Platinum') update('tier', 'Platinum');
       } else if (p === 'subcategory') {
-        if (form.tier !== 'Platinum' && form.tier !== 'Gold') update('tier', 'Gold');
+        if (form.tier !== 'Gold' && form.tier !== 'Silver') update('tier', 'Gold');
       } else if (p === 'keyword') {
-        if (form.tier === 'Featured') update('tier', 'Gold');
+        if (form.tier !== 'Silver' && form.tier !== 'Gold') update('tier', 'Gold');
       }
     }
     setErrors((prev) => {
@@ -443,15 +441,13 @@ export default function SponsorFormPage() {
                     const next = e.target.value as SponsorTier;
                     update('tier', next);
                     // Flip placement to one valid for the new tier (matrix:
-                    // Featured→Category, Silver→Keyword, Platinum/Gold→stay
-                    // unless on the now-illegal top-level). keepTier=true so we
-                    // don't re-override the tier the user just chose.
-                    if (next === 'Featured' && placement !== 'top-category') {
+                    // Platinum→Category only; Gold/Silver→Subcategory or
+                    // Keyword, never top-level). keepTier=true so we don't
+                    // re-override the tier the user just chose.
+                    if (next === 'Platinum' && placement !== 'top-category') {
                       choosePlacement('top-category', true);
-                    } else if (next === 'Silver' && placement !== 'keyword') {
-                      choosePlacement('keyword', true);
                     } else if (
-                      (next === 'Platinum' || next === 'Gold') &&
+                      (next === 'Gold' || next === 'Silver') &&
                       placement === 'top-category'
                     ) {
                       choosePlacement('subcategory', true);
@@ -476,9 +472,9 @@ export default function SponsorFormPage() {
                   onClick={() => choosePlacement('top-category')}
                   role="radio"
                   aria-checked={placement === 'top-category'}
-                  disabled={form.tier !== 'Featured'}
-                  aria-disabled={form.tier !== 'Featured'}
-                  title={form.tier !== 'Featured' ? 'Top-level Category placement requires the Featured tier' : undefined}
+                  disabled={form.tier !== 'Platinum'}
+                  aria-disabled={form.tier !== 'Platinum'}
+                  title={form.tier !== 'Platinum' ? 'Top-level Category placement requires the Platinum tier' : undefined}
                 >
                   Category Sponsor
                 </button>
@@ -488,15 +484,9 @@ export default function SponsorFormPage() {
                   onClick={() => choosePlacement('subcategory')}
                   role="radio"
                   aria-checked={placement === 'subcategory'}
-                  disabled={form.tier === 'Featured' || form.tier === 'Silver'}
-                  aria-disabled={form.tier === 'Featured' || form.tier === 'Silver'}
-                  title={
-                    form.tier === 'Featured'
-                      ? 'Featured tier is reserved for top-level Category placement'
-                      : form.tier === 'Silver'
-                        ? 'Silver tier is for Keyword placement only'
-                        : undefined
-                  }
+                  disabled={form.tier === 'Platinum'}
+                  aria-disabled={form.tier === 'Platinum'}
+                  title={form.tier === 'Platinum' ? 'Platinum tier is reserved for top-level Category placement' : undefined}
                 >
                   Subcategory Sponsor
                 </button>
@@ -506,18 +496,17 @@ export default function SponsorFormPage() {
                   onClick={() => choosePlacement('keyword')}
                   role="radio"
                   aria-checked={placement === 'keyword'}
-                  disabled={form.tier === 'Featured'}
-                  aria-disabled={form.tier === 'Featured'}
-                  title={form.tier === 'Featured' ? 'Featured tier is reserved for top-level Category placement' : undefined}
+                  disabled={form.tier === 'Platinum'}
+                  aria-disabled={form.tier === 'Platinum'}
+                  title={form.tier === 'Platinum' ? 'Platinum tier is reserved for top-level Category placement' : undefined}
                 >
                   Keyword Sponsor
                 </button>
               </div>
               <p className={styles.fieldHint}>
-                <strong>Featured</strong> → top-level Category (Preferred Partners
-                banner). <strong>Platinum / Gold</strong> → Subcategory.{' '}
-                <strong>Silver / Gold / Platinum</strong> → Keyword (Silver is
-                keyword-only).
+                <strong>Platinum</strong> → top-level Category (premium Category
+                Sponsor board). <strong>Gold / Silver</strong> → Subcategory.{' '}
+                <strong>Silver / Gold</strong> → Keyword.
               </p>
             </div>
 
@@ -534,9 +523,9 @@ export default function SponsorFormPage() {
                   placeholder="Select top-level category…"
                 />
                 <p className={styles.fieldHint}>
-                  Adds the supplier to the Preferred Partners banner on this
-                  category. Multiple Featured sponsors can coexist — they all
-                  appear as ranked rows on the banner.
+                  Becomes the premium Category Sponsor board on this top-level
+                  category and every subpage. Single-slot — a new Platinum
+                  sponsor supersedes the previous one.
                 </p>
                 {errors.category_id && <div className={styles.fieldError}>{errors.category_id}</div>}
               </div>

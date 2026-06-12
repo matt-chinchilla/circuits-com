@@ -168,7 +168,7 @@ export interface AdminCategory {
 // styling on the list page; the backend sends exactly these values. The
 // backend contract types them as plain strings, so the unions are a stricter
 // client-side narrowing — `status` is nullable to match the contract.
-export type SponsorTier = 'Featured' | 'Platinum' | 'Gold' | 'Silver';
+export type SponsorTier = 'Platinum' | 'Gold' | 'Silver';
 export type SponsorStatus = 'Active' | 'Paused' | 'Expired';
 
 export interface AdminSponsor {

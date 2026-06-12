@@ -16,7 +16,7 @@ import styles from './SponsorsPage.module.scss';
 // category_name / category_icon directly, so no client-side id→name mapping
 // is needed anymore.
 
-const TIERS: SponsorTier[] = ['Featured', 'Platinum', 'Gold', 'Silver'];
+const TIERS: SponsorTier[] = ['Platinum', 'Gold', 'Silver'];
 
 type TierFilter = 'All' | SponsorTier;
 
@@ -24,8 +24,6 @@ const TIER_FILTERS: TierFilter[] = ['All', ...TIERS];
 
 function tierClass(tier: SponsorTier): string {
   switch (tier) {
-    case 'Featured':
-      return styles.tierFeatured;
     case 'Platinum':
       return styles.tierPlatinum;
     case 'Gold':
@@ -107,12 +105,16 @@ export default function SponsorsPage() {
   const tierCounts = useMemo(() => {
     const map: Record<TierFilter, number> = {
       All: sponsors.length,
-      Featured: 0,
       Platinum: 0,
       Gold: 0,
       Silver: 0,
     };
-    for (const s of sponsors) map[s.tier]++;
+    // Guard against legacy rows still carrying a dropped tier (e.g. pre-013
+    // 'Featured') — those land in `map[s.tier]` as undefined and would NaN the
+    // running count, so skip any tier outside the current union.
+    for (const s of sponsors) {
+      if (s.tier in map) map[s.tier]++;
+    }
     return map;
   }, [sponsors]);
 
