@@ -20,7 +20,7 @@ export interface PartPrefill {
 export interface SponsorPrefill {
   supplier_id: string;
   supplier_name: string;
-  tier?: 'Featured' | 'Platinum' | 'Gold' | 'Silver';
+  tier?: 'Platinum' | 'Gold' | 'Silver';
   category_id?: string;
 }
 
