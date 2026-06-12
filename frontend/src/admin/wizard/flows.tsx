@@ -668,8 +668,8 @@ export const FLOWS: Flow[] = [
         title: 'Sponsorship is live',
         body: (
           <>
-            The new row appears in the sponsors table. Sponsors are stored in browser localStorage
-            for now — they don&apos;t round-trip to the API yet.
+            The new row appears in the sponsors table and is live on the public site — the Category
+            Sponsor board on the target category will show this company.
           </>
         ),
         advance: { kind: 'manual' },
@@ -680,8 +680,8 @@ export const FLOWS: Flow[] = [
         body: (
           <>
             To remove the demo sponsorship, go to <b>Sponsors</b>, find the row, and use the
-            delete action. The list is local-only so clearing your browser&apos;s storage also
-            wipes it.
+            delete action. Unlike the supplier and part flows, sponsorships have no automatic
+            wizard cleanup — delete it manually.
           </>
         ),
         advance: { kind: 'manual' },

@@ -260,8 +260,6 @@ export default function SettingsPage() {
   // Reset just clears LS keys → next mount picks up DEFAULTS.
   function handleResetData() {
     Object.values(LS_KEYS).forEach((k) => localStorage.removeItem(k));
-    // Also clear the demo sponsor store (matches the bundle's resetStore intent).
-    localStorage.removeItem('circuits.admin.sponsors');
     setGeneral(DEFAULTS.general);
     setAccount(DEFAULTS.account);
     setNotifications(DEFAULTS.notifications);

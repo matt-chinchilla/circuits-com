@@ -22,11 +22,10 @@ interface Props {
   onAfterSync?: (delta: number) => void;
 }
 
-type Tier = 'Featured' | 'Platinum' | 'Gold' | 'Silver';
+type Tier = 'Platinum' | 'Gold' | 'Silver';
 
 function deriveTierLabel(parts_count: number | undefined): Tier {
   const n = parts_count ?? 0;
-  if (n >= 200) return 'Featured';
   if (n >= 100) return 'Platinum';
   if (n >= 25) return 'Gold';
   return 'Silver';
@@ -74,10 +73,9 @@ export default function QuickActionsPanel({ supplier, partRows, onAfterSync }: P
     setPrefill('sponsor', {
       supplier_id: supplier.id,
       supplier_name: supplier.name,
-      // The supplier's catalog tier (Featured for the biggest distributors) is
-      // only a hint; sponsor tiers are Platinum/Gold/Silver, so map the merged
-      // Featured→Platinum. The sponsor form re-corrects it to match placement.
-      tier: tierLabel === 'Featured' ? 'Platinum' : tierLabel,
+      // The supplier's catalog-size tier is only a hint; the sponsor form
+      // re-corrects it to match the chosen placement.
+      tier: tierLabel,
       category_id: smartCategoryId,
     });
     navigate('/admin/sponsors/new');

@@ -456,6 +456,19 @@ def get_or_create_supplier(
         )
         db.add(obj)
         db.flush()
+    else:
+        # Idempotent: backfill the board fields on a pre-existing supplier so a
+        # re-seed over an existing DB (a normal deploy / local rebuild) populates
+        # contact_role/coverage_hours/brand colors (migration 014), not just
+        # fresh inserts.
+        for attr, val in (
+            ("contact_role", contact_role),
+            ("coverage_hours", coverage_hours),
+            ("brand_primary", brand_primary),
+            ("brand_secondary", brand_secondary),
+        ):
+            if val is not None and getattr(obj, attr) != val:
+                setattr(obj, attr, val)
     return obj
 
 
