@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { motion } from "framer-motion";
 import { Helmet } from "react-helmet-async";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import PageHeaderBand from "@public/components/layout/PageHeaderBand";
 import { api } from "@public/services/api";
 import styles from "./ContactPage.module.scss";
@@ -39,11 +39,20 @@ const REASONS = [
 const MAX_MSG = 1200;
 
 export default function ContactPage() {
-  const [reason, setReason] = useState("general");
+  // Open-Placement sponsor CTAs (CategorySponsor "Become a sponsor") navigate
+  // here with a prefilled message in location.state. Read it ONCE in the lazy
+  // useState initializer so a later re-render (or back-nav) doesn't re-apply it.
+  const location = useLocation();
+  const prefillMessage =
+    (location.state as { prefillMessage?: string } | null)?.prefillMessage ?? "";
+
+  // A sponsorship inquiry is a "Listing my company" reason; default to it when a
+  // prefill is present so the folded-subject line reads correctly.
+  const [reason, setReason] = useState(() => (prefillMessage ? "list" : "general"));
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [subject, setSubject] = useState("");
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState(() => prefillMessage);
 
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);

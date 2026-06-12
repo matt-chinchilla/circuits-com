@@ -59,8 +59,9 @@ export const api = {
     api.getCategory(slug, 1, 500, 1, 500).catch(() => {});
   },
 
-  // Top-level Category Sponsors banner (small, cacheable). No trailing slash —
-  // matches the route exactly; the endpoint resolves a child slug to its parent.
+  // Top-level Platinum Category Sponsor (small, cacheable) → { slug, name,
+  // platinum: PlatinumSponsor | null }. No trailing slash — matches the route
+  // exactly; the endpoint resolves a child slug to its parent.
   getCategoryPartners: (slug: string) =>
     client.get<CategoryPartners>(`/categories/${slug}/partners`).then(r => r.data),
 

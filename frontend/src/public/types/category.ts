@@ -35,7 +35,12 @@ export interface CategoryDetail extends Category {
     icon: string;
     children: Subcategory[];
   } | null;
+  // On a child category this is the single GOLD sponsor (newest visible); the
+  // Gold-tier SponsorBlock consumes it. Null when unsold.
   sponsor: import('./sponsor').Sponsor | null;
+  // The child category's SILVER sponsors (many) — feeds the SilverPartners
+  // directory in the tier row. Empty on parent pages and when unsold.
+  silver: import('./sponsor').PartnerSupplier[];
   parts: PartsPage;
   // Paginated rollup of parts across all subcategories of a parent category.
   // Powers the "Popular Parts" section. On leaf pages, items is empty.
@@ -44,8 +49,9 @@ export interface CategoryDetail extends Category {
 
 export interface CategoryPartners {
   // The resolved TOP-LEVEL category (a child slug resolves to its parent) and
-  // its Featured "Preferred Partners" — fed to the persistent banner.
+  // its single PLATINUM Category Sponsor — fed to the always-present banner.
+  // `platinum` is null when the slot is unsold (→ Open-Placement board).
   slug: string;
   name: string;
-  partners: import('./supplier').Supplier[];
+  platinum: import('./sponsor').PlatinumSponsor | null;
 }
