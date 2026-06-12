@@ -21,20 +21,17 @@
 
 /* Band wrapper — aligns the banner to the same gutter as the wide content. */
 .cs-band {
+  // The band is nested inside CategoryPage's .contentWide, which already supplies
+  // the max-width, horizontal gutter, and centering. So the band must NOT repeat
+  // them (that double-guttered the Platinum board ~28px narrower each side than the
+  // Gold/Silver tier row). It only adds the TOP offset and fills the inner width, so
+  // the Platinum board aligns edge-to-edge with the tier row below (per the design).
   width: 100%;
-  max-width: 1480px;
-  margin: 0 auto;
-  padding: 30px 28px 0;
+  padding: 30px 0 0;
 }
 @media (max-width: 640px) {
   .cs-band {
-    padding: 24px 16px 0;
-  }
-}
-@media (min-width: 1600px) {
-  .cs-band {
-    padding-left: 40px;
-    padding-right: 40px;
+    padding: 24px 0 0;
   }
 }
 
