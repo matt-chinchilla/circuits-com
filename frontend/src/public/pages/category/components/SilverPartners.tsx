@@ -18,6 +18,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import CircuitTraces from '@public/components/widgets/CircuitTraces';
 import type { PartnerSupplier } from '@public/types/sponsor';
+import { prependScheme } from '@shared/utils/url';
 import { CsCopy, csTelHref } from './csFx';
 import './categorySponsor.scss';
 import './silverPartners.scss';
@@ -60,7 +61,11 @@ function toChipData(s: PartnerSupplier): SvChipData {
   return {
     name: s.name,
     lettermark: svLettermark(s.name),
-    website: s.website || '',
+    // RFC-3986-aware: the stored website may be a bare host (digikey.com) OR
+    // already-schemed (https://digikey.com); prependScheme normalizes both to a
+    // single valid scheme. Empty → '' so the `s.website &&` link guard still
+    // hides an absent website (prependScheme('') === '').
+    website: s.website ? prependScheme(s.website) : '',
     contact: s.contact_name || '',
     role: s.contact_role || '',
     phone: s.phone || '',
@@ -110,12 +115,12 @@ const SvChip = ({
       {s.website && (
         <a
           className="svp-site"
-          href={'https://' + s.website}
+          href={s.website}
           target="_blank"
           rel="noopener noreferrer"
           onClick={(e) => e.stopPropagation()}
         >
-          <span aria-hidden="true">⊕</span> {svHost('https://' + s.website)}
+          <span aria-hidden="true">⊕</span> {svHost(s.website)}
         </a>
       )}
     </div>
@@ -149,7 +154,6 @@ const SvChip = ({
 export interface SilverPartnersProps {
   suppliers: PartnerSupplier[];
   categoryName: string;
-  onNavigate?: (target: 'sponsor') => void;
 }
 
 export default function SilverPartners({
