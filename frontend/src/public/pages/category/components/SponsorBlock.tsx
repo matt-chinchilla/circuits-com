@@ -289,11 +289,9 @@ function PcbArt() {
  */
 function PcbCard({
   empty,
-  tier,
   children,
 }: {
   empty?: boolean;
-  tier?: Sponsor['tier'];
   children: ReactNode;
 }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -419,7 +417,10 @@ function PcbCard({
       className={`${styles.card} ${empty ? styles.cardEmpty : ''}`}
       role="region"
       aria-label={empty ? 'Open sponsor slot' : 'Featured sponsor'}
-      data-tier={(tier ?? 'gold').toLowerCase()}
+      // This is the Gold-tier board (a child category's single Gold sponsor, from
+      // category.sponsor). Pinned to gold so the silver/platinum/gold token system
+      // tints it gold regardless of the sponsor.tier string casing.
+      data-tier="gold"
       data-lit="false"
       initial={animateIn ? { opacity: 0, y: 20 } : false}
       animate={{ opacity: 1, y: 0 }}
@@ -465,7 +466,7 @@ export default function SponsorBlock({ sponsor }: SponsorBlockProps) {
   }
 
   return (
-    <PcbCard tier={sponsor.tier}>
+    <PcbCard>
       <span className={styles.kicker}>&#9670; FEATURED PARTNER</span>
 
       <div className={styles.pad}>
