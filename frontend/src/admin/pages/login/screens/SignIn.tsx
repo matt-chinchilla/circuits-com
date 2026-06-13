@@ -2,10 +2,10 @@ import { useState, type FormEvent } from 'react';
 import axios from 'axios';
 import { useAuth } from '@admin/contexts/AuthContext';
 import Field from '../components/Field';
+import SubmitButton from '../components/SubmitButton';
 import { I, Svg } from '../components/icons';
+import { PWD_DOTS } from '../lib/recovery';
 import type { Screen } from './types';
-
-const PWD_DOTS = '•'.repeat(8); // placeholder ••••••••
 
 export default function SignIn({ go }: { go: (s: Screen) => void }) {
   const { login } = useAuth();
@@ -101,19 +101,7 @@ export default function SignIn({ go }: { go: (s: Screen) => void }) {
           </span>
           <span>Keep me signed in for 30 days</span>
         </label>
-        <button className="btn" type="submit" disabled={busy}>
-          {busy ? (
-            <>
-              <span className="spinner" />
-              Verifying&hellip;
-            </>
-          ) : (
-            <>
-              Sign in
-              <Svg d={I.arrow} w={16} className="arrow" />
-            </>
-          )}
-        </button>
+        <SubmitButton busy={busy} label="Sign in" busyLabel={<>Verifying&hellip;</>} />
       </form>
       <div className="form-meta">
         <p className="recover-line">

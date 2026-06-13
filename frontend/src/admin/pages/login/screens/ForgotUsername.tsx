@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { adminApi } from '@admin/services/adminApi';
 import Field from '../components/Field';
+import SubmitButton from '../components/SubmitButton';
 import { I, Svg } from '../components/icons';
 import { isEmail, mask } from '../lib/recovery';
 import type { Screen } from './types';
@@ -77,19 +78,7 @@ export default function ForgotUsername({ go }: { go: (s: Screen) => void }) {
           autoFocus
           error={err}
         />
-        <button className="btn" type="submit" disabled={busy}>
-          {busy ? (
-            <>
-              <span className="spinner" />
-              Sending&hellip;
-            </>
-          ) : (
-            <>
-              Email my username
-              <Svg d={I.arrow} w={16} className="arrow" />
-            </>
-          )}
-        </button>
+        <SubmitButton busy={busy} label="Email my username" busyLabel={<>Sending&hellip;</>} />
       </form>
     </div>
   );

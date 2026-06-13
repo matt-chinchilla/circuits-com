@@ -8,9 +8,9 @@ import axios from 'axios';
 import { adminApi } from '@admin/services/adminApi';
 import AuthShell from '@admin/pages/login/components/AuthShell';
 import Field from '@admin/pages/login/components/Field';
+import SubmitButton from '@admin/pages/login/components/SubmitButton';
 import { I, Svg } from '@admin/pages/login/components/icons';
-
-const PWD_DOTS = '•'.repeat(8);
+import { PWD_DOTS } from '@admin/pages/login/lib/recovery';
 
 export default function ResetPasswordPage() {
   const [params] = useSearchParams();
@@ -149,19 +149,7 @@ export default function ResetPasswordPage() {
             autoComplete="new-password"
             error={errs.confirm}
           />
-          <button className="btn" type="submit" disabled={busy}>
-            {busy ? (
-              <>
-                <span className="spinner" />
-                Updating&hellip;
-              </>
-            ) : (
-              <>
-                Update password
-                <Svg d={I.arrow} w={16} className="arrow" />
-              </>
-            )}
-          </button>
+          <SubmitButton busy={busy} label="Update password" busyLabel={<>Updating&hellip;</>} />
         </form>
       </div>
     </AuthShell>

@@ -4,6 +4,10 @@
 
 const BULLET = '•'; // • — explicit escape so edit tooling can't mangle it
 
+// Password-field placeholder (••••••••) — shared by the sign-in and
+// reset-password screens so the bullet glyph has a single source.
+export const PWD_DOTS = BULLET.repeat(8);
+
 export const isEmail = (v: string): boolean =>
   /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
 
