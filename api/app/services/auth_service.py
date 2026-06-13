@@ -85,6 +85,15 @@ def decode_reset_token(token: str) -> dict:
     return payload
 
 
+def reset_token_matches_hash(payload: dict, password_hash: str) -> bool:
+    """True iff the token's pwfp still matches the user's live password hash.
+
+    A False here means the password already changed since the link was issued
+    (the link was used, or a newer one superseded it) → the route rejects it.
+    """
+    return payload.get("pwfp") == _pw_fingerprint(password_hash)
+
+
 def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(security),
     db: Session = Depends(get_db),
