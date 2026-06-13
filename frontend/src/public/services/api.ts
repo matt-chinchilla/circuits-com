@@ -74,11 +74,16 @@ export const api = {
   getSponsorByKeyword: (keyword: string) =>
     client.get<Sponsor>(`/sponsors/keyword/${keyword}/`).then(r => r.data),
 
+  // POST the exact route path (no trailing slash). The form routes are defined
+  // as `/api/contact|join|keyword-request` (no slash); a trailing slash forces a
+  // 307 redirect that the client must re-POST through — works in mainstream
+  // browsers but some proxies/security tools drop the body on a 307-POST, which
+  // would silently lose a submission. Matching the path removes that round-trip.
   submitContact: (data: Record<string, string>) =>
-    client.post('/contact/', data),
+    client.post('/contact', data),
 
   submitJoin: (data: Record<string, unknown>) =>
-    client.post('/join/', data),
+    client.post('/join', data),
 
   submitKeywordRequest: (data: {
     company_name: string;
@@ -92,7 +97,7 @@ export const api = {
     name: string;
     tier?: 'silver' | 'gold' | null;
     message?: string;
-  }) => client.post('/keyword-request/', data),
+  }) => client.post('/keyword-request', data),
 
   getPartDetail: (id: string) =>
     client.get<PartDetail>(`/parts/${id}`).then(r => r.data),

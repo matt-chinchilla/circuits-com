@@ -1,13 +1,11 @@
 import type { Message } from '@admin/types/messages';
 
-// "Now" anchored to the demo data so relative times read correctly without
-// real-clock drift. When the backend lands and Messages persist server-side,
-// drop this anchor and use Date.now() directly.
-export const NOW_REF = new Date('2026-05-07T15:00:00Z');
-
 export function relTime(iso: string): string {
   const t = new Date(iso);
-  const ms = +NOW_REF - +t;
+  // Reference the real clock at call time. A hardcoded NOW_REF demo anchor used
+  // to live here; once Messages persisted server-side it froze every real
+  // message at "now"/"Today" (see api/tests/test_admin_message_reltime_anchor.py).
+  const ms = Date.now() - +t;
   const m = ms / 60_000;
   const h = m / 60;
   const d = h / 24;
@@ -21,7 +19,7 @@ export function relTime(iso: string): string {
 
 export function dayBucket(iso: string): 'Today' | 'Yesterday' | 'This week' | 'Earlier' {
   const t = new Date(iso);
-  const d = (+NOW_REF - +t) / 86_400_000;
+  const d = (Date.now() - +t) / 86_400_000;
   if (d < 1) return 'Today';
   if (d < 2) return 'Yesterday';
   if (d < 7) return 'This week';
