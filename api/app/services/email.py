@@ -186,3 +186,68 @@ async def send_keyword_notification(form) -> None:
         body=body,
     )
     await _smtp_send(msg)
+
+
+# ── Account recovery (2026-06-13 admin login redesign) ─────────────────────
+# Unlike the form notifications above (which go to NOTIFY_RECIPIENTS), these are
+# addressed to the account holder. The pure _build_* helpers return the message
+# so they can be unit-tested without an SMTP connection; the async wrappers send.
+
+
+def _build_password_reset(to_email: str, username: str, reset_url: str) -> EmailMessage:
+    """Compose the password-reset email (one secure link, 30-minute validity)."""
+    body = (
+        f"Hi {username},\n"
+        "\n"
+        "We received a request to reset the password on your Circuits.com\n"
+        "account. Use the secure link below to choose a new password:\n"
+        "\n"
+        f"{reset_url}\n"
+        "\n"
+        "This link expires in 30 minutes and can only be used once. If you didn't\n"
+        "request a reset, you can safely ignore this email — your password won't\n"
+        "change.\n"
+        "\n"
+        "- The Circuits.com Team\n"
+    )
+    msg = EmailMessage()
+    msg["From"] = settings.SMTP_FROM
+    msg["To"] = to_email
+    msg["Subject"] = "Reset your Circuits.com password"
+    msg.set_content(body)
+    return msg
+
+
+def _build_username_reminder(to_email: str, usernames: list[str]) -> EmailMessage:
+    """Compose the forgot-username email listing the account's username(s)."""
+    listed = "\n".join(f"  - {u}" for u in usernames)
+    body = (
+        "Hi,\n"
+        "\n"
+        "You asked us to remind you of the username on your Circuits.com account.\n"
+        f"The {'usernames' if len(usernames) > 1 else 'username'} linked to this "
+        "email address:\n"
+        "\n"
+        f"{listed}\n"
+        "\n"
+        "Head to https://circuits.com/admin/login to sign in. If you didn't make\n"
+        "this request, you can ignore this email.\n"
+        "\n"
+        "- The Circuits.com Team\n"
+    )
+    msg = EmailMessage()
+    msg["From"] = settings.SMTP_FROM
+    msg["To"] = to_email
+    msg["Subject"] = "Your Circuits.com username"
+    msg.set_content(body)
+    return msg
+
+
+async def send_password_reset(to_email: str, username: str, reset_url: str) -> None:
+    """Email the account holder a secure password-reset link. Demo-mode aware."""
+    await _smtp_send(_build_password_reset(to_email, username, reset_url))
+
+
+async def send_username_reminder(to_email: str, usernames: list[str]) -> None:
+    """Email the account holder their username(s). Demo-mode aware."""
+    await _smtp_send(_build_username_reminder(to_email, usernames))

@@ -11,6 +11,11 @@ class Settings(BaseSettings):
     ADMIN_USERNAME: str = "admin"
     ADMIN_PASSWORD: str = "admin"
     ADMIN_SECRET_KEY: str = "change-me-in-production"
+    # Public origin used to build absolute links in recovery emails (e.g. the
+    # password-reset link). When None, the auth routes fall back to the incoming
+    # request's base_url (ProxyHeadersMiddleware surfaces the real host behind
+    # nginx). Set explicitly in prod .env if the derived host is ever wrong.
+    APP_BASE_URL: str | None = None
 
     # SMTP - when SMTP_HOST is unset, services/email.py runs in demo mode
     # (logs the email payload to stderr instead of sending). Lets local dev
