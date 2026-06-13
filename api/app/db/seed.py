@@ -1223,22 +1223,32 @@ def seed(db: Session) -> None:
 
 
 def _seed_admin_user(db: Session) -> None:
+    # (username, password, email). Emails power the account-recovery flows
+    # (forgot-password / forgot-username); demo/demo is the public demo login
+    # advertised on the redesigned sign-in screen.
     admin_users = [
-        ("matthew", "admin"),
-        ("mike", "admin"),
-        ("john", "admin"),
+        ("matthew", "admin", "matthew@circuits.com"),
+        ("mike", "admin", "mike@circuits.com"),
+        ("john", "admin", "john@circuits.com"),
+        ("demo", "demo", "demo@circuits.com"),
     ]
     created = 0
-    for username, password in admin_users:
+    backfilled = 0
+    for username, password, email in admin_users:
         existing = db.query(User).filter(User.username == username).first()
         if existing:
+            # Backfill the email on rows seeded before migration 015 so existing
+            # prod admins can use recovery without a reseed.
+            if not existing.email:
+                existing.email = email
+                backfilled += 1
             continue
         hashed = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
-        db.add(User(username=username, password_hash=hashed, role="admin"))
+        db.add(User(username=username, password_hash=hashed, role="admin", email=email))
         created += 1
     db.flush()
-    if created:
-        print(f"Seed: {created} admin user(s) created.")
+    if created or backfilled:
+        print(f"Seed: {created} admin user(s) created, {backfilled} email(s) backfilled.")
 
 
 # ---------------------------------------------------------------------------
