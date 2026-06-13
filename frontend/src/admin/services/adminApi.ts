@@ -66,13 +66,31 @@ async function bustingAfter<T>(mutation: Promise<T>): Promise<T> {
 }
 
 export const adminApi = {
-  login: (username: string, password: string) =>
+  login: (username: string, password: string, remember = false) =>
     adminClient
-      .post<AuthResponse>('/auth/login', { username, password })
+      .post<AuthResponse>('/auth/login', { username, password, remember })
       .then((r) => r.data),
 
   getMe: () =>
     adminClient.get<UserInfo>('/auth/me').then((r) => r.data),
+
+  // Account recovery. All three return a generic { status: "ok" } regardless of
+  // whether an account matched (the backend is anti-enumeration), so the UI
+  // shows the same "check your inbox" success either way.
+  forgotPassword: (identifier: string) =>
+    adminClient
+      .post<{ status: string }>('/auth/forgot-password', { identifier })
+      .then((r) => r.data),
+
+  forgotUsername: (email: string) =>
+    adminClient
+      .post<{ status: string }>('/auth/forgot-username', { email })
+      .then((r) => r.data),
+
+  resetPassword: (token: string, newPassword: string) =>
+    adminClient
+      .post<{ status: string }>('/auth/reset-password', { token, new_password: newPassword })
+      .then((r) => r.data),
 
   getStats: () =>
     adminClient.get<DashboardStats>('/dashboard/stats').then((r) => r.data),
