@@ -22,6 +22,7 @@ const NotFoundPage = lazy(() => import("@public/pages/not-found"));
 // admin/Reports; with these routes lazy it won't ship to public-page
 // visitors. See vite.config.ts manualChunks for extra chunk hints.
 const LoginPage = lazy(() => import("@admin/pages/login"));
+const ResetPasswordPage = lazy(() => import("@admin/pages/reset-password"));
 const DashboardPage = lazy(() => import("@admin/pages/dashboard"));
 const SuppliersPage = lazy(() => import("@admin/pages/suppliers/list"));
 const SupplierDetailPage = lazy(
@@ -108,6 +109,7 @@ function App() {
         <Suspense fallback={<RouteFallback />}>
           <Routes>
             <Route path="/admin/login" element={<LoginPage />} />
+            <Route path="/admin/reset-password" element={<ResetPasswordPage />} />
             <Route
               path="/admin/*"
               element={

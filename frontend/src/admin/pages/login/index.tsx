@@ -1,22 +1,23 @@
 import { useState } from 'react';
-import type { FormEvent } from 'react';
-import { Navigate, Link } from 'react-router-dom';
+import { Navigate } from 'react-router-dom';
 import { useAuth } from '@admin/contexts/AuthContext';
-import Icon from '@shared/components/Icon';
-import styles from './LoginPage.module.scss';
+import AuthShell from './components/AuthShell';
+import SignIn from './screens/SignIn';
+import ForgotPassword from './screens/ForgotPassword';
+import ForgotUsername from './screens/ForgotUsername';
+import type { Screen } from './screens/types';
 
 export default function LoginPage() {
-  const { login, isAuthenticated, loading } = useAuth();
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [submitting, setSubmitting] = useState(false);
+  const { isAuthenticated, loading } = useAuth();
+  const [screen, setScreen] = useState<Screen>('signin');
 
   if (loading) {
+    // Keep the branded shell up while the token check runs — no flash of an
+    // empty card or a layout jump into the form.
     return (
-      <div className={styles.page}>
-        <div className={styles.card}>Loading...</div>
-      </div>
+      <AuthShell>
+        <div className="screen" aria-busy="true" />
+      </AuthShell>
     );
   }
 
@@ -24,67 +25,11 @@ export default function LoginPage() {
     return <Navigate to="/admin" replace />;
   }
 
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setSubmitting(true);
-    try {
-      await login(username, password);
-    } catch {
-      setError('Invalid username or password.');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
   return (
-    <div className={styles.page}>
-      <Link to="/" className={styles.backLink}>
-        <Icon name="arrow-left" />
-        <span>Back to circuits.com</span>
-      </Link>
-      <form className={styles.card} onSubmit={handleSubmit}>
-        <div className={styles.header}>
-          <span className={styles.logo}>{'\u26A1'}</span>
-          <h1 className={styles.title}>Circuits Control Center</h1>
-        </div>
-
-        {error && <div className={styles.error}>{error}</div>}
-
-        <label className={styles.label} htmlFor="login-username">
-          Username
-        </label>
-        <input
-          id="login-username"
-          className={styles.input}
-          type="text"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-          autoComplete="username"
-          required
-        />
-
-        <label className={styles.label} htmlFor="login-password">
-          Password
-        </label>
-        <input
-          id="login-password"
-          className={styles.input}
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          autoComplete="current-password"
-          required
-        />
-
-        <button
-          className={styles.submit}
-          type="submit"
-          disabled={submitting}
-        >
-          {submitting ? 'Signing in...' : 'Sign In'}
-        </button>
-      </form>
-    </div>
+    <AuthShell>
+      {screen === 'signin' && <SignIn go={setScreen} />}
+      {screen === 'forgot-password' && <ForgotPassword go={setScreen} />}
+      {screen === 'forgot-username' && <ForgotUsername go={setScreen} />}
+    </AuthShell>
   );
 }
