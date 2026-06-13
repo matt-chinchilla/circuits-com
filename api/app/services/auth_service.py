@@ -30,6 +30,19 @@ def verify_password(password: str, hashed: str) -> bool:
     return bcrypt.checkpw(password.encode(), hashed.encode())
 
 
+# Precomputed hash (same cost factor as real hashes) used to equalize /login
+# timing on the user-not-found path. Without it, a missing username short-
+# circuits before bcrypt runs (~3ms) while a real username pays the bcrypt cost
+# (~200ms) — a ~70x gap that leaks which usernames exist despite the generic 401.
+_DUMMY_PASSWORD_HASH = bcrypt.hashpw(b"timing-equalizer", bcrypt.gensalt()).decode()
+
+
+def verify_dummy_password() -> None:
+    """Burn one bcrypt verify (result discarded) so the user-not-found login
+    path costs the same as the wrong-password path. Constant-time anti-enum."""
+    bcrypt.checkpw(b"x", _DUMMY_PASSWORD_HASH.encode())
+
+
 def create_token(user_id: str, role: str, expires_hours: int = TOKEN_EXPIRY_HOURS) -> str:
     now = datetime.now(timezone.utc)
     payload = {

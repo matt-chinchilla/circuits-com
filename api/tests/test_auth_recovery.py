@@ -159,6 +159,35 @@ class TestResetTokenNotABearer:
         assert resp.status_code == 401
 
 
+class TestLoginEnumeration:
+    def test_unknown_user_still_runs_bcrypt_equalizer(self, client, seeded_db, monkeypatch):
+        # Guards the login timing oracle: the user-not-found path must still pay
+        # the bcrypt cost (via verify_dummy_password) so latency can't reveal
+        # which usernames exist.
+        calls = {"n": 0}
+        monkeypatch.setattr(
+            "app.routes.auth.verify_dummy_password", lambda: calls.__setitem__("n", calls["n"] + 1)
+        )
+        resp = client.post(
+            "/api/auth/login", json={"username": "ghost-user", "password": "whatever"}
+        )
+        assert resp.status_code == 401
+        assert calls["n"] == 1
+
+    def test_known_user_wrong_password_skips_equalizer(self, client, seeded_db, monkeypatch):
+        # The found-user path already pays bcrypt via verify_password, so it must
+        # NOT also call the equalizer (that would itself create a timing gap).
+        calls = {"n": 0}
+        monkeypatch.setattr(
+            "app.routes.auth.verify_dummy_password", lambda: calls.__setitem__("n", calls["n"] + 1)
+        )
+        resp = client.post(
+            "/api/auth/login", json={"username": "admin", "password": "wrongpass"}
+        )
+        assert resp.status_code == 401
+        assert calls["n"] == 0
+
+
 class TestForgotUsername:
     def test_known_email_returns_generic_ok(self, client, db, seeded_db):
         seeded_db["admin_user"].email = "admin@example.com"

@@ -18,6 +18,7 @@ interface FieldProps {
   onReveal?: () => void;
   revealed?: boolean;
   inputMode?: HTMLAttributes<HTMLInputElement>['inputMode'];
+  autoComplete?: string;
   right?: ReactNode;
 }
 
@@ -35,6 +36,7 @@ export default function Field({
   onReveal,
   revealed,
   inputMode,
+  autoComplete = 'off',
   right,
 }: FieldProps) {
   return (
@@ -56,7 +58,7 @@ export default function Field({
           placeholder={placeholder}
           inputMode={inputMode}
           autoFocus={autoFocus}
-          autoComplete="off"
+          autoComplete={autoComplete}
           onChange={(e) => onChange(e.target.value)}
         />
         {reveal && (

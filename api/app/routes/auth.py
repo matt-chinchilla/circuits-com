@@ -19,6 +19,7 @@ from app.services.auth_service import (
     get_current_user,
     hash_password,
     reset_token_matches_hash,
+    verify_dummy_password,
     verify_password,
 )
 
@@ -64,7 +65,15 @@ class ForgotUsernameRequest(BaseModel):
 @router.post("/login", response_model=LoginResponse)
 def login(body: LoginRequest, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.username == body.username).first()
-    if not user or not verify_password(body.password, user.password_hash):
+    if user is None:
+        # Equalize timing with the wrong-password path so a missing username
+        # can't be detected by response latency (username enumeration).
+        verify_dummy_password()
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid credentials",
+        )
+    if not verify_password(body.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid credentials",

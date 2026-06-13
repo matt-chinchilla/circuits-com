@@ -85,9 +85,18 @@ export default function ResetPasswordPage() {
       setDone(true);
     } catch (err) {
       setBusy(false);
-      const detail = axios.isAxiosError(err)
-        ? (err.response?.data as { detail?: string } | undefined)?.detail
+      if (axios.isAxiosError(err) && !err.response) {
+        // No response → server unreachable, NOT a dead link. The token is still
+        // valid; tell the user to retry rather than discard it.
+        setBanner('Couldn’t reach the server. Check your connection and try again.');
+        return;
+      }
+      // Only a string detail (the 400 messages) is safe to render; a 422 detail
+      // is an array of error objects and would crash as a React child.
+      const raw = axios.isAxiosError(err)
+        ? (err.response?.data as { detail?: unknown } | undefined)?.detail
         : undefined;
+      const detail = typeof raw === 'string' ? raw : undefined;
       setBanner(detail || 'This reset link is no longer valid. Please request a new one.');
     }
   };
@@ -122,6 +131,7 @@ export default function ResetPasswordPage() {
             onChange={setPw}
             placeholder={PWD_DOTS}
             type={show ? 'text' : 'password'}
+            autoComplete="new-password"
             reveal
             revealed={show}
             onReveal={() => setShow((s) => !s)}
@@ -136,6 +146,7 @@ export default function ResetPasswordPage() {
             onChange={setConfirm}
             placeholder={PWD_DOTS}
             type={show ? 'text' : 'password'}
+            autoComplete="new-password"
             error={errs.confirm}
           />
           <button className="btn" type="submit" disabled={busy}>

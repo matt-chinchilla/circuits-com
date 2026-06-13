@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import axios from 'axios';
 import { useAuth } from '@admin/contexts/AuthContext';
 import Field from '../components/Field';
 import { I, Svg } from '../components/icons';
@@ -29,9 +30,15 @@ export default function SignIn({ go }: { go: (s: Screen) => void }) {
       // On success AuthContext flips isAuthenticated → LoginPage redirects to
       // /admin, unmounting this screen (no need to reset busy).
       await login(username.trim(), password, remember);
-    } catch {
+    } catch (err) {
       setBusy(false);
-      setBanner('Incorrect username or password. Please try again.');
+      // A 401 means bad credentials; no response at all means the server is
+      // unreachable — don't tell the user their password is wrong in that case.
+      if (axios.isAxiosError(err) && !err.response) {
+        setBanner('Couldn’t reach the server. Check your connection and try again.');
+      } else {
+        setBanner('Incorrect username or password. Please try again.');
+      }
     }
   };
 
@@ -60,6 +67,7 @@ export default function SignIn({ go }: { go: (s: Screen) => void }) {
           value={username}
           onChange={setU}
           placeholder="demo"
+          autoComplete="username"
           autoFocus
           error={errs.username}
         />
@@ -71,6 +79,7 @@ export default function SignIn({ go }: { go: (s: Screen) => void }) {
           onChange={setP}
           placeholder={PWD_DOTS}
           type={show ? 'text' : 'password'}
+          autoComplete="current-password"
           reveal
           revealed={show}
           onReveal={() => setShow((s) => !s)}
