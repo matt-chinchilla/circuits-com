@@ -26,6 +26,12 @@ services:
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_FROM: ${SMTP_FROM:-no-reply@circuits.com}
       NOTIFY_RECIPIENTS: ${NOTIFY_RECIPIENTS:-no-reply@circuits.com}
+      # Admin JWT signing secret — MUST come from /opt/circuits-com/.env on prod.
+      # Fail-fast (`:?`): never fall back to the base compose's public dev default
+      # ("change-me-in-production"), which would make admin tokens forgeable by
+      # anyone who reads the repo. Generate a strong value with:
+      #   python -c "import secrets; print(secrets.token_urlsafe(48))"
+      ADMIN_SECRET_KEY: ${ADMIN_SECRET_KEY:?ADMIN_SECRET_KEY must be set in /opt/circuits-com/.env}
 
   frontend:
     build:
