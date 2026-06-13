@@ -344,9 +344,14 @@
   object-fit: contain;
 }
 
-.chipGlyph {
-  font-size: 2.1rem;
+// Lettermark fallback when a sponsor has no logo (or its logo URL fails to
+// load) — initials centred on the gold pad, matching the Platinum/Silver boards.
+.logoMark {
+  font-family: $font-heading;
+  font-size: 1.9rem;
+  font-weight: 700;
   line-height: 1;
+  letter-spacing: 0.02em;
   color: var(--accent);
 }
 

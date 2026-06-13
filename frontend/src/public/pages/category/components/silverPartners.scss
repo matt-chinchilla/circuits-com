@@ -382,3 +382,59 @@
   background: color-mix(in srgb, var(--gold) 14%, transparent);
   border-color: var(--gold);
 }
+
+/* ── Mobile reflow (≤768px) ───────────────────────────────────────────────
+   The desktop 5-column grid (92px 1.15fr .8fr 1.25fr 1.3fr) crushes Company /
+   Phone / Email down to a few pixels each on a phone (each cell is
+   white-space:nowrap + ellipsis, so they truncate to nothing). Reflow every chip
+   into a card: a narrow left rail (U-refdes + logo pad) beside the
+   company/contact/phone/email lines stacked in a single column. The pill header
+   row is just column labels for the grid — meaningless once the columns stack —
+   so it's hidden. */
+@media (max-width: 768px) {
+  .svp-headrow {
+    display: none;
+  }
+  .svp-chip {
+    grid-template-columns: 46px 1fr;
+    align-items: start;
+    row-gap: 4px;
+    padding: 14px 16px;
+  }
+  /* Rail: U-refdes stacked above the logo pad (the row layout won't fit 46px). */
+  .svp-idcol {
+    grid-column: 1;
+    flex-direction: column;
+    gap: 6px;
+    padding-left: 0;
+  }
+  /* Every data column drops into the content column; grid auto-placement stacks
+     them in rows 1–4 beside the rail. */
+  .svp-col {
+    grid-column: 2;
+  }
+  /* An absent value (e.g. no phone) renders an EMPTY wrapper div — collapse it so
+     phone-less / email-less chips don't leave a blank stacked row. */
+  .svp-col:empty {
+    display: none;
+  }
+  /* Open "Advertise here" slot: spanned cols 2/-1 on desktop → col 2 here, and
+     stack the CTA under the pitch so the sub-text reads in full instead of being
+     truncated to "Feature your compan…" beside the pill. */
+  .svp-slot-body {
+    grid-column: 2;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .svp-slot-sub {
+    white-space: normal;
+  }
+  /* The copper bus + per-row via are positioned for the wide desktop id column
+     and misalign under the narrow rail. They're decorative (aria-hidden) — drop
+     them on mobile; the live-row background tint stays as tap feedback. */
+  .svp-bus,
+  .svp-via {
+    display: none;
+  }
+}

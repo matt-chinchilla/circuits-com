@@ -2,6 +2,8 @@ import { useRef, useEffect, useState, type ReactNode } from 'react';
 import { motion } from 'framer-motion';
 import type { Sponsor } from '@public/types/sponsor';
 import { prependScheme } from '@shared/utils/url';
+import { lettermark } from '@shared/utils/lettermark';
+import { formatPhone } from '@shared/utils/phone';
 import styles from './SponsorBlock.module.scss';
 
 interface SponsorBlockProps {
@@ -439,6 +441,25 @@ function PcbCard({
   );
 }
 
+/**
+ * Sponsor logo on the gold pad. A configured logo URL that 404s would otherwise
+ * render the browser's broken-image glyph; on error — or when no URL is set —
+ * fall back to the company lettermark, matching the Platinum and Silver boards.
+ */
+function SbLogo({ src, name }: { src: string | null; name: string }) {
+  const [broken, setBroken] = useState(!src);
+  if (broken || !src) {
+    return (
+      <span className={styles.logoMark} aria-hidden="true">
+        {lettermark(name)}
+      </span>
+    );
+  }
+  return (
+    <img src={src} alt={`${name} logo`} className={styles.logo} onError={() => setBroken(true)} />
+  );
+}
+
 export default function SponsorBlock({ sponsor }: SponsorBlockProps) {
   if (!sponsor) {
     return (
@@ -470,11 +491,7 @@ export default function SponsorBlock({ sponsor }: SponsorBlockProps) {
       <span className={styles.kicker}>&#9670; FEATURED PARTNER</span>
 
       <div className={styles.pad}>
-        {sponsor.image_url ? (
-          <img src={sponsor.image_url} alt={`${sponsor.supplier_name} logo`} className={styles.logo} />
-        ) : (
-          <span className={styles.chipGlyph} aria-hidden="true">&#9638;</span>
-        )}
+        <SbLogo src={sponsor.image_url} name={sponsor.supplier_name} />
       </div>
 
       <h3 className={styles.name}>{sponsor.supplier_name}</h3>
@@ -489,7 +506,7 @@ export default function SponsorBlock({ sponsor }: SponsorBlockProps) {
         )}
         {sponsor.phone && (
           <a href={`tel:${sponsor.phone}`} className={styles.phone}>
-            {sponsor.phone}
+            {formatPhone(sponsor.phone)}
           </a>
         )}
       </div>

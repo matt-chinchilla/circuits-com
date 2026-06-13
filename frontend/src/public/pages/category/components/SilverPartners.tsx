@@ -134,25 +134,29 @@ const SvChip = ({
       <span className="svp-rep">{s.contact || 'Sales team'}</span>
       {s.role && <span className="svp-sub">{s.role}</span>}
     </div>
+    {/* Ternary → null (not `&&`): an absent value via `&&` yields '' which React
+        can render as an empty text node, defeating the `.svp-col:empty` mobile
+        collapse (silverPartners.scss). `null` renders nothing, so the column is
+        reliably childless and the blank stacked row collapses on a phone. */}
     <div className="svp-col">
-      {s.phone && (
+      {s.phone ? (
         <span className="svp-foot">
           <a className="svp-link mono" href={csTelHref(s.phone)} onClick={(e) => e.stopPropagation()}>
             {formatPhone(s.phone)}
           </a>
           <CsCopy text={formatPhone(s.phone)} />
         </span>
-      )}
+      ) : null}
     </div>
     <div className="svp-col">
-      {s.email && (
+      {s.email ? (
         <span className="svp-foot">
           <a className="svp-link mono" href={'mailto:' + s.email} onClick={(e) => e.stopPropagation()}>
             {s.email}
           </a>
           <CsCopy text={s.email} />
         </span>
-      )}
+      ) : null}
     </div>
   </div>
 );

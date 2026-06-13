@@ -187,6 +187,17 @@
   }
 }
 
+// Mobile: inactive chips wrap past the fixed 420px hero backdrop onto the light
+// page surface, where the white-on-transparent text is invisible. Fill them with
+// a dark pill so the text stays legible on BOTH the dark hero and the surface.
+.chip:not(.chipActive) {
+  @media (max-width: $bp-mobile) {
+    background: rgba($executive-blue, 0.92);
+    border-color: rgba($nav-blue, 0.5);
+    color: #fff;
+  }
+}
+
 .chipActive {
   background: rgba(255, 255, 255, 0.95);
   color: $executive-blue;
@@ -278,6 +289,12 @@
   }
 
   @media (max-width: 900px) {
+    // In the now-column flex row, the base `flex: 1 1 0` (flex-basis 0) would
+    // collapse this item to height 0 — the Silver board (switched to in-flow
+    // `position: relative` just below) then overflows its zero-height parent and
+    // paints OVER the Gold card in the sibling .tierRowSide. Size to content so
+    // the two boards stack cleanly. (.tierRowSide already does the same.)
+    flex: 0 0 auto;
     min-height: 0;
 
     > :global(.svp) {
@@ -285,9 +302,20 @@
       inset: auto;
     }
 
-    // Cap the scroll area on mobile so the directory doesn't run on forever.
+    // Cap the scroll area on tablets so the directory doesn't run on forever.
     :global(.svp-scroll) {
       max-height: 340px;
+    }
+  }
+
+  // Phones: drop the inner scroll entirely so the directory flows at natural
+  // height and the PAGE scrolls — a nested 340px scroll region inside the card
+  // reads as unintuitive on a small screen. Pairs with the stacked-chip reflow
+  // in silverPartners.scss.
+  @media (max-width: 768px) {
+    :global(.svp-scroll) {
+      max-height: none;
+      overflow: visible;
     }
   }
 }

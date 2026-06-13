@@ -61,3 +61,42 @@
   font-size: 0.9rem;
   line-height: 1;
 }
+
+// Mobile: the chips are white-on-transparent, styled for the dark hero backdrop
+// — but that backdrop is a fixed 420px tall. Long subcategory names wrap each
+// chip onto its own row, so the stack overflows the backdrop and lower chips
+// land on the light page surface, where the white text is invisible. Two fixes:
+// (1) lay the chips out 2-up (matching the parent page's chipBar grid) to halve
+// the stack height; (2) fill inactive chips with a dark pill so they stay
+// legible on BOTH the dark hero and the light surface below it.
+@media (max-width: $bp-mobile) {
+  .chips {
+    // This board is the lone child of the parent's .chipBar, which is itself a
+    // 2-col grid on mobile — so span both columns to take the full width (else
+    // it's confined to one ~half-width cell and the chips below get crushed).
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .chip {
+    justify-content: center;
+    text-align: center;
+    font-size: 0.78rem;
+    padding: 8px 10px;
+    // Let long subcategory names wrap instead of clipping under `overflow:hidden`
+    // (the inline-flex .label below otherwise lays the name out on one line).
+    white-space: normal;
+    line-height: 1.3;
+  }
+  .label {
+    flex-wrap: wrap;
+    justify-content: center;
+    min-width: 0;
+  }
+  .chip:not(.active) {
+    background: rgba($executive-blue, 0.92);
+    border-color: rgba($nav-blue, 0.5);
+    color: #fff;
+  }
+}

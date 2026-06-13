@@ -46,6 +46,7 @@ yarn-error.log*
 # Claude Code local config
 .claude.local.md
 .claude/settings.local.json
+.claude/*.local.md
 .superpowers/
 .remember/
 .firecrawl/
