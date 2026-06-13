@@ -1,7 +1,7 @@
 import uuid as uuid_mod
 
 import jwt
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
@@ -91,7 +91,6 @@ def logout():
 def forgot_password(
     body: ForgotPasswordRequest,
     background_tasks: BackgroundTasks,
-    request: Request,
     db: Session = Depends(get_db),
 ):
     """Email a secure reset link if the identifier matches an account with an
@@ -111,7 +110,11 @@ def forgot_password(
         )
         if user and user.email:
             token = create_reset_token(str(user.id), user.password_hash)
-            base = (settings.APP_BASE_URL or str(request.base_url)).rstrip("/")
+            # The link origin is the trusted, configured APP_BASE_URL — NEVER the
+            # request Host header (which ProxyHeadersMiddleware trusts blindly).
+            # Building it from the request would let an attacker poison the reset
+            # link emailed to a victim. (security review 2026-06-13)
+            base = settings.APP_BASE_URL.rstrip("/")
             reset_url = f"{base}/admin/reset-password?token={token}"
             background_tasks.add_task(
                 email_service.send_password_reset, user.email, user.username, reset_url

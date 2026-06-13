@@ -11,11 +11,13 @@ class Settings(BaseSettings):
     ADMIN_USERNAME: str = "admin"
     ADMIN_PASSWORD: str = "admin"
     ADMIN_SECRET_KEY: str = "change-me-in-production"
-    # Public origin used to build absolute links in recovery emails (e.g. the
-    # password-reset link). When None, the auth routes fall back to the incoming
-    # request's base_url (ProxyHeadersMiddleware surfaces the real host behind
-    # nginx). Set explicitly in prod .env if the derived host is ever wrong.
-    APP_BASE_URL: str | None = None
+    # Trusted canonical origin for absolute links in recovery emails (the
+    # password-reset link). MUST be a fixed, trusted value — NEVER derived from
+    # the incoming request's Host/X-Forwarded-Host (ProxyHeadersMiddleware trusts
+    # all hosts), or an attacker could poison the reset link sent to a victim
+    # (host-header injection / password-reset poisoning). Override per-host in
+    # the prod .env only with another trusted domain.
+    APP_BASE_URL: str = "https://circuits.com"
 
     # SMTP - when SMTP_HOST is unset, services/email.py runs in demo mode
     # (logs the email payload to stderr instead of sending). Lets local dev

@@ -68,6 +68,31 @@ class TestForgotPassword:
         resp = client.post("/api/auth/forgot-password", json={"identifier": "   "})
         assert resp.status_code == 200
 
+    def test_reset_link_ignores_spoofed_host_header(self, client, db, seeded_db, monkeypatch):
+        # Password-reset poisoning guard: the emailed link must use the trusted
+        # APP_BASE_URL, never the attacker-controllable Host / X-Forwarded-Host.
+        seeded_db["admin_user"].email = "admin@example.com"
+        db.commit()
+        captured = {}
+
+        async def _capture(to_email, username, reset_url):
+            captured["url"] = reset_url
+
+        monkeypatch.setattr(
+            "app.routes.auth.email_service.send_password_reset", _capture
+        )
+        resp = client.post(
+            "/api/auth/forgot-password",
+            json={"identifier": "admin"},
+            headers={"Host": "evil.example.com", "X-Forwarded-Host": "evil.example.com"},
+        )
+        assert resp.status_code == 200
+        # TestClient runs the BackgroundTask before returning → url is captured.
+        assert "evil.example.com" not in captured["url"]
+        assert captured["url"].startswith(
+            settings.APP_BASE_URL.rstrip("/") + "/admin/reset-password?token="
+        )
+
 
 class TestResetPassword:
     def _reset_token(self, user):
