@@ -13,6 +13,10 @@ class User(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     username = Column(String(100), unique=True, nullable=False)
+    # Recovery address for forgot-password / forgot-username. Nullable: legacy
+    # admin rows and the demo user may omit it. Indexed for the case-insensitive
+    # lookup in the recovery routes. (alembic 015)
+    email = Column(String(255), nullable=True, index=True)
     password_hash = Column(String(200), nullable=False)
     role = Column(
         Enum("admin", "company", name="user_role", create_constraint=True),
