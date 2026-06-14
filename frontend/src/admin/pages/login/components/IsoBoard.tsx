@@ -8,26 +8,33 @@
 // so the literal class strings below resolve scoped.
 import type { CSSProperties, ReactNode } from 'react';
 
-const ELEV = 50; // lead height — how high the chip body floats
-const BX = 165;
-const BX2 = 295; // chip body left / right edges
-const BY = 102;
-const BY2 = 218; // chip body back / front edges
-const LEAD_OUT = 8; // how far each lead foot sits outside the body
-const FL = BX - LEAD_OUT;
-const FR = BX2 + LEAD_OUT; // left / right foot columns
-const FT = BY - LEAD_OUT;
-const FB = BY2 + LEAD_OUT; // top / bottom foot rows
+import IsoBoardSvg from './IsoBoardSvg';
+import {
+  BOARD_D,
+  BOARD_H,
+  BOARD_W,
+  BX,
+  BX2,
+  BY,
+  BY2,
+  CHIP_H,
+  CLIMB_DELAYS,
+  ELEV,
+  FEET,
+  FINGERS,
+  FLOWS,
+  NETS,
+  PINS,
+  type Pt,
+  TW,
+} from './isoGeometry';
 
-type Pt = [number, number];
+// The board's geometry (coords, pins, nets, flows) lives in isoGeometry.ts so the
+// desktop CSS-3D board (here) and the mobile vector board (IsoBoardSvg) share ONE
+// source of truth and can never drift apart.
 
 const lpath = (x1: number, y1: number, x2: number, y2: number) =>
   `M${x1} ${y1} L${x2} ${y1} L${x2} ${y2}`;
-
-// Flat-trace thickness (px). The horizontal and vertical segments BOTH use it,
-// so they always render the same thickness; 4 (vs the old 3) gives the flat
-// traces the visual weight of the gold Z-risers, esp. at the 0.58 mobile scale.
-const TW = 4;
 
 // ── Cuboid: top + four side faces ──────────────────────────────────────
 function Cube({
@@ -138,78 +145,22 @@ function SidePin({ foot, pin }: { foot: Pt; pin: Pt }) {
   return <div className="side-pin" style={{ left, top: fy - 2.25, width: w, height: 4.5 }} />;
 }
 
-// ── Body-edge attach points (where each lead meets the chip) ────────────
-const P_TOP: Pt[] = [186, 208, 230, 252, 274].map((x) => [x, BY]);
-const P_BOT: Pt[] = [186, 208, 230, 252, 274].map((x) => [x, BY2]);
-const P_LFT: Pt[] = [126, 146, 166, 186, 206].map((y) => [BX, y]);
-const P_RGT: Pt[] = [126, 146, 166, 186, 206].map((y) => [BX2, y]);
-const PINS: Pt[] = [...P_TOP, ...P_BOT, ...P_LFT, ...P_RGT];
-
-// foot point (on board, just outside the body) for an attach point
-const footOf = ([x, y]: Pt): Pt => {
-  let fx = x;
-  let fy = y;
-  if (x === BX) fx = FL;
-  else if (x === BX2) fx = FR;
-  if (y === BY) fy = FT;
-  else if (y === BY2) fy = FB;
-  return [fx, fy];
-};
-const FEET: Pt[] = PINS.map(footOf);
-
-// gold edge-connector fingers — centred under the bottom-edge feet
-const FINGERS = [186, 208, 230, 252, 274, 300, 322];
-
-// flat nets across the board — every net STARTS at a lead foot (outside body)
-const NETS: [number, number, number, number, string][] = [
-  [FR, 126, 348, 126, 'sig'],
-  [FR, 146, 392, 168, 'sig'],
-  [FR, 166, 388, 166, 'sig'],
-  [FR, 186, 322, 308, 'sig'],
-  [FR, 206, 300, 308, 'sig'],
-  [FL, 126, 110, 80, 'sig'],
-  [FL, 146, 110, 104, 'sig'],
-  [FL, 166, 60, 166, 'sig'],
-  [FL, 186, 92, 232, 'sig'],
-  [FL, 206, 66, 236, 'sig'],
-  [186, FT, 186, 44, 'sig'],
-  [208, FT, 150, 48, 'sig'],
-  [230, FT, 230, 44, 'au'],
-  [252, FT, 300, 48, 'sig'],
-  [186, FB, 186, 308, 'sig'],
-  [208, FB, 208, 308, 'sig'],
-  [230, FB, 230, 308, 'sig'],
-  [252, FB, 252, 308, 'sig'],
-  [274, FB, 274, 308, 'sig'],
-];
-
-const FLOWS: [number, number, number, number, number, number][] = [
-  [FR, 146, 392, 168, 2.6, 0],
-  [FL, 126, 110, 80, 3.1, 0.5],
-  [FL, 186, 92, 232, 2.9, 1.1],
-  [230, FB, 230, 308, 3.4, 0.3],
-  [274, FB, 274, 308, 2.7, 0.8],
-  [FR, 206, 300, 308, 3.0, 1.4],
-];
-
-// climb the clearly-visible front + right riser columns
-const CLIMB_DELAYS = [0, 0.9, 1.3, 0.4, 1.0, 1.6, 0.6, 1.2, 0.3, 1.5];
-
 export default function IsoBoard() {
   return (
     <div className="iso-stage" aria-hidden="true">
       <div className="iso-glow" />
-      {/* Mobile (<=900px) shows this flat snapshot of the board instead of the
-          live CSS-3D scene below: at the iPhone's DPR 3 the live ~210-layer
-          preserve-3d board re-rasterizes on pinch-zoom and OOM-crashes iOS Safari
-          (and the per-frame recomposite flickered). One <img> layer can't do
-          either. Hidden on desktop via CSS; the live board renders there. */}
-      <img className="iso-flat" src="/iso-board-mobile.webp" alt="" />
+      {/* Mobile (<=900px) renders the board as a single vector <svg> (IsoBoardSvg)
+          instead of this live CSS-3D scene: at the iPhone's DPR 3 the live
+          ~210-layer preserve-3d board re-rasterizes on pinch-zoom and OOM-crashes
+          iOS Safari (and the per-frame recomposite flickered). One SVG element does
+          neither, stays crisp at any zoom, and keeps the full animation. Hidden on
+          desktop, which renders the live board below. */}
+      <IsoBoardSvg />
       <div className="iso-scene">
         <div className="iso-shadow" />
         <div className="iso-lift">
           {/* PCB slab */}
-          <Cube x={0} y={0} w={460} d={320} h={16} cls="c-board" />
+          <Cube x={0} y={0} w={BOARD_W} d={BOARD_D} h={BOARD_H} cls="c-board" />
 
           {/* surface plane — flat traces, components, lead feet, chip unit */}
           <div className="surface">
@@ -262,7 +213,7 @@ export default function IsoBoard() {
                   y={BY}
                   w={BX2 - BX}
                   d={BY2 - BY}
-                  h={22}
+                  h={CHIP_H}
                   cls="c-chip"
                   top={
                     <div className="chip-face">

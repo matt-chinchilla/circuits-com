@@ -1,9 +1,12 @@
 """Regression guard: the login IsoBoard must stay VISIBLE on mobile.
 
-2026-06-13 change: the v13 design hid the 3D IsoBoard on phones
-(`.iso-stage { display: none }` at <=900px). Per user request it now surfaces
-above the sign-in form on mobile, scaled down to fit. This guards against the
-board being hidden again and ensures a mobile-specific scale override exists.
+History: the v13 design hid the 3D board on phones; 2026-06-13 it was surfaced
+above the sign-in form, scaled down. 2026-06-14: the live ~210-layer CSS-3D board
+OOM-crashed iOS Safari on pinch-zoom at DPR 3 (and flickered once animating), so on
+mobile it is now rendered as a single-element vector board (`.iso-svg`, IsoBoardSvg)
+in place of the live scene — one SVG layer that keeps the full animation without the
+crash or flicker. This guards that the board stays VISIBLE on mobile (the band
+container isn't hidden and the SVG is shown) rather than disappearing entirely.
 """
 
 import re
@@ -15,24 +18,25 @@ MODULE = (
 )
 
 
-def test_isoboard_not_hidden_anywhere():
-    src = MODULE.read_text()
-    # The only place .iso-stage was ever `display: none` was the mobile hide.
-    assert not re.search(r"\.iso-stage\s*\{[^}]*display:\s*none", src), (
-        ".iso-stage is set to display:none — the IsoBoard must stay visible on "
-        "mobile (surfaced above the sign-in form)."
+def _rule_bodies(selector):
+    return re.findall(re.escape(selector) + r"\s*\{([^}]*)\}", MODULE.read_text(), re.S)
+
+
+def test_iso_stage_not_hidden_on_mobile():
+    # .iso-stage is the band container that hosts the mobile vector board; it must
+    # never be display:none or the board vanishes on phones.
+    assert not re.search(r"\.iso-stage\s*\{[^}]*display:\s*none", MODULE.read_text()), (
+        ".iso-stage is set to display:none — the IsoBoard band must stay visible "
+        "on mobile (it now hosts the vector board)."
     )
 
 
-def test_isoboard_has_mobile_scale_override():
-    src = MODULE.read_text()
-    # base .iso-scene scale(0.84) + at least one smaller mobile scale → the board
-    # is sized down to fit phone widths rather than overflowing.
-    scales = re.findall(r"\.iso-scene\s*\{[^}]*scale\(([0-9.]+)\)", src)
-    assert len(scales) >= 2, (
-        "expected a mobile scale override on .iso-scene in addition to the base "
-        f"desktop scale (found scales: {scales})"
-    )
-    assert any(float(s) < 0.84 for s in scales), (
-        f"expected a mobile .iso-scene scale smaller than the 0.84 base (got {scales})"
+def test_isoboard_shown_as_svg_on_mobile():
+    # On mobile the live 3D scene is hidden (zoom-OOM + flicker) and the board is
+    # rendered as the .iso-svg vector element — it must be display:block (the <=900
+    # rule) so the board stays visible after the live scene is hidden.
+    bodies = _rule_bodies(".iso-svg")
+    assert any(re.search(r"display:\s*block", b) for b in bodies), (
+        ".iso-svg (the mobile vector board) must be display:block on mobile so the "
+        "board stays visible after the live 3D scene is hidden."
     )

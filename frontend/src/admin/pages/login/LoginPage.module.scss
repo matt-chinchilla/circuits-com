@@ -107,11 +107,21 @@
         transparent 74%
       );
     }
-    .iso-flat {
-      // Mobile-only flat board image (shown in the <=900 media query); hidden on
-      // desktop, which renders the live CSS-3D board below.
+    // Mobile vector board (IsoBoardSvg): ONE <svg> element instead of the CSS-3D
+    // board's ~210 GPU layers — pinch-zoom re-rasters one vector element (no OOM
+    // crash) and there's no preserve-3d subtree (no flicker). Shown only on mobile.
+    .iso-svg {
       display: none;
-      max-width: 100%;
+      width: 100%;
+      height: 100%;
+    }
+    .iso-svg-lift {
+      animation: isoSvgFloat 7s ease-in-out infinite;
+    }
+    .iso-svg-flow {
+      animation-name: isoSvgFlow;
+      animation-timing-function: linear;
+      animation-iteration-count: infinite;
     }
     .iso-scene {
       position: relative;
@@ -1160,13 +1170,8 @@
       .iso-scene {
         display: none;
       }
-      .iso-flat {
+      .iso-svg {
         display: block;
-        width: 100%;
-        height: 100%;
-        object-fit: contain;
-        // Gentle bob — one cached image gliding; no 3D scene to re-composite.
-        animation: authIsoFloatFlat 7s ease-in-out infinite;
       }
       .brand-foot {
         margin-top: 0;
@@ -1205,7 +1210,8 @@
     @media (prefers-reduced-motion: reduce) {
       .logo-node::after,
       .led,
-      .iso-flat,
+      .iso-svg-lift,
+      .iso-svg-flow,
       .iso-lift,
       .iso-shadow,
       .flow,

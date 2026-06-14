@@ -11,9 +11,10 @@ iPhone's DPR 3 — pinch-zoom re-rasterized every layer and OOM-crashed iOS Safa
 and the per-frame recomposite flickered once the animation ran; the board's fixed
 460px layout box also overflowed the viewport. Fixes guarded below: the mobile
 column is `minmax(0, 1fr)` (page-fit), and on mobile the live 3D scene is HIDDEN and
-replaced by a flat board image (`.iso-flat`, /iso-board-mobile.webp) that floats via
-the 2D `authIsoFloatFlat` bob — one layer that can neither crash on zoom nor flicker.
-Desktop keeps the full live 3D board.
+replaced by a single-element vector board (`.iso-svg`, IsoBoardSvg) — one SVG layer
+that re-rasters as one crisp vector element on zoom (no OOM) with no preserve-3d
+subtree to flicker, while keeping the full animation (float + flowing electrons).
+Desktop keeps the full live CSS-3D board.
 """
 
 import re
@@ -23,6 +24,7 @@ LOGIN = Path(__file__).resolve().parents[2] / "frontend/src/admin/pages/login"
 SCSS = LOGIN / "LoginPage.module.scss"
 ISOBOARD = LOGIN / "components/IsoBoard.tsx"
 KEYFRAMES = LOGIN / "LoginPage.keyframes.scss"
+GEOMETRY = LOGIN / "components/isoGeometry.ts"  # shared geometry/projection source
 
 
 def _rule_blocks(selector):
@@ -38,7 +40,8 @@ def _surface_translate_z():
 
 
 def _board_height():
-    m = re.search(r'h=\{(\d+)\}[^/>]*cls="c-board"', ISOBOARD.read_text())
+    # BOARD_H now lives in the shared geometry module (the .c-board Cube uses it).
+    m = re.search(r"BOARD_H\s*=\s*(\d+)", GEOMETRY.read_text())
     return int(m.group(1)) if m else None
 
 
@@ -53,16 +56,16 @@ def test_surface_not_coplanar_with_board_top():
 
 
 def test_flat_traces_share_thickness_constant():
-    # Horizontal + vertical trace segments must draw from ONE thickness constant
-    # so they can never render different thicknesses.
-    src = ISOBOARD.read_text()
-    assert re.search(r"const TW\s*=\s*\d+", src), (
-        "Trace thickness must come from a shared `const TW` so the horizontal and "
-        "vertical segments stay equal."
+    # Trace thickness comes from ONE shared constant (TW, in isoGeometry) so the
+    # horizontal + vertical segments can't differ AND the desktop + mobile boards
+    # stay in sync.
+    assert re.search(r"const TW\s*=\s*\d+", GEOMETRY.read_text()), (
+        "trace thickness must come from a shared `const TW` in isoGeometry.ts."
     )
+    src = ISOBOARD.read_text()
     assert "height: TW" in src and "width: TW" in src, (
-        "both the horizontal (height: TW) and vertical (width: TW) trace segments "
-        "must use the shared TW thickness."
+        "both the horizontal (height: TW) and vertical (width: TW) desktop trace "
+        "segments must use the shared TW thickness."
     )
 
 
@@ -119,42 +122,36 @@ def test_mobile_grid_column_capped():
     )
 
 
-def test_mobile_uses_static_board_image():
+def test_mobile_uses_vector_board():
     # At the iPhone's DPR 3 the live ~210-layer 3D board re-rasterizes on pinch-zoom
     # and OOM-crashes iOS (and the per-frame preserve-3d recomposite flickered once
-    # the animation ran). On mobile the live scene MUST be hidden and a flat image
-    # shown in its place — one layer that can neither crash on zoom nor flicker.
+    # the animation ran). On mobile the live scene MUST be hidden and the single
+    # vector board (.iso-svg) shown — one layer that can neither crash nor flicker.
     text = SCSS.read_text()
     assert re.search(r"\.iso-glow,\s*\.iso-scene\s*\{[^}]*display:\s*none", text, re.S), (
         "mobile must hide the live .iso-glow + .iso-scene (display:none) so the "
         "~210-layer 3D board is not rendered on phones (zoom-OOM + flicker)."
     )
-    flat = _rule_blocks(".iso-flat")
-    assert any("authIsoFloatFlat" in b for b in flat), (
-        "the mobile flat board image (.iso-flat) must run the authIsoFloatFlat bob."
+    svg = _rule_blocks(".iso-svg")
+    assert any(re.search(r"display:\s*block", b) for b in svg), (
+        "the mobile vector board (.iso-svg) must be display:block on mobile."
     )
 
 
-def test_mobile_board_image_asset_exists():
-    asset = LOGIN.parents[3] / "public/iso-board-mobile.webp"
-    assert asset.exists(), f"mobile board image asset missing: {asset}"
-    assert "iso-board-mobile.webp" in ISOBOARD.read_text(), (
-        "IsoBoard must render the flat board <img src=/iso-board-mobile.webp> "
-        "(shown on mobile in place of the live 3D scene)."
-    )
+def test_vector_board_component_present():
+    assert (LOGIN / "components/IsoBoardSvg.tsx").exists(), "IsoBoardSvg component is missing."
+    assert (LOGIN / "components/isoGeometry.ts").exists(), "shared isoGeometry module is missing."
+    assert "IsoBoardSvg" in ISOBOARD.read_text(), "IsoBoard must render <IsoBoardSvg /> for mobile."
+    # the dead static-image path must be gone (one mobile board, not two)
+    assert "iso-board-mobile.webp" not in ISOBOARD.read_text(), "legacy .webp image path should be removed."
 
 
-def test_flat_float_keyframe_is_2d():
-    # authIsoFloatFlat must animate translateY (a flat 2D move on the perspective
-    # container), NEVER translateZ (that on a preserve-3d node is the very thing
-    # that re-composites the scene every frame).
-    # `^\}` (re.M) matches the keyframe's column-0 closing brace regardless of a
-    # blank line before it; the indented step braces (`  }`) don't match.
-    m = re.search(r"@keyframes authIsoFloatFlat\s*\{(.*?)^\}", KEYFRAMES.read_text(), re.S | re.M)
-    assert m, "authIsoFloatFlat keyframe must exist in LoginPage.keyframes.scss"
+def test_svg_float_keyframe_is_2d():
+    # The SVG board floats with a 2-D translateY (cheap, one layer) — never a
+    # translateZ, which would imply a 3-D context (the very thing being avoided).
+    # `^\}` (re.M) matches the keyframe's column-0 close regardless of blank lines.
+    m = re.search(r"@keyframes isoSvgFloat\s*\{(.*?)^\}", KEYFRAMES.read_text(), re.S | re.M)
+    assert m, "isoSvgFloat keyframe must exist in LoginPage.keyframes.scss"
     body = m.group(1)
-    assert "translateY" in body, "authIsoFloatFlat must animate translateY (flat 2D float)."
-    assert not re.search(r"translateZ\s*\(", body), (
-        "authIsoFloatFlat must NOT use translateZ() — a Z move re-composites the 3D "
-        "scene per frame (defeats the flat-layer fix)."
-    )
+    assert "translateY" in body, "isoSvgFloat must animate translateY (flat 2D float)."
+    assert not re.search(r"translateZ\s*\(", body), "isoSvgFloat must NOT use translateZ()."
