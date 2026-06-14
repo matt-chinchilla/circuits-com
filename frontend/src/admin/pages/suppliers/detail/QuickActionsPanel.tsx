@@ -13,6 +13,7 @@ import { useNavigate } from 'react-router-dom';
 import Icon from '@shared/components/Icon';
 import { setPrefill } from '@admin/services/prefillBus';
 import type { AdminSupplier, Part } from '@admin/types/admin';
+import { deriveSupplierTier, supplierTierLabel } from '../tier';
 import styles from './QuickActionsPanel.module.scss';
 
 interface Props {
@@ -20,15 +21,6 @@ interface Props {
   partRows: Part[];
   /** Called after the "Sync now" action so the parent can refresh stats. */
   onAfterSync?: (delta: number) => void;
-}
-
-type Tier = 'Platinum' | 'Gold' | 'Silver';
-
-function deriveTierLabel(parts_count: number | undefined): Tier {
-  const n = parts_count ?? 0;
-  if (n >= 100) return 'Platinum';
-  if (n >= 25) return 'Gold';
-  return 'Silver';
 }
 
 export default function QuickActionsPanel({ supplier, partRows, onAfterSync }: Props) {
@@ -57,7 +49,7 @@ export default function QuickActionsPanel({ supplier, partRows, onAfterSync }: P
     return hit.category_name ?? undefined;
   }, [smartCategoryId, partRows]);
 
-  const tierLabel = deriveTierLabel(supplier.parts_count);
+  const tierLabel = supplierTierLabel(deriveSupplierTier(supplier.parts_count));
 
   const handleAddPart = () => {
     setPrefill('part', {

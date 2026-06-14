@@ -3,60 +3,73 @@ import { useNavigate, Link } from 'react-router-dom';
 import { Plus, Search, Upload } from 'lucide-react';
 import Breadcrumbs from '@admin/components/Breadcrumbs';
 import { adminApi } from '@admin/services/adminApi';
-import type { AdminSupplier } from '@admin/types/admin';
+import type { AdminSupplier, AdminSponsor, SponsorTier } from '@admin/types/admin';
 import { lettermark } from '@shared/utils/lettermark';
+import {
+  buildSponsorshipBySupplier,
+  supplierSponsorship,
+  SPONSORSHIP_FILTERS,
+  type SupplierSponsorship,
+  type SponsorshipFilter,
+} from '../sponsorship';
 import styles from './SuppliersPage.module.scss';
 
-type Tier = 'featured' | 'platinum' | 'gold' | 'silver';
-
-const TIERS: { key: 'all' | Tier; label: string }[] = [
-  { key: 'all', label: 'All' },
-  { key: 'featured', label: 'Featured' },
-  { key: 'platinum', label: 'Platinum' },
-  { key: 'gold', label: 'Gold' },
-  { key: 'silver', label: 'Silver' },
-];
-
-const TIER_CLASS: Record<Tier, string> = {
-  featured: styles.tierFeatured,
-  platinum: styles.tierPlatinum,
-  gold: styles.tierGold,
-  silver: styles.tierSilver,
+const SPONSORSHIP_CLASS: Record<SupplierSponsorship, string> = {
+  Platinum: styles.tierPlatinum,
+  Gold: styles.tierGold,
+  Silver: styles.tierSilver,
+  None: styles.tierNone,
 };
-
-function deriveTier(supplier: AdminSupplier): Tier {
-  const n = supplier.parts_count ?? 0;
-  if (n >= 200) return 'featured';
-  if (n >= 100) return 'platinum';
-  if (n >= 25) return 'gold';
-  return 'silver';
-}
 
 export default function SuppliersPage() {
   const navigate = useNavigate();
   const [suppliers, setSuppliers] = useState<AdminSupplier[]>([]);
+  const [sponsorMap, setSponsorMap] = useState<Map<string, SponsorTier>>(new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [filter, setFilter] = useState<'all' | Tier>('all');
+  const [filter, setFilter] = useState<SponsorshipFilter>('All');
   const [query, setQuery] = useState('');
 
   useEffect(() => {
-    adminApi
-      .getSuppliers()
-      .then(setSuppliers)
-      .catch(() => setError('Failed to load suppliers.'))
-      .finally(() => setLoading(false));
+    let cancelled = false;
+    Promise.all([
+      adminApi.getSuppliers(),
+      // Sponsorship only enriches the badge; if it fails the suppliers still
+      // load (badges fall back to None) rather than blanking the whole page.
+      adminApi.getSponsors().catch((e) => {
+        console.warn('[SuppliersPage] getSponsors failed; badges default to None', e);
+        return [] as AdminSponsor[];
+      }),
+    ])
+      .then(([sups, spons]) => {
+        if (cancelled) return;
+        setSuppliers(sups);
+        setSponsorMap(buildSponsorshipBySupplier(spons));
+      })
+      .catch(() => {
+        if (!cancelled) setError('Failed to load suppliers.');
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const annotated = useMemo(
-    () => suppliers.map((s) => ({ supplier: s, tier: deriveTier(s) })),
-    [suppliers]
+    () =>
+      suppliers.map((s) => ({
+        supplier: s,
+        sponsorship: supplierSponsorship(s.id, sponsorMap),
+      })),
+    [suppliers, sponsorMap]
   );
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return annotated.filter(({ supplier, tier }) => {
-      if (filter !== 'all' && tier !== filter) return false;
+    return annotated.filter(({ supplier, sponsorship }) => {
+      if (filter !== 'All' && sponsorship !== filter) return false;
       if (!q) return true;
       const haystacks = [
         supplier.name,
@@ -76,7 +89,7 @@ export default function SuppliersPage() {
         <div className={styles.pageHeadLeft}>
           <h1 className={styles.title}>Suppliers</h1>
           <p className={styles.subtitle}>
-            {suppliers.length} active distributors &middot; all visible regardless of part count
+            {suppliers.length} active distributors &middot; badge shows current sponsorship
           </p>
         </div>
         <div className={styles.pageHeadActions}>
@@ -97,14 +110,14 @@ export default function SuppliersPage() {
 
       <div className={styles.panel}>
         <div className={styles.toolbar}>
-          {TIERS.map((t) => (
+          {SPONSORSHIP_FILTERS.map((t) => (
             <button
-              key={t.key}
+              key={t}
               type="button"
-              className={`${styles.filterChip} ${filter === t.key ? styles.filterChipActive : ''}`}
-              onClick={() => setFilter(t.key)}
+              className={`${styles.filterChip} ${filter === t ? styles.filterChipActive : ''}`}
+              onClick={() => setFilter(t)}
             >
-              {t.label}
+              {t}
             </button>
           ))}
           <div className={styles.toolbarSpacer} />
@@ -130,7 +143,7 @@ export default function SuppliersPage() {
           )}
           {!loading &&
             !error &&
-            filtered.map(({ supplier, tier }) => (
+            filtered.map(({ supplier, sponsorship }) => (
               <article
                 key={supplier.id}
                 data-tour="supplier-card"
@@ -150,8 +163,8 @@ export default function SuppliersPage() {
                   <div className={styles.supHeadBody}>
                     <h3 className={styles.supName}>{supplier.name}</h3>
                     <div className={styles.supTierRow}>
-                      <span className={`${styles.supTier} ${TIER_CLASS[tier]}`}>
-                        {tier.charAt(0).toUpperCase() + tier.slice(1)}
+                      <span className={`${styles.supTier} ${SPONSORSHIP_CLASS[sponsorship]}`}>
+                        {sponsorship}
                       </span>
                     </div>
                   </div>

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Edit, ExternalLink, Upload, Trash2 } from 'lucide-react';
 import Breadcrumbs from '@admin/components/Breadcrumbs';
@@ -6,24 +6,19 @@ import { adminApi } from '@admin/services/adminApi';
 import { useDemo } from '@admin/contexts/DemoContext';
 import type { AdminSupplier, Part, PaginatedResponse } from '@admin/types/admin';
 import QuickActionsPanel from './QuickActionsPanel';
+import {
+  buildSponsorshipBySupplier,
+  supplierSponsorship,
+  type SupplierSponsorship,
+} from '../sponsorship';
 import styles from './SupplierDetailPage.module.scss';
 
-type Tier = 'featured' | 'platinum' | 'gold' | 'silver';
-
-const TIER_CLASS: Record<Tier, string> = {
-  featured: styles.tierFeatured,
-  platinum: styles.tierPlatinum,
-  gold: styles.tierGold,
-  silver: styles.tierSilver,
+const SPONSORSHIP_CLASS: Record<SupplierSponsorship, string> = {
+  Platinum: styles.tierPlatinum,
+  Gold: styles.tierGold,
+  Silver: styles.tierSilver,
+  None: styles.tierNone,
 };
-
-function deriveTier(s: AdminSupplier): Tier {
-  const n = s.parts_count ?? 0;
-  if (n >= 200) return 'featured';
-  if (n >= 100) return 'platinum';
-  if (n >= 25) return 'gold';
-  return 'silver';
-}
 
 function stripScheme(url: string): string {
   return url.replace(/^https?:\/\//i, '').replace(/\/$/, '');
@@ -65,7 +60,25 @@ export default function SupplierDetailPage() {
       .finally(() => setLoading(false));
   }, [id, page]);
 
-  const tier = useMemo(() => (supplier ? deriveTier(supplier) : null), [supplier]);
+  // Badge = this supplier's actual active sponsorship (highest tier) or 'None'.
+  // AdminSupplier has no sponsorship field, so cross-reference the sponsor rows.
+  const [sponsorship, setSponsorship] = useState<SupplierSponsorship>('None');
+  useEffect(() => {
+    if (!id) return;
+    let cancelled = false;
+    adminApi
+      .getSponsors()
+      .then((spons) => {
+        if (cancelled) return;
+        setSponsorship(supplierSponsorship(id, buildSponsorshipBySupplier(spons)));
+      })
+      .catch((e) => {
+        console.warn('[SupplierDetailPage] getSponsors failed; badge defaults to None', e);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
 
   const handleDelete = async () => {
     if (!supplier) return;
@@ -129,27 +142,25 @@ export default function SupplierDetailPage() {
             All suppliers
           </button>
           <h1 className={styles.title}>{supplier.name}</h1>
-          {tier && (
-            <div className={styles.subtitle}>
-              <span className={`${styles.supTier} ${TIER_CLASS[tier]}`}>
-                {tier.charAt(0).toUpperCase() + tier.slice(1)}
-              </span>
-              {websiteHost && (
-                <>
-                  <span>&middot;</span>
-                  <a
-                    href={externalHref(supplier.website as string)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className={styles.extLink}
-                  >
-                    {websiteHost}
-                    <ExternalLink size={11} strokeWidth={2} />
-                  </a>
-                </>
-              )}
-            </div>
-          )}
+          <div className={styles.subtitle}>
+            <span className={`${styles.supTier} ${SPONSORSHIP_CLASS[sponsorship]}`}>
+              {sponsorship}
+            </span>
+            {websiteHost && (
+              <>
+                <span>&middot;</span>
+                <a
+                  href={externalHref(supplier.website as string)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={styles.extLink}
+                >
+                  {websiteHost}
+                  <ExternalLink size={11} strokeWidth={2} />
+                </a>
+              </>
+            )}
+          </div>
         </div>
         <div className={styles.pageHeadActions}>
           <button

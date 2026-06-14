@@ -4,6 +4,7 @@ import { Plus, Search, Pencil, X } from 'lucide-react';
 import { loadSponsors } from '@admin/services/sponsorStore';
 import Icon from '@shared/components/Icon';
 import type { AdminSponsor, SponsorTier, SponsorStatus } from '@admin/types/admin';
+import { normalizeSponsorTier } from '@admin/services/sponsorTier';
 import styles from './SponsorsPage.module.scss';
 
 // Phase A6 — list page ported from 2026-04-25 Claude Design bundle
@@ -22,14 +23,17 @@ type TierFilter = 'All' | SponsorTier;
 
 const TIER_FILTERS: TierFilter[] = ['All', ...TIERS];
 
-function tierClass(tier: SponsorTier): string {
-  switch (tier) {
+function tierClass(tier: string): string {
+  // Normalize first — legacy seed rows store lowercase 'platinum'.
+  switch (normalizeSponsorTier(tier)) {
     case 'Platinum':
       return styles.tierPlatinum;
     case 'Gold':
       return styles.tierGold;
     case 'Silver':
       return styles.tierSilver;
+    default:
+      return '';
   }
 }
 
@@ -87,7 +91,7 @@ export default function SponsorsPage() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return sponsors.filter((s) => {
-      if (tierFilter !== 'All' && s.tier !== tierFilter) return false;
+      if (tierFilter !== 'All' && normalizeSponsorTier(s.tier) !== tierFilter) return false;
       if (!q) return true;
       const haystack = [
         s.supplier_name,
@@ -109,11 +113,12 @@ export default function SponsorsPage() {
       Gold: 0,
       Silver: 0,
     };
-    // Guard against legacy rows still carrying a dropped tier (e.g. pre-013
-    // 'Featured') — those land in `map[s.tier]` as undefined and would NaN the
-    // running count, so skip any tier outside the current union.
+    // Normalize casing (legacy seed stores lowercase 'platinum') and skip any
+    // tier outside the live union (e.g. a dropped pre-013 'Featured', which
+    // normalizes to null) so it can't NaN the running count.
     for (const s of sponsors) {
-      if (s.tier in map) map[s.tier]++;
+      const t = normalizeSponsorTier(s.tier);
+      if (t) map[t]++;
     }
     return map;
   }, [sponsors]);
@@ -190,7 +195,7 @@ export default function SponsorsPage() {
                     <strong>{s.supplier_name}</strong>
                   </td>
                   <td>
-                    <span className={`${styles.tierBadge} ${tierClass(s.tier)}`}>{s.tier}</span>
+                    <span className={`${styles.tierBadge} ${tierClass(s.tier)}`}>{normalizeSponsorTier(s.tier) ?? s.tier}</span>
                   </td>
                   <td>
                     {s.category_id ? (

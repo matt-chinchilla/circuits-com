@@ -379,11 +379,6 @@
   white-space: nowrap;
 }
 
-.tierFeatured {
-  background: rgba(168, 141, 46, 0.15);
-  color: #92773a;
-}
-
 .tierPlatinum {
   background: rgba(75, 85, 99, 0.12);
   color: #4b5563;
@@ -397,6 +392,13 @@
 .tierSilver {
   background: rgba(148, 163, 184, 0.18);
   color: #475569;
+}
+
+// No active sponsorship — a muted, dashed "empty slot" distinct from Silver.
+.tierNone {
+  background: transparent;
+  color: #94a3b8;
+  border: 1px dashed rgba(148, 163, 184, 0.55);
 }
 
 // ─── Parts panel ────────────────────────────────────────────────────────────
