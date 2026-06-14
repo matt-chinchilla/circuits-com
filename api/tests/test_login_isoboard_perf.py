@@ -68,14 +68,18 @@ def test_iso_shadow_static():
     assert "animation" not in m.group(1), ".iso-shadow must stay static (no per-frame work)."
 
 
-def test_iso_stage_pins_stable_layer():
-    # The iOS-only flicker fix: a stable compositing layer on the FLAT perspective
-    # container (.iso-stage) so WebKit stops re-rasterizing the clipped, animated
-    # 3D subtree each frame. Must be on .iso-stage (flat), NOT a preserve-3d node.
+def test_iso_stage_has_no_forced_layer():
+    # REVERSE of the prior (wrong) guard: will-change/translateZ(0) on .iso-stage
+    # pins a GPU layer that OOM-crashes iOS Safari at DPR 3 (renderer reload loop).
+    # The base .iso-stage must NOT force a compositing layer.
     m = re.search(r"\.iso-stage\s*\{([^}]*)\}", SCSS.read_text(), re.S)
     assert m, "no .iso-stage rule found"
     body = m.group(1)
-    assert "translateZ(0)" in body or "will-change" in body, (
-        ".iso-stage must pin a stable layer (transform: translateZ(0) / "
-        "will-change: transform) to stop the iOS per-frame re-raster flicker."
+    # Match actual DECLARATIONS (line-start), not the words in the `//` NOTE.
+    assert not re.search(r"^\s*will-change\s*:", body, re.M), (
+        ".iso-stage must NOT declare will-change — it pins a GPU layer that "
+        "OOM-crashes iOS Safari at DPR 3."
+    )
+    assert not re.search(r"^\s*transform\s*:\s*translateZ\(0\)", body, re.M), (
+        ".iso-stage must NOT declare transform: translateZ(0) — same OOM risk."
     )

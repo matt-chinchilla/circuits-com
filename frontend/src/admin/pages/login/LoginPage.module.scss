@@ -86,13 +86,11 @@
       align-items: center;
       justify-content: center;
       perspective: 1600px;
-      // Pin a STABLE compositing layer on the flat perspective container (this is
-      // NOT a preserve-3d node, so it doesn't flatten the board). Gives the whole
-      // animated 3D subtree one cached backing store instead of WebKit re-tiling
-      // the clipped scene every frame → fixes the iOS-only flicker. (Apple "Using
-      // 2D and 3D Transforms"; must NOT go on .iso-scene/.iso-lift/preserve-3d.)
-      transform: translateZ(0);
-      will-change: transform;
+      // DO NOT add will-change/translateZ(0) here. It pins a persistent GPU
+      // backing layer for the whole 3D scene; at the iPhone's DPR 3 that texture
+      // (sized ~DPR²) blows iOS Safari's per-tab GPU budget → the WebContent
+      // renderer is killed + the tab auto-reloads in a loop (mobile crash, NOT a
+      // flicker). Desktop (DPR 1-2) has the headroom, which is why it was fine.
     }
     .iso-glow {
       position: absolute;
