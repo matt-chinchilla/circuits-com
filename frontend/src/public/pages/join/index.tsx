@@ -18,8 +18,8 @@ interface JoinBenefit {
 const JOIN_BENEFITS: JoinBenefit[] = [
   {
     icon: "lightning",
-    title: "Buyer intent traffic.",
-    body: "Visitors arrive with a part number in hand.",
+    title: "Buyer-intent traffic.",
+    body: "Visitors arrive with a part number already in hand.",
   },
   {
     icon: "link",
@@ -28,20 +28,19 @@ const JOIN_BENEFITS: JoinBenefit[] = [
   },
   {
     icon: "chart-line-up",
-    title: "Monthly traffic report.",
-    body: "See impressions, clicks, top parts (Gold + Platinum).",
+    title: "Reporting that scales.",
+    body: "Base reports on Silver; traffic + audience insights on Gold and Platinum.",
   },
   {
     icon: "wrench",
-    title: "Optional API sync.",
-    body: "Push live stock + price updates from your ERP (Platinum).",
+    title: "Live stock sync.",
+    body: "Platinum pushes live stock + price from your ERP via API.",
   },
 ];
 
 interface JoinTier {
   id: "silver" | "gold" | "platinum";
   name: string;
-  price: string;
   tag: string;
   perks: string[];
   featured: boolean;
@@ -51,38 +50,36 @@ const JOIN_TIERS: JoinTier[] = [
   {
     id: "silver",
     name: "Silver",
-    price: "$0",
-    tag: "Free listing",
+    tag: "Directory",
     perks: [
-      "Standard listing in your category",
-      "Up to 25 part numbers",
-      "Email-only contact link",
+      "Listed in your subcategory's Silver Sponsors banner",
+      "Publish part listings in that subcategory",
+      "Direct buy-links to your own store",
+      "Base-level reporting dashboard",
     ],
     featured: false,
   },
   {
     id: "gold",
     name: "Gold",
-    price: "$249/mo",
     tag: "Most chosen",
     perks: [
-      "Priority placement in category",
-      "Unlimited part numbers",
-      "Phone + website + email",
-      "Monthly traffic report",
+      "Sole sponsor of your subcategory (exclusive banner)",
+      "Pinned to the top of the Silver Sponsors banner",
+      "Traffic reports + audience insights",
+      "Priority access to new features",
     ],
     featured: true,
   },
   {
     id: "platinum",
     name: "Platinum",
-    price: "$849/mo",
-    tag: "Featured partner",
+    tag: "Flagship",
     perks: [
-      "Top-of-page sponsor block",
-      "Cross-category placement",
-      "Dedicated account manager",
-      "API for live stock sync",
+      "Top-of-page sponsor block in your brand's colors",
+      "Placement across the whole category (every subcategory)",
+      "Unlimited report generation",
+      "API access for live stock + price sync",
     ],
     featured: false,
   },
@@ -300,9 +297,8 @@ export default function JoinPage() {
                       />
                       <div className={styles.tierHead}>
                         <span className={styles.tierName}>{t.name}</span>
-                        <span className={styles.tierPrice}>{t.price}</span>
+                        <span className={styles.tierTag}>{t.tag}</span>
                       </div>
-                      <span className={styles.tierTag}>{t.tag}</span>
                       <ul className={styles.tierPerks}>
                         {t.perks.map((p) => (
                           <li key={p}>{p}</li>
