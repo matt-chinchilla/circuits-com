@@ -7,6 +7,7 @@ import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import IsoBoard from './IsoBoard';
 import { I, Svg } from './icons';
+import '../LoginPage.keyframes.scss'; // global @keyframes (NOT hashed) — see file header
 import styles from '../LoginPage.module.scss';
 
 export default function AuthShell({ children }: { children: ReactNode }) {

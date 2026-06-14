@@ -1,0 +1,134 @@
+/* Admin-login @keyframes — kept in a PLAIN (non-module) global stylesheet on
+   purpose. CSS Modules hashes @keyframes names even inside a `:global { }` block
+   (authIsoFloat → _authIsoFloat_dynhf_1) while leaving the `animation:` refs in
+   LoginPage.module.scss literal, so the names stop matching and every login
+   animation silently dies. Defining them here (global → names NOT hashed) makes
+   the literal refs resolve. Names are `auth*`-prefixed to avoid colliding with
+   the app's other global keyframes. Imported as a side-effect by AuthShell. */
+
+@keyframes authIsoFloat {
+  0%,
+  100% {
+    transform: translateZ(0);
+  }
+  50% {
+    transform: translateZ(26px);
+  }
+}
+
+@keyframes authIsoShadow {
+  0%,
+  100% {
+    opacity: 0.85;
+    transform: translateZ(-2px) scale(1);
+  }
+  50% {
+    opacity: 0.55;
+    transform: translateZ(-2px) scale(1.06);
+  }
+}
+
+@keyframes authFlow {
+  from {
+    offset-distance: 0%;
+  }
+  to {
+    offset-distance: 100%;
+  }
+}
+
+@keyframes authChipShine {
+  0%,
+  100% {
+    background-position: 130% 0;
+  }
+  50% {
+    background-position: -30% 0;
+  }
+}
+
+@keyframes authLeadElectron {
+  from {
+    background-position: 0 150%, 0 0;
+  }
+  to {
+    background-position: 0 -150%, 0 0;
+  }
+}
+
+@keyframes authLedPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 12px 3px rgba(90, 236, 69, 0.65);
+  }
+  50% {
+    box-shadow: 0 0 22px 7px rgba(124, 255, 69, 1);
+  }
+}
+
+@keyframes authPing {
+  0% {
+    transform: scale(0.7);
+    opacity: 0.8;
+  }
+  70%,
+  100% {
+    transform: scale(1.7);
+    opacity: 0;
+  }
+}
+
+@keyframes authBlink {
+  0%,
+  72% {
+    opacity: 1;
+  }
+  73%,
+  100% {
+    opacity: 0.25;
+  }
+}
+
+@keyframes authScreenIn {
+  from {
+    transform: translateY(10px);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes authShake {
+  10%,
+  90% {
+    transform: translateX(-1px);
+  }
+  20%,
+  80% {
+    transform: translateX(2px);
+  }
+  30%,
+  50%,
+  70% {
+    transform: translateX(-4px);
+  }
+  40%,
+  60% {
+    transform: translateX(4px);
+  }
+}
+
+@keyframes authSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes authPop {
+  0% {
+    transform: scale(0.72);
+  }
+  100% {
+    transform: scale(1);
+  }
+}

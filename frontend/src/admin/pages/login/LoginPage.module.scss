@@ -7,8 +7,10 @@
    so each selector compiles to `.authRoot_HASH .auth` etc. — the JSX keeps the
    prototype's literal class strings (zero pixel drift, incl. IsoBoard's dynamic
    `tr tr-${c}`) while staying fully scoped, with none of the design's global
-   `*` / `body` / `form` resets leaking into the rest of the app. @keyframes are
-   prefixed `auth*` to avoid colliding with the app's other global animations.
+   `*` / `body` / `form` resets leaking into the rest of the app. The animations
+   live in the sibling LoginPage.keyframes.scss — a PLAIN global stylesheet, NOT
+   this module, because CSS Modules hashes @keyframes names (even inside :global)
+   while leaving the `animation:` refs literal, which would break every animation.
    ─────────────────────────────────────────────────────────────────────── */
 
 .authRoot {
@@ -103,15 +105,6 @@
       transform-style: preserve-3d;
       animation: authIsoFloat 7s ease-in-out infinite;
     }
-    @keyframes authIsoFloat {
-      0%,
-      100% {
-        transform: translateZ(0);
-      }
-      50% {
-        transform: translateZ(26px);
-      }
-    }
     .iso-shadow {
       position: absolute;
       inset: -6% -6% -6% -6%;
@@ -119,17 +112,6 @@
       filter: blur(8px);
       transform: translateZ(-2px);
       animation: authIsoShadow 7s ease-in-out infinite;
-    }
-    @keyframes authIsoShadow {
-      0%,
-      100% {
-        opacity: 0.85;
-        transform: translateZ(-2px) scale(1);
-      }
-      50% {
-        opacity: 0.55;
-        transform: translateZ(-2px) scale(1.06);
-      }
     }
 
     /* cuboid faces */
@@ -257,14 +239,6 @@
       animation-timing-function: linear;
       animation-iteration-count: infinite;
     }
-    @keyframes authFlow {
-      from {
-        offset-distance: 0%;
-      }
-      to {
-        offset-distance: 100%;
-      }
-    }
 
     /* hero chip — flush heat-spreader lid, edge-to-edge into the side walls */
     .c-chip .cf-top {
@@ -321,15 +295,6 @@
       background-size: 250% 100%;
       animation: authChipShine 4.6s ease-in-out infinite;
     }
-    @keyframes authChipShine {
-      0%,
-      100% {
-        background-position: 130% 0;
-      }
-      50% {
-        background-position: -30% 0;
-      }
-    }
 
     /* electrolytic cap */
     .c-cap .cf-top {
@@ -384,15 +349,6 @@
       border-radius: 3px;
       box-shadow: 0 0 14px 4px rgba(90, 236, 69, 0.75);
       animation: authLedPulse 1.9s ease-in-out infinite;
-    }
-    @keyframes authLedPulse {
-      0%,
-      100% {
-        box-shadow: 0 0 12px 3px rgba(90, 236, 69, 0.65);
-      }
-      50% {
-        box-shadow: 0 0 22px 7px rgba(124, 255, 69, 1);
-      }
     }
     .c-led .cf-s,
     .c-led .cf-n {
@@ -485,14 +441,6 @@
       animation: authLeadElectron 2.2s linear infinite;
       animation-delay: var(--ld, 0s);
     }
-    @keyframes authLeadElectron {
-      from {
-        background-position: 0 150%, 0 0;
-      }
-      to {
-        background-position: 0 -150%, 0 0;
-      }
-    }
     .lead-sh {
       position: absolute;
       border-radius: 1px;
@@ -546,17 +494,6 @@
       border-radius: 50%;
       border: 1px solid rgba(68, 189, 19, 0.4);
       animation: authPing 2.6s cubic-bezier(0.2, 0.7, 0.3, 1) infinite;
-    }
-    @keyframes authPing {
-      0% {
-        transform: scale(0.7);
-        opacity: 0.8;
-      }
-      70%,
-      100% {
-        transform: scale(1.7);
-        opacity: 0;
-      }
     }
     .logo-word {
       font-family: var(--font-heading);
@@ -647,16 +584,6 @@
       box-shadow: 0 0 8px 1px rgba(68, 189, 19, 0.8);
       animation: authBlink 1.8s steps(1) infinite;
     }
-    @keyframes authBlink {
-      0%,
-      72% {
-        opacity: 1;
-      }
-      73%,
-      100% {
-        opacity: 0.25;
-      }
-    }
     .brand-foot .sep {
       width: 1px;
       height: 12px;
@@ -713,14 +640,6 @@
     /* screen transition — motion-only (never traps content at opacity:0) */
     .screen {
       animation: authScreenIn 340ms cubic-bezier(0.2, 0.8, 0.25, 1) both;
-    }
-    @keyframes authScreenIn {
-      from {
-        transform: translateY(10px);
-      }
-      to {
-        transform: translateY(0);
-      }
     }
 
     /* heading */
@@ -974,25 +893,6 @@
       margin-top: 1px;
       color: var(--danger);
     }
-    @keyframes authShake {
-      10%,
-      90% {
-        transform: translateX(-1px);
-      }
-      20%,
-      80% {
-        transform: translateX(2px);
-      }
-      30%,
-      50%,
-      70% {
-        transform: translateX(-4px);
-      }
-      40%,
-      60% {
-        transform: translateX(4px);
-      }
-    }
 
     /* submit */
     .btn {
@@ -1042,11 +942,6 @@
       border: 2px solid rgba(255, 255, 255, 0.35);
       border-top-color: #fff;
       animation: authSpin 0.7s linear infinite;
-    }
-    @keyframes authSpin {
-      to {
-        transform: rotate(360deg);
-      }
     }
 
     /* meta under form */
@@ -1113,14 +1008,6 @@
       height: 28px;
       color: var(--ok);
       stroke-width: 2.6;
-    }
-    @keyframes authPop {
-      0% {
-        transform: scale(0.72);
-      }
-      100% {
-        transform: scale(1);
-      }
     }
     .success h2 {
       margin-bottom: 10px;
