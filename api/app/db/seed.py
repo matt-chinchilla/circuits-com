@@ -503,7 +503,7 @@ def get_or_create_sponsor(
     keyword: str | None = None,
     image_url: str | None = None,
     description: str | None = None,
-    tier: str = "gold",
+    tier: str = "Gold",
 ) -> Sponsor:
     query = db.query(Sponsor).filter(Sponsor.supplier_id == supplier.id)
     if category is not None:
@@ -518,7 +518,11 @@ def get_or_create_sponsor(
             keyword=keyword,
             image_url=image_url,
             description=description,
-            tier=tier,
+            # Canonicalize to TitleCase so seeded rows match the admin-created
+            # casing — the `tier` column is a free string and the frontend (plus
+            # _is_featured) compares case-insensitively, but consistent data
+            # keeps every TitleCase-keyed reader correct. (CLAUDE.md tier casing.)
+            tier=tier.strip().capitalize(),
         )
         db.add(obj)
         db.flush()
