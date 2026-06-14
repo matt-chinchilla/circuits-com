@@ -1086,23 +1086,39 @@
       .auth {
         grid-template-columns: 1fr;
       }
+      // Brand panel stacks above the form. Unlike the v13 design (which hid the
+      // 3D board on phones), the IsoBoard is surfaced between the logo and the
+      // status line, scaled down to fit the band — so the floating PCB shows
+      // above the sign-in form on mobile.
       .brand {
-        min-height: 230px;
-        padding: 26px 28px;
-        flex-direction: row;
-        align-items: center;
-        justify-content: space-between;
+        min-height: 0;
+        padding: 28px 28px 20px;
+        flex-direction: column;
+        align-items: stretch;
+        justify-content: flex-start;
+        gap: 16px;
       }
       .brand-mid {
         display: none;
       }
       .iso-stage {
-        display: none;
+        display: flex;
+        flex: 0 0 auto;
+        width: 100%;
+        height: 220px;
+      }
+      .iso-scene {
+        transform: rotateX(56deg) rotateZ(-45deg) scale(0.58);
       }
       .brand-foot {
         margin-top: 0;
+        justify-content: center;
       }
       .brand-foot .stat.hide-sm {
+        display: none;
+      }
+      // Only "Secure terminal" remains on mobile — hide the now-dangling seps.
+      .brand-foot .sep {
         display: none;
       }
       .form-side {
@@ -1113,12 +1129,10 @@
       }
     }
     @media (max-width: 560px) {
+      // brand stays column + stretch from the <=900 block; just tighten spacing.
       .brand {
-        flex-direction: column;
-        align-items: flex-start;
-        justify-content: center;
-        gap: 18px;
-        min-height: 180px;
+        gap: 12px;
+        padding: 24px 20px 16px;
       }
       .brand-top {
         width: 100%;
