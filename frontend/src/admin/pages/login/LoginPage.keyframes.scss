@@ -16,18 +16,6 @@
   }
 }
 
-@keyframes authIsoShadow {
-  0%,
-  100% {
-    opacity: 0.85;
-    transform: translateZ(-2px) scale(1);
-  }
-  50% {
-    opacity: 0.55;
-    transform: translateZ(-2px) scale(1.06);
-  }
-}
-
 @keyframes authFlow {
   from {
     offset-distance: 0%;

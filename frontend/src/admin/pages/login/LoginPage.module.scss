@@ -111,7 +111,8 @@
       background: radial-gradient(ellipse 46% 46% at 50% 50%, rgba(0, 0, 0, 0.6) 0%, transparent 70%);
       filter: blur(8px);
       transform: translateZ(-2px);
-      animation: authIsoShadow 7s ease-in-out infinite;
+      // Static: this element is blurred, so animating it re-rasterizes the blur
+      // every frame (mobile lag). The board still visibly floats via .iso-lift.
     }
 
     /* cuboid faces */
@@ -121,6 +122,9 @@
     }
     .cf {
       position: absolute;
+      // Cull away-facing faces — halves the faces rendered (and the per-frame
+      // lead-electron paints) and prevents back faces z-fighting through.
+      backface-visibility: hidden;
     }
     .cf-top {
       inset: 0;
@@ -186,7 +190,10 @@
       width: 460px;
       height: 320px;
       transform-style: preserve-3d;
-      transform: translateZ(16px);
+      // +1px above the board slab top (which is also at 16) so traces/vias don't
+      // z-fight the PCB face. Coplanar surfaces flicker on mobile's low-precision
+      // depth buffer; the gap is imperceptible at the iso angle.
+      transform: translateZ(17px);
     }
 
     /* emissive traces + glowing vias — all GOLD (electrons stay green) */
