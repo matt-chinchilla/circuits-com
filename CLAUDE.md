@@ -24,6 +24,7 @@ npm run dev                             # Vite on :3000
 npm run build
 npx tsc -b                              # type-gate (`tsc --noEmit`=NO-OP here: solution tsconfig, files:[]); `npm run build` too
 npx eslint --ext .ts,.tsx src/          # boundary enforcement (exit 0=clean; --ext req'd, eslint 8)
+npm test                                # vitest run (unit-logic only; *.test.ts, happy-dom per-file for DOM)
 
 # Deploy (requires AWS CLI + ~/.ssh/id_ed25519 + commits pushed)
 ./deploy.sh                             # full deploy — INCLUDES nginx restart since 2026-06-02
@@ -34,7 +35,7 @@ npx eslint --ext .ts,.tsx src/          # boundary enforcement (exit 0=clean; --
 
 Production: t3.small EC2 (`i-0d456bd12719e2176`), EIP `100.55.235.167`. Migrations + seed auto-run on api container start via `docker-compose.prod.yml`. Domains `circuits.com` (primary), `www.circuits.com`, `circuits.matthew-chirichella.com` — all on one SAN cert at `/etc/letsencrypt/live/circuits.matthew-chirichella.com/`.
 
-Static analysis: TypeScript strict + ESLint at `frontend/.eslintrc.json` (boundary rules only — no Prettier). Frontend has no test suite; API has pytest. Visual baselines at `tests/visual/baselines/`.
+Static analysis: TypeScript strict + ESLint at `frontend/.eslintrc.json` (boundary rules only — no Prettier). Frontend has a minimal vitest harness (`npm test`, unit-logic only — `*.test.ts` excluded from `tsc -b` + eslint via `tsconfig.app.json`/`.eslintrc.json`); API has pytest. Visual baselines at `tests/visual/baselines/`.
 
 ## Architecture
 
@@ -137,7 +138,7 @@ HeroSection + PageHeaderBand are TRANSPARENT layout-only — band is a "window" 
 All routes prefixed `/api/` (router prefix). **`routes/forms.py` is `/api`, NOT `/api/forms`** — endpoints `POST /api/contact`, `/api/join`, `/api/keyword-request`. Frontend uses relative paths. `part_to_dict()` returns `category_name`/`slug` + `parent_category_name`/`slug` (`| null` top-level). Category API exposes siblings via `ParentCategoryResponse.children` (`lazy="selectin"`). `SubcategoryChips` URL-driven, `aria-current="page"` on active.
 
 ### Contact page motif
-Datasheet card — founders labeled U1/U2 (schematic designators), crop-mark corners, PCB grid bg (24px cells, $nav-blue @ 3.5%). Don't flatten.
+Datasheet card — founders labeled U1/U2 (schematic designators), crop-mark corners, PCB grid bg (24px cells, $nav-blue @ 3.5%). Don't flatten. Emails/phones are plain `<a href="mailto:|tel:">` (no JS handler, PCB-grid/crop-mark overlays are `pointer-events: none`) — an "email app won't open" report is ENVIRONMENTAL (no OS default mail handler / corp browser protocol policy), NOT a code bug; don't add an onClick to "fix" it.
 
 ### Navbar — pinned-edge layout
 Brand (`left: 20px`) + nav+LOGIN (`right: 20px`) are `position: absolute` on `.topStrip`. Search bar centered via `left: 50%; transform: translateX(-50%)`, hidden on `/`. Do NOT use Grid or `space-between` (breaks on narrow side-track content).
@@ -251,6 +252,7 @@ Brand (`left: 20px`) + nav+LOGIN (`right: 20px`) are `position: absolute` on `.t
 - **nginx HTTP/2 requires `http2 on;`** — `listen 443 ssl;` alone gives HTTP/1.1. All 3 SSL blocks in `nginx.ssl.conf` carry it. Verify: `curl -sI --http2 https://circuits.com/ -w '%{http_version}\n'` (want `2`).
 - **Category preload couples `frontend/index.html` ↔ `api.ts`** — inline `<script>` stashes the fetch promise on `window.__categoryPreload`; `api.getCategory` reuses it (matching slug+params). Direct-load only; SPA nav = axios.
 - **`index.html` served `no-cache`** (`frontend/nginx.conf` `location /`) so browsers revalidate the SPA entry. Hashed assets stay `immutable`. Guard: `api/tests/test_nginx_cache_headers.py`.
+- **Stale lazy-chunk after deploy → `vite:preloadError` recovery reload** — lazy routes (App.tsx) are content-hashed chunks; a deploy deletes the old hashes, so a returning client on a pre-deploy `index.html`/module graph (most often a tab left open across the deploy) dynamic-imports a 404'd chunk → `import()` rejects → ErrorBoundary "failed to load" dead-end until a manual browser-cache reset (eager `HomePage` is immune; every lazy route was affected — it's not contact-specific). `@shared/preloadErrorRecovery.ts` (called in `main.tsx` BEFORE render, bundled in the EAGER entry chunk) turns `vite:preloadError` into ONE `sessionStorage`-guarded recovery reload — fail-open if storage throws (Safari private mode / locked-down browsers), whole install `try/catch`-wrapped so a hardened-browser `window.sessionStorage` throw can't white-screen bootstrap. Don't remove the `installPreloadErrorRecovery()` call. Guard: `frontend/src/shared/preloadErrorRecovery.test.ts` (vitest, 5 tests).
 - **`sw.js` MUST NOT be cached immutable** — generic regex applies `immutable, 1y` to ALL js. Exact-match `location = /sw.js` + `/registerSW.js` with `no-cache` (exact wins over regex).
 - **Sponsor cache invalidation (inc1)** — category endpoints send `no-cache` (set AFTER the 404 check — HTTPException makes a new response; guard `test_cache_headers.py`); `bustSponsorCaches()` (`@admin/services/swCache.ts`) deletes the `api-categories`+`api-general` SW caches, wired in `adminApi` so every sponsor/supplier mutation + wizard-feature busts. **ETag/304 on `/{slug}` + `/partners` via `_conditional_json`** (`If-None-Match`→304); cross-tab push deferred.
 - **Edge gzip = `nginx/nginx.ssl.conf`** (`gzip on`/`gzip_proxied any`, json+js) — was OFF (drift). **PROD-only: LOCAL non-SSL nginx does NOT gzip /api — verify on prod** (`per_page=500` 127→24.9 KB, 5.1×). Guard `test_nginx_gzip.py`. **alembic 012** = hot-col indexes (`parts.category_id`/`sub_slug`, `part_listings.part_id`, `price_breaks.listing_id`/`min_quantity`), index-only; guard `test_part_indexes.py`.

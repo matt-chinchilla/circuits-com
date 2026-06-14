@@ -45,5 +45,5 @@
       }
     ]
   },
-  "ignorePatterns": ["dist/", "node_modules/", "*.config.ts", "*.config.js"]
+  "ignorePatterns": ["dist/", "node_modules/", "*.config.ts", "*.config.js", "src/**/*.test.ts"]
 }
