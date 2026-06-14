@@ -107,6 +107,12 @@
         transparent 74%
       );
     }
+    .iso-flat {
+      // Mobile-only flat board image (shown in the <=900 media query); hidden on
+      // desktop, which renders the live CSS-3D board below.
+      display: none;
+      max-width: 100%;
+    }
     .iso-scene {
       position: relative;
       width: 460px;
@@ -1142,26 +1148,25 @@
         flex: 0 0 auto;
         width: 100%;
         height: 220px;
-        // Float the FLAT perspective container with a cheap 2D translateY instead
-        // of the translateZ-on-preserve-3d float (.iso-lift, silenced below). This
-        // shifts the already-composited 3D board as ONE bounded layer rather than
-        // re-compositing the ~210-layer preserve-3d scene every frame — that
-        // per-frame 3D recomposite (not z-fighting) is the iOS flicker. Desktop
-        // keeps the richer translateZ float (it has the GPU headroom at DPR 1–2).
-        animation: authIsoFloatFlat 7s ease-in-out infinite;
-        // Containment of the board's 460px layout box is handled by .auth's
-        // minmax(0,1fr) column cap + .brand's overflow:clip — NOT a clip here.
-        // overflow:clip on THIS perspective container can crop the chip's +Z
-        // projection on iOS (WebKit 3D-overflow divergence); keep it off.
       }
+      // Mobile renders a flat IMAGE of the board, NOT the live ~210-layer CSS-3D
+      // scene. At the iPhone's DPR 3 the live scene's layers re-rasterize on
+      // pinch-zoom and OOM-crash the WebContent renderer (crash + auto-reload),
+      // and the per-frame preserve-3d recomposite flickered once the animation ran.
+      // One <img> layer can neither crash on zoom nor flicker. (The old 460px-box
+      // containment is moot now; the .auth minmax(0,1fr) column cap still applies.)
+      // Desktop keeps the full live 3D board.
+      .iso-glow,
       .iso-scene {
-        transform: rotateX(56deg) rotateZ(-45deg) scale(0.58);
+        display: none;
       }
-      // The float now lives on the flat .iso-stage above; silence the in-scene
-      // translateZ float so the preserve-3d subtree no longer re-composites every
-      // frame (it animates the leads/flows via paint, but the geometry is static).
-      .iso-lift {
-        animation: none;
+      .iso-flat {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        // Gentle bob — one cached image gliding; no 3D scene to re-composite.
+        animation: authIsoFloatFlat 7s ease-in-out infinite;
       }
       .brand-foot {
         margin-top: 0;
@@ -1200,7 +1205,7 @@
     @media (prefers-reduced-motion: reduce) {
       .logo-node::after,
       .led,
-      .iso-stage,
+      .iso-flat,
       .iso-lift,
       .iso-shadow,
       .flow,

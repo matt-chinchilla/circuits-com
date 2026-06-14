@@ -6,13 +6,14 @@ depth precision). Compute waste: 170 cube faces rendered both sides (no backface
 cull) + the blurred `.iso-shadow` re-blurred every frame (animated). These guards
 lock in the fixes so the flicker/cost can't silently return.
 
-Mobile follow-up (same date): the real iOS flicker was the per-frame re-composite
-of the ~210-layer preserve-3d scene driven by the translateZ float on the
-preserve-3d `.iso-lift`, and the board's fixed 460px layout box overflowed the
-phone viewport. Fixes guarded below: the mobile column is `minmax(0, 1fr)` (caps
-the page width; .brand's overflow:clip contains the board), and the float moves to
-a flat 2D translateY on `.iso-stage` while `.iso-lift` is silenced (no per-frame
-3D recomposite).
+Mobile follow-up: the live ~210-layer preserve-3d board could not survive the
+iPhone's DPR 3 — pinch-zoom re-rasterized every layer and OOM-crashed iOS Safari,
+and the per-frame recomposite flickered once the animation ran; the board's fixed
+460px layout box also overflowed the viewport. Fixes guarded below: the mobile
+column is `minmax(0, 1fr)` (page-fit), and on mobile the live 3D scene is HIDDEN and
+replaced by a flat board image (`.iso-flat`, /iso-board-mobile.webp) that floats via
+the 2D `authIsoFloatFlat` bob — one layer that can neither crash on zoom nor flicker.
+Desktop keeps the full live 3D board.
 """
 
 import re
@@ -118,21 +119,28 @@ def test_mobile_grid_column_capped():
     )
 
 
-def test_mobile_float_moved_off_preserve3d():
-    # The iOS flicker is the per-frame re-composite of the ~210-layer preserve-3d
-    # scene, driven by the translateZ float on the preserve-3d .iso-lift. On mobile
-    # that float must move to the FLAT .iso-stage (a 2D translateY shifts the
-    # composited board as one layer, no per-frame 3D recomposite).
-    lift = _rule_blocks(".iso-lift")
-    assert len(lift) >= 2, "expected a base + mobile .iso-lift rule"
-    assert re.search(r"animation:\s*none", lift[1]), (
-        "mobile .iso-lift must set `animation: none` — the float moves to the flat "
-        ".iso-stage so the preserve-3d subtree stops re-compositing every frame."
+def test_mobile_uses_static_board_image():
+    # At the iPhone's DPR 3 the live ~210-layer 3D board re-rasterizes on pinch-zoom
+    # and OOM-crashes iOS (and the per-frame preserve-3d recomposite flickered once
+    # the animation ran). On mobile the live scene MUST be hidden and a flat image
+    # shown in its place — one layer that can neither crash on zoom nor flicker.
+    text = SCSS.read_text()
+    assert re.search(r"\.iso-glow,\s*\.iso-scene\s*\{[^}]*display:\s*none", text, re.S), (
+        "mobile must hide the live .iso-glow + .iso-scene (display:none) so the "
+        "~210-layer 3D board is not rendered on phones (zoom-OOM + flicker)."
     )
-    stage = _rule_blocks(".iso-stage")
-    assert len(stage) >= 2, "expected a base + mobile .iso-stage rule"
-    assert "authIsoFloatFlat" in stage[1], (
-        "mobile .iso-stage must run the flat float `authIsoFloatFlat`."
+    flat = _rule_blocks(".iso-flat")
+    assert any("authIsoFloatFlat" in b for b in flat), (
+        "the mobile flat board image (.iso-flat) must run the authIsoFloatFlat bob."
+    )
+
+
+def test_mobile_board_image_asset_exists():
+    asset = LOGIN.parents[3] / "public/iso-board-mobile.webp"
+    assert asset.exists(), f"mobile board image asset missing: {asset}"
+    assert "iso-board-mobile.webp" in ISOBOARD.read_text(), (
+        "IsoBoard must render the flat board <img src=/iso-board-mobile.webp> "
+        "(shown on mobile in place of the live 3D scene)."
     )
 
 

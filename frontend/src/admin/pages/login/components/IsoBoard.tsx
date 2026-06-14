@@ -199,6 +199,12 @@ export default function IsoBoard() {
   return (
     <div className="iso-stage" aria-hidden="true">
       <div className="iso-glow" />
+      {/* Mobile (<=900px) shows this flat snapshot of the board instead of the
+          live CSS-3D scene below: at the iPhone's DPR 3 the live ~210-layer
+          preserve-3d board re-rasterizes on pinch-zoom and OOM-crashes iOS Safari
+          (and the per-frame recomposite flickered). One <img> layer can't do
+          either. Hidden on desktop via CSS; the live board renders there. */}
+      <img className="iso-flat" src="/iso-board-mobile.webp" alt="" />
       <div className="iso-scene">
         <div className="iso-shadow" />
         <div className="iso-lift">
