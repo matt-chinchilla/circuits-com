@@ -42,6 +42,20 @@ def test_cube_faces_cull_backface():
     )
 
 
+def test_flat_traces_share_thickness_constant():
+    # Horizontal + vertical trace segments must draw from ONE thickness constant
+    # so they can never render different thicknesses.
+    src = ISOBOARD.read_text()
+    assert re.search(r"const TW\s*=\s*\d+", src), (
+        "Trace thickness must come from a shared `const TW` so the horizontal and "
+        "vertical segments stay equal."
+    )
+    assert "height: TW" in src and "width: TW" in src, (
+        "both the horizontal (height: TW) and vertical (width: TW) trace segments "
+        "must use the shared TW thickness."
+    )
+
+
 def test_blurred_shadow_not_animated():
     m = re.search(r"\.iso-shadow\s*\{([^}]*)\}", SCSS.read_text(), re.S)
     assert m, "no .iso-shadow rule found"

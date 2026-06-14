@@ -190,10 +190,11 @@
       width: 460px;
       height: 320px;
       transform-style: preserve-3d;
-      // +1px above the board slab top (which is also at 16) so traces/vias don't
-      // z-fight the PCB face. Coplanar surfaces flicker on mobile's low-precision
-      // depth buffer; the gap is imperceptible at the iso angle.
-      transform: translateZ(17px);
+      // Lift the trace plane a decisive 4px above the board slab top (at 16) so
+      // it can't z-fight the PCB face. 1px was below some mobile GPUs' depth-
+      // buffer resolution for the animated scene → flicker; 4px is still only
+      // ~2px on screen at the iso angle/mobile scale ("just barely above").
+      transform: translateZ(20px);
     }
 
     /* emissive traces + glowing vias — all GOLD (electrons stay green) */

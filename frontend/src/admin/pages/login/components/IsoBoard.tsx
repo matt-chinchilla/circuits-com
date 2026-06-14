@@ -24,6 +24,11 @@ type Pt = [number, number];
 const lpath = (x1: number, y1: number, x2: number, y2: number) =>
   `M${x1} ${y1} L${x2} ${y1} L${x2} ${y2}`;
 
+// Flat-trace thickness (px). The horizontal and vertical segments BOTH use it,
+// so they always render the same thickness; 4 (vs the old 3) gives the flat
+// traces the visual weight of the gold Z-risers, esp. at the 0.58 mobile scale.
+const TW = 4;
+
 // ── Cuboid: top + four side faces ──────────────────────────────────────
 function Cube({
   x = 0,
@@ -77,10 +82,10 @@ function Trace({
   return (
     <>
       {hw > 0 && (
-        <div className={`tr tr-${c}`} style={{ left: hx, top: y1 - 1.5, width: hw + 3, height: 3 }} />
+        <div className={`tr tr-${c}`} style={{ left: hx, top: y1 - TW / 2, width: hw + TW, height: TW }} />
       )}
       {vh > 0 && (
-        <div className={`tr tr-${c}`} style={{ left: x2 - 1.5, top: vy, width: 3, height: vh + 3 }} />
+        <div className={`tr tr-${c}`} style={{ left: x2 - TW / 2, top: vy, width: TW, height: vh + TW }} />
       )}
       <div className={`via via-${c}`} style={{ left: x2 - 4.5, top: y2 - 4.5 }} />
     </>
