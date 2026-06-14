@@ -62,7 +62,10 @@
     /* ════════════════════ LEFT — brand / atmosphere ═══════════════════ */
     .brand {
       position: relative;
-      overflow: hidden;
+      // `clip` (not `hidden`): per spec, overflow:hidden on an ancestor of a 3D
+      // subtree forces flattening/clip-into-surface work that WebKit re-rasters
+      // every animation frame (mobile flicker, bug 48386); `clip` does not.
+      overflow: clip;
       background: var(--steel-850);
       background-image:
         radial-gradient(120% 90% at 22% 16%, rgba(68, 189, 19, 0.1) 0%, transparent 46%),
@@ -83,14 +86,28 @@
       align-items: center;
       justify-content: center;
       perspective: 1600px;
+      // Pin a STABLE compositing layer on the flat perspective container (this is
+      // NOT a preserve-3d node, so it doesn't flatten the board). Gives the whole
+      // animated 3D subtree one cached backing store instead of WebKit re-tiling
+      // the clipped scene every frame → fixes the iOS-only flicker. (Apple "Using
+      // 2D and 3D Transforms"; must NOT go on .iso-scene/.iso-lift/preserve-3d.)
+      transform: translateZ(0);
+      will-change: transform;
     }
     .iso-glow {
       position: absolute;
       width: 70%;
       height: 56%;
       border-radius: 50%;
-      background: radial-gradient(circle, rgba(68, 189, 19, 0.3) 0%, rgba(68, 189, 19, 0.08) 40%, transparent 70%);
-      filter: blur(14px);
+      // Pre-blurred soft gradient instead of filter: blur() — a filter layer
+      // re-rasters/re-composites in the scene on iOS (flicker + CPU cost).
+      background: radial-gradient(
+        circle,
+        rgba(68, 189, 19, 0.26) 0%,
+        rgba(68, 189, 19, 0.12) 34%,
+        rgba(68, 189, 19, 0.04) 56%,
+        transparent 74%
+      );
     }
     .iso-scene {
       position: relative;
@@ -108,11 +125,17 @@
     .iso-shadow {
       position: absolute;
       inset: -6% -6% -6% -6%;
-      background: radial-gradient(ellipse 46% 46% at 50% 50%, rgba(0, 0, 0, 0.6) 0%, transparent 70%);
-      filter: blur(8px);
+      // Pre-blurred soft gradient (no filter): a filter-flattened layer inside
+      // the preserve-3d scene must re-interleave with the 3D siblings every
+      // frame on iOS. Static gradient = one cheap cached layer.
+      background: radial-gradient(
+        ellipse 52% 52% at 50% 50%,
+        rgba(0, 0, 0, 0.5) 0%,
+        rgba(0, 0, 0, 0.26) 38%,
+        rgba(0, 0, 0, 0.1) 58%,
+        transparent 74%
+      );
       transform: translateZ(-2px);
-      // Static: this element is blurred, so animating it re-rasterizes the blur
-      // every frame (mobile lag). The board still visibly floats via .iso-lift.
     }
 
     /* cuboid faces */
@@ -122,9 +145,6 @@
     }
     .cf {
       position: absolute;
-      // Cull away-facing faces — halves the faces rendered (and the per-frame
-      // lead-electron paints) and prevents back faces z-fighting through.
-      backface-visibility: hidden;
     }
     .cf-top {
       inset: 0;
@@ -426,8 +446,13 @@
       width: 132px;
       height: 122px;
       border-radius: 14px;
-      background: radial-gradient(ellipse 50% 50% at 50% 50%, rgba(0, 0, 0, 0.5) 0%, transparent 72%);
-      filter: blur(7px);
+      // Pre-blurred soft gradient (no filter) — see .iso-shadow rationale.
+      background: radial-gradient(
+        ellipse 52% 52% at 50% 50%,
+        rgba(0, 0, 0, 0.42) 0%,
+        rgba(0, 0, 0, 0.18) 45%,
+        transparent 78%
+      );
     }
     /* gold leads — gold body with a GREEN electron pulse travelling UP */
     .c-lead .cf-top {

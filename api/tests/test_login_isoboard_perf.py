@@ -35,13 +35,6 @@ def test_surface_not_coplanar_with_board_top():
     )
 
 
-def test_cube_faces_cull_backface():
-    assert re.search(r"\.cf\s*\{[^}]*backface-visibility:\s*hidden", SCSS.read_text(), re.S), (
-        ".cf must set backface-visibility: hidden — halves rendered faces and "
-        "stops back faces flickering through the 3D scene."
-    )
-
-
 def test_flat_traces_share_thickness_constant():
     # Horizontal + vertical trace segments must draw from ONE thickness constant
     # so they can never render different thicknesses.
@@ -56,12 +49,33 @@ def test_flat_traces_share_thickness_constant():
     )
 
 
-def test_blurred_shadow_not_animated():
+def test_no_blur_filters_in_scene():
+    # The .iso-glow/.iso-shadow/.chip-cast filter:blur() layers were flatten-
+    # layers that re-interleave/re-raster in the preserve-3d scene every frame on
+    # iOS (flicker). Replaced with pre-blurred radial-gradients — none should
+    # remain (matches CLAUDE.md's "pre-baked gradient over blur" gotcha).
+    # Match an actual `filter: blur(...)` DECLARATION (line-start), not the words
+    # in a `//` comment.
+    assert not re.search(r"^\s*filter:\s*blur\(", SCSS.read_text(), re.M), (
+        "filter: blur() re-rasters/re-composites inside the 3D scene on iOS. Use "
+        "a pre-blurred radial-gradient instead."
+    )
+
+
+def test_iso_shadow_static():
     m = re.search(r"\.iso-shadow\s*\{([^}]*)\}", SCSS.read_text(), re.S)
     assert m, "no .iso-shadow rule found"
+    assert "animation" not in m.group(1), ".iso-shadow must stay static (no per-frame work)."
+
+
+def test_iso_stage_pins_stable_layer():
+    # The iOS-only flicker fix: a stable compositing layer on the FLAT perspective
+    # container (.iso-stage) so WebKit stops re-rasterizing the clipped, animated
+    # 3D subtree each frame. Must be on .iso-stage (flat), NOT a preserve-3d node.
+    m = re.search(r"\.iso-stage\s*\{([^}]*)\}", SCSS.read_text(), re.S)
+    assert m, "no .iso-stage rule found"
     body = m.group(1)
-    assert "blur(" in body, ".iso-shadow should keep its static blur"
-    assert "animation" not in body, (
-        ".iso-shadow is blurred; animating it re-rasterizes the blur every frame "
-        "(mobile lag). Keep the shadow static."
+    assert "translateZ(0)" in body or "will-change" in body, (
+        ".iso-stage must pin a stable layer (transform: translateZ(0) / "
+        "will-change: transform) to stop the iOS per-frame re-raster flicker."
     )
