@@ -1115,7 +1115,12 @@
     /* ── Responsive ──────────────────────────────────────────────────── */
     @media (max-width: 900px) {
       .auth {
-        grid-template-columns: 1fr;
+        // minmax(0, 1fr), NOT 1fr (which is minmax(auto, 1fr)): the board's fixed
+        // 460px layout box inflates the column's `auto` minimum past the phone's
+        // width, so the whole page renders wider than the viewport (iOS zooms out
+        // to fit → "doesn't fit within the borders"). A 0 minimum pins the column
+        // to the viewport; .iso-stage's `overflow: clip` then contains the board.
+        grid-template-columns: minmax(0, 1fr);
       }
       // Brand panel stacks above the form. Unlike the v13 design (which hid the
       // 3D board on phones), the IsoBoard is surfaced between the logo and the
@@ -1137,9 +1142,26 @@
         flex: 0 0 auto;
         width: 100%;
         height: 220px;
+        // Float the FLAT perspective container with a cheap 2D translateY instead
+        // of the translateZ-on-preserve-3d float (.iso-lift, silenced below). This
+        // shifts the already-composited 3D board as ONE bounded layer rather than
+        // re-compositing the ~210-layer preserve-3d scene every frame — that
+        // per-frame 3D recomposite (not z-fighting) is the iOS flicker. Desktop
+        // keeps the richer translateZ float (it has the GPU headroom at DPR 1–2).
+        animation: authIsoFloatFlat 7s ease-in-out infinite;
+        // Containment of the board's 460px layout box is handled by .auth's
+        // minmax(0,1fr) column cap + .brand's overflow:clip — NOT a clip here.
+        // overflow:clip on THIS perspective container can crop the chip's +Z
+        // projection on iOS (WebKit 3D-overflow divergence); keep it off.
       }
       .iso-scene {
         transform: rotateX(56deg) rotateZ(-45deg) scale(0.58);
+      }
+      // The float now lives on the flat .iso-stage above; silence the in-scene
+      // translateZ float so the preserve-3d subtree no longer re-composites every
+      // frame (it animates the leads/flows via paint, but the geometry is static).
+      .iso-lift {
+        animation: none;
       }
       .brand-foot {
         margin-top: 0;
@@ -1178,6 +1200,7 @@
     @media (prefers-reduced-motion: reduce) {
       .logo-node::after,
       .led,
+      .iso-stage,
       .iso-lift,
       .iso-shadow,
       .flow,

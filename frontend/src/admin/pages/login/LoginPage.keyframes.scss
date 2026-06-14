@@ -16,6 +16,23 @@
   }
 }
 
+/* Mobile float — a flat 2D translateY on the perspective container (.iso-stage),
+   NOT a translateZ on the preserve-3d .iso-lift. A 2D move on a flat ancestor
+   shifts the already-composited 3D board as one layer instead of re-compositing
+   the ~210-layer preserve-3d subtree every frame (the iOS flicker). ~12px = the
+   on-screen vertical projection of the desktop translateZ(26px) float:
+   sin(56°) × 26 × 0.58 ≈ 12.5. Re-derive if the iso rotateX (56°) or the mobile
+   scale (0.58) changes, else the bob drifts out of parity with desktop. */
+@keyframes authIsoFloatFlat {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-12px);
+  }
+}
+
 @keyframes authFlow {
   from {
     offset-distance: 0%;
