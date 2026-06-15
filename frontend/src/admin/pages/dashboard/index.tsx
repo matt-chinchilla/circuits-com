@@ -3,7 +3,8 @@ import { Link } from 'react-router-dom'
 import { Plus, Upload, Download } from 'lucide-react'
 import { useDemo } from '@admin/contexts/DemoContext'
 import { adminApi } from '@admin/services/adminApi'
-import type { DashboardStats, ActivityItem, RevenueDataPoint } from '@admin/types/admin'
+import type { DashboardStats, ActivityItem, RevenueDataPoint, AdminSponsor } from '@admin/types/admin'
+import { countActiveSponsorsByTier } from '@admin/services/sponsorTier'
 import styles from './DashboardPage.module.scss'
 
 // ─── Sparkline (12-pt mini area chart) ─────────────────────────────────────
@@ -213,15 +214,24 @@ export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [activity, setActivity] = useState<ActivityItem[]>([])
   const [revenue, setRevenue] = useState<RevenueDataPoint[]>([])
+  const [sponsors, setSponsors] = useState<AdminSponsor[]>([])
 
   useEffect(() => {
     let cancelled = false
-    Promise.all([adminApi.getStats(), adminApi.getActivity(), adminApi.getRevenue()])
-      .then(([s, a, r]) => {
+    Promise.all([
+      adminApi.getStats(),
+      adminApi.getActivity(),
+      adminApi.getRevenue(),
+      // Best-effort: the tier chart degrades to empty if sponsors fail to load,
+      // rather than failing the whole dashboard.
+      adminApi.getSponsors().catch(() => [] as AdminSponsor[]),
+    ])
+      .then(([s, a, r, sp]) => {
         if (cancelled) return
         setStats(s)
         setActivity(a)
         setRevenue(r)
+        setSponsors(sp)
       })
       .catch((err) => {
         if (cancelled) return
@@ -264,19 +274,17 @@ export default function DashboardPage() {
     ? [12, 18, 14, 22, 28, 24, 32, 38, 34, 44, 52, 58].map((v, i) => ({ l: `W${i + 1}`, v }))
     : revenue.map((r, i) => ({ l: r.month?.slice(5) || `${i + 1}`, v: r.total ?? 0 }))
 
-  const realSponsors = stats?.sponsors_count ?? 0
+  const realTierCounts = countActiveSponsorsByTier(sponsors)
   const sponsorTiers: Tier[] = demoMode
     ? [
-        { n: 'Featured', v: 12, c: '#a88d2e' },
         { n: 'Platinum', v: 34, c: '#0a4a2e' },
         { n: 'Gold', v: 58, c: '#d97706' },
         { n: 'Silver', v: 82, c: '#94a3b8' },
       ]
     : [
-        { n: 'Featured', v: Math.max(1, Math.floor(realSponsors * 0.1)), c: '#a88d2e' },
-        { n: 'Platinum', v: Math.max(1, Math.floor(realSponsors * 0.2)), c: '#0a4a2e' },
-        { n: 'Gold', v: Math.max(1, Math.floor(realSponsors * 0.3)), c: '#d97706' },
-        { n: 'Silver', v: Math.max(0, realSponsors - Math.floor(realSponsors * 0.6)), c: '#94a3b8' },
+        { n: 'Platinum', v: realTierCounts.Platinum, c: '#0a4a2e' },
+        { n: 'Gold', v: realTierCounts.Gold, c: '#d97706' },
+        { n: 'Silver', v: realTierCounts.Silver, c: '#94a3b8' },
       ]
 
   const activityRows = demoMode ? DEMO_ACTIVITY : activity.map((a) => ({

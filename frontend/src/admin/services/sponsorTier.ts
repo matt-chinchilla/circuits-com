@@ -1,4 +1,4 @@
-import type { SponsorTier } from '@admin/types/admin';
+import type { AdminSponsor, SponsorStatus, SponsorTier } from '@admin/types/admin';
 
 // Sponsor `tier` is a free-form string column (no DB enum): admin-created rows
 // are TitleCase, but legacy/seed rows can be lowercase ('platinum'/'gold'). So
@@ -22,4 +22,29 @@ export function normalizeSponsorTier(
   const key = (tier.charAt(0).toUpperCase() +
     tier.slice(1).toLowerCase()) as SponsorTier;
   return key in SPONSOR_TIER_RANK ? key : null;
+}
+
+// A sponsor row is "active" when its status is 'Active' OR null — legacy seed
+// rows omit status, and null must read as Active (see CLAUDE.md Sponsor.status
+// gotcha). The single home for this check, shared by the Suppliers badge and
+// the Dashboard tier chart.
+export function isActiveSponsor(
+  status: SponsorStatus | null | undefined,
+): boolean {
+  return status === 'Active' || status == null;
+}
+
+// Tally ACTIVE sponsors into the live tiers (casing-normalized; inactive rows
+// and any dropped tier such as 'Featured' are ignored). Lets the Dashboard's
+// "Active Sponsors by tier" chart reflect real data instead of a fabrication.
+export function countActiveSponsorsByTier(
+  sponsors: AdminSponsor[],
+): Record<SponsorTier, number> {
+  const counts: Record<SponsorTier, number> = { Platinum: 0, Gold: 0, Silver: 0 };
+  for (const s of sponsors) {
+    if (!isActiveSponsor(s.status)) continue;
+    const tier = normalizeSponsorTier(s.tier);
+    if (tier) counts[tier]++;
+  }
+  return counts;
 }

@@ -1,5 +1,6 @@
 import type { AdminSponsor, SponsorTier } from '@admin/types/admin';
 import {
+  isActiveSponsor,
   normalizeSponsorTier,
   SPONSOR_TIER_RANK,
 } from '@admin/services/sponsorTier';
@@ -22,13 +23,6 @@ export const SPONSORSHIP_FILTERS: SponsorshipFilter[] = [
   'Silver',
 ];
 
-// A sponsor row counts as active when status is 'Active' OR null — legacy seed
-// rows omit status, and null must read as Active (see CLAUDE.md Sponsor.status
-// gotcha: `status != 'Expired'` is UNKNOWN for null and would wrongly drop it).
-function isActiveSponsor(s: AdminSponsor): boolean {
-  return s.status === 'Active' || s.status == null;
-}
-
 // supplier_id -> highest active sponsorship tier (canonical TitleCase). Suppliers
 // with no active sponsorship are absent (→ 'None' via supplierSponsorship). Tier
 // casing is normalized — legacy seed stores lowercase 'platinum'.
@@ -37,7 +31,7 @@ export function buildSponsorshipBySupplier(
 ): Map<string, SponsorTier> {
   const best = new Map<string, SponsorTier>();
   for (const s of sponsors) {
-    if (!isActiveSponsor(s)) continue;
+    if (!isActiveSponsor(s.status)) continue;
     const tier = normalizeSponsorTier(s.tier);
     if (!tier) continue; // outside the live set (e.g. the dropped 'Featured')
     const cur = best.get(s.supplier_id);
