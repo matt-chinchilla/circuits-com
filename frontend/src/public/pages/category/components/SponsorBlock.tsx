@@ -313,6 +313,8 @@ function PcbCard({
 
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
     let rect: DOMRect | null = null;
+    let lastX = 0;
+    let lastY = 0;
 
     const onEnter = (e: PointerEvent) => {
       if (!e.isPrimary) return;
@@ -339,15 +341,19 @@ function PcbCard({
       el.setAttribute('data-lit', 'false');
     };
     const onMove = (e: PointerEvent) => {
-      if (!e.isPrimary || raf.current) return;
+      if (!e.isPrimary) return;
       const r = rect ?? el.getBoundingClientRect();
       rect = r;
-      const x = e.clientX - r.left;
-      const y = e.clientY - r.top;
+      // Always record the LATEST position; the rAF reads it at fire time so the
+      // beam lands where the cursor actually is — not where it was when the
+      // first event of this frame arrived (the old single-capture lag).
+      lastX = e.clientX - r.left;
+      lastY = e.clientY - r.top;
+      if (raf.current) return;
       raf.current = requestAnimationFrame(() => {
         raf.current = 0;
-        el.style.setProperty('--mx', `${x}px`);
-        el.style.setProperty('--my', `${y}px`);
+        el.style.setProperty('--mx', `${lastX}px`);
+        el.style.setProperty('--my', `${lastY}px`);
       });
     };
     // Touch + pen: capture the pointer on down so finger drift outside the card

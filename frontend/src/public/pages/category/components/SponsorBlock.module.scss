@@ -155,20 +155,34 @@
 // by the card's isolation so it never washes out the text above).
 .lamp {
   position: absolute;
-  inset: 0;
+  top: 0;
+  left: 0;
   z-index: 1;
+  width: 300px;
+  height: 300px;
   pointer-events: none;
   opacity: 0;
   visibility: hidden;
   transition:
     opacity 260ms ease,
     visibility 0s linear 260ms;
-  mix-blend-mode: screen;
+  // Pre-baked warm pool (static gradient, centred in its own 300px box) that
+  // follows the pointer via a COMPOSITOR-ONLY translate3d — its centre parks at
+  // --mx/--my. No mix-blend-mode (the "deleted twice" per-pointermove blend-
+  // recomposite anti-pattern) and no position-driven gradient, so each move is a
+  // GPU transform with zero repaint. Alpha nudged up to offset the lost screen
+  // blend's brightening.
   background: radial-gradient(
-    circle 150px at var(--mx, -9999px) var(--my, -9999px),
-    color-mix(in srgb, var(--accent) 24%, transparent),
+    circle 150px at center,
+    color-mix(in srgb, var(--accent) 30%, transparent),
     transparent 68%
   );
+  transform: translate3d(
+    calc(var(--mx, -9999px) - 150px),
+    calc(var(--my, -9999px) - 150px),
+    0
+  );
+  will-change: transform;
 }
 
 .card[data-lit='true'] .reveal,

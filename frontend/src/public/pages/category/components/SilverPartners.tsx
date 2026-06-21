@@ -289,14 +289,14 @@ export default function SilverPartners({
       role="region"
       aria-label={categoryName ? 'Silver sponsors for ' + categoryName : 'Silver sponsors'}
     >
-      {/* variant="full" — the Silver board keeps the design's ANIMATED PCB
-          (electrons travelling the gold traces, opacity .5 per the CSS) per
-          BANNER_SPEC §3. The old lag cause (the feGaussianBlur glow filter) was
-          removed, and `full`'s IntersectionObserver pauses the SMIL when the board
-          is off-screen, so this second instance stays cheap (measured 60fps idle
-          on the subpage; the hero backdrop is scrolled out by the time it shows). */}
+      {/* variant="static" — a still PCB background (no SMIL). `full`'s
+          IntersectionObserver only pauses the 14 electron loops when the board is
+          OFF-screen, but the user hovers this board while it's ON-screen, so the
+          loops ran during interaction and starved the raster budget — the hover
+          effect visibly trailed the cursor. `static` restores the "full is
+          hero-only" invariant (CLAUDE.md) and frees the compositor for hover. */}
       <div className="csb-circuit" aria-hidden="true">
-        <CircuitTraces variant="full" />
+        <CircuitTraces variant="static" />
       </div>
       <span className="csb-rim" aria-hidden="true"></span>
       <span className="csb-fid tl" aria-hidden="true"></span>
