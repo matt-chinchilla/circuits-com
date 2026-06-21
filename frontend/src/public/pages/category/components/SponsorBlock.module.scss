@@ -123,32 +123,41 @@
 }
 
 // Hidden components — invisible at rest, revealed only inside the flashlight
-// beam. The beam is a radial mask centred on --mx/--my (written by JS, rAF-
-// batched). Default position is parked far offscreen so nothing leaks before
-// the first pointer move.
+// beam. The beam is a fixed-size WINDOW with a STATIC radial mask centred in it;
+// it follows the pointer via a compositor-only translate3d (JS-driven), while the
+// art inside counter-translates to stay fixed in card-space. No per-frame mask
+// re-raster (the old ~8ms cost) — moving the beam is pure GPU transform. Parked
+// far offscreen at rest so nothing leaks before the first pointer move.
 .reveal {
   position: absolute;
-  inset: 0;
+  top: 0;
+  left: 0;
   z-index: 1;
+  width: 280px;
+  height: 280px;
+  overflow: hidden;
   opacity: 0;
-  // visibility:hidden at rest lets the compositor skip the layer entirely (no
-  // mask repaint / mix-blend backdrop sampling) — important now that the layer
-  // exists on touch too. Delay the visibility flip until the opacity fade-out
-  // finishes so the exit transition still plays.
+  // visibility:hidden at rest lets the compositor skip the layer entirely.
+  // Delay the flip until the opacity fade-out finishes so the exit still plays.
   visibility: hidden;
   transition:
     opacity 260ms ease,
     visibility 0s linear 260ms;
-  transform: translateZ(0); // own compositor layer → mask repaint stays local
   --beam: 124px;
-  --beam-mask: radial-gradient(
-    circle var(--beam) at var(--mx, -9999px) var(--my, -9999px),
-    #000 0,
-    #000 36%,
-    transparent 74%
-  );
-  -webkit-mask-image: var(--beam-mask);
-  mask-image: var(--beam-mask);
+  -webkit-mask-image: radial-gradient(circle var(--beam) at 140px 140px, #000 0, #000 36%, transparent 74%);
+  mask-image: radial-gradient(circle var(--beam) at 140px 140px, #000 0, #000 36%, transparent 74%);
+  transform: translate3d(-9999px, -9999px, 0);
+  will-change: transform;
+}
+
+// Full-card art holder inside the window. JS sizes it to the card and counter-
+// translates it (opposite the window) so the PCB art stays put in card-space
+// while the window slides over it — both transforms are compositor-only.
+.revealInner {
+  position: absolute;
+  top: 0;
+  left: 0;
+  will-change: transform;
 }
 
 // Warm "lamp" pool that brightens the copper beneath it (screen blend, scoped
@@ -177,11 +186,10 @@
     color-mix(in srgb, var(--accent) 30%, transparent),
     transparent 68%
   );
-  transform: translate3d(
-    calc(var(--mx, -9999px) - 150px),
-    calc(var(--my, -9999px) - 150px),
-    0
-  );
+  // JS-driven transform (parked at rest); set directly on the element so a
+  // pointer move never writes a cascading var on the card (which would recalc
+  // the whole card subtree every frame — see place() in the component).
+  transform: translate3d(-9999px, -9999px, 0);
   will-change: transform;
 }
 

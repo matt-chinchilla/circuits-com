@@ -316,16 +316,38 @@ function PcbCard({
     let lastX = 0;
     let lastY = 0;
 
+    // The flashlight layers are positioned by writing transforms DIRECTLY on each
+    // element (not a cascading --mx/--my on the card, which recalcs the whole
+    // subtree every move). The reveal "window" slides to the cursor while its art
+    // counter-translates to stay fixed in card-space; the lamp pool centres on the
+    // cursor. All three are compositor-only transforms — no mask re-raster.
+    const lamp = el.querySelector<HTMLElement>(`.${styles.lamp}`);
+    const reveal = el.querySelector<HTMLElement>(`.${styles.reveal}`);
+    const revealInner = el.querySelector<HTMLElement>(`.${styles.revealInner}`);
+    const REVEAL_HALF = 140; // half the 280px reveal window
+    const LAMP_HALF = 150; // half the 300px lamp box
+    const place = (x: number, y: number) => {
+      if (lamp) lamp.style.transform = `translate3d(${x - LAMP_HALF}px, ${y - LAMP_HALF}px, 0)`;
+      if (reveal) reveal.style.transform = `translate3d(${x - REVEAL_HALF}px, ${y - REVEAL_HALF}px, 0)`;
+      if (revealInner) revealInner.style.transform = `translate3d(${REVEAL_HALF - x}px, ${REVEAL_HALF - y}px, 0)`;
+    };
+
     const onEnter = (e: PointerEvent) => {
       if (!e.isPrimary) return;
       const r = el.getBoundingClientRect();
       rect = r;
-      // Seed --mx/--my synchronously so the very first painted frame of
-      // data-lit="true" already has the beam under the cursor/finger. Otherwise
-      // a tap-without-move (or the gap before the first pointermove rAF) would
-      // fade in a beam parked at the default -9999px and look like a no-op flash.
-      el.style.setProperty('--mx', `${e.clientX - r.left}px`);
-      el.style.setProperty('--my', `${e.clientY - r.top}px`);
+      const x = e.clientX - r.left;
+      const y = e.clientY - r.top;
+      lastX = x;
+      lastY = y;
+      // Size the counter-translated art holder to the card (so it maps card-space)
+      // and seed the position synchronously so the first lit frame is correct —
+      // otherwise a tap-without-move would fade in a beam parked offscreen.
+      if (revealInner) {
+        revealInner.style.width = `${r.width}px`;
+        revealInner.style.height = `${r.height}px`;
+      }
+      place(x, y);
       el.setAttribute('data-lit', 'true');
     };
     const onLeave = (e: PointerEvent) => {
@@ -352,8 +374,7 @@ function PcbCard({
       if (raf.current) return;
       raf.current = requestAnimationFrame(() => {
         raf.current = 0;
-        el.style.setProperty('--mx', `${lastX}px`);
-        el.style.setProperty('--my', `${lastY}px`);
+        place(lastX, lastY);
       });
     };
     // Touch + pen: capture the pointer on down so finger drift outside the card
@@ -436,7 +457,9 @@ function PcbCard({
     >
       <div className={styles.substrate} aria-hidden="true" />
       <div className={styles.reveal} aria-hidden="true">
-        <PcbArt />
+        <div className={styles.revealInner}>
+          <PcbArt />
+        </div>
       </div>
       <div className={styles.lamp} aria-hidden="true" />
       <span className={styles.fiducialTL} aria-hidden="true" />
