@@ -24,3 +24,28 @@ export function prependScheme(s: string): string {
   if (/^[a-z][a-z0-9+.-]*:/i.test(trimmed) || trimmed.startsWith('//')) return trimmed;
   return `https://${trimmed}`;
 }
+
+/**
+ * Validate that a (possibly scheme-less) URL resolves to an http(s) endpoint,
+ * returning a safe href string or `null`.
+ *
+ * `prependScheme` alone is NOT safe to drop into an href: it passes through any
+ * value that ALREADY carries a scheme, so `javascript:alert(1)`, `data:…`, or
+ * `vbscript:…` survive untouched and execute on click (stored DOM-XSS when the
+ * value comes from the DB or a form). This runs the scheme-prepended candidate
+ * through the URL parser and accepts ONLY `http:`/`https:`.
+ *
+ * Returns `null` for empty input, an unparseable value, or a non-http(s)
+ * scheme, so callers render the link conditionally (`href && <a …>`).
+ */
+export function safeHttpUrl(input: string | null | undefined): string | null {
+  if (!input) return null;
+  const candidate = prependScheme(input);
+  if (!candidate) return null;
+  try {
+    const url = new URL(candidate);
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}

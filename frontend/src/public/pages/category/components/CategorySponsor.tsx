@@ -24,6 +24,7 @@ import type { ReactElement } from 'react';
 import CircuitTraces from '@public/components/widgets/CircuitTraces';
 import type { PlatinumSponsor } from '@public/types/sponsor';
 import { formatPhone } from '@shared/utils/phone';
+import { safeHttpUrl } from '@shared/utils/url';
 import { brandVars, CsCopy, csTelHref, extractBrandColors, mountTileField } from './csFx';
 import type { TileField } from './csFx';
 import uploadIcon from './upload-icon.png';
@@ -39,6 +40,7 @@ interface BoardData {
   phone: string;
   hours: string;
   email: string;
+  websiteHref?: string | null;
   designator?: string;
   brandPrimary?: string;
   brandSecondary?: string;
@@ -287,6 +289,7 @@ export default function CategorySponsor({
         phone: sponsor.phone || '',
         hours: sponsor.coverage_hours || '',
         email: sponsor.email || '',
+        websiteHref: safeHttpUrl(sponsor.website),
         designator: 'CS1 · CATEGORY-SPONSOR',
         // Brand takeover of a REAL sponsor uses the STORED hex (never pixel-
         // extracted from a remote logo — canvas taint). null → platinum default.
@@ -428,7 +431,19 @@ export default function CategorySponsor({
             )}
           </button>
           <span className="csbA-co">
-            <span className="csbA-coname">{s.company}</span>
+            {s.websiteHref ? (
+              <a
+                className="csbA-coname"
+                href={s.websiteHref}
+                target="_blank"
+                rel="sponsored noopener noreferrer"
+                title={'Visit ' + s.company}
+              >
+                {s.company}
+              </a>
+            ) : (
+              <span className="csbA-coname">{s.company}</span>
+            )}
           </span>
         </div>
       </div>
@@ -447,8 +462,8 @@ export default function CategorySponsor({
           <a href={csTelHref(s.phone)}>{formatPhone(s.phone)}</a>
         </span>
         <span className="csbA-fieldfoot">
-          <span className="csbA-sub">{s.hours}</span>
           <CsCopy text={formatPhone(s.phone)} />
+          <span className="csbA-sub">{s.hours}</span>
         </span>
       </div>
       <div className="csbA-field" data-enter>
@@ -459,7 +474,6 @@ export default function CategorySponsor({
           <a href={'mailto:' + s.email}>{s.email}</a>
         </span>
         <span className="csbA-fieldfoot">
-          <span className="csbA-sub">Direct line</span>
           <CsCopy text={s.email} />
         </span>
       </div>
@@ -492,7 +506,7 @@ export default function CategorySponsor({
           >
             <CsFrame designator={'CS1 · PITCH-PREVIEW'} canvasRef={canvasRef} />
             <div className="csb-surface">
-              <CsBadge>Category Sponsor</CsBadge>
+              <CsBadge>Exclusive Partner</CsBadge>
               {renderRail(ps, true)}
             </div>
             <button
@@ -598,7 +612,7 @@ export default function CategorySponsor({
         >
           <CsFrame designator={mapped!.designator || 'CS1 · CATEGORY-SPONSOR'} canvasRef={canvasRef} />
           <div className="csb-surface">
-            <CsBadge>Category Sponsor</CsBadge>
+            <CsBadge>Exclusive Partner</CsBadge>
             {renderRail(mapped!, false)}
           </div>
         </div>

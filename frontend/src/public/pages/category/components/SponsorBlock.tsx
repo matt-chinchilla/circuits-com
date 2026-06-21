@@ -488,7 +488,7 @@ export default function SponsorBlock({ sponsor }: SponsorBlockProps) {
 
   return (
     <PcbCard>
-      <span className={styles.kicker}>&#9670; FEATURED PARTNER</span>
+      <span className={styles.kicker}>&#9670; PREMIERE PARTNER</span>
 
       <div className={styles.pad}>
         <SbLogo src={sponsor.image_url} name={sponsor.supplier_name} />

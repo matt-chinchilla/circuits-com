@@ -433,6 +433,17 @@
   color: var(--txt-strong);
   line-height: 1.12;
   letter-spacing: -0.01em;
+  text-decoration: none;
+}
+a.csbA-coname {
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+a.csbA-coname:hover {
+  color: var(--gold);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
 }
 .csbA-cotag {
   font-size: 0.78rem;
@@ -525,7 +536,7 @@
 .csbA-fieldfoot {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 8px;
 }
 
