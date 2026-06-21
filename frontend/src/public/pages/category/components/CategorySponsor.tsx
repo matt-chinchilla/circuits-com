@@ -62,11 +62,22 @@ export interface CategorySponsorProps {
 
 /* Staggered entrance via the Web Animations API. Content is visible by default
    (fill:none + positive delays), so it can never be stranded invisible. */
+// Sponsor identities whose entrance has already played this session. The banner
+// remounts on every subcategory nav (CategoryPage is pathname-keyed), so without
+// this the fade+slide re-runs each time and reads as the board "re-loading".
+const csEntranceSeen = new Set<string>();
+
 function useCsEntrance(ref: React.RefObject<HTMLElement | null>, dep: unknown) {
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    // Play the entrance ONCE per sponsor identity per session. Resting state is
+    // visible (the animation is fill:none), so a skipped warm nav just shows the
+    // board instantly instead of re-animating it.
+    const key = String(dep);
+    if (csEntranceSeen.has(key)) return;
+    csEntranceSeen.add(key);
     let r1 = 0,
       r2 = 0;
     r1 = requestAnimationFrame(() => {
