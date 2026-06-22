@@ -8,6 +8,7 @@ import { useKeywordRequestModal } from '@public/hooks/useKeywordRequestModal';
 import { api } from '@public/services/api';
 import { SPONSOR_TIERS } from '@public/pages/keyword-landing/constants';
 import type { Sponsor } from '@public/types/sponsor';
+import { safeImageUrl } from '@shared/utils/url';
 import styles from './KeywordSponsorPage.module.scss';
 
 export default function KeywordSponsorPage() {
@@ -153,6 +154,8 @@ export default function KeywordSponsorPage() {
 
   // ─── Main sponsor page ──────────────────────────────────────────────────
 
+  const heroLogo = safeImageUrl(sponsor.image_url);
+
   return (
     <motion.div
       initial={{ opacity: 0, x: 20 }}
@@ -173,7 +176,7 @@ export default function KeywordSponsorPage() {
             &#9733; KEYWORD SPONSOR
           </motion.span>
 
-          {sponsor.image_url && (
+          {heroLogo && (
             <motion.div
               className={styles.logoWrap}
               initial={{ opacity: 0, scale: 0.8 }}
@@ -181,9 +184,10 @@ export default function KeywordSponsorPage() {
               transition={{ duration: 0.5, ease: 'easeOut', delay: 0.05 }}
             >
               <img
-                src={sponsor.image_url}
+                src={heroLogo}
                 alt={`${sponsor.supplier_name} logo`}
                 className={styles.logo}
+                onError={(e) => { e.currentTarget.style.display = 'none'; }}
               />
             </motion.div>
           )}

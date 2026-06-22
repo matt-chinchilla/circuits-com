@@ -1,7 +1,7 @@
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -18,6 +18,7 @@ from app.models import (
     User,
 )
 from app.services.auth_service import get_current_user
+from app.utils.image_url import validate_optional_image_url
 
 router = APIRouter(prefix="/api/suppliers", tags=["suppliers"])
 
@@ -43,6 +44,11 @@ class SupplierCreate(BaseModel):
     description: str | None = None
     logo_url: str | None = None
 
+    @field_validator("logo_url")
+    @classmethod
+    def _validate_logo_url(cls, v: str | None) -> str | None:
+        return validate_optional_image_url(v)
+
 
 class SupplierUpdate(BaseModel):
     name: str | None = None
@@ -54,6 +60,11 @@ class SupplierUpdate(BaseModel):
     coverage_hours: str | None = None
     description: str | None = None
     logo_url: str | None = None
+
+    @field_validator("logo_url")
+    @classmethod
+    def _validate_logo_url(cls, v: str | None) -> str | None:
+        return validate_optional_image_url(v)
 
 
 def supplier_to_dict(supplier: Supplier) -> dict:

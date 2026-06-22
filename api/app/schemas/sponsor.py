@@ -2,7 +2,9 @@ from datetime import date
 from decimal import Decimal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
+
+from app.utils.image_url import validate_optional_image_url
 
 
 class SponsorResponse(BaseModel):
@@ -65,6 +67,11 @@ class AdminSponsorCreate(BaseModel):
     amount: Decimal | None = None
     status: str | None = "Active"
 
+    @field_validator("image_url")
+    @classmethod
+    def _validate_image_url(cls, v: str | None) -> str | None:
+        return validate_optional_image_url(v)
+
 
 class AdminSponsorUpdate(BaseModel):
     supplier_id: UUID | None = None
@@ -77,3 +84,8 @@ class AdminSponsorUpdate(BaseModel):
     end_date: date | None = None
     amount: Decimal | None = None
     status: str | None = None
+
+    @field_validator("image_url")
+    @classmethod
+    def _validate_image_url(cls, v: str | None) -> str | None:
+        return validate_optional_image_url(v)
