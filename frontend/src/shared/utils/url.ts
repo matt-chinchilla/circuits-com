@@ -52,3 +52,25 @@ export function safeHttpUrl(input: string | null | undefined): string | null {
     return null;
   }
 }
+
+// Raster image data-URLs we trust to render in <img src>. SVG is excluded —
+// it can carry inline script. http(s) URLs are validated by URL parsing.
+const RASTER_DATA_IMAGE = /^data:image\/(png|jpe?g|webp|gif|avif);base64,/i;
+
+/**
+ * Sanitize a value destined for an <img src>. Allows http(s) URLs and raster
+ * base64 data-URLs; rejects javascript:, data:text/html, data:image/svg+xml,
+ * and anything unparseable. NOTE: distinct from safeHttpUrl — that rejects
+ * data: URLs, so logos (which may be data-URLs) must use THIS function.
+ */
+export function safeImageUrl(input: string | null | undefined): string | null {
+  if (!input) return null;
+  const trimmed = input.trim();
+  if (RASTER_DATA_IMAGE.test(trimmed)) return trimmed;
+  try {
+    const url = new URL(trimmed);
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { prependScheme, safeHttpUrl } from './url';
+import { prependScheme, safeHttpUrl, safeImageUrl } from './url';
 
 describe('prependScheme', () => {
   it('prepends https:// to a bare hostname', () => {
@@ -60,5 +60,28 @@ describe('safeHttpUrl', () => {
     expect(safeHttpUrl('   ')).toBeNull();
     expect(safeHttpUrl(null)).toBeNull();
     expect(safeHttpUrl(undefined)).toBeNull();
+  });
+});
+
+describe('safeImageUrl', () => {
+  it('allows http and https URLs', () => {
+    expect(safeImageUrl('https://cdn.example.com/a.png')).toBe('https://cdn.example.com/a.png');
+    expect(safeImageUrl('http://example.com/a.jpg')).toBe('http://example.com/a.jpg');
+  });
+  it('allows raster data-image URLs', () => {
+    const d = 'data:image/webp;base64,AAAA';
+    expect(safeImageUrl(d)).toBe(d);
+    expect(safeImageUrl('data:image/png;base64,AAAA')).toBe('data:image/png;base64,AAAA');
+    expect(safeImageUrl('data:image/jpeg;base64,AAAA')).toBe('data:image/jpeg;base64,AAAA');
+  });
+  it('rejects script and html data URLs', () => {
+    expect(safeImageUrl('javascript:alert(1)')).toBeNull();
+    expect(safeImageUrl('data:text/html;base64,AAAA')).toBeNull();
+    expect(safeImageUrl('data:image/svg+xml;base64,AAAA')).toBeNull();
+  });
+  it('returns null for empty/garbage', () => {
+    expect(safeImageUrl('')).toBeNull();
+    expect(safeImageUrl(null)).toBeNull();
+    expect(safeImageUrl('not a url')).toBeNull();
   });
 });
