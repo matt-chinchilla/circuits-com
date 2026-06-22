@@ -108,8 +108,7 @@
   position: sticky;
   top: 0;
   z-index: 3;
-  padding: 11px 18px 9px;
-  padding-top: 40px; // clears the floating .svp-badge (pill height + 11px top)
+  padding: 40px 18px 9px; // top clears the floating .svp-badge (pill height + 11px top)
   border-bottom: 1px dashed color-mix(in srgb, var(--gold) 22%, transparent);
   background: transparent;
 }

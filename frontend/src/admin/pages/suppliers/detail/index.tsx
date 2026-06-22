@@ -126,6 +126,7 @@ export default function SupplierDetailPage() {
   const partRows = parts?.items ?? [];
   const partsTotal = parts?.total ?? 0;
   const websiteHost = supplier.website ? stripScheme(supplier.website) : null;
+  const logoSrc = safeImageUrl(supplier.logo_url);
 
   return (
     <div className={styles.page}>
@@ -145,12 +146,8 @@ export default function SupplierDetailPage() {
           </button>
           <div className={styles.titleRow}>
             <div className={styles.avatar}>
-              {safeImageUrl(supplier.logo_url) ? (
-                <img
-                  className={styles.avatarImg}
-                  src={safeImageUrl(supplier.logo_url) as string}
-                  alt=""
-                />
+              {logoSrc ? (
+                <img className={styles.avatarImg} src={logoSrc} alt="" />
               ) : (
                 <span>{lettermark(supplier.name)}</span>
               )}

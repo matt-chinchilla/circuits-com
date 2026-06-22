@@ -479,7 +479,7 @@ export default function CategorySponsor({
           >
             <span className="csbA-ring" aria-hidden="true"></span>
             {s.logo ? (
-              <CsLogo key={s.logo} src={s.logo} alt={s.company + ' logo'} mark={s.lettermark} />
+              <CsLogo key={s.logo ?? s.company} src={s.logo} alt={s.company + ' logo'} mark={s.lettermark} />
             ) : (
               <span className="csbA-mark">{s.lettermark}</span>
             )}

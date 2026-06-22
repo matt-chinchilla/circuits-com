@@ -144,8 +144,9 @@ export default function SuppliersPage() {
           )}
           {!loading &&
             !error &&
-            filtered.map(({ supplier, sponsorship }) => (
-              <article
+            filtered.map(({ supplier, sponsorship }) => {
+              const logoSrc = safeImageUrl(supplier.logo_url);
+              return <article
                 key={supplier.id}
                 data-tour="supplier-card"
                 className={styles.supCard}
@@ -161,12 +162,8 @@ export default function SuppliersPage() {
               >
                 <div className={styles.supHead}>
                   <div className={styles.supLogo}>
-                    {safeImageUrl(supplier.logo_url) ? (
-                      <img
-                        className={styles.avatarImg}
-                        src={safeImageUrl(supplier.logo_url) as string}
-                        alt=""
-                      />
+                    {logoSrc ? (
+                      <img className={styles.avatarImg} src={logoSrc} alt="" />
                     ) : (
                       <span>{lettermark(supplier.name)}</span>
                     )}
@@ -195,7 +192,7 @@ export default function SuppliersPage() {
                   </span>
                 </div>
               </article>
-            ))}
+            })}
         </div>
       </div>
     </div>
