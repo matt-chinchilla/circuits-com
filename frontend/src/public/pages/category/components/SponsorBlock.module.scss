@@ -147,7 +147,6 @@
   -webkit-mask-image: radial-gradient(circle var(--beam) at 140px 140px, #000 0, #000 36%, transparent 74%);
   mask-image: radial-gradient(circle var(--beam) at 140px 140px, #000 0, #000 36%, transparent 74%);
   transform: translate3d(-9999px, -9999px, 0);
-  will-change: transform;
 }
 
 // Full-card art holder inside the window. JS sizes it to the card and counter-
@@ -157,7 +156,6 @@
   position: absolute;
   top: 0;
   left: 0;
-  will-change: transform;
 }
 
 // Warm "lamp" pool that brightens the copper beneath it (screen blend, scoped
@@ -190,17 +188,24 @@
   // pointer move never writes a cascading var on the card (which would recalc
   // the whole card subtree every frame — see place() in the component).
   transform: translate3d(-9999px, -9999px, 0);
-  will-change: transform;
 }
 
 .card[data-lit='true'] .reveal,
 .card[data-lit='true'] .lamp {
   opacity: 1;
   visibility: visible;
+  // Promote to a GPU layer ONLY while lit (pointer over the card): the flashlight
+  // transforms stay smooth during interaction, but the layers are released at rest
+  // so there's no permanent GPU backing store per card — matters on mobile at
+  // DPR 3, where 3 always-on will-change layers added real memory pressure.
+  will-change: transform;
   // Show immediately on lit; the fade-in plays via opacity.
   transition:
     opacity 260ms ease,
     visibility 0s linear 0s;
+}
+.card[data-lit='true'] .revealInner {
+  will-change: transform;
 }
 
 // Reduced-motion users still get a calm static board with zero per-frame cost;
