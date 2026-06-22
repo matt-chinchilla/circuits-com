@@ -1,0 +1,27 @@
+// frontend/src/admin/components/ImageUploadField.module.scss
+.field { display: flex; flex-direction: column; gap: 8px; }
+.label { font-size: 0.82rem; font-weight: 600; color: var(--a-text, #1f2733); }
+.row { display: flex; gap: 14px; align-items: flex-start; }
+.previewBox {
+  flex: 0 0 auto; width: 72px; height: 72px; border-radius: 10px;
+  border: 1px dashed rgba(0, 0, 0, 0.18); background: #f4f6f9;
+  display: flex; align-items: center; justify-content: center; overflow: hidden;
+}
+.preview { width: 100%; height: 100%; object-fit: contain; }
+.previewEmpty { font-size: 0.62rem; color: #8a93a0; text-transform: uppercase; letter-spacing: 0.06em; }
+.controls { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.fileInput { display: none; }
+.btnRow { display: flex; gap: 8px; }
+.uploadBtn, .clearBtn {
+  font-size: 0.8rem; font-weight: 600; line-height: 1; padding: 9px 14px;
+  border-radius: 8px; cursor: pointer; border: 1px solid transparent;
+}
+.uploadBtn { background: var(--a-blue, #2f6df0); color: #fff; }
+.uploadBtn:disabled { opacity: 0.6; cursor: default; }
+.clearBtn { background: transparent; border-color: rgba(0, 0, 0, 0.16); color: #4a5562; }
+.urlInput {
+  width: 100%; font-size: 0.84rem; padding: 9px 11px; border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.16); font-family: ui-monospace, monospace;
+}
+.hint { font-size: 0.74rem; color: #6b7480; }
+.error { font-size: 0.76rem; color: var(--error-red, #c0392b); font-weight: 600; }
