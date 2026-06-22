@@ -502,8 +502,9 @@ export default function SponsorBlock({ sponsor }: SponsorBlockProps) {
         </div>
         <h3 className={styles.title}>Advertise Here</h3>
         <p className={styles.text}>
-          Reach buyers actively browsing this category. Get featured placement with your brand,
-          logo, and direct contact info.
+          Reach buyers actively browsing this category. Get featured placement
+          with your brand, logo, direct contact details, and a &ldquo;Visit
+          Website&rdquo; button linking shoppers straight to your store.
         </p>
         <a
           href="mailto:john@circuits.com?subject=Category%20Sponsorship%20Inquiry"
