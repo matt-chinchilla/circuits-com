@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Check, ChevronLeft, Trash2 } from 'lucide-react';
 import { adminApi } from '@admin/services/adminApi';
+import { apiErrorDetail } from '@admin/services/apiError';
 import { consumePrefill, type SponsorPrefill } from '@admin/services/prefillBus';
 import {
   deleteSponsor,
@@ -336,7 +337,11 @@ export default function SponsorFormPage() {
       setTimeout(() => navigate('/admin/sponsors'), 600);
     } catch (err) {
       console.error('[SponsorFormPage] save failed', err);
-      setToast('Save failed — try again');
+      // Surface the backend's specific message when present — e.g. the single-slot
+      // 409 "This category already has an active <tier> sponsor. Expire or remove
+      // the current sponsor before adding another." — so the admin knows the slot
+      // is taken and how to proceed, instead of a generic "try again".
+      setToast(apiErrorDetail(err) ?? 'Save failed — try again');
     } finally {
       setSaving(false);
     }
@@ -521,8 +526,9 @@ export default function SponsorFormPage() {
                 />
                 <p className={styles.fieldHint}>
                   Becomes the premium Category Sponsor board on this top-level
-                  category and every subpage. Single-slot — a new Platinum
-                  sponsor supersedes the previous one.
+                  category and every subpage. Single-slot — only one active
+                  Platinum per category. To re-sell it, expire or remove the
+                  current sponsor first.
                 </p>
                 {errors.category_id && <div className={styles.fieldError}>{errors.category_id}</div>}
               </div>

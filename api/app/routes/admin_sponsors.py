@@ -24,6 +24,7 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.models import Category, Sponsor, Supplier, User
+from app.models.sponsor import is_single_slot
 from app.schemas.sponsor import (
     AdminSponsorCreate,
     AdminSponsorResponse,
@@ -32,19 +33,6 @@ from app.schemas.sponsor import (
 from app.services.auth_service import get_current_user
 
 router = APIRouter(prefix="/api/admin/sponsors", tags=["admin-sponsors"])
-
-
-def _is_single_slot(tier: str | None, is_top_level: bool) -> bool:
-    """Single-occupant placements that supersede same-tier peers: Platinum on a
-    top-level category, Gold on a child. Silver (directory) and keyword
-    placements are multi-occupant — never supersede.
-
-    Casing-tolerant: admin emits TitleCase ('Platinum'), legacy seed rows are
-    lowercase ('gold'). Normalize at the comparison site (per CLAUDE.md "Sponsor
-    tier casing" gotcha).
-    """
-    t = (tier or "").strip().lower()
-    return (t == "platinum" and is_top_level) or (t == "gold" and not is_top_level)
 
 
 def _serialize(sponsor: Sponsor) -> AdminSponsorResponse:
@@ -85,8 +73,9 @@ def _validate_xor(category_id: uuid.UUID | None, keyword: str | None) -> None:
 def _validate_tier_placement(db: Session, tier: str | None, category_id: uuid.UUID | None) -> None:
     """Enforce the tier ↔ placement matrix (2026-06-11 tier-boards model):
 
-      - Category (top-level, ``parent_id IS NULL``): **Platinum** only (single
-        Category Sponsor board, supersede peers).
+      - Category (top-level, ``parent_id IS NULL``): **Platinum** only (single-slot
+        Category Sponsor board; a 2nd active peer is BLOCKED 409 by
+        ``_reject_if_slot_taken`` + migration 016's unique index).
       - Subcategory (child): **Gold** (single slot) or **Silver** (directory).
       - Keyword: **Silver / Gold** (multi-sponsor; Platinum is top-level-only).
 
@@ -125,30 +114,34 @@ def _parse_sponsor_id(sponsor_id: str) -> uuid.UUID:
         raise HTTPException(status_code=404, detail="Sponsor not found") from None
 
 
-def _supersede_existing_for_category(
+def _reject_if_slot_taken(
     db: Session,
     category_id: uuid.UUID,
     tier: str,
     exclude_id: uuid.UUID | None = None,
 ) -> None:
-    """Mark existing visible **same-tier** sponsors for ``category_id`` Expired.
+    """Block a second occupant of a single-slot placement → 409 (incumbent wins).
 
-    Enforces single-occupancy for the single-slot tiers (Platinum on a
-    top-level category, Gold on a child) on every write path (POST +
-    PATCH-with-category-id-change). Only callers that have confirmed a
-    single-slot placement via ``_is_single_slot`` invoke this, so it filters to
-    the SAME tier — a new Gold must not Expire the coexisting Silver directory
-    on the same child, and vice versa. The public read in
-    ``category_service`` mirrors the newest-visible-per-tier predicate.
+    Single-occupant placements (Platinum on a top-level category, Gold on a
+    child) hold ONE active sponsor: if an active same-tier sponsor already holds
+    ``category_id``, reject — the incumbent keeps the slot. This is the 2026-06-22
+    BLOCK policy, replacing the prior supersede (which Expired the old one so the
+    NEWEST won); re-selling a slot now means expiring/removing the current
+    sponsor first. The Postgres partial unique indexes (migration 016) are the
+    un-bypassable DB backstop; this gives the clean 422/409 on the API path (and
+    covers SQLite tests, which skip the indexes like the tier-placement trigger).
 
-    NULL is treated as Active: legacy seed rows (`db/seed.py`) omit the
-    ``status`` column entirely, leaving it NULL. SQL three-valued logic
-    means a naive ``status != 'Expired'`` filter SKIPS those rows (NULL !=
-    'Expired' → NULL, not TRUE), so the supersede silently leaves a
-    legacy row Active alongside the new one. ``or_(== 'Active', is_(None))``
-    catches both. ``Paused`` is preserved unchanged — it's a deliberate
-    lifecycle hold (billing dispute / contract pause), not a stale row, and
-    a future booking on the same slot should not wipe it.
+    Only callers that have confirmed a single-slot placement via
+    ``is_single_slot`` invoke this, so it filters to the SAME tier — a new Gold
+    must not collide with the coexisting Silver directory on the same child, and
+    vice versa. ``exclude_id`` skips the row being PATCHed (re-validating itself).
+
+    NULL is treated as Active: legacy seed rows (`db/seed.py`) omit the ``status``
+    column, leaving it NULL. SQL three-valued logic means a naive
+    ``status != 'Expired'`` filter SKIPS those rows, so a legacy incumbent would
+    be invisible here and the second sponsor wrongly allowed.
+    ``or_(== 'Active', is_(None))`` catches both. ``Paused``/``Expired`` rows are
+    not active occupants, so they never block a new booking.
     """
     q = db.query(Sponsor).filter(
         Sponsor.category_id == category_id,
@@ -157,8 +150,14 @@ def _supersede_existing_for_category(
     )
     if exclude_id is not None:
         q = q.filter(Sponsor.id != exclude_id)
-    for old in q.all():
-        old.status = "Expired"
+    if db.query(q.exists()).scalar():
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"This category already has an active {tier} sponsor. "
+                "Expire or remove the current sponsor before adding another."
+            ),
+        )
 
 
 @router.get("/", response_model=list[AdminSponsorResponse])
@@ -183,15 +182,15 @@ def create_sponsor(
     if not supplier:
         raise HTTPException(status_code=404, detail="Supplier not found")
 
-    # Tier-aware supersede: single-slot placements (Platinum on a top-level
-    # category, Gold on a child) Expire their same-tier peers so the board
-    # shows one. Silver (the subcategory directory) and keyword placements are
-    # multi-occupant — never supersede. Look up the category's parent_id to
-    # resolve top-level vs child.
+    # Single-slot BLOCK: a single-occupant placement (Platinum on a top-level
+    # category, Gold on a child) rejects a second active sponsor with 409 — the
+    # incumbent keeps the slot. Silver (the subcategory directory) and keyword
+    # placements are multi-occupant — never blocked. Look up the category's
+    # parent_id to resolve top-level vs child.
     if body.category_id is not None:
         cat = db.query(Category).filter(Category.id == body.category_id).first()
-        if cat is not None and _is_single_slot(body.tier, cat.parent_id is None):
-            _supersede_existing_for_category(db, body.category_id, body.tier)
+        if cat is not None and is_single_slot(body.tier, cat.parent_id is None):
+            _reject_if_slot_taken(db, body.category_id, body.tier)
 
     sponsor = Sponsor(
         id=uuid.uuid4(),
@@ -240,6 +239,7 @@ def update_sponsor(
     new_category_id = update_data.get("category_id", sponsor.category_id)
     new_keyword = update_data.get("keyword", sponsor.keyword)
     new_tier = update_data.get("tier", sponsor.tier)
+    new_status = update_data.get("status", sponsor.status)
 
     # Re-validate XOR + tier/placement invariants against the post-update
     # state so a PATCH can't leave the row in an illegal config.
@@ -248,15 +248,24 @@ def update_sponsor(
     if "category_id" in update_data or "tier" in update_data:
         _validate_tier_placement(db, new_tier, new_category_id)
 
-    # Re-assert single-slot occupancy after the update: if this PATCH lands the
-    # sponsor as a single-slot tier (Platinum on top-level / Gold on child) —
-    # whether by retargeting the category OR changing the tier — expire
-    # same-tier peers on that category. Silver/keyword are multi-occupant: never
-    # supersede. (Idempotent: supersede excludes self.)
-    if new_category_id is not None and ("category_id" in update_data or "tier" in update_data):
+    # Re-assert single-slot occupancy after the update: BLOCK when the POST-UPDATE
+    # row would be an ACTIVE single-slot sponsor (Platinum on top-level / Gold on
+    # child) AND the update touches a field that could create a 2nd active occupant
+    # of that slot — the category, the tier, OR the status flipping to active. The
+    # status case matters: re-activating an Expired sponsor (status-only PATCH) into
+    # a now-occupied slot must 409 too, else it dodges the category/tier-only check
+    # and two active sponsors land on one slot. An update that Expires/Pauses a row
+    # frees the slot (new_is_active False) — never blocked. Silver/keyword are
+    # multi-occupant. exclude_id skips self, so re-saving a row on its own slot is fine.
+    new_is_active = new_status == "Active" or new_status is None
+    if (
+        new_category_id is not None
+        and new_is_active
+        and bool({"category_id", "tier", "status"} & update_data.keys())
+    ):
         target_cat = db.query(Category).filter(Category.id == new_category_id).first()
-        if target_cat is not None and _is_single_slot(new_tier, target_cat.parent_id is None):
-            _supersede_existing_for_category(db, new_category_id, new_tier, exclude_id=sponsor.id)
+        if target_cat is not None and is_single_slot(new_tier, target_cat.parent_id is None):
+            _reject_if_slot_taken(db, new_category_id, new_tier, exclude_id=sponsor.id)
 
     for key, value in update_data.items():
         setattr(sponsor, key, value)

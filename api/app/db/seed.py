@@ -18,7 +18,7 @@ from decimal import Decimal
 from pathlib import Path
 
 import bcrypt
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.db.session import SessionLocal
@@ -33,6 +33,7 @@ from app.models import (
     Supplier,
     User,
 )
+from app.models.sponsor import is_single_slot
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -504,28 +505,51 @@ def get_or_create_sponsor(
     image_url: str | None = None,
     description: str | None = None,
     tier: str = "Gold",
-) -> Sponsor:
+) -> Sponsor | None:
     query = db.query(Sponsor).filter(Sponsor.supplier_id == supplier.id)
     if category is not None:
         query = query.filter(Sponsor.category_id == category.id)
     elif keyword is not None:
         query = query.filter(Sponsor.keyword == keyword)
     obj = query.first()
-    if obj is None:
-        obj = Sponsor(
-            supplier_id=supplier.id,
-            category_id=category.id if category else None,
-            keyword=keyword,
-            image_url=image_url,
-            description=description,
-            # Canonicalize to TitleCase so seeded rows match the admin-created
-            # casing — the `tier` column is a free string and the frontend (plus
-            # _is_featured) compares case-insensitively, but consistent data
-            # keeps every TitleCase-keyed reader correct. (CLAUDE.md tier casing.)
-            tier=tier.strip().capitalize(),
+    if obj is not None:
+        return obj
+
+    # Don't create a SECOND active occupant of a single-slot placement (Platinum
+    # on a top-level category, Gold on a child) — the slot is BLOCKED to one active
+    # sponsor (migration 016 partial unique index + the admin 409). On a fresh
+    # reseed each slot is empty so this is a no-op; on an EXISTING db where an admin
+    # already filled the slot with another company, this keeps the seed idempotent
+    # (skip — the incumbent wins) instead of crashing on the unique index. Silver
+    # (directory) + keyword placements are multi-occupant — never guarded.
+    if category is not None and is_single_slot(tier, category.parent_id is None):
+        t = (tier or "").strip().lower()
+        taken = (
+            db.query(Sponsor)
+            .filter(
+                Sponsor.category_id == category.id,
+                func.lower(func.coalesce(Sponsor.tier, "")) == t,
+                or_(Sponsor.status == "Active", Sponsor.status.is_(None)),
+            )
+            .first()
         )
-        db.add(obj)
-        db.flush()
+        if taken is not None:
+            return None  # slot already held by an active sponsor — leave it
+
+    obj = Sponsor(
+        supplier_id=supplier.id,
+        category_id=category.id if category else None,
+        keyword=keyword,
+        image_url=image_url,
+        description=description,
+        # Canonicalize to TitleCase so seeded rows match the admin-created
+        # casing — the `tier` column is a free string and the frontend (plus
+        # _is_featured) compares case-insensitively, but consistent data
+        # keeps every TitleCase-keyed reader correct. (CLAUDE.md tier casing.)
+        tier=tier.strip().capitalize(),
+    )
+    db.add(obj)
+    db.flush()
     return obj
 
 

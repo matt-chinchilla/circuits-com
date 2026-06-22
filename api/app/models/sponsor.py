@@ -60,3 +60,16 @@ class Sponsor(Base):
 
     supplier = relationship("Supplier")
     category = relationship("Category")
+
+
+def is_single_slot(tier: str | None, is_top_level: bool) -> bool:
+    """True for single-occupant sponsor placements — Platinum on a top-level
+    category, Gold on a child — which hold exactly ONE active sponsor. A 2nd is
+    BLOCKED 409 by ``admin_sponsors._reject_if_slot_taken`` + migration 016's
+    partial unique indexes, and ``seed.get_or_create_sponsor`` skips a taken slot.
+    Silver (subcategory directory) and keyword placements are multi-occupant —
+    never single-slot. The single home for the tier↔occupancy matrix so the API
+    block and the seed guard can never desync. Casing-tolerant (admin emits
+    TitleCase, legacy seed/DB rows lowercase — CLAUDE.md tier-casing gotcha)."""
+    t = (tier or "").strip().lower()
+    return (t == "platinum" and is_top_level) or (t == "gold" and not is_top_level)

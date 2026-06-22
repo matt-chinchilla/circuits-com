@@ -6,6 +6,7 @@ import { useState, type FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import { adminApi } from '@admin/services/adminApi';
+import { apiErrorDetail } from '@admin/services/apiError';
 import AuthShell from '@admin/pages/login/components/AuthShell';
 import Field from '@admin/pages/login/components/Field';
 import SubmitButton from '@admin/pages/login/components/SubmitButton';
@@ -91,13 +92,9 @@ export default function ResetPasswordPage() {
         setBanner('Couldn’t reach the server. Check your connection and try again.');
         return;
       }
-      // Only a string detail (the 400 messages) is safe to render; a 422 detail
-      // is an array of error objects and would crash as a React child.
-      const raw = axios.isAxiosError(err)
-        ? (err.response?.data as { detail?: unknown } | undefined)?.detail
-        : undefined;
-      const detail = typeof raw === 'string' ? raw : undefined;
-      setBanner(detail || 'This reset link is no longer valid. Please request a new one.');
+      setBanner(
+        apiErrorDetail(err) || 'This reset link is no longer valid. Please request a new one.',
+      );
     }
   };
 

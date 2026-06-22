@@ -6,7 +6,8 @@ from app.models import Category, Part, PartListing, PriceBreak, Sponsor, Supplie
 
 def _active_sponsor():
     """Visible-sponsor predicate: Active OR legacy NULL status (Paused/Expired
-    are hidden). Must match the admin write-path supersede."""
+    are hidden). Must match the admin write-path block
+    (`admin_sponsors._reject_if_slot_taken`) + migration 016's index predicate."""
     return or_(Sponsor.status == "Active", Sponsor.status.is_(None))
 
 
@@ -119,9 +120,13 @@ def get_category_partners(db: Session, slug: str) -> dict | None:
     # lazy SELECT here (one object, not a loop) — not an N+1.
     top = category if category.parent_id is None else category.parent
 
-    # Single visible Platinum sponsor — newest-wins (mirrors the write-side
-    # single-slot supersede). Top-level placements are Platinum-only per the
-    # matrix, but tier-filter explicitly so a legacy/mis-tiered row can't leak.
+    # Single visible Platinum sponsor. Single-occupancy is enforced on the write
+    # path (`admin_sponsors._reject_if_slot_taken`, 409 BLOCK) + a Postgres partial
+    # unique index (migration 016), so at most one is active; created_at.asc()
+    # (oldest/incumbent wins, matching the block + migration-016 dedup) breaks any
+    # legacy 2-active tie the same way the write side does. Top-level placements are
+    # Platinum-only per the matrix, but tier-filter explicitly so a legacy/mis-
+    # tiered row can't leak.
     # Sponsor + Supplier in ONE join (no N+1 — this is a category-page hot path).
     row = (
         db.query(Sponsor, Supplier)
@@ -131,7 +136,7 @@ def get_category_partners(db: Session, slug: str) -> dict | None:
             func.lower(Sponsor.tier) == "platinum",
             _active_sponsor(),
         )
-        .order_by(Sponsor.created_at.desc())
+        .order_by(Sponsor.created_at.asc())
         .first()
     )
     platinum = _sponsor_board_dict(row[0], row[1]) if row else None
@@ -355,13 +360,16 @@ def get_category_by_slug(
     if not category:
         return None
 
-    # The child's single Subcategory Sponsor slot → SponsorBlock. This is now
-    # the newest visible **Gold** sponsor (tier-filtered — Silver rows populate
-    # the directory below, not this slot). The visible-status filter (Active OR
-    # legacy NULL) MUST match the admin write-path supersede in
-    # `routes/admin_sponsors._supersede_existing_for_category`, else an admin
-    # marking the current sponsor Expired (deliberately taking the slot down)
-    # would still surface it. Paused sponsors are hidden too.
+    # The child's single Subcategory Sponsor slot → SponsorBlock. This is the
+    # single visible **Gold** sponsor (tier-filtered — Silver rows populate the
+    # directory below, not this slot). Single-occupancy is enforced on the write
+    # path (`routes/admin_sponsors._reject_if_slot_taken`, 409 BLOCK) plus a
+    # Postgres partial unique index (migration 016), so at most one Gold is active
+    # per child. The visible-status filter (Active OR legacy NULL) MUST match that
+    # block, else an admin marking the current sponsor Expired (deliberately
+    # taking the slot down) would still surface it. Paused sponsors are hidden
+    # too; created_at.asc() (oldest/incumbent wins, matching the write-side block +
+    # migration 016) breaks any legacy 2-active tie consistently.
     # Sponsor + Supplier in ONE join (no N+1 — this is a category-page hot path).
     gold_row = (
         db.query(Sponsor, Supplier)
@@ -371,7 +379,7 @@ def get_category_by_slug(
             func.lower(Sponsor.tier) == "gold",
             _active_sponsor(),
         )
-        .order_by(Sponsor.created_at.desc())
+        .order_by(Sponsor.created_at.asc())
         .first()
     )
     sponsor_data = _sponsor_board_dict(gold_row[0], gold_row[1]) if gold_row else None

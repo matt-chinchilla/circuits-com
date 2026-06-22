@@ -6,8 +6,9 @@ The new matrix (LOCKED):
   - Keyword (``category_id IS NULL``) ⇒ **silver** or **gold** (multi).
 
 These tests hit the Python validator ``_validate_tier_placement`` and the
-tier-aware supersede directly (both run on SQLite). The Postgres trigger that
-mirrors this matrix is verified separately on PG — SQLite ignores triggers.
+single-slot BLOCK (``_reject_if_slot_taken``) directly (both run on SQLite). The
+Postgres trigger + migration-016 partial unique indexes that mirror this matrix
+at the DB level are verified separately on PG — SQLite ignores both.
 """
 
 import uuid
@@ -58,7 +59,7 @@ def two_suppliers(db):
 
 @pytest.fixture
 def three_suppliers(db):
-    """Three suppliers usable as sponsors (tier-change supersede scenarios)."""
+    """Three suppliers usable as sponsors (tier-change single-slot scenarios)."""
     a = Supplier(id=uuid.uuid4(), name="Alpha Components", website="alpha.com")
     b = Supplier(id=uuid.uuid4(), name="Beta Distribution", website="beta.com")
     c = Supplier(id=uuid.uuid4(), name="Gamma Supply", website="gamma.com")
@@ -117,10 +118,13 @@ def test_keyword_rejects_platinum(db):
     assert ei.value.status_code == 422
 
 
-# --- Task 1.2: tier-aware supersede -----------------------------------------
+# --- Task 1.2: single-slot BLOCK (incumbent wins) ---------------------------
 
 
-def test_second_platinum_supersedes_first(admin_client, top_category, two_suppliers):
+def test_second_platinum_blocked_incumbent_kept(admin_client, top_category, two_suppliers):
+    """Platinum top-level slot is single-occupant: a 2nd Platinum is BLOCKED (409)
+    and the incumbent (a) keeps the slot. (2026-06-22 BLOCK policy — was supersede,
+    where the newest won.)"""
     a, b = two_suppliers
     r1 = admin_client.post(
         "/api/admin/sponsors/",
@@ -131,13 +135,13 @@ def test_second_platinum_supersedes_first(admin_client, top_category, two_suppli
         "/api/admin/sponsors/",
         json={"supplier_id": str(b.id), "category_id": str(top_category.id), "tier": "platinum"},
     )
-    assert r2.status_code == 200, r2.text
+    assert r2.status_code == 409, r2.text
     active = [
         s
         for s in admin_client.get("/api/admin/sponsors/").json()
         if s["category_id"] == str(top_category.id) and s["status"] != "Expired"
     ]
-    assert len(active) == 1 and active[0]["supplier_id"] == str(b.id)
+    assert len(active) == 1 and active[0]["supplier_id"] == str(a.id)
 
 
 def test_silver_does_not_supersede_and_coexists(admin_client, child_category, two_suppliers):
@@ -159,14 +163,15 @@ def test_silver_does_not_supersede_and_coexists(admin_client, child_category, tw
     assert len(active) == 2
 
 
-def test_tier_only_patch_to_gold_supersedes_existing_gold(
+def test_tier_only_patch_to_gold_blocked_by_existing_gold(
     admin_client, child_category, three_suppliers
 ):
-    """Regression: a tier-only PATCH (Silver→Gold) on a child that already has a
-    Gold sponsor must Expire that pre-existing Gold — single-slot occupancy is
-    re-asserted on tier change, not just on category change."""
-    a, b, c = three_suppliers
-    # Pre-existing Gold on the child (supplier c).
+    """Regression: a tier-only PATCH (Silver→Gold) on a child that already has an
+    active Gold sponsor is BLOCKED (409) — single-slot occupancy is re-asserted on
+    tier change, not just on category change, and the incumbent Gold keeps the slot.
+    The block runs BEFORE the update is applied, so the patched row stays Silver."""
+    a, _b, c = three_suppliers
+    # Pre-existing Gold on the child (supplier c) — the incumbent.
     gold = admin_client.post(
         "/api/admin/sponsors/",
         json={"supplier_id": str(c.id), "category_id": str(child_category.id), "tier": "gold"},
@@ -178,25 +183,18 @@ def test_tier_only_patch_to_gold_supersedes_existing_gold(
     )
     assert gold.status_code == 200 and silver.status_code == 200, (gold.text, silver.text)
 
-    # Promote the Silver row to Gold on the SAME child (tier-only PATCH).
+    # Promote the Silver row to Gold on the SAME child (tier-only PATCH) → 409.
     patched = admin_client.patch(
         f"/api/admin/sponsors/{silver.json()['id']}", json={"tier": "gold"}
     )
-    assert patched.status_code == 200, patched.text
+    assert patched.status_code == 409, patched.text
 
     rows = admin_client.get("/api/admin/sponsors/").json()
     by_id = {r["id"]: r for r in rows}
-    # The pre-existing Gold (supplier c) was superseded.
-    assert by_id[gold.json()["id"]]["status"] == "Expired"
-    # The patched row is the only Active Gold on this child.
-    active_gold = [
-        r
-        for r in rows
-        if r["category_id"] == str(child_category.id)
-        and (r["tier"] or "").lower() == "gold"
-        and r["status"] != "Expired"
-    ]
-    assert len(active_gold) == 1 and active_gold[0]["supplier_id"] == str(a.id)
+    # The incumbent Gold (supplier c) is untouched (not superseded).
+    assert by_id[gold.json()["id"]]["status"] != "Expired"
+    # The PATCH was rejected before applying — the row stays Silver.
+    assert (by_id[silver.json()["id"]]["tier"] or "").lower() == "silver"
 
 
 def test_tier_only_patch_to_silver_does_not_supersede(

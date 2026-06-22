@@ -4,9 +4,13 @@ The `sponsors` table is the ONLY source for the category page's sponsor boards
 (CategorySupplier.is_featured was dropped). DB uniqueness + the tier↔placement
 rule keep it ACID-consistent:
   - one sponsorship per (company, category) and per (company, keyword);
-  - Platinum ⟺ top-level category (single-slot, supersede peers),
-    Gold ⟺ child (single-slot) or Silver ⟺ child (directory, many),
+  - Platinum ⟺ top-level category (single-slot, BLOCK peers),
+    Gold ⟺ child (single-slot, BLOCK peers) or Silver ⟺ child (directory, many),
     keyword ⟺ Silver/Gold (many).
+
+Single-slot (Platinum-top / Gold-child) is BLOCK, not supersede (2026-06-22): a
+second active sponsor for an occupied slot is rejected 409 — the incumbent keeps
+it. Re-selling a slot means expiring/removing the current sponsor first.
 
 Uniqueness is enforced by model UniqueConstraints (so it holds on SQLite too);
 tier↔placement by the app validator here (the Postgres trigger is the DB-level
@@ -82,9 +86,12 @@ def test_company_may_hold_many_keyword_sponsorships(client, seeded_db):
 
 
 def test_company_may_sponsor_many_categories(client, seeded_db):
-    """A company sponsors many DIFFERENT categories (one each)."""
+    """A company sponsors many DIFFERENT categories (one each). Free the child's
+    single Gold slot first (the seeded Kennedy holds it) so the same company can
+    take it — the single-slot block is per-category, not per-company."""
     headers = _auth(client)
     sup, parent, child = seeded_db["supplier1"], seeded_db["parent"], seeded_db["child"]
+    client.delete(f"/api/admin/sponsors/{seeded_db['sponsor'].id}", headers=headers)
     assert (
         _post(
             client,
@@ -166,7 +173,10 @@ def test_subcategory_accepts_silver(client, seeded_db):
 
 
 def test_subcategory_accepts_gold(client, seeded_db):
+    """Gold is a valid child tier. Free the child's single Gold slot first (the
+    seeded Kennedy holds it) so this asserts tier-acceptance, not occupancy."""
     headers = _auth(client)
+    client.delete(f"/api/admin/sponsors/{seeded_db['sponsor'].id}", headers=headers)
     r = _post(
         client,
         headers,
@@ -271,7 +281,7 @@ def test_patch_tier_to_invalid_for_placement_rejected(client, seeded_db):
 def test_patch_category_to_top_level_without_platinum_rejected(client, seeded_db):
     """Re-targeting the seeded Gold child sponsor onto a top-level category
     (tier stays Gold) breaks the matrix → 422. Validation must precede the
-    supersede side-effect, so the prior slot is left untouched."""
+    single-slot block check, so the prior slot is left untouched."""
     headers = _auth(client)
     sid, parent = str(seeded_db["sponsor"].id), seeded_db["parent"]
     r = client.patch(
@@ -308,15 +318,19 @@ def test_patch_to_xor_violation_rejected(client, seeded_db):
     assert r.status_code == 422, r.text
 
 
-# --- Single-slot supersede (Gold child slot + Platinum top-level slot) ------
+# --- Single-slot BLOCK: incumbent keeps the slot (2026-06-22) ---------------
+# Single-occupant tiers (Platinum on a top-level category, Gold on a child) now
+# REJECT a second active sponsor with 409 — the incumbent (oldest/existing) keeps
+# the slot (was: supersede, where the newest auto-expired the prior one). To
+# re-sell a slot the admin expires/removes the current sponsor first.
 
 
-def test_new_child_sponsor_supersedes_prior(client, seeded_db):
-    """The child Gold slot is SINGLE: a new Gold sponsor on a child Expires the
-    prior visible Gold one. The seeded Kennedy sponsor has NULL status (legacy)
-    — NULL counts as visible, so it too is superseded (guards the 'status !=
-    Expired skips NULL' SQL three-valued-logic trap), and the read-side then
-    hides the now-Expired row."""
+def test_second_gold_on_child_blocked_incumbent_kept(client, seeded_db):
+    """The child Gold slot is SINGLE-occupant: a 2nd Gold sponsor on a child that
+    already has one (seeded Kennedy, NULL status = active) is REJECTED 409, and
+    the incumbent keeps the SponsorBlock slot. NULL-as-active is the trap this
+    guards — a naive `status != 'Expired'` would skip the legacy row and wrongly
+    allow the second."""
     headers = _auth(client)
     avnet, child = seeded_db["supplier1"], seeded_db["child"]
     # Kennedy (supplier2) already sponsors `child` (Gold, status NULL) via fixture.
@@ -328,18 +342,16 @@ def test_new_child_sponsor_supersedes_prior(client, seeded_db):
         tier="Gold",
         status="Active",
     )
-    assert r.status_code == 200, r.text
-    # The child's single Gold slot is SponsorBlock's `sponsor` (the Platinum
-    # board is the top-level artifact now). Newest-visible wins.
+    assert r.status_code == 409, r.text
     sponsor = client.get(f"/api/categories/{child.slug}").json()["sponsor"]
-    assert sponsor is not None and sponsor["supplier_name"] == "Avnet", sponsor
+    assert sponsor is not None and sponsor["supplier_name"] == "Kennedy Electronics", sponsor
 
 
-def test_second_platinum_top_level_supersedes_first(client, seeded_db):
-    """Platinum is a SINGLE-slot Category Sponsor board: a 2nd Platinum company
-    on the SAME top-level category SUPERSEDES the 1st (only the newest shows) —
-    the contrast to the old multi-row Featured banner. The `/partners` board now
-    carries the single surviving Platinum as `platinum`."""
+def test_second_platinum_top_level_blocked_incumbent_kept(client, seeded_db):
+    """Platinum is a SINGLE-slot Category Sponsor board: a 2nd Platinum company on
+    the SAME top-level category is REJECTED 409 — the first/incumbent keeps the
+    board (was: superseded by the newest). The `/partners` board keeps carrying
+    the incumbent as `platinum`."""
     headers = _auth(client)
     a, b, parent = seeded_db["supplier1"], seeded_db["supplier2"], seeded_db["parent"]
     assert (
@@ -353,26 +365,138 @@ def test_second_platinum_top_level_supersedes_first(client, seeded_db):
         ).status_code
         == 200
     )
+    r2 = _post(
+        client,
+        headers,
+        supplier_id=str(b.id),
+        category_id=str(parent.id),
+        tier="Platinum",
+        status="Active",
+    )
+    assert r2.status_code == 409, r2.text
+    plat = client.get(f"/api/categories/{parent.slug}/partners").json()["platinum"]
+    assert plat is not None and plat["supplier_name"] == "Avnet", plat
+    # Exactly one active sponsor remains on the category — the incumbent (a).
+    active = [
+        s
+        for s in client.get("/api/admin/sponsors/", headers=headers).json()
+        if s["category_id"] == str(parent.id) and s["status"] != "Expired"
+    ]
+    assert len(active) == 1 and active[0]["supplier_id"] == str(a.id), active
+
+
+def test_silver_directory_allows_many_on_child(client, seeded_db, db):
+    """Silver is the multi-occupant subcategory DIRECTORY — the single-slot block
+    must NOT apply: several Silver sponsors coexist on one child."""
+    import uuid as _uuid
+
+    from app.models import Supplier
+
+    headers = _auth(client)
+    child = seeded_db["child"]
+    extras = [
+        Supplier(id=_uuid.uuid4(), name="Mouser", website="mouser.com", email="x@mouser.com"),
+        Supplier(id=_uuid.uuid4(), name="DigiKey", website="digikey.com", email="x@digikey.com"),
+    ]
+    db.add_all(extras)
+    db.commit()
+    for s in extras:
+        r = _post(
+            client,
+            headers,
+            supplier_id=str(s.id),
+            category_id=str(child.id),
+            tier="Silver",
+            status="Active",
+        )
+        assert r.status_code == 200, r.text
+
+
+def test_patch_into_occupied_platinum_slot_blocked(client, seeded_db):
+    """PATCH that retargets a sponsor onto a top-level category that already has an
+    active Platinum is REJECTED 409 (the incumbent keeps the slot) — the block runs
+    on the mutation path too, excluding self."""
+    headers = _auth(client)
+    avnet, parent = seeded_db["supplier1"], seeded_db["parent"]
+    # Avnet takes the parent's Platinum slot.
     assert (
         _post(
             client,
             headers,
-            supplier_id=str(b.id),
+            supplier_id=str(avnet.id),
             category_id=str(parent.id),
             tier="Platinum",
             status="Active",
         ).status_code
         == 200
     )
-    plat = client.get(f"/api/categories/{parent.slug}/partners").json()["platinum"]
-    assert plat is not None and plat["supplier_name"] == "Kennedy Electronics", plat
-    # The superseded first sponsor is Expired in the admin list (single-slot).
-    active = [
-        s
-        for s in client.get("/api/admin/sponsors/", headers=headers).json()
-        if s["category_id"] == str(parent.id) and s["status"] != "Expired"
-    ]
-    assert len(active) == 1 and active[0]["supplier_id"] == str(b.id), active
+    # Retarget Kennedy's seeded child-Gold sponsor onto the occupied parent as Platinum → 409.
+    sid = str(seeded_db["sponsor"].id)
+    r = client.patch(
+        f"/api/admin/sponsors/{sid}",
+        json={"category_id": str(parent.id), "tier": "Platinum"},
+        headers=headers,
+    )
+    assert r.status_code == 409, r.text
+
+
+def test_expire_incumbent_then_resell_allowed(client, seeded_db):
+    """Re-sell flow: once the incumbent single-slot sponsor is Expired, the slot
+    frees up and a new sponsor can take it (200)."""
+    headers = _auth(client)
+    avnet, child = seeded_db["supplier1"], seeded_db["child"]
+    sid = str(seeded_db["sponsor"].id)  # Kennedy Gold on child (incumbent)
+    # Adding a 2nd Gold is blocked while the incumbent is active.
+    blocked = _post(
+        client,
+        headers,
+        supplier_id=str(avnet.id),
+        category_id=str(child.id),
+        tier="Gold",
+        status="Active",
+    )
+    assert blocked.status_code == 409, blocked.text
+    # Expire the incumbent (status-only PATCH — no block re-check), freeing the slot.
+    e = client.patch(f"/api/admin/sponsors/{sid}", json={"status": "Expired"}, headers=headers)
+    assert e.status_code == 200, e.text
+    # Now the new Gold sponsor is accepted.
+    r = _post(
+        client,
+        headers,
+        supplier_id=str(avnet.id),
+        category_id=str(child.id),
+        tier="Gold",
+        status="Active",
+    )
+    assert r.status_code == 200, r.text
+    sponsor = client.get(f"/api/categories/{child.slug}").json()["sponsor"]
+    assert sponsor is not None and sponsor["supplier_name"] == "Avnet", sponsor
+
+
+def test_reactivating_expired_into_occupied_slot_blocked(client, seeded_db):
+    """A status-only PATCH that re-activates an Expired single-slot sponsor into a
+    now-occupied slot is BLOCKED (409). The block must run on status→active too —
+    not just category/tier changes — else reactivation dodges it and TWO active
+    sponsors land on one slot (the gap a status-only PATCH would otherwise slip
+    through)."""
+    headers = _auth(client)
+    avnet, child = seeded_db["supplier1"], seeded_db["child"]
+    incumbent = str(seeded_db["sponsor"].id)  # Kennedy Gold on child (active / NULL status)
+    # Expire the incumbent → the child's Gold slot is free.
+    assert (
+        client.patch(
+            f"/api/admin/sponsors/{incumbent}", json={"status": "Expired"}, headers=headers
+        ).status_code
+        == 200
+    )
+    # A new Gold sponsor takes the freed slot.
+    new = _post(
+        client, headers, supplier_id=str(avnet.id), category_id=str(child.id), tier="Gold", status="Active"
+    )
+    assert new.status_code == 200, new.text
+    # Re-activating the old incumbent now would make TWO active Golds on the child → 409.
+    r = client.patch(f"/api/admin/sponsors/{incumbent}", json={"status": "Active"}, headers=headers)
+    assert r.status_code == 409, r.text
 
 
 # --- Read-side visibility: NULL = Active, Expired hidden -------------------

@@ -3,7 +3,7 @@
 The banner is a TOP-LEVEL-category artifact: a child slug resolves to its parent,
 so every subpage shows the same partners. Platinum sponsor only (top-level tier;
 2026-06-11 tier-boards matrix — was Featured). Platinum is single-slot, so a
-second Platinum on the same category supersedes the first.
+second Platinum on the same category is BLOCKED (409) — the incumbent keeps it.
 """
 
 
@@ -115,13 +115,25 @@ def test_partners_etag_304_when_unchanged(client, seeded_db):
 
 
 def test_partners_etag_changes_after_mutation(client, seeded_db):
-    """Anti-staleness guard: adding a sponsor changes the ETag, so an old
-    If-None-Match no longer 304s. Proves inc1's freshness invariant survives."""
+    """Anti-staleness guard: mutating the category's sponsor changes the ETag, so
+    an old If-None-Match no longer 304s. Single-slot Platinum is BLOCK now, so this
+    re-sells the slot (expire the incumbent, feature a new sponsor) rather than
+    stacking two — and asserts the swap still busts the ETag."""
     headers = _auth(client)
     a, b, parent = seeded_db["supplier1"], seeded_db["supplier2"], seeded_db["parent"]
-    assert _feature(client, headers, a.id, parent.id).status_code == 200
+    feat_a = _feature(client, headers, a.id, parent.id)
+    assert feat_a.status_code == 200
 
     etag1 = client.get(f"/api/categories/{parent.slug}/partners").headers["etag"]
+    # Re-sell the slot: expire the incumbent (frees it), then feature the new sponsor.
+    assert (
+        client.patch(
+            f"/api/admin/sponsors/{feat_a.json()['id']}",
+            json={"status": "Expired"},
+            headers=headers,
+        ).status_code
+        == 200
+    )
     assert _feature(client, headers, b.id, parent.id).status_code == 200
     r = client.get(f"/api/categories/{parent.slug}/partners", headers={"If-None-Match": etag1})
     assert r.status_code == 200
