@@ -84,6 +84,13 @@
      (PCB leads, tiles, board) but NOT these, so on-screen text never shifts. */
   --txt-accent: #c5bfd6;
   --txt-strong: #ece8f6;
+  /* Full finger control of the tile "ball": touch-action:none stops the browser
+     claiming a drag as page-scroll, so pointermove fires in every direction and
+     the dome tracks the finger (the page scrolls via the sub-nav / parts around
+     the banner). Mirrors the Gold SponsorBlock. Interactive descendants (logo,
+     links, copy) still work — the pointer-capture skips them (see useCsBoardFx). */
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 /* gold rim (mask-composite cutout — keeps round corners) */

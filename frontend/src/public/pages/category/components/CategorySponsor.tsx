@@ -134,12 +134,40 @@ function useCsBoardFx(
       field && field.clearCursor();
       rect = null;
     };
+    // Touch/pen: capture the pointer on down so a finger dragging the "ball" keeps
+    // driving the dome even past the board edge, and (with touch-action:none on the
+    // board) the page doesn't scroll under the drag. Skip capture on interactive
+    // descendants so taps on the logo/links/copy buttons still fire.
+    const onDown = (e: PointerEvent) => {
+      if (e.pointerType === 'mouse') return;
+      const t = e.target as Element | null;
+      if (t?.closest('a, button, [role="button"], input, textarea, select, label')) return;
+      try {
+        board.setPointerCapture(e.pointerId);
+      } catch {
+        /* unsupported */
+      }
+      const r = rect || (rect = board.getBoundingClientRect());
+      field && field.setCursor(e.clientX - r.left, e.clientY - r.top);
+    };
+    const onUp = (e: PointerEvent) => {
+      if (e.pointerType === 'mouse') return;
+      try {
+        board.releasePointerCapture(e.pointerId);
+      } catch {
+        /* not captured */
+      }
+      field && field.clearCursor();
+    };
     const invalidate = () => {
       rect = null;
     };
     board.addEventListener('pointerenter', onEnter);
     board.addEventListener('pointermove', onMove);
     board.addEventListener('pointerleave', onLeave);
+    board.addEventListener('pointerdown', onDown);
+    board.addEventListener('pointerup', onUp);
+    board.addEventListener('pointercancel', onUp);
     window.addEventListener('scroll', invalidate, true);
     window.addEventListener('resize', invalidate);
 
@@ -147,6 +175,9 @@ function useCsBoardFx(
       board.removeEventListener('pointerenter', onEnter);
       board.removeEventListener('pointermove', onMove);
       board.removeEventListener('pointerleave', onLeave);
+      board.removeEventListener('pointerdown', onDown);
+      board.removeEventListener('pointerup', onUp);
+      board.removeEventListener('pointercancel', onUp);
       window.removeEventListener('scroll', invalidate, true);
       window.removeEventListener('resize', invalidate);
       field && field.destroy();

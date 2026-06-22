@@ -456,6 +456,12 @@ export function mountTileField(canvas: HTMLCanvasElement, board: HTMLElement): T
     if (R > waveState!.maxR) waveState = null;
   };
 
+  // Deflate-on-release: after the pointer leaves, the dome descends over
+  // DEFLATE_MS — every raised tile lowers together (the "ball" deflating)
+  // instead of snapping flat the instant the finger lifts.
+  const DEFLATE_MS = 420;
+  let releaseAt = 0; // performance.now() when the pointer left; 0 = not deflating
+
   const frame = (now: number) => {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, W, H);
@@ -472,6 +478,16 @@ export function mountTileField(canvas: HTMLCanvasElement, board: HTMLElement): T
       SH_BAND = 60,
       SH_AMP = 0.5;
     const shimX = ((now * SH_SPEED) % (W + 2 * SH_BAND)) - SH_BAND;
+    // Dome height: 1 while held, ramps to 0 over DEFLATE_MS after release.
+    let domeStrength = 0;
+    if (cursor.on) domeStrength = 1;
+    else if (releaseAt) {
+      domeStrength = 1 - (now - releaseAt) / DEFLATE_MS;
+      if (domeStrength <= 0) {
+        domeStrength = 0;
+        releaseAt = 0;
+      }
+    }
     for (const tile of tiles) {
       let z = 0;
       if (tile.br) {
@@ -481,14 +497,14 @@ export function mountTileField(canvas: HTMLCanvasElement, board: HTMLElement): T
           z += k * k * SH_AMP * tile.amp;
         }
       }
-      if (cursor.on) {
+      if (domeStrength > 0) {
         const dx = tile.cx - cursor.x,
           dy = tile.cy - cursor.y;
         const d2 = dx * dx + dy * dy,
           R = 72;
         if (d2 < R * R) {
           const k = 1 - Math.sqrt(d2) / R;
-          z += k * k;
+          z += k * k * domeStrength;
         }
       }
       if (z > 1) z = 1;
@@ -554,10 +570,12 @@ export function mountTileField(canvas: HTMLCanvasElement, board: HTMLElement): T
       cursor.x = x;
       cursor.y = y;
       cursor.on = true;
+      releaseAt = 0;
       start();
     },
     clearCursor() {
       cursor.on = false;
+      releaseAt = performance.now();
     },
     wave(ox: number, oy: number) {
       if (reducedMQ.matches) {
