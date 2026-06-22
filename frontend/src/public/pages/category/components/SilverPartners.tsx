@@ -203,7 +203,7 @@ const SvSlotEmpty = ({
           <span className="svp-slot-sub">Feature your company in {where}</span>
         </span>
         <span className="svp-slot-cta" aria-hidden="true">
-          Get listed{' →'}
+          Become a Preferred Partner{' →'}
         </span>
       </div>
     </div>

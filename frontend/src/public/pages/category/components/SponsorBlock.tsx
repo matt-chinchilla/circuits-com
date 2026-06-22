@@ -509,7 +509,7 @@ export default function SponsorBlock({ sponsor }: SponsorBlockProps) {
           href="mailto:john@circuits.com?subject=Category%20Sponsorship%20Inquiry"
           className={styles.cta}
         >
-          Become a Sponsor &rarr;
+          Become a Premier Partner &rarr;
         </a>
       </PcbCard>
     );

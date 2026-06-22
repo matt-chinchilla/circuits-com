@@ -549,7 +549,7 @@ a.csbA-coname:hover {
 
 /* "Become a sponsor" CTA (open slot) */
 .csbA-cta {
-  align-self: flex-start;
+  align-self: center;
   width: max-content;
   font-family: var(--font-heading);
   font-size: 0.8rem;
@@ -572,13 +572,27 @@ a.csbA-coname:hover {
 }
 
 /* ── Open-slot (no sponsor) variant + logo drop target ─────────────────── */
+/* The unsold banner is a centered pitch: heading → Platinum benefits → a
+   centered CTA, vertically + horizontally centered in the rail. The left
+   .csbA-id logo footprint column is unchanged; only this right rail differs from
+   the four-division sponsored rail (it overrides the base `display: grid`). */
 .csbA-empty .csbA-rail {
-  grid-template-columns: 1fr auto;
-}
-.csbA-emptymsg {
-  padding: 22px 22px;
   display: flex;
   flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 15px;
+  /* Top padding clears the top-center "Open Placement" badge that straddles the
+     board edge (matches the .csbA-id column's 54px) — without it the vertically
+     centered heading collides with the badge. */
+  padding: 54px 24px 24px;
+}
+.csbA-emptymsg {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   gap: 6px;
 }
 .csbA-emptymsg h4 {
@@ -592,13 +606,42 @@ a.csbA-coname:hover {
   font-size: 0.85rem;
   color: var(--cream-mut);
   margin: 0;
-  max-width: 60ch;
+  max-width: 56ch;
   line-height: 1.5;
 }
-.csbA-emptycta {
-  padding: 22px 24px;
+/* Platinum value props (mirrors /join). A 2-col checklist centered as a block,
+   each item left-aligned (tick + text) so the multi-word perks read cleanly. */
+.csbA-benefits {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 240px));
+  justify-content: center;
+  gap: 9px 28px;
+  text-align: left;
+}
+.csbA-benefits li {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 0.82rem;
+  color: var(--cream);
+  line-height: 1.35;
+}
+.csbA-benefit-tick {
+  flex: 0 0 auto;
+  color: var(--txt-accent);
+  font-weight: 700;
+}
+/* Drop-target microcopy — lives in the LEFT id zone, beside the footprint that
+   is the actual drop target, and adds vertical weight there so the two zones
+   read as balanced halves rather than a floating footprint next to a full pitch. */
+.csbA-drophint {
+  font-size: 0.74rem;
+  color: var(--cream-mut);
+  line-height: 1.4;
+  max-width: 26ch;
 }
 .csbA-footprint {
   position: relative;
@@ -756,9 +799,8 @@ a.csbA-coname:hover {
   .csbA-field:nth-child(4) {
     border-top: 1px dashed color-mix(in srgb, var(--gold) 18%, transparent);
   }
-  .csbA-empty .csbA-rail {
-    grid-template-columns: 1fr;
-  }
+  /* .csbA-empty .csbA-rail is a centered flex column (not a grid) — no
+     column override needed when the surface stacks to one column here. */
 }
 @media (max-width: 560px) {
   .csbA-rail {
@@ -767,6 +809,12 @@ a.csbA-coname:hover {
   .csbA-field + .csbA-field {
     border-left: none;
     border-top: 1px dashed color-mix(in srgb, var(--gold) 18%, transparent);
+  }
+  /* Stack the Platinum benefits to one centered column on a phone (the 2-col
+     grid would overflow the narrow board). */
+  .csbA-benefits {
+    grid-template-columns: minmax(0, max-content);
+    gap: 8px 0;
   }
   .csb-badge {
     padding: 4px 10px;

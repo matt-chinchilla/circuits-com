@@ -67,6 +67,17 @@ export interface CategorySponsorProps {
 // this the fade+slide re-runs each time and reads as the board "re-loading".
 const csEntranceSeen = new Set<string>();
 
+// Platinum value props shown on the UNSOLD (open-placement) banner so a prospect
+// sees the same pitch the /join pricing page makes. Mirrors JOIN_TIERS →
+// platinum.perks in join/index.tsx (the canonical wording), trimmed to fit the
+// banner's width — keep the two in loose sync.
+const PLATINUM_BENEFITS = [
+  'Top-of-page sponsor block in your brand colors',
+  'Placement across every subcategory',
+  'Unlimited report generation',
+  'Live stock + price API sync',
+] as const;
+
 function useCsEntrance(ref: React.RefObject<HTMLElement | null>, dep: unknown) {
   useEffect(() => {
     const el = ref.current;
@@ -604,24 +615,31 @@ export default function CategorySponsor({
                     <span className="csbA-cotag">{categoryName}</span>
                   </span>
                 </div>
+                <span className="csbA-drophint">Drag a logo here to preview the takeover.</span>
               </div>
               <div className="csbA-rail csbA-rail-empty">
                 <div className="csbA-emptymsg" data-enter>
                   <h4>Reach buyers browsing {categoryName}.</h4>
-                  <p>
-                    Feature your company at the top of this category with your logo, a sales rep, and a
-                    direct line. Drag a logo onto the board to preview the takeover.
-                  </p>
+                  <p>The flagship tier — one Platinum sponsor per category.</p>
                 </div>
-                <div className="csbA-emptycta" data-enter>
-                  <button
-                    type="button"
-                    className="csbA-cta"
-                    onClick={() => onNavigate && onNavigate('sponsor')}
-                  >
-                    Become a sponsor →
-                  </button>
-                </div>
+                <ul className="csbA-benefits" data-enter>
+                  {PLATINUM_BENEFITS.map((b) => (
+                    <li key={b}>
+                      <span className="csbA-benefit-tick" aria-hidden="true">
+                        &#10003;
+                      </span>
+                      {b}
+                    </li>
+                  ))}
+                </ul>
+                <button
+                  type="button"
+                  className="csbA-cta"
+                  data-enter
+                  onClick={() => onNavigate && onNavigate('sponsor')}
+                >
+                  Become An Exclusive Partner &rarr;
+                </button>
               </div>
             </div>
             <input
