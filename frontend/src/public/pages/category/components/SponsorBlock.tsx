@@ -1,7 +1,7 @@
 import { useRef, useEffect, useState, type ReactNode } from 'react';
 import { motion } from 'framer-motion';
 import type { Sponsor } from '@public/types/sponsor';
-import { prependScheme } from '@shared/utils/url';
+import { safeHttpUrl } from '@shared/utils/url';
 import { lettermark } from '@shared/utils/lettermark';
 import { formatPhone } from '@shared/utils/phone';
 import styles from './SponsorBlock.module.scss';
@@ -515,6 +515,9 @@ export default function SponsorBlock({ sponsor }: SponsorBlockProps) {
     );
   }
 
+  // Validate the DB-sourced website through the http(s) allowlist before it
+  // reaches an href (rejects javascript:/data: — stored-XSS guard); null → no link.
+  const websiteHref = safeHttpUrl(sponsor.website);
   return (
     <PcbCard>
       <span className={styles.kicker}>&#9670; PREMIERE PARTNER</span>
@@ -528,8 +531,8 @@ export default function SponsorBlock({ sponsor }: SponsorBlockProps) {
       {sponsor.description && <p className={styles.description}>{sponsor.description}</p>}
 
       <div className={styles.details}>
-        {sponsor.website && (
-          <a href={prependScheme(sponsor.website)} target="_blank" rel="noopener noreferrer" className={styles.visit}>
+        {websiteHref && (
+          <a href={websiteHref} target="_blank" rel="sponsored noopener noreferrer" className={styles.visit}>
             Visit Website &#8599;
           </a>
         )}

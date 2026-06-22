@@ -19,7 +19,7 @@ import { useNavigate } from 'react-router-dom';
 import type { ReactElement } from 'react';
 import CircuitTraces from '@public/components/widgets/CircuitTraces';
 import type { PartnerSupplier } from '@public/types/sponsor';
-import { prependScheme } from '@shared/utils/url';
+import { safeHttpUrl } from '@shared/utils/url';
 import { formatPhone } from '@shared/utils/phone';
 import { CsCopy, csTelHref } from './csFx';
 import './categorySponsor.scss';
@@ -67,11 +67,11 @@ function toChipData(s: PartnerSupplier): SvChipData {
   return {
     name: s.name,
     lettermark: svLettermark(s.name),
-    // RFC-3986-aware: the stored website may be a bare host (digikey.com) OR
-    // already-schemed (https://digikey.com); prependScheme normalizes both to a
-    // single valid scheme. Empty → '' so the `s.website &&` link guard still
-    // hides an absent website (prependScheme('') === '').
-    website: s.website ? prependScheme(s.website) : '',
+    // The stored website may be a bare host (digikey.com) OR already-schemed.
+    // safeHttpUrl prepends a scheme AND validates it's http(s) (rejecting
+    // javascript:/data: — stored-XSS guard); null → '' so the `s.website &&`
+    // link guard still hides an absent/invalid website.
+    website: safeHttpUrl(s.website) ?? '',
     contact: s.contact_name || '',
     role: s.contact_role || '',
     phone: s.phone || '',
@@ -123,7 +123,7 @@ const SvChip = ({
           className="svp-site"
           href={s.website}
           target="_blank"
-          rel="noopener noreferrer"
+          rel="sponsored noopener noreferrer"
           onClick={(e) => e.stopPropagation()}
         >
           <span aria-hidden="true">⊕</span> {svHost(s.website)}

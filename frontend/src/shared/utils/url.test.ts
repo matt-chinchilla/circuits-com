@@ -34,6 +34,10 @@ describe('safeHttpUrl', () => {
     expect(safeHttpUrl('  acme.com  ')).toBe('https://acme.com/');
   });
 
+  it('resolves protocol-relative URLs to https', () => {
+    expect(safeHttpUrl('//acme.com')).toBe('https://acme.com/');
+  });
+
   // The whole point: dangerous schemes must NEVER survive into an href.
   it('rejects javascript: URLs (XSS)', () => {
     expect(safeHttpUrl('javascript:alert(1)')).toBeNull();

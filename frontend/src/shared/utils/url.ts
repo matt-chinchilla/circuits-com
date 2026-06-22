@@ -42,8 +42,11 @@ export function safeHttpUrl(input: string | null | undefined): string | null {
   if (!input) return null;
   const candidate = prependScheme(input);
   if (!candidate) return null;
+  // prependScheme preserves protocol-relative URLs (//host); resolve them to
+  // https so new URL() can parse them (it throws on a base-less //host).
+  const absolute = candidate.startsWith('//') ? `https:${candidate}` : candidate;
   try {
-    const url = new URL(candidate);
+    const url = new URL(absolute);
     return url.protocol === 'http:' || url.protocol === 'https:' ? url.toString() : null;
   } catch {
     return null;
