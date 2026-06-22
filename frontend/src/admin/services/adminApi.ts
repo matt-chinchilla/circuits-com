@@ -130,9 +130,11 @@ export const adminApi = {
     bustingAfter(adminClient.delete(`/parts/${id}`).then((r) => r.data)),
 
   batchImportParts: (supplierId: string, data: Record<string, unknown>[]) =>
-    adminClient
-      .post<BatchImportResult>('/parts/batch', { supplier_id: supplierId, parts: data })
-      .then((r) => r.data),
+    bustingAfter(
+      adminClient
+        .post<BatchImportResult>('/parts/batch', { supplier_id: supplierId, parts: data })
+        .then((r) => r.data),
+    ),
 
   getSuppliers: () =>
     adminClient.get<AdminSupplier[]>('/suppliers/').then((r) => r.data),

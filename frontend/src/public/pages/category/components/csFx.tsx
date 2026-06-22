@@ -576,6 +576,9 @@ export function mountTileField(canvas: HTMLCanvasElement, board: HTMLElement): T
     clearCursor() {
       cursor.on = false;
       releaseAt = performance.now();
+      // Ensure the loop is running so the deflate ramp pumps to completion
+      // (no-op if already running / paused off-screen / reduced-motion).
+      start();
     },
     wave(ox: number, oy: number) {
       if (reducedMQ.matches) {
