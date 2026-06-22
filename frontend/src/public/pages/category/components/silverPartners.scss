@@ -108,7 +108,7 @@
   position: sticky;
   top: 0;
   z-index: 3;
-  padding: 40px 18px 9px; // top clears the floating .svp-badge (pill height + 11px top)
+  padding: 52px 18px 9px; // top clears the floating .svp-badge with breathing room (pill bottom ~36px + gap)
   border-bottom: 1px dashed color-mix(in srgb, var(--gold) 22%, transparent);
   background: transparent;
 }
@@ -433,6 +433,12 @@
 @media (max-width: 768px) {
   .svp-headrow {
     display: none;
+  }
+  /* Headrow is hidden here, so the chip stack starts at the board top — reserve
+     room for the floating .svp-badge pill (top:11px + ~25px tall) so the first
+     chip clears it instead of sitting under it. */
+  .svp-stack {
+    padding-top: 46px;
   }
   .svp-chip {
     grid-template-columns: 46px 1fr;

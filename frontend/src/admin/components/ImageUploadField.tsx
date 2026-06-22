@@ -60,6 +60,7 @@ export default function ImageUploadField({
               className={styles.uploadBtn}
               onClick={() => fileRef.current?.click()}
               disabled={busy}
+              aria-describedby={error ? errId : undefined}
             >
               {busy ? 'Processing…' : value ? 'Replace image' : 'Upload image'}
             </button>
