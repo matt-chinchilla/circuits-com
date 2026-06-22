@@ -17,6 +17,7 @@ import type {
   SponsorStatus,
 } from '@admin/types/admin';
 import Icon from '@shared/components/Icon';
+import ImageUploadField from '@admin/components/ImageUploadField';
 import styles from './SponsorFormPage.module.scss';
 
 // Tier visual palette — the three tiers (Platinum/Gold/Silver) get flat fills.
@@ -671,20 +672,12 @@ export default function SponsorFormPage() {
               />
             </div>
             <div className={styles.field}>
-              <label className={styles.fieldLabel} htmlFor="image_url">
-                Image URL
-              </label>
-              <input
+              <ImageUploadField
                 id="image_url"
-                type="text"
-                inputMode="url"
-                className={styles.textInput}
+                label="Sponsor image / logo"
                 value={form.image_url}
-                onChange={(e) => update('image_url', e.target.value)}
-                placeholder="https://example.com/banner.png"
-                autoCapitalize="off"
-                autoCorrect="off"
-                spellCheck={false}
+                onChange={(v) => update('image_url', v)}
+                hint="Upload a logo/icon or paste an image URL. Shown on the sponsor board."
               />
             </div>
           </div>
