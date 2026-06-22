@@ -11,6 +11,8 @@ import {
   supplierSponsorship,
   type SupplierSponsorship,
 } from '../sponsorship';
+import { lettermark } from '@shared/utils/lettermark';
+import { safeImageUrl } from '@shared/utils/url';
 import styles from './SupplierDetailPage.module.scss';
 
 const SPONSORSHIP_CLASS: Record<SupplierSponsorship, string> = {
@@ -141,7 +143,20 @@ export default function SupplierDetailPage() {
             <ArrowLeft size={14} strokeWidth={2} />
             All suppliers
           </button>
-          <h1 className={styles.title}>{supplier.name}</h1>
+          <div className={styles.titleRow}>
+            <div className={styles.avatar}>
+              {safeImageUrl(supplier.logo_url) ? (
+                <img
+                  className={styles.avatarImg}
+                  src={safeImageUrl(supplier.logo_url) as string}
+                  alt=""
+                />
+              ) : (
+                <span>{lettermark(supplier.name)}</span>
+              )}
+            </div>
+            <h1 className={styles.title}>{supplier.name}</h1>
+          </div>
           <div className={styles.subtitle}>
             <span className={`${styles.supTier} ${SPONSORSHIP_CLASS[sponsorship]}`}>
               {sponsorship}

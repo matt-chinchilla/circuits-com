@@ -48,6 +48,35 @@
   }
 }
 
+.titleRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #a88d2e, #c4a53a);
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 18px;
+  font-family: $admin-font-display;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.avatarImg {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #f4f6f9;
+}
+
 .title {
   font-size: 28px;
   font-weight: 700;

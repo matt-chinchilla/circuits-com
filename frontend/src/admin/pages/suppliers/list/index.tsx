@@ -5,6 +5,7 @@ import Breadcrumbs from '@admin/components/Breadcrumbs';
 import { adminApi } from '@admin/services/adminApi';
 import type { AdminSupplier, AdminSponsor, SponsorTier } from '@admin/types/admin';
 import { lettermark } from '@shared/utils/lettermark';
+import { safeImageUrl } from '@shared/utils/url';
 import {
   buildSponsorshipBySupplier,
   supplierSponsorship,
@@ -159,7 +160,17 @@ export default function SuppliersPage() {
                 }}
               >
                 <div className={styles.supHead}>
-                  <div className={styles.supLogo}>{lettermark(supplier.name)}</div>
+                  <div className={styles.supLogo}>
+                    {safeImageUrl(supplier.logo_url) ? (
+                      <img
+                        className={styles.avatarImg}
+                        src={safeImageUrl(supplier.logo_url) as string}
+                        alt=""
+                      />
+                    ) : (
+                      <span>{lettermark(supplier.name)}</span>
+                    )}
+                  </div>
                   <div className={styles.supHeadBody}>
                     <h3 className={styles.supName}>{supplier.name}</h3>
                     <div className={styles.supTierRow}>
