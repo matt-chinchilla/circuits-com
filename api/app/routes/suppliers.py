@@ -41,6 +41,7 @@ class SupplierCreate(BaseModel):
     contact_role: str | None = None
     coverage_hours: str | None = None
     description: str | None = None
+    logo_url: str | None = None
 
 
 class SupplierUpdate(BaseModel):
@@ -52,6 +53,7 @@ class SupplierUpdate(BaseModel):
     contact_role: str | None = None
     coverage_hours: str | None = None
     description: str | None = None
+    logo_url: str | None = None
 
 
 def supplier_to_dict(supplier: Supplier) -> dict:
@@ -114,6 +116,7 @@ def create_supplier(
         contact_role=body.contact_role,
         coverage_hours=body.coverage_hours,
         description=body.description,
+        logo_url=body.logo_url,
     )
     db.add(supplier)
     db.commit()
