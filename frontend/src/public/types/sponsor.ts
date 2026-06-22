@@ -2,6 +2,7 @@ export interface Sponsor {
   id: string;
   supplier_name: string;
   image_url: string | null;
+  logo_url?: string | null;
   description: string | null;
   // Free-form: seed uses lowercase ('gold'/'silver'); admin form emits
   // TitleCase ('Featured'/'Platinum'/'Gold'/'Silver'). SponsorBlock lowercases

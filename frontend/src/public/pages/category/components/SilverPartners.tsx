@@ -19,7 +19,7 @@ import { useNavigate } from 'react-router-dom';
 import type { ReactElement } from 'react';
 import CircuitTraces from '@public/components/widgets/CircuitTraces';
 import type { PartnerSupplier } from '@public/types/sponsor';
-import { safeHttpUrl } from '@shared/utils/url';
+import { safeHttpUrl, safeImageUrl } from '@shared/utils/url';
 import { formatPhone } from '@shared/utils/phone';
 import { CsCopy, csTelHref } from './csFx';
 import './categorySponsor.scss';
@@ -56,6 +56,7 @@ const svLettermark = (name: string): string =>
 interface SvChipData {
   name: string;
   lettermark: string;
+  logoSrc: string | null;
   website: string;
   contact: string;
   role: string;
@@ -67,6 +68,7 @@ function toChipData(s: PartnerSupplier): SvChipData {
   return {
     name: s.name,
     lettermark: svLettermark(s.name),
+    logoSrc: safeImageUrl(s.logo_url),
     // The stored website may be a bare host (digikey.com) OR already-schemed.
     // safeHttpUrl prepends a scheme AND validates it's http(s) (rejecting
     // javascript:/data: — stored-XSS guard); null → '' so the `s.website &&`
@@ -111,7 +113,11 @@ const SvChip = ({
     <div className="svp-idcol">
       <span className="svp-refdes">U{i + 1}</span>
       <span className="svp-pad">
-        <span className="svp-mark">{s.lettermark}</span>
+        {s.logoSrc ? (
+          <img className="svp-markimg" src={s.logoSrc} alt="" />
+        ) : (
+          <span className="svp-mark">{s.lettermark}</span>
+        )}
       </span>
     </div>
     <div className="svp-col">

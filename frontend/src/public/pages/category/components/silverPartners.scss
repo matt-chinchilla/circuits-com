@@ -224,6 +224,14 @@
   color: var(--gold);
   line-height: 1;
 }
+/* Supplier logo image inside the circular pad — same size as .svp-mark bounds,
+   contained so the full logo is visible at any aspect ratio. */
+.svp-markimg {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+  border-radius: 6px;
+}
 .svp-col {
   min-width: 0;
   display: flex;

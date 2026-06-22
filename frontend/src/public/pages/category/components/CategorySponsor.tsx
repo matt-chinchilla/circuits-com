@@ -24,7 +24,7 @@ import type { ReactElement } from 'react';
 import CircuitTraces from '@public/components/widgets/CircuitTraces';
 import type { PlatinumSponsor } from '@public/types/sponsor';
 import { formatPhone } from '@shared/utils/phone';
-import { safeHttpUrl } from '@shared/utils/url';
+import { safeHttpUrl, safeImageUrl } from '@shared/utils/url';
 import { brandVars, CsCopy, csTelHref, extractBrandColors, mountTileField } from './csFx';
 import type { TileField } from './csFx';
 import uploadIcon from './upload-icon.png';
@@ -285,10 +285,11 @@ const csLettermark = (name: string): string =>
 /* Sponsor logo with graceful fallback: a broken/missing image URL falls back to
    the company lettermark (e.g. "KE") instead of the browser's broken-image
    glyph. Keyed by `src` at the call site so the broken state resets when the
-   logo changes (sponsor swap / brand takeover). */
-const CsLogo = ({ src, alt, mark }: { src: string; alt: string; mark: string }): ReactElement => {
-  const [broken, setBroken] = useState(false);
-  if (broken) return <span className="csbA-mark">{mark}</span>;
+   logo changes (sponsor swap / brand takeover). A null/falsy `src` initialises
+   `broken=true` so the lettermark renders immediately (mirrors SbLogo). */
+const CsLogo = ({ src, alt, mark }: { src: string | null; alt: string; mark: string }): ReactElement => {
+  const [broken, setBroken] = useState(!src);
+  if (broken || !src) return <span className="csbA-mark">{mark}</span>;
   return <img className="csbA-logoimg" src={src} alt={alt} onError={() => setBroken(true)} />;
 };
 
@@ -336,7 +337,7 @@ export default function CategorySponsor({
         company: sponsor.supplier_name,
         lettermark: csLettermark(sponsor.supplier_name),
         division: 'Category Sponsor · ' + (categoryName || ''),
-        logo: sponsor.image_url ?? sponsor.logo_url ?? null,
+        logo: safeImageUrl(sponsor.image_url ?? sponsor.logo_url),
         contact: sponsor.contact_name || '',
         role: sponsor.contact_role || '',
         phone: sponsor.phone || '',

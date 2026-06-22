@@ -1,7 +1,7 @@
 import { useRef, useEffect, useState, type ReactNode } from 'react';
 import { motion } from 'framer-motion';
 import type { Sponsor } from '@public/types/sponsor';
-import { safeHttpUrl } from '@shared/utils/url';
+import { safeHttpUrl, safeImageUrl } from '@shared/utils/url';
 import { lettermark } from '@shared/utils/lettermark';
 import { formatPhone } from '@shared/utils/phone';
 import styles from './SponsorBlock.module.scss';
@@ -523,7 +523,7 @@ export default function SponsorBlock({ sponsor }: SponsorBlockProps) {
       <span className={styles.kicker}>&#9670; PREMIERE PARTNER</span>
 
       <div className={styles.pad}>
-        <SbLogo src={sponsor.image_url} name={sponsor.supplier_name} />
+        <SbLogo src={safeImageUrl(sponsor.image_url ?? sponsor.logo_url)} name={sponsor.supplier_name} />
       </div>
 
       <h3 className={styles.name}>{sponsor.supplier_name}</h3>
