@@ -4,6 +4,7 @@ import { ArrowLeft, Check, Trash2 } from 'lucide-react';
 import Breadcrumbs from '@admin/components/Breadcrumbs';
 import { adminApi } from '@admin/services/adminApi';
 import { prependScheme } from '@shared/utils/url';
+import ImageUploadField from '@admin/components/ImageUploadField';
 import styles from './SupplierFormPage.module.scss';
 
 // Single-page form (Identity + Contact + Description panels) — port of
@@ -19,6 +20,7 @@ interface FormData {
   contact_name: string;
   contact_role: string;
   coverage_hours: string;
+  logo_url: string;
 }
 
 interface FormErrors {
@@ -36,6 +38,7 @@ function emptyForm(): FormData {
     contact_name: '',
     contact_role: '',
     coverage_hours: '',
+    logo_url: '',
   };
 }
 
@@ -100,6 +103,7 @@ export default function SupplierFormPage() {
           contact_name: s.contact_name ?? '',
           contact_role: s.contact_role ?? '',
           coverage_hours: s.coverage_hours ?? '',
+          logo_url: s.logo_url ?? '',
         });
       })
       .catch(() => setToast({ type: 'error', msg: 'Failed to load supplier.' }))
@@ -140,6 +144,7 @@ export default function SupplierFormPage() {
         contact_name: form.contact_name.trim() || null,
         contact_role: form.contact_role.trim() || null,
         coverage_hours: form.coverage_hours.trim() || null,
+        logo_url: form.logo_url.trim() || null,
       };
       if (isEdit && id) {
         await adminApi.updateSupplier(id, payload);
@@ -259,6 +264,15 @@ export default function SupplierFormPage() {
                 rows={3}
               />
               <div className={styles.fieldHint}>One sentence shown in supplier cards.</div>
+            </div>
+            <div className={styles.field} data-field="logo_url">
+              <ImageUploadField
+                id="sup-logo"
+                label="Logo / photo"
+                value={form.logo_url}
+                onChange={(v) => set('logo_url', v)}
+                hint="Shown on supplier cards and as the company logo on sponsor boards."
+              />
             </div>
           </div>
         </section>
