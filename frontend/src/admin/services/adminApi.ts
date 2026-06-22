@@ -121,13 +121,13 @@ export const adminApi = {
     adminClient.get<PartDetail>(`/parts/${id}`).then((r) => r.data),
 
   createPart: (data: Partial<PartDetail>) =>
-    adminClient.post<Part>('/parts/', data).then((r) => r.data),
+    bustingAfter(adminClient.post<Part>('/parts/', data).then((r) => r.data)),
 
   updatePart: (id: string, data: Partial<PartDetail>) =>
-    adminClient.put<Part>(`/parts/${id}`, data).then((r) => r.data),
+    bustingAfter(adminClient.put<Part>(`/parts/${id}`, data).then((r) => r.data)),
 
   deletePart: (id: string) =>
-    adminClient.delete(`/parts/${id}`).then((r) => r.data),
+    bustingAfter(adminClient.delete(`/parts/${id}`).then((r) => r.data)),
 
   batchImportParts: (supplierId: string, data: Record<string, unknown>[]) =>
     adminClient

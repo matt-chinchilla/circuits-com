@@ -12,6 +12,7 @@ import Pagination from '@public/components/widgets/Pagination';
 import Icon from '@shared/components/Icon';
 import { api } from '@public/services/api';
 import { getCategoryShell, setCategoryShell, type CategoryShell } from '@public/services/categoryShellMemo';
+import { getCategoryDetailMemo, setCategoryDetailMemo } from '@shared/services/categoryDetailMemo';
 import { categoryPath } from '@shared/utils/categoryPath';
 import type { CategoryDetail } from '@public/types/category';
 import type { PublicPart } from '@public/types/part';
@@ -54,8 +55,14 @@ export default function CategoryPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const pageParam = Math.max(1, parseInt(searchParams.get('p') || '1', 10) || 1);
 
-  const [category, setCategory] = useState<CategoryDetail | null>(null);
-  const [loading, setLoading] = useState(true);
+  // Warm navigations paint parts + counts synchronously from the session memo
+  // (no loading flash); cold ones fall back to null + the skeleton.
+  const [category, setCategory] = useState<CategoryDetail | null>(
+    () => (slug ? getCategoryDetailMemo<CategoryDetail>(slug) ?? null : null),
+  );
+  const [loading, setLoading] = useState(
+    () => (slug ? getCategoryDetailMemo<CategoryDetail>(slug) === undefined : true),
+  );
   const [error, setError] = useState<string | null>(null);
 
   const [sort, setSort] = useState<SortState>({ col: 'sku', dir: 'asc' });
@@ -65,17 +72,34 @@ export default function CategoryPage() {
 
   useEffect(() => {
     if (!slug) return;
-    setLoading(true);
+    // Warm (memo hit): the useState initializers already painted parts + counts
+    // from the memo on the first frame — revalidate silently, no skeleton. Cold
+    // (miss): show the skeleton until the first fetch resolves.
+    const warm = getCategoryDetailMemo<CategoryDetail>(slug) !== undefined;
+    if (!warm) setLoading(true);
     setError(null);
     setSkuSearch('');
     setMfgFilter(null);
     setSubFilter(null);
     setSort({ col: 'sku', dir: 'asc' });
 
-    api.getCategory(slug, 1, 500, 1, 500)
-      .then((data) => setCategory(data))
-      .catch(() => setError('Failed to load category. Please try again later.'))
-      .finally(() => setLoading(false));
+    let cancelled = false;
+    api
+      .getCategory(slug, 1, 500, 1, 500)
+      .then((data) => {
+        if (cancelled) return;
+        setCategoryDetailMemo(slug, data);
+        setCategory(data);
+      })
+      .catch(() => {
+        if (!cancelled) setError('Failed to load category. Please try again later.');
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [slug]);
 
   const isParent = category != null && category.children.length > 0;

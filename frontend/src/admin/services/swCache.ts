@@ -1,5 +1,6 @@
 import { SW_CACHE_API_CATEGORIES, SW_CACHE_API_GENERAL } from '@shared/swCacheNames';
 import { clearPartnersMemo } from '@shared/services/partnersMemo';
+import { clearCategoryDetailMemo } from '@shared/services/categoryDetailMemo';
 
 // Every Workbox runtime cache that can hold sponsor-derived PUBLIC data:
 //  - api-categories (StaleWhileRevalidate): the Preferred Partners banner +
@@ -22,9 +23,10 @@ const SPONSOR_CACHES = [SW_CACHE_API_CATEGORIES, SW_CACHE_API_GENERAL];
  * where the Cache Storage API is unavailable (SSR / plain-http dev / no SW).
  */
 export async function bustSponsorCaches(): Promise<void> {
-  // Clear the in-memory partners memo first (sync) so a same-tab admin→public
-  // navigation can't short-circuit this bust and render stale partners.
+  // Clear the in-memory memos first (sync) so a same-tab admin→public navigation
+  // can't short-circuit this bust and render stale partners / parts / counts.
   clearPartnersMemo();
+  clearCategoryDetailMemo();
   if (typeof caches === 'undefined') return;
   try {
     await Promise.all(SPONSOR_CACHES.map((name) => caches.delete(name)));
