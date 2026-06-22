@@ -57,8 +57,12 @@ export async function fileToDataUrl(
       return { ok: false, error: 'That image is too detailed — try a smaller or simpler logo.' };
     }
     return { ok: true, dataUrl };
-  } catch {
-    return { ok: false, error: 'Could not process that image.' };
+  } catch (err) {
+    console.error('[fileToDataUrl]', err);
+    const msg = err instanceof DOMException
+      ? 'That image type is not supported — try PNG, JPEG, or WebP.'
+      : 'Could not process that image.';
+    return { ok: false, error: msg };
   } finally {
     URL.revokeObjectURL(objectUrl);
   }

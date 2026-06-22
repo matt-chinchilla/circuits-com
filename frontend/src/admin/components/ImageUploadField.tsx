@@ -7,7 +7,7 @@ import styles from './ImageUploadField.module.scss';
 interface ImageUploadFieldProps {
   id: string;
   label: string;
-  value: string;
+  value: string | null;
   onChange: (next: string) => void;
   hint?: string;
 }
@@ -79,8 +79,8 @@ export default function ImageUploadField({
             type="text"
             inputMode="url"
             className={styles.urlInput}
-            value={value.startsWith('data:') ? '' : value}
-            onChange={(e) => onChange(e.target.value)}
+            value={(value ?? '').startsWith('data:') ? '' : (value ?? '')}
+            onChange={(e) => { if (error) setError(null); onChange(e.target.value); }}
             placeholder="…or paste an image URL"
             autoCapitalize="off"
             autoCorrect="off"
