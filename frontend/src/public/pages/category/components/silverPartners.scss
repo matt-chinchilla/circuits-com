@@ -73,11 +73,43 @@
   padding: 3px 6px;
   flex: 0 0 auto;
 }
+.svp-badge {
+  position: absolute;
+  top: 11px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 4;
+  pointer-events: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.32);
+  border: 1px solid color-mix(in srgb, var(--gold) 32%, transparent);
+
+  .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--gold);
+    box-shadow: 0 0 8px color-mix(in srgb, var(--gold) 60%, transparent);
+  }
+}
+.svp-badge-txt {
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--txt-strong);
+}
 .svp-headrow {
   position: sticky;
   top: 0;
   z-index: 3;
   padding: 11px 18px 9px;
+  padding-top: 40px; // clears the floating .svp-badge (pill height + 11px top)
   border-bottom: 1px dashed color-mix(in srgb, var(--gold) 22%, transparent);
   background: transparent;
 }
