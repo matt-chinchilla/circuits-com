@@ -25,7 +25,7 @@ class Sponsor(Base):
     supplier_id = Column(UUID(as_uuid=True), ForeignKey("suppliers.id"), nullable=False)
     category_id = Column(UUID(as_uuid=True), ForeignKey("categories.id"), nullable=True)
     keyword = Column(String(100), nullable=True)
-    image_url = Column(String(500), nullable=True)
+    image_url = Column(Text, nullable=True)
     description = Column(Text, nullable=True)
     tier = Column(String(10), default="gold")
     start_date = Column(Date, nullable=True)

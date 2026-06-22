@@ -18,7 +18,7 @@ class Supplier(Base):
     email = Column(String(200))
     contact_name = Column(String(120), nullable=True)
     description = Column(Text, nullable=True)
-    logo_url = Column(String(500), nullable=True)
+    logo_url = Column(Text, nullable=True)
     # Sponsor-board fields (migration 014, 2026-06-11 tier boards). Rendered on
     # the Platinum/Gold/Silver boards; all nullable (CsFx falls back to the
     # locked platinum palette when brand colors are absent).
