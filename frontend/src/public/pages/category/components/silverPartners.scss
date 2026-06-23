@@ -82,19 +82,23 @@
   pointer-events: none;
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  padding: 4px 12px;
+  padding: 4px 13px;
   border-radius: 999px;
-  background: rgba(0, 0, 0, 0.32);
-  border: 1px solid color-mix(in srgb, var(--gold) 32%, transparent);
-
-  .dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: var(--gold);
-    box-shadow: 0 0 8px color-mix(in srgb, var(--gold) 60%, transparent);
-  }
+  // Brushed-metal chip: a top-lit sheen over the dark base, a polished-gold
+  // rim, and a soft metallic glow + beveled inner highlight/shadow.
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.12) 0%,
+      rgba(255, 255, 255, 0.02) 46%,
+      rgba(0, 0, 0, 0.3) 100%
+    ),
+    rgba(0, 0, 0, 0.34);
+  border: 1px solid color-mix(in srgb, var(--gold) 44%, transparent);
+  box-shadow:
+    0 0 16px color-mix(in srgb, var(--gold) 26%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.24),
+    inset 0 -1px 2px rgba(0, 0, 0, 0.32);
 }
 .svp-badge-txt {
   font-family: var(--font-mono);
@@ -102,7 +106,17 @@
   font-weight: 600;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: var(--txt-strong);
+  // Polished-silver metallic letters (incl. the leading ◆) to match the
+  // Silver board's steel accent (its --gold token resolves to steel): bright
+  // highlight → light steel → a darker reflection band → bright base, clipped
+  // to the glyphs, with a cool glow. `color` is the fallback for browsers
+  // without text clipping.
+  color: #d9e3ec;
+  background: linear-gradient(180deg, #f6fafd 0%, #d9e3ec 36%, #8fa0b0 52%, #e9eff5 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0 0 9px color-mix(in srgb, var(--gold) 42%, transparent);
 }
 .svp-headrow {
   position: sticky;

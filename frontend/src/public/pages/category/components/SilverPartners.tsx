@@ -311,7 +311,6 @@ export default function SilverPartners({
       <span className="csb-fid br" aria-hidden="true"></span>
       <span className="csb-des">CS2 · SILVER-TIER</span>
       <div className="svp-badge" aria-hidden="true">
-        <span className="dot"></span>
         <span className="svp-badge-txt">&#9670; Preferred Partners</span>
       </div>
 
