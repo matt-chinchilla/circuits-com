@@ -514,7 +514,17 @@ export function mountTileField(canvas: HTMLCanvasElement, board: HTMLElement): T
     raf = requestAnimationFrame(frame);
   };
 
+  // Once destroy() runs (the board unmounted) no public method may restart the
+  // rAF loop or re-arm deferred work — otherwise a deferred runWave() frame can
+  // resurrect a detached ~60fps loop that never stops (one orphaned loop per
+  // brand-takeover-then-navigate; they stack and the page gets slower the more
+  // you visit). Guarding start()/wave() neutralizes every resurrection path
+  // (wave/setCursor/clearCursor/setEmblem all funnel through start()).
+  let destroyed = false;
+  const waveTimers: number[] = [];
+
   const start = () => {
+    if (destroyed) return;
     if (!running && visible && !reducedMQ.matches) {
       running = true;
       raf = requestAnimationFrame(frame);
@@ -581,6 +591,7 @@ export function mountTileField(canvas: HTMLCanvasElement, board: HTMLElement): T
       start();
     },
     wave(ox: number, oy: number) {
+      if (destroyed) return;
       if (reducedMQ.matches) {
         refreshColor();
         buildPCB();
@@ -599,12 +610,15 @@ export function mountTileField(canvas: HTMLCanvasElement, board: HTMLElement): T
       const maxR = Math.hypot(Math.max(ox, W - ox), Math.max(oy, H - oy)) + FLIPLEN + 20;
       waveState = { ox, oy, t0: performance.now(), maxR };
       // re-rasterize the vectors to the new accent once the brand vars settle
+      while (waveTimers.length) clearTimeout(waveTimers.pop());
       [120, 600].forEach((d) =>
-        setTimeout(() => {
-          refreshColor();
-          snapshotCircuit();
-          buildPCB();
-        }, d),
+        waveTimers.push(
+          window.setTimeout(() => {
+            refreshColor();
+            snapshotCircuit();
+            buildPCB();
+          }, d),
+        ),
       );
       start();
     },
@@ -619,6 +633,8 @@ export function mountTileField(canvas: HTMLCanvasElement, board: HTMLElement): T
       buildPCB();
     },
     destroy() {
+      destroyed = true;
+      while (waveTimers.length) clearTimeout(waveTimers.pop());
       stop();
       ro.disconnect();
       io.disconnect();
