@@ -46,14 +46,70 @@
 }
 
 .subtitle {
+  position: relative;
   font-family: $font-body;
-  font-size: 1.125rem;
-  color: rgba(255, 255, 255, 0.8);
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  color: #ffffff;
   margin: 0;
   animation: fade-in-up 0.6s ease 0.15s both;
+  // Static layered glow — text-shadow is never animated (CLAUDE.md)
+  text-shadow:
+    0 0 6px rgba(255, 255, 255, 0.55),
+    0 0 18px rgba(255, 255, 255, 0.28),
+    0 0 42px rgba(120, 190, 255, 0.22);
+
+  // Searchlight rig: pre-baked conic spokes, transform-only rotation,
+  // radial mask (rotation-invariant) fades beams before they reach content
+  &::before {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 400px;
+    height: 400px;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    z-index: -1;
+    background: repeating-conic-gradient(
+      from 0deg,
+      rgba(255, 255, 255, 0) 0deg 9deg,
+      rgba(160, 205, 255, 0.10) 12deg,
+      rgba(255, 255, 255, 0.16) 15deg,
+      rgba(255, 255, 255, 0) 18deg 30deg
+    );
+    -webkit-mask-image: radial-gradient(circle closest-side, #000 18%, transparent 70%);
+    mask-image: radial-gradient(circle closest-side, #000 18%, transparent 70%);
+    animation: slogan-beams 46s linear infinite;
+  }
+
+  // Soft core bloom behind the letters (opacity-only pulse)
+  &::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 340px;
+    height: 120px;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    z-index: -1;
+    background: radial-gradient(closest-side, rgba(255, 255, 255, 0.20), rgba(140, 195, 255, 0.10) 55%, transparent 75%);
+    animation: slogan-bloom 6.5s ease-in-out infinite;
+  }
 
   @include responsive($bp-mobile) {
     font-size: 1rem;
+    letter-spacing: 0.14em;
+
+    &::before { width: 300px; height: 300px; }
+    &::after { width: 250px; height: 90px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    &::before,
+    &::after { animation: none; }
   }
 }
 
@@ -77,4 +133,14 @@
       box-shadow: 0 0 12px rgba(255, 255, 255, 0.2);
     }
   }
+}
+
+@keyframes slogan-beams {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+@keyframes slogan-bloom {
+  0%, 100% { opacity: 0.65; }
+  50% { opacity: 1; }
 }
