@@ -23,7 +23,11 @@ import { useEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import CircuitTraces from '@public/components/widgets/CircuitTraces';
 import type { PlatinumSponsor } from '@public/types/sponsor';
+import { BrandColorPicker } from '@shared/components/BrandColorPicker';
+import { LogoCropperModal } from '@shared/components/LogoCropperModal';
 import { DEFAULT_PALETTE, extractBrandPalette } from '@shared/utils/brandPalette';
+import { safeHexColor } from '@shared/utils/color';
+import { canvasToDataUrl } from '@shared/utils/image';
 import { formatPhone } from '@shared/utils/phone';
 import { safeHttpUrl, safeImageUrl } from '@shared/utils/url';
 import { brandVars, CsCopy, csTelHref, mountTileField } from './csFx';
@@ -315,20 +319,27 @@ export default function CategorySponsor({
       return null;
     }
   });
-  const [branded, setBranded] = useState<boolean>(
-    () =>
-      !!(
-        !sponsor &&
-        (() => {
-          try {
-            return JSON.parse(sessionStorage.getItem(pitchKey) || 'null');
-          } catch {
-            return null;
-          }
-        })()
-      ),
-  );
+  // A SOLD board with sponsorship-level colors set (brand_takeover) renders
+  // branded from FIRST PAINT (no wave on load — boardStyle applies statically,
+  // exactly like today's post-click state). The !sponsor branch keeps the
+  // pitch-restore behavior verbatim (a saved session pitch → branded).
+  const [branded, setBranded] = useState<boolean>(() => {
+    if (sponsor) return Boolean(sponsor.brand_takeover);
+    try {
+      return !!JSON.parse(sessionStorage.getItem(pitchKey) || 'null');
+    } catch {
+      return false;
+    }
+  });
   const [dragging, setDragging] = useState(false);
+  const [cropFile, setCropFile] = useState<File | null>(null);
+
+  // Sync `branded` to the sponsor's takeover flag on identity/flag change ONLY
+  // (primitive deps) — a same-values refetch never stomps a visitor's manual
+  // toggle. The react-hooks plugin isn't installed here, so no disable comment.
+  useEffect(() => {
+    if (sponsor) setBranded(Boolean(sponsor.brand_takeover));
+  }, [sponsor?.id, sponsor?.brand_takeover]);
 
   // Map the API sponsor (snake_case) → the board's field vocabulary so the rail
   // + brand logic stay verbatim with the prototype. Per the project null gotcha
@@ -347,9 +358,10 @@ export default function CategorySponsor({
         websiteHref: safeHttpUrl(sponsor.website),
         designator: 'CS1 · CATEGORY-SPONSOR',
         // Brand takeover of a REAL sponsor uses the STORED hex (never pixel-
-        // extracted from a remote logo — canvas taint). null → platinum default.
-        brandPrimary: sponsor.brand_primary ?? undefined,
-        brandSecondary: sponsor.brand_secondary ?? undefined,
+        // extracted from a remote logo — canvas taint). safeHexColor gates the
+        // #RRGGBB shape; a null/invalid value → undefined → platinum default.
+        brandPrimary: safeHexColor(sponsor.brand_primary) ?? undefined,
+        brandSecondary: safeHexColor(sponsor.brand_secondary) ?? undefined,
       }
     : null;
 
@@ -407,33 +419,37 @@ export default function CategorySponsor({
     runWave(ref, fx, padRef.current, () => setBranded(next));
   };
 
-  // ── Pitch mode (open slot): drop a logo → extract colors → take over ──
+  // ── Pitch mode (open slot): drop a logo → crop dialog → extract colors →
+  //    take over. A dropped/picked file opens the cropper; Apply hands back a
+  //    256×256 white-underfilled canvas we colour-sample + store (the bounded
+  //    data-URL, not the raw file — no sessionStorage quota risk).
   const adoptLogoFile = (file: File | null | undefined) => {
     if (!file || !/^image\//.test(file.type)) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const img = new Image();
-      img.onload = () => {
-        const { primary, secondary } = extractBrandPalette(img) ?? DEFAULT_PALETTE;
-        const next: PitchState = {
-          logo: reader.result as string,
-          name: csPrettyName(file.name),
-          primary,
-          secondary,
-        };
-        try {
-          sessionStorage.setItem(pitchKey, JSON.stringify(next));
-        } catch {
-          /* storage unavailable */
-        }
-        runWave(ref, fx, padRef.current, () => {
-          setPitch(next);
-          setBranded(true);
-        });
-      };
-      img.src = reader.result as string;
+    setCropFile(file);
+  };
+
+  const applyCroppedLogo = (canvas: HTMLCanvasElement) => {
+    const file = cropFile;
+    setCropFile(null);
+    if (!file) return;
+    const encoded = canvasToDataUrl(canvas);
+    if (!encoded.ok) return;
+    const palette = extractBrandPalette(canvas) ?? DEFAULT_PALETTE;
+    const next: PitchState = {
+      logo: encoded.dataUrl,
+      name: csPrettyName(file.name),
+      primary: palette.primary,
+      secondary: palette.secondary,
     };
-    reader.readAsDataURL(file);
+    try {
+      sessionStorage.setItem(pitchKey, JSON.stringify(next));
+    } catch {
+      /* storage unavailable */
+    }
+    runWave(ref, fx, padRef.current, () => {
+      setPitch(next);
+      setBranded(true);
+    });
   };
   const clearPitch = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -563,6 +579,23 @@ export default function CategorySponsor({
             <div className="csb-surface">
               <CsBadge>Exclusive Partner</CsBadge>
               {renderRail(ps, true)}
+              <div className="csb-swatches" data-enter>
+                <BrandColorPicker
+                  compact
+                  logoSrc={pitch.logo}
+                  primary={pitch.primary}
+                  secondary={pitch.secondary}
+                  onChange={(role, hex) => {
+                    const next = { ...pitch, [role]: hex } as PitchState;
+                    try {
+                      sessionStorage.setItem(pitchKey, JSON.stringify(next));
+                    } catch {
+                      /* storage unavailable */
+                    }
+                    runWave(ref, fx, padRef.current, () => setPitch(next));
+                  }}
+                />
+              </div>
             </div>
             <button
               type="button"
@@ -574,6 +607,14 @@ export default function CategorySponsor({
             </button>
           </div>
         </div>
+        {cropFile && (
+          <LogoCropperModal
+            file={cropFile}
+            onApply={applyCroppedLogo}
+            onCancel={() => setCropFile(null)}
+            title="Position your logo"
+          />
+        )}
       </div>
     );
   }
@@ -656,6 +697,14 @@ export default function CategorySponsor({
             />
           </div>
         </div>
+        {cropFile && (
+          <LogoCropperModal
+            file={cropFile}
+            onApply={applyCroppedLogo}
+            onCancel={() => setCropFile(null)}
+            title="Position your logo"
+          />
+        )}
       </div>
     );
   }

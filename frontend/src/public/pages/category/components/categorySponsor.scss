@@ -742,6 +742,15 @@ a.csbA-coname:hover {
   border-color: var(--gold);
 }
 
+/* Pitch-mode brand-color chooser strip (BrandColorPicker `compact`). Layout
+   only — the chip swatch colors are inline styles from the picker. */
+.csb-swatches {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
 /* ── Click-to-copy affordance (shared with the Silver directory) ─────────── */
 .csb-copy {
   display: inline-flex;

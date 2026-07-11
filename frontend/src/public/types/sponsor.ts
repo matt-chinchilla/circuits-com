@@ -36,6 +36,7 @@ export interface PlatinumSponsor {
   coverage_hours?: string | null; // → hours
   brand_primary?: string | null;
   brand_secondary?: string | null;
+  brand_takeover?: boolean | null;
 }
 
 /**
