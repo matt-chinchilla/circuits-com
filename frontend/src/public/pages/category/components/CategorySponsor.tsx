@@ -24,6 +24,7 @@ import type { ReactElement } from 'react';
 import CircuitTraces from '@public/components/widgets/CircuitTraces';
 import type { PlatinumSponsor } from '@public/types/sponsor';
 import { BrandColorPicker } from '@shared/components/BrandColorPicker';
+import { BrandColorSelectModal } from '@shared/components/BrandColorSelectModal';
 import { LogoCropperModal } from '@shared/components/LogoCropperModal';
 import { DEFAULT_PALETTE, extractBrandPalette } from '@shared/utils/brandPalette';
 import { safeHexColor } from '@shared/utils/color';
@@ -333,6 +334,13 @@ export default function CategorySponsor({
   });
   const [dragging, setDragging] = useState(false);
   const [cropFile, setCropFile] = useState<File | null>(null);
+  // Two-step upload: after a crop, hold the canvas + a PROVISIONAL (auto-color)
+  // pitch so the color screen can open BEFORE the wave. Non-null = color screen
+  // is up; the provisional is already persisted so a mid-screen nav survives.
+  const [colorStage, setColorStage] = useState<{
+    canvas: HTMLCanvasElement;
+    provisional: PitchState;
+  } | null>(null);
   // Demo-host encode failure (e.g. Safari: a photographic crop exceeding the
   // 64,000-char cap) — surfaced instead of silently doing nothing on Apply.
   const [cropError, setCropError] = useState<string | null>(null);
@@ -442,12 +450,33 @@ export default function CategorySponsor({
       return;
     }
     const palette = extractBrandPalette(canvas) ?? DEFAULT_PALETTE;
-    const next: PitchState = {
+    // Provisional takeover: the auto-extracted palette. Persisted immediately so
+    // navigating away while the color screen is open keeps today's crop-durability
+    // (the board restores branded with the auto colors). The wave waits for the
+    // color screen to commit — no immediate takeover here.
+    const provisional: PitchState = {
       logo: encoded.dataUrl,
       name: csPrettyName(file.name),
       primary: palette.primary,
       secondary: palette.secondary,
     };
+    try {
+      sessionStorage.setItem(pitchKey, JSON.stringify(provisional));
+    } catch {
+      /* storage unavailable */
+    }
+    setColorStage({ canvas, provisional });
+  };
+
+  // Commit the color screen's choice (or the provisional auto-colors on Skip):
+  // persist, then play the tile-flip wave into the branded takeover — exactly
+  // the old applyCroppedLogo tail.
+  const commitPitch = (
+    stage: { canvas: HTMLCanvasElement; provisional: PitchState },
+    primary: string,
+    secondary: string,
+  ) => {
+    const next: PitchState = { ...stage.provisional, primary, secondary };
     try {
       sessionStorage.setItem(pitchKey, JSON.stringify(next));
     } catch {
@@ -457,6 +486,7 @@ export default function CategorySponsor({
       setPitch(next);
       setBranded(true);
     });
+    setColorStage(null);
   };
   const clearPitch = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -628,6 +658,15 @@ export default function CategorySponsor({
             title="Position your logo"
           />
         )}
+        {colorStage && (
+          <BrandColorSelectModal
+            source={colorStage.canvas}
+            initialPrimary={colorStage.provisional.primary}
+            initialSecondary={colorStage.provisional.secondary}
+            onApply={(p, s) => commitPitch(colorStage, p, s)}
+            onSkip={() => commitPitch(colorStage, colorStage.provisional.primary, colorStage.provisional.secondary)}
+          />
+        )}
       </div>
     );
   }
@@ -721,6 +760,15 @@ export default function CategorySponsor({
             onApply={applyCroppedLogo}
             onCancel={() => setCropFile(null)}
             title="Position your logo"
+          />
+        )}
+        {colorStage && (
+          <BrandColorSelectModal
+            source={colorStage.canvas}
+            initialPrimary={colorStage.provisional.primary}
+            initialSecondary={colorStage.provisional.secondary}
+            onApply={(p, s) => commitPitch(colorStage, p, s)}
+            onSkip={() => commitPitch(colorStage, colorStage.provisional.primary, colorStage.provisional.secondary)}
           />
         )}
       </div>

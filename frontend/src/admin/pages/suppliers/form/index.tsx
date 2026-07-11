@@ -3,7 +3,10 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Check, Trash2 } from 'lucide-react';
 import Breadcrumbs from '@admin/components/Breadcrumbs';
 import { adminApi } from '@admin/services/adminApi';
+import { isActiveSponsor, normalizeSponsorTier } from '@admin/services/sponsorTier';
 import { prependScheme } from '@shared/utils/url';
+import { BrandColorPicker } from '@shared/components/BrandColorPicker';
+import { BrandColorSelectModal } from '@shared/components/BrandColorSelectModal';
 import ImageUploadField from '@admin/components/ImageUploadField';
 import styles from './SupplierFormPage.module.scss';
 
@@ -21,11 +24,15 @@ interface FormData {
   contact_role: string;
   coverage_hours: string;
   logo_url: string;
+  brand_primary: string;
+  brand_secondary: string;
 }
 
 interface FormErrors {
   name?: string;
   email?: string;
+  brand_primary?: string;
+  brand_secondary?: string;
 }
 
 function emptyForm(): FormData {
@@ -39,6 +46,8 @@ function emptyForm(): FormData {
     contact_role: '',
     coverage_hours: '',
     logo_url: '',
+    brand_primary: '',
+    brand_secondary: '',
   };
 }
 
@@ -84,6 +93,8 @@ export default function SupplierFormPage() {
   const [loadingExisting, setLoadingExisting] = useState(isEdit);
   const [existingName, setExistingName] = useState('');
   const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
+  // Freshly cropped logo canvas → opens the brand-color picker (two-step upload).
+  const [colorSource, setColorSource] = useState<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -104,6 +115,8 @@ export default function SupplierFormPage() {
           contact_role: s.contact_role ?? '',
           coverage_hours: s.coverage_hours ?? '',
           logo_url: s.logo_url ?? '',
+          brand_primary: s.brand_primary ?? '',
+          brand_secondary: s.brand_secondary ?? '',
         });
       })
       .catch(() => setToast({ type: 'error', msg: 'Failed to load supplier.' }))
@@ -124,6 +137,21 @@ export default function SupplierFormPage() {
     const e: FormErrors = {};
     if (!form.name.trim()) e.name = 'Required';
     if (form.email.trim() && !form.email.includes('@')) e.email = 'Invalid email';
+
+    // Brand-color hex + both-or-neither rules — identical to the sponsor form.
+    // A lone brand color would flip a sold board to branded with the OTHER
+    // channel silently pulled from fallback defaults.
+    const hexOk = (v: string) => !v.trim() || /^#[0-9a-f]{6}$/i.test(v.trim());
+    if (!hexOk(form.brand_primary)) e.brand_primary = 'Use a hex color like #1d3a8f';
+    if (!hexOk(form.brand_secondary)) e.brand_secondary = 'Use a hex color like #1d3a8f';
+    const hasPrimary = !!form.brand_primary.trim();
+    const hasSecondary = !!form.brand_secondary.trim();
+    if (hasPrimary !== hasSecondary) {
+      const msg = 'Set both brand colors, or neither.';
+      if (!hasPrimary) e.brand_primary = msg;
+      else e.brand_secondary = msg;
+    }
+
     setErrors(e);
     return Object.keys(e).length === 0;
   }
@@ -132,6 +160,8 @@ export default function SupplierFormPage() {
     if (!validate()) return;
     setSaving(true);
     try {
+      const brand_primary = form.brand_primary.trim() || null;
+      const brand_secondary = form.brand_secondary.trim() || null;
       const payload = {
         name: form.name.trim(),
         description: form.description.trim() || null,
@@ -145,10 +175,45 @@ export default function SupplierFormPage() {
         contact_role: form.contact_role.trim() || null,
         coverage_hours: form.coverage_hours.trim() || null,
         logo_url: form.logo_url.trim() || null,
+        brand_primary,
+        brand_secondary,
       };
       if (isEdit && id) {
         await adminApi.updateSupplier(id, payload);
-        setToast({ type: 'success', msg: 'Supplier updated successfully.' });
+        // Propagate the new brand colors onto this supplier's ACTIVE Platinum
+        // sponsorship(s) so the sold Category Sponsor board re-tints without a
+        // second manual edit. Runs BEFORE the toast/navigate so the copy can
+        // report partial failures, but the whole block is try/catch-degradable
+        // and uses allSettled — a getSponsors failure or one rejected PATCH can
+        // never abort the save that already succeeded above. A supplier may
+        // legally hold multiple active Platinum slots (one per category), and a
+        // brand-only PATCH doesn't trip the single-slot guard (no
+        // category_id/tier/status keys).
+        let notUpdated = 0;
+        if (brand_primary && brand_secondary) {
+          try {
+            const sponsors = await adminApi.getSponsors();
+            const targets = sponsors.filter(
+              (s) =>
+                s.supplier_id === id &&
+                normalizeSponsorTier(s.tier) === 'Platinum' &&
+                isActiveSponsor(s.status),
+            );
+            const results = await Promise.allSettled(
+              targets.map((s) => adminApi.updateSponsor(s.id, { brand_primary, brand_secondary })),
+            );
+            notUpdated = results.filter((r) => r.status === 'rejected').length;
+          } catch {
+            /* getSponsors failed — degrade to the plain success toast */
+          }
+        }
+        setToast({
+          type: 'success',
+          msg:
+            notUpdated > 0
+              ? `Supplier updated — ${notUpdated} Platinum placement(s) not updated.`
+              : 'Supplier updated.',
+        });
         setTimeout(() => navigate(`/admin/suppliers/${id}`), 900);
       } else {
         const created = await adminApi.createSupplier(payload);
@@ -271,8 +336,28 @@ export default function SupplierFormPage() {
                 label="Logo / photo"
                 value={form.logo_url}
                 onChange={(v) => set('logo_url', v)}
+                onCroppedCanvas={setColorSource}
                 hint="Shown on supplier cards and as the company logo on sponsor boards."
               />
+            </div>
+            <div className={styles.field} data-field="brand_colors">
+              <label className={styles.fieldLabel}>Brand colors</label>
+              <BrandColorPicker
+                logoSrc={form.logo_url.trim() || null}
+                primary={form.brand_primary.trim() || null}
+                secondary={form.brand_secondary.trim() || null}
+                onChange={(role, hex) =>
+                  set(role === 'primary' ? 'brand_primary' : 'brand_secondary', hex)
+                }
+                allowCustom
+              />
+              <div className={styles.fieldHint}>
+                Applies to this supplier&rsquo;s active Platinum placement too.
+              </div>
+              {errors.brand_primary && <div className={styles.fieldError}>{errors.brand_primary}</div>}
+              {errors.brand_secondary && (
+                <div className={styles.fieldError}>{errors.brand_secondary}</div>
+              )}
             </div>
           </div>
         </section>
@@ -467,6 +552,20 @@ export default function SupplierFormPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {colorSource && (
+        <BrandColorSelectModal
+          source={colorSource}
+          initialPrimary={form.brand_primary.trim() || null}
+          initialSecondary={form.brand_secondary.trim() || null}
+          onApply={(p, s) => {
+            set('brand_primary', p);
+            set('brand_secondary', s);
+            setColorSource(null);
+          }}
+          onSkip={() => setColorSource(null)}
+        />
       )}
 
       {toast && (

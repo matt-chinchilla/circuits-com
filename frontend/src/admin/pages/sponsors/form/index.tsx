@@ -18,6 +18,7 @@ import type {
 } from '@admin/types/admin';
 import Icon from '@shared/components/Icon';
 import { BrandColorPicker } from '@shared/components/BrandColorPicker';
+import { BrandColorSelectModal } from '@shared/components/BrandColorSelectModal';
 import ImageUploadField from '@admin/components/ImageUploadField';
 import styles from './SponsorFormPage.module.scss';
 
@@ -137,6 +138,9 @@ export default function SponsorFormPage() {
   const [categories, setCategories] = useState<AdminCategory[]>([]);
   const [toast, setToast] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  // Set to the freshly cropped logo canvas so the two-step upload flow can open
+  // the brand-color picker right after a crop. Null = no color screen open.
+  const [colorSource, setColorSource] = useState<HTMLCanvasElement | null>(null);
 
   // Hydrate suppliers + categories from live API
   useEffect(() => {
@@ -702,6 +706,7 @@ export default function SponsorFormPage() {
                 label="Sponsor image / logo"
                 value={form.image_url}
                 onChange={(v) => update('image_url', v)}
+                onCroppedCanvas={setColorSource}
                 hint="Upload a logo/icon or paste an image URL. Shown on the sponsor board."
               />
             </div>
@@ -773,6 +778,20 @@ export default function SponsorFormPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {colorSource && (
+        <BrandColorSelectModal
+          source={colorSource}
+          initialPrimary={form.brand_primary.trim() || null}
+          initialSecondary={form.brand_secondary.trim() || null}
+          onApply={(p, s) => {
+            update('brand_primary', p);
+            update('brand_secondary', s);
+            setColorSource(null);
+          }}
+          onSkip={() => setColorSource(null)}
+        />
       )}
 
       {toast && (

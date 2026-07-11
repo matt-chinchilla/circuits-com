@@ -121,6 +121,8 @@ export interface AdminSupplier {
   coverage_hours: string | null;
   description: string | null;
   logo_url: string | null;
+  brand_primary: string | null;
+  brand_secondary: string | null;
   parts_count?: number;
   revenue_total?: number;
   categories?: string[];
