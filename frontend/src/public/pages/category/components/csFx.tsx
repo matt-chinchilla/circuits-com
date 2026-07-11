@@ -10,9 +10,9 @@
 //    tiles near the cursor rise in fake-3D, random tiles "breathe" up/down,
 //    and wave() ripples a literal flip wave out from a point. Returns an api
 //    { setCursor, clearCursor, wave, refreshColor, destroy }.
-//  • extractBrandColors(img) — dominant saturated color (primary) + a bright
-//    companion accent (secondary) from a dropped logo image.
 //  • brandVars(primary, secondary) — CSS-var overrides that re-skin a board.
+//    (Brand-color EXTRACTION from a logo lives in @shared/utils/brandPalette
+//    now — shared with the admin sponsor form; this file only re-skins.)
 //  • CsCopy — click-to-copy affordance (shared by both banners).
 //  • csTelHref — tel: href normalizer.
 //
@@ -642,71 +642,6 @@ export function mountTileField(canvas: HTMLCanvasElement, board: HTMLElement): T
       reducedMQ.removeEventListener('change', onRM);
     },
   };
-}
-
-/* Dominant-color extraction from a logo image (for the drag-a-logo pitch
-   mode). Downscales to 28px, buckets opaque pixels by hue, picks the most
-   populated SATURATED bucket as primary; secondary is a brightened accent
-   of the runner-up hue (or of the primary when the logo is one-colored). */
-export function extractBrandColors(img: CanvasImageSource): { primary: string; secondary: string } {
-  const N = 28;
-  const cv = document.createElement('canvas');
-  cv.width = N;
-  cv.height = N;
-  const ctx = cv.getContext('2d', { willReadFrequently: true }) as CanvasRenderingContext2D;
-  ctx.drawImage(img, 0, 0, N, N);
-  const data = ctx.getImageData(0, 0, N, N).data;
-  const buckets = new Map<number, { n: number; r: number; g: number; b: number }>(); // hueBucket -> {n, r, g, b}
-  const fb = { n: 0, r: 0, g: 0, b: 0 }; // fallback: any non-white/black pixel
-  for (let i = 0; i < data.length; i += 4) {
-    const r = data[i],
-      g = data[i + 1],
-      b = data[i + 2],
-      a = data[i + 3];
-    if (a < 140) continue;
-    const mx = Math.max(r, g, b),
-      mn = Math.min(r, g, b);
-    const l = (mx + mn) / 510;
-    if (l > 0.94 || l < 0.06) continue;
-    fb.n++;
-    fb.r += r;
-    fb.g += g;
-    fb.b += b;
-    const sat = mx === 0 ? 0 : (mx - mn) / mx;
-    if (sat < 0.28) continue;
-    let h = 0;
-    const d = mx - mn;
-    if (d > 0) {
-      if (mx === r) h = ((g - b) / d) % 6;
-      else if (mx === g) h = (b - r) / d + 2;
-      else h = (r - g) / d + 4;
-      h = Math.round((h * 60 + 360) % 360);
-    }
-    const key = Math.floor(h / 24);
-    const bk = buckets.get(key) || { n: 0, r: 0, g: 0, b: 0 };
-    bk.n++;
-    bk.r += r;
-    bk.g += g;
-    bk.b += b;
-    buckets.set(key, bk);
-  }
-  const hex = (v: number) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0');
-  const avg = (bk: { n: number; r: number; g: number; b: number }) =>
-    '#' + hex(bk.r / bk.n) + hex(bk.g / bk.n) + hex(bk.b / bk.n);
-  const sorted = [...buckets.values()].sort((a, b) => b.n - a.n);
-  let primary: string, secondary: string;
-  if (sorted.length === 0) {
-    primary = fb.n ? avg(fb) : '#3a6ea5';
-  } else {
-    primary = avg(sorted[0]);
-  }
-  if (sorted.length > 1 && sorted[1].n > sorted[0].n * 0.2) {
-    const s = avg(sorted[1]);
-    secondary = `color-mix(in srgb, ${s} 72%, #ffffff)`;
-  } else {
-    secondary = `color-mix(in srgb, ${primary} 52%, #ffffff)`;
-  }
-  return { primary, secondary };
 }
 
 /* Build the inline CSS-var overrides that re-skin a board in brand colors.

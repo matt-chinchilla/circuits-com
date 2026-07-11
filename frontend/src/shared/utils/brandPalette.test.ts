@@ -1,0 +1,38 @@
+import { describe, expect, it } from 'vitest';
+import { paletteFromPixels } from './brandPalette';
+import { mixHex } from './color';
+
+const px = (colors: Array<[number, number, number, number]>) => {
+  const data = new Uint8ClampedArray(colors.length * 4);
+  colors.forEach(([r, g, b, a], i) => data.set([r, g, b, a], i * 4));
+  return data;
+};
+
+describe('paletteFromPixels', () => {
+  it('single saturated hue wins as primary; secondary is the 52% white mix', () => {
+    const p = paletteFromPixels(px(Array(20).fill([255, 0, 0, 255])), 20);
+    expect(p.primary).toBe('#ff0000');
+    expect(p.swatches[0]).toBe('#ff0000');
+    expect(p.secondary).toBe(mixHex('#ff0000', '#ffffff', 0.52)); // parity with csFx 52% branch
+  });
+
+  it('runner-up hue above 20% drives the secondary via the 72% white mix', () => {
+    const p = paletteFromPixels(
+      px([...Array(10).fill([255, 0, 0, 255]), ...Array(5).fill([0, 0, 255, 255])]),
+      15,
+    );
+    expect(p.swatches).toEqual(['#ff0000', '#0000ff']);
+    expect(p.secondary).toBe(mixHex('#0000ff', '#ffffff', 0.72)); // parity with csFx 72% branch
+  });
+
+  it('near-white, near-black and transparent pixels are ignored', () => {
+    const p = paletteFromPixels(px([[250, 250, 250, 255], [5, 5, 5, 255], [255, 0, 0, 10]]), 3);
+    expect(p.primary).toBe('#3a6ea5'); // hard fallback — nothing survived
+  });
+
+  it('unsaturated pixels only reach the fallback average', () => {
+    const p = paletteFromPixels(px(Array(4).fill([128, 128, 128, 255])), 4);
+    expect(p.primary).toBe('#808080');
+    expect(p.swatches).toEqual(['#808080']); // fallback primary is the only swatch
+  });
+});

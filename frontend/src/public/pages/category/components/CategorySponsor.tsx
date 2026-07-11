@@ -23,9 +23,10 @@ import { useEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import CircuitTraces from '@public/components/widgets/CircuitTraces';
 import type { PlatinumSponsor } from '@public/types/sponsor';
+import { DEFAULT_PALETTE, extractBrandPalette } from '@shared/utils/brandPalette';
 import { formatPhone } from '@shared/utils/phone';
 import { safeHttpUrl, safeImageUrl } from '@shared/utils/url';
-import { brandVars, CsCopy, csTelHref, extractBrandColors, mountTileField } from './csFx';
+import { brandVars, CsCopy, csTelHref, mountTileField } from './csFx';
 import type { TileField } from './csFx';
 import uploadIcon from './upload-icon.png';
 import './categorySponsor.scss';
@@ -413,7 +414,7 @@ export default function CategorySponsor({
     reader.onload = () => {
       const img = new Image();
       img.onload = () => {
-        const { primary, secondary } = extractBrandColors(img);
+        const { primary, secondary } = extractBrandPalette(img) ?? DEFAULT_PALETTE;
         const next: PitchState = {
           logo: reader.result as string,
           name: csPrettyName(file.name),
