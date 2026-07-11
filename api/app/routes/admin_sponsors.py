@@ -52,6 +52,8 @@ def _serialize(sponsor: Sponsor) -> AdminSponsorResponse:
         end_date=sponsor.end_date,
         amount=sponsor.amount,
         status=sponsor.status,
+        brand_primary=sponsor.brand_primary,
+        brand_secondary=sponsor.brand_secondary,
     )
 
 
@@ -204,6 +206,8 @@ def create_sponsor(
         end_date=body.end_date,
         amount=body.amount,
         status=body.status,
+        brand_primary=body.brand_primary,
+        brand_secondary=body.brand_secondary,
     )
     db.add(sponsor)
     try:

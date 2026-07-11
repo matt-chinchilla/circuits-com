@@ -4,6 +4,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, field_validator
 
+from app.utils.color import validate_optional_hex_color
 from app.utils.image_url import validate_optional_image_url
 
 
@@ -51,6 +52,8 @@ class AdminSponsorResponse(BaseModel):
     end_date: date | None = None
     amount: Decimal | None = None
     status: str | None = None
+    brand_primary: str | None = None
+    brand_secondary: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -66,11 +69,18 @@ class AdminSponsorCreate(BaseModel):
     end_date: date | None = None
     amount: Decimal | None = None
     status: str | None = "Active"
+    brand_primary: str | None = None
+    brand_secondary: str | None = None
 
     @field_validator("image_url")
     @classmethod
     def _validate_image_url(cls, v: str | None) -> str | None:
         return validate_optional_image_url(v)
+
+    @field_validator("brand_primary", "brand_secondary")
+    @classmethod
+    def _validate_brand_colors(cls, value: str | None) -> str | None:
+        return validate_optional_hex_color(value)
 
 
 class AdminSponsorUpdate(BaseModel):
@@ -84,8 +94,15 @@ class AdminSponsorUpdate(BaseModel):
     end_date: date | None = None
     amount: Decimal | None = None
     status: str | None = None
+    brand_primary: str | None = None
+    brand_secondary: str | None = None
 
     @field_validator("image_url")
     @classmethod
     def _validate_image_url(cls, v: str | None) -> str | None:
         return validate_optional_image_url(v)
+
+    @field_validator("brand_primary", "brand_secondary")
+    @classmethod
+    def _validate_brand_colors(cls, value: str | None) -> str | None:
+        return validate_optional_hex_color(value)
