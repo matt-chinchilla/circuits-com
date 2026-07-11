@@ -1,6 +1,7 @@
 // frontend/src/admin/components/ImageUploadField.tsx
 import { useId, useRef, useState, type ReactElement } from 'react';
-import { fileToDataUrl } from '@shared/utils/image';
+import { LogoCropperModal } from '@shared/components/LogoCropperModal';
+import { canvasToDataUrl } from '@shared/utils/image';
 import { safeImageUrl } from '@shared/utils/url';
 import styles from './ImageUploadField.module.scss';
 
@@ -19,21 +20,36 @@ export default function ImageUploadField({
   id, label, value, onChange, hint,
 }: ImageUploadFieldProps): ReactElement {
   const fileRef = useRef<HTMLInputElement>(null);
-  const [busy, setBusy] = useState(false);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const errId = useId();
   const safePreview = safeImageUrl(value);
 
-  async function onPick(file: File | undefined) {
+  const resetFileInput = () => { if (fileRef.current) fileRef.current.value = ''; }; // allow re-picking the same file
+
+  const onPick = (file: File | undefined) => {
     if (!file) return;
     setError(null);
-    setBusy(true);
-    const result = await fileToDataUrl(file);
-    setBusy(false);
+    if (!file.type.startsWith('image/') || file.size === 0) {
+      setError('Please choose an image file.');
+      resetFileInput();
+      return;
+    }
+    setPendingFile(file);
+  };
+
+  const applyCrop = (canvas: HTMLCanvasElement) => {
+    setPendingFile(null);
+    resetFileInput();
+    const result = canvasToDataUrl(canvas);
     if (result.ok) onChange(result.dataUrl);
     else setError(result.error);
-    if (fileRef.current) fileRef.current.value = ''; // allow re-picking the same file
-  }
+  };
+
+  const cancelCrop = () => {
+    setPendingFile(null);
+    resetFileInput();
+  };
 
   return (
     <div className={styles.field}>
@@ -59,10 +75,9 @@ export default function ImageUploadField({
               type="button"
               className={styles.uploadBtn}
               onClick={() => fileRef.current?.click()}
-              disabled={busy}
               aria-describedby={error ? errId : undefined}
             >
-              {busy ? 'Processing…' : value ? 'Replace image' : 'Upload image'}
+              {value ? 'Replace image' : 'Upload image'}
             </button>
             {value && (
               <button
@@ -89,8 +104,15 @@ export default function ImageUploadField({
           />
         </div>
       </div>
-      {hint && !error && <div className={styles.hint}>{hint}</div>}
+      {!error && (
+        <div className={styles.hint}>
+          {hint ? `${hint} ` : ''}Logos are cropped to a circular frame.
+        </div>
+      )}
       {error && <div className={styles.error} id={errId} role="alert">{error}</div>}
+      {pendingFile && (
+        <LogoCropperModal file={pendingFile} onApply={applyCrop} onCancel={cancelCrop} />
+      )}
     </div>
   );
 }
