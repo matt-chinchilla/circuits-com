@@ -18,6 +18,7 @@ from app.models import (
     User,
 )
 from app.services.auth_service import get_current_user
+from app.utils.color import validate_optional_hex_color
 from app.utils.image_url import validate_optional_image_url
 
 router = APIRouter(prefix="/api/suppliers", tags=["suppliers"])
@@ -43,11 +44,18 @@ class SupplierCreate(BaseModel):
     coverage_hours: str | None = None
     description: str | None = None
     logo_url: str | None = None
+    brand_primary: str | None = None
+    brand_secondary: str | None = None
 
     @field_validator("logo_url")
     @classmethod
     def _validate_logo_url(cls, v: str | None) -> str | None:
         return validate_optional_image_url(v)
+
+    @field_validator("brand_primary", "brand_secondary")
+    @classmethod
+    def _validate_brand_colors(cls, value: str | None) -> str | None:
+        return validate_optional_hex_color(value)
 
 
 class SupplierUpdate(BaseModel):
@@ -60,11 +68,18 @@ class SupplierUpdate(BaseModel):
     coverage_hours: str | None = None
     description: str | None = None
     logo_url: str | None = None
+    brand_primary: str | None = None
+    brand_secondary: str | None = None
 
     @field_validator("logo_url")
     @classmethod
     def _validate_logo_url(cls, v: str | None) -> str | None:
         return validate_optional_image_url(v)
+
+    @field_validator("brand_primary", "brand_secondary")
+    @classmethod
+    def _validate_brand_colors(cls, value: str | None) -> str | None:
+        return validate_optional_hex_color(value)
 
 
 def supplier_to_dict(supplier: Supplier) -> dict:
@@ -79,6 +94,8 @@ def supplier_to_dict(supplier: Supplier) -> dict:
         "coverage_hours": supplier.coverage_hours,
         "description": supplier.description,
         "logo_url": supplier.logo_url,
+        "brand_primary": supplier.brand_primary,
+        "brand_secondary": supplier.brand_secondary,
     }
 
 
@@ -128,6 +145,8 @@ def create_supplier(
         coverage_hours=body.coverage_hours,
         description=body.description,
         logo_url=body.logo_url,
+        brand_primary=body.brand_primary,
+        brand_secondary=body.brand_secondary,
     )
     db.add(supplier)
     db.commit()
@@ -142,14 +161,11 @@ def get_supplier(supplier_id: str, db: Session = Depends(get_db)):
         raise HTTPException(404, "Supplier not found")
 
     parts_count = (
-        db.query(func.count(PartListing.id))
-        .filter(PartListing.supplier_id == supplier.id)
-        .scalar() or 0
+        db.query(func.count(PartListing.id)).filter(PartListing.supplier_id == supplier.id).scalar()
+        or 0
     )
     revenue_total = (
-        db.query(func.sum(Revenue.amount))
-        .filter(Revenue.supplier_id == supplier.id)
-        .scalar() or 0
+        db.query(func.sum(Revenue.amount)).filter(Revenue.supplier_id == supplier.id).scalar() or 0
     )
     category_names = (
         db.query(Category.name)
@@ -203,9 +219,7 @@ def delete_supplier(
 
     listing_ids = [
         row[0]
-        for row in db.query(PartListing.id)
-        .filter(PartListing.supplier_id == supplier.id)
-        .all()
+        for row in db.query(PartListing.id).filter(PartListing.supplier_id == supplier.id).all()
     ]
     if listing_ids:
         db.query(PriceBreak).filter(PriceBreak.listing_id.in_(listing_ids)).delete(
@@ -214,15 +228,11 @@ def delete_supplier(
     db.query(PartListing).filter(PartListing.supplier_id == supplier.id).delete(
         synchronize_session=False
     )
-    db.query(Sponsor).filter(Sponsor.supplier_id == supplier.id).delete(
+    db.query(Sponsor).filter(Sponsor.supplier_id == supplier.id).delete(synchronize_session=False)
+    db.query(CategorySupplier).filter(CategorySupplier.supplier_id == supplier.id).delete(
         synchronize_session=False
     )
-    db.query(CategorySupplier).filter(
-        CategorySupplier.supplier_id == supplier.id
-    ).delete(synchronize_session=False)
-    db.query(Revenue).filter(Revenue.supplier_id == supplier.id).delete(
-        synchronize_session=False
-    )
+    db.query(Revenue).filter(Revenue.supplier_id == supplier.id).delete(synchronize_session=False)
     db.query(User).filter(User.supplier_id == supplier.id).update(
         {User.supplier_id: None}, synchronize_session=False
     )
