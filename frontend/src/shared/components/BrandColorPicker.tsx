@@ -31,7 +31,7 @@ export function BrandColorPicker({
       try {
         const img = await loadImage(logoSrc, logoSrc.startsWith('data:') ? undefined : 'anonymous');
         const palette = extractBrandPalette(img) ?? DEFAULT_PALETTE;
-        if (!cancelled) setSwatches(palette.swatches.length >= 2 ? palette.swatches : DEFAULT_SWATCHES);
+        if (!cancelled) setSwatches(palette.swatches.length >= 2 ? palette.swatches.map((s) => s.hex) : DEFAULT_SWATCHES);
       } catch {
         if (!cancelled) setSwatches(DEFAULT_SWATCHES);
       }

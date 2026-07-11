@@ -10,10 +10,15 @@
 
 import { mixHex, rgbToHex } from './color';
 
+export interface RankedSwatch {
+  hex: string;
+  pct: number;
+}
+
 export interface BrandPalette {
   primary: string;
   secondary: string;
-  swatches: string[];
+  swatches: RankedSwatch[];
 }
 
 // Constants preserved 1:1 from the original csFx.tsx logo-color helper (2026-07-10).
@@ -81,8 +86,11 @@ export function paletteFromPixels(data: Uint8ClampedArray, pixelCount: number): 
     sorted[1] && sorted[1].n > sorted[0].n * 0.2
       ? mixHex(avg(sorted[1]), '#ffffff', 0.72)
       : mixHex(primary, '#ffffff', 0.52);
-  const swatches = sorted.slice(0, MAX_SWATCHES).map(avg);
-  return { primary, secondary, swatches: swatches.length ? swatches : [primary] };
+  const swatches: RankedSwatch[] = sorted.slice(0, MAX_SWATCHES).map((bucket) => ({
+    hex: avg(bucket),
+    pct: Math.max(1, Math.round((bucket.n / fbN) * 100)),
+  }));
+  return { primary, secondary, swatches: swatches.length ? swatches : [{ hex: primary, pct: 100 }] };
 }
 
 export function extractBrandPalette(source: HTMLImageElement | HTMLCanvasElement): BrandPalette | null {
@@ -107,5 +115,5 @@ export function extractBrandPalette(source: HTMLImageElement | HTMLCanvasElement
 export const DEFAULT_PALETTE: BrandPalette = {
   primary: FALLBACK_PRIMARY,
   secondary: mixHex(FALLBACK_PRIMARY, '#ffffff', 0.52),
-  swatches: [FALLBACK_PRIMARY],
+  swatches: [{ hex: FALLBACK_PRIMARY, pct: 100 }],
 };
