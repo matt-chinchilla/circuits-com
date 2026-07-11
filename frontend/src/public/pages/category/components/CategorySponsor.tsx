@@ -333,6 +333,9 @@ export default function CategorySponsor({
   });
   const [dragging, setDragging] = useState(false);
   const [cropFile, setCropFile] = useState<File | null>(null);
+  // Demo-host encode failure (e.g. Safari: a photographic crop exceeding the
+  // 64,000-char cap) — surfaced instead of silently doing nothing on Apply.
+  const [cropError, setCropError] = useState<string | null>(null);
 
   // Sync `branded` to the sponsor's takeover flag on identity/flag change ONLY
   // (primitive deps) — a same-values refetch never stomps a visitor's manual
@@ -424,6 +427,7 @@ export default function CategorySponsor({
   //    256×256 white-underfilled canvas we colour-sample + store (the bounded
   //    data-URL, not the raw file — no sessionStorage quota risk).
   const adoptLogoFile = (file: File | null | undefined) => {
+    setCropError(null);
     if (!file || !/^image\//.test(file.type)) return;
     setCropFile(file);
   };
@@ -433,7 +437,10 @@ export default function CategorySponsor({
     setCropFile(null);
     if (!file) return;
     const encoded = canvasToDataUrl(canvas);
-    if (!encoded.ok) return;
+    if (!encoded.ok) {
+      setCropError(encoded.error);
+      return;
+    }
     const palette = extractBrandPalette(canvas) ?? DEFAULT_PALETTE;
     const next: PitchState = {
       logo: encoded.dataUrl,
@@ -453,6 +460,7 @@ export default function CategorySponsor({
   };
   const clearPitch = (e: React.MouseEvent) => {
     e.stopPropagation();
+    setCropError(null);
     try {
       sessionStorage.removeItem(pitchKey);
     } catch {
@@ -605,6 +613,11 @@ export default function CategorySponsor({
             >
               ✕ reset
             </button>
+            {cropError && (
+              <p className="csb-croperr" aria-live="polite">
+                {cropError}
+              </p>
+            )}
           </div>
         </div>
         {cropFile && (
@@ -659,6 +672,11 @@ export default function CategorySponsor({
                   </span>
                 </div>
                 <span className="csbA-drophint">Drag a logo here to preview the takeover.</span>
+                {cropError && (
+                  <p className="csb-croperr" aria-live="polite">
+                    {cropError}
+                  </p>
+                )}
               </div>
               <div className="csbA-rail csbA-rail-empty">
                 <div className="csbA-emptymsg" data-enter>

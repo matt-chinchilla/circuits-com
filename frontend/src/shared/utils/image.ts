@@ -1,6 +1,7 @@
-// Client-side image normalizer: downscale to a bounded raster data-URL so a
-// logo/icon can be stored inline in the DB (no upload endpoint). WebP first,
-// JPEG fallback. Pure async — no React. Caller stores the returned data-URL.
+// Client-side image helpers: async decode (`loadImage`) plus a synchronous,
+// bounded data-URL encode (`canvasToDataUrl`) so a logo/icon can be stored
+// inline in the DB (no upload endpoint). WebP first, JPEG fallback (Safari
+// can't encode WebP), capped at MAX_DATA_URL_BYTES. No React.
 
 export type ImageEncodeResult = { ok: true; dataUrl: string } | { ok: false; error: string };
 

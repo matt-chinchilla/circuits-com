@@ -643,6 +643,13 @@ a.csbA-coname:hover {
   line-height: 1.4;
   max-width: 26ch;
 }
+/* Demo-host crop-encode failure (e.g. Safari 64KB cap exceeded) — legible on
+   the near-black board without competing with the gold/cream palette. */
+.csb-croperr {
+  color: #ff9c9c;
+  font-size: 12px;
+  margin: 8px 0 0;
+}
 .csbA-footprint {
   position: relative;
   z-index: 3;

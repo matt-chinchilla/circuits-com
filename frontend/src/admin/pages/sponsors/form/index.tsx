@@ -309,6 +309,16 @@ export default function SponsorFormPage() {
     if (!hexOk(form.brand_primary)) e.brand_primary = 'Use a hex color like #1d3a8f';
     if (!hexOk(form.brand_secondary)) e.brand_secondary = 'Use a hex color like #1d3a8f';
 
+    // Both-or-neither: a lone brand color would flip a sold board to branded
+    // with the OTHER channel silently pulled from fallback defaults.
+    const hasPrimary = !!form.brand_primary.trim();
+    const hasSecondary = !!form.brand_secondary.trim();
+    if (hasPrimary !== hasSecondary) {
+      const msg = 'Set both brand colors, or neither.';
+      if (!hasPrimary) e.brand_primary = msg;
+      else e.brand_secondary = msg;
+    }
+
     setErrors(e);
     return Object.keys(e).length === 0;
   }

@@ -23,6 +23,7 @@ export function LogoCropperModal({ file, title = 'Position your logo', onApply, 
   const frameRef = useRef<HTMLDivElement | null>(null);
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const sliderRef = useRef<HTMLInputElement | null>(null);
+  const cancelRef = useRef<HTMLButtonElement | null>(null);
   const dragRef = useRef<{ id: number; startX: number; startY: number; baseX: number; baseY: number } | null>(null);
   const zoomRef = useRef(zoom);
   zoomRef.current = zoom;
@@ -43,6 +44,13 @@ export function LogoCropperModal({ file, title = 'Position your logo', onApply, 
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => { document.body.style.overflow = prev; };
+  }, []);
+
+  // Until the image decodes there's nothing else focusable to hand off to —
+  // land focus on Cancel so it isn't stranded outside the portaled dialog.
+  // The zoom slider takes over once onImgLoad fires (below).
+  useEffect(() => {
+    cancelRef.current?.focus();
   }, []);
 
   // The rendered frame is the geometry authority (CSS caps it on narrow screens)
@@ -209,7 +217,7 @@ export function LogoCropperModal({ file, title = 'Position your logo', onApply, 
           />
         </label>
         <div className={styles.actions}>
-          <button type="button" className={styles.cancel} onClick={onCancel}>Cancel</button>
+          <button ref={cancelRef} type="button" className={styles.cancel} onClick={onCancel}>Cancel</button>
           <button type="button" className={styles.apply} onClick={apply} disabled={!dims || loadError}>Apply</button>
         </div>
       </div>
