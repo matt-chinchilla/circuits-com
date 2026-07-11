@@ -2,6 +2,8 @@
 
 **Date:** 2026-07-10 · **Status:** Approved (design presented and approved in-session, including the sold-board default flip to branded)
 
+> **Note (2026-07-11):** the "Out of scope" item "Supplier-form color editing" below was superseded by round 2 — see `docs/superpowers/plans/2026-07-11-round2-fixes.md` Task 4.
+
 ## Problem
 
 1. Uploaded sponsor/supplier logos render letterboxed inside circular frames — "a rectangle inside a circle" — at the four public render sites (Platinum `CsLogo`, Gold `SbLogo`, Silver `svp-markimg`, keyword hero). There is no way to frame the logo so it fills the circle.
