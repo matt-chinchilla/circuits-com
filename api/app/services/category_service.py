@@ -98,8 +98,10 @@ def _sponsor_board_dict(sponsor: Sponsor, supplier: Supplier | None) -> dict:
         "logo_url": supplier.logo_url if supplier else None,
         "contact_role": supplier.contact_role if supplier else None,
         "coverage_hours": supplier.coverage_hours if supplier else None,
-        "brand_primary": supplier.brand_primary if supplier else None,
-        "brand_secondary": supplier.brand_secondary if supplier else None,
+        "brand_primary": sponsor.brand_primary or (supplier.brand_primary if supplier else None),
+        "brand_secondary": sponsor.brand_secondary
+        or (supplier.brand_secondary if supplier else None),
+        "brand_takeover": bool(sponsor.brand_primary or sponsor.brand_secondary),
     }
 
 

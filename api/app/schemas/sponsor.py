@@ -27,6 +27,7 @@ class SponsorResponse(BaseModel):
     coverage_hours: str | None = None
     brand_primary: str | None = None
     brand_secondary: str | None = None
+    brand_takeover: bool = False
     model_config = ConfigDict(from_attributes=True)
 
 

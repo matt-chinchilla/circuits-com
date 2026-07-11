@@ -27,4 +27,8 @@ def get_sponsor_by_keyword(keyword: str, db: Session = Depends(get_db)):
         # to None for every keyword sponsor. Mirror category_service.
         email=supplier.email if supplier else None,
         contact_name=supplier.contact_name if supplier else None,
+        brand_primary=sponsor.brand_primary or (supplier.brand_primary if supplier else None),
+        brand_secondary=sponsor.brand_secondary
+        or (supplier.brand_secondary if supplier else None),
+        brand_takeover=bool(sponsor.brand_primary or sponsor.brand_secondary),
     )
