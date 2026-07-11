@@ -76,12 +76,14 @@ export function mountTileField(canvas: HTMLCanvasElement, board: HTMLElement): T
     dot: string;
     dark: [number, number, number];
     acc: [number, number, number];
+    glow: [number, number, number];
     g1: [number, number, number];
     g2: [number, number, number];
   } = {
     dot: 'rgba(150,160,166,.15)',
     dark: [8, 12, 11],
     acc: [232, 194, 82],
+    glow: [232, 194, 82],
     g1: [13, 44, 30],
     g2: [10, 30, 22],
   };
@@ -98,7 +100,7 @@ export function mountTileField(canvas: HTMLCanvasElement, board: HTMLElement): T
   let glowReady = false;
   const buildGlow = () => {
     const S = 96,
-      a = col.acc;
+      a = col.glow;
     glctx.clearRect(0, 0, S, S);
     const gr = glctx.createRadialGradient(S / 2, S / 2, 1, S / 2, S / 2, S / 2);
     gr.addColorStop(0, `rgba(${a[0]},${a[1]},${a[2]},1)`);
@@ -211,7 +213,6 @@ export function mountTileField(canvas: HTMLCanvasElement, board: HTMLElement): T
     // a darker shade. g1/g2 are the board-gradient endpoints painted on canvas.
     col.g2 = b;
     col.dark = [Math.round(b[0] * 0.42), Math.round(b[1] * 0.42), Math.round(b[2] * 0.42)];
-    col.dot = `rgba(${Math.round(b[0] * 0.5 + 18)},${Math.round(b[1] * 0.5 + 22)},${Math.round(b[2] * 0.5 + 20)},.22)`;
     const pb1 = document.createElement('span');
     pb1.style.cssText = 'position:absolute;left:-9999px;top:0;color:var(--board-1)';
     board.appendChild(pb1);
@@ -222,6 +223,19 @@ export function mountTileField(canvas: HTMLCanvasElement, board: HTMLElement): T
     board.appendChild(pa);
     col.acc = resolveRGB(getComputedStyle(pa).color);
     board.removeChild(pa);
+    // Dot grid follows the SECONDARY (accent) color. Darkened (×0.3 + 8) so an
+    // UNBRANDED board keeps a similar resting luminance. Computed AFTER the
+    // --gold probe so it reads the fresh accent, not the previous refresh's.
+    const a = col.acc;
+    col.dot = `rgba(${Math.round(a[0] * 0.3 + 8)},${Math.round(a[1] * 0.3 + 8)},${Math.round(a[2] * 0.3 + 8)},.22)`;
+    // Lifted-tile underglow is PINNED to the stock board accent: --underglow is
+    // NEVER set by brandVars, so the glow sprite is identical for every
+    // sponsorship (branded or steel) and never follows a takeover.
+    const pu = document.createElement('span');
+    pu.style.cssText = 'position:absolute;left:-9999px;top:0;color:var(--underglow)';
+    board.appendChild(pu);
+    col.glow = resolveRGB(getComputedStyle(pu).color);
+    board.removeChild(pu);
     buildGlow();
   };
 

@@ -46,6 +46,9 @@
   --gold: #e8c252;
   --gold-bright: #f3cf5c;
   --gold-deep: #b8902e;
+  /* Lifted-tile underglow, PINNED to the stock accent (never touched by a brand
+     takeover — brandVars never sets --underglow). csFx probes it into col.glow. */
+  --underglow: #e8c252;
   --board-1: #0d2c1e;
   --board-2: #0a1e16;
   --board-3: #0f3826;
@@ -78,6 +81,8 @@
   --gold: #c5bfd6;
   --gold-bright: #ece8f6;
   --gold-deep: #8f86ac;
+  /* Platinum-board underglow (stock silver-purple); pinned like the base rule. */
+  --underglow: #c5bfd6;
   --cream: #e7eaf3;
   --cream-mut: rgba(205, 210, 226, 0.74);
   /* Fixed platinum TEXT colors — the brand takeover recolors --gold/--board-*
@@ -400,6 +405,13 @@
   height: 66%;
   object-fit: contain;
   border-radius: 50%;
+}
+/* Square-crop logos fill the pad flush to the inset rim (2px at .csbA-pad). Must
+   follow .csbA-logoimg — equal (0,1,0) specificity, so source order decides. */
+.csbA-logoimg-flush {
+  width: calc(100% - 4px);
+  height: calc(100% - 4px);
+  object-fit: cover;
 }
 /* rotating solder-ring around the logo pad */
 .csbA-ring {

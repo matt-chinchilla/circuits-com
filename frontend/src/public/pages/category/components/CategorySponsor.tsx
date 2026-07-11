@@ -30,7 +30,7 @@ import { DEFAULT_PALETTE, extractBrandPalette } from '@shared/utils/brandPalette
 import { safeHexColor } from '@shared/utils/color';
 import { canvasToDataUrl } from '@shared/utils/image';
 import { formatPhone } from '@shared/utils/phone';
-import { safeHttpUrl, safeImageUrl } from '@shared/utils/url';
+import { isDataImage, safeHttpUrl, safeImageUrl } from '@shared/utils/url';
 import { brandVars, CsCopy, csTelHref, mountTileField } from './csFx';
 import type { TileField } from './csFx';
 import uploadIcon from './upload-icon.png';
@@ -295,8 +295,22 @@ const csLettermark = (name: string): string =>
    `broken=true` so the lettermark renders immediately (mirrors SbLogo). */
 const CsLogo = ({ src, alt, mark }: { src: string | null; alt: string; mark: string }): ReactElement => {
   const [broken, setBroken] = useState(!src);
+  // Square crop-pipeline data-URLs fill the pad flush; legacy/letterboxed logos
+  // keep the contained `.csbA-logoimg` fit. Keyed by src at the call site, so
+  // this resets on sponsor swap / brand takeover.
+  const [cropped, setCropped] = useState(false);
   if (broken || !src) return <span className="csbA-mark">{mark}</span>;
-  return <img className="csbA-logoimg" src={src} alt={alt} onError={() => setBroken(true)} />;
+  return (
+    <img
+      className={cropped ? 'csbA-logoimg csbA-logoimg-flush' : 'csbA-logoimg'}
+      src={src}
+      alt={alt}
+      onLoad={(e) =>
+        setCropped(isDataImage(src) && e.currentTarget.naturalWidth === e.currentTarget.naturalHeight)
+      }
+      onError={() => setBroken(true)}
+    />
+  );
 };
 
 // ─── Main component ──────────────────────────────────────────────────────

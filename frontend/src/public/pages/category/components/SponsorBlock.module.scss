@@ -375,8 +375,8 @@
 // output whose subject already fills the inscribed circle) — renders as a
 // full circular disc instead of the default letterboxed fit.
 .logoCropped {
-  width: 58%;
-  height: 58%;
+  width: calc(100% - 4px);
+  height: calc(100% - 4px);
   max-width: none;
   max-height: none;
   object-fit: cover;

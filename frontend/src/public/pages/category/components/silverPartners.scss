@@ -281,6 +281,9 @@
    output whose subject already fills the inscribed circle) — renders as a
    full circular disc instead of the default rounded-square pad. */
 .svp-markimg-cropped {
+  width: calc(100% - 3px);
+  height: calc(100% - 3px);
+  object-fit: cover;
   border-radius: 50%;
 }
 .svp-col {
