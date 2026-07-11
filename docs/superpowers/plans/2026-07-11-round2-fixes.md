@@ -26,7 +26,7 @@
 
 ---
 
-### R2-T1: Backend — expose supplier brand colors
+### Task 1: Backend — expose supplier brand colors
 
 **Files:**
 - Modify: `api/app/routes/suppliers.py` (`SupplierCreate` 34-50, `SupplierUpdate` 53-67, `supplier_to_dict` 70-82, `create_supplier` explicit `Supplier(...)` kwargs 120-131; `update_supplier` 179-181 is a generic setattr loop — no change)
@@ -76,7 +76,7 @@ def test_supplier_brand_color_rejects_invalid_hex(...):
 
 ---
 
-### R2-T2: Shared — percentage-ranked palette + nearest CSS color name
+### Task 2: Shared — percentage-ranked palette + nearest CSS color name
 
 **Files:**
 - Modify: `frontend/src/shared/utils/brandPalette.ts` (+ its test)
@@ -144,7 +144,7 @@ describe('nearestCssColor', () => {
 
 ---
 
-### R2-T3: Shared — `BrandColorSelectModal` (the second screen)
+### Task 3: Shared — `BrandColorSelectModal` (the second screen)
 
 **Files:**
 - Create: `frontend/src/shared/components/BrandColorSelectModal/index.tsx` + `BrandColorSelectModal.module.scss`
@@ -178,7 +178,7 @@ Behavior:
 
 ---
 
-### R2-T4: Hosts — two-step upload flow (sponsor form, supplier form + propagation, public demo)
+### Task 4: Hosts — two-step upload flow (sponsor form, supplier form + propagation, public demo)
 
 **Files:**
 - Modify: `frontend/src/admin/components/ImageUploadField.tsx` (add optional `onCroppedCanvas?: (canvas: HTMLCanvasElement) => void` prop, called in `applyCrop` after a successful `onChange(result.dataUrl)` — lets hosts chain the color modal without re-decoding)
@@ -213,7 +213,7 @@ const results = await Promise.allSettled(
 
 ---
 
-### R2-T5: Board — flush logos + secondary remap + pinned underglow
+### Task 5: Board — flush logos + secondary remap + pinned underglow
 
 **Files:**
 - Modify: `frontend/src/public/pages/category/components/CategorySponsor.tsx` (CsLogo 295-299: add onLoad squareness gate — it has onError only; keyed by src at 507 so state resets)
@@ -240,7 +240,7 @@ const results = await Promise.allSettled(
 
 ---
 
-### R2-T6: Slogan — backlit-marquee glow ("ALL CIRCUITS ALL THE TIME")
+### Task 6: Slogan — backlit-marquee glow ("ALL CIRCUITS ALL THE TIME")
 
 **Files:**
 - Modify: `frontend/src/public/pages/home/components/HeroSection.module.scss` (`.subtitle`, lines 48-58; TSX unchanged — pseudo-elements only)
