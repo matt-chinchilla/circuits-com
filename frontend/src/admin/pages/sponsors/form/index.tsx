@@ -17,6 +17,7 @@ import type {
   SponsorStatus,
 } from '@admin/types/admin';
 import Icon from '@shared/components/Icon';
+import { BrandColorPicker } from '@shared/components/BrandColorPicker';
 import ImageUploadField from '@admin/components/ImageUploadField';
 import styles from './SponsorFormPage.module.scss';
 
@@ -63,6 +64,8 @@ interface FormState {
   status: SponsorStatus;
   description: string;
   image_url: string;
+  brand_primary: string;
+  brand_secondary: string;
 }
 
 interface FormErrors {
@@ -72,6 +75,8 @@ interface FormErrors {
   amount?: string;
   start_date?: string;
   end_date?: string;
+  brand_primary?: string;
+  brand_secondary?: string;
 }
 
 function emptyForm(): FormState {
@@ -86,6 +91,8 @@ function emptyForm(): FormState {
     status: 'Active',
     description: '',
     image_url: '',
+    brand_primary: '',
+    brand_secondary: '',
   };
 }
 
@@ -164,6 +171,8 @@ export default function SponsorFormPage() {
             status: existing.status ?? 'Active',
             description: existing.description ?? '',
             image_url: existing.image_url ?? '',
+            brand_primary: existing.brand_primary ?? '',
+            brand_secondary: existing.brand_secondary ?? '',
           });
           // Provisional bucket — the keyword/category split is unambiguous
           // here; top-category vs subcategory is derived in the effect below
@@ -296,6 +305,10 @@ export default function SponsorFormPage() {
     if (!form.start_date) e.start_date = 'Required';
     if (!form.end_date) e.end_date = 'Required';
 
+    const hexOk = (v: string) => !v.trim() || /^#[0-9a-f]{6}$/i.test(v.trim());
+    if (!hexOk(form.brand_primary)) e.brand_primary = 'Use a hex color like #1d3a8f';
+    if (!hexOk(form.brand_secondary)) e.brand_secondary = 'Use a hex color like #1d3a8f';
+
     setErrors(e);
     return Object.keys(e).length === 0;
   }
@@ -324,6 +337,8 @@ export default function SponsorFormPage() {
       status: form.status,
       description: form.description.trim() || null,
       image_url: form.image_url.trim() || null,
+      brand_primary: form.brand_primary.trim() || null,
+      brand_secondary: form.brand_secondary.trim() || null,
     };
   }
 
@@ -679,6 +694,18 @@ export default function SponsorFormPage() {
                 onChange={(v) => update('image_url', v)}
                 hint="Upload a logo/icon or paste an image URL. Shown on the sponsor board."
               />
+            </div>
+            <div className={styles.field} data-field="brand_colors">
+              <label className={styles.fieldLabel}>Brand colors</label>
+              <BrandColorPicker
+                logoSrc={form.image_url.trim() || null}
+                primary={form.brand_primary.trim() || null}
+                secondary={form.brand_secondary.trim() || null}
+                onChange={(role, hex) => update(role === 'primary' ? 'brand_primary' : 'brand_secondary', hex)}
+                allowCustom
+              />
+              {errors.brand_primary && <div className={styles.fieldError}>{errors.brand_primary}</div>}
+              {errors.brand_secondary && <div className={styles.fieldError}>{errors.brand_secondary}</div>}
             </div>
           </div>
         </section>

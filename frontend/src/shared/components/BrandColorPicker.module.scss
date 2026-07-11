@@ -1,0 +1,80 @@
+@use '@shared/styles/variables' as *;
+@use '@shared/styles/mixins' as *;
+
+.picker {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.roleLabel {
+  min-width: 76px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #5a6572;
+}
+
+.chips {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid rgba(0, 0, 0, 0.12);
+  cursor: pointer;
+  padding: 0;
+
+  &:focus-visible { outline: 2px solid $nav-blue; outline-offset: 2px; }
+}
+
+.chipActive {
+  border-color: #fff;
+  box-shadow: 0 0 0 2px $nav-blue;
+}
+
+.hexInput {
+  width: 92px;
+  padding: 5px 8px;
+  border: 1px solid #cbd5e0;
+  border-radius: 6px;
+  font-family: $font-mono;
+  font-size: 12px;
+}
+
+.preview {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.previewChip {
+  width: 44px;
+  height: 18px;
+  border-radius: 5px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+}
+
+.previewLabel {
+  font-size: 12px;
+  color: #5a6572;
+}
+
+.compact {
+  gap: 6px;
+
+  .roleLabel { min-width: 60px; font-size: 10px; }
+  .chip { width: 18px; height: 18px; }
+}

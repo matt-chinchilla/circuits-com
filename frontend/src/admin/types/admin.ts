@@ -188,4 +188,6 @@ export interface AdminSponsor {
   status: SponsorStatus | null;
   description: string | null;
   image_url: string | null;
+  brand_primary: string | null;
+  brand_secondary: string | null;
 }
