@@ -8,13 +8,34 @@ export type ImageEncodeResult = { ok: true; dataUrl: string } | { ok: false; err
 export const MAX_DATA_URL_BYTES = 64000;
 const DEFAULT_MAX_EDGE = 256;
 
-function loadImage(objectUrl: string): Promise<HTMLImageElement> {
+export function loadImage(url: string, crossOrigin?: 'anonymous'): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => resolve(img);
     img.onerror = () => reject(new Error('decode'));
-    img.src = objectUrl;
+    if (crossOrigin) img.crossOrigin = crossOrigin;
+    img.src = url;
   });
+}
+
+/**
+ * Encode a canvas to a bounded data-URL: WebP 0.82 with JPEG 0.85 fallback
+ * (Safari cannot encode WebP — toDataURL silently returns PNG there).
+ */
+export function canvasToDataUrl(canvas: HTMLCanvasElement): ImageEncodeResult {
+  try {
+    let dataUrl = canvas.toDataURL('image/webp', 0.82);
+    if (!dataUrl.startsWith('data:image/webp')) {
+      dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+    }
+    if (dataUrl.length > MAX_DATA_URL_BYTES) {
+      return { ok: false, error: 'That image is too detailed to store. Try a simpler version.' };
+    }
+    return { ok: true, dataUrl };
+  } catch (err) {
+    console.error('canvasToDataUrl failed', err);
+    return { ok: false, error: 'Your browser could not process this image.' };
+  }
 }
 
 export async function fileToDataUrl(

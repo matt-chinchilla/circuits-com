@@ -1,6 +1,6 @@
 // frontend/src/admin/components/ImageUploadField.tsx
 import { useId, useRef, useState, type ReactElement } from 'react';
-import { fileToDataUrl } from '@admin/utils/image';
+import { fileToDataUrl } from '@shared/utils/image';
 import { safeImageUrl } from '@shared/utils/url';
 import styles from './ImageUploadField.module.scss';
 
