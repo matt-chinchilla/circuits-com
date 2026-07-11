@@ -8,7 +8,7 @@ import { useKeywordRequestModal } from '@public/hooks/useKeywordRequestModal';
 import { api } from '@public/services/api';
 import { SPONSOR_TIERS } from '@public/pages/keyword-landing/constants';
 import type { Sponsor } from '@public/types/sponsor';
-import { safeImageUrl } from '@shared/utils/url';
+import { isDataImage, safeImageUrl } from '@shared/utils/url';
 import styles from './KeywordSponsorPage.module.scss';
 
 export default function KeywordSponsorPage() {
@@ -20,6 +20,12 @@ export default function KeywordSponsorPage() {
 
   const [modalOpen, setModalOpen] = useState(false);
   const form = useKeywordRequestModal({ logTag: 'keyword/:keyword' });
+
+  // True once the decoded hero logo is a square data-URL (new crop-pipeline
+  // output whose subject already fills the inscribed circle) — legacy
+  // rectangular data-URLs and remote wordmark URLs never flip this, so they
+  // keep today's letterboxed rendering untouched.
+  const [logoCropped, setLogoCropped] = useState(false);
 
   useEffect(() => {
     if (!keyword) return;
@@ -186,8 +192,14 @@ export default function KeywordSponsorPage() {
               <img
                 src={heroLogo}
                 alt={`${sponsor.supplier_name} logo`}
-                className={styles.logo}
+                className={logoCropped ? `${styles.logo} ${styles.logoFull}` : styles.logo}
                 onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                onLoad={(e) =>
+                  setLogoCropped(
+                    isDataImage(heroLogo) &&
+                      e.currentTarget.naturalWidth === e.currentTarget.naturalHeight,
+                  )
+                }
               />
             </motion.div>
           )}

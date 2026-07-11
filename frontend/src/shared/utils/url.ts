@@ -74,3 +74,7 @@ export function safeImageUrl(input: string | null | undefined): string | null {
     return null;
   }
 }
+
+/** True for data:image/* sources — candidates for crop-pipeline output (pair with a squareness check). */
+export const isDataImage = (src: string | null | undefined): boolean =>
+  typeof src === 'string' && src.startsWith('data:image/');

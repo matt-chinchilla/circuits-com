@@ -19,7 +19,7 @@ import { useNavigate } from 'react-router-dom';
 import type { ReactElement } from 'react';
 import CircuitTraces from '@public/components/widgets/CircuitTraces';
 import type { PartnerSupplier } from '@public/types/sponsor';
-import { safeHttpUrl, safeImageUrl } from '@shared/utils/url';
+import { isDataImage, safeHttpUrl, safeImageUrl } from '@shared/utils/url';
 import { formatPhone } from '@shared/utils/phone';
 import { CsCopy, csTelHref } from './csFx';
 import './categorySponsor.scss';
@@ -81,6 +81,27 @@ function toChipData(s: PartnerSupplier): SvChipData {
   };
 }
 
+// Logo image inside a directory row's circular pad. Holds its own `cropped`
+// state (per-row, since SilverPartners renders one of these per chip inside
+// a `.map()`) — true only once the decoded logo is a square data-URL (new
+// crop-pipeline output); legacy rectangular data-URLs and remote wordmark
+// URLs never flip this, so they keep today's rounded-square rendering.
+const SvpMarkImg = ({ src }: { src: string }): ReactElement => {
+  const [cropped, setCropped] = useState(false);
+  return (
+    <img
+      className={cropped ? 'svp-markimg svp-markimg-cropped' : 'svp-markimg'}
+      src={src}
+      alt=""
+      onLoad={(e) =>
+        setCropped(
+          isDataImage(src) && e.currentTarget.naturalWidth === e.currentTarget.naturalHeight,
+        )
+      }
+    />
+  );
+};
+
 const SvChip = ({
   s,
   i,
@@ -114,7 +135,7 @@ const SvChip = ({
       <span className="svp-refdes">U{i + 1}</span>
       <span className="svp-pad">
         {s.logoSrc ? (
-          <img className="svp-markimg" src={s.logoSrc} alt="" />
+          <SvpMarkImg src={s.logoSrc} />
         ) : (
           <span className="svp-mark">{s.lettermark}</span>
         )}

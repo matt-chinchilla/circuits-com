@@ -277,6 +277,12 @@
   object-fit: contain;
   border-radius: 6px;
 }
+/* Applied only when the decoded logo is a square data-URL (new crop-pipeline
+   output whose subject already fills the inscribed circle) — renders as a
+   full circular disc instead of the default rounded-square pad. */
+.svp-markimg-cropped {
+  border-radius: 50%;
+}
 .svp-col {
   min-width: 0;
   display: flex;

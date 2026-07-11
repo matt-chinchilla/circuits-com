@@ -371,6 +371,18 @@
   object-fit: contain;
 }
 
+// Applied only when the decoded logo is a square data-URL (new crop-pipeline
+// output whose subject already fills the inscribed circle) — renders as a
+// full circular disc instead of the default letterboxed fit.
+.logoCropped {
+  width: 58%;
+  height: 58%;
+  max-width: none;
+  max-height: none;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
 // Lettermark fallback when a sponsor has no logo (or its logo URL fails to
 // load) — initials centred on the gold pad, matching the Platinum/Silver boards.
 .logoMark {

@@ -78,6 +78,14 @@
   object-fit: contain;
 }
 
+// Applied only when the decoded hero logo is a square data-URL (new
+// crop-pipeline output whose subject already fills the inscribed circle) —
+// lets it fill more of the circular .logoWrap so it reads as a full disc.
+.logoFull {
+  max-width: 100%;
+  max-height: 100%;
+}
+
 .heroTitle {
   font-family: $font-heading;
   font-size: 2.4rem;

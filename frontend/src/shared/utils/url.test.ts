@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { prependScheme, safeHttpUrl, safeImageUrl } from './url';
+import { isDataImage, prependScheme, safeHttpUrl, safeImageUrl } from './url';
 
 describe('prependScheme', () => {
   it('prepends https:// to a bare hostname', () => {
@@ -83,5 +83,15 @@ describe('safeImageUrl', () => {
     expect(safeImageUrl('')).toBeNull();
     expect(safeImageUrl(null)).toBeNull();
     expect(safeImageUrl('not a url')).toBeNull();
+  });
+});
+
+describe('isDataImage', () => {
+  it('flags only data:image sources', () => {
+    expect(isDataImage('data:image/webp;base64,x')).toBe(true);
+    expect(isDataImage('https://acme.com/logo.png')).toBe(false);
+    expect(isDataImage(null)).toBe(false);
+    expect(isDataImage(undefined)).toBe(false);
+    expect(isDataImage('data:text/html,x')).toBe(false);
   });
 });

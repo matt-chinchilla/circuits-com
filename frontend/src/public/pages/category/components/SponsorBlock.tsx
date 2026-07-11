@@ -1,7 +1,7 @@
 import { useRef, useEffect, useState, type ReactNode } from 'react';
 import { motion } from 'framer-motion';
 import type { Sponsor } from '@public/types/sponsor';
-import { safeHttpUrl, safeImageUrl } from '@shared/utils/url';
+import { isDataImage, safeHttpUrl, safeImageUrl } from '@shared/utils/url';
 import { lettermark } from '@shared/utils/lettermark';
 import { formatPhone } from '@shared/utils/phone';
 import styles from './SponsorBlock.module.scss';
@@ -477,6 +477,10 @@ function PcbCard({
  */
 function SbLogo({ src, name }: { src: string | null; name: string }) {
   const [broken, setBroken] = useState(!src);
+  // True once a data-URL logo has decoded AND is square — the new crop-pipeline
+  // signature. Legacy rectangular data-URLs and remote wordmark URLs never
+  // flip this, so they keep today's letterboxed rendering untouched.
+  const [cropped, setCropped] = useState(false);
   if (broken || !src) {
     return (
       <span className={styles.logoMark} aria-hidden="true">
@@ -485,7 +489,17 @@ function SbLogo({ src, name }: { src: string | null; name: string }) {
     );
   }
   return (
-    <img src={src} alt={`${name} logo`} className={styles.logo} onError={() => setBroken(true)} />
+    <img
+      src={src}
+      alt={`${name} logo`}
+      className={cropped ? `${styles.logo} ${styles.logoCropped}` : styles.logo}
+      onError={() => setBroken(true)}
+      onLoad={(e) =>
+        setCropped(
+          isDataImage(src) && e.currentTarget.naturalWidth === e.currentTarget.naturalHeight,
+        )
+      }
+    />
   );
 }
 
