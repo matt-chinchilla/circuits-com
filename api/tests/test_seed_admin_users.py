@@ -22,10 +22,38 @@ class TestSeedAdminUsers:
     def test_named_admins_get_emails(self, db):
         _seed_admin_user(db)
         db.commit()
-        for username in ("matthew", "mike", "john"):
+        expected = {
+            "matthew": "matthew@circuitcenter.ai",
+            "Daniel": "daniel@circuitcenter.ai",
+            "Anthony": "anthony@circuitcenter.ai",
+            "Ronald": "ronald@circuitcenter.ai",
+        }
+        for username, email in expected.items():
             u = db.query(User).filter(User.username == username).first()
             assert u is not None
-            assert u.email == f"{username}@circuitcenter.ai"
+            assert u.role == "admin"
+            assert u.email == email
+
+    def test_former_partners_not_seeded(self, db):
+        # Mike and John parted ways — their logins are no longer seeded.
+        _seed_admin_user(db)
+        db.commit()
+        for username in ("mike", "john"):
+            assert db.query(User).filter(User.username == username).first() is None
+
+    def test_new_team_credentials_authenticate(self, client, db):
+        _seed_admin_user(db)
+        db.commit()
+        for username, password in (
+            ("Daniel", "DanmyfriendDan"),
+            ("Anthony", "AntmyfriendAnt"),
+            ("Ronald", "RonmyfriendRon"),
+        ):
+            resp = client.post(
+                "/api/auth/login", json={"username": username, "password": password}
+            )
+            assert resp.status_code == 200, f"{username} login failed"
+            assert resp.json()["user"]["username"] == username
 
     def test_demo_credentials_authenticate(self, client, db):
         _seed_admin_user(db)

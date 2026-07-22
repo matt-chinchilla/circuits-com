@@ -1256,9 +1256,11 @@ def _seed_admin_user(db: Session) -> None:
     # advertised on the redesigned sign-in screen.
     admin_users = [
         ("matthew", "admin", "matthew@circuitcenter.ai"),
-        ("mike", "admin", "mike@circuitcenter.ai"),
-        ("john", "admin", "john@circuitcenter.ai"),
         ("demo", "demo", "demo@circuitcenter.ai"),
+        # Current team (usernames are case-sensitive on login — matched verbatim).
+        ("Daniel", "DanmyfriendDan", "daniel@circuitcenter.ai"),
+        ("Anthony", "AntmyfriendAnt", "anthony@circuitcenter.ai"),
+        ("Ronald", "RonmyfriendRon", "ronald@circuitcenter.ai"),
     ]
     created = 0
     backfilled = 0
