@@ -1,7 +1,7 @@
 """Transactional email composition and delivery via aiosmtplib.
 
-Used by the form routes to notify John and Mike (or, during testing, the
-no-reply@ mailbox itself) when someone submits Contact, Join, or
+Used by the form routes to notify the configured recipients
+(settings.NOTIFY_RECIPIENTS) when someone submits Contact, Join, or
 Keyword-Request forms - and to send auto-reply confirmations to applicants.
 
 Demo mode: when settings.SMTP_HOST is None, _smtp_send logs the message

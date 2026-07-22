@@ -328,7 +328,7 @@ export default function PrivacyPage() {
               <div className={styles.signRow}>
                 <span className={styles.signLabel}>Signed</span>
                 <span className={styles.signName}>
-                  M. Chirichella &middot; M. Kennedy &middot; J. Tietjen
+                  M. Chirichella
                 </span>
               </div>
               <div className={styles.signRow}>
