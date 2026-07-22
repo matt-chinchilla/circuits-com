@@ -55,14 +55,14 @@
       }
     },
     {
-      "id": "notify-john",
-      "name": "Notify John",
+      "id": "notify-team",
+      "name": "Notify Team",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2,
       "position": [690, 300],
       "parameters": {
         "fromEmail": "noreply@circuitcenter.ai",
-        "toEmail": "contact@circuitcenter.ai",
+        "toEmail": "team@circuitcenter.ai",
         "subject": "Keyword Sponsorship Request: {{ $json.keyword }}",
         "emailType": "text",
         "text": "New keyword sponsorship request:\n\nCompany: {{ $json.company_name }}\nEmail: {{ $json.email }}\nKeyword: {{ $json.keyword }}\n\nMessage:\n{{ $json.message }}"
@@ -86,7 +86,7 @@
       "main": [
         [
           {
-            "node": "Notify John",
+            "node": "Notify Team",
             "type": "main",
             "index": 0
           }

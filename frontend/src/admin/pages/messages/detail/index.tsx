@@ -26,8 +26,16 @@ import {
   refreshMessages,
   toggleRead,
 } from '@admin/services/messageStore';
-import type { Message } from '@admin/types/messages';
+import type { AssignedTo, Message } from '@admin/types/messages';
 import styles from './MessageDetailPage.module.scss';
+
+// Schematic-designator labels for the assignee KV row (U1/U2/U3 mirrors the
+// datasheet-card motif used elsewhere in messages).
+const ASSIGNEE_DESIGNATOR: Record<Exclude<AssignedTo, null>, string> = {
+  Daniel: 'U1',
+  Anthony: 'U2',
+  Ronald: 'U3',
+};
 
 export default function MessageDetailPage() {
   const { id = '' } = useParams<{ id: string }>();
@@ -190,11 +198,7 @@ export default function MessageDetailPage() {
               </KvMini>
               <KvMini label="Assigned">
                 <span className={styles.kvMono}>
-                  {m.assigned_to === 'john'
-                    ? 'John (U1)'
-                    : m.assigned_to === 'mike'
-                      ? 'Mike (U2)'
-                      : '—'}
+                  {m.assigned_to ? `${m.assigned_to} (${ASSIGNEE_DESIGNATOR[m.assigned_to]})` : '—'}
                 </span>
               </KvMini>
               {m.spam_score != null && (

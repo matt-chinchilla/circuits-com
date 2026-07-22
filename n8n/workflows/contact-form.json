@@ -16,14 +16,14 @@
       }
     },
     {
-      "id": "forward-to-john",
-      "name": "Forward to John",
+      "id": "forward-to-team",
+      "name": "Forward to Team",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2,
       "position": [500, 200],
       "parameters": {
         "fromEmail": "noreply@circuitcenter.ai",
-        "toEmail": "contact@circuitcenter.ai",
+        "toEmail": "team@circuitcenter.ai",
         "subject": "New Contact Form: {{ $json.body.subject }}",
         "emailType": "text",
         "text": "New contact form submission:\n\nName: {{ $json.body.name }}\nEmail: {{ $json.body.email }}\nSubject: {{ $json.body.subject }}\n\nMessage:\n{{ $json.body.message }}"
@@ -51,7 +51,7 @@
       "main": [
         [
           {
-            "node": "Forward to John",
+            "node": "Forward to Team",
             "type": "main",
             "index": 0
           },

@@ -212,15 +212,15 @@ class TestPatchMessage:
         headers = _auth_header(client)
         resp = client.patch(
             f"/api/admin/messages/{msg.id}",
-            json={"assigned_to": "mike"},
+            json={"assigned_to": "Anthony"},
             headers=headers,
         )
         assert resp.status_code == 200
-        assert resp.json()["assigned_to"] == "mike"
+        assert resp.json()["assigned_to"] == "Anthony"
 
         # Reload and confirm persistence
         resp2 = client.get(f"/api/admin/messages/{msg.id}", headers=headers)
-        assert resp2.json()["assigned_to"] == "mike"
+        assert resp2.json()["assigned_to"] == "Anthony"
 
     def test_patch_last_reply_body_persists(self, client, seeded_db, db):
         msg = _insert_message(db, seq=1)
@@ -252,7 +252,7 @@ class TestPatchMessage:
         assert resp.status_code == 401
 
     def test_patch_partial_update_preserves_other_fields(self, client, seeded_db, db):
-        msg = _insert_message(db, seq=7, assigned_to="john")
+        msg = _insert_message(db, seq=7, assigned_to="Daniel")
 
         headers = _auth_header(client)
         resp = client.patch(
@@ -264,4 +264,4 @@ class TestPatchMessage:
         data = resp.json()
         assert data["status"] == "read"
         # assigned_to preserved across the partial update
-        assert data["assigned_to"] == "john"
+        assert data["assigned_to"] == "Daniel"

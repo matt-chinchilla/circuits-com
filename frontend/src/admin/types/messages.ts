@@ -4,7 +4,7 @@
 
 export type MessageType = 'contact' | 'join' | 'keyword' | 'reply';
 export type MessageStatus = 'new' | 'read' | 'archived' | 'responded';
-export type AssignedTo = 'john' | 'mike' | null;
+export type AssignedTo = 'Daniel' | 'Anthony' | 'Ronald' | null;
 export type Tier = 'silver' | 'gold' | 'platinum';
 export type ContactReason = 'general' | 'list' | 'data' | 'press' | 'other';
 
@@ -38,7 +38,7 @@ export interface ReplyPayload {
   to: string;
   subject: string;
   body: string;
-  sent_by: 'john' | 'mike';
+  sent_by: 'Daniel' | 'Anthony' | 'Ronald';
 }
 
 interface MessageBase {

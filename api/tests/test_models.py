@@ -373,11 +373,20 @@ class TestSeedIdempotency:
         from app.db.seed import seed
 
         seed(db)
-        for username in ("matthew", "mike", "john"):
+        # matthew keeps the "admin" dev-fallback (SEED_PW_MATTHEW default)
+        matthew = db.query(User).filter(User.username == "matthew").first()
+        assert matthew is not None
+        assert matthew.role == "admin"
+        assert bcrypt.checkpw("admin".encode(), matthew.password_hash.encode())
+        # current team seeded as admins (passwords sourced from env — see
+        # test_seed_admin_users::test_new_team_credentials_authenticate)
+        for username in ("Daniel", "Anthony", "Ronald"):
             user = db.query(User).filter(User.username == username).first()
             assert user is not None
             assert user.role == "admin"
-            assert bcrypt.checkpw("admin".encode(), user.password_hash.encode())
+        # former partners (Mike, John) are no longer seeded
+        for username in ("mike", "john"):
+            assert db.query(User).filter(User.username == username).first() is None
 
     def test_seed_creates_parts(self, db):
         from app.db.seed import seed

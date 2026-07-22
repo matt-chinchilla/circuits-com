@@ -11,6 +11,7 @@ and name (suppliers/users), so it is safe to run multiple times.
 from __future__ import annotations
 
 import json
+import os
 import random
 import re
 from datetime import date, timedelta
@@ -1254,13 +1255,17 @@ def _seed_admin_user(db: Session) -> None:
     # (username, password, email). Emails power the account-recovery flows
     # (forgot-password / forgot-username); demo/demo is the public demo login
     # advertised on the redesigned sign-in screen.
+    # Passwords come from env vars (real values live in /opt/circuits-com/.env
+    # on prod, never committed) with non-secret dev fallbacks so local seeding
+    # still works out of the box. demo/demo stays a literal — it's the
+    # intentional public demo login, not a real credential.
     admin_users = [
-        ("matthew", "admin", "matthew@circuitcenter.ai"),
+        ("matthew", os.getenv("SEED_PW_MATTHEW", "admin"), "matthew@circuitcenter.ai"),
         ("demo", "demo", "demo@circuitcenter.ai"),
         # Current team (usernames are case-sensitive on login — matched verbatim).
-        ("Daniel", "DanmyfriendDan", "daniel@circuitcenter.ai"),
-        ("Anthony", "AntmyfriendAnt", "anthony@circuitcenter.ai"),
-        ("Ronald", "RonmyfriendRon", "ronald@circuitcenter.ai"),
+        ("Daniel", os.getenv("SEED_PW_DANIEL", "changeme-dev"), "daniel@circuitcenter.ai"),
+        ("Anthony", os.getenv("SEED_PW_ANTHONY", "changeme-dev"), "anthony@circuitcenter.ai"),
+        ("Ronald", os.getenv("SEED_PW_RONALD", "changeme-dev"), "ronald@circuitcenter.ai"),
     ]
     created = 0
     backfilled = 0

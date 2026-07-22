@@ -29,6 +29,6 @@ class Message(Base):
     )
     read_at = Column(DateTime(timezone=True), nullable=True)
     responded_at = Column(DateTime(timezone=True), nullable=True)
-    assigned_to = Column(String(10), nullable=True)  # 'john' | 'mike' | None
+    assigned_to = Column(String(10), nullable=True)  # 'Daniel' | 'Anthony' | 'Ronald' | None
     spam_score = Column(Float, nullable=True)
     last_reply_body = Column(Text, nullable=True)

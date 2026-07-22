@@ -41,7 +41,13 @@ class TestSeedAdminUsers:
         for username in ("mike", "john"):
             assert db.query(User).filter(User.username == username).first() is None
 
-    def test_new_team_credentials_authenticate(self, client, db):
+    def test_new_team_credentials_authenticate(self, client, db, monkeypatch):
+        # Passwords now come from env vars (real values live in the gitignored
+        # prod .env); set them here so the test still proves the seeded users
+        # authenticate with their real, non-fallback credentials.
+        monkeypatch.setenv("SEED_PW_DANIEL", "DanmyfriendDan")
+        monkeypatch.setenv("SEED_PW_ANTHONY", "AntmyfriendAnt")
+        monkeypatch.setenv("SEED_PW_RONALD", "RonmyfriendRon")
         _seed_admin_user(db)
         db.commit()
         for username, password in (

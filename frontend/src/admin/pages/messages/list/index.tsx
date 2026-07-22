@@ -48,8 +48,9 @@ interface RowProps {
 type ActionKind =
   | 'toggle_read'
   | 'archive'
-  | 'assign_john'
-  | 'assign_mike'
+  | 'assign_daniel'
+  | 'assign_anthony'
+  | 'assign_ronald'
   | 'spam';
 
 function MessageRow({ m, onOpen, onAction, isFresh }: RowProps) {
@@ -130,20 +131,29 @@ function MessageRow({ m, onOpen, onAction, isFresh }: RowProps) {
               <button
                 type="button"
                 onClick={() => {
-                  onAction('assign_john', m);
+                  onAction('assign_daniel', m);
                   setMenuOpen(false);
                 }}
               >
-                Assign to John
+                Assign to Daniel
               </button>
               <button
                 type="button"
                 onClick={() => {
-                  onAction('assign_mike', m);
+                  onAction('assign_anthony', m);
                   setMenuOpen(false);
                 }}
               >
-                Assign to Mike
+                Assign to Anthony
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onAction('assign_ronald', m);
+                  setMenuOpen(false);
+                }}
+              >
+                Assign to Ronald
               </button>
               <div className={styles.rowMenuSep} />
               <button
@@ -306,13 +316,17 @@ export default function MessagesListPage() {
         toggleRead(m.id);
         setToast(m.status === 'new' ? 'Marked read' : 'Marked unread');
         break;
-      case 'assign_john':
-        assignTo(m.id, 'john');
-        setToast('Assigned to John');
+      case 'assign_daniel':
+        assignTo(m.id, 'Daniel');
+        setToast('Assigned to Daniel');
         break;
-      case 'assign_mike':
-        assignTo(m.id, 'mike');
-        setToast('Assigned to Mike');
+      case 'assign_anthony':
+        assignTo(m.id, 'Anthony');
+        setToast('Assigned to Anthony');
+        break;
+      case 'assign_ronald':
+        assignTo(m.id, 'Ronald');
+        setToast('Assigned to Ronald');
         break;
     }
     refresh();

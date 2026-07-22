@@ -32,6 +32,11 @@ services:
       # anyone who reads the repo. Generate a strong value with:
       #   python -c "import secrets; print(secrets.token_urlsafe(48))"
       ADMIN_SECRET_KEY: ${ADMIN_SECRET_KEY:?ADMIN_SECRET_KEY must be set in /opt/circuits-com/.env}
+      # SQLAdmin creds — unreachable in prod (nginx routes /admin to the React
+      # SPA instead), but fail-fast anyway so the base compose's public dev
+      # default ("admin"/"admin") never ships as a live secret.
+      ADMIN_USERNAME: ${SQLADMIN_USERNAME:?SQLADMIN_USERNAME must be set in /opt/circuits-com/.env}
+      ADMIN_PASSWORD: ${SQLADMIN_PASSWORD:?SQLADMIN_PASSWORD must be set in /opt/circuits-com/.env}
 
   frontend:
     build:
