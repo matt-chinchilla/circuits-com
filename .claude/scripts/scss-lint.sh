@@ -43,7 +43,7 @@ fi
 # Gotcha #6 — absolute /api/ URL in frontend code (breaks the "one-config cutover" property)
 if [[ "$filepath" == *.tsx || "$filepath" == *.ts ]]; then
   if grep -qE '(https?:)?//[^/\s"]*/api/' "$filepath"; then
-    add "Absolute /api/ URL detected in frontend — use a relative path. The circuits.com cutover was a 2-file change because api calls are relative; don't regress that. (CLAUDE.md Relative API URLs)"
+    add "Absolute /api/ URL detected in frontend — use a relative path. The circuitcenter.ai cutover was a 2-file change because api calls are relative; don't regress that. (CLAUDE.md Relative API URLs)"
   fi
 fi
 

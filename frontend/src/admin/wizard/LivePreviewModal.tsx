@@ -139,7 +139,7 @@ function previewUrl(step: PreviewStep): string {
 
 function previewLabelFor(step: PreviewStep): string {
   const { page, arg } = step.preview;
-  if (page === 'category' && arg) return `circuits.com/category/${arg}`;
-  if (page === 'home') return 'circuits.com/';
-  return arg ? `circuits.com/${page}/${arg}` : `circuits.com/${page}`;
+  if (page === 'category' && arg) return `circuitcenter.ai/category/${arg}`;
+  if (page === 'home') return 'circuitcenter.ai/';
+  return arg ? `circuitcenter.ai/${page}/${arg}` : `circuitcenter.ai/${page}`;
 }

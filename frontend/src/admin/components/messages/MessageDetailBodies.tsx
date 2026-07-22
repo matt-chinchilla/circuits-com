@@ -49,7 +49,7 @@ export function ContactBody({
           <span className={styles.dotSep}>·</span>
           <span>SRC · /contact</span>
           <span className={styles.dotSep}>·</span>
-          <span>via circuits.com form</span>
+          <span>via circuitcenter.ai form</span>
         </div>
       </article>
     </div>

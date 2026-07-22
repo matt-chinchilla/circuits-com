@@ -628,7 +628,7 @@ def seed(db: Session) -> None:
         dict(
             name="Mike's Electric",
             phone="16317086040",
-            website="www.circuits.com",
+            website="www.circuitcenter.ai",
             email="1859charlesdarwin@gmail.com",
             description="Helloooooooooooo",
         ),
@@ -1255,10 +1255,10 @@ def _seed_admin_user(db: Session) -> None:
     # (forgot-password / forgot-username); demo/demo is the public demo login
     # advertised on the redesigned sign-in screen.
     admin_users = [
-        ("matthew", "admin", "matthew@circuits.com"),
-        ("mike", "admin", "mike@circuits.com"),
-        ("john", "admin", "john@circuits.com"),
-        ("demo", "demo", "demo@circuits.com"),
+        ("matthew", "admin", "matthew@circuitcenter.ai"),
+        ("mike", "admin", "mike@circuitcenter.ai"),
+        ("john", "admin", "john@circuitcenter.ai"),
+        ("demo", "demo", "demo@circuitcenter.ai"),
     ]
     created = 0
     backfilled = 0

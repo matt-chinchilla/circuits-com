@@ -10,13 +10,13 @@ from app.services.email import _build_password_reset, _build_username_reminder
 class TestPasswordResetEmail:
     def test_addressed_to_the_user(self):
         msg = _build_password_reset(
-            "user@example.com", "matthew", "https://circuits.com/admin/reset-password?token=ABC"
+            "user@example.com", "matthew", "https://circuitcenter.ai/admin/reset-password?token=ABC"
         )
         assert msg["To"] == "user@example.com"
         assert msg["From"]  # has a From
 
     def test_body_contains_link_and_username(self):
-        url = "https://circuits.com/admin/reset-password?token=ABC123"
+        url = "https://circuitcenter.ai/admin/reset-password?token=ABC123"
         msg = _build_password_reset("user@example.com", "matthew", url)
         body = msg.get_content()
         assert url in body

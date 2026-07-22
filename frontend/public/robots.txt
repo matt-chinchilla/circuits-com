@@ -3,4 +3,4 @@ Allow: /
 Disallow: /admin
 Disallow: /admin/
 
-Sitemap: https://circuits.com/sitemap.xml
+Sitemap: https://circuitcenter.ai/sitemap.xml

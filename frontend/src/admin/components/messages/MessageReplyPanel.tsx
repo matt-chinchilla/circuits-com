@@ -16,7 +16,7 @@ interface Props {
 }
 
 // Inline reply panel — collapses to a thin bar by default, expands on click.
-// Sends from no-reply@circuits.com (the SMTP path Phase 2 will wire). On
+// Sends from no-reply@circuitcenter.ai (the SMTP path Phase 2 will wire). On
 // send: simulated 400ms delay → onSend callback fires (caller updates store
 // + triggers reply-trace animation in the parent).
 export default function MessageReplyPanel({ m, onSend }: Props) {
@@ -72,7 +72,7 @@ export default function MessageReplyPanel({ m, onSend }: Props) {
             key={t}
             type="button"
             className={styles.tmplChip}
-            onClick={() => setBody((b) => b || `${t}.\n\n— Circuits.com`)}
+            onClick={() => setBody((b) => b || `${t}.\n\n— CircuitCenter`)}
           >
             <Reply size={11} strokeWidth={2} />
             {t}
@@ -92,7 +92,7 @@ export default function MessageReplyPanel({ m, onSend }: Props) {
       </div>
 
       <div className={styles.replyFoot}>
-        <span className={styles.replyFrom}>From: no-reply@circuits.com</span>
+        <span className={styles.replyFrom}>From: no-reply@circuitcenter.ai</span>
         <button
           type="button"
           data-tour="reply-send"

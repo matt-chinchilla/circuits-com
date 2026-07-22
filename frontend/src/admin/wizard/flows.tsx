@@ -174,7 +174,7 @@ export const FLOWS: Flow[] = [
         title: 'See it on the live site',
         body: () => (
           <>
-            This is the public-facing Circuits.com — note how <b>{supplierNameFromPage()}</b> now
+            This is the public-facing CircuitCenter — note how <b>{supplierNameFromPage()}</b> now
             appears as the <i>Featured Supplier</i> in the category page sidebar. Adding through
             the admin propagates to the directory immediately.
           </>
@@ -724,7 +724,7 @@ export const FLOWS: Flow[] = [
         body: (
           <>
             Type a response — three or four sentences is the house style. Plain text, no signature
-            (the system adds <code>no-reply@circuits.com</code>).
+            (the system adds <code>no-reply@circuitcenter.ai</code>).
           </>
         ),
         suggested:

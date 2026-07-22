@@ -90,7 +90,7 @@ async def test_send_contact_notification_composes_correct_message(monkeypatch):
     from app.schemas import ContactForm
     from app.services import email as email_service
 
-    monkeypatch.setattr(email_service.settings, "NOTIFY_RECIPIENTS", ["alerts@circuits.com"])
+    monkeypatch.setattr(email_service.settings, "NOTIFY_RECIPIENTS", ["alerts@circuitcenter.ai"])
     monkeypatch.setattr(email_service.settings, "SMTP_FROM", "no-reply@example.invalid")
     monkeypatch.setattr(email_service.settings, "SMTP_HOST", "smtp.example.invalid")
     monkeypatch.setattr(email_service.settings, "SMTP_USERNAME", "x")
@@ -109,7 +109,7 @@ async def test_send_contact_notification_composes_correct_message(monkeypatch):
     mock_send.assert_called_once()
     msg = mock_send.call_args[0][0]
     assert msg["From"] == "no-reply@example.invalid"
-    assert msg["To"] == "alerts@circuits.com"
+    assert msg["To"] == "alerts@circuitcenter.ai"
     assert msg["Reply-To"] == "t.reilly@gizmodo.com"
     assert "Press inquiry" in msg["Subject"]
     assert "Tom Reilly" in msg["Subject"]
@@ -126,7 +126,7 @@ async def test_send_join_notification_includes_company_tier_categories(monkeypat
     from app.schemas import JoinForm
     from app.services import email as email_service
 
-    monkeypatch.setattr(email_service.settings, "NOTIFY_RECIPIENTS", ["alerts@circuits.com"])
+    monkeypatch.setattr(email_service.settings, "NOTIFY_RECIPIENTS", ["alerts@circuitcenter.ai"])
     monkeypatch.setattr(email_service.settings, "SMTP_FROM", "no-reply@example.invalid")
     monkeypatch.setattr(email_service.settings, "SMTP_HOST", "smtp.example.invalid")
     monkeypatch.setattr(email_service.settings, "SMTP_USERNAME", "x")
@@ -148,7 +148,7 @@ async def test_send_join_notification_includes_company_tier_categories(monkeypat
 
     msg = mock_send.call_args[0][0]
     assert msg["From"] == "no-reply@example.invalid"
-    assert msg["To"] == "alerts@circuits.com"
+    assert msg["To"] == "alerts@circuitcenter.ai"
     assert msg["Reply-To"] == "jane@arrow.com"
     assert "Arrow Electronics" in msg["Subject"]
     body = msg.get_content()
@@ -197,7 +197,7 @@ async def test_send_keyword_notification_includes_keyword(monkeypatch):
     from app.schemas import KeywordRequestForm
     from app.services import email as email_service
 
-    monkeypatch.setattr(email_service.settings, "NOTIFY_RECIPIENTS", ["alerts@circuits.com"])
+    monkeypatch.setattr(email_service.settings, "NOTIFY_RECIPIENTS", ["alerts@circuitcenter.ai"])
     monkeypatch.setattr(email_service.settings, "SMTP_FROM", "no-reply@example.invalid")
     monkeypatch.setattr(email_service.settings, "SMTP_HOST", "smtp.example.invalid")
     monkeypatch.setattr(email_service.settings, "SMTP_USERNAME", "x")
@@ -217,7 +217,7 @@ async def test_send_keyword_notification_includes_keyword(monkeypatch):
 
     msg = mock_send.call_args[0][0]
     assert msg["From"] == "no-reply@example.invalid"
-    assert msg["To"] == "alerts@circuits.com"
+    assert msg["To"] == "alerts@circuitcenter.ai"
     assert msg["Reply-To"] == "partnerships@vishay.com"
     assert "low-noise op-amps" in msg["Subject"]
     body = msg.get_content()
@@ -232,7 +232,7 @@ async def test_send_keyword_notification_includes_name_and_tier(monkeypatch):
     from app.schemas import KeywordRequestForm
     from app.services import email as email_service
 
-    monkeypatch.setattr(email_service.settings, "NOTIFY_RECIPIENTS", ["alerts@circuits.com"])
+    monkeypatch.setattr(email_service.settings, "NOTIFY_RECIPIENTS", ["alerts@circuitcenter.ai"])
     monkeypatch.setattr(email_service.settings, "SMTP_FROM", "no-reply@example.invalid")
     monkeypatch.setattr(email_service.settings, "SMTP_HOST", "smtp.example.invalid")
     monkeypatch.setattr(email_service.settings, "SMTP_USERNAME", "x")
@@ -268,7 +268,7 @@ async def test_send_keyword_notification_subject_omits_tier_when_unset(monkeypat
     from app.schemas import KeywordRequestForm
     from app.services import email as email_service
 
-    monkeypatch.setattr(email_service.settings, "NOTIFY_RECIPIENTS", ["alerts@circuits.com"])
+    monkeypatch.setattr(email_service.settings, "NOTIFY_RECIPIENTS", ["alerts@circuitcenter.ai"])
     monkeypatch.setattr(email_service.settings, "SMTP_FROM", "no-reply@example.invalid")
     monkeypatch.setattr(email_service.settings, "SMTP_HOST", "smtp.example.invalid")
     monkeypatch.setattr(email_service.settings, "SMTP_USERNAME", "x")

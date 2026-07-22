@@ -22,8 +22,8 @@
       "typeVersion": 2,
       "position": [500, 200],
       "parameters": {
-        "fromEmail": "noreply@circuits.com",
-        "toEmail": "john@circuits.com",
+        "fromEmail": "noreply@circuitcenter.ai",
+        "toEmail": "contact@circuitcenter.ai",
         "subject": "New Contact Form: {{ $json.body.subject }}",
         "emailType": "text",
         "text": "New contact form submission:\n\nName: {{ $json.body.name }}\nEmail: {{ $json.body.email }}\nSubject: {{ $json.body.subject }}\n\nMessage:\n{{ $json.body.message }}"
@@ -37,7 +37,7 @@
       "typeVersion": 2,
       "position": [500, 400],
       "parameters": {
-        "fromEmail": "noreply@circuits.com",
+        "fromEmail": "noreply@circuitcenter.ai",
         "toEmail": "={{ $json.body.email }}",
         "subject": "We received your message — Circuits.com",
         "emailType": "text",

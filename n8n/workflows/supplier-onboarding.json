@@ -116,7 +116,7 @@
       "typeVersion": 2,
       "position": [690, 400],
       "parameters": {
-        "fromEmail": "noreply@circuits.com",
+        "fromEmail": "noreply@circuitcenter.ai",
         "toEmail": "={{ $json.email }}",
         "subject": "Welcome to Circuits.com — Supplier Onboarding",
         "emailType": "text",

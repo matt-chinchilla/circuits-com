@@ -17,7 +17,7 @@ class TestSeedAdminUsers:
         demo = db.query(User).filter(User.username == "demo").first()
         assert demo is not None
         assert demo.role == "admin"
-        assert demo.email == "demo@circuits.com"
+        assert demo.email == "demo@circuitcenter.ai"
 
     def test_named_admins_get_emails(self, db):
         _seed_admin_user(db)
@@ -25,7 +25,7 @@ class TestSeedAdminUsers:
         for username in ("matthew", "mike", "john"):
             u = db.query(User).filter(User.username == username).first()
             assert u is not None
-            assert u.email == f"{username}@circuits.com"
+            assert u.email == f"{username}@circuitcenter.ai"
 
     def test_demo_credentials_authenticate(self, client, db):
         _seed_admin_user(db)
@@ -51,4 +51,4 @@ class TestSeedAdminUsers:
         _seed_admin_user(db)
         db.commit()
         u = db.query(User).filter(User.username == "matthew").first()
-        assert u.email == "matthew@circuits.com"
+        assert u.email == "matthew@circuitcenter.ai"

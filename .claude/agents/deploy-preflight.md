@@ -96,7 +96,7 @@ Your final message MUST be one of these two shapes:
 
 - Instance: t3.small (running)
 - Git: clean, HEAD = origin/master (<sha>)
-- DNS: circuits.com, www.circuits.com, circuits.matthew-chirichella.com → 100.55.235.167 ✓
+- DNS: circuitcenter.ai, www.circuitcenter.ai → 100.55.235.167 ✓
 - Disk: <N>G free
 - Docker cache: <size>, <reclaimable> reclaimable
 

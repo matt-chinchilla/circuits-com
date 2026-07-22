@@ -73,7 +73,7 @@ def _build_notification(
 async def send_contact_notification(form) -> None:
     """Notify recipients that someone submitted the Contact form."""
     body = (
-        "New contact submission via circuits.com:\n"
+        "New contact submission via circuitcenter.ai:\n"
         "\n"
         f"Name:    {form.name}\n"
         f"Email:   {form.email}\n"
@@ -101,7 +101,7 @@ async def send_join_notification(form) -> None:
     extra_message = form.message or "(no message)"
     website = form.website or "(none)"
     body = (
-        "New supplier-onboarding submission via circuits.com:\n"
+        "New supplier-onboarding submission via circuitcenter.ai:\n"
         "\n"
         f"Company:    {form.company_name}\n"
         f"Contact:    {form.contact_person}\n"
@@ -134,18 +134,18 @@ async def send_join_autoreply(form) -> None:
     body = (
         f"Hi {form.contact_person},\n"
         "\n"
-        f"Thanks for applying to list {form.company_name} on Circuits.com.\n"
+        f"Thanks for applying to list {form.company_name} on CircuitCenter.\n"
         "\n"
-        "John and Mike will review your submission and get back to you within\n"
+        "Our team will review your submission and get back to you within\n"
         "1-2 business days. If you have time-sensitive questions, you can reach\n"
-        "us directly at john@circuits.com or mike@circuits.com.\n"
+        "us directly at contact@circuitcenter.ai.\n"
         "\n"
-        "- The Circuits.com Team\n"
+        "- The CircuitCenter Team\n"
     )
     msg = EmailMessage()
     msg["From"] = settings.SMTP_FROM
     msg["To"] = form.email
-    msg["Subject"] = "We received your application — Circuits.com"
+    msg["Subject"] = "We received your application — CircuitCenter"
     msg.set_content(body)
     await _smtp_send(msg)
 
@@ -161,7 +161,7 @@ async def send_keyword_notification(form) -> None:
     extra_message = form.message or "(no message)"
     tier_display = form.tier or "(no tier selected)"
     body = (
-        "New keyword-sponsorship request via circuits.com:\n"
+        "New keyword-sponsorship request via circuitcenter.ai:\n"
         "\n"
         f"Company: {form.company_name}\n"
         f"Name:    {form.name}\n"
@@ -199,7 +199,7 @@ def _build_password_reset(to_email: str, username: str, reset_url: str) -> Email
     body = (
         f"Hi {username},\n"
         "\n"
-        "We received a request to reset the password on your Circuits.com\n"
+        "We received a request to reset the password on your CircuitCenter\n"
         "account. Use the secure link below to choose a new password:\n"
         "\n"
         f"{reset_url}\n"
@@ -208,12 +208,12 @@ def _build_password_reset(to_email: str, username: str, reset_url: str) -> Email
         "request a reset, you can safely ignore this email — your password won't\n"
         "change.\n"
         "\n"
-        "- The Circuits.com Team\n"
+        "- The CircuitCenter Team\n"
     )
     msg = EmailMessage()
     msg["From"] = settings.SMTP_FROM
     msg["To"] = to_email
-    msg["Subject"] = "Reset your Circuits.com password"
+    msg["Subject"] = "Reset your CircuitCenter password"
     msg.set_content(body)
     return msg
 
@@ -224,21 +224,21 @@ def _build_username_reminder(to_email: str, usernames: list[str]) -> EmailMessag
     body = (
         "Hi,\n"
         "\n"
-        "You asked us to remind you of the username on your Circuits.com account.\n"
+        "You asked us to remind you of the username on your CircuitCenter account.\n"
         f"The {'usernames' if len(usernames) > 1 else 'username'} linked to this "
         "email address:\n"
         "\n"
         f"{listed}\n"
         "\n"
-        "Head to https://circuits.com/admin/login to sign in. If you didn't make\n"
+        "Head to https://circuitcenter.ai/admin/login to sign in. If you didn't make\n"
         "this request, you can ignore this email.\n"
         "\n"
-        "- The Circuits.com Team\n"
+        "- The CircuitCenter Team\n"
     )
     msg = EmailMessage()
     msg["From"] = settings.SMTP_FROM
     msg["To"] = to_email
-    msg["Subject"] = "Your Circuits.com username"
+    msg["Subject"] = "Your CircuitCenter username"
     msg.set_content(body)
     return msg
 

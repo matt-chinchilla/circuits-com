@@ -37,7 +37,7 @@ const SECTIONS: Section[] = [
     num: "01",
     title: "Scope",
     body: [
-      'This Privacy Policy describes how Circuits.com ("we", "us", "our") collects, uses, and shares information when you visit circuits.com or use any service we operate (collectively, the "Service").',
+      'This Privacy Policy describes how CircuitCenter ("we", "us", "our") collects, uses, and shares information when you visit circuitcenter.ai or use any service we operate (collectively, the "Service").',
       "By using the Service you agree to the practices described here. If you do not agree, please do not use the Service.",
     ],
   },
@@ -66,9 +66,9 @@ const SECTIONS: Section[] = [
     title: "How We Share Information",
     body: [
       "Service providers. We share information with vendors who help us operate the Service (e.g. hosting, analytics, email delivery). These providers are contractually limited to processing data on our behalf.",
-      "Distributors. When you click a buy-link, you leave Circuits.com and enter the distributor's own website under their terms and privacy policy. We do not transmit your identity to the distributor unless you tell them yourself by signing in there.",
+      "Distributors. When you click a buy-link, you leave CircuitCenter and enter the distributor's own website under their terms and privacy policy. We do not transmit your identity to the distributor unless you tell them yourself by signing in there.",
       "Legal. We may disclose information when we believe in good faith that disclosure is required by law, court order, or to protect the rights, property, or safety of any person.",
-      "Business transfers. If Circuits.com is involved in a merger, acquisition, or sale of assets, information may be transferred as part of that transaction.",
+      "Business transfers. If CircuitCenter is involved in a merger, acquisition, or sale of assets, information may be transferred as part of that transaction.",
     ],
   },
   {
@@ -94,7 +94,7 @@ const SECTIONS: Section[] = [
     title: "Your Rights",
     body: [
       "Depending on where you live (including residents of the EEA, the United Kingdom, and California), you may have the right to access, correct, delete, or port your personal information; to object to or restrict certain processing; and to withdraw consent where we rely on it.",
-      "To exercise any of these rights, email privacy@circuits.com from the address associated with your information. We will respond within the timeframe required by applicable law.",
+      "To exercise any of these rights, email privacy@circuitcenter.ai from the address associated with your information. We will respond within the timeframe required by applicable law.",
     ],
   },
   {
@@ -110,7 +110,7 @@ const SECTIONS: Section[] = [
     num: "09",
     title: "Children's Privacy",
     body: [
-      "The Service is intended for engineering and purchasing professionals and is not directed to children under 13. We do not knowingly collect personal information from children under 13. If you believe a child has provided us with personal information, please contact privacy@circuits.com and we will delete it.",
+      "The Service is intended for engineering and purchasing professionals and is not directed to children under 13. We do not knowingly collect personal information from children under 13. If you believe a child has provided us with personal information, please contact privacy@circuitcenter.ai and we will delete it.",
     ],
   },
   {
@@ -118,7 +118,7 @@ const SECTIONS: Section[] = [
     num: "10",
     title: "International Transfers",
     body: [
-      "Circuits.com is operated from the United States. If you access the Service from outside the United States, your information may be transferred to, stored in, and processed in the United States or other countries with different data protection laws than your jurisdiction.",
+      "CircuitCenter is operated from the United States. If you access the Service from outside the United States, your information may be transferred to, stored in, and processed in the United States or other countries with different data protection laws than your jurisdiction.",
     ],
   },
   {
@@ -134,7 +134,7 @@ const SECTIONS: Section[] = [
     num: "12",
     title: "Contact Us",
     body: [
-      "Questions, requests, or complaints regarding this Policy may be sent to privacy@circuits.com or by mail to Circuits.com, Attn: Privacy, 1 Industry Park Way, Brookhaven, NY 11719, USA.",
+      "Questions, requests, or complaints regarding this Policy may be sent to privacy@circuitcenter.ai or by mail to CircuitCenter, Attn: Privacy, 1 Industry Park Way, Brookhaven, NY 11719, USA.",
     ],
   },
 ];
@@ -149,17 +149,17 @@ const LICENSES: License[] = [
   {
     tag: "MIT-style",
     name: "Site Content License",
-    body: 'Copyright (c) 2003–2026 Circuits.com. Permission is hereby granted, free of charge, to any person obtaining a copy of the publicly displayed directory pages of circuits.com ("the Content"), to use, copy, reference, and link to the Content for personal, educational, or internal engineering use, subject to the following conditions: the above copyright notice and this permission notice shall be included in all substantial reproductions; bulk scraping, automated re-distribution, or resale of the Content is prohibited without written consent. THE CONTENT IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.',
+    body: 'Copyright (c) 2003–2026 CircuitCenter. Permission is hereby granted, free of charge, to any person obtaining a copy of the publicly displayed directory pages of circuitcenter.ai ("the Content"), to use, copy, reference, and link to the Content for personal, educational, or internal engineering use, subject to the following conditions: the above copyright notice and this permission notice shall be included in all substantial reproductions; bulk scraping, automated re-distribution, or resale of the Content is prohibited without written consent. THE CONTENT IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.',
   },
   {
     tag: "Trademarks",
     name: "Third-Party Marks",
-    body: "All manufacturer names, part numbers, logos, and trademarks displayed on circuits.com are the property of their respective owners and are used here solely for identification and reference purposes. Their appearance on this site does not imply endorsement, sponsorship, or affiliation.",
+    body: "All manufacturer names, part numbers, logos, and trademarks displayed on circuitcenter.ai are the property of their respective owners and are used here solely for identification and reference purposes. Their appearance on this site does not imply endorsement, sponsorship, or affiliation.",
   },
   {
     tag: "Datasheets",
     name: "Distributor Data",
-    body: "Stock levels, pricing, and lead-time information are aggregated under license from participating authorized distributors and are subject to their own terms of use. Circuits.com makes no warranty as to the accuracy or timeliness of any third-party data displayed.",
+    body: "Stock levels, pricing, and lead-time information are aggregated under license from participating authorized distributors and are subject to their own terms of use. CircuitCenter makes no warranty as to the accuracy or timeliness of any third-party data displayed.",
   },
 ];
 
@@ -211,9 +211,9 @@ export default function PrivacyPage() {
       transition={{ duration: 0.15, ease: "easeInOut" as const }}
     >
       <Helmet>
-        <title>Privacy Policy | Circuits.com</title>
-        <meta name="description" content="Circuits.com privacy policy — how we handle your data, cookies, and third-party services." />
-        <link rel="canonical" href="https://circuits.com/privacy" />
+        <title>Privacy Policy | CircuitCenter</title>
+        <meta name="description" content="CircuitCenter privacy policy — how we handle your data, cookies, and third-party services." />
+        <link rel="canonical" href="https://circuitcenter.ai/privacy" />
       </Helmet>
       <PageHeaderBand
         page="privacy"
@@ -273,7 +273,7 @@ export default function PrivacyPage() {
                 </div>
                 <div>
                   <dt>Owner</dt>
-                  <dd>privacy@circuits.com</dd>
+                  <dd>privacy@circuitcenter.ai</dd>
                 </div>
               </dl>
             </header>
@@ -310,7 +310,7 @@ export default function PrivacyPage() {
               </header>
               <p className={styles.p}>
                 The following generic licenses govern the content displayed on
-                circuits.com. They are provided for reference and do not
+                circuitcenter.ai. They are provided for reference and do not
                 modify any agreement you have entered into separately with us.
               </p>
               <div className={styles.licenseGrid}>

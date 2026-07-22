@@ -79,7 +79,7 @@ export const SPONSOR_FAQS: readonly SponsorFAQItem[] = [
   },
   {
     q: 'Can I see traffic stats for a keyword before I buy?',
-    a: "Yes. Drop us a line at sales@circuits.com with the keyword and we'll send last-90-days impressions and click-through. No login required to inspect the existing public landing page if one is already live.",
+    a: "Yes. Drop us a line at sales@circuitcenter.ai with the keyword and we'll send last-90-days impressions and click-through. No login required to inspect the existing public landing page if one is already live.",
   },
   {
     q: "What's the difference between keyword and category sponsorship?",

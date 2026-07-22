@@ -72,7 +72,7 @@ export default function ForgotUsername({ go }: { go: (s: Screen) => void }) {
           icon={I.mail}
           value={email}
           onChange={setEmail}
-          placeholder="you@circuits.com"
+          placeholder="you@circuitcenter.ai"
           inputMode="email"
           autoComplete="email"
           autoFocus

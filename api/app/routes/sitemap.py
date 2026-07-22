@@ -23,7 +23,7 @@ STATIC_PAGES = [
 @router.get("/api/sitemap.xml", response_class=Response)
 def sitemap_xml(db: Session = Depends(get_db)):
     today = date.today().isoformat()
-    base = "https://circuits.com"
+    base = "https://circuitcenter.ai"
 
     urls: list[str] = []
     for path, freq, priority in STATIC_PAGES:

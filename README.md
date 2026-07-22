@@ -1,6 +1,6 @@
-# Circuits.com
+# CircuitCenter
 
-Electronic components directory prototype — Vite React SPA + FastAPI + PostgreSQL, all in Docker. Live at [circuits.com](https://circuits.com). Built as a functional demo of a modern, animated redesign with category browsing, distributor price comparison, keyword sponsorships, and an admin console with a guided onboarding wizard.
+Electronic components directory prototype — Vite React SPA + FastAPI + PostgreSQL, all in Docker. Live at [circuitcenter.ai](https://circuitcenter.ai). Built as a functional demo of a modern, animated redesign with category browsing, distributor price comparison, keyword sponsorships, and an admin console with a guided onboarding wizard.
 
 ## Architecture
 
@@ -32,7 +32,7 @@ Five Docker containers orchestrated by Docker Compose:
 | **db**       | postgres:16-alpine  | 5432            | Persistent data store                    |
 | **n8n**      | ./n8n               | 5678            | Workflow automation (kept for future, no live workflows) |
 
-Production: t3.small EC2 (`i-0d456bd12719e2176`), EIP `100.55.235.167`, SAN cert covers `circuits.com`, `www.circuits.com`, `circuits.matthew-chirichella.com`.
+Production: t3.small EC2 (`i-0d456bd12719e2176`), EIP `100.55.235.167`, SAN cert covers `circuitcenter.ai`, `www.circuitcenter.ai`.
 
 ## Prerequisites
 
@@ -254,8 +254,8 @@ git checkout updates
 | `sudo docker exec circuits-com-api-1 alembic current` | Current migration revision |
 | `sudo docker exec -T circuits-com-api-1 python -c "from app.config import settings; print(settings.SMTP_HOST)" < /dev/null` | Verify env vars |
 | `sudo docker compose -f docker-compose.yml -f docker-compose.prod.yml restart nginx` | Recover from 502 after bare `./deploy.sh` |
-| `curl -sI --http2 https://circuits.com/ -w '%{http_version}\n'` | Confirm HTTP/2 negotiation |
-| `curl -sS -o /dev/null -w "%{http_code}" https://circuits.com` | Health check |
+| `curl -sI --http2 https://circuitcenter.ai/ -w '%{http_version}\n'` | Confirm HTTP/2 negotiation |
+| `curl -sS -o /dev/null -w "%{http_code}" https://circuitcenter.ai` | Health check |
 
 EC2 recovery: if a deploy hangs extracting layers, kill the orphaned `ssh ...ec2...` process; if it persists, **stop+start** the instance via AWS console (NOT reboot).
 

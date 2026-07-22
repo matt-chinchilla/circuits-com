@@ -1,4 +1,4 @@
-# Circuits.com
+# CircuitCenter
 
 Electronic components directory prototype — Vite React SPA + FastAPI + PostgreSQL + n8n, all in Docker.
 
@@ -33,7 +33,7 @@ npm test                                # vitest run (unit-logic only; *.test.ts
 ./deploy.sh --status | --logs | --cert-renew
 ```
 
-Production: t3.small EC2 (`i-0d456bd12719e2176`), EIP `100.55.235.167`. Migrations + seed auto-run on api container start via `docker-compose.prod.yml`. Domains `circuits.com` (primary), `www.circuits.com`, `circuits.matthew-chirichella.com` — all on one SAN cert at `/etc/letsencrypt/live/circuits.matthew-chirichella.com/`.
+Production: t3.small EC2 (`i-0d456bd12719e2176`), EIP `100.55.235.167`. Migrations + seed auto-run on api container start via `docker-compose.prod.yml`. Domains `circuitcenter.ai` (primary), `www.circuitcenter.ai` — all on one SAN cert at `/etc/letsencrypt/live/circuitcenter.ai/`.
 
 Static analysis: TypeScript strict + ESLint at `frontend/.eslintrc.json` (boundary rules only — no Prettier). Frontend has a minimal vitest harness (`npm test`, unit-logic only — `*.test.ts` excluded from `tsc -b` + eslint via `tsconfig.app.json`/`.eslintrc.json`); API has pytest. Visual baselines at `tests/visual/baselines/`.
 
@@ -263,7 +263,7 @@ Brand (`left: 20px`) + nav+LOGIN (`right: 20px`) are `position: absolute` on `.t
 - **`./deploy.sh` restarts nginx automatically** (2026-06-02; run `deploy-preflight` first). **Local `nginx.conf` self-heals** (`resolver 127.0.0.11` + variable `proxy_pass`) so a local `up --build <svc>` re-resolves new container IPs; prod `nginx.ssl.conf` relies on the deploy restart.
 - **`.dockerignore` in `frontend/` + `api/`** (2026-06-02) — frontend context was 236MB (230MB `node_modules`); now ~5MB. Both Dockerfiles also gain `# syntax=docker/dockerfile:1.6` + BuildKit `--mount=type=cache` on `/root/.npm` (frontend) and `/root/.cache/{uv,pip}` (api). `deploy.sh` exports `DOCKER_BUILDKIT=1` for older Docker. Rebuild on unchanged deps is now near-instant.
 - **Deploying API → ~1-2 min of 502 on `/api/*`** — recreating api re-runs `alembic → seed → uvicorn`. HTML still 200. Check api logs (`Seeding database...`) before intervening.
-- **nginx HTTP/2 requires `http2 on;`** — `listen 443 ssl;` alone gives HTTP/1.1. All 3 SSL blocks in `nginx.ssl.conf` carry it. Verify: `curl -sI --http2 https://circuits.com/ -w '%{http_version}\n'` (want `2`).
+- **nginx HTTP/2 requires `http2 on;`** — `listen 443 ssl;` alone gives HTTP/1.1. All 3 SSL blocks in `nginx.ssl.conf` carry it. Verify: `curl -sI --http2 https://circuitcenter.ai/ -w '%{http_version}\n'` (want `2`).
 - **Category preload couples `frontend/index.html` ↔ `api.ts`** — inline `<script>` stashes the fetch promise on `window.__categoryPreload`; `api.getCategory` reuses it (matching slug+params). Direct-load only; SPA nav = axios.
 - **`index.html` served `no-cache`** (`frontend/nginx.conf` `location /`) so browsers revalidate the SPA entry. Hashed assets stay `immutable`. Guard: `api/tests/test_nginx_cache_headers.py`.
 - **Stale lazy-chunk after deploy → `vite:preloadError` recovery reload** — lazy routes (App.tsx) are content-hashed chunks; a deploy deletes the old hashes, so a returning client on a pre-deploy `index.html`/module graph (most often a tab left open across the deploy) dynamic-imports a 404'd chunk → `import()` rejects → ErrorBoundary "failed to load" dead-end until a manual browser-cache reset (eager `HomePage` is immune; every lazy route was affected — it's not contact-specific). `@shared/preloadErrorRecovery.ts` (called in `main.tsx` BEFORE render, bundled in the EAGER entry chunk) turns `vite:preloadError` into ONE `sessionStorage`-guarded recovery reload — fail-open if storage throws (Safari private mode / locked-down browsers), whole install `try/catch`-wrapped so a hardened-browser `window.sessionStorage` throw can't white-screen bootstrap. Don't remove the `installPreloadErrorRecovery()` call. Guard: `frontend/src/shared/preloadErrorRecovery.test.ts` (vitest, 5 tests).
@@ -273,12 +273,12 @@ Brand (`left: 20px`) + nav+LOGIN (`right: 20px`) are `position: absolute` on `.t
 - **Workbox `runtimeCaching` regex MUST allow trailing slash** — axios ends `/?params`. Need `\/?` before query: `/\/api\/categories(\/[^/?]+)?\/?(\?.*)?$/`.
 - **`global.scss` uses deprecated Sass `darken()`/`lighten()`** — new code uses `@use 'sass:color'` + `color.adjust()`.
 - **ProxyHeadersMiddleware trusts all hosts** — required for admin HTTPS URL gen behind nginx. FastAPI 307-redirects missing trailing slash (axios follows).
-- **Adding a hostname**: add `server_name` in `nginx.ssl.conf` → stop nginx → `sudo certbot certonly --standalone --expand --cert-name circuits.matthew-chirichella.com -d <every>` → start. DNS must resolve first. Cert dir stays `circuits.matthew-chirichella.com` even though `circuits.com` is primary (SAN match).
-- **SMTP creds in `/opt/circuits-com/.env` on prod EC2** (Hover: host/587/no-reply@circuits.com). Without `SMTP_HOST`, `email._smtp_send` runs demo. `NOTIFY_RECIPIENTS` = JSON or CSV.
+- **Adding a hostname**: add `server_name` in `nginx.ssl.conf` → stop nginx → `sudo certbot certonly --standalone --expand --cert-name circuitcenter.ai -d <every>` → start. DNS must resolve first. Cert dir is `circuitcenter.ai` (the primary).
+- **SMTP creds in `/opt/circuits-com/.env` on prod EC2** (Hover: host/587/no-reply@circuitcenter.ai). Without `SMTP_HOST`, `email._smtp_send` runs demo. `NOTIFY_RECIPIENTS` = JSON or CSV.
 - **Prod `ADMIN_SECRET_KEY` MUST be in `/opt/circuits-com/.env`** — `docker-compose.prod.yml` reads it `${...:?}` fail-fast (base default is dev-only), so every prod `up`/deploy errors without it. Rotate via host secret → `up -d --force-recreate api`.
 - **n8n no longer in form path** — `routes/forms.py` uses aiosmtplib + Hover SMTP via BackgroundTasks.
 - **Admin login = v13 two-panel (`pages/login/`) + recovery** — creds add `demo`/`demo` (admins seeded w/ emails, migration 015). `LoginPage.module.scss` ports the design under ONE hashed `.authRoot{:global{…}}` (literal classnames, sibling-global keyframes, no `*`/`body` leak). Reset-link origin MUST be `settings.APP_BASE_URL`, NEVER `request.base_url` (poisoning). **Mobile board = vector `<svg>` (`IsoBoardSvg`/`isoGeometry`), desktop = live CSS-3D — see the "fixed-angle 3D = ONE vector svg" gotcha.**
-- **Test fixtures must NOT pair a real-looking SMTP host with `SMTP_PASSWORD`** — GitGuardian pattern-matches host+user+pw proximity. Use RFC 6761 TLDs (`.invalid`/`.test`/`.example`). Guard: `api/tests/test_no_smtp_credential_lookalikes.py`. But `EmailStr` rejects those TLDs — smoke tests use plus-tag self-route (`smoke-test+verify@circuits.com`).
+- **Test fixtures must NOT pair a real-looking SMTP host with `SMTP_PASSWORD`** — GitGuardian pattern-matches host+user+pw proximity. Use RFC 6761 TLDs (`.invalid`/`.test`/`.example`). Guard: `api/tests/test_no_smtp_credential_lookalikes.py`. But `EmailStr` rejects those TLDs — smoke tests use plus-tag self-route (`smoke-test+verify@circuitcenter.ai`).
 - **Claude Design handoffs** — `WebFetch` saves to `<tmpdir>/tool-results/webfetch-*.bin`; extract `tar -xzf <path>.bin -C design-handoff-vN/`. Versioned dirs gitignored.
 - **Accent-colored text on light cards uses `var(--executive-blue)`** — `var(--theme-accent)`/`--theme-cta-bg` fail WCAG-AA. Borders/chip-bg can keep `--theme-accent`. `--fg2` passes on white (4.85:1), fails on `--surface` (4.07:1). Exception: `/keyword` uses `--theme-accent` for section-num + tier price (a11y 91/100 documented).
 - **Branch workflow**: `master` = deploy tip, `updates` = active dev. Commit on `updates` → push → `checkout master && merge --ff-only updates && push` → deploy → `checkout updates`. No squash; ff-only.

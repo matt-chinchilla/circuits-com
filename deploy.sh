@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # ============================================================================
-# Circuits.com — Deploy Script
+# circuitcenter.ai — Deploy Script
 # ============================================================================
 # Usage:
 #   ./deploy.sh              Deploy latest committed changes (frontend + API)
@@ -132,27 +132,20 @@ renew_cert() {
 
 verify_site() {
     echo "Verifying site..."
-    local primary_code legacy_code www_code
-    primary_code=$(curl -sS -o /dev/null -w "%{http_code}" --connect-timeout 10 https://circuits.com 2>/dev/null || echo "000")
-    www_code=$(curl -sS -o /dev/null -w "%{http_code}" --connect-timeout 10 https://www.circuits.com 2>/dev/null || echo "000")
-    legacy_code=$(curl -sS -o /dev/null -w "%{http_code}" --connect-timeout 10 https://circuits.matthew-chirichella.com 2>/dev/null || echo "000")
+    local primary_code www_code
+    primary_code=$(curl -sS -o /dev/null -w "%{http_code}" --connect-timeout 10 https://circuitcenter.ai 2>/dev/null || echo "000")
+    www_code=$(curl -sS -o /dev/null -w "%{http_code}" --connect-timeout 10 https://www.circuitcenter.ai 2>/dev/null || echo "000")
 
     if [[ "$primary_code" == "200" ]]; then
-        green "Primary:  https://circuits.com                       → HTTP $primary_code"
+        green "Primary:  https://circuitcenter.ai                    → HTTP $primary_code"
     else
-        red   "Primary:  https://circuits.com                       → HTTP $primary_code (expected 200)"
+        red   "Primary:  https://circuitcenter.ai                    → HTTP $primary_code (expected 200)"
     fi
 
     if [[ "$www_code" =~ ^30[12]$ ]]; then
-        green "www:      https://www.circuits.com                   → HTTP $www_code (redirect OK)"
+        green "www:      https://www.circuitcenter.ai                → HTTP $www_code (redirect OK)"
     else
-        yellow "www:      https://www.circuits.com                   → HTTP $www_code (expected 301/302)"
-    fi
-
-    if [[ "$legacy_code" =~ ^30[12]$ ]]; then
-        green "Legacy:   https://circuits.matthew-chirichella.com   → HTTP $legacy_code (redirect OK)"
-    else
-        yellow "Legacy:   https://circuits.matthew-chirichella.com   → HTTP $legacy_code (expected 301/302)"
+        yellow "www:      https://www.circuitcenter.ai                → HTTP $www_code (expected 301/302)"
     fi
 
     if [[ "$primary_code" != "200" ]]; then

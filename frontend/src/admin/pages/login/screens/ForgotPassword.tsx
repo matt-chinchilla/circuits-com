@@ -108,7 +108,7 @@ export default function ForgotPassword({ go }: { go: (s: Screen) => void }) {
           icon={I.id}
           value={val}
           onChange={setVal}
-          placeholder="you@circuits.com"
+          placeholder="you@circuitcenter.ai"
           autoComplete="username"
           autoFocus
           error={err}

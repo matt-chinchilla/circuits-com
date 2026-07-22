@@ -259,23 +259,23 @@ export default function CategoryPage() {
 
   const categoryName = category?.name ?? '';
   const metaDescription = category?.description
-    ?? `Compare prices for ${categoryName} components from top distributors on Circuits.com.`;
+    ?? `Compare prices for ${categoryName} components from top distributors on CircuitCenter.`;
 
   const collectionPageJsonLd = category && canonicalPath ? {
     '@context': 'https://schema.org',
     '@type': 'CollectionPage',
     name: categoryName,
     description: category.description ?? metaDescription,
-    url: `https://circuits.com${canonicalPath}`,
+    url: `https://circuitcenter.ai${canonicalPath}`,
   } : null;
 
   const breadcrumbJsonLd = category?.parent ? {
     '@context': 'https://schema.org',
     '@type': 'BreadcrumbList',
     itemListElement: [
-      { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://circuits.com/' },
-      { '@type': 'ListItem', position: 2, name: category.parent.name, item: `https://circuits.com/category/${category.parent.slug}` },
-      { '@type': 'ListItem', position: 3, name: categoryName, item: `https://circuits.com${canonicalPath}` },
+      { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://circuitcenter.ai/' },
+      { '@type': 'ListItem', position: 2, name: category.parent.name, item: `https://circuitcenter.ai/category/${category.parent.slug}` },
+      { '@type': 'ListItem', position: 3, name: categoryName, item: `https://circuitcenter.ai${canonicalPath}` },
     ],
   } : null;
 
@@ -309,9 +309,9 @@ export default function CategoryPage() {
     >
       {category && canonicalPath && (
         <Helmet>
-          <title>{categoryName} — Prices &amp; Distributors | Circuits.com</title>
+          <title>{categoryName} — Prices &amp; Distributors | CircuitCenter</title>
           <meta name="description" content={metaDescription} />
-          <link rel="canonical" href={`https://circuits.com${canonicalPath}`} />
+          <link rel="canonical" href={`https://circuitcenter.ai${canonicalPath}`} />
           {collectionPageJsonLd && (
             <script type="application/ld+json">{JSON.stringify(collectionPageJsonLd)}</script>
           )}

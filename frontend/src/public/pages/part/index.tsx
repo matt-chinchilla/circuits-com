@@ -109,12 +109,12 @@ export default function PartPage() {
     >
       {part && (
         <Helmet>
-          <title>{part.sku} by {part.manufacturer_name} — Buy from Distributors | Circuits.com</title>
+          <title>{part.sku} by {part.manufacturer_name} — Buy from Distributors | CircuitCenter</title>
           <meta
             name="description"
             content={`${part.description || part.sku}. Compare prices from distributors.${part.best_price != null ? ` Best price: $${part.best_price.toFixed(2)}` : ''}`}
           />
-          <link rel="canonical" href={`https://circuits.com/part/${part.slug ?? id}`} />
+          <link rel="canonical" href={`https://circuitcenter.ai/part/${part.slug ?? id}`} />
           <script type="application/ld+json">{JSON.stringify({
             "@context": "https://schema.org",
             "@type": "Product",

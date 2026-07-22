@@ -1,6 +1,6 @@
 ---
 name: theme-persistency-guard
-description: Verify that the active theme propagates correctly across every public sub-page of circuits.com (not just home), and audit per-page resource cost (DOM node count, animated-element count, transferred JS/CSS weight). Use after SCSS changes, theme-token edits, adding a new page route, or when the user reports "the theme only works on home". Catches the cross-page theme-gap bug class + resource regressions.
+description: Verify that the active theme propagates correctly across every public sub-page of circuitcenter.ai (not just home), and audit per-page resource cost (DOM node count, animated-element count, transferred JS/CSS weight). Use after SCSS changes, theme-token edits, adding a new page route, or when the user reports "the theme only works on home". Catches the cross-page theme-gap bug class + resource regressions.
 tools: Bash, Read, Glob, Grep, mcp__plugin_chrome-devtools-mcp_chrome-devtools__list_pages, mcp__plugin_chrome-devtools-mcp_chrome-devtools__navigate_page, mcp__plugin_chrome-devtools-mcp_chrome-devtools__emulate, mcp__plugin_chrome-devtools-mcp_chrome-devtools__evaluate_script, mcp__plugin_chrome-devtools-mcp_chrome-devtools__list_network_requests
 model: sonnet
 ---

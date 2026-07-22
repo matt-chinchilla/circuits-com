@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     # all hosts), or an attacker could poison the reset link sent to a victim
     # (host-header injection / password-reset poisoning). Override per-host in
     # the prod .env only with another trusted domain.
-    APP_BASE_URL: str = "https://circuits.com"
+    APP_BASE_URL: str = "https://circuitcenter.ai"
 
     # SMTP - when SMTP_HOST is unset, services/email.py runs in demo mode
     # (logs the email payload to stderr instead of sending). Lets local dev
@@ -26,12 +26,12 @@ class Settings(BaseSettings):
     SMTP_PORT: int = 587
     SMTP_USERNAME: str | None = None
     SMTP_PASSWORD: str | None = None
-    SMTP_FROM: str = "no-reply@circuits.com"
+    SMTP_FROM: str = "no-reply@circuitcenter.ai"
     # Annotated[..., NoDecode] tells pydantic-settings NOT to JSON-parse the
     # env var first. The validator below then handles both JSON-list form
-    # AND comma-separated string form. Loopback default for testing; flip
-    # via NOTIFY_RECIPIENTS=john@circuits.com,mike@circuits.com once verified.
-    NOTIFY_RECIPIENTS: Annotated[list[str], NoDecode] = ["no-reply@circuits.com"]
+    # AND comma-separated string form. Defaults to the owner's inbox so form
+    # submissions reach them; override via NOTIFY_RECIPIENTS env var.
+    NOTIFY_RECIPIENTS: Annotated[list[str], NoDecode] = ["mc@matthew-chirichella.com"]
 
     @field_validator("NOTIFY_RECIPIENTS", mode="before")
     @classmethod

@@ -88,7 +88,7 @@ export default function AvailabilityCheck({
 
         <div className={`${styles.availField} ${styles[`availField_${state}`]}`}>
           <span className={styles.availPre} aria-hidden="true">
-            circuits.com/keyword/
+            circuitcenter.ai/keyword/
           </span>
           <input
             id="avail-input"

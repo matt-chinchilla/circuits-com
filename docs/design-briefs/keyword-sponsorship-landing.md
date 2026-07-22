@@ -8,14 +8,14 @@
 
 ---
 
-## Background — what Circuits.com offers
+## Background — what CircuitCenter offers
 
-Circuits.com offers a **keyword sponsorship** product: a manufacturer or distributor pays to claim a specific search-keyword (e.g., `spi-flash`, `low-noise op-amps`, `mlcc`). When a visitor lands on `circuits.com/keyword/<that-word>`, the sponsor's logo, description, and contact info appear as a dedicated full-page card. The intended traffic source is sponsor-driven — paid ads, external links, SEO — not in-site navigation.
+CircuitCenter offers a **keyword sponsorship** product: a manufacturer or distributor pays to claim a specific search-keyword (e.g., `spi-flash`, `low-noise op-amps`, `mlcc`). When a visitor lands on `circuitcenter.ai/keyword/<that-word>`, the sponsor's logo, description, and contact info appear as a dedicated full-page card. The intended traffic source is sponsor-driven — paid ads, external links, SEO — not in-site navigation.
 
 That assumption left two real-world gaps:
 
 1. **No in-site discoverability.** A site visitor who is themselves a potential sponsor (manufacturer / distributor / brand interested in the offering) has no way to learn that the product exists. There's no navbar link, no footer link, no surfacing on search-result pages, no CTA on category pages. Revenue lead that's invisible to the lead.
-2. **The URL `circuits.com/keyword/` (no specific keyword) renders only the persistent PCB-banner backdrop and nothing else** — because the route `/keyword/:keyword` requires the `:keyword` param, and React Router falls through to no-match → blank render. This is the canonical entry-point URL someone would try first if they were exploring.
+2. **The URL `circuitcenter.ai/keyword/` (no specific keyword) renders only the persistent PCB-banner backdrop and nothing else** — because the route `/keyword/:keyword` requires the `:keyword` param, and React Router falls through to no-match → blank render. This is the canonical entry-point URL someone would try first if they were exploring.
 
 This brief commissions the design for **(a) a landing page at `/keyword/`** that replaces the blank-render bug AND becomes the discoverability surface, and **(b) a search empty-state CTA** that turns "no results for X" into "are you a vendor of X? sponsor this keyword →".
 

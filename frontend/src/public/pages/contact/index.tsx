@@ -6,25 +6,16 @@ import PageHeaderBand from "@public/components/layout/PageHeaderBand";
 import { api } from "@public/services/api";
 import styles from "./ContactPage.module.scss";
 
-// Founder roster — surfaced as schematic component designators (U1 / U2).
-// The U1/U2 monospace label is a load-bearing brand element (datasheet motif —
+// Founder roster — surfaced as schematic component designators (U1).
+// The U1 monospace label is a load-bearing brand element (datasheet motif —
 // see CLAUDE.md "Contact Page — Datasheet Card Motif"). Do not strip.
 const CONTACTS = [
   {
-    name: "John Tietjen",
-    title: "Founder / CEO",
-    email: "john@circuits.com",
-    phone: "631-495-0445",
-    initials: "JT",
+    name: "Matthew Chirichella",
+    title: "Founder",
+    email: "contact@circuitcenter.ai",
+    initials: "MC",
     des: "U1",
-  },
-  {
-    name: "Mike Kennedy, PhD",
-    title: "Co-Founder / COO",
-    email: "mike@circuits.com",
-    phone: "631-708-6040",
-    initials: "MK",
-    des: "U2",
   },
 ];
 
@@ -102,9 +93,9 @@ export default function ContactPage() {
         transition={{ duration: 0.15, ease: "easeInOut" as const }}
       >
         <Helmet>
-          <title>Contact Circuits.com — Get in Touch</title>
-          <meta name="description" content="Contact Circuits.com for questions about electronic component pricing, distributor listings, or partnership opportunities." />
-          <link rel="canonical" href="https://circuits.com/contact" />
+          <title>Contact CircuitCenter — Get in Touch</title>
+          <meta name="description" content="Contact CircuitCenter for questions about electronic component pricing, distributor listings, or partnership opportunities." />
+          <link rel="canonical" href="https://circuitcenter.ai/contact" />
         </Helmet>
         <PageHeaderBand
           page="contact"
@@ -176,11 +167,11 @@ export default function ContactPage() {
           >
             <header className={styles.contactInfoHead}>
               <span className={styles.contactInfoTag}>
-                CIRCUITS.COM · CONTACTS · U1, U2
+                CIRCUITCENTER · CONTACTS · U1
               </span>
               <h2 className={styles.contactInfoTitle}>Get in Touch</h2>
               <p className={styles.contactInfoDek}>
-                Two founders. Two direct lines. No gatekeepers, no ticket queue,
+                A direct line to the founder. No gatekeepers, no ticket queue,
                 no chatbot.
               </p>
             </header>
@@ -231,25 +222,6 @@ export default function ContactPage() {
                         ✉
                       </span>
                       <span className={styles.contactLineText}>{c.email}</span>
-                      <span
-                        className={styles.contactLineArrow}
-                        aria-hidden="true"
-                      >
-                        →
-                      </span>
-                    </a>
-                    <a
-                      className={styles.contactLine}
-                      href={`tel:${c.phone}`}
-                      aria-label={`Call ${c.name}`}
-                    >
-                      <span
-                        className={styles.contactLineIco}
-                        aria-hidden="true"
-                      >
-                        ☎
-                      </span>
-                      <span className={styles.contactLineText}>{c.phone}</span>
                       <span
                         className={styles.contactLineArrow}
                         aria-hidden="true"

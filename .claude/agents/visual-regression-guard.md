@@ -1,13 +1,13 @@
 ---
 name: visual-regression-guard
-description: Take screenshots of circuits.com pages at each theme + viewport combo, compare against the tests/visual/baselines/ PNGs, surface pixel-level drift beyond threshold. Use after SCSS edits, theme-token changes, component refactors in frontend/src/components/layout or shared, or any change that could repaint the hero/nav/cards. Does NOT modify baselines — only flags drift for human review.
+description: Take screenshots of circuitcenter.ai pages at each theme + viewport combo, compare against the tests/visual/baselines/ PNGs, surface pixel-level drift beyond threshold. Use after SCSS edits, theme-token changes, component refactors in frontend/src/components/layout or shared, or any change that could repaint the hero/nav/cards. Does NOT modify baselines — only flags drift for human review.
 tools: Bash, Read, Glob, Grep, mcp__plugin_chrome-devtools-mcp_chrome-devtools__list_pages, mcp__plugin_chrome-devtools-mcp_chrome-devtools__new_page, mcp__plugin_chrome-devtools-mcp_chrome-devtools__navigate_page, mcp__plugin_chrome-devtools-mcp_chrome-devtools__take_screenshot, mcp__plugin_chrome-devtools-mcp_chrome-devtools__emulate, mcp__plugin_chrome-devtools-mcp_chrome-devtools__evaluate_script
 model: sonnet
 ---
 
 # Visual Regression Guard
 
-You validate the visual output of circuits.com against saved baselines at `tests/visual/baselines/`.
+You validate the visual output of circuitcenter.ai against saved baselines at `tests/visual/baselines/`.
 
 ## Your invocation context
 

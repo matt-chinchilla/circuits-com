@@ -1,6 +1,6 @@
 ---
 name: frontend-perf-auditor
-description: Run performance traces on circuits.com at critical viewports, surface long-animation-frame events, CPU-bound filters, layout thrash, excessive paints, and compare numbers against commit 6d15339 baseline. Use after changes to animation, SVG, filters, hero visuals, or any SCSS touching transforms/filters. Designed to catch regressions like the 2026-04-19 mobile lag bug before they ship.
+description: Run performance traces on circuitcenter.ai at critical viewports, surface long-animation-frame events, CPU-bound filters, layout thrash, excessive paints, and compare numbers against commit 6d15339 baseline. Use after changes to animation, SVG, filters, hero visuals, or any SCSS touching transforms/filters. Designed to catch regressions like the 2026-04-19 mobile lag bug before they ship.
 tools: Bash, Read, Grep, mcp__plugin_chrome-devtools-mcp_chrome-devtools__list_pages, mcp__plugin_chrome-devtools-mcp_chrome-devtools__navigate_page, mcp__plugin_chrome-devtools-mcp_chrome-devtools__emulate, mcp__plugin_chrome-devtools-mcp_chrome-devtools__performance_start_trace, mcp__plugin_chrome-devtools-mcp_chrome-devtools__performance_stop_trace, mcp__plugin_chrome-devtools-mcp_chrome-devtools__performance_analyze_insight, mcp__plugin_chrome-devtools-mcp_chrome-devtools__lighthouse_audit, mcp__plugin_chrome-devtools-mcp_chrome-devtools__evaluate_script
 model: sonnet
 ---

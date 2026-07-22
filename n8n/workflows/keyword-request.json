@@ -61,8 +61,8 @@
       "typeVersion": 2,
       "position": [690, 300],
       "parameters": {
-        "fromEmail": "noreply@circuits.com",
-        "toEmail": "john@circuits.com",
+        "fromEmail": "noreply@circuitcenter.ai",
+        "toEmail": "contact@circuitcenter.ai",
         "subject": "Keyword Sponsorship Request: {{ $json.keyword }}",
         "emailType": "text",
         "text": "New keyword sponsorship request:\n\nCompany: {{ $json.company_name }}\nEmail: {{ $json.email }}\nKeyword: {{ $json.keyword }}\n\nMessage:\n{{ $json.message }}"

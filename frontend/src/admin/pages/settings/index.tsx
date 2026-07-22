@@ -129,13 +129,13 @@ const LS_KEYS = {
 
 const DEFAULTS: SettingsState = {
   general: {
-    siteName: 'Circuits.com',
+    siteName: 'CircuitCenter',
     defaultTheme: 'base',
     timezone: 'America/New_York',
     demoDataDefault: true,
   },
   account: {
-    email: 'matt@circuits.com',
+    email: 'matt@circuitcenter.ai',
     twoFactor: false,
     lastLogin: '2026-04-25 08:42 EDT',
   },
@@ -161,7 +161,7 @@ const DEFAULTS: SettingsState = {
       },
     ],
     webhooks: [
-      { id: 'wh-stripe', label: 'Stripe payment events', url: 'https://hooks.circuits.com/stripe' },
+      { id: 'wh-stripe', label: 'Stripe payment events', url: 'https://hooks.circuitcenter.ai/stripe' },
       { id: 'wh-n8n', label: 'n8n form intake', url: 'http://n8n:5678/webhook/contact' },
     ],
     slackWorkspace: '',

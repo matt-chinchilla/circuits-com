@@ -19,7 +19,7 @@ export default function AuthShell({ children }: { children: ReactNode }) {
           <div className="brand-top">
             <span className="logo">
               <span className="logo-node" />
-              <span className="logo-word">Circuits.com</span>
+              <span className="logo-word">CircuitCenter</span>
             </span>
             <span className="brand-tag">Account</span>
           </div>
@@ -33,7 +33,7 @@ export default function AuthShell({ children }: { children: ReactNode }) {
             </h1>
             <p className="brand-sub">
               Search millions of components, track the parts you need and manage your
-              Circuits.com account &mdash; all from one secure place.
+              CircuitCenter account &mdash; all from one secure place.
             </p>
           </div>
           <div className="brand-foot">
@@ -44,7 +44,7 @@ export default function AuthShell({ children }: { children: ReactNode }) {
             <span className="sep" />
             <span className="stat hide-sm">TLS 1.3 &middot; AES-256</span>
             <span className="sep hide-sm" />
-            <span className="stat hide-sm">U1 &middot; circuits.com</span>
+            <span className="stat hide-sm">U1 &middot; circuitcenter.ai</span>
           </div>
         </aside>
 
@@ -63,7 +63,7 @@ export default function AuthShell({ children }: { children: ReactNode }) {
             Protected access &middot; <Link to="/privacy">Privacy</Link> &middot;{' '}
             <Link to="/terms">Terms</Link>
             <br />
-            &copy; 2026 Circuits.com &mdash; All rights reserved.
+            &copy; 2026 CircuitCenter &mdash; All rights reserved.
           </p>
         </main>
       </div>

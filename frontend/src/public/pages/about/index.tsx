@@ -137,13 +137,13 @@ export default function AboutPage() {
       className={styles.aboutPage}
     >
       <Helmet>
-        <title>About Circuits.com — The Integrated Circuits Directory</title>
-        <meta name="description" content="Learn about Circuits.com — the integrated circuits directory connecting buyers, suppliers, and engineers. Compare prices from 57 distributors." />
-        <link rel="canonical" href="https://circuits.com/about" />
+        <title>About CircuitCenter — The Integrated Circuits Directory</title>
+        <meta name="description" content="Learn about CircuitCenter — the integrated circuits directory connecting buyers, suppliers, and engineers. Compare prices from 57 distributors." />
+        <link rel="canonical" href="https://circuitcenter.ai/about" />
       </Helmet>
       <PageHeaderBand
         page="about"
-        title="About Circuits.com"
+        title="About CircuitCenter"
         subtitle="The trusted directory for integrated circuits — connecting buyers, suppliers, and engineers since 2003."
       />
 
@@ -214,9 +214,9 @@ export default function AboutPage() {
         className={`${styles.aboutSection} ${styles.aboutWhy} ${whySeen ? styles.seen : ''}`}
       >
         <div className={styles.aboutWhyInner}>
-          <h2 className={styles.aboutSectionTitle}>Why Circuits.com?</h2>
+          <h2 className={styles.aboutSectionTitle}>Why CircuitCenter?</h2>
           <p className={styles.aboutWhyLead}>
-            For over two decades, Circuits.com has been the go-to resource for engineers and
+            For over two decades, CircuitCenter has been the go-to resource for engineers and
             purchasing managers sourcing integrated circuits, semiconductors, passive components,
             and modules. We don&rsquo;t sell parts &mdash; we make them findable.
           </p>
