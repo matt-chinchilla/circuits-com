@@ -78,7 +78,7 @@ export default function SearchPage() {
     >
 
       <Helmet>
-        <title>{q ? `${q} — Search Results | CircuitCenter` : 'Search Electronic Components | CircuitCenter'}</title>
+        <title>{q ? `${q} — Search Results | Circuit Center` : 'Search Electronic Components | Circuit Center'}</title>
         <meta name="robots" content="noindex, follow" />
       </Helmet>
       <div className={styles.searchHeader}>

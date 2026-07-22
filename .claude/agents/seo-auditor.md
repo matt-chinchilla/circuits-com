@@ -51,7 +51,7 @@ The caller gives you a target — respond differently per type:
 
 Fetch the raw HTML (what Googlebot sees before JS) with `curl -sL -A 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)' <url>`.
 
-1. **Title tag** — present, 50-60 chars, keyword near the start, brand suffix (`| CircuitCenter`).
+1. **Title tag** — present, 50-60 chars, keyword near the start, brand suffix (`| Circuit Center`).
 2. **Meta description** — present, 150-160 chars, contains CTA and count/specific detail.
 3. **Canonical** — present, points to `https://circuitcenter.ai/...`, no trailing slash unless consistent with sitemap.
 4. **Open Graph** — `og:title`, `og:description`, `og:image`, `og:type`, `og:url` all present.

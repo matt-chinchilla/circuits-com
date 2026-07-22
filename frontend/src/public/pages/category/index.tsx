@@ -259,7 +259,7 @@ export default function CategoryPage() {
 
   const categoryName = category?.name ?? '';
   const metaDescription = category?.description
-    ?? `Compare prices for ${categoryName} components from top distributors on CircuitCenter.`;
+    ?? `Compare prices for ${categoryName} components from top distributors on Circuit Center.`;
 
   const collectionPageJsonLd = category && canonicalPath ? {
     '@context': 'https://schema.org',
@@ -309,7 +309,7 @@ export default function CategoryPage() {
     >
       {category && canonicalPath && (
         <Helmet>
-          <title>{categoryName} — Prices &amp; Distributors | CircuitCenter</title>
+          <title>{categoryName} — Prices &amp; Distributors | Circuit Center</title>
           <meta name="description" content={metaDescription} />
           <link rel="canonical" href={`https://circuitcenter.ai${canonicalPath}`} />
           {collectionPageJsonLd && (

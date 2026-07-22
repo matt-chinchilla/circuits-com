@@ -72,7 +72,7 @@ export default function MessageReplyPanel({ m, onSend }: Props) {
             key={t}
             type="button"
             className={styles.tmplChip}
-            onClick={() => setBody((b) => b || `${t}.\n\n— CircuitCenter`)}
+            onClick={() => setBody((b) => b || `${t}.\n\n— Circuit Center`)}
           >
             <Reply size={11} strokeWidth={2} />
             {t}

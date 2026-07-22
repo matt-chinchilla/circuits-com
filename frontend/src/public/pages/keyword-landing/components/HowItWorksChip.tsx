@@ -54,7 +54,7 @@ export default function HowItWorksChip({ steps }: HowItWorksChipProps) {
       <div className={styles.howChipStage}>
         {/* IC body — 15-pin top + 15-pin bottom layout */}
         <div className={styles.howChipBody} aria-hidden="true">
-          <span className={styles.howChipMarking}>CIRCUITCENTER · KW-SPONSOR</span>
+          <span className={styles.howChipMarking}>CIRCUIT CENTER · KW-SPONSOR</span>
           <span className={styles.howChipPin1Dot} aria-hidden="true" />
           <div className={`${styles.howChipPinRow} ${styles.pinRowTop}`}>
             {Array.from({ length: PINS_PER_ROW }).map((_, i) => (

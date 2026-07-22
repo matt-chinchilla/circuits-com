@@ -83,8 +83,8 @@ export default function KeywordLandingPage() {
          /keyword into the standard inner-page contract; previously the
          page jumped straight into section 01 with no top-band signature. */}
       <Helmet>
-        <title>Keyword Sponsorship — Promote Your Brand | CircuitCenter</title>
-        <meta name="description" content="Sponsor a keyword on CircuitCenter. Own the search term your buyers type — one sponsor per keyword, live in 48 hours, month-to-month." />
+        <title>Keyword Sponsorship — Promote Your Brand | Circuit Center</title>
+        <meta name="description" content="Sponsor a keyword on Circuit Center. Own the search term your buyers type — one sponsor per keyword, live in 48 hours, month-to-month." />
         <link rel="canonical" href="https://circuitcenter.ai/keyword" />
       </Helmet>
       <PageHeaderBand
@@ -129,7 +129,7 @@ export default function KeywordLandingPage() {
               <span className={styles.sponsorSectionNum}>02</span>
               <h2 id="sponsor-spec-title">The short version.</h2>
               <p>
-                You pay to own a search term. When a buyer searches it on CircuitCenter, your
+                You pay to own a search term. When a buyer searches it on Circuit Center, your
                 sponsor card answers — logo, one paragraph, a buy-link, and a way to reach you.
               </p>
             </header>
@@ -168,7 +168,7 @@ export default function KeywordLandingPage() {
                   See a live example: <code>/keyword/rp2040</code> &rarr;
                 </Link>
                 <span className={styles.sponsorSpecFootRev}>
-                  &copy; 2026 CircuitCenter · APP-NOTE · KW-SP-001
+                  &copy; 2026 Circuit Center · APP-NOTE · KW-SP-001
                 </span>
               </footer>
             </article>

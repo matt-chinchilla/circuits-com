@@ -304,7 +304,7 @@ export default function AdminLayout({ children, role = 'admin' }: AdminLayoutPro
         <Link to="/admin" className={styles.sideBrand}>
           <div className={styles.sideBrandMark}>C</div>
           <div>
-            <div className={styles.sideBrandName}>CircuitCenter</div>
+            <div className={styles.sideBrandName}>Circuit Center</div>
             <div className={styles.sideBrandRole}>Admin</div>
           </div>
         </Link>

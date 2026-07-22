@@ -93,8 +93,8 @@ export default function ContactPage() {
         transition={{ duration: 0.15, ease: "easeInOut" as const }}
       >
         <Helmet>
-          <title>Contact CircuitCenter — Get in Touch</title>
-          <meta name="description" content="Contact CircuitCenter for questions about electronic component pricing, distributor listings, or partnership opportunities." />
+          <title>Contact Circuit Center — Get in Touch</title>
+          <meta name="description" content="Contact Circuit Center for questions about electronic component pricing, distributor listings, or partnership opportunities." />
           <link rel="canonical" href="https://circuitcenter.ai/contact" />
         </Helmet>
         <PageHeaderBand
@@ -167,7 +167,7 @@ export default function ContactPage() {
           >
             <header className={styles.contactInfoHead}>
               <span className={styles.contactInfoTag}>
-                CIRCUITCENTER · CONTACTS · U1
+                CIRCUIT CENTER · CONTACTS · U1
               </span>
               <h2 className={styles.contactInfoTitle}>Get in Touch</h2>
               <p className={styles.contactInfoDek}>

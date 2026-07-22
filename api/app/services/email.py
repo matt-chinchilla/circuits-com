@@ -134,18 +134,18 @@ async def send_join_autoreply(form) -> None:
     body = (
         f"Hi {form.contact_person},\n"
         "\n"
-        f"Thanks for applying to list {form.company_name} on CircuitCenter.\n"
+        f"Thanks for applying to list {form.company_name} on Circuit Center.\n"
         "\n"
         "Our team will review your submission and get back to you within\n"
         "1-2 business days. If you have time-sensitive questions, you can reach\n"
         "us directly at contact@circuitcenter.ai.\n"
         "\n"
-        "- The CircuitCenter Team\n"
+        "- The Circuit Center Team\n"
     )
     msg = EmailMessage()
     msg["From"] = settings.SMTP_FROM
     msg["To"] = form.email
-    msg["Subject"] = "We received your application — CircuitCenter"
+    msg["Subject"] = "We received your application — Circuit Center"
     msg.set_content(body)
     await _smtp_send(msg)
 
@@ -199,7 +199,7 @@ def _build_password_reset(to_email: str, username: str, reset_url: str) -> Email
     body = (
         f"Hi {username},\n"
         "\n"
-        "We received a request to reset the password on your CircuitCenter\n"
+        "We received a request to reset the password on your Circuit Center\n"
         "account. Use the secure link below to choose a new password:\n"
         "\n"
         f"{reset_url}\n"
@@ -208,12 +208,12 @@ def _build_password_reset(to_email: str, username: str, reset_url: str) -> Email
         "request a reset, you can safely ignore this email — your password won't\n"
         "change.\n"
         "\n"
-        "- The CircuitCenter Team\n"
+        "- The Circuit Center Team\n"
     )
     msg = EmailMessage()
     msg["From"] = settings.SMTP_FROM
     msg["To"] = to_email
-    msg["Subject"] = "Reset your CircuitCenter password"
+    msg["Subject"] = "Reset your Circuit Center password"
     msg.set_content(body)
     return msg
 
@@ -224,7 +224,7 @@ def _build_username_reminder(to_email: str, usernames: list[str]) -> EmailMessag
     body = (
         "Hi,\n"
         "\n"
-        "You asked us to remind you of the username on your CircuitCenter account.\n"
+        "You asked us to remind you of the username on your Circuit Center account.\n"
         f"The {'usernames' if len(usernames) > 1 else 'username'} linked to this "
         "email address:\n"
         "\n"
@@ -233,12 +233,12 @@ def _build_username_reminder(to_email: str, usernames: list[str]) -> EmailMessag
         "Head to https://circuitcenter.ai/admin/login to sign in. If you didn't make\n"
         "this request, you can ignore this email.\n"
         "\n"
-        "- The CircuitCenter Team\n"
+        "- The Circuit Center Team\n"
     )
     msg = EmailMessage()
     msg["From"] = settings.SMTP_FROM
     msg["To"] = to_email
-    msg["Subject"] = "Your CircuitCenter username"
+    msg["Subject"] = "Your Circuit Center username"
     msg.set_content(body)
     return msg
 

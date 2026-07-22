@@ -7,7 +7,7 @@ import { useCategories } from "@public/hooks/useCategories";
 const WEBSITE_JSONLD = JSON.stringify({
   "@context": "https://schema.org",
   "@type": "WebSite",
-  name: "CircuitCenter",
+  name: "Circuit Center",
   url: "https://circuitcenter.ai/",
   potentialAction: {
     "@type": "SearchAction",
@@ -27,7 +27,7 @@ export default function HomePage() {
       transition={{ duration: 0.15, ease: "easeInOut" as const }}
     >
       <Helmet>
-        <title>The Integrated Circuits Directory — Compare Prices &amp; Distributors | CircuitCenter</title>
+        <title>The Integrated Circuits Directory — Compare Prices &amp; Distributors | Circuit Center</title>
         <meta name="description" content="Compare prices and stock for 3,600+ electronic components from 57 distributors. ICs, MCUs, sensors, and more." />
         <link rel="canonical" href="https://circuitcenter.ai/" />
         <script type="application/ld+json">{WEBSITE_JSONLD}</script>

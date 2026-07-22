@@ -202,13 +202,13 @@ export default function JoinPage() {
       transition={{ duration: 0.15, ease: "easeInOut" as const }}
     >
       <Helmet>
-        <title>Join CircuitCenter — List Your Components | Distributors Welcome</title>
-        <meta name="description" content="List your electronic components on CircuitCenter. Reach engineers and buyers searching for ICs, MCUs, sensors, and more from 57+ distributors." />
+        <title>Join Circuit Center — List Your Components | Distributors Welcome</title>
+        <meta name="description" content="List your electronic components on Circuit Center. Reach engineers and buyers searching for ICs, MCUs, sensors, and more from 57+ distributors." />
         <link rel="canonical" href="https://circuitcenter.ai/join" />
       </Helmet>
       <PageHeaderBand
         page="join"
-        title="Join CircuitCenter"
+        title="Join Circuit Center"
         subtitle="Get your company listed in our electronic components directory."
       />
 

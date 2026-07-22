@@ -286,7 +286,7 @@ CATEGORY_DESCRIPTIONS: dict[str, str] = {
         " automotive ECUs, and server power rails. Leading manufacturers include Texas"
         " Instruments, Analog Devices, Monolithic Power Systems, ON Semiconductor,"
         " and STMicroelectronics. Compare datasheets, pricing, and stock across"
-        " authorized distributors on CircuitCenter."
+        " authorized distributors on Circuit Center."
     ),
     "microcontrollers-processors": (
         "Microcontrollers and processors form the computational heart of embedded systems."
@@ -304,7 +304,7 @@ CATEGORY_DESCRIPTIONS: dict[str, str] = {
         " ranging from general-purpose to precision and low-noise grades, voltage comparators,"
         " analog multiplexers and switches, precision voltage references, and instrumentation"
         " amplifiers for sensor front-ends. Key manufacturers are Texas Instruments, Analog"
-        " Devices, Maxim Integrated, Microchip, and ON Semiconductor. Use CircuitCenter to"
+        " Devices, Maxim Integrated, Microchip, and ON Semiconductor. Use Circuit Center to"
         " compare specifications, unit pricing at volume, and real-time stock levels across"
         " major distributors."
     ),
@@ -323,7 +323,7 @@ CATEGORY_DESCRIPTIONS: dict[str, str] = {
         " Browse EEPROMs for configuration storage, NOR flash for execute-in-place firmware,"
         " NAND flash for high-density data logging, SRAM for low-latency cache and buffers,"
         " and DRAM for large working-memory pools. Leading suppliers include Micron, Samsung,"
-        " Winbond, ISSI, Infineon, and Microchip. CircuitCenter lets you compare pricing across"
+        " Winbond, ISSI, Infineon, and Microchip. Circuit Center lets you compare pricing across"
         " package types, densities, and speed grades from dozens of authorized distributors"
         " worldwide."
     ),

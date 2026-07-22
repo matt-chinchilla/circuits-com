@@ -37,7 +37,7 @@ const SECTIONS: Section[] = [
     num: "01",
     title: "Scope",
     body: [
-      'This Privacy Policy describes how CircuitCenter ("we", "us", "our") collects, uses, and shares information when you visit circuitcenter.ai or use any service we operate (collectively, the "Service").',
+      'This Privacy Policy describes how Circuit Center ("we", "us", "our") collects, uses, and shares information when you visit circuitcenter.ai or use any service we operate (collectively, the "Service").',
       "By using the Service you agree to the practices described here. If you do not agree, please do not use the Service.",
     ],
   },
@@ -66,9 +66,9 @@ const SECTIONS: Section[] = [
     title: "How We Share Information",
     body: [
       "Service providers. We share information with vendors who help us operate the Service (e.g. hosting, analytics, email delivery). These providers are contractually limited to processing data on our behalf.",
-      "Distributors. When you click a buy-link, you leave CircuitCenter and enter the distributor's own website under their terms and privacy policy. We do not transmit your identity to the distributor unless you tell them yourself by signing in there.",
+      "Distributors. When you click a buy-link, you leave Circuit Center and enter the distributor's own website under their terms and privacy policy. We do not transmit your identity to the distributor unless you tell them yourself by signing in there.",
       "Legal. We may disclose information when we believe in good faith that disclosure is required by law, court order, or to protect the rights, property, or safety of any person.",
-      "Business transfers. If CircuitCenter is involved in a merger, acquisition, or sale of assets, information may be transferred as part of that transaction.",
+      "Business transfers. If Circuit Center is involved in a merger, acquisition, or sale of assets, information may be transferred as part of that transaction.",
     ],
   },
   {
@@ -118,7 +118,7 @@ const SECTIONS: Section[] = [
     num: "10",
     title: "International Transfers",
     body: [
-      "CircuitCenter is operated from the United States. If you access the Service from outside the United States, your information may be transferred to, stored in, and processed in the United States or other countries with different data protection laws than your jurisdiction.",
+      "Circuit Center is operated from the United States. If you access the Service from outside the United States, your information may be transferred to, stored in, and processed in the United States or other countries with different data protection laws than your jurisdiction.",
     ],
   },
   {
@@ -134,7 +134,7 @@ const SECTIONS: Section[] = [
     num: "12",
     title: "Contact Us",
     body: [
-      "Questions, requests, or complaints regarding this Policy may be sent to privacy@circuitcenter.ai or by mail to CircuitCenter, Attn: Privacy, 1 Industry Park Way, Brookhaven, NY 11719, USA.",
+      "Questions, requests, or complaints regarding this Policy may be sent to privacy@circuitcenter.ai or by mail to Circuit Center, Attn: Privacy, 1 Industry Park Way, Brookhaven, NY 11719, USA.",
     ],
   },
 ];
@@ -149,7 +149,7 @@ const LICENSES: License[] = [
   {
     tag: "MIT-style",
     name: "Site Content License",
-    body: 'Copyright (c) 2003–2026 CircuitCenter. Permission is hereby granted, free of charge, to any person obtaining a copy of the publicly displayed directory pages of circuitcenter.ai ("the Content"), to use, copy, reference, and link to the Content for personal, educational, or internal engineering use, subject to the following conditions: the above copyright notice and this permission notice shall be included in all substantial reproductions; bulk scraping, automated re-distribution, or resale of the Content is prohibited without written consent. THE CONTENT IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.',
+    body: 'Copyright (c) 2003–2026 Circuit Center. Permission is hereby granted, free of charge, to any person obtaining a copy of the publicly displayed directory pages of circuitcenter.ai ("the Content"), to use, copy, reference, and link to the Content for personal, educational, or internal engineering use, subject to the following conditions: the above copyright notice and this permission notice shall be included in all substantial reproductions; bulk scraping, automated re-distribution, or resale of the Content is prohibited without written consent. THE CONTENT IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.',
   },
   {
     tag: "Trademarks",
@@ -159,7 +159,7 @@ const LICENSES: License[] = [
   {
     tag: "Datasheets",
     name: "Distributor Data",
-    body: "Stock levels, pricing, and lead-time information are aggregated under license from participating authorized distributors and are subject to their own terms of use. CircuitCenter makes no warranty as to the accuracy or timeliness of any third-party data displayed.",
+    body: "Stock levels, pricing, and lead-time information are aggregated under license from participating authorized distributors and are subject to their own terms of use. Circuit Center makes no warranty as to the accuracy or timeliness of any third-party data displayed.",
   },
 ];
 
@@ -211,8 +211,8 @@ export default function PrivacyPage() {
       transition={{ duration: 0.15, ease: "easeInOut" as const }}
     >
       <Helmet>
-        <title>Privacy Policy | CircuitCenter</title>
-        <meta name="description" content="CircuitCenter privacy policy — how we handle your data, cookies, and third-party services." />
+        <title>Privacy Policy | Circuit Center</title>
+        <meta name="description" content="Circuit Center privacy policy — how we handle your data, cookies, and third-party services." />
         <link rel="canonical" href="https://circuitcenter.ai/privacy" />
       </Helmet>
       <PageHeaderBand

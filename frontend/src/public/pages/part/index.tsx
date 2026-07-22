@@ -109,7 +109,7 @@ export default function PartPage() {
     >
       {part && (
         <Helmet>
-          <title>{part.sku} by {part.manufacturer_name} — Buy from Distributors | CircuitCenter</title>
+          <title>{part.sku} by {part.manufacturer_name} — Buy from Distributors | Circuit Center</title>
           <meta
             name="description"
             content={`${part.description || part.sku}. Compare prices from distributors.${part.best_price != null ? ` Best price: $${part.best_price.toFixed(2)}` : ''}`}

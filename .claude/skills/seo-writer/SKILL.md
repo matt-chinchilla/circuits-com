@@ -25,7 +25,7 @@ If the caller is vague, ask only for what's missing: slug, category list, suppli
 ## Constants for this site
 
 ```
-SITE_NAME      = "CircuitCenter"
+SITE_NAME      = "Circuit Center"
 SITE_TAGLINE   = "Electronic Components Directory"
 BASE_URL       = "https://circuitcenter.ai"
 DEFAULT_OG_IMG = "https://circuitcenter.ai/og-default.png"  (1200×630, must exist)
@@ -40,7 +40,7 @@ Every output has the same 7-section shape. Fill the slots per type.
 ### 1. Home (`/`)
 
 ```
-SLOT TITLE       → "CircuitCenter — Electronic Components Directory & Supplier Search"
+SLOT TITLE       → "Circuit Center — Electronic Components Directory & Supplier Search"
 SLOT DESCRIPTION → "Find trusted electronic component suppliers in seconds. Search by category, part number, or distributor. Free directory with live stock links to Digi-Key, Mouser, Arrow, and more."
 SLOT CANONICAL   → "https://circuitcenter.ai/"
 SLOT OG_TYPE     → "website"
@@ -53,7 +53,7 @@ JSON-LD skeleton:
 {
   "@context": "https://schema.org",
   "@type": "WebSite",
-  "name": "CircuitCenter",
+  "name": "Circuit Center",
   "url": "https://circuitcenter.ai/",
   "potentialAction": {
     "@type": "SearchAction",
@@ -69,7 +69,7 @@ JSON-LD skeleton:
 ### 2. Category page (`/c/<slug>`)
 
 ```
-SLOT TITLE       → "{Category Name} Suppliers & Distributors | CircuitCenter"
+SLOT TITLE       → "{Category Name} Suppliers & Distributors | Circuit Center"
                    (keep ≤ 60 chars; shorten category if needed)
 SLOT DESCRIPTION → "Find {N} trusted {category} suppliers. Compare stock, data sheets, and pricing from authorized distributors including {top-3-supplier-names}. Free sourcing directory."
                    (150-160 chars — if N is small or top-3 unknown, rephrase)
@@ -120,7 +120,7 @@ JSON-LD skeleton (two blocks — one CollectionPage, one BreadcrumbList):
 ### 3. Supplier page (`/supplier/<slug>`)
 
 ```
-SLOT TITLE       → "{Supplier Name} — {Top-2 Categories} Distributor | CircuitCenter"
+SLOT TITLE       → "{Supplier Name} — {Top-2 Categories} Distributor | Circuit Center"
 SLOT DESCRIPTION → "Contact {Supplier Name} for {category-list}. Phone, email, website, and stocked categories. {Authorized|Independent} distributor. Free supplier directory."
 SLOT CANONICAL   → "https://circuitcenter.ai/supplier/{slug}"
 SLOT OG_TYPE     → "profile"
@@ -150,7 +150,7 @@ JSON-LD skeleton:
 ### 4. Part page (future — `/part/<mpn>-<manufacturer-slug>`)
 
 ```
-SLOT TITLE       → "{MPN} — {Short Description} | CircuitCenter"
+SLOT TITLE       → "{MPN} — {Short Description} | Circuit Center"
 SLOT DESCRIPTION → "{MPN} by {Manufacturer}. {brief spec: key params}. In stock at {supplier count} distributors. Data sheet, pricing, alternatives."
 SLOT CANONICAL   → "https://circuitcenter.ai/part/{mpn}-{manufacturer-slug}"
 SLOT OG_TYPE     → "product"
@@ -186,11 +186,11 @@ JSON-LD skeleton:
 Simpler shape — no ItemList or Product schema needed:
 
 ```
-about:    title = "About CircuitCenter | Electronic Components Directory"
+about:    title = "About Circuit Center | Electronic Components Directory"
           type  = WebPage
-contact:  title = "Contact CircuitCenter | Supplier Directory Support"
+contact:  title = "Contact Circuit Center | Supplier Directory Support"
           type  = ContactPage (Schema.org has this built-in)
-join:     title = "List Your Company on CircuitCenter | Free Supplier Listing"
+join:     title = "List Your Company on Circuit Center | Free Supplier Listing"
           type  = WebPage
 ```
 
@@ -215,11 +215,11 @@ import { Helmet } from 'react-helmet-async';
 export function CategorySeo({ category, suppliers, topSupplierNames }) {
   return (
     <Helmet>
-      <title>{category.name} Suppliers & Distributors | CircuitCenter</title>
+      <title>{category.name} Suppliers & Distributors | Circuit Center</title>
       <meta name="description" content={`Find ${suppliers.length} trusted ${category.name.toLowerCase()} suppliers...`} />
       <link rel="canonical" href={`https://circuitcenter.ai/c/${category.slug}`} />
       {/* Open Graph */}
-      <meta property="og:title" content={`${category.name} Suppliers & Distributors | CircuitCenter`} />
+      <meta property="og:title" content={`${category.name} Suppliers & Distributors | Circuit Center`} />
       <meta property="og:description" content="..." />
       <meta property="og:url" content={`https://circuitcenter.ai/c/${category.slug}`} />
       <meta property="og:image" content="https://circuitcenter.ai/og-default.png" />
@@ -240,7 +240,7 @@ export function CategorySeo({ category, suppliers, topSupplierNames }) {
 ### (c) Raw HTML block (for `index.html` / Vite SSG / pre-rendering)
 
 ```html
-<title>{Category Name} Suppliers & Distributors | CircuitCenter</title>
+<title>{Category Name} Suppliers & Distributors | Circuit Center</title>
 <meta name="description" content="Find N trusted {category} suppliers. Compare stock, data sheets, and pricing from authorized distributors including A, B, C. Free sourcing directory.">
 <link rel="canonical" href="https://circuitcenter.ai/c/{slug}">
 
@@ -281,7 +281,7 @@ Input:
 > `category: Capacitors, slug=capacitors, 12 suppliers, top 3: Digi-Key, Mouser, Arrow`
 
 Output (condensed):
-- Title: `Capacitor Suppliers & Distributors | CircuitCenter` (49 chars ✓)
+- Title: `Capacitor Suppliers & Distributors | Circuit Center` (49 chars ✓)
 - Description: `Find 12 trusted capacitor suppliers. Compare stock, data sheets, and pricing from authorized distributors including Digi-Key, Mouser, Arrow. Free sourcing directory.` (159 chars ✓)
 - + canonical, OG, Twitter, CollectionPage JSON-LD, BreadcrumbList JSON-LD
 - JSX block + raw HTML block

@@ -174,7 +174,7 @@ export const FLOWS: Flow[] = [
         title: 'See it on the live site',
         body: () => (
           <>
-            This is the public-facing CircuitCenter — note how <b>{supplierNameFromPage()}</b> now
+            This is the public-facing Circuit Center — note how <b>{supplierNameFromPage()}</b> now
             appears as the <i>Featured Supplier</i> in the category page sidebar. Adding through
             the admin propagates to the directory immediately.
           </>

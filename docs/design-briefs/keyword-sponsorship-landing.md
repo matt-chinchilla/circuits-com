@@ -8,9 +8,9 @@
 
 ---
 
-## Background — what CircuitCenter offers
+## Background — what Circuit Center offers
 
-CircuitCenter offers a **keyword sponsorship** product: a manufacturer or distributor pays to claim a specific search-keyword (e.g., `spi-flash`, `low-noise op-amps`, `mlcc`). When a visitor lands on `circuitcenter.ai/keyword/<that-word>`, the sponsor's logo, description, and contact info appear as a dedicated full-page card. The intended traffic source is sponsor-driven — paid ads, external links, SEO — not in-site navigation.
+Circuit Center offers a **keyword sponsorship** product: a manufacturer or distributor pays to claim a specific search-keyword (e.g., `spi-flash`, `low-noise op-amps`, `mlcc`). When a visitor lands on `circuitcenter.ai/keyword/<that-word>`, the sponsor's logo, description, and contact info appear as a dedicated full-page card. The intended traffic source is sponsor-driven — paid ads, external links, SEO — not in-site navigation.
 
 That assumption left two real-world gaps:
 

@@ -1,4 +1,4 @@
-# CircuitCenter
+# Circuit Center
 
 Electronic components directory prototype — Vite React SPA + FastAPI + PostgreSQL, all in Docker. Live at [circuitcenter.ai](https://circuitcenter.ai). Built as a functional demo of a modern, animated redesign with category browsing, distributor price comparison, keyword sponsorships, and an admin console with a guided onboarding wizard.
 

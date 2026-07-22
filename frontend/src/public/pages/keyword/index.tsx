@@ -77,7 +77,7 @@ export default function KeywordSponsorPage() {
 
   const keywordHelmet = (
     <Helmet>
-      <title>{keyword ? `${keyword} — Sponsored Results | CircuitCenter` : 'Keyword Sponsorship | CircuitCenter'}</title>
+      <title>{keyword ? `${keyword} — Sponsored Results | Circuit Center` : 'Keyword Sponsorship | Circuit Center'}</title>
     </Helmet>
   );
 

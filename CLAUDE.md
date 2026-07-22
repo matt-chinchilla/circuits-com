@@ -1,4 +1,4 @@
-# CircuitCenter
+# Circuit Center
 
 Electronic components directory prototype — Vite React SPA + FastAPI + PostgreSQL + n8n, all in Docker.
 

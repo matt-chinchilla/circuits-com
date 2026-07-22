@@ -129,7 +129,7 @@ const LS_KEYS = {
 
 const DEFAULTS: SettingsState = {
   general: {
-    siteName: 'CircuitCenter',
+    siteName: 'Circuit Center',
     defaultTheme: 'base',
     timezone: 'America/New_York',
     demoDataDefault: true,

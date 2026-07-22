@@ -19,7 +19,7 @@ export default function AuthShell({ children }: { children: ReactNode }) {
           <div className="brand-top">
             <span className="logo">
               <span className="logo-node" />
-              <span className="logo-word">CircuitCenter</span>
+              <span className="logo-word">Circuit Center</span>
             </span>
             <span className="brand-tag">Account</span>
           </div>
@@ -33,7 +33,7 @@ export default function AuthShell({ children }: { children: ReactNode }) {
             </h1>
             <p className="brand-sub">
               Search millions of components, track the parts you need and manage your
-              CircuitCenter account &mdash; all from one secure place.
+              Circuit Center account &mdash; all from one secure place.
             </p>
           </div>
           <div className="brand-foot">
@@ -63,7 +63,7 @@ export default function AuthShell({ children }: { children: ReactNode }) {
             Protected access &middot; <Link to="/privacy">Privacy</Link> &middot;{' '}
             <Link to="/terms">Terms</Link>
             <br />
-            &copy; 2026 CircuitCenter &mdash; All rights reserved.
+            &copy; 2026 Circuit Center &mdash; All rights reserved.
           </p>
         </main>
       </div>
