@@ -425,9 +425,9 @@
 
 // No active sponsorship — a muted, dashed "empty slot" distinct from Silver.
 .tierNone {
-  background: transparent;
-  color: #94a3b8;
-  border: 1px dashed rgba(148, 163, 184, 0.55);
+  background: rgba(192, 57, 43, 0.08);
+  color: $error-red;
+  border: 1px dashed $error-red;
 }
 
 // ─── Parts panel ────────────────────────────────────────────────────────────
