@@ -39,9 +39,9 @@
       "parameters": {
         "fromEmail": "noreply@circuitcenter.ai",
         "toEmail": "={{ $json.body.email }}",
-        "subject": "We received your message — Circuits.com",
+        "subject": "We received your message — CircuitCenter",
         "emailType": "text",
-        "text": "Hi {{ $json.body.name }},\n\nThank you for reaching out to Circuits.com! We've received your message and will get back to you as soon as possible.\n\nFor reference, your message was:\n\nSubject: {{ $json.body.subject }}\n{{ $json.body.message }}\n\nBest regards,\nThe Circuits.com Team"
+        "text": "Hi {{ $json.body.name }},\n\nThank you for reaching out to CircuitCenter! We've received your message and will get back to you as soon as possible.\n\nFor reference, your message was:\n\nSubject: {{ $json.body.subject }}\n{{ $json.body.message }}\n\nBest regards,\nThe CircuitCenter Team"
       },
       "continueOnFail": true
     }

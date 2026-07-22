@@ -14,7 +14,7 @@ export default function Footer() {
   return (
     <footer className={styles.footer}>
       <div className={styles.inner}>
-        <p className={styles.copyright}>© 2026 Circuits.com</p>
+        <p className={styles.copyright}>© 2026 CircuitCenter</p>
         <nav className={styles.links} aria-label="Footer navigation">
           {FOOTER_LINKS.map(({ to, label }) => (
             <Link key={to} to={to} className={styles.link}>

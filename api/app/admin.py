@@ -76,7 +76,7 @@ def setup_admin(app: FastAPI) -> Admin:
         app,
         engine,
         authentication_backend=auth_backend,
-        title="Circuits.com Admin",
+        title="CircuitCenter Admin",
     )
     admin.add_view(SupplierAdmin)
     admin.add_view(CategoryAdmin)

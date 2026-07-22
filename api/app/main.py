@@ -19,7 +19,7 @@ from app.routes import (
     suppliers,
 )
 
-app = FastAPI(title="Circuits.com API", version="0.1.0")
+app = FastAPI(title="CircuitCenter API", version="0.1.0")
 
 app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=["*"])
 app.add_middleware(

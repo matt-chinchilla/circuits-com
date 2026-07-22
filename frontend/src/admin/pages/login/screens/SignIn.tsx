@@ -50,7 +50,7 @@ export default function SignIn({ go }: { go: (s: Screen) => void }) {
       </p>
       <h2>Sign in</h2>
       <p className="lede">
-        Sign in to your Circuits.com account to search the catalog, track parts and manage
+        Sign in to your CircuitCenter account to search the catalog, track parts and manage
         your orders.
       </p>
       <form onSubmit={submit} noValidate>

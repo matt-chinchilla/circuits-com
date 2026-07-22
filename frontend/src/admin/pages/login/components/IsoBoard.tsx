@@ -1,5 +1,5 @@
 // IsoBoard — the lively 3D-isometric PCB hero on the brand panel (ported
-// verbatim from the v13 design's IsoBoard.jsx). The CIRCUITS.COM chip is ONE
+// verbatim from the v13 design's IsoBoard.jsx). The CIRCUITCENTER chip is ONE
 // entity: a floating QFP body on gull-wing leads whose feet sit just OUTSIDE the
 // silhouette, rise in +Z, then bend back to the chip edge. Flat green traces
 // route to each foot; data packets flow across the board and climb the risers.
@@ -218,7 +218,7 @@ export default function IsoBoard() {
                   top={
                     <div className="chip-face">
                       <span className="chip-pin1" />
-                      <span className="chip-brand">CIRCUITS.COM</span>
+                      <span className="chip-brand">CIRCUITCENTER</span>
                       <span className="chip-part">U1 &middot; QFP-64</span>
                       <span className="chip-shine" />
                     </div>

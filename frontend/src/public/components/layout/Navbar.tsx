@@ -59,7 +59,7 @@ export default function Navbar() {
         <Link to="/" className={styles.brand}>
           <span className={styles.brandDot} aria-hidden="true" />
           <span className={styles.brandSquare} aria-hidden="true" />
-          Circuits.com
+          CircuitCenter
           <span className={styles.brandSuffix} aria-hidden="true">
             / REV-A
           </span>
@@ -130,7 +130,7 @@ export default function Navbar() {
           ))}
         </ul>
         <div className={styles.navMobileFoot}>
-          <span className={styles.navMobileFootBrand}>Circuits.com</span>
+          <span className={styles.navMobileFootBrand}>CircuitCenter</span>
           <span className={styles.navMobileFootRev}>REV-A</span>
         </div>
       </nav>

@@ -256,7 +256,7 @@ export default function IsoBoardSvg() {
         {/* chip face label, skewed onto the chip top plane */}
         <g transform={chipFaceT} fill="#d6fac4" fontFamily="ui-monospace, 'SF Mono', Menlo, monospace">
           <text x={(BX + BX2) / 2} y={(BY + BY2) / 2 - 2} textAnchor="middle" fontSize="14" fontWeight="700" letterSpacing="0.5">
-            CIRCUITS.COM
+            CIRCUITCENTER
           </text>
           <text x={(BX + BX2) / 2} y={(BY + BY2) / 2 + 16} textAnchor="middle" fontSize="9" fill="#8fc88c" letterSpacing="0.5">
             U1 · QFP-64

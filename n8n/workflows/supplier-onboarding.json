@@ -118,9 +118,9 @@
       "parameters": {
         "fromEmail": "noreply@circuitcenter.ai",
         "toEmail": "={{ $json.email }}",
-        "subject": "Welcome to Circuits.com — Supplier Onboarding",
+        "subject": "Welcome to CircuitCenter — Supplier Onboarding",
         "emailType": "text",
-        "text": "Hi {{ $json.contact_person }},\n\nThank you for registering {{ $json.company_name }} on Circuits.com!\n\nWe've received your supplier application and will review it shortly. You'll hear from us within 1-2 business days.\n\nBest regards,\nThe Circuits.com Team"
+        "text": "Hi {{ $json.contact_person }},\n\nThank you for registering {{ $json.company_name }} on CircuitCenter!\n\nWe've received your supplier application and will review it shortly. You'll hear from us within 1-2 business days.\n\nBest regards,\nThe CircuitCenter Team"
       },
       "continueOnFail": true
     }

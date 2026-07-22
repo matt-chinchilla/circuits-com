@@ -111,7 +111,7 @@ export default function ResetPasswordPage() {
         </p>
         <h2>Set a new password</h2>
         <p className="lede">
-          Choose a new password for your Circuits.com account. Use at least 8 characters.
+          Choose a new password for your CircuitCenter account. Use at least 8 characters.
         </p>
         <form onSubmit={submit} noValidate>
           {banner && (
