@@ -8,9 +8,14 @@ set -euo pipefail
 #   ./deploy.sh              Deploy latest committed changes (frontend + API)
 #   ./deploy.sh --frontend   Deploy frontend only (faster)
 #   ./deploy.sh --reseed     Deploy all + clear & reseed database
+#   ./deploy.sh pull         Mirror the PRODUCTION database into your LOCAL one
+#                            (backs up local first, then overwrites it)
 #   ./deploy.sh --status     Check container status on EC2
 #   ./deploy.sh --logs       Tail logs from all containers
 #   ./deploy.sh --cert-renew Renew Let's Encrypt SSL certificate
+#
+# Tip: add  alias circuitcenter='/home/matthew/circuits-com/deploy.sh'  to your
+#      shell rc, then run:  circuitcenter pull  ·  circuitcenter --frontend  · ...
 #
 # Prerequisites:
 #   - AWS CLI configured (aws sts get-caller-identity works)
@@ -33,7 +38,9 @@ green()  { printf '\033[0;32m%s\033[0m\n' "$*"; }
 yellow() { printf '\033[0;33m%s\033[0m\n' "$*"; }
 
 push_ssh_key() {
-    echo "Pushing temporary SSH key via EC2 Instance Connect..."
+    # Progress goes to stderr so run_remote's stdout stays clean for binary
+    # captures (e.g. `run_remote "pg_dump -Fc" > file` in db_pull).
+    echo "Pushing temporary SSH key via EC2 Instance Connect..." >&2
     aws ec2-instance-connect send-ssh-public-key \
         --instance-id "$EC2_INSTANCE_ID" \
         --instance-os-user "$EC2_USER" \
@@ -130,6 +137,57 @@ renew_cert() {
     green "Certificate renewed, nginx restarted."
 }
 
+# Mirror the production database into the local one. Backs up local first,
+# then drop/recreates the local `circuits` DB and restores the prod dump into
+# it — an exact snapshot, so local bug-fixing runs against real site data.
+db_pull() {
+    local ts backup_dir dump
+    local local_db="circuits-com-db-1" local_api="circuits-com-api-1"
+    ts=$(date +%Y%m%d-%H%M%S)
+    backup_dir="$HOME/circuits-prod-backups/db-pull-$ts"
+    dump="$backup_dir/prod.dump"
+
+    if ! docker ps --format '{{.Names}}' | grep -qx "$local_db"; then
+        red "ERROR: local DB container '$local_db' isn't running. Start the stack first (docker compose up -d)."
+        exit 1
+    fi
+
+    yellow "This OVERWRITES your local database with production data (local is backed up first)."
+    read -p "Continue? (y/N) " -n 1 -r; echo
+    [[ $REPLY =~ ^[Yy]$ ]] || { echo "Aborted — local DB untouched."; exit 0; }
+
+    mkdir -p "$backup_dir"
+
+    echo "[1/5] Backing up local DB → $backup_dir/local-pre-pull.dump"
+    docker exec "$local_db" pg_dump -U circuits -Fc circuits > "$backup_dir/local-pre-pull.dump"
+
+    echo "[2/5] Dumping production DB → $dump"
+    run_remote "sudo docker exec $local_db pg_dump -U circuits -Fc circuits" > "$dump"
+    if ! docker exec -i "$local_db" pg_restore -l < "$dump" > /dev/null 2>&1; then
+        red "ERROR: the production dump is not a valid archive — aborting (local DB untouched)."
+        exit 1
+    fi
+
+    echo "[3/5] Resetting local database (stop api, terminate connections, drop/recreate)"
+    docker stop "$local_api" > /dev/null 2>&1 || true
+    docker exec "$local_db" psql -U circuits -d postgres -c \
+        "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='circuits' AND pid <> pg_backend_pid();" > /dev/null
+    docker exec "$local_db" psql -U circuits -d postgres -c "DROP DATABASE IF EXISTS circuits;" > /dev/null
+    docker exec "$local_db" psql -U circuits -d postgres -c "CREATE DATABASE circuits OWNER circuits;" > /dev/null
+
+    echo "[4/5] Restoring production data into local"
+    docker exec -i "$local_db" pg_restore -U circuits -d circuits --no-owner --no-privileges < "$dump"
+
+    echo "[5/5] Restarting local api"
+    docker start "$local_api" > /dev/null 2>&1 || true
+
+    green "Local DB now mirrors production."
+    echo "Backup + prod dump saved in: $backup_dir"
+    docker exec "$local_db" psql -U circuits circuits -t -c \
+        "SELECT 'users='||count(*) FROM users UNION ALL SELECT 'suppliers='||count(*) FROM suppliers UNION ALL SELECT 'sponsors='||count(*) FROM sponsors UNION ALL SELECT 'parts='||count(*) FROM parts UNION ALL SELECT 'messages='||count(*) FROM messages UNION ALL SELECT 'page_views='||count(*) FROM page_views;" 2>/dev/null | grep -E '=[0-9]' | sed 's/^ */  /' || true
+    yellow "Browse it at http://localhost/ (port 80 — not :3000)."
+}
+
 verify_site() {
     echo "Verifying site..."
     local primary_code www_code
@@ -176,8 +234,11 @@ case "${1:-}" in
         renew_cert
         verify_site
         ;;
+    pull|--pull)
+        db_pull
+        ;;
     --help|-h)
-        head -16 "$0" | tail -14
+        sed -n '/^# Usage:/,/^# Prerequisites:/p' "$0" | sed 's/^# \?//;/^Prerequisites:/d'
         ;;
     *)
         check_prerequisites
