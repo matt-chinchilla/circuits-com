@@ -34,6 +34,11 @@ class Sponsor(Base):
     end_date = Column(Date, nullable=True)
     amount = Column(Numeric(10, 2), nullable=True)
     status = Column(String(20), nullable=True)
+    # Sales rep who closed the deal — an admin User.username (migration 019).
+    # ADMIN-ONLY: exposed on AdminSponsorCreate/Update/Response, never on the
+    # public SponsorResponse (routes/sponsors.py is unauthenticated). Free
+    # string, not an FK, so renaming/removing a rep can't orphan a sponsorship.
+    sold_by = Column(String(120), nullable=True)
     created_at = Column(
         DateTime(timezone=True),
         default=lambda: datetime.now(UTC),

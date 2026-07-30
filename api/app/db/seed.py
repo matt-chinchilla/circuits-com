@@ -10,6 +10,7 @@ and name (suppliers/users), so it is safe to run multiple times.
 
 from __future__ import annotations
 
+import calendar
 import json
 import os
 import random
@@ -26,6 +27,7 @@ from app.db.session import SessionLocal
 from app.models import (
     Category,
     CategorySupplier,
+    Expense,
     Part,
     PartListing,
     PriceBreak,
@@ -35,6 +37,7 @@ from app.models import (
     User,
 )
 from app.models.sponsor import is_single_slot
+from app.services.aws_cost import estimate_monthly_aws_cost
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -1242,6 +1245,16 @@ def seed(db: Session) -> None:
     # ------------------------------------------------------------------
     _seed_revenue(db, suppliers)
 
+    # ------------------------------------------------------------------
+    # 9. Sales-rep attribution on sponsorships (dashboard rollup)
+    # ------------------------------------------------------------------
+    _seed_sponsor_sold_by(db)
+
+    # ------------------------------------------------------------------
+    # 10. Operating expenses (3 months of recurring costs)
+    # ------------------------------------------------------------------
+    _seed_expenses(db)
+
     db.commit()
     print("Seed completed successfully.")
 
@@ -1914,6 +1927,202 @@ def _seed_revenue(db: Session, suppliers: dict[str, Supplier]) -> None:
 
     db.flush()
     print(f"Seed: {db.query(Revenue).count()} revenue records created.")
+
+
+# ---------------------------------------------------------------------------
+# Sales-rep attribution
+# ---------------------------------------------------------------------------
+
+# The current sales team — a subset of the seeded admin Users (_seed_admin_user).
+# Kept as an explicit tuple so `matthew` / `demo` (service logins) are never
+# credited with closing a deal. GET /api/admin/sales-reps deliberately returns
+# ALL admin usernames — this list is only about who the SEED attributes to.
+_SALES_REP_USERNAMES: tuple[str, ...] = ("Anthony", "Daniel", "Ronald")
+
+
+# A "seller" bucket for sponsorships whose rep attribution is not real: the
+# catalog distributors (Digi-Key, Mouser, ...) and the seeded demo suppliers.
+# It shows up as its own group in /api/dashboard/sales-reps.
+_DEMO_SELLER = "Demo"
+# A supplier with more real part-listings than this is a catalog distributor,
+# not a rep's hand-added test account (the gap is stark: real ones have 75+,
+# every test/demo supplier has <= 3).
+_REAL_SUPPLIER_MIN_LISTINGS = 10
+# Name tokens that tie a hand-added supplier to the rep who created it, so
+# "Ron's Demo Components Inc." -> Ronald, "Danny Test" -> Daniel.
+_REP_NAME_HINTS: dict[str, tuple[str, ...]] = {
+    "Anthony": ("anthony", "tony"),
+    "Daniel": ("daniel", "danny", "dan"),
+    "Ronald": ("ronald", "ron"),
+}
+
+
+def _rep_for_supplier(name: str, reps: list[str], rr_index: int) -> str:
+    """The rep whose name is a whole word in the supplier name, else round-robin."""
+    tokens = set(name.lower().replace("'", " ").replace(".", " ").split())
+    for rep in reps:
+        if any(hint in tokens for hint in _REP_NAME_HINTS.get(rep, ())):
+            return rep
+    return reps[rr_index % len(reps)]
+
+
+def _seed_sponsor_sold_by(db: Session) -> None:
+    """Attribute each ACTIVE sponsorship to a seller, filling only NULL sold_by.
+
+    Feeds /api/dashboard/sales-reps (groups active sponsorships by
+    `Sponsor.sold_by`). Catalog distributors (many part-listings) and seeded
+    demo suppliers go to a "Demo" seller — their rep attribution is not real.
+    The genuinely hand-added test accounts (few/no listings, a person's name)
+    go to the rep whose name is in the supplier, else round-robin.
+
+    Only NULL sold_by is filled, so a re-seed never re-shuffles an admin's hand
+    edit. NULL status counts as Active (CLAUDE.md Sponsor.status gotcha); the
+    (created_at, id) sort is done in Python because NULL-ordering differs
+    between SQLite and Postgres and created_at is nullable.
+    """
+    reps = [
+        u.username
+        for u in db.query(User)
+        .filter(User.role == "admin", User.username.in_(_SALES_REP_USERNAMES))
+        .all()
+    ]
+    # Preserve the declared team order (SQL IN() gives no ordering guarantee).
+    reps = [name for name in _SALES_REP_USERNAMES if name in reps]
+    if not reps:
+        return
+
+    listing_counts = {
+        str(row[0]): row[1]
+        for row in db.query(PartListing.supplier_id, func.count(PartListing.id))
+        .group_by(PartListing.supplier_id)
+        .all()
+    }
+
+    sponsors = (
+        db.query(Sponsor)
+        .filter(
+            or_(Sponsor.status == "Active", Sponsor.status.is_(None)),
+            Sponsor.sold_by.is_(None),
+        )
+        .all()
+    )
+    sponsors.sort(key=lambda s: (str(s.created_at or ""), str(s.id)))
+
+    rr_index = 0
+    to_rep = 0
+    for sponsor in sponsors:
+        supplier = db.get(Supplier, sponsor.supplier_id)
+        name = str(supplier.name) if supplier else ""
+        listings = listing_counts.get(str(sponsor.supplier_id), 0)
+        if listings > _REAL_SUPPLIER_MIN_LISTINGS or name in _DEMO_SUPPLIER_NAMES:
+            sponsor.sold_by = _DEMO_SELLER
+        else:
+            sponsor.sold_by = _rep_for_supplier(name, reps, rr_index)
+            rr_index += 1
+            to_rep += 1
+
+    db.flush()
+    print(
+        f"Seed: sold_by -> {to_rep} rep account(s), "
+        f"{len(sponsors) - to_rep} to '{_DEMO_SELLER}'."
+    )
+
+
+# ---------------------------------------------------------------------------
+# Operating expenses
+# ---------------------------------------------------------------------------
+
+
+def _calendar_month_bounds(anchor: date, months_ago: int) -> tuple[date, date]:
+    """First/last day of the calendar month ``months_ago`` before ``anchor``.
+
+    Uses real year/month arithmetic. (``_month_bounds`` above subtracts
+    30-day blocks, which skips a month across a 28-day February — fine for the
+    12-month revenue spread it was written for, wrong for an exact 3-month walk.)
+    """
+    month_index = anchor.year * 12 + (anchor.month - 1) - months_ago
+    first = date(month_index // 12, month_index % 12 + 1, 1)
+    last_day = calendar.monthrange(first.year, first.month)[1]
+    return first, first.replace(day=last_day)
+
+
+def _seed_expenses(db: Session) -> None:
+    """Three months of recurring operating costs (idempotent).
+
+    Feeds /api/dashboard/expenses + /expenses/breakdown. Every line except AWS
+    is a PLACEHOLDER amount — flagged in each row's `description` so nobody
+    mistakes them for invoiced actuals:
+
+      - AWS is computed from services/aws_cost.py (list-price ESTIMATE of the
+        t3.small + 30 GB gp3 + Elastic IP + egress stack, currently $21.23/mo).
+      - Domain is the real ~$18/yr registration amortized to a monthly figure.
+      - SMTP / payment-processing / LLM lines are stand-ins pending real
+        invoices; Anthropic in particular exposes no public billing API, so
+        that number has to be entered by hand.
+
+    Deterministic by construction — flat recurring amounts, no `random` draw,
+    so repeat seeds and the test fixtures agree exactly.
+    """
+    if db.query(Expense).first():
+        return
+
+    aws_estimate = estimate_monthly_aws_cost()
+
+    # (category, vendor, monthly amount, description)
+    recurring: list[tuple[str, str, Decimal, str]] = [
+        (
+            "infrastructure",
+            "Amazon Web Services",
+            aws_estimate,
+            "ESTIMATE (list price, not an invoice): EC2 t3.small + 30 GB gp3 + "
+            "Elastic IP + egress, us-east-1. Computed by app/services/aws_cost.py.",
+        ),
+        (
+            "domain",
+            "Name.com",
+            Decimal("1.50"),
+            "circuitcenter.ai registration — ~$18/yr amortized to a monthly figure.",
+        ),
+        (
+            "email",
+            "Hover",
+            Decimal("5.00"),
+            "PLACEHOLDER — Hover SMTP mailbox (no-reply@circuitcenter.ai). "
+            "Replace with the billed amount.",
+        ),
+        (
+            "payment",
+            "Stripe",
+            Decimal("30.00"),
+            "PLACEHOLDER — processor fees (2.9% + $0.30 per transaction). Flat "
+            "stand-in until real settlement data is wired up.",
+        ),
+        (
+            "ai",
+            "Anthropic",
+            Decimal("120.00"),
+            "PLACEHOLDER — Claude API / subscription usage. Anthropic exposes no "
+            "public billing API, so this must be entered manually each month.",
+        ),
+    ]
+
+    today = date.today()
+    for months_ago in range(2, -1, -1):  # oldest → current month
+        period_start, period_end = _calendar_month_bounds(today, months_ago)
+        for category, vendor, amount, description in recurring:
+            db.add(
+                Expense(
+                    category=category,
+                    vendor=vendor,
+                    amount=amount,
+                    description=description,
+                    period_start=period_start,
+                    period_end=period_end,
+                )
+            )
+
+    db.flush()
+    print(f"Seed: {db.query(Expense).count()} expense records created.")
 
 
 # ---------------------------------------------------------------------------

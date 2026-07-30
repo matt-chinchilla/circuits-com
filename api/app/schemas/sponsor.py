@@ -2,7 +2,7 @@ from datetime import date
 from decimal import Decimal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.utils.color import validate_optional_hex_color
 from app.utils.image_url import validate_optional_image_url
@@ -55,6 +55,10 @@ class AdminSponsorResponse(BaseModel):
     status: str | None = None
     brand_primary: str | None = None
     brand_secondary: str | None = None
+    # Sales rep who closed the deal (an admin User.username). ADMIN-ONLY —
+    # deliberately absent from the public SponsorResponse above, which
+    # routes/sponsors.py serves unauthenticated.
+    sold_by: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -72,6 +76,7 @@ class AdminSponsorCreate(BaseModel):
     status: str | None = "Active"
     brand_primary: str | None = None
     brand_secondary: str | None = None
+    sold_by: str | None = Field(default=None, max_length=120)
 
     @field_validator("image_url")
     @classmethod
@@ -97,6 +102,7 @@ class AdminSponsorUpdate(BaseModel):
     status: str | None = None
     brand_primary: str | None = None
     brand_secondary: str | None = None
+    sold_by: str | None = Field(default=None, max_length=120)
 
     @field_validator("image_url")
     @classmethod

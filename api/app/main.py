@@ -5,6 +5,7 @@ from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 from app.admin import setup_admin
 from app.config import settings
 from app.routes import (
+    admin_expenses,
     admin_messages,
     admin_sponsors,
     analytics,
@@ -37,9 +38,12 @@ app.include_router(forms.router)
 app.include_router(sponsors.router)
 app.include_router(auth.router)
 app.include_router(dashboard.router)
+# Dashboard also owns a small /api/admin/* lookup router (sales reps).
+app.include_router(dashboard.admin_router)
 app.include_router(parts.router)
 app.include_router(admin_messages.router)
 app.include_router(admin_sponsors.router)
+app.include_router(admin_expenses.router)
 app.include_router(analytics.router)
 app.include_router(sitemap.router)
 

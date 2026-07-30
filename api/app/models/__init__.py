@@ -1,12 +1,13 @@
 from .category import Category
-from .supplier import Supplier, CategorySupplier
-from .sponsor import Sponsor
-from .user import User
+from .expense import Expense
+from .message import Message
+from .page_view import PageView
 from .part import Part
 from .part_listing import PartListing, PriceBreak
 from .revenue import Revenue
-from .message import Message
-from .page_view import PageView
+from .sponsor import Sponsor
+from .supplier import CategorySupplier, Supplier
+from .user import User
 
 __all__ = [
     "Category",
@@ -18,6 +19,7 @@ __all__ = [
     "PartListing",
     "PriceBreak",
     "Revenue",
+    "Expense",
     "Message",
     "PageView",
 ]
