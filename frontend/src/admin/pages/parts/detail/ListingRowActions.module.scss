@@ -1,0 +1,56 @@
+// Additive styles for the per-row distributor-listing controls (2026-07-29).
+//
+// PartDetailPage.module.scss is a 1:1 port of the Claude Design bundle and its
+// `.listingRow` grid declares exactly five tracks — a sixth child would wrap
+// onto a second implicit row. So the Remove control lives INSIDE the existing
+// fifth cell, and the two classes it needs are kept here rather than editing
+// the ported file.
+
+@use '@shared/styles/variables' as *;
+
+$a-border: #e5e7eb;
+$a-fg3: #6b7280;
+$a-danger: $error-red;
+
+// Applied alongside .listingLead on the row's last cell: lead time on the
+// left, Remove on the right, still one line, still right-aligned.
+.leadCell {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.removeBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  color: $a-fg3;
+  background: #ffffff;
+  border: 1px solid $a-border;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: color 150ms, border-color 150ms, background-color 150ms;
+
+  svg {
+    width: 13px;
+    height: 13px;
+    stroke-width: 2;
+  }
+
+  &:hover:not(:disabled) {
+    color: $a-danger;
+    border-color: rgba(192, 57, 43, 0.35);
+    background: rgba(192, 57, 43, 0.06);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}

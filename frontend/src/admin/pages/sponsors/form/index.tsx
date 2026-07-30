@@ -6,9 +6,10 @@ import { apiErrorDetail } from '@admin/services/apiError';
 import { consumePrefill, type SponsorPrefill } from '@admin/services/prefillBus';
 import {
   deleteSponsor,
-  findSponsor,
+  loadSponsors,
   upsertSponsor,
 } from '@admin/services/sponsorStore';
+import { isActiveSponsor, normalizeSponsorTier } from '@admin/services/sponsorTier';
 import type {
   AdminSponsor,
   AdminSupplier,
@@ -71,6 +72,7 @@ interface FormState {
 
 interface FormErrors {
   supplier_id?: string;
+  tier?: string;
   category_id?: string;
   keyword?: string;
   amount?: string;
@@ -80,14 +82,48 @@ interface FormErrors {
   brand_secondary?: string;
 }
 
+// Today's date in America/New_York as `YYYY-MM-DD` (the shape
+// <input type="date"> wants). en-CA is the locale that formats ISO-style, and
+// the explicit timeZone keeps it DST-safe. NEVER
+// `new Date().toISOString().slice(0, 10)` — that's UTC, so every evening after
+// ~7-8pm ET the form would default to TOMORROW.
+function estToday(): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/New_York',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
+}
+
+// +1 year by incrementing the YEAR component of the STRING. Date math is out:
+// `new Date('YYYY-MM-DD')` parses as UTC and setFullYear + DST can shift the
+// day off by one. Feb 29 clamps to Feb 28 when the target year isn't a leap
+// year, so the value is never a date <input type="date"> rejects.
+function plusOneYear(ymd: string): string {
+  const [y, m, d] = ymd.split('-');
+  const year = Number(y) + 1;
+  const isLeap = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+  const day = m === '02' && d === '29' && !isLeap ? '28' : d;
+  return `${year}-${m}-${day}`;
+}
+
+// Supplier creative fields are `string | null` (Python None → JSON null), so
+// normalize before use — `?:`/falsy checks miss null and `.trim()` throws on it.
+function nonEmpty(value: string | null | undefined): string | null {
+  if (value == null) return null;
+  return value.trim() || null;
+}
+
 function emptyForm(): FormState {
+  const start = estToday();
   return {
     supplier_id: '',
     tier: 'Gold',
     category_id: '',
     keyword: '',
-    start_date: '2026-05-01',
-    end_date: '2027-05-01',
+    start_date: start,
+    end_date: plusOneYear(start),
     amount: '',
     status: 'Active',
     description: '',
@@ -119,30 +155,55 @@ export default function SponsorFormPage() {
   });
   const [placement, setPlacement] = useState<Placement>('subcategory');
   // One-shot guard: the placement bucket is derived from the loaded
-  // category_id against the loaded categories list — on edit (from the
-  // findSponsor hydration) AND on create with a prefilled category_id (from
-  // the Supplier-detail Quick Actions, where the prefilled id is almost
-  // always a subcategory). The derive must NOT re-fire when the user later
+  // category_id against the loaded (RAW, unfiltered) categories list — on edit
+  // (from the loadSponsors hydration) AND on create with a prefilled
+  // category_id (from the Supplier-detail Quick Actions, which may hand over
+  // either level). The derive must NOT re-fire when the user later
   // picks a different category from the dropdown (that would clobber an
   // explicit user choice). The ref pins it.
   const placementDerivedRef = useRef(false);
+  // One-shot guard for the prefill-bus Creative default (see the effect below
+  // copySupplierCreative).
+  const prefillCreativeRef = useRef(false);
+  const [errors, setErrors] = useState<FormErrors>({});
+  // Inline notice set by the occupancy sweep below when it drops a category
+  // whose single-slot tier is already sold — without it the clear is silent and
+  // the admin just sees the select mysteriously back at its placeholder.
+  const [slotNote, setSlotNote] = useState<string | null>(null);
+  // The RAW stored tier of the row being edited when it falls outside the live
+  // set (the retired 'Featured', or a typo). Non-null = keep that value visible
+  // in the tier select and block the save until the admin picks a real tier —
+  // see the hydration effect below.
+  const [unknownTier, setUnknownTier] = useState<string | null>(null);
   // Reset the one-shot guard whenever the routed id changes — without this,
   // navigating /admin/sponsors/A/edit -> /admin/sponsors/B/edit (same
   // SponsorFormPage component instance) re-hydrates the form for B but
   // leaves the ref true from A's derive, so B's bucket stays at A's value.
-  useEffect(() => { placementDerivedRef.current = false; }, [id]);
-  const [errors, setErrors] = useState<FormErrors>({});
+  // Both transient notices are per-row too: a stale "slot taken" / "stored
+  // tier" note must not follow the admin onto the next sponsor.
+  useEffect(() => {
+    placementDerivedRef.current = false;
+    setSlotNote(null);
+    setUnknownTier(null);
+  }, [id]);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(isEdit);
   const [suppliers, setSuppliers] = useState<AdminSupplier[]>([]);
   const [categories, setCategories] = useState<AdminCategory[]>([]);
+  // Every sponsorship — read ONLY to hide categories whose SINGLE-SLOT tier is
+  // already taken (Platinum on a top-level, Gold on a child — see
+  // occupiedSlots below).
+  const [sponsors, setSponsors] = useState<AdminSponsor[]>([]);
   const [toast, setToast] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   // Set to the freshly cropped logo canvas so the two-step upload flow can open
   // the brand-color picker right after a crop. Null = no color screen open.
   const [colorSource, setColorSource] = useState<HTMLCanvasElement | null>(null);
 
-  // Hydrate suppliers + categories from live API
+  // Hydrate suppliers + categories from the live API. The sponsors list is
+  // pulled here ONLY on create: the edit path below already loads the full list
+  // and finds the row (the backend has no sponsor detail endpoint), so fetching
+  // in both places would GET /api/admin/sponsors/ twice per edit.
   useEffect(() => {
     adminApi
       .getSuppliers()
@@ -152,21 +213,46 @@ export default function SponsorFormPage() {
       .getCategories()
       .then(setCategories)
       .catch(() => setCategories([]));
-  }, []);
+    if (isEdit) return;
+    loadSponsors()
+      .then(setSponsors)
+      .catch(() => setSponsors([]));
+  }, [isEdit]);
 
-  // Hydrate form on edit — findSponsor is async (fetches from the API). Cancel
-  // flag guards against a late resolve after unmount / id change.
+  // Hydrate form on edit — loadSponsors is async (fetches from the API) and
+  // doubles as the `sponsors` hydration for the single-slot option filters, so
+  // the page issues exactly one sponsors request. Cancel flag guards against a
+  // late resolve after unmount / id change.
   useEffect(() => {
     if (!isEdit || !id) return;
     let cancelled = false;
     setLoading(true);
-    findSponsor(id)
-      .then((existing) => {
+    loadSponsors()
+      .then((rows) => {
         if (cancelled) return;
+        setSponsors(rows);
+        const existing = rows.find((s) => s.id === id);
         if (existing) {
+          // Normalize casing on the way IN — `tier` is a free-form column and
+          // legacy/seed rows store lowercase ('platinum'/'gold'), which no
+          // TitleCase <option value> matches, so the tier <select> would render
+          // blank (and every downstream tier comparison read false).
+          const storedTier = normalizeSponsorTier(existing.tier);
+          const rawTier = (existing.tier ?? '').trim();
+          // A stored tier OUTSIDE the live set (the retired 'Featured', or a
+          // typo) is NOT silently rewritten: `unknownTier` keeps the raw string
+          // visible in the select and validate() blocks the save until the admin
+          // picks a real tier. Fabricating the default here meant that editing
+          // (say) a window date on a 'Featured' row quietly persisted Gold — an
+          // accidental downgrade with no signal. A known lowercase ('gold')
+          // still resolves through normalizeSponsorTier and is unaffected.
+          setUnknownTier(!storedTier && rawTier ? rawTier : null);
           setForm({
             supplier_id: existing.supplier_id,
-            tier: existing.tier,
+            // Placeholder only when the stored tier is unknown — `unknownTier`
+            // masks it in the UI and validate() refuses to save, so this value
+            // can never reach the API without an explicit pick.
+            tier: storedTier ?? 'Gold',
             category_id: existing.category_id ?? '',
             keyword: existing.keyword ?? '',
             start_date: existing.start_date ?? '',
@@ -206,24 +292,212 @@ export default function SponsorFormPage() {
     setForm((prev) => ({ ...prev, [key]: value }));
   }, []);
 
+  // Canonical TitleCase tier for every tier COMPARISON below. `form.tier` is
+  // hydrated from a free-form column, so a raw `form.tier === 'Gold'` silently
+  // reads false for a legacy lowercase row (see CLAUDE.md "Sponsor tier
+  // casing") — which would leave a sold Gold subcategory selectable and the
+  // single-slot hint wrong. Hydration normalizes too; this is belt-and-braces.
+  //
+  // While `unknownTier` is set the tier is UNDETERMINED (the stored value isn't
+  // one we offer and the admin hasn't picked yet), so it reads null rather than
+  // the internal placeholder: nothing Gold-specific — hiding sold Gold
+  // subcategories, or the occupancy sweep clearing one — may act on a tier the
+  // admin never chose.
+  const tierNorm = useMemo(
+    () => (unknownTier ? null : normalizeSponsorTier(form.tier)),
+    [form.tier, unknownTier],
+  );
+
+  // Copy the chosen supplier's STORED logo + brand colors into the Creative
+  // fields — the supplier record is the source of truth (saving a supplier
+  // re-syncs its logo + colors onto its active Platinum sponsorships), so these
+  // fields are a per-placement STARTING POINT, not a permanent override.
+  // `force` (the "Use supplier logo & colors" button) overwrites; otherwise
+  // (the supplier-select default) it fills ONLY empty fields so an admin's edit
+  // is never clobbered. Deliberately NOT an unguarded useEffect keyed on
+  // [suppliers]: a late getSuppliers resolve would then re-run and stomp edits
+  // made in the meantime — the one place it IS effect-driven (the prefill-bus
+  // default below) is ref-guarded to fire exactly once. Brand colors move as a
+  // PAIR — validate() rejects a lone color, and a half-set pair flips a sold
+  // board to branded with the other channel silently defaulted.
+  const copySupplierCreative = useCallback(
+    (supplierId: string, force: boolean) => {
+      const sup = suppliers.find((s) => s.id === supplierId);
+      if (!sup) return;
+      const logo = nonEmpty(sup.logo_url);
+      const primary = nonEmpty(sup.brand_primary);
+      const secondary = nonEmpty(sup.brand_secondary);
+      if (logo && (force || !form.image_url.trim())) {
+        update('image_url', logo);
+      }
+      const colorsEmpty = !form.brand_primary.trim() && !form.brand_secondary.trim();
+      if (primary && secondary && (force || colorsEmpty)) {
+        update('brand_primary', primary);
+        update('brand_secondary', secondary);
+      }
+    },
+    [suppliers, form.image_url, form.brand_primary, form.brand_secondary, update],
+  );
+
+  // The Supplier-detail Quick Actions handoff seeds supplier_id inside the
+  // form's useState initializer, so the supplier <select>'s onChange never
+  // fires and the Creative panel would stay empty — a Platinum created that way
+  // saves NULL brand colors, so `brand_takeover` is false and the sold board
+  // renders un-branded. Run the same fill-empty-only copy once, as soon as
+  // `suppliers` first resolves. One-shot + force=false means a late resolve can
+  // never clobber an edit the admin made in the meantime.
+  useEffect(() => {
+    if (
+      isEdit
+      || !prefill?.supplier_id
+      || prefillCreativeRef.current
+      || suppliers.length === 0
+    ) return;
+    prefillCreativeRef.current = true;
+    copySupplierCreative(prefill.supplier_id, false);
+  }, [suppliers, prefill, isEdit, copySupplierCreative]);
+
+  // Category ids whose SINGLE-SLOT tier is already held by an ACTIVE sponsor,
+  // bucketed by tier: Platinum on a top-level category and Gold on a child are
+  // both single-slot (409 from `_reject_if_slot_taken` + the migration-016
+  // partial unique indexes). Silver is deliberately absent — the Silver
+  // subcategory directory is multi-occupant, as are keyword placements.
+  // Casing is normalized (legacy/seed rows store lowercase 'platinum'/'gold')
+  // and a NULL status reads as Active (legacy seed omits status) — both per the
+  // CLAUDE.md sponsor gotchas.
+  //
+  // The row BEING EDITED is skipped: it occupies its own slot, so counting it
+  // would hide the sponsor's own saved category from the dropdown. Excluding it
+  // here (keyed on the ROUTE id, which never changes while the form is open)
+  // instead of re-adding it downstream keyed on the LIVE form.category_id also
+  // makes switching away and back work — a carve-out keyed on form.category_id
+  // moves with the selection, so the original category vanished the moment the
+  // admin picked a different one.
+  const occupiedSlots = useMemo(() => {
+    const platinum = new Set<string>();
+    const gold = new Set<string>();
+    for (const s of sponsors) {
+      if (isEdit && s.id === id) continue;
+      if (s.category_id == null) continue;
+      if (!isActiveSponsor(s.status)) continue;
+      const tier = normalizeSponsorTier(s.tier);
+      if (tier === 'Platinum') platinum.add(s.category_id);
+      else if (tier === 'Gold') gold.add(s.category_id);
+    }
+    return { platinum, gold };
+  }, [sponsors, isEdit, id]);
+
+  // Is the row this form is editing itself COMPETING for a single slot?
+  //   • create        → always yes (the POST would add an occupant).
+  //   • edit + Active → yes.
+  //   • edit + Paused/Expired → NO. The backend only blocks a second occupant
+  //     when the POST-UPDATE row would be active (`new_is_active` in
+  //     admin_sponsors.update_sponsor), so an inactive row may legally keep
+  //     sitting on a slot a peer has since taken — which is exactly the state
+  //     the documented RE-SELL workflow produces (expire the incumbent, sell
+  //     the slot to someone else, then come back to edit the expired row).
+  // Treating that row as a competitor is what made the sweep + option filters
+  // clear and then HIDE its own saved category, leaving it unsaveable
+  // (validate() demands a category the dropdown no longer offered).
+  const selfActive = !isEdit || isActiveSponsor(form.status);
+
+  // The category the edited row is SAVED on, exposed ONLY while that row is
+  // inactive (i.e. not competing) so the occupancy filters below can keep it
+  // visible even though a peer holds the slot. Read from the loaded row keyed
+  // on the ROUTE id — never `form.category_id` — so it doesn't move with the
+  // live selection: a carve-out that follows the selection makes the original
+  // category vanish the moment the admin picks a different one (same reasoning
+  // as occupiedSlots' self-exclusion above). Null when the row IS competing,
+  // and category ids are non-empty strings, so `id === keepOwnCategoryId`
+  // reads false in that case without a second condition at each call site.
+  const keepOwnCategoryId = useMemo(() => {
+    if (selfActive || !isEdit || !id) return null;
+    return sponsors.find((s) => s.id === id)?.category_id ?? null;
+  }, [selfActive, sponsors, isEdit, id]);
+
+  // THE occupancy sweep — one effect, both entry paths. Drops a category_id
+  // whose SINGLE-SLOT tier is already sold, so an invisible selection (the
+  // IconSelect trigger showing its placeholder while form.category_id still
+  // holds an id the option list HIDES) can never reach submit and 409.
+  //
+  //   1. CREATE with a prefilled category: Quick Actions hands over
+  //      `smartCategoryId` (the supplier's most-listed category — top-level in
+  //      prod, where all 15 Platinum slots are sold) straight into form state,
+  //      so it can name a category the lists below hide.
+  //   2. A TIER SWITCH on an already-picked category (e.g. Silver → Gold on a
+  //      subcategory that is free for Silver but Gold-sold): the id stays put
+  //      while the Gold filter starts hiding it. This is why the sweep is NOT
+  //      one-shot — it re-evaluates on every tier and occupancy change.
+  //
+  // Occupancy is tested by the category's LEVEL so it mirrors the two option
+  // filters EXACTLY (top-level → the Platinum set; child → the Gold set, and
+  // only when the tier is Gold): "cleared" therefore means precisely "no longer
+  // in the rendered list". Level comes from the RAW `categories`, so the sweep
+  // no-ops until they load — and an unresolved/failed `sponsors` fetch leaves
+  // occupiedSlots empty, which would clear nothing anyway.
+  //
+  // A VALID selection is never clobbered: only ids sitting in an occupied
+  // single-slot set are cleared, so anything the admin can actually pick from
+  // the (already filtered) dropdown survives. On EDIT the row's own slot is
+  // safe for free — occupiedSlots excludes the routed id, so the edited
+  // sponsor's own category never reads as occupied. And an INACTIVE edited row
+  // isn't competing at all (see `selfActive`), so the sweep sits out entirely
+  // rather than clearing a category the backend would still accept.
+  useEffect(() => {
+    if (!selfActive) return;
+    if (!form.category_id || categories.length === 0) return;
+    const isTop = categories.some((c) => c.id === form.category_id);
+    let blocking: SponsorTier | null = null;
+    if (isTop && occupiedSlots.platinum.has(form.category_id)) blocking = 'Platinum';
+    else if (!isTop && tierNorm === 'Gold' && occupiedSlots.gold.has(form.category_id)) {
+      blocking = 'Gold';
+    }
+    if (!blocking) return;
+    update('category_id', '');
+    setSlotNote(
+      `That category's ${blocking} slot is already taken — pick an open one.`,
+    );
+  }, [form.category_id, categories, occupiedSlots, tierNorm, selfActive, update]);
+
   // Top-level categories only — for the "Top-level category" placement select.
+  // Categories whose Platinum slot is already sold are HIDDEN (IconSelect has
+  // no per-option disabled state, and its "No options" empty row covers the
+  // all-sold case), so the admin can't pick a placement the backend would
+  // reject with a 409. That 409 stays as the server-side backstop.
+  //
+  // An ACTIVE edited row needs no carve-out — occupiedSlots already excludes
+  // it, so the sponsor's own saved category stays in the list (and comes back
+  // if the admin switches away and changes their mind). An INACTIVE one does:
+  // its slot is legitimately held by a PEER now, which would hide the row's own
+  // saved category and make it uneditable — `keepOwnCategoryId` pins it
+  // visible. This list is for RENDERING only: the placement-derive effect below
+  // reads the raw `categories`, so filtering here can never flip the bucket.
   const topCategoryOptions = useMemo(
     () =>
-      categories.map((c) => ({
-        id: c.id,
-        label: c.name,
-        name: c.name,
-        icon: c.icon ?? null,
-      })),
-    [categories],
+      categories
+        .filter((c) => !occupiedSlots.platinum.has(c.id) || c.id === keepOwnCategoryId)
+        .map((c) => ({
+          id: c.id,
+          label: c.name,
+          name: c.name,
+          icon: c.icon ?? null,
+        })),
+    [categories, occupiedSlots, keepOwnCategoryId],
   );
 
   // Subcategories only — labeled "Parent → Child" so admins can disambiguate
-  // duplicate sub-names across parents at a glance.
+  // duplicate sub-names across parents at a glance. Gold-on-child is single-slot
+  // too, so when the tier is Gold the children whose Gold slot is already sold
+  // are hidden — same treatment as Platinum above (and the same self-exclusion
+  // via occupiedSlots plus the same inactive-row carve-out), which keeps the
+  // "already sold are hidden" hint truthful for BOTH single-slot tiers. Silver
+  // leaves the list complete (multi-occupant).
   const subcategoryOptions = useMemo(() => {
     const out: Array<{ id: string; label: string; name: string; icon: string | null }> = [];
     for (const c of categories) {
       for (const child of c.children ?? []) {
+        const goldTaken = tierNorm === 'Gold' && occupiedSlots.gold.has(child.id);
+        if (goldTaken && child.id !== keepOwnCategoryId) continue;
         out.push({
           id: child.id,
           label: `${c.name} → ${child.name}`,
@@ -233,7 +507,7 @@ export default function SponsorFormPage() {
       }
     }
     return out;
-  }, [categories]);
+  }, [categories, occupiedSlots, tierNorm, keepOwnCategoryId]);
 
   // Union — used by buildSponsor for the name/icon lookup since either bucket
   // submits the same category_id field.
@@ -242,23 +516,27 @@ export default function SponsorFormPage() {
     [topCategoryOptions, subcategoryOptions],
   );
 
-  // Derive the precise placement bucket once: on edit (after findSponsor
-  // sets form.category_id) AND on create with a prefilled category_id
-  // (from Supplier-detail Quick Actions — the prefilled id is almost always
-  // a subcategory, since suppliers' parts attach to children). Without the
-  // create-path coverage, the initial useState placement='top-category'
-  // would mismatch a sub-prefilled id and the dropdown would render blank
-  // while validation silently passes on the wrong bucket.
+  // Derive the precise placement bucket once: on edit (after the sponsor load
+  // sets form.category_id) AND on create with a prefilled category_id (from
+  // Supplier-detail Quick Actions). Without it the initial useState
+  // placement='subcategory' would mismatch a TOP-LEVEL id and the dropdown
+  // would render blank while validation silently passes on the wrong bucket.
+  //
+  // Gate + membership test read the RAW `categories`, never the Platinum-
+  // filtered `topCategoryOptions`: in prod every top-level Platinum slot can be
+  // sold, which empties the filtered list, and gating on that would return
+  // forever — a Gold/Silver subcategory sponsor would then be stuck showing the
+  // wrong bucket with its saved subcategory invisible and uneditable.
   useEffect(() => {
     if (
       placementDerivedRef.current
       || !form.category_id
-      || topCategoryOptions.length === 0
+      || categories.length === 0
     ) return;
-    const isTop = topCategoryOptions.some((c) => c.id === form.category_id);
+    const isTop = categories.some((c) => c.id === form.category_id);
     setPlacement(isTop ? 'top-category' : 'subcategory');
     placementDerivedRef.current = true;
-  }, [form.category_id, topCategoryOptions]);
+  }, [form.category_id, categories]);
 
   // Consolidated placement switch. Clears BOTH XOR fields and ANY stale
   // field errors so a failed-submit error message under the previous bucket
@@ -270,18 +548,29 @@ export default function SponsorFormPage() {
     setPlacement(p);
     update('category_id', '');
     update('keyword', '');
+    // The slot notice named the category we just cleared, so it's stale now.
+    // If the new bucket/tier lands on another sold slot the sweep re-sets it.
+    setSlotNote(null);
     // Tier↔placement matrix (2026-06-11): Category=Platinum only,
     // Subcategory=Gold/Silver only, Keyword=Silver/Gold. Auto-correct the tier
     // so the form stays legal without a round-trip through the select.
     // `keepTier` skips this when the user just picked the tier (the tier-select
     // onChange drives the placement, not the other way around).
     if (!keepTier) {
+      let corrected: SponsorTier | null = null;
       if (p === 'top-category') {
-        if (form.tier !== 'Platinum') update('tier', 'Platinum');
+        if (form.tier !== 'Platinum') corrected = 'Platinum';
       } else if (p === 'subcategory') {
-        if (form.tier !== 'Gold' && form.tier !== 'Silver') update('tier', 'Gold');
+        if (form.tier !== 'Gold' && form.tier !== 'Silver') corrected = 'Gold';
       } else if (p === 'keyword') {
-        if (form.tier !== 'Silver' && form.tier !== 'Gold') update('tier', 'Gold');
+        if (form.tier !== 'Silver' && form.tier !== 'Gold') corrected = 'Gold';
+      }
+      if (corrected) {
+        update('tier', corrected);
+        // An auto-corrected tier is a real value the select now displays, so
+        // stop masking it with a retired stored tier — otherwise the select
+        // would read 'Featured' while the form holds Platinum.
+        setUnknownTier(null);
       }
     }
     setErrors((prev) => {
@@ -295,6 +584,10 @@ export default function SponsorFormPage() {
   function validate(): boolean {
     const e: FormErrors = {};
     if (!form.supplier_id) e.supplier_id = 'Required';
+
+    // The stored tier isn't one we offer (retired/typo) — require an explicit
+    // pick instead of letting the internal placeholder persist as a downgrade.
+    if (unknownTier) e.tier = 'Pick a tier — the stored value is no longer offered.';
 
     // XOR placement validation — must satisfy backend CheckConstraint.
     if ((placement === 'top-category' || placement === 'subcategory') && !form.category_id) {
@@ -447,7 +740,13 @@ export default function SponsorFormPage() {
                   id="supplier_id"
                   className={styles.select}
                   value={form.supplier_id}
-                  onChange={(e) => update('supplier_id', e.target.value)}
+                  onChange={(e) => {
+                    const next = e.target.value;
+                    update('supplier_id', next);
+                    // Default the Creative panel from the supplier record
+                    // (only-if-empty — see copySupplierCreative).
+                    if (next) copySupplierCreative(next, false);
+                  }}
                 >
                   <option value="">Select supplier&hellip;</option>
                   {suppliers.map((s) => (
@@ -464,13 +763,23 @@ export default function SponsorFormPage() {
               <label className={styles.fieldLabel} htmlFor="tier">
                 Tier <span className={styles.fieldReq}>*</span>
               </label>
-              <div className={styles.selectWrap} data-tier={form.tier}>
+              {/* `unknownTier` (a retired/typo'd stored tier) is shown as-is
+                  instead of being silently replaced: no data-tier rule matches
+                  it, so the trigger stays neutral rather than wearing a tier
+                  color it isn't. */}
+              <div className={styles.selectWrap} data-tier={unknownTier ?? form.tier}>
                 <select
                   id="tier"
                   className={styles.select}
-                  value={form.tier}
+                  value={unknownTier ?? form.tier}
                   onChange={(e) => {
-                    const next = e.target.value as SponsorTier;
+                    // Re-picking the transient stored-tier row is not a choice.
+                    const next = normalizeSponsorTier(e.target.value);
+                    if (!next) return;
+                    setUnknownTier(null);
+                    // Stale: it named the previous tier's slot. The occupancy
+                    // sweep re-sets it if the new tier's slot is sold too.
+                    setSlotNote(null);
                     update('tier', next);
                     // Flip placement to one valid for the new tier (matrix:
                     // Platinum→Category only; Gold/Silver→Subcategory or
@@ -486,6 +795,9 @@ export default function SponsorFormPage() {
                     }
                   }}
                 >
+                  {unknownTier && (
+                    <option value={unknownTier}>{unknownTier} (not offered)</option>
+                  )}
                   {TIERS.map((t) => (
                     <option key={t} value={t} style={TIER_OPTION_STYLE[t]}>
                       {t}
@@ -493,6 +805,19 @@ export default function SponsorFormPage() {
                   ))}
                 </select>
               </div>
+              {unknownTier && (
+                <p className={styles.fieldHint} role="status">
+                  This placement is stored as <strong>{unknownTier}</strong>, a
+                  tier we no longer offer. Pick Platinum, Gold, or Silver before
+                  saving &mdash; we won&rsquo;t guess one for you.
+                </p>
+              )}
+              {/* Gated on the same condition that produces it, so the error can
+                  never outlive the unknown tier (picking any real tier, or a
+                  placement that auto-corrects it, drops both at once). */}
+              {unknownTier && errors.tier && (
+                <div className={styles.fieldError}>{errors.tier}</div>
+              )}
             </div>
 
             <div className={styles.field}>
@@ -551,14 +876,23 @@ export default function SponsorFormPage() {
                   id="category_id"
                   value={form.category_id}
                   options={topCategoryOptions}
-                  onChange={(v) => update('category_id', v)}
+                  onChange={(v) => {
+                    update('category_id', v);
+                    setSlotNote(null);
+                  }}
                   placeholder="Select top-level category…"
                 />
+                {slotNote && (
+                  <p className={styles.fieldHint} role="status">
+                    <strong>Cleared:</strong> {slotNote}
+                  </p>
+                )}
                 <p className={styles.fieldHint}>
                   Becomes the premium Category Sponsor board on this top-level
                   category and every subpage. Single-slot — only one active
-                  Platinum per category. To re-sell it, expire or remove the
-                  current sponsor first.
+                  Platinum per category, so categories that are already sold
+                  are hidden from this list. To re-sell one, expire or remove
+                  its current sponsor first.
                 </p>
                 {errors.category_id && <div className={styles.fieldError}>{errors.category_id}</div>}
               </div>
@@ -573,12 +907,36 @@ export default function SponsorFormPage() {
                   id="category_id"
                   value={form.category_id}
                   options={subcategoryOptions}
-                  onChange={(v) => update('category_id', v)}
+                  onChange={(v) => {
+                    update('category_id', v);
+                    setSlotNote(null);
+                  }}
                   placeholder="Select subcategory…"
                 />
+                {slotNote && (
+                  <p className={styles.fieldHint} role="status">
+                    <strong>Cleared:</strong> {slotNote}
+                  </p>
+                )}
                 <p className={styles.fieldHint}>
                   Shown as the PCB-flashlight sidebar card on the chosen
                   child page only.
+                  {/* Two independent branches, not an either/or: `tierNorm` is
+                      null while the stored tier is unknown, and neither claim
+                      holds for a tier the admin hasn't picked yet. */}
+                  {tierNorm === 'Gold' && (
+                    <>
+                      {' '}Gold is single-slot &mdash; subcategories that already
+                      have an active Gold sponsor are hidden. To re-sell one,
+                      expire or remove its current sponsor first.
+                    </>
+                  )}
+                  {tierNorm === 'Silver' && (
+                    <>
+                      {' '}Silver placements are unlimited per subcategory
+                      (the Preferred Partners directory).
+                    </>
+                  )}
                 </p>
                 {errors.category_id && <div className={styles.fieldError}>{errors.category_id}</div>}
               </div>
@@ -721,6 +1079,39 @@ export default function SponsorFormPage() {
               />
               {errors.brand_primary && <div className={styles.fieldError}>{errors.brand_primary}</div>}
               {errors.brand_secondary && <div className={styles.fieldError}>{errors.brand_secondary}</div>}
+            </div>
+            <div className={styles.field}>
+              <div>
+                <button
+                  type="button"
+                  className={`${styles.btn} ${styles.btnGhost}`}
+                  onClick={() => copySupplierCreative(form.supplier_id, true)}
+                  disabled={!form.supplier_id}
+                  title={!form.supplier_id ? 'Pick a sponsor first' : undefined}
+                >
+                  Use supplier logo &amp; colors
+                </button>
+              </div>
+              <p className={styles.fieldHint}>
+                Re-copies the selected supplier&rsquo;s stored logo and brand
+                colors over the values above. The creative defaults from the
+                supplier record.
+                {tierNorm === 'Platinum' ? (
+                  <>
+                    {' '}On Platinum the supplier stays the source of truth
+                    &mdash; saving that supplier re-syncs its logo and colors
+                    onto its active Platinum placements, so values set here can
+                    be replaced later. Edit the supplier to change them for good.
+                  </>
+                ) : (
+                  <>
+                    {' '}Re-syncing on supplier save only targets Platinum
+                    placements, so on Gold and Silver these values are
+                    placement-local &mdash; a later supplier edit won&rsquo;t
+                    change them.
+                  </>
+                )}
+              </p>
             </div>
           </div>
         </section>

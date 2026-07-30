@@ -239,6 +239,7 @@
 .tourCardAccentRose   .tourIcon { background: linear-gradient(155deg, #be123c, #e11d48); box-shadow: 0 4px 10px rgba(190, 18, 60, 0.22); }
 .tourCardAccentCyan   .tourIcon { background: linear-gradient(155deg, #155e75, #0891b2); box-shadow: 0 4px 10px rgba(21, 94, 117, 0.22); }
 .tourCardAccentAmber  .tourIcon { background: linear-gradient(155deg, #b45309, #d97706); box-shadow: 0 4px 10px rgba(180, 83, 9, 0.22); }
+.tourCardAccentTeal   .tourIcon { background: linear-gradient(155deg, #0f766e, #14b8a6); box-shadow: 0 4px 10px rgba(15, 118, 110, 0.22); }
 
 .tourBody { min-width: 0; }
 .tourTitle {
@@ -575,6 +576,22 @@
   border-color: rgba(68, 189, 19, 0.3);
   &:hover { background: rgba(68, 189, 19, 0.16); }
 }
+// Back — the one control in the coach that UNDOES progress (it can rewind
+// admin navigation), so it reads red while staying a tinted pill like the
+// other coach buttons rather than a solid alarm. Pinned left in .coachFoot;
+// margin-right keeps it there even if the pip-bar is ever hidden.
+.btnBack {
+  margin-right: auto;
+  padding: 7px 12px;
+  background: rgba($error-red, 0.09);
+  color: #97281c;
+  border-color: rgba($error-red, 0.32);
+  letter-spacing: 0;
+  &:hover {
+    background: rgba($error-red, 0.16);
+    color: #7d2117;
+  }
+}
 
 .coachActions {
   display: flex;
@@ -814,6 +831,10 @@
   .menu { right: 12px; left: 12px; width: auto; bottom: 80px; }
   .coach { width: calc(100vw - 32px); }
   .welcome { display: none; }
+  // Three buttons (Back / Exit / Next) share the footer on narrow coaches —
+  // trim them so the pip-bar keeps a usable width.
+  .coachFoot { gap: 6px; }
+  .coachFoot .btn { padding: 6px 10px; font-size: 12px; }
 }
 
 // When the wizard is active, prevent overscroll bounce so the spotlight

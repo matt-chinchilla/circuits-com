@@ -21,11 +21,18 @@ export function useExposeGlobals(): void {
   const navigate = useNavigate();
 
   useEffect(() => {
-    window.__adminNavigate = (path: string) => {
+    // Reports whether the navigation was ISSUED. Swallowing the throw and
+    // returning nothing let navTo claim success for a navigation that never
+    // happened — WizardApp.goBack then armed its create-detector guard for a
+    // transition that would never arrive, and the armed guard went on to
+    // swallow the NEXT observation instead (a real creation among them).
+    window.__adminNavigate = (path: string): boolean => {
       try {
         navigate(path);
+        return true;
       } catch {
         // Defensive — navigate can throw if the path isn't in the route tree.
+        return false;
       }
     };
 

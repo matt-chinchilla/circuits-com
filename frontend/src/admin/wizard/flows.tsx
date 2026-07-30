@@ -1,14 +1,215 @@
 import type { Flow } from './types';
 import { getStore, getRoute } from './helpers';
+import { getTrackedDemoEntity, getTrackedDemoListing } from './demoCleanup';
+import {
+  DEMO_PART_SKU_PREFIX,
+  DEMO_SUPPLIER_NAME,
+  isDemoPartSku,
+  isDemoSupplierName,
+} from './demoMarkers';
 
 function supplierNameFromPage(): string {
   return document.querySelector('h1')?.textContent?.trim() || DEMO_SUPPLIER.name;
 }
 
+// First CLICKABLE row of the parts table. The loading + "no parts found"
+// placeholders are also `tbody tr`, but carry a single colSpan cell and no
+// onClick — spotlighting one of those would point the user at a dead row
+// while the fetch is still in flight. Cell count is the class-name-agnostic
+// discriminator (CSS-module names are hashed).
+function firstPartsTableRow(): Element | null {
+  const rows = Array.from(document.querySelectorAll('tbody tr'));
+  return rows.find((r) => r.querySelectorAll('td').length > 2) ?? null;
+}
+
+// ⚠ DATA SAFETY. Part detail renders one [data-tour="delete-listing"] Remove
+// button PER distributor row, and this step tells the user to click the
+// highlighted one — so a wrong match instructs them to delete REAL catalog
+// data (the click-blockers make the highlighted row the ONLY clickable one).
+// The exact demo listing id is already known from the tracker, so match on
+// it and NOTHING else: no price-string heuristic, no last-row fallback over
+// an unordered listings array. No tracked id / not on the page ⇒ null, which
+// drops the spotlight and leaves the coach's Next as the way forward.
+//
+// Ids are UUIDs; anything else can't be safely interpolated into a selector, so
+// every id-keyed lookup below refuses rather than risk matching the wrong node.
+const SAFE_ID = /^[A-Za-z0-9_-]+$/;
+
+function demoListingSelector(listingId: string): string | null {
+  if (!SAFE_ID.test(listingId)) return null;
+  return `[data-tour="delete-listing"][data-listing-id="${listingId}"]`;
+}
+
+function demoListingDeleteButton(): Element | null {
+  const ref = getTrackedDemoListing();
+  if (!ref) return null;
+  const sel = demoListingSelector(ref.listingId);
+  if (!sel) return null;
+  const btn = document.querySelector(sel);
+  // Defense in depth: the tracked id already comes from the per-submission
+  // create bridge, but ALSO require the rendered row to bear the DEMO- SKU
+  // marker — so even a mis-pointed id can never spotlight a real listing.
+  if (btn && !isDemoPartSku(btn.getAttribute('data-listing-sku') ?? '')) return null;
+  return btn;
+}
+
+// ⚠ DATA SAFETY. The confirm modal on part-detail serves BOTH "delete part"
+// and "remove listing", so a bare [data-modal="confirm-delete"] match proves
+// only that some dialog is open — not that it targets the demo row. Part
+// detail stamps the pending target (data-modal-kind / data-modal-listing-id),
+// so key on the TRACKED listing id: a dialog raised from a real distributor
+// row, or from Delete part, resolves to null and the tour will not tell the
+// user to confirm it.
+function demoListingConfirmModal(): Element | null {
+  const ref = getTrackedDemoListing();
+  if (!ref) return null;
+  if (!SAFE_ID.test(ref.listingId)) return null;
+  const modal = document.querySelector(
+    `[data-modal="confirm-delete"][data-modal-kind="listing"][data-modal-listing-id="${ref.listingId}"]`,
+  );
+  // Defense in depth (mirror of demoListingDeleteButton): the open dialog must
+  // also carry the DEMO- SKU marker before the tour tells the user to confirm.
+  if (modal && !isDemoPartSku(modal.getAttribute('data-modal-listing-sku') ?? '')) return null;
+  return modal;
+}
+
+function demoListingConfirmButton(): Element | null {
+  return demoListingConfirmModal()?.querySelector('[data-modal-confirm="true"]') ?? null;
+}
+
+// Proof-of-deletion for the detach step. Advancing on modal ABSENCE fired on
+// Cancel and backdrop clicks too, so the "listing removed" annotation could
+// appear while the demo row was still sitting on a real part. The tracked
+// row being GONE from a rendered part-detail page is the only honest signal.
+function demoListingIsGone(): boolean {
+  const ref = getTrackedDemoListing();
+  if (!ref) return false;
+  // Absence proves nothing unless we're looking at THE part the demo listing
+  // hangs off. Every OTHER part-detail page also lacks the row, so a generic
+  // "some part detail is rendered" check reported success from any part in the
+  // catalog and walked the tour past the detach step with the demo listing
+  // still attached.
+  if (getRoute() !== `parts/${ref.partId}`) return false;
+  if (document.querySelector('[data-tour="add-listing"]') == null) return false;
+  const sel = demoListingSelector(ref.listingId);
+  if (!sel) return false;
+  return document.querySelector(sel) == null;
+}
+
+// The entity label the DETAIL page renders — the marker half of the identity
+// proof below. Both supplier-detail and part-detail put it in an <h1> inside the
+// same page-head block that holds the Delete button, so the lookup walks UP from
+// the button rather than querying the document: AdminLayout's topbar renders its
+// own <h1> (the static route title) and that one comes FIRST in DOM order, so a
+// bare document.querySelector('h1') reads "Parts", not the SKU. Three levels is
+// button → actions → pageHead → page, which cannot reach the topbar's separate
+// subtree.
+function renderedEntityLabel(deleteBtn: Element): string | null {
+  let node: Element | null = deleteBtn.parentElement;
+  for (let up = 0; up < 3 && node != null; up += 1) {
+    const h1 = node.querySelector('h1');
+    if (h1 != null) return h1.textContent?.trim() ?? '';
+    node = node.parentElement;
+  }
+  return null;
+}
+
+// ⚠ DATA SAFETY. The same rule the detach step above follows, applied to the
+// three tours that delete a whole ENTITY. Those steps used a bare
+// [data-tour="delete-supplier"] / [data-tour="delete-part"] selector, which
+// resolves on ANY supplier/part detail page — so a tour whose create went
+// untracked (or that the user navigated elsewhere during) would spotlight the
+// Delete button of whatever REAL row was on screen and instruct them to remove
+// it, with the click-blockers making it the only clickable control.
+//
+// Identity proof: a detail route IS the entity's id, so the tracked demo id
+// must equal the id in the URL. Anything else — no tracked id, a different
+// entity's page, a list page — resolves to null: no spotlight, no
+// click-blockers, and the coach's Next is the way forward.
+function demoEntityDeleteButton(
+  kind: 'supplier' | 'part',
+  collection: 'suppliers' | 'parts',
+  tour: 'delete-supplier' | 'delete-part',
+): Element | null {
+  const id = getTrackedDemoEntity(kind);
+  if (!id || !SAFE_ID.test(id)) return null;
+  if (getRoute() !== `${collection}/${id}`) return null;
+  const btn = document.querySelector(`[data-tour="${tour}"]`);
+  if (btn == null) return null;
+  // Where the page stamps its entity id on the control (part detail does), it
+  // must MATCH — a belt to the route's braces.
+  const stamped = btn.getAttribute('data-entity-id');
+  if (stamped != null && stamped !== id) return null;
+  // ⚠ MARKER PROOF, and the reason the id checks above aren't enough. Every
+  // check so far only proves "the page we're on is the id we RECORDED" — it
+  // says nothing about whether that id was recorded correctly. If it ever
+  // pointed at a real row (a stale localStorage key, a hand-edited value, a
+  // UUID reassigned by a reseed) the tour would spotlight a customer's Delete
+  // button and, with the click-blockers making it the only clickable control,
+  // instruct them to press it. So require the SAME marker cleanup requires —
+  // the rendered name/SKU — using the SAME predicates (demoMarkers.ts), which
+  // is what keeps "the tour offers to delete it" and "cleanup will delete it"
+  // from ever disagreeing. Unreadable label ⇒ null, the fail-closed direction.
+  const label = renderedEntityLabel(btn);
+  const bearsMarker = kind === 'supplier' ? isDemoSupplierName(label) : isDemoPartSku(label);
+  if (!bearsMarker) return null;
+  return btn;
+}
+
+function demoSupplierDeleteButton(): Element | null {
+  return demoEntityDeleteButton('supplier', 'suppliers', 'delete-supplier');
+}
+
+function demoPartDeleteButton(): Element | null {
+  return demoEntityDeleteButton('part', 'parts', 'delete-part');
+}
+
+// The confirm half of the same pair: the open dialog is the tour's own only
+// when the delete control it was raised from still resolves to the tracked demo
+// entity — which now includes that control's rendered marker, since this
+// delegates to demoEntityDeleteButton rather than re-deriving the checks. On
+// part detail ONE modal serves both "delete part" and "remove listing", so the
+// kind stamp has to say `part` as well.
+function demoEntityConfirmButton(
+  resolveDeleteButton: () => Element | null,
+  modalKind: 'part' | null,
+): Element | null {
+  if (resolveDeleteButton() == null) return null;
+  const modal = document.querySelector('[data-modal="confirm-delete"]');
+  if (modal == null) return null;
+  if (modalKind != null && modal.getAttribute('data-modal-kind') !== modalKind) return null;
+  return modal.querySelector('[data-modal-confirm="true"]');
+}
+
+function demoSupplierConfirmButton(): Element | null {
+  return demoEntityConfirmButton(demoSupplierDeleteButton, null);
+}
+
+function demoPartConfirmButton(): Element | null {
+  return demoEntityConfirmButton(demoPartDeleteButton, 'part');
+}
+
+// Where a tour's delete step should stand: the tracked demo entity's own detail
+// page. Falls back to the current detail route (then the list) when nothing is
+// tracked — the spotlight resolves to null there, so the fallback can only ever
+// show the user a page, never a delete instruction.
+function trackedDemoEntityRoute(
+  kind: 'supplier' | 'part',
+  collection: 'suppliers' | 'parts',
+): string {
+  const id = getTrackedDemoEntity(kind);
+  if (id && SAFE_ID.test(id)) return `${collection}/${id}`;
+  const r = getRoute();
+  if (new RegExp(`^${collection}/[^/]+$`).test(r) && r !== `${collection}/new`) return r;
+  return collection;
+}
+
 // Demo data — short, recognizably fake, easy for the user to spot and
-// delete at the end of each tour.
+// delete at the end of each tour. The name/SKU markers live in demoMarkers.ts:
+// cleanup re-reads the row and refuses to delete anything that doesn't still
+// carry them, so a tour's demo data MUST be built from those constants.
 export const DEMO_SUPPLIER = {
-  name: 'Demo Components Inc.',
+  name: DEMO_SUPPLIER_NAME,
   description: 'Demo distributor created during the guided tour — safe to delete.',
   contactPerson: 'Jane Doe',
   website: 'demo-components.com',
@@ -17,13 +218,31 @@ export const DEMO_SUPPLIER = {
 } as const;
 
 export const DEMO_PART = {
-  sku: 'DEMO-100',
+  sku: `${DEMO_PART_SKU_PREFIX}100`,
   manufacturer: 'Demo Components Inc.',
   description: 'Tutorial 10uF X7R Capacitor — safe to delete.',
   category: 'pmic',
   price: '1.25',
   stock: '5',
 } as const;
+
+// The attach tour's distributor order code (PartListing.sku).
+//
+// ⚠ DATA SAFETY, not cosmetics. This is the ONLY marker a demo listing carries:
+// the row hangs off a REAL catalog part, so cleanup can't identify it by its
+// parent, and the tracked id is only ever as good as the bridge that published
+// it. demoCleanup re-reads the listing off its part and refuses to detach
+// anything whose `sku` doesn't still start with DEMO- — so an unmarked listing
+// survives the tour, and a real distributor row can never be removed. The tour
+// autofills this value (and its advance won't pass without a DEMO- one).
+//
+// The 4-char suffix is cosmetic — it keeps consecutive runs distinguishable in
+// the listings panel. Only the PREFIX is read by anything. Well inside the
+// backend's Field(max_length=100) / the form's maxLength={100}.
+export const DEMO_LISTING_SKU = `${DEMO_PART_SKU_PREFIX}LST-${Date.now()
+  .toString(36)
+  .slice(-4)
+  .toUpperCase()}`;
 
 export const SAMPLE_CSV_TEXT = `sku,description,manufacturer,category,stock,price_usd
 DEMO-CAP-100,Tutorial 10uF X7R Capacitor,Demo Components Inc.,pmic,5000,1.25
@@ -182,34 +401,46 @@ export const FLOWS: Flow[] = [
         advance: { kind: 'manual' },
       },
       {
-        goto: () => {
-          // Navigate back to the demo supplier so the delete button is on-screen.
-          // We don't have a sync supplier cache, but the route is still
-          // /admin/suppliers/<id> from step 9. Re-navigate to itself so the
-          // route-based advance picks up the goto-driven path.
-          const r = getRoute();
-          if (/^suppliers\/[^/]+$/.test(r) && r !== 'suppliers/new') return r;
-          return 'suppliers';
-        },
-        selector: '[data-tour="delete-supplier"]',
+        // Back to the demo supplier so the delete button is on-screen — by
+        // TRACKED id when we have one (the preview modal may have left us
+        // anywhere), otherwise the detail page we're already on.
+        goto: () => trackedDemoEntityRoute('supplier', 'suppliers'),
+        selector: demoSupplierDeleteButton,
         title: "Now let's clean up",
-        body: () => (
-          <>
-            <b>{supplierNameFromPage()}</b> was just for the tutorial. Click <b>Delete</b> in the
-            header — you&apos;ll get a confirmation dialog.
-          </>
-        ),
+        // Nothing highlighted ⇒ the tour can't prove this page is its own demo
+        // supplier, so the copy must NOT tell the user to delete it.
+        body: () =>
+          demoSupplierDeleteButton() != null ? (
+            <>
+              <b>{supplierNameFromPage()}</b> was just for the tutorial. Click <b>Delete</b> in the
+              header — you&apos;ll get a confirmation dialog.
+            </>
+          ) : (
+            <>
+              Nothing is highlighted: the tour couldn&apos;t identify the supplier it created.{' '}
+              <b>Don&apos;t delete the supplier on screen</b> — it may be real catalog data. Click{' '}
+              <b>Next</b> to move on; the tour still removes its own demo row when it ends.
+            </>
+          ),
         advance: { kind: 'modal' },
       },
       {
-        selector: '[data-modal-confirm="true"]',
+        // Identity-keyed like the step above: resolved only inside a dialog
+        // raised from the tracked demo supplier's own Delete button.
+        selector: demoSupplierConfirmButton,
         title: 'Confirm the delete',
-        body: () => (
-          <>
-            Click <b>Confirm</b> to remove <b>{supplierNameFromPage()}</b>. The supplier is gone
-            from the directory, and from the public site, in the same beat.
-          </>
-        ),
+        body: () =>
+          demoSupplierConfirmButton() != null ? (
+            <>
+              Click <b>Confirm</b> to remove <b>{supplierNameFromPage()}</b>. The supplier is gone
+              from the directory, and from the public site, in the same beat.
+            </>
+          ) : (
+            <>
+              Nothing is highlighted: this dialog isn&apos;t the one the tour opened for its own
+              demo supplier. <b>Cancel it</b> rather than confirming — then click <b>Next</b>.
+            </>
+          ),
         advance: { kind: 'route', test: (r) => r === 'suppliers' },
       },
       {
@@ -396,20 +627,36 @@ export const FLOWS: Flow[] = [
         advance: { kind: 'manual' },
       },
       {
-        selector: '[data-tour="delete-part"]',
+        goto: () => trackedDemoEntityRoute('part', 'parts'),
+        selector: demoPartDeleteButton,
         title: 'Delete the demo SKU',
-        body: (
-          <>
-            Click <b>Delete</b> and confirm to remove the tutorial part. Distributor listings
-            linked to it are unlinked automatically.
-          </>
-        ),
+        body: () =>
+          demoPartDeleteButton() != null ? (
+            <>
+              Click <b>Delete</b> and confirm to remove the tutorial part. Distributor listings
+              linked to it are unlinked automatically.
+            </>
+          ) : (
+            <>
+              Nothing is highlighted: the tour couldn&apos;t identify the part it created.{' '}
+              <b>Don&apos;t delete the part on screen</b> — it may be real catalog data. Click{' '}
+              <b>Next</b> to move on; the tour still removes its own demo SKU when it ends.
+            </>
+          ),
         advance: { kind: 'modal' },
       },
       {
-        selector: '[data-modal-confirm="true"]',
+        selector: demoPartConfirmButton,
         title: 'Confirm',
-        body: <>Wipe the tutorial part.</>,
+        body: () =>
+          demoPartConfirmButton() != null ? (
+            <>Wipe the tutorial part.</>
+          ) : (
+            <>
+              Nothing is highlighted: this dialog isn&apos;t the one the tour opened for its own
+              demo SKU. <b>Cancel it</b> rather than confirming — then click <b>Next</b>.
+            </>
+          ),
         advance: { kind: 'route', test: (r) => r === 'parts' || /^suppliers\/[^/]+$/.test(r) },
       },
       {
@@ -582,10 +829,28 @@ export const FLOWS: Flow[] = [
       {
         type: 'annotation',
         title: 'Cleaning up',
+        // ⚠ DELIBERATE AND EXPLICIT: the batch import is the ONE tour with no
+        // automatic cleanup, and that is the accepted trade-off — not an
+        // oversight to be "fixed" later.
+        //
+        // Why: `batchImportParts` publishes no id bridge, so the 3 synthetic
+        // rows are UNTRACKED. The single-id tracker can only own one row per
+        // kind, and a 3-row array key would have to be kept in step with a
+        // partial import (some rows created, some skipped by dedupe) — so the
+        // copy states the manual path outright instead of implying the wizard
+        // will tidy up. Both backstops hold regardless: all 3 SKUs carry the
+        // DEMO- marker (SAMPLE_CSV_TEXT), and `--reseed` wipes them.
+        //
+        // ⚠ And NOTHING in this step can reach a non-DEMO part: it is an
+        // `annotation` — no `selector`, no `fieldName`, no resolver, no delete.
+        // It renders copy and waits for Next. Do not add a delete affordance
+        // here; there is no tracked id to prove which rows are the tour's, so
+        // any spotlight would have to guess at real catalog data.
         body: (
           <>
-            The 3 demo SKUs all start with <code>DEMO-</code>. You can delete them individually
-            from the Parts page, or leave them — they&apos;ll get wiped on the next{' '}
+            This tour is the one that <b>doesn&apos;t</b> clean up after itself — all 3 demo SKUs
+            stay in the catalog. They all start with <code>DEMO-</code>: delete them individually
+            from the Parts page, or leave them and they&apos;ll be wiped by the next{' '}
             <code>./deploy.sh --reseed</code>.
           </>
         ),
@@ -872,10 +1137,15 @@ export const FLOWS: Flow[] = [
         body: (
           <>
             The manufacturer&apos;s part number — this is the universal identifier engineers search
-            by. We&apos;ll use a real-world component.
+            by. We&apos;ll use a real-world component, prefixed <code>DEMO-</code> so it can never
+            collide with (or be mistaken for) the real AMS1117 in the catalog.
           </>
         ),
-        suggested: 'AMS1117-3.3',
+        // ⚠ The DEMO- prefix is load-bearing, not cosmetic: cleanup re-reads the
+        // part and only deletes SKUs carrying it (see demoMarkers.ts). A bare
+        // 'AMS1117-3.3' would be indistinguishable from real catalog data, so
+        // the tour's own row could never be safely removed.
+        suggested: `${DEMO_PART_SKU_PREFIX}AMS1117-3.3`,
         advance: { kind: 'value', fieldName: 'sku', test: (v) => v.trim().length >= 3 },
       },
       {
@@ -958,19 +1228,35 @@ export const FLOWS: Flow[] = [
         },
       },
       {
-        selector: '[data-tour="delete-part"]',
+        goto: () => trackedDemoEntityRoute('part', 'parts'),
+        selector: demoPartDeleteButton,
         title: 'Clean up',
-        body: (
-          <>
-            Click <b>Delete</b> and confirm to remove the tutorial part.
-          </>
-        ),
+        body: () =>
+          demoPartDeleteButton() != null ? (
+            <>
+              Click <b>Delete</b> and confirm to remove the tutorial part.
+            </>
+          ) : (
+            <>
+              Nothing is highlighted: the tour couldn&apos;t identify the part it created.{' '}
+              <b>Don&apos;t delete the part on screen</b> — it may be real catalog data. Click{' '}
+              <b>Next</b> to move on; the tour still removes its own demo SKU when it ends.
+            </>
+          ),
         advance: { kind: 'modal' },
       },
       {
-        selector: '[data-modal-confirm="true"]',
+        selector: demoPartConfirmButton,
         title: 'Confirm delete',
-        body: <>Remove the AMS1117 tutorial entry.</>,
+        body: () =>
+          demoPartConfirmButton() != null ? (
+            <>Remove the tutorial entry.</>
+          ) : (
+            <>
+              Nothing is highlighted: this dialog isn&apos;t the one the tour opened for its own
+              demo SKU. <b>Cancel it</b> rather than confirming — then click <b>Next</b>.
+            </>
+          ),
         advance: { kind: 'route', test: (r) => r === 'parts' },
       },
       {
@@ -980,6 +1266,224 @@ export const FLOWS: Flow[] = [
           <>
             Same shape as the other flows: create → land on detail → delete. Now you&apos;ve seen
             every variant.
+          </>
+        ),
+        advance: { kind: 'manual' },
+      },
+    ],
+  },
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Add a Part (supplier context) — the mirror image of add-part-general:
+  // the SKU already exists in the catalog, we attach a supplier to it via
+  // POST /parts/{id}/listings. Nothing in the parts table is created OR
+  // deleted here; the only demo row is the listing, which the last two
+  // steps remove. WizardApp also tracks that listing for abandon-cleanup —
+  // deleting the borrowed part would be data loss, so cleanup is
+  // listing-scoped (see demoCleanup's 'listing' kind).
+  //
+  // The tour stamps DEMO_LISTING_SKU into the listing's own order code so that
+  // cleanup has a marker to verify before detaching anything. Tracking the id
+  // is NOT sufficient on its own: every attach submission — tour or real admin
+  // work — publishes the same id bridge, so the marker is what makes a real
+  // distributor row un-deletable by the wizard.
+  // ──────────────────────────────────────────────────────────────────────
+  {
+    id: 'add-part-supplier',
+    title: 'Add a Part (supplier context)',
+    summary: 'Attach an existing catalog SKU to a distributor, then detach it again.',
+    icon: 'link-simple',
+    accent: 'teal',
+    minutes: 3,
+    steps: [
+      {
+        goto: '',
+        selector: '[data-tour="side-parts"]',
+        title: 'Open the Parts page',
+        body: (
+          <>
+            This tour doesn&apos;t create a part — it takes one that already exists and adds a
+            distributor to it. Start from <b>Parts</b> under <i>Catalog</i>.
+          </>
+        ),
+        advance: { kind: 'route', test: (r) => r === 'parts' || /^parts\//.test(r) },
+      },
+      {
+        selector: firstPartsTableRow,
+        title: 'Open any existing part',
+        body: (
+          <>
+            Click the first row in the table. Any real SKU works — we&apos;re only adding a
+            listing to it, so the part itself is never modified.
+          </>
+        ),
+        advance: {
+          kind: 'route',
+          test: (r) => /^parts\/[^/]+$/.test(r) && r !== 'parts/new',
+        },
+      },
+      {
+        selector: '[data-tour="add-listing"]',
+        title: 'Add a distributor',
+        body: (
+          <>
+            The <i>Distributor listings</i> panel shows every supplier that stocks this part. Click{' '}
+            <b>Add distributor</b> to open the attach form.
+          </>
+        ),
+        advance: { kind: 'route', test: (r) => /^parts\/[^/]+\/listings\/new$/.test(r) },
+      },
+      {
+        fieldName: 'supplier_id',
+        title: 'Pick the supplier',
+        body: (
+          <>
+            Choose which distributor stocks this SKU. A supplier can only be listed once per part —
+            picking one that&apos;s already listed comes back as a duplicate error.
+          </>
+        ),
+        suggested: '__auto_select__',
+        suggestedLabel: 'First available supplier',
+        advance: { kind: 'value', fieldName: 'supplier_id', test: (v) => !!v && v.length > 1 },
+      },
+      {
+        fieldName: 'initial_stock_quantity',
+        title: 'Stock quantity',
+        body: (
+          <>
+            How many units this distributor has on hand. It feeds the public part page&apos;s stock
+            column and rolls into the part&apos;s total availability.
+          </>
+        ),
+        suggested: DEMO_PART.stock,
+        advance: {
+          kind: 'value',
+          fieldName: 'initial_stock_quantity',
+          test: (v) => Number(v) > 0,
+        },
+      },
+      {
+        fieldName: 'initial_unit_price',
+        title: 'Unit price',
+        body: (
+          <>
+            What this distributor charges per unit, in USD. The lowest price across all listings
+            becomes the part&apos;s <i>best price</i> on the public site.
+          </>
+        ),
+        suggested: DEMO_PART.price,
+        advance: {
+          kind: 'value',
+          fieldName: 'initial_unit_price',
+          test: (v) => Number(v) > 0,
+        },
+      },
+      {
+        // ⚠ NOT an optional nicety. This field is what MARKS the row as the
+        // tour's own: the listing hangs off a real catalog part, so its `sku` is
+        // the only thing cleanup can check before detaching it. Leave it blank
+        // and the demo listing is unprovable — cleanup will refuse to touch it
+        // and it stays attached (fail-closed). Hence the DEMO- advance test.
+        fieldName: 'listing_sku',
+        title: 'Give it a demo order code',
+        body: (
+          <>
+            The distributor&apos;s own part number for this SKU. We fill in a{' '}
+            <code>{DEMO_LISTING_SKU}</code> value on purpose — that <code>DEMO-</code> prefix is
+            the marker the tour reads back before it removes this listing, so cleanup can never
+            detach one of the real distributor rows next to it.
+          </>
+        ),
+        suggested: DEMO_LISTING_SKU,
+        advance: { kind: 'value', fieldName: 'listing_sku', test: isDemoPartSku },
+      },
+      {
+        selector: '[data-tour="submit-listing"]',
+        title: 'Attach the listing',
+        body: (
+          <>
+            Hit <b>Add distributor</b>. You&apos;ll land back on the part&apos;s detail page with
+            the new listing row in place.
+          </>
+        ),
+        advance: {
+          kind: 'route',
+          test: (r) =>
+            /^parts\/[^/]+$/.test(r) && r !== 'parts/new' && !r.endsWith('/listings/new'),
+        },
+      },
+      {
+        type: 'annotation',
+        title: 'The part is now listed',
+        body: (
+          <>
+            The distributor shows in the listings panel with its stock and price, and the
+            supplier&apos;s parts-count badge bumps up — same catalog row, one more source. This is
+            how a real SKU picks up competing distributors over time.
+          </>
+        ),
+        advance: { kind: 'manual' },
+      },
+      {
+        selector: demoListingDeleteButton,
+        title: 'Detach the demo listing',
+        // Nothing highlighted ⇒ the tour can't prove which row is its own, so
+        // the copy must NOT tell the user to remove one. Every other row on
+        // this page is real catalog data.
+        body: () =>
+          demoListingDeleteButton() != null ? (
+            <>
+              Click <b>Remove</b> on the highlighted row — the listing we just added. Only the
+              listing goes; the part stays in the catalog, because it was never ours to delete.
+            </>
+          ) : (
+            <>
+              Nothing is highlighted: the tour couldn&apos;t identify the listing it added.{' '}
+              <b>Don&apos;t remove any of the rows shown</b> — they&apos;re real catalog data.
+              Click <b>Next</b> to move on.
+            </>
+          ),
+        hint: 'Leave the other distributor rows alone — those are real catalog data.',
+        // Requires OUR row to still be identifiable AND the open dialog to be
+        // the one raised for it — not just "a modal is open": with no spotlight
+        // there are no click-blockers either, so a confirm dialog opened from a
+        // REAL row must never walk the tour on to "Confirm the detach" and tell
+        // the user to go through with it.
+        advance: {
+          kind: 'predicate',
+          test: () =>
+            demoListingDeleteButton() != null && demoListingConfirmModal() != null,
+        },
+      },
+      {
+        // Identity-keyed, same as the step above: the confirm button is only
+        // resolved inside the dialog stamped with the tracked listing id.
+        selector: demoListingConfirmButton,
+        title: 'Confirm the detach',
+        body: () =>
+          demoListingConfirmButton() != null ? (
+            <>
+              Confirm to drop the listing and its price breaks. The part&apos;s best price and
+              total stock recalculate from whatever distributors remain.
+            </>
+          ) : (
+            <>
+              Nothing is highlighted: this dialog isn&apos;t the one the tour opened for its own
+              listing. <b>Cancel it</b> rather than confirming — then click <b>Next</b>.
+            </>
+          ),
+        // Deliberately NOT modalGone — Cancel and backdrop clicks dismiss the
+        // modal too, and the next annotation would then claim a still-present
+        // listing was removed. Advance only once the row is actually gone.
+        advance: { kind: 'predicate', test: demoListingIsGone },
+      },
+      {
+        type: 'annotation',
+        title: 'Back to where we started',
+        body: (
+          <>
+            Attach → verify → detach, with the catalog part untouched throughout. That&apos;s the
+            supplier-context half of parts management.
           </>
         ),
         advance: { kind: 'manual' },

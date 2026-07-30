@@ -29,15 +29,6 @@ export async function loadSponsors(): Promise<AdminSponsor[]> {
 }
 
 /**
- * Fetch a single sponsor by id. The backend has no detail endpoint in the
- * contract, so we pull the list and find — the list is small (paid placements).
- */
-export async function findSponsor(id: string): Promise<AdminSponsor | undefined> {
-  const rows = await loadSponsors();
-  return rows.find((s) => s.id === id);
-}
-
-/**
  * Create (POST) when `next` has no id, otherwise update (PATCH) the existing
  * sponsor. The server returns the canonical row, which we splice into the cache
  * so a subsequent cachedSponsors() read is fresh.

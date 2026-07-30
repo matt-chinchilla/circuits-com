@@ -196,6 +196,18 @@ export default function PartFormPage() {
         setTimeout(() => navigate(`/admin/parts/${id}`), 900);
       } else {
         const created = await adminApi.createPart(payload);
+        // ─── Wizard id-from-response bridge ─────────────────────────────────
+        // Published SYNCHRONOUSLY, before the navigate below, so the guided
+        // tour tracks its demo SKU for cleanup instead of inferring the id from
+        // the 'parts/new' → 'parts/<id>' transition. A browser Back during the
+        // 900ms toast delay eats that transition, and an untracked DEMO- part is
+        // visible on the PUBLIC catalog until someone deletes it by hand.
+        //
+        // Harmless outside a tour: the wizard adopts a bridge only while a flow
+        // that creates THIS kind is active, and clears it on flow start/end.
+        if (created.id) {
+          window.__wizardCreatedEntity = { kind: 'part', id: created.id };
+        }
         setToast({ type: 'success', msg: 'Part created successfully.' });
         setTimeout(() => navigate(`/admin/parts/${created.id}`), 900);
       }

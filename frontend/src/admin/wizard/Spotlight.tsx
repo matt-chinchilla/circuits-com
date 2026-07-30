@@ -4,7 +4,7 @@ import CoachCard, { type CoachPos } from './CoachCard';
 import { useTargetRect, type Rect } from './useTargetRect';
 import { useAdvance } from './useAdvance';
 import { findEl, findFieldInput } from './helpers';
-import type { Flow, Step, SpotlightStep } from './types';
+import type { BackGuard, Flow, Step, SpotlightStep } from './types';
 
 function isSpotlightStep(step: Step): step is SpotlightStep {
   return step.type === undefined || step.type === 'spotlight';
@@ -16,7 +16,10 @@ interface SpotlightProps {
   totalSteps: number;
   flow: Flow;
   currentRoute: string;
+  backGuard: BackGuard | null;
+  canGoBack: boolean;
   onNext: () => void;
+  onBack: () => void;
   onExit: () => void;
   onAutofill: (step: Step) => void;
 }
@@ -89,7 +92,10 @@ export default function Spotlight({
   totalSteps,
   flow,
   currentRoute,
+  backGuard,
+  canGoBack,
   onNext,
+  onBack,
   onExit,
   onAutofill,
 }: SpotlightProps) {
@@ -102,7 +108,18 @@ export default function Spotlight({
     setCoachPos(placeCoach(rect));
   }, [rect?.top, rect?.left, rect?.width, rect?.height]);
 
-  useAdvance(step.advance, onNext, `${flow.id}-${stepIndex}`, currentRoute);
+  // Scope the Back guard to the step it was raised for — every other step
+  // runs its advance conditions completely unchanged.
+  const suppressedRoute =
+    backGuard && backGuard.stepIndex === stepIndex ? backGuard.route : null;
+  // A guarded step has NO working auto-advance until a fresh transition
+  // happens, and its anchor is often the route/panel the user is already on —
+  // so the anchor click may change nothing. CoachCard still performs the click
+  // (it's the action the step exists to demonstrate) but uses this flag to arm
+  // a short force-advance timer behind it, so a no-op click can't dead-end.
+  const guarded = suppressedRoute != null;
+
+  useAdvance(step.advance, onNext, `${flow.id}-${stepIndex}`, currentRoute, suppressedRoute);
 
   // Auto-focus the field input when stepping onto an input step. Helps
   // keyboard-driven users stay on the home row.
@@ -218,7 +235,10 @@ export default function Spotlight({
         totalSteps={totalSteps}
         flow={flow}
         pos={coachPos}
+        canGoBack={canGoBack}
+        guarded={guarded}
         onNext={onNext}
+        onBack={onBack}
         onExit={onExit}
         onAutofill={onAutofill}
       />

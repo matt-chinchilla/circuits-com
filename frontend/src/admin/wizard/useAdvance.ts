@@ -14,21 +14,36 @@ import type { AdvanceSpec } from './types';
 // stale DOM from the previous step. But route advances are user-driven and
 // MUST fire immediately. Now route uses a clean React-effect-key-on-route
 // pattern (no setTimeout grace), while polling kinds keep the grace.
+//
+// `suppressedRoute` (2026-07-29, wizard-wide Back button): non-null means
+// the user just REWOUND onto this step, and its forward condition is very
+// likely already true — the route still matches, the input still holds what
+// they typed. Firing would bounce them straight back where they came from,
+// so both runners demand a FRESH transition first:
+//   - route kind: blocked while currentRoute equals the suppressed route;
+//     any real route change re-enables it.
+//   - polling kinds: the runner starts un-armed and arms itself the first
+//     time it observes the condition FALSE, so only a false→true edge fires.
+// The guard is scoped per-step by the caller (Spotlight passes null unless
+// the guard's index matches the rendered step), so it can never leak into
+// the next step.
 export function useAdvance(
   advance: AdvanceSpec | undefined,
   onAdvance: () => void,
   stepKey: string,
   currentRoute: string,
+  suppressedRoute?: string | null,
 ): void {
   // Route advances: re-run the effect whenever the route changes. If the
   // test passes for the current route, advance. No grace window — the user
   // just clicked the spotlighted button, they expect instant feedback.
   useEffect(() => {
     if (!advance || advance.kind !== 'route') return;
+    if (suppressedRoute != null && currentRoute === suppressedRoute) return;
     if (!advance.test(currentRoute)) return;
     const t = setTimeout(onAdvance, 240);
     return () => clearTimeout(t);
-  }, [stepKey, currentRoute, advance, onAdvance]);
+  }, [stepKey, currentRoute, advance, onAdvance, suppressedRoute]);
 
   // Polling advances. Two timing modes:
   //
@@ -48,15 +63,23 @@ export function useAdvance(
     if (!advance || advance.kind === 'manual' || advance.kind === 'route') return;
 
     let fired = false;
+    // Post-Back arming (see suppressedRoute above). Normal step entry starts
+    // ARMED, so every timing semantic below is untouched. A rewound step
+    // starts un-armed and `arm()` — called on any poll tick that reads the
+    // condition as false — re-enables it, so only a false→true edge fires.
+    let armed = suppressedRoute == null;
+    const arm = () => {
+      armed = true;
+    };
     const startedAt = Date.now();
     const fire = () => {
-      if (fired) return;
+      if (fired || !armed) return;
       if (Date.now() - startedAt < 450) return;
       fired = true;
       setTimeout(onAdvance, 240);
     };
     const fireImmediate = () => {
-      if (fired) return;
+      if (fired || !armed) return;
       fired = true;
       setTimeout(onAdvance, 240);
     };
@@ -70,12 +93,16 @@ export function useAdvance(
         if (advance.kind === 'value') {
           const val = advance.fieldName ? getFieldValue(advance.fieldName) : '';
           if (advance.test(val)) fire();
+          else arm();
         } else if (advance.kind === 'predicate') {
           if (advance.test()) fire();
+          else arm();
         } else if (advance.kind === 'modal') {
           if (document.querySelector('[data-modal="confirm-delete"]')) fireImmediate();
+          else arm();
         } else if (advance.kind === 'modalGone') {
           if (!document.querySelector('[data-modal="confirm-delete"]')) fireImmediate();
+          else arm();
         }
       } catch {
         // Bad selector etc. — swallow and keep polling.
@@ -83,5 +110,5 @@ export function useAdvance(
     }, 220);
 
     return () => clearInterval(poll);
-  }, [stepKey, advance, onAdvance]);
+  }, [stepKey, advance, onAdvance, suppressedRoute]);
 }

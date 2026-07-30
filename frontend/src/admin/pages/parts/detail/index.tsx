@@ -1,11 +1,21 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Edit, Trash2, ExternalLink, Check } from 'lucide-react';
+import { ArrowLeft, Edit, Trash2, ExternalLink, Check, Plus } from 'lucide-react';
 import { adminApi } from '@admin/services/adminApi';
 import Icon from '@shared/components/Icon';
 import { lettermark } from '@shared/utils/lettermark';
-import type { PartDetail } from '@admin/types/admin';
+import type { PartDetail, PartListing } from '@admin/types/admin';
 import styles from './PartDetailPage.module.scss';
+import rowStyles from './ListingRowActions.module.scss';
+
+// ─── Confirm-modal target ──────────────────────────────────────────────────
+// One modal serves both destructive actions on this page. Keeping a single
+// element also keeps the wizard's [data-modal="confirm-delete"] /
+// [data-modal-confirm="true"] anchors unique in the DOM.
+
+type PendingDelete =
+  | { kind: 'part' }
+  | { kind: 'listing'; listing: PartListing };
 
 // ─── Lifecycle status badge ────────────────────────────────────────────────
 
@@ -31,17 +41,43 @@ export default function PartDetailPage() {
   const [part, setPart] = useState<PartDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [pending, setPending] = useState<PendingDelete | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [toast, setToast] = useState('');
 
+  // Mounted flag. Every setState on this page happens after an await, and
+  // both destructive actions chain a second request — a fast Back-nav out of
+  // the page must not write into an unmounted tree. Set on mount (NOT just
+  // at declaration) because StrictMode runs setup → cleanup → setup on the
+  // same instance, which would otherwise leave the flag permanently false.
+  const alive = useRef(true);
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
+
   useEffect(() => {
     if (!id) return;
+    let cancelled = false;
     adminApi
       .getPart(id)
-      .then(setPart)
-      .catch(() => setError('Failed to load part details.'))
-      .finally(() => setLoading(false));
+      .then((fresh) => {
+        if (cancelled || !alive.current) return;
+        setPart(fresh);
+      })
+      .catch(() => {
+        if (cancelled || !alive.current) return;
+        setError('Failed to load part details.');
+      })
+      .finally(() => {
+        if (cancelled || !alive.current) return;
+        setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [id]);
 
   useEffect(() => {
@@ -61,18 +97,49 @@ export default function PartDetailPage() {
     return { distributorCount: dc, bestPrice: bp, totalStock: ts };
   }, [part]);
 
-  async function handleDelete() {
+  async function deleteThePart() {
     if (!id) return;
-    setDeleting(true);
     try {
       await adminApi.deletePart(id);
+      if (!alive.current) return;
       setToast(`Deleted ${part?.sku ?? 'part'}`);
-      setTimeout(() => navigate('/admin/parts'), 800);
+      setTimeout(() => {
+        if (alive.current) navigate('/admin/parts');
+      }, 800);
     } catch {
+      if (!alive.current) return;
       setToast('Failed to delete part.');
+    }
+  }
+
+  // Listing-scoped: the part stays in the catalog, only this distributor's
+  // listing (and its price breaks) go. Re-fetch so the row disappears and the
+  // Distribution mini-stats re-derive from the remaining listings.
+  async function deleteTheListing(listing: PartListing) {
+    if (!id) return;
+    try {
+      await adminApi.deletePartListing(id, listing.id);
+      const fresh = await adminApi.getPart(id);
+      if (!alive.current) return;
+      setPart(fresh);
+      setToast(`Removed ${listing.supplier_name ?? 'distributor'}`);
+    } catch {
+      if (!alive.current) return;
+      setToast('Failed to remove listing.');
+    }
+  }
+
+  async function handleConfirmDelete() {
+    if (!pending) return;
+    setDeleting(true);
+    try {
+      if (pending.kind === 'part') await deleteThePart();
+      else await deleteTheListing(pending.listing);
     } finally {
-      setDeleting(false);
-      setConfirmDelete(false);
+      if (alive.current) {
+        setDeleting(false);
+        setPending(null);
+      }
     }
   }
 
@@ -129,13 +196,25 @@ export default function PartDetailPage() {
           <button
             type="button"
             data-tour="delete-part"
+            // Page identity for the wizard's cleanup step: it spotlights this
+            // button ONLY when the id matches the demo part its own tour
+            // created — every other part is real catalog data. See flows.tsx.
+            data-entity-id={id}
             className={`${styles.btn} ${styles.btnDangerGhost}`}
-            onClick={() => setConfirmDelete(true)}
+            onClick={() => setPending({ kind: 'part' })}
             disabled={deleting}
           >
             <Trash2 />
             Delete
           </button>
+          <Link
+            to={`/admin/parts/${id}/listings/new`}
+            data-tour="add-listing"
+            className={`${styles.btn} ${styles.btnGhost}`}
+          >
+            <Plus />
+            Add distributor
+          </Link>
           <Link to={`/admin/parts/${id}/edit`} className={`${styles.btn} ${styles.btnPrimary}`}>
             <Edit />
             Edit
@@ -258,8 +337,29 @@ export default function PartDetailPage() {
                   <div className={`${styles.listingStock} ${stockClass(listing.stock_quantity)}`}>
                     {listing.stock_quantity.toLocaleString()}
                   </div>
-                  <div className={styles.listingLead}>
-                    {listing.lead_time_days != null ? `${listing.lead_time_days}d lead` : '—'}
+                  <div className={`${styles.listingLead} ${rowStyles.leadCell}`}>
+                    <span>
+                      {listing.lead_time_days != null ? `${listing.lead_time_days}d lead` : '—'}
+                    </span>
+                    <button
+                      type="button"
+                      data-tour="delete-listing"
+                      // Row identity for the wizard's detach step: it must
+                      // spotlight the ONE demo listing it created and never
+                      // guess at a real distributor row. See flows.tsx.
+                      data-listing-id={listing.id}
+                      // Marker for the wizard's defense-in-depth check: the
+                      // detach step also verifies this bears the DEMO- SKU
+                      // before spotlighting, so a real row can never be it.
+                      data-listing-sku={listing.sku ?? undefined}
+                      className={rowStyles.removeBtn}
+                      onClick={() => setPending({ kind: 'listing', listing })}
+                      disabled={deleting}
+                      aria-label={`Remove ${listing.supplier_name ?? 'distributor'} listing`}
+                    >
+                      <Trash2 />
+                      Remove
+                    </button>
                   </div>
                 </div>
                 {listing.price_breaks.length > 0 && (
@@ -280,22 +380,39 @@ export default function PartDetailPage() {
         </div>
       </div>
 
-      {confirmDelete && (
+      {pending && (
         <div
           className={styles.modalBackdrop}
           data-modal="confirm-delete"
-          onClick={() => setConfirmDelete(false)}
+          // ⚠ DATA SAFETY. One modal serves both destructive actions, so
+          // "a confirm-delete modal is open" alone tells the wizard nothing
+          // about WHICH row it targets. Stamping the pending target lets the
+          // detach tour prove the open dialog belongs to the demo listing it
+          // created before it tells the user to go through with it — every
+          // other row here is real catalog data. See flows.tsx.
+          data-modal-kind={pending.kind}
+          data-modal-listing-id={pending.kind === 'listing' ? pending.listing.id : undefined}
+          data-modal-listing-sku={
+            pending.kind === 'listing' ? (pending.listing.sku ?? undefined) : undefined
+          }
+          onClick={() => setPending(null)}
         >
           <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
-            <h3 className={styles.modalTitle}>Delete {part.sku}?</h3>
+            <h3 className={styles.modalTitle}>
+              {pending.kind === 'part'
+                ? `Delete ${part.sku}?`
+                : `Remove ${pending.listing.supplier_name ?? 'this distributor'}?`}
+            </h3>
             <p className={styles.modalBody}>
-              This removes the part and all its distributor listings. This action cannot be undone.
+              {pending.kind === 'part'
+                ? 'This removes the part and all its distributor listings. This action cannot be undone.'
+                : `This removes the ${pending.listing.supplier_name ?? 'distributor'} listing and its price breaks. ${part.sku} stays in the catalog.`}
             </p>
             <div className={styles.modalActions}>
               <button
                 type="button"
                 className={`${styles.btn} ${styles.btnGhost}`}
-                onClick={() => setConfirmDelete(false)}
+                onClick={() => setPending(null)}
                 disabled={deleting}
               >
                 Cancel
@@ -304,11 +421,17 @@ export default function PartDetailPage() {
                 type="button"
                 data-modal-confirm="true"
                 className={`${styles.btn} ${styles.btnDanger}`}
-                onClick={handleDelete}
+                onClick={handleConfirmDelete}
                 disabled={deleting}
               >
                 <Trash2 />
-                {deleting ? 'Deleting...' : 'Delete part'}
+                {pending.kind === 'part'
+                  ? deleting
+                    ? 'Deleting...'
+                    : 'Delete part'
+                  : deleting
+                    ? 'Removing...'
+                    : 'Remove listing'}
               </button>
             </div>
           </div>

@@ -19,6 +19,7 @@ const ACCENT_CLASS: Record<Flow['accent'], string | undefined> = {
   rose: styles.tourCardAccentRose,
   cyan: styles.tourCardAccentCyan,
   amber: styles.tourCardAccentAmber,
+  teal: styles.tourCardAccentTeal,
 };
 
 // Tours catalog panel. Esc-to-close + focus-trap on first tab/shift-tab.

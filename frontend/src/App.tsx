@@ -32,6 +32,7 @@ const SupplierFormPage = lazy(() => import("@admin/pages/suppliers/form"));
 const PartsPage = lazy(() => import("@admin/pages/parts/list"));
 const PartDetailPage = lazy(() => import("@admin/pages/parts/detail"));
 const PartFormPage = lazy(() => import("@admin/pages/parts/form"));
+const AttachListingPage = lazy(() => import("@admin/pages/parts/attach"));
 const ImportPage = lazy(() => import("@admin/pages/import"));
 const ReportsPage = lazy(() => import("@admin/pages/reports"));
 const CategoriesPage = lazy(() => import("@admin/pages/categories"));
@@ -135,6 +136,10 @@ function App() {
                       <Route path="parts/new" element={<PartFormPage />} />
                       <Route path="parts/:id" element={<PartDetailPage />} />
                       <Route path="parts/:id/edit" element={<PartFormPage />} />
+                      <Route
+                        path="parts/:id/listings/new"
+                        element={<AttachListingPage />}
+                      />
                       <Route path="import" element={<ImportPage />} />
                       <Route path="reports" element={<ReportsPage />} />
                       <Route path="categories" element={<CategoriesPage />} />

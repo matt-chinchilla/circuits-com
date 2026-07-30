@@ -88,9 +88,26 @@ export function getRoute(): string {
   return m ? m[1] : '';
 }
 
-export function navTo(path: string): void {
-  if (!path) return;
-  // Always prefix /admin/ — the flow DSL drops it for readability.
-  const target = path.startsWith('/admin') ? path : `/admin/${path.replace(/^\//, '')}`;
-  window.__adminNavigate?.(target);
+// Navigate the admin SPA to a flow-DSL route. Returns whether a navigation
+// was actually ISSUED — WizardApp.goBack arms its create-detector guard off
+// this return value, so a call that turns out to be a no-op can never leave
+// the guard armed to swallow an unrelated future transition.
+export function navTo(path: string): boolean {
+  // '' is a REAL address — the admin dashboard. The flow DSL spells it as the
+  // empty route (`goto: ''`), so treating falsy as "nothing to do" silently
+  // dropped both those gotos and any Back-rewind onto the dashboard.
+  const target =
+    path === ''
+      ? '/admin'
+      : // Always prefix /admin/ — the flow DSL drops it for readability.
+        path.startsWith('/admin')
+        ? path
+        : `/admin/${path.replace(/^\//, '')}`;
+  const navigate = window.__adminNavigate;
+  if (!navigate) return false;
+  // The binding itself answers, because it is the only thing that knows: it
+  // swallows a router throw (a path outside the route tree), and a swallowed
+  // throw is NOT a navigation. Anything other than an explicit false counts as
+  // issued, so a legacy void-returning stub still behaves as it used to.
+  return navigate(target) !== false;
 }

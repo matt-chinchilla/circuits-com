@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Check, Trash2 } from 'lucide-react';
 import Breadcrumbs from '@admin/components/Breadcrumbs';
@@ -95,6 +95,18 @@ export default function SupplierFormPage() {
   const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
   // Freshly cropped logo canvas → opens the brand-color picker (two-step upload).
   const [colorSource, setColorSource] = useState<HTMLCanvasElement | null>(null);
+  // The logo as LOADED from the server, normalized the same way the submit
+  // payload is (trimmed, '' → null). handleSubmit diffs against it so it can
+  // tell whether the mark actually changed and only then re-syncs it onto this
+  // supplier's active Platinum placements. Stays null on create.
+  const originalLogoRef = useRef<string | null>(null);
+  // Same idea for the brand pair: without a baseline, `both colors set` alone
+  // re-PATCHed every active Platinum placement (and burned a SW-cache purge)
+  // on EVERY supplier save — a phone-only edit re-pushed identical colors.
+  const originalColorsRef = useRef<{ primary: string | null; secondary: string | null }>({
+    primary: null,
+    secondary: null,
+  });
 
   useEffect(() => {
     if (!id) return;
@@ -102,6 +114,11 @@ export default function SupplierFormPage() {
       .getSupplier(id)
       .then((s) => {
         setExistingName(s.name);
+        originalLogoRef.current = (s.logo_url ?? '').trim() || null;
+        originalColorsRef.current = {
+          primary: (s.brand_primary ?? '').trim() || null,
+          secondary: (s.brand_secondary ?? '').trim() || null,
+        };
         setForm({
           name: s.name,
           description: s.description ?? '',
@@ -178,19 +195,41 @@ export default function SupplierFormPage() {
         brand_primary,
         brand_secondary,
       };
+      // Did the company mark change relative to what we loaded? On create there
+      // is no prior value, so any present logo counts as changed.
+      const logoChanged = isEdit
+        ? payload.logo_url !== originalLogoRef.current
+        : payload.logo_url != null;
+      // Same diff for the brand pair, so an unrelated edit (phone, hours…)
+      // doesn't re-PATCH identical colors onto every Platinum placement.
+      // validate() enforces both-or-neither, so the pair is always complete
+      // here — including the both-cleared case, which propagates as nulls and
+      // un-brands the board exactly like a cleared logo does.
+      const colorsChanged = isEdit
+        ? brand_primary !== originalColorsRef.current.primary
+          || brand_secondary !== originalColorsRef.current.secondary
+        : brand_primary != null && brand_secondary != null;
       if (isEdit && id) {
         await adminApi.updateSupplier(id, payload);
-        // Propagate the new brand colors onto this supplier's ACTIVE Platinum
-        // sponsorship(s) so the sold Category Sponsor board re-tints without a
-        // second manual edit. Runs BEFORE the toast/navigate so the copy can
-        // report partial failures, but the whole block is try/catch-degradable
-        // and uses allSettled — a getSponsors failure or one rejected PATCH can
-        // never abort the save that already succeeded above. A supplier may
-        // legally hold multiple active Platinum slots (one per category), and a
-        // brand-only PATCH doesn't trip the single-slot guard (no
-        // category_id/tier/status keys).
+        // Propagate the new logo + brand colors onto this supplier's ACTIVE
+        // Platinum sponsorship(s) so the sold Category Sponsor board re-tints
+        // and re-badges without a second manual edit. Runs BEFORE the
+        // toast/navigate so the copy can report partial failures, but the whole
+        // block is try/catch-degradable and uses allSettled — a getSponsors
+        // failure or one rejected PATCH can never abort the save that already
+        // succeeded above. A supplier may legally hold multiple active Platinum
+        // slots (one per category), and a creative-only PATCH doesn't trip the
+        // single-slot guard (no category_id/tier/status keys).
+        //
+        // The gate fires on EITHER change and the body is built per-field, each
+        // half sent only when its OWN flag is set: nesting the logo copy inside
+        // the colors check meant the common no-brand-colors supplier never
+        // synced its logo at all, and gating the colors on "both set" (rather
+        // than "changed") re-pushed them on every unrelated save. Colors only
+        // travel as a complete pair (a lone channel flips the board to branded
+        // with the other channel silently defaulted).
         let notUpdated = 0;
-        if (brand_primary && brand_secondary) {
+        if (colorsChanged || logoChanged) {
           try {
             const sponsors = await adminApi.getSponsors();
             const targets = sponsors.filter(
@@ -199,8 +238,15 @@ export default function SupplierFormPage() {
                 normalizeSponsorTier(s.tier) === 'Platinum' &&
                 isActiveSponsor(s.status),
             );
+            const body = {
+              ...(colorsChanged ? { brand_primary, brand_secondary } : {}),
+              // The supplier logo is the source of truth for the board's
+              // company mark, so a CLEARED logo propagates as null too —
+              // removing it on the supplier must clear the board's copy.
+              ...(logoChanged ? { image_url: payload.logo_url } : {}),
+            };
             const results = await Promise.allSettled(
-              targets.map((s) => adminApi.updateSponsor(s.id, { brand_primary, brand_secondary })),
+              targets.map((s) => adminApi.updateSponsor(s.id, body)),
             );
             notUpdated = results.filter((r) => r.status === 'rejected').length;
           } catch {
@@ -217,6 +263,19 @@ export default function SupplierFormPage() {
         setTimeout(() => navigate(`/admin/suppliers/${id}`), 900);
       } else {
         const created = await adminApi.createSupplier(payload);
+        // ─── Wizard id-from-response bridge ─────────────────────────────────
+        // Published SYNCHRONOUSLY, before the navigate below, so the guided
+        // tour can track its demo supplier for cleanup without inferring the id
+        // from the 'suppliers/new' → 'suppliers/<id>' transition. That inference
+        // MISSES the create whenever the transition isn't observed — a browser
+        // Back during the 900ms toast delay is enough — leaving an orphaned demo
+        // supplier nothing would clean up.
+        //
+        // Harmless outside a tour: the wizard adopts a bridge only while a flow
+        // that creates THIS kind is active, and clears it on flow start/end.
+        if (created.id) {
+          window.__wizardCreatedEntity = { kind: 'supplier', id: created.id };
+        }
         setToast({ type: 'success', msg: `Created ${created.name}.` });
         setTimeout(() => navigate(`/admin/suppliers/${created.id}`), 900);
       }
@@ -337,7 +396,7 @@ export default function SupplierFormPage() {
                 value={form.logo_url}
                 onChange={(v) => set('logo_url', v)}
                 onCroppedCanvas={setColorSource}
-                hint="Shown on supplier cards and as the company logo on sponsor boards."
+                hint="Shown on supplier cards and as the company logo on sponsor boards. Saving re-syncs it onto this supplier's active Platinum placements."
               />
             </div>
             <div className={styles.field} data-field="brand_colors">
@@ -352,7 +411,8 @@ export default function SupplierFormPage() {
                 allowCustom
               />
               <div className={styles.fieldHint}>
-                Applies to this supplier&rsquo;s active Platinum placement too.
+                Applies to this supplier&rsquo;s active Platinum placements too
+                &mdash; saving re-syncs the pair onto them.
               </div>
               {errors.brand_primary && <div className={styles.fieldError}>{errors.brand_primary}</div>}
               {errors.brand_secondary && (

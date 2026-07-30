@@ -48,7 +48,28 @@ export interface PreviewStep extends BaseStep {
 
 export type Step = SpotlightStep | AnnotationStep | PreviewStep;
 
-export type FlowAccent = 'primary' | 'blue' | 'gold' | 'violet' | 'rose' | 'cyan' | 'amber';
+// Set when the user clicks Back in the coach footer. The step we rewound TO
+// usually has its forward advance-condition already satisfied (the field
+// still holds what you typed, the route already matches), so the runner
+// would instantly skip forward again and Back would look like a no-op.
+// `stepIndex` scopes the guard to that one step; `route` is the route we
+// expect to be standing on after the rewind — a route-kind advance stays
+// blocked until the route actually changes, and polling kinds stay blocked
+// until their condition goes false→true. See useAdvance.
+export interface BackGuard {
+  stepIndex: number;
+  route: string;
+}
+
+export type FlowAccent =
+  | 'primary'
+  | 'blue'
+  | 'gold'
+  | 'violet'
+  | 'rose'
+  | 'cyan'
+  | 'amber'
+  | 'teal';
 
 export interface Flow {
   id: string;
@@ -71,9 +92,48 @@ export interface WizardStoreSnapshot {
   imports: Array<{ filename?: string }>;
 }
 
+// ─── Attach-listing id bridge ──────────────────────────────────────────────
+// How a just-created distributor listing's id reaches the wizard.
+// POST /parts/{id}/listings RETURNS the row it created, but that response
+// lands in AttachListingPage — the id appears in neither the URL nor any step
+// anchor, so the form publishes it on `window` the instant the POST resolves.
+//
+// Why not infer it? The wizard used to diff the part's listing ids across the
+// submit-navigation. That inference is only ever as reliable as the
+// navigation: a browser Back during the form's post-submit toast delay MISSED
+// the create outright, leaving a synthetic demo listing on a REAL catalog SKU
+// with nothing tracking it for cleanup. An id handed over at the source is
+// independent of navigation timing, Back included.
+//
+// `supplierId` is informational (which distributor the demo row points at) —
+// cleanup's DELETE is keyed on partId + listingId alone.
+export interface WizardCreatedListing {
+  partId: string;
+  listingId: string;
+  supplierId: string;
+}
+
+// ─── Entity id bridge (supplier / part creates) ─────────────────────────────
+// Same contract as the listing bridge, for the two entity forms. Route
+// inference ('suppliers/new' → 'suppliers/<id>') was the only way the wizard
+// learned these ids, and it MISSES the create whenever the transition isn't
+// observed — a browser Back during the form's post-submit toast delay is
+// enough. An untracked demo part is worse than an untracked demo supplier: a
+// DEMO- SKU shows up on the PUBLIC catalog. The forms therefore hand the id
+// over at the source, synchronously, before they navigate.
+export interface WizardCreatedEntity {
+  kind: 'supplier' | 'part';
+  id: string;
+}
+
 declare global {
   interface Window {
-    __adminNavigate?: (path: string) => void;
+    // Returns whether the navigation was actually issued — the wizard's Back
+    // arms a create-detector guard off that answer, so a swallowed throw must
+    // not report success. See useExposeGlobals + helpers.navTo.
+    __adminNavigate?: (path: string) => boolean;
     __adminGetStore?: () => WizardStoreSnapshot;
+    __wizardCreatedListing?: WizardCreatedListing;
+    __wizardCreatedEntity?: WizardCreatedEntity;
   }
 }

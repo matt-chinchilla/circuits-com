@@ -1,10 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
 import Papa from 'papaparse';
+import axios from 'axios';
 import { Link } from 'react-router-dom';
 import { Upload, FileText, Check, ChevronRight } from 'lucide-react';
 import Icon from '@shared/components/Icon';
 import { adminApi } from '@admin/services/adminApi';
+import { apiErrorDetail } from '@admin/services/apiError';
 import { consumePrefill, type ImportPrefill } from '@admin/services/prefillBus';
 import type { AdminSupplier, BatchImportResult } from '@admin/types/admin';
 import styles from './ImportPage.module.scss';
@@ -43,6 +45,51 @@ function guessMapping(header: string): string {
   if (h.includes('stock') || h.includes('qty') || h.includes('quantity')) return 'stock_quantity';
   if (h.includes('price') || h.includes('cost')) return 'unit_price';
   return '';
+}
+
+// FastAPI request-body validation (422) → the existing per-row error list.
+//
+// BatchPartItem's Field bounds (max_length on sku / manufacturer_name /
+// listing_sku / currency, ge/le on stock_quantity, unit_price, lead_time_days)
+// make a 422 the COMMON outcome for a bad CSV — one out-of-range cell rejects
+// the whole request, and `apiErrorDetail` deliberately returns undefined for a
+// 422 because its `detail` is an ARRAY of error objects (rendering that array as
+// a React child would crash). Pydantic locates every failure precisely
+// (`loc: ['body', 'parts', <index>, '<field>']`) and that index is the SAME
+// 0-based row index the success path reports, so the entries drop straight into
+// BatchImportResult.errors and render as "Row N: field: message" — the admin
+// sees which row, which field, and which limit instead of "Import failed".
+//
+// Returns null when the error isn't a mappable 422, so the caller falls back to
+// its generic (apiErrorDetail-aware) single line.
+function rowErrorsFrom422(err: unknown): BatchImportResult['errors'] | null {
+  if (!axios.isAxiosError(err) || err.response?.status !== 422) return null;
+  const detail = (err.response.data as { detail?: unknown } | undefined)?.detail;
+  if (!Array.isArray(detail)) return null;
+
+  const rows: BatchImportResult['errors'] = [];
+  for (const entry of detail) {
+    if (typeof entry !== 'object' || entry === null) continue;
+    const { loc, msg } = entry as { loc?: unknown; msg?: unknown };
+    const path: unknown[] = Array.isArray(loc) ? loc : [];
+    // First numeric segment = the index into `parts`, i.e. the CSV data row.
+    // Absent for a failure on the envelope itself (e.g. a missing
+    // supplier_id) — row -1 marks "not tied to a row" so the list omits the
+    // "Row N:" prefix rather than blaming an innocent row.
+    const idx = path.find((p) => typeof p === 'number');
+    // Last string segment names the offending field; the envelope keys carry
+    // no information for the admin.
+    const fields = path.filter(
+      (p): p is string => typeof p === 'string' && p !== 'body' && p !== 'parts',
+    );
+    const field = fields.length > 0 ? fields[fields.length - 1] : null;
+    const message = typeof msg === 'string' && msg.trim() ? msg.trim() : 'Invalid value';
+    rows.push({
+      row: typeof idx === 'number' ? idx : -1,
+      error: field ? `${field}: ${message}` : message,
+    });
+  }
+  return rows.length > 0 ? rows : null;
 }
 
 export default function ImportPage() {
@@ -127,8 +174,19 @@ export default function ImportPage() {
       const res = await adminApi.batchImportParts(supplierId, mapped);
       setResult(res);
       setStep('done');
-    } catch {
-      setResult({ created: 0, errors: [{ row: 0, error: 'Import failed. Please try again.' }] });
+    } catch (err) {
+      // A rejected batch is usually a 422 from BatchPartItem's field bounds, and
+      // that response pinpoints row + field + limit — surface it per row. Any
+      // other failure (404 "Supplier not found", 5xx, network) falls back to a
+      // single row-less line, using the backend's string `detail` when it sent
+      // one.
+      const rowErrors = rowErrorsFrom422(err);
+      setResult({
+        created: 0,
+        errors: rowErrors ?? [
+          { row: -1, error: apiErrorDetail(err) ?? 'Import failed. Please try again.' },
+        ],
+      });
       setStep('done');
     } finally {
       setImporting(false);
@@ -396,7 +454,13 @@ LM7805CT,5V 1.5A LDO,Texas Instruments,pmic,240000,0.45`}
                 <ul className={styles.errorListItems}>
                   {result.errors.slice(0, 25).map((err, i) => (
                     <li key={i} className={styles.errorListItem}>
-                      Row {err.row + 1}: {err.error}
+                      {/* row &lt; 0 = not tied to a CSV row (a whole-request
+                          failure, or a 422 on the envelope rather than on a
+                          `parts` entry) — a "Row 1:" prefix there would point
+                          the admin at an innocent row. Server-reported errors
+                          always carry a real 0-based index. */}
+                      {err.row >= 0 ? `Row ${err.row + 1}: ` : ''}
+                      {err.error}
                     </li>
                   ))}
                   {result.errors.length > 25 && (

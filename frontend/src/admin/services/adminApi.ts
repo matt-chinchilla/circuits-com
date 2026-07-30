@@ -10,6 +10,7 @@ import type {
   PopularData,
   Part,
   PartDetail,
+  PartListing,
   PaginatedResponse,
   AdminSupplier,
   BatchImportResult,
@@ -30,6 +31,17 @@ export interface MessageUpdate {
 // POST /api/admin/sponsors/ body — an AdminSponsor without the server-assigned
 // id. PATCH accepts any partial subset of these fields.
 export type SponsorCreate = Omit<AdminSponsor, 'id'>;
+
+// POST /api/parts/{part_id}/listings body. Only supplier_id is required; the
+// backend defaults stock to 0, price to 0, and currency to USD.
+export interface PartListingCreate {
+  supplier_id: string;
+  stock_quantity?: number;
+  unit_price?: number;
+  listing_sku?: string | null;
+  lead_time_days?: number | null;
+  currency?: string;
+}
 
 const adminClient = axios.create({ baseURL: API_BASE_URL });
 
@@ -128,6 +140,21 @@ export const adminApi = {
 
   deletePart: (id: string) =>
     bustingAfter(adminClient.delete(`/parts/${id}`).then((r) => r.data)),
+
+  // Attach an existing part to a supplier's catalog / detach it again. Both
+  // bust the sponsor caches: a listing changes the part's public best_price +
+  // total_stock and the supplier's parts_count.
+  addPartListing: (partId: string, data: PartListingCreate) =>
+    bustingAfter(
+      adminClient.post<PartListing>(`/parts/${partId}/listings`, data).then((r) => r.data),
+    ),
+
+  deletePartListing: (partId: string, listingId: string) =>
+    bustingAfter(
+      adminClient
+        .delete(`/parts/${partId}/listings/${listingId}`)
+        .then(() => undefined),
+    ),
 
   batchImportParts: (supplierId: string, data: Record<string, unknown>[]) =>
     bustingAfter(

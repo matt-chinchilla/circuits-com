@@ -1,0 +1,430 @@
+@use '@shared/styles/variables' as *;
+
+// AttachListingPage — "add an existing part to a supplier's catalog".
+// Visual structure is lifted 1:1 from PartFormPage (.page-head → .form-grid
+// stack of .panel cards → .form-actions) so the two part-writing surfaces
+// read as one console. Admin chrome is intentionally un-themed.
+
+// ─── Local admin tokens (intentionally un-themed) ──────────────────────────
+$a-bg: #f5f7fa;
+$a-card: #ffffff;
+$a-border: #e5e7eb;
+$a-border-soft: #f0f2f5;
+$a-fg1: #111827;
+$a-fg2: #4b5563;
+$a-fg3: #6b7280;
+$a-fg4: #9ca3af;
+$a-primary: $executive-blue;
+$a-primary-hover: #083b24;
+$a-danger: $error-red;
+$a-ok: #15803d;
+$a-radius: 8px;
+$a-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
+
+.page {
+  display: flex;
+  flex-direction: column;
+}
+
+// ─── Page head ─────────────────────────────────────────────────────────────
+
+.pageHead {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.pageHeadLeft {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.backLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: $a-fg3;
+  cursor: pointer;
+  margin-bottom: 8px;
+  text-decoration: none;
+  transition: color 150ms;
+
+  &:hover {
+    color: $a-primary;
+  }
+
+  svg {
+    width: 14px;
+    height: 14px;
+    stroke-width: 2;
+  }
+}
+
+.title {
+  font-size: 26px;
+  font-weight: 700;
+  color: $a-fg1;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+.subtitle {
+  font-size: 14px;
+  color: $a-fg3;
+  margin: 0;
+}
+
+// ─── Form grid (panel stack) ───────────────────────────────────────────────
+
+.formGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 920px;
+}
+
+.panel {
+  background: $a-card;
+  border-radius: $a-radius;
+  box-shadow: $a-shadow-sm;
+  overflow: hidden;
+}
+
+.panelHead {
+  padding: 16px 20px;
+  border-bottom: 1px solid $a-border-soft;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.panelTitle {
+  font-size: 16px;
+  font-weight: 700;
+  color: $a-fg1;
+  margin: 0;
+}
+
+.panelNote {
+  font-size: 12px;
+  color: $a-fg4;
+}
+
+.panelBody {
+  padding: 16px 20px 20px;
+}
+
+.formBody {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.formRow2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+
+  @media (max-width: 720px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+// ─── Read-only part identity ───────────────────────────────────────────────
+// The part is fixed on this page — the admin arrived from its detail view and
+// is only choosing a distributor. Rendered as a flat spec readout (no inputs)
+// so there's no doubt about which SKU is being listed.
+
+.idGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px 24px;
+
+  @media (max-width: 720px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.idItem {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.idItemWide {
+  grid-column: 1 / -1;
+}
+
+.idLabel {
+  font-size: 11px;
+  font-weight: 600;
+  color: $a-fg4;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.idValue {
+  font-size: 14px;
+  color: $a-fg1;
+  line-height: 1.5;
+}
+
+.idSku {
+  font-family: $font-mono;
+  font-size: 17px;
+  font-weight: 600;
+  color: $a-fg1;
+  letter-spacing: -0.01em;
+}
+
+.carrierList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.carrierChip {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid $a-border;
+  background: $a-bg;
+  font-size: 12px;
+  font-weight: 500;
+  color: $a-fg2;
+}
+
+// ─── Field ─────────────────────────────────────────────────────────────────
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.fieldLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: $a-fg2;
+  letter-spacing: 0.02em;
+}
+
+.fieldReq {
+  color: $a-danger;
+  margin-left: 4px;
+}
+
+.fieldHint {
+  font-size: 12px;
+  color: $a-fg4;
+}
+
+.fieldError {
+  font-size: 12px;
+  color: $a-danger;
+  font-weight: 500;
+}
+
+// ─── Inputs ────────────────────────────────────────────────────────────────
+
+.input,
+.select {
+  font-family: inherit;
+  font-size: 14px;
+  color: $a-fg1;
+  background: #ffffff;
+  border: 1px solid $a-border;
+  border-radius: 6px;
+  padding: 9px 12px;
+  outline: none;
+  transition: border-color 150ms, box-shadow 150ms;
+  width: 100%;
+  box-sizing: border-box;
+
+  &:focus {
+    border-color: $a-primary;
+    box-shadow: 0 0 0 3px rgba(10, 74, 46, 0.08);
+  }
+
+  &::placeholder {
+    color: $a-fg4;
+  }
+
+  &:disabled {
+    background: $a-bg;
+    color: $a-fg3;
+    cursor: not-allowed;
+  }
+}
+
+.inputMono {
+  font-family: $font-mono;
+  font-size: 13px;
+}
+
+.inputError {
+  border-color: $a-danger;
+
+  &:focus {
+    border-color: $a-danger;
+    box-shadow: 0 0 0 3px rgba(192, 57, 43, 0.08);
+  }
+}
+
+.selectWrap {
+  position: relative;
+}
+
+.select {
+  appearance: none;
+  padding-right: 32px;
+  cursor: pointer;
+}
+
+.selectCaret {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: $a-fg3;
+  pointer-events: none;
+  width: 10px;
+  height: 10px;
+}
+
+// ─── Form actions ──────────────────────────────────────────────────────────
+
+.formActions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  align-items: center;
+  padding: 4px 0;
+  flex-wrap: wrap;
+}
+
+// Persistent submit error (the 409 "already carries this part" needs to stay
+// on screen until the admin picks a different distributor — a toast that
+// auto-dismisses would leave them guessing).
+.submitError {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 6px;
+  border: 1px solid rgba(192, 57, 43, 0.3);
+  background: rgba(192, 57, 43, 0.06);
+  color: #8f2b1f;
+  font-size: 13px;
+  line-height: 1.5;
+  max-width: 920px;
+
+  svg {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    margin-top: 1px;
+    stroke-width: 2;
+  }
+}
+
+// ─── Buttons ───────────────────────────────────────────────────────────────
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background-color 150ms, transform 150ms;
+
+  svg {
+    width: 15px;
+    height: 15px;
+    stroke-width: 2;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+.btnPrimary {
+  background: $a-primary;
+  color: #ffffff;
+
+  &:hover:not(:disabled) {
+    background: $a-primary-hover;
+  }
+}
+
+.btnGhost {
+  background: #ffffff;
+  color: $a-fg1;
+  border-color: $a-border;
+
+  &:hover:not(:disabled) {
+    background: $a-border-soft;
+  }
+}
+
+// ─── Loading / error states ────────────────────────────────────────────────
+
+.loading {
+  padding: 48px;
+  text-align: center;
+  color: $a-fg3;
+  font-size: 14px;
+}
+
+.error {
+  padding: 20px;
+  border-radius: $a-radius;
+  background: $a-card;
+  box-shadow: $a-shadow-sm;
+  color: $a-danger;
+  font-size: 14px;
+}
+
+// ─── Toast ─────────────────────────────────────────────────────────────────
+
+.toast {
+  position: fixed;
+  bottom: 32px;
+  right: 32px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 18px;
+  border-radius: $a-radius;
+  font-size: 14px;
+  font-weight: 600;
+  color: #ffffff;
+  background: $a-ok;
+  z-index: 1100;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+
+  svg {
+    width: 16px;
+    height: 16px;
+    stroke-width: 3;
+  }
+}

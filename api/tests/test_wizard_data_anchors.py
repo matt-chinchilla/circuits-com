@@ -41,6 +41,13 @@ EXPECTED_DATA_TOUR = {
     "submit-sponsor",
     "delete-supplier",
     "delete-part",
+    # Attach-existing-part-to-supplier flow (part detail → attach form).
+    # delete-listing is the per-row control on the part-detail listings
+    # panel; it opens the same confirm-delete modal as delete-part but is
+    # listing-scoped.
+    "add-listing",
+    "submit-listing",
+    "delete-listing",
     # Supplier-detail Quick Actions strip
     "qa-add-part",
     "qa-import-csv",
@@ -74,8 +81,12 @@ EXPECTED_DATA_FIELD = {
     "sku",
     "manufacturer_name",
     "category_id",
+    # Shared by the part form's Initial-listing fieldset AND the standalone
+    # attach-listing form (parts/:id/listings/new) — same three field names
+    # so one wizard flow can spotlight either surface.
     "initial_unit_price",
     "initial_stock_quantity",
+    "supplier_id",
     "lifecycle_status",
     "datasheet_url",
     # Sponsor form
