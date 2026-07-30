@@ -1,18 +1,24 @@
 @use '@shared/styles/variables' as *;
 
-// DashboardPage — ported from 2026-04-25 Claude Design bundle (Phase A3).
-// Replaces previous Recharts-based charts with native SVG (Sparkline,
-// RevenueChart, SponsorRing) inlined in the page. Phase A7 (2026-04-25)
-// completed the recharts removal by porting ReportsPage to native SVG too;
-// the dep is now fully gone.
+// DashboardPage — chrome for the ECharts widget set in ./components.
+//
+// Everything that has an admin token uses it (`var(--a-*)`, defined on `.admin`
+// in AdminLayout.module.scss). The only literal hexes left are the two
+// low-alpha rgba() tints, which have no token.
+//
+// The chart PALETTE is deliberately NOT here: a canvas cannot resolve
+// `var(...)` (it paints black), so series colours come from
+// `charts/chartTheme.ts`, which mirrors the `--a-grad-*` tokens 1:1. Change one,
+// change both.
 //
 // Layout:
-// (1) .pageHead    — title + subtitle + Export ghost button
-// (2) .qaBar       — quick-actions bar (4 link buttons)
-// (3) .stats       — 4-col grid of stat cards w/ animated sparklines
-// (4) .aTwo        — 2-col panel grid (Revenue + Sponsors, then Activity + Queue)
-// (5) .panel       — shared panel chrome w/ head + body + link
-// (6) .activity / .queue — Recent Activity + Import Queue lists
+// (1) .pageHead   — title + Export ghost button
+// (2) .qaBar      — quick-actions strip
+// (3) .stats      — 4 stat cards, each with a 30-day ECharts sparkline
+// (4) .aWide / .aEven / .aOne / .aTwo — the panel grids
+// (5) .panel      — shared panel chrome
+// (6) widget-local blocks: comparator, circle-pack legend, tier mix,
+//     cost breakdown, traffic, platform grid, activity, queue
 
 // ─── (1) Page head ──────────────────────────────────────────────────────────
 
@@ -28,13 +34,14 @@
   h1 {
     font-size: 26px;
     font-weight: 700;
-    color: #111827;
+    color: var(--a-fg1);
     letter-spacing: -0.02em;
     margin: 0 0 4px;
   }
+
   p {
     font-size: 14px;
-    color: #6b7280;
+    color: var(--a-fg3);
     margin: 0;
   }
 }
@@ -47,18 +54,21 @@
   font-family: inherit;
   font-size: 14px;
   font-weight: 600;
+  line-height: 1;
   border-radius: 6px;
   border: 1px solid transparent;
   cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
 }
 
 .btnGhost {
-  background: #ffffff;
-  color: #111827;
-  border-color: #e5e7eb;
+  background: var(--a-card);
+  color: var(--a-fg1);
+  border-color: var(--a-border);
 
   &:hover {
-    background: #f0f2f5;
+    background: var(--a-border-soft);
   }
 }
 
@@ -69,12 +79,12 @@
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
-  background: #ffffff;
-  border: 1px solid #f0f2f5;
-  border-radius: 8px;
+  background: var(--a-card);
+  border: 1px solid var(--a-border-soft);
+  border-radius: var(--a-radius);
   padding: 10px 14px;
   margin-bottom: 20px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--a-shadow-sm);
 }
 
 .qaTitle {
@@ -82,9 +92,9 @@
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #9ca3af;
+  color: var(--a-fg4);
   padding-right: 8px;
-  border-right: 1px solid #f0f2f5;
+  border-right: 1px solid var(--a-border-soft);
 }
 
 .qaBtn {
@@ -94,7 +104,7 @@
   padding: 7px 12px;
   font-size: 13px;
   font-weight: 500;
-  color: #4b5563;
+  color: var(--a-fg2);
   background: transparent;
   border: 1px solid transparent;
   border-radius: 6px;
@@ -107,7 +117,7 @@
 
   &:hover {
     background: rgba(10, 74, 46, 0.06);
-    color: #{$executive-blue};
+    color: var(--a-primary);
     border-color: rgba(10, 74, 46, 0.12);
   }
 }
@@ -116,26 +126,31 @@
 
 .stats {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 16px;
-  margin-bottom: 24px;
+  margin-bottom: 20px;
 
   @media (max-width: 1200px) {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
+// `--stat-accent` is set by the tone class below, so the rail, the delta pill
+// and the sparkline all read from one place per card.
 .stat {
-  background: #ffffff;
-  border-radius: 8px;
-  padding: 18px 20px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-  border: 1px solid #f0f2f5;
+  --stat-accent: var(--a-grad-green);
+
+  background: var(--a-card);
+  border-radius: var(--a-radius);
+  padding: 16px 18px 8px;
+  box-shadow: var(--a-shadow-sm);
+  border: 1px solid var(--a-border-soft);
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 6px;
   position: relative;
   overflow: hidden;
+  min-width: 0;
   transition:
     box-shadow 200ms,
     transform 200ms,
@@ -148,20 +163,40 @@
     top: 0;
     bottom: 0;
     width: 2px;
-    background: linear-gradient(180deg, #{$executive-blue}, transparent 80%);
+    background: linear-gradient(180deg, var(--stat-accent), transparent 80%);
     opacity: 0;
     transition: opacity 200ms;
   }
 
   &:hover {
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-    border-color: #e5e7eb;
+    box-shadow: var(--a-shadow-md);
+    border-color: var(--a-border);
     transform: translateY(-1px);
 
     &::before {
       opacity: 1;
     }
   }
+}
+
+.toneGreen {
+  --stat-accent: var(--a-grad-green);
+}
+
+.toneBlue {
+  --stat-accent: var(--a-grad-blue);
+}
+
+.toneGold {
+  --stat-accent: var(--a-grad-gold);
+}
+
+.tonePurple {
+  --stat-accent: var(--a-grad-purple);
+}
+
+.toneSlate {
+  --stat-accent: var(--a-grad-slate);
 }
 
 .statHead {
@@ -174,7 +209,7 @@
 .statLabel {
   font-size: 12px;
   font-weight: 600;
-  color: #6b7280;
+  color: var(--a-fg3);
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
@@ -191,12 +226,12 @@
 }
 
 .statDelta.up {
-  color: #15803d;
+  color: var(--a-ok);
   background: rgba(21, 128, 61, 0.1);
 }
 
 .statDelta.down {
-  color: #c0392b;
+  color: var(--a-danger);
   background: rgba(192, 57, 43, 0.1);
 }
 
@@ -204,7 +239,7 @@
   font-family: $font-mono;
   font-size: 26px;
   font-weight: 700;
-  color: #111827;
+  color: var(--a-fg1);
   letter-spacing: -0.02em;
   line-height: 1.05;
   font-variant-numeric: tabular-nums;
@@ -216,277 +251,615 @@
     opacity: 0;
     transform: translateY(4px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
   }
 }
 
-.statFoot {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 8px;
-  padding-top: 2px;
-}
-
 .statHint {
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--a-fg4);
+  line-height: 1.35;
+  min-height: 32px;
 }
 
-// ─── Sparkline ──────────────────────────────────────────────────────────────
-
-.sparkline {
-  overflow: visible;
+// Full card width so the hover tooltip has room to land — a 130px-wide host
+// would clamp (`tooltip.confine`) the readout into a sliver.
+.statSpark {
+  width: 100%;
+  margin: 0 -4px -4px;
 }
 
-.sparklinePath {
-  stroke-dasharray: 180;
-  stroke-dashoffset: 180;
-  animation: sparkDraw 900ms cubic-bezier(0.2, 0.9, 0.3, 1) forwards;
+.statSparkEmpty {
+  height: 52px;
 }
 
-.sparklineDot {
-  opacity: 0;
-  animation:
-    sparkDotIn 300ms 850ms forwards,
-    sparkPulse 2.2s 1.2s ease-in-out infinite;
-}
+// ─── (4) Panel grids ────────────────────────────────────────────────────────
+//
+// `minmax(0, …)` on every track: a bare `1fr` is `minmax(auto, 1fr)`, and a
+// canvas inside it inflates the column instead of shrinking with it.
 
-@keyframes sparkDraw {
-  to {
-    stroke-dashoffset: 0;
-  }
-}
-
-@keyframes sparkDotIn {
-  to {
-    opacity: 1;
-  }
-}
-
-@keyframes sparkPulse {
-  0%,
-  100% {
-    r: 2.2;
-    opacity: 1;
-  }
-  50% {
-    r: 3;
-    opacity: 0.6;
-  }
-}
-
-// ─── (4) Two-column panel grid + (5) panel chrome ──────────────────────────
-
-.aTwo {
+.aWide {
   display: grid;
-  grid-template-columns: 1fr 360px;
+  grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr);
   gap: 20px;
-  align-items: flex-start;
+  align-items: start;
   margin-bottom: 20px;
 
   @media (max-width: 1200px) {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
+.aEven {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+  align-items: start;
+  margin-bottom: 20px;
+
+  @media (max-width: 1200px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.aTwo {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 20px;
+  align-items: start;
+  margin-bottom: 20px;
+
+  @media (max-width: 1200px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.aOne {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  margin-bottom: 20px;
+}
+
+// ─── (5) Panel chrome ───────────────────────────────────────────────────────
+
 .panel {
-  background: #ffffff;
-  border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-  border: 1px solid #f0f2f5;
+  background: var(--a-card);
+  border-radius: var(--a-radius);
+  box-shadow: var(--a-shadow-sm);
+  border: 1px solid var(--a-border-soft);
+  min-width: 0;
 }
 
 .panelHead {
   padding: 16px 20px;
-  border-bottom: 1px solid #f0f2f5;
+  border-bottom: 1px solid var(--a-border-soft);
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
 
-  > div {
-    display: flex;
-    flex-direction: column;
-  }
+// The title stack. An explicit class, NOT `.panelHead > div` — a descendant
+// selector there also caught the actions cluster and stacked the 3/6/12
+// segmented control vertically.
+.panelHeadMain {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.panelHeadActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .panelTitle {
   font-size: 16px;
   font-weight: 700;
-  color: #111827;
+  color: var(--a-fg1);
   margin: 0;
 }
 
 .panelSub {
   font-size: 12px;
-  color: #6b7280;
+  color: var(--a-fg3);
   margin: 2px 0 0;
 }
 
 .panelLink {
   font-size: 13px;
   font-weight: 500;
-  color: #{$executive-blue};
+  color: var(--a-primary);
   cursor: pointer;
   text-decoration: none;
+  white-space: nowrap;
 
   &:hover {
     text-decoration: underline;
   }
 }
 
-.panelBody {
-  padding: 16px 20px 20px;
-}
-
-.panelLegend {
-  font-size: 12px;
-  color: #6b7280;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.legendDot {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-}
-
-// ─── Revenue chart ──────────────────────────────────────────────────────────
-
-.revChart {
-  width: 100%;
-  height: 220px;
-}
-
-.revArea {
-  animation: revFade 800ms ease forwards;
-  opacity: 0;
-}
-
-.revLine {
-  stroke-dasharray: 1400;
-  stroke-dashoffset: 1400;
-  animation: revDraw 1100ms cubic-bezier(0.2, 0.9, 0.3, 1) 120ms forwards;
-}
-
-.revDot {
-  opacity: 0;
-  animation: revDotIn 260ms forwards;
-}
-
-.revLabel {
+.panelTotal {
   font-family: $font-mono;
-  font-size: 9px;
-  fill: #9ca3af;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--a-fg1);
+  font-variant-numeric: tabular-nums;
 }
 
-@keyframes revFade {
-  to {
-    opacity: 1;
+.panelBadge {
+  padding: 3px 9px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border-radius: 4px;
+  color: var(--a-fg3);
+  background: var(--a-track);
+  border: 1px dashed var(--a-border);
+  white-space: nowrap;
+}
+
+.panelBody {
+  padding: 14px 18px 18px;
+}
+
+.panelNote {
+  margin: 0;
+  padding: 10px 18px 14px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--a-fg4);
+  border-top: 1px solid var(--a-border-soft);
+}
+
+// ─── Segmented control (3 / 6 / 12 months) ──────────────────────────────────
+
+.segControl {
+  display: inline-flex;
+  background: var(--a-track);
+  border: 1px solid var(--a-border);
+  border-radius: 6px;
+  padding: 2px;
+  gap: 2px;
+}
+
+.segBtn {
+  padding: 4px 10px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--a-fg3);
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition:
+    background-color 120ms,
+    color 120ms;
+
+  &:hover {
+    color: var(--a-fg1);
   }
 }
 
-@keyframes revDraw {
-  to {
-    stroke-dashoffset: 0;
+.segBtnOn {
+  background: var(--a-card);
+  color: var(--a-primary);
+  box-shadow: var(--a-shadow-sm);
+}
+
+// ─── Comparator figure + footer ─────────────────────────────────────────────
+
+.chartFigure {
+  min-width: 0;
+  width: 100%;
+}
+
+// ─── Book of business (full-width force graph + side legend) ────────────────
+.bookWrap {
+  display: flex;
+  gap: 20px;
+  align-items: stretch;
+
+  @media (max-width: 900px) {
+    flex-direction: column;
   }
 }
 
-@keyframes revDotIn {
-  to {
-    opacity: 1;
+.bookChart {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+// The rep legend becomes a centered right-hand sidebar next to the tall graph,
+// so it drops the stacked-below top border; it comes back when it wraps under
+// the chart on narrow screens.
+.bookLegend {
+  flex: 0 0 240px;
+  align-self: center;
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+
+  @media (max-width: 900px) {
+    flex-basis: auto;
+    align-self: stretch;
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid var(--a-border-soft);
   }
+}
+
+// The not-real "Demo" catch-all row is de-emphasized.
+.repRowDemo {
+  opacity: 0.6;
+}
+
+.chartFoot {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--a-border-soft);
+}
+
+.chartFootLabel {
+  font-size: 12px;
+  color: var(--a-fg3);
+}
+
+.chartFootValue {
+  font-family: $font-mono;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--a-fg1);
+  font-variant-numeric: tabular-nums;
 }
 
 .emptyChart {
-  padding: 40px 20px;
-  text-align: center;
-  color: #6b7280;
-  font-size: 13px;
-}
-
-// ─── Sponsor donut ──────────────────────────────────────────────────────────
-
-.ringWrap {
-  display: grid;
-  grid-template-columns: 140px 1fr;
-  gap: 20px;
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  padding: 10px 4px;
-}
+  justify-content: center;
+  gap: 6px;
+  min-height: 200px;
+  padding: 32px 20px;
+  text-align: center;
+  color: var(--a-fg3);
+  font-size: 13px;
+  line-height: 1.5;
 
-.ring {
-  width: 140px;
-  height: 140px;
-  transform: rotate(-90deg);
-}
+  strong {
+    color: var(--a-fg1);
+    font-size: 14px;
+  }
 
-.ringSeg {
-  stroke-dasharray: 0 999;
-  animation: ringDraw 900ms cubic-bezier(0.2, 0.9, 0.3, 1) forwards;
-}
-
-@keyframes ringDraw {
-  from {
-    stroke-dasharray: 0 999;
+  span {
+    max-width: 34ch;
   }
 }
 
-.ringNum {
-  font-family: $font-mono;
-  font-size: 24px;
-  font-weight: 700;
-  fill: #111827;
-  transform: rotate(90deg);
-  transform-origin: 70px 70px;
-}
+// ─── Circle-pack legend (sales reps) ────────────────────────────────────────
 
-.ringLbl {
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  fill: #6b7280;
-  transform: rotate(90deg);
-  transform-origin: 70px 70px;
-}
-
-.ringLegend {
+.repLegend {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 10px 0 0;
+  border-top: 1px solid var(--a-border-soft);
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
-.ringRow {
+.repRow {
   display: grid;
-  grid-template-columns: 10px 1fr auto;
+  grid-template-columns: 10px minmax(0, 1fr) auto auto;
   gap: 10px;
   align-items: center;
   font-size: 13px;
 }
 
-.ringSwatch {
+.repRowTotal {
+  padding-top: 8px;
+  border-top: 1px dashed var(--a-border);
+  grid-template-columns: minmax(0, 1fr) auto auto;
+
+  .repName {
+    color: var(--a-fg2);
+    font-weight: 600;
+  }
+}
+
+.repSwatch {
   width: 10px;
   height: 10px;
   border-radius: 2px;
 }
 
-.ringName {
-  color: #4b5563;
+.repName {
+  color: var(--a-fg2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.ringVal {
+.repCount {
+  font-size: 12px;
+  color: var(--a-fg4);
+  white-space: nowrap;
+}
+
+.repTotal {
   font-family: $font-mono;
   font-weight: 700;
-  color: #111827;
+  color: var(--a-fg1);
   font-variant-numeric: tabular-nums;
 }
 
-// ─── (6) Activity + Queue lists ─────────────────────────────────────────────
+// ─── Tier mix (pie + legend) ────────────────────────────────────────────────
+
+.mixWrap {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 150px;
+  gap: 16px;
+  align-items: center;
+}
+
+.mixChart {
+  min-width: 0;
+}
+
+.mixLegend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mixRow {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) auto auto;
+  gap: 8px;
+  align-items: center;
+  font-size: 13px;
+}
+
+.mixSwatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.mixName {
+  color: var(--a-fg2);
+}
+
+.mixShare {
+  font-size: 11px;
+  color: var(--a-fg4);
+  font-variant-numeric: tabular-nums;
+}
+
+.mixValue {
+  font-family: $font-mono;
+  font-weight: 700;
+  color: var(--a-fg1);
+  font-variant-numeric: tabular-nums;
+}
+
+// ─── Cost breakdown ─────────────────────────────────────────────────────────
+
+.breakdown {
+  padding: 6px 0;
+}
+
+.breakdownRow {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 11px 18px;
+  border-bottom: 1px solid var(--a-border-soft);
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.breakdownIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--a-track);
+  color: var(--a-primary);
+
+  :global(i.ph-light) {
+    font-size: 16px;
+    line-height: 1;
+  }
+}
+
+.breakdownMain {
+  min-width: 0;
+}
+
+.breakdownLabel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--a-fg1);
+}
+
+.estTag {
+  padding: 0 5px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border-radius: 3px;
+  color: var(--a-warn);
+  background: rgba(217, 119, 6, 0.12);
+}
+
+.breakdownVendor {
+  font-size: 12px;
+  color: var(--a-fg4);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.breakdownTrack {
+  height: 4px;
+  margin-top: 6px;
+  border-radius: 2px;
+  background: var(--a-track);
+  overflow: hidden;
+}
+
+.breakdownBar {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--a-grad-gold), var(--a-grad-gold-lift));
+}
+
+.breakdownAmount {
+  font-family: $font-mono;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--a-fg1);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+// ─── Traffic ────────────────────────────────────────────────────────────────
+
+.trafficHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.trafficValue {
+  font-family: $font-mono;
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--a-fg1);
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.trafficHint {
+  font-size: 12px;
+  color: var(--a-fg4);
+  text-align: right;
+}
+
+// ─── Social platform grid ───────────────────────────────────────────────────
+
+.platformGrid {
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.platformTile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px dashed var(--a-border);
+  border-radius: 6px;
+  background: var(--a-bg);
+  min-width: 0;
+}
+
+.platformOn {
+  border-style: solid;
+  background: var(--a-card);
+}
+
+.platformIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+
+  :global(i.ph-light) {
+    font-size: 20px;
+    line-height: 1;
+  }
+}
+
+.platformName {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--a-fg1);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.platformState {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--a-fg4);
+  white-space: nowrap;
+}
+
+.connectCta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--a-border-soft);
+  border-radius: 6px;
+  background: var(--a-bg);
+  flex-wrap: wrap;
+}
+
+.connectTitle {
+  display: block;
+  font-size: 14px;
+  color: var(--a-fg1);
+  margin-bottom: 3px;
+}
+
+.connectBody {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--a-fg3);
+  max-width: 62ch;
+}
+
+// ─── Activity + Queue lists ─────────────────────────────────────────────────
 
 .activity,
 .queue {
@@ -495,11 +868,11 @@
 
 .activityRow {
   display: grid;
-  grid-template-columns: 36px 1fr auto;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
   gap: 12px;
   align-items: center;
   padding: 12px 20px;
-  border-bottom: 1px solid #f0f2f5;
+  border-bottom: 1px solid var(--a-border-soft);
 
   &:last-child {
     border-bottom: none;
@@ -510,7 +883,7 @@
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: #f0f2f5;
+  background: var(--a-track);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -531,7 +904,7 @@
 
 .activityText {
   font-size: 14px;
-  color: #111827;
+  color: var(--a-fg1);
   line-height: 1.4;
 
   b {
@@ -541,13 +914,13 @@
   :global(.mono) {
     font-family: $font-mono;
     font-size: 13px;
-    color: #{$executive-blue};
+    color: var(--a-primary);
   }
 }
 
 .activityTime {
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--a-fg4);
   font-family: $font-mono;
   white-space: nowrap;
 }
@@ -558,7 +931,7 @@
   justify-content: space-between;
   gap: 10px;
   padding: 12px 20px;
-  border-bottom: 1px solid #f0f2f5;
+  border-bottom: 1px solid var(--a-border-soft);
 
   &:last-child {
     border-bottom: none;
@@ -568,12 +941,12 @@
 .queueName {
   font-size: 14px;
   font-weight: 500;
-  color: #111827;
+  color: var(--a-fg1);
 }
 
 .queueMeta {
   font-size: 12px;
-  color: #6b7280;
+  color: var(--a-fg3);
 }
 
 .queuePill {
@@ -588,41 +961,39 @@
 }
 
 .queuePill.pending {
-  color: #d97706;
+  color: var(--a-warn);
   background: rgba(217, 119, 6, 0.12);
   border-color: rgba(217, 119, 6, 0.3);
 }
 
 .queuePill.approved {
-  color: #15803d;
+  color: var(--a-ok);
   background: rgba(34, 197, 94, 0.12);
   border-color: rgba(34, 197, 94, 0.3);
 }
 
 .empty {
-  padding: 40px 20px;
+  padding: 36px 20px;
   text-align: center;
-  color: #6b7280;
+  color: var(--a-fg3);
   font-size: 13px;
 }
 
 // ─── Mobile (<=820px) ──────────────────────────────────────────────────────
-// Stats → 1 column; ring stacks above legend; activity row compresses.
 
 @media (max-width: $bp-admin-mobile) {
   .stats {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     gap: 12px;
   }
 
-  .ringWrap {
-    grid-template-columns: 1fr;
-    justify-items: center;
-    gap: 14px;
+  .mixWrap {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
   }
 
   .activityRow {
-    grid-template-columns: 32px 1fr;
+    grid-template-columns: 32px minmax(0, 1fr);
     gap: 10px;
     padding: 10px 14px;
   }
@@ -639,22 +1010,23 @@
     padding: 10px 12px;
   }
 
-  .qaTitle {
+  .qaTitle,
+  .qaBtn {
     flex-shrink: 0;
   }
 
-  .qaBtn {
-    flex-shrink: 0;
+  .connectCta {
+    align-items: flex-start;
   }
 }
 
 @media (max-width: $bp-admin-compact) {
-  .stats {
-    grid-template-columns: 1fr;
-  }
-
   .panelBody,
   .panelHead {
     padding: 12px 16px;
+  }
+
+  .breakdownRow {
+    padding: 10px 14px;
   }
 }

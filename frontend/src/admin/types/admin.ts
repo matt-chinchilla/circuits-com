@@ -17,6 +17,10 @@ export interface DashboardStats {
   suppliers_count: number;
   revenue_total: number;
   sponsors_count: number;
+  // Sum of Revenue.amount whose period covers the CURRENT calendar month in
+  // America/New_York. Server float()-casts it — a Postgres NUMERIC would
+  // otherwise arrive as a JSON string despite this `number` type.
+  monthly_revenue: number;
 }
 
 export interface ActivityItem {
@@ -37,6 +41,151 @@ export interface PopularData {
   top_categories: Array<{ name: string; parts_count: number }>;
   top_suppliers: Array<{ name: string; listings_count: number }>;
 }
+
+// ── Dashboard overhaul (2026-07-30) ────────────────────────────────────────
+// Every dollar field below is float()-cast server-side. Every "today" /
+// "current month" / day bucket is America/New_York (zoneinfo), NOT UTC — a
+// UTC-bucketed chart shifts the last point by a day for five hours each night.
+
+/** One day bucket. `day` is `YYYY-MM-DD` in EST. */
+export interface TrendPoint {
+  day: string;
+  value: number;
+}
+
+/**
+ * GET /api/dashboard/trends?days=30
+ *
+ * parts / suppliers / sponsors are CUMULATIVE counts (rows with
+ * `created_at <= day`, forward-filled). revenue is the daily sum, traffic the
+ * daily PageView count — both 0-filled. EVERY series has exactly `days`
+ * points ending today (EST), with no gaps, so the arrays are index-aligned and
+ * a chart can zip them without a date join.
+ */
+export interface DashboardTrends {
+  days: number;
+  series: {
+    parts: TrendPoint[];
+    suppliers: TrendPoint[];
+    sponsors: TrendPoint[];
+    revenue: TrendPoint[];
+    traffic: TrendPoint[];
+  };
+}
+
+export type TrendSeriesKey = keyof DashboardTrends['series'];
+
+/** Day-of-month bucket inside a MonthlyCompareMonth. `day` is 1..days_in_month. */
+export interface MonthlyDailyPoint {
+  day: number;
+  value: number;
+}
+
+export interface MonthlyCompareMonth {
+  /** `YYYY-MM`. */
+  key: string;
+  /** Display label, e.g. "July". */
+  label: string;
+  /** One entry per day of that month; 0 for future/absent days. */
+  daily: MonthlyDailyPoint[];
+}
+
+/**
+ * GET /api/dashboard/revenue-compare?months=3  AND
+ * GET /api/dashboard/expenses?months=3  — identical wire shape, hence one type.
+ * NEWEST MONTH FIRST.
+ */
+export interface MonthlyCompare {
+  months: MonthlyCompareMonth[];
+}
+
+export interface SalesRepCustomer {
+  company: string;
+  /** Server normalizes casing (`initcap`) before sending. An unrecognized
+   *  value still renders — `tierColor()` falls back to the neutral slate. */
+  tier: SponsorTier;
+  /** Sponsor.amount when set, else a TIER DEFAULT (Platinum 2500 / Gold 900 /
+   *  Silver 300). Those defaults are PLACEHOLDER constants living server-side —
+   *  revisit with real pricing before this drives anything but a demo chart. */
+  amount: number;
+}
+
+export interface SalesRep {
+  name: string;
+  total: number;
+  customers: SalesRepCustomer[];
+}
+
+/** GET /api/dashboard/sales-reps — ACTIVE sponsors (status Active OR NULL) that
+ *  carry `sold_by`, grouped by `sold_by`. */
+export interface SalesRepsResponse {
+  reps: SalesRep[];
+}
+
+/** GET /api/admin/sales-reps — usernames of admin-role Users; the `sold_by`
+ *  options for the sponsor form. */
+export interface SalesRepOptions {
+  reps: string[];
+}
+
+export type ExpenseCategory =
+  | 'infrastructure'
+  | 'ai'
+  | 'email'
+  | 'domain'
+  | 'payment'
+  | 'other';
+
+export interface ExpenseBreakdownRow {
+  category: string;
+  label: string;
+  amount: number;
+  vendor: string;
+}
+
+/** GET /api/dashboard/expenses/breakdown — the CURRENT month only. */
+export interface ExpensesBreakdown {
+  /** `YYYY-MM`. */
+  month: string;
+  total: number;
+  categories: ExpenseBreakdownRow[];
+}
+
+/**
+ * GET /api/admin/expenses — a monthly recurring cost row.
+ *
+ * GOTCHA: `amount` is a Postgres NUMERIC, so it arrives as a JSON STRING
+ * ("42.00") at runtime despite this `number` type — exactly like
+ * `AdminSponsor.amount`. Coerce with `Number()` before ANY compare / sum /
+ * bucket / sort, or it string-compares ("9" > "10").
+ */
+export interface AdminExpense {
+  id: string;
+  category: ExpenseCategory;
+  vendor: string | null;
+  amount: number;
+  description: string | null;
+  /** `YYYY-MM-DD`. Both required server-side (a `date`, not nullable). */
+  period_start: string;
+  period_end: string;
+  created_at: string | null;
+}
+
+/** POST /api/admin/expenses/ body. `vendor`/`description` are optional
+ *  server-side; the period bounds and the amount are not. */
+export interface ExpenseCreate {
+  category: ExpenseCategory;
+  vendor?: string | null;
+  amount: number;
+  description?: string | null;
+  period_start: string;
+  period_end: string;
+}
+
+/** PATCH /api/admin/expenses/{id} body — any partial subset. An OMITTED field
+ *  is left untouched (the router uses `exclude_unset`); an explicit `null`
+ *  clears it. */
+export type ExpenseUpdate = Partial<ExpenseCreate>;
 
 // Parts
 export interface PriceBreak {
@@ -192,4 +341,24 @@ export interface AdminSponsor {
   image_url: string | null;
   brand_primary: string | null;
   brand_secondary: string | null;
+  // ADMIN-ONLY. Present on AdminSponsorCreate/Update/Response, and DELIBERATELY
+  // absent from the public `SponsorResponse` in schemas/sponsor.py that
+  // routes/sponsors.py serves unauthenticated — who sold a placement is not
+  // public. Optional here (`?: string | null`) so existing sponsor-object
+  // literals keep compiling; `?:` alone would miss a JSON `null`, hence the
+  // explicit `| null` per the repo's `?: T | null` rule.
+  sold_by?: string | null;
 }
+
+// ── Social / ad engagement (frontend-only contract; no backend yet) ─────────
+// Re-exported TYPE-ONLY so `@admin/types/admin` stays the one import site for
+// admin wire types while the values (SOCIAL_PLATFORMS, PLATFORM_META,
+// isSocialPlatform) keep their own module — a value re-export here would give
+// this otherwise type-only file a runtime footprint in every bundle that
+// touches it. Import the values from '@admin/types/engagement' directly.
+export type {
+  SocialPlatform,
+  PlatformMeta,
+  PlatformEngagementPoint,
+  PlatformEngagementSeries,
+} from '@admin/types/engagement';

@@ -1,421 +1,330 @@
-import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { Plus, Upload, Download } from 'lucide-react'
-import { useDemo } from '@admin/contexts/DemoContext'
-import { adminApi } from '@admin/services/adminApi'
-import type { DashboardStats, ActivityItem, RevenueDataPoint, AdminSponsor } from '@admin/types/admin'
-import { countActiveSponsorsByTier } from '@admin/services/sponsorTier'
-import styles from './DashboardPage.module.scss'
+// DashboardPage — the admin console home.
+//
+// This file is the SHELL only: it fetches, branches on demo mode, and lays the
+// widgets out. Every widget lives in ./components and owns its own chart option
+// and empty state. Charts go through `<EChart>` (which disposes its zrender
+// instance on unmount) — never a hand-rolled SVG and never a bare
+// `echarts.init`.
+//
+// ── Demo mode ──────────────────────────────────────────────────────────────
+// `DemoContext.demoMode` is ON by default and the console gets shown to
+// prospects long before the live catalog has a believable P&L. Demo fakes the
+// VALUES, never the SHAPE: the day axis, month keys and month lengths come from
+// the real ET calendar either way, so switching the toggle re-labels nothing.
+//
+// ── Fetching ───────────────────────────────────────────────────────────────
+// Three effects: one for the range-independent payloads and one each for the
+// two comparators (whose `months` query changes with their segmented control).
+// Each request is individually `.catch`-ed to a neutral fallback so one failing
+// endpoint degrades a single widget instead of blanking the page, and each
+// effect carries the repo's cancel flag so a late resolve cannot set state on
+// an unmounted page.
 
-// ─── Sparkline (12-pt mini area chart) ─────────────────────────────────────
+import { useEffect, useMemo, useState } from 'react';
+import { Download } from 'lucide-react';
+import { useDemo } from '@admin/contexts/DemoContext';
+import { adminApi } from '@admin/services/adminApi';
+import { countActiveSponsorsByTier } from '@admin/services/sponsorTier';
+import type {
+  ActivityItem,
+  AdminSponsor,
+  DashboardStats,
+  DashboardTrends,
+  ExpensesBreakdown,
+  MonthlyCompareMonth,
+  SalesRep,
+  SponsorTier,
+  TrendPoint,
+} from '@admin/types/admin';
+import type { PlatformEngagementSeries } from '@admin/types/engagement';
+import ActivityPanel from './components/ActivityPanel';
+import EngagementPanel from './components/EngagementPanel';
+import ExpenseBreakdownPanel from './components/ExpenseBreakdownPanel';
+import ExpensesPanel from './components/ExpensesPanel';
+import ImportQueuePanel from './components/ImportQueuePanel';
+import QuickActions from './components/QuickActions';
+import RevenuePanel, { type CompareRange } from './components/RevenuePanel';
+import SalesRepsPanel from './components/SalesRepsPanel';
+import SponsorMixPanel from './components/SponsorMixPanel';
+import StatCard from './components/StatCard';
+import TrafficPanel from './components/TrafficPanel';
+import {
+  DEMO_SALES_REPS,
+  DEMO_STATS,
+  DEMO_TIER_COUNTS,
+  demoExpensesBreakdown,
+  demoMonthlyCompare,
+  demoTrend,
+} from './components/demoData';
+import { count, estDayWindow, estToday, usd } from './components/format';
+import { monthTotal } from './components/monthlySeries';
+import styles from './DashboardPage.module.scss';
 
-interface SparklineProps {
-  data: number[]
-  color: string
-  height?: number
-  width?: number
-}
+const TREND_DAYS = 30;
 
-function Sparkline({ data, color, height = 28, width = 84 }: SparklineProps) {
-  if (data.length < 2) return null
-  const max = Math.max(...data)
-  const min = Math.min(...data)
-  const range = max - min || 1
-  const step = width / (data.length - 1)
-  const pts = data.map((v, i) => [i * step, height - ((v - min) / range) * (height - 2) - 1] as const)
-  const d = pts.reduce((acc, [x, y], i) => acc + (i ? ` L${x.toFixed(1)} ${y.toFixed(1)}` : `M${x.toFixed(1)} ${y.toFixed(1)}`), '')
-  const area = d + ` L${width} ${height} L0 ${height} Z`
-  const gradId = `sg-${color.replace(/[^a-z0-9]/gi, '')}`
-  return (
-    <svg className={styles.sparkline} viewBox={`0 0 ${width} ${height}`} width={width} height={height} preserveAspectRatio="none">
-      <defs>
-        <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={color} stopOpacity="0.25" />
-          <stop offset="100%" stopColor={color} stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      <path d={area} fill={`url(#${gradId})`} />
-      <path d={d} fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className={styles.sparklinePath} />
-      <circle cx={pts[pts.length - 1][0]} cy={pts[pts.length - 1][1]} r="2.2" fill={color} className={styles.sparklineDot} />
-    </svg>
-  )
-}
-
-// ─── Revenue area chart (smoothed cubic-bezier) ────────────────────────────
-
-interface RevenueChartProps {
-  data: { l: string; v: number }[]
-}
-
-function RevenueChart({ data }: RevenueChartProps) {
-  if (data.length < 2) {
-    return <div className={styles.emptyChart}>No revenue data yet.</div>
-  }
-  const W = 640, H = 200, P = 28
-  const max = Math.max(...data.map((d) => d.v))
-  const step = (W - P * 2) / (data.length - 1)
-  const pts = data.map((d, i) => [P + i * step, H - P - (d.v / Math.max(max, 1)) * (H - P * 2)] as const)
-  const path = pts.reduce((acc, [x, y], i) => {
-    if (i === 0) return `M${x} ${y}`
-    const [px, py] = pts[i - 1]
-    const cx1 = px + (x - px) / 2
-    const cx2 = px + (x - px) / 2
-    return acc + ` C${cx1} ${py} ${cx2} ${y} ${x} ${y}`
-  }, '')
-  const area = path + ` L${W - P} ${H - P} L${P} ${H - P} Z`
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} className={styles.revChart} preserveAspectRatio="none">
-      <defs>
-        <linearGradient id="rev-grad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#0a4a2e" stopOpacity="0.28" />
-          <stop offset="100%" stopColor="#0a4a2e" stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      {[0.25, 0.5, 0.75].map((t, i) => (
-        <line key={i} x1={P} x2={W - P} y1={P + (H - P * 2) * t} y2={P + (H - P * 2) * t} stroke="#e5e7eb" strokeDasharray="2 4" />
-      ))}
-      <path d={area} fill="url(#rev-grad)" className={styles.revArea} />
-      <path d={path} fill="none" stroke="#0a4a2e" strokeWidth="2" strokeLinecap="round" className={styles.revLine} />
-      {pts.map(([x, y], i) => (
-        <circle key={i} cx={x} cy={y} r="3" fill="#fff" stroke="#0a4a2e" strokeWidth="1.6" className={styles.revDot} style={{ animationDelay: `${i * 60}ms` }} />
-      ))}
-      {data.map((d, i) => (
-        <text key={i} x={pts[i][0]} y={H - 8} textAnchor="middle" className={styles.revLabel}>{d.l}</text>
-      ))}
-    </svg>
-  )
-}
-
-// ─── Sponsor donut (segment-draw animation + legend) ───────────────────────
-
-interface Tier { n: string; v: number; c: string }
-
-function SponsorRing({ tiers }: { tiers: Tier[] }) {
-  const total = tiers.reduce((s, t) => s + t.v, 0)
-  const R = 54
-  const C = 2 * Math.PI * R
-  let offset = 0
-  return (
-    <div className={styles.ringWrap}>
-      <svg viewBox="0 0 140 140" className={styles.ring}>
-        <circle cx="70" cy="70" r={R} fill="none" stroke="#f0f2f5" strokeWidth="14" />
-        {tiers.map((t, i) => {
-          const len = total > 0 ? (t.v / total) * C : 0
-          const seg = (
-            <circle
-              key={i}
-              cx="70"
-              cy="70"
-              r={R}
-              fill="none"
-              stroke={t.c}
-              strokeWidth="14"
-              strokeDasharray={`${len} ${C - len}`}
-              strokeDashoffset={-offset}
-              strokeLinecap="butt"
-              className={styles.ringSeg}
-              style={{ animationDelay: `${i * 120}ms` }}
-            />
-          )
-          offset += len
-          return seg
-        })}
-        <text x="70" y="66" textAnchor="middle" className={styles.ringNum}>{total}</text>
-        <text x="70" y="84" textAnchor="middle" className={styles.ringLbl}>sponsors</text>
-      </svg>
-      <div className={styles.ringLegend}>
-        {tiers.map((t) => (
-          <div key={t.n} className={styles.ringRow}>
-            <span className={styles.ringSwatch} style={{ background: t.c }} />
-            <span className={styles.ringName}>{t.n}</span>
-            <span className={styles.ringVal}>{t.v}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-// ─── Stat card (label + value + delta + sparkline) ─────────────────────────
-
-interface StatProps {
-  label: string
-  value: string
-  delta?: string | null
-  deltaDir?: 'up' | 'down'
-  hint: string
-  series: number[]
-  color: string
-}
-
-function Stat({ label, value, delta, deltaDir = 'up', hint, series, color }: StatProps) {
-  return (
-    <div className={styles.stat}>
-      <div className={styles.statHead}>
-        <span className={styles.statLabel}>{label}</span>
-        {delta && (
-          <span className={`${styles.statDelta} ${deltaDir === 'up' ? styles.up : styles.down}`}>
-            {deltaDir === 'up' ? '▲' : '▼'} {delta}
-          </span>
-        )}
-      </div>
-      <div className={styles.statValue}>{value}</div>
-      <div className={styles.statFoot}>
-        <span className={styles.statHint}>{hint}</span>
-        <Sparkline data={series} color={color} />
-      </div>
-    </div>
-  )
-}
-
-// ─── Quick actions bar ─────────────────────────────────────────────────────
-
-function QuickActions() {
-  return (
-    <div className={styles.qaBar}>
-      <span className={styles.qaTitle}>Quick actions</span>
-      <Link to="/admin/parts/new" className={styles.qaBtn}>
-        <Plus size={14} strokeWidth={2} />Add Part
-      </Link>
-      <Link to="/admin/suppliers/new" className={styles.qaBtn}>
-        <Plus size={14} strokeWidth={2} />Add Supplier
-      </Link>
-      <Link to="/admin/sponsors/new" className={styles.qaBtn}>
-        <Plus size={14} strokeWidth={2} />New Sponsor
-      </Link>
-      <Link to="/admin/import" className={styles.qaBtn}>
-        <Upload size={14} strokeWidth={2} />Import CSV
-      </Link>
-    </div>
-  )
-}
-
-// ─── Realistic-looking activity defaults (demo mode) ───────────────────────
-
-const DEMO_ACTIVITY = [
-  { i: 'ok' as const, e: '✓', t: <>Approved <b>Digi-Key</b> price update for <span className="mono">STM32F407VGT6</span></>, w: '4m ago' },
-  { i: 'info' as const, e: '↻', t: <>Mouser imported <b>3,421</b> new parts in category <b>Analog ICs</b></>, w: '22m ago' },
-  { i: 'warn' as const, e: '!', t: <>MX25L12833FM2I-10G flagged <b>Obsolete</b> by Macronix</>, w: '1h ago' },
-  { i: 'ok' as const, e: '+', t: <>New supplier onboarded: <b>Future Electronics</b></>, w: '3h ago' },
-  { i: 'info' as const, e: '◷', t: <>Weekly stock sync completed · <b>186</b> distributors</>, w: '6h ago' },
-]
-
-const DEMO_QUEUE = [
-  { filename: 'digikey-q4-pricing.csv', size: '4.2 MB', rows: 18432, status: 'pending' as const },
-  { filename: 'mouser-analog-ics.csv', size: '2.1 MB', rows: 9201, status: 'approved' as const },
-  { filename: 'arrow-mcus-restock.csv', size: '892 KB', rows: 2412, status: 'pending' as const },
-  { filename: 'newark-passives-week48.csv', size: '1.4 MB', rows: 5128, status: 'approved' as const },
-]
-
-// ─── Page ──────────────────────────────────────────────────────────────────
+const EMPTY_TIER_COUNTS: Record<SponsorTier, number> = { Platinum: 0, Gold: 0, Silver: 0 };
 
 export default function DashboardPage() {
-  const { demoMode } = useDemo()
-  const [stats, setStats] = useState<DashboardStats | null>(null)
-  const [activity, setActivity] = useState<ActivityItem[]>([])
-  const [revenue, setRevenue] = useState<RevenueDataPoint[]>([])
-  const [sponsors, setSponsors] = useState<AdminSponsor[]>([])
+  const { demoMode } = useDemo();
+
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [activity, setActivity] = useState<ActivityItem[]>([]);
+  const [sponsors, setSponsors] = useState<AdminSponsor[]>([]);
+  const [trends, setTrends] = useState<DashboardTrends | null>(null);
+  const [salesReps, setSalesReps] = useState<SalesRep[]>([]);
+  const [breakdown, setBreakdown] = useState<ExpensesBreakdown | null>(null);
+  const [engagement, setEngagement] = useState<PlatformEngagementSeries[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // TODO: move both windows to Settings — they are a per-admin preference, not
+  // page state. Local `useState` keeps this shippable without a settings
+  // migration; the two are independent on purpose (costs are usually read over
+  // a longer horizon than bookings).
+  const [revenueRange, setRevenueRange] = useState<CompareRange>(3);
+  const [expenseRange, setExpenseRange] = useState<CompareRange>(3);
+  const [revenueMonths, setRevenueMonths] = useState<MonthlyCompareMonth[]>([]);
+  const [expenseMonths, setExpenseMonths] = useState<MonthlyCompareMonth[]>([]);
+  const [revenueLoading, setRevenueLoading] = useState(true);
+  const [expenseLoading, setExpenseLoading] = useState(true);
+
+  // ── Range-independent payloads ───────────────────────────────────────────
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    Promise.all([
+      adminApi.getStats().catch(() => null),
+      adminApi.getActivity().catch(() => [] as ActivityItem[]),
+      // Best-effort: the tier mix degrades to its empty state rather than
+      // failing the page.
+      adminApi.getSponsors().catch(() => [] as AdminSponsor[]),
+      adminApi.getTrends(TREND_DAYS).catch(() => null),
+      adminApi.getSalesReps().catch(() => ({ reps: [] as SalesRep[] })),
+      adminApi.getExpensesBreakdown().catch(() => null),
+      // Stub today — resolves [] until the engagement endpoint lands.
+      adminApi.getEngagement(TREND_DAYS).catch(() => [] as PlatformEngagementSeries[]),
+    ])
+      .then(([s, a, sp, t, reps, bd, eng]) => {
+        if (cancelled) return;
+        setStats(s);
+        setActivity(a);
+        setSponsors(sp);
+        setTrends(t);
+        setSalesReps(reps.reps ?? []);
+        setBreakdown(bd);
+        setEngagement(eng);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [demoMode]);
+
+  // ── Comparators ──────────────────────────────────────────────────────────
+  // One effect EACH, keyed only on its own window: a combined effect refetched
+  // both endpoints every time either segmented control moved. Neither depends
+  // on `demoMode` — the payload is the same either way, the demo branch just
+  // renders generated months instead.
+  useEffect(() => {
+    let cancelled = false;
+    setRevenueLoading(true);
+    adminApi
+      .getRevenueCompare(revenueRange)
+      .catch(() => ({ months: [] }))
+      .then((rev) => {
+        if (cancelled) return;
+        setRevenueMonths(rev.months ?? []);
+        setRevenueLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [revenueRange]);
 
   useEffect(() => {
-    let cancelled = false
-    Promise.all([
-      adminApi.getStats(),
-      adminApi.getActivity(),
-      adminApi.getRevenue(),
-      // Best-effort: the tier chart degrades to empty if sponsors fail to load,
-      // rather than failing the whole dashboard.
-      adminApi.getSponsors().catch(() => [] as AdminSponsor[]),
-    ])
-      .then(([s, a, r, sp]) => {
-        if (cancelled) return
-        setStats(s)
-        setActivity(a)
-        setRevenue(r)
-        setSponsors(sp)
-      })
-      .catch((err) => {
-        if (cancelled) return
-        console.error('[DashboardPage] data fetch failed', err)
-      })
-    return () => { cancelled = true }
-  }, [demoMode])
+    let cancelled = false;
+    setExpenseLoading(true);
+    adminApi
+      .getExpenses(expenseRange)
+      .catch(() => ({ months: [] }))
+      .then((exp) => {
+        if (cancelled) return;
+        setExpenseMonths(exp.months ?? []);
+        setExpenseLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [expenseRange]);
 
-  const revTotals = revenue.map(r => r.total)
-  const revSparkline = revTotals.length >= 2 ? revTotals : [0, 0]
+  // ── Derived: day axis ────────────────────────────────────────────────────
+  // Demo curves ride the REAL ET day axis, so the hover readout names a real
+  // date in both modes. The locally generated window is only a fallback for
+  // when /trends has not answered (or failed).
+  const dayAxis = useMemo(() => {
+    const days = trends?.series.parts.map((p) => p.day);
+    return days && days.length > 0 ? days : estDayWindow(TREND_DAYS);
+  }, [trends]);
 
-  // Generate a gentle ramp from `base * startFrac` to `base` over N points
-  function ramp(base: number, startFrac: number): number[] {
-    const last = Math.max(revSparkline.length - 1, 1)
-    return revSparkline.map((_, i) => base * (startFrac + (1 - startFrac) * (i / last)))
-  }
+  const todayDayOfMonth = useMemo(() => estToday().day, []);
 
-  const series = demoMode
-    ? {
-        parts: [40, 44, 48, 52, 58, 62, 70, 78, 85, 92, 98, 110],
-        suppliers: [120, 128, 140, 152, 161, 170, 176, 181, 183, 184, 185, 186],
-        revenue: [12, 18, 14, 22, 28, 24, 32, 38, 34, 44, 52, 58],
-        pending: [4, 8, 6, 10, 14, 12, 9, 11, 14, 10, 13, 12],
-      }
-    : {
-        parts: ramp(stats?.parts_count ?? 0, 0.85),
-        suppliers: ramp(stats?.suppliers_count ?? 0, 0.9),
-        revenue: revSparkline,
-        pending: revSparkline.map(() => stats?.sponsors_count ?? 0),
-      }
+  const series = useMemo(() => {
+    if (demoMode) {
+      return {
+        parts: demoTrend(dayAxis, 2_180_000, DEMO_STATS.parts, 11, 0.012),
+        suppliers: demoTrend(dayAxis, 148, DEMO_STATS.suppliers, 29, 0.02),
+        // Daily bookings, deliberately scaled to the demo comparator base
+        // below (~900/day) and the demo book of business (~$26k/mo) so the
+        // three widgets tell one story rather than three.
+        revenue: demoTrend(dayAxis, 700, 1_100, 47, 0.22),
+        sponsors: demoTrend(dayAxis, 131, DEMO_STATS.sponsors, 83, 0.03),
+        traffic: demoTrend(dayAxis, 640, 1_450, 101, 0.28),
+      };
+    }
+    const empty: TrendPoint[] = [];
+    return {
+      parts: trends?.series.parts ?? empty,
+      suppliers: trends?.series.suppliers ?? empty,
+      revenue: trends?.series.revenue ?? empty,
+      sponsors: trends?.series.sponsors ?? empty,
+      traffic: trends?.series.traffic ?? empty,
+    };
+  }, [demoMode, dayAxis, trends]);
 
-  const partsValue = demoMode ? '2,487,302' : (stats?.parts_count ?? 0).toLocaleString()
-  const supValue = demoMode ? '186' : (stats?.suppliers_count ?? 0).toLocaleString()
-  const revValue = demoMode ? '$184,320' : `$${(stats?.revenue_total ?? 0).toLocaleString()}`
-  const spnValue = demoMode ? '186' : (stats?.sponsors_count ?? 0).toLocaleString()
+  // ── Derived: widget data ─────────────────────────────────────────────────
+  const revenueData = useMemo(
+    () => (demoMode ? demoMonthlyCompare(revenueRange, 900, 5) : revenueMonths),
+    [demoMode, revenueRange, revenueMonths],
+  );
 
-  // Bundle's smoothed-bezier RevenueChart accepts a {l,v}[] series; map the
-  // adminApi RevenueDataPoint[] to that shape (use total or fall back to 0).
-  const revChartData = demoMode
-    ? [12, 18, 14, 22, 28, 24, 32, 38, 34, 44, 52, 58].map((v, i) => ({ l: `W${i + 1}`, v }))
-    : revenue.map((r, i) => ({ l: r.month?.slice(5) || `${i + 1}`, v: r.total ?? 0 }))
+  const expenseData = useMemo(
+    () => (demoMode ? demoMonthlyCompare(expenseRange, 9.4, 61, 0.97) : expenseMonths),
+    [demoMode, expenseRange, expenseMonths],
+  );
 
-  const realTierCounts = countActiveSponsorsByTier(sponsors)
-  const sponsorTiers: Tier[] = demoMode
-    ? [
-        { n: 'Platinum', v: 34, c: '#0a4a2e' },
-        { n: 'Gold', v: 58, c: '#d97706' },
-        { n: 'Silver', v: 82, c: '#94a3b8' },
-      ]
-    : [
-        { n: 'Platinum', v: realTierCounts.Platinum, c: '#0a4a2e' },
-        { n: 'Gold', v: realTierCounts.Gold, c: '#d97706' },
-        { n: 'Silver', v: realTierCounts.Silver, c: '#94a3b8' },
-      ]
+  const breakdownData = useMemo(
+    () => (demoMode ? demoExpensesBreakdown() : breakdown),
+    [demoMode, breakdown],
+  );
 
-  const activityRows = demoMode ? DEMO_ACTIVITY : activity.map((a) => ({
-    i: 'info' as const,
-    e: '·',
-    t: <>{a.description}</>,
-    w: a.created_at ? new Date(a.created_at).toLocaleDateString() : '',
-  }))
+  const repData = demoMode ? DEMO_SALES_REPS : salesReps;
+
+  // Demo headline for Monthly Revenue: `/dashboard/stats.monthly_revenue`
+  // whenever the current month actually has Revenue rows. The seeder's NEWEST
+  // period is LAST month (`_seed_revenue` walks months_ago 12 → 1), so on
+  // seeded data that figure is 0 — which would make demo mode look as unsold as
+  // live mode. In that case the card falls back to the demo comparator's
+  // month-to-date total, so the headline agrees with the chart right below it.
+  const demoMonthlyRevenue = useMemo(() => {
+    const reported = Number(stats?.monthly_revenue) || 0;
+    if (reported > 0) return reported;
+    return revenueData.length > 0 ? monthTotal(revenueData[0]) : 0;
+  }, [stats, revenueData]);
+
+  const tierCounts = useMemo(() => {
+    if (demoMode) return DEMO_TIER_COUNTS;
+    return sponsors.length > 0 ? countActiveSponsorsByTier(sponsors) : EMPTY_TIER_COUNTS;
+  }, [demoMode, sponsors]);
 
   return (
     <div>
       <div className={styles.pageHead}>
         <div className={styles.pageHeadLeft}>
           <h1>Dashboard</h1>
-          <p>Catalog health · finances · recent activity</p>
+          <p>Catalog health &middot; finances &middot; recent activity</p>
         </div>
         <button type="button" className={`${styles.btn} ${styles.btnGhost}`}>
-          <Download size={15} strokeWidth={2} />Export report
+          <Download size={15} strokeWidth={2} />
+          Export report
         </button>
       </div>
 
       <QuickActions />
 
       <div className={styles.stats}>
-        <Stat
+        <StatCard
           label="Total Parts"
-          value={partsValue}
+          value={demoMode ? count(DEMO_STATS.parts) : count(stats?.parts_count ?? 0)}
           delta={demoMode ? '2.4%' : null}
-          deltaDir="up"
-          hint={demoMode ? 'vs last week' : 'real catalog'}
+          hint={demoMode ? 'vs last week' : 'live catalog'}
           series={series.parts}
-          color="#0a4a2e"
+          tone="green"
+          valueFormat={count}
         />
-        <Stat
+        <StatCard
           label="Active Suppliers"
-          value={supValue}
+          value={demoMode ? count(DEMO_STATS.suppliers) : count(stats?.suppliers_count ?? 0)}
           delta={demoMode ? '4 new' : null}
-          deltaDir="up"
           hint="this month"
           series={series.suppliers}
-          color="var(--a-blue)"
+          tone="blue"
+          valueFormat={count}
         />
-        <Stat
+        {/* Live mode is deliberately a hard $0.00: nothing is billed yet, and
+            showing seeded demo revenue as a real figure would be a lie about
+            the business. Demo mode shows the seeded monthly total. */}
+        <StatCard
           label="Monthly Revenue"
-          value={revValue}
+          value={demoMode ? usd(demoMonthlyRevenue) : usd(0)}
           delta={demoMode ? '18.2%' : null}
-          deltaDir="up"
-          hint={demoMode ? 'recurring + spot' : 'not monetized yet'}
+          hint={
+            demoMode
+              ? 'recurring + spot'
+              : 'Not monetized yet — connects to your payment processor'
+          }
           series={series.revenue}
-          color="#a88d2e"
+          tone="gold"
+          valueFormat={usd}
         />
-        <Stat
+        <StatCard
           label="Active Sponsors"
-          value={spnValue}
+          value={demoMode ? count(DEMO_STATS.sponsors) : count(stats?.sponsors_count ?? 0)}
           hint="paying tiers"
-          series={series.pending}
-          color="var(--a-purple)"
+          series={series.sponsors}
+          tone="purple"
+          valueFormat={count}
         />
       </div>
 
-      <div className={styles.aTwo}>
-        <div className={styles.panel}>
-          <div className={styles.panelHead}>
-            <div>
-              <h3 className={styles.panelTitle}>Revenue</h3>
-              <p className={styles.panelSub}>Weekly gross · last 12 weeks</p>
-            </div>
-            <div className={styles.panelLegend}>
-              <span className={styles.legendDot} style={{ background: '#0a4a2e' }} />
-              Gross revenue
-            </div>
-          </div>
-          <div className={styles.panelBody}>
-            <RevenueChart data={revChartData} />
-          </div>
-        </div>
-        <div className={styles.panel}>
-          <div className={styles.panelHead}>
-            <div>
-              <h3 className={styles.panelTitle}>Active Sponsors</h3>
-              <p className={styles.panelSub}>By tier · monetization mix</p>
-            </div>
-            <Link to="/admin/sponsors" className={styles.panelLink}>Manage →</Link>
-          </div>
-          <div className={styles.panelBody}>
-            <SponsorRing tiers={sponsorTiers} />
-          </div>
-        </div>
+      <div className={styles.aOne}>
+        <RevenuePanel
+          months={revenueData}
+          range={revenueRange}
+          onRangeChange={setRevenueRange}
+          todayDayOfMonth={todayDayOfMonth}
+          loading={revenueLoading}
+        />
+      </div>
+
+      <div className={styles.aOne}>
+        <SalesRepsPanel reps={repData} loading={loading} />
+      </div>
+
+      <div className={styles.aEven}>
+        <SponsorMixPanel counts={tierCounts} loading={loading} />
+        <TrafficPanel series={series.traffic} loading={loading} />
+      </div>
+
+      <div className={styles.aWide}>
+        <ExpensesPanel
+          months={expenseData}
+          range={expenseRange}
+          onRangeChange={setExpenseRange}
+          todayDayOfMonth={todayDayOfMonth}
+          loading={expenseLoading}
+        />
+        <ExpenseBreakdownPanel breakdown={breakdownData} loading={loading} />
+      </div>
+
+      <div className={styles.aOne}>
+        <EngagementPanel series={engagement} loading={loading} />
       </div>
 
       <div className={styles.aTwo}>
-        <div className={styles.panel}>
-          <div className={styles.panelHead}>
-            <h3 className={styles.panelTitle}>Recent Activity</h3>
-            <span className={styles.panelLink}>View all →</span>
-          </div>
-          <div className={styles.activity}>
-            {activityRows.length === 0 ? (
-              <div className={styles.empty}>No recent activity.</div>
-            ) : (
-              activityRows.map((r, idx) => (
-                <div key={idx} className={styles.activityRow}>
-                  <div className={`${styles.activityIcon} ${styles[r.i]}`}>{r.e}</div>
-                  <div className={styles.activityText}>{r.t}</div>
-                  <div className={styles.activityTime}>{r.w}</div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-        <div className={styles.panel}>
-          <div className={styles.panelHead}>
-            <h3 className={styles.panelTitle}>Import Queue</h3>
-            <Link to="/admin/import" className={styles.panelLink}>Review all →</Link>
-          </div>
-          <div className={styles.queue}>
-            {(demoMode ? DEMO_QUEUE : []).map((q, idx) => (
-              <div key={idx} className={styles.queueRow}>
-                <div>
-                  <div className={styles.queueName}>{q.filename}</div>
-                  <div className={styles.queueMeta}>{q.size} · {q.rows.toLocaleString()} rows</div>
-                </div>
-                <span className={`${styles.queuePill} ${styles[q.status]}`}>{q.status}</span>
-              </div>
-            ))}
-            {!demoMode && (
-              <div className={styles.empty}>No imports pending review.</div>
-            )}
-          </div>
-        </div>
+        <ActivityPanel activity={activity} demoMode={demoMode} />
+        <ImportQueuePanel demoMode={demoMode} />
       </div>
     </div>
-  )
+  );
 }

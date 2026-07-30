@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { NavLink, Link, useLocation, useNavigate } from 'react-router-dom';
-import { LogOut, Search, Bell, Plus, Menu, X } from 'lucide-react';
+import { LogOut, Search, Bell, Plus, Menu, X, Sun, Moon } from 'lucide-react';
 import { useAuth } from '@admin/contexts/AuthContext';
 import { useDemo } from '@admin/contexts/DemoContext';
+import { useAdminTheme } from '@admin/contexts/AdminThemeContext';
 import Icon from '@shared/components/Icon';
 import BellDropdown from '@admin/components/messages/BellDropdown';
 import { adminApi } from '@admin/services/adminApi';
@@ -42,6 +43,9 @@ const CATALOG_LINKS: SidebarLink[] = [
   { to: '/admin/suppliers', label: 'Suppliers', icon: 'buildings', badgeKey: 'suppliers', tour: 'side-suppliers' },
   { to: '/admin/categories', label: 'Categories', icon: 'squares-four', adminOnly: true, tour: 'side-categories' },
   { to: '/admin/sponsors', label: 'Sponsors', icon: 'star', adminOnly: true, tour: 'side-sponsors' },
+  // Operating costs — the other half of the dashboard P&L. Admin-only: it is
+  // internal finance, never anything a supplier login should see.
+  { to: '/admin/expenses', label: 'Expenses', icon: 'receipt', adminOnly: true, tour: 'side-expenses' },
   { to: '/admin/reports', label: 'Reports', icon: 'chart-bar', tour: 'side-reports' },
 ];
 
@@ -76,6 +80,8 @@ const TITLE_MAP: Record<string, string> = {
   '/admin/categories': 'Categories',
   '/admin/sponsors': 'Sponsors',
   '/admin/sponsors/new': 'New Sponsor',
+  '/admin/expenses': 'Expenses',
+  '/admin/expenses/new': 'New Expense',
   '/admin/reports': 'Reports',
   '/admin/messages': 'Messages',
   '/admin/import': 'Import Queue',
@@ -137,6 +143,7 @@ function SignOutModal({ open, onConfirm, onCancel }: SignOutModalProps) {
 export default function AdminLayout({ children, role = 'admin' }: AdminLayoutProps) {
   const { user, logout } = useAuth();
   const { demoMode, toggleDemo } = useDemo();
+  const { theme, toggleTheme } = useAdminTheme();
   const location = useLocation();
   const navigate = useNavigate();
   const [signOutOpen, setSignOutOpen] = useState(false);
@@ -411,6 +418,20 @@ export default function AdminLayout({ children, role = 'admin' }: AdminLayoutPro
               </span>
             </button>
 
+            <button
+              type="button"
+              className={styles.iconBtn}
+              title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+              aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+              onClick={toggleTheme}
+            >
+              {theme === 'dark' ? (
+                <Sun size={16} strokeWidth={2} />
+              ) : (
+                <Moon size={16} strokeWidth={2} />
+              )}
+            </button>
+
             <div className={styles.bellWrap}>
               <button
                 type="button"
@@ -448,7 +469,9 @@ export default function AdminLayout({ children, role = 'admin' }: AdminLayoutPro
           </div>
         </header>
 
-        <div className={styles.content}>{children}</div>
+        <div key={theme} className={styles.content}>
+          {children}
+        </div>
       </div>
 
       <SignOutModal

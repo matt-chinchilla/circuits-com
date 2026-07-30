@@ -1,0 +1,136 @@
+// SalesRepsPanel — book of business as a force-directed graph.
+//
+// Reps are labelled hubs; their customers are draggable leaf nodes linked to
+// them, sized by monthly value and coloured by sponsor TIER (the board
+// materials). Force layout gives the physics — nodes repel so they stop
+// stacking, the graph settles with a jiggle, and every node carries its own
+// always-on company label. The "Demo" seller is the not-real catch-all
+// (catalog distributors + seeded fakes); it sits last and is dimmed in the
+// legend, and the "Rep book" total excludes it.
+
+import { useMemo } from 'react';
+import { Link } from 'react-router-dom';
+import EChart from '@admin/components/charts/EChart';
+import { salesForceOption, type SalesForceGroup } from '@admin/components/charts/options';
+import { CHART_NEUTRAL, CHART_SERIES } from '@admin/components/charts/chartTheme';
+import type { SalesRep } from '@admin/types/admin';
+import { usd, usdCompact } from './format';
+import styles from '../DashboardPage.module.scss';
+
+// Hub / cluster colours for the reps (leaves stay tier-coloured). Gold is
+// skipped — it now reads as the Gold TIER. "Demo" is the neutral slate.
+const HUB_COLORS = [CHART_SERIES[0], CHART_SERIES[1], CHART_SERIES[3]];
+
+function isDemoSeller(name: string): boolean {
+  return name.trim().toLowerCase() === 'demo';
+}
+
+interface SalesRepsPanelProps {
+  reps: SalesRep[];
+  loading: boolean;
+}
+
+interface BuiltGroup extends SalesForceGroup {
+  accounts: number;
+  demo: boolean;
+}
+
+function buildGroups(reps: readonly SalesRep[]): BuiltGroup[] {
+  // Real reps first (by book, desc); the Demo catch-all always sits last.
+  const ordered = [...reps].sort((a, b) => {
+    const ad = isDemoSeller(a.name) ? 1 : 0;
+    const bd = isDemoSeller(b.name) ? 1 : 0;
+    if (ad !== bd) return ad - bd;
+    return (Number(b.total) || 0) - (Number(a.total) || 0);
+  });
+  let colorIndex = 0;
+  return ordered.map((rep) => {
+    const demo = isDemoSeller(rep.name);
+    return {
+      name: rep.name,
+      demo,
+      color: demo ? CHART_NEUTRAL : HUB_COLORS[colorIndex++ % HUB_COLORS.length],
+      total: Number(rep.total) || 0,
+      accounts: rep.customers.length,
+      children: rep.customers.map((c) => ({
+        label: c.company,
+        value: Number(c.amount) || 0,
+        tier: c.tier,
+      })),
+    };
+  });
+}
+
+export default function SalesRepsPanel({ reps, loading }: SalesRepsPanelProps) {
+  const groups = useMemo(() => buildGroups(reps), [reps]);
+  const option = useMemo(
+    () =>
+      salesForceOption({
+        groups,
+        valueFormat: usdCompact,
+        emptyMessage: 'No sponsorships assigned to a rep yet.',
+      }),
+    [groups],
+  );
+
+  // The real book excludes the Demo catch-all — its attribution is not real.
+  const repBook = groups.filter((g) => !g.demo).reduce((sum, g) => sum + g.total, 0);
+
+  return (
+    <div className={styles.panel}>
+      <div className={styles.panelHead}>
+        <div className={styles.panelHeadMain}>
+          <h3 className={styles.panelTitle}>Book of business</h3>
+          <p className={styles.panelSub}>
+            By sales rep &middot; drag a bubble &middot; area = monthly value
+          </p>
+        </div>
+        <Link to="/admin/sponsors" className={styles.panelLink}>
+          Sponsors &rarr;
+        </Link>
+      </div>
+      <div className={styles.panelBody}>
+        {groups.length === 0 ? (
+          <div className={styles.emptyChart}>
+            {loading ? (
+              'Loading reps…'
+            ) : (
+              <>
+                <strong>No rep assignments yet.</strong>
+                <span>
+                  Set <em>Sold by</em> on a sponsorship and its value shows up here.
+                </span>
+              </>
+            )}
+          </div>
+        ) : (
+          <div className={styles.bookWrap}>
+            <div className={styles.bookChart}>
+              <EChart option={option} style={{ height: 400 }} />
+            </div>
+            <ul className={`${styles.repLegend} ${styles.bookLegend}`}>
+              {groups.map((g) => (
+                <li
+                  key={g.name}
+                  className={g.demo ? `${styles.repRow} ${styles.repRowDemo}` : styles.repRow}
+                >
+                  <span className={styles.repSwatch} style={{ background: g.color }} />
+                  <span className={styles.repName}>{g.name}</span>
+                  <span className={styles.repCount}>
+                    {g.accounts} {g.accounts === 1 ? 'account' : 'accounts'}
+                  </span>
+                  <span className={styles.repTotal}>{usd(g.total)}</span>
+                </li>
+              ))}
+              <li className={`${styles.repRow} ${styles.repRowTotal}`}>
+                <span className={styles.repName}>Rep book</span>
+                <span className={styles.repCount} />
+                <span className={styles.repTotal}>{usd(repBook)}</span>
+              </li>
+            </ul>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

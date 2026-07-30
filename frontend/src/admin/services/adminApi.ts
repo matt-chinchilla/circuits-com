@@ -16,8 +16,17 @@ import type {
   BatchImportResult,
   AdminCategory,
   AdminSponsor,
+  AdminExpense,
+  DashboardTrends,
+  ExpenseCreate,
+  ExpenseUpdate,
+  ExpensesBreakdown,
+  MonthlyCompare,
+  SalesRepOptions,
+  SalesRepsResponse,
 } from '@admin/types/admin';
 import type { Message, MessageStatus, AssignedTo } from '@admin/types/messages';
+import type { PlatformEngagementSeries } from '@admin/types/engagement';
 import { bustSponsorCaches } from '@admin/services/swCache';
 
 // PATCH /api/admin/messages/{id} body — subset of MessageBase the admin UI can
@@ -118,6 +127,83 @@ export const adminApi = {
 
   getAnalytics: (days = 30) =>
     adminClient.get<AnalyticsData>('/dashboard/analytics', { params: { days } }).then((r) => r.data),
+
+  // ── Dashboard overhaul (2026-07-30) ──────────────────────────────────────
+  // All of these bucket by America/New_York server-side and float()-cast their
+  // dollar fields, so the numbers arrive as JSON numbers, not NUMERIC strings.
+
+  /** GET /dashboard/trends?days=30 — 5 index-aligned, gap-free day series. */
+  getTrends: (days = 30) =>
+    adminClient.get<DashboardTrends>('/dashboard/trends', { params: { days } }).then((r) => r.data),
+
+  /** GET /dashboard/revenue-compare?months=3 — day-of-month overlay, newest first. */
+  getRevenueCompare: (months = 3) =>
+    adminClient
+      .get<MonthlyCompare>('/dashboard/revenue-compare', { params: { months } })
+      .then((r) => r.data),
+
+  /** GET /dashboard/sales-reps — active sponsorships grouped by `sold_by`. */
+  getSalesReps: () =>
+    adminClient.get<SalesRepsResponse>('/dashboard/sales-reps').then((r) => r.data),
+
+  /** GET /dashboard/expenses?months=3 — same wire shape as revenue-compare. */
+  getExpenses: (months = 3) =>
+    adminClient
+      .get<MonthlyCompare>('/dashboard/expenses', { params: { months } })
+      .then((r) => r.data),
+
+  /** GET /dashboard/expenses/breakdown — current month, by category. */
+  getExpensesBreakdown: () =>
+    adminClient.get<ExpensesBreakdown>('/dashboard/expenses/breakdown').then((r) => r.data),
+
+  // ── Expense CRUD ─────────────────────────────────────────────────────────
+  // No `bustingAfter` here on purpose: expenses are admin-internal and feed no
+  // public/SW-cached surface, unlike sponsor + supplier mutations.
+  // Reminder: `AdminExpense.amount` is a NUMERIC → runtime STRING. Coerce.
+
+  // Trailing slash on list/create matches the router's `@router.get("/")` (same
+  // shape as /admin/sponsors/) — without it FastAPI 307-redirects and every
+  // call pays an extra round-trip.
+  listExpenses: () => adminClient.get<AdminExpense[]>('/admin/expenses/').then((r) => r.data),
+
+  createExpense: (data: ExpenseCreate) =>
+    adminClient.post<AdminExpense>('/admin/expenses/', data).then((r) => r.data),
+
+  updateExpense: (id: string, data: ExpenseUpdate) =>
+    adminClient.patch<AdminExpense>(`/admin/expenses/${id}`, data).then((r) => r.data),
+
+  deleteExpense: (id: string) =>
+    adminClient.delete(`/admin/expenses/${id}`).then(() => undefined),
+
+  /** GET /admin/sales-reps — admin-role usernames; the sponsor form's `sold_by`
+   *  options (e.g. Anthony, Daniel, Ronald). */
+  getSalesRepOptions: () =>
+    adminClient.get<SalesRepOptions>('/admin/sales-reps').then((r) => r.data),
+
+  /**
+   * GET /api/dashboard/engagement?days=30 -> PlatformEngagementSeries[]
+   *
+   * STUB -- backend not built. Resolves [] so the panel renders its
+   * "no platforms connected" empty state instead of throwing. Callers must
+   * already handle an empty array; nothing else changes on cutover.
+   *
+   * Real implementation is a one-line swap:
+   *   adminClient
+   *     .get<PlatformEngagementSeries[]>('/dashboard/engagement', { params: { days } })
+   *     .then((r) => r.data)
+   *
+   * `days` is kept in the signature so call sites are written against the final
+   * shape. `void days` is what satisfies tsconfig `noUnusedParameters` — a
+   * `_days` rename is forbidden by CLAUDE.md — and it disappears with the real
+   * body. Response contract + the OAuth upstream feeding each platform (Meta
+   * Graph API for instagram + meta_ads, TikTok Business API, Google Ads API,
+   * Snapchat Marketing API, LinkedIn Marketing API, X API v2) are documented on
+   * PlatformEngagementSeries in @admin/types/engagement.
+   */
+  getEngagement: (days = 30): Promise<PlatformEngagementSeries[]> => {
+    void days;
+    return Promise.resolve([]);
+  },
 
   getParts: (params: {
     page?: number;

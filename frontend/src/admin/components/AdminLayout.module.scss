@@ -40,6 +40,31 @@
   // so palette variants (e.g. high-contrast themes) can override centrally.
   --a-blue: #2563eb;
   --a-purple: #7c3aed;
+  // Chart kit (dataviz-validated 2026-07-30) — see components/charts/README.md.
+  // Marks render on --a-card (#fff). Validator, light/#ffffff:
+  //   adjacent order green→blue→gold→purple: worst CVD ΔE 25.6, normal 27.6,
+  //   all ≥ 3:1.
+  //   HARD: --a-grad-blue and --a-grad-purple collapse under deuteranopia
+  //   (ΔE 0.4) — never adjacent slots, never together in an all-pairs form
+  //   (scatter/bubble/pack).
+  //   $executive-blue #0a4a2e FAILS the mark gate (L .363 / C .078) — it is
+  //   ink, not a series.
+  // MIRROR: chartTheme.ts hard-codes these same hexes because the ECharts
+  // canvas renderer cannot resolve var(). Change one, change both.
+  --a-grad-green: #0e7a49; // series slot 1   5.39:1
+  --a-grad-green-lift: #52b985;
+  --a-grad-blue: #2563eb; // series slot 2   5.17:1
+  --a-grad-blue-lift: #7fb2f5;
+  --a-grad-gold: #e8c252; // brand/tier gold (public board ENIG) — DOM chrome only, decoupled from the CHART_SERIES slot-3 line colour (#a88d2e)
+  --a-grad-gold-lift: #f3cf5c;
+  --a-grad-purple: #7c3aed; // series slot 4   5.70:1
+  --a-grad-purple-lift: #b394f5;
+  --a-grad-slate: #64748b; // de-emphasis / "Other" — NOT a categorical slot
+  --a-grad-slate-lift: #b0bac9;
+  // Chart chrome — gridlines are SOLID hairlines, never dashed.
+  --a-grid: #eef1f5;
+  --a-axis: #d8dee7;
+  --a-track: #f0f2f5; // empty meter/donut track (= --a-border-soft)
   // Status
   --a-danger: #{$error-red};
   --a-warn: #d97706;
@@ -51,6 +76,33 @@
   // Shadows
   --a-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
   --a-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+
+  // ── Dark mode (admin only) ────────────────────────────────────────────────
+  // Overrides surface / text / border / chart-chrome / shadow tokens when
+  // <html data-admin-theme="dark"> is set (see AdminThemeContext). The
+  // chart-chrome values (--a-card / --a-fg* / --a-grid / --a-axis / --a-track /
+  // --a-border) MIRROR CHROME_DARK in charts/chartTheme.ts — change one,
+  // change both. Brand accents (--a-blue/purple/grad-*, status) read on dark
+  // and stay; only --a-primary is lifted so the green CTA doesn't sink.
+  :global(html[data-admin-theme='dark']) & {
+    --a-bg: #0e131c;
+    --a-card: #171e2b;
+    --a-nav-bg: #131925;
+    --a-side-bg: #131925;
+    --a-border: #2a3446;
+    --a-border-soft: #202a3a;
+    --a-fg1: #f1f4f9;
+    --a-fg2: #c3ccda;
+    --a-fg3: #93a0b4;
+    --a-fg4: #647080;
+    --a-primary: #1f9d63;
+    --a-primary-hover: #26b374;
+    --a-grid: #232d3d;
+    --a-axis: #38445a;
+    --a-track: #202a39;
+    --a-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.45);
+    --a-shadow-md: 0 8px 22px rgba(0, 0, 0, 0.55);
+  }
 
   display: grid;
   grid-template-columns: var(--a-side-w) 1fr;

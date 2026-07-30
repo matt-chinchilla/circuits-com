@@ -38,6 +38,8 @@ const ReportsPage = lazy(() => import("@admin/pages/reports"));
 const CategoriesPage = lazy(() => import("@admin/pages/categories"));
 const SponsorsPage = lazy(() => import("@admin/pages/sponsors/list"));
 const SponsorFormPage = lazy(() => import("@admin/pages/sponsors/form"));
+const ExpensesPage = lazy(() => import("@admin/pages/expenses/list"));
+const ExpenseFormPage = lazy(() => import("@admin/pages/expenses/form"));
 const SettingsPage = lazy(() => import("@admin/pages/settings"));
 const MessagesListPage = lazy(() => import("@admin/pages/messages/list"));
 const MessageDetailPage = lazy(() => import("@admin/pages/messages/detail"));
@@ -52,6 +54,7 @@ import PublicLayout from "@public/components/layout/PublicLayout";
 import BackdropLayer from "@public/components/layout/BackdropLayer";
 import ErrorBoundary from "@shared/components/ErrorBoundary";
 import { DemoProvider } from "@admin/contexts/DemoContext";
+import { AdminThemeProvider } from "@admin/contexts/AdminThemeContext";
 
 // Admin fallback (PublicLayout provides the equivalent on public routes).
 const RouteFallback = () => <div style={{ minHeight: 420 }} aria-busy="true" />;
@@ -107,6 +110,7 @@ function App() {
   if (location.pathname.startsWith("/admin")) {
     return (
       <DemoProvider>
+        <AdminThemeProvider>
         <Suspense fallback={<RouteFallback />}>
           <Routes>
             <Route path="/admin/login" element={<LoginPage />} />
@@ -152,6 +156,12 @@ function App() {
                         path="sponsors/:id/edit"
                         element={<SponsorFormPage />}
                       />
+                      <Route path="expenses" element={<ExpensesPage />} />
+                      <Route path="expenses/new" element={<ExpenseFormPage />} />
+                      <Route
+                        path="expenses/:id/edit"
+                        element={<ExpenseFormPage />}
+                      />
                       <Route path="messages" element={<MessagesListPage />} />
                       <Route
                         path="messages/:id"
@@ -166,6 +176,7 @@ function App() {
             />
           </Routes>
         </Suspense>
+        </AdminThemeProvider>
       </DemoProvider>
     );
   }

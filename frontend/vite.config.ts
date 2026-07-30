@@ -75,12 +75,33 @@ export default defineConfig({
   // native SVG charts, dropping the dep entirely.) framer-motion + router
   // stay isolated so public-route visitors get better cache utilization
   // across deploys (app code changes don't invalidate vendor chunks).
+  //
+  // 2026-07-30: switched from the object form to the id-based function form so
+  // Apache ECharts (admin dashboard overhaul) can be pinned to its own chunk.
+  // The `echarts` chunk stays ASYNC because its only importers are lazy
+  // `@admin/pages/*` routes — verify with `npm run build` that `index-*.js`
+  // contains no echarts/zrender after touching this. framer-motion's runtime
+  // now lives in the `motion-dom` / `motion-utils` packages, and
+  // react-router-dom re-exports `react-router`; both are matched explicitly so
+  // the function form reproduces what the old object form grouped.
   build: {
     rollupOptions: {
       output: {
-        manualChunks: {
-          framer: ['framer-motion'],
-          router: ['react-router-dom'],
+        manualChunks(id) {
+          if (id.includes('node_modules/echarts') || id.includes('node_modules/zrender')) {
+            return 'echarts'
+          }
+          if (
+            id.includes('node_modules/framer-motion') ||
+            id.includes('node_modules/motion-dom') ||
+            id.includes('node_modules/motion-utils')
+          ) {
+            return 'framer'
+          }
+          if (id.includes('node_modules/react-router')) {
+            return 'router'
+          }
+          return undefined
         },
       },
     },

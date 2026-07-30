@@ -64,6 +64,10 @@ interface FormState {
   end_date: string;
   amount: string;
   status: SponsorStatus;
+  // ADMIN-ONLY attribution — the rep credited with the sale. Never reaches the
+  // public SponsorResponse (see AdminSponsor.sold_by); it drives the dashboard
+  // "Book of business" pack via /dashboard/sales-reps.
+  sold_by: string;
   description: string;
   image_url: string;
   brand_primary: string;
@@ -126,6 +130,7 @@ function emptyForm(): FormState {
     end_date: plusOneYear(start),
     amount: '',
     status: 'Active',
+    sold_by: '',
     description: '',
     image_url: '',
     brand_primary: '',
@@ -190,6 +195,11 @@ export default function SponsorFormPage() {
   const [loading, setLoading] = useState(isEdit);
   const [suppliers, setSuppliers] = useState<AdminSupplier[]>([]);
   const [categories, setCategories] = useState<AdminCategory[]>([]);
+  // Admin-role usernames from GET /api/admin/sales-reps — the `sold_by`
+  // options. Best-effort: a failed fetch leaves the select with just the
+  // "Unassigned" row plus whatever the row already stores, so the form still
+  // saves.
+  const [salesRepOptions, setSalesRepOptions] = useState<string[]>([]);
   // Every sponsorship — read ONLY to hide categories whose SINGLE-SLOT tier is
   // already taken (Platinum on a top-level, Gold on a child — see
   // occupiedSlots below).
@@ -213,6 +223,10 @@ export default function SponsorFormPage() {
       .getCategories()
       .then(setCategories)
       .catch(() => setCategories([]));
+    adminApi
+      .getSalesRepOptions()
+      .then((r) => setSalesRepOptions(r.reps ?? []))
+      .catch(() => setSalesRepOptions([]));
     if (isEdit) return;
     loadSponsors()
       .then(setSponsors)
@@ -259,6 +273,7 @@ export default function SponsorFormPage() {
             end_date: existing.end_date ?? '',
             amount: existing.amount != null ? String(existing.amount) : '',
             status: existing.status ?? 'Active',
+            sold_by: existing.sold_by ?? '',
             description: existing.description ?? '',
             image_url: existing.image_url ?? '',
             brand_primary: existing.brand_primary ?? '',
@@ -656,6 +671,10 @@ export default function SponsorFormPage() {
       end_date: form.end_date || null,
       amount: Number(form.amount),
       status: form.status,
+      // Empty select -> null, so "Unassigned" clears an earlier attribution
+      // instead of persisting an empty string the sales-reps rollup would then
+      // have to filter out.
+      sold_by: form.sold_by.trim() || null,
       description: form.description.trim() || null,
       image_url: form.image_url.trim() || null,
       brand_primary: form.brand_primary.trim() || null,
@@ -1049,6 +1068,39 @@ export default function SponsorFormPage() {
                   </select>
                 </div>
               </div>
+            </div>
+
+            <div className={styles.field} data-field="sold_by">
+              <label className={styles.fieldLabel} htmlFor="sold_by">
+                Sold by
+              </label>
+              <div className={styles.selectWrap}>
+                <select
+                  id="sold_by"
+                  className={styles.select}
+                  value={form.sold_by}
+                  onChange={(e) => update('sold_by', e.target.value)}
+                >
+                  <option value="">Unassigned</option>
+                  {/* A stored rep who is no longer an admin account (renamed,
+                      deactivated) is kept as an option so opening the form and
+                      saving an unrelated field can't silently drop the
+                      attribution. */}
+                  {form.sold_by && !salesRepOptions.includes(form.sold_by) && (
+                    <option value={form.sold_by}>{form.sold_by} (former)</option>
+                  )}
+                  {salesRepOptions.map((rep) => (
+                    <option key={rep} value={rep}>
+                      {rep}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <p className={styles.fieldHint}>
+                Internal only &mdash; the rep credited with this sale. Never shown
+                on the public site; it drives the dashboard&rsquo;s book-of-business
+                chart.
+              </p>
             </div>
           </div>
         </section>
