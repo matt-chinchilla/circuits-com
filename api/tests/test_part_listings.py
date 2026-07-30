@@ -231,41 +231,35 @@ class TestAddPartListingValidation:
     part_listings row; the two sibling classes below cover the other two.
     """
 
+    def _attach(self, client, seeded_db, **listing):
+        """POST one listing onto part2, which starts with none — so `_listings`
+        below reads exactly what this call wrote, and `== []` means the payload
+        was rejected at the schema boundary.
+        """
+        return client.post(
+            f"/api/parts/{seeded_db['part2'].id}/listings",
+            json={"supplier_id": str(seeded_db["supplier1"].id), **listing},
+            headers=_auth_header(client),
+        )
+
+    def _listings(self, client, seeded_db):
+        return client.get(f"/api/parts/{seeded_db['part2'].id}").json()["listings"]
+
     def test_currency_longer_than_three_chars_422s(self, client, seeded_db):
         """currency is String(3) — "DOLLARS" must 422, not overflow the column."""
-        headers = _auth_header(client)
-        part_id = str(seeded_db["part2"].id)
-        resp = client.post(
-            f"/api/parts/{part_id}/listings",
-            json={"supplier_id": str(seeded_db["supplier1"].id), "currency": "DOLLARS"},
-            headers=headers,
-        )
+        resp = self._attach(client, seeded_db, currency="DOLLARS")
         assert resp.status_code == 422, resp.text
-
-        # Rejected at the schema boundary — nothing was written
-        assert client.get(f"/api/parts/{part_id}").json()["listings"] == []
+        assert self._listings(client, seeded_db) == []
 
     def test_unit_price_over_column_precision_422s(self, client, seeded_db):
         """Numeric(10, 4) leaves 6 integer digits — 1234567.89 needs 7."""
-        headers = _auth_header(client)
-        part_id = str(seeded_db["part2"].id)
-        resp = client.post(
-            f"/api/parts/{part_id}/listings",
-            json={"supplier_id": str(seeded_db["supplier1"].id), "unit_price": 1234567.89},
-            headers=headers,
-        )
+        resp = self._attach(client, seeded_db, unit_price=1234567.89)
         assert resp.status_code == 422, resp.text
-        assert client.get(f"/api/parts/{part_id}").json()["listings"] == []
+        assert self._listings(client, seeded_db) == []
 
     def test_unit_price_just_under_the_ceiling_is_accepted(self, client, seeded_db):
         """The bound must not be tighter than the column: 6 integer digits fit."""
-        headers = _auth_header(client)
-        part_id = str(seeded_db["part2"].id)
-        resp = client.post(
-            f"/api/parts/{part_id}/listings",
-            json={"supplier_id": str(seeded_db["supplier1"].id), "unit_price": 999999.99},
-            headers=headers,
-        )
+        resp = self._attach(client, seeded_db, unit_price=999999.99)
         assert resp.status_code == 200, resp.text
         assert resp.json()["unit_price"] == 999999.99
 
@@ -277,64 +271,63 @@ class TestAddPartListingValidation:
         6-integer-digit column, i.e. the same 'numeric field overflow' 500 the
         bound exists to prevent. `le=999999.9999` is the real ceiling.
         """
-        headers = _auth_header(client)
-        part_id = str(seeded_db["part2"].id)
-        resp = client.post(
-            f"/api/parts/{part_id}/listings",
-            json={"supplier_id": str(seeded_db["supplier1"].id), "unit_price": 999999.99999},
-            headers=headers,
-        )
+        resp = self._attach(client, seeded_db, unit_price=999999.99999)
         assert resp.status_code == 422, resp.text
-        assert client.get(f"/api/parts/{part_id}").json()["listings"] == []
+        assert self._listings(client, seeded_db) == []
 
     def test_unit_price_at_the_exact_ceiling_is_accepted(self, client, seeded_db):
         """...and the largest value the column CAN hold still gets through, so
         the tightened bound didn't start rejecting legitimate prices.
         """
-        headers = _auth_header(client)
-        part_id = str(seeded_db["part2"].id)
-        resp = client.post(
-            f"/api/parts/{part_id}/listings",
-            json={"supplier_id": str(seeded_db["supplier1"].id), "unit_price": 999999.9999},
-            headers=headers,
-        )
+        resp = self._attach(client, seeded_db, unit_price=999999.9999)
         assert resp.status_code == 200, resp.text
         assert resp.json()["unit_price"] == 999999.9999
 
     def test_negative_unit_price_422s(self, client, seeded_db):
         """A negative price would undercut every real listing in best_price."""
-        headers = _auth_header(client)
-        part_id = str(seeded_db["part2"].id)
-        resp = client.post(
-            f"/api/parts/{part_id}/listings",
-            json={"supplier_id": str(seeded_db["supplier1"].id), "unit_price": -1.5},
-            headers=headers,
-        )
+        resp = self._attach(client, seeded_db, unit_price=-1.5)
         assert resp.status_code == 422, resp.text
-        assert client.get(f"/api/parts/{part_id}").json()["listings"] == []
+        assert self._listings(client, seeded_db) == []
 
     def test_negative_stock_quantity_422s(self, client, seeded_db):
         """Negative stock would subtract from the part's total_stock rollup."""
-        headers = _auth_header(client)
-        part_id = str(seeded_db["part2"].id)
-        resp = client.post(
-            f"/api/parts/{part_id}/listings",
-            json={"supplier_id": str(seeded_db["supplier1"].id), "stock_quantity": -500},
-            headers=headers,
-        )
+        resp = self._attach(client, seeded_db, stock_quantity=-500)
         assert resp.status_code == 422, resp.text
-        assert client.get(f"/api/parts/{part_id}").json()["listings"] == []
+        assert self._listings(client, seeded_db) == []
 
     def test_negative_lead_time_days_422s(self, client, seeded_db):
-        headers = _auth_header(client)
-        part_id = str(seeded_db["part2"].id)
-        resp = client.post(
-            f"/api/parts/{part_id}/listings",
-            json={"supplier_id": str(seeded_db["supplier1"].id), "lead_time_days": -3},
-            headers=headers,
-        )
+        resp = self._attach(client, seeded_db, lead_time_days=-3)
         assert resp.status_code == 422, resp.text
-        assert client.get(f"/api/parts/{part_id}").json()["listings"] == []
+        assert self._listings(client, seeded_db) == []
+
+    def test_stock_quantity_over_int4_422s(self, client, seeded_db):
+        """part_listings.stock_quantity is a Postgres int4 (max 2147483647), and
+        `ge=0` alone left the ceiling open — a fat-fingered or pasted
+        12345678901 reached the column as 'integer out of range', the same
+        opaque 500 the unit_price bound exists to prevent.
+        """
+        resp = self._attach(client, seeded_db, stock_quantity=12345678901)
+        assert resp.status_code == 422, resp.text
+        assert self._listings(client, seeded_db) == []
+
+    def test_stock_quantity_at_the_bound_is_accepted(self, client, seeded_db):
+        """The cap must stay well clear of any real inventory count."""
+        resp = self._attach(client, seeded_db, stock_quantity=2_000_000_000)
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["stock_quantity"] == 2_000_000_000
+
+    def test_lead_time_days_over_the_bound_422s(self, client, seeded_db):
+        """Same int4 column class, same missing ceiling. 100000 days is ~274
+        years, so nothing legitimate is rejected.
+        """
+        resp = self._attach(client, seeded_db, lead_time_days=12345678901)
+        assert resp.status_code == 422, resp.text
+        assert self._listings(client, seeded_db) == []
+
+    def test_lead_time_days_at_the_bound_is_accepted(self, client, seeded_db):
+        resp = self._attach(client, seeded_db, lead_time_days=100_000)
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["lead_time_days"] == 100_000
 
     def test_listing_sku_longer_than_the_column_422s(self, client, seeded_db):
         """`listing_sku` is the one bound that lives per-schema rather than on
@@ -343,32 +336,14 @@ class TestAddPartListingValidation:
         101-char distributor SKU was still reaching Postgres as 'value too long
         for type character varying(100)'.
         """
-        headers = _auth_header(client)
-        part_id = str(seeded_db["part2"].id)
-        resp = client.post(
-            f"/api/parts/{part_id}/listings",
-            json={
-                "supplier_id": str(seeded_db["supplier1"].id),
-                "unit_price": 1.25,
-                "listing_sku": "A" * 101,
-            },
-            headers=headers,
-        )
+        resp = self._attach(client, seeded_db, unit_price=1.25, listing_sku="A" * 101)
         assert resp.status_code == 422, resp.text
-
-        # Rejected at the schema boundary — nothing was written
-        assert client.get(f"/api/parts/{part_id}").json()["listings"] == []
+        assert self._listings(client, seeded_db) == []
 
     def test_listing_sku_at_the_column_limit_is_accepted(self, client, seeded_db):
         """The bound must not be tighter than the column: 100 chars fit."""
-        headers = _auth_header(client)
-        part_id = str(seeded_db["part2"].id)
         sku = "A" * 100
-        resp = client.post(
-            f"/api/parts/{part_id}/listings",
-            json={"supplier_id": str(seeded_db["supplier1"].id), "listing_sku": sku},
-            headers=headers,
-        )
+        resp = self._attach(client, seeded_db, listing_sku=sku)
         assert resp.status_code == 200, resp.text
         assert resp.json()["sku"] == sku
 
@@ -443,6 +418,19 @@ class TestInitialListingValidation:
         assert resp.status_code == 422, resp.text
         assert self._part_count(client, "IL-NEGLEAD") == 0
 
+    def test_stock_quantity_over_int4_422s(self, client, seeded_db):
+        """The int4 ceiling rides the shared base, so this door is closed too —
+        and because validation precedes the handler, no Part row survives either.
+        """
+        resp = self._create(client, seeded_db, "IL-BIGSTOCK", stock_quantity=12345678901)
+        assert resp.status_code == 422, resp.text
+        assert self._part_count(client, "IL-BIGSTOCK") == 0
+
+    def test_lead_time_days_over_the_bound_422s(self, client, seeded_db):
+        resp = self._create(client, seeded_db, "IL-BIGLEAD", lead_time_days=12345678901)
+        assert resp.status_code == 422, resp.text
+        assert self._part_count(client, "IL-BIGLEAD") == 0
+
     def test_currency_longer_than_three_chars_422s(self, client, seeded_db):
         resp = self._create(client, seeded_db, "IL-CURRENCY", currency="DOLLARS")
         assert resp.status_code == 422, resp.text
@@ -477,11 +465,20 @@ class TestBatchImportListingValidation:
     """POST /api/parts/batch is the third — and highest-volume — writer.
 
     The CSV import fans one upload out into many part_listings rows, so it is
-    the likeliest source of a mistyped price. The per-row `except` in
-    batch_import can't help: it calls db.rollback(), which on Postgres discards
-    every part already flushed in that transaction, and the DataError it's
-    catching never fires on the SQLite test DB at all. Bounding the schema
-    rejects the bad upload at the boundary instead, before anything is written.
+    the likeliest source of a mistyped price. batch_import wraps EACH row in its
+    own SAVEPOINT (`with db.begin_nested()`) and counts a row only once that
+    savepoint releases cleanly, so a row that fails at runtime rolls back just
+    itself and the partial-success response ({"created": N, "errors": [...]}) is
+    honest about what persisted.
+
+    That per-row isolation is still no substitute for bounding the schema, for
+    two reasons. Pydantic validates the whole request BEFORE the handler runs, so
+    an out-of-bounds cell 422s the ENTIRE upload with nothing written — the admin
+    fixes the cell and re-uploads, rather than finding out afterwards that row 40
+    of 200 landed in `errors`. And the DataError a savepoint would be isolating
+    here ('numeric field overflow', 'integer out of range') is a Postgres error
+    that never fires on the SQLite test DB at all, so without these bounds the
+    bad payload would be both untested here and unrejected in prod.
     """
 
     def _import(self, client, seeded_db, rows):
@@ -514,6 +511,22 @@ class TestBatchImportListingValidation:
 
     def test_negative_lead_time_days_422s(self, client, seeded_db):
         resp = self._import(client, seeded_db, [self._row(unit_price=1.0, lead_time_days=-1)])
+        assert resp.status_code == 422, resp.text
+
+    def test_stock_quantity_over_int4_422s(self, client, seeded_db):
+        """A pasted-in-the-wrong-column figure is exactly the CSV failure mode
+        the int4 ceiling exists for — and here it must not half-apply the sheet.
+        """
+        resp = self._import(
+            client, seeded_db, [self._row(unit_price=1.0, stock_quantity=12345678901)]
+        )
+        assert resp.status_code == 422, resp.text
+        assert client.get("/api/parts/", params={"search": "CSV-1"}).json()["total"] == 0
+
+    def test_lead_time_days_over_the_bound_422s(self, client, seeded_db):
+        resp = self._import(
+            client, seeded_db, [self._row(unit_price=1.0, lead_time_days=12345678901)]
+        )
         assert resp.status_code == 422, resp.text
 
     def test_currency_longer_than_three_chars_422s(self, client, seeded_db):
@@ -580,14 +593,29 @@ def _schema_max_length(model, field: str) -> int | None:
     return None
 
 
+def _schema_le(model, field: str) -> float | None:
+    """The inclusive upper bound a Pydantic v2 field declares, or None if it has
+    none — `Field(le=N)` lands in FieldInfo.metadata as an annotated_types.Le,
+    the same way max_length does.
+    """
+    for meta in model.model_fields[field].metadata:
+        if hasattr(meta, "le"):
+            return meta.le
+    return None
+
+
 class TestWriteSchemaBoundsMatchColumnWidths:
-    """Every String(N) column a write path touches needs the matching bound.
+    """Every bounded column a write path touches needs the matching bound.
 
     The bounds turn 'value too long for type character varying(N)' — a 500 the
     admin form can only render as a generic failure — into a 422 pointing at the
     offending field. Asserting bound == column width (rather than bound == a
     literal) means widening one side without the other trips here, which is the
     drift that left listing_sku unbounded while its sibling currency was capped.
+
+    The int4 columns are the same contract with a different ceiling: SQLAlchemy's
+    Integer carries no width to compare against, so they are checked against
+    int4's own limit instead.
     """
 
     def test_part_write_schemas_mirror_the_parts_columns(self):
@@ -618,6 +646,28 @@ class TestWriteSchemaBoundsMatchColumnWidths:
         # initial_listing never writes the row's sku, so it must NOT advertise a
         # listing_sku field it would silently drop.
         assert "listing_sku" not in InitialListing.model_fields
+
+    def test_listing_int_columns_are_capped_inside_int4(self):
+        """stock_quantity / lead_time_days are Integer — int4 on Postgres.
+
+        `ge=0` alone left them with a floor and no ceiling, so 12345678901
+        reached the column as 'integer out of range': the same opaque 500 the
+        String and Numeric bounds exist to prevent. All three writers share
+        `_ListingNumbers`, and this asserts none of them can drift off it.
+        """
+        from sqlalchemy import Integer
+
+        from app.models import PartListing
+        from app.routes.parts import BatchPartItem, InitialListing, ListingCreate
+
+        int4_max = 2_147_483_647
+        cols = PartListing.__table__.c
+        for field in ("stock_quantity", "lead_time_days"):
+            assert isinstance(cols[field].type, Integer), field
+            for model in (ListingCreate, InitialListing, BatchPartItem):
+                bound = _schema_le(model, field)
+                assert bound is not None, f"{model.__name__}.{field} has no ceiling"
+                assert bound <= int4_max, f"{model.__name__}.{field}"
 
     def test_part_sku_over_column_length_422s(self, client, seeded_db):
         headers = _auth_header(client)

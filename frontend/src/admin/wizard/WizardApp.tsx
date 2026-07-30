@@ -52,6 +52,21 @@ function createKindForFlow(flowId: string): 'supplier' | 'part' | null {
   return null;
 }
 
+// Where a step's `goto` directive will send the app on entry, or null when it
+// declares none (or resolves to nothing). SINGLE resolution site: the goto
+// RUNNER navigates by it, and goBack names the route the rewind LANDS on by it
+// (see the Back guard it sets) — resolving the directive twice, two different
+// ways, is how the guard would end up naming a route the runner never went to.
+// A throwing function reads as "no target" rather than taking the wizard down.
+function resolveGoto(step: Step): string | null {
+  if (step.goto === undefined) return null;
+  try {
+    return (typeof step.goto === 'function' ? step.goto() : step.goto) ?? null;
+  } catch {
+    return null;
+  }
+}
+
 // Top-level wizard state machine. Owns:
 //   - active flow + step index
 //   - menu open/closed
@@ -107,11 +122,12 @@ export default function WizardApp() {
 
   // Run the step's `goto` directive when entering it. Handles both
   // string and function forms (function form supports context-dependent
-  // navigation like "go to the just-created supplier's detail page").
+  // navigation like "go to the just-created supplier's detail page") —
+  // through resolveGoto, so this runner and goBack's landing-route
+  // calculation can't drift on what a step's goto resolves to.
   useEffect(() => {
     if (!step) return;
-    if (step.goto === undefined) return;
-    const target = typeof step.goto === 'function' ? step.goto() : step.goto;
+    const target = resolveGoto(step);
     if (target == null) return;
     // Skip navigation if we're already at the target — avoids router
     // double-pushes and unnecessary remounts. This also covers `goto: ''`
@@ -478,7 +494,16 @@ export default function WizardApp() {
     Array.from(stepRoutesRef.current.keys()).forEach((i) => {
       if (i > target) stepRoutesRef.current.delete(i);
     });
-    setBackGuard({ stepIndex: target, route: nav ?? currentRoute });
+    // The guard's route is where the rewind LANDS, not the route being left.
+    // For a target step that declares its own `goto`, `nav` is null (the goto
+    // runner does that navigation on entry) — recording currentRoute there left
+    // the guard naming the route we were LEAVING, and since re-doing the step's
+    // action returns to exactly that route, the step's route-advance stayed
+    // suppressed forever. The tour dead-ended on it, moved on only by
+    // CoachCard's 900ms fallback. Naming the landing route means the trip away
+    // from it and back is a FRESH transition, which re-enables the runner.
+    const landing = nav ?? resolveGoto(targetStep) ?? currentRoute;
+    setBackGuard({ stepIndex: target, route: landing });
     setStepIndex(target);
     if (nav != null) {
       // ⚠ DATA SAFETY: this navigation is synthetic, and it is a PUSH (navTo →

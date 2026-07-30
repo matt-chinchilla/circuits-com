@@ -320,6 +320,19 @@ export default function SponsorFormPage() {
   // default below) is ref-guarded to fire exactly once. Brand colors move as a
   // PAIR — validate() rejects a lone color, and a half-set pair flips a sold
   // board to branded with the other channel silently defaulted.
+  //
+  // ⚠ The LOGO half of the auto path is PLATINUM-ONLY. All three tier boards
+  // read `image_url ?? logo_url`, so an EMPTY image_url is not a missing logo —
+  // it's a live reference that keeps following the supplier record. Copying the
+  // logo in for every tier turned that reference into a frozen SNAPSHOT (plus a
+  // duplicate base64 blob per row): change the supplier's logo afterwards and
+  // the Gold/Silver board kept rendering the old one, because the supplier-save
+  // propagation that re-syncs sponsorships is Platinum-only. Platinum keeps the
+  // copy — that propagation is what maintains it, and the takeover board is
+  // brand-critical enough to want an explicit per-placement value. `force`
+  // (the "Use supplier logo & colors" button) is a deliberate admin override
+  // and still copies at any tier. Brand COLORS are unaffected: they're
+  // per-placement overrides by design (`brand_takeover`), not a fallback chain.
   const copySupplierCreative = useCallback(
     (supplierId: string, force: boolean) => {
       const sup = suppliers.find((s) => s.id === supplierId);
@@ -327,7 +340,8 @@ export default function SponsorFormPage() {
       const logo = nonEmpty(sup.logo_url);
       const primary = nonEmpty(sup.brand_primary);
       const secondary = nonEmpty(sup.brand_secondary);
-      if (logo && (force || !form.image_url.trim())) {
+      const autoLogoOk = !form.image_url.trim() && tierNorm === 'Platinum';
+      if (logo && (force || autoLogoOk)) {
         update('image_url', logo);
       }
       const colorsEmpty = !form.brand_primary.trim() && !form.brand_secondary.trim();
@@ -336,7 +350,7 @@ export default function SponsorFormPage() {
         update('brand_secondary', secondary);
       }
     },
-    [suppliers, form.image_url, form.brand_primary, form.brand_secondary, update],
+    [suppliers, form.image_url, form.brand_primary, form.brand_secondary, tierNorm, update],
   );
 
   // The Supplier-detail Quick Actions handoff seeds supplier_id inside the
@@ -1094,21 +1108,23 @@ export default function SponsorFormPage() {
               </div>
               <p className={styles.fieldHint}>
                 Re-copies the selected supplier&rsquo;s stored logo and brand
-                colors over the values above. The creative defaults from the
-                supplier record.
+                colors over the values above.
                 {tierNorm === 'Platinum' ? (
                   <>
-                    {' '}On Platinum the supplier stays the source of truth
-                    &mdash; saving that supplier re-syncs its logo and colors
-                    onto its active Platinum placements, so values set here can
-                    be replaced later. Edit the supplier to change them for good.
+                    {' '}Platinum defaults both from the supplier record, and
+                    the supplier stays the source of truth &mdash; saving that
+                    supplier re-syncs its logo and colors onto its active
+                    Platinum placements, so values set here can be replaced
+                    later. Edit the supplier to change them for good.
                   </>
                 ) : (
                   <>
-                    {' '}Re-syncing on supplier save only targets Platinum
-                    placements, so on Gold and Silver these values are
-                    placement-local &mdash; a later supplier edit won&rsquo;t
-                    change them.
+                    {' '}On Gold and Silver only the colors default from the
+                    supplier record. Leaving the logo EMPTY makes the board fall
+                    back to the supplier&rsquo;s own logo, so it keeps following
+                    a later supplier edit; setting one here freezes it, because
+                    re-syncing on supplier save only targets Platinum
+                    placements.
                   </>
                 )}
               </p>

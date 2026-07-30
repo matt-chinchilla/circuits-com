@@ -1,6 +1,23 @@
 import { useEffect } from 'react';
-import { getFieldValue } from './helpers';
+import { findFieldInput } from './helpers';
 import type { AdvanceSpec } from './types';
+
+// How long a still-focused field's value must hold steady before a passing
+// `value` test counts as COMMITTED.
+//
+// Bug fix (2026-07-29, wizard-wide): every value step fired the instant the
+// typed value first passed its own minimum (`name` at 3 characters, `sku` at 3,
+// `description` at 10, …), so the coach yanked the user to the next step in the
+// MIDDLE of typing the first word — on every field step of every tour. The test
+// answers "is this value acceptable", which is not the same question as "is the
+// user done". Committed means one of:
+//   - the input no longer holds focus (blur / Tab / click-away) → advance now;
+//   - it still holds focus but the value hasn't changed for this long → the
+//     user typed something and stopped, so advance;
+// and while the value keeps changing under an active caret, NEVER. 1500ms is
+// comfortably longer than the gap between keystrokes mid-word (~100-300ms) and
+// short enough that pausing to read the coach card moves the tour on by itself.
+const VALUE_SETTLE_MS = 1500;
 
 // Advance-condition runner. Watches for the signal a step needs to move on:
 // a route change, a field value matching a predicate, a store mutation, or
@@ -27,6 +44,9 @@ import type { AdvanceSpec } from './types';
 // The guard is scoped per-step by the caller (Spotlight passes null unless
 // the guard's index matches the rendered step), so it can never leak into
 // the next step.
+//
+// `value` kinds additionally wait for the field to be COMMITTED — see
+// VALUE_SETTLE_MS above.
 export function useAdvance(
   advance: AdvanceSpec | undefined,
   onAdvance: () => void,
@@ -59,10 +79,17 @@ export function useAdvance(
   //   scenario to defend against. Applying the grace here makes the
   //   wizard feel sluggish (~900ms perceived lag between Delete click
   //   and the spotlight moving to the Confirm button). 2026-05-24 bug.
+  //
+  // The `value` kind carries a THIRD condition on top of the grace: the field
+  // must be COMMITTED, not merely passing. See VALUE_SETTLE_MS.
   useEffect(() => {
     if (!advance || advance.kind === 'manual' || advance.kind === 'route') return;
 
     let fired = false;
+    // The 240ms debounce timer, tracked so step-change cleanup can cancel it.
+    // Without this a pending advance outlived the step it belonged to and
+    // landed AFTER a manual Next — two advances, one step skipped.
+    let pending: ReturnType<typeof setTimeout> | null = null;
     // Post-Back arming (see suppressedRoute above). Normal step entry starts
     // ARMED, so every timing semantic below is untouched. A rewound step
     // starts un-armed and `arm()` — called on any poll tick that reads the
@@ -76,13 +103,21 @@ export function useAdvance(
       if (fired || !armed) return;
       if (Date.now() - startedAt < 450) return;
       fired = true;
-      setTimeout(onAdvance, 240);
+      pending = setTimeout(onAdvance, 240);
     };
     const fireImmediate = () => {
       if (fired || !armed) return;
       fired = true;
-      setTimeout(onAdvance, 240);
+      pending = setTimeout(onAdvance, 240);
     };
+
+    // Commit tracking for the `value` kind. `lastValue` is the previous poll's
+    // reading and `changedAt` the moment it last differed, so "the user stopped
+    // typing" is answerable without listening to the input at all (these fields
+    // are React-controlled and the wizard also writes them via autofill, so a
+    // keydown/blur listener would miss half the mutations).
+    let lastValue: string | null = null;
+    let changedAt = Date.now();
 
     const poll = setInterval(() => {
       try {
@@ -91,9 +126,29 @@ export function useAdvance(
           return;
         }
         if (advance.kind === 'value') {
-          const val = advance.fieldName ? getFieldValue(advance.fieldName) : '';
-          if (advance.test(val)) fire();
-          else arm();
+          // ONE node lookup per tick, and both readings come off it: the value
+          // AND the focus state. getFieldValue() + findFieldInput() walked the
+          // same [data-field] wrapper twice every 220ms, and could in principle
+          // answer about two different nodes if the field remounted in between.
+          // `?.value ?? ''` is exactly what getFieldValue does.
+          const input = advance.fieldName ? findFieldInput(advance.fieldName) : null;
+          const val = input?.value ?? '';
+          // `val` is always a string, so the first tick (lastValue === null)
+          // records a change here on its own — no separate null test needed.
+          if (val !== lastValue) {
+            lastValue = val;
+            changedAt = Date.now();
+          }
+          if (!advance.test(val)) {
+            arm();
+            return;
+          }
+          // Passing is NOT enough — see VALUE_SETTLE_MS. Advance the moment the
+          // user leaves the field (blur / Tab / click-away), or once the value
+          // has held still for the settle window while they keep the caret in
+          // it. Actively typing satisfies neither, so the coach stays put.
+          const focused = input != null && document.activeElement === input;
+          if (!focused || Date.now() - changedAt >= VALUE_SETTLE_MS) fire();
         } else if (advance.kind === 'predicate') {
           if (advance.test()) fire();
           else arm();
@@ -109,6 +164,11 @@ export function useAdvance(
       }
     }, 220);
 
-    return () => clearInterval(poll);
+    return () => {
+      clearInterval(poll);
+      // A fired-but-not-yet-delivered advance belongs to the step being torn
+      // down. Leaving it queued is how a Next click could double-advance.
+      if (pending != null) clearTimeout(pending);
+    };
   }, [stepKey, advance, onAdvance, suppressedRoute]);
 }

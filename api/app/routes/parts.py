@@ -58,6 +58,13 @@ class _ListingNumbers(BaseModel):
                       straight into the public best_price / total_stock
                       aggregates (one negative price undercuts every real
                       listing on the part page).
+      - integers   -> stock_quantity / lead_time_days are Postgres int4, so a
+                      fat-fingered or pasted 12345678901 is 'integer out of
+                      range' — the same opaque 500 the price bound prevents,
+                      via the one column class that had a floor but no
+                      ceiling. Both caps sit well inside int4's 2147483647
+                      and well outside anything real: 2e9 units of stock, and
+                      100000 days (~274 years) of lead time.
 
     The one column bound that CANNOT live here is `listing_sku` -> String(100).
     Only two of the three writers put a value in the row's `sku` column
@@ -67,9 +74,9 @@ class _ListingNumbers(BaseModel):
     keep the two in step.
     """
 
-    stock_quantity: int | None = Field(None, ge=0)
+    stock_quantity: int | None = Field(None, ge=0, le=2_000_000_000)
     unit_price: float | None = Field(None, ge=0, le=999999.9999)
-    lead_time_days: int | None = Field(None, ge=0)
+    lead_time_days: int | None = Field(None, ge=0, le=100_000)
     currency: str | None = Field("USD", max_length=3)
 
 
@@ -364,6 +371,17 @@ def add_part_listing(
 
     # Decimal(str(...)) — never a raw float and never None into the
     # Numeric(10, 4) NOT NULL column. Mirrors create_part's initial_listing.
+    #
+    # The Decimal("0") fallback is API tolerance ONLY, and it is a poor value:
+    # best_price is MIN(unit_price) across a part's listings, so a $0.0000 row
+    # doesn't read as "price unknown" on the public part page — it WINS, and
+    # undercuts every real distributor. The admin attach form
+    # (frontend/src/admin/pages/parts/attach) therefore requires a unit price
+    # client-side rather than letting the omission reach here. It stays optional
+    # in the schema because the two sibling writers legitimately omit it (batch
+    # rows without pricing create no listing at all, and initial_listing's
+    # contract predates this), and because tightening it to a required field
+    # would break the documented default-to-zero behaviour of this endpoint.
     listing = PartListing(
         id=uuid.uuid4(),
         part_id=part.id,

@@ -27,6 +27,13 @@ const emptyForm: FormData = {
   lead_time_days: '',
 };
 
+// Per-field validation messages, keyed by field — the same record idiom the
+// sibling admin forms use (parts/form, suppliers/form, sponsors/form).
+interface FormErrors {
+  supplier_id?: string;
+  unit_price?: string;
+}
+
 /** '' → null, garbage → null, otherwise the parsed number. */
 function numOrNull(raw: string): number | null {
   const trimmed = raw.trim();
@@ -59,7 +66,7 @@ export default function AttachListingPage() {
   const [part, setPart] = useState<PartDetail | null>(null);
   const [suppliers, setSuppliers] = useState<AdminSupplier[]>([]);
   const [form, setForm] = useState<FormData>(emptyForm);
-  const [supplierError, setSupplierError] = useState('');
+  const [errors, setErrors] = useState<FormErrors>({});
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -152,18 +159,42 @@ export default function AttachListingPage() {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
-  function validate(): boolean {
-    if (!form.supplier_id) {
-      setSupplierError('Pick a distributor.');
-      return false;
-    }
-    setSupplierError('');
-    return true;
+  // Clear one field's message as the user edits it, leaving the others standing.
+  function clearError(key: keyof FormErrors) {
+    setErrors((prev) => {
+      if (prev[key] === undefined) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  }
+
+  // Both fields are checked on every pass (no early return) so a submit with
+  // two problems surfaces two errors instead of one at a time.
+  //
+  // Returns the PARSED unit price, so the "never invent a $0" rule is enforced
+  // and the number produced in one place: a null return means "don't submit",
+  // and handleSubmit never re-parses (nor needs a `?? 0` fallback in the
+  // payload, which is how a free listing would get written).
+  function validate(): number | null {
+    const e: FormErrors = {};
+    if (!form.supplier_id) e.supplier_id = 'Pick a distributor.';
+    // ⚠ Unit price is REQUIRED here, even though the API accepts a payload
+    // without one. Omitting it wrote a $0.0000 listing — and $0 is not a
+    // missing value on the public site, it's the winning one: best_price is
+    // MIN(unit_price) across listings, so one price-less attach silently
+    // undercut every real distributor on that part's page. Make the admin
+    // type a number rather than have the form invent a free part.
+    const unitPrice = numOrNull(form.unit_price);
+    if (unitPrice == null) e.unit_price = 'Enter a unit price.';
+    setErrors(e);
+    return Object.keys(e).length === 0 ? unitPrice : null;
   }
 
   async function handleSubmit() {
     if (!id || saving || done) return;
-    if (!validate()) return;
+    const unitPrice = validate();
+    if (unitPrice == null) return;
     setSaving(true);
     setSubmitError('');
     try {
@@ -171,7 +202,7 @@ export default function AttachListingPage() {
       const created = await adminApi.addPartListing(id, {
         supplier_id: form.supplier_id,
         stock_quantity: numOrNull(form.stock_quantity) ?? 0,
-        unit_price: numOrNull(form.unit_price) ?? 0,
+        unit_price: unitPrice,
         listing_sku: listingSku || null,
         lead_time_days: numOrNull(form.lead_time_days),
       });
@@ -312,11 +343,11 @@ export default function AttachListingPage() {
                 </label>
                 <div className={styles.selectWrap}>
                   <select
-                    className={`${styles.select} ${supplierError ? styles.inputError : ''}`}
+                    className={`${styles.select} ${errors.supplier_id ? styles.inputError : ''}`}
                     value={form.supplier_id}
                     onChange={(e) => {
                       set('supplier_id', e.target.value);
-                      setSupplierError('');
+                      clearError('supplier_id');
                       setSubmitError('');
                     }}
                   >
@@ -329,8 +360,8 @@ export default function AttachListingPage() {
                   </select>
                   <SelectCaret />
                 </div>
-                {supplierError ? (
-                  <div className={styles.fieldError}>{supplierError}</div>
+                {errors.supplier_id ? (
+                  <div className={styles.fieldError}>{errors.supplier_id}</div>
                 ) : (
                   <div className={styles.fieldHint}>
                     Distributors already carrying this part are greyed out.
@@ -355,20 +386,33 @@ export default function AttachListingPage() {
                   </div>
                 </div>
                 <div className={styles.field} data-field="initial_unit_price">
-                  <label className={styles.fieldLabel}>Unit price (USD)</label>
+                  <label className={styles.fieldLabel}>
+                    Unit price (USD)
+                    <span className={styles.fieldReq}>*</span>
+                  </label>
                   <input
                     type="number"
                     min="0"
                     max="999999"
                     step="0.0001"
-                    className={`${styles.input} ${styles.inputMono}`}
+                    className={`${styles.input} ${styles.inputMono} ${
+                      errors.unit_price ? styles.inputError : ''
+                    }`}
                     value={form.unit_price}
-                    onChange={(e) => set('unit_price', e.target.value)}
+                    onChange={(e) => {
+                      set('unit_price', e.target.value);
+                      clearError('unit_price');
+                      setSubmitError('');
+                    }}
                     placeholder="0.48"
                   />
-                  <div className={styles.fieldHint}>
-                    Per-unit price for single-quantity orders.
-                  </div>
+                  {errors.unit_price ? (
+                    <div className={styles.fieldError}>{errors.unit_price}</div>
+                  ) : (
+                    <div className={styles.fieldHint}>
+                      Per-unit price for single-quantity orders.
+                    </div>
+                  )}
                 </div>
               </div>
 
