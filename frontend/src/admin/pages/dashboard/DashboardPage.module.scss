@@ -473,9 +473,15 @@
   }
 }
 
+// The bounded "arena" the force bubbles live inside — a visible frame so the
+// finite space reads as intentional (physics gravity keeps nodes pulled back
+// toward its centre; panning is disabled so the graph can't leave the box).
 .bookChart {
   flex: 1 1 auto;
   min-width: 0;
+  border: 1px solid var(--a-border-soft);
+  border-radius: 12px;
+  overflow: hidden;
 }
 
 // The rep legend becomes a centered right-hand sidebar next to the tall graph,

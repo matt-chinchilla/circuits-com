@@ -8,7 +8,7 @@
 // (catalog distributors + seeded fakes); it sits last and is dimmed in the
 // legend, and the "Rep book" total excludes it.
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import EChart from '@admin/components/charts/EChart';
 import { salesForceOption, type SalesForceGroup } from '@admin/components/charts/options';
@@ -63,14 +63,31 @@ function buildGroups(reps: readonly SalesRep[]): BuiltGroup[] {
 
 export default function SalesRepsPanel({ reps, loading }: SalesRepsPanelProps) {
   const groups = useMemo(() => buildGroups(reps), [reps]);
+  const [demoOpen, setDemoOpen] = useState(false);
+
   const option = useMemo(
     () =>
       salesForceOption({
-        groups,
+        // The not-real "Demo" bucket collapses to ONE summary sphere (click to
+        // expand) unless the user has opened it — that alone de-clutters the
+        // graph; reps then cluster naturally in the free force layout.
+        groups: groups.map((g) => ({ ...g, collapsed: g.demo && !demoOpen })),
         valueFormat: usdCompact,
         emptyMessage: 'No sponsorships assigned to a rep yet.',
       }),
-    [groups],
+    [groups, demoOpen],
+  );
+
+  const onEvents = useMemo(
+    () => ({
+      click: (params: unknown) => {
+        const d = (params as { data?: { groupName?: string; kind?: string } })?.data;
+        if (d && isDemoSeller(d.groupName ?? '') && (d.kind === 'summary' || d.kind === 'hub')) {
+          setDemoOpen((open) => !open);
+        }
+      },
+    }),
+    [],
   );
 
   // The real book excludes the Demo catch-all — its attribution is not real.
@@ -106,16 +123,21 @@ export default function SalesRepsPanel({ reps, loading }: SalesRepsPanelProps) {
         ) : (
           <div className={styles.bookWrap}>
             <div className={styles.bookChart}>
-              <EChart option={option} style={{ height: 400 }} />
+              <EChart option={option} onEvents={onEvents} style={{ height: 400 }} />
             </div>
             <ul className={`${styles.repLegend} ${styles.bookLegend}`}>
               {groups.map((g) => (
                 <li
                   key={g.name}
                   className={g.demo ? `${styles.repRow} ${styles.repRowDemo}` : styles.repRow}
+                  onClick={g.demo ? () => setDemoOpen((open) => !open) : undefined}
+                  style={g.demo ? { cursor: 'pointer' } : undefined}
                 >
                   <span className={styles.repSwatch} style={{ background: g.color }} />
-                  <span className={styles.repName}>{g.name}</span>
+                  <span className={styles.repName}>
+                    {g.name}
+                    {g.demo ? (demoOpen ? ' ▾' : ' ▸') : ''}
+                  </span>
                   <span className={styles.repCount}>
                     {g.accounts} {g.accounts === 1 ? 'account' : 'accounts'}
                   </span>

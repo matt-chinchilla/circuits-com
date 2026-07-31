@@ -39,6 +39,11 @@ export interface SalesForceGroup {
   color: string;
   total: number;
   children: readonly SalesForceCustomer[];
+  /** Render the whole group as ONE summary sphere (no leaves) instead of a hub
+   *  + its customers — used to tame the big not-real "Demo" bucket. */
+  collapsed?: boolean;
+  /** Account count shown on a collapsed summary sphere. Defaults to children.length. */
+  accounts?: number;
 }
 
 export interface SalesForceOptionInput {
@@ -53,6 +58,8 @@ const MAX_NODE = 58;
 // Big enough that a rep name (Anthony / Ronald / Demo) sits INSIDE the hub
 // instead of spilling past its edge.
 const HUB_NODE = 54;
+// A collapsed group's single summary sphere is larger (it stands for many).
+const SUMMARY_NODE = 78;
 
 /** Radius so bubble AREA is proportional to value — the largest customer hits
  *  MAX_NODE, the smallest floors at MIN_NODE (a $14 bubble must still be a
@@ -74,10 +81,11 @@ interface ForceNode {
   name: string;
   /** The company / rep name actually shown (label + tooltip). */
   displayName: string;
-  kind: 'hub' | 'leaf';
+  kind: 'hub' | 'leaf' | 'summary';
   groupName: string;
   tier: string | null;
   value: number;
+  accounts?: number;
   symbolSize: number;
   itemStyle: Record<string, unknown>;
   label: Record<string, unknown>;
@@ -119,6 +127,42 @@ export function salesForceOption(input: SalesForceOptionInput): EChartsCoreOptio
 
   groups.forEach((g) => {
     const hubColor = safeHexColor(g.color) ?? CHART_NEUTRAL;
+
+    // A collapsed group is ONE summary sphere — no hub, no leaves — so the big
+    // not-real "Demo" bucket stops swamping the rep clusters.
+    if (g.collapsed) {
+      const accounts = g.accounts ?? g.children.length;
+      nodes.push({
+        name: `n${nodes.length}`,
+        displayName: g.name,
+        kind: 'summary',
+        groupName: g.name,
+        tier: null,
+        value: Number(g.total) || 0,
+        accounts,
+        symbolSize: SUMMARY_NODE,
+        itemStyle: {
+          color: sphereFill(hubColor),
+          borderColor: CHART_CARD,
+          borderWidth: 1,
+          shadowBlur: 14,
+          shadowColor: withAlpha(hubColor, 0.4),
+          shadowOffsetY: 4,
+        },
+        label: {
+          show: true,
+          position: 'inside',
+          formatter: `${g.name}\n${accounts} accts`,
+          fontFamily: CHART_FONT,
+          fontSize: 12,
+          fontWeight: 800,
+          lineHeight: 15,
+          color: '#ffffff',
+        },
+      });
+      return;
+    }
+
     const hubIndex = nodes.length;
     nodes.push({
       name: `n${hubIndex}`,
@@ -204,6 +248,15 @@ export function salesForceOption(input: SalesForceOptionInput): EChartsCoreOptio
         const [item] = tooltipItems(raw);
         const d = item?.data as ForceNode | undefined;
         if (!d) return '';
+        if (d.kind === 'summary') {
+          return tooltipCard(String(d.displayName ?? ''), [
+            tooltipRow(
+              CHART_NEUTRAL,
+              `${d.accounts ?? 0} accounts · click to expand`,
+              valueFormat(Number(d.value) || 0),
+            ),
+          ]);
+        }
         if (d.kind === 'hub') {
           return tooltipCard(String(d.displayName ?? ''), [
             tooltipRow(CHART_NEUTRAL, 'Book', valueFormat(Number(d.value) || 0)),
@@ -219,7 +272,10 @@ export function salesForceOption(input: SalesForceOptionInput): EChartsCoreOptio
       {
         type: 'graph',
         layout: 'force',
-        roam: true,
+        // Zoom only — panning is off so the graph can never be dragged out of
+        // its bordered arena; gravity always pulls the spheres back to centre,
+        // which is what keeps the space FINITE.
+        roam: 'scale',
         draggable: true,
         // Gentle physics: enough repulsion to unstack the nodes, a light pull
         // to centre, and layoutAnimation so it visibly settles (the "jiggle").
@@ -227,7 +283,7 @@ export function salesForceOption(input: SalesForceOptionInput): EChartsCoreOptio
           repulsion: 135,
           gravity: 0.09,
           edgeLength: [36, 108],
-          friction: 0.16,
+          friction: 0.18,
           layoutAnimation: true,
         },
         emphasis: { focus: 'adjacency', scale: true },
