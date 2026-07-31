@@ -8,6 +8,19 @@ site's admin login and each person's mailbox sharing **one** password.
 
 ---
 
+## Ground truth (verified 2026-07-31, not assumed)
+
+- **DNS is already in Route53** (`ns-*.awsdns-*`) — no zone migration; records go
+  in via the AWS CLI.
+- **No MX record exists today.** Nothing routes mail to the domain right now, so
+  the cutover has **zero risk** and nothing to preserve.
+- **SES: domain already verified, and already OUT of the sandbox** —
+  50,000/day at 14/sec. No production-access request needed.
+- **Hover is dead** — a leftover of the `circuits.com` era. Its credentials in
+  prod `.env`, and every mention in `CLAUDE.md` / `README.md`, get purged as
+  part of P2. (Frontend `hover` hits are CSS pseudo-classes, not the vendor.)
+- The only AWS approval still required is the **port-25 unblock + PTR request**.
+
 ## Decisions already made
 
 | Decision | Choice | Why |
@@ -43,7 +56,22 @@ deployable on its own.
 **Password policy** — 8–24 characters, ≥1 uppercase, ≥1 digit, ≥1 symbol.
 Enforced server-side (422 with a specific message per unmet rule) and mirrored
 client-side as live checklist feedback. One shared validator module so the two
-can't drift.
+can't drift. (The 24-char ceiling is as requested; bcrypt ignores past 72 bytes,
+so raising it later is free if passphrases are ever wanted.)
+
+**Session invalidation (gap found in review).** Tokens are stateless JWTs and
+"remember me" lasts 30 days, so today a password change leaves old sessions
+alive — rotating a leaked temp password would not evict an attacker for a month.
+Add `users.password_changed_at`; reject any token issued before it. Changing a
+password now genuinely ends every other session.
+
+**Login rate limiting (gap found in review).** There is currently *no* rate
+limiting anywhere in the API. With guessable addresses as the login key, add
+per-IP and per-account throttling with escalating backoff, returning the same
+generic error so it cannot be used as an enumeration oracle.
+
+**No 2FA in this phase** — deferred by decision; documented as the next security
+upgrade after this lands.
 
 **Login flow**
 - `POST /api/auth/login` takes `email` + `password` (the existing
@@ -85,10 +113,13 @@ SMTP env switches from Hover to SES credentials (secrets live only in
 `/opt/circuits-com/.env`), so form notifications keep flowing from
 `no-reply@circuitcenter.ai`.
 
-**Two AWS forms only the account owner can submit** (flagged when reached):
-port-25 unblock + PTR request, and SES production access. Both can take
-24–48 h and neither is guaranteed — until SES production access lands, sending
-is limited to verified addresses.
+**One AWS form only the account owner can submit** (flagged when reached): the
+port-25 unblock + PTR request, which can take 24–48 h and is not guaranteed.
+SES production access is **already granted** (50k/day), so outbound works
+regardless — a refusal only costs us direct port-25 delivery, not sending.
+
+**New-hire provisioning is manual** by decision: a DB row plus a mailbox command,
+run on request. No user-admin UI in this phase.
 
 ---
 
@@ -129,6 +160,14 @@ sales and partnership opportunities, so shared visibility is the point.
 
 - A **catch-all alias** routes anything not addressed to a person (`info@`,
   `sales@`, typos) into the same store, so nothing is silently lost.
+- **Duplicate suppression (gap found in review):** website forms already write a
+  `Message` row *and* email a notification. Once the shared box is ingested,
+  every submission would appear twice. Our own notifications get an
+  `X-CircuitCenter-Origin` header and the ingester skips them.
+- **Replies** send as the individual (`anthony@`) with the shared address as
+  `Reply-To`, so a customer's answer returns to the inbox everyone can see.
+- Per-mailbox **quota ~1 GB** (10 GB disk) so one attachment-heavy account can't
+  break mail for everyone.
 - Friendly public aliases (`hello@`, `contact@`) deliver here too. Worth noting:
   `no-reply@` is conventionally a *send-only* identity, so publishing a friendlier
   address for humans while `no-reply@` remains the sending name reads better on
