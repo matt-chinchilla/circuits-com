@@ -92,6 +92,33 @@
   color: #fff;
 }
 
+// Pushes the background-color pair to the row's right edge.
+.optionSpacer {
+  flex: 1;
+}
+
+.bgBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  background: #fff;
+  border: 1px solid #cbd5e0;
+  color: #2d3748;
+}
+
+.bgSwatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  border: 1px solid #cbd5e0;
+  flex-shrink: 0;
+}
+
 .zoomRow {
   display: flex;
   align-items: center;

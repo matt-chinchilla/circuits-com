@@ -47,3 +47,47 @@ describe('paletteFromPixels', () => {
     expect(p.swatches[0]).toEqual({ hex: '#ff0000', pct: 100 }); // 2 analyzed, both red
   });
 });
+
+// Picker mode ({ includeAchromatic: true }) — used by the brand-color modal,
+// where black and white ARE legitimate brand answers (the base mode's gates
+// exist for the csFx board-tint context and stay untouched by default).
+describe('paletteFromPixels — includeAchromatic (picker mode)', () => {
+  const opts = { includeAchromatic: true };
+
+  it('Avnet-shaped logo (mostly black ink + tiny green accent): green primary, black + white swatches', () => {
+    // 72% transparent, ~20% black ink, ~6% white, ~2% green accent — the
+    // wordmark whose crop-window bug reported #939393.
+    const pixels = [
+      ...Array(72).fill([0, 0, 0, 0]),
+      ...Array(20).fill([2, 2, 2, 255]),
+      ...Array(6).fill([254, 254, 254, 255]),
+      ...Array(2).fill([64, 194, 98, 255]),
+    ] as Array<[number, number, number, number]>;
+    const p = paletteFromPixels(px(pixels), pixels.length, opts);
+    expect(p.primary).toBe('#40c262'); // the saturated accent still wins primary
+    const hexes = p.swatches.map((s) => s.hex);
+    expect(hexes).toContain('#020202'); // black ink IS offered
+    expect(hexes).toContain('#fefefe'); // white IS offered
+  });
+
+  it('an all-achromatic logo suggests its dominant ink, not an anti-aliasing gray average', () => {
+    // Black ink + white + AA edge grays: base mode would average the edge
+    // grays into a meaningless mid-gray; picker mode must answer BLACK.
+    const pixels = [
+      ...Array(30).fill([2, 2, 2, 255]),
+      ...Array(60).fill([254, 254, 254, 255]),
+      ...Array(10).fill([147, 147, 147, 255]),
+    ] as Array<[number, number, number, number]>;
+    const p = paletteFromPixels(px(pixels), pixels.length, opts);
+    expect(p.primary).toBe('#020202');
+  });
+
+  it('default mode is untouched: same pixels still fall back to the gray average', () => {
+    const pixels = [
+      ...Array(30).fill([2, 2, 2, 255]),
+      ...Array(10).fill([147, 147, 147, 255]),
+    ] as Array<[number, number, number, number]>;
+    const p = paletteFromPixels(px(pixels), pixels.length);
+    expect(p.primary).toBe('#939393'); // csFx parity preserved
+  });
+});

@@ -12,6 +12,15 @@ import styles from './LogoCropperModal.module.scss';
 export type CropShape = 'circle' | 'rounded';
 const ROUNDED_RADIUS_FRAC = 0.17;
 
+// Letterbox/backing color baked into the export. Many company logos are a
+// white-on-transparent or black wordmark — against the wrong backing they
+// simply vanish, so the choice is the admin's.
+const BG_CHOICES = [
+  { hex: '#ffffff', label: 'White' },
+  { hex: '#000000', label: 'Black' },
+] as const;
+type CropBg = (typeof BG_CHOICES)[number]['hex'];
+
 interface LogoCropperModalProps {
   file: File;
   title?: string;
@@ -27,6 +36,7 @@ export function LogoCropperModal({ file, title = 'Position your logo', onApply, 
   const [frameSize, setFrameSize] = useState(FRAME_MAX);
   const [zoom, setZoom] = useState(DEFAULT_ZOOM);
   const [shape, setShape] = useState<CropShape>('circle');
+  const [bg, setBg] = useState<CropBg>('#ffffff');
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [loadError, setLoadError] = useState(false);
   const imgRef = useRef<HTMLImageElement | null>(null);
@@ -172,7 +182,7 @@ export function LogoCropperModal({ file, title = 'Position your logo', onApply, 
       ctx.roundRect(0, 0, canvas.width, canvas.height, r);
       ctx.clip();
     }
-    ctx.fillStyle = '#ffffff';
+    ctx.fillStyle = bg;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     // Destination-space drawing mirrors the on-screen CSS math, so it stays
     // correct below cover-fit (zoom < 1), where the image letterboxes and a
@@ -199,6 +209,7 @@ export function LogoCropperModal({ file, title = 'Position your logo', onApply, 
           <div
             ref={frameRef}
             className={styles.frame}
+            style={{ background: bg }}
             tabIndex={0}
             aria-label="Logo position. Use arrow keys to move, or drag."
             onPointerDown={onDown}
@@ -244,6 +255,20 @@ export function LogoCropperModal({ file, title = 'Position your logo', onApply, 
           >
             Rounded square
           </button>
+          <span className={styles.optionSpacer} aria-hidden="true" />
+          {BG_CHOICES.map((choice) => (
+            <button
+              key={choice.hex}
+              type="button"
+              className={bg === choice.hex ? `${styles.bgBtn} ${styles.shapeBtnActive}` : styles.bgBtn}
+              aria-pressed={bg === choice.hex}
+              onClick={() => setBg(choice.hex)}
+              title={`${choice.label} background`}
+            >
+              <span className={styles.bgSwatch} style={{ background: choice.hex }} aria-hidden="true" />
+              {choice.label}
+            </button>
+          ))}
         </div>
         <label className={styles.zoomRow}>
           <span>Zoom</span>

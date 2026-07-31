@@ -1,7 +1,7 @@
 // frontend/src/admin/components/ImageUploadField.tsx
 import { useId, useRef, useState, type ReactElement } from 'react';
 import { LogoCropperModal } from '@shared/components/LogoCropperModal';
-import { canvasToDataUrl } from '@shared/utils/image';
+import { canvasToDataUrl, loadImage } from '@shared/utils/image';
 import { safeImageUrl } from '@shared/utils/url';
 import { adminApi } from '@admin/services/adminApi';
 import styles from './ImageUploadField.module.scss';
@@ -49,20 +49,53 @@ export default function ImageUploadField({
   };
 
   const applyCrop = (canvas: HTMLCanvasElement) => {
+    const original = pendingFile;
     setPendingFile(null);
     resetFileInput();
     const result = canvasToDataUrl(canvas);
-    if (result.ok) {
-      onChange(result.dataUrl);
-      onCroppedCanvas?.(canvas);
-    } else {
+    if (!result.ok) {
       setError(result.error);
+      return;
+    }
+    onChange(result.dataUrl);
+    if (!onCroppedCanvas) return;
+    // Brand colors read the FULL ORIGINAL logo, not the crop window: a wide
+    // wordmark's accent often sits outside the cover-crop (the Avnet green
+    // mark lived at the far left → the crop-fed extractor answered gray).
+    if (original) {
+      const url = URL.createObjectURL(original);
+      loadImage(url)
+        .then((img) => {
+          const full = document.createElement('canvas');
+          full.width = img.naturalWidth;
+          full.height = img.naturalHeight;
+          full.getContext('2d')?.drawImage(img, 0, 0);
+          onCroppedCanvas(full);
+        })
+        .catch(() => onCroppedCanvas(canvas))
+        .finally(() => URL.revokeObjectURL(url));
+    } else {
+      onCroppedCanvas(canvas);
     }
   };
 
   const cancelCrop = () => {
     setPendingFile(null);
     resetFileInput();
+  };
+
+  // Re-open the cropper on the CURRENTLY STORED image — the path for legacy
+  // rectangular data-URL wordmarks that pre-date the cropper (and for
+  // re-cropping any upload): zoom/pan/shape/background against the same modal.
+  const recropStored = async () => {
+    if (!safePreview || !(value ?? '').startsWith('data:')) return;
+    setError(null);
+    try {
+      const blob = await (await fetch(value as string)).blob();
+      setPendingFile(new File([blob], 'logo', { type: blob.type || 'image/png' }));
+    } catch {
+      setError('Could not reopen the stored image for cropping.');
+    }
   };
 
   // Pull a pasted URL through the admin image-proxy (same-origin bytes), then
@@ -117,6 +150,15 @@ export default function ImageUploadField({
             >
               {value ? 'Replace image' : 'Upload image'}
             </button>
+            {(value ?? '').startsWith('data:') && safePreview && (
+              <button
+                type="button"
+                className={styles.uploadBtn}
+                onClick={() => { void recropStored(); }}
+              >
+                Zoom &amp; crop
+              </button>
+            )}
             {value && (
               <button
                 type="button"

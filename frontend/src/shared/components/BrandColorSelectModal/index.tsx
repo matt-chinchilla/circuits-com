@@ -50,7 +50,10 @@ export function BrandColorSelectModal({
         const img = typeof source === 'string'
           ? await loadImage(source, source.startsWith('data:') ? undefined : 'anonymous')
           : source;
-        const p = extractBrandPalette(img) ?? DEFAULT_PALETTE;
+        // Picker mode: black/white ink pools rank as swatches (a wordmark's
+        // honest answer), and the finer 64px sample keeps a thin accent mark
+        // from desaturating away in the resample.
+        const p = extractBrandPalette(img, { includeAchromatic: true, sample: 64 }) ?? DEFAULT_PALETTE;
         if (!cancelled) setPalette(p);
       } catch {
         if (!cancelled) setPalette(DEFAULT_PALETTE);
