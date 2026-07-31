@@ -68,6 +68,11 @@ export interface EChartProps {
   /** ECharts event name -> handler, e.g. `{ click: (p) => ... }`. Memoize the
    *  object; a new identity re-binds (cheap, but pointless churn). */
   onEvents?: Record<string, EChartEventHandler>;
+  /** Called once per chart INSTANCE, right after init — the escape hatch for
+   *  imperative interaction layers (e.g. salesForcePhysics). The instance is
+   *  disposed on unmount (twice-inited under StrictMode), so consumers MUST
+   *  guard every later use with `chart.isDisposed()`. */
+  onReady?: (chart: EChartsType) => void;
 }
 
 /** Honour the OS motion setting. Read at every setOption rather than cached,
@@ -85,9 +90,13 @@ function applyMotionPreference(option: EChartsCoreOption): EChartsCoreOption {
   return prefersReducedMotion() ? { ...option, animation: false } : option;
 }
 
-export default function EChart({ option, style, className, onEvents }: EChartProps) {
+export default function EChart({ option, style, className, onEvents, onReady }: EChartProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<EChartsType | null>(null);
+  // Latest-ref: the lifecycle effect below has [] deps, so it must not close
+  // over a stale onReady — and a new callback identity must not re-init.
+  const onReadyRef = useRef(onReady);
+  onReadyRef.current = onReady;
 
   // (1) Lifecycle. Runs once (twice under StrictMode, which tears down and
   // re-runs EVERY effect — including the setOption effect below, so the
@@ -99,6 +108,7 @@ export default function EChart({ option, style, className, onEvents }: EChartPro
     echarts.registerTheme(ADMIN_CHART_THEME_NAME, buildAdminTheme());
     const chart = echarts.init(host, ADMIN_CHART_THEME_NAME, { renderer: 'canvas' });
     chartRef.current = chart;
+    onReadyRef.current?.(chart);
 
     // Resize on container change. ECharts warns (and lays out garbage) on a
     // 0-sized box, which is exactly what a collapsed/hidden panel reports.

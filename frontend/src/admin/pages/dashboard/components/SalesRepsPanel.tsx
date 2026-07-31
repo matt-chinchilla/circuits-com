@@ -1,16 +1,23 @@
 // SalesRepsPanel — book of business as a radial cluster graph.
 //
-// Reps are labelled hubs; their customers are leaf nodes divided EVENLY
-// around them (360°/n spokes from 12 o'clock), sized by monthly value and
-// coloured by sponsor TIER (the board materials). The "Demo" seller is the
-// not-real catch-all (catalog distributors + seeded fakes); it collapses to
-// one summary sphere, sits last and is dimmed in the legend, and the
-// "Rep book" total excludes it.
+// Reps are labelled hubs; their customers sit on concentric tier SHELLS
+// around them (Platinum in, Silver out), tier-fixed sizes, divided EVENLY
+// per shell (360°/n from 12 o'clock) and coloured by sponsor TIER (the board
+// materials). salesForcePhysics makes it alive: drag a name bubble to move
+// the whole cluster (children trail with a springy lag), flail a leaf and it
+// springs back home. The "Demo" seller is the not-real catch-all (catalog
+// distributors + seeded fakes); it collapses to one summary sphere, sits last
+// and is dimmed in the legend, and the "Rep book" total excludes it.
 
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import type { EChartsType } from 'echarts/core';
 import EChart from '@admin/components/charts/EChart';
-import { salesForceOption, type SalesForceGroup } from '@admin/components/charts/options';
+import { buildSalesForce, type SalesForceGroup } from '@admin/components/charts/options';
+import {
+  attachSalesForcePhysics,
+  type SalesForcePhysicsHandle,
+} from '@admin/components/charts/options/salesForcePhysics';
 import { CHART_NEUTRAL, CHART_SERIES } from '@admin/components/charts/chartTheme';
 import type { SalesRep } from '@admin/types/admin';
 import { usd, usdCompact } from './format';
@@ -63,23 +70,46 @@ function buildGroups(reps: readonly SalesRep[]): BuiltGroup[] {
 export default function SalesRepsPanel({ reps, loading }: SalesRepsPanelProps) {
   const groups = useMemo(() => buildGroups(reps), [reps]);
   const [demoOpen, setDemoOpen] = useState(false);
+  const [chart, setChart] = useState<EChartsType | null>(null);
+  const physicsRef = useRef<SalesForcePhysicsHandle | null>(null);
 
-  const option = useMemo(
+  const build = useMemo(
     () =>
-      salesForceOption({
+      buildSalesForce({
         // The not-real "Demo" bucket collapses to ONE summary sphere (click to
         // expand) unless the user has opened it — that alone de-clutters the
-        // graph; reps then cluster naturally in the free force layout.
+        // graph of tier-shell clusters.
         groups: groups.map((g) => ({ ...g, collapsed: g.demo && !demoOpen })),
         valueFormat: usdCompact,
         emptyMessage: 'No sponsorships assigned to a rep yet.',
       }),
     [groups, demoOpen],
   );
+  const option = build.option;
+
+  const onReady = useCallback((c: EChartsType) => setChart(c), []);
+
+  // (Re)attach the spring layer AFTER each option rebuild. Effects run
+  // child-first, so EChart has already applied the new option (notMerge) by
+  // the time this runs; cleanup-first detaches the previous attachment.
+  // attachSalesForcePhysics is StrictMode/dispose-safe (inert on a disposed
+  // chart; dispose() is idempotent and kills its rAF + listeners).
+  useEffect(() => {
+    if (!chart) return;
+    const physics = attachSalesForcePhysics(chart, build.layout);
+    physicsRef.current = physics;
+    return () => {
+      physicsRef.current = null;
+      physics.dispose();
+    };
+  }, [chart, build]);
 
   const onEvents = useMemo(
     () => ({
       click: (params: unknown) => {
+        // A "click" that was actually a drag (pointer travelled) must not
+        // toggle the Demo bucket — the user was moving the sphere.
+        if (physicsRef.current?.wasDragClick()) return;
         const d = (params as { data?: { groupName?: string; kind?: string } })?.data;
         if (d && isDemoSeller(d.groupName ?? '') && (d.kind === 'summary' || d.kind === 'hub')) {
           setDemoOpen((open) => !open);
@@ -98,7 +128,8 @@ export default function SalesRepsPanel({ reps, loading }: SalesRepsPanelProps) {
         <div className={styles.panelHeadMain}>
           <h3 className={styles.panelTitle}>Book of business</h3>
           <p className={styles.panelSub}>
-            By sales rep &middot; area = monthly value &middot; click Demo to expand
+            By sales rep &middot; rings = tier &middot; drag a name bubble &middot; click Demo to
+            expand
           </p>
         </div>
         <Link to="/admin/sponsors" className={styles.panelLink}>
@@ -122,7 +153,7 @@ export default function SalesRepsPanel({ reps, loading }: SalesRepsPanelProps) {
         ) : (
           <div className={styles.bookWrap}>
             <div className={styles.bookChart}>
-              <EChart option={option} onEvents={onEvents} style={{ height: 400 }} />
+              <EChart option={option} onEvents={onEvents} onReady={onReady} style={{ height: 400 }} />
             </div>
             <ul className={`${styles.repLegend} ${styles.bookLegend}`}>
               {groups.map((g) => (

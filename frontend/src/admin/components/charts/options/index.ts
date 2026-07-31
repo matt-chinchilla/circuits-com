@@ -29,12 +29,17 @@ export type {
   CirclePackOptionInput,
 } from './circlePackOption';
 
-export { salesForceOption } from './salesForceOption';
+export { buildSalesForce, salesForceOption } from './salesForceOption';
 export type {
+  SalesForceBuild,
   SalesForceCustomer,
   SalesForceGroup,
   SalesForceOptionInput,
+  SalesForceRestNode,
 } from './salesForceOption';
+// The interaction layer for the sales-force graph lives in ./salesForcePhysics
+// (imported directly by its host) — it is NOT an option builder, so it stays
+// out of this barrel on purpose.
 
 export { escapeHtml, tooltipCard, tooltipItems, tooltipRow, numericValue } from './tooltip';
 export type { TooltipItem } from './tooltip';
