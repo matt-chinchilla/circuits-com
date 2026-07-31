@@ -56,12 +56,23 @@ interface PresenceBubblesProps {
 export default function PresenceBubbles({ selfUsername }: PresenceBubblesProps) {
   const [others, setOthers] = useState<PresenceUser[]>([]);
 
-  // Heartbeat: ping on mount, then every 30s. Cancel-flag law — the cleanup
-  // both clears the interval and blocks a late .then from setting state on an
-  // unmounted component (a ping in flight when the admin signs out).
+  // Heartbeat: ping on mount, then every 30s WHILE VISIBLE. Hidden tabs stop
+  // pinging (so a tab left open overnight neither spams the API nor shows its
+  // admin as "here" past the server TTL — visibility IS the presence signal),
+  // and a 401 (expired token) stops the interval for good instead of retrying
+  // forever. Cancel-flag law — cleanup clears the interval and blocks a late
+  // .then from setting state on an unmounted component.
   useEffect(() => {
     let cancelled = false;
+    let timer: ReturnType<typeof setInterval> | null = null;
     const self = (selfUsername ?? '').toLowerCase();
+
+    const stop = () => {
+      if (timer != null) {
+        clearInterval(timer);
+        timer = null;
+      }
+    };
 
     const ping = () => {
       adminApi
@@ -70,17 +81,31 @@ export default function PresenceBubbles({ selfUsername }: PresenceBubblesProps) 
           if (cancelled) return;
           setOthers(roster.filter((p) => p.username.toLowerCase() !== self));
         })
-        .catch(() => {
+        .catch((err: unknown) => {
           if (cancelled) return;
           setOthers([]); // best-effort: no bubbles, no error UI
+          const status = (err as { response?: { status?: number } })?.response?.status;
+          if (status === 401) stop(); // token expired — no point heartbeating
         });
     };
 
-    ping();
-    const timer = setInterval(ping, PING_MS);
+    const startPolling = () => {
+      if (cancelled || timer != null) return;
+      ping();
+      timer = setInterval(ping, PING_MS);
+    };
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') stop();
+      else startPolling();
+    };
+
+    if (document.visibilityState !== 'hidden') startPolling();
+    document.addEventListener('visibilitychange', onVisibility);
     return () => {
       cancelled = true;
-      clearInterval(timer);
+      stop();
+      document.removeEventListener('visibilitychange', onVisibility);
     };
   }, [selfUsername]);
 

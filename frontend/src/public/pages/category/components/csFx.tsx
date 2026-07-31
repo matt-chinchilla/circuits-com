@@ -613,6 +613,7 @@ export function mountTileField(canvas: HTMLCanvasElement, board: HTMLElement): T
         refreshColor();
         buildPCB();
         snapshotCircuit();
+        drawStatic(); // paint the rebuild — the RM loop won't (same gap resync() fixes)
         return;
       }
       // Snapshot the CURRENT (old) surface, then rebuild pcb to the NEW colors
@@ -649,6 +650,13 @@ export function mountTileField(canvas: HTMLCanvasElement, board: HTMLElement): T
       refreshColor();
       buildPCB();
       snapshotCircuit();
+      if (reducedMQ.matches) {
+        // start() no-ops under reduced motion and nothing else copies the
+        // rebuilt raster to the visible canvas — paint it directly, or the
+        // stale-steel bug this method exists to fix persists for RM users.
+        drawStatic();
+        return;
+      }
       start();
     },
     setEmblem(img, cx, cy, size) {

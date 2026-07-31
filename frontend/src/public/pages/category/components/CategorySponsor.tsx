@@ -376,7 +376,10 @@ export default function CategorySponsor({
   // never fires this (a resync there would poison runWave's before-snapshot
   // and erase the wave transition).
   useEffect(() => {
-    if (!sponsor) return;
+    // Only a takeover changes the brand CSS vars — gating here saves a full
+    // redundant re-raster (~5ms, byte-identical steel) on every sold-but-
+    // unbranded category visit (perf review, 2026-07-31).
+    if (!sponsor || !sponsor.brand_takeover) return;
     let raf2 = 0;
     const raf1 = requestAnimationFrame(() => {
       raf2 = requestAnimationFrame(() => {

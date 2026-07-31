@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import ipaddress
 import socket
-
 from urllib.parse import urlparse
 
 import httpx
@@ -33,6 +32,12 @@ router = APIRouter(prefix="/api/admin", tags=["admin-media"])
 _MAX_BYTES = 8 * 1024 * 1024  # matches "reasonable logo" — cropper downscales to 256px anyway
 _MAX_REDIRECTS = 3
 _TIMEOUT = httpx.Timeout(8.0)
+
+# Test seam: None = httpx's real network transport. Tests swap in an
+# httpx.MockTransport so the guards below (per-hop SSRF re-validation, size cap,
+# content-type filter, redirect cap) run for REAL against scripted responses
+# instead of being monkeypatched away at the _fetch_image boundary.
+_TRANSPORT: httpx.AsyncBaseTransport | None = None
 
 
 def _assert_public_http_url(url: str) -> None:
@@ -66,32 +71,38 @@ async def _fetch_image(url: str) -> tuple[bytes, str]:
         "Accept": "image/*",
     }
     async with httpx.AsyncClient(
-        timeout=_TIMEOUT, follow_redirects=False, headers=headers
+        timeout=_TIMEOUT, follow_redirects=False, headers=headers, transport=_TRANSPORT
     ) as client:
-        for _ in range(_MAX_REDIRECTS + 1):
-            _assert_public_http_url(url)
-            async with client.stream("GET", url) as resp:
-                if resp.status_code in (301, 302, 303, 307, 308):
-                    location = resp.headers.get("location")
-                    if not location:
-                        raise HTTPException(422, "The image host sent a broken redirect.")
-                    url = str(httpx.URL(url).join(location))
-                    continue
-                if resp.status_code != 200:
-                    raise HTTPException(
-                        422, f"The image host answered HTTP {resp.status_code}."
-                    )
-                ctype = resp.headers.get("content-type", "").split(";")[0].strip().lower()
-                # Raster images only — svg goes through <img> fine but canvas
-                # export of it is flaky, and svg can smuggle scripts elsewhere.
-                if not ctype.startswith("image/") or "svg" in ctype:
-                    raise HTTPException(422, "That URL did not return a raster image.")
-                buf = bytearray()
-                async for chunk in resp.aiter_bytes():
-                    buf.extend(chunk)
-                    if len(buf) > _MAX_BYTES:
-                        raise HTTPException(422, "That image is larger than 8 MB.")
-                return bytes(buf), ctype
+        # Connection refused / DNS blips / timeouts / a malformed redirect target
+        # are the remote host's problem, not ours — surface them as the same 422
+        # the other unusable-image paths return instead of a 500.
+        try:
+            for _ in range(_MAX_REDIRECTS + 1):
+                _assert_public_http_url(url)
+                async with client.stream("GET", url) as resp:
+                    if resp.status_code in (301, 302, 303, 307, 308):
+                        location = resp.headers.get("location")
+                        if not location:
+                            raise HTTPException(422, "The image host sent a broken redirect.")
+                        url = str(httpx.URL(url).join(location))
+                        continue
+                    if resp.status_code != 200:
+                        raise HTTPException(
+                            422, f"The image host answered HTTP {resp.status_code}."
+                        )
+                    ctype = resp.headers.get("content-type", "").split(";")[0].strip().lower()
+                    # Raster images only — svg goes through <img> fine but canvas
+                    # export of it is flaky, and svg can smuggle scripts elsewhere.
+                    if not ctype.startswith("image/") or "svg" in ctype:
+                        raise HTTPException(422, "That URL did not return a raster image.")
+                    buf = bytearray()
+                    async for chunk in resp.aiter_bytes():
+                        buf.extend(chunk)
+                        if len(buf) > _MAX_BYTES:
+                            raise HTTPException(422, "That image is larger than 8 MB.")
+                    return bytes(buf), ctype
+        except (httpx.HTTPError, httpx.InvalidURL) as exc:
+            raise HTTPException(422, "Could not fetch that image.") from exc
     raise HTTPException(422, "Too many redirects from the image host.")
 
 

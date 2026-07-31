@@ -44,7 +44,13 @@ const SettingsPage = lazy(() => import("@admin/pages/settings"));
 const MessagesListPage = lazy(() => import("@admin/pages/messages/list"));
 const MessageDetailPage = lazy(() => import("@admin/pages/messages/detail"));
 
-import AdminLayout from "@admin/components/AdminLayout";
+// AdminLayout is LAZY on purpose (perf review 2026-07-31, measured): statically
+// imported it dragged the whole admin chrome — adminApi/axios, presence, bell,
+// wizard, and ~36KB of admin SCSS — into the PUBLIC entry chunk. Splitting it
+// cut the entry 382→298KB raw (−20% gzip) and HALVED the render-blocking CSS
+// on every public first paint. It renders inside the existing <Suspense>.
+// ProtectedRoute stays static (tiny; needed to gate before the chunk loads).
+const AdminLayout = lazy(() => import("@admin/components/AdminLayout"));
 import ProtectedRoute from "@admin/components/ProtectedRoute";
 import Navbar from "@public/components/layout/Navbar";
 import NavVariantPicker from "@public/components/layout/NavVariantPicker";

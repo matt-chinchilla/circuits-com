@@ -2,26 +2,30 @@
 
 Powers the "who else is in the admin right now" avatar bubbles in the topbar.
 
-Deliberately NOT persisted: presence is ephemeral, worthless after ~a minute,
-and writing a row per admin per 30s heartbeat would be pure churn. The API runs
-as a single uvicorn process (see docker-compose / the api container entrypoint),
-so ONE module-level dict is a correct, complete store here. If the API is ever
-scaled to multiple workers this needs a shared backend (Redis) — a per-worker
-dict would show a different roster depending on which worker answered.
+DB-backed via `users.last_seen_at` (alembic 021): prod runs
+`uvicorn --workers 4` (docker-compose.prod.yml), so the original module-level
+dict was PER-WORKER — the roster changed depending on which worker answered a
+poll and peers flickered in and out (2026-07-31 review finding). One nullable
+timestamp on the existing users row is the smallest store every worker shares;
+the cost is one UPDATE per open admin tab per 30s, which the demo-scale DB
+does not notice.
 
-`last_seen` uses time.monotonic(): the TTL is a duration, and monotonic can't
-be dragged backwards by an NTP step the way wall-clock time can.
+Wall-clock (timezone-aware UTC) rather than time.monotonic(): monotonic is
+per-process, meaningless across workers. An NTP step can wobble the 75s TTL by
+its skew — harmless for a presence indicator.
 
 Auth-gated like the rest of /admin/* via Depends(get_current_user).
 """
 
 from __future__ import annotations
 
-import time
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
+from app.db.session import get_db
 from app.models.user import User
 from app.services.auth_service import get_current_user
 
@@ -31,9 +35,6 @@ router = APIRouter(prefix="/api/admin", tags=["admin-presence"])
 # before a user is considered gone.
 PRESENCE_TTL_SECONDS = 75.0
 
-# {user_id: {"username": str, "name": str | None, "role": str, "last_seen": float}}
-_PRESENCE: dict[str, dict] = {}
-
 
 class PresenceUser(BaseModel):
     user_id: str
@@ -42,21 +43,14 @@ class PresenceUser(BaseModel):
     role: str
 
 
-def _now() -> float:
-    """Monotonic clock seam — tests monkeypatch this to fast-forward the TTL."""
-    return time.monotonic()
-
-
-def _prune(now: float) -> None:
-    """Drop everyone whose last heartbeat is older than the TTL."""
-    for user_id in [
-        uid for uid, entry in _PRESENCE.items() if now - entry["last_seen"] > PRESENCE_TTL_SECONDS
-    ]:
-        del _PRESENCE[user_id]
+def _now() -> datetime:
+    """Clock seam — tests monkeypatch this to fast-forward the TTL."""
+    return datetime.now(timezone.utc)
 
 
 @router.post("/presence/ping", response_model=list[PresenceUser])
 def presence_ping(
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> list[PresenceUser]:
     """Heartbeat: record the caller as present, then return everyone active.
@@ -65,22 +59,24 @@ def presence_ping(
     its own avatar already anchors the topbar pill).
     """
     now = _now()
-    _PRESENCE[str(current_user.id)] = {
-        "username": current_user.username,
-        # `name` is future-proofing: the User model has no display name today,
-        # so this is None and the UI falls back to the username.
-        "name": getattr(current_user, "name", None),
-        "role": current_user.role,
-        "last_seen": now,
-    }
-    _prune(now)
+    current_user.last_seen_at = now
+    db.commit()
+    cutoff = now - timedelta(seconds=PRESENCE_TTL_SECONDS)
+    active = (
+        db.query(User)
+        .filter(User.last_seen_at.isnot(None), User.last_seen_at > cutoff)
+        # Stable order so the bubble row doesn't reshuffle between polls.
+        .order_by(User.username)
+        .all()
+    )
     return [
         PresenceUser(
-            user_id=user_id,
-            username=entry["username"],
-            name=entry["name"],
-            role=entry["role"],
+            user_id=str(u.id),
+            username=u.username,
+            # `name` is future-proofing: the User model has no display name
+            # today, so this is None and the UI falls back to the username.
+            name=getattr(u, "name", None),
+            role=u.role,
         )
-        # Stable order so the bubble row doesn't reshuffle between polls.
-        for user_id, entry in sorted(_PRESENCE.items(), key=lambda kv: kv[1]["username"].lower())
+        for u in active
     ]

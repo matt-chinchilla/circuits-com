@@ -26,6 +26,9 @@ class User(Base):
     supplier_id = Column(
         UUID(as_uuid=True), ForeignKey("suppliers.id"), nullable=True
     )
+    # Admin presence heartbeat (alembic 021) — see routes/admin_presence.py.
+    # Nullable: only stamped while an admin has the console open.
+    last_seen_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),

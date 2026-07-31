@@ -30,6 +30,10 @@ export default function ImageUploadField({
   const [fetchingUrl, setFetchingUrl] = useState(false);
   // Last URL auto-fetched on commit — blocks a blur/Enter loop after a cancel.
   const lastFetchedRef = useRef<string | null>(null);
+  // Auto-fetch fires ONLY after the user actually edited the field — without
+  // this, tab-through or blur of a PREFILLED stored URL popped the cropper
+  // modal uninvited (review finding, 2026-07-31). The explicit button ignores it.
+  const urlDirtyRef = useRef(false);
   const errId = useId();
   const safePreview = safeImageUrl(value);
   const urlValue = (value ?? '').startsWith('data:') ? '' : (value ?? '');
@@ -66,10 +70,14 @@ export default function ImageUploadField({
       const url = URL.createObjectURL(original);
       loadImage(url)
         .then((img) => {
+          // Cap the raster — extraction samples at 64px anyway, and an
+          // uncapped 40MP photo would briefly hold a ~160MB backing store.
+          const MAX_EDGE = 1024;
+          const scale = Math.min(1, MAX_EDGE / Math.max(img.naturalWidth, img.naturalHeight));
           const full = document.createElement('canvas');
-          full.width = img.naturalWidth;
-          full.height = img.naturalHeight;
-          full.getContext('2d')?.drawImage(img, 0, 0);
+          full.width = Math.max(1, Math.round(img.naturalWidth * scale));
+          full.height = Math.max(1, Math.round(img.naturalHeight * scale));
+          full.getContext('2d')?.drawImage(img, 0, 0, full.width, full.height);
           onCroppedCanvas(full);
         })
         .catch(() => onCroppedCanvas(canvas))
@@ -106,7 +114,8 @@ export default function ImageUploadField({
   const fetchAndCrop = async (force = false) => {
     const raw = urlValue.trim();
     if (!/^https?:\/\/\S+$/i.test(raw) || fetchingUrl) return;
-    if (!force && raw === lastFetchedRef.current) return;
+    if (!force && (!urlDirtyRef.current || raw === lastFetchedRef.current)) return;
+    urlDirtyRef.current = false;
     lastFetchedRef.current = raw;
     setFetchingUrl(true);
     setError(null);
@@ -175,7 +184,7 @@ export default function ImageUploadField({
             inputMode="url"
             className={styles.urlInput}
             value={urlValue}
-            onChange={(e) => { if (error) setError(null); onChange(e.target.value); }}
+            onChange={(e) => { if (error) setError(null); urlDirtyRef.current = true; onChange(e.target.value); }}
             onBlur={() => { void fetchAndCrop(); }}
             onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void fetchAndCrop(); } }}
             placeholder="…or paste an image URL"

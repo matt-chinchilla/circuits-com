@@ -146,9 +146,14 @@ export function attachSalesForcePhysics(
   let downY = 0;
   let moved = false;
 
+  // Targets are clamped to the SAME arena as positions — a hub dropped at the
+  // boundary would otherwise give its outer leaves targets OUTSIDE the clamp:
+  // the pinned leaf's displacement never shrinks, step() stays "lively"
+  // forever, and the rAF loop burns 60fps setOption calls indefinitely
+  // (review finding, 2026-07-31). A clamped target is always reachable.
   const targetOf = (leaf: Body): [number, number] => [
-    (leaf.hub?.x ?? 0) + leaf.offX,
-    (leaf.hub?.y ?? 0) + leaf.offY,
+    clampX((leaf.hub?.x ?? 0) + leaf.offX),
+    clampY((leaf.hub?.y ?? 0) + leaf.offY),
   ];
 
   const toData = (px: number, py: number): [number, number] | null => {
