@@ -1,14 +1,31 @@
 // Auth
+// The one login-shaped payload: /auth/login, /auth/demo and
+// /auth/change-password all answer with this, so the client stores a token
+// exactly one way.
 export interface AuthResponse {
   token: string;
   user: UserInfo;
+  /**
+   * True while the account owes a forced password reset. The server's 403
+   * `password_change_required` gate is the real enforcement; this flag is the
+   * front door that shows the screen without waiting for a rejected request.
+   */
+  must_change_password?: boolean;
 }
 
 export interface UserInfo {
   id: string;
   username: string;
-  role: 'admin' | 'company';
+  // 'owner' arrived with alembic 022 (matthew). Nothing in the UI branches on
+  // role — it is displayed — but the union must not lie about what can arrive.
+  role: 'admin' | 'company' | 'owner';
   supplier_id?: string;
+  /**
+   * Present on GET /auth/me only; the nested `user` of a login response omits
+   * it (the flag rides at the top level there). `?:` catches the missing key,
+   * so read it with `Boolean(...)` rather than trusting the shape.
+   */
+  must_change_password?: boolean;
 }
 
 // Dashboard

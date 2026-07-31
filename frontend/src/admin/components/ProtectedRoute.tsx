@@ -3,7 +3,7 @@ import { useAuth } from '@admin/contexts/AuthContext';
 import type { ReactNode } from 'react';
 
 export default function ProtectedRoute({ children }: { children: ReactNode }) {
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, loading, mustChangePassword } = useAuth();
 
   if (loading) {
     return (
@@ -24,6 +24,13 @@ export default function ProtectedRoute({ children }: { children: ReactNode }) {
 
   if (!isAuthenticated) {
     return <Navigate to="/admin/login" replace />;
+  }
+
+  // A pending forced reset wins over every admin page — the API would 403 them
+  // all anyway (auth_service.get_current_user), so nothing behind this renders
+  // until the password is changed.
+  if (mustChangePassword) {
+    return <Navigate to="/admin/change-password" replace />;
   }
 
   return <>{children}</>;

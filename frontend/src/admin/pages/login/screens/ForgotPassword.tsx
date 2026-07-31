@@ -3,7 +3,7 @@ import { adminApi } from '@admin/services/adminApi';
 import Field from '../components/Field';
 import SubmitButton from '../components/SubmitButton';
 import { I, Svg } from '../components/icons';
-import { mask } from '../lib/recovery';
+import { isEmail, mask } from '../lib/recovery';
 import type { Screen } from './types';
 
 export default function ForgotPassword({ go }: { go: (s: Screen) => void }) {
@@ -45,7 +45,11 @@ export default function ForgotPassword({ go }: { go: (s: Screen) => void }) {
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (!val.trim()) {
-      setErr('Enter the email or username on your account.');
+      setErr('Enter the email address on your account.');
+      return;
+    }
+    if (!isEmail(val)) {
+      setErr('Enter a valid email address.');
       return;
     }
     setErr('');
@@ -98,17 +102,18 @@ export default function ForgotPassword({ go }: { go: (s: Screen) => void }) {
       </p>
       <h2>Reset your password</h2>
       <p className="lede">
-        Enter the email or username on your account and we&rsquo;ll send a secure link to set a
+        Enter the email address on your account and we&rsquo;ll send a secure link to set a
         new password.
       </p>
       <form onSubmit={submit} noValidate>
         <Field
           id="recover-id"
-          label="Email or username"
-          icon={I.id}
+          label="Email address"
+          icon={I.mail}
           value={val}
           onChange={setVal}
           placeholder="you@circuitcenter.ai"
+          inputMode="email"
           autoComplete="username"
           autoFocus
           error={err}

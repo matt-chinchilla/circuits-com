@@ -23,6 +23,9 @@ const NotFoundPage = lazy(() => import("@public/pages/not-found"));
 // visitors. See vite.config.ts manualChunks for extra chunk hints.
 const LoginPage = lazy(() => import("@admin/pages/login"));
 const ResetPasswordPage = lazy(() => import("@admin/pages/reset-password"));
+const ChangePasswordPage = lazy(
+  () => import("@admin/pages/change-password"),
+);
 const DashboardPage = lazy(() => import("@admin/pages/dashboard"));
 const SuppliersPage = lazy(() => import("@admin/pages/suppliers/list"));
 const SupplierDetailPage = lazy(
@@ -121,6 +124,12 @@ function App() {
           <Routes>
             <Route path="/admin/login" element={<LoginPage />} />
             <Route path="/admin/reset-password" element={<ResetPasswordPage />} />
+            {/* Forced password reset — outside ProtectedRoute, which redirects
+                HERE while the gate is up (the page does its own auth check). */}
+            <Route
+              path="/admin/change-password"
+              element={<ChangePasswordPage />}
+            />
             <Route
               path="/admin/*"
               element={

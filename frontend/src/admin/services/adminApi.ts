@@ -28,6 +28,7 @@ import type {
 import type { Message, MessageStatus, AssignedTo } from '@admin/types/messages';
 import type { PlatformEngagementSeries } from '@admin/types/engagement';
 import { bustSponsorCaches } from '@admin/services/swCache';
+import { isPasswordChangeRequired, passwordGate } from '@admin/services/passwordGate';
 
 // PATCH /api/admin/messages/{id} body — subset of MessageBase the admin UI can
 // mutate. Mirrors the contract Agent A is building in the backend.
@@ -76,8 +77,16 @@ adminClient.interceptors.request.use((config) => {
 adminClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    const status = error.response?.status;
+    if (status === 401) {
+      // Unchanged behavior: an expired/retired token is dropped so the next
+      // render bounces to the sign-in screen.
       localStorage.removeItem('admin_token');
+    } else if (isPasswordChangeRequired(status, error.response?.data?.detail)) {
+      // The forced-reset gate. The token is still VALID — do not clear it, or
+      // the user would be signed out of the only session that can clear the
+      // flag. Raising the gate routes the SPA to /admin/change-password.
+      passwordGate.set(true);
     }
     return Promise.reject(error);
   }
@@ -98,9 +107,44 @@ async function bustingAfter<T>(mutation: Promise<T>): Promise<T> {
 }
 
 export const adminApi = {
-  login: (username: string, password: string, remember = false) =>
+  // Sign-in is EMAIL-keyed (P1 auth overhaul) — there is no username fallback
+  // for any account, the public demo included. The response carries
+  // `must_change_password`, which AuthContext feeds to the passwordGate.
+  login: (email: string, password: string, remember = false) =>
     adminClient
-      .post<AuthResponse>('/auth/login', { username, password, remember })
+      .post<AuthResponse>('/auth/login', { email, password, remember })
+      .then((r) => r.data),
+
+  /**
+   * POST /auth/demo — one-click demo access for prospective customers.
+   *
+   * Takes NO body: the account is resolved server-side from DEMO_LOGIN_EMAIL,
+   * so no credential ever ships in the public JS bundle. Answers 404 when the
+   * demo is disabled (the caller hides its button rather than showing an
+   * error), and otherwise returns the same login-shaped payload as /auth/login
+   * so the token is stored exactly one way.
+   */
+  demoLogin: () => adminClient.post<AuthResponse>('/auth/demo').then((r) => r.data),
+
+  /**
+   * POST /auth/change-password — self-service change, and the ONLY way out of
+   * the forced-reset gate.
+   *
+   * Returns a FRESH token: the server stamps `password_changed_at`, which
+   * retires every token minted before the change, so the caller MUST store the
+   * new one or it logs itself out by succeeding.
+   *
+   * Errors worth handling at the call site: 400 (wrong current password / same
+   * password as before) and 422 with a STRUCTURED detail
+   * `{ code, message, unmet: [...] }` — read it with `unmetKeysFromDetail`,
+   * since `apiErrorDetail` only surfaces string details.
+   */
+  changePassword: (currentPassword: string, newPassword: string) =>
+    adminClient
+      .post<AuthResponse>('/auth/change-password', {
+        current_password: currentPassword,
+        new_password: newPassword,
+      })
       .then((r) => r.data),
 
   getMe: () =>
@@ -120,17 +164,15 @@ export const adminApi = {
   pingPresence: () =>
     adminClient.post<PresenceUser[]>('/admin/presence/ping').then((r) => r.data),
 
-  // Account recovery. All three return a generic { status: "ok" } regardless of
+  // Account recovery. Both return a generic { status: "ok" } regardless of
   // whether an account matched (the backend is anti-enumeration), so the UI
   // shows the same "check your inbox" success either way.
+  //
+  // There is no username recovery any more: the login identifier IS the email
+  // address, so `POST /auth/forgot-username` is retired server-side (410).
   forgotPassword: (identifier: string) =>
     adminClient
       .post<{ status: string }>('/auth/forgot-password', { identifier })
-      .then((r) => r.data),
-
-  forgotUsername: (email: string) =>
-    adminClient
-      .post<{ status: string }>('/auth/forgot-username', { email })
       .then((r) => r.data),
 
   resetPassword: (token: string, newPassword: string) =>

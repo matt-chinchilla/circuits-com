@@ -4,11 +4,10 @@ import { useAuth } from '@admin/contexts/AuthContext';
 import AuthShell from './components/AuthShell';
 import SignIn from './screens/SignIn';
 import ForgotPassword from './screens/ForgotPassword';
-import ForgotUsername from './screens/ForgotUsername';
 import type { Screen } from './screens/types';
 
 export default function LoginPage() {
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, loading, mustChangePassword } = useAuth();
   const [screen, setScreen] = useState<Screen>('signin');
 
   if (loading) {
@@ -22,14 +21,15 @@ export default function LoginPage() {
   }
 
   if (isAuthenticated) {
-    return <Navigate to="/admin" replace />;
+    // A flagged account goes straight to the forced-reset screen — ProtectedRoute
+    // would bounce it there anyway; this just skips the extra hop.
+    return <Navigate to={mustChangePassword ? '/admin/change-password' : '/admin'} replace />;
   }
 
   return (
     <AuthShell>
       {screen === 'signin' && <SignIn go={setScreen} />}
       {screen === 'forgot-password' && <ForgotPassword go={setScreen} />}
-      {screen === 'forgot-username' && <ForgotUsername go={setScreen} />}
     </AuthShell>
   );
 }

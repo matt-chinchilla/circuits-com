@@ -871,6 +871,65 @@
       flex-shrink: 0;
     }
 
+    /* live password-rule checklist (forced "Set a new password" screen) */
+    .rules {
+      list-style: none;
+      margin: -4px 0 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+    }
+    .rule {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      font-size: 12.5px;
+      line-height: 1.35;
+      color: var(--fg3);
+      transition: color 140ms;
+    }
+    .rule-mark {
+      width: 16px;
+      height: 16px;
+      flex-shrink: 0;
+      border-radius: 50%;
+      border: 1.5px solid var(--border);
+      background: #fff;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: background-color 140ms, border-color 140ms;
+    }
+    .rule-mark svg {
+      width: 11px;
+      height: 11px;
+      color: #fff;
+      stroke-width: 3.2;
+    }
+    .rule-ok {
+      color: var(--fg2);
+    }
+    .rule-ok .rule-mark {
+      background: var(--ok);
+      border-color: var(--ok);
+    }
+    .rule-no .rule-mark {
+      border-color: var(--danger);
+    }
+    /* State for screen readers only — sighted users read the mark. */
+    .rule-state {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+      border: 0;
+    }
+
     /* checkbox */
     .remember {
       display: inline-flex;
@@ -1018,19 +1077,50 @@
     .recover-line button:hover {
       text-decoration: underline;
     }
-    .demo-hint {
-      font-family: var(--font-mono);
-      font-size: 11.5px;
-      color: var(--fg4);
-      background: var(--surface);
-      border: 1px solid var(--border-soft);
-      border-radius: 7px;
-      padding: 8px 10px;
-      line-height: 1.5;
+    /* "See Demo" — deliberately quieter than the primary Sign in button */
+    .demo-cta {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 7px;
     }
-    .demo-hint b {
-      color: var(--fg2);
+    .btn-demo {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      height: 42px;
+      padding: 0 16px;
+      white-space: nowrap;
+      font-family: var(--font-body);
+      font-size: 13.5px;
       font-weight: 600;
+      color: var(--fg2);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      cursor: pointer;
+      transition: background-color 140ms, border-color 140ms, color 140ms;
+    }
+    .btn-demo:hover {
+      color: var(--exec-green);
+      border-color: var(--exec-green);
+      background: #fff;
+    }
+    .btn-demo:disabled {
+      opacity: 0.72;
+      cursor: progress;
+    }
+    /* the shared .spinner is white-on-green; recolor it for this quiet button */
+    .btn-demo .spinner {
+      border-color: rgba(10, 74, 46, 0.25);
+      border-top-color: var(--exec-green);
+    }
+    .demo-note {
+      font-size: 12px;
+      line-height: 1.45;
+      color: var(--fg4);
     }
 
     /* success state */
