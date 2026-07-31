@@ -78,9 +78,13 @@ class TestSeedAdminUsers:
         assert db.query(User).filter(User.username == "demo").count() == 1
 
     def test_backfills_email_on_legacy_row(self, db):
-        # Simulate a row seeded before migration 015 (no email).
+        # Simulate a row seeded before migration 015 (no email). Migration
+        # 022 makes email NOT NULL, so a truly absent (None) email is no
+        # longer representable in the DB — "" is the closest legacy-row
+        # stand-in and still exercises the same falsy-email backfill branch
+        # in _seed_admin_user (`if not existing.email:`).
         hashed = bcrypt.hashpw(b"admin", bcrypt.gensalt()).decode()
-        db.add(User(username="matthew", password_hash=hashed, role="admin"))
+        db.add(User(username="matthew", password_hash=hashed, role="admin", email=""))
         db.flush()
         _seed_admin_user(db)
         db.commit()

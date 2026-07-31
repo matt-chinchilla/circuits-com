@@ -202,6 +202,7 @@ def seeded_db(db):
         username="admin",
         password_hash=hashed,
         role="admin",
+        email="admin@test.example",
     )
     db.add(admin_user)
     db.flush()
@@ -212,6 +213,7 @@ def seeded_db(db):
         username="kennedy_user",
         password_hash=hashed,
         role="company",
+        email="kennedy_user@test.example",
         supplier_id=supplier2.id,
     )
     db.add(company_user)

@@ -28,7 +28,12 @@ class TestUserModel:
         from app.models import User
 
         hashed = bcrypt.hashpw("pass123".encode(), bcrypt.gensalt()).decode()
-        user = User(username="admin", password_hash=hashed, role="admin")
+        user = User(
+            username="admin",
+            password_hash=hashed,
+            role="admin",
+            email="admin@test.example",
+        )
         db.add(user)
         db.commit()
 
@@ -48,10 +53,24 @@ class TestUserModel:
         from app.models import User
 
         hashed = bcrypt.hashpw("pass".encode(), bcrypt.gensalt()).decode()
-        db.add(User(username="dupe", password_hash=hashed, role="admin"))
+        db.add(
+            User(
+                username="dupe",
+                password_hash=hashed,
+                role="admin",
+                email="dupe1@test.example",
+            )
+        )
         db.commit()
 
-        db.add(User(username="dupe", password_hash=hashed, role="company"))
+        db.add(
+            User(
+                username="dupe",
+                password_hash=hashed,
+                role="company",
+                email="dupe2@test.example",
+            )
+        )
         with pytest.raises(Exception):
             db.commit()
         db.rollback()

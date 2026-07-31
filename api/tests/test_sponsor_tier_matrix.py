@@ -76,7 +76,13 @@ def admin_user(db):
     from app.models import User
 
     hashed = bcrypt.hashpw(b"testpass123", bcrypt.gensalt()).decode()
-    user = User(id=uuid.uuid4(), username="admin", password_hash=hashed, role="admin")
+    user = User(
+        id=uuid.uuid4(),
+        username="admin",
+        password_hash=hashed,
+        role="admin",
+        email="admin@test.example",
+    )
     db.add(user)
     db.flush()
     return user
