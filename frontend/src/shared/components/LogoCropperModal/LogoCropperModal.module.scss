@@ -63,6 +63,35 @@
   pointer-events: none;
 }
 
+// Rounded-square window — radius mirrors the export's ROUNDED_RADIUS_FRAC
+// (0.17 of the output size) so what you see is what gets baked.
+.maskRounded {
+  border-radius: 17%;
+}
+
+.shapeRow {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.shapeBtn {
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  background: #fff;
+  border: 1px solid #cbd5e0;
+  color: #2d3748;
+}
+
+.shapeBtnActive {
+  background: #0a4a2e;
+  border-color: #0a4a2e;
+  color: #fff;
+}
+
 .zoomRow {
   display: flex;
   align-items: center;

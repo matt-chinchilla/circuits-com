@@ -1,4 +1,7 @@
-export const MIN_ZOOM = 1;
+// Zoom below 1 letterboxes: the image no longer covers the frame and the
+// export pads the margins white — how a wide wordmark fits a square tile.
+export const MIN_ZOOM = 0.5;
+export const DEFAULT_ZOOM = 1; // cover-fit; the historical minimum
 export const MAX_ZOOM = 4;
 export const OUTPUT_SIZE = 256;
 
@@ -19,6 +22,22 @@ export function clampOffset(
     // in lockstep with the geometry tests' `toEqual({ offsetX, offsetY: 0 })`.
     offsetX: Math.min(maxX, Math.max(-maxX, offsetX)) + 0,
     offsetY: Math.min(maxY, Math.max(-maxY, offsetY)) + 0,
+  };
+}
+
+/** Destination rect (output px) for export drawing — mirrors the on-screen
+ *  CSS math exactly, so it is correct at EVERY zoom, including below cover-fit
+ *  where a source-rect approach would read outside the image bounds. */
+export function destRect(
+  imgW: number, imgH: number, frame: number, scale: number,
+  offsetX: number, offsetY: number, out: number,
+): { dx: number; dy: number; dw: number; dh: number } {
+  const k = (out / frame) * scale;
+  return {
+    dx: out / 2 - (imgW * k) / 2 + offsetX * (out / frame),
+    dy: out / 2 - (imgH * k) / 2 + offsetY * (out / frame),
+    dw: imgW * k,
+    dh: imgH * k,
   };
 }
 

@@ -1,7 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { clampOffset, coverScale, MAX_ZOOM, MIN_ZOOM, OUTPUT_SIZE, sourceRect } from './geometry';
+import { clampOffset, coverScale, DEFAULT_ZOOM, destRect, MAX_ZOOM, MIN_ZOOM, OUTPUT_SIZE } from './geometry';
 import styles from './LogoCropperModal.module.scss';
+
+// The crop window: 'circle' keeps the historical full-square export (the
+// render sites circle-clip square data-URLs, so the net look is a circle);
+// 'rounded' bakes a rounded-square alpha window into the export AND makes it
+// 256×254 on purpose — the sites' circle-clip gate keys on
+// naturalWidth === naturalHeight, so the off-square export routes to their
+// letterbox rendering and the baked corners survive.
+export type CropShape = 'circle' | 'rounded';
+const ROUNDED_RADIUS_FRAC = 0.17;
 
 interface LogoCropperModalProps {
   file: File;
@@ -16,7 +25,8 @@ export function LogoCropperModal({ file, title = 'Position your logo', onApply, 
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [dims, setDims] = useState<{ w: number; h: number } | null>(null);
   const [frameSize, setFrameSize] = useState(FRAME_MAX);
-  const [zoom, setZoom] = useState(MIN_ZOOM);
+  const [zoom, setZoom] = useState(DEFAULT_ZOOM);
+  const [shape, setShape] = useState<CropShape>('circle');
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [loadError, setLoadError] = useState(false);
   const imgRef = useRef<HTMLImageElement | null>(null);
@@ -34,7 +44,7 @@ export function LogoCropperModal({ file, title = 'Position your logo', onApply, 
     const url = URL.createObjectURL(file);
     setImageUrl(url);
     setDims(null);
-    setZoom(MIN_ZOOM);
+    setZoom(DEFAULT_ZOOM);
     setOffset({ x: 0, y: 0 });
     setLoadError(false);
     return () => URL.revokeObjectURL(url);
@@ -150,13 +160,25 @@ export function LogoCropperModal({ file, title = 'Position your logo', onApply, 
     if (!img || !dims) return;
     const canvas = document.createElement('canvas');
     canvas.width = OUTPUT_SIZE;
-    canvas.height = OUTPUT_SIZE;
+    // Rounded exports are DELIBERATELY off-square (see CropShape) so the
+    // render sites' square-detect gate letterboxes them instead of
+    // circle-clipping the baked corners away.
+    canvas.height = shape === 'rounded' ? OUTPUT_SIZE - 2 : OUTPUT_SIZE;
     const ctx = canvas.getContext('2d');
     if (!ctx) { onCancel(); return; }
+    if (shape === 'rounded') {
+      const r = OUTPUT_SIZE * ROUNDED_RADIUS_FRAC;
+      ctx.beginPath();
+      ctx.roundRect(0, 0, canvas.width, canvas.height, r);
+      ctx.clip();
+    }
     ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, OUTPUT_SIZE, OUTPUT_SIZE);
-    const rect = sourceRect(dims.w, dims.h, frameSize, scale, offset.x, offset.y);
-    ctx.drawImage(img, rect.sx, rect.sy, rect.size, rect.size, 0, 0, OUTPUT_SIZE, OUTPUT_SIZE);
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    // Destination-space drawing mirrors the on-screen CSS math, so it stays
+    // correct below cover-fit (zoom < 1), where the image letterboxes and a
+    // source-rect read would fall outside the bitmap.
+    const d = destRect(dims.w, dims.h, frameSize, scale, offset.x, offset.y, OUTPUT_SIZE);
+    ctx.drawImage(img, d.dx, d.dy, d.dw, d.dh);
     onApply(canvas);
   };
 
@@ -199,9 +221,30 @@ export function LogoCropperModal({ file, title = 'Position your logo', onApply, 
                   : { visibility: 'hidden' }}
               />
             )}
-            <div className={styles.mask} aria-hidden="true" />
+            <div
+              className={shape === 'rounded' ? `${styles.mask} ${styles.maskRounded}` : styles.mask}
+              aria-hidden="true"
+            />
           </div>
         )}
+        <div className={styles.shapeRow} role="group" aria-label="Crop window shape">
+          <button
+            type="button"
+            className={shape === 'circle' ? `${styles.shapeBtn} ${styles.shapeBtnActive}` : styles.shapeBtn}
+            aria-pressed={shape === 'circle'}
+            onClick={() => setShape('circle')}
+          >
+            Circle
+          </button>
+          <button
+            type="button"
+            className={shape === 'rounded' ? `${styles.shapeBtn} ${styles.shapeBtnActive}` : styles.shapeBtn}
+            aria-pressed={shape === 'rounded'}
+            onClick={() => setShape('rounded')}
+          >
+            Rounded square
+          </button>
+        </div>
         <label className={styles.zoomRow}>
           <span>Zoom</span>
           <input

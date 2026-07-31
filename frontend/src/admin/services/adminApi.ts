@@ -95,6 +95,14 @@ export const adminApi = {
   getMe: () =>
     adminClient.get<UserInfo>('/auth/me').then((r) => r.data),
 
+  // Server-side logo fetch (GET /api/admin/image-proxy) — returns the image
+  // bytes SAME-ORIGIN so the cropper + brand-color extraction can run on a
+  // pasted URL (a direct cross-origin <img> taints the canvas and kills both).
+  fetchImageForCrop: (url: string) =>
+    adminClient
+      .get<Blob>('/admin/image-proxy', { params: { url }, responseType: 'blob' })
+      .then((r) => r.data),
+
   // Account recovery. All three return a generic { status: "ok" } regardless of
   // whether an account matched (the backend is anti-enumeration), so the UI
   // shows the same "check your inbox" success either way.

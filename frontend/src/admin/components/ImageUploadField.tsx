@@ -3,6 +3,7 @@ import { useId, useRef, useState, type ReactElement } from 'react';
 import { LogoCropperModal } from '@shared/components/LogoCropperModal';
 import { canvasToDataUrl } from '@shared/utils/image';
 import { safeImageUrl } from '@shared/utils/url';
+import { adminApi } from '@admin/services/adminApi';
 import styles from './ImageUploadField.module.scss';
 
 interface ImageUploadFieldProps {
@@ -26,8 +27,13 @@ export default function ImageUploadField({
   const fileRef = useRef<HTMLInputElement>(null);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [fetchingUrl, setFetchingUrl] = useState(false);
+  // Last URL auto-fetched on commit — blocks a blur/Enter loop after a cancel.
+  const lastFetchedRef = useRef<string | null>(null);
   const errId = useId();
   const safePreview = safeImageUrl(value);
+  const urlValue = (value ?? '').startsWith('data:') ? '' : (value ?? '');
+  const fetchableUrl = /^https?:\/\/\S+$/i.test(urlValue.trim());
 
   const resetFileInput = () => { if (fileRef.current) fileRef.current.value = ''; }; // allow re-picking the same file
 
@@ -57,6 +63,30 @@ export default function ImageUploadField({
   const cancelCrop = () => {
     setPendingFile(null);
     resetFileInput();
+  };
+
+  // Pull a pasted URL through the admin image-proxy (same-origin bytes), then
+  // run the SAME cropper -> brand-color flow as a file upload. A direct
+  // cross-origin <img> would taint the canvas, which is why the URL path
+  // historically skipped the cropper. On failure the raw URL stays stored —
+  // exactly the old behavior.
+  const fetchAndCrop = async (force = false) => {
+    const raw = urlValue.trim();
+    if (!/^https?:\/\/\S+$/i.test(raw) || fetchingUrl) return;
+    if (!force && raw === lastFetchedRef.current) return;
+    lastFetchedRef.current = raw;
+    setFetchingUrl(true);
+    setError(null);
+    try {
+      const blob = await adminApi.fetchImageForCrop(raw);
+      setPendingFile(new File([blob], 'logo', { type: blob.type || 'image/png' }));
+    } catch {
+      setError(
+        "Couldn't fetch that image for cropping (the host may block it) — the URL was kept as-is.",
+      );
+    } finally {
+      setFetchingUrl(false);
+    }
   };
 
   return (
@@ -102,19 +132,32 @@ export default function ImageUploadField({
             type="text"
             inputMode="url"
             className={styles.urlInput}
-            value={(value ?? '').startsWith('data:') ? '' : (value ?? '')}
+            value={urlValue}
             onChange={(e) => { if (error) setError(null); onChange(e.target.value); }}
+            onBlur={() => { void fetchAndCrop(); }}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void fetchAndCrop(); } }}
             placeholder="…or paste an image URL"
             autoCapitalize="off"
             autoCorrect="off"
             spellCheck={false}
             aria-describedby={error ? errId : undefined}
           />
+          {fetchableUrl && (
+            <button
+              type="button"
+              className={styles.uploadBtn}
+              disabled={fetchingUrl}
+              onClick={() => { void fetchAndCrop(true); }}
+            >
+              {fetchingUrl ? 'Fetching…' : 'Crop & extract colors'}
+            </button>
+          )}
         </div>
       </div>
       {!error && (
         <div className={styles.hint}>
-          {hint ? `${hint} ` : ''}Logos are cropped to a circular frame.
+          {hint ? `${hint} ` : ''}Logos crop to a circle or rounded square — pasted
+          URLs are fetched so you can crop &amp; pick brand colors too.
         </div>
       )}
       {error && <div className={styles.error} id={errId} role="alert">{error}</div>}

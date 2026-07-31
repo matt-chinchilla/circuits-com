@@ -18,15 +18,30 @@ export function loadImage(url: string, crossOrigin?: 'anonymous'): Promise<HTMLI
   });
 }
 
+/** Coarse transparency probe (every 16th pixel) — decides the encode fallback. */
+function canvasHasAlpha(canvas: HTMLCanvasElement): boolean {
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return false;
+  const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+  for (let i = 3; i < data.length; i += 64) {
+    if (data[i] < 255) return true;
+  }
+  return false;
+}
+
 /**
- * Encode a canvas to a bounded data-URL: WebP 0.82 with JPEG 0.85 fallback
- * (Safari cannot encode WebP — toDataURL silently returns PNG there).
+ * Encode a canvas to a bounded data-URL: WebP 0.82 first. Fallback when the
+ * browser can't encode WebP (Safari — toDataURL silently returns PNG there):
+ * JPEG 0.85 for opaque canvases, PNG when the canvas carries transparency
+ * (a rounded-square crop's corners — JPEG would flatten them to black).
  */
 export function canvasToDataUrl(canvas: HTMLCanvasElement): ImageEncodeResult {
   try {
     let dataUrl = canvas.toDataURL('image/webp', 0.82);
     if (!dataUrl.startsWith('data:image/webp')) {
-      dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+      dataUrl = canvasHasAlpha(canvas)
+        ? canvas.toDataURL('image/png')
+        : canvas.toDataURL('image/jpeg', 0.85);
     }
     if (dataUrl.length > MAX_DATA_URL_BYTES) {
       return { ok: false, error: 'That image is too detailed to store. Try a simpler version.' };

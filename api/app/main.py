@@ -6,6 +6,7 @@ from app.admin import setup_admin
 from app.config import settings
 from app.routes import (
     admin_expenses,
+    admin_media,
     admin_messages,
     admin_sponsors,
     analytics,
@@ -44,6 +45,7 @@ app.include_router(parts.router)
 app.include_router(admin_messages.router)
 app.include_router(admin_sponsors.router)
 app.include_router(admin_expenses.router)
+app.include_router(admin_media.router)
 app.include_router(analytics.router)
 app.include_router(sitemap.router)
 
