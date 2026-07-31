@@ -119,6 +119,26 @@ export function attachSalesForcePhysics(
   }
   const leaves = [...bodies.values()].filter((b) => b.kind === 'leaf');
 
+  // Fixed ARENA bounds from the rest layout. Positions are clamped here so a
+  // drag can never grow the data bbox without limit — unclamped, each frame's
+  // setOption refits the view to the larger extents, which remaps the same
+  // pointer pixel farther out in data space: a feedback loop that stretches
+  // the graph "infinitely" (owner-reported). The finite space is a principle
+  // of this chart; the clamp enforces it in data space.
+  const ARENA_PAD = 90;
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+  for (const l of layout) {
+    minX = Math.min(minX, l.rest.x);
+    maxX = Math.max(maxX, l.rest.x);
+    minY = Math.min(minY, l.rest.y);
+    maxY = Math.max(maxY, l.rest.y);
+  }
+  const clampX = (x: number) => Math.min(maxX + ARENA_PAD, Math.max(minX - ARENA_PAD, x));
+  const clampY = (y: number) => Math.min(maxY + ARENA_PAD, Math.max(minY - ARENA_PAD, y));
+
   let destroyed = false;
   let rafId: number | null = null;
   let drag: { body: Body; grabDX: number; grabDY: number } | null = null;
@@ -173,8 +193,8 @@ export function attachSalesForcePhysics(
       }
       leaf.vx += SPRING_K * (tx - leaf.x) - DAMPING * leaf.vx;
       leaf.vy += SPRING_K * (ty - leaf.y) - DAMPING * leaf.vy;
-      leaf.x += leaf.vx;
-      leaf.y += leaf.vy;
+      leaf.x = clampX(leaf.x + leaf.vx);
+      leaf.y = clampY(leaf.y + leaf.vy);
       ke += leaf.vx * leaf.vx + leaf.vy * leaf.vy;
       maxDist = Math.max(maxDist, Math.hypot(tx - leaf.x, ty - leaf.y));
     }
@@ -254,8 +274,8 @@ export function attachSalesForcePhysics(
     }
     const pt = toData(e.offsetX, e.offsetY);
     if (!pt) return;
-    drag.body.x = pt[0] + drag.grabDX;
-    drag.body.y = pt[1] + drag.grabDY;
+    drag.body.x = clampX(pt[0] + drag.grabDX);
+    drag.body.y = clampY(pt[1] + drag.grabDY);
     zr.setCursorStyle('grabbing');
     start();
   };

@@ -69,21 +69,34 @@ function buildGroups(reps: readonly SalesRep[]): BuiltGroup[] {
 
 export default function SalesRepsPanel({ reps, loading }: SalesRepsPanelProps) {
   const groups = useMemo(() => buildGroups(reps), [reps]);
-  const [demoOpen, setDemoOpen] = useState(false);
+  // EVERY cluster collapses to a summary sphere on a plain click (bubble or
+  // legend row) — `toggled` XORs against the default state, which is
+  // collapsed for the not-real "Demo" bucket and expanded for real reps.
+  const [toggled, setToggled] = useState<ReadonlySet<string>>(new Set());
   const [chart, setChart] = useState<EChartsType | null>(null);
   const physicsRef = useRef<SalesForcePhysicsHandle | null>(null);
+
+  const isCollapsed = useCallback(
+    (g: BuiltGroup) => g.demo !== toggled.has(g.name),
+    [toggled],
+  );
+  const toggleGroup = useCallback((name: string) => {
+    setToggled((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  }, []);
 
   const build = useMemo(
     () =>
       buildSalesForce({
-        // The not-real "Demo" bucket collapses to ONE summary sphere (click to
-        // expand) unless the user has opened it — that alone de-clutters the
-        // graph of tier-shell clusters.
-        groups: groups.map((g) => ({ ...g, collapsed: g.demo && !demoOpen })),
+        groups: groups.map((g) => ({ ...g, collapsed: isCollapsed(g) })),
         valueFormat: usdCompact,
         emptyMessage: 'No sponsorships assigned to a rep yet.',
       }),
-    [groups, demoOpen],
+    [groups, isCollapsed],
   );
   const option = build.option;
 
@@ -108,15 +121,15 @@ export default function SalesRepsPanel({ reps, loading }: SalesRepsPanelProps) {
     () => ({
       click: (params: unknown) => {
         // A "click" that was actually a drag (pointer travelled) must not
-        // toggle the Demo bucket — the user was moving the sphere.
+        // toggle the cluster — the user was moving the sphere.
         if (physicsRef.current?.wasDragClick()) return;
         const d = (params as { data?: { groupName?: string; kind?: string } })?.data;
-        if (d && isDemoSeller(d.groupName ?? '') && (d.kind === 'summary' || d.kind === 'hub')) {
-          setDemoOpen((open) => !open);
+        if (d?.groupName && (d.kind === 'summary' || d.kind === 'hub')) {
+          toggleGroup(d.groupName);
         }
       },
     }),
-    [],
+    [toggleGroup],
   );
 
   // The real book excludes the Demo catch-all — its attribution is not real.
@@ -128,8 +141,8 @@ export default function SalesRepsPanel({ reps, loading }: SalesRepsPanelProps) {
         <div className={styles.panelHeadMain}>
           <h3 className={styles.panelTitle}>Book of business</h3>
           <p className={styles.panelSub}>
-            By sales rep &middot; rings = tier &middot; drag a name bubble &middot; click Demo to
-            expand
+            By sales rep &middot; rings = tier &middot; drag a name bubble &middot; click one to
+            collapse/expand
           </p>
         </div>
         <Link to="/admin/sponsors" className={styles.panelLink}>
@@ -160,13 +173,13 @@ export default function SalesRepsPanel({ reps, loading }: SalesRepsPanelProps) {
                 <li
                   key={g.name}
                   className={g.demo ? `${styles.repRow} ${styles.repRowDemo}` : styles.repRow}
-                  onClick={g.demo ? () => setDemoOpen((open) => !open) : undefined}
-                  style={g.demo ? { cursor: 'pointer' } : undefined}
+                  onClick={() => toggleGroup(g.name)}
+                  style={{ cursor: 'pointer' }}
                 >
                   <span className={styles.repSwatch} style={{ background: g.color }} />
                   <span className={styles.repName}>
                     {g.name}
-                    {g.demo ? (demoOpen ? ' ▾' : ' ▸') : ''}
+                    {isCollapsed(g) ? ' ▸' : ' ▾'}
                   </span>
                   <span className={styles.repCount}>
                     {g.accounts} {g.accounts === 1 ? 'account' : 'accounts'}
