@@ -317,10 +317,15 @@ class TestSalesReps:
 
 
 class TestSeedSalesRepAttribution:
-    """`_seed_sponsor_sold_by` — round-robin attribution, run-once semantics."""
+    """`_seed_sponsor_sold_by` — Demo-vs-rep attribution, fill-only-NULL semantics."""
 
-    def test_assigns_reps_round_robin_to_active_sponsors(self, db, seeded_db):
-        from app.db.seed import _SALES_REP_USERNAMES, _seed_admin_user, _seed_sponsor_sold_by
+    def test_attributes_each_active_sponsor_to_a_rep_or_demo(self, db, seeded_db):
+        from app.db.seed import (
+            _DEMO_SELLER,
+            _SALES_REP_USERNAMES,
+            _seed_admin_user,
+            _seed_sponsor_sold_by,
+        )
 
         _seed_admin_user(db)
         parent = seeded_db["parent"]
@@ -336,10 +341,13 @@ class TestSeedSalesRepAttribution:
         _seed_sponsor_sold_by(db)
         db.commit()
 
+        # Every active sponsorship is attributed to a real rep OR the "Demo"
+        # catch-all (real distributors + seeded demo suppliers -> Demo; genuine
+        # hand-added accounts -> a rep). None is left unattributed.
+        valid = set(_SALES_REP_USERNAMES) | {_DEMO_SELLER}
         assigned = [s.sold_by for s in db.query(Sponsor).all()]
-        assert all(name in _SALES_REP_USERNAMES for name in assigned)
-        # 3 sponsors (incl. the conftest Gold) across 3 reps → one each.
-        assert sorted(assigned) == sorted(_SALES_REP_USERNAMES)
+        assert assigned, "expected the seed to attribute the active sponsors"
+        assert all(name in valid for name in assigned)
 
     def test_is_idempotent_and_never_reshuffles(self, db, seeded_db):
         from app.db.seed import _seed_admin_user, _seed_sponsor_sold_by

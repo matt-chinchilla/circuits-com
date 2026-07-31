@@ -469,7 +469,14 @@ export default function AdminLayout({ children, role = 'admin' }: AdminLayoutPro
           </div>
         </header>
 
-        <div key={theme} className={styles.content}>
+        <div
+          key={
+            location.pathname === '/admin' || location.pathname.startsWith('/admin/dashboard')
+              ? theme
+              : 'admin'
+          }
+          className={styles.content}
+        >
           {children}
         </div>
       </div>

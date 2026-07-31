@@ -180,8 +180,10 @@ export function salesForceOption(input: SalesForceOptionInput): EChartsCoreOptio
           fontSize: 11,
           fontWeight: 600,
           color: CHART_FG1,
-          // White halo so a caption stays legible over a neighbouring bubble.
-          textBorderColor: '#ffffff',
+          // Card-coloured halo so a caption stays legible over a neighbouring
+          // bubble — CHART_CARD (not literal white) so it stays correct in dark
+          // mode, where a white halo would smear near-white text into a blob.
+          textBorderColor: CHART_CARD,
           textBorderWidth: 3,
         },
       });

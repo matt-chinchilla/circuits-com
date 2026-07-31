@@ -35,6 +35,15 @@ export function AdminThemeProvider({ children }: { children: ReactNode }) {
     return initial;
   });
 
+  // Re-apply on mount AND on every change. The initializer stamp above covers the
+  // first paint (so charts init with the right chrome), but a browser back/forward
+  // that re-mounts the provider — or React StrictMode's setup/cleanup/setup in dev —
+  // needs this to RE-stamp <html> + chart chrome after the unmount cleanup ran.
+  // Without it, going back into /admin (or dev double-invoke) silently reverts to light.
+  useEffect(() => {
+    applyTheme(theme);
+  }, [theme]);
+
   useEffect(() => {
     // Leaving the admin SPA — drop the attribute so it can't tint anything else.
     return () => {
