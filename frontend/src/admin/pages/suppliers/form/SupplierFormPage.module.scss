@@ -22,7 +22,7 @@
   align-items: center;
   gap: 6px;
   font-size: 13px;
-  color: #6b7280;
+  color: var(--a-fg3);
   text-decoration: none;
   background: transparent;
   border: none;
@@ -34,21 +34,21 @@
   align-self: flex-start;
 
   &:hover {
-    color: $executive-blue;
+    color: var(--a-primary);
   }
 }
 
 .title {
   font-size: 28px;
   font-weight: 700;
-  color: $admin-text-primary;
+  color: var(--a-fg1);
   margin: 0;
   letter-spacing: -0.01em;
 }
 
 .subtitle {
   font-size: 13px;
-  color: #6b7280;
+  color: var(--a-fg3);
   margin: 0;
 }
 
@@ -61,20 +61,20 @@
 }
 
 .panel {
-  background: #ffffff;
+  background: var(--a-card);
   border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--a-shadow-sm);
 }
 
 .panelHead {
   padding: 14px 20px;
-  border-bottom: 1px solid #f0f2f5;
+  border-bottom: 1px solid var(--a-border-soft);
 }
 
 .panelTitle {
   font-size: 14px;
   font-weight: 700;
-  color: $admin-text-primary;
+  color: var(--a-fg1);
   margin: 0;
   letter-spacing: -0.005em;
 }
@@ -111,21 +111,21 @@
   gap: 4px;
   font-size: 13px;
   font-weight: 600;
-  color: #374151;
+  color: var(--a-fg2);
 }
 
 .fieldReq {
-  color: $error-red;
+  color: var(--a-danger);
 }
 
 .fieldHint {
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--a-fg4);
 }
 
 .fieldError {
   font-size: 12px;
-  color: $error-red;
+  color: var(--a-danger);
 }
 
 .input {
@@ -134,21 +134,21 @@
   padding: 0 12px;
   font-size: 14px;
   font-family: inherit;
-  color: $admin-text-primary;
-  background: #ffffff;
-  border: 1px solid #d1d5db;
+  color: var(--a-fg1);
+  background: var(--a-card);
+  border: 1px solid var(--a-border);
   border-radius: 6px;
   outline: none;
   box-sizing: border-box;
   transition: border-color 150ms ease, box-shadow 150ms ease;
 
   &:focus {
-    border-color: $executive-blue;
+    border-color: var(--a-primary);
     box-shadow: 0 0 0 3px rgba(10, 74, 46, 0.08);
   }
 
   &::placeholder {
-    color: #9ca3af;
+    color: var(--a-fg4);
   }
 }
 
@@ -158,10 +158,10 @@
 }
 
 .inputError {
-  border-color: $error-red;
+  border-color: var(--a-danger);
 
   &:focus {
-    border-color: $error-red;
+    border-color: var(--a-danger);
     box-shadow: 0 0 0 3px rgba(192, 57, 43, 0.10);
   }
 }
@@ -175,15 +175,15 @@
   align-items: stretch;
   width: 100%;
   height: 38px;
-  background: #ffffff;
-  border: 1px solid #d1d5db;
+  background: var(--a-card);
+  border: 1px solid var(--a-border);
   border-radius: 6px;
   overflow: hidden;
   box-sizing: border-box;
   transition: border-color 150ms ease, box-shadow 150ms ease;
 
   &:focus-within {
-    border-color: $executive-blue;
+    border-color: var(--a-primary);
     box-shadow: 0 0 0 3px rgba(10, 74, 46, 0.08);
   }
 }
@@ -192,9 +192,9 @@
   display: inline-flex;
   align-items: center;
   padding: 0 10px;
-  background: #f3f4f6;
-  border-right: 1px solid #e5e7eb;
-  color: #6b7280;
+  background: var(--a-hover);
+  border-right: 1px solid var(--a-border);
+  color: var(--a-fg3);
   font-family: $admin-font-mono;
   font-size: 13px;
   user-select: none;
@@ -221,9 +221,9 @@
   padding: 10px 12px;
   font-size: 14px;
   font-family: inherit;
-  color: $admin-text-primary;
-  background: #ffffff;
-  border: 1px solid #d1d5db;
+  color: var(--a-fg1);
+  background: var(--a-card);
+  border: 1px solid var(--a-border);
   border-radius: 6px;
   outline: none;
   resize: vertical;
@@ -231,12 +231,12 @@
   transition: border-color 150ms ease, box-shadow 150ms ease;
 
   &:focus {
-    border-color: $executive-blue;
+    border-color: var(--a-primary);
     box-shadow: 0 0 0 3px rgba(10, 74, 46, 0.08);
   }
 
   &::placeholder {
-    color: #9ca3af;
+    color: var(--a-fg4);
   }
 }
 
@@ -267,11 +267,11 @@
 }
 
 .btnPrimary {
-  background: $executive-blue;
+  background: var(--a-primary);
   color: #ffffff;
 
   &:hover:not(:disabled) {
-    background: #083b24;
+    background: var(--a-primary-hover);
   }
 
   &:disabled {
@@ -281,12 +281,12 @@
 }
 
 .btnGhost {
-  background: #ffffff;
-  color: $admin-text-primary;
-  border-color: #e5e7eb;
+  background: var(--a-card);
+  color: var(--a-fg1);
+  border-color: var(--a-border);
 
   &:hover {
-    background: #f0f2f5;
+    background: var(--a-border-soft);
   }
 }
 
@@ -309,11 +309,11 @@
 }
 
 .toastSuccess {
-  background: #15803d;
+  background: var(--a-ok);
 }
 
 .toastError {
-  background: $error-red;
+  background: var(--a-danger);
 }
 
 // ─── States ─────────────────────────────────────────────────────────────────
@@ -324,7 +324,7 @@
   justify-content: center;
   min-height: 300px;
   font-size: 14px;
-  color: #6b7280;
+  color: var(--a-fg3);
 }
 
 // ─── Delete action + confirmation modal ─────────────────────────────────────
@@ -334,7 +334,7 @@
 }
 
 .btnDanger {
-  background: $error-red;
+  background: var(--a-danger);
   color: #ffffff;
 
   &:hover:not(:disabled) {
@@ -365,7 +365,7 @@
 }
 
 .modal {
-  background: #ffffff;
+  background: var(--a-card);
   border-radius: 10px;
   padding: 24px;
   max-width: 460px;
@@ -383,13 +383,13 @@
   margin: 0 0 8px;
   font-size: 17px;
   font-weight: 700;
-  color: $admin-text-primary;
+  color: var(--a-fg1);
 }
 
 .modalBody {
   margin: 0 0 20px;
   font-size: 14px;
-  color: #6b7280;
+  color: var(--a-fg3);
   line-height: 1.5;
 }
 

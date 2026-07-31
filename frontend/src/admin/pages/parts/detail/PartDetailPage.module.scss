@@ -5,21 +5,21 @@
 // (1fr 320px) — main panel = .kv-list of part fields, sidebar panel = mini
 // stats (best price, distributor count). Listings render below in a panel.
 
-// ─── Local admin tokens (intentionally un-themed) ──────────────────────────
-$a-bg: #f5f7fa;
-$a-card: #ffffff;
-$a-border: #e5e7eb;
-$a-border-soft: #f0f2f5;
-$a-fg1: #111827;
-$a-fg2: #4b5563;
-$a-fg3: #6b7280;
-$a-fg4: #9ca3af;
-$a-primary: $executive-blue;
-$a-primary-hover: #083b24;
-$a-danger: $error-red;
-$a-ok: #15803d;
-$a-radius: 8px;
-$a-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
+// ─── Local admin tokens (follow the admin light/dark theme) ────────────────
+$a-bg: var(--a-bg);
+$a-card: var(--a-card);
+$a-border: var(--a-border);
+$a-border-soft: var(--a-border-soft);
+$a-fg1: var(--a-fg1);
+$a-fg2: var(--a-fg2);
+$a-fg3: var(--a-fg3);
+$a-fg4: var(--a-fg4);
+$a-primary: var(--a-primary);
+$a-primary-hover: var(--a-primary-hover);
+$a-danger: var(--a-danger);
+$a-ok: var(--a-ok);
+$a-radius: var(--a-radius);
+$a-shadow-sm: var(--a-shadow-sm);
 
 .page {
   display: flex;
@@ -161,7 +161,7 @@ $a-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .btnGhost {
-  background: #ffffff;
+  background: var(--a-card);
   color: $a-fg1;
   border-color: $a-border;
 
@@ -171,7 +171,7 @@ $a-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .btnDangerGhost {
-  background: #ffffff;
+  background: var(--a-card);
   color: $a-danger;
   border-color: rgba(192, 57, 43, 0.3);
 
@@ -297,7 +297,7 @@ $a-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .statusActive {
-  color: #15803d;
+  color: var(--a-ok);
   background: rgba(34, 197, 94, 0.12);
   border-color: rgba(34, 197, 94, 0.3);
 }
@@ -432,7 +432,7 @@ $a-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .stockLow {
-  color: #d97706;
+  color: var(--a-warn);
 }
 
 .stockOut {
@@ -473,7 +473,7 @@ $a-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
   font-family: $font-mono;
   font-size: 12px;
   color: $a-fg2;
-  background: #ffffff;
+  background: var(--a-card);
   padding: 3px 9px;
   border-radius: 4px;
   border: 1px solid $a-border;
@@ -525,7 +525,7 @@ $a-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .modal {
-  background: #ffffff;
+  background: var(--a-card);
   border-radius: 10px;
   padding: 24px;
   max-width: 440px;

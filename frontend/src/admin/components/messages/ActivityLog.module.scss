@@ -2,21 +2,21 @@
 @use '@admin/styles/variables' as *;
 
 .panel {
-  background: $admin-card-bg;
-  border: 1px solid #f0f2f5;
+  background: var(--a-card);
+  border: 1px solid var(--a-border-soft);
   border-radius: $admin-border-radius;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--a-shadow-sm);
 }
 
 .panelHead {
   padding: 14px 20px;
-  border-bottom: 1px solid #f0f2f5;
+  border-bottom: 1px solid var(--a-border-soft);
 }
 
 .panelTitle {
   font-size: 14px;
   font-weight: 700;
-  color: $admin-text-primary;
+  color: var(--a-fg1);
   margin: 0;
   letter-spacing: -0.005em;
 }
@@ -38,8 +38,8 @@
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  background: $admin-bg;
-  color: #6b7280;
+  background: var(--a-bg);
+  color: var(--a-fg3);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -49,6 +49,6 @@
 .alogText {
   font-family: $admin-font-mono;
   font-size: 11px;
-  color: #4b5563;
+  color: var(--a-fg2);
   line-height: 1.4;
 }

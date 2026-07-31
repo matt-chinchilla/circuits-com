@@ -15,7 +15,7 @@
 
 .contactSender {
   padding: 28px 24px;
-  border-right: 1px solid #f0f2f5;
+  border-right: 1px solid var(--a-border-soft);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -24,7 +24,7 @@
 
   @media (max-width: 720px) {
     border-right: none;
-    border-bottom: 1px solid #f0f2f5;
+    border-bottom: 1px solid var(--a-border-soft);
   }
 }
 
@@ -45,13 +45,13 @@
 .senderName {
   font-size: 15px;
   font-weight: 700;
-  color: $admin-text-primary;
+  color: var(--a-fg1);
   margin-top: 4px;
 }
 
 .senderEmail {
   font-size: 12px;
-  color: $executive-blue;
+  color: var(--a-primary);
   text-decoration: none;
   word-break: break-all;
   font-family: $admin-font-mono;
@@ -67,9 +67,9 @@
   font-family: $admin-font-mono;
   font-size: 10px;
   font-weight: 700;
-  background: $admin-bg;
+  background: var(--a-bg);
   border-radius: 3px;
-  color: #6b7280;
+  color: var(--a-fg3);
   letter-spacing: 0.06em;
 }
 
@@ -85,7 +85,7 @@
   margin: 0 0 14px;
   font-size: 15px;
   line-height: 1.65;
-  color: $admin-text-primary;
+  color: var(--a-fg1);
   text-wrap: pretty;
 }
 
@@ -99,16 +99,16 @@
   gap: 8px;
   flex-wrap: wrap;
   padding: 10px 14px;
-  background: $admin-bg;
-  border: 1px solid #f0f2f5;
+  background: var(--a-bg);
+  border: 1px solid var(--a-border-soft);
   border-radius: 6px;
   font-family: $admin-font-mono;
   font-size: 11px;
-  color: #9ca3af;
+  color: var(--a-fg4);
 }
 
 .dotSep {
-  color: #9ca3af;
+  color: var(--a-fg4);
   margin: 0;
 }
 
@@ -126,7 +126,7 @@
   grid-template-columns: repeat(3, 1fr);
   gap: 16px;
   padding: 18px 20px;
-  background: $admin-bg;
+  background: var(--a-bg);
   border-radius: 8px;
 
   @media (max-width: 720px) {
@@ -144,7 +144,7 @@
   font-family: $admin-font-mono;
   font-size: 10px;
   font-weight: 700;
-  color: #9ca3af;
+  color: var(--a-fg4);
   letter-spacing: 0.08em;
   margin-bottom: 4px;
 }
@@ -152,7 +152,7 @@
 .jsVal {
   font-size: 16px;
   font-weight: 700;
-  color: $admin-text-primary;
+  color: var(--a-fg1);
 }
 
 .jsLink {
@@ -161,7 +161,7 @@
   gap: 4px;
   font-family: $admin-font-mono;
   font-size: 12px;
-  color: $executive-blue;
+  color: var(--a-primary);
   text-decoration: none;
   cursor: pointer;
 }
@@ -173,7 +173,7 @@
 .jsSub {
   font-family: $admin-font-mono;
   font-size: 12px;
-  color: #6b7280;
+  color: var(--a-fg3);
   margin-top: 2px;
 }
 
@@ -250,20 +250,20 @@
   gap: 4px;
   padding: 5px 10px 5px 8px;
   font-size: 12px;
-  color: #4b5563;
-  background: $admin-bg;
-  border: 1px solid #f0f2f5;
+  color: var(--a-fg2);
+  background: var(--a-bg);
+  border: 1px solid var(--a-border-soft);
   border-radius: 999px;
 }
 
 .catPill svg {
-  color: $executive-blue;
+  color: var(--a-primary);
 }
 
 .joinMsg {
   margin: 0;
   font-size: 14px;
-  color: $admin-text-primary;
+  color: var(--a-fg1);
   line-height: 1.6;
 }
 
@@ -279,8 +279,8 @@
 .kwHero {
   position: relative;
   padding: 28px 24px;
-  background: $admin-card-bg;
-  border: 1px solid $executive-blue;
+  background: var(--a-card);
+  border: 1px solid var(--a-primary);
   border-radius: 8px;
   box-shadow: inset 0 0 0 1px rgba(10, 74, 46, 0.08);
   text-align: center;
@@ -292,7 +292,7 @@
   position: absolute;
   width: 24px;
   height: 1px;
-  background: $executive-blue;
+  background: var(--a-primary);
 }
 
 .kwHero::before {
@@ -310,7 +310,7 @@
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.12em;
-  color: #9ca3af;
+  color: var(--a-fg4);
   margin-bottom: 12px;
 }
 
@@ -318,12 +318,12 @@
   font-family: $admin-font-mono;
   font-size: 36px;
   font-weight: 700;
-  color: $executive-blue;
+  color: var(--a-primary);
   letter-spacing: -0.01em;
 }
 
 .kwMeta {
-  background: $admin-bg;
+  background: var(--a-bg);
   border-radius: 6px;
   padding: 8px 0;
 }
@@ -337,7 +337,7 @@
   grid-template-columns: 140px 1fr;
   gap: 12px;
   padding: 10px 20px;
-  border-bottom: 1px solid #f0f2f5;
+  border-bottom: 1px solid var(--a-border-soft);
 }
 
 .kvList > div:last-child {
@@ -347,7 +347,7 @@
 .kvList dt {
   font-size: 12px;
   font-weight: 600;
-  color: #6b7280;
+  color: var(--a-fg3);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   margin: 0;
@@ -356,7 +356,7 @@
 .kvList dd {
   margin: 0;
   font-size: 14px;
-  color: $admin-text-primary;
+  color: var(--a-fg1);
 }
 
 .mono {

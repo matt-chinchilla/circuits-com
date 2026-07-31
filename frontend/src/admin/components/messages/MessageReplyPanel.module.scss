@@ -8,23 +8,23 @@
   gap: 10px;
   width: 100%;
   padding: 14px 20px;
-  background: $admin-card-bg;
-  border: 1px solid #e5e7eb;
+  background: var(--a-card);
+  border: 1px solid var(--a-border);
   border-radius: $admin-border-radius;
   font-family: inherit;
   font-size: 14px;
   font-weight: 600;
-  color: $executive-blue;
+  color: var(--a-primary);
   cursor: pointer;
   text-align: left;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--a-shadow-sm);
   transition:
     border-color 150ms,
     box-shadow 150ms;
 }
 
 .replyBar:hover {
-  border-color: $executive-blue;
+  border-color: var(--a-primary);
   box-shadow: 0 0 0 3px rgba(10, 74, 46, 0.06);
 }
 
@@ -32,20 +32,20 @@
   margin-left: auto;
   font-family: $admin-font-mono;
   font-size: 11px;
-  color: #9ca3af;
+  color: var(--a-fg4);
   font-weight: 500;
 }
 
 // Expanded panel
 .replyPanel {
-  background: $admin-card-bg;
-  border: 1px solid #e5e7eb;
+  background: var(--a-card);
+  border: 1px solid var(--a-border);
   border-radius: $admin-border-radius;
   padding: 18px 20px;
   display: flex;
   flex-direction: column;
   gap: 14px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--a-shadow-sm);
   animation: panelIn 200ms ease-out;
 }
 
@@ -69,16 +69,16 @@
 
 .replyTo {
   font-size: 13px;
-  color: #4b5563;
+  color: var(--a-fg2);
 }
 
 .replyTo b {
-  color: $admin-text-primary;
+  color: var(--a-fg1);
 }
 
 .mono {
   font-family: $admin-font-mono;
-  color: #6b7280;
+  color: var(--a-fg3);
   font-size: 12px;
 }
 
@@ -91,14 +91,14 @@
   border-radius: 4px;
   border: none;
   background: transparent;
-  color: #6b7280;
+  color: var(--a-fg3);
   cursor: pointer;
   transition: all 150ms;
 }
 
 .collapseBtn:hover {
-  background: #f0f2f5;
-  color: $admin-text-primary;
+  background: var(--a-border-soft);
+  color: var(--a-fg1);
 }
 
 .replyTemplates {
@@ -115,25 +115,25 @@
   font-family: inherit;
   font-size: 12px;
   font-weight: 500;
-  background: $admin-bg;
-  color: #4b5563;
-  border: 1px solid #f0f2f5;
+  background: var(--a-bg);
+  color: var(--a-fg2);
+  border: 1px solid var(--a-border-soft);
   border-radius: 999px;
   cursor: pointer;
   transition: all 120ms;
 }
 
 .tmplChip svg {
-  color: #6b7280;
+  color: var(--a-fg3);
 }
 
 .tmplChip:hover {
-  border-color: $executive-blue;
-  color: $executive-blue;
+  border-color: var(--a-primary);
+  color: var(--a-primary);
 }
 
 .tmplChip:hover svg {
-  color: $executive-blue;
+  color: var(--a-primary);
 }
 
 .replyText {
@@ -142,9 +142,9 @@
   font-family: inherit;
   font-size: 14px;
   line-height: 1.6;
-  color: $admin-text-primary;
-  background: $admin-card-bg;
-  border: 1px solid #e5e7eb;
+  color: var(--a-fg1);
+  background: var(--a-card);
+  border: 1px solid var(--a-border);
   border-radius: 6px;
   outline: none;
   resize: vertical;
@@ -155,7 +155,7 @@
 }
 
 .replyText:focus {
-  border-color: $executive-blue;
+  border-color: var(--a-primary);
   box-shadow: 0 0 0 3px rgba(10, 74, 46, 0.08);
 }
 
@@ -169,7 +169,7 @@
 .replyFrom {
   font-family: $admin-font-mono;
   font-size: 11px;
-  color: #9ca3af;
+  color: var(--a-fg4);
 }
 
 .sendBtn {
@@ -183,14 +183,14 @@
   line-height: 1;
   border-radius: 6px;
   border: none;
-  background: $executive-blue;
-  color: $admin-card-bg;
+  background: var(--a-primary);
+  color: #ffffff; // white on primary — correct in both themes
   cursor: pointer;
   transition: background-color 150ms;
 }
 
 .sendBtn:hover:not(:disabled) {
-  background: #083b24;
+  background: var(--a-primary-hover);
 }
 
 .sendBtn:disabled {

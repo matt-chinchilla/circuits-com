@@ -14,7 +14,7 @@
 }
 
 .separator {
-  color: #9ca3af;
+  color: var(--a-fg4);
   font-size: 20px;
   line-height: 1;
 }
@@ -29,6 +29,6 @@
 }
 
 .current {
-  color: #374151;
+  color: var(--a-fg2);
   font-weight: 600;
 }

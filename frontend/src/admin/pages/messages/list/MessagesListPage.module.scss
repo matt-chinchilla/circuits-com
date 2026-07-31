@@ -12,22 +12,22 @@
 .title {
   font-size: 28px;
   font-weight: 700;
-  color: $admin-text-primary;
+  color: var(--a-fg1);
   margin: 0;
   letter-spacing: -0.01em;
 }
 
 .subtitle {
   font-size: 13px;
-  color: #6b7280;
+  color: var(--a-fg3);
   margin: 0;
 }
 
 // Card panel
 .panel {
-  background: $admin-card-bg;
+  background: var(--a-card);
   border-radius: $admin-border-radius;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--a-shadow-sm);
   overflow: hidden;
 }
 
@@ -38,7 +38,7 @@
   justify-content: space-between;
   gap: 16px;
   padding: 14px 20px;
-  border-bottom: 1px solid #f0f2f5;
+  border-bottom: 1px solid var(--a-border-soft);
   flex-wrap: wrap;
 }
 
@@ -57,22 +57,22 @@
   font-size: 13px;
   font-weight: 600;
   background: transparent;
-  color: #4b5563;
-  border: 1px solid #e5e7eb;
+  color: var(--a-fg2);
+  border: 1px solid var(--a-border);
   border-radius: 999px;
   cursor: pointer;
   transition: all 150ms;
 }
 
 .filterChip.active {
-  background: $executive-blue;
-  color: $admin-card-bg;
-  border-color: $executive-blue;
+  background: var(--a-primary);
+  color: #ffffff; // white text on colored bg — correct in both themes
+  border-color: var(--a-primary);
 }
 
 .filterChip:hover:not(.active) {
-  border-color: $executive-blue;
-  color: $executive-blue;
+  border-color: var(--a-primary);
+  color: var(--a-primary);
 }
 
 .chipCount {
@@ -107,9 +107,9 @@
   padding: 0 32px 0 12px;
   font-family: inherit;
   font-size: 13px;
-  color: $admin-text-primary;
-  background: $admin-card-bg;
-  border: 1px solid #e5e7eb;
+  color: var(--a-fg1);
+  background: var(--a-card);
+  border: 1px solid var(--a-border);
   border-radius: 6px;
   outline: none;
   cursor: pointer;
@@ -120,7 +120,7 @@
 }
 
 .select:focus {
-  border-color: $executive-blue;
+  border-color: var(--a-primary);
   box-shadow: 0 0 0 3px rgba(10, 74, 46, 0.08);
 }
 
@@ -132,8 +132,8 @@
   min-width: 320px;
   height: 36px;
   padding: 0 12px;
-  background: $admin-card-bg;
-  border: 1px solid #e5e7eb;
+  background: var(--a-card);
+  border: 1px solid var(--a-border);
   border-radius: 6px;
   transition:
     border-color 150ms,
@@ -141,12 +141,12 @@
 }
 
 .search:focus-within {
-  border-color: $executive-blue;
+  border-color: var(--a-primary);
   box-shadow: 0 0 0 3px rgba(10, 74, 46, 0.08);
 }
 
 .search svg {
-  color: #9ca3af;
+  color: var(--a-fg4);
 }
 
 .searchInput {
@@ -155,12 +155,12 @@
   outline: none;
   font-family: inherit;
   font-size: 13px;
-  color: $admin-text-primary;
+  color: var(--a-fg1);
   background: transparent;
 }
 
 .searchInput::placeholder {
-  color: #9ca3af;
+  color: var(--a-fg4);
 }
 
 // Table — auto layout. table-layout:fixed over-constrained the columns at
@@ -178,25 +178,25 @@
 
 .row td {
   padding: 14px 12px;
-  border-bottom: 1px solid #f0f2f5;
+  border-bottom: 1px solid var(--a-border-soft);
   vertical-align: middle;
   position: relative;
 }
 
 .row:hover td {
-  background: #f0f2f5;
+  background: var(--a-border-soft);
 }
 
 .isNew td {
-  background: #fafbfc;
+  background: var(--a-hover);
 }
 
 .isNew:hover td {
-  background: #f0f2f5;
+  background: var(--a-border-soft);
 }
 
 .isNew td:first-child {
-  border-left: 2px solid $error-red;
+  border-left: 2px solid var(--a-danger);
 }
 
 .isArc td {
@@ -213,7 +213,7 @@
 }
 
 .cTime {
-  color: #6b7280;
+  color: var(--a-fg3);
   text-align: right;
   padding-right: 18px !important;
   font-family: $admin-font-mono;
@@ -240,7 +240,7 @@
 .senderName {
   font-size: 14px;
   font-weight: 600;
-  color: $admin-text-primary;
+  color: var(--a-fg1);
   display: flex;
   align-items: center;
   gap: 6px;
@@ -252,7 +252,7 @@
 .senderEmail {
   font-family: $admin-font-mono;
   font-size: 12px;
-  color: #6b7280;
+  color: var(--a-fg3);
   margin-top: 2px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -261,7 +261,7 @@
 
 .subject {
   font-size: 14px;
-  color: $admin-text-primary;
+  color: var(--a-fg1);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -272,7 +272,7 @@
 }
 
 .row:not(.isNew) .subject {
-  color: #4b5563;
+  color: var(--a-fg2);
 }
 
 // PCB-grid hover background — subtle brand easter egg.
@@ -296,13 +296,13 @@
 // Cluster headers (Today / Yesterday / etc.)
 .cluster td {
   padding: 12px 18px 6px !important;
-  background: $admin-card-bg !important;
+  background: var(--a-card) !important;
   font-family: $admin-font-mono;
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #9ca3af;
+  color: var(--a-fg4);
   border-bottom: none;
   position: sticky;
   top: $admin-topbar-height;
@@ -316,7 +316,7 @@
   align-items: center;
   gap: 12px;
   padding: 60px 20px;
-  color: #6b7280;
+  color: var(--a-fg3);
   font-size: 14px;
 }
 
@@ -327,15 +327,15 @@
   font-family: inherit;
   font-size: 13px;
   font-weight: 600;
-  background: $admin-card-bg;
-  color: $admin-text-primary;
-  border: 1px solid #e5e7eb;
+  background: var(--a-card);
+  color: var(--a-fg1);
+  border: 1px solid var(--a-border);
   border-radius: 6px;
   cursor: pointer;
 }
 
 .clearBtn:hover {
-  background: $admin-bg;
+  background: var(--a-bg);
 }
 
 // Per-row action menu
@@ -348,14 +348,14 @@
   border-radius: 4px;
   border: none;
   background: transparent;
-  color: #6b7280;
+  color: var(--a-fg3);
   cursor: pointer;
   transition: all 150ms;
 }
 
 .rowAction:hover {
-  background: #f0f2f5;
-  color: $admin-text-primary;
+  background: var(--a-border-soft);
+  color: var(--a-fg1);
 }
 
 .menuBackdrop {
@@ -370,8 +370,8 @@
   top: 100%;
   z-index: 30;
   min-width: 180px;
-  background: $admin-card-bg;
-  border: 1px solid #e5e7eb;
+  background: var(--a-card);
+  border: 1px solid var(--a-border);
   border-radius: 8px;
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12);
   padding: 4px;
@@ -400,18 +400,18 @@
   background: transparent;
   font-family: inherit;
   font-size: 13px;
-  color: $admin-text-primary;
+  color: var(--a-fg1);
   border-radius: 4px;
   cursor: pointer;
   text-align: left;
 }
 
 .rowMenu button:hover {
-  background: #f0f2f5;
+  background: var(--a-border-soft);
 }
 
 .rowMenu .danger {
-  color: $error-red;
+  color: var(--a-danger);
 }
 
 .rowMenu .danger:hover {
@@ -420,7 +420,7 @@
 
 .rowMenuSep {
   height: 1px;
-  background: #f0f2f5;
+  background: var(--a-border-soft);
   margin: 4px 0;
 }
 
@@ -436,8 +436,8 @@
   border-radius: 6px;
   font-size: 13px;
   font-weight: 600;
-  color: $admin-card-bg;
-  background: #15803d;
+  color: #ffffff; // white text on colored bg — correct in both themes
+  background: var(--a-ok);
   z-index: 1100;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
   animation: toastIn 200ms ease-out;

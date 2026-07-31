@@ -3,23 +3,23 @@
 // AttachListingPage — "add an existing part to a supplier's catalog".
 // Visual structure is lifted 1:1 from PartFormPage (.page-head → .form-grid
 // stack of .panel cards → .form-actions) so the two part-writing surfaces
-// read as one console. Admin chrome is intentionally un-themed.
+// read as one console. Tokens follow the admin light/dark theme.
 
-// ─── Local admin tokens (intentionally un-themed) ──────────────────────────
-$a-bg: #f5f7fa;
-$a-card: #ffffff;
-$a-border: #e5e7eb;
-$a-border-soft: #f0f2f5;
-$a-fg1: #111827;
-$a-fg2: #4b5563;
-$a-fg3: #6b7280;
-$a-fg4: #9ca3af;
-$a-primary: $executive-blue;
-$a-primary-hover: #083b24;
-$a-danger: $error-red;
-$a-ok: #15803d;
-$a-radius: 8px;
-$a-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
+// ─── Local admin tokens — follow the admin light/dark theme (--a-* vars) ───
+$a-bg: var(--a-bg);
+$a-card: var(--a-card);
+$a-border: var(--a-border);
+$a-border-soft: var(--a-border-soft);
+$a-fg1: var(--a-fg1);
+$a-fg2: var(--a-fg2);
+$a-fg3: var(--a-fg3);
+$a-fg4: var(--a-fg4);
+$a-primary: var(--a-primary);
+$a-primary-hover: var(--a-primary-hover);
+$a-danger: var(--a-danger);
+$a-ok: var(--a-ok);
+$a-radius: var(--a-radius);
+$a-shadow-sm: var(--a-shadow-sm);
 
 .page {
   display: flex;
@@ -242,7 +242,7 @@ $a-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
   font-family: inherit;
   font-size: 14px;
   color: $a-fg1;
-  background: #ffffff;
+  background: $a-card;
   border: 1px solid $a-border;
   border-radius: 6px;
   padding: 9px 12px;
@@ -377,7 +377,7 @@ $a-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .btnGhost {
-  background: #ffffff;
+  background: $a-card;
   color: $a-fg1;
   border-color: $a-border;
 

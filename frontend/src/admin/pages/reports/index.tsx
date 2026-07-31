@@ -172,7 +172,7 @@ function ReportsRevenueChart({ series }: ReportsRevenueChartProps) {
               x2={W - PAD_R}
               y1={yScale(t)}
               y2={yScale(t)}
-              stroke="#e7e5e0"
+              style={{ stroke: 'var(--a-grid)' }}
               strokeDasharray="3 4"
             />
             <text
@@ -180,7 +180,7 @@ function ReportsRevenueChart({ series }: ReportsRevenueChartProps) {
               y={yScale(t) + 4}
               textAnchor="end"
               fontSize="11"
-              fill="#7a756d"
+              style={{ fill: 'var(--a-axis)' }}
               fontFamily="JetBrains Mono"
             >
               {t.toLocaleString()}
@@ -195,7 +195,7 @@ function ReportsRevenueChart({ series }: ReportsRevenueChartProps) {
               y={H - PAD_B + 18}
               textAnchor="middle"
               fontSize="11"
-              fill="#7a756d"
+              style={{ fill: 'var(--a-axis)' }}
               fontFamily="JetBrains Mono"
             >
               {d.m}
@@ -207,7 +207,7 @@ function ReportsRevenueChart({ series }: ReportsRevenueChartProps) {
         <path
           d={totalLine}
           fill="none"
-          stroke="#0a4a2e"
+          style={{ stroke: 'var(--a-primary)' }}
           strokeWidth="2"
           className={styles.revLine}
         />
@@ -217,7 +217,7 @@ function ReportsRevenueChart({ series }: ReportsRevenueChartProps) {
             x2={xs[hover]}
             y1={PAD_T}
             y2={H - PAD_B}
-            stroke="#7a756d"
+            style={{ stroke: 'var(--a-axis)' }}
             strokeDasharray="2 3"
             opacity="0.5"
           />
@@ -236,8 +236,7 @@ function ReportsRevenueChart({ series }: ReportsRevenueChartProps) {
               cx={xs[i]}
               cy={yScale(sponsorTop[i])}
               r={hover === i ? 5 : 3}
-              fill="#0a4a2e"
-              stroke="#fff"
+              style={{ fill: 'var(--a-primary)', stroke: 'var(--a-card)' }}
               strokeWidth="2"
             />
           </g>
@@ -259,7 +258,7 @@ function ReportsRevenueChart({ series }: ReportsRevenueChartProps) {
             Sponsor<b>${tipData.sponsor.toLocaleString()}</b>
           </div>
           <div className={styles.revTipRow}>
-            <span className="dot" style={{ background: '#0a4a2e' }} />
+            <span className="dot" style={{ background: 'var(--a-primary)' }} />
             Listings<b>${tipData.listing.toLocaleString()}</b>
           </div>
           <div className={styles.revTipTotal}>
@@ -273,11 +272,11 @@ function ReportsRevenueChart({ series }: ReportsRevenueChartProps) {
           Sponsorship
         </span>
         <span>
-          <i className="dot" style={{ background: '#0a4a2e' }} />
+          <i className="dot" style={{ background: 'var(--a-primary)' }} />
           Listing fees
         </span>
         <span>
-          <i className="dash" style={{ background: '#0a4a2e' }} />
+          <i className="dash" style={{ background: 'var(--a-primary)' }} />
           Total revenue
         </span>
       </div>
@@ -303,7 +302,7 @@ function RevenueDonut({ sponsor, listing }: RevenueDonutProps) {
   return (
     <div className={styles.donutWrap}>
       <svg viewBox="0 0 200 200" className={styles.donut}>
-        <circle cx="100" cy="100" r="60" fill="none" stroke="#f0f2f5" strokeWidth="22" />
+        <circle cx="100" cy="100" r="60" fill="none" style={{ stroke: 'var(--a-track)' }} strokeWidth="22" />
         <g transform="rotate(-90 100 100)">
           <circle
             cx="100"
@@ -320,14 +319,14 @@ function RevenueDonut({ sponsor, listing }: RevenueDonutProps) {
             cy="100"
             r="60"
             fill="none"
-            stroke="#0a4a2e"
+            style={{ stroke: 'var(--a-primary)' }}
             strokeWidth="22"
             strokeDasharray={`${lLen} ${C}`}
             strokeDashoffset={-sLen}
             className={`${styles.donutArc} ${styles.lArc}`}
           />
         </g>
-        <text x="100" y="92" textAnchor="middle" fontSize="13" fill="#6b7280">
+        <text x="100" y="92" textAnchor="middle" fontSize="13" style={{ fill: 'var(--a-fg3)' }}>
           Total YTD
         </text>
         <text
@@ -336,7 +335,7 @@ function RevenueDonut({ sponsor, listing }: RevenueDonutProps) {
           textAnchor="middle"
           fontSize="22"
           fontWeight="700"
-          fill="#111827"
+          style={{ fill: 'var(--a-fg1)' }}
           fontFamily="JetBrains Mono"
         >
           ${(total / 1000).toFixed(1)}k
@@ -349,7 +348,7 @@ function RevenueDonut({ sponsor, listing }: RevenueDonutProps) {
           <span className="pct">{Math.round(sPct * 100)}%</span>
         </div>
         <div className={styles.donutRow}>
-          <span className="dot" style={{ background: '#0a4a2e' }} />
+          <span className="dot" style={{ background: 'var(--a-primary)' }} />
           <span>listing_fee</span>
           <span className="pct">{Math.round(lPct * 100)}%</span>
         </div>
@@ -367,7 +366,7 @@ interface HBarChartProps {
   color?: string
 }
 
-function HBarChart({ data, max, fmt = (v: number) => `${v}`, color = '#0a4a2e' }: HBarChartProps) {
+function HBarChart({ data, max, fmt = (v: number) => `${v}`, color = 'var(--a-primary)' }: HBarChartProps) {
   if (data.length === 0) {
     return <div className={styles.empty}>No data.</div>
   }
@@ -448,13 +447,13 @@ function TrafficChart({ data }: TrafficChartProps) {
       >
         {yTicks.map(t => (
           <g key={t}>
-            <line x1={PAD.l} x2={W - PAD.r} y1={yScale(t)} y2={yScale(t)} stroke="#e7e5e0" strokeDasharray="3 4" />
-            <text x={PAD.l - 8} y={yScale(t) + 4} textAnchor="end" fontSize="11" fill="#7a756d" fontFamily="ui-monospace">{t}</text>
+            <line x1={PAD.l} x2={W - PAD.r} y1={yScale(t)} y2={yScale(t)} style={{ stroke: 'var(--a-grid)' }} strokeDasharray="3 4" />
+            <text x={PAD.l - 8} y={yScale(t) + 4} textAnchor="end" fontSize="11" style={{ fill: 'var(--a-axis)' }} fontFamily="ui-monospace">{t}</text>
           </g>
         ))}
         {data.map((d, i) =>
           i % labelEvery === 0 || N <= 3 ? (
-            <text key={d.day} x={xs[i]} y={H - PAD.b + 18} textAnchor="middle" fontSize="10" fill="#7a756d" fontFamily="ui-monospace">
+            <text key={d.day} x={xs[i]} y={H - PAD.b + 18} textAnchor="middle" fontSize="10" style={{ fill: 'var(--a-axis)' }} fontFamily="ui-monospace">
               {d.day.slice(5)}
             </text>
           ) : null
@@ -462,24 +461,24 @@ function TrafficChart({ data }: TrafficChartProps) {
         {N >= 2 && (
           <>
             <path d={viewsArea} fill="rgba(10, 74, 46, 0.1)" className={styles.revArea} />
-            <path d={viewsLine} fill="none" stroke="#0a4a2e" strokeWidth="2" className={styles.revLine} />
+            <path d={viewsLine} fill="none" style={{ stroke: 'var(--a-primary)' }} strokeWidth="2" className={styles.revLine} />
             <path d={visitorsLine} fill="none" stroke="#2563eb" strokeWidth="1.5" strokeDasharray="4 3" opacity="0.7" />
           </>
         )}
         {data.map((d, i) => (
           <g key={d.day}>
-            <circle cx={xs[i]} cy={yScale(d.views)} r={hover === i || N === 1 ? 5 : 3} fill="#0a4a2e" stroke="#fff" strokeWidth="2" />
-            <circle cx={xs[i]} cy={yScale(d.visitors)} r={hover === i || N === 1 ? 4 : 2.5} fill="#2563eb" stroke="#fff" strokeWidth="1.5" />
+            <circle cx={xs[i]} cy={yScale(d.views)} r={hover === i || N === 1 ? 5 : 3} style={{ fill: 'var(--a-primary)', stroke: 'var(--a-card)' }} strokeWidth="2" />
+            <circle cx={xs[i]} cy={yScale(d.visitors)} r={hover === i || N === 1 ? 4 : 2.5} fill="#2563eb" style={{ stroke: 'var(--a-card)' }} strokeWidth="1.5" />
             {N === 1 && (
               <>
-                <text x={xs[i] + 10} y={yScale(d.views) - 8} fontSize="11" fill="#0a4a2e" fontWeight="600">{d.views} views</text>
+                <text x={xs[i] + 10} y={yScale(d.views) - 8} fontSize="11" style={{ fill: 'var(--a-primary)' }} fontWeight="600">{d.views} views</text>
                 <text x={xs[i] + 10} y={yScale(d.visitors) + 16} fontSize="11" fill="#2563eb" fontWeight="600">{d.visitors} visitors</text>
               </>
             )}
           </g>
         ))}
         {hover !== null && N >= 2 && (
-          <line x1={xs[hover]} x2={xs[hover]} y1={PAD.t} y2={H - PAD.b} stroke="#7a756d" strokeDasharray="2 3" opacity="0.5" />
+          <line x1={xs[hover]} x2={xs[hover]} y1={PAD.t} y2={H - PAD.b} style={{ stroke: 'var(--a-axis)' }} strokeDasharray="2 3" opacity="0.5" />
         )}
         {N >= 2 && data.map((_, i) => (
           <rect key={i} x={xs[i] - innerW / (N * 2)} y={PAD.t} width={innerW / N} height={innerH} fill="transparent" onMouseEnter={() => setHover(i)} />
@@ -489,7 +488,7 @@ function TrafficChart({ data }: TrafficChartProps) {
         <div className={styles.revTip} style={{ position: 'absolute', left: tipLeft, top: `${(20 / H) * 100}%`, width: 140 }}>
           <div className={styles.revTipTitle}>{hovered.day}</div>
           <div className={styles.revTipRow}>
-            <span className="dot" style={{ background: '#0a4a2e' }} />Views<b>{hovered.views}</b>
+            <span className="dot" style={{ background: 'var(--a-primary)' }} />Views<b>{hovered.views}</b>
           </div>
           <div className={styles.revTipRow}>
             <span className="dot" style={{ background: '#2563eb' }} />Visitors<b>{hovered.visitors}</b>
@@ -497,7 +496,7 @@ function TrafficChart({ data }: TrafficChartProps) {
         </div>
       )}
       <div className={styles.chartLegend}>
-        <span><i className="dot" style={{ background: '#0a4a2e' }} />Page Views</span>
+        <span><i className="dot" style={{ background: 'var(--a-primary)' }} />Page Views</span>
         <span><i className="dash" style={{ background: '#2563eb' }} />Unique Visitors</span>
       </div>
     </div>
@@ -507,10 +506,10 @@ function TrafficChart({ data }: TrafficChartProps) {
 // ─── DeviceDonut ────────────────────────────────────────────────────────────
 
 const DEVICE_COLORS: Record<string, string> = {
-  desktop: '#0a4a2e',
+  desktop: 'var(--a-primary)',
   mobile: '#2563eb',
   tablet: '#a88d2e',
-  unknown: '#94a3b8',
+  unknown: 'var(--a-fg4)',
 }
 
 interface DeviceDonutProps {
@@ -534,28 +533,27 @@ function DeviceDonut({ data }: DeviceDonutProps) {
   return (
     <div className={styles.deviceGrid}>
       <svg viewBox="0 0 140 140" width="140" height="140">
-        <circle cx="70" cy="70" r={R} fill="none" stroke="#f0f2f5" strokeWidth="14" />
+        <circle cx="70" cy="70" r={R} fill="none" style={{ stroke: 'var(--a-track)' }} strokeWidth="14" />
         {data.map((d, i) => (
           <circle
             key={i}
             cx="70" cy="70" r={R}
             fill="none"
-            stroke={DEVICE_COLORS[d.type] ?? '#94a3b8'}
             strokeWidth="14"
             strokeDasharray={`${arcs[i]} ${C - arcs[i]}`}
             strokeDashoffset={-offsets[i]}
             strokeLinecap="butt"
             className={styles.donutArc}
-            style={{ animationDelay: `${i * 120}ms` }}
+            style={{ animationDelay: `${i * 120}ms`, stroke: DEVICE_COLORS[d.type] ?? 'var(--a-fg4)' }}
           />
         ))}
-        <text x="70" y="66" textAnchor="middle" fontSize="11" fill="#6b7280">Total</text>
-        <text x="70" y="84" textAnchor="middle" fontSize="18" fontWeight="700" fill="#111827">{total}</text>
+        <text x="70" y="66" textAnchor="middle" fontSize="11" style={{ fill: 'var(--a-fg3)' }}>Total</text>
+        <text x="70" y="84" textAnchor="middle" fontSize="18" fontWeight="700" style={{ fill: 'var(--a-fg1)' }}>{total}</text>
       </svg>
       <div className={styles.deviceLegend}>
         {data.map(d => (
           <div key={d.type} className={styles.deviceRow}>
-            <span className={styles.deviceSwatch} style={{ background: DEVICE_COLORS[d.type] ?? '#94a3b8' }} />
+            <span className={styles.deviceSwatch} style={{ background: DEVICE_COLORS[d.type] ?? 'var(--a-fg4)' }} />
             <span>{d.type}</span>
             <span className={styles.deviceVal}>{total > 0 ? Math.round((d.count / total) * 100) : 0}%</span>
           </div>
@@ -568,7 +566,7 @@ function DeviceDonut({ data }: DeviceDonutProps) {
 // ─── DeviceTrendChart (multi-line: desktop/mobile/tablet over time) ─────────
 
 const DEVICE_LINES: Array<{ key: 'desktop' | 'mobile' | 'tablet'; color: string; label: string }> = [
-  { key: 'desktop', color: '#0a4a2e', label: 'Desktop' },
+  { key: 'desktop', color: 'var(--a-primary)', label: 'Desktop' },
   { key: 'mobile', color: '#2563eb', label: 'Mobile' },
   { key: 'tablet', color: '#a88d2e', label: 'Tablet' },
 ]
@@ -602,28 +600,28 @@ function DeviceTrendChart({ data }: { data: Array<{ day: string; desktop: number
       <svg viewBox={`0 0 ${W} ${H}`} className={styles.chart} onMouseLeave={() => setHover(null)} preserveAspectRatio="xMidYMid meet" style={{ height: 200 }}>
         {yTicks.map(t => (
           <g key={t}>
-            <line x1={PAD.l} x2={W - PAD.r} y1={yScale(t)} y2={yScale(t)} stroke="#e7e5e0" strokeDasharray="3 4" />
-            <text x={PAD.l - 6} y={yScale(t) + 4} textAnchor="end" fontSize="10" fill="#7a756d" fontFamily="ui-monospace">{t}</text>
+            <line x1={PAD.l} x2={W - PAD.r} y1={yScale(t)} y2={yScale(t)} style={{ stroke: 'var(--a-grid)' }} strokeDasharray="3 4" />
+            <text x={PAD.l - 6} y={yScale(t) + 4} textAnchor="end" fontSize="10" style={{ fill: 'var(--a-axis)' }} fontFamily="ui-monospace">{t}</text>
           </g>
         ))}
         {data.map((d, i) =>
           (i % labelEvery === 0 || N <= 3) ? (
-            <text key={d.day} x={xs[i]} y={H - PAD.b + 16} textAnchor="middle" fontSize="9" fill="#7a756d" fontFamily="ui-monospace">{d.day.slice(5)}</text>
+            <text key={d.day} x={xs[i]} y={H - PAD.b + 16} textAnchor="middle" fontSize="9" style={{ fill: 'var(--a-axis)' }} fontFamily="ui-monospace">{d.day.slice(5)}</text>
           ) : null
         )}
         {DEVICE_LINES.map(({ key, color }) => {
           if (N < 2) return null
           const line = data.map((d, i) => `${i === 0 ? 'M' : 'L'} ${xs[i]},${yScale(d[key])}`).join(' ')
-          return <path key={key} d={line} fill="none" stroke={color} strokeWidth="1.8" opacity="0.85" />
+          return <path key={key} d={line} fill="none" style={{ stroke: color }} strokeWidth="1.8" opacity="0.85" />
         })}
         {N === 1 && DEVICE_LINES.map(({ key, color }) => (
-          <circle key={key} cx={xs[0]} cy={yScale(data[0][key])} r={4} fill={color} stroke="#fff" strokeWidth="1.5" />
+          <circle key={key} cx={xs[0]} cy={yScale(data[0][key])} r={4} style={{ fill: color, stroke: 'var(--a-card)' }} strokeWidth="1.5" />
         ))}
         {N >= 2 && data.map((_, i) => (
           <rect key={i} x={xs[i] - innerW / (N * 2)} y={PAD.t} width={innerW / N} height={innerH} fill="transparent" onMouseEnter={() => setHover(i)} />
         ))}
         {hover !== null && N >= 2 && (
-          <line x1={xs[hover]} x2={xs[hover]} y1={PAD.t} y2={H - PAD.b} stroke="#7a756d" strokeDasharray="2 3" opacity="0.5" />
+          <line x1={xs[hover]} x2={xs[hover]} y1={PAD.t} y2={H - PAD.b} style={{ stroke: 'var(--a-axis)' }} strokeDasharray="2 3" opacity="0.5" />
         )}
       </svg>
       {hovered && (

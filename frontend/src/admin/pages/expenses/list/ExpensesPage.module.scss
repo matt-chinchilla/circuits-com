@@ -234,7 +234,7 @@
   }
 
   tbody tr:hover td {
-    background: #fbfcfd;
+    background: var(--a-hover);
   }
 
   @media (max-width: $bp-admin-mobile) {

@@ -3,11 +3,13 @@
 
 .datasheetCard {
   position: relative;
-  background: $admin-card-bg;
-  border: 1px solid #f0f2f5;
+  // Datasheet "paper" motif — the sheet stays paper-white in BOTH admin themes
+  // (crop marks + grid print on it in ink); only the cast shadow follows the theme.
+  background: #ffffff;
+  border: 1px solid #f0f2f5; // paper edge — part of the sheet, intentionally un-themed
   border-radius: $admin-border-radius;
   padding: 24px 28px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--a-shadow-sm);
   overflow: hidden;
   margin-bottom: 16px;
 }

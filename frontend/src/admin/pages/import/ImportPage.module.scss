@@ -22,11 +22,11 @@
   border: 1px solid rgba(10, 74, 46, 0.15);
   border-radius: 8px;
   font-size: 13px;
-  color: $executive-blue;
+  color: var(--a-primary);
 
   :global(i.ph-light) {
     font-size: 18px;
-    color: $executive-blue;
+    color: var(--a-primary);
   }
 }
 
@@ -37,7 +37,7 @@
   padding: 0;
   font: inherit;
   font-weight: 600;
-  color: $executive-blue;
+  color: var(--a-primary);
   cursor: pointer;
   text-decoration: none;
 
@@ -99,7 +99,7 @@
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  background: #ffffff;
+  background: var(--a-card);
   border: 2px solid var(--a-border);
   display: flex;
   align-items: center;
@@ -248,7 +248,7 @@
   font-family: inherit;
   font-size: 14px;
   color: var(--a-fg1);
-  background: #ffffff;
+  background: var(--a-card);
   border: 1px solid var(--a-border);
   border-radius: 6px;
   padding: 9px 12px;
@@ -396,7 +396,7 @@
   font-family: inherit;
   font-size: 13px;
   color: var(--a-fg1);
-  background: #ffffff;
+  background: var(--a-card);
   border: 1px solid var(--a-border);
   border-radius: 6px;
   padding: 6px 10px;
@@ -521,7 +521,7 @@
 .errorListItem {
   font-family: $font-mono;
   font-size: 12px;
-  color: #7f1d1d;
+  color: var(--a-danger);
   line-height: 1.5;
 }
 
@@ -585,7 +585,7 @@
 }
 
 .btnGhost {
-  background: #ffffff;
+  background: var(--a-card);
   color: var(--a-fg1);
   border-color: var(--a-border);
 

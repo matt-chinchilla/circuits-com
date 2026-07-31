@@ -13,9 +13,9 @@
   gap: 18px;
   font-family: $admin-font-mono;
   font-size: 11px;
-  color: #9ca3af;
-  background: $admin-card-bg;
-  border-top: 1px solid #f0f2f5;
+  color: var(--a-fg4);
+  background: var(--a-card);
+  border-top: 1px solid var(--a-border-soft);
   opacity: 0;
   transform: translateY(100%);
   transition:
@@ -35,8 +35,8 @@
   margin: 0 2px;
   font-family: $admin-font-mono;
   font-size: 10px;
-  background: $admin-bg;
-  color: #4b5563;
-  border: 1px solid #e5e7eb;
+  background: var(--a-bg);
+  color: var(--a-fg2);
+  border: 1px solid var(--a-border);
   border-radius: 3px;
 }

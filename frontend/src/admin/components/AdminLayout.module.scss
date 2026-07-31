@@ -26,6 +26,9 @@
   --a-side-bg: #ffffff;
   --a-border: #e5e7eb;
   --a-border-soft: #f0f2f5;
+  // Soft interactive fill — table row hover, thead bg, subtle wells. Sits
+  // between --a-card and --a-border-soft in both themes.
+  --a-hover: #f7f9fb;
   // Text
   --a-fg1: #111827;
   --a-fg2: #4b5563;
@@ -91,6 +94,7 @@
     --a-side-bg: #131925;
     --a-border: #2a3446;
     --a-border-soft: #202a3a;
+    --a-hover: #1d2637;
     --a-fg1: #f1f4f9;
     --a-fg2: #c3ccda;
     --a-fg3: #93a0b4;
@@ -456,7 +460,7 @@
   width: 28px;
   height: 16px;
   border-radius: 8px;
-  background: #d1d5db;
+  background: var(--a-border);
   transition: background-color 200ms;
 }
 

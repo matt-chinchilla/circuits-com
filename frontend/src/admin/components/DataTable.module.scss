@@ -1,10 +1,10 @@
 @use '@admin/styles/variables' as *;
 
 .wrapper {
-  background: $admin-card-bg;
+  background: var(--a-card);
   border-radius: $admin-border-radius;
   overflow: auto;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--a-shadow-sm);
 }
 
 .table {
@@ -19,10 +19,10 @@
   padding: 16px 20px;
   font-size: $admin-font-base;
   font-weight: 600;
-  color: #4b5563;
+  color: var(--a-fg2);
   text-transform: uppercase;
   letter-spacing: 0.03em;
-  border-bottom: 2px solid #e5e7eb;
+  border-bottom: 2px solid var(--a-border);
   white-space: nowrap;
   user-select: none;
 }
@@ -31,7 +31,7 @@
   cursor: pointer;
 
   &:hover {
-    color: #374151;
+    color: var(--a-fg1);
   }
 }
 
@@ -40,7 +40,7 @@
 }
 
 .row {
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid var(--a-border-soft);
 
   &:last-child {
     border-bottom: none;
@@ -51,19 +51,19 @@
   cursor: pointer;
 
   &:hover {
-    background: #f9fafb;
+    background: var(--a-hover);
   }
 }
 
 .td {
   padding: 16px 20px;
-  color: #111827;
+  color: var(--a-fg1);
   vertical-align: middle;
 }
 
 .tdMono {
   padding: 16px 20px;
-  color: #111827;
+  color: var(--a-fg1);
   vertical-align: middle;
   font-family: $admin-font-mono;
   letter-spacing: -0.01em;
@@ -74,5 +74,5 @@
   padding: 48px;
   text-align: center;
   font-size: $admin-font-base;
-  color: #6b7280;
+  color: var(--a-fg3);
 }

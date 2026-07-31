@@ -1,11 +1,11 @@
 @use '@admin/styles/variables' as *;
 
 .card {
-  background: $admin-card-bg;
+  background: var(--a-card);
   border-radius: $admin-border-radius;
   padding: $admin-padding;
   min-height: $admin-card-min-height;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--a-shadow-sm);
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -16,7 +16,7 @@
   transition: box-shadow 200ms ease;
 
   &:hover {
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+    box-shadow: var(--a-shadow-md);
   }
 
   &:focus-visible {
@@ -33,7 +33,7 @@
 
 .label {
   font-size: $admin-font-small;
-  color: #6b7280;
+  color: var(--a-fg3);
   font-weight: 500;
 }
 
@@ -46,7 +46,7 @@
   font-family: $admin-font-mono;
   font-size: 32px;
   font-weight: 700;
-  color: #111827;
+  color: var(--a-fg1);
   line-height: 1.2;
   letter-spacing: -0.02em;
 }
@@ -71,5 +71,5 @@
 }
 
 .trendLabel {
-  color: #6b7280;
+  color: var(--a-fg3);
 }

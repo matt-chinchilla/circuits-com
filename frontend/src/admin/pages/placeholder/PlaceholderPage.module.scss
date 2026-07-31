@@ -7,12 +7,12 @@
 .title {
   font-size: $admin-font-heading;
   font-weight: 700;
-  color: #111827;
+  color: var(--a-fg1);
   margin: 0 0 12px;
 }
 
 .message {
   font-size: $admin-font-base;
-  color: #6b7280;
+  color: var(--a-fg3);
   margin: 0;
 }

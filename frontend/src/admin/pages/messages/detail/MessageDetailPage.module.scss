@@ -11,7 +11,7 @@
   align-items: center;
   gap: 6px;
   font-size: 13px;
-  color: #6b7280;
+  color: var(--a-fg3);
   text-decoration: none;
   background: transparent;
   border: none;
@@ -25,7 +25,7 @@
 }
 
 .backLink:hover {
-  color: $executive-blue;
+  color: var(--a-primary);
 }
 
 .metaRow {
@@ -41,13 +41,13 @@
   margin-left: auto;
   font-family: $admin-font-mono;
   font-size: 11px;
-  color: #9ca3af;
+  color: var(--a-fg4);
 }
 
 .subject {
   font-size: 22px;
   font-weight: 700;
-  color: $admin-text-primary;
+  color: var(--a-fg1);
   letter-spacing: -0.015em;
   margin: 0 0 14px;
   position: relative;
@@ -59,7 +59,7 @@
   align-items: center;
   gap: 8px;
   padding-top: 12px;
-  border-top: 1px dashed #f0f2f5;
+  border-top: 1px dashed var(--a-border-soft);
   position: relative;
   z-index: 1;
 }
@@ -76,16 +76,16 @@
   font-family: inherit;
   font-size: 13px;
   font-weight: 600;
-  color: $admin-text-primary;
-  background: $admin-card-bg;
-  border: 1px solid #e5e7eb;
+  color: var(--a-fg1);
+  background: var(--a-card);
+  border: 1px solid var(--a-border);
   border-radius: 6px;
   cursor: pointer;
   transition: background-color 150ms;
 }
 
 .btnGhost:hover {
-  background: $admin-bg;
+  background: var(--a-bg);
 }
 
 // Detail two-column grid
@@ -115,38 +115,38 @@
 
 // Body wrapper panel (the type-specific bodies render inside this)
 .bodyPanel {
-  background: $admin-card-bg;
-  border: 1px solid #f0f2f5;
+  background: var(--a-card);
+  border: 1px solid var(--a-border-soft);
   border-radius: $admin-border-radius;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--a-shadow-sm);
   overflow: hidden;
 }
 
 // Reply-trace easter egg — fires on send-success.
 .replyTraceFire > * {
   box-shadow:
-    0 0 0 2px $nav-blue,
-    0 1px 3px rgba(0, 0, 0, 0.05);
+    0 0 0 2px var(--a-accent),
+    var(--a-shadow-sm);
   transition: box-shadow 600ms ease-out;
 }
 
 // Status sidebar panel
 .statusPanel {
-  background: $admin-card-bg;
-  border: 1px solid #f0f2f5;
+  background: var(--a-card);
+  border: 1px solid var(--a-border-soft);
   border-radius: $admin-border-radius;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--a-shadow-sm);
 }
 
 .statusPanelHead {
   padding: 14px 20px;
-  border-bottom: 1px solid #f0f2f5;
+  border-bottom: 1px solid var(--a-border-soft);
 }
 
 .statusPanelTitle {
   font-size: 14px;
   font-weight: 700;
-  color: $admin-text-primary;
+  color: var(--a-fg1);
   margin: 0;
   letter-spacing: -0.005em;
 }
@@ -171,7 +171,7 @@
   font-family: $admin-font-mono;
   font-size: 11px;
   font-weight: 600;
-  color: #6b7280;
+  color: var(--a-fg3);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
@@ -179,23 +179,23 @@
 .kvMono {
   font-family: $admin-font-mono;
   font-size: 12px;
-  color: $admin-text-primary;
+  color: var(--a-fg1);
 }
 
 // Not found
 .notFoundPanel {
-  background: $admin-card-bg;
-  border: 1px solid #f0f2f5;
+  background: var(--a-card);
+  border: 1px solid var(--a-border-soft);
   border-radius: $admin-border-radius;
   padding: 48px 32px;
   text-align: center;
-  color: #6b7280;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  color: var(--a-fg3);
+  box-shadow: var(--a-shadow-sm);
 }
 
 .notFoundPanel h2 {
   margin: 0 0 8px;
-  color: $admin-text-primary;
+  color: var(--a-fg1);
   font-size: 20px;
 }
 
@@ -220,8 +220,8 @@
   border-radius: 6px;
   font-size: 13px;
   font-weight: 600;
-  color: $admin-card-bg;
-  background: #15803d;
+  color: #ffffff; // white text on colored bg — correct in both themes
+  background: var(--a-ok);
   z-index: 1100;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
   animation: toastIn 200ms ease-out;

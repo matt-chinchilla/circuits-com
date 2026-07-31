@@ -1,24 +1,24 @@
 @use '@shared/styles/variables' as *;
-@use 'sass:color';
 
 // PartsPage — ported from 2026-04-25 Claude Design bundle (Phase A5).
 // Mirrors the bundle's `.panel`, `.a-toolbar`, `.filter-chip`, `.inline-search`,
 // and `.a-table` rules in CSS Modules camelCase. Wraps in AdminLayout `.content`,
 // so no own page padding.
 
-// ─── Local admin tokens (intentionally un-themed) ──────────────────────────
-$a-bg: #f5f7fa;
-$a-card: #ffffff;
-$a-border: #e5e7eb;
-$a-border-soft: #f0f2f5;
-$a-fg1: #111827;
-$a-fg2: #4b5563;
-$a-fg3: #6b7280;
-$a-fg4: #9ca3af;
-$a-primary: $executive-blue;
-$a-primary-hover: #083b24;
-$a-radius: 8px;
-$a-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
+// ─── Local admin tokens — follow the admin light/dark theme (--a-* runtime
+// vars from AdminLayout.module.scss; light values unchanged) ────────────────
+$a-bg: var(--a-bg);
+$a-card: var(--a-card);
+$a-border: var(--a-border);
+$a-border-soft: var(--a-border-soft);
+$a-fg1: var(--a-fg1);
+$a-fg2: var(--a-fg2);
+$a-fg3: var(--a-fg3);
+$a-fg4: var(--a-fg4);
+$a-primary: var(--a-primary);
+$a-primary-hover: var(--a-primary-hover);
+$a-radius: var(--a-radius);
+$a-shadow-sm: var(--a-shadow-sm);
 
 .page {
   display: flex;
@@ -96,7 +96,7 @@ $a-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .btnGhost {
-  background: #ffffff;
+  background: $a-card;
   color: $a-fg1;
   border-color: $a-border;
 
@@ -143,7 +143,7 @@ $a-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
   font-size: 13px;
   font-weight: 500;
   color: $a-fg2;
-  background: #ffffff;
+  background: $a-card;
   border: 1px solid $a-border;
   border-radius: 20px;
   cursor: pointer;
@@ -171,7 +171,7 @@ $a-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
   align-items: center;
   gap: 6px;
   padding: 6px 10px;
-  background: #ffffff;
+  background: $a-card;
   border: 1px solid $a-border;
   border-radius: 6px;
   min-width: 240px;
@@ -254,7 +254,7 @@ $a-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
   }
 
   tbody tr:hover td {
-    background: #fbfcfd;
+    background: var(--a-hover);
   }
 }
 
@@ -306,7 +306,7 @@ $a-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .statusActive {
-  color: #15803d;
+  color: var(--a-ok);
   background: rgba(34, 197, 94, 0.12);
   border-color: rgba(34, 197, 94, 0.3);
 }
@@ -354,7 +354,7 @@ $a-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
   font-family: inherit;
   font-size: 13px;
   font-weight: 600;
-  background: #ffffff;
+  background: $a-card;
   color: $a-fg2;
   border: 1px solid $a-border;
   border-radius: 6px;
@@ -417,7 +417,9 @@ $a-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
   transition: background-color 150ms, color 150ms;
 
   &:hover {
-    background: color.adjust($a-bg, $lightness: -2%);
+    // Was color.adjust($a-bg, -2% lightness) ≈ #eff2f6 — --a-border-soft is
+    // the same shade in light and themes correctly in dark.
+    background: var(--a-border-soft);
     color: $a-primary;
   }
 
@@ -440,7 +442,7 @@ $a-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .filterDot {
-  color: $nav-blue;
+  color: var(--a-accent);
   font-size: 8px;
   line-height: 1;
 }
@@ -458,10 +460,10 @@ $a-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
   z-index: 30;
   min-width: 240px;
   max-width: 320px;
-  background: #ffffff;
+  background: $a-card;
   border: 1px solid $a-border;
   border-radius: 8px;
-  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.14);
+  box-shadow: var(--a-shadow-md);
   margin-top: 4px;
   overflow: hidden;
   text-transform: none;
@@ -534,7 +536,7 @@ $a-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
   color: $a-fg3;
 
   &:hover {
-    color: $error-red;
+    color: var(--a-danger);
   }
 }
 

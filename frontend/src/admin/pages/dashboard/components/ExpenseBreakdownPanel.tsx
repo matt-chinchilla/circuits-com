@@ -67,7 +67,7 @@ export default function ExpenseBreakdownPanel({
                       className={styles.breakdownBar}
                       style={{
                         width: `${share}%`,
-                        background: `linear-gradient(90deg, ${meta.color}, color-mix(in srgb, ${meta.color} 55%, #fff))`,
+                        background: `linear-gradient(90deg, ${meta.color}, color-mix(in srgb, ${meta.color} 55%, var(--a-card)))`,
                       }}
                     />
                   </div>

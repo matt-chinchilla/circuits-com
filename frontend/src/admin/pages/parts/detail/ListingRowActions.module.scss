@@ -8,9 +8,10 @@
 
 @use '@shared/styles/variables' as *;
 
-$a-border: #e5e7eb;
-$a-fg3: #6b7280;
-$a-danger: $error-red;
+// Local admin tokens (follow the admin light/dark theme).
+$a-border: var(--a-border);
+$a-fg3: var(--a-fg3);
+$a-danger: var(--a-danger);
 
 // Applied alongside .listingLead on the row's last cell: lead time on the
 // left, Remove on the right, still one line, still right-aligned.
@@ -31,7 +32,7 @@ $a-danger: $error-red;
   font-weight: 600;
   line-height: 1;
   color: $a-fg3;
-  background: #ffffff;
+  background: var(--a-card);
   border: 1px solid $a-border;
   border-radius: 5px;
   cursor: pointer;

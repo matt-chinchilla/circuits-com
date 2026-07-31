@@ -13,8 +13,8 @@
   right: 0;
   z-index: 30;
   width: 380px;
-  background: $admin-card-bg;
-  border: 1px solid #e5e7eb;
+  background: var(--a-card);
+  border: 1px solid var(--a-border);
   border-radius: 10px;
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.14);
   overflow: hidden;
@@ -37,20 +37,20 @@
   align-items: center;
   justify-content: space-between;
   padding: 14px 18px;
-  border-bottom: 1px solid #f0f2f5;
+  border-bottom: 1px solid var(--a-border-soft);
 }
 
 .bellTitle {
   font-size: 13px;
   font-weight: 700;
-  color: $admin-text-primary;
+  color: var(--a-fg1);
   letter-spacing: -0.01em;
 }
 
 .bellCount {
   font-family: $admin-font-mono;
   font-size: 11px;
-  color: #6b7280;
+  color: var(--a-fg3);
 }
 
 .bellBody {
@@ -64,12 +64,12 @@
   align-items: center;
   gap: 8px;
   padding: 40px 20px;
-  color: #6b7280;
+  color: var(--a-fg3);
   font-size: 13px;
 }
 
 .bellEmpty svg {
-  color: #15803d;
+  color: var(--a-ok);
 }
 
 .bellRow {
@@ -81,14 +81,14 @@
   padding: 12px 18px;
   border: none;
   background: transparent;
-  border-bottom: 1px solid #f0f2f5;
+  border-bottom: 1px solid var(--a-border-soft);
   cursor: pointer;
   text-align: left;
   font-family: inherit;
 }
 
 .bellRow:hover {
-  background: $admin-bg;
+  background: var(--a-hover);
 }
 
 .bellRow:last-child {
@@ -109,19 +109,19 @@
 .bellName {
   font-size: 13px;
   font-weight: 600;
-  color: $admin-text-primary;
+  color: var(--a-fg1);
 }
 
 .bellTime {
   font-family: $admin-font-mono;
   font-size: 11px;
-  color: #9ca3af;
+  color: var(--a-fg4);
   flex-shrink: 0;
 }
 
 .bellPreview {
   font-size: 12px;
-  color: #6b7280;
+  color: var(--a-fg3);
   line-height: 1.4;
   margin-top: 2px;
   overflow: hidden;
@@ -133,14 +133,14 @@
   width: 100%;
   padding: 12px 18px;
   text-align: center;
-  background: $admin-bg;
+  background: var(--a-bg);
   border: none;
   font-family: inherit;
   font-size: 13px;
   font-weight: 600;
-  color: $executive-blue;
+  color: var(--a-primary);
   cursor: pointer;
-  border-top: 1px solid #f0f2f5;
+  border-top: 1px solid var(--a-border-soft);
 }
 
 .bellFoot:hover {

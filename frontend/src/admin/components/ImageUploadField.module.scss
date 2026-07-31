@@ -1,14 +1,14 @@
 // frontend/src/admin/components/ImageUploadField.module.scss
 .field { display: flex; flex-direction: column; gap: 8px; }
-.label { font-size: 0.82rem; font-weight: 600; color: var(--a-text, #1f2733); }
+.label { font-size: 0.82rem; font-weight: 600; color: var(--a-fg1); }
 .row { display: flex; gap: 14px; align-items: flex-start; }
 .previewBox {
   flex: 0 0 auto; width: 72px; height: 72px; border-radius: 10px;
-  border: 1px dashed rgba(0, 0, 0, 0.18); background: #f4f6f9;
+  border: 1px dashed var(--a-border); background: var(--a-hover);
   display: flex; align-items: center; justify-content: center; overflow: hidden;
 }
 .preview { width: 100%; height: 100%; object-fit: contain; }
-.previewEmpty { font-size: 0.62rem; color: #8a93a0; text-transform: uppercase; letter-spacing: 0.06em; }
+.previewEmpty { font-size: 0.62rem; color: var(--a-fg4); text-transform: uppercase; letter-spacing: 0.06em; }
 .controls { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
 .fileInput { display: none; }
 .btnRow { display: flex; gap: 8px; }
@@ -18,10 +18,11 @@
 }
 .uploadBtn { background: var(--a-blue, #2f6df0); color: #fff; }
 .uploadBtn:disabled { opacity: 0.6; cursor: default; }
-.clearBtn { background: transparent; border-color: rgba(0, 0, 0, 0.16); color: #4a5562; }
+.clearBtn { background: transparent; border-color: var(--a-border); color: var(--a-fg2); }
 .urlInput {
   width: 100%; font-size: 0.84rem; padding: 9px 11px; border-radius: 8px;
-  border: 1px solid rgba(0, 0, 0, 0.16); font-family: ui-monospace, monospace;
+  border: 1px solid var(--a-border); font-family: ui-monospace, monospace;
+  background: var(--a-card); color: var(--a-fg1);
 }
-.hint { font-size: 0.74rem; color: #6b7480; }
-.error { font-size: 0.76rem; color: var(--error-red, #c0392b); font-weight: 600; }
+.hint { font-size: 0.74rem; color: var(--a-fg3); }
+.error { font-size: 0.76rem; color: var(--a-danger); font-weight: 600; }

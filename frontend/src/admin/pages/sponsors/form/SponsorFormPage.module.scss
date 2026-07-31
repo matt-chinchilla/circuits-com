@@ -150,7 +150,7 @@
   font-family: inherit;
   font-size: 14px;
   color: var(--a-fg1);
-  background: #ffffff;
+  background: var(--a-card);
   border: 1px solid var(--a-border);
   border-radius: 6px;
   padding: 9px 12px;
@@ -256,7 +256,7 @@
   font-family: inherit;
   font-size: 14px;
   color: var(--a-fg1);
-  background: #ffffff;
+  background: var(--a-card);
   border: 1px solid var(--a-border);
   border-radius: 6px;
   padding: 9px 32px 9px 12px;
@@ -301,7 +301,7 @@
   left: 0;
   right: 0;
   z-index: 50;
-  background: #ffffff;
+  background: var(--a-card);
   border: 1px solid var(--a-border);
   border-radius: 6px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
@@ -384,7 +384,7 @@
 }
 
 .segBtnOn {
-  background: #ffffff;
+  background: var(--a-card);
   color: var(--a-primary);
   box-shadow: var(--a-shadow-sm);
   font-weight: 600;
@@ -436,7 +436,7 @@
 }
 
 .btnGhost {
-  background: #ffffff;
+  background: var(--a-card);
   color: var(--a-fg1);
   border-color: var(--a-border);
 
@@ -465,8 +465,10 @@
   align-items: center;
   gap: 10px;
   padding: 12px 18px;
+  // Inverse-video toast: fg1 as the surface, card as the text — identical in
+  // light (#ffffff text) and stays legible when the tokens flip in dark.
   background: var(--a-fg1);
-  color: #ffffff;
+  color: var(--a-card);
   border-radius: 8px;
   font-size: 14px;
   font-weight: 500;
@@ -513,7 +515,7 @@
 }
 
 .modal {
-  background: #ffffff;
+  background: var(--a-card);
   border-radius: 10px;
   padding: 24px;
   max-width: 440px;
