@@ -1,12 +1,11 @@
-// SalesRepsPanel — book of business as a force-directed graph.
+// SalesRepsPanel — book of business as a radial cluster graph.
 //
-// Reps are labelled hubs; their customers are draggable leaf nodes linked to
-// them, sized by monthly value and coloured by sponsor TIER (the board
-// materials). Force layout gives the physics — nodes repel so they stop
-// stacking, the graph settles with a jiggle, and every node carries its own
-// always-on company label. The "Demo" seller is the not-real catch-all
-// (catalog distributors + seeded fakes); it sits last and is dimmed in the
-// legend, and the "Rep book" total excludes it.
+// Reps are labelled hubs; their customers are leaf nodes divided EVENLY
+// around them (360°/n spokes from 12 o'clock), sized by monthly value and
+// coloured by sponsor TIER (the board materials). The "Demo" seller is the
+// not-real catch-all (catalog distributors + seeded fakes); it collapses to
+// one summary sphere, sits last and is dimmed in the legend, and the
+// "Rep book" total excludes it.
 
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -99,7 +98,7 @@ export default function SalesRepsPanel({ reps, loading }: SalesRepsPanelProps) {
         <div className={styles.panelHeadMain}>
           <h3 className={styles.panelTitle}>Book of business</h3>
           <p className={styles.panelSub}>
-            By sales rep &middot; drag a bubble &middot; area = monthly value
+            By sales rep &middot; area = monthly value &middot; click Demo to expand
           </p>
         </div>
         <Link to="/admin/sponsors" className={styles.panelLink}>

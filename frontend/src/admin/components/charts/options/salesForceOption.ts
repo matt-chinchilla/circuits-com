@@ -1,15 +1,18 @@
-// salesForceOption — the "book of business" as a force-directed graph.
+// salesForceOption — the "book of business" as a radial cluster graph.
 //
 // Each sales rep is a labelled HUB; their sponsored customers are leaf nodes
 // linked to it, sized by monthly value (AREA ∝ value → radius ∝ √value) and
-// coloured by sponsor TIER (the public-board materials). The force layout
-// settles with a gentle jiggle, repels nodes so they stop sitting on top of
-// each other, and every node is DRAGGABLE — so it reads as a live, physical
-// book you can nudge around. Every company carries its own always-on label, so
-// you never have to hover to see what a bubble is.
+// coloured by sponsor TIER (the public-board materials). Children are divided
+// EVENLY around their hub — 360°/n steps starting at 12 o'clock, so 3 kids
+// read as a tripod (| top, / \ below) and 4 kids as a cross — with the ring
+// radius grown just enough that adjacent siblings clear each other. Clusters
+// pack left→right on one baseline, centred on the origin.
 //
-// This is a graph, not the old circle-pack: force layout is what gives the
-// physics + the breathing room the pack couldn't.
+// layout: 'none' (computed geometry), NOT 'force': a force simulation can only
+// approximate even angular division, and ECharts' force+fixed-node combination
+// mis-fits the viewport (the 2026-07-30 lane-anchor clipping). Node dragging
+// is force-only in ECharts, so it went with the physics — zoom (roam:'scale')
+// remains. (File keeps its historical name to avoid import churn.)
 
 import type { EChartsCoreOption } from 'echarts/core';
 import { safeHexColor } from '@shared/utils/color';
@@ -89,6 +92,8 @@ interface ForceNode {
   symbolSize: number;
   itemStyle: Record<string, unknown>;
   label: Record<string, unknown>;
+  x: number;
+  y: number;
 }
 
 export function salesForceOption(input: SalesForceOptionInput): EChartsCoreOption {
@@ -125,8 +130,41 @@ export function salesForceOption(input: SalesForceOptionInput): EChartsCoreOptio
   // both sponsor "Digi-Key", so names are not unique.
   const links: Array<{ source: number; target: number; lineStyle: Record<string, unknown> }> = [];
 
-  groups.forEach((g) => {
+  // ── Radial geometry ───────────────────────────────────────────────────────
+  const LEAF_GAP = 14; // min clearance between adjacent siblings on the ring
+  const SPOKE_MIN = 30; // min clear spoke (hub edge → leaf edge)
+  const CLUSTER_GAP = 56; // breathing room between neighbouring clusters
+  const LABEL_PAD = 26; // room under a leaf for its caption
+
+  const geoms = groups.map((g) => {
+    const hubSize = g.collapsed ? SUMMARY_NODE : HUB_NODE;
+    if (g.collapsed || !g.children.length) {
+      return { ringR: 0, clusterR: hubSize / 2 + 8, sizes: [] as number[], hubSize };
+    }
+    const sizes = g.children.map((c) => nodeSize(Number(c.value) || 0, maxCustomer));
+    const maxLeaf = Math.max(...sizes);
+    const n = sizes.length;
+    // Two constraints: the spoke must clear the hub, and the CHORD between
+    // adjacent siblings (2r·sin(π/n)) must clear two half-leaves + a gap.
+    const spokeR = hubSize / 2 + SPOKE_MIN + maxLeaf / 2;
+    const chordR = n >= 2 ? (maxLeaf + LEAF_GAP) / (2 * Math.sin(Math.PI / n)) : 0;
+    const ringR = Math.max(spokeR, chordR);
+    return { ringR, clusterR: ringR + maxLeaf / 2 + LABEL_PAD, sizes, hubSize };
+  });
+
+  // Pack clusters left→right on one baseline, then centre the row on x=0.
+  const centers: number[] = [];
+  let cursor = 0;
+  geoms.forEach((geo, i) => {
+    centers[i] = cursor + geo.clusterR;
+    cursor = centers[i] + geo.clusterR + CLUSTER_GAP;
+  });
+  const shift = (cursor - CLUSTER_GAP) / 2;
+
+  groups.forEach((g, gi) => {
     const hubColor = safeHexColor(g.color) ?? CHART_NEUTRAL;
+    const geo = geoms[gi];
+    const cx = centers[gi] - shift;
 
     // A collapsed group is ONE summary sphere — no hub, no leaves — so the big
     // not-real "Demo" bucket stops swamping the rep clusters.
@@ -159,6 +197,8 @@ export function salesForceOption(input: SalesForceOptionInput): EChartsCoreOptio
           lineHeight: 15,
           color: '#ffffff',
         },
+        x: cx,
+        y: 0,
       });
       return;
     }
@@ -191,11 +231,28 @@ export function salesForceOption(input: SalesForceOptionInput): EChartsCoreOptio
         fontWeight: 800,
         color: '#ffffff',
       },
+      x: cx,
+      y: 0,
     });
 
-    g.children.forEach((c) => {
+    // Ring order interleaves big/small (sorted halves zipped) so consecutive
+    // high-value accounts don't clump visual mass on one arc — every large
+    // sphere gets small neighbours. Angles stay an exact even division.
+    const bySize = g.children.map((_, i) => i).sort((a, b) => geo.sizes[b] - geo.sizes[a]);
+    const half = Math.ceil(bySize.length / 2);
+    const ringOrder: number[] = [];
+    for (let i = 0; i < half; i++) {
+      ringOrder.push(bySize[i]);
+      if (i + half < bySize.length) ringOrder.push(bySize[i + half]);
+    }
+
+    ringOrder.forEach((childIdx, k) => {
+      const c = g.children[childIdx];
       const set = tierColorSet(c.tier);
       const leafIndex = nodes.length;
+      // Even angular division, starting at 12 o'clock (screen y grows down,
+      // so -π/2 is straight up): 3 kids → tripod, 4 kids → cross.
+      const angle = -Math.PI / 2 + (2 * Math.PI * k) / g.children.length;
       nodes.push({
         name: `n${leafIndex}`,
         displayName: c.label,
@@ -203,7 +260,7 @@ export function salesForceOption(input: SalesForceOptionInput): EChartsCoreOptio
         groupName: g.name,
         tier: c.tier ?? null,
         value: Number(c.value) || 0,
-        symbolSize: nodeSize(Number(c.value) || 0, maxCustomer),
+        symbolSize: geo.sizes[k],
         // Glossy 3D bead: an off-centre radial highlight -> base -> deep, plus a
         // soft tier-dark drop shadow, so the bubble reads as a lit sphere.
         itemStyle: {
@@ -230,6 +287,8 @@ export function salesForceOption(input: SalesForceOptionInput): EChartsCoreOptio
           textBorderColor: CHART_CARD,
           textBorderWidth: 3,
         },
+        x: cx + geo.ringR * Math.cos(angle),
+        y: geo.ringR * Math.sin(angle),
       });
       links.push({
         source: hubIndex,
@@ -271,21 +330,12 @@ export function salesForceOption(input: SalesForceOptionInput): EChartsCoreOptio
     series: [
       {
         type: 'graph',
-        layout: 'force',
-        // Zoom only — panning is off so the graph can never be dragged out of
-        // its bordered arena; gravity always pulls the spheres back to centre,
-        // which is what keeps the space FINITE.
+        // Computed radial geometry — see the header comment. Zoom only: no
+        // panning, so the graph can never leave its bordered arena.
+        layout: 'none',
         roam: 'scale',
-        draggable: true,
-        // Gentle physics: enough repulsion to unstack the nodes, a light pull
-        // to centre, and layoutAnimation so it visibly settles (the "jiggle").
-        force: {
-          repulsion: 135,
-          gravity: 0.09,
-          edgeLength: [36, 108],
-          friction: 0.18,
-          layoutAnimation: true,
-        },
+        // Demo expand/collapse morphs the clusters smoothly between layouts.
+        animationDurationUpdate: 500,
         emphasis: { focus: 'adjacency', scale: true },
         scaleLimit: { min: 0.6, max: 2.4 },
         data: nodes,
