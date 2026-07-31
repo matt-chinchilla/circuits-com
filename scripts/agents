@@ -162,6 +162,92 @@ def render(path: Path, tail: int, verbose: bool, width: int) -> None:
         print(f"  {C['dim']}{stamp}{C['reset']} {C[color_key]}{prefix}{body}{C['reset']}")
 
 
+WORK_PATTERNS = (
+    ("pytest", "running backend tests"),
+    ("vitest", "running frontend tests"),
+    ("tsc ", "type-checking"),
+    ("eslint", "linting"),
+    ("alembic", "running a migration"),
+    ("docker compose build", "building a container"),
+    ("docker-compose build", "building a container"),
+    ("npm run build", "building the frontend"),
+)
+
+
+def live_evidence(repo: Path, width: int) -> None:
+    """What agents are doing RIGHT NOW, inferred from the machine itself.
+
+    Agent transcripts are not always flushed to disk while an agent is
+    working, so a transcript-only viewer can show "nothing happening" while an
+    agent is mid-test-run. Processes, file mtimes and git state are always
+    true, so they are the honest fallback.
+    """
+    import subprocess
+
+    print(f"\n{C['bold']}◆ live evidence{C['reset']}")
+
+    try:
+        ps = subprocess.run(
+            ["ps", "-eo", "pid,etime,args"], capture_output=True, text=True, timeout=10
+        ).stdout.splitlines()
+    except (OSError, subprocess.SubprocessError):
+        ps = []
+    # One row per KIND of work, keeping the longest-running instance: a single
+    # `pytest` run also shows up as its zsh wrapper and any watcher polling it,
+    # and three lines for one test run reads as three test runs.
+    longest: dict[str, tuple[str, str]] = {}
+    for row in ps:
+        if "/scripts/agents" in row or "ps -eo" in row:
+            continue
+        parts = row.split(None, 2)
+        if len(parts) < 3:
+            continue
+        pid, elapsed, cmd = parts
+        # Skip shell wrappers — they carry the same pattern as the real process.
+        if cmd.startswith(("/usr/bin/zsh", "/bin/sh", "/bin/bash")) and " -c " in cmd:
+            continue
+        for pattern, meaning in WORK_PATTERNS:
+            if pattern in cmd:
+                prev = longest.get(meaning)
+                if prev is None or len(elapsed) > len(prev[1]) or elapsed > prev[1]:
+                    longest[meaning] = (pid, elapsed)
+                break
+    for meaning, (pid, elapsed) in list(longest.items())[:4]:
+        print(f"  {C['tool']}⚙ {meaning}{C['reset']} "
+              f"{C['dim']}(pid {pid}, {elapsed} elapsed){C['reset']}")
+    if not longest:
+        print(f"  {C['dim']}no build/test process running{C['reset']}")
+
+    try:
+        status = subprocess.run(
+            ["git", "-C", str(repo), "status", "--short"],
+            capture_output=True, text=True, timeout=10,
+        ).stdout.strip().splitlines()
+    except (OSError, subprocess.SubprocessError):
+        status = []
+    if status:
+        # `git status --short` is "XY path"; splitting on whitespace survives
+        # both staged ("M  path") and unstaged (" M path") forms.
+        names = [s.split(maxsplit=1)[-1] for s in status[:6]]
+        print(f"  {C['text']}✎ {len(status)} uncommitted file(s):{C['reset']} "
+              f"{C['dim']}{clip(', '.join(names), width - 30)}{C['reset']}")
+
+    for ledger in sorted(repo.glob(".superpowers/sdd/*/progress.md")):
+        tail = [ln for ln in ledger.read_text().splitlines() if ln.strip()][-3:]
+        if len(tail) > 1:
+            print(f"  {C['ok']}▤ {ledger.parent.name}{C['reset']}")
+            for ln in tail[1:]:
+                print(f"      {C['dim']}{clip(ln, width - 10)}{C['reset']}")
+
+    for report in sorted(repo.glob(".superpowers/sdd/*/task-*-report.md"),
+                         key=lambda p: p.stat().st_mtime, reverse=True)[:2]:
+        age = int((time.time() - report.stat().st_mtime) // 60)
+        lines = [ln for ln in report.read_text().splitlines() if ln.strip()]
+        print(f"  {C['ok']}▤ {report.name}{C['reset']} {C['dim']}({age}m ago){C['reset']}")
+        for ln in lines[-3:]:
+            print(f"      {C['dim']}{clip(ln, width - 10)}{C['reset']}")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Watch Claude subagent activity.")
     ap.add_argument("focus", nargs="?", help="name or id fragment of one agent")
@@ -187,10 +273,13 @@ def main() -> int:
         print(f"{C['dim']}agents · {datetime.now():%H:%M:%S}"
               f"{' · following (Ctrl-C to stop)' if args.follow else ''}{C['reset']}")
         if not paths:
-            print(f"  {C['dim']}no agent activity in the last hour "
+            print(f"  {C['dim']}no agent transcripts in the last hour "
                   f"(use -a for older){C['reset']}")
         for path in reversed(paths):
             render(path, args.tail, args.verbose or bool(args.focus), args.width)
+
+        if not args.focus:
+            live_evidence(Path(__file__).resolve().parent.parent, args.width)
 
         if not args.follow:
             return 0
