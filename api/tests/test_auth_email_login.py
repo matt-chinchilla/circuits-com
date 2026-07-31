@@ -4,9 +4,9 @@ Three contracts live here:
 
 1. **The login identifier is the email address**, matched case-insensitively on
    ``lower(email)`` — the same expression the ``uq_users_email_lower`` unique
-   index covers. Usernames no longer authenticate, with ONE documented
-   exception: the public demo account (``demo`` / ``demo``), advertised
-   verbatim on the sign-in screen.
+   index covers. Usernames no longer authenticate — for ANY account, the
+   public demo one included (task 4 retired the last carve-out; prospects use
+   ``POST /api/auth/demo`` instead).
 2. **Sessions die on password change.** ``create_token`` stamps ``iat``;
    ``get_current_user`` rejects a token minted before the user's
    ``password_changed_at`` with 401 "Session expired". NULL means "no
@@ -144,7 +144,13 @@ class TestLoginAntiEnumeration:
 
 
 class TestDemoAccount:
-    """The sign-in screen advertises demo/demo verbatim — it must keep working."""
+    """The demo account logs in by EMAIL like everyone else.
+
+    Task 4 (owner decision, 2026-07-31) retired the `demo` username fallback
+    this class used to guard: email is now the only login key for every
+    account, and prospects get in via POST /api/auth/demo — which ships no
+    credential in the public bundle. See test_auth_forced_password_change.py.
+    """
 
     def _seed_demo(self, db, password="demo"):
         user = User(
@@ -157,35 +163,36 @@ class TestDemoAccount:
         db.commit()
         return user
 
-    def test_demo_username_authenticates(self, client, db, seeded_db):
+    def test_demo_username_no_longer_authenticates(self, client, db, seeded_db):
         self._seed_demo(db)
         resp = _login(client, email="demo", password="demo")
-        assert resp.status_code == 200
-        assert resp.json()["user"]["username"] == "demo"
-
-    def test_demo_username_is_case_insensitive(self, client, db, seeded_db):
-        self._seed_demo(db)
-        assert _login(client, email="DEMO", password="demo").status_code == 200
+        assert resp.status_code == 401
+        assert resp.json()["detail"] == "Invalid credentials"
 
     def test_demo_email_authenticates(self, client, db, seeded_db):
         self._seed_demo(db)
         resp = _login(client, email="demo@circuitcenter.ai", password="demo")
         assert resp.status_code == 200
+        assert resp.json()["user"]["username"] == "demo"
+
+    def test_demo_email_is_case_insensitive(self, client, db, seeded_db):
+        self._seed_demo(db)
+        assert _login(client, email="Demo@CircuitCenter.ai", password="demo").status_code == 200
 
     def test_demo_wrong_password_still_rejected(self, client, db, seeded_db):
         self._seed_demo(db)
-        assert _login(client, email="demo", password="nope").status_code == 401
+        assert _login(client, email="demo@circuitcenter.ai", password="nope").status_code == 401
 
-    def test_demo_fallback_does_not_generalize_to_other_usernames(self, client, db, seeded_db):
-        # Only the literal "demo" username resolves — this is a one-account
-        # carve-out, not a username login path.
+    def test_no_username_resolves_for_any_account(self, client, db, seeded_db):
+        # The carve-out is gone; there is no username login path at all.
         self._seed_demo(db)
         assert _login(client, email="kennedy_user", password=ADMIN_PASSWORD).status_code == 401
 
     def test_demo_is_not_forced_to_change_its_password(self, client, db, seeded_db):
         user = self._seed_demo(db)
         assert user.must_change_password is False
-        assert _login(client, email="demo", password="demo").json()["must_change_password"] is False
+        login = _login(client, email="demo@circuitcenter.ai", password="demo")
+        assert login.json()["must_change_password"] is False
 
 
 class TestMustChangePasswordFlag:

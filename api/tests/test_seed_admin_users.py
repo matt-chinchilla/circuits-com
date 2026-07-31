@@ -1,7 +1,8 @@
-"""Tests for the seeded admin users: emails + the demo/demo account.
+"""Tests for the seeded admin users: emails + the public demo account.
 
-The recovery flows need an email on each admin row, and the redesigned login
-advertises a working demo/demo account.
+The recovery flows need an email on each admin row, and the seeded demo row is
+what ``POST /api/auth/demo`` (one-click prospect access) resolves — so its
+address has to match ``settings.DEMO_LOGIN_EMAIL``.
 """
 
 import bcrypt
@@ -58,24 +59,28 @@ class TestSeedAdminUsers:
             ("Anthony", "Anthony@CircuitCenter.ai", "AntmyfriendAnt"),
             ("Ronald", "ronald@circuitcenter.ai", "RonmyfriendRon"),
         ):
-            resp = client.post(
-                "/api/auth/login", json={"email": email, "password": password}
-            )
+            resp = client.post("/api/auth/login", json={"email": email, "password": password})
             assert resp.status_code == 200, f"{username} login failed"
             assert resp.json()["user"]["username"] == username
 
-    def test_demo_credentials_authenticate(self, client, db):
-        # The sign-in screen advertises "demo / demo" verbatim — the bare
-        # username must keep authenticating even though email is the login key.
+    def test_demo_username_does_not_authenticate(self, client, db):
+        # Task 4 retired the last username carve-out: email is the only login
+        # key, for every account. Prospects use POST /api/auth/demo instead.
         _seed_admin_user(db)
         db.commit()
-        resp = client.post(
-            "/api/auth/login", json={"email": "demo", "password": "demo"}
-        )
+        resp = client.post("/api/auth/login", json={"email": "demo", "password": "demo"})
+        assert resp.status_code == 401
+
+    def test_seeded_demo_row_powers_the_one_click_demo_endpoint(self, client, db):
+        # The seeded email must match settings.DEMO_LOGIN_EMAIL or /auth/demo
+        # 404s in prod.
+        _seed_admin_user(db)
+        db.commit()
+        resp = client.post("/api/auth/demo")
         assert resp.status_code == 200
         assert resp.json()["user"]["username"] == "demo"
 
-    def test_demo_also_authenticates_by_email(self, client, db):
+    def test_demo_authenticates_by_email(self, client, db):
         _seed_admin_user(db)
         db.commit()
         resp = client.post(
@@ -92,13 +97,10 @@ class TestSeedAdminUsers:
         _seed_admin_user(db)
         db.commit()
         resp = client.post(
-            "/api/auth/login", json={"email": "demo", "password": "demo"}
+            "/api/auth/login", json={"email": "demo@circuitcenter.ai", "password": "demo"}
         )
         assert resp.json()["must_change_password"] is False
-        assert (
-            db.query(User).filter(User.username == "demo").first().must_change_password
-            is False
-        )
+        assert db.query(User).filter(User.username == "demo").first().must_change_password is False
 
     def test_idempotent_no_duplicates(self, db):
         _seed_admin_user(db)

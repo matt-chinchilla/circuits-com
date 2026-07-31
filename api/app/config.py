@@ -19,6 +19,14 @@ class Settings(BaseSettings):
     # the prod .env only with another trusted domain.
     APP_BASE_URL: str = "https://circuitcenter.ai"
 
+    # One-click demo access (POST /api/auth/demo). The endpoint takes NO
+    # credentials — it mints a token for DEMO_LOGIN_EMAIL — so no password ever
+    # ships in the public JS bundle. Flip DEMO_LOGIN_ENABLED=false in the prod
+    # .env to switch prospect access off WITHOUT a frontend redeploy (the route
+    # then 404s, indistinguishable from a route that was never deployed).
+    DEMO_LOGIN_ENABLED: bool = True
+    DEMO_LOGIN_EMAIL: str = "demo@circuitcenter.ai"
+
     # SMTP - when SMTP_HOST is unset, services/email.py runs in demo mode
     # (logs the email payload to stderr instead of sending). Lets local dev
     # work without exposing the prod mailbox password.

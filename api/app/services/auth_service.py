@@ -150,10 +150,23 @@ def reset_token_matches_hash(payload: dict, password_hash: str) -> bool:
     return payload.get("pwfp") == _pw_fingerprint(password_hash)
 
 
-def get_current_user(
+# The 403 body a flagged user gets from every gated route. A machine-readable
+# code, not prose: the admin client keys the "set a new password" redirect off
+# this exact string, so changing it silently breaks the forced-reset UX.
+PASSWORD_CHANGE_REQUIRED_DETAIL = "password_change_required"
+
+
+def get_authenticated_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(security),
     db: Session = Depends(get_db),
 ) -> User:
+    """Authenticate the bearer token — WITHOUT the forced-password-change gate.
+
+    Only the three endpoints a flagged user must still reach may depend on
+    this: ``/api/auth/change-password`` (the way out), ``/api/auth/me`` (the
+    client asks "who am I / do I have to change it?") and logout. Everything
+    else takes :func:`get_current_user`, which adds the 403 gate.
+    """
     if credentials is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -200,5 +213,34 @@ def get_current_user(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Session expired",
+        )
+    return user
+
+
+def get_current_user(user: User = Depends(get_authenticated_user)) -> User:
+    """The authenticated user, gated on a pending forced password change.
+
+    THE enforcement point for ``must_change_password``: a flagged user gets 403
+    ``password_change_required`` on every route that depends on this — the
+    admin screen is only its front end, and deleting the screen would not open
+    the console.
+
+    Fail-CLOSED by construction: every admin route already depends on
+    ``get_current_user``, so the gate covers them all (and covers any route
+    added later) without a per-router opt-in that a new endpoint could forget.
+    The three exempt endpoints opt OUT explicitly via
+    :func:`get_authenticated_user`.
+
+    Deliberately role-agnostic — it never compares ``role`` to ``"admin"``, so
+    the ``owner`` role (matthew, alembic 022) is neither privileged nor locked
+    out by it. Any future role check must use a set like ``{"admin", "owner"}``.
+    """
+    # bool(): the column is NOT NULL, but a row read through a connection that
+    # predates alembic 022 could still surface None — never let `if x` decide
+    # on a value whose null-ness is uncertain.
+    if bool(user.must_change_password):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=PASSWORD_CHANGE_REQUIRED_DETAIL,
         )
     return user
