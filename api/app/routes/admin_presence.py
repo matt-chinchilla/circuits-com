@@ -31,9 +31,11 @@ from app.services.auth_service import get_current_user
 
 router = APIRouter(prefix="/api/admin", tags=["admin-presence"])
 
-# A client heartbeats every 30s; 75s tolerates one dropped ping (plus slack)
-# before a user is considered gone.
-PRESENCE_TTL_SECONDS = 75.0
+# A client heartbeats every 15s; 40s tolerates two dropped pings (plus slack)
+# before a user is considered gone. Tightened from 75s so a colleague closing
+# their tab disappears in ~40-55s instead of ~105s — the TTL, not the poll,
+# dominates departure latency, so both had to come down together.
+PRESENCE_TTL_SECONDS = 40.0
 
 
 class PresenceUser(BaseModel):

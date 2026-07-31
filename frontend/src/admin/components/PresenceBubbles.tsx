@@ -14,8 +14,11 @@ import styles from './PresenceBubbles.module.scss';
  * ambient information; it must not be able to shout.
  */
 
-// Heartbeat cadence. The backend TTL is 75s, so one dropped ping is survivable.
-const PING_MS = 30_000;
+// Heartbeat cadence. Kept tight (15s) so arrivals and departures read as LIVE:
+// worst-case departure latency is the backend TTL plus one poll. The backend
+// TTL (40s) is ~2.5x this, so a couple of dropped pings still can't make a
+// present colleague flicker out.
+const PING_MS = 15_000;
 const MAX_VISIBLE = 4;
 
 // Stable per-user accent, hashed from the username so a given person keeps the
