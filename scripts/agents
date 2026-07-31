@@ -1,0 +1,207 @@
+#!/usr/bin/env python3
+"""agents — see what Claude's subagents are actually doing.
+
+Subagents write a live JSONL transcript per agent. This renders them as a
+readable feed: what each one is thinking, which tools it is running, and what
+came back — so a long delegated task is not a black box.
+
+Usage (from the repo root):
+    ./scripts/agents                # one-screen status of every recent agent
+    ./scripts/agents -v             # include each agent's reasoning
+    ./scripts/agents -f             # follow live (Ctrl-C to stop)
+    ./scripts/agents -n 40          # show more history per agent
+    ./scripts/agents <name-or-id>   # focus one agent, full detail
+
+Inside a Claude Code session, prefix with `!` so the output lands in the
+conversation:  ! ./scripts/agents -v
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import sys
+import time
+from datetime import datetime
+from pathlib import Path
+
+PROJECT_DIR = Path.home() / ".claude" / "projects" / "-home-matthew-circuits-com"
+# Session scratch dirs hold background-task output and, for some agent kinds,
+# the only copy of the transcript.
+SCRATCH_ROOTS = [Path("/tmp/claude-1000/-home-matthew-circuits-com")]
+
+C = {
+    "dim": "\033[2m",
+    "bold": "\033[1m",
+    "reset": "\033[0m",
+    "think": "\033[38;5;245m",
+    "tool": "\033[38;5;39m",
+    "text": "\033[38;5;252m",
+    "ok": "\033[38;5;42m",
+    "warn": "\033[38;5;214m",
+    "name": "\033[38;5;213m",
+}
+if not sys.stdout.isatty() or os.environ.get("NO_COLOR"):
+    C = dict.fromkeys(C, "")
+
+
+def transcripts(session: str | None = None) -> list[Path]:
+    """Every agent transcript, newest activity first.
+
+    Two producers write these, in different places: Agent-tool subagents land
+    under <session>/subagents/, workflow agents under
+    <session>/subagents/workflows/<run>/, and background task output under the
+    scratch task dir. Glob widely — a viewer that silently misses a whole
+    class of agent is worse than no viewer.
+    """
+    found: list[Path] = []
+    roots = [PROJECT_DIR, *SCRATCH_ROOTS]
+    for root in roots:
+        if not root.exists():
+            continue
+        for pattern in ("*/subagents/agent-*.jsonl",
+                        "*/subagents/workflows/*/agent-*.jsonl",
+                        "**/agent-*.jsonl"):
+            try:
+                found += list(root.glob(pattern))
+            except OSError:
+                continue
+    uniq = {p.resolve(): p for p in found if p.is_file()}
+    paths = list(uniq.values())
+    if session:
+        paths = [p for p in paths if session in str(p)]
+    return sorted(paths, key=lambda p: p.stat().st_mtime, reverse=True)
+
+
+def label(path: Path) -> str:
+    """Prefer the agent's human name from its sidecar meta file."""
+    meta = path.with_suffix(".meta.json")
+    if meta.exists():
+        try:
+            data = json.loads(meta.read_text())
+            for key in ("name", "agentName", "description", "subagent_type"):
+                if data.get(key):
+                    return str(data[key])
+        except (json.JSONDecodeError, OSError):
+            pass
+    return path.stem.replace("agent-", "")[:12]
+
+
+def clip(text: str, width: int) -> str:
+    text = " ".join(str(text).split())
+    return text if len(text) <= width else text[: width - 1] + "…"
+
+
+def events(path: Path, verbose: bool) -> list[tuple[str, str, str]]:
+    """(timestamp, kind, rendered) for each interesting event in a transcript."""
+    out: list[tuple[str, str, str]] = []
+    try:
+        lines = path.read_text(errors="replace").splitlines()
+    except OSError:
+        return out
+    for line in lines:
+        try:
+            rec = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        stamp = str(rec.get("timestamp", ""))[11:19]
+        msg = rec.get("message") or {}
+        content = msg.get("content")
+        if rec.get("type") == "assistant" and isinstance(content, list):
+            for block in content:
+                kind = block.get("type")
+                if kind == "thinking" and verbose:
+                    out.append((stamp, "think", block.get("thinking", "")))
+                elif kind == "text" and block.get("text", "").strip():
+                    out.append((stamp, "text", block["text"]))
+                elif kind == "tool_use":
+                    inp = block.get("input") or {}
+                    detail = (
+                        inp.get("command")
+                        or inp.get("file_path")
+                        or inp.get("pattern")
+                        or inp.get("prompt")
+                        or ""
+                    )
+                    out.append((stamp, "tool", f"{block.get('name', '?')}  {detail}"))
+        elif rec.get("type") == "user" and isinstance(content, list):
+            for block in content:
+                if block.get("type") == "tool_result":
+                    body = block.get("content")
+                    if isinstance(body, list):
+                        body = " ".join(
+                            b.get("text", "") for b in body if isinstance(b, dict)
+                        )
+                    flag = "warn" if block.get("is_error") else "result"
+                    out.append((stamp, flag, str(body or "")))
+    return out
+
+
+ICON = {
+    "think": ("think", "· "),
+    "text": ("text", "» "),
+    "tool": ("tool", "→ "),
+    "result": ("dim", "  ← "),
+    "warn": ("warn", "  ✗ "),
+}
+
+
+def render(path: Path, tail: int, verbose: bool, width: int) -> None:
+    evs = events(path, verbose)
+    if not evs:
+        return
+    age = time.time() - path.stat().st_mtime
+    state = f"{C['ok']}live{C['reset']}" if age < 90 else f"{C['dim']}idle {int(age // 60)}m{C['reset']}"
+    print(f"\n{C['bold']}{C['name']}◆ {label(path)}{C['reset']}  {state}")
+    for stamp, kind, body in evs[-tail:]:
+        color_key, prefix = ICON.get(kind, ("text", "  "))
+        body = clip(body, width)
+        if not body:
+            continue
+        print(f"  {C['dim']}{stamp}{C['reset']} {C[color_key]}{prefix}{body}{C['reset']}")
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description="Watch Claude subagent activity.")
+    ap.add_argument("focus", nargs="?", help="name or id fragment of one agent")
+    ap.add_argument("-n", "--tail", type=int, default=12, help="events per agent")
+    ap.add_argument("-v", "--verbose", action="store_true", help="include reasoning")
+    ap.add_argument("-f", "--follow", action="store_true", help="refresh live")
+    ap.add_argument("-a", "--all", action="store_true", help="include idle agents")
+    ap.add_argument("-w", "--width", type=int, default=150, help="max line width")
+    args = ap.parse_args()
+
+    while True:
+        paths = transcripts()
+        if args.focus:
+            paths = [p for p in paths if args.focus.lower() in label(p).lower()
+                     or args.focus in p.stem]
+        elif not args.all:
+            cutoff = time.time() - 3600
+            paths = [p for p in paths if p.stat().st_mtime > cutoff]
+        paths = paths[:8]
+
+        if args.follow:
+            print("\033[2J\033[H", end="")
+        print(f"{C['dim']}agents · {datetime.now():%H:%M:%S}"
+              f"{' · following (Ctrl-C to stop)' if args.follow else ''}{C['reset']}")
+        if not paths:
+            print(f"  {C['dim']}no agent activity in the last hour "
+                  f"(use -a for older){C['reset']}")
+        for path in reversed(paths):
+            render(path, args.tail, args.verbose or bool(args.focus), args.width)
+
+        if not args.follow:
+            return 0
+        try:
+            time.sleep(3)
+        except KeyboardInterrupt:
+            return 0
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except KeyboardInterrupt:
+        sys.exit(0)
