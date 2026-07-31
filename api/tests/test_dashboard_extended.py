@@ -28,7 +28,9 @@ def _today_est() -> date:
 
 
 def _auth_header(client):
-    resp = client.post("/api/auth/login", json={"email": "admin@test.example", "password": "testpass123"})
+    resp = client.post(
+        "/api/auth/login", json={"email": "admin@test.example", "password": "testpass123"}
+    )
     return {"Authorization": f"Bearer {resp.json()['token']}"}
 
 
@@ -378,6 +380,27 @@ class TestAdminSalesRepsLookup:
         data = client.get("/api/admin/sales-reps", headers=_auth_header(client)).json()
         # conftest seeds one admin + one 'company'-role user; only admins qualify.
         assert data["reps"] == ["admin"]
+
+    def test_includes_the_owner(self, client, db, seeded_db):
+        # `owner` is a tier ABOVE admin (alembic 022). A `role == "admin"`
+        # filter drops the site owner out of the sponsor form's rep list, so
+        # his existing deals render as "matthew (former)" and he can't be
+        # picked on a new one.
+        import bcrypt
+
+        from app.models import User
+
+        db.add(
+            User(
+                username="matthew",
+                email="matthew@test.example",
+                password_hash=bcrypt.hashpw(b"testpass123", bcrypt.gensalt()).decode(),
+                role="owner",
+            )
+        )
+        db.commit()
+        data = client.get("/api/admin/sales-reps", headers=_auth_header(client)).json()
+        assert data["reps"] == ["admin", "matthew"]
 
 
 # ---------------------------------------------------------------------------

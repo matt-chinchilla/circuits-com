@@ -23,6 +23,7 @@ from app.models import Part, PartListing, PriceBreak, Revenue, User
 # User model
 # =========================================================================
 
+
 class TestUserModel:
     def test_create_admin_user(self, db):
         from app.models import User
@@ -104,6 +105,7 @@ class TestUserModel:
 # Part model
 # =========================================================================
 
+
 class TestPartModel:
     def test_create_part(self, seeded_db, db):
         part = seeded_db["part1"]
@@ -172,6 +174,7 @@ class TestPartModel:
 # PartListing model
 # =========================================================================
 
+
 class TestPartListingModel:
     def test_create_listing(self, seeded_db):
         listing = seeded_db["listing1"]
@@ -234,13 +237,14 @@ class TestPartListingModel:
 # PriceBreak model
 # =========================================================================
 
+
 class TestPriceBreakModel:
     def test_create_price_break(self, seeded_db, db):
         from app.models import PriceBreak
 
-        breaks = db.query(PriceBreak).filter(
-            PriceBreak.listing_id == seeded_db["listing1"].id
-        ).all()
+        breaks = (
+            db.query(PriceBreak).filter(PriceBreak.listing_id == seeded_db["listing1"].id).all()
+        )
         assert len(breaks) == 3
 
         # Prices decrease at higher quantities
@@ -260,6 +264,7 @@ class TestPriceBreakModel:
 # =========================================================================
 # Revenue model
 # =========================================================================
+
 
 class TestRevenueModel:
     def test_create_revenue(self, seeded_db):
@@ -309,6 +314,7 @@ class TestRevenueModel:
 # =========================================================================
 # Existing model timestamp additions
 # =========================================================================
+
 
 class TestTimestamps:
     def test_supplier_has_timestamps(self, seeded_db):
@@ -375,6 +381,7 @@ class TestTimestamps:
 # Seed idempotency
 # =========================================================================
 
+
 class TestSeedIdempotency:
     def test_seed_runs_twice_without_error(self, db):
         from app.db.seed import seed
@@ -392,10 +399,13 @@ class TestSeedIdempotency:
         from app.db.seed import seed
 
         seed(db)
-        # matthew keeps the "admin" dev-fallback (SEED_PW_MATTHEW default)
+        # matthew keeps the "admin" dev-fallback password (SEED_PW_MATTHEW
+        # default) but his ROLE is `owner` — the tier alembic 022 introduced.
+        # seed.py holds that invariant so a fresh DB / --reseed can't demote
+        # him (see test_seed_admin_users::TestSeededAccountContract).
         matthew = db.query(User).filter(User.username == "matthew").first()
         assert matthew is not None
-        assert matthew.role == "admin"
+        assert matthew.role == "owner"
         assert bcrypt.checkpw("admin".encode(), matthew.password_hash.encode())
         # current team seeded as admins (passwords sourced from env — see
         # test_seed_admin_users::test_new_team_credentials_authenticate)

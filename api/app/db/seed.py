@@ -36,6 +36,7 @@ from app.models import (
     Supplier,
     User,
 )
+from app.models.roles import ADMIN_ROLES
 from app.models.sponsor import is_single_slot
 from app.services.aws_cost import estimate_monthly_aws_cost
 
@@ -1264,6 +1265,20 @@ def seed(db: Session) -> None:
 # ---------------------------------------------------------------------------
 
 
+# The account contract alembic 022 backfilled ONCE, kept here so it survives a
+# fresh database and a reseed. 022's `UPDATE users ...` only matched rows that
+# already existed when it ran: on a new DB the entrypoint runs it BEFORE seed,
+# when `users` is still empty, and `./deploy.sh --reseed` truncates `users`
+# (FK to suppliers) long after 022 is stamped. Without these two lines here,
+# every new environment and every reseed silently demoted the owner back to
+# `admin` and cancelled all four forced rotations, with no error anywhere.
+_OWNER_USERNAME = "matthew"
+# Flagged for a forced password rotation ON CREATE — their credentials were
+# rotated out from under them. NEVER demo: flagging the public demo account
+# would trap every "See Demo" prospect on the "set a new password" screen.
+_FORCED_RESET_USERNAMES = ("matthew", "Daniel", "Anthony", "Ronald")
+
+
 def _seed_admin_user(db: Session) -> None:
     # (username, password, email). Emails power the account-recovery flows
     # (forgot-password / forgot-username); demo/demo is the public demo login
@@ -1282,7 +1297,9 @@ def _seed_admin_user(db: Session) -> None:
     ]
     created = 0
     backfilled = 0
+    promoted = 0
     for username, password, email in admin_users:
+        role = "owner" if username == _OWNER_USERNAME else "admin"
         existing = db.query(User).filter(User.username == username).first()
         if existing:
             # Backfill the email on rows seeded before migration 015 so existing
@@ -1290,13 +1307,33 @@ def _seed_admin_user(db: Session) -> None:
             if not existing.email:
                 existing.email = email
                 backfilled += 1
+            # `role` is a seed-declared invariant, so re-assert it — a row
+            # created before matthew became `owner` self-heals on the next
+            # seed. `must_change_password` is deliberately NOT re-asserted: an
+            # admin who already completed their forced reset cleared that flag,
+            # and re-stamping it would drop them back on the reset screen every
+            # time the seeder runs.
+            if existing.role != role:
+                existing.role = role
+                promoted += 1
             continue
         hashed = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
-        db.add(User(username=username, password_hash=hashed, role="admin", email=email))
+        db.add(
+            User(
+                username=username,
+                password_hash=hashed,
+                role=role,
+                email=email,
+                must_change_password=username in _FORCED_RESET_USERNAMES,
+            )
+        )
         created += 1
     db.flush()
-    if created or backfilled:
-        print(f"Seed: {created} admin user(s) created, {backfilled} email(s) backfilled.")
+    if created or backfilled or promoted:
+        print(
+            f"Seed: {created} admin user(s) created, {backfilled} email(s) backfilled, "
+            f"{promoted} role(s) corrected."
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -1983,7 +2020,7 @@ def _seed_sponsor_sold_by(db: Session) -> None:
     reps = [
         u.username
         for u in db.query(User)
-        .filter(User.role == "admin", User.username.in_(_SALES_REP_USERNAMES))
+        .filter(User.role.in_(ADMIN_ROLES), User.username.in_(_SALES_REP_USERNAMES))
         .all()
     ]
     # Preserve the declared team order (SQL IN() gives no ordering guarantee).
@@ -2023,8 +2060,7 @@ def _seed_sponsor_sold_by(db: Session) -> None:
 
     db.flush()
     print(
-        f"Seed: sold_by -> {to_rep} rep account(s), "
-        f"{len(sponsors) - to_rep} to '{_DEMO_SELLER}'."
+        f"Seed: sold_by -> {to_rep} rep account(s), {len(sponsors) - to_rep} to '{_DEMO_SELLER}'."
     )
 
 

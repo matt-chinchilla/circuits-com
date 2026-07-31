@@ -38,6 +38,7 @@ from app.models import (
     User,
 )
 from app.models.expense import expense_category_label
+from app.models.roles import ADMIN_ROLES
 from app.services.auth_service import get_current_user
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
@@ -437,9 +438,14 @@ def list_sales_reps(
     Every admin account is a candidate rep (there is no separate rep table), so
     this includes service logins like `demo`. Sorted case-insensitively for a
     stable dropdown order.
+
+    ``ADMIN_ROLES``, not ``role == "admin"``: `owner` is a tier above admin, and
+    a bare equality drops the owner out of this list — the sponsor form then
+    renders his existing deals as "matthew (former)" and won't let him be picked
+    as the rep on a new one.
     """
     usernames = [
-        row[0] for row in db.query(User.username).filter(User.role == "admin").all() if row[0]
+        row[0] for row in db.query(User.username).filter(User.role.in_(ADMIN_ROLES)).all() if row[0]
     ]
     return {"reps": sorted(usernames, key=str.lower)}
 
