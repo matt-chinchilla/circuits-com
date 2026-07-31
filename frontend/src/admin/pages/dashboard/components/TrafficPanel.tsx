@@ -36,7 +36,9 @@ export default function TrafficPanel({ series, loading }: TrafficPanelProps) {
   );
 
   return (
-    <div className={styles.panel}>
+    // panelFill: stretches to its Active Sponsors row-mate's height; the
+    // chart flexes to absorb the difference (120px floor when unstretched).
+    <div className={`${styles.panel} ${styles.panelFill}`}>
       <div className={styles.panelHead}>
         <div className={styles.panelHeadMain}>
           <h3 className={styles.panelTitle}>Site traffic</h3>
@@ -46,7 +48,7 @@ export default function TrafficPanel({ series, loading }: TrafficPanelProps) {
           Reports &rarr;
         </Link>
       </div>
-      <div className={styles.panelBody}>
+      <div className={`${styles.panelBody} ${styles.panelBodyFill}`}>
         {series.length < 2 ? (
           <div className={styles.emptyChart}>
             {loading ? 'Loading traffic…' : 'No page views recorded yet.'}
@@ -61,7 +63,7 @@ export default function TrafficPanel({ series, loading }: TrafficPanelProps) {
                   : ''}
               </span>
             </div>
-            <EChart option={option} style={{ height: 120 }} />
+            <EChart option={option} style={{ flex: '1 1 auto', minHeight: 120, height: 'auto' }} />
           </>
         )}
       </div>

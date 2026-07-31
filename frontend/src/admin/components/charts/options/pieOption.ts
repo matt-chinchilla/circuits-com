@@ -106,6 +106,10 @@ export function pieOption(input: PieOptionInput): EChartsCoreOption {
         ? { orient: 'vertical', right: 0, top: 'middle', itemGap: 12 }
         : { bottom: 0, left: 'center', itemGap: 16 }
       : { show: false },
+    // ONE two-line rich text, not two elements: `left/top: 'center'` layout
+    // overrides per-element position (and `style.y` isn't a text style), so
+    // two separately-centred texts can't be nudged apart — they land on top
+    // of each other. A single block centres as a whole and the lines stack.
     graphic: hasCenterText
       ? [
           {
@@ -114,30 +118,23 @@ export function pieOption(input: PieOptionInput): EChartsCoreOption {
             top: 'middle',
             silent: true,
             style: {
-              text: centerValue ?? '',
-              textAlign: 'center',
-              textVerticalAlign: 'middle',
-              // Nudged up so the two-line centre stack (value over label) clears
-              // the donut ring and never collides with the label below it.
-              y: -9,
-              // Proportional figures on purpose: equal-width digits make a
-              // large standalone number look loose.
-              font: `600 20px ${CHART_FONT}`,
-              fill: CHART_FG1,
-            },
-          },
-          {
-            type: 'text',
-            left: 'center',
-            top: 'middle',
-            silent: true,
-            style: {
-              text: centerLabel ?? '',
-              textAlign: 'center',
-              textVerticalAlign: 'middle',
-              y: 12,
-              font: `11px ${CHART_FONT}`,
-              fill: CHART_FG3,
+              text: [
+                // Proportional figures on purpose: equal-width digits make a
+                // large standalone number look loose.
+                centerValue ? `{v|${centerValue}}` : '',
+                centerLabel ? `{l|${centerLabel}}` : '',
+              ]
+                .filter(Boolean)
+                .join('\n'),
+              rich: {
+                v: { font: `600 20px ${CHART_FONT}`, fill: CHART_FG1, align: 'center' },
+                l: {
+                  font: `11px ${CHART_FONT}`,
+                  fill: CHART_FG3,
+                  align: 'center',
+                  padding: [4, 0, 0, 0],
+                },
+              },
             },
           },
         ]

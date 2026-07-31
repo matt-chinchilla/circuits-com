@@ -297,7 +297,9 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 20px;
-  align-items: start;
+  // Stretch (not start): row-mates share the row height, so Site traffic
+  // matches Active Sponsors instead of stopping at its natural height.
+  align-items: stretch;
   margin-bottom: 20px;
 
   @media (max-width: 1200px) {
@@ -331,6 +333,20 @@
   box-shadow: var(--a-shadow-sm);
   border: 1px solid var(--a-border-soft);
   min-width: 0;
+}
+
+// Row-mate equalizer: a stretched panel becomes a flex column whose body
+// grows, so its chart can absorb the height difference to its taller
+// neighbour (EChart's ResizeObserver re-fits the canvas).
+.panelFill {
+  display: flex;
+  flex-direction: column;
+}
+
+.panelBodyFill {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
 }
 
 .panelHead {
