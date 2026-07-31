@@ -21,7 +21,7 @@ class TestDashboardAuth:
 
 def _auth_header(client):
     resp = client.post("/api/auth/login", json={
-        "username": "admin",
+        "email": "admin@test.example",
         "password": "testpass123",
     })
     token = resp.json()["token"]

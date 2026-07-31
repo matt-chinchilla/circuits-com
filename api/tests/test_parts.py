@@ -56,7 +56,7 @@ def test_part_to_dict_includes_parent_category_icon(db, seeded_db):
 
 def _auth_header(client):
     resp = client.post("/api/auth/login", json={
-        "username": "admin",
+        "email": "admin@test.example",
         "password": "testpass123",
     })
     token = resp.json()["token"]

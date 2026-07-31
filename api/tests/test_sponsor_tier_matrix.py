@@ -92,7 +92,7 @@ def admin_user(db):
 def admin_client(client, admin_user):
     """An authed TestClient: injects the admin Bearer token on every request."""
     token = client.post(
-        "/api/auth/login", json={"username": "admin", "password": "testpass123"}
+        "/api/auth/login", json={"email": "admin@test.example", "password": "testpass123"}
     ).json()["token"]
     client.headers.update({"Authorization": f"Bearer {token}"})
     return client

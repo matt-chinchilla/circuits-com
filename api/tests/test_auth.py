@@ -4,7 +4,7 @@
 class TestLogin:
     def test_login_valid_credentials(self, client, seeded_db):
         resp = client.post("/api/auth/login", json={
-            "username": "admin",
+            "email": "admin@test.example",
             "password": "testpass123",
         })
         assert resp.status_code == 200
@@ -16,7 +16,7 @@ class TestLogin:
 
     def test_login_company_user(self, client, seeded_db):
         resp = client.post("/api/auth/login", json={
-            "username": "kennedy_user",
+            "email": "kennedy_user@test.example",
             "password": "testpass123",
         })
         assert resp.status_code == 200
@@ -26,7 +26,7 @@ class TestLogin:
 
     def test_login_wrong_password(self, client, seeded_db):
         resp = client.post("/api/auth/login", json={
-            "username": "admin",
+            "email": "admin@test.example",
             "password": "wrongpassword",
         })
         assert resp.status_code == 401
@@ -34,7 +34,7 @@ class TestLogin:
 
     def test_login_nonexistent_user(self, client, seeded_db):
         resp = client.post("/api/auth/login", json={
-            "username": "nobody",
+            "email": "nobody@test.example",
             "password": "testpass123",
         })
         assert resp.status_code == 401
@@ -49,9 +49,9 @@ class TestLogout:
 
 
 class TestMe:
-    def _get_token(self, client, username="admin", password="testpass123"):
+    def _get_token(self, client, email="admin@test.example", password="testpass123"):
         resp = client.post("/api/auth/login", json={
-            "username": username,
+            "email": email,
             "password": password,
         })
         return resp.json()["token"]
@@ -94,7 +94,7 @@ class TestMe:
         assert resp.status_code == 401
 
     def test_me_company_user(self, client, seeded_db):
-        token = self._get_token(client, "kennedy_user", "testpass123")
+        token = self._get_token(client, "kennedy_user@test.example", "testpass123")
         resp = client.get("/api/auth/me", headers={
             "Authorization": f"Bearer {token}",
         })

@@ -100,17 +100,21 @@ def client(db):
 @pytest.fixture
 def auth_header(client):
     """Log in and return the Bearer header — ``auth_header()`` for the seeded
-    admin, ``auth_header(username="kennedy_user")`` for anyone else.
+    admin, ``auth_header(email="kennedy_user@test.example")`` for anyone else.
+
+    Login is keyed on the EMAIL address (P1 auth overhaul), not the username.
 
     THE home for this: the login route, the token field and the seed password
     are one edit here instead of one per test module. Requires ``seeded_db``
     (request it in the test alongside this fixture — the users live there).
     """
 
-    def _make(username: str = "admin", password: str = "testpass123") -> dict[str, str]:
+    def _make(
+        email: str = "admin@test.example", password: str = "testpass123"
+    ) -> dict[str, str]:
         resp = client.post(
             "/api/auth/login",
-            json={"username": username, "password": password},
+            json={"email": email, "password": password},
         )
         token = resp.json()["token"]
         return {"Authorization": f"Bearer {token}"}

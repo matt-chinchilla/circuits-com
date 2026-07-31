@@ -24,7 +24,7 @@ def test_supplier_contact_role_length():
 
 def _auth_header(client):
     resp = client.post(
-        "/api/auth/login", json={"username": "admin", "password": "testpass123"}
+        "/api/auth/login", json={"email": "admin@test.example", "password": "testpass123"}
     )
     return {"Authorization": f"Bearer {resp.json()['token']}"}
 

@@ -20,7 +20,7 @@ backstop, skipped under SQLite like the XOR CheckConstraint).
 
 def _auth(client):
     token = client.post(
-        "/api/auth/login", json={"username": "admin", "password": "testpass123"}
+        "/api/auth/login", json={"email": "admin@test.example", "password": "testpass123"}
     ).json()["token"]
     return {"Authorization": f"Bearer {token}"}
 

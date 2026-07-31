@@ -37,7 +37,7 @@ def test_repeat_ping_upserts_not_duplicates(client, seeded_db, auth_header):
 
 def test_two_users_see_each_other(client, seeded_db, auth_header):
     admin_header = auth_header()
-    company_header = auth_header(username="kennedy_user")
+    company_header = auth_header(email="kennedy_user@test.example")
 
     client.post("/api/admin/presence/ping", headers=admin_header)
     resp = client.post("/api/admin/presence/ping", headers=company_header)
@@ -54,7 +54,7 @@ def test_two_users_see_each_other(client, seeded_db, auth_header):
 def test_stale_entry_drops_out(client, seeded_db, auth_header, monkeypatch):
     """A user who stopped heartbeating falls off once past the TTL."""
     admin_header = auth_header()
-    company_header = auth_header(username="kennedy_user")
+    company_header = auth_header(email="kennedy_user@test.example")
 
     client.post("/api/admin/presence/ping", headers=admin_header)
 
@@ -69,7 +69,7 @@ def test_stale_entry_drops_out(client, seeded_db, auth_header, monkeypatch):
 def test_entry_inside_ttl_survives(client, seeded_db, auth_header, monkeypatch):
     """Boundary companion to the test above — just under the TTL still counts."""
     admin_header = auth_header()
-    company_header = auth_header(username="kennedy_user")
+    company_header = auth_header(email="kennedy_user@test.example")
 
     client.post("/api/admin/presence/ping", headers=admin_header)
 

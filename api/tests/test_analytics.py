@@ -2,7 +2,7 @@
 
 
 def _login(client):
-    resp = client.post("/api/auth/login", json={"username": "admin", "password": "testpass123"})
+    resp = client.post("/api/auth/login", json={"email": "admin@test.example", "password": "testpass123"})
     return resp.json()["token"]
 
 

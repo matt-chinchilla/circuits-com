@@ -1,6 +1,6 @@
 import hashlib
 import uuid as uuid_mod
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 
 import bcrypt
 import jwt
@@ -20,6 +20,12 @@ TOKEN_EXPIRY_HOURS = 24
 REMEMBER_EXPIRY_HOURS = 24 * 30
 # Password-reset links are short-lived (the design copy promises 30 minutes).
 RESET_EXPIRY_MINUTES = 30
+# Session invalidation: a token is only honored if it was minted at (or after)
+# the user's last password change, so changing a password logs out every other
+# session. PyJWT truncates `iat` to whole seconds while password_changed_at
+# keeps microseconds — one second of grace absorbs that rounding (and any small
+# clock skew) so the token a password change hands back can't invalidate itself.
+SESSION_IAT_GRACE_SECONDS = 1
 
 
 def hash_password(password: str) -> str:
@@ -44,11 +50,14 @@ def verify_dummy_password() -> None:
 
 
 def create_token(user_id: str, role: str, expires_hours: int = TOKEN_EXPIRY_HOURS) -> str:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     payload = {
         "sub": user_id,
         "role": role,
         "exp": now + timedelta(hours=expires_hours),
+        # `iat` is load-bearing, not decorative: get_current_user compares it to
+        # the user's password_changed_at to kill sessions minted before the last
+        # password change. Never drop it from this payload.
         "iat": now,
     }
     return jwt.encode(payload, settings.ADMIN_SECRET_KEY, algorithm="HS256")
@@ -56,6 +65,40 @@ def create_token(user_id: str, role: str, expires_hours: int = TOKEN_EXPIRY_HOUR
 
 def decode_token(token: str) -> dict:
     return jwt.decode(token, settings.ADMIN_SECRET_KEY, algorithms=["HS256"])
+
+
+def _as_utc(dt: datetime) -> datetime:
+    """Normalize a DB datetime to aware-UTC.
+
+    Postgres hands back aware datetimes for a ``DateTime(timezone=True)``
+    column; SQLite (the test suite, built via ``Base.metadata.create_all``)
+    hands back NAIVE ones for the same column. Comparing aware to naive raises
+    TypeError, so treat a naive value as UTC — which is what both the model
+    default and the migration backfill write.
+    """
+    return dt if dt.tzinfo is not None else dt.replace(tzinfo=UTC)
+
+
+def token_predates_password_change(payload: dict, password_changed_at: datetime | None) -> bool:
+    """True when this token was minted before the user's last password change.
+
+    A NULL ``password_changed_at`` means "no constraint": fresh rows carry no
+    timestamp (alembic 022 backfilled only the users that already existed), and
+    reading NULL as "changed at the epoch" would instantly log out every newly
+    created user. A token with a missing or unparseable ``iat`` cannot prove it
+    is newer than the change, so it loses.
+    """
+    if password_changed_at is None:
+        return False
+    changed_at = _as_utc(password_changed_at)
+    raw_iat = payload.get("iat")
+    if raw_iat is None:
+        return True
+    try:
+        issued_at = datetime.fromtimestamp(float(raw_iat), tz=UTC)
+    except (TypeError, ValueError, OverflowError, OSError):
+        return True
+    return issued_at < changed_at - timedelta(seconds=SESSION_IAT_GRACE_SECONDS)
 
 
 # ── Password-reset tokens (tableless, single-use) ──────────────────────────
@@ -74,7 +117,7 @@ def _pw_fingerprint(password_hash: str) -> str:
 
 
 def create_reset_token(user_id: str, password_hash: str) -> str:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     payload = {
         "sub": user_id,
         "purpose": "pwreset",
@@ -150,5 +193,12 @@ def get_current_user(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found",
+        )
+    # Session invalidation: changing a password retires every token issued
+    # before the change (this one included), no revocation table required.
+    if token_predates_password_change(payload, user.password_changed_at):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Session expired",
         )
     return user

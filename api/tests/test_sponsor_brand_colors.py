@@ -42,7 +42,7 @@ def test_sponsor_brand_columns_metadata():
 def _auth_header(client):
     resp = client.post(
         "/api/auth/login",
-        json={"username": "admin", "password": "testpass123"},
+        json={"email": "admin@test.example", "password": "testpass123"},
     )
     token = resp.json()["token"]
     return {"Authorization": f"Bearer {token}"}

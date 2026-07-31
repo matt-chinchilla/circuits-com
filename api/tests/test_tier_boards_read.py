@@ -13,7 +13,7 @@ so the exact-count assertions over the base ``seeded_db`` fixture stay green.
 
 def _auth(client):
     token = client.post(
-        "/api/auth/login", json={"username": "admin", "password": "testpass123"}
+        "/api/auth/login", json={"email": "admin@test.example", "password": "testpass123"}
     ).json()["token"]
     return {"Authorization": f"Bearer {token}"}
 

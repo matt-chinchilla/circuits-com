@@ -50,25 +50,55 @@ class TestSeedAdminUsers:
         monkeypatch.setenv("SEED_PW_RONALD", "RonmyfriendRon")
         _seed_admin_user(db)
         db.commit()
-        for username, password in (
-            ("Daniel", "DanmyfriendDan"),
-            ("Anthony", "AntmyfriendAnt"),
-            ("Ronald", "RonmyfriendRon"),
+        # Login is keyed on the email address now — the seeded usernames are
+        # mixed-case, the addresses are lowercase, and both are matched
+        # case-insensitively.
+        for username, email, password in (
+            ("Daniel", "daniel@circuitcenter.ai", "DanmyfriendDan"),
+            ("Anthony", "Anthony@CircuitCenter.ai", "AntmyfriendAnt"),
+            ("Ronald", "ronald@circuitcenter.ai", "RonmyfriendRon"),
         ):
             resp = client.post(
-                "/api/auth/login", json={"username": username, "password": password}
+                "/api/auth/login", json={"email": email, "password": password}
             )
             assert resp.status_code == 200, f"{username} login failed"
             assert resp.json()["user"]["username"] == username
 
     def test_demo_credentials_authenticate(self, client, db):
+        # The sign-in screen advertises "demo / demo" verbatim — the bare
+        # username must keep authenticating even though email is the login key.
         _seed_admin_user(db)
         db.commit()
         resp = client.post(
-            "/api/auth/login", json={"username": "demo", "password": "demo"}
+            "/api/auth/login", json={"email": "demo", "password": "demo"}
         )
         assert resp.status_code == 200
         assert resp.json()["user"]["username"] == "demo"
+
+    def test_demo_also_authenticates_by_email(self, client, db):
+        _seed_admin_user(db)
+        db.commit()
+        resp = client.post(
+            "/api/auth/login",
+            json={"email": "demo@circuitcenter.ai", "password": "demo"},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["user"]["username"] == "demo"
+
+    def test_demo_is_exempt_from_forced_password_change(self, client, db):
+        # Migration 022 flags the four named admins, never demo — and the login
+        # response must say so, or the UI would trap the demo user on the
+        # "set a new password" screen.
+        _seed_admin_user(db)
+        db.commit()
+        resp = client.post(
+            "/api/auth/login", json={"email": "demo", "password": "demo"}
+        )
+        assert resp.json()["must_change_password"] is False
+        assert (
+            db.query(User).filter(User.username == "demo").first().must_change_password
+            is False
+        )
 
     def test_idempotent_no_duplicates(self, db):
         _seed_admin_user(db)

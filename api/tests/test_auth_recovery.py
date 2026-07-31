@@ -1,8 +1,10 @@
 """Tests for account recovery routes + the 30-day remember-me TTL.
 
-The seeded admin user (conftest) is username "admin" / password "testpass123"
-with no email; recovery tests that need an address set one in-test (the route's
-db is the same session as the `db` fixture via the client override).
+The seeded admin user (conftest) is username "admin" / email
+"admin@test.example" / password "testpass123"; recovery tests that need a
+different address set one in-test (the route's db is the same session as the
+`db` fixture via the client override). Login itself is keyed on the email
+address (P1 auth overhaul) — see test_auth_email_login.py.
 """
 
 import jwt
@@ -20,7 +22,7 @@ class TestRememberMe:
     def test_remember_true_issues_long_token(self, client, seeded_db):
         resp = client.post(
             "/api/auth/login",
-            json={"username": "admin", "password": "testpass123", "remember": True},
+            json={"email": "admin@test.example", "password": "testpass123", "remember": True},
         )
         assert resp.status_code == 200
         # 30 days, well beyond the 24h default
@@ -30,13 +32,13 @@ class TestRememberMe:
     def test_remember_false_issues_24h_token(self, client, seeded_db):
         resp = client.post(
             "/api/auth/login",
-            json={"username": "admin", "password": "testpass123", "remember": False},
+            json={"email": "admin@test.example", "password": "testpass123", "remember": False},
         )
         assert abs(_exp_window(resp.json()["token"]) - svc.TOKEN_EXPIRY_HOURS * 3600) <= 5
 
     def test_remember_defaults_to_false(self, client, seeded_db):
         resp = client.post(
-            "/api/auth/login", json={"username": "admin", "password": "testpass123"}
+            "/api/auth/login", json={"email": "admin@test.example", "password": "testpass123"}
         )
         assert resp.status_code == 200
         assert abs(_exp_window(resp.json()["token"]) - svc.TOKEN_EXPIRY_HOURS * 3600) <= 5
@@ -107,13 +109,13 @@ class TestResetPassword:
         assert resp.status_code == 200
         assert (
             client.post(
-                "/api/auth/login", json={"username": "admin", "password": "newpass99"}
+                "/api/auth/login", json={"email": "admin@test.example", "password": "newpass99"}
             ).status_code
             == 200
         )
         assert (
             client.post(
-                "/api/auth/login", json={"username": "admin", "password": "testpass123"}
+                "/api/auth/login", json={"email": "admin@test.example", "password": "testpass123"}
             ).status_code
             == 401
         )
@@ -169,7 +171,7 @@ class TestLoginEnumeration:
             "app.routes.auth.verify_dummy_password", lambda: calls.__setitem__("n", calls["n"] + 1)
         )
         resp = client.post(
-            "/api/auth/login", json={"username": "ghost-user", "password": "whatever"}
+            "/api/auth/login", json={"email": "ghost-user@test.example", "password": "whatever"}
         )
         assert resp.status_code == 401
         assert calls["n"] == 1
@@ -182,25 +184,45 @@ class TestLoginEnumeration:
             "app.routes.auth.verify_dummy_password", lambda: calls.__setitem__("n", calls["n"] + 1)
         )
         resp = client.post(
-            "/api/auth/login", json={"username": "admin", "password": "wrongpass"}
+            "/api/auth/login", json={"email": "admin@test.example", "password": "wrongpass"}
         )
         assert resp.status_code == 401
         assert calls["n"] == 0
 
 
-class TestForgotUsername:
-    def test_known_email_returns_generic_ok(self, client, db, seeded_db):
+class TestForgotUsernameRetired:
+    """Username recovery is retired: the username IS the email address now, so
+    the route answers 410 Gone for every caller — a known address and an
+    unknown one are still indistinguishable (anti-enumeration holds)."""
+
+    def test_known_email_returns_410(self, client, db, seeded_db):
         seeded_db["admin_user"].email = "admin@example.com"
         db.commit()
         resp = client.post(
             "/api/auth/forgot-username", json={"email": "admin@example.com"}
         )
-        assert resp.status_code == 200
-        assert resp.json() == {"status": "ok"}
+        assert resp.status_code == 410
 
-    def test_unknown_email_returns_generic_ok(self, client, seeded_db):
+    def test_unknown_email_returns_the_same_410(self, client, seeded_db):
         resp = client.post(
             "/api/auth/forgot-username", json={"email": "nobody@example.com"}
         )
-        assert resp.status_code == 200
-        assert resp.json() == {"status": "ok"}
+        assert resp.status_code == 410
+
+    def test_bodyless_call_still_410_not_422(self, client, seeded_db):
+        # A pre-overhaul client posting anything at all gets the same answer;
+        # the route takes no body, so it can never 422 on shape.
+        resp = client.post("/api/auth/forgot-username", json={})
+        assert resp.status_code == 410
+        assert "email" in resp.json()["detail"].lower()
+
+    def test_no_username_reminder_email_is_ever_sent(self, client, db, seeded_db, monkeypatch):
+        seeded_db["admin_user"].email = "admin@example.com"
+        db.commit()
+        calls = {"n": 0}
+        monkeypatch.setattr(
+            "app.services.email.send_username_reminder",
+            lambda *a, **k: calls.__setitem__("n", calls["n"] + 1),
+        )
+        client.post("/api/auth/forgot-username", json={"email": "admin@example.com"})
+        assert calls["n"] == 0
