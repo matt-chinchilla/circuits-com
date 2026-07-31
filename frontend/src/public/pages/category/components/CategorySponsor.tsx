@@ -366,6 +366,30 @@ export default function CategorySponsor({
     if (sponsor) setBranded(Boolean(sponsor.brand_takeover));
   }, [sponsor?.id, sponsor?.brand_takeover]);
 
+  // COLD-LOAD REPAINT: the canvas rasterizes its palette at init (and on the
+  // manual wave) ONLY — when the async /partners payload lands AFTER the field
+  // initialized, the brand CSS vars change but the tile field keeps its steel
+  // raster (owner-reported: branded chrome, default PCB, until a manual
+  // double-toggle waved it). Re-raster statically once the vars from the
+  // takeover render are committed (double-rAF, same trick as runWave). Keyed
+  // on sponsor identity/colors — NOT `branded` — so the manual toggle path
+  // never fires this (a resync there would poison runWave's before-snapshot
+  // and erase the wave transition).
+  useEffect(() => {
+    if (!sponsor) return;
+    let raf2 = 0;
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => {
+        const field = fx.current && fx.current.field;
+        if (field) field.resync();
+      });
+    });
+    return () => {
+      cancelAnimationFrame(raf1);
+      if (raf2) cancelAnimationFrame(raf2);
+    };
+  }, [sponsor?.id, sponsor?.brand_primary, sponsor?.brand_secondary]);
+
   // Map the API sponsor (snake_case) → the board's field vocabulary so the rail
   // + brand logic stay verbatim with the prototype. Per the project null gotcha
   // (`?:` catches undefined but not null), coalesce with `?? null`/`|| ''`.

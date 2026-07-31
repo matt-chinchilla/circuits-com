@@ -38,6 +38,9 @@ export interface TileField {
   clearCursor(): void;
   wave(ox: number, oy: number): void;
   refreshColor(): void;
+  /** Statically re-rasterize to the CURRENT CSS vars — no wave. For when the
+   *  brand vars change AFTER init (async /partners landing post-mount). */
+  resync(): void;
   setEmblem(img: HTMLImageElement, cx: number, cy: number, size: number): void;
   clearEmblem(): void;
   destroy(): void;
@@ -637,6 +640,17 @@ export function mountTileField(canvas: HTMLCanvasElement, board: HTMLElement): T
       start();
     },
     refreshColor,
+    resync() {
+      // Same static rebuild as wave()'s reduced-motion branch: sample the
+      // NOW-current CSS vars and re-raster, no transition animation. Guarded
+      // like every post-destroy entry point (csFx resurrection law) and
+      // funnelled through start() so a paused/idle loop paints the result.
+      if (destroyed) return;
+      refreshColor();
+      buildPCB();
+      snapshotCircuit();
+      start();
+    },
     setEmblem(img, cx, cy, size) {
       emblem = { img, cx, cy, size };
       buildPCB();
