@@ -22,6 +22,7 @@ import socket
 from urllib.parse import urlparse
 
 import httpx
+from anyio import to_thread
 from fastapi import APIRouter, Depends, HTTPException, Response
 
 from app.models.user import User
@@ -33,20 +34,20 @@ _MAX_BYTES = 8 * 1024 * 1024  # matches "reasonable logo" — cropper downscales
 _MAX_REDIRECTS = 3
 _TIMEOUT = httpx.Timeout(8.0)
 
-# Test seam: None = httpx's real network transport. Tests swap in an
-# httpx.MockTransport so the guards below (per-hop SSRF re-validation, size cap,
-# content-type filter, redirect cap) run for REAL against scripted responses
-# instead of being monkeypatched away at the _fetch_image boundary.
-_TRANSPORT: httpx.AsyncBaseTransport | None = None
 
+async def _assert_public_http_url(url: str) -> None:
+    """422 unless url is http(s) AND its host resolves only to public addresses.
 
-def _assert_public_http_url(url: str) -> None:
-    """422 unless url is http(s) AND its host resolves only to public addresses."""
+    The lookup runs in a worker thread: ``socket.getaddrinfo`` is BLOCKING and
+    this executes on the request's event loop, so an unresponsive resolver
+    (seconds, once per redirect hop) would otherwise freeze every concurrent
+    request on the worker — including public ``/api/*`` traffic.
+    """
     parsed = urlparse(url)
     if parsed.scheme not in ("http", "https") or not parsed.hostname:
         raise HTTPException(422, "The image URL must start with http:// or https://.")
     try:
-        infos = socket.getaddrinfo(parsed.hostname, None)
+        infos = await to_thread.run_sync(socket.getaddrinfo, parsed.hostname, None)
     except socket.gaierror:
         raise HTTPException(422, "Could not resolve that image host.") from None
     for info in infos:
@@ -62,23 +63,31 @@ def _assert_public_http_url(url: str) -> None:
             raise HTTPException(422, "That image host is not reachable from here.")
 
 
-async def _fetch_image(url: str) -> tuple[bytes, str]:
+async def _fetch_image(
+    url: str, transport: httpx.AsyncBaseTransport | None = None
+) -> tuple[bytes, str]:
     """Fetch url (following ≤3 redirects, re-validating each hop) and return
-    (bytes, content_type). Raises HTTPException(422) on anything unusable."""
+    (bytes, content_type). Raises HTTPException(422) on anything unusable.
+
+    ``transport`` is the test seam — None is httpx's real network transport;
+    tests pass an ``httpx.MockTransport`` so the guards below (per-hop SSRF
+    re-validation, size cap, content-type filter, redirect cap) run for REAL
+    against scripted responses instead of being monkeypatched away.
+    """
     # Some CDNs (e.g. Wikimedia) refuse UA-less requests — identify honestly.
     headers = {
         "User-Agent": "CircuitCenterAdmin/1.0 (+https://circuitcenter.ai; logo cropper)",
         "Accept": "image/*",
     }
     async with httpx.AsyncClient(
-        timeout=_TIMEOUT, follow_redirects=False, headers=headers, transport=_TRANSPORT
+        timeout=_TIMEOUT, follow_redirects=False, headers=headers, transport=transport
     ) as client:
         # Connection refused / DNS blips / timeouts / a malformed redirect target
         # are the remote host's problem, not ours — surface them as the same 422
         # the other unusable-image paths return instead of a 500.
         try:
             for _ in range(_MAX_REDIRECTS + 1):
-                _assert_public_http_url(url)
+                await _assert_public_http_url(url)
                 async with client.stream("GET", url) as resp:
                     if resp.status_code in (301, 302, 303, 307, 308):
                         location = resp.headers.get("location")

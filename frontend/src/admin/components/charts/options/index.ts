@@ -22,14 +22,7 @@ export type {
 export { pieOption } from './pieOption';
 export type { PieSlice, PieOptionInput } from './pieOption';
 
-export { circlePackOption } from './circlePackOption';
-export type {
-  CirclePackChild,
-  CirclePackGroup,
-  CirclePackOptionInput,
-} from './circlePackOption';
-
-export { buildSalesForce, salesForceOption } from './salesForceOption';
+export { buildSalesForce } from './salesForceOption';
 export type {
   SalesForceBuild,
   SalesForceCustomer,

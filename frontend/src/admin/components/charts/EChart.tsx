@@ -32,7 +32,7 @@ import {
   TooltipComponent,
 } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
-import { ADMIN_CHART_THEME_NAME, buildAdminTheme } from './chartTheme';
+import { ADMIN_CHART_THEME_NAME, buildAdminTheme, prefersReducedMotion } from './chartTheme';
 
 // Explicit registration — anything not listed here is tree-shaken away.
 // TooltipComponent transitively installs the axis-pointer used by
@@ -75,17 +75,9 @@ export interface EChartProps {
   onReady?: (chart: EChartsType) => void;
 }
 
-/** Honour the OS motion setting. Read at every setOption rather than cached,
+/** Top-level `animation:false` disables entry, update AND series-level motion.
+ *  `prefersReducedMotion` is read here at EVERY setOption rather than cached,
  *  so a mid-session toggle takes effect on the next data refresh. */
-function prefersReducedMotion(): boolean {
-  return (
-    typeof window !== 'undefined' &&
-    typeof window.matchMedia === 'function' &&
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  );
-}
-
-/** Top-level `animation:false` disables entry, update AND series-level motion. */
 function applyMotionPreference(option: EChartsCoreOption): EChartsCoreOption {
   return prefersReducedMotion() ? { ...option, animation: false } : option;
 }

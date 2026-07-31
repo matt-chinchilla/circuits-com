@@ -9,8 +9,15 @@ import styles from './LogoCropperModal.module.scss';
 // 256×254 on purpose — the sites' circle-clip gate keys on
 // naturalWidth === naturalHeight, so the off-square export routes to their
 // letterbox rendering and the baked corners survive.
-export type CropShape = 'circle' | 'rounded';
+const SHAPE_CHOICES = [
+  { shape: 'circle', label: 'Circle' },
+  { shape: 'rounded', label: 'Rounded square' },
+] as const;
+type CropShape = (typeof SHAPE_CHOICES)[number]['shape'];
 const ROUNDED_RADIUS_FRAC = 0.17;
+/** The off-square height that routes a rounded crop to letterbox rendering.
+ *  It must stay ≠ OUTPUT_SIZE — that inequality IS the shape signal. */
+const ROUNDED_EXPORT_H = OUTPUT_SIZE - 2;
 
 // Letterbox/backing color baked into the export. Many company logos are a
 // white-on-transparent or black wordmark — against the wrong backing they
@@ -173,7 +180,7 @@ export function LogoCropperModal({ file, title = 'Position your logo', onApply, 
     // Rounded exports are DELIBERATELY off-square (see CropShape) so the
     // render sites' square-detect gate letterboxes them instead of
     // circle-clipping the baked corners away.
-    canvas.height = shape === 'rounded' ? OUTPUT_SIZE - 2 : OUTPUT_SIZE;
+    canvas.height = shape === 'rounded' ? ROUNDED_EXPORT_H : OUTPUT_SIZE;
     const ctx = canvas.getContext('2d');
     if (!ctx) { onCancel(); return; }
     if (shape === 'rounded') {
@@ -239,22 +246,17 @@ export function LogoCropperModal({ file, title = 'Position your logo', onApply, 
           </div>
         )}
         <div className={styles.shapeRow} role="group" aria-label="Crop window shape">
-          <button
-            type="button"
-            className={shape === 'circle' ? `${styles.shapeBtn} ${styles.shapeBtnActive}` : styles.shapeBtn}
-            aria-pressed={shape === 'circle'}
-            onClick={() => setShape('circle')}
-          >
-            Circle
-          </button>
-          <button
-            type="button"
-            className={shape === 'rounded' ? `${styles.shapeBtn} ${styles.shapeBtnActive}` : styles.shapeBtn}
-            aria-pressed={shape === 'rounded'}
-            onClick={() => setShape('rounded')}
-          >
-            Rounded square
-          </button>
+          {SHAPE_CHOICES.map((choice) => (
+            <button
+              key={choice.shape}
+              type="button"
+              className={shape === choice.shape ? `${styles.shapeBtn} ${styles.shapeBtnActive}` : styles.shapeBtn}
+              aria-pressed={shape === choice.shape}
+              onClick={() => setShape(choice.shape)}
+            >
+              {choice.label}
+            </button>
+          ))}
           <span className={styles.optionSpacer} aria-hidden="true" />
           {BG_CHOICES.map((choice) => (
             <button

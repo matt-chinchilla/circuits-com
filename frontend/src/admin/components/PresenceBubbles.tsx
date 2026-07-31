@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import axios from 'axios';
 import { adminApi } from '@admin/services/adminApi';
 import type { PresenceUser } from '@admin/services/adminApi';
 import styles from './PresenceBubbles.module.scss';
@@ -84,8 +85,11 @@ export default function PresenceBubbles({ selfUsername }: PresenceBubblesProps) 
         .catch((err: unknown) => {
           if (cancelled) return;
           setOthers([]); // best-effort: no bubbles, no error UI
-          const status = (err as { response?: { status?: number } })?.response?.status;
-          if (status === 401) stop(); // token expired — no point heartbeating
+          // House pattern (see @admin/services/apiError) — typed, and a network
+          // failure with no `response` can't be mistaken for a status.
+          if (axios.isAxiosError(err) && err.response?.status === 401) {
+            stop(); // token expired — no point heartbeating
+          }
         });
     };
 

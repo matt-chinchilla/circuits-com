@@ -40,17 +40,3 @@ export function destRect(
     dh: imgH * k,
   };
 }
-
-/** Source rect (image px) shown in the frame — feeds the 9-arg drawImage. */
-export function sourceRect(
-  imgW: number, imgH: number, frame: number, scale: number, offsetX: number, offsetY: number,
-): { sx: number; sy: number; size: number } {
-  const size = frame / scale;
-  const sx = (imgW - size) / 2 - offsetX / scale;
-  const sy = (imgH - size) / 2 - offsetY / scale;
-  return {
-    sx: Math.min(Math.max(0, sx), Math.max(0, imgW - size)),
-    sy: Math.min(Math.max(0, sy), Math.max(0, imgH - size)),
-    size,
-  };
-}

@@ -97,15 +97,18 @@
   flex: 1;
 }
 
+// Same pill chrome as .shapeBtn (radius / type / cursor come from it via
+// `composes`) plus a swatch slot and tighter padding.
+// The background / border / color re-statements below are NOT stale copies:
+// this rule is declared AFTER .shapeBtnActive, and re-stating them is what
+// keeps the rendered result byte-identical to the hand-rolled version. Drop
+// them only if you intend the background pair to take the active treatment.
 .bgBtn {
+  composes: shapeBtn;
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  border-radius: 8px;
   padding: 6px 12px;
-  font-size: 13px;
-  line-height: 1;
-  cursor: pointer;
   background: #fff;
   border: 1px solid #cbd5e0;
   color: #2d3748;

@@ -398,7 +398,3 @@ export function buildSalesForce(input: SalesForceOptionInput): SalesForceBuild {
 
   return { option, layout };
 }
-
-export function salesForceOption(input: SalesForceOptionInput): EChartsCoreOption {
-  return buildSalesForce(input).option;
-}

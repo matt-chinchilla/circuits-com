@@ -84,6 +84,21 @@ const PLATINUM_BENEFITS = [
   'Live stock + price API sync',
 ] as const;
 
+/* Run `cb` after TWO animation frames — the earliest point at which brand CSS
+   custom properties committed by the current render are readable by the canvas
+   layer (one rAF still races the style commit). Returns a canceller, so an
+   effect can `return afterPaint(...)` directly. */
+function afterPaint(cb: () => void): () => void {
+  let r2 = 0;
+  const r1 = requestAnimationFrame(() => {
+    r2 = requestAnimationFrame(cb);
+  });
+  return () => {
+    cancelAnimationFrame(r1);
+    cancelAnimationFrame(r2);
+  };
+}
+
 function useCsEntrance(ref: React.RefObject<HTMLElement | null>, dep: unknown) {
   useEffect(() => {
     const el = ref.current;
@@ -95,26 +110,18 @@ function useCsEntrance(ref: React.RefObject<HTMLElement | null>, dep: unknown) {
     const key = String(dep);
     if (csEntranceSeen.has(key)) return;
     csEntranceSeen.add(key);
-    let r1 = 0,
-      r2 = 0;
-    r1 = requestAnimationFrame(() => {
-      r2 = requestAnimationFrame(() => {
-        const ease = 'cubic-bezier(.2,.8,.3,1)';
-        el.querySelectorAll('[data-enter]').forEach((node, i) => {
-          (node as HTMLElement).animate(
-            [
-              { opacity: 0, transform: 'translateY(10px)' },
-              { opacity: 1, transform: 'translateY(0)' },
-            ],
-            { duration: 460, delay: 50 + i * 80, easing: ease, fill: 'none' },
-          );
-        });
+    return afterPaint(() => {
+      const ease = 'cubic-bezier(.2,.8,.3,1)';
+      el.querySelectorAll('[data-enter]').forEach((node, i) => {
+        (node as HTMLElement).animate(
+          [
+            { opacity: 0, transform: 'translateY(10px)' },
+            { opacity: 1, transform: 'translateY(0)' },
+          ],
+          { duration: 460, delay: 50 + i * 80, easing: ease, fill: 'none' },
+        );
       });
     });
-    return () => {
-      cancelAnimationFrame(r1);
-      cancelAnimationFrame(r2);
-    };
     // Entrance re-runs whenever the identity `dep` flips (sponsor/pitch swap) —
     // verbatim with the prototype; the project lints boundaries only, not deps.
   }, [dep]);
@@ -221,20 +228,19 @@ function runWave(
   const board = boardRef.current;
   const field = apiRef && apiRef.current && apiRef.current.field;
   if (!board || !field) return;
-  // two rAFs so the new brand CSS vars are applied before the canvas samples them
-  requestAnimationFrame(() =>
-    requestAnimationFrame(() => {
-      const b = board.getBoundingClientRect();
-      let ox = b.width * 0.12,
-        oy = b.height * 0.5;
-      if (originEl) {
-        const o = originEl.getBoundingClientRect();
-        ox = o.left + o.width / 2 - b.left;
-        oy = o.top + o.height / 2 - b.top;
-      }
-      field.wave(ox, oy);
-    }),
-  );
+  // afterPaint: the new brand CSS vars must be applied before the canvas samples
+  // them. Fire-and-forget here — the wave outlives this call by design.
+  afterPaint(() => {
+    const b = board.getBoundingClientRect();
+    let ox = b.width * 0.12,
+      oy = b.height * 0.5;
+    if (originEl) {
+      const o = originEl.getBoundingClientRect();
+      ox = o.left + o.width / 2 - b.left;
+      oy = o.top + o.height / 2 - b.top;
+    }
+    field.wave(ox, oy);
+  });
 }
 
 /* Un-tilted board frame: the snapshot-source PCB SVG, the canvas tile field,
@@ -380,17 +386,10 @@ export default function CategorySponsor({
     // redundant re-raster (~5ms, byte-identical steel) on every sold-but-
     // unbranded category visit (perf review, 2026-07-31).
     if (!sponsor || !sponsor.brand_takeover) return;
-    let raf2 = 0;
-    const raf1 = requestAnimationFrame(() => {
-      raf2 = requestAnimationFrame(() => {
-        const field = fx.current && fx.current.field;
-        if (field) field.resync();
-      });
+    return afterPaint(() => {
+      const field = fx.current && fx.current.field;
+      if (field) field.resync();
     });
-    return () => {
-      cancelAnimationFrame(raf1);
-      if (raf2) cancelAnimationFrame(raf2);
-    };
   }, [sponsor?.id, sponsor?.brand_primary, sponsor?.brand_secondary]);
 
   // Map the API sponsor (snake_case) → the board's field vocabulary so the rail

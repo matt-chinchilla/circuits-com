@@ -3,7 +3,8 @@ alembic 021) "who's in the admin right now" heartbeat behind the topbar
 presence bubbles. DB-backed so it is correct under prod's multi-worker uvicorn.
 
 The TTL is exercised through the module's `_now` clock seam rather than a real
-sleep. Per-test DB isolation comes from the standard conftest fixtures.
+sleep. Per-test DB isolation comes from the standard conftest fixtures, and the
+login helper is conftest's shared `auth_header` fixture.
 """
 
 from datetime import timedelta
@@ -11,22 +12,13 @@ from datetime import timedelta
 from app.routes import admin_presence
 
 
-def _auth_header(client, username="admin", password="testpass123"):
-    resp = client.post(
-        "/api/auth/login",
-        json={"username": username, "password": password},
-    )
-    token = resp.json()["token"]
-    return {"Authorization": f"Bearer {token}"}
-
-
 def test_requires_auth(client, seeded_db):
     resp = client.post("/api/admin/presence/ping")
     assert resp.status_code in (401, 403)
 
 
-def test_ping_returns_self(client, seeded_db):
-    resp = client.post("/api/admin/presence/ping", headers=_auth_header(client))
+def test_ping_returns_self(client, seeded_db, auth_header):
+    resp = client.post("/api/admin/presence/ping", headers=auth_header())
     assert resp.status_code == 200
     body = resp.json()
     assert [u["username"] for u in body] == ["admin"]
@@ -36,16 +28,16 @@ def test_ping_returns_self(client, seeded_db):
     assert body[0]["name"] is None
 
 
-def test_repeat_ping_upserts_not_duplicates(client, seeded_db):
-    header = _auth_header(client)
+def test_repeat_ping_upserts_not_duplicates(client, seeded_db, auth_header):
+    header = auth_header()
     client.post("/api/admin/presence/ping", headers=header)
     resp = client.post("/api/admin/presence/ping", headers=header)
     assert [u["username"] for u in resp.json()] == ["admin"]
 
 
-def test_two_users_see_each_other(client, seeded_db):
-    admin_header = _auth_header(client)
-    company_header = _auth_header(client, username="kennedy_user")
+def test_two_users_see_each_other(client, seeded_db, auth_header):
+    admin_header = auth_header()
+    company_header = auth_header(username="kennedy_user")
 
     client.post("/api/admin/presence/ping", headers=admin_header)
     resp = client.post("/api/admin/presence/ping", headers=company_header)
@@ -59,10 +51,10 @@ def test_two_users_see_each_other(client, seeded_db):
     assert [u["username"] for u in resp2.json()] == ["admin", "kennedy_user"]
 
 
-def test_stale_entry_drops_out(client, seeded_db, monkeypatch):
+def test_stale_entry_drops_out(client, seeded_db, auth_header, monkeypatch):
     """A user who stopped heartbeating falls off once past the TTL."""
-    admin_header = _auth_header(client)
-    company_header = _auth_header(client, username="kennedy_user")
+    admin_header = auth_header()
+    company_header = auth_header(username="kennedy_user")
 
     client.post("/api/admin/presence/ping", headers=admin_header)
 
@@ -74,10 +66,10 @@ def test_stale_entry_drops_out(client, seeded_db, monkeypatch):
     assert [u["username"] for u in resp.json()] == ["kennedy_user"]
 
 
-def test_entry_inside_ttl_survives(client, seeded_db, monkeypatch):
+def test_entry_inside_ttl_survives(client, seeded_db, auth_header, monkeypatch):
     """Boundary companion to the test above — just under the TTL still counts."""
-    admin_header = _auth_header(client)
-    company_header = _auth_header(client, username="kennedy_user")
+    admin_header = auth_header()
+    company_header = auth_header(username="kennedy_user")
 
     client.post("/api/admin/presence/ping", headers=admin_header)
 

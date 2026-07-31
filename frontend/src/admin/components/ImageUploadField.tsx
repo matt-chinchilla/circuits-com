@@ -6,6 +6,10 @@ import { safeImageUrl } from '@shared/utils/url';
 import { adminApi } from '@admin/services/adminApi';
 import styles from './ImageUploadField.module.scss';
 
+// One home for "this pasted string is worth fetching": it gates BOTH the
+// explicit crop button and the auto-fetch on commit, which must never disagree.
+const FETCHABLE_URL = /^https?:\/\/\S+$/i;
+
 interface ImageUploadFieldProps {
   id: string;
   label: string;
@@ -36,10 +40,22 @@ export default function ImageUploadField({
   const urlDirtyRef = useRef(false);
   const errId = useId();
   const safePreview = safeImageUrl(value);
-  const urlValue = (value ?? '').startsWith('data:') ? '' : (value ?? '');
-  const fetchableUrl = /^https?:\/\/\S+$/i.test(urlValue.trim());
+  // Deliberately BROADER than @shared's isDataImage (which requires an
+  // image/* media type): this only asks "is the stored value an inline blob
+  // rather than a hosted URL", and narrowing it would change which values the
+  // URL box hides and the re-crop button offers.
+  const isStoredDataUrl = (value ?? '').startsWith('data:');
+  const urlValue = isStoredDataUrl ? '' : (value ?? '');
+  const fetchableUrl = FETCHABLE_URL.test(urlValue.trim());
 
   const resetFileInput = () => { if (fileRef.current) fileRef.current.value = ''; }; // allow re-picking the same file
+
+  // Hand a fetched/reopened blob to the cropper. Both non-upload entry points
+  // (re-crop stored, fetch pasted URL) land here so the synthesized File stays
+  // one definition.
+  const openCropperOn = (blob: Blob) => {
+    setPendingFile(new File([blob], 'logo', { type: blob.type || 'image/png' }));
+  };
 
   const onPick = (file: File | undefined) => {
     if (!file) return;
@@ -96,11 +112,11 @@ export default function ImageUploadField({
   // rectangular data-URL wordmarks that pre-date the cropper (and for
   // re-cropping any upload): zoom/pan/shape/background against the same modal.
   const recropStored = async () => {
-    if (!safePreview || !(value ?? '').startsWith('data:')) return;
+    if (!safePreview || !isStoredDataUrl) return;
     setError(null);
     try {
       const blob = await (await fetch(value as string)).blob();
-      setPendingFile(new File([blob], 'logo', { type: blob.type || 'image/png' }));
+      openCropperOn(blob);
     } catch {
       setError('Could not reopen the stored image for cropping.');
     }
@@ -113,7 +129,7 @@ export default function ImageUploadField({
   // exactly the old behavior.
   const fetchAndCrop = async (force = false) => {
     const raw = urlValue.trim();
-    if (!/^https?:\/\/\S+$/i.test(raw) || fetchingUrl) return;
+    if (!fetchableUrl || fetchingUrl) return;
     if (!force && (!urlDirtyRef.current || raw === lastFetchedRef.current)) return;
     urlDirtyRef.current = false;
     lastFetchedRef.current = raw;
@@ -121,7 +137,7 @@ export default function ImageUploadField({
     setError(null);
     try {
       const blob = await adminApi.fetchImageForCrop(raw);
-      setPendingFile(new File([blob], 'logo', { type: blob.type || 'image/png' }));
+      openCropperOn(blob);
     } catch {
       setError(
         "Couldn't fetch that image for cropping (the host may block it) — the URL was kept as-is.",
@@ -159,7 +175,7 @@ export default function ImageUploadField({
             >
               {value ? 'Replace image' : 'Upload image'}
             </button>
-            {(value ?? '').startsWith('data:') && safePreview && (
+            {isStoredDataUrl && safePreview && (
               <button
                 type="button"
                 className={styles.uploadBtn}

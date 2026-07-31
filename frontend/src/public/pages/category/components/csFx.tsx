@@ -559,6 +559,20 @@ export function mountTileField(canvas: HTMLCanvasElement, board: HTMLElement): T
     if (pcbReady) ctx.drawImage(pcb, 0, 0, pcb.width, pcb.height, 0, 0, W, H);
   };
 
+  // THE static rebuild: sample the NOW-current CSS vars and re-raster with no
+  // transition animation. Single home for the pipeline, shared by the exported
+  // resync() and wave()'s reduced-motion branch — it drifted once already (the
+  // missing drawStatic bug), and a palette-pipeline tweak must not land twice.
+  // Under reduced motion start() no-ops and nothing else copies the rebuilt
+  // raster to the visible canvas, so paint it directly.
+  const resyncStatic = () => {
+    refreshColor();
+    buildPCB();
+    snapshotCircuit();
+    if (reducedMQ.matches) drawStatic();
+    else start();
+  };
+
   const ro = new ResizeObserver(() => {
     resize();
     if (reducedMQ.matches) drawStatic();
@@ -610,10 +624,7 @@ export function mountTileField(canvas: HTMLCanvasElement, board: HTMLElement): T
     wave(ox: number, oy: number) {
       if (destroyed) return;
       if (reducedMQ.matches) {
-        refreshColor();
-        buildPCB();
-        snapshotCircuit();
-        drawStatic(); // paint the rebuild — the RM loop won't (same gap resync() fixes)
+        resyncStatic(); // no transition under RM — same rebuild resync() runs
         return;
       }
       // Snapshot the CURRENT (old) surface, then rebuild pcb to the NEW colors
@@ -642,22 +653,11 @@ export function mountTileField(canvas: HTMLCanvasElement, board: HTMLElement): T
     },
     refreshColor,
     resync() {
-      // Same static rebuild as wave()'s reduced-motion branch: sample the
-      // NOW-current CSS vars and re-raster, no transition animation. Guarded
-      // like every post-destroy entry point (csFx resurrection law) and
-      // funnelled through start() so a paused/idle loop paints the result.
+      // Guarded like every post-destroy entry point (csFx resurrection law);
+      // the rebuild itself funnels through start() so a paused/idle loop
+      // paints the result.
       if (destroyed) return;
-      refreshColor();
-      buildPCB();
-      snapshotCircuit();
-      if (reducedMQ.matches) {
-        // start() no-ops under reduced motion and nothing else copies the
-        // rebuilt raster to the visible canvas — paint it directly, or the
-        // stale-steel bug this method exists to fix persists for RM users.
-        drawStatic();
-        return;
-      }
-      start();
+      resyncStatic();
     },
     setEmblem(img, cx, cy, size) {
       emblem = { img, cx, cy, size };

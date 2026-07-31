@@ -137,6 +137,18 @@ export const CHART_FONT =
 export const CHART_EASING = 'cubicOut';
 export const CHART_DURATION = 620;
 
+/** Honour the OS motion setting. The ONE definition for the chart kit — read at
+ *  the call site (never cached) so a mid-session toggle takes effect; consumers
+ *  decide their own sampling point (`EChart` per setOption, the physics layer
+ *  once per attach). SSR-safe. */
+export function prefersReducedMotion(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  );
+}
+
 /** The tier's {base,bright,deep} set. Unknown tier -> the neutral 'none' set. */
 export function tierColorSet(tier: string | null | undefined): TierColor {
   switch ((tier ?? '').trim().toLowerCase()) {

@@ -9,13 +9,15 @@ met.
 charts/
   EChart.tsx            React wrapper — init / setOption / resize / DISPOSE
   chartTheme.ts         palette + registered theme (PURE: no echarts import)
-  packHierarchy.ts      deterministic 2-level circle packing (no deps)
+  packHierarchy.ts      deterministic 2-level circle packing (no deps) — currently
+                        unused; its only consumer (circlePackOption) was superseded
+                        by the sales-force graph
   options/
     index.ts            barrel for the pure builders
     sparklineOption.ts
     comparatorOption.ts (+ expensesOption alias, month/trend adapters)
     pieOption.ts
-    circlePackOption.ts
+    salesForceOption.ts (+ salesForcePhysics.ts — the interaction layer, NOT in the barrel)
     tooltip.ts          shared, HTML-ESCAPED tooltip markup
 ```
 

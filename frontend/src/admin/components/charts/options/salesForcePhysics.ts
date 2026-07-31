@@ -28,6 +28,7 @@
 // already-disposed chart returns an inert handle.
 
 import type { EChartsType } from 'echarts/core';
+import { prefersReducedMotion } from '../chartTheme';
 import { SALES_FORCE_MORPH_MS, type SalesForceRestNode } from './salesForceOption';
 
 // Spring constants, tuned per-frame at ~60fps for a lively but settling flail.
@@ -78,10 +79,9 @@ export function attachSalesForcePhysics(
   const zr = chart.getZr();
   if (!zr) return INERT;
 
-  const reducedMotion =
-    typeof window !== 'undefined' &&
-    typeof window.matchMedia === 'function' &&
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  // Sampled ONCE per attach by design: the host re-attaches after every option
+  // rebuild, which is when a mid-session toggle takes effect.
+  const reducedMotion = prefersReducedMotion();
 
   // The LIVE node data array: handed back to setOption every frame with only
   // x/y mutated, so all styling (spheres, labels, tooltips) rides along.
