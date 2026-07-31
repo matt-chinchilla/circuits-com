@@ -21,11 +21,42 @@ class Settings(BaseSettings):
 
     # One-click demo access (POST /api/auth/demo). The endpoint takes NO
     # credentials — it mints a token for DEMO_LOGIN_EMAIL — so no password ever
-    # ships in the public JS bundle. Flip DEMO_LOGIN_ENABLED=false in the prod
-    # .env to switch prospect access off WITHOUT a frontend redeploy (the route
-    # then 404s, indistinguishable from a route that was never deployed).
-    DEMO_LOGIN_ENABLED: bool = True
+    # ships in the public JS bundle.
+    #
+    # Default OFF, deliberately. This is an unauthenticated endpoint that hands
+    # out a real session, so it must be OPTED INTO per environment rather than
+    # switched off per environment: a deployment that forgets to configure it
+    # gets no demo door at all, which is the safe direction. Both compose files
+    # pass the value through to the api container
+    # (`DEMO_LOGIN_ENABLED: ${DEMO_LOGIN_ENABLED:-...}`) — pydantic-settings
+    # reads process env only, so WITHOUT that passthrough this switch is inert
+    # no matter what /opt/circuits-com/.env says (the api container has no
+    # volume mount and never sees that file). Guarded by
+    # tests/test_compose_env_passthrough.py.
+    #
+    # Flip DEMO_LOGIN_ENABLED=true/false in the host .env and recreate the api
+    # container to open/close prospect access WITHOUT a frontend redeploy (the
+    # route 404s when off, indistinguishable from one never deployed).
+    DEMO_LOGIN_ENABLED: bool = False
     DEMO_LOGIN_EMAIL: str = "demo@circuitcenter.ai"
+
+    # uvicorn worker count the container actually runs. COUPLED to the
+    # `--workers` flag in docker-compose.prod.yml: the same ${API_WORKERS}
+    # interpolation feeds both the command and this env var, so the process
+    # count and the number this app believes cannot drift.
+    #
+    # app.services.rate_limit keeps its counters in PROCESS memory, so the
+    # login/recovery thresholds are divided by this value (see
+    # per_worker_threshold). 1 keeps the limiter exact — read that module's
+    # docstring before raising it.
+    API_WORKERS: int = 1
+
+    @field_validator("API_WORKERS", mode="after")
+    @classmethod
+    def _at_least_one_worker(cls, v: int) -> int:
+        """0 or a negative worker count would make the rate-limit division
+        nonsense (and uvicorn wouldn't start either)."""
+        return max(1, v)
 
     # SMTP - when SMTP_HOST is unset, services/email.py runs in demo mode
     # (logs the email payload to stderr instead of sending). Lets local dev

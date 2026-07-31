@@ -3,7 +3,8 @@
 #
 # Changes from dev:
 # - Frontend uses multi-stage prod build (nginx serving static files on port 80)
-# - API runs uvicorn with 4 workers (no --reload)
+# - API runs uvicorn with ${API_WORKERS:-1} workers (no --reload)
+# - API port 8000 is NOT published — nginx is the only way in
 # - No source code volume mounts on frontend
 # - Nginx config updated to proxy to frontend on port 80
 
@@ -11,10 +12,22 @@ services:
   api:
     build:
       context: ./api
+    # --workers and the API_WORKERS env var below MUST stay on the SAME
+    # ${API_WORKERS} interpolation: app.services.rate_limit keeps its counters
+    # in process memory and divides its thresholds by API_WORKERS, so a worker
+    # count the app doesn't know about silently multiplies the login lockout
+    # threshold. Default 1 keeps the limiter exact (and its clear()-on-success
+    # honest); read app/services/rate_limit.py before raising it.
     command: >
       sh -c "alembic upgrade head &&
              python -m app.db.seed &&
-             uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4"
+             uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers ${API_WORKERS:-1}"
+    # The base compose publishes 8000 for local dev. In prod that would be a
+    # second, un-proxied front door — and the rate limiter trusts nginx's
+    # X-Real-IP / rightmost X-Forwarded-For hop, both of which a caller could
+    # forge by reaching uvicorn directly. nginx talks to `api` over the compose
+    # network, so nothing needs the published port.
+    ports: !reset []
     environment:
       # Real SMTP creds come from /opt/circuits-com/.env on EC2.
       # SMTP_HOST defaults to mail.hover.com on prod, but empty
@@ -37,6 +50,18 @@ services:
       # default ("admin"/"admin") never ships as a live secret.
       ADMIN_USERNAME: ${SQLADMIN_USERNAME:?SQLADMIN_USERNAME must be set in /opt/circuits-com/.env}
       ADMIN_PASSWORD: ${SQLADMIN_PASSWORD:?SQLADMIN_PASSWORD must be set in /opt/circuits-com/.env}
+      # One-click demo access (POST /api/auth/demo) — an UNAUTHENTICATED
+      # endpoint that mints a real session, so prod defaults it OFF and the
+      # operator opts in from /opt/circuits-com/.env (`DEMO_LOGIN_ENABLED=true`)
+      # + `docker compose ... up -d --force-recreate api`. Without this
+      # passthrough the .env value never reaches the container at all (no volume
+      # mount; pydantic-settings reads process env only) — the switch was inert
+      # until 2026-07-31. Guarded by tests/test_compose_env_passthrough.py.
+      DEMO_LOGIN_ENABLED: ${DEMO_LOGIN_ENABLED:-false}
+      DEMO_LOGIN_EMAIL: ${DEMO_LOGIN_EMAIL:-demo@circuitcenter.ai}
+      # Same ${API_WORKERS} the `command` above passes to uvicorn — see the
+      # comment there and app/services/rate_limit.py.
+      API_WORKERS: ${API_WORKERS:-1}
 
   frontend:
     build:

@@ -28,6 +28,14 @@ services:
       ADMIN_USERNAME: ${SQLADMIN_USERNAME:-admin}
       ADMIN_PASSWORD: ${SQLADMIN_PASSWORD:-admin}
       ADMIN_SECRET_KEY: change-me-in-production
+      # One-click demo access (POST /api/auth/demo). The CODE default is OFF
+      # (app/config.py) — this passthrough is what makes the switch live at all,
+      # since pydantic-settings reads process env and the api container has no
+      # volume mount (it never sees a host .env). Dev opts IN so the "See Demo"
+      # button works locally; prod defaults it back to false
+      # (docker-compose.prod.yml). Guarded by tests/test_compose_env_passthrough.py.
+      DEMO_LOGIN_ENABLED: ${DEMO_LOGIN_ENABLED:-true}
+      DEMO_LOGIN_EMAIL: ${DEMO_LOGIN_EMAIL:-demo@circuitcenter.ai}
       # SMTP — empty defaults trigger demo mode in app.services.email.
       # Populate via .env on prod EC2 host (see CLAUDE.md gotcha).
       SMTP_HOST: ${SMTP_HOST:-}
