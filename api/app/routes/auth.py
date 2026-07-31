@@ -124,15 +124,31 @@ class ChangePasswordRequest(BaseModel):
     new_password: str
 
 
+def _is_demo_identifier(identifier: str) -> bool:
+    """True when this identifier addresses the public demo account."""
+    demo_email = (settings.DEMO_LOGIN_EMAIL or "").strip().lower()
+    return bool(demo_email) and identifier.strip().lower() == demo_email
+
+
 def _find_login_user(db: Session, identifier: str) -> User | None:
     """Resolve a login identifier to a user, or None.
 
     Case-insensitive on lower(email) — the same expression the unique index
     covers, so at most one row can ever match. Email is the ONLY login key:
     no username resolves here, for any account.
+
+    The public demo account is NOT reachable through this path at all
+    (2026-07-31 owner decision). Its one and only door is `POST /auth/demo`,
+    which takes no credentials. Two reasons this matters beyond tidiness:
+    the demo password is public, so leaving it usable here would hand an
+    attacker a credential that legitimately succeeds — and a success clears
+    the rate-limit buckets, i.e. an unlimited lever for resetting a lockout
+    they armed themselves. Returning None routes it through the identical
+    unknown-account path (dummy hash + generic 401 + counted failure), so
+    refusing the demo here leaks nothing about which accounts exist.
     """
     ident = identifier.strip().lower()
-    if not ident:
+    if not ident or _is_demo_identifier(ident):
         return None
     return db.query(User).filter(func.lower(User.email) == ident).first()
 

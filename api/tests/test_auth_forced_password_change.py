@@ -377,13 +377,19 @@ class TestUsernameLoginIsFullyRetired:
         assert resp.status_code == 401
         assert resp.json()["detail"] == "Invalid credentials"
 
-    def test_demo_email_still_authenticates(self, client, db, seeded_db):
+    def test_demo_email_does_not_authenticate_either(self, client, db, seeded_db):
+        """Owner decision 2026-07-31: the demo account has NO credential login.
+
+        Its password is public, so a working /login for it is both a
+        legitimately-succeeding credential for an attacker and a free
+        rate-limit reset. The button (/auth/demo) is the only door.
+        """
         _seed_demo(db)
         resp = client.post(
             "/api/auth/login", json={"email": "demo@circuitcenter.ai", "password": "demo"}
         )
-        assert resp.status_code == 200
-        assert resp.json()["user"]["username"] == "demo"
+        assert resp.status_code == 401
+        assert client.post("/api/auth/demo").status_code == 200
 
     def test_the_retired_fallback_leaks_nothing(self, client, db, seeded_db):
         _seed_demo(db)

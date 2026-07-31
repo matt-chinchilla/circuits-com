@@ -346,16 +346,29 @@ class TestDemoEndpoint:
             == 200
         )
 
-    def test_the_demo_account_can_still_sign_in_normally(self, client, db, seeded_db, clock):
-        # The global constraint: demo/demo keeps working. Its own failures
-        # score like anyone's, but a clean run is untouched by the limiter.
+    def test_a_lockout_is_scoped_to_the_host_that_earned_it(self, client, db, seeded_db, clock):
+        # The demo account has no /login path at all (owner decision
+        # 2026-07-31), so what matters here is blast radius. /demo deliberately
+        # HONORS a lockout on its own host — otherwise a brute-forcer would
+        # just pivot to it for a token — but that lock must not follow the
+        # button around: a prospect on any other host still gets in.
         _seed_demo(db)
+        attacker = "10.0.9.1"
         for _ in range(THRESHOLD * 2):
-            resp = client.post(
+            client.post(
                 "/api/auth/login",
-                json={"email": "demo@circuitcenter.ai", "password": "demo"},
+                json={"email": "stranger@circuitcenter.ai", "password": "wrong"},
+                headers={"X-Forwarded-For": attacker},
             )
-            assert resp.status_code == 200
+        # Same host as the spraying: the button is closed too.
+        assert (
+            client.post("/api/auth/demo", headers={"X-Forwarded-For": attacker}).status_code != 200
+        )
+        # A different prospect is unaffected.
+        assert (
+            client.post("/api/auth/demo", headers={"X-Forwarded-For": "10.0.9.2"}).status_code
+            == 200
+        )
 
 
 # ── Recovery endpoints ──────────────────────────────────────────────────────
