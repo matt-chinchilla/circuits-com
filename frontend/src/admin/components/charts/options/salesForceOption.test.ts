@@ -137,6 +137,31 @@ describe('electron shells', () => {
     });
   });
 
+  it('staggers shell starts 120° apart: 1-per-tier splays Silver top, Gold lower-right, Platinum lower-left', () => {
+    // The owner's tripod spec — without the stagger, three single-occupant
+    // shells all start at 12 o'clock and stack into a vertical column.
+    const build = buildSalesForce({
+      groups: [
+        group([
+          { label: 'p', value: 1, tier: 'Platinum' },
+          { label: 'g', value: 1, tier: 'Gold' },
+          { label: 's', value: 1, tier: 'Silver' },
+        ]),
+      ],
+    });
+    const nodes = nodesOf(build);
+    const hub = nodes.find((n) => n.kind === 'hub');
+    if (!hub) throw new Error('no hub');
+    const angleOf = (label: string) => {
+      const leaf = nodes.find((n) => n.displayName === label);
+      if (!leaf) throw new Error(`no leaf ${label}`);
+      return (Math.atan2(leaf.y - hub.y, leaf.x - hub.x) * 180) / Math.PI;
+    };
+    expect(angleOf('s')).toBeCloseTo(-90, 5); // outermost: 12 o'clock
+    expect(angleOf('g')).toBeCloseTo(30, 5); // lower-right (screen y down)
+    expect(angleOf('p')).toBeCloseTo(150, 5); // lower-left
+  });
+
   it('grows a crowded shell to satisfy the chord constraint', () => {
     const many = Array.from({ length: 12 }, (_, i) => ({
       label: `s${i}`,

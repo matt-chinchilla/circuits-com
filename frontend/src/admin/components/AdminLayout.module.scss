@@ -484,9 +484,14 @@
   align-items: center;
   gap: 8px;
   padding: 4px;
-  border: 1px solid var(--a-border);
+  // Gradient RING (reference: the manage.svg container's blue→teal stroke):
+  // transparent border + two-layer background — solid card on the padding
+  // box, brand gradient on the border box showing through the 1px ring.
+  border: 1px solid transparent;
   border-radius: 999px;
-  background: var(--a-card);
+  background:
+    linear-gradient(var(--a-card), var(--a-card)) padding-box,
+    linear-gradient(120deg, var(--a-grad-green), var(--a-blue), var(--a-purple)) border-box;
   box-shadow: var(--a-shadow-sm);
 }
 
@@ -536,8 +541,10 @@
 // You. Initials on the primary green; its ring is the same green at 60% so the
 // chip keeps the pill's fine-stroke language instead of reading as a solid blob.
 .chipAvatar {
-  background: var(--a-primary);
-  border-color: color-mix(in srgb, var(--a-primary) 60%, transparent);
+  // Same gradient family as the pill's ring, worn as the FILL — the avatar is
+  // the pill's anchor, so it carries the brand sweep rather than a ring.
+  background: linear-gradient(135deg, var(--a-grad-green), var(--a-blue));
+  border-color: color-mix(in srgb, var(--a-blue) 55%, transparent);
   color: #ffffff;
   font-size: 12.5px;
   font-weight: 700;

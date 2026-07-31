@@ -284,16 +284,23 @@ export function buildSalesForce(input: SalesForceOptionInput): SalesForceBuild {
     });
     layout.push({ name: hubName, kind: 'hub', rest: { x: cx, y: 0 }, hubName: null });
 
-    geo.shells.forEach((shell) => {
+    geo.shells.forEach((shell, shellIdx) => {
       const n = shell.childIdxs.length;
+      // Staggered shell starts (owner's tripod spec): the OUTERMOST shell
+      // starts at 12 o'clock and each shell inward rotates a further +120°,
+      // so single-occupant shells splay across x AND y instead of stacking
+      // into a vertical column (1-per-tier: Silver top, Gold lower-right,
+      // Platinum lower-left). Within a shell, even 360°/n division remains.
+      const start =
+        -Math.PI / 2 + ((geo.shells.length - 1 - shellIdx) * (2 * Math.PI)) / 3;
       shell.childIdxs.forEach((childIdx, k) => {
         const c = g.children[childIdx];
         const set = tierColorSet(c.tier);
         const leafIndex = nodes.length;
         const leafName = `n${leafIndex}`;
-        // Even angular division PER SHELL, starting at 12 o'clock (screen y
+        // Even angular division PER SHELL from the staggered start (screen y
         // grows down, so -π/2 is straight up): 3 kids → tripod, 4 → cross.
-        const angle = -Math.PI / 2 + (2 * Math.PI * k) / n;
+        const angle = start + (2 * Math.PI * k) / n;
         const x = cx + shell.ringR * Math.cos(angle);
         const y = shell.ringR * Math.sin(angle);
         nodes.push({
