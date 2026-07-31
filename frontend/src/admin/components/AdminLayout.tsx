@@ -6,6 +6,7 @@ import { useDemo } from '@admin/contexts/DemoContext';
 import { useAdminTheme } from '@admin/contexts/AdminThemeContext';
 import Icon from '@shared/components/Icon';
 import BellDropdown from '@admin/components/messages/BellDropdown';
+import PresenceBubbles from '@admin/components/PresenceBubbles';
 import { adminApi } from '@admin/services/adminApi';
 import {
   loadMessages,
@@ -345,14 +346,6 @@ export default function AdminLayout({ children, role = 'admin' }: AdminLayoutPro
             <span>Sign Out</span>
           </button>
         </div>
-
-        <div className={styles.sideProfile}>
-          <div className={styles.sideAvatar}>{initials}</div>
-          <div>
-            <div className={styles.sideUserName}>{user?.username || 'Admin'}</div>
-            <div className={styles.sideUserRole}>U1 · {user?.role || 'admin'}</div>
-          </div>
-        </div>
       </aside>
 
       <div
@@ -418,48 +411,63 @@ export default function AdminLayout({ children, role = 'admin' }: AdminLayoutPro
               </span>
             </button>
 
-            <button
-              type="button"
-              className={styles.iconBtn}
-              title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-              aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-              onClick={toggleTheme}
-            >
-              {theme === 'dark' ? (
-                <Sun size={16} strokeWidth={2} />
-              ) : (
-                <Moon size={16} strokeWidth={2} />
-              )}
-            </button>
+            {/* One soft pill groups everything that is "about you": who else is
+                here, the theme toggle, notifications, and your own avatar. */}
+            <div className={styles.ctrlPill}>
+              <PresenceBubbles selfUsername={user?.username} />
 
-            <div className={styles.bellWrap}>
               <button
                 type="button"
-                className={`${styles.iconBtn} ${wiggle ? styles.bellWiggle : ''}`}
-                title="Notifications"
-                aria-label="Notifications"
-                onClick={() => setBellOpen((b) => !b)}
+                className={`${styles.chip} ${styles.chipTheme}`}
+                title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+                aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+                onClick={toggleTheme}
               >
-                <Bell size={16} strokeWidth={2} />
-                {unread > 0 && (
-                  <span className={styles.bellBadge}>{unread > 9 ? '9+' : unread}</span>
+                {theme === 'dark' ? (
+                  <Sun size={16} strokeWidth={2} />
+                ) : (
+                  <Moon size={16} strokeWidth={2} />
                 )}
               </button>
-              {bellOpen && (
-                <BellDropdown
-                  messages={loadMessages()}
-                  unreadCount={unread}
-                  onClose={() => setBellOpen(false)}
-                  onOpenAll={() => {
-                    setBellOpen(false);
-                    navigate('/admin/messages');
-                  }}
-                  onOpen={(id) => {
-                    setBellOpen(false);
-                    navigate(`/admin/messages/${id}`);
-                  }}
-                />
-              )}
+
+              <div className={styles.bellWrap}>
+                <button
+                  type="button"
+                  className={`${styles.chip} ${styles.chipBell} ${wiggle ? styles.bellWiggle : ''}`}
+                  title="Notifications"
+                  aria-label="Notifications"
+                  onClick={() => setBellOpen((b) => !b)}
+                >
+                  <Bell size={16} strokeWidth={2} />
+                  {unread > 0 && (
+                    <span className={styles.bellBadge}>{unread > 9 ? '9+' : unread}</span>
+                  )}
+                </button>
+                {bellOpen && (
+                  <BellDropdown
+                    messages={loadMessages()}
+                    unreadCount={unread}
+                    onClose={() => setBellOpen(false)}
+                    onOpenAll={() => {
+                      setBellOpen(false);
+                      navigate('/admin/messages');
+                    }}
+                    onOpen={(id) => {
+                      setBellOpen(false);
+                      navigate(`/admin/messages/${id}`);
+                    }}
+                  />
+                )}
+              </div>
+
+              {/* Was the sidebar's .sideProfile block — the identity now anchors
+                  the right end of the pill. No click action yet. */}
+              <span
+                className={`${styles.chip} ${styles.chipAvatar}`}
+                title={`${user?.username || 'Admin'} · ${user?.role || 'admin'}`}
+              >
+                {initials}
+              </span>
             </div>
 
             <Link to="/admin/parts/new" className={`${styles.btn} ${styles.btnPrimary}`}>

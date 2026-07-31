@@ -41,6 +41,17 @@ export interface MessageUpdate {
 // id. PATCH accepts any partial subset of these fields.
 export type SponsorCreate = Omit<AdminSponsor, 'id'>;
 
+// One entry of the POST /api/admin/presence/ping roster — an admin who has
+// heartbeated within the backend's 75s TTL. The CALLER is included in the
+// response (PresenceBubbles filters itself out). `name` is null until the User
+// model grows a display name; the UI falls back to `username`.
+export interface PresenceUser {
+  user_id: string;
+  username: string;
+  name?: string | null;
+  role: string;
+}
+
 // POST /api/parts/{part_id}/listings body. Only supplier_id is required; the
 // backend defaults stock to 0, price to 0, and currency to USD.
 export interface PartListingCreate {
@@ -102,6 +113,12 @@ export const adminApi = {
     adminClient
       .get<Blob>('/admin/image-proxy', { params: { url }, responseType: 'blob' })
       .then((r) => r.data),
+
+  // POST /api/admin/presence/ping — heartbeat + the current "who else is in the
+  // admin" roster (self included; the caller filters itself out). In-memory and
+  // best-effort: a failure just means no bubbles render.
+  pingPresence: () =>
+    adminClient.post<PresenceUser[]>('/admin/presence/ping').then((r) => r.data),
 
   // Account recovery. All three return a generic { status: "ok" } regardless of
   // whether an account matched (the backend is anti-enumeration), so the UI

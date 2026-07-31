@@ -7,11 +7,13 @@
 // Sections:
 // (1) .admin           — root grid (240px sidebar + 1fr main).
 // (2) .side            — fixed-position sidebar with brand mark, two grouped
-//                        nav sections (Catalog + System), back-to-site, sign-out,
-//                        and user profile pinned to bottom.
+//                        nav sections (Catalog + System), back-to-site, and
+//                        sign-out. (The user profile block moved to the topbar
+//                        pill on 2026-07-31.)
 // (3) .topbar          — sticky 64px top strip with page title + collapsible
-//                        ⌘K-driven search + Demo Data toggle + Notifications +
-//                        primary "New Part" CTA.
+//                        ⌘K-driven search + Demo Data toggle + the control pill
+//                        (presence | theme | notifications | you) + primary
+//                        "New Part" CTA.
 // (4) .content         — page-body wrapper (24px 32px 48px padding).
 // (5) Modal + button primitives — used by SignOutModal and any page-level
 //                        confirmation dialogs.
@@ -260,40 +262,8 @@
   }
 }
 
-.sideProfile {
-  margin-top: 8px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 10px;
-  border-top: 1px solid var(--a-border-soft);
-}
-
-.sideAvatar {
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #a88d2e, #c4a53a);
-  color: #ffffff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 700;
-  font-size: 13px;
-  flex-shrink: 0;
-}
-
-.sideUserName {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--a-fg1);
-  line-height: 1.2;
-}
-
-.sideUserRole {
-  font-size: 11px;
-  color: var(--a-fg3);
-}
+// (The bottom-pinned .sideProfile block moved to the topbar control pill on
+// 2026-07-31 — see .ctrlPill / .chipAvatar below.)
 
 // ─── (3) Topbar ─────────────────────────────────────────────────────────────
 
@@ -500,33 +470,80 @@
   color: var(--a-fg4);
 }
 
-.iconBtn {
-  width: 34px;
-  height: 34px;
-  border-radius: 6px;
+// ─── Topbar control pill ────────────────────────────────────────────────────
+// One soft container groups everything "about you": presence bubbles (who else
+// is here) | theme toggle | notifications | your avatar. The pill + the
+// fine-stroke circular chips ARE the design moment here — no gradients, no
+// motion beyond the 150ms border/background tint on hover.
+//
+// Height math: 38px chip + 2×4px padding + 2×1px border = 48px inside the 64px
+// topbar, i.e. 8px of breathing room top and bottom.
+
+.ctrlPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px;
   border: 1px solid var(--a-border);
-  background: #ffffff;
+  border-radius: 999px;
+  background: var(--a-card);
+  box-shadow: var(--a-shadow-sm);
+}
+
+.chip {
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  padding: 0;
+  border-radius: 50%;
+  // 1.25px: heavier than a hairline so the ring reads as deliberate, lighter
+  // than the 2px focus outline that has to beat it.
+  border: 1.25px solid var(--a-border);
+  background: var(--a-card);
+  color: var(--a-fg2);
   display: flex;
   align-items: center;
   justify-content: center;
+  position: relative; // anchors .bellBadge
   cursor: pointer;
-  color: var(--a-fg2);
-  position: relative;
+  font-family: inherit;
+  transition: border-color 150ms, background-color 150ms, color 150ms;
 
-  &:hover {
-    background: var(--a-border-soft);
-    color: var(--a-fg1);
+  &:focus-visible {
+    outline: 2px solid var(--a-primary);
+    outline-offset: 2px;
   }
 }
 
-.iconBtnDot {
-  position: absolute;
-  top: 6px;
-  right: 7px;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--a-danger);
+// Quiet at rest, accented on hover/focus: primary green for the theme toggle…
+.chipTheme:hover {
+  border-color: var(--a-primary);
+  color: var(--a-primary);
+  background: var(--a-hover);
+}
+
+// …and the admin blue for notifications, so the two never read as one control.
+.chipBell:hover {
+  border-color: var(--a-blue);
+  color: var(--a-blue);
+  background: var(--a-hover);
+}
+
+.chipBell:focus-visible {
+  outline-color: var(--a-blue);
+}
+
+// You. Initials on the primary green; its ring is the same green at 60% so the
+// chip keeps the pill's fine-stroke language instead of reading as a solid blob.
+.chipAvatar {
+  background: var(--a-primary);
+  border-color: color-mix(in srgb, var(--a-primary) 60%, transparent);
+  color: #ffffff;
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: default;
+  user-select: none;
 }
 
 // Bell wrap + counted badge + wiggle on new arrival.
@@ -550,7 +567,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1.5px solid #ffffff;
+  // Ring in the chip's own surface so the badge stays legible in dark mode too.
+  border: 1.5px solid var(--a-card);
   letter-spacing: 0;
   pointer-events: none;
 }
@@ -890,6 +908,18 @@
     flex-shrink: 0;
     gap: 8px;
     margin-left: 0;
+  }
+
+  // Control pill tightens so the hamburger row stays compact (presence bubbles
+  // hide themselves at this breakpoint — see PresenceBubbles.module.scss).
+  .ctrlPill {
+    gap: 6px;
+    padding: 3px;
+  }
+
+  .chip {
+    width: 34px;
+    height: 34px;
   }
 
   // Demo Data: hide the label, keep the switch + ON/OFF chip

@@ -1,0 +1,64 @@
+@use '@shared/styles/variables' as *;
+
+// Presence bubbles — stacked "who else is in the admin" avatars. Rendered
+// INSIDE the topbar control pill (AdminLayout .ctrlPill), so every --a-* token
+// below is inherited from the .admin scope and resolves in both themes.
+//
+// The component returns null when nobody else is online, so the trailing
+// hairline divider disappears with the stack — no empty gutter in the pill.
+
+.stack {
+  display: flex;
+  align-items: center;
+  padding-right: 10px;
+  margin-right: 2px;
+  border-right: 1px solid var(--a-border-soft);
+}
+
+.bubble {
+  position: relative; // so :hover can lift one out of the overlap
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1.25px solid var(--a-border); // overridden per-user with the hashed accent
+  background: var(--a-hover);
+  color: var(--a-fg2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  user-select: none;
+  cursor: default;
+  transition: border-color 150ms, background-color 150ms;
+
+  // Google-Drive stack: each bubble tucks under its left neighbour.
+  margin-left: -8px;
+
+  &:first-child {
+    margin-left: 0;
+  }
+
+  &:hover {
+    z-index: 1;
+    background: var(--a-card);
+  }
+}
+
+// "+N" overflow chip — quiet, never accented; it is a count, not a person.
+.overflow {
+  border-color: var(--a-border);
+  background: var(--a-card);
+  color: var(--a-fg3);
+  font-family: $font-mono;
+  font-size: 10px;
+}
+
+// Mobile: the pill sits on the hamburger row (<=820px), so drop presence and
+// keep only toggle / bell / avatar.
+@media (max-width: $bp-admin-mobile) {
+  .stack {
+    display: none;
+  }
+}

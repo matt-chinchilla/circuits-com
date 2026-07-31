@@ -8,6 +8,7 @@ from app.routes import (
     admin_expenses,
     admin_media,
     admin_messages,
+    admin_presence,
     admin_sponsors,
     analytics,
     auth,
@@ -46,6 +47,7 @@ app.include_router(admin_messages.router)
 app.include_router(admin_sponsors.router)
 app.include_router(admin_expenses.router)
 app.include_router(admin_media.router)
+app.include_router(admin_presence.router)
 app.include_router(analytics.router)
 app.include_router(sitemap.router)
 
