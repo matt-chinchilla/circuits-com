@@ -232,12 +232,26 @@ def live_evidence(repo: Path, width: int) -> None:
         print(f"  {C['text']}✎ {len(status)} uncommitted file(s):{C['reset']} "
               f"{C['dim']}{clip(', '.join(names), width - 30)}{C['reset']}")
 
-    for ledger in sorted(repo.glob(".superpowers/sdd/*/progress.md")):
-        tail = [ln for ln in ledger.read_text().splitlines() if ln.strip()][-3:]
-        if len(tail) > 1:
-            print(f"  {C['ok']}▤ {ledger.parent.name}{C['reset']}")
-            for ln in tail[1:]:
+    # Newest ledger first, and only the active one: an older plan's completed
+    # ledger next to a silent current plan reads as "the current work is the
+    # finished work", which is exactly backwards.
+    ledgers = sorted(repo.glob(".superpowers/sdd/*/progress.md"),
+                     key=lambda p: p.stat().st_mtime, reverse=True)
+    if ledgers:
+        ledger = ledgers[0]
+        lines = [ln for ln in ledger.read_text().splitlines() if ln.strip()]
+        done = [ln for ln in lines[1:]]
+        age = int((time.time() - ledger.stat().st_mtime) // 60)
+        print(f"  {C['ok']}▤ plan: {ledger.parent.name}{C['reset']} "
+              f"{C['dim']}(updated {age}m ago){C['reset']}")
+        if done:
+            for ln in done[-3:]:
                 print(f"      {C['dim']}{clip(ln, width - 10)}{C['reset']}")
+        else:
+            print(f"      {C['dim']}started — no task marked complete yet{C['reset']}")
+        if len(ledgers) > 1:
+            print(f"      {C['dim']}({len(ledgers) - 1} older plan ledger(s) not"
+                  f" shown){C['reset']}")
 
     for report in sorted(repo.glob(".superpowers/sdd/*/task-*-report.md"),
                          key=lambda p: p.stat().st_mtime, reverse=True)[:2]:
