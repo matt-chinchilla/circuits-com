@@ -34,6 +34,11 @@ deployable on its own.
   anthony, daniel, matthew, ronald.
 - `demo` is **exempt** (stays `false`) — `demo/demo` is the public demo login
   and a forced reset would break it.
+- **New `owner` tier** on the existing `user_role` enum (Postgres `ALTER TYPE`,
+  which is additive and irreversible — noted in the migration). `matthew`
+  becomes `owner`; the rest stay `admin`. P4b's cross-mailbox access and P4c's
+  broadcast are gated on it, so it must land in this migration even though it is
+  only exercised later.
 
 **Password policy** — 8–24 characters, ≥1 uppercase, ≥1 digit, ≥1 symbol.
 Enforced server-side (422 with a specific message per unmet rule) and mirrored
@@ -110,17 +115,52 @@ mode this explicitly prevents.
 
 ---
 
-## P4 — Messages integration
+## P4 — Messages as the company inbox
 
-`/admin/messages` keeps its four website-form types (contact, join, keyword,
-archived) exactly as today, and gains a clearly-labelled **"Your mailbox"**
-panel showing the signed-in person's address with a hand-off to
-`https://mail.circuitcenter.ai`.
+`/admin/messages` becomes the single place company mail lands, keeping its four
+website-form types (contact, join, keyword, archived) and gaining three things.
 
-**Deliberately NOT building now:** rendering personal inboxes inside the
-dashboard. That requires a Dovecot master credential, i.e. the website would be
-able to read every rep's private mail. Revisit only if the hand-off proves
-insufficient in daily use.
+### P4a — Shared company inbox (everyone)
+
+Inbound mail to the domain is funnelled into **`no-reply@`**, which the backend
+reads over IMAP with its own role-account credential and renders as a fifth
+message type alongside the form submissions. Every admin sees it — these are
+sales and partnership opportunities, so shared visibility is the point.
+
+- A **catch-all alias** routes anything not addressed to a person (`info@`,
+  `sales@`, typos) into the same store, so nothing is silently lost.
+- Friendly public aliases (`hello@`, `contact@`) deliver here too. Worth noting:
+  `no-reply@` is conventionally a *send-only* identity, so publishing a friendlier
+  address for humans while `no-reply@` remains the sending name reads better on
+  the site — same mailbox either way.
+- No privacy consideration: this is a role account, not a person's mailbox.
+
+### P4b — Owner access to employee mailboxes (owner only)
+
+The owner can open any employee mailbox from the admin console. This requires a
+**Dovecot master credential** held by the backend, and — importantly — a
+permission tier that does not exist today: **all five accounts are currently
+`role='admin'`**, so without a new tier "the owner can read everyone" would mean
+"everyone can read everyone."
+
+- Add an **`owner`** tier (`matthew`); anthony, daniel and ronald stay `admin`.
+- Cross-mailbox reads are gated on `owner` server-side, and every access is
+  written to an audit log (who opened whose mailbox, when).
+- Practical note: standard practice — and in some jurisdictions a requirement —
+  is that staff are *told* company mail is employer-accessible. A line in their
+  onboarding note costs nothing and avoids an unpleasant surprise later.
+
+### P4c — Broadcast to staff (owner only)
+
+A composer that sends one message to all active staff addresses, via SES from
+`matthew@` (reply-to preserved so replies come back to a human, not the void).
+Owner-gated, with each broadcast logged (recipients, subject, timestamp).
+
+### Personal mailbox access (everyone)
+
+Each person still gets a **"Your mailbox"** hand-off to
+`https://mail.circuitcenter.ai` for day-to-day mail — full webmail beats a
+half-built inbox view, and it costs no extra engineering.
 
 ---
 
@@ -129,7 +169,8 @@ insufficient in daily use.
 1. **P1** — auth overhaul (independent; deploy and confirm everyone can log in)
 2. **P2** — mail box, DNS, SES (AWS forms are the long pole)
 3. **P3** — push-sync (needs P1's password endpoints + P2's mail box)
-4. **P4** — Messages panel (needs P2's webmail URL)
+4. **P4a** — shared company inbox + catch-all (needs P2)
+5. **P4b/P4c** — owner mailbox access + broadcast (needs P1's `owner` tier)
 
 ## Risks
 
@@ -142,7 +183,13 @@ insufficient in daily use.
 - **P1 locks people out if the policy screen has a bug** — mitigated by testing
   the forced-reset path against a scratch account before flagging real ones.
 
+- **The Dovecot master credential (P4b) is a high-value secret** — it opens
+  every mailbox. It lives only in `/opt/circuits-com/.env` on the web box, is
+  never sent to the browser, and every use is audit-logged. A web-box compromise
+  reaching it would expose all company mail; that is the accepted cost of
+  owner-side access, and the audit log is what makes misuse visible.
+
 ## Out of scope
 
-Calendar/contacts (CalDAV), mailing lists, shared/group inboxes, mobile device
-provisioning profiles, and migrating any existing mail history.
+Calendar/contacts (CalDAV), mailing lists, mobile device provisioning profiles,
+and migrating any existing mail history.
