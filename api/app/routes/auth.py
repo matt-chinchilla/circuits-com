@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 
 import jwt
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
@@ -116,7 +116,11 @@ class ForgotPasswordRequest(BaseModel):
 
 class ResetPasswordRequest(BaseModel):
     token: str
-    new_password: str = Field(min_length=8)
+    # No Field(min_length=...) here on purpose: validate_password is the ONE
+    # gate, so a too-short password answers with the same structured
+    # password_policy 422 as every other rule instead of a stock pydantic
+    # array-detail the client can't read.
+    new_password: str
 
 
 class ChangePasswordRequest(BaseModel):
@@ -356,6 +360,12 @@ def forgot_password(
 def reset_password(body: ResetPasswordRequest, request: Request, db: Session = Depends(get_db)):
     """Set a new password from a valid, unused reset token.
 
+    The new password must satisfy the SAME policy as /change-password (422
+    ``password_policy`` listing the unmet rule keys). This route writes a real,
+    permanent credential — an unpoliced recovery path would simply be the way
+    round the policy — and because it enforces the policy it can also clear
+    ``must_change_password``.
+
     Rate limited per-IP in the ``recovery:*`` namespace so the token itself
     can't be brute-forced. Only REJECTED tokens count, so a user clicking their
     own valid link is never throttled.
@@ -399,14 +409,35 @@ def reset_password(body: ResetPasswordRequest, request: Request, db: Session = D
     if user is None or not reset_token_matches_hash(payload, user.password_hash):
         raise _dead_link("This reset link is no longer valid. Please request a new one.")
 
+    # The policy runs AFTER the link is proven good, and does NOT go through
+    # _dead_link: reaching this line means the caller holds a valid single-use
+    # link, so a rule they haven't met yet is a form error, not a failed attack
+    # — counting it would throttle a user fumbling their own recovery, and the
+    # link stays usable (the password hash, hence the token fingerprint, is
+    # unchanged) so they can simply retry.
+    unmet = validate_password(body.new_password)
+    if unmet:
+        # Byte-identical shape to /change-password's policy 422 so one client
+        # helper reads both (see admin passwordPolicy.unmetKeysFromDetail).
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "password_policy", "message": PASSWORD_HELP, "unmet": unmet},
+        )
+
     user.password_hash = hash_password(body.new_password)
     # Stamping this retires every session token minted before the reset (see
     # auth_service.token_predates_password_change) — a password recovered
     # because the account was compromised must not leave the intruder's
-    # existing session alive. must_change_password is deliberately NOT cleared
-    # here: this route does not yet enforce the password policy, so clearing it
-    # would let a forced rotation be satisfied by a weak password.
+    # existing session alive.
     user.password_changed_at = datetime.now(UTC)
+    # A completed reset IS the rotation the forced-change flag demands: the new
+    # password just passed the same policy /change-password enforces, and the
+    # caller proved control of the mailbox. Leaving the flag set would trap the
+    # migration-022 admins — whose passwords were rotated out from under them,
+    # so /change-password (which needs current_password) is unusable — behind a
+    # 403 gate with no way through. Clearing it here is what makes recovery a
+    # complete exit from the gate.
+    user.must_change_password = False
     db.commit()
     # A completed reset clears this host's recovery counter AND the sign-in
     # lockout it was almost certainly triggered by. Without the login keys here

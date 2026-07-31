@@ -183,9 +183,7 @@ class TestDemoAccount:
         assert resp.status_code == 401
         assert resp.json()["detail"] == "Invalid credentials"
 
-    def test_demo_refusal_is_indistinguishable_from_an_unknown_account(
-        self, client, db, seeded_db
-    ):
+    def test_demo_refusal_is_indistinguishable_from_an_unknown_account(self, client, db, seeded_db):
         """Refusing a KNOWN account must not become an existence oracle."""
         self._seed_demo(db)
         demo = _login(client, email="demo@circuitcenter.ai", password="demo")
@@ -313,15 +311,23 @@ class TestSessionInvalidation:
         assert fresh.status_code == 200
         assert _me(client, fresh.json()["token"]).status_code == 200
 
-    def test_reset_password_does_not_clear_the_forced_change_flag(self, client, db, seeded_db):
-        # This route does not enforce the password policy yet, so it must not
-        # be a way to satisfy a forced rotation with a weak password.
+    def test_reset_password_clears_the_forced_change_flag(self, client, db, seeded_db):
+        # The route now enforces the SAME policy /change-password does, so a
+        # completed reset IS the rotation the flag demands — and it is the only
+        # exit for an admin whose password was rotated out from under them
+        # (no current_password to give /change-password). A weak password is
+        # rejected outright, so this can't satisfy a rotation cheaply; see
+        # test_auth_recovery.TestResetPasswordClearsTheForcedChangeFlag.
         user = seeded_db["admin_user"]
         user.must_change_password = True
         db.commit()
         reset = svc.create_reset_token(str(user.id), user.password_hash)
-        client.post("/api/auth/reset-password", json={"token": reset, "new_password": "Newpass99!"})
-        assert user.must_change_password is True
+        resp = client.post(
+            "/api/auth/reset-password", json={"token": reset, "new_password": "Newpass99!"}
+        )
+        assert resp.status_code == 200
+        db.refresh(user)
+        assert user.must_change_password is False
 
 
 class TestTokenPredatesPasswordChange:

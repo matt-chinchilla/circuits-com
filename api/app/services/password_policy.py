@@ -10,17 +10,25 @@ The policy is EXACTLY:
     length     8-24 characters, inclusive
     uppercase  at least one uppercase letter
     digit      at least one number
-    symbol     at least one symbol (any non-alphanumeric character)
+    symbol     at least one symbol — a character that is neither a letter nor
+               a number, in ANY script (``str.isalnum()`` is False)
 
-Character classes are deliberately **ASCII-anchored** (``[A-Z]``, ``[0-9]``,
-``[^A-Za-z0-9]``) rather than Python's unicode-aware ``str.isupper()`` /
+**uppercase** and **digit** are deliberately ASCII-anchored (``[A-Z]``,
+``[0-9]``) rather than Python's unicode-aware ``str.isupper()`` /
 ``str.isdigit()``. The frontend mirror is JavaScript, whose ``\\d`` and
 ``[A-Z]`` are ASCII-only; anchoring both sides to ASCII keeps the two
-validators byte-for-byte equivalent instead of quietly diverging on, say,
-``Ä`` (unicode-uppercase) or ``٣`` (unicode-digit). Note the direction of the
-looseness: non-ASCII characters are NOT rejected — they simply count as
-*symbols* (``☂``, ``é`` and ``中`` all satisfy the symbol rule), which is what
-a user typing a non-Latin password would expect.
+validators equivalent instead of quietly diverging on, say, ``Ä``
+(unicode-uppercase) or ``٣`` (unicode-digit).
+
+**symbol** is the one rule that must NOT be ASCII-anchored. ``[^A-Za-z0-9]``
+reads "non-ASCII counts as punctuation", which is false: ``é``, ``中`` and
+``Ä`` are LETTERS, so a naive class let ``Passw0rdé`` pass a rule the UI
+describes as "anything that is not a letter or number" — a whole rule
+satisfied by adding an accent. The honest test is Unicode's own answer,
+``not ch.isalnum()``: ``☂``, ``→``, ``£``, ``!`` and a space are symbols;
+``é``, ``中``, ``Ä`` and ``٣`` are not. Non-ASCII characters are still fully
+accepted in a password — they simply count as the letters/numbers they are.
+The JS mirror of this rule is ``/[^\\p{L}\\p{N}]/u``.
 
 Length counts Python characters (code points). The JS mirror should count
 ``[...password].length``, not ``password.length``, so an astral character
@@ -51,7 +59,17 @@ PASSWORD_HELP = (
 
 _UPPERCASE_RE = re.compile(r"[A-Z]")
 _DIGIT_RE = re.compile(r"[0-9]")
-_SYMBOL_RE = re.compile(r"[^A-Za-z0-9]")
+
+
+def _has_symbol(value: str) -> bool:
+    """True when at least one character is neither a letter nor a number.
+
+    Not a regex: the rule is a Unicode-category question, and ``[^A-Za-z0-9]``
+    answers a different one (see the module docstring — it counts ``é`` as a
+    symbol). ``str.isalnum()`` is exactly "letter or number in some script",
+    so its negation is exactly "symbol".
+    """
+    return any(not ch.isalnum() for ch in value)
 
 
 def validate_password(password: str) -> list[str]:
@@ -72,6 +90,6 @@ def validate_password(password: str) -> list[str]:
         unmet.append("uppercase")
     if not _DIGIT_RE.search(value):
         unmet.append("digit")
-    if not _SYMBOL_RE.search(value):
+    if not _has_symbol(value):
         unmet.append("symbol")
     return unmet

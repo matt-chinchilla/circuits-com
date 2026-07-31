@@ -123,21 +123,33 @@ def test_unmet_keys_are_always_a_subset_of_the_rule_keys():
 # ── Unicode ────────────────────────────────────────────────────────────────
 
 
-@pytest.mark.parametrize("symbol", ["☂", "é", "中", "→", "£"])
-def test_unicode_characters_count_as_symbols(symbol):
-    """Non-ASCII characters satisfy the symbol rule (JS-mirrored [^A-Za-z0-9])."""
+@pytest.mark.parametrize("symbol", ["☂", "→", "£", "·", " "])
+def test_non_alphanumeric_unicode_characters_count_as_symbols(symbol):
+    """A symbol is any character that is neither a letter nor a number, in any
+    script — Unicode's own answer (``str.isalnum()`` is False), not merely
+    "non-ASCII"."""
     assert validate_password(f"Passw0rd{symbol}") == []
 
 
-def test_unicode_uppercase_does_not_satisfy_the_uppercase_rule():
-    """ASCII-anchored by design so the JS mirror ([A-Z]) can't diverge —
-    the unicode 'Ä' counts as a SYMBOL, not as an uppercase letter."""
-    assert validate_password("Äbcdef1gh") == ["uppercase"]
+@pytest.mark.parametrize("letter", ["é", "中", "Ä", "ß", "٣"])
+def test_unicode_letters_and_digits_do_not_satisfy_the_symbol_rule(letter):
+    """The rule the UI advertises is "anything that is not a letter or number".
+    A naive [^A-Za-z0-9] class made every non-ASCII character a symbol, so
+    'Passw0rdé' satisfied "at least one symbol" by adding an accent. Accented
+    letters, CJK ideographs and Arabic-Indic digits are letters and numbers —
+    they are perfectly legal IN a password, they just aren't the symbol."""
+    assert validate_password(f"Passw0rd{letter}") == ["symbol"]
 
 
-def test_unicode_digit_does_not_satisfy_the_digit_rule():
-    """Same ASCII anchoring for digits: '٣' is a symbol, not a number."""
-    assert validate_password("Abcdefg٣h") == ["digit"]
+def test_unicode_uppercase_satisfies_neither_uppercase_nor_symbol():
+    """uppercase is ASCII-anchored by design so the JS mirror ([A-Z]) can't
+    diverge — and 'Ä' is a LETTER, so it is not a symbol either."""
+    assert validate_password("Äbcdef1gh") == ["uppercase", "symbol"]
+
+
+def test_unicode_digit_satisfies_neither_digit_nor_symbol():
+    """Same ASCII anchoring for digits — and '٣' is a NUMBER, not a symbol."""
+    assert validate_password("Abcdefg٣h") == ["digit", "symbol"]
 
 
 def test_length_counts_code_points_not_bytes():

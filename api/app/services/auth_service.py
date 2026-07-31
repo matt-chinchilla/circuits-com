@@ -28,12 +28,38 @@ RESET_EXPIRY_MINUTES = 30
 SESSION_IAT_GRACE_SECONDS = 1
 
 
+# bcrypt hashes at most 72 BYTES of input, and since bcrypt 4 it RAISES
+# ValueError on longer input instead of silently truncating. Left unhandled that
+# ValueError becomes a 500, and a 500-vs-401 split on /login is a one-request
+# account-existence oracle: a >72-byte password reaches bcrypt (and raises) only
+# when the address matched a real user — the unknown-account path burns the
+# fixed-length dummy hash instead and can never raise. It bites on the write
+# side too: the policy caps passwords at 24 CODE POINTS, and 24 emoji are 96
+# bytes, so a policy-VALID password could 500 inside hash_password.
+#
+# Clamping the encoded bytes here makes both functions total for every str, so
+# no call site can produce a 500. 72 bytes has always been bcrypt's semantic
+# ceiling (bytes past it were never part of the digest), so this verifies every
+# previously-stored hash exactly as before.
+BCRYPT_MAX_BYTES = 72
+
+
+def _bcrypt_bytes(password: str) -> bytes:
+    """UTF-8 encode a password, clamped to bcrypt's 72-byte ceiling.
+
+    Sliced on BYTES, not characters — the ceiling is a byte limit, and a
+    multibyte character straddling the boundary is fine: bcrypt takes raw
+    bytes, it does not decode them.
+    """
+    return (password or "").encode()[:BCRYPT_MAX_BYTES]
+
+
 def hash_password(password: str) -> str:
-    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+    return bcrypt.hashpw(_bcrypt_bytes(password), bcrypt.gensalt()).decode()
 
 
 def verify_password(password: str, hashed: str) -> bool:
-    return bcrypt.checkpw(password.encode(), hashed.encode())
+    return bcrypt.checkpw(_bcrypt_bytes(password), hashed.encode())
 
 
 # Precomputed hash (same cost factor as real hashes) used to equalize /login

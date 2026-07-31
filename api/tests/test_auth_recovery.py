@@ -8,9 +8,11 @@ address (P1 auth overhaul) — see test_auth_email_login.py.
 """
 
 import jwt
+import pytest
 
 from app.config import settings
 from app.services import auth_service as svc
+from app.services.password_policy import PASSWORD_HELP
 
 
 def _exp_window(token: str) -> int:
@@ -55,9 +57,7 @@ class TestForgotPassword:
     def test_known_email_returns_generic_ok(self, client, db, seeded_db):
         seeded_db["admin_user"].email = "admin@example.com"
         db.commit()
-        resp = client.post(
-            "/api/auth/forgot-password", json={"identifier": "ADMIN@example.com"}
-        )
+        resp = client.post("/api/auth/forgot-password", json={"identifier": "ADMIN@example.com"})
         assert resp.status_code == 200
 
     def test_unknown_identifier_returns_generic_ok(self, client, seeded_db):
@@ -80,9 +80,7 @@ class TestForgotPassword:
         async def _capture(to_email, username, reset_url):
             captured["url"] = reset_url
 
-        monkeypatch.setattr(
-            "app.routes.auth.email_service.send_password_reset", _capture
-        )
+        monkeypatch.setattr("app.routes.auth.email_service.send_password_reset", _capture)
         resp = client.post(
             "/api/auth/forgot-password",
             json={"identifier": "admin"},
@@ -97,6 +95,14 @@ class TestForgotPassword:
 
 
 class TestResetPassword:
+    """The reset link writes a REAL, permanent credential, so it enforces the
+    same password policy /change-password does — an unpoliced recovery path
+    would simply be the way round the policy. NEW_PASSWORD is therefore
+    policy-compliant everywhere below; a non-compliant one is a 422, not a 200
+    (these tests previously asserted the opposite and pinned the bypass)."""
+
+    NEW_PASSWORD = "Newpass99!"
+
     def _reset_token(self, user):
         return svc.create_reset_token(str(user.id), user.password_hash)
 
@@ -104,12 +110,13 @@ class TestResetPassword:
         token = self._reset_token(seeded_db["admin_user"])
         resp = client.post(
             "/api/auth/reset-password",
-            json={"token": token, "new_password": "newpass99"},
+            json={"token": token, "new_password": self.NEW_PASSWORD},
         )
         assert resp.status_code == 200
         assert (
             client.post(
-                "/api/auth/login", json={"email": "admin@test.example", "password": "newpass99"}
+                "/api/auth/login",
+                json={"email": "admin@test.example", "password": self.NEW_PASSWORD},
             ).status_code
             == 200
         )
@@ -123,12 +130,12 @@ class TestResetPassword:
     def test_token_is_single_use(self, client, db, seeded_db):
         token = self._reset_token(seeded_db["admin_user"])
         first = client.post(
-            "/api/auth/reset-password", json={"token": token, "new_password": "newpass99"}
+            "/api/auth/reset-password", json={"token": token, "new_password": self.NEW_PASSWORD}
         )
         assert first.status_code == 200
         # Reuse → fingerprint no longer matches the (changed) hash → 400.
         second = client.post(
-            "/api/auth/reset-password", json={"token": token, "new_password": "another88"}
+            "/api/auth/reset-password", json={"token": token, "new_password": "Another88!"}
         )
         assert second.status_code == 400
 
@@ -141,16 +148,139 @@ class TestResetPassword:
 
     def test_garbage_token_rejected(self, client, seeded_db):
         resp = client.post(
-            "/api/auth/reset-password", json={"token": "not-a-jwt", "new_password": "newpass99"}
+            "/api/auth/reset-password",
+            json={"token": "not-a-jwt", "new_password": self.NEW_PASSWORD},
         )
         assert resp.status_code == 400
 
     def test_session_token_not_accepted_as_reset(self, client, db, seeded_db):
         session = svc.create_token(str(seeded_db["admin_user"].id), "admin")
         resp = client.post(
-            "/api/auth/reset-password", json={"token": session, "new_password": "newpass99"}
+            "/api/auth/reset-password",
+            json={"token": session, "new_password": self.NEW_PASSWORD},
         )
         assert resp.status_code == 400
+
+
+class TestResetPasswordEnforcesThePolicy:
+    """Before this, ``new_password="a"*8`` was a valid permanent credential: the
+    only gate was ``Field(min_length=8)``. With email as the login key that is
+    directly brute-forceable."""
+
+    def _reset_token(self, user):
+        return svc.create_reset_token(str(user.id), user.password_hash)
+
+    @pytest.mark.parametrize(
+        "password,unmet",
+        [
+            ("newpass99", ["uppercase", "symbol"]),
+            ("NEWPASS99", ["symbol"]),
+            ("Newpass!!", ["digit"]),
+            ("Aa1!", ["length"]),
+            ("aaaaaaaa", ["uppercase", "digit", "symbol"]),
+        ],
+    )
+    def test_a_policy_violating_password_is_rejected(self, client, db, seeded_db, password, unmet):
+        user = seeded_db["admin_user"]
+        resp = client.post(
+            "/api/auth/reset-password",
+            json={"token": self._reset_token(user), "new_password": password},
+        )
+        assert resp.status_code == 422
+        # Byte-identical shape to /change-password's policy 422 — one client
+        # helper (admin passwordPolicy.unmetKeysFromDetail) reads both.
+        detail = resp.json()["detail"]
+        assert detail["code"] == "password_policy"
+        assert detail["message"] == PASSWORD_HELP
+        assert detail["unmet"] == unmet
+        # Rejected → the password is untouched and the old one still works.
+        assert (
+            client.post(
+                "/api/auth/login", json={"email": "admin@test.example", "password": "testpass123"}
+            ).status_code
+            == 200
+        )
+
+    def test_a_rejected_password_leaves_the_link_usable(self, client, db, seeded_db):
+        """A rule the user hasn't met yet is a form error, not a failed attack:
+        the link must survive so they can simply retype."""
+        token = self._reset_token(seeded_db["admin_user"])
+        assert (
+            client.post(
+                "/api/auth/reset-password", json={"token": token, "new_password": "newpass99"}
+            ).status_code
+            == 422
+        )
+        assert (
+            client.post(
+                "/api/auth/reset-password", json={"token": token, "new_password": "Newpass99!"}
+            ).status_code
+            == 200
+        )
+
+
+class TestResetPasswordClearsTheForcedChangeFlag:
+    """A completed reset IS the rotation ``must_change_password`` demands — the
+    new password just passed the same policy /change-password enforces and the
+    caller proved control of the mailbox. Leaving the flag set traps the
+    migration-022 admins: their passwords were rotated out from under them, so
+    /change-password (which needs ``current_password``) is unusable and the
+    reset link is their ONLY exit from the 403 gate."""
+
+    def test_reset_clears_the_flag_and_stamps_the_change(self, client, db, seeded_db):
+        user = seeded_db["admin_user"]
+        user.must_change_password = True
+        user.password_changed_at = None
+        db.commit()
+        token = svc.create_reset_token(str(user.id), user.password_hash)
+
+        resp = client.post(
+            "/api/auth/reset-password", json={"token": token, "new_password": "Newpass99!"}
+        )
+        assert resp.status_code == 200
+
+        db.refresh(user)
+        assert user.must_change_password is False
+        assert user.password_changed_at is not None
+
+    def test_the_recovered_user_can_reach_a_gated_route(self, client, db, seeded_db):
+        """End-to-end proof there is no dead end: flagged → reset → sign in →
+        the 403 gate is open."""
+        user = seeded_db["admin_user"]
+        user.must_change_password = True
+        db.commit()
+        token = svc.create_reset_token(str(user.id), user.password_hash)
+        assert (
+            client.post(
+                "/api/auth/reset-password", json={"token": token, "new_password": "Newpass99!"}
+            ).status_code
+            == 200
+        )
+
+        login = client.post(
+            "/api/auth/login", json={"email": "admin@test.example", "password": "Newpass99!"}
+        )
+        assert login.status_code == 200
+        assert login.json()["must_change_password"] is False
+        gated = client.get(
+            "/api/admin/sponsors/", headers={"Authorization": f"Bearer {login.json()['token']}"}
+        )
+        assert gated.status_code == 200
+
+    def test_a_rejected_reset_leaves_the_flag_set(self, client, db, seeded_db):
+        """The flag may only be cleared by a password that actually passed."""
+        user = seeded_db["admin_user"]
+        user.must_change_password = True
+        db.commit()
+        token = svc.create_reset_token(str(user.id), user.password_hash)
+        assert (
+            client.post(
+                "/api/auth/reset-password", json={"token": token, "new_password": "newpass99"}
+            ).status_code
+            == 422
+        )
+        db.refresh(user)
+        assert user.must_change_password is True
 
 
 class TestResetTokenNotABearer:
@@ -198,15 +328,11 @@ class TestForgotUsernameRetired:
     def test_known_email_returns_410(self, client, db, seeded_db):
         seeded_db["admin_user"].email = "admin@example.com"
         db.commit()
-        resp = client.post(
-            "/api/auth/forgot-username", json={"email": "admin@example.com"}
-        )
+        resp = client.post("/api/auth/forgot-username", json={"email": "admin@example.com"})
         assert resp.status_code == 410
 
     def test_unknown_email_returns_the_same_410(self, client, seeded_db):
-        resp = client.post(
-            "/api/auth/forgot-username", json={"email": "nobody@example.com"}
-        )
+        resp = client.post("/api/auth/forgot-username", json={"email": "nobody@example.com"})
         assert resp.status_code == 410
 
     def test_bodyless_call_still_410_not_422(self, client, seeded_db):
