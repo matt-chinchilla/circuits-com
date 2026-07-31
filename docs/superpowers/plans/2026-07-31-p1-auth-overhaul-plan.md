@@ -140,6 +140,33 @@ fast-forwarding past the window unlocks.
 - Vitest: the mirrored validator agrees with the backend rule set on a shared
   table of cases (same inputs, same expected unmet keys).
 
+## Task 8 — Safe demo account (added 2026-07-31)
+
+The `See Demo →` button (tasks 4 + 6) removes the last friction protecting live
+production data: any visitor can reach the admin console in one click. Today the
+`demo` account is `role='admin'` with unrestricted write access, so a prospect
+could edit sponsors, delete parts, or change expenses on the real site.
+
+Two changes, both server-side (a client-side guard is decoration):
+
+1. **Read-only demo.** Every mutating admin route (POST/PUT/PATCH/DELETE under
+   `/api/admin/*`, `/api/suppliers/*`, `/api/parts/*`) returns **403
+   `demo_account_read_only`** when the caller is the demo account. Implement as
+   one dependency applied at the router level — never a per-route check that the
+   next new endpoint can forget. GET stays fully open so the console renders
+   normally.
+2. **Force demo data on.** A demo session sees synthetic figures, not real
+   revenue, customer names, or sponsor contacts. The dashboard already has a
+   DEMO DATA mode — make it default-on and non-disableable for this account.
+
+Frontend: surface the 403 as a friendly inline notice ("Editing is disabled in
+the demo") rather than a generic error toast, and mark the console with an
+unobtrusive "Demo" badge so a prospect knows what they are looking at.
+
+Tests: demo cannot POST/PATCH/DELETE a sponsor, part, supplier, or expense (403
+each); demo CAN read those same resources; a real admin is unaffected; the demo
+session reports demo-data mode on.
+
 ## Task 7 — Docs
 
 Update `CLAUDE.md`: login is email-keyed, the policy, the `owner` tier, session
