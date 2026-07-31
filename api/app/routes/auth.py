@@ -2,7 +2,7 @@ import uuid as uuid_mod
 from datetime import UTC, datetime
 
 import jwt
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
@@ -24,12 +24,50 @@ from app.services.auth_service import (
     verify_password,
 )
 from app.services.password_policy import PASSWORD_HELP, validate_password
+from app.services.rate_limit import (
+    limiter,
+    login_email_key,
+    login_ip_key,
+    recovery_identifier_key,
+    recovery_ip_key,
+)
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 # Recovery endpoints always return this, whether or not an account matched, so a
 # caller can't probe which usernames/emails exist (anti-enumeration).
 GENERIC_OK = {"status": "ok"}
+
+# THE one wrong-credentials body. A locked-out attempt raises the very same
+# thing (only a Retry-After header differs), so the rate limiter can never be
+# read as "this account exists / this password was nearly right".
+INVALID_CREDENTIALS_DETAIL = "Invalid credentials"
+
+
+def _invalid_credentials(retry_after: int = 0) -> HTTPException:
+    """The generic 401 — identical body for unknown account, wrong password and
+    rate-limited. ``Retry-After`` is advisory only and says nothing about any
+    account: it is armed by the CALLER's own request volume, whether or not the
+    address they typed exists."""
+    headers = {"Retry-After": str(retry_after)} if retry_after > 0 else None
+    return HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail=INVALID_CREDENTIALS_DETAIL,
+        headers=headers,
+    )
+
+
+def _login_rate_limit(request: Request) -> None:
+    """Per-IP pre-check for the sign-in endpoints (see LOGIN_RATE_LIMIT_DEPENDENCIES).
+
+    IP-only: a body-scoped (per-email) check needs the parsed body, which lives
+    in the route. The route adds the per-email key itself, so an attacker
+    spraying one address from many hosts is still caught.
+    """
+    retry_after = limiter.retry_after(login_ip_key(request))
+    if retry_after:
+        raise _invalid_credentials(retry_after)
+
 
 # ── Rate-limit seam (task 5) ────────────────────────────────────────────────
 # /login and /demo are the two unauthenticated credential-adjacent endpoints and
@@ -39,7 +77,12 @@ GENERIC_OK = {"status": "ok"}
 # hammering the API. FastAPI reads the list when the decorator runs, so task 5
 # must populate it above the route definitions (or assign a new list to this
 # name BEFORE import completes).
-LOGIN_RATE_LIMIT_DEPENDENCIES: list = []
+#
+# /demo HONORS a login lockout but never escalates one: it takes no credentials,
+# so it cannot "fail", and counting the marketing button's clicks would lock a
+# prospect out of the demo after five taps. Sharing the check is what stops a
+# brute-forcing IP from simply pivoting to /demo for a token.
+LOGIN_RATE_LIMIT_DEPENDENCIES: list = [Depends(_login_rate_limit)]
 
 
 class LoginRequest(BaseModel):
@@ -116,21 +159,35 @@ def _session_response(user: User, *, expires_hours: int = TOKEN_EXPIRY_HOURS) ->
 
 
 @router.post("/login", response_model=LoginResponse, dependencies=LOGIN_RATE_LIMIT_DEPENDENCIES)
-def login(body: LoginRequest, db: Session = Depends(get_db)):
+def login(body: LoginRequest, request: Request, db: Session = Depends(get_db)):
+    # Two keys, scored independently: the host (one machine walking a list of
+    # addresses) and the address (a botnet spraying one account).
+    ip_key = login_ip_key(request)
+    email_key = login_email_key(body.email)
+
+    # The per-IP half already ran in the dependency; this covers the per-email
+    # half. Returns BEFORE bcrypt: a locked key must not buy the attacker a
+    # password check, and burning a hash per blocked request would hand them a
+    # CPU-exhaustion lever. The early return leaks nothing an attacker doesn't
+    # already know — they armed this lock themselves, and it arms identically
+    # for an address that has no account.
+    retry_after = limiter.retry_after(email_key)
+    if retry_after:
+        raise _invalid_credentials(retry_after)
+
     user = _find_login_user(db, body.email)
     if user is None:
         # Equalize timing with the wrong-password path so a missing account
         # can't be detected by response latency (account enumeration).
         verify_dummy_password()
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid credentials",
-        )
+        # Counted exactly like a wrong password — if only real accounts scored
+        # failures, the lockout itself would become an existence oracle.
+        raise _invalid_credentials(limiter.record_failure(ip_key, email_key))
     if not verify_password(body.password, user.password_hash):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid credentials",
-        )
+        raise _invalid_credentials(limiter.record_failure(ip_key, email_key))
+    # Success clears both keys: a legitimate user who finally remembers their
+    # password is not still one fumble from a lockout.
+    limiter.clear(ip_key, email_key)
     expires = REMEMBER_EXPIRY_HOURS if body.remember else TOKEN_EXPIRY_HOURS
     return _session_response(user, expires_hours=expires)
 
@@ -225,10 +282,33 @@ def logout():
 def forgot_password(
     body: ForgotPasswordRequest,
     background_tasks: BackgroundTasks,
+    request: Request,
+    response: Response,
     db: Session = Depends(get_db),
 ):
     """Email a secure reset link if the identifier matches an account with an
-    email on file. Always returns GENERIC_OK (anti-enumeration)."""
+    email on file. Always returns GENERIC_OK (anti-enumeration).
+
+    Rate limited in the ``recovery:*`` namespace — deliberately NOT the
+    ``login:*`` one. "Fail the password a few times, then click Forgot
+    password" is the single most common real user flow there is, and a shared
+    bucket would let the login lockout suppress the email that resolves it.
+
+    A throttled request returns the SAME generic OK with no mail sent (plus an
+    advisory Retry-After): this endpoint's response is a constant by design, and
+    the throttle exists to stop an attacker mail-bombing a victim's inbox — not
+    to tell the caller anything.
+    """
+    ip_key = recovery_ip_key(request)
+    identifier_key = recovery_identifier_key(body.identifier)
+    retry_after = limiter.retry_after(ip_key, identifier_key)
+    if retry_after:
+        response.headers["Retry-After"] = str(retry_after)
+        return GENERIC_OK
+    # Every attempt costs — success included. There is no "correct" answer here
+    # to reward, so the send itself is what has to be bounded.
+    limiter.record_failure(ip_key, identifier_key)
+
     identifier = body.identifier.strip()
     if identifier:
         ident_lower = identifier.lower()
@@ -257,37 +337,51 @@ def forgot_password(
 
 
 @router.post("/reset-password")
-def reset_password(body: ResetPasswordRequest, db: Session = Depends(get_db)):
-    """Set a new password from a valid, unused reset token."""
+def reset_password(body: ResetPasswordRequest, request: Request, db: Session = Depends(get_db)):
+    """Set a new password from a valid, unused reset token.
+
+    Rate limited per-IP in the ``recovery:*`` namespace so the token itself
+    can't be brute-forced. Only REJECTED tokens count, so a user clicking their
+    own valid link is never throttled.
+
+    A throttled caller gets 429 — not the generic OK, and not the "link is no
+    longer valid" 400. Telling someone their password was reset when it wasn't
+    is a lie, and reusing the dead-link copy would send them to request another
+    link that would also be throttled. 429 reveals nothing about any account:
+    it is armed purely by this caller's own failed attempts.
+    """
+    ip_key = recovery_ip_key(request)
+    retry_after = limiter.retry_after(ip_key)
+    if retry_after:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many attempts. Please try again in a few minutes.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
+    def _dead_link(detail: str) -> HTTPException:
+        """Reject + count. Every failure path funnels through here so none can
+        be added later that forgets to score against the limiter."""
+        limiter.record_failure(ip_key)
+        return HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
+
     try:
         payload = decode_reset_token(body.token)
     except jwt.ExpiredSignatureError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="This reset link has expired. Please request a new one.",
-        ) from None
+        raise _dead_link("This reset link has expired. Please request a new one.") from None
     except jwt.InvalidTokenError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="This reset link is invalid. Please request a new one.",
-        ) from None
+        raise _dead_link("This reset link is invalid. Please request a new one.") from None
 
     try:
         user_uuid = uuid_mod.UUID(payload.get("sub"))
     except (ValueError, TypeError):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="This reset link is invalid. Please request a new one.",
-        ) from None
+        raise _dead_link("This reset link is invalid. Please request a new one.") from None
 
     user = db.query(User).filter(User.id == user_uuid).first()
     # A fingerprint mismatch means the password already changed since the link
     # was issued (used once, or superseded) — treat as a dead link.
     if user is None or not reset_token_matches_hash(payload, user.password_hash):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="This reset link is no longer valid. Please request a new one.",
-        )
+        raise _dead_link("This reset link is no longer valid. Please request a new one.")
 
     user.password_hash = hash_password(body.new_password)
     # Stamping this retires every session token minted before the reset (see
@@ -298,6 +392,14 @@ def reset_password(body: ResetPasswordRequest, db: Session = Depends(get_db)):
     # would let a forced rotation be satisfied by a weak password.
     user.password_changed_at = datetime.now(UTC)
     db.commit()
+    # A completed reset clears this host's recovery counter AND the sign-in
+    # lockout it was almost certainly triggered by. Without the login keys here
+    # the flow dead-ends: forgetting your password is exactly what locks you
+    # out, so "reset it" would hand you a working password you still can't use
+    # for up to 15 minutes. Possession of a single-use link emailed to the
+    # account is stronger proof of legitimacy than the password itself — anyone
+    # who can reach this line already holds the mailbox.
+    limiter.clear(ip_key, login_ip_key(request), login_email_key(user.email))
     return GENERIC_OK
 
 

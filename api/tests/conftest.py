@@ -68,6 +68,23 @@ from app.models import (  # noqa: E402
     Supplier,
     User,
 )
+from app.services import rate_limit  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def reset_login_rate_limiter():
+    """Wipe the login/recovery rate limiter between tests.
+
+    The limiter (app.services.rate_limit) keeps its counters in PROCESS memory,
+    not the DB, so the per-test database teardown does nothing for it: every
+    test in the session shares one client host ("testclient"), and a handful of
+    deliberate wrong-password tests would otherwise accumulate into a lockout
+    that fails whichever unrelated test happens to run next. Autouse so no test
+    has to know the limiter exists.
+    """
+    rate_limit.limiter.reset()
+    yield
+    rate_limit.limiter.reset()
 
 
 @pytest.fixture(scope="function")
@@ -109,9 +126,7 @@ def auth_header(client):
     (request it in the test alongside this fixture — the users live there).
     """
 
-    def _make(
-        email: str = "admin@test.example", password: str = "testpass123"
-    ) -> dict[str, str]:
+    def _make(email: str = "admin@test.example", password: str = "testpass123") -> dict[str, str]:
         resp = client.post(
             "/api/auth/login",
             json={"email": email, "password": password},
