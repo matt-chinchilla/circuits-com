@@ -11,6 +11,7 @@ from app.config import settings
 from app.db.session import get_db
 from app.models import User
 from app.services import email as email_service
+from app.services import mail_sync
 from app.services.auth_service import (
     DEMO_READ_ONLY_DETAIL,
     REMEMBER_EXPIRY_HOURS,
@@ -224,6 +225,13 @@ def login(body: LoginRequest, request: Request, db: Session = Depends(get_db)):
     # Success clears both keys: a legitimate user who finally remembers their
     # password is not still one fumble from a lockout.
     limiter.clear(ip_key, email_key)
+    # Mailbox drift self-heals HERE (P3). A login is the one moment outside a
+    # password change where the site legitimately holds the plaintext, so a
+    # push that failed earlier gets a free retry with nobody typing anything
+    # twice. No-op unless the row is actually flagged, and rate-limited by a
+    # per-address cooldown, so a mail box that is down cannot make every
+    # sign-in wait out the HTTP timeout.
+    mail_sync.retry_pending_sync(db, user, body.password)
     expires = REMEMBER_EXPIRY_HOURS if body.remember else TOKEN_EXPIRY_HOURS
     return _session_response(user, expires_hours=expires)
 
@@ -322,6 +330,12 @@ def change_password(
     current_user.must_change_password = False
     db.commit()
     db.refresh(current_user)
+    # P3: push the new password to the mailbox — AFTER the commit, on purpose.
+    # The site is the source of truth and its write must never be at the mercy
+    # of a mail box being up; a failure here only marks mail_sync_pending (and
+    # is retried on the next login), it does not undo or 500 the change the
+    # user just made successfully.
+    mail_sync.sync_user_password(db, current_user, body.new_password)
     # Minted AFTER the stamp so its iat is not older than password_changed_at
     # (the 1s grace absorbs JWT's second-truncation either way).
     return _session_response(current_user)
@@ -473,6 +487,11 @@ def reset_password(body: ResetPasswordRequest, request: Request, db: Session = D
     # complete exit from the gate.
     user.must_change_password = False
     db.commit()
+    # P3: the second password-set path, and it must sync exactly like the
+    # first — a recovery that left the mailbox on the old password would be the
+    # very drift this channel exists to prevent. Best-effort and post-commit:
+    # the reset itself has already succeeded.
+    mail_sync.sync_user_password(db, user, body.new_password)
     # A completed reset clears this host's recovery counter AND the sign-in
     # lockout it was almost certainly triggered by. Without the login keys here
     # the flow dead-ends: forgetting your password is exactly what locks you
@@ -506,6 +525,12 @@ def me(current_user: User = Depends(get_authenticated_user)):
         "role": current_user.role,
         "supplier_id": str(current_user.supplier_id) if current_user.supplier_id else None,
         "must_change_password": bool(current_user.must_change_password),
+        # P3 drift signal: true means this account's SITE password changed but
+        # its MAILBOX did not get it, so the two are temporarily different.
+        # Surfaced rather than kept server-side because silent drift is exactly
+        # the failure mode the push-sync design set out to prevent — the person
+        # whose mail is behind is the one who needs to know.
+        "mail_sync_pending": bool(current_user.mail_sync_pending),
         # Same server-signalled flag as the login payload — a reloaded tab
         # rediscovers "this is the demo" here, so DEMO DATA stays forced on and
         # the console stays marked without a fresh sign-in.

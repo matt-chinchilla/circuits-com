@@ -64,6 +64,21 @@ services:
       # Same ${API_WORKERS} the `command` above passes to uvicorn — see the
       # comment there and app/services/rate_limit.py.
       API_WORKERS: ${API_WORKERS:-1}
+      # P3 mailbox credential push-sync (app/services/mail_sync.py). BOTH must
+      # be set for the channel to arm; empty defaults mean a deploy that hasn't
+      # been given a mail box simply doesn't sync (password changes still
+      # succeed). The secret is shared with the receiver on the mail box and
+      # lives ONLY in /opt/circuits-com/.env on both hosts — never in git.
+      # Without these two lines the .env values never reach the container at
+      # all (no volume mount; pydantic-settings reads process env only).
+      MAIL_SYNC_URL: ${MAIL_SYNC_URL:-}
+      MAIL_SYNC_SECRET: ${MAIL_SYNC_SECRET:-}
+      # The addresses that actually have a mailbox. Host-overridable so
+      # provisioning a sixth one is an .env line + `up -d --force-recreate api`
+      # rather than a redeploy. The default here MUST stay identical to
+      # Settings.MAIL_SYNC_MAILBOXES — guarded by tests/test_mail_sync.py, and
+      # an empty value would silently disable syncing for everyone.
+      MAIL_SYNC_MAILBOXES: ${MAIL_SYNC_MAILBOXES:-anthony@circuitcenter.ai,daniel@circuitcenter.ai,matthew@circuitcenter.ai,ronald@circuitcenter.ai,no-reply@circuitcenter.ai}
 
   frontend:
     build:

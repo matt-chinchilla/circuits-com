@@ -44,6 +44,17 @@ services:
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_FROM: ${SMTP_FROM:-no-reply@circuitcenter.ai}
       NOTIFY_RECIPIENTS: ${NOTIFY_RECIPIENTS:-mc@matthew-chirichella.com}
+      # P3 mailbox credential push-sync (app/services/mail_sync.py). Empty by
+      # default: a dev box has no mail server, and with either half unset the
+      # channel is inert — password changes still work, they just don't sync.
+      # The secret is shared with the receiver on the mail box and lives only
+      # in /opt/circuits-com/.env there and on prod; never commit a value.
+      MAIL_SYNC_URL: ${MAIL_SYNC_URL:-}
+      MAIL_SYNC_SECRET: ${MAIL_SYNC_SECRET:-}
+      # Must stay identical to Settings.MAIL_SYNC_MAILBOXES (guarded by
+      # tests/test_mail_sync.py) — an empty value would disable syncing for
+      # every account rather than for none.
+      MAIL_SYNC_MAILBOXES: ${MAIL_SYNC_MAILBOXES:-anthony@circuitcenter.ai,daniel@circuitcenter.ai,matthew@circuitcenter.ai,ronald@circuitcenter.ai,no-reply@circuitcenter.ai}
 
   frontend:
     build: ./frontend

@@ -39,6 +39,13 @@ class User(Base):
     # session at deploy.
     must_change_password = Column(Boolean, nullable=False, default=False)
     password_changed_at = Column(DateTime(timezone=True), nullable=True, default=None)
+    # P3 mailbox push-sync drift flag (alembic 023). True means "the site's
+    # password changed but the mail box did NOT get it" — the site is always
+    # the source of truth, so a failed push never blocks the change, it just
+    # records that the mailbox is behind. app/services/mail_sync.py sets it,
+    # the next successful login retries and clears it, and /api/auth/me
+    # surfaces it so the drift is visible rather than silent.
+    mail_sync_pending = Column(Boolean, nullable=False, default=False)
     created_at = Column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),

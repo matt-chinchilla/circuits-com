@@ -1,0 +1,65 @@
+; circuitcenter.ai mailbox password sync receiver (P3).
+;
+; Install on the MAIL box (t4g.micro, Amazon Linux 2023):
+;   sudo install -D -m 0755 mail_sync_receiver.py /opt/circuits-com/mail-sync/mail_sync_receiver.py
+;   sudo install -D -m 0644 circuits-mail-sync.service /etc/systemd/system/circuits-mail-sync.service
+;   sudo install -D -m 0600 /dev/null /opt/circuits-com/.env   # then add MAIL_SYNC_SECRET=...
+;   sudo systemctl daemon-reload && sudo systemctl enable --now circuits-mail-sync
+;
+; See README.md in this directory for the full runbook.
+
+[Unit]
+Description=circuitcenter.ai mailbox password sync receiver
+; Runbook: mail/sync-receiver/README.md in the circuits-com repo.
+; (No inline comments anywhere below — systemd does not strip them, it would
+; read "value # note" as the value.)
+; The accounts file it rewrites is a docker-mailserver bind mount, so start
+; after Docker — writing it before the mail stack is up is harmless, but a
+; reload command would have nothing to talk to.
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+; Secrets come from the host env file ONLY — never from this unit and never
+; from the repo. Must contain MAIL_SYNC_SECRET (the same value the web box
+; holds). Keep it 0600 root:root.
+EnvironmentFile=/opt/circuits-com/.env
+ExecStart=/usr/bin/python3 /opt/circuits-com/mail-sync/mail_sync_receiver.py
+; The service refuses to start without a >=32 char MAIL_SYNC_SECRET, so a
+; misconfigured deploy restart-loops loudly in the journal instead of quietly
+; serving an unauthenticated credential endpoint.
+Restart=always
+RestartSec=5s
+
+; Root is required to rewrite postfix-accounts.cf with its container-visible
+; ownership intact, so everything root does NOT need is taken away instead.
+User=root
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+; The ONLY writable path: docker-mailserver's config volume (the atomic rewrite
+; creates its temp file alongside the accounts file, so the DIRECTORY must be
+; writable, not just the file). `dms-config` is named explicitly in
+; mail/docker-compose.mail.yml; confirm the host path with
+;   docker volume inspect -f '{{.Mountpoint}}' dms-config
+; and keep this line and MAIL_SYNC_ACCOUNTS_FILE pointing at the same place —
+; a mismatch fails as a 500 "accounts file unavailable", which is at least loud.
+ReadWritePaths=/var/lib/docker/volumes/dms-config/_data
+; Uncomment ONLY if MAIL_SYNC_RELOAD_CMD is set to a `docker exec ...` nudge;
+; docker-mailserver's own change detector normally makes that unnecessary.
+;ReadWritePaths=/run/docker.sock
+
+[Install]
+WantedBy=multi-user.target
