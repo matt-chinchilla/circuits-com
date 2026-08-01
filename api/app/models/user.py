@@ -32,10 +32,11 @@ class User(Base):
     # Auth hardening (alembic 022). must_change_password forces a reset on
     # next login once a later task enforces it (set true for accounts whose
     # credentials that migration rotated out from under them).
-    # password_changed_at is stamped by the password-change flow (task 4);
-    # None means "never changed since account creation" for new rows —
-    # migration 022 backfills existing rows to now() so this deploy doesn't
-    # mass-invalidate anything a later task keys off this column.
+    # password_changed_at is stamped ONLY by a real password change/reset;
+    # None means "no constraint" to the session-invalidation check
+    # (auth_service.token_predates_password_change). Migration 022 deliberately
+    # does NOT backfill it — stamping now() would have invalidated every live
+    # session at deploy.
     must_change_password = Column(Boolean, nullable=False, default=False)
     password_changed_at = Column(DateTime(timezone=True), nullable=True, default=None)
     created_at = Column(

@@ -16,6 +16,26 @@ os.environ.setdefault("DEMO_LOGIN_ENABLED", "true")
 import bcrypt
 import pytest
 from fastapi.testclient import TestClient
+
+# ── Test-only bcrypt cost ───────────────────────────────────────────────────
+# bcrypt is deliberately slow: one hash at the production cost factor takes
+# ~198 ms, and this suite hashes/verifies thousands of times (every login test,
+# every seeded user, plus the anti-enumeration dummy-hash on every miss). That
+# put ~6 of the suite's ~8 minutes into burning CPU against attackers who are
+# not present. At 4 rounds a hash takes ~1 ms — a 200x cut — and NOTHING about
+# what the tests prove changes: bcrypt embeds its cost factor in the hash, so
+# verify still exercises the real code path, and hashes made at any cost verify
+# correctly. Production is untouched (app code calls gensalt() with no args and
+# gets the library default).
+_PRODUCTION_GENSALT = bcrypt.gensalt
+_TEST_BCRYPT_ROUNDS = 4
+
+
+def _fast_gensalt(rounds: int = _TEST_BCRYPT_ROUNDS, prefix: bytes = b"2b") -> bytes:
+    return _PRODUCTION_GENSALT(rounds=rounds, prefix=prefix)
+
+
+bcrypt.gensalt = _fast_gensalt
 from sqlalchemy import create_engine, event
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.ext.compiler import compiles
