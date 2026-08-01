@@ -1,9 +1,19 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  Circuit Center webmail wordmark. This file shadows Elastic's stock
-  images/logo.svg (Roundcube's 3D cube) via skin-path resolution — the
-  login template asks for /images/logo.svg and Roundcube looks in this
-  skin before the parent.
+  Circuit Center webmail wordmark. Replaces Roundcube's stock 3D cube on
+  the login screen — but NOT by file placement alone: the logo tag lives
+  in Elastic's templates/login.html, and rcmail_output_html::file_callback
+  resolves its "/images/logo.svg" src with the TEMPLATE's own skin
+  (elastic) unshifted to the FRONT of the search path (get_skin_file's
+  $add_path, release-1.6). Elastic ships that file, so a child skin can
+  never shadow it. Activation therefore requires ONE config line:
+
+    $config['skin_logo'] = ['circuitcenter:login' => 'skins/circuitcenter/images/logo.svg'];
+
+  The value is webroot-relative WITHOUT a leading slash on purpose —
+  file_callback only re-anchors leading-slash paths into the skin search;
+  a non-slash path passes through untouched and just gains the ?s= cache-
+  buster. See README "Install" step 3.
 
   Self-contained: no external references; the text renders in the same
   OS-native stacks the skin uses (SF/Segoe sans for the name, the mono

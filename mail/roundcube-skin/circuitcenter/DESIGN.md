@@ -242,7 +242,12 @@ Computed, not eyeballed: every pair above was produced by compositing math
 
 Rendered audit against the live install (mail.circuitcenter.ai, Roundcube
 1.6.x, 2026-07-31): the login screen was verified at 1440px and phone width
-— bench, glass card, drill-holes, CN1, gold pad, wordmark all correct; on
+— bench, glass card, drill-holes, CN1, gold pad all correct (the IC
+wordmark renders correctly too, but activating it needs the one-line
+`skin_logo` config in README Install step 3 — the stock cube's src is baked
+in Elastic's own login template and resolves elastic-first, a mechanism
+confirmed from the release-1.6 source after a first, wrong, file-shadowing
+attempt); on
 phone the card goes opaque and computed `backdrop-filter` is `none`
 everywhere, as designed. The audit caught two real bugs, both fixed: the
 bench gradient TILED at 24px (a background-size list one layer short — the

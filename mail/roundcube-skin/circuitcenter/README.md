@@ -10,7 +10,7 @@ circuitcenter/
 ├── meta.json                        skin manifest ("extends": "elastic")
 ├── templates/includes/layout.html   the ONE template override
 ├── styles/circuitcenter.css         the whole skin
-├── images/logo.svg                  wordmark (shadows Elastic's stock cube)
+├── images/logo.svg                  wordmark (needs the skin_logo config line)
 ├── watermark.html                   empty reading pane
 ├── thumbnail.png                    Settings > Interface preview
 ├── DESIGN.md
@@ -74,6 +74,21 @@ cp -r mail/roundcube-skin/circuitcenter "$ROUNDCUBE_ROOT/skins/circuitcenter"
 #      $config['skin'] = 'circuitcenter';
 #    if you have restricted the list, circuitcenter must be in it:
 #      $config['skins_allowed'] = ['circuitcenter', 'elastic'];
+
+# 3. REQUIRED for the login wordmark (config/config.inc.php):
+#      $config['skin_logo'] = ['circuitcenter:login' => 'skins/circuitcenter/images/logo.svg'];
+#    Without this line Roundcube's stock 3D cube renders. Why file
+#    placement alone cannot replace it: the logo tag lives in ELASTIC's
+#    templates/login.html, and rcmail_output_html::file_callback resolves
+#    its "/images/logo.svg" src with the template's own skin (elastic)
+#    unshifted to the FRONT of the skin search (get_skin_file $add_path,
+#    release-1.6) — elastic ships that file, so it always wins. The config
+#    value must stay webroot-relative with NO leading slash: file_callback
+#    re-anchors leading-slash paths into that same elastic-first search,
+#    while a non-slash path passes through untouched (plus cache-buster).
+#    The 'circuitcenter:login' key scopes it to this skin's login template
+#    (the only Elastic 1.6 template that renders a logo object); favicon
+#    and typed logo variants are unaffected by design.
 ```
 
 In a container, mount it read-only instead of copying so it survives image
@@ -110,34 +125,76 @@ grep -nE '@keyframes|animation:|@import|url\(https?:|will-change|mix-blend|hue-r
   "$ROUNDCUBE_ROOT/skins/circuitcenter/styles/circuitcenter.css"
 ```
 
-Then open the webmail and check, on a desktop width:
+### The owner's walkthrough (no tools needed — just eyes)
 
-- the three columns float as rounded glass panes with the dark green bench
-  visible in the 10px gaps between them;
-- the bench is a SMOOTH gradient under a faint grid — if it renders as
-  bevelled 24px bricks, a `background-size` list is short one layer (the
-  grid var expands to two layers; the gradient is the third);
-- the task rail at the far left is dark bare board with gold contact fingers,
-  the active task's finger lit;
-- panel titles read `U1 · FOLDERS` / `U2 · INBOX` in gold monospace
-  silkscreen;
-- unread rows carry a deep-gold LED with a soft halo; the selected row is a
-  gold tint, not a filled bar;
-- exactly one gold "pad" button per screen (Send / Save); Delete is quiet red
-  text;
-- the login screen is the Circuit Center IC wordmark and a single glass card
-  on the OPEN bench (the pane veil is carved out of `#layout-content` on
-  `body.task-login` — if the whole page is a white sheet, that carve-out
-  regressed), plated drill-holes in the card corners, a small `CN1` mark;
-- the empty reading pane shows the board coupon with `U3`.
+Anyone with a mailbox can run this in five minutes. For each step: do the
+thing, compare with what SHOULD happen, and if it doesn't match, report the
+step number plus a screenshot (on a Mac: Cmd+Shift+3; on Windows:
+Win+Shift+S). Use a normal desktop browser window, maximized.
 
-Verified against the live install (2026-07-31, Roundcube 1.6.x): both
-stylesheets 200; served CSS byte-identical to the repo; login page rendered
-correctly at 1440px and at phone width (opaque card, zero backdrop-filter,
-bench visible) after the carve-out and background-size fixes; the
-`!important` audit below produced the seven mirrors in section 11 of the
-stylesheet. Still unverified (needs a logged-in session): message-list /
-reading-pane / compose rendering, and the iframe-opacity check.
+1. **Open https://mail.circuitcenter.ai — before logging in.**
+   Should be: a dark green board fading into shadow with a very faint grid,
+   ONE pale card floating in the middle, tiny gold dots in the card's
+   corners, "CN1" in small letters at its top right, and the Circuit Center
+   chip logo above the card. The LOGIN button is gold with dark text.
+   Wrong looks worth reporting: the whole page is pale/white (no dark green
+   anywhere) · the green area looks like bumpy little tiles instead of one
+   smooth surface · the logo is a grey 3D cube instead of the chip wordmark.
+
+2. **Log in. Look at the overall shape.**
+   Should be: three rounded pale panels "floating" over the dark green
+   board, with thin dark-green gaps visible between them; at the far LEFT
+   edge, a dark strip with small gold stripes down its side (like the gold
+   fingers on a memory stick) — the section you're in (Mail) is lit gold.
+   Wrong: everything edge-to-edge white with no dark gaps · no gold
+   fingers on the left strip.
+
+3. **The folder list (left panel).**
+   Should be: "U1 · FOLDERS"-style small gold label at the top; folders
+   with unread mail show a small GOLD pill with a dark number.
+   Wrong: blue pills or blue highlights anywhere (blue = the stock theme
+   leaking through — report exactly where you saw it).
+
+4. **The message list (middle panel).**
+   Should be: unread messages in darker, heavier text with a small deep-gold
+   dot glowing softly at the left of the row; the message you click turns
+   soft GOLD-tinted (not a solid colored bar); sender names and dates are in
+   a typewriter-style font.
+   Wrong: blue selection bar · unreadable pale grey text · rows taller or
+   more spread out than the old theme.
+
+5. **Open a message.**
+   Should be: the subject sits on a slightly raised pale card; a normal
+   email (newsletter, order confirmation) shows on its own clean WHITE
+   sheet with rounded corners, exactly as the sender designed it. The area
+   BEHIND the message text must be solid pale — if you can see the dark
+   green board THROUGH the message text area (like frosted glass where
+   you're reading), report it: reading surfaces must be solid.
+
+6. **Reply or compose.**
+   Should be: form fields look gently sunken into the surface; clicking
+   into a field gives it a GOLD edge (never blue); recipient names become
+   small chips in typewriter font; exactly ONE gold button (Send/Save) —
+   other buttons look like frosted glass; Delete, where present, is quiet
+   red text, not a big red button.
+
+7. **Narrow the browser window until it's phone-shaped** (drag the edge).
+   Should be: the floating-panels look goes away — everything becomes
+   edge-to-edge and solid, still readable, still gold-accented.
+
+8. **If anything animated seems frozen or the page looks broken right
+   after a redeploy:** hard-refresh first (Cmd/Ctrl+Shift+R) and check
+   again before reporting — a stale cached copy looks identical to a real
+   bug.
+
+Live-verified so far (2026-07-31, Roundcube 1.6.x): steps 1 and 7's login
+half — both stylesheets serve 200, served files byte-identical to the repo,
+login rendered correctly at 1440px and phone width (open bench, opaque
+card, zero backdrop-filter on phone) after the carve-out and
+background-size fixes; the served wordmark renders correctly when pointed
+at (awaits the Install step 3 config line to activate). The `!important`
+audit below produced the seven mirrors in section 11 of the stylesheet.
+Steps 2–6 (logged-in views) await the owner's account.
 
 And two health checks worth 60 seconds:
 
@@ -214,7 +271,9 @@ section 11.
   Printing hands the page back to ink-on-white (section 13).
 - **The donor system's cursor-tracked rim/gloss JS** — deliberately not
   ported; see DESIGN.md's adopted/adapted/skipped ledger.
-- **A `$config['skin_logo']` entry** — not needed: the skin ships
-  `images/logo.svg` (the IC wordmark), which shadows Elastic's stock cube via
-  skin-path resolution. Setting `skin_logo` still overrides it if a customer
-  ever wants to.
+- **A `templates/login.html` override** — considered and rejected as the way
+  to activate the wordmark. Overriding the template WOULD flip `base_path`
+  to this skin (making our `images/logo.svg` win the search), but it adds a
+  second upstream file to diff on every Roundcube upgrade for something the
+  supported `skin_logo` config line does in one verified stroke (Install
+  step 3). One template override stays the budget.

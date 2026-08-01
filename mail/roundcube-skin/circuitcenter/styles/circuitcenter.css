@@ -1251,9 +1251,11 @@ html.cc .task-login #layout-content {
 	box-shadow: none;
 }
 
-/* The wordmark (images/logo.svg, ours — it shadows Elastic's stock cube via
-   skin-path resolution). Elastic pins #logo to a 100px square; the lockup
-   is 232x56. */
+/* The wordmark (images/logo.svg, ours — activated by the skin_logo config
+   line, see README Install step 3: the stock cube's src is baked in
+   Elastic's login.html and resolves elastic-first, so file placement alone
+   cannot replace it). Elastic pins #logo to a 100px square; the lockup is
+   232x56. This rule applies to whichever image renders. */
 html.cc .task-login #logo {
 	width: 232px;
 	height: auto;
