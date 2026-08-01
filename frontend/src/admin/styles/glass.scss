@@ -1,0 +1,88 @@
+// ── Liquid-glass utilities (admin scope) ─────────────────────────────────────
+// GLOBAL stylesheet (plain .scss, NOT a CSS Module) so class names stay
+// literal — same pattern as public/pages/category/components/categorySponsor.scss.
+// Loaded once as a side-effect import in AdminLayout.tsx, so the classes exist
+// wherever the admin renders.
+//
+// Every color/shadow here resolves through the --a-glass* custom properties
+// defined on .admin in AdminLayout.module.scss (light + dark blocks), so the
+// utilities theme-switch for free via inheritance. Outside the admin tree the
+// vars are unset and the classes are inert by design.
+//
+// House law (see styles/LIQUID-GLASS.md):
+//   - Static glass only: no JS-driven vars, no will-change, no keyframes,
+//     no mix-blend-mode, no perpetual loops.
+//   - backdrop-filter always declared BOTH prefixed and unprefixed.
+//   - ONE filled primary action per screen; everything else glass or quiet.
+//   - Text on glass: fg1/fg2 anywhere; fg3 only on resting panes (see the
+//     computed contrast tables in LIQUID-GLASS.md before adding small text).
+
+// Glass pane — floating sheet: feature panels, popovers, sticky bars.
+.a-glass-pane {
+  background: var(--a-glass);
+  -webkit-backdrop-filter: var(--a-glass-filter);
+  backdrop-filter: var(--a-glass-filter);
+  border: 1px solid var(--a-glass-rim);
+  border-radius: var(--a-radius);
+  box-shadow: var(--a-glass-hi), var(--a-glass-shadow);
+}
+
+// Glass control — button/pill material with pure-CSS hover/press states.
+// Consumers add their own padding + font-size; height-constrained rows rely
+// on the explicit line-height (body's 1.6 overflows them — house gotcha).
+.a-glass-ctl {
+  font: inherit;
+  line-height: 1.2;
+  color: var(--a-fg1);
+  background: var(--a-glass-ctl);
+  -webkit-backdrop-filter: var(--a-glass-ctl-filter);
+  backdrop-filter: var(--a-glass-ctl-filter);
+  border: 1px solid var(--a-glass-rim);
+  border-radius: var(--a-radius);
+  box-shadow: var(--a-glass-hi), var(--a-glass-shadow);
+  cursor: pointer;
+  transition:
+    transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1),
+    box-shadow 0.18s ease,
+    background 0.18s ease;
+}
+
+.a-glass-ctl:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--a-glass-hi), var(--a-glass-shadow-hover);
+}
+
+.a-glass-ctl:active {
+  transform: scale(0.97);
+  box-shadow: var(--a-glass-press);
+}
+
+.a-glass-ctl:focus-visible {
+  outline: none;
+  box-shadow: var(--a-focus-ring);
+}
+
+.a-glass-ctl:disabled {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+// Recessed channel — search fields, segmented-control tracks, kbd wells.
+// Text inside: fg1/fg2 only (fg3 fails 4.5:1 in the light well — computed).
+.a-glass-well {
+  background: var(--a-glass-well);
+  border: 1px solid transparent;
+  border-radius: var(--a-radius);
+  box-shadow: var(--a-glass-well-shadow);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .a-glass-ctl {
+    transition: none;
+  }
+
+  .a-glass-ctl:hover,
+  .a-glass-ctl:active {
+    transform: none;
+  }
+}

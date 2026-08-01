@@ -16,6 +16,10 @@ import {
 } from '@admin/services/messageStore';
 import { Wizard } from '@admin/wizard';
 import styles from './AdminLayout.module.scss';
+// Liquid-glass utility classes (global, static) — see styles/LIQUID-GLASS.md.
+// Side-effect import only: tokens live on .admin above; nothing here applies
+// the classes yet.
+import '@admin/styles/glass.scss';
 import type { ReactNode } from 'react';
 
 interface AdminLayoutProps {

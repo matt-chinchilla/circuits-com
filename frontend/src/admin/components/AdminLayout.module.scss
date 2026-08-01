@@ -81,6 +81,35 @@
   // Shadows
   --a-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
   --a-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+  // Liquid glass (2026-07-31, STATIC port of Perry's admin-restyle recipe —
+  // see styles/LIQUID-GLASS.md for the token table, adopted/adapted/skipped
+  // ledger, and COMPUTED worst-case contrast). Consumed by the global
+  // utilities in styles/glass.scss (.a-glass-pane / .a-glass-ctl /
+  // .a-glass-well); custom properties inherit from .admin so both theme
+  // blocks switch the utilities for free. No will-change, no keyframes,
+  // no pointer-driven vars — glass here is static by house law.
+  // Pane veil — sheets/panels. Floor .78 white: dense fg3 metadata still
+  // clears 4.5:1 over the bench, and a floating pane over solid ink content
+  // holds fg1/fg2 (the mail skin's raised-veil finding, re-derived).
+  --a-glass: linear-gradient(rgba(255, 255, 255, 0.88), rgba(255, 255, 255, 0.78));
+  --a-glass-filter: saturate(180%) blur(20px);
+  // Control veil — buttons/pills on panes/cards. Donor verbatim (.62 → .30).
+  --a-glass-ctl: linear-gradient(rgba(255, 255, 255, 0.62), rgba(255, 255, 255, 0.3));
+  --a-glass-ctl-filter: blur(14px) saturate(170%);
+  // 1px hairline rim (ink-tinted on light; inverts to a light rim on dark).
+  --a-glass-rim: rgba(17, 24, 39, 0.1);
+  // Inset top-highlight — composable box-shadow component ("lit from top").
+  --a-glass-hi: inset 0 1px 0 rgba(255, 255, 255, 0.75);
+  // Contact + ambient pair (tight contact, large negative-spread ambient).
+  --a-glass-shadow: 0 1px 2px rgba(0, 0, 0, 0.05), 0 8px 24px -12px rgba(0, 0, 0, 0.14);
+  --a-glass-shadow-hover: 0 2px 4px rgba(0, 0, 0, 0.07), 0 14px 28px -10px rgba(0, 0, 0, 0.2);
+  // Press-state compression (inset) — needs a heavier alpha on dark.
+  --a-glass-press: inset 0 1px 3px rgba(0, 0, 0, 0.12);
+  // Recessed channel (search fields, segmented tracks, kbd).
+  --a-glass-well: rgba(17, 24, 39, 0.06);
+  --a-glass-well-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.06);
+  // Two-ring focus halo (donor pattern, hued to the admin primary).
+  --a-focus-ring: 0 0 0 3px rgba(10, 74, 46, 0.18), 0 0 0 1.5px var(--a-primary);
 
   // ── Dark mode (admin only) ────────────────────────────────────────────────
   // Overrides surface / text / border / chart-chrome / shadow tokens when
@@ -108,6 +137,23 @@
     --a-track: #202a39;
     --a-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.45);
     --a-shadow-md: 0 8px 22px rgba(0, 0, 0, 0.55);
+    // Liquid glass, dark. NOT the light values at lower alpha (the mail
+    // skin's finding, re-derived for a themed dark mode): because --a-fg*
+    // flips LIGHT here, the veil flips to near-opaque smoked glass in the
+    // theme's own ink direction — a translucent veil would composite to an
+    // unpredictable mid-tone that fails AA. Floor .86 keeps fg1 ≥ 11:1 even
+    // over the lightest chart mark (#f3cf5c). Filters are not overridden
+    // (blur/saturate are theme-independent).
+    --a-glass: linear-gradient(rgba(30, 39, 56, 0.9), rgba(21, 28, 41, 0.86));
+    --a-glass-ctl: linear-gradient(rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.05));
+    --a-glass-rim: rgba(255, 255, 255, 0.16);
+    --a-glass-hi: inset 0 1px 0 rgba(255, 255, 255, 0.09);
+    --a-glass-shadow: 0 1px 2px rgba(0, 0, 0, 0.45), 0 12px 28px -10px rgba(0, 0, 0, 0.55);
+    --a-glass-shadow-hover: 0 2px 4px rgba(0, 0, 0, 0.5), 0 16px 34px -10px rgba(0, 0, 0, 0.65);
+    --a-glass-press: inset 0 1px 3px rgba(0, 0, 0, 0.6);
+    --a-glass-well: rgba(0, 0, 0, 0.3);
+    --a-glass-well-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.5);
+    --a-focus-ring: 0 0 0 3px rgba(31, 157, 99, 0.3), 0 0 0 1.5px var(--a-primary);
   }
 
   display: grid;
