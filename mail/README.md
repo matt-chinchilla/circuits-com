@@ -145,7 +145,8 @@ sudo docker compose --env-file /opt/circuits-com/.env \
 variables and refuses to start. First boot takes a few minutes on a t4g.micro.
 
 ```bash
-sudo docker compose -f docker-compose.mail.yml logs -f mailserver   # watch
+sudo docker compose --env-file /opt/circuits-com/.env \
+  -f docker-compose.mail.yml logs -f mailserver                     # watch
 sudo docker inspect -f '{{.State.Health.Status}}' mailserver        # want: healthy
 ```
 
@@ -178,11 +179,12 @@ earlier.
 
 ```bash
 cd /opt/circuits-com/mail
-sudo docker compose -f docker-compose.mail.yml exec -T mailserver \
-  setup config dkim domain circuitcenter.ai < /dev/null
+sudo docker compose --env-file /opt/circuits-com/.env -f docker-compose.mail.yml \
+  exec -T mailserver setup config dkim domain circuitcenter.ai < /dev/null
 
 # Print the TXT record to publish (selector `mail`, RSA 2048):
-sudo docker compose -f docker-compose.mail.yml exec -T mailserver \
+sudo docker compose --env-file /opt/circuits-com/.env -f docker-compose.mail.yml \
+  exec -T mailserver \
   cat /tmp/docker-mailserver/rspamd/dkim/rsa-2048-mail-circuitcenter.ai.public.dns.txt < /dev/null
 ```
 
@@ -193,8 +195,9 @@ Hand that value to the DNS stream and publish, in this order:
    they cannot verify, which is worse than no signature.
 2. **SPF** — widen the existing `v=spf1 include:amazonses.com ~all` to also
    authorise the mail host.
-3. **DMARC** `p=none` with `rua=mailto:dmarc@circuitcenter.ai` (already aliased
-   to the shared inbox). Tighten only after a week of clean reports.
+3. **DMARC** `p=none` with `rua=mailto:no-reply@circuitcenter.ai` (what
+   `dns/records.json` actually publishes; `dmarc@` aliases to the same inbox).
+   Tighten only after a week of clean reports.
 4. **MX** `circuitcenter.ai` → `mail.circuitcenter.ai`. **Last.** There is no MX
    record today, so this is the moment mail starts arriving and there is nothing
    to cut over from — zero risk, but also no reason to do it early.
@@ -212,7 +215,7 @@ Run these on the box after step 6. All of them are read-only.
 
 ```bash
 cd /opt/circuits-com/mail
-C="sudo docker compose -f docker-compose.mail.yml"
+C="sudo docker compose --env-file /opt/circuits-com/.env -f docker-compose.mail.yml"
 ```
 
 **Container and its memory cap**

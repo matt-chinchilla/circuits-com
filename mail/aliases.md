@@ -108,17 +108,20 @@ change rather than a five-line one.
 3. Confirm what Postfix actually loaded, which is the only thing that counts:
 
 ```bash
-docker compose -f docker-compose.mail.yml exec -T mailserver \
+docker compose --env-file /opt/circuits-com/.env -f docker-compose.mail.yml \
+  exec -T mailserver \
   cat /etc/postfix/virtual < /dev/null
 
 # Resolve a specific address through the real map:
-docker compose -f docker-compose.mail.yml exec -T mailserver \
+docker compose --env-file /opt/circuits-com/.env -f docker-compose.mail.yml \
+  exec -T mailserver \
   postmap -q anthony@circuitcenter.ai texthash:/etc/postfix/virtual < /dev/null
 # -> anthony@circuitcenter.ai        (correct)
 # -> no-reply@circuitcenter.ai       (WRONG - the self-alias is missing or
 #                                     is below the wildcard)
 
-docker compose -f docker-compose.mail.yml exec -T mailserver \
+docker compose --env-file /opt/circuits-com/.env -f docker-compose.mail.yml \
+  exec -T mailserver \
   postmap -q definitely-not-a-user@circuitcenter.ai texthash:/etc/postfix/virtual < /dev/null
 # -> no-reply@circuitcenter.ai       (catch-all working)
 ```

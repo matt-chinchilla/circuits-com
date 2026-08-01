@@ -1,0 +1,65 @@
+# Webmail — Roundcube behind an nginx TLS terminator.
+#
+# Runs on the MAIL box (not the web box), alongside docker-compose.mail.yml.
+# Two containers rather than one because the official Roundcube image serves
+# plain HTTP: nginx terminates TLS with the same Let's Encrypt certificate
+# docker-mailserver already uses, so the browser sees one valid cert for
+# mail.circuitcenter.ai and non-technical users never meet a security warning.
+#
+# Roundcube talks to the mailserver container over the shared Docker network
+# by service name — IMAP/SMTP never leave the host, so no TLS negotiation
+# between them is needed and a misconfigured cert can't break login.
+#
+# Memory: the box has 916 MB with mailserver capped at 640 MB. These two are
+# capped so a webmail spike can never OOM the thing actually receiving mail.
+
+services:
+  roundcube:
+    image: roundcube/roundcubemail:1.6.x-apache
+    container_name: roundcube
+    restart: unless-stopped
+    depends_on:
+      - webmail-proxy
+    environment:
+      ROUNDCUBEMAIL_DEFAULT_HOST: mailserver
+      ROUNDCUBEMAIL_DEFAULT_PORT: 143
+      ROUNDCUBEMAIL_SMTP_SERVER: mailserver
+      ROUNDCUBEMAIL_SMTP_PORT: 587
+      ROUNDCUBEMAIL_DB_TYPE: sqlite
+      # 25 MB — matches the mail server's own accepted message size.
+      ROUNDCUBEMAIL_UPLOAD_MAX_FILESIZE: 25M
+      ROUNDCUBEMAIL_SKIN: circuitcenter
+      ROUNDCUBEMAIL_PLUGINS: archive,zipdownload,newmail_notifier
+    volumes:
+      - roundcube-data:/var/roundcube/db
+      # The skin ships read-only from the repo checkout — redeploying it is a
+      # git pull plus a container restart, never an in-place edit on the box.
+      - /opt/circuits-mail/skin/circuitcenter:/var/www/html/skins/circuitcenter:ro
+      # Overrides env-generated config can't express: STARTTLS on the
+      # internal IMAP/SMTP hop (Dovecot is ssl=required) and skin_logo.
+      - /opt/circuits-mail/roundcube-config.inc.php:/var/www/html/config/config.inc.php:ro
+    networks: [mailnet]
+    mem_limit: 192m
+
+  webmail-proxy:
+    image: nginx:alpine
+    container_name: webmail-proxy
+    restart: unless-stopped
+    ports:
+      - "443:443"
+      - "80:80"
+    volumes:
+      - /opt/circuits-mail/nginx-webmail.conf:/etc/nginx/conf.d/default.conf:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+    networks: [mailnet]
+    mem_limit: 64m
+
+volumes:
+  roundcube-data:
+
+networks:
+  mailnet:
+    # Joins the network docker-compose.mail.yml creates, so `mailserver`
+    # resolves by name. external: true means this file never owns it.
+    name: circuits-mail_default
+    external: true
