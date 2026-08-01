@@ -110,6 +110,14 @@
   --a-glass-well-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.06);
   // Two-ring focus halo (donor pattern, hued to the admin primary).
   --a-focus-ring: 0 0 0 3px rgba(10, 74, 46, 0.18), 0 0 0 1.5px var(--a-primary);
+  // Porcelain sheet — DIALOGS ONLY (near-opaque .98→.94; the mail skin's
+  // "menus and dialogs are near-opaque porcelain glass" precedent). A dialog
+  // floats over the darkened scrim + arbitrary content, where the .88→.78
+  // pane veil composites too dark for fg2 body text; the porcelain floor
+  // keeps fg2 at 6.65:1 worst-case (over scrim-on-black — computed, see the
+  // chrome-restyle contrast table). NEW TOKEN vs LIQUID-GLASS.md — added
+  // 2026-07-31 by the chrome pass; fold into the doc's token table.
+  --a-glass-sheet: linear-gradient(rgba(255, 255, 255, 0.98), rgba(255, 255, 255, 0.94));
 
   // ── Dark mode (admin only) ────────────────────────────────────────────────
   // Overrides surface / text / border / chart-chrome / shadow tokens when
@@ -154,6 +162,9 @@
     --a-glass-well: rgba(0, 0, 0, 0.3);
     --a-glass-well-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.5);
     --a-focus-ring: 0 0 0 3px rgba(31, 157, 99, 0.3), 0 0 0 1.5px var(--a-primary);
+    // Porcelain sheet, dark: same smoked-ink direction as --a-glass, floor
+    // raised to .95 (fg2 10.05:1 over scrim-on-white worst case — computed).
+    --a-glass-sheet: linear-gradient(rgba(30, 39, 56, 0.97), rgba(21, 28, 41, 0.95));
   }
 
   display: grid;
@@ -167,9 +178,17 @@
 
 // ─── (2) Sidebar ────────────────────────────────────────────────────────────
 
+// DELIBERATELY FLAT, not glass (2026-07-31 chrome pass): the sidebar is a grid
+// COLUMN — no content ever passes beneath it, so backdrop-filter would sample
+// nothing but its own background: zero optical payoff for a 240px × 100vh
+// compositing layer, the single largest surface in the admin (the exact
+// "large surface" the perf budget warns about). It harmonizes with the glass
+// chrome through the shared hairline instead: --a-glass-rim inverts to a light
+// silhouette edge in dark mode ("light lives at the silhouette" — mail-skin
+// finding), so sidebar, topbar and pill read as one machined unit.
 .side {
   background: var(--a-side-bg);
-  border-right: 1px solid var(--a-border);
+  border-right: 1px solid var(--a-glass-rim);
   position: sticky;
   top: 0;
   align-self: start;
@@ -261,12 +280,15 @@
 }
 
 .sideItem.active {
-  background: rgba(10, 74, 46, 0.08);
+  // color-mix on --a-primary (not the old rgba(10,74,46,…) literal) so dark
+  // mode tints with its LIFTED green: #1f9d63 on the 9% tint = 4.57:1
+  // (computed) — the literal was a near-invisible dark-on-dark smudge there.
+  background: color-mix(in srgb, var(--a-primary) 9%, transparent);
   color: var(--a-primary);
   font-weight: 600;
 
   &:hover {
-    background: rgba(10, 74, 46, 0.08);
+    background: color-mix(in srgb, var(--a-primary) 9%, transparent);
   }
 }
 
@@ -284,7 +306,9 @@
   font-size: 11px;
   font-weight: 600;
   border-radius: 10px;
-  background: rgba(10, 74, 46, 0.10);
+  // 8% (not 10%): dark-mode #1f9d63 text on its own 8% tint = 4.62:1; the
+  // 10% tint sat at 4.51 — passing but marginless. Light: 8.9:1.
+  background: color-mix(in srgb, var(--a-primary) 8%, transparent);
   color: var(--a-primary);
 }
 
@@ -304,7 +328,7 @@
 
   &:hover {
     color: var(--a-primary);
-    background: rgba(10, 74, 46, 0.06);
+    background: color-mix(in srgb, var(--a-primary) 6%, transparent);
   }
 }
 
@@ -319,17 +343,40 @@
   min-width: 0;
 }
 
+// macOS-toolbar material (donor spec: veil + saturate/blur + 1px hairline).
+// This is the ONE chrome surface that earns real backdrop-filter: it is
+// sticky, 64px tall (not full-viewport), and page content genuinely scrolls
+// beneath it. The veil + filter live on ::before, NOT on .topbar itself —
+// backdrop-filter turns its element into a containing block for FIXED
+// descendants, and BellDropdown's click-away .menuBackdrop (position: fixed;
+// inset: 0) renders inside this header; on the element it would shrink that
+// backdrop to the 64px bar. A pseudo has no descendants, so nothing reflows.
+// Fallback: browsers without backdrop-filter still paint the ::before veil —
+// its floor over worst-case scrolled ink (#111827) composites to #cbcccf,
+// where fg1 = 11.06:1 (computed). Small text never sits bare on this bar:
+// every control keeps its own opaque fill.
 .topbar {
   height: var(--a-topbar-h);
-  background: var(--a-nav-bg);
-  border-bottom: 1px solid var(--a-border);
+  background: transparent;
+  border-bottom: 1px solid var(--a-glass-rim);
+  box-shadow: var(--a-glass-hi);
   display: flex;
   align-items: center;
   padding: 0 24px;
   gap: 16px;
   position: sticky;
   top: 0;
-  z-index: 10;
+  z-index: 10; // also guarantees the stacking context the z:-1 pseudo needs
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background: var(--a-glass);
+    -webkit-backdrop-filter: var(--a-glass-filter);
+    backdrop-filter: var(--a-glass-filter);
+  }
 }
 
 .pageTitle {
@@ -349,14 +396,20 @@
   min-width: 0;
 }
 
+// Recessed channel on the glass bar (donor .pf-recessed, adapted): the FILL
+// stays the OPAQUE --a-bg — the translucent --a-glass-well over worst-case
+// scrolled content would sink fg3 below AA (computed 4.28 even over card).
+// Opaque fill keeps the label's basis fixed: fg3 on #f5f7fa = 4.50:1 light /
+// 7.02:1 dark. The well inset + transparent border do the recessing.
 .topbarSearchTrigger {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   padding: 7px 12px;
   background: var(--a-bg);
-  border: 1px solid var(--a-border);
+  border: 1px solid transparent;
   border-radius: 20px;
+  box-shadow: var(--a-glass-well-shadow);
   font-family: inherit;
   font-size: 13px;
   color: var(--a-fg3);
@@ -364,7 +417,7 @@
   transition: background-color 150ms, border-color 150ms, color 150ms;
 
   &:hover {
-    background: #ffffff;
+    background: var(--a-card); // was #ffffff — flashed white in dark mode
     border-color: var(--a-primary);
     color: var(--a-fg2);
   }
@@ -373,11 +426,11 @@
     margin-left: 6px;
     font-family: $font-mono;
     font-size: 10px;
-    color: var(--a-fg4);
+    color: var(--a-fg3); // fg4 was 2.54:1 on the chip — fg3 = 4.83 / 6.31 dark
     padding: 1px 5px;
     border: 1px solid var(--a-border);
     border-radius: 3px;
-    background: #ffffff;
+    background: var(--a-card);
   }
 }
 
@@ -389,7 +442,7 @@
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  background: #ffffff;
+  background: var(--a-card); // was #ffffff — dark mode gets its own card tone
   border: 1px solid var(--a-primary);
   border-radius: 6px;
   box-shadow: 0 0 0 3px rgba(10, 74, 46, 0.08);
@@ -417,7 +470,7 @@
     font-family: $font-mono;
     font-size: 10px;
     font-weight: 500;
-    color: var(--a-fg4);
+    color: var(--a-fg3); // fg4 failed AA on the chip (2.4:1 light)
     padding: 2px 6px;
     border: 1px solid var(--a-border);
     border-radius: 3px;
@@ -458,7 +511,7 @@
   transition: background-color 150ms, border-color 150ms;
 
   &:hover {
-    background: #ffffff;
+    background: var(--a-card); // was #ffffff — flashed white in dark mode
     border-color: var(--a-primary);
   }
 }
@@ -482,7 +535,10 @@
   padding: 3px 9px;
   border: 1px solid color-mix(in srgb, var(--a-warn) 40%, transparent);
   border-radius: 20px;
-  background: color-mix(in srgb, var(--a-warn) 12%, transparent);
+  // Mixed over --a-card (opaque), not transparent: on the glass topbar a
+  // translucent tint would composite against whatever scrolls beneath.
+  // Visually identical to the old transparent mix over the solid bar.
+  background: color-mix(in srgb, var(--a-warn) 12%, var(--a-card));
   color: var(--a-warn);
   font-size: 10px;
   font-weight: 700;
@@ -538,11 +594,13 @@
 }
 
 .demoState.on {
-  color: var(--a-ok);
+  // --a-primary, not --a-ok: --a-ok #15803d never theme-flips and sat at
+  // 3.71:1 on the dark bench fill; the primary is 9.63 light / 5.37 dark.
+  color: var(--a-primary);
 }
 
 .demoState.off {
-  color: var(--a-fg4);
+  color: var(--a-fg3); // fg4 was 2.43:1 on the fill; fg3 = 4.50 / 7.02 dark
 }
 
 // ─── Topbar control pill ────────────────────────────────────────────────────
@@ -554,20 +612,30 @@
 // Height math: 38px chip + 2×4px padding + 2×1px border = 48px inside the 64px
 // topbar, i.e. 8px of breathing room top and bottom.
 
+// The machined-glass hero of the topbar (2026-07-31 chrome pass). Three
+// background layers, top to bottom: the donor control veil (--a-glass-ctl),
+// an OPAQUE card base under it, and the brand-gradient ring on the border
+// box. The opaque base is deliberate — without it the ring gradient (which
+// paints the whole border box) would wash through the .30-floor veil and tint
+// the entire pill; with it the veil composites over a fixed card basis (the
+// contrast table's "control floor over card" rows) and the gradient survives
+// only as the 1px ring. NO backdrop-filter here: the pill sits ON the
+// topbar's already-blurred veil, so a second filter layer would blur a flat
+// gradient — pure compositing cost for nothing (the mail skin's toolbar
+// finding). Material reads through veil + rim highlight + contact/ambient
+// cast instead.
 .ctrlPill {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   padding: 4px;
-  // Gradient RING (reference: the manage.svg container's blue→teal stroke):
-  // transparent border + two-layer background — solid card on the padding
-  // box, brand gradient on the border box showing through the 1px ring.
   border: 1px solid transparent;
   border-radius: 999px;
   background:
+    var(--a-glass-ctl) padding-box,
     linear-gradient(var(--a-card), var(--a-card)) padding-box,
     linear-gradient(120deg, var(--a-grad-green), var(--a-blue), var(--a-purple)) border-box;
-  box-shadow: var(--a-shadow-sm);
+  box-shadow: var(--a-glass-hi), var(--a-glass-shadow);
 }
 
 .chip {
@@ -577,9 +645,13 @@
   padding: 0;
   border-radius: 50%;
   // 1.25px: heavier than a hairline so the ring reads as deliberate, lighter
-  // than the 2px focus outline that has to beat it.
-  border: 1.25px solid var(--a-border);
-  background: var(--a-card);
+  // than the 2px focus outline that has to beat it. Stroke color is the glass
+  // rim so the chips inherit the lit-silhouette inversion in dark mode.
+  border: 1.25px solid var(--a-glass-rim);
+  // Second application of the control veil over the pill's veil-on-card —
+  // the chips read as lenses machined out of the same slab (icons are fg2:
+  // 7.6:1 light / 5.3:1 dark on the stacked composite — computed).
+  background: var(--a-glass-ctl);
   color: var(--a-fg2);
   display: flex;
   align-items: center;
@@ -725,22 +797,44 @@
   transition: background-color 150ms, transform 150ms, box-shadow 250ms;
 }
 
+// The ONE filled primary action per screen (house law — LIQUID-GLASS.md).
+// Gains the donor's lit-from-top inset so it sits in the same material
+// family as the glass around it; fill and hover behavior unchanged.
 .btnPrimary {
   background: var(--a-primary);
   color: #ffffff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16);
 
   &:hover {
     background: var(--a-primary-hover);
   }
 }
 
+// Quiet counterpart → glass control (consumes the --a-glass-ctl material
+// directly; no backdrop-filter — it rests on the near-opaque porcelain
+// sheet, where a filter would sample a flat surface). fg1 label worst-case:
+// 16.2:1 light / 12.8:1 dark (computed over sheet-on-scrim).
 .btnGhost {
-  background: #ffffff;
+  background: var(--a-glass-ctl);
   color: var(--a-fg1);
-  border-color: var(--a-border);
+  border-color: var(--a-glass-rim);
+  box-shadow: var(--a-glass-hi), var(--a-glass-shadow);
 
   &:hover {
-    background: var(--a-border-soft);
+    transform: translateY(-1px);
+    box-shadow: var(--a-glass-hi), var(--a-glass-shadow-hover);
+  }
+
+  &:active {
+    transform: scale(0.97);
+    box-shadow: var(--a-glass-press);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btnGhost:hover,
+  .btnGhost:active {
+    transform: none;
   }
 }
 
@@ -765,13 +859,22 @@
   }
 }
 
+// Porcelain glass sheet (--a-glass-sheet, .98→.94): the modal floats over the
+// darkened scrim + arbitrary page content — the only chrome surface besides
+// the topbar that genuinely earns a filter, and it exists only while open.
+// Body text is fg2: 6.65:1 worst-case light (over scrim-on-black) / 10.05:1
+// dark (over scrim-on-white) — computed; fg3 fails here (4.26) and must not
+// be introduced inside modals.
 .modal {
-  background: #ffffff;
+  background: var(--a-glass-sheet);
+  -webkit-backdrop-filter: var(--a-glass-filter);
+  backdrop-filter: var(--a-glass-filter);
+  border: 1px solid var(--a-glass-rim);
   border-radius: 10px;
   padding: 24px;
   max-width: 440px;
   width: 90%;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--a-glass-hi), 0 20px 60px rgba(0, 0, 0, 0.3);
   animation: modalIn 200ms cubic-bezier(0.2, 0.9, 0.3, 1);
 }
 
@@ -954,12 +1057,27 @@
     display: block;
   }
 
+  // Glass furls on small screens (house perf rule: below ~768px panes go
+  // OPAQUE — phone GPUs pay for backdrop blur in DPR²-sized layers; this
+  // repo has OOM-crashed iPhones on cheaper effects). 820 is the admin's
+  // mobile chrome breakpoint — stricter than the 768 floor, one reflow point.
   .topbar {
     flex-wrap: wrap;
     height: auto;
     min-height: var(--a-topbar-h);
     padding: 10px 14px;
     gap: 8px;
+    background: var(--a-nav-bg);
+
+    &::before {
+      display: none;
+    }
+  }
+
+  .modal {
+    background: var(--a-card);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
   }
 
   .topbarBurger {

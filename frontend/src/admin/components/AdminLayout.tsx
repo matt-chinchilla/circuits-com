@@ -17,8 +17,9 @@ import {
 import { Wizard } from '@admin/wizard';
 import styles from './AdminLayout.module.scss';
 // Liquid-glass utility classes (global, static) — see styles/LIQUID-GLASS.md.
-// Side-effect import only: tokens live on .admin above; nothing here applies
-// the classes yet.
+// Side-effect import for admin pages that consume .a-glass-*; the chrome
+// itself (topbar / control pill / modal, 2026-07-31) consumes the --a-glass*
+// tokens directly in AdminLayout.module.scss.
 import '@admin/styles/glass.scss';
 import type { ReactNode } from 'react';
 
