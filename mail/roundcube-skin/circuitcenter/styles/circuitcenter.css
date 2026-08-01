@@ -1,0 +1,1167 @@
+/* ===========================================================================
+   Circuit Center — Roundcube 1.6 skin (Elastic-derived)
+   ---------------------------------------------------------------------------
+   HOW THIS SHEET WORKS
+   This file is loaded AFTER Elastic's compiled styles.css (see
+   templates/includes/layout.html). The <html> element carries `dark-mode`, so
+   Elastic's own complete dark stylesheet (skins/elastic/styles/dark.less,
+   ~1100 lines covering every widget down to TinyMCE and jQuery-UI) is already
+   in effect. We do not re-implement it — we re-tint it.
+
+   Every selector below mirrors an Elastic selector and swaps `html.dark-mode`
+   for `html.cc`. That is a deliberate specificity TIE, resolved by load order:
+   this sheet is later, so it wins. `cc` is our own class and Roundcube's ui.js
+   never touches it, so this layer cannot be stripped from under us.
+
+   INVARIANTS — please keep these true:
+   * No @keyframes, no `animation`, no requestAnimationFrame, no <canvas>.
+     Motion is transitions-on-interaction only. (This repo has a documented
+     history of orphaned rAF loops; a webmail tab stays open for eight hours.)
+   * No external hosts. No @import, no webfonts, no remote images. Type is the
+     OS-native stack the main site already uses; icons stay Elastic's
+     self-hosted Font Awesome.
+   * Body text is >= 4.5:1 against the surface it sits on. The ratios are
+     recorded next to the tokens; re-measure if you change one.
+   * Nothing here reduces Elastic's list density or row heights.
+
+   Verify the invariants:
+     grep -nE '@keyframes|animation:|@import|https?://' styles/circuitcenter.css
+   =========================================================================== */
+
+
+/* ---------------------------------------------------------------------------
+   1. TOKENS
+   The board, lit. Contrast ratios are against --cc-board (the panel surface)
+   unless noted; the worst case is a selected row (--cc-select), given second.
+   --------------------------------------------------------------------------- */
+html.cc {
+	/* --- substrate ------------------------------------------------------- */
+	--cc-mask:      #06180f;  /* solder mask, unpopulated — app substrate, task rail */
+	--cc-board:     #0b2419;  /* board surface — sidebar, list, content panels      */
+	--cc-board-hi:  #123626;  /* copper pour — headers, toolbars, hover             */
+	--cc-select:    #14432c;  /* selected row                                       */
+	--cc-input:     #082016;  /* drilled cavity — form fields                       */
+
+	/* --- ink ------------------------------------------------------------- */
+	--cc-silk:      #e6efe8;  /* silkscreen white — primary text   13.96 / 9.56 */
+	--cc-silk-2:    #c3d4c9;  /* read subjects, body copy          10.61 / 7.27 */
+	--cc-dim:       #93b3a5;  /* datasheet meta — from, date, size  7.21 / 4.94 */
+
+	/* --- signal ---------------------------------------------------------- */
+	--cc-enig:      #e8c252;  /* ENIG gold — accent, unread, focus  9.58 / 6.56 */
+	--cc-enig-deep: #b8902e;  /* gold in shadow — edges, fingers    5.09         */
+	--cc-trace:     #5fd93a;  /* trace green — links, success       8.96 / 6.14 */
+	--cc-flag:      #ff8378;  /* flagged, deleted, error            6.85 / 4.69 */
+
+	/* --- structure ------------------------------------------------------- */
+	--cc-edge:      #3e7a5c;  /* form + control borders             3.24 (UI, >=3) */
+	--cc-hair:      rgba(232, 194, 82, 0.22);  /* gold hairline    */
+	--cc-hair-soft: rgba(147, 179, 165, 0.16); /* row separators   */
+	--cc-glow:      rgba(232, 194, 82, 0.32);
+	--cc-sink:      rgba(0, 0, 0, 0.45);
+
+	/* --- type ------------------------------------------------------------
+	   Identical to the main site's _variables.scss. Native stack, no download,
+	   and the webmail reads as the same product as circuitcenter.ai. */
+	--cc-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', 'Inter', system-ui, sans-serif;
+	--cc-mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+
+	/* 24px PCB grid, quoted from the site's contact-page motif. Static tile —
+	   painted once, never animated. */
+	--cc-grid:
+		linear-gradient(rgba(68, 189, 19, 0.035) 1px, transparent 1px),
+		linear-gradient(90deg, rgba(68, 189, 19, 0.035) 1px, transparent 1px);
+
+	color-scheme: dark;
+	scrollbar-color: var(--cc-edge) var(--cc-mask);
+}
+
+
+/* ---------------------------------------------------------------------------
+   2. SUBSTRATE
+   --------------------------------------------------------------------------- */
+html.cc body {
+	color: var(--cc-silk);
+	background-color: var(--cc-mask);
+	background-image: var(--cc-grid);
+	background-size: 24px 24px;
+	font-family: var(--cc-sans);
+}
+
+html.cc:not(.touch) ::-webkit-scrollbar-track {
+	background-color: var(--cc-mask);
+}
+
+html.cc:not(.touch) ::-webkit-scrollbar-thumb {
+	background-color: var(--cc-edge);
+	border-radius: 4px;
+}
+
+html.cc ::selection {
+	background: var(--cc-enig);
+	color: var(--cc-mask);
+}
+
+/* One focus treatment everywhere: a gold pad ring. Elastic's own focus styles
+   are colour-only and vanish on this substrate. */
+html.cc a:focus-visible,
+html.cc button:focus-visible,
+html.cc input:focus-visible,
+html.cc select:focus-visible,
+html.cc textarea:focus-visible,
+html.cc [tabindex]:focus-visible {
+	outline: 2px solid var(--cc-enig);
+	outline-offset: 1px;
+}
+
+
+/* ---------------------------------------------------------------------------
+   3. THE EDGE CONNECTOR  — the signature element
+   The task rail is the card edge of a board that is plugged in. A column of
+   ENIG contact fingers runs its full height; the active task's finger is lit
+   and bleeds a short trace into the panel beside it.
+
+   Peripheral by construction: it lives in a 6px strip at the screen edge, so
+   it is present all day without ever competing with a message.
+   Phone widths turn #layout-menu into a popover, so the fingers are scoped to
+   >480px where the rail actually exists.
+   --------------------------------------------------------------------------- */
+html.cc #layout-menu {
+	background-color: var(--cc-mask);
+}
+
+@media screen and (min-width: 481px) {
+	html.cc #layout-menu {
+		position: relative;
+		background-color: var(--cc-mask);
+		border-right: 1px solid var(--cc-hair);
+	}
+
+	/* The finger array. Static paint: a repeating gradient, no animation. */
+	html.cc #layout-menu::before {
+		content: '';
+		position: absolute;
+		z-index: 1;
+		top: 0;
+		bottom: 0;
+		left: 0;
+		width: 6px;
+		pointer-events: none;
+		background-image:
+			linear-gradient(to right, rgba(0, 0, 0, 0.5), transparent),
+			repeating-linear-gradient(
+				to bottom,
+				var(--cc-enig-deep) 0 22px,
+				transparent 22px 32px
+			);
+		opacity: 0.42;
+	}
+
+	/* Unlit tasks: silkscreen labels on the mask. */
+	html.cc #taskmenu a {
+		color: var(--cc-silk);
+		background: transparent;
+	}
+
+	html.cc #taskmenu a span.inner {
+		font-family: var(--cc-mono);
+		font-size: 0.62rem;
+		letter-spacing: 0.1em;
+		text-transform: uppercase;
+	}
+
+	html.cc #taskmenu a:hover {
+		color: var(--cc-enig);
+		background: var(--cc-board-hi);
+	}
+
+	/* Lit finger + trace stub. */
+	/* background-COLOR must be set explicitly: Elastic's dark sheet paints
+	   #374549 here, and overriding only background-image leaves that grey
+	   sitting under the glow. */
+	html.cc #taskmenu a.selected,
+	html.cc #taskmenu a.selected:hover {
+		color: var(--cc-enig);
+		background-color: var(--cc-select);
+		background-image: linear-gradient(to right, var(--cc-glow), transparent 72%);
+		box-shadow:
+			inset 6px 0 0 0 var(--cc-enig),
+			inset 8px 0 16px -6px var(--cc-enig);
+	}
+
+	html.cc #taskmenu .action-buttons a {
+		color: var(--cc-trace);
+	}
+
+	html.cc #taskmenu .action-buttons a:hover {
+		color: var(--cc-trace);
+		background: var(--cc-board-hi);
+	}
+
+	html.cc #taskmenu .special-buttons {
+		background-color: var(--cc-mask);
+		border-top: 1px solid var(--cc-hair-soft);
+	}
+
+	html.cc #taskmenu a.logout,
+	html.cc #taskmenu a.logout:hover {
+		color: var(--cc-flag) !important;
+	}
+}
+
+/* Phone: the rail is a popover list. Keep it plainly readable — no fingers. */
+html.cc.layout-phone #layout-menu {
+	background-color: var(--cc-board);
+}
+
+html.cc.layout-phone #taskmenu a {
+	color: var(--cc-silk);
+	border-bottom-color: var(--cc-hair-soft) !important;
+}
+
+
+/* ---------------------------------------------------------------------------
+   4. PANELS AND THEIR SILKSCREEN BANDS
+   Each column is a board coupon: solder-mask fill, a gold hairline where it
+   meets its header, and a monospace silkscreen label instead of a bold title.
+   --------------------------------------------------------------------------- */
+html.cc #layout-sidebar,
+html.cc #layout-list,
+html.cc #layout-content,
+html.cc .popup .listbox .footer,
+html.cc .menu.pagenav.pagenav-list,
+html.cc .menu.pagenav.pagenav-list + .navlist,
+html.cc .menu.pagenav.pagenav-list.expanded + .navlist {
+	background-color: var(--cc-board);
+	border-color: var(--cc-hair-soft);
+}
+
+html.cc #layout-sidebar,
+html.cc #layout-list {
+	border-right: 1px solid var(--cc-hair-soft);
+}
+
+html.cc #layout > div > .header,
+html.cc #layout > div > .footer {
+	color: var(--cc-silk);
+	background-color: var(--cc-board-hi);
+	border-color: var(--cc-hair);
+}
+
+html.cc #layout > div > .header {
+	border-bottom: 1px solid var(--cc-hair);
+}
+
+html.cc #layout > div > .footer {
+	border-top: 1px solid var(--cc-hair-soft);
+	background-color: var(--cc-mask);
+}
+
+/* Silkscreen designators. Scoped to the sidebar and list headers only —
+   #layout-content's header title carries the message SUBJECT on narrow
+   viewports (it is display:none above 768px) and must never be uppercased. */
+html.cc #layout-sidebar > .header .header-title,
+html.cc #layout-list > .header .header-title {
+	font-family: var(--cc-mono);
+	font-size: 0.7rem;
+	font-weight: 600;
+	letter-spacing: 0.16em;
+	text-transform: uppercase;
+	color: var(--cc-enig);
+}
+
+html.cc #layout > div > .header a.button,
+html.cc #layout > div > .footer a.button {
+	color: var(--cc-silk);
+}
+
+html.cc .header a.button.icon:not(.disabled):focus,
+html.cc .header a.button.icon:not(.disabled):hover {
+	color: var(--cc-enig);
+	background-color: var(--cc-select);
+}
+
+/* Search bar — a probe field seated in the header band. */
+html.cc .searchbar {
+	color: var(--cc-silk);
+	background-color: var(--cc-mask);
+	border-color: var(--cc-hair-soft);
+	border-bottom: 1px solid var(--cc-hair-soft);
+}
+
+html.cc .searchbar input {
+	color: var(--cc-silk);
+	background: transparent;
+}
+
+html.cc .searchbar input::placeholder {
+	color: var(--cc-dim);
+	opacity: 1;
+}
+
+html.cc .searchbar form::before,
+html.cc .searchbar a {
+	color: var(--cc-dim);
+}
+
+html.cc .searchbar a:hover {
+	color: var(--cc-enig);
+}
+
+html.cc .listing-info,
+html.cc .listing span.secondary,
+html.cc .menu.pagenav .pagenav-text,
+html.cc .menu.pagenav a,
+html.cc .file-upload .hint,
+html.cc .contactlist span.email,
+html.cc #login-footer {
+	color: var(--cc-dim);
+}
+
+html.cc .menu.pagenav .pagenav-text {
+	font-family: var(--cc-mono);
+	font-size: 0.78rem;
+	letter-spacing: 0.04em;
+}
+
+
+/* ---------------------------------------------------------------------------
+   5. LISTINGS
+   Folder tree and message list. Row heights, paddings and Elastic's ellipsis
+   behaviour are untouched — density is the whole point of a mail list. Only
+   colour and the metadata typeface change.
+   --------------------------------------------------------------------------- */
+html.cc .proplist li.with-sublist > a.dropdown,
+html.cc .listing tbody td,
+html.cc .listing tbody td a,
+html.cc .listing li a {
+	color: var(--cc-silk-2);
+}
+
+html.cc .listing li ul,
+html.cc .listing tbody td,
+html.cc .listing li {
+	border-color: var(--cc-hair-soft);
+}
+
+html.cc .listing li.selected,
+html.cc .listing li.selected > a,
+html.cc .listing li.selected > div > a,
+html.cc .listing tr.selected td {
+	color: var(--cc-silk);
+	background-color: var(--cc-select);
+}
+
+html.cc .listing li.selected ul {
+	background-color: var(--cc-board);
+}
+
+html.cc .listing li.droptarget > a,
+html.cc .listing tr.droptarget > td {
+	background-color: #4a3f10;
+	color: var(--cc-silk);
+}
+
+html.cc:not(.touch) .listing li > a:hover,
+html.cc:not(.touch) .listing tbody tr:hover td {
+	background-color: var(--cc-board-hi);
+}
+
+/* Focus indicator: Elastic already reserves a 2px left border on the first
+   cell. Re-tint it to a copper trace entering the row. */
+html.cc:not(.touch) .listing li > a:focus,
+html.cc:not(.touch) .listing.focus tbody tr.focused > td:first-child,
+html.cc:not(.touch) .listing.focus:not(.withselection) tbody tr.focused > td.selection + td {
+	border-left-color: var(--cc-enig);
+}
+
+/* --- folder tree ------------------------------------------------------- */
+html.cc .folderlist li.mailbox .unreadcount {
+	font-family: var(--cc-mono);
+	font-size: 0.7rem;
+	font-weight: 600;
+	letter-spacing: 0.02em;
+	color: var(--cc-mask);
+	background-color: var(--cc-enig);
+}
+
+html.cc .folderlist li.mailbox.recent > a .unreadcount {
+	background-color: var(--cc-trace);
+	color: var(--cc-mask);
+}
+
+/* --- message list ------------------------------------------------------ */
+html.cc .messagelist {
+	color: var(--cc-silk-2);
+	border-color: var(--cc-hair-soft);
+}
+
+html.cc .messagelist td.subject span.subject {
+	color: var(--cc-silk-2);
+}
+
+html.cc .messagelist tr.unread td.subject span.subject {
+	color: var(--cc-silk);
+}
+
+/* Datasheet register: sender, date and size are measured values, so they are
+   set in the same mono the site uses for SKUs and prices. */
+html.cc .messagelist td.subject span.fromto,
+html.cc .messagelist td.subject span.date,
+html.cc .messagelist td.subject span.size {
+	font-family: var(--cc-mono);
+	letter-spacing: 0.01em;
+	color: var(--cc-dim);
+}
+
+html.cc .messagelist td.subject span.date,
+html.cc .messagelist td.subject span.size {
+	font-size: 0.72rem;
+}
+
+html.cc .messagelist tr.unread td.subject span.fromto {
+	color: var(--cc-silk-2);
+}
+
+/* The status pip becomes a lit indicator LED. Static glow, no pulse. */
+html.cc .messagelist td.subject span.msgicon.status.unread:before {
+	color: var(--cc-enig);
+	text-shadow: 0 0 6px var(--cc-glow);
+}
+
+html.cc .messagelist td.subject span.msgicon.status:before {
+	color: var(--cc-edge);
+}
+
+html.cc .messagelist span.attachment span,
+html.cc .messagelist tr.flaggedroot:not(:hover) span.unflagged:before {
+	color: var(--cc-dim);
+}
+
+html.cc .messagelist tr.flagged td,
+html.cc .messagelist tr.flagged td.subject span.subject a,
+html.cc .messagelist tr.flagged td.subject span.date,
+html.cc .messagelist tr.flagged td.subject span.fromto,
+html.cc .messagelist span.flagged:before {
+	color: var(--cc-flag);
+}
+
+/* Deleted rows. Elastic dims these to ~50% opacity, which on this substrate
+   measured 2.79:1 on a selected row — unreadable. Hold the colour at --cc-dim
+   (4.94:1 worst case) and carry the "deleted" signal on a strike-through
+   instead, which is also one less meaning riding on colour alone. */
+html.cc .messagelist tr.deleted td,
+html.cc .messagelist tr.deleted td.subject span.subject a,
+html.cc .messagelist tr.deleted td.subject span.date,
+html.cc .messagelist tr.deleted td.subject span.fromto,
+html.cc .listing li.disabled,
+html.cc .listing tr.disabled td {
+	color: var(--cc-dim);
+}
+
+html.cc .messagelist tr.deleted td.subject span.subject {
+	text-decoration: line-through;
+}
+
+/* Column headers, when the list is in table mode. */
+html.cc .messagelist > thead th,
+html.cc table.listing > thead th {
+	font-family: var(--cc-mono);
+	font-size: 0.66rem;
+	letter-spacing: 0.14em;
+	text-transform: uppercase;
+	color: var(--cc-dim);
+	background-color: var(--cc-board-hi);
+	border-bottom: 1px solid var(--cc-hair);
+}
+
+html.cc .attachmentslist {
+	border-color: var(--cc-hair-soft);
+	background-color: var(--cc-mask);
+}
+
+html.cc .attachmentslist li a.filename {
+	color: var(--cc-silk-2);
+}
+
+html.cc .attachmentslist li span.attachment-size {
+	font-family: var(--cc-mono);
+	color: var(--cc-dim);
+}
+
+/* Quota gauge — a fuel gauge on the board. */
+html.cc .quota-widget {
+	color: var(--cc-dim);
+	font-family: var(--cc-mono);
+	font-size: 0.72rem;
+}
+
+html.cc .quota-widget .bar {
+	background-color: var(--cc-mask);
+	border: 1px solid var(--cc-hair-soft);
+}
+
+html.cc .quota-widget .value {
+	background-color: var(--cc-trace);
+}
+
+html.cc .quota-widget .value.warning {
+	background-color: var(--cc-flag);
+}
+
+
+/* ---------------------------------------------------------------------------
+   6. THE READING PANE — a datasheet page
+   Long threads are read here for hours, so this is the one region where the
+   theme steps back: generous line-height, high-contrast silkscreen body copy,
+   and HTML mail left on its own white sheet.
+   --------------------------------------------------------------------------- */
+html.cc #message-header {
+	padding: 0.85rem 1rem;
+	border: 1px solid var(--cc-hair-soft);
+	border-radius: 8px;
+	background-color: var(--cc-board-hi);
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+html.cc #message-header > .subject {
+	color: var(--cc-silk);
+	letter-spacing: -0.015em;
+	line-height: 1.25;
+}
+
+html.cc #message-header .header-summary,
+html.cc #message-header .header-headers,
+html.cc #message-header .rcmContactAddress,
+html.cc #message-header .adr {
+	font-family: var(--cc-mono);
+	font-size: 0.8rem;
+	color: var(--cc-silk-2);
+}
+
+html.cc #message-header .header-headers .header-title {
+	font-family: var(--cc-mono);
+	font-size: 0.68rem;
+	letter-spacing: 0.13em;
+	text-transform: uppercase;
+	color: var(--cc-dim);
+	font-weight: 600;
+}
+
+html.cc #message-header .header-links a {
+	color: var(--cc-trace);
+}
+
+html.cc #message-header .date,
+html.cc #message-header span.rcmContactAddress a {
+	color: var(--cc-dim);
+}
+
+/* Plain-text parts stay on the board and get real reading measure. */
+html.cc .message-part {
+	color: var(--cc-silk-2);
+	border-color: var(--cc-hair-soft);
+	line-height: 1.6;
+}
+
+html.cc .message-part div.pre {
+	font-family: var(--cc-mono);
+	font-size: 0.82rem;
+	line-height: 1.6;
+}
+
+html.cc .message-part span.sig {
+	color: var(--cc-dim);
+}
+
+/* Quote levels as trace layers: top / inner / inner-inner. */
+html.cc .message-part blockquote {
+	color: #a7c8b4;
+	background-color: rgba(0, 0, 0, 0.22);
+	border-left-color: var(--cc-trace);
+	border-right-color: var(--cc-trace);
+}
+
+html.cc .message-part blockquote blockquote {
+	color: #cbb887;
+	border-left-color: var(--cc-enig-deep);
+	border-right-color: var(--cc-enig-deep);
+}
+
+html.cc .message-part blockquote blockquote blockquote {
+	color: #d2a49d;
+	border-left-color: var(--cc-flag);
+	border-right-color: var(--cc-flag);
+}
+
+html.cc .message-part blockquote span.blockquote-link {
+	color: var(--cc-silk-2);
+	background: var(--cc-board-hi);
+	border-color: var(--cc-edge);
+	font-family: var(--cc-sans);
+}
+
+/* HTML mail keeps Elastic's white sheet — senders' inline styles assume light,
+   and forcing them dark is how dark webmail clients ruin newsletters. We only
+   mount the sheet: it reads as a datasheet page seated on the board. */
+html.cc .message-htmlpart {
+	border-radius: 8px;
+	border: 1px solid var(--cc-hair);
+	box-shadow: 0 10px 28px var(--cc-sink);
+	overflow: hidden;
+}
+
+html.cc .message-partheaders {
+	background-color: var(--cc-select);
+	border: 0;
+}
+
+html.cc .message-partheaders table.headers-table {
+	font-family: var(--cc-mono);
+	color: var(--cc-silk-2);
+}
+
+html.cc p.image-attachment {
+	border-color: var(--cc-hair-soft);
+	background-color: var(--cc-board-hi);
+}
+
+html.cc p.image-attachment span,
+html.cc fieldset.image-attachment legend {
+	color: var(--cc-dim);
+}
+
+html.cc fieldset.image-attachment legend {
+	border-color: var(--cc-hair-soft);
+}
+
+html.cc a,
+html.cc .message-part a {
+	color: var(--cc-trace);
+}
+
+html.cc a:hover {
+	color: #86e86a;
+}
+
+
+/* ---------------------------------------------------------------------------
+   7. FORMS, COMPOSE AND BUTTONS
+   Fields read as drilled cavities in the board; the primary button is a gold
+   pad. Everything stays at Elastic's sizes so the compose form keeps working
+   at the same rhythm.
+   --------------------------------------------------------------------------- */
+html.cc .form-control,
+html.cc .custom-file-label,
+html.cc .custom-select,
+html.cc input.form-control,
+html.cc textarea.form-control {
+	color: var(--cc-silk);
+	background-color: var(--cc-input);
+	border-color: var(--cc-edge);
+	font-family: var(--cc-sans);
+}
+
+html.cc textarea.form-control,
+html.cc #composebody {
+	font-family: var(--cc-mono);
+	font-size: 0.86rem;
+	line-height: 1.6;
+}
+
+html.cc .form-control::placeholder {
+	color: var(--cc-dim);
+	opacity: 1;
+}
+
+html.cc .form-control:focus,
+html.cc .custom-select:focus {
+	color: var(--cc-silk);
+	background-color: #0a2a1d;
+	border-color: var(--cc-enig);
+	box-shadow: 0 0 0 3px rgba(232, 194, 82, 0.18);
+}
+
+html.cc .form-control:disabled,
+html.cc input:disabled,
+html.cc select:disabled {
+	color: var(--cc-dim);
+	background-color: var(--cc-mask);
+}
+
+html.cc .form-control-plaintext {
+	color: var(--cc-silk-2);
+}
+
+html.cc .input-group-text,
+html.cc .custom-file-label::after {
+	color: var(--cc-silk-2);
+	background-color: var(--cc-board-hi);
+	border-color: var(--cc-edge);
+}
+
+html.cc .multi-input:not(.is-invalid) > .content {
+	background-color: var(--cc-input);
+	border-color: var(--cc-edge);
+}
+
+/* Recipient chips — component packages with gold leads. */
+html.cc .recipient-input {
+	background-color: var(--cc-input);
+	border-color: var(--cc-edge);
+}
+
+html.cc .recipient-input li.recipient {
+	font-family: var(--cc-mono);
+	font-size: 0.8rem;
+	color: var(--cc-silk);
+	background-color: var(--cc-select);
+	border: 1px solid var(--cc-hair);
+	border-radius: 4px;
+}
+
+html.cc .recipient-input li.recipient a.button.icon.remove {
+	color: var(--cc-dim);
+}
+
+html.cc .recipient-input li.recipient a.button.icon.remove:hover {
+	color: var(--cc-flag);
+}
+
+html.cc .file-upload,
+html.cc .image-upload,
+html.cc .formcontent.raweditor {
+	color: var(--cc-silk-2);
+	background-color: var(--cc-mask);
+	border-color: var(--cc-hair-soft);
+}
+
+html.cc fieldset legend,
+html.cc .propform legend,
+html.cc .boxtitle {
+	font-family: var(--cc-mono);
+	font-size: 0.7rem;
+	letter-spacing: 0.15em;
+	text-transform: uppercase;
+	color: var(--cc-enig);
+}
+
+html.cc label,
+html.cc .propform td.title,
+html.cc table.propform td.title {
+	color: var(--cc-silk-2);
+}
+
+html.cc .form-text,
+html.cc .hint {
+	color: var(--cc-dim);
+}
+
+/* --- buttons ----------------------------------------------------------- */
+html.cc .btn {
+	color: var(--cc-silk);
+	background-color: transparent;
+	border: 1px solid var(--cc-edge);
+	font-family: var(--cc-sans);
+	font-weight: 500;
+	transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+
+html.cc .btn:hover {
+	background-color: var(--cc-board-hi);
+	border-color: var(--cc-enig-deep);
+}
+
+/* A gold pad. Board-dark legend on ENIG: 9.58:1. */
+html.cc .btn-primary,
+html.cc .btn.mainaction {
+	color: var(--cc-mask);
+	background-color: var(--cc-enig);
+	border-color: var(--cc-enig);
+	font-weight: 600;
+}
+
+html.cc .btn-primary:hover,
+html.cc .btn.mainaction:hover {
+	color: var(--cc-mask);
+	background-color: #f3cf5c;
+	border-color: #f3cf5c;
+}
+
+html.cc .btn-secondary {
+	color: var(--cc-silk);
+	background-color: transparent;
+	border-color: var(--cc-edge);
+}
+
+html.cc .btn-secondary:hover {
+	background-color: var(--cc-board-hi);
+}
+
+html.cc .btn-danger {
+	color: var(--cc-silk);
+	background-color: #8c2f28;
+	border-color: #8c2f28;
+}
+
+html.cc .btn-danger:hover {
+	background-color: #a5382f;
+	border-color: #a5382f;
+}
+
+html.cc .floating-action-buttons a.button {
+	color: var(--cc-mask);
+	background-color: var(--cc-enig);
+}
+
+html.cc .custom-switch .custom-control-label::before {
+	background-color: var(--cc-mask);
+	border-color: var(--cc-edge);
+}
+
+html.cc .custom-control-input:checked ~ .custom-control-label::before {
+	background-color: var(--cc-enig);
+	border-color: var(--cc-enig);
+}
+
+html.cc .custom-switch .custom-control-label::after {
+	background-color: var(--cc-silk-2);
+}
+
+
+/* ---------------------------------------------------------------------------
+   8. MENUS, DIALOGS, NOTIFICATIONS
+   --------------------------------------------------------------------------- */
+html.cc .popover,
+html.cc .popupmenu,
+html.cc .ui-widget-content,
+html.cc .ui-widget-header,
+html.cc .ui-dialog,
+html.cc .ui-menu,
+html.cc .minicolors-panel {
+	color: var(--cc-silk);
+	background-color: var(--cc-board);
+	border-color: var(--cc-hair);
+}
+
+html.cc .popover .popover-header {
+	color: var(--cc-enig);
+	background-color: var(--cc-board-hi);
+	font-family: var(--cc-mono);
+	font-size: 0.7rem;
+	letter-spacing: 0.15em;
+	text-transform: uppercase;
+}
+
+html.cc #taskmenu a:hover,
+html.cc .popupmenu .listing li > a:not(.disabled):hover,
+html.cc .menu.toolbar .dropbutton:not(.disabled):hover,
+html.cc .menu a:not(.disabled):focus,
+html.cc .menu a:not(.disabled):hover {
+	color: var(--cc-enig);
+	background-color: var(--cc-select);
+}
+
+/* Section 6 sets a global link colour (Elastic's `a { color: #00acff }` is
+   never re-tinted by dark.less). Menu entries are controls, not links, so pin
+   them back to silkscreen before that leaks in. */
+html.cc .menu a,
+html.cc .popover .menu li a,
+html.cc .menu.toolbar a,
+html.cc .menu.toolbar a.button {
+	color: var(--cc-silk);
+}
+
+html.cc .menu.toolbar a.selected {
+	color: var(--cc-enig);
+	background-color: var(--cc-select);
+}
+
+html.cc .menu li.separator span,
+html.cc .popupmenu .listing li.separator {
+	color: var(--cc-dim);
+	background-color: var(--cc-mask);
+	font-family: var(--cc-mono);
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+}
+
+html.cc .ui-widget-overlay {
+	background-color: rgba(2, 9, 6, 0.72);
+}
+
+html.cc .ui-dialog .ui-dialog-titlebar {
+	border-color: var(--cc-hair);
+	background-color: var(--cc-board-hi);
+}
+
+html.cc .ui-dialog .ui-dialog-title,
+html.cc .ui-dialog .ui-dialog-titlebar-close {
+	color: var(--cc-silk);
+}
+
+html.cc .ui-datepicker,
+html.cc .ui-datepicker .ui-datepicker-header {
+	color: var(--cc-silk);
+	background-color: var(--cc-board);
+	border-color: var(--cc-hair-soft);
+}
+
+html.cc .ui-datepicker td a,
+html.cc .ui-datepicker td span {
+	color: var(--cc-silk-2);
+}
+
+html.cc .ui-datepicker .ui-state-active {
+	color: var(--cc-mask);
+	background-color: var(--cc-enig);
+}
+
+/* Alerts: solid ink on a saturated bar, so the four states stay tellable
+   apart at a glance without relying on hue alone (each keeps its icon). */
+/* Conformal-coating blue — the one cool hue on a real board, and the only
+   place this skin uses one. 9.57:1 with mask-dark legend. */
+html.cc .ui.alert.boxinformation,
+html.cc #messagestack .alert-info {
+	color: var(--cc-mask);
+	background-color: #7fc4e8;
+	border-color: #7fc4e8;
+}
+
+html.cc .ui.alert.boxconfirmation,
+html.cc #messagestack .alert-success {
+	color: var(--cc-mask);
+	background-color: var(--cc-trace);
+	border-color: var(--cc-trace);
+}
+
+html.cc .ui.alert.boxwarning,
+html.cc #messagestack .alert-warning {
+	color: var(--cc-mask);
+	background-color: var(--cc-enig);
+	border-color: var(--cc-enig);
+}
+
+html.cc .ui.alert.boxerror,
+html.cc #messagestack .alert-danger {
+	color: var(--cc-mask);
+	background-color: var(--cc-flag);
+	border-color: var(--cc-flag);
+}
+
+html.cc #messagestack .loading,
+html.cc .ui.alert.loading {
+	color: var(--cc-silk);
+	background-color: var(--cc-board-hi);
+	border-color: var(--cc-hair);
+}
+
+html.cc .ui.alert a:not(.btn) {
+	color: inherit;
+	text-decoration: underline;
+}
+
+html.cc .iframe-loader {
+	background-color: rgba(6, 24, 15, 0.8);
+}
+
+html.cc .skinselection .skinthumbnail {
+	background-color: var(--cc-board-hi);
+	border-color: var(--cc-hair-soft);
+}
+
+
+/* ---------------------------------------------------------------------------
+   9. LOGIN — the bare coupon
+   The one screen with room to be a board. Panel, gold hairline, and the four
+   plated drill-holes from the site's sponsor cards (.csb-fid), drawn as four
+   corner-anchored radial gradients on a single pseudo-element.
+   --------------------------------------------------------------------------- */
+html.cc body.task-login {
+	background-color: var(--cc-mask);
+}
+
+html.cc #login-form {
+	position: relative;
+	padding: 1.75rem 1.5rem 1.5rem;
+	background-color: var(--cc-board);
+	border: 1px solid var(--cc-hair);
+	border-radius: 12px;
+	box-shadow: 0 18px 44px var(--cc-sink), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+html.cc #login-form::after {
+	content: '';
+	position: absolute;
+	inset: 9px;
+	pointer-events: none;
+	background-image:
+		radial-gradient(circle at 50% 50%, transparent 1.6px, var(--cc-enig-deep) 1.6px 2.7px, transparent 2.8px),
+		radial-gradient(circle at 50% 50%, transparent 1.6px, var(--cc-enig-deep) 1.6px 2.7px, transparent 2.8px),
+		radial-gradient(circle at 50% 50%, transparent 1.6px, var(--cc-enig-deep) 1.6px 2.7px, transparent 2.8px),
+		radial-gradient(circle at 50% 50%, transparent 1.6px, var(--cc-enig-deep) 1.6px 2.7px, transparent 2.8px);
+	background-size: 9px 9px;
+	background-position: left top, right top, left bottom, right bottom;
+	background-repeat: no-repeat;
+	opacity: 0.8;
+}
+
+html.cc #login-form .input-group-text {
+	background-color: var(--cc-mask);
+}
+
+html.cc #rcmloginsubmit {
+	width: 100%;
+}
+
+html.cc #login-footer > div {
+	color: var(--cc-dim);
+	background-color: var(--cc-board-hi);
+	border: 1px solid var(--cc-hair-soft);
+}
+
+html.cc #logo {
+	opacity: 1;
+}
+
+
+/* ---------------------------------------------------------------------------
+   10. SPECIFICITY MIRRORS
+   The "tie on specificity, win on load order" rule that the rest of this sheet
+   relies on has exactly one class of exception: Elastic's dark sheet guards
+   some rules with :not(), and every :not(.foo) silently adds a class's worth
+   of specificity. A plainly-mirrored selector then LOSES.
+
+   These were found by reading the compiled styles.min.css for
+   `html.dark-mode ... :not(` and checking each against a rendered harness —
+   not by eye. Without this block Elastic's blue (#37beff) still shows on the
+   selected message, the unread pip stays a muddy #b88a00, and every form
+   field keeps a grey #7c949c border.
+
+   If you upgrade Roundcube, re-run the audit:
+     grep -o 'html\.dark-mode[^,{]*:not([^,{]*' \
+       skins/elastic/styles/styles.min.css | sort -u
+   --------------------------------------------------------------------------- */
+html.cc .messagelist tr:not(.flagged):not(.deleted) td.subject span.date,
+html.cc .messagelist tr:not(.flagged):not(.deleted) td.subject span.fromto,
+html.cc .messagelist tr:not(.flagged):not(.deleted) td.subject span.size {
+	color: var(--cc-dim);
+}
+
+html.cc .messagelist tr:not(.flagged):not(.deleted) td.subject span.msgicon.status,
+html.cc .messagelist tr:not(.flagged):not(.deleted) span.flag {
+	color: var(--cc-edge);
+}
+
+/* The indicator LED. Elastic's dark sheet dims it to #b88a00 (3.6:1 here);
+   this is the single most-scanned mark in the whole product. */
+html.cc .messagelist tr:not(.flagged):not(.deleted) td.subject span.msgicon.status.unread::before {
+	color: var(--cc-enig);
+	text-shadow: 0 0 6px var(--cc-glow);
+}
+
+html.cc .messagelist tr:not(.flagged):not(.deleted).selected td.subject a,
+html.cc .messagelist tr:not(.flagged):not(.deleted).selected td.subject span.msgicon.status {
+	color: var(--cc-silk);
+}
+
+html.cc .messagelist tr.flagged:not(.deleted) td,
+html.cc .messagelist tr.flagged:not(.deleted) span.attachment span {
+	color: var(--cc-flag);
+}
+
+html.cc #layout-menu .special-buttons a:not(:focus) {
+	background: transparent;
+}
+
+html.cc .custom-file-label:not(.is-invalid),
+html.cc .form-control:not(.is-invalid),
+html.cc .multi-input:not(.is-invalid) > .content {
+	border-color: var(--cc-edge);
+}
+
+html.cc .custom-file-label:focus:not(.is-invalid),
+html.cc .form-control:focus:not(.is-invalid),
+html.cc .multi-input:not(.is-invalid) > .content.focused {
+	color: var(--cc-silk) !important;
+	border-color: var(--cc-enig);
+}
+
+html.cc .btn-primary:hover:not(:disabled) {
+	background-color: #f3cf5c;
+	color: var(--cc-mask);
+}
+
+html.cc .btn-secondary:hover:not(:disabled) {
+	background-color: var(--cc-board-hi);
+	color: var(--cc-silk);
+}
+
+html.cc .btn-danger:hover:not(:disabled) {
+	background-color: #a5382f;
+	color: var(--cc-silk);
+}
+
+html.cc .ui-dialog .ui-dialog-buttonpane .ui-dialog-buttonset button.btn-primary:not(.btn-danger) {
+	color: var(--cc-mask);
+}
+
+html.cc .ui-dialog .ui-dialog-buttonpane .ui-dialog-buttonset button.btn-secondary {
+	color: var(--cc-silk);
+}
+
+
+/* ---------------------------------------------------------------------------
+   11. PRINT
+   Elastic loads its own print.css, but this sheet is not print-scoped and
+   would otherwise carry the board onto paper. Hand it back to ink-on-white.
+   --------------------------------------------------------------------------- */
+@media print {
+	html.cc,
+	html.cc body,
+	html.cc #layout,
+	html.cc #layout-content,
+	html.cc #message-header,
+	html.cc .message-part,
+	html.cc .message-htmlpart {
+		color: #000 !important;
+		background: #fff !important;
+		background-image: none !important;
+		box-shadow: none !important;
+		border-color: #999 !important;
+	}
+
+	html.cc a,
+	html.cc .message-part a,
+	html.cc #message-header .header-links a {
+		color: #000 !important;
+	}
+
+	html.cc .message-part blockquote,
+	html.cc .message-part blockquote blockquote,
+	html.cc .message-part blockquote blockquote blockquote {
+		color: #333 !important;
+		background: transparent !important;
+		border-color: #999 !important;
+	}
+}
+
+
+/* ---------------------------------------------------------------------------
+   12. REDUCED MOTION
+   This skin adds no keyframes and no loops; all it can produce is a hover or
+   focus transition. Honour the preference anyway, and neutralise Elastic's
+   own transitions and animations while we are here.
+   --------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+	html.cc *,
+	html.cc *::before,
+	html.cc *::after {
+		transition-duration: 0.01ms !important;
+		transition-delay: 0ms !important;
+		animation-duration: 0.01ms !important;
+		animation-delay: 0ms !important;
+		animation-iteration-count: 1 !important;
+		scroll-behavior: auto !important;
+	}
+}

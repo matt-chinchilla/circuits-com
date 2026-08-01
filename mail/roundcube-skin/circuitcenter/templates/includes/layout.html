@@ -1,0 +1,78 @@
+<!--
+  Circuit Center skin — layout include.
+
+  This is Roundcube 1.6 Elastic's skins/elastic/templates/includes/layout.html
+  with exactly THREE deliberate changes. Everything else is byte-for-byte the
+  upstream file so that a Roundcube upgrade diffs cleanly:
+
+    1. <html> carries `cc dark-mode`.
+       `dark-mode` turns on Elastic's own complete dark stylesheet, which we
+       then re-tint. `cc` is OUR hook: Elastic's ui.js can add/remove
+       `dark-mode` on iframe documents, but it never touches `cc`, so the
+       Circuit Center layer can't be stripped out from under us.
+       Set as a class attribute rather than by script, so there is no
+       light-theme flash on first paint.
+
+    2. Elastic's inline colour-mode <script> is removed. meta.json sets
+       "dark_mode_support": false (the skin is dark-only by design), which
+       makes that script a no-op and hides the Settings light/dark toggle.
+
+    3. /styles/circuitcenter.css is linked AFTER Elastic's stylesheet.
+       Load order is how our overrides win: every rule we write mirrors
+       Elastic's own selector, so specificity ties and the later sheet wins.
+       Roundcube resolves a "/"-prefixed path against this skin first and
+       falls back to the parent skin, so Elastic's stylesheet still comes from
+       Elastic while /styles/circuitcenter.css comes from here.
+
+  AND ONE FORCED CORRECTION, which is the subtle part:
+       Upstream writes href="/styles/styles.css". That file does NOT exist in
+       any Roundcube distribution — releases ship styles.min.css only. Elastic
+       gets away with it because rcmail_output_html::file_mod() silently
+       rewrites a missing .css to .min.css, and it does that lookup relative to
+       $base_path, which is "whichever skin the template was found in".
+       The moment we override this template, $base_path becomes THIS skin, the
+       .min swap looks in skins/circuitcenter/styles/, misses, and Elastic's
+       entire stylesheet 404s.
+       So we name the minified files explicitly. find_file_path() locates them
+       in the parent skin and the cache-buster still gets appended.
+       (Same reasoning for print.css.) If you ever run against a build that has
+       unminified styles.css and no styles.min.css, drop the two ".min" below.
+       Verify after install:
+         curl -sI https://mail.circuitcenter.ai/skins/elastic/styles/styles.min.css
+-->
+<roundcube:add_label name="back" />
+<roundcube:add_label name="errortitle" />
+<roundcube:add_label name="options" />
+<roundcube:add_label name="plaintoggle" />
+<roundcube:add_label name="htmltoggle" />
+<roundcube:add_label name="previous" />
+<roundcube:add_label name="next" />
+<roundcube:add_label name="select" />
+<roundcube:add_label name="close" />
+<roundcube:add_label name="browse" />
+<roundcube:add_label name="choosefile" />
+<roundcube:add_label name="choosefiles" />
+<roundcube:object name="doctype" value="html5" />
+<roundcube:if condition="!env:framed || env:extwin" />
+<html class="cc dark-mode">
+<roundcube:else />
+<html class="iframe cc dark-mode">
+<roundcube:endif />
+<head>
+	<roundcube:object name="meta" />
+	<roundcube:object name="links" />
+	<link rel="stylesheet" href="/deps/bootstrap.min.css">
+	<roundcube:if condition="config:devel_mode" />
+		<link rel="stylesheet/less" href="/styles/styles.less">
+		<roundcube:link rel="stylesheet/less" href="/styles/print.less" condition="env:action == 'print'" />
+		<script src="/deps/less.min.js" data-env="development"></script>
+	<roundcube:else />
+		<link rel="stylesheet" href="/styles/styles.min.css">
+		<roundcube:link rel="stylesheet" href="/styles/print.min.css" condition="env:action == 'print'" />
+	<roundcube:endif />
+	<link rel="stylesheet" href="/styles/circuitcenter.css">
+</head>
+<body class="task-<roundcube:exp expression="env:error_task ?: env:task ?: 'error'"> action-<roundcube:exp expression="asciiwords(env:action, true, '-') ?: 'none'">">
+	<roundcube:if condition="!env:framed || env:extwin" />
+		<div id="<roundcube:exp expression="env:action == 'print' ? 'print-' : ''">layout">
+	<roundcube:endif />

@@ -1,0 +1,14 @@
+{
+	"name": "Circuit Center",
+	"author": "Circuit Center",
+	"license": "Creative Commons Attribution-ShareAlike",
+	"license-url": "https://creativecommons.org/licenses/by-sa/3.0/",
+	"extends": "elastic",
+	"config": {
+		"dark_mode_support": false
+	},
+	"meta": {
+		"theme-color": "#06180f",
+		"msapplication-navbutton-color": "#06180f"
+	}
+}
