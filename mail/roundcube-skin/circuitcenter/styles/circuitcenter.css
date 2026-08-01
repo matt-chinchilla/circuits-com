@@ -133,11 +133,15 @@ html.cc {
    the 24px grid. It shows at the panel gaps, behind the login card, and —
    saturated and blurred — through every pane of glass above it.
    --------------------------------------------------------------------------- */
+/* --cc-grid expands to TWO gradient layers, so with the bench gradient the
+   image list is THREE layers deep — background-size must name all three or
+   the size list repeats and TILES the bench gradient at 24px (verified on
+   the live install: the bench rendered as bevelled bricks). */
 html.cc body {
 	color: var(--cc-ink);
 	background-color: var(--cc-bench-deep);
 	background-image: var(--cc-grid), linear-gradient(160deg, var(--cc-bench-hi), var(--cc-bench-deep) 72%);
-	background-size: 24px 24px, auto;
+	background-size: 24px 24px, 24px 24px, auto;
 	font-family: var(--cc-sans);
 	-webkit-font-smoothing: antialiased;
 }
@@ -1223,7 +1227,37 @@ html.cc .skinselection .skinthumbnail {
 html.cc body.task-login {
 	background-color: var(--cc-bench-deep);
 	background-image: var(--cc-grid), linear-gradient(160deg, var(--cc-bench-hi), var(--cc-bench-deep) 72%);
-	background-size: 24px 24px, auto;
+	background-size: 24px 24px, 24px 24px, auto;  /* three layers — see section 2 */
+}
+
+/* The login route hangs the entire viewport off #layout-content (classes
+   `selected no-navbar`), so without this carve-out the pane veil from
+   section 3 glazes the whole bench and the page reads as one white sheet
+   (found and verified on the live install, 2026-07-31). On login the card
+   is the ONLY glass. Specificity (.task-login + id) also out-ranks the
+   mobile porcelain rule in section 12, so the bench shows on phones too. */
+html.cc .task-login #layout {
+	gap: 0;
+	padding-right: 0;
+}
+
+html.cc .task-login #layout-content {
+	margin: 0;
+	border: 0;
+	border-radius: 0;
+	background: transparent;
+	-webkit-backdrop-filter: none;
+	backdrop-filter: none;
+	box-shadow: none;
+}
+
+/* The wordmark (images/logo.svg, ours — it shadows Elastic's stock cube via
+   skin-path resolution). Elastic pins #logo to a 100px square; the lockup
+   is 232x56. */
+html.cc .task-login #logo {
+	width: 232px;
+	height: auto;
+	max-height: none;
 }
 
 html.cc #login-form {
@@ -1333,8 +1367,65 @@ html.cc .ui-dialog .ui-dialog-buttonpane .ui-dialog-buttonset button.btn-seconda
 	color: var(--cc-ink);
 }
 
-/* If a Roundcube upgrade re-introduces fights, audit what the compiled
-   sheet guards (see README "Upgrading Roundcube"). */
+/* --- verified against the LIVE compiled sheet (1.6.x, 2026-07-31) --------
+   The following upstream rules carry !important and would punch Elastic
+   blue / slate / grey through this skin. Each mirror was found by fetching
+   the served styles.min.css and extracting every `!important` declaration
+   that touches a property this skin sets — not by eye. */
+
+/* jQuery-UI menu active entry: `.ui-menu .ui-state-active` forces #37beff. */
+html.cc .ui-menu .ui-state-active {
+	border: 0 !important;
+	background-color: var(--cc-tint-select) !important;
+	color: var(--cc-ink) !important;
+}
+
+/* Datepicker selected day: `background:#37beff!important;color:#fff!important`. */
+html.cc .ui-datepicker a.ui-state-active {
+	background: linear-gradient(#eccc63, #d2a72b) !important;
+	color: #241a04 !important;
+}
+
+/* Compose HTML editor focus: `div.tox.focused` forces a blue ring. */
+html.cc div.tox.focused {
+	border-color: var(--cc-focus) !important;
+	box-shadow: 0 0 0 0.2rem var(--cc-halo) !important;
+}
+
+/* Grouped-input focus border: `.input-group-text input:focus` forces blue. */
+html.cc .input-group-text input:focus {
+	border-color: var(--cc-focus) !important;
+}
+
+/* Image viewer toolbar: hover/focus forces rgba(55,190,255,.5). */
+html.cc .image-tools a:focus,
+html.cc .image-tools a:hover {
+	background-color: rgba(232, 194, 82, 0.5) !important;
+}
+
+/* The rail's popover header (phone task menu) is pinned to slate #2f3a3f. */
+html.cc #layout-menu .popover-header {
+	background-color: #f2f5f3 !important;
+	color: var(--cc-legend);
+}
+
+/* Rail entries carry `border-bottom:1px solid #f1f3f4!important` — pale grey
+   hairlines that would glow on the dark bench. Scoped to widths where the
+   rail exists; the phone popover keeps its own separator rule (section 4). */
+@media screen and (min-width: 481px) {
+	html.cc #taskmenu a {
+		border-bottom: 1px solid rgba(146, 176, 162, 0.14) !important;
+	}
+}
+
+/* NOT mirrored, deliberately: TinyMCE's internal `div.tox` chrome forces
+   `font-family:Roboto,...!important` on its own fields. Fighting the
+   editor's private UI buys nothing — the composed MESSAGE body uses our
+   stack; only TinyMCE's toolbars fall back (to a font that isn't even
+   shipped, so the OS default serves anyway). */
+
+/* If a Roundcube upgrade re-introduces fights, re-run the audit against the
+   served compiled sheet (see README "Upgrading Roundcube"). */
 
 
 /* ---------------------------------------------------------------------------

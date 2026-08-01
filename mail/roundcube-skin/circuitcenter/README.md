@@ -10,6 +10,7 @@ circuitcenter/
 ├── meta.json                        skin manifest ("extends": "elastic")
 ├── templates/includes/layout.html   the ONE template override
 ├── styles/circuitcenter.css         the whole skin
+├── images/logo.svg                  wordmark (shadows Elastic's stock cube)
 ├── watermark.html                   empty reading pane
 ├── thumbnail.png                    Settings > Interface preview
 ├── DESIGN.md
@@ -113,6 +114,9 @@ Then open the webmail and check, on a desktop width:
 
 - the three columns float as rounded glass panes with the dark green bench
   visible in the 10px gaps between them;
+- the bench is a SMOOTH gradient under a faint grid — if it renders as
+  bevelled 24px bricks, a `background-size` list is short one layer (the
+  grid var expands to two layers; the gradient is the third);
 - the task rail at the far left is dark bare board with gold contact fingers,
   the active task's finger lit;
 - panel titles read `U1 · FOLDERS` / `U2 · INBOX` in gold monospace
@@ -121,9 +125,19 @@ Then open the webmail and check, on a desktop width:
   gold tint, not a filled bar;
 - exactly one gold "pad" button per screen (Send / Save); Delete is quiet red
   text;
-- the login screen is a single glass card on the open bench with plated
-  drill-holes in its corners and a small `CN1` mark;
+- the login screen is the Circuit Center IC wordmark and a single glass card
+  on the OPEN bench (the pane veil is carved out of `#layout-content` on
+  `body.task-login` — if the whole page is a white sheet, that carve-out
+  regressed), plated drill-holes in the card corners, a small `CN1` mark;
 - the empty reading pane shows the board coupon with `U3`.
+
+Verified against the live install (2026-07-31, Roundcube 1.6.x): both
+stylesheets 200; served CSS byte-identical to the repo; login page rendered
+correctly at 1440px and at phone width (opaque card, zero backdrop-filter,
+bench visible) after the carve-out and background-size fixes; the
+`!important` audit below produced the seven mirrors in section 11 of the
+stylesheet. Still unverified (needs a logged-in session): message-list /
+reading-pane / compose rendering, and the iframe-opacity check.
 
 And two health checks worth 60 seconds:
 
@@ -151,15 +165,21 @@ Anything beyond those changes is new upstream work to port in.
 **2. Specificity fights.** Riding the light theme means Elastic's base rules
 are low-specificity and `html.cc` mirrors out-rank nearly everything — but a
 handful of upstream rules carry their own `:not()` guards or `!important`
-(section 11 of `circuitcenter.css` holds the current mirrors). After an
-upgrade, audit what the compiled sheet guards:
+(section 11 of `circuitcenter.css` holds the current mirrors, each verified
+against the served compiled sheet). After an upgrade, re-run both audits:
 
 ```bash
+# !important declarations touching properties this skin sets
+grep -oE '[^}{]{0,80}![[:space:]]*important[^;}]{0,10}' \
+  "$ROUNDCUBE_ROOT/skins/elastic/styles/styles.min.css" \
+  | grep -iE 'background|color|border|shadow|font' | sort -u
+
+# :not() guards (each adds a class's worth of specificity)
 grep -oE '(html)?[^,{]*:not\([^,{]*' \
   "$ROUNDCUBE_ROOT/skins/elastic/styles/styles.min.css" | sort -u | head -50
 ```
 
-Anything in that list touching a property this skin sets needs a mirror in
+Anything in either list touching a property this skin sets needs a mirror in
 section 11.
 
 ## Constraints this skin holds to
@@ -194,5 +214,7 @@ section 11.
   Printing hands the page back to ink-on-white (section 13).
 - **The donor system's cursor-tracked rim/gloss JS** — deliberately not
   ported; see DESIGN.md's adopted/adapted/skipped ledger.
-- **A logo** — set `$config['skin_logo']` if you want one; Roundcube's own is
-  used otherwise.
+- **A `$config['skin_logo']` entry** — not needed: the skin ships
+  `images/logo.svg` (the IC wordmark), which shadows Elastic's stock cube via
+  skin-path resolution. Setting `skin_logo` still overrides it if a customer
+  ever wants to.

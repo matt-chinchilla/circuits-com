@@ -236,11 +236,23 @@ clauses added:
 
 ## Verification status
 
-Computed, not eyeballed: every pair above was produced by the compositing
-math in this file's audit script (worst-case veil floor over darkest bench).
-Global minimum: **4.91:1** (metadata on a selected row); every non-text
-indicator ≥ **3.36:1**. What was *not* possible in this pass: rendering
-against a live Roundcube — the mail stack isn't deployed yet (the first
-pass's browser audit ran against 1.6.11's compiled stylesheet; its selector
-inventory is inherited wholesale). Re-run a rendered audit at install time:
-the README's "Verify after install" section lists the checks.
+Computed, not eyeballed: every pair above was produced by compositing math
+(worst-case veil floor over darkest bench). Global minimum: **4.91:1**
+(metadata on a selected row); every non-text indicator ≥ **3.36:1**.
+
+Rendered audit against the live install (mail.circuitcenter.ai, Roundcube
+1.6.x, 2026-07-31): the login screen was verified at 1440px and phone width
+— bench, glass card, drill-holes, CN1, gold pad, wordmark all correct; on
+phone the card goes opaque and computed `backdrop-filter` is `none`
+everywhere, as designed. The audit caught two real bugs, both fixed: the
+bench gradient TILED at 24px (a background-size list one layer short — the
+grid var expands to two layers) and the login route's `#layout-content`
+carrying the pane veil across the whole viewport (now carved out;
+`body.task-login` shows the open bench, and the card is the only glass).
+The served compiled Elastic sheet was also pulled and every `!important`
+declaration touching our properties extracted — seven verified mirrors now
+live in section 11 (datepicker and jQuery-UI actives, TinyMCE focus ring,
+grouped-input focus, image-tools hover, the rail popover header, rail
+separators). Still pending (needs a logged-in session): message list,
+reading pane, compose, and the iframe-opacity check — the README's "Verify
+after install" section lists them.
