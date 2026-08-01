@@ -1,0 +1,18 @@
+{
+  "Comment": "P2 mail: publish the DKIM public key generated inside docker-mailserver. Selector and key are substituted by apply-dns.sh --dkim-file.",
+  "Changes": [
+    {
+      "Action": "UPSERT",
+      "ResourceRecordSet": {
+        "Name": "DKIM_SELECTOR._domainkey.circuitcenter.ai.",
+        "Type": "TXT",
+        "TTL": 300,
+        "ResourceRecords": [
+          {
+            "Value": "DKIM_VALUE"
+          }
+        ]
+      }
+    }
+  ]
+}

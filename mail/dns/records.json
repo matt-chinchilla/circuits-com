@@ -1,0 +1,57 @@
+{
+  "Comment": "P2 mail cutover: A mail.circuitcenter.ai + MX pri 10 + widened SPF + DMARC p=none/rua. DKIM deliberately EXCLUDED (the container generates that key later) - see dkim-record.json.template.",
+  "Changes": [
+    {
+      "Action": "UPSERT",
+      "ResourceRecordSet": {
+        "Name": "mail.circuitcenter.ai.",
+        "Type": "A",
+        "TTL": 300,
+        "ResourceRecords": [
+          {
+            "Value": "MAIL_EIP"
+          }
+        ]
+      }
+    },
+    {
+      "Action": "UPSERT",
+      "ResourceRecordSet": {
+        "Name": "circuitcenter.ai.",
+        "Type": "MX",
+        "TTL": 300,
+        "ResourceRecords": [
+          {
+            "Value": "10 mail.circuitcenter.ai."
+          }
+        ]
+      }
+    },
+    {
+      "Action": "UPSERT",
+      "ResourceRecordSet": {
+        "Name": "circuitcenter.ai.",
+        "Type": "TXT",
+        "TTL": 300,
+        "ResourceRecords": [
+          {
+            "Value": "\"v=spf1 include:amazonses.com ip4:MAIL_EIP ~all\""
+          }
+        ]
+      }
+    },
+    {
+      "Action": "UPSERT",
+      "ResourceRecordSet": {
+        "Name": "_dmarc.circuitcenter.ai.",
+        "Type": "TXT",
+        "TTL": 300,
+        "ResourceRecords": [
+          {
+            "Value": "\"v=DMARC1; p=none; rua=mailto:no-reply@circuitcenter.ai; fo=1; adkim=r; aspf=r; pct=100\""
+          }
+        ]
+      }
+    }
+  ]
+}
