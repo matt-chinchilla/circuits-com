@@ -179,12 +179,15 @@
   --theme-nav-bottom-border: 2px solid #c49b5d;
 
   // Smoked-glass navbar veil — 24px silkscreen grids + sheen/shade + solder-
-  // mask veil. Slightly higher floor (.94 -> .90): the green bar's lighter
-  // resting text needs it. Floor .90 over white: resting 5.10:1, hover
-  // 9.55:1 — computed.
+  // mask veil. This theme needs the HIGHEST floor of the four: its resting
+  // link ink is the lightest (.72 alpha) and three white layers sit ON TOP of
+  // the veil (+.04 sheen, 2 x +.025 gridlines), so the veil alpha alone
+  // overstates contrast. Computed through the FULL stack over white content,
+  // worst case: resting 4.58:1, hover 9.9:1. Dropping the floor back to .90
+  // puts resting at 4.19:1 — below AA.
   --glass-nav-veil:
     repeating-linear-gradient(0deg, transparent 0 23px, rgba(255, 255, 255, 0.025) 23px 24px),
     repeating-linear-gradient(90deg, transparent 0 23px, rgba(255, 255, 255, 0.025) 23px 24px),
     linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, rgba(0, 0, 0, 0.06) 100%),
-    linear-gradient(180deg, rgba(6, 58, 35, 0.94), rgba(6, 58, 35, 0.9));
+    linear-gradient(180deg, rgba(6, 58, 35, 0.96), rgba(6, 58, 35, 0.94));
 }
