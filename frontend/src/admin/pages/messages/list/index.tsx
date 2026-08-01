@@ -33,7 +33,15 @@ import {
   toggleRead,
 } from '@admin/services/messageStore';
 import type { Message } from '@admin/types/messages';
+import { useAuth } from '@admin/contexts/AuthContext';
 import styles from './MessagesListPage.module.scss';
+
+/** Where the company's mail lives. The address is derived from the signed-in
+ *  username because mailbox local-parts ARE the usernames (lower-cased —
+ *  `Anthony` owns `anthony@`). Kept beside the URL so both move together if
+ *  the mail host ever changes. */
+const WEBMAIL_URL = 'https://mail.circuitcenter.ai';
+const MAIL_DOMAIN = 'circuitcenter.ai';
 
 type Filter = 'all' | 'contact' | 'join' | 'keyword' | 'archived';
 type Sort = 'unread' | 'newest' | 'oldest';
@@ -177,6 +185,11 @@ function MessageRow({ m, onOpen, onAction, isFresh }: RowProps) {
 
 export default function MessagesListPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  // Hidden for the public demo account, which has no mailbox — a prospect
+  // clicking through to a login screen they can't pass is a dead end.
+  const mailboxAddress =
+    user && !user.is_demo ? `${user.username.toLowerCase()}@${MAIL_DOMAIN}` : null;
   const [messages, setMessages] = useState<Message[]>(() => loadMessages());
   const [filter, setFilter] = useState<Filter>('all');
   const [sort, setSort] = useState<Sort>('unread');
@@ -351,8 +364,21 @@ export default function MessagesListPage() {
       transition={{ duration: 0.15, ease: 'easeInOut' as const }}
     >
       <div className={styles.pageHead}>
-        <h1 className={styles.title}>Messages</h1>
-        <p className={styles.subtitle}>Inbound from the public site</p>
+        <div className={styles.pageHeadMain}>
+          <h1 className={styles.title}>Messages</h1>
+          <p className={styles.subtitle}>Inbound from the public site</p>
+        </div>
+        {mailboxAddress && (
+          <a
+            className={styles.mailboxLink}
+            href={WEBMAIL_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <span className={styles.mailboxLabel}>Open mailbox</span>
+            <span className={styles.mailboxAddress}>{mailboxAddress}</span>
+          </a>
+        )}
       </div>
 
       <div className={styles.panel}>

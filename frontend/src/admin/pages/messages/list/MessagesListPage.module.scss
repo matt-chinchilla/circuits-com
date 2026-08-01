@@ -4,9 +4,63 @@
 // Page head
 .pageHead {
   display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.pageHeadMain {
+  display: flex;
   flex-direction: column;
   gap: 6px;
-  margin-bottom: 24px;
+  min-width: 0;
+}
+
+// Hand-off to webmail. Deliberately a link, not a fetch: personal mail is not
+// rendered in the console (that would need a Dovecot master credential, i.e.
+// the site able to read everyone's mail). Full webmail beats a half-inbox.
+.mailboxLink {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 14px;
+  border: 1px solid var(--a-border);
+  border-radius: var(--a-radius);
+  background: var(--a-card);
+  box-shadow: var(--a-shadow-sm);
+  text-decoration: none;
+  flex-shrink: 0;
+  transition: border-color 150ms, background-color 150ms;
+
+  &:hover {
+    border-color: var(--a-primary);
+    background: var(--a-hover);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--a-primary);
+    outline-offset: 2px;
+  }
+}
+
+.mailboxLabel {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--a-primary);
+
+  // The arrow is an entity, not a literal glyph — edit tooling mangles
+  // non-ASCII in source (see CLAUDE.md).
+  &::after {
+    content: ' \2192';
+  }
+}
+
+.mailboxAddress {
+  font-family: $font-mono;
+  font-size: 11px;
+  color: var(--a-fg3);
 }
 
 .title {
