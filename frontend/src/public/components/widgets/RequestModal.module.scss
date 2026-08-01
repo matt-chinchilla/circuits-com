@@ -15,6 +15,10 @@
   inset: 0;
   z-index: 1000;
   background: rgba(10, 15, 20, 0.6);
+  // House-sanctioned scrim blur (CLAUDE.md: OK when the scrim only animates
+  // opacity). Kept at 3px; -webkit- twin added 2026-07-31 (glass house law:
+  // backdrop-filter is always declared both ways).
+  -webkit-backdrop-filter: blur(3px);
   backdrop-filter: blur(3px);
   display: flex;
   align-items: center;
@@ -24,6 +28,10 @@
 
 // ─── Modal panel ────────────────────────────────────────────────────────────
 
+// Liquid-glass porcelain sheet (2026-07-31): near-opaque --glass-sheet veil
+// (.96 -> .92, the mail-skin dialog idiom — this sheet holds dense small
+// text). Opaque #fff stays as the ≤768px / no-backdrop-filter fallback.
+// The scrim above stays blur-light and the sheet does the material work.
 .modal {
   position: relative;
   width: 100%;
@@ -33,7 +41,13 @@
   background: #fff;
   border-radius: 12px;
   padding: 32px 32px 28px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+  // Muted-ink remap for the whole sheet: every `var(--fg2, ...)` descendant
+  // (intro, labels, receipt, cancel button) picks up the glass-muted ink —
+  // >=5.5:1 at the sheet floor over scrimmed dark content, 6.66:1 on the
+  // opaque fallback (a strict improvement; stock --fg2 was 4.83 on white).
+  // Computed — see _themes.scss.
+  --fg2: var(--glass-ink-muted);
+  @include glass-pane(var(--glass-sheet));
 }
 
 .modalClose {

@@ -78,3 +78,30 @@
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+
+// ── Liquid-glass floating pane (public static port, 2026-07-31) ────────────
+// Source of truth: src/admin/styles/LIQUID-GLASS.md (admin foundation);
+// model: the owner's static fork (collab-kit/tokens.css). Veil + backdrop-
+// filter + hairline rim + inset top-highlight + contact/ambient shadow —
+// pure CSS, no JS gloss/rim, no will-change, no keyframes.
+//
+// The CALL SITE keeps its own OPAQUE background declared BEFORE the include —
+// that is the fallback for browsers without backdrop-filter AND for ≤768px
+// viewports, where the veil + filter are dropped entirely (phone GPUs pay
+// DPR²-sized layers for blur; this repo has OOM-crashed iPhones on cheaper
+// effects — see the mail-skin precedent, which furls glass the same way).
+// Contrast at the veil floor over the darkest public backdrop (#0e1113) is
+// computed in _themes.scss beside the tokens; the floor composite IS the
+// no-filter fallback, so the numbers hold in both modes.
+@mixin glass-pane($veil: var(--glass-veil)) {
+  border: 1px solid var(--glass-rim);
+  box-shadow: var(--glass-hi), var(--glass-shadow-float);
+
+  @supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+    @media (min-width: #{$bp-mobile + 1}) {
+      background: $veil;
+      -webkit-backdrop-filter: var(--glass-filter);
+      backdrop-filter: var(--glass-filter);
+    }
+  }
+}

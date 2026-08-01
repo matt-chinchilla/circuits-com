@@ -39,6 +39,30 @@
   --theme-brand-font: #{$font-heading};
   --theme-brand-suffix: "";
   --theme-nav-bottom-border: none;
+
+  // ── Liquid glass — public static port (2026-07-31) ───────────────────────
+  // Source of truth: src/admin/styles/LIQUID-GLASS.md (the admin token
+  // foundation). Its --a-glass* tokens are scoped under `.admin` and cannot
+  // cascade to the public tree, so the public-scope values live HERE, in the
+  // public token layer, following the same static-fork model the foundation
+  // itself cites (collab-kit/tokens.css): veil + filter + rim + top-highlight
+  // + contact/ambient shadow, pure CSS only — no JS gloss/rim driver.
+  // Veil floors are COMPUTED (WCAG 2.x) against the darkest public backdrop
+  // (steel nav/backdrop #0e1113); consuming mixin: glass-pane in _mixins.scss.
+  //   --glass-veil   floating pane (popovers) — floor .88: fg1 12.87:1,
+  //                  --glass-ink-muted 5.16:1 over #0e1113.
+  //   --glass-sheet  modal sheet (porcelain, mail-skin dialog idiom) — floor .92.
+  //   --glass-ink-muted  replaces #6b7280-class muted ink ON GLASS: the stock
+  //                  muted gray composites to 3.75–4.35:1 over dark content
+  //                  (AA fail); #565d66 holds ≥5.16:1 at every veil floor and
+  //                  6.66:1 on plain white.
+  --glass-veil: linear-gradient(rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.88));
+  --glass-sheet: linear-gradient(rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 0.92));
+  --glass-filter: saturate(180%) blur(20px);
+  --glass-rim: rgba(17, 24, 39, 0.1);
+  --glass-hi: inset 0 1px 0 rgba(255, 255, 255, 0.75);
+  --glass-shadow-float: 0 2px 6px rgba(0, 0, 0, 0.08), 0 24px 60px -18px rgba(0, 0, 0, 0.3);
+  --glass-ink-muted: #565d66;
 }
 
 :root,
@@ -75,6 +99,14 @@
 
   --theme-brand-font: #{$font-mono};
   --theme-nav-bottom-border: 1px solid rgba(255, 255, 255, 0.06);
+
+  // Smoked-glass navbar veil (Navbar.module.scss applies it with
+  // backdrop-filter on >768px). Same sheen + graphite layers as the opaque
+  // bar, minus the opaque background-color. Floor .88 over WHITE content
+  // (worst case): resting nav text 5.85:1, hover 12.60:1 — computed.
+  --glass-nav-veil:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0) 70%),
+    linear-gradient(180deg, rgba(14, 17, 19, 0.92), rgba(14, 17, 19, 0.88));
 }
 
 // ─── Schematic Command Bar — graphite brand rail, bone-accent CTA ───
@@ -106,6 +138,13 @@
 
   --theme-brand-font: #{$font-mono};
   --theme-nav-bottom-border: 1px solid #000;
+
+  // Smoked-glass navbar veil — sheen + pinstripe + graphite veil.
+  // Floor .88 over white: resting nav text 6.65:1, hover 12.33:1 — computed.
+  --glass-nav-veil:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, transparent 40%),
+    repeating-linear-gradient(90deg, transparent 0 3px, rgba(255, 255, 255, 0.012) 3px 4px),
+    linear-gradient(180deg, rgba(20, 26, 30, 0.92), rgba(20, 26, 30, 0.88));
 }
 
 // ─── Solder-Mask Rail — PCB substrate + copper ───
@@ -138,4 +177,14 @@
   --theme-brand-font: #{$font-heading};
   --theme-brand-suffix: "/ REV-A";
   --theme-nav-bottom-border: 2px solid #c49b5d;
+
+  // Smoked-glass navbar veil — 24px silkscreen grids + sheen/shade + solder-
+  // mask veil. Slightly higher floor (.94 -> .90): the green bar's lighter
+  // resting text needs it. Floor .90 over white: resting 5.10:1, hover
+  // 9.55:1 — computed.
+  --glass-nav-veil:
+    repeating-linear-gradient(0deg, transparent 0 23px, rgba(255, 255, 255, 0.025) 23px 24px),
+    repeating-linear-gradient(90deg, transparent 0 23px, rgba(255, 255, 255, 0.025) 23px 24px),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, rgba(0, 0, 0, 0.06) 100%),
+    linear-gradient(180deg, rgba(6, 58, 35, 0.94), rgba(6, 58, 35, 0.9));
 }

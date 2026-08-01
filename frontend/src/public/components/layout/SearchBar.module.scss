@@ -161,18 +161,23 @@
 
 // ─── Dropdown ─────────────────────────────────────────────────────────────────
 
+// Liquid-glass floating pane (2026-07-31): the suggestion popover floats over
+// the animated hero traces (hero variant) and over the dark PageHeaderBand
+// (nav variant) — a genuine blur payoff, transient, small. Opaque #fff stays
+// as the ≤768px / no-backdrop-filter fallback; glass-pane supplies veil +
+// filter + rim + top-highlight + float shadow above the gate. Contrast at the
+// veil floor is computed beside the tokens in _themes.scss.
 .dropdown {
   position: absolute;
   top: calc(100% + 6px);
   left: 0;
   right: 0;
   background: #ffffff;
-  border: 1px solid rgba(0, 0, 0, 0.08);
   border-radius: 8px;
-  box-shadow: $shadow-lg;
   z-index: 200;
   overflow: hidden;
   animation: fade-in-up 0.2s ease both;
+  @include glass-pane;
 }
 
 // ─── Dropdown sections ────────────────────────────────────────────────────────
@@ -193,7 +198,10 @@
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: $text-secondary;
+  // Glass-muted ink: stock $text-secondary composites to 3.75:1 over dark
+  // content behind the veil (AA fail at 11px); #565d66 holds >=5.16:1 on
+  // glass and 6.66:1 on the opaque fallback. Computed — see _themes.scss.
+  color: var(--glass-ink-muted, #{$text-secondary});
 }
 
 // ─── Dropdown items ───────────────────────────────────────────────────────────
@@ -211,7 +219,10 @@
 
   &:hover {
     background-color: var(--theme-accent-soft);
-    color: var(--theme-accent);
+    // House rule (CLAUDE.md): accent-colored text on light cards uses
+    // --executive-blue — --theme-accent green is ~2.2:1 on light surfaces and
+    // drops further on the glass veil. 8.01:1 at the worst veil floor.
+    color: var(--executive-blue);
   }
 }
 
@@ -235,7 +246,11 @@
   font-weight: 600;
   letter-spacing: 0.04em;
   color: $sponsor-gold;
-  background: rgba($sponsor-gold, 0.1);
+  // Opaque chip (was a 10% translucent tint): on the glass pane a translucent
+  // tint would let dark scrolled content darken the chip and cut the gold
+  // text's already-marginal ratio further. Solid = today's white-card
+  // pairing, unchanged by what's behind the pane.
+  background: #f6f4ea;
   border-radius: 4px;
   padding: 2px 7px;
 }
@@ -261,7 +276,9 @@
   border-radius: 6px;
   font-family: $font-body;
   font-size: 0.875rem;
-  color: var(--theme-accent);
+  // House rule (CLAUDE.md): accent-colored text on light cards uses
+  // --executive-blue (accent green fails AA at this size; worse on glass).
+  color: var(--executive-blue);
   font-weight: 500;
   cursor: pointer;
   text-align: left;

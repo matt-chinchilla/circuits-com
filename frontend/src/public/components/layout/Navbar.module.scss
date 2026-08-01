@@ -81,6 +81,31 @@
     inset 0 -1px 0 rgba(196, 155, 93, 0.55);
 }
 
+// ── Liquid glass (2026-07-31) — smoked-glass toolbar on the dark themes ────
+// The donor spec's #1 surface ("top bar = macOS toolbar material"), taken in
+// the admin foundation's DARK direction: the veil smokes in the theme's own
+// ink (per-theme --glass-nav-veil in _themes.scss, floors .88–.90, contrast
+// computed there) so content scrolling beneath blurs through the bar instead
+// of being hidden by it. Base theme stays OPAQUE deliberately: a translucent
+// brand-green over white content lightens an already-marginal white-on-green
+// pairing, and the saturated flat green IS that theme's identity.
+// Desktop-only + @supports-gated: ≤768px and no-backdrop-filter browsers keep
+// the exact opaque substrate above (the fallbacks are the rules above, which
+// this block overrides only where the gate passes). PCB keeps its inset
+// box-shadow + copper ::after — separate properties, untouched.
+@supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  @media (min-width: #{$bp-mobile + 1}) {
+    :global([data-theme="steel"]) .topStrip,
+    :global([data-theme="schematic"]) .topStrip,
+    :global([data-theme="pcb"]) .topStrip {
+      background-color: transparent;
+      background-image: var(--glass-nav-veil);
+      -webkit-backdrop-filter: var(--glass-filter);
+      backdrop-filter: var(--glass-filter);
+    }
+  }
+}
+
 // PCB copper-trace bottom accent — never present on other themes
 :global([data-theme="pcb"]) .topStrip::after {
   content: "";

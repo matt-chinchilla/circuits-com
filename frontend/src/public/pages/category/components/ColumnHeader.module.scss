@@ -1,4 +1,5 @@
 @use '@shared/styles/variables' as *;
+@use '@shared/styles/mixins' as *;
 
 .colHead {
   position: relative;
@@ -73,6 +74,10 @@
 
 // Positioned via inline `position: fixed; top; left` from ColumnHeader (the
 // popover is portaled to <body> so the scrollable table can't clip it).
+// Liquid-glass floating pane (2026-07-31): transient, small, genuinely floats
+// over live content (table rows, sponsor boards at the top edge). Opaque #fff
+// stays as the ≤768px / no-backdrop-filter fallback; contrast computed beside
+// the tokens in _themes.scss. The parts TABLE itself stays glass-free.
 .popover {
   z-index: 1000;
   width: 280px;
@@ -80,13 +85,12 @@
   max-height: calc(100vh - 16px);
   overflow-y: auto;
   background: #fff;
-  border: 1px solid #e5e7eb;
   border-radius: 8px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.05);
   padding: 10px;
   text-align: left;
   font-family: $font-body;
   animation: cpPopIn 140ms ease-out;
+  @include glass-pane;
 }
 
 @keyframes cpPopIn {
@@ -115,7 +119,9 @@
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: $text-secondary;
+  // Glass-muted ink — stock muted gray fails AA over dark content behind the
+  // veil; >=5.16:1 on glass, 6.66:1 on the opaque fallback (see _themes.scss).
+  color: var(--glass-ink-muted, #{$text-secondary});
   margin-bottom: 6px;
 }
 
@@ -134,7 +140,10 @@
 .link {
   font-size: 0.72rem;
   font-weight: 500;
-  color: var(--theme-accent, $nav-blue);
+  // House rule (CLAUDE.md): accent-colored text on light cards uses
+  // --executive-blue — accent green is ~2.2:1 at this size and drops further
+  // on the glass veil. 8.01:1 at the worst veil floor.
+  color: var(--executive-blue, $executive-blue);
   background: none;
   border: none;
   padding: 2px 4px;
