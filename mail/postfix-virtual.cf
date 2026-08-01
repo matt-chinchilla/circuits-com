@@ -1,0 +1,79 @@
+# circuitcenter.ai — Postfix virtual alias map
+#
+# Installed to /tmp/docker-mailserver/postfix-virtual.cf inside the container
+# (the `mail-config` / `dms-config` volume) by ./setup-mailboxes.sh.
+# DMS copies it verbatim to /etc/postfix/virtual on every change-detection pass.
+#
+# Format: <alias>  <recipient>   (whitespace separated, one per line)
+#
+# ===========================================================================
+# ORDER IS LOAD-BEARING. READ ./aliases.md BEFORE EDITING.
+#
+# Postfix resolves `user@domain` by trying, in order: `user@domain`, then
+# `@domain`. A bare `@domain` wildcard therefore matches EVERY address in the
+# domain that has no more specific entry — including real mailboxes. Without
+# the self-alias block below, mail to anthony@circuitcenter.ai would be
+# rewritten to no-reply@circuitcenter.ai and Anthony's mailbox would sit empty
+# while nobody sees an error anywhere.
+#
+# So: every real account gets an identity entry, and the wildcard goes LAST.
+# ===========================================================================
+
+# ---------------------------------------------------------------------------
+# 1. Self-aliases — one per real mailbox. These EXIST ONLY to out-rank the
+#    wildcard at the bottom of this file. They are not forwards.
+#
+#    ADD A LINE HERE WHENEVER YOU ADD A MAILBOX. A new account without a
+#    self-alias silently loses all of its mail to the catch-all.
+#
+#    `setup alias add` cannot create these — it refuses any alias whose name
+#    matches an existing account — so this file is edited by hand (upstream's
+#    documented workaround). setup-mailboxes.sh verifies every account it
+#    manages has a line here and refuses to install the file otherwise.
+#
+#    Expected, harmless startup log line, one per entry:
+#      "Alias '<addr>' will not be added to '/etc/dovecot/userdb' twice"
+#    DMS generates an identical userdb row and de-duplicates it. Nothing to fix.
+# ---------------------------------------------------------------------------
+
+anthony@circuitcenter.ai    anthony@circuitcenter.ai
+daniel@circuitcenter.ai     daniel@circuitcenter.ai
+matthew@circuitcenter.ai    matthew@circuitcenter.ai
+ronald@circuitcenter.ai     ronald@circuitcenter.ai
+no-reply@circuitcenter.ai   no-reply@circuitcenter.ai
+
+# ---------------------------------------------------------------------------
+# 2. Friendly public addresses -> the shared company inbox.
+#
+#    no-reply@ is the shared role account P4a ingests over IMAP. Publish these
+#    on the site instead of no-reply@ — "no-reply" reads as send-only and
+#    discourages the replies this inbox exists to collect. Same mailbox either
+#    way.
+# ---------------------------------------------------------------------------
+
+hello@circuitcenter.ai      no-reply@circuitcenter.ai
+contact@circuitcenter.ai    no-reply@circuitcenter.ai
+info@circuitcenter.ai       no-reply@circuitcenter.ai
+sales@circuitcenter.ai      no-reply@circuitcenter.ai
+support@circuitcenter.ai    no-reply@circuitcenter.ai
+
+# ---------------------------------------------------------------------------
+# 3. Role addresses required (or expected) by RFC 2142 / RFC 5321.
+#    The wildcard would cover these anyway; they are explicit so they keep
+#    working if the wildcard is ever removed.
+# ---------------------------------------------------------------------------
+
+postmaster@circuitcenter.ai no-reply@circuitcenter.ai
+abuse@circuitcenter.ai      no-reply@circuitcenter.ai
+# Destination for DMARC aggregate reports (DNS `rua=mailto:` target).
+dmarc@circuitcenter.ai      no-reply@circuitcenter.ai
+
+# ---------------------------------------------------------------------------
+# 4. Catch-all — MUST BE THE LAST ENTRY IN THIS FILE.
+#
+#    Anything not matched above lands in the shared inbox rather than bouncing,
+#    so a typo'd address or an address printed on old collateral still reaches
+#    a human. Trade-offs and how to turn this off: see ./aliases.md.
+# ---------------------------------------------------------------------------
+
+@circuitcenter.ai           no-reply@circuitcenter.ai

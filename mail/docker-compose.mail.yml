@@ -1,0 +1,160 @@
+# circuitcenter.ai — self-hosted mail server (P2)
+#
+# Runs on the DEDICATED t4g.micro mail box (arm64, Amazon Linux 2023, 1 GB RAM,
+# 10 GB gp3). NOT on the web box. See ./README.md for the run order.
+#
+# Start:
+#   cd /opt/circuits-com/mail
+#   docker compose --env-file /opt/circuits-com/.env -f docker-compose.mail.yml up -d
+#
+# The `--env-file` is REQUIRED: the two SES SMTP secrets below are `${VAR:?}`
+# fail-fast interpolations, and Compose resolves them from the env-file/shell,
+# NOT from `mailserver.env` (env_file entries reach the container's process
+# environment, they are not visible to Compose's own `${...}` substitution).
+# Mirrors the pattern the web box already uses in docker-compose.prod.yml.
+
+services:
+  mailserver:
+    # docker-mailserver v15.1.0, pinned by multi-arch INDEX digest.
+    #
+    # arm64 verified 2026-07-31 against BOTH registries (identical digests):
+    #   index      sha256:af51b15dd3fc72153c0e90eb7692bb5e3a463212d87959a80fa7aa89b617d44a
+    #   linux/arm64 sha256:e6c61e8cbe6282e71eb9d4367eaeb1a3671b6d503de085a54a6cf9aa039cd26c
+    #   linux/amd64 sha256:c341669e6cbb012c34e8c4a86af27d6415bed485e0a2b66fb18c9ed60a4c4302
+    # Pinning the INDEX digest (not the arm64 child) keeps the tag reproducible
+    # while still letting Docker pick the right platform.
+    #
+    # `latest`, `15` and `15.1` all currently resolve to this same digest.
+    # Do NOT use `edge` — it is a rolling build of the default branch.
+    image: ghcr.io/docker-mailserver/docker-mailserver:15.1.0@sha256:af51b15dd3fc72153c0e90eb7692bb5e3a463212d87959a80fa7aa89b617d44a
+    container_name: mailserver
+
+    # The FQDN this MTA announces in HELO/EHLO and the name the MX record points
+    # at. It is ALSO what SSL_TYPE=letsencrypt uses to locate the certificate:
+    # DMS looks for /etc/letsencrypt/live/mail.circuitcenter.ai/. Change this and
+    # the cert path, the MX record and the PTR record all have to change with it.
+    hostname: mail.circuitcenter.ai
+
+    # Non-secret configuration. Read ./mailserver.env before changing anything.
+    env_file:
+      - ./mailserver.env
+
+    environment:
+      # --- SECRETS: host-only, never in git -------------------------------
+      # SES SMTP credentials (IAM user with ses:SendRawEmail). These are NOT the
+      # IAM access key pair — the SMTP password is DERIVED from the secret access
+      # key; see README.md.
+      #
+      # `:?` = fail fast. If /opt/circuits-com/.env is missing these, the stack
+      # refuses to start rather than booting a mail server that silently cannot
+      # relay. That is deliberate: a mail server that accepts mail it can never
+      # deliver is worse than one that does not start.
+      RELAY_USER: ${SES_SMTP_USERNAME:?SES_SMTP_USERNAME must be set in /opt/circuits-com/.env}
+      RELAY_PASSWORD: ${SES_SMTP_PASSWORD:?SES_SMTP_PASSWORD must be set in /opt/circuits-com/.env}
+
+    ports:
+      # 25  — inbound SMTP from the world. Requires the AWS port-25 unblock.
+      #       Auth is disabled here by design; submission is 465/587.
+      - "25:25"
+      # 465 — ESMTP submission, implicit TLS (RFC 8314 preferred).
+      - "465:465"
+      # 587 — ESMTP submission, STARTTLS (what most clients still default to).
+      - "587:587"
+      # 993 — IMAP4, implicit TLS.
+      - "993:993"
+      #
+      # 143 (IMAP STARTTLS) and 4190 (ManageSieve) are deliberately NOT
+      # published. Roundcube, when it lands, runs on this same box and reaches
+      # the container over the Compose network — it does not need 143 exposed to
+      # the internet.
+
+    volumes:
+      # Maildir — the actual mail. This is the volume that matters; the nightly
+      # EBS snapshot exists for this.
+      - mail-data:/var/mail/
+      # Per-service runtime state that MUST survive a container replacement:
+      # fail2ban bans, rspamd/redis bayes DB, postfix + dovecot state.
+      - mail-state:/var/mail-state/
+      # Configuration + the DMS "database" files: postfix-accounts.cf (the
+      # SHA512-CRYPT password hashes P3 push-sync rewrites), postfix-virtual.cf
+      # (aliases), dovecot-quotas.cf, and the generated rspamd DKIM keypair.
+      # Backing this up is what makes the box rebuildable.
+      - mail-config:/tmp/docker-mailserver/
+      # Mail logs, kept out of the container layer so they rotate on the volume.
+      - mail-logs:/var/log/mail/
+      # Let's Encrypt cert for mail.circuitcenter.ai, issued on the HOST by
+      # certbot (see README). Read-only: the container must never be able to
+      # rewrite the host's certificate store.
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - /etc/localtime:/etc/localtime:ro
+
+    # nftables needs NET_ADMIN or fail2ban can compute bans but never apply
+    # them — it fails silently, which is the worst possible outcome for a
+    # security control. Required whenever ENABLE_FAIL2BAN=1.
+    cap_add:
+      - NET_ADMIN
+
+    # --- Hard memory ceiling --------------------------------------------
+    # The box has 1 GB. Without a cap, an rspamd or dovecot spike takes the
+    # kernel OOM killer with it and the HOST loses sshd/dockerd. 640 MiB caps
+    # the container's cgroup so the kernel kills something INSIDE the container
+    # and the box stays reachable.
+    #
+    # 640M is ~2x the expected steady state. With ClamAV, Amavis and
+    # SpamAssassin all disabled (see mailserver.env) the resident set is roughly
+    # postfix ~30M + dovecot ~60M + rspamd ~150M + redis ~20M + fail2ban ~40M +
+    # supervisord ~30M. Check the real number with `docker stats mailserver`
+    # after a week and tighten or loosen from evidence, not from this comment.
+    #
+    # Both keys are set on purpose: `mem_limit` is the non-swarm key and
+    # `deploy.resources.limits` is the Compose-Spec key. Docker Compose v2
+    # honours either; setting both means the cap survives whichever one a future
+    # Compose version decides to respect. They MUST stay equal.
+    mem_limit: 640m
+    mem_reservation: 384m
+    deploy:
+      resources:
+        limits:
+          memory: 640M
+        reservations:
+          memory: 384M
+    # Verify the cap is actually applied (671088640 == 640 MiB):
+    #   docker inspect -f '{{.HostConfig.Memory}}' mailserver
+
+    restart: unless-stopped
+
+    # Postfix/dovecot need time to flush queues and close IMAP sessions. The
+    # 10s Docker default SIGKILLs mid-delivery.
+    stop_grace_period: 1m
+
+    healthcheck:
+      # Postfix listening on 25 is the cheapest true liveness signal.
+      test: "ss --listening --ipv4 --tcp | grep --silent ':smtp' || exit 1"
+      interval: 60s
+      timeout: 5s
+      retries: 3
+      # First boot generates certs/state and can take minutes on a t4g.micro.
+      start_period: 5m
+
+    # 10 GB disk, and mail logs are chatty once port 25 is open to the world.
+    # Cap the json-file driver so logs can never fill the volume that holds the
+    # mail itself.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  # Explicit `name:` (rather than the `<project>_<key>` default) so a second
+  # Compose project on this box — the P3 credential push-sync receiver, which
+  # has to rewrite postfix-accounts.cf — can attach the same volume with
+  # `external: true` without depending on the project directory's name.
+  mail-data:
+    name: dms-mail-data
+  mail-state:
+    name: dms-mail-state
+  mail-config:
+    name: dms-config
+  mail-logs:
+    name: dms-mail-logs
