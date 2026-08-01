@@ -1,143 +1,256 @@
 /* ===========================================================================
    Circuit Center — Roundcube 1.6 skin (Elastic-derived)
+   "The inspection bench": liquid-glass instrument panes floating over a
+   solder-mask green bench. Cyberpunk-iOS — Apple's material restraint
+   applied to a circuit-board world.
    ---------------------------------------------------------------------------
    HOW THIS SHEET WORKS
    This file is loaded AFTER Elastic's compiled styles.css (see
-   templates/includes/layout.html). The <html> element carries `dark-mode`, so
-   Elastic's own complete dark stylesheet (skins/elastic/styles/dark.less,
-   ~1100 lines covering every widget down to TinyMCE and jQuery-UI) is already
-   in effect. We do not re-implement it — we re-tint it.
+   templates/includes/layout.html). The skin rides Elastic's LIGHT theme —
+   Elastic's default styles are the base, and every selector below is
+   prefixed `html.cc`, which out-specifies Elastic's own (mostly classless-
+   root) rules. `cc` is our own class on <html>; Roundcube's ui.js never
+   touches it, so this layer cannot be stripped from under us.
 
-   Every selector below mirrors an Elastic selector and swaps `html.dark-mode`
-   for `html.cc`. That is a deliberate specificity TIE, resolved by load order:
-   this sheet is later, so it wins. `cc` is our own class and Roundcube's ui.js
-   never touches it, so this layer cannot be stripped from under us.
+   THE MATERIAL SYSTEM is the owner's liquid-glass recipe (Perry's admin
+   restyle, recon/admin-restyle-spec.md + packages/ui globals.css), adapted:
+   white-veil gradients + backdrop blur/saturate + 1px hairline + inset
+   top-highlight + contact-and-ambient shadows. Panes that hold dense small
+   text carry a HIGH-opacity veil (.92 -> .88) so body text clears WCAG-AA
+   over the dark bench; the verbatim .62 -> .30 veil is reserved for
+   controls, which sit on already-light panes. One filled primary action
+   per screen (the ENIG pad); everything else is glass or quiet.
 
    INVARIANTS — please keep these true:
-   * No @keyframes, no `animation`, no requestAnimationFrame, no <canvas>.
-     Motion is transitions-on-interaction only. (This repo has a documented
-     history of orphaned rAF loops; a webmail tab stays open for eight hours.)
-   * No external hosts. No @import, no webfonts, no remote images. Type is the
-     OS-native stack the main site already uses; icons stay Elastic's
-     self-hosted Font Awesome.
-   * Body text is >= 4.5:1 against the surface it sits on. The ratios are
-     recorded next to the tokens; re-measure if you change one.
+   * No @keyframes, no `animation`, no requestAnimationFrame, no <canvas>,
+     no will-change, no mix-blend-mode, no hue-rotate. Motion is
+     transitions-on-interaction only. (This repo has a documented history of
+     orphaned animation loops; a webmail tab stays open for eight hours.)
+   * backdrop-filter is STATIC only — applied to resting surfaces, never
+     animated, and declared with BOTH -webkit- and unprefixed forms.
+     It is dropped entirely <=768px (mobile GPU layer cost; see the
+     repo's DPR^3 OOM history) where veils become opaque instead.
+   * No external fetches. No @import, no url(http...), no webfonts, no
+     remote images. The three inline SVG data-URIs carry the W3C xmlns
+     namespace IDENTIFIER (never fetched). Type is the OS-native stack the
+     main site already uses; icons stay Elastic's self-hosted Font Awesome.
+   * Body text >= 4.5:1, non-text UI >= 3:1, measured against the WORST
+     effective surface (veil floor composited over the darkest bench,
+     ignoring blur's lightening — i.e. the no-backdrop-filter fallback is
+     the case that was measured). Ratios recorded next to the tokens;
+     re-measure if you change one (DESIGN.md has the math).
    * Nothing here reduces Elastic's list density or row heights.
 
-   Verify the invariants:
-     grep -nE '@keyframes|animation:|@import|https?://' styles/circuitcenter.css
+   Verify the invariants (expect matches in comment lines only):
+     grep -nE '@keyframes|animation:|@import|url\(https?:|will-change|mix-blend|hue-rotate' styles/circuitcenter.css
    =========================================================================== */
 
 
 /* ---------------------------------------------------------------------------
    1. TOKENS
-   The board, lit. Contrast ratios are against --cc-board (the panel surface)
-   unless noted; the worst case is a selected row (--cc-select), given second.
+   Text ratios are measured against the worst-case pane surface — the veil
+   floor rgba(255,255,255,.88) composited over the deepest bench #051d13,
+   i.e. rgb(225,228,227) — and, second, against a selected row (gold tint
+   .26 over that). Rail ratios are against the bench itself.
    --------------------------------------------------------------------------- */
 html.cc {
-	/* --- substrate ------------------------------------------------------- */
-	--cc-mask:      #06180f;  /* solder mask, unpopulated — app substrate, task rail */
-	--cc-board:     #0b2419;  /* board surface — sidebar, list, content panels      */
-	--cc-board-hi:  #123626;  /* copper pour — headers, toolbars, hover             */
-	--cc-select:    #14432c;  /* selected row                                       */
-	--cc-input:     #082016;  /* drilled cavity — form fields                       */
+	/* --- the bench (substrate, seen through and between the glass) ------- */
+	--cc-bench-hi:   #0e4a2d;  /* solder mask in light — brand $executive-blue register */
+	--cc-bench:      #093323;  /* mid bench                                              */
+	--cc-bench-deep: #051d13;  /* bench in shadow — rail, env gradient floor             */
 
-	/* --- ink ------------------------------------------------------------- */
-	--cc-silk:      #e6efe8;  /* silkscreen white — primary text   13.96 / 9.56 */
-	--cc-silk-2:    #c3d4c9;  /* read subjects, body copy          10.61 / 7.27 */
-	--cc-dim:       #93b3a5;  /* datasheet meta — from, date, size  7.21 / 4.94 */
+	/* --- glass materials --------------------------------------------------
+	   Pane veil ADAPTED from the Perry recipe (high-opacity: dense text over
+	   a dark backdrop); button veil + both filters ADOPTED VERBATIM. */
+	--cc-pane-veil:  linear-gradient(rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.88));
+	--cc-glass-filter: saturate(180%) blur(20px);
+	--cc-btn-glass:  linear-gradient(rgba(255, 255, 255, 0.62), rgba(255, 255, 255, 0.30));
+	--cc-btn-glass-filter: blur(14px) saturate(170%);
+	--cc-pop-veil:   rgba(255, 255, 255, 0.96);   /* menus, dialogs — near-opaque */
+	--cc-strip:      rgba(255, 255, 255, 0.55);   /* toolbar band inside a pane   */
+	--cc-fill:       rgba(22, 40, 31, 0.07);      /* recessed channels: search, fields */
+	--cc-rim:        rgba(255, 255, 255, 0.55);   /* glass edge on the dark bench */
+	--cc-hair:       rgba(15, 44, 30, 0.14);      /* hairline on glass            */
+	--cc-hair-soft:  rgba(15, 44, 30, 0.09);      /* row separators               */
 
-	/* --- signal ---------------------------------------------------------- */
-	--cc-enig:      #e8c252;  /* ENIG gold — accent, unread, focus  9.58 / 6.56 */
-	--cc-enig-deep: #b8902e;  /* gold in shadow — edges, fingers    5.09         */
-	--cc-trace:     #5fd93a;  /* trace green — links, success       8.96 / 6.14 */
-	--cc-flag:      #ff8378;  /* flagged, deleted, error            6.85 / 4.69 */
+	/* --- ink (on glass) ---------------------------------------------------
+	   worst-pane / selected-row                                             */
+	--cc-ink:        #16281f;  /* primary text, unread subjects  12.09 / 11.15 */
+	--cc-ink-2:      #3a4f43;  /* read subjects, body copy        6.90 /  6.36 */
+	--cc-dim:        #4d5f54;  /* meta: from, date, size          5.33 /  4.91 */
 
-	/* --- structure ------------------------------------------------------- */
-	--cc-edge:      #3e7a5c;  /* form + control borders             3.24 (UI, >=3) */
-	--cc-hair:      rgba(232, 194, 82, 0.22);  /* gold hairline    */
-	--cc-hair-soft: rgba(147, 179, 165, 0.16); /* row separators   */
-	--cc-glow:      rgba(232, 194, 82, 0.32);
-	--cc-sink:      rgba(0, 0, 0, 0.45);
+	/* --- signal ------------------------------------------------------------ */
+	--cc-enig:       #e8c252;  /* ENIG gold, bright — glows, tints, rail labels (10.30 on rail) */
+	--cc-legend:     #6d5211;  /* gold as TEXT on glass — silkscreen legends  5.73 / 5.28 */
+	--cc-led:        #96690a;  /* unread LED dot (non-text)       3.80 / 3.50 */
+	--cc-link:       #1a680f;  /* links — phosphor at text weight 5.41 / 4.99 (6.93 on white) */
+	--cc-phosphor:   #44bd13;  /* oscilloscope phosphor — GLOW ONLY, never a sole indicator */
+	--cc-flag:       #a42e22;  /* flagged, errors                 5.48 / 5.06 */
 
-	/* --- type ------------------------------------------------------------
-	   Identical to the main site's _variables.scss. Native stack, no download,
-	   and the webmail reads as the same product as circuitcenter.ai. */
+	/* --- structure ----------------------------------------------------------- */
+	--cc-edge:       #64756a;  /* form-control borders            3.36 on field fill (>=3 UI) */
+	--cc-focus:      #8a6a1c;  /* focus ring stroke               3.95 pane / 3.49 rail       */
+	--cc-halo:       rgba(232, 194, 82, 0.38);
+	--cc-tint-select: rgba(232, 194, 82, 0.26);  /* selected rows */
+	--cc-tint-hover:  rgba(22, 40, 31, 0.05);
+	--cc-rail-silk:  #d9e6de;  /* rail labels                    13.70 on bench-deep */
+	--cc-rail-dim:   #92b0a2;  /*                                 7.51 on bench-deep */
+
+	/* --- elevation — ADOPTED VERBATIM (tight contact + deep ambient) ------- */
+	--cc-shadow-s: 0 1px 2px rgba(0, 0, 0, 0.05), 0 2px 8px rgba(0, 0, 0, 0.04);
+	--cc-shadow-m: 0 1px 2px rgba(0, 0, 0, 0.06), 0 10px 28px -10px rgba(0, 0, 0, 0.16);
+	--cc-shadow-l: 0 2px 6px rgba(0, 0, 0, 0.08), 0 28px 80px -20px rgba(0, 0, 0, 0.35);
+
+	/* --- motion — ADOPTED VERBATIM (two easings do everything) ------------- */
+	--cc-ease-out:    cubic-bezier(0.2, 0.8, 0.2, 1);
+	--cc-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+	/* --- radii — ADOPTED VERBATIM (one scale, no strays) -------------------- */
+	--cc-r-input: 9px;  --cc-r-btn: 11px;  --cc-r-card: 12px;
+	--cc-r-pane: 16px;  --cc-r-sheet: 18px;  --cc-r-pill: 999px;
+
+	/* --- type ----------------------------------------------------------------
+	   The site's own stacks (_variables.scss), plus the Perry fractional
+	   variable weights — never bold.                                            */
 	--cc-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', 'Inter', system-ui, sans-serif;
 	--cc-mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+	--cc-w-btn: 520;  --cc-w-control: 560;  --cc-w-emphasis: 590;  --cc-w-heading: 650;
 
-	/* 24px PCB grid, quoted from the site's contact-page motif. Static tile —
-	   painted once, never animated. */
+	/* 24px PCB grid on the bench — the contact page's motif. Painted once,
+	   never animated. */
 	--cc-grid:
-		linear-gradient(rgba(68, 189, 19, 0.035) 1px, transparent 1px),
-		linear-gradient(90deg, rgba(68, 189, 19, 0.035) 1px, transparent 1px);
+		linear-gradient(rgba(68, 189, 19, 0.05) 1px, transparent 1px),
+		linear-gradient(90deg, rgba(68, 189, 19, 0.05) 1px, transparent 1px);
 
-	color-scheme: dark;
-	scrollbar-color: var(--cc-edge) var(--cc-mask);
+	color-scheme: light;
+	scrollbar-color: rgba(22, 40, 31, 0.30) transparent;
 }
 
 
 /* ---------------------------------------------------------------------------
-   2. SUBSTRATE
+   2. THE BENCH
+   The body is the workbench: solder-mask green falling into shadow, ruled by
+   the 24px grid. It shows at the panel gaps, behind the login card, and —
+   saturated and blurred — through every pane of glass above it.
    --------------------------------------------------------------------------- */
 html.cc body {
-	color: var(--cc-silk);
-	background-color: var(--cc-mask);
-	background-image: var(--cc-grid);
-	background-size: 24px 24px;
+	color: var(--cc-ink);
+	background-color: var(--cc-bench-deep);
+	background-image: var(--cc-grid), linear-gradient(160deg, var(--cc-bench-hi), var(--cc-bench-deep) 72%);
+	background-size: 24px 24px, auto;
 	font-family: var(--cc-sans);
+	-webkit-font-smoothing: antialiased;
+}
+
+/* Framed documents (message preview, compose editor chrome) cannot see the
+   bench through the iframe boundary — glass would composite against
+   nothing. Inside frames the surface is opaque porcelain instead. */
+html.cc.iframe body {
+	background-color: #f2f5f3;
+	background-image: none;
+}
+
+html.cc:not(.touch) ::-webkit-scrollbar {
+	width: 10px;
+	height: 10px;
 }
 
 html.cc:not(.touch) ::-webkit-scrollbar-track {
-	background-color: var(--cc-mask);
+	background-color: transparent;
 }
 
 html.cc:not(.touch) ::-webkit-scrollbar-thumb {
-	background-color: var(--cc-edge);
-	border-radius: 4px;
+	background-color: rgba(22, 40, 31, 0.28);
+	border-radius: 5px;
+	border: 2px solid transparent;
+	background-clip: content-box;
+}
+
+html.cc:not(.touch) ::-webkit-scrollbar-thumb:hover {
+	background-color: rgba(22, 40, 31, 0.42);
 }
 
 html.cc ::selection {
-	background: var(--cc-enig);
-	color: var(--cc-mask);
+	background: #f0d36e;
+	color: #241a04;
 }
 
-/* One focus treatment everywhere: a gold pad ring. Elastic's own focus styles
-   are colour-only and vanish on this substrate. */
+/* One focus treatment everywhere: the gold ring. 3.95:1 on glass, 3.49:1 on
+   the rail — one stroke that works on both worlds. */
 html.cc a:focus-visible,
 html.cc button:focus-visible,
 html.cc input:focus-visible,
 html.cc select:focus-visible,
 html.cc textarea:focus-visible,
 html.cc [tabindex]:focus-visible {
-	outline: 2px solid var(--cc-enig);
+	outline: 2px solid var(--cc-focus);
 	outline-offset: 1px;
 }
 
 
 /* ---------------------------------------------------------------------------
-   3. THE EDGE CONNECTOR  — the signature element
-   The task rail is the card edge of a board that is plugged in. A column of
-   ENIG contact fingers runs its full height; the active task's finger is lit
-   and bleeds a short trace into the panel beside it.
+   3. THE GLASS PANES
+   Elastic's three working columns become instruments floating 10px above the
+   bench: white-veil gradient, backdrop blur + saturate, a light rim (on a
+   dark bench the glass edge catches light — the Perry hairline, inverted),
+   an inset top-highlight, and the ambient shadow. Density inside each pane
+   is untouched.
 
-   Peripheral by construction: it lives in a 6px strip at the screen edge, so
-   it is present all day without ever competing with a message.
-   Phone widths turn #layout-menu into a popover, so the fingers are scoped to
-   >480px where the rail actually exists.
+   Exactly three static backdrop-filter layers exist at rest (plus menus
+   while open). Nothing repaints them: the bench beneath never changes and
+   the filter is never animated.
+   --------------------------------------------------------------------------- */
+html.cc #layout {
+	gap: 10px;
+	padding-right: 10px;
+	background: transparent;
+}
+
+html.cc #layout-sidebar,
+html.cc #layout-list,
+html.cc #layout-content {
+	margin: 10px 0;
+	border: 1px solid var(--cc-rim);
+	border-radius: var(--cc-r-pane);
+	overflow: hidden;
+	background: var(--cc-pane-veil);
+	-webkit-backdrop-filter: var(--cc-glass-filter);
+	backdrop-filter: var(--cc-glass-filter);
+	box-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.75),
+		var(--cc-shadow-m);
+}
+
+/* Legibility floor: with no backdrop-filter support the veil still
+   composites over the bench at >= .88 alpha — that blend IS the worst case
+   every ratio in section 1 was measured against. No opaque fallback needed;
+   recorded here so nobody adds one that kills the glass. */
+
+
+/* ---------------------------------------------------------------------------
+   4. THE EDGE CONNECTOR — the signature element, kept from the first pass
+   The task rail is the card edge of a board that is plugged in: the ONE
+   unglazed surface in the app. Bare bench, a full-height column of ENIG
+   contact fingers, and the active task's finger lit with a short phosphor
+   trace bleeding toward the glass. Everything else floats; this is where
+   the board is held.
+
+   Peripheral by construction: a 6px strip at the screen edge, present all
+   day, never competing with a message. Phone widths turn #layout-menu into
+   a popover, so the fingers are scoped to >480px where the rail exists.
    --------------------------------------------------------------------------- */
 html.cc #layout-menu {
-	background-color: var(--cc-mask);
+	background-color: var(--cc-bench-deep);
 }
 
 @media screen and (min-width: 481px) {
 	html.cc #layout-menu {
 		position: relative;
-		background-color: var(--cc-mask);
-		border-right: 1px solid var(--cc-hair);
+		background-color: var(--cc-bench-deep);
+		border-right: 1px solid rgba(232, 194, 82, 0.20);
 	}
 
-	/* The finger array. Static paint: a repeating gradient, no animation. */
+	/* The finger array. Static paint: one repeating gradient, no animation. */
 	html.cc #layout-menu::before {
 		content: '';
 		position: absolute;
@@ -151,7 +264,7 @@ html.cc #layout-menu {
 			linear-gradient(to right, rgba(0, 0, 0, 0.5), transparent),
 			repeating-linear-gradient(
 				to bottom,
-				var(--cc-enig-deep) 0 22px,
+				#b8902e 0 22px,
 				transparent 22px 32px
 			);
 		opacity: 0.42;
@@ -159,7 +272,7 @@ html.cc #layout-menu {
 
 	/* Unlit tasks: silkscreen labels on the mask. */
 	html.cc #taskmenu a {
-		color: var(--cc-silk);
+		color: var(--cc-rail-silk);
 		background: transparent;
 	}
 
@@ -172,80 +285,76 @@ html.cc #layout-menu {
 
 	html.cc #taskmenu a:hover {
 		color: var(--cc-enig);
-		background: var(--cc-board-hi);
+		background: #0e3a26;
 	}
 
-	/* Lit finger + trace stub. */
-	/* background-COLOR must be set explicitly: Elastic's dark sheet paints
-	   #374549 here, and overriding only background-image leaves that grey
-	   sitting under the glow. */
+	/* Lit finger + phosphor trace stub. background-COLOR set explicitly:
+	   Elastic paints its own here, and overriding only background-image
+	   would leave that sitting under the glow. */
 	html.cc #taskmenu a.selected,
 	html.cc #taskmenu a.selected:hover {
 		color: var(--cc-enig);
-		background-color: var(--cc-select);
-		background-image: linear-gradient(to right, var(--cc-glow), transparent 72%);
+		background-color: #0e3a26;
+		background-image: linear-gradient(to right, rgba(68, 189, 19, 0.22), transparent 72%);
 		box-shadow:
 			inset 6px 0 0 0 var(--cc-enig),
 			inset 8px 0 16px -6px var(--cc-enig);
 	}
 
 	html.cc #taskmenu .action-buttons a {
-		color: var(--cc-trace);
+		color: var(--cc-rail-dim);
 	}
 
 	html.cc #taskmenu .action-buttons a:hover {
-		color: var(--cc-trace);
-		background: var(--cc-board-hi);
+		color: var(--cc-enig);
+		background: #0e3a26;
 	}
 
 	html.cc #taskmenu .special-buttons {
-		background-color: var(--cc-mask);
-		border-top: 1px solid var(--cc-hair-soft);
+		background-color: var(--cc-bench-deep);
+		border-top: 1px solid rgba(146, 176, 162, 0.18);
 	}
 
 	html.cc #taskmenu a.logout,
 	html.cc #taskmenu a.logout:hover {
-		color: var(--cc-flag) !important;
+		color: #ff8378 !important;  /* 7.36:1 on the rail */
 	}
 }
 
-/* Phone: the rail is a popover list. Keep it plainly readable — no fingers. */
+/* Phone: the rail is a popover list. Porcelain, plainly readable — no
+   fingers; a card edge on a phone would be decoration without a job. */
 html.cc.layout-phone #layout-menu {
-	background-color: var(--cc-board);
+	background-color: #f2f5f3;
 }
 
 html.cc.layout-phone #taskmenu a {
-	color: var(--cc-silk);
+	color: var(--cc-ink);
 	border-bottom-color: var(--cc-hair-soft) !important;
+}
+
+html.cc.layout-phone #taskmenu a.selected {
+	color: var(--cc-legend);
 }
 
 
 /* ---------------------------------------------------------------------------
-   4. PANELS AND THEIR SILKSCREEN BANDS
-   Each column is a board coupon: solder-mask fill, a gold hairline where it
-   meets its header, and a monospace silkscreen label instead of a bold title.
+   5. TOOLBAR STRIPS, SILKSCREEN AND THE PROBE FIELD
+   The header band inside each pane is the macOS-toolbar material: a lighter
+   veil over the glass with a hairline underline. No backdrop-filter of its
+   own — the pane beneath already carries the blur, and nothing ever scrolls
+   under a Roundcube header, so a second filter layer would buy nothing.
+
+   Panel titles are silkscreen: small, mono, uppercase, legend gold —
+   prefixed with a component designator (U1 folders / U2 list), the same
+   register the main site prints on its contact card. The designators are
+   empty-content pseudo-elements with SVG backgrounds, so screen readers
+   never hear them.
    --------------------------------------------------------------------------- */
-html.cc #layout-sidebar,
-html.cc #layout-list,
-html.cc #layout-content,
-html.cc .popup .listbox .footer,
-html.cc .menu.pagenav.pagenav-list,
-html.cc .menu.pagenav.pagenav-list + .navlist,
-html.cc .menu.pagenav.pagenav-list.expanded + .navlist {
-	background-color: var(--cc-board);
-	border-color: var(--cc-hair-soft);
-}
-
-html.cc #layout-sidebar,
-html.cc #layout-list {
-	border-right: 1px solid var(--cc-hair-soft);
-}
-
 html.cc #layout > div > .header,
 html.cc #layout > div > .footer {
-	color: var(--cc-silk);
-	background-color: var(--cc-board-hi);
-	border-color: var(--cc-hair);
+	color: var(--cc-ink);
+	background: var(--cc-strip);
+	border-color: var(--cc-hair-soft);
 }
 
 html.cc #layout > div > .header {
@@ -254,43 +363,68 @@ html.cc #layout > div > .header {
 
 html.cc #layout > div > .footer {
 	border-top: 1px solid var(--cc-hair-soft);
-	background-color: var(--cc-mask);
+	background: transparent;
 }
 
 /* Silkscreen designators. Scoped to the sidebar and list headers only —
    #layout-content's header title carries the message SUBJECT on narrow
-   viewports (it is display:none above 768px) and must never be uppercased. */
+   viewports and must never be uppercased or badged. */
 html.cc #layout-sidebar > .header .header-title,
 html.cc #layout-list > .header .header-title {
 	font-family: var(--cc-mono);
-	font-size: 0.7rem;
+	font-size: 0.68rem;
 	font-weight: 600;
 	letter-spacing: 0.16em;
 	text-transform: uppercase;
-	color: var(--cc-enig);
+	color: var(--cc-legend);
+}
+
+@media screen and (min-width: 769px) {
+	html.cc #layout-sidebar > .header .header-title::before,
+	html.cc #layout-list > .header .header-title::before {
+		content: '';
+		display: inline-block;
+		vertical-align: -1px;
+		width: 22px;
+		height: 11px;
+		margin-right: 8px;
+		background: no-repeat left center / contain;
+		opacity: 0.75;
+	}
+
+	html.cc #layout-sidebar > .header .header-title::before {
+		background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='12'%3E%3Ctext x='0' y='10' font-family='Menlo,monospace' font-size='10' letter-spacing='1.5' fill='%234d5f54'%3EU1%3C/text%3E%3C/svg%3E");
+	}
+
+	html.cc #layout-list > .header .header-title::before {
+		background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='12'%3E%3Ctext x='0' y='10' font-family='Menlo,monospace' font-size='10' letter-spacing='1.5' fill='%234d5f54'%3EU2%3C/text%3E%3C/svg%3E");
+	}
 }
 
 html.cc #layout > div > .header a.button,
 html.cc #layout > div > .footer a.button {
-	color: var(--cc-silk);
+	color: var(--cc-ink-2);
 }
 
 html.cc .header a.button.icon:not(.disabled):focus,
 html.cc .header a.button.icon:not(.disabled):hover {
-	color: var(--cc-enig);
-	background-color: var(--cc-select);
+	color: var(--cc-ink);
+	background-color: var(--cc-tint-hover);
+	border-radius: 8px;
 }
 
-/* Search bar — a probe field seated in the header band. */
+/* Search — a recessed probe channel seated in the glass (the Perry
+   .pf-recessed recipe, re-hued). */
 html.cc .searchbar {
-	color: var(--cc-silk);
-	background-color: var(--cc-mask);
-	border-color: var(--cc-hair-soft);
-	border-bottom: 1px solid var(--cc-hair-soft);
+	color: var(--cc-ink);
+	background: var(--cc-fill);
+	border: 1px solid transparent;
+	border-radius: var(--cc-r-input);
+	box-shadow: inset 0 1px 2px rgba(5, 29, 19, 0.06);
 }
 
 html.cc .searchbar input {
-	color: var(--cc-silk);
+	color: var(--cc-ink);
 	background: transparent;
 }
 
@@ -305,16 +439,14 @@ html.cc .searchbar a {
 }
 
 html.cc .searchbar a:hover {
-	color: var(--cc-enig);
+	color: var(--cc-legend);
 }
 
 html.cc .listing-info,
 html.cc .listing span.secondary,
 html.cc .menu.pagenav .pagenav-text,
-html.cc .menu.pagenav a,
 html.cc .file-upload .hint,
-html.cc .contactlist span.email,
-html.cc #login-footer {
+html.cc .contactlist span.email {
 	color: var(--cc-dim);
 }
 
@@ -322,20 +454,22 @@ html.cc .menu.pagenav .pagenav-text {
 	font-family: var(--cc-mono);
 	font-size: 0.78rem;
 	letter-spacing: 0.04em;
+	font-variant-numeric: tabular-nums;
 }
 
 
 /* ---------------------------------------------------------------------------
-   5. LISTINGS
+   6. LISTINGS
    Folder tree and message list. Row heights, paddings and Elastic's ellipsis
-   behaviour are untouched — density is the whole point of a mail list. Only
-   colour and the metadata typeface change.
+   behaviour are untouched — density is the whole point of a mail list. What
+   changes: selection is a gold tint (not a filled bar), unread is a lit LED,
+   and every measured value sits in the datasheet mono.
    --------------------------------------------------------------------------- */
 html.cc .proplist li.with-sublist > a.dropdown,
 html.cc .listing tbody td,
 html.cc .listing tbody td a,
 html.cc .listing li a {
-	color: var(--cc-silk-2);
+	color: var(--cc-ink-2);
 }
 
 html.cc .listing li ul,
@@ -348,60 +482,67 @@ html.cc .listing li.selected,
 html.cc .listing li.selected > a,
 html.cc .listing li.selected > div > a,
 html.cc .listing tr.selected td {
-	color: var(--cc-silk);
-	background-color: var(--cc-select);
+	color: var(--cc-ink);
+	background-color: var(--cc-tint-select);
 }
 
 html.cc .listing li.selected ul {
-	background-color: var(--cc-board);
+	background-color: transparent;
 }
 
 html.cc .listing li.droptarget > a,
 html.cc .listing tr.droptarget > td {
-	background-color: #4a3f10;
-	color: var(--cc-silk);
+	background-color: rgba(232, 194, 82, 0.45);
+	color: var(--cc-ink);
 }
 
 html.cc:not(.touch) .listing li > a:hover,
 html.cc:not(.touch) .listing tbody tr:hover td {
-	background-color: var(--cc-board-hi);
+	background-color: var(--cc-tint-hover);
 }
 
-/* Focus indicator: Elastic already reserves a 2px left border on the first
-   cell. Re-tint it to a copper trace entering the row. */
+/* Focus indicator: Elastic reserves a 2px left border on the first cell.
+   Re-tint it to a gold trace entering the row. */
 html.cc:not(.touch) .listing li > a:focus,
 html.cc:not(.touch) .listing.focus tbody tr.focused > td:first-child,
 html.cc:not(.touch) .listing.focus:not(.withselection) tbody tr.focused > td.selection + td {
-	border-left-color: var(--cc-enig);
+	border-left-color: var(--cc-focus);
 }
 
-/* --- folder tree ------------------------------------------------------- */
+/* --- folder tree: unread counts are gold pads --------------------------- */
 html.cc .folderlist li.mailbox .unreadcount {
 	font-family: var(--cc-mono);
 	font-size: 0.7rem;
 	font-weight: 600;
+	font-variant-numeric: tabular-nums;
 	letter-spacing: 0.02em;
-	color: var(--cc-mask);
-	background-color: var(--cc-enig);
+	color: #241a04;  /* 7.74:1 on the pad */
+	background: linear-gradient(#eccc63, #d3a92c);
+	border-radius: var(--cc-r-pill);
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 1px 2px rgba(5, 29, 19, 0.25);
 }
 
 html.cc .folderlist li.mailbox.recent > a .unreadcount {
-	background-color: var(--cc-trace);
-	color: var(--cc-mask);
+	color: #241a04;
+	box-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.5),
+		0 1px 2px rgba(5, 29, 19, 0.25),
+		0 0 0 2px rgba(68, 189, 19, 0.45);  /* phosphor ring = fresh arrival */
 }
 
-/* --- message list ------------------------------------------------------ */
+/* --- message list -------------------------------------------------------- */
 html.cc .messagelist {
-	color: var(--cc-silk-2);
+	color: var(--cc-ink-2);
 	border-color: var(--cc-hair-soft);
 }
 
 html.cc .messagelist td.subject span.subject {
-	color: var(--cc-silk-2);
+	color: var(--cc-ink-2);
 }
 
 html.cc .messagelist tr.unread td.subject span.subject {
-	color: var(--cc-silk);
+	color: var(--cc-ink);
+	font-weight: var(--cc-w-heading);
 }
 
 /* Datasheet register: sender, date and size are measured values, so they are
@@ -411,6 +552,7 @@ html.cc .messagelist td.subject span.date,
 html.cc .messagelist td.subject span.size {
 	font-family: var(--cc-mono);
 	letter-spacing: 0.01em;
+	font-variant-numeric: tabular-nums;
 	color: var(--cc-dim);
 }
 
@@ -420,17 +562,19 @@ html.cc .messagelist td.subject span.size {
 }
 
 html.cc .messagelist tr.unread td.subject span.fromto {
-	color: var(--cc-silk-2);
+	color: var(--cc-ink-2);
 }
 
-/* The status pip becomes a lit indicator LED. Static glow, no pulse. */
+/* The status pip is a lit indicator LED: a deep-gold dot (3.80:1 — reads on
+   glass) haloed by bright ENIG. The halo is a static text-shadow; it never
+   pulses. */
 html.cc .messagelist td.subject span.msgicon.status.unread:before {
-	color: var(--cc-enig);
-	text-shadow: 0 0 6px var(--cc-glow);
+	color: var(--cc-led);
+	text-shadow: 0 0 6px rgba(232, 194, 82, 0.8);
 }
 
 html.cc .messagelist td.subject span.msgicon.status:before {
-	color: var(--cc-edge);
+	color: rgba(22, 40, 31, 0.30);
 }
 
 html.cc .messagelist span.attachment span,
@@ -446,10 +590,9 @@ html.cc .messagelist span.flagged:before {
 	color: var(--cc-flag);
 }
 
-/* Deleted rows. Elastic dims these to ~50% opacity, which on this substrate
-   measured 2.79:1 on a selected row — unreadable. Hold the colour at --cc-dim
-   (4.94:1 worst case) and carry the "deleted" signal on a strike-through
-   instead, which is also one less meaning riding on colour alone. */
+/* Deleted rows: hold the colour at --cc-dim (4.91:1 worst case) and carry
+   the "deleted" signal on a strike-through — one less meaning riding on
+   colour alone. (Kept from the first pass; it was right.) */
 html.cc .messagelist tr.deleted td,
 html.cc .messagelist tr.deleted td.subject span.subject a,
 html.cc .messagelist tr.deleted td.subject span.date,
@@ -471,38 +614,42 @@ html.cc table.listing > thead th {
 	letter-spacing: 0.14em;
 	text-transform: uppercase;
 	color: var(--cc-dim);
-	background-color: var(--cc-board-hi);
+	background: var(--cc-strip);
 	border-bottom: 1px solid var(--cc-hair);
 }
 
 html.cc .attachmentslist {
 	border-color: var(--cc-hair-soft);
-	background-color: var(--cc-mask);
+	background-color: rgba(255, 255, 255, 0.45);
 }
 
 html.cc .attachmentslist li a.filename {
-	color: var(--cc-silk-2);
+	color: var(--cc-ink-2);
 }
 
 html.cc .attachmentslist li span.attachment-size {
 	font-family: var(--cc-mono);
+	font-variant-numeric: tabular-nums;
 	color: var(--cc-dim);
 }
 
-/* Quota gauge — a fuel gauge on the board. */
+/* Quota gauge — a fuel gauge etched in the glass. */
 html.cc .quota-widget {
 	color: var(--cc-dim);
 	font-family: var(--cc-mono);
 	font-size: 0.72rem;
+	font-variant-numeric: tabular-nums;
 }
 
 html.cc .quota-widget .bar {
-	background-color: var(--cc-mask);
-	border: 1px solid var(--cc-hair-soft);
+	background: var(--cc-fill);
+	border: 1px solid var(--cc-hair);
+	border-radius: var(--cc-r-pill);
+	overflow: hidden;
 }
 
 html.cc .quota-widget .value {
-	background-color: var(--cc-trace);
+	background-color: var(--cc-link);  /* >=3:1 on the channel */
 }
 
 html.cc .quota-widget .value.warning {
@@ -511,21 +658,23 @@ html.cc .quota-widget .value.warning {
 
 
 /* ---------------------------------------------------------------------------
-   6. THE READING PANE — a datasheet page
-   Long threads are read here for hours, so this is the one region where the
-   theme steps back: generous line-height, high-contrast silkscreen body copy,
-   and HTML mail left on its own white sheet.
+   7. THE READING PANE — a datasheet on the bench
+   Long threads are read here for hours, so this is where the theme steps
+   back: the message header is a raised porcelain coupon, plain-text bodies
+   get real reading measure, and HTML mail keeps its white sheet — mounted,
+   not recoloured.
    --------------------------------------------------------------------------- */
 html.cc #message-header {
 	padding: 0.85rem 1rem;
 	border: 1px solid var(--cc-hair-soft);
-	border-radius: 8px;
-	background-color: var(--cc-board-hi);
-	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+	border-radius: var(--cc-r-card);
+	background: rgba(255, 255, 255, 0.72);
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85), var(--cc-shadow-s);
 }
 
 html.cc #message-header > .subject {
-	color: var(--cc-silk);
+	color: var(--cc-ink);
+	font-weight: var(--cc-w-heading);
 	letter-spacing: -0.015em;
 	line-height: 1.25;
 }
@@ -536,7 +685,7 @@ html.cc #message-header .rcmContactAddress,
 html.cc #message-header .adr {
 	font-family: var(--cc-mono);
 	font-size: 0.8rem;
-	color: var(--cc-silk-2);
+	color: var(--cc-ink-2);
 }
 
 html.cc #message-header .header-headers .header-title {
@@ -549,7 +698,7 @@ html.cc #message-header .header-headers .header-title {
 }
 
 html.cc #message-header .header-links a {
-	color: var(--cc-trace);
+	color: var(--cc-link);
 }
 
 html.cc #message-header .date,
@@ -557,9 +706,9 @@ html.cc #message-header span.rcmContactAddress a {
 	color: var(--cc-dim);
 }
 
-/* Plain-text parts stay on the board and get real reading measure. */
+/* Plain-text parts stay on the glass and get real reading measure. */
 html.cc .message-part {
-	color: var(--cc-silk-2);
+	color: var(--cc-ink-2);
 	border-color: var(--cc-hair-soft);
 	line-height: 1.6;
 }
@@ -574,56 +723,58 @@ html.cc .message-part span.sig {
 	color: var(--cc-dim);
 }
 
-/* Quote levels as trace layers: top / inner / inner-inner. */
+/* Quote levels as signal layers: phosphor / gold / flag. All three inks
+   measured >=5:1 on the quote fill. */
 html.cc .message-part blockquote {
-	color: #a7c8b4;
-	background-color: rgba(0, 0, 0, 0.22);
-	border-left-color: var(--cc-trace);
-	border-right-color: var(--cc-trace);
+	color: var(--cc-link);
+	background-color: rgba(22, 40, 31, 0.04);
+	border-left-color: var(--cc-link);
+	border-right-color: var(--cc-link);
 }
 
 html.cc .message-part blockquote blockquote {
-	color: #cbb887;
-	border-left-color: var(--cc-enig-deep);
-	border-right-color: var(--cc-enig-deep);
+	color: var(--cc-legend);
+	border-left-color: var(--cc-legend);
+	border-right-color: var(--cc-legend);
 }
 
 html.cc .message-part blockquote blockquote blockquote {
-	color: #d2a49d;
+	color: var(--cc-flag);
 	border-left-color: var(--cc-flag);
 	border-right-color: var(--cc-flag);
 }
 
 html.cc .message-part blockquote span.blockquote-link {
-	color: var(--cc-silk-2);
-	background: var(--cc-board-hi);
+	color: var(--cc-ink-2);
+	background: rgba(255, 255, 255, 0.85);
 	border-color: var(--cc-edge);
 	font-family: var(--cc-sans);
 }
 
-/* HTML mail keeps Elastic's white sheet — senders' inline styles assume light,
-   and forcing them dark is how dark webmail clients ruin newsletters. We only
-   mount the sheet: it reads as a datasheet page seated on the board. */
+/* HTML mail keeps its white sheet — senders' inline styles assume light.
+   The sheet is MOUNTED: rounded, hairlined, floated on the ambient shadow,
+   so it reads as a datasheet page laid on the glass. */
 html.cc .message-htmlpart {
-	border-radius: 8px;
-	border: 1px solid var(--cc-hair);
-	box-shadow: 0 10px 28px var(--cc-sink);
+	border-radius: var(--cc-r-card);
+	border: 1px solid rgba(15, 44, 30, 0.12);
+	box-shadow: var(--cc-shadow-m);
 	overflow: hidden;
+	background: #fff;
 }
 
 html.cc .message-partheaders {
-	background-color: var(--cc-select);
+	background: var(--cc-strip);
 	border: 0;
 }
 
 html.cc .message-partheaders table.headers-table {
 	font-family: var(--cc-mono);
-	color: var(--cc-silk-2);
+	color: var(--cc-ink-2);
 }
 
 html.cc p.image-attachment {
 	border-color: var(--cc-hair-soft);
-	background-color: var(--cc-board-hi);
+	background: rgba(255, 255, 255, 0.55);
 }
 
 html.cc p.image-attachment span,
@@ -635,30 +786,38 @@ html.cc fieldset.image-attachment legend {
 	border-color: var(--cc-hair-soft);
 }
 
+/* Elastic's base `a` colour is a blue that never suited this product.
+   Links are phosphor at text weight. */
 html.cc a,
 html.cc .message-part a {
-	color: var(--cc-trace);
+	color: var(--cc-link);
 }
 
 html.cc a:hover {
-	color: #86e86a;
+	color: #114d09;
 }
 
 
 /* ---------------------------------------------------------------------------
-   7. FORMS, COMPOSE AND BUTTONS
-   Fields read as drilled cavities in the board; the primary button is a gold
-   pad. Everything stays at Elastic's sizes so the compose form keeps working
-   at the same rhythm.
+   8. FORMS, COMPOSE AND BUTTONS
+   Fields are recessed channels in the glass (.pf-recessed, re-hued); the
+   focus halo is the two-ring gold treatment. Buttons are the Perry glass
+   control — veil, hairline, bright inner rim, top highlight, contact +
+   ambient cast — with ONE filled primary per screen: the ENIG pad, dark
+   legend on gold, exactly how a plated pad carries its silkscreen.
+   Everything stays at Elastic's sizes.
    --------------------------------------------------------------------------- */
 html.cc .form-control,
 html.cc .custom-file-label,
 html.cc .custom-select,
 html.cc input.form-control,
 html.cc textarea.form-control {
-	color: var(--cc-silk);
-	background-color: var(--cc-input);
+	color: var(--cc-ink);
+	background-color: transparent;
+	background-image: linear-gradient(var(--cc-fill), var(--cc-fill));
 	border-color: var(--cc-edge);
+	border-radius: var(--cc-r-input);
+	box-shadow: inset 0 1px 2px rgba(5, 29, 19, 0.06);
 	font-family: var(--cc-sans);
 }
 
@@ -676,48 +835,49 @@ html.cc .form-control::placeholder {
 
 html.cc .form-control:focus,
 html.cc .custom-select:focus {
-	color: var(--cc-silk);
-	background-color: #0a2a1d;
-	border-color: var(--cc-enig);
-	box-shadow: 0 0 0 3px rgba(232, 194, 82, 0.18);
+	color: var(--cc-ink);
+	background-image: linear-gradient(rgba(22, 40, 31, 0.04), rgba(22, 40, 31, 0.04));
+	border-color: var(--cc-focus);
+	box-shadow: 0 0 0 3px var(--cc-halo);
 }
 
 html.cc .form-control:disabled,
 html.cc input:disabled,
 html.cc select:disabled {
 	color: var(--cc-dim);
-	background-color: var(--cc-mask);
+	background-image: linear-gradient(rgba(22, 40, 31, 0.03), rgba(22, 40, 31, 0.03));
 }
 
 html.cc .form-control-plaintext {
-	color: var(--cc-silk-2);
+	color: var(--cc-ink-2);
 }
 
 html.cc .input-group-text,
 html.cc .custom-file-label::after {
-	color: var(--cc-silk-2);
-	background-color: var(--cc-board-hi);
+	color: var(--cc-ink-2);
+	background: var(--cc-strip);
 	border-color: var(--cc-edge);
 }
 
 html.cc .multi-input:not(.is-invalid) > .content {
-	background-color: var(--cc-input);
+	background: rgba(255, 255, 255, 0.45);
 	border-color: var(--cc-edge);
 }
 
-/* Recipient chips — component packages with gold leads. */
+/* Recipient chips — component packages seated on the glass. */
 html.cc .recipient-input {
-	background-color: var(--cc-input);
+	background-image: linear-gradient(var(--cc-fill), var(--cc-fill));
 	border-color: var(--cc-edge);
 }
 
 html.cc .recipient-input li.recipient {
 	font-family: var(--cc-mono);
 	font-size: 0.8rem;
-	color: var(--cc-silk);
-	background-color: var(--cc-select);
+	color: var(--cc-ink);
+	background: rgba(255, 255, 255, 0.85);
 	border: 1px solid var(--cc-hair);
-	border-radius: 4px;
+	border-radius: 6px;
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 1px 2px rgba(5, 29, 19, 0.10);
 }
 
 html.cc .recipient-input li.recipient a.button.icon.remove {
@@ -731,9 +891,9 @@ html.cc .recipient-input li.recipient a.button.icon.remove:hover {
 html.cc .file-upload,
 html.cc .image-upload,
 html.cc .formcontent.raweditor {
-	color: var(--cc-silk-2);
-	background-color: var(--cc-mask);
-	border-color: var(--cc-hair-soft);
+	color: var(--cc-ink-2);
+	background: rgba(255, 255, 255, 0.35);
+	border-color: var(--cc-hair);
 }
 
 html.cc fieldset legend,
@@ -743,13 +903,13 @@ html.cc .boxtitle {
 	font-size: 0.7rem;
 	letter-spacing: 0.15em;
 	text-transform: uppercase;
-	color: var(--cc-enig);
+	color: var(--cc-legend);
 }
 
 html.cc label,
 html.cc .propform td.title,
 html.cc table.propform td.title {
-	color: var(--cc-silk-2);
+	color: var(--cc-ink-2);
 }
 
 html.cc .form-text,
@@ -757,203 +917,283 @@ html.cc .hint {
 	color: var(--cc-dim);
 }
 
-/* --- buttons ----------------------------------------------------------- */
+/* --- buttons: the glass control ------------------------------------------
+   The Perry .pf-glass recipe with the veil verbatim; hues re-anchored to
+   this world. Hover rises 1px on the spring and deepens the cast; press
+   compresses. Transform + box-shadow only — compositor-friendly, no
+   will-change, released the moment the interaction ends. */
 html.cc .btn {
-	color: var(--cc-silk);
-	background-color: transparent;
-	border: 1px solid var(--cc-edge);
+	color: var(--cc-ink);
 	font-family: var(--cc-sans);
-	font-weight: 500;
-	transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
+	font-weight: var(--cc-w-btn);
+	background: var(--cc-btn-glass);
+	-webkit-backdrop-filter: var(--cc-btn-glass-filter);
+	backdrop-filter: var(--cc-btn-glass-filter);
+	border: 1px solid rgba(15, 44, 30, 0.16);
+	border-radius: var(--cc-r-btn);
+	box-shadow:
+		inset 0 0 0 1px rgba(255, 255, 255, 0.38),
+		inset 0 1px 0 rgba(255, 255, 255, 0.85),
+		inset 0 -1px 1px rgba(0, 0, 0, 0.04),
+		0 1px 2px rgba(5, 29, 19, 0.10),
+		0 4px 12px -6px rgba(5, 29, 19, 0.18);
+	transition:
+		transform 0.18s var(--cc-ease-spring),
+		box-shadow 0.18s var(--cc-ease-out),
+		background-color 0.14s ease,
+		border-color 0.14s ease,
+		color 0.14s ease;
 }
 
-html.cc .btn:hover {
-	background-color: var(--cc-board-hi);
-	border-color: var(--cc-enig-deep);
+html.cc .btn:hover:not(:disabled) {
+	color: var(--cc-ink);
+	transform: translateY(-1px);
+	box-shadow:
+		inset 0 0 0 1px rgba(255, 255, 255, 0.42),
+		inset 0 1px 0 rgba(255, 255, 255, 0.9),
+		inset 0 -1px 1px rgba(0, 0, 0, 0.05),
+		0 2px 4px rgba(5, 29, 19, 0.12),
+		0 10px 22px -8px rgba(5, 29, 19, 0.26);
 }
 
-/* A gold pad. Board-dark legend on ENIG: 9.58:1. */
+html.cc .btn:active {
+	transform: scale(0.97);
+	box-shadow: inset 0 1px 3px rgba(5, 29, 19, 0.14);
+}
+
+html.cc .btn:disabled {
+	opacity: 0.45;
+}
+
+/* The ONE lit action per screen: an ENIG pad, top-lit, its legend printed
+   dark the way silkscreen sits on plating. 7.60:1. */
 html.cc .btn-primary,
 html.cc .btn.mainaction {
-	color: var(--cc-mask);
-	background-color: var(--cc-enig);
-	border-color: var(--cc-enig);
-	font-weight: 600;
+	color: #241a04;
+	font-weight: var(--cc-w-emphasis);
+	background: linear-gradient(#eccc63, #d2a72b);
+	-webkit-backdrop-filter: none;
+	backdrop-filter: none;
+	border-color: rgba(122, 92, 20, 0.55);
+	box-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.55),
+		inset 0 -1px 2px rgba(90, 62, 8, 0.35),
+		0 1px 2px rgba(5, 29, 19, 0.18),
+		0 6px 18px -5px rgba(232, 194, 82, 0.55);
 }
 
-html.cc .btn-primary:hover,
-html.cc .btn.mainaction:hover {
-	color: var(--cc-mask);
-	background-color: #f3cf5c;
-	border-color: #f3cf5c;
+html.cc .btn-primary:hover:not(:disabled),
+html.cc .btn.mainaction:hover:not(:disabled) {
+	color: #241a04;
+	background: linear-gradient(#f0d36e, #dcb136);
+	transform: translateY(-1px);
+	box-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.55),
+		inset 0 -1px 2px rgba(90, 62, 8, 0.35),
+		0 2px 4px rgba(5, 29, 19, 0.18),
+		0 12px 26px -7px rgba(232, 194, 82, 0.65);
 }
 
 html.cc .btn-secondary {
-	color: var(--cc-silk);
-	background-color: transparent;
-	border-color: var(--cc-edge);
+	color: var(--cc-ink);
+	background: var(--cc-btn-glass);
+	border-color: rgba(15, 44, 30, 0.16);
 }
 
-html.cc .btn-secondary:hover {
-	background-color: var(--cc-board-hi);
+html.cc .btn-secondary:hover:not(:disabled) {
+	color: var(--cc-ink);
+	background: var(--cc-btn-glass);
 }
 
+/* Destructive: text-only red until a hover tint. Danger never shouts. */
 html.cc .btn-danger {
-	color: var(--cc-silk);
-	background-color: #8c2f28;
-	border-color: #8c2f28;
+	color: var(--cc-flag);
+	background: none;
+	border-color: transparent;
+	box-shadow: none;
+	-webkit-backdrop-filter: none;
+	backdrop-filter: none;
 }
 
-html.cc .btn-danger:hover {
-	background-color: #a5382f;
-	border-color: #a5382f;
+html.cc .btn-danger:hover:not(:disabled) {
+	color: var(--cc-flag);
+	background: rgba(164, 46, 34, 0.09);
+	transform: none;
+	box-shadow: none;
 }
 
 html.cc .floating-action-buttons a.button {
-	color: var(--cc-mask);
-	background-color: var(--cc-enig);
+	color: #241a04;
+	background: linear-gradient(#eccc63, #d2a72b);
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55), var(--cc-shadow-m);
 }
 
 html.cc .custom-switch .custom-control-label::before {
-	background-color: var(--cc-mask);
+	background: var(--cc-fill);
 	border-color: var(--cc-edge);
+	box-shadow: inset 0 1px 2px rgba(5, 29, 19, 0.08);
 }
 
 html.cc .custom-control-input:checked ~ .custom-control-label::before {
-	background-color: var(--cc-enig);
-	border-color: var(--cc-enig);
+	background: linear-gradient(#eccc63, #d2a72b);
+	border-color: rgba(122, 92, 20, 0.55);
 }
 
 html.cc .custom-switch .custom-control-label::after {
-	background-color: var(--cc-silk-2);
+	background-color: #fff;
+	box-shadow: 0 1px 2px rgba(5, 29, 19, 0.3);
 }
 
 
 /* ---------------------------------------------------------------------------
-   8. MENUS, DIALOGS, NOTIFICATIONS
+   9. MENUS, DIALOGS, NOTIFICATIONS
+   Floating chrome is near-opaque porcelain glass — the one place the
+   backdrop-filter earns its keep at runtime, because menus really do float
+   over live content. Dialog sheets take the modal shadow and the 18px
+   sheet radius.
    --------------------------------------------------------------------------- */
 html.cc .popover,
 html.cc .popupmenu,
 html.cc .ui-widget-content,
 html.cc .ui-widget-header,
-html.cc .ui-dialog,
 html.cc .ui-menu,
 html.cc .minicolors-panel {
-	color: var(--cc-silk);
-	background-color: var(--cc-board);
+	color: var(--cc-ink);
+	background-color: var(--cc-pop-veil);
 	border-color: var(--cc-hair);
 }
 
+html.cc .popover,
+html.cc .popupmenu,
+html.cc .ui-menu {
+	-webkit-backdrop-filter: var(--cc-glass-filter);
+	backdrop-filter: var(--cc-glass-filter);
+	border-radius: var(--cc-r-card);
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75), var(--cc-shadow-m);
+}
+
+html.cc .ui-dialog {
+	-webkit-backdrop-filter: var(--cc-glass-filter);
+	backdrop-filter: var(--cc-glass-filter);
+	border-radius: var(--cc-r-sheet);
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75), var(--cc-shadow-l);
+}
+
 html.cc .popover .popover-header {
-	color: var(--cc-enig);
-	background-color: var(--cc-board-hi);
+	color: var(--cc-legend);
+	background: var(--cc-strip);
 	font-family: var(--cc-mono);
 	font-size: 0.7rem;
 	letter-spacing: 0.15em;
 	text-transform: uppercase;
 }
 
-html.cc #taskmenu a:hover,
 html.cc .popupmenu .listing li > a:not(.disabled):hover,
 html.cc .menu.toolbar .dropbutton:not(.disabled):hover,
 html.cc .menu a:not(.disabled):focus,
 html.cc .menu a:not(.disabled):hover {
-	color: var(--cc-enig);
-	background-color: var(--cc-select);
+	color: var(--cc-ink);
+	background-color: var(--cc-tint-select);
 }
 
-/* Section 6 sets a global link colour (Elastic's `a { color: #00acff }` is
-   never re-tinted by dark.less). Menu entries are controls, not links, so pin
-   them back to silkscreen before that leaks in. */
+/* Section 7 sets a global link colour. Menu entries are controls, not
+   links, so pin them back to ink before that leaks in. */
 html.cc .menu a,
 html.cc .popover .menu li a,
 html.cc .menu.toolbar a,
 html.cc .menu.toolbar a.button {
-	color: var(--cc-silk);
+	color: var(--cc-ink-2);
 }
 
 html.cc .menu.toolbar a.selected {
-	color: var(--cc-enig);
-	background-color: var(--cc-select);
+	color: var(--cc-ink);
+	background-color: var(--cc-tint-select);
 }
 
 html.cc .menu li.separator span,
 html.cc .popupmenu .listing li.separator {
 	color: var(--cc-dim);
-	background-color: var(--cc-mask);
+	background: var(--cc-strip);
 	font-family: var(--cc-mono);
 	letter-spacing: 0.12em;
 	text-transform: uppercase;
 }
 
+/* The scrim: bench-green shade, no blur — a full-viewport backdrop-filter
+   is the one glass surface that is never worth its cost. */
 html.cc .ui-widget-overlay {
-	background-color: rgba(2, 9, 6, 0.72);
+	background-color: rgba(5, 29, 19, 0.55);
 }
 
 html.cc .ui-dialog .ui-dialog-titlebar {
 	border-color: var(--cc-hair);
-	background-color: var(--cc-board-hi);
+	background: var(--cc-strip);
 }
 
 html.cc .ui-dialog .ui-dialog-title,
 html.cc .ui-dialog .ui-dialog-titlebar-close {
-	color: var(--cc-silk);
+	color: var(--cc-ink);
 }
 
 html.cc .ui-datepicker,
 html.cc .ui-datepicker .ui-datepicker-header {
-	color: var(--cc-silk);
-	background-color: var(--cc-board);
+	color: var(--cc-ink);
+	background-color: var(--cc-pop-veil);
 	border-color: var(--cc-hair-soft);
 }
 
 html.cc .ui-datepicker td a,
 html.cc .ui-datepicker td span {
-	color: var(--cc-silk-2);
+	color: var(--cc-ink-2);
 }
 
 html.cc .ui-datepicker .ui-state-active {
-	color: var(--cc-mask);
-	background-color: var(--cc-enig);
+	color: #241a04;
+	background: linear-gradient(#eccc63, #d2a72b);
 }
 
-/* Alerts: solid ink on a saturated bar, so the four states stay tellable
-   apart at a glance without relying on hue alone (each keeps its icon). */
-/* Conformal-coating blue — the one cool hue on a real board, and the only
-   place this skin uses one. 9.57:1 with mask-dark legend. */
+/* Alerts: ink on a soft tint — the iOS idiom — so the four states stay
+   readable AND tellable apart (each keeps its icon; hue is never the only
+   signal). Info's tint is conformal-coating blue, the one cool hue on real
+   hardware and the only one in this skin. All measured >= 6.2:1. */
 html.cc .ui.alert.boxinformation,
 html.cc #messagestack .alert-info {
-	color: var(--cc-mask);
-	background-color: #7fc4e8;
-	border-color: #7fc4e8;
+	color: #1c4e63;
+	background-color: #ddeef7;
+	border-color: rgba(28, 78, 99, 0.25);
 }
 
 html.cc .ui.alert.boxconfirmation,
 html.cc #messagestack .alert-success {
-	color: var(--cc-mask);
-	background-color: var(--cc-trace);
-	border-color: var(--cc-trace);
+	color: #1d5c10;
+	background-color: #e1f3da;
+	border-color: rgba(29, 92, 16, 0.25);
 }
 
 html.cc .ui.alert.boxwarning,
 html.cc #messagestack .alert-warning {
-	color: var(--cc-mask);
-	background-color: var(--cc-enig);
-	border-color: var(--cc-enig);
+	color: #6b4e0a;
+	background-color: #f4e7c3;
+	border-color: rgba(107, 78, 10, 0.3);
 }
 
 html.cc .ui.alert.boxerror,
 html.cc #messagestack .alert-danger {
-	color: var(--cc-mask);
-	background-color: var(--cc-flag);
-	border-color: var(--cc-flag);
+	color: #8f2417;
+	background-color: #f7ddd8;
+	border-color: rgba(143, 36, 23, 0.25);
 }
 
 html.cc #messagestack .loading,
 html.cc .ui.alert.loading {
-	color: var(--cc-silk);
-	background-color: var(--cc-board-hi);
+	color: var(--cc-ink);
+	background-color: var(--cc-pop-veil);
 	border-color: var(--cc-hair);
+}
+
+html.cc #messagestack > div {
+	border-radius: var(--cc-r-card);
+	box-shadow: var(--cc-shadow-m);
 }
 
 html.cc .ui.alert a:not(.btn) {
@@ -962,62 +1202,94 @@ html.cc .ui.alert a:not(.btn) {
 }
 
 html.cc .iframe-loader {
-	background-color: rgba(6, 24, 15, 0.8);
+	background-color: rgba(242, 245, 243, 0.8);
 }
 
 html.cc .skinselection .skinthumbnail {
-	background-color: var(--cc-board-hi);
-	border-color: var(--cc-hair-soft);
+	background: rgba(255, 255, 255, 0.6);
+	border-color: var(--cc-hair);
+	border-radius: var(--cc-r-card);
 }
 
 
 /* ---------------------------------------------------------------------------
-   9. LOGIN — the bare coupon
-   The one screen with room to be a board. Panel, gold hairline, and the four
-   plated drill-holes from the site's sponsor cards (.csb-fid), drawn as four
-   corner-anchored radial gradients on a single pseudo-element.
+   10. LOGIN — one pane of glass on the open bench
+   The only screen where the bench shows in full: the grid, the fall of
+   light, and a single glass card floating at sheet radius. The card keeps
+   the first pass's plated drill-holes — through the glass you can see the
+   board is mounted — plus a CN1 silkscreen designator: this is where you
+   plug in.
    --------------------------------------------------------------------------- */
 html.cc body.task-login {
-	background-color: var(--cc-mask);
+	background-color: var(--cc-bench-deep);
+	background-image: var(--cc-grid), linear-gradient(160deg, var(--cc-bench-hi), var(--cc-bench-deep) 72%);
+	background-size: 24px 24px, auto;
 }
 
 html.cc #login-form {
 	position: relative;
 	padding: 1.75rem 1.5rem 1.5rem;
-	background-color: var(--cc-board);
-	border: 1px solid var(--cc-hair);
-	border-radius: 12px;
-	box-shadow: 0 18px 44px var(--cc-sink), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+	background: var(--cc-pane-veil);
+	-webkit-backdrop-filter: var(--cc-glass-filter);
+	backdrop-filter: var(--cc-glass-filter);
+	border: 1px solid var(--cc-rim);
+	border-radius: var(--cc-r-sheet);
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), var(--cc-shadow-l);
 }
 
+/* Plated through-holes at the corners: a gold annular ring around a drill
+   that shows the bench through the glass. Four corner-anchored radial
+   gradients on one pseudo-element — no images. */
 html.cc #login-form::after {
 	content: '';
 	position: absolute;
 	inset: 9px;
 	pointer-events: none;
 	background-image:
-		radial-gradient(circle at 50% 50%, transparent 1.6px, var(--cc-enig-deep) 1.6px 2.7px, transparent 2.8px),
-		radial-gradient(circle at 50% 50%, transparent 1.6px, var(--cc-enig-deep) 1.6px 2.7px, transparent 2.8px),
-		radial-gradient(circle at 50% 50%, transparent 1.6px, var(--cc-enig-deep) 1.6px 2.7px, transparent 2.8px),
-		radial-gradient(circle at 50% 50%, transparent 1.6px, var(--cc-enig-deep) 1.6px 2.7px, transparent 2.8px);
+		radial-gradient(circle at 50% 50%, var(--cc-bench-deep) 1.5px, #b8902e 1.6px 2.7px, transparent 2.8px),
+		radial-gradient(circle at 50% 50%, var(--cc-bench-deep) 1.5px, #b8902e 1.6px 2.7px, transparent 2.8px),
+		radial-gradient(circle at 50% 50%, var(--cc-bench-deep) 1.5px, #b8902e 1.6px 2.7px, transparent 2.8px),
+		radial-gradient(circle at 50% 50%, var(--cc-bench-deep) 1.5px, #b8902e 1.6px 2.7px, transparent 2.8px);
 	background-size: 9px 9px;
 	background-position: left top, right top, left bottom, right bottom;
 	background-repeat: no-repeat;
-	opacity: 0.8;
+	opacity: 0.9;
+}
+
+/* CN1 — the connector this card is. Empty-content pseudo + SVG background:
+   silent for screen readers. */
+html.cc #login-form::before {
+	content: '';
+	position: absolute;
+	top: 12px;
+	right: 16px;
+	width: 30px;
+	height: 11px;
+	pointer-events: none;
+	opacity: 0.7;
+	background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='12'%3E%3Ctext x='0' y='10' font-family='Menlo,monospace' font-size='10' letter-spacing='1.5' fill='%234d5f54'%3ECN1%3C/text%3E%3C/svg%3E") no-repeat right center / contain;
 }
 
 html.cc #login-form .input-group-text {
-	background-color: var(--cc-mask);
+	background: var(--cc-strip);
 }
 
 html.cc #rcmloginsubmit {
 	width: 100%;
 }
 
+/* The footer sits on the OPEN bench gradient, whose lightest point is
+   bench-hi — not the rail's uniform deep. --cc-rail-dim only makes 4.40:1
+   there, so the footer gets its own lighter tone: 5.53:1 on bench-hi,
+   9.45:1 on bench-deep. */
+html.cc #login-footer {
+	color: #a9c4b6;
+}
+
 html.cc #login-footer > div {
-	color: var(--cc-dim);
-	background-color: var(--cc-board-hi);
-	border: 1px solid var(--cc-hair-soft);
+	color: #a9c4b6;
+	background: transparent;
+	border: 0;
 }
 
 html.cc #logo {
@@ -1026,95 +1298,104 @@ html.cc #logo {
 
 
 /* ---------------------------------------------------------------------------
-   10. SPECIFICITY MIRRORS
-   The "tie on specificity, win on load order" rule that the rest of this sheet
-   relies on has exactly one class of exception: Elastic's dark sheet guards
-   some rules with :not(), and every :not(.foo) silently adds a class's worth
-   of specificity. A plainly-mirrored selector then LOSES.
-
-   These were found by reading the compiled styles.min.css for
-   `html.dark-mode ... :not(` and checking each against a rendered harness —
-   not by eye. Without this block Elastic's blue (#37beff) still shows on the
-   selected message, the unread pip stays a muddy #b88a00, and every form
-   field keeps a grey #7c949c border.
-
-   If you upgrade Roundcube, re-run the audit:
-     grep -o 'html\.dark-mode[^,{]*:not([^,{]*' \
-       skins/elastic/styles/styles.min.css | sort -u
+   11. SPECIFICITY NOTES
+   The first pass fought Elastic's dark.less, whose :not() guards out-ranked
+   plain mirrors. This skin rides the LIGHT theme, where Elastic's rules are
+   the low-specificity base — html.cc mirrors out-rank nearly all of them.
+   The survivors that still need force or a guard-for-guard mirror:
    --------------------------------------------------------------------------- */
-html.cc .messagelist tr:not(.flagged):not(.deleted) td.subject span.date,
-html.cc .messagelist tr:not(.flagged):not(.deleted) td.subject span.fromto,
-html.cc .messagelist tr:not(.flagged):not(.deleted) td.subject span.size {
-	color: var(--cc-dim);
-}
 
-html.cc .messagelist tr:not(.flagged):not(.deleted) td.subject span.msgicon.status,
-html.cc .messagelist tr:not(.flagged):not(.deleted) span.flag {
-	color: var(--cc-edge);
-}
-
-/* The indicator LED. Elastic's dark sheet dims it to #b88a00 (3.6:1 here);
-   this is the single most-scanned mark in the whole product. */
-html.cc .messagelist tr:not(.flagged):not(.deleted) td.subject span.msgicon.status.unread::before {
-	color: var(--cc-enig);
-	text-shadow: 0 0 6px var(--cc-glow);
-}
-
-html.cc .messagelist tr:not(.flagged):not(.deleted).selected td.subject a,
-html.cc .messagelist tr:not(.flagged):not(.deleted).selected td.subject span.msgicon.status {
-	color: var(--cc-silk);
-}
-
-html.cc .messagelist tr.flagged:not(.deleted) td,
-html.cc .messagelist tr.flagged:not(.deleted) span.attachment span {
-	color: var(--cc-flag);
-}
-
+/* Elastic pins special-button backgrounds with its own :not(:focus). */
 html.cc #layout-menu .special-buttons a:not(:focus) {
 	background: transparent;
 }
 
+/* Bootstrap's validation states carry their own border colours at higher
+   specificity; mirror the guard so unvalidated fields keep the channel edge. */
 html.cc .custom-file-label:not(.is-invalid),
-html.cc .form-control:not(.is-invalid),
-html.cc .multi-input:not(.is-invalid) > .content {
+html.cc .form-control:not(.is-invalid) {
 	border-color: var(--cc-edge);
 }
 
 html.cc .custom-file-label:focus:not(.is-invalid),
 html.cc .form-control:focus:not(.is-invalid),
 html.cc .multi-input:not(.is-invalid) > .content.focused {
-	color: var(--cc-silk) !important;
-	border-color: var(--cc-enig);
+	color: var(--cc-ink);
+	border-color: var(--cc-focus);
 }
 
-html.cc .btn-primary:hover:not(:disabled) {
-	background-color: #f3cf5c;
-	color: var(--cc-mask);
-}
-
-html.cc .btn-secondary:hover:not(:disabled) {
-	background-color: var(--cc-board-hi);
-	color: var(--cc-silk);
-}
-
-html.cc .btn-danger:hover:not(:disabled) {
-	background-color: #a5382f;
-	color: var(--cc-silk);
-}
-
+/* jQuery-UI dialog buttons re-declare .btn colours inside the buttonset. */
 html.cc .ui-dialog .ui-dialog-buttonpane .ui-dialog-buttonset button.btn-primary:not(.btn-danger) {
-	color: var(--cc-mask);
+	color: #241a04;
 }
 
 html.cc .ui-dialog .ui-dialog-buttonpane .ui-dialog-buttonset button.btn-secondary {
-	color: var(--cc-silk);
+	color: var(--cc-ink);
+}
+
+/* If a Roundcube upgrade re-introduces fights, audit what the compiled
+   sheet guards (see README "Upgrading Roundcube"). */
+
+
+/* ---------------------------------------------------------------------------
+   12. SMALL SCREENS — the glass is furled
+   Below 769px the panes go edge-to-edge and OPAQUE and every backdrop-filter
+   is dropped: phone GPUs pay for blur layers in DPR-squared memory (this
+   repo has crashed iPhones with cheaper effects than these). The measured
+   palette holds — the opaque porcelain #f2f5f3 is LIGHTER than the audited
+   worst case, so every ratio only improves.
+   --------------------------------------------------------------------------- */
+@media screen and (max-width: 768px) {
+	html.cc #layout {
+		gap: 0;
+		padding-right: 0;
+	}
+
+	html.cc #layout-sidebar,
+	html.cc #layout-list,
+	html.cc #layout-content {
+		margin: 0;
+		border: 0;
+		border-radius: 0;
+		background: #f2f5f3;
+		-webkit-backdrop-filter: none;
+		backdrop-filter: none;
+		box-shadow: none;
+	}
+
+	html.cc .btn,
+	html.cc .btn-secondary {
+		background: rgba(255, 255, 255, 0.9);
+		-webkit-backdrop-filter: none;
+		backdrop-filter: none;
+	}
+
+	html.cc .btn-primary,
+	html.cc .btn.mainaction {
+		background: linear-gradient(#eccc63, #d2a72b);
+	}
+
+	html.cc .popover,
+	html.cc .popupmenu,
+	html.cc .ui-menu,
+	html.cc .ui-dialog {
+		background-color: #fdfefd;
+		-webkit-backdrop-filter: none;
+		backdrop-filter: none;
+	}
+
+	html.cc #login-form {
+		background: #f2f5f3;
+		-webkit-backdrop-filter: none;
+		backdrop-filter: none;
+	}
 }
 
 
 /* ---------------------------------------------------------------------------
-   11. PRINT
+   13. PRINT
    Elastic loads its own print.css, but this sheet is not print-scoped and
-   would otherwise carry the board onto paper. Hand it back to ink-on-white.
+   would otherwise carry the bench onto paper. Hand it back to ink-on-white.
    --------------------------------------------------------------------------- */
 @media print {
 	html.cc,
@@ -1129,6 +1410,8 @@ html.cc .ui-dialog .ui-dialog-buttonpane .ui-dialog-buttonset button.btn-seconda
 		background-image: none !important;
 		box-shadow: none !important;
 		border-color: #999 !important;
+		-webkit-backdrop-filter: none !important;
+		backdrop-filter: none !important;
 	}
 
 	html.cc a,
@@ -1148,7 +1431,7 @@ html.cc .ui-dialog .ui-dialog-buttonpane .ui-dialog-buttonset button.btn-seconda
 
 
 /* ---------------------------------------------------------------------------
-   12. REDUCED MOTION
+   14. REDUCED MOTION
    This skin adds no keyframes and no loops; all it can produce is a hover or
    focus transition. Honour the preference anyway, and neutralise Elastic's
    own transitions and animations while we are here.

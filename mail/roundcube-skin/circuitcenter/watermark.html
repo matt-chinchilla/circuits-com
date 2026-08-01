@@ -4,8 +4,12 @@
 
   This overrides skins/elastic/watermark.html. It is a standalone document
   loaded into the preview iframe, so it carries its own styles and cannot use
-  the skin's custom properties. Fully self-contained: inline SVG, no image
-  files, no fonts, no network. Nothing animates.
+  the skin's custom properties — and it cannot be glass either: backdrop-filter
+  sees nothing through an iframe boundary. It is the opaque porcelain the
+  parent pane resolves to, carrying a bare board coupon and the U3 designator
+  (folders are U1, the list is U2 — this pane is the third instrument).
+  Fully self-contained: inline SVG, no image files, no fonts, no network.
+  Nothing animates.
 -->
 <html>
 <head>
@@ -17,14 +21,10 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		background-color: #0b2419;
-		background-image:
-			linear-gradient(rgba(68, 189, 19, .035) 1px, transparent 1px),
-			linear-gradient(90deg, rgba(68, 189, 19, .035) 1px, transparent 1px);
-		background-size: 24px 24px;
+		background-color: #f2f5f3;
 		font-family: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
 	}
-	.coupon { text-align: center; padding: 1rem; opacity: .8; }
+	.coupon { text-align: center; padding: 1rem; }
 	svg { display: block; margin: 0 auto; width: 180px; height: auto; }
 	.label {
 		margin-top: 1.1rem;
@@ -32,15 +32,22 @@
 		font-weight: 600;
 		letter-spacing: .18em;
 		text-transform: uppercase;
-		/* #93b3a5 on #0b2419 = 7.21:1 */
-		color: #93b3a5;
+		/* #4d5f54 on #f2f5f3 = 6.21:1 */
+		color: #4d5f54;
+	}
+	.designator {
+		margin-top: .45rem;
+		font-size: 10px;
+		letter-spacing: .15em;
+		color: #4d5f54;
+		opacity: .7;
 	}
 </style>
 </head>
 <body>
 	<div class="coupon">
 		<svg viewBox="0 0 200 120" role="img" aria-label="Circuit board coupon">
-			<g fill="none" stroke="#3e7a5c" stroke-width="1.4" stroke-linecap="square">
+			<g fill="none" stroke="#0e4a2d" stroke-width="1.4" stroke-linecap="square" opacity=".55">
 				<path d="M8 30 H44 L58 44 H86" />
 				<path d="M8 60 H32 L46 74 H86" />
 				<path d="M8 90 H70 L78 82 H86" />
@@ -48,10 +55,10 @@
 				<path d="M192 60 H168 L154 74 H114" />
 				<path d="M192 90 H130 L122 82 H114" />
 			</g>
-			<rect x="86" y="34" width="28" height="52" rx="2"
-				fill="#123626" stroke="#b8902e" stroke-width="1.4" />
+			<rect x="86" y="34" width="28" height="52" rx="3"
+				fill="#ffffff" stroke="#b8902e" stroke-width="1.4" />
 			<circle cx="93" cy="41" r="2.2" fill="#b8902e" />
-			<g fill="#e8c252">
+			<g fill="#d3a92c">
 				<rect x="80" y="42" width="6" height="3" rx="1" />
 				<rect x="80" y="56" width="6" height="3" rx="1" />
 				<rect x="80" y="70" width="6" height="3" rx="1" />
@@ -59,7 +66,7 @@
 				<rect x="114" y="56" width="6" height="3" rx="1" />
 				<rect x="114" y="70" width="6" height="3" rx="1" />
 			</g>
-			<g fill="none" stroke="#b8902e" stroke-width="1.6">
+			<g fill="none" stroke="#b8902e" stroke-width="1.6" opacity=".8">
 				<circle cx="14" cy="14" r="3.4" />
 				<circle cx="186" cy="14" r="3.4" />
 				<circle cx="14" cy="106" r="3.4" />
@@ -67,6 +74,7 @@
 			</g>
 		</svg>
 		<div class="label">No message selected</div>
+		<div class="designator" aria-hidden="true">U3</div>
 	</div>
 </body>
 </html>
