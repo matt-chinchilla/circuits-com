@@ -12,6 +12,7 @@ import {
   Settings as SettingsIcon,
 } from 'lucide-react';
 import ConfirmDialog from '@admin/components/ConfirmDialog';
+import { useAuth } from '@admin/contexts/AuthContext';
 import styles from './SettingsPage.module.scss';
 
 // Phase A9 — full SettingsPage buildout, ported & extended from
@@ -105,11 +106,10 @@ interface SettingsState {
     timezone: string;
     demoDataDefault: boolean;
   };
-  account: {
-    email: string;
-    twoFactor: boolean;
-    lastLogin: string;
-  };
+  // No `account` section. Its three fields were an invented email, an inert
+  // 2FA toggle and a hardcoded sign-in date; the address and the sign-in are
+  // now read from the server, and neither belongs in a browser-editable
+  // preference blob to begin with.
   notifications: Record<string, NotifSetting>;
   integrations: {
     apiKeys: { id: string; label: string; key: string; created: string }[];
@@ -122,7 +122,6 @@ interface SettingsState {
 // can change one without touching the others.
 const LS_KEYS = {
   general: 'circuits.admin.settings.general',
-  account: 'circuits.admin.settings.account',
   notifications: 'circuits.admin.settings.notifications',
   integrations: 'circuits.admin.settings.integrations',
 };
@@ -133,11 +132,6 @@ const DEFAULTS: SettingsState = {
     defaultTheme: 'base',
     timezone: 'America/New_York',
     demoDataDefault: true,
-  },
-  account: {
-    email: 'matt@circuitcenter.ai',
-    twoFactor: false,
-    lastLogin: '2026-04-25 08:42 EDT',
   },
   notifications: {
     dailySummary: { email: true, webhook: '' },
@@ -196,9 +190,34 @@ export default function SettingsPage() {
   const [tab, setTab] = useState<TabKey>('general');
   const [toast, setToast] = useState<string | null>(null);
 
+  // The account panel reads the SERVER, not localStorage: the address is the
+  // login key and the sign-in stamp is a security record, so neither may be a
+  // local preference the browser can be talked into changing.
+  const { user } = useAuth();
+
+  // The sign-in BEFORE this session (alembic 024). null until a second one
+  // exists, which the panel states plainly rather than printing a zero date.
+  const previousLogin = useMemo(() => {
+    if (user?.previous_login_at == null) return null;
+    const at = new Date(user.previous_login_at);
+    if (Number.isNaN(at.getTime())) return null;
+    return {
+      // The server sends UTC; render it in the reader's own zone, since "was
+      // that me?" is a question people answer in local time.
+      when: at.toLocaleString(undefined, {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        timeZoneName: 'short',
+      }),
+      where: user.previous_login_ip ?? 'an unrecorded address',
+    };
+  }, [user?.previous_login_at, user?.previous_login_ip]);
+
   // Per-section state — each persists independently to its localStorage key.
   const [general, setGeneral] = useState(() => loadSection('general'));
-  const [account, setAccount] = useState(() => loadSection('account'));
   const [notifications, setNotifications] = useState(() => loadSection('notifications'));
   const [integrations, setIntegrations] = useState(() => loadSection('integrations'));
 
@@ -238,11 +257,6 @@ export default function SettingsPage() {
     showToast('Password updated');
   }
 
-  function saveAccountToggle(next: typeof account) {
-    setAccount(next);
-    saveSection('account', next);
-  }
-
   function updateNotification(k: string, patch: Partial<NotifSetting>) {
     const next = {
       ...notifications,
@@ -261,7 +275,6 @@ export default function SettingsPage() {
   function handleResetData() {
     Object.values(LS_KEYS).forEach((k) => localStorage.removeItem(k));
     setGeneral(DEFAULTS.general);
-    setAccount(DEFAULTS.account);
     setNotifications(DEFAULTS.notifications);
     setIntegrations(DEFAULTS.integrations);
     setConfirmReset(false);
@@ -272,7 +285,7 @@ export default function SettingsPage() {
     const payload = {
       exported_at: new Date().toISOString(),
       version: '1.0',
-      settings: { general, account, notifications, integrations },
+      settings: { general, notifications, integrations },
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -453,39 +466,66 @@ export default function SettingsPage() {
                   <div className={styles.formRow2}>
                     <div className={styles.field}>
                       <label className={styles.fieldLabel}>Email</label>
+                      {/* Read-only: this is the LOGIN KEY (alembic 022), not a
+                          preference. An editable box implied you could change
+                          the address you sign in with by typing here, which was
+                          never true — it wrote to localStorage. */}
                       <input
-                        type="email"
+                        type="text"
                         className={`${styles.textInput} ${styles.textInputMono}`}
-                        value={account.email}
-                        onChange={(e) =>
-                          saveAccountToggle({ ...account, email: e.target.value })
-                        }
+                        value={user?.email ?? '—'}
+                        readOnly
+                        aria-describedby="account-email-hint"
                       />
+                      <p id="account-email-hint" className={styles.fieldHint}>
+                        You sign in with this address. It also opens your mailbox.
+                      </p>
                     </div>
                     <div className={styles.field}>
                       <label className={styles.fieldLabel}>Last sign-in</label>
-                      <div className={styles.lastLogin}>
-                        <span className={styles.mono}>{account.lastLogin}</span>
-                        <span className={styles.lastLoginIp}>from 73.142.18.4</span>
-                      </div>
+                      {/* The sign-in BEFORE this session — the reading that
+                          lets you spot a session that was not yours. */}
+                      {previousLogin ? (
+                        <div className={styles.lastLogin}>
+                          <span className={styles.mono}>{previousLogin.when}</span>
+                          <span className={styles.lastLoginIp}>
+                            from {previousLogin.where}
+                          </span>
+                        </div>
+                      ) : (
+                        <div className={styles.lastLogin}>
+                          <span className={styles.mono}>This is your first sign-in</span>
+                          <span className={styles.lastLoginIp}>
+                            Next time, the session before this one shows here
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
 
                   <div className={styles.toggleRow}>
                     <div>
                       <div className={styles.toggleTitle}>Two-factor authentication</div>
+                      {/* Deliberately inert and SAID to be inert. This switch
+                          flipped a localStorage boolean and nothing else — a
+                          security control that looks armed but isn't is worse
+                          than one that is absent, and these accounts now open
+                          real company mail. It stays visible so the gap is
+                          known, and turns back on when there is a server to
+                          enforce it. */}
                       <div className={styles.toggleSub}>
-                        Require a TOTP code (Authy, 1Password, Google Authenticator) on sign-in.
+                        Not available yet. When it ships, signing in will also ask for a
+                        code from your authenticator app.
                       </div>
                     </div>
                     <button
                       type="button"
                       role="switch"
-                      aria-checked={account.twoFactor}
-                      className={`${styles.togglePill} ${account.twoFactor ? styles.togglePillOn : ''}`}
-                      onClick={() =>
-                        saveAccountToggle({ ...account, twoFactor: !account.twoFactor })
-                      }
+                      aria-checked={false}
+                      aria-disabled="true"
+                      disabled
+                      title="Two-factor authentication is not available yet"
+                      className={`${styles.togglePill} ${styles.togglePillDisabled}`}
                     >
                       <span className={styles.toggleKnob} />
                     </button>
@@ -821,7 +861,7 @@ export default function SettingsPage() {
         }
         message={
           deleteStep === 1
-            ? `This will sign you out, revoke all sessions, and remove every locally-stored preference for ${account.email}. You will lose access to the admin console immediately.`
+            ? `This will sign you out, revoke all sessions, and remove every locally-stored preference for ${user?.email ?? 'this account'}. You will lose access to the admin console immediately.`
             : 'This action cannot be undone. Click "Delete forever" one more time to confirm, or cancel to back out.'
         }
         confirmLabel={deleteStep === 1 ? 'Yes, continue' : 'Delete forever'}

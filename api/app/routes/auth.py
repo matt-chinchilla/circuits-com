@@ -29,6 +29,7 @@ from app.services.auth_service import (
 )
 from app.services.password_policy import PASSWORD_HELP, validate_password
 from app.services.rate_limit import (
+    client_ip,
     limiter,
     login_email_key,
     login_ip_key,
@@ -195,6 +196,37 @@ def _session_response(user: User, *, expires_hours: int = TOKEN_EXPIRY_HOURS) ->
     )
 
 
+def _record_login(db: Session, user: User, request: Request) -> None:
+    """Shift the previous sign-in stamp down and record this one (alembic 024).
+
+    The console shows the PREVIOUS sign-in, not this one: "you signed in four
+    seconds ago" is not information, whereas "the session before this came from
+    that address at that time" is how somebody notices access that was not
+    theirs. So this shifts ``last_* -> prev_*`` before stamping itself, which
+    also means a reloaded tab reads the right answer from the database instead
+    of depending on what the login response happened to carry.
+
+    The address comes from :func:`client_ip` — ``X-Real-IP``, which nginx
+    overwrites with ``$remote_addr`` — and never from the caller-supplied
+    ``X-Forwarded-For``. A spoofable stamp would be worse than none at all: it
+    would be evidence pointing wherever an attacker decided to point it.
+
+    Best-effort. A failure here must never cost a valid credential its session,
+    so the write is rolled back and swallowed rather than 500-ing a sign-in that
+    has already succeeded. Not called for the demo account, which is shared and
+    public — a "last sign-in" showing a stranger's address would be noise at
+    best and a small privacy leak at worst.
+    """
+    try:
+        user.prev_login_at = user.last_login_at
+        user.prev_login_ip = user.last_login_ip
+        user.last_login_at = datetime.now(UTC)
+        user.last_login_ip = client_ip(request)
+        db.commit()
+    except Exception:  # pragma: no cover - defensive
+        db.rollback()
+
+
 @router.post("/login", response_model=LoginResponse, dependencies=LOGIN_RATE_LIMIT_DEPENDENCIES)
 def login(body: LoginRequest, request: Request, db: Session = Depends(get_db)):
     # Two keys, scored independently: the host (one machine walking a list of
@@ -232,6 +264,7 @@ def login(body: LoginRequest, request: Request, db: Session = Depends(get_db)):
     # per-address cooldown, so a mail box that is down cannot make every
     # sign-in wait out the HTTP timeout.
     mail_sync.retry_pending_sync(db, user, body.password)
+    _record_login(db, user, request)
     expires = REMEMBER_EXPIRY_HOURS if body.remember else TOKEN_EXPIRY_HOURS
     return _session_response(user, expires_hours=expires)
 
@@ -522,9 +555,21 @@ def me(current_user: User = Depends(get_authenticated_user)):
     return {
         "id": str(current_user.id),
         "username": current_user.username,
+        # The login key since 022, and the address the console shows on the
+        # account screen — which used to print a hardcoded `matt@` that did not
+        # match anybody's actual account or mailbox.
+        "email": current_user.email,
         "role": current_user.role,
         "supplier_id": str(current_user.supplier_id) if current_user.supplier_id else None,
         "must_change_password": bool(current_user.must_change_password),
+        # The sign-in BEFORE the current session (alembic 024) — the reading
+        # that lets someone spot access that was not theirs. null means never
+        # recorded (first-ever sign-in, or an account that predates 024), and
+        # the console says so rather than rendering a zero date.
+        "previous_login_at": (
+            current_user.prev_login_at.isoformat() if current_user.prev_login_at else None
+        ),
+        "previous_login_ip": current_user.prev_login_ip,
         # P3 drift signal: true means this account's SITE password changed but
         # its MAILBOX did not get it, so the two are temporarily different.
         # Surfaced rather than kept server-side because silent drift is exactly

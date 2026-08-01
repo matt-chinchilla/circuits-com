@@ -285,6 +285,17 @@
   }
 }
 
+// Not-yet-built control. It reads as unavailable rather than merely "off", so
+// nobody concludes they switched a security feature off — or, worse, on.
+.togglePillDisabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+
+  .toggleKnob {
+    box-shadow: none;
+  }
+}
+
 .toggleKnob {
   position: absolute;
   top: 2px;

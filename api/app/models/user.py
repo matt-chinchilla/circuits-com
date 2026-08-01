@@ -46,6 +46,20 @@ class User(Base):
     # the next successful login retries and clears it, and /api/auth/me
     # surfaces it so the drift is visible rather than silent.
     mail_sync_pending = Column(Boolean, nullable=False, default=False)
+    # Sign-in history (alembic 024). Each successful login SHIFTS last_* into
+    # prev_* and stamps itself into last_*, because the useful reading of "last
+    # sign-in" is the one BEFORE the current session — telling someone they
+    # signed in four seconds ago is not information, telling them where the
+    # previous session came from is. The console renders the prev_* pair.
+    # NULL means "never recorded", which is the truth for every pre-024 row and
+    # for a first-ever sign-in; the UI says so instead of printing a zero date.
+    # The address comes from rate_limit.client_ip (X-Real-IP, written by nginx)
+    # — never the caller-supplied X-Forwarded-For, which would let an attacker
+    # choose the evidence. 45 chars is the longest IPv6 text form.
+    last_login_at = Column(DateTime(timezone=True), nullable=True)
+    last_login_ip = Column(String(45), nullable=True)
+    prev_login_at = Column(DateTime(timezone=True), nullable=True)
+    prev_login_ip = Column(String(45), nullable=True)
     created_at = Column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),

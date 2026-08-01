@@ -39,6 +39,27 @@ export interface UserInfo {
    * `?:` catches only the MISSING key: read it with `Boolean(...)`.
    */
   is_demo?: boolean;
+  /**
+   * The account's real address — the login key since alembic 022. Present on
+   * GET /auth/me only. The Settings screen used to print a hardcoded
+   * `matt@circuitcenter.ai` here that matched neither an account nor a mailbox.
+   */
+  email?: string;
+  /**
+   * The sign-in BEFORE the current session, and the address it came from
+   * (alembic 024). Deliberately the previous one, not this one: "you signed in
+   * four seconds ago" is not information, whereas the session before this is
+   * how somebody notices access that was not theirs.
+   *
+   * `null` means never recorded — a first-ever sign-in, or an account that
+   * predates 024. `?: T | null` because Python's None arrives as JSON null,
+   * which a bare `?:` would let through; read it with `!= null`.
+   *
+   * The address is canonicalized by the same helper the rate limiter buckets
+   * on, so an IPv6 client shows as its /64 network rather than a bare host.
+   */
+  previous_login_at?: string | null;
+  previous_login_ip?: string | null;
 }
 
 // Dashboard
