@@ -1,5 +1,6 @@
 import type { Message, MessageStatus, AssignedTo } from '@admin/types/messages';
 import { adminApi } from '@admin/services/adminApi';
+import { demoSession } from '@admin/services/demoReadOnly';
 
 // API-backed store for the admin Messages UI. The pre-Phase-4 implementation
 // was localStorage-backed with a 15-row seed; Phase 4 moved persistence to the
@@ -50,6 +51,13 @@ function fireUpdate(id: string, update: Partial<{
   assigned_to: AssignedTo;
   last_reply_body: string;
 }>): void {
+  // The demo account's inbox is SYNTHETIC (app/services/demo_messages.py) —
+  // those rows have no server-side identity, so a PATCH could only ever be
+  // refused (403 demo_account_read_only) or miss. Optimistic local state is the
+  // whole truth there, and skipping the call is what stops merely OPENING a
+  // message from popping "Editing is disabled in the demo" at a prospect.
+  // Convenience only: the server refuses demo writes whether or not this fires.
+  if (demoSession.isDemo()) return;
   adminApi.updateMessage(id, update).catch((err) => {
     console.error('[messageStore] update failed', id, update, err);
   });

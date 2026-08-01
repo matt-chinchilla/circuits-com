@@ -417,6 +417,35 @@
   }
 }
 
+// The public demo account can't switch demo data off (the server forces it on
+// via user.is_demo), so the switch shows its state without inviting a click.
+.demoToggleLocked {
+  cursor: default;
+  opacity: 0.75;
+
+  &:hover {
+    background: var(--a-bg);
+    border-color: var(--a-border);
+  }
+}
+
+// "Demo" mark — quiet, not a banner. Tells a prospect what they're looking at.
+.demoBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border: 1px solid color-mix(in srgb, var(--a-warn) 40%, transparent);
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--a-warn) 12%, transparent);
+  color: var(--a-warn);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
 .demoLabel {
   font-size: 11px;
   font-weight: 600;

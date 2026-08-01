@@ -12,13 +12,16 @@ from app.db.session import get_db
 from app.models import User
 from app.services import email as email_service
 from app.services.auth_service import (
+    DEMO_READ_ONLY_DETAIL,
     REMEMBER_EXPIRY_HOURS,
     TOKEN_EXPIRY_HOURS,
     create_reset_token,
     create_token,
     decode_reset_token,
+    demo_login_email,
     get_authenticated_user,
     hash_password,
+    is_demo_user,
     reset_token_matches_hash,
     verify_dummy_password,
     verify_password,
@@ -100,6 +103,14 @@ class UserInfo(BaseModel):
     username: str
     role: str
     supplier_id: str | None = None
+    # Task 8 — the public demo account, signalled by the SERVER so the console
+    # never has to infer it from a username or a role it could be lied to about.
+    # One flag drives both demo behaviours: the console renders read-only (the
+    # 403 `demo_account_read_only` gate in get_current_user is the real
+    # enforcement — this is only the front end of it) and DEMO DATA mode is
+    # forced on and non-disableable, so a prospect never sees real revenue,
+    # customer names or sponsor contacts.
+    is_demo: bool = False
 
 
 class LoginResponse(BaseModel):
@@ -129,8 +140,12 @@ class ChangePasswordRequest(BaseModel):
 
 
 def _is_demo_identifier(identifier: str) -> bool:
-    """True when this identifier addresses the public demo account."""
-    demo_email = (settings.DEMO_LOGIN_EMAIL or "").strip().lower()
+    """True when this identifier addresses the public demo account.
+
+    Reads the ONE definition in auth_service so this and the read-only gate
+    cannot disagree about which address is the demo.
+    """
+    demo_email = demo_login_email()
     return bool(demo_email) and identifier.strip().lower() == demo_email
 
 
@@ -170,6 +185,7 @@ def _session_response(user: User, *, expires_hours: int = TOKEN_EXPIRY_HOURS) ->
             username=user.username,
             role=user.role,
             supplier_id=str(user.supplier_id) if user.supplier_id else None,
+            is_demo=is_demo_user(user),
         ),
         # bool(): the column is NOT NULL, but a legacy row read through an
         # older connection could still surface None — `?:`-style optionality
@@ -224,6 +240,11 @@ def demo_login(db: Session = Depends(get_db)):
     404 — not 403 — when disabled or when the demo row is missing: a disabled
     demo should look like a route that was never deployed, and the response
     must not confirm which accounts exist (anti-enumeration).
+
+    The session it hands out is READ-ONLY: ``get_current_user`` answers 403
+    ``demo_account_read_only`` to every write from this account (task 8), and
+    the payload's ``user.is_demo`` tells the console to mark itself and force
+    DEMO DATA on. That is what makes it safe to put this behind a public button.
     """
     if not settings.DEMO_LOGIN_ENABLED:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
@@ -254,6 +275,19 @@ def change_password(
     minted before now (auth_service.token_predates_password_change), so without
     a replacement the caller would log itself out by succeeding.
     """
+    # The demo account is read-only here too, even though this endpoint takes
+    # the UNgated dependency. It is not a security hole (the demo has no
+    # credential login to protect) — it is griefing: the demo password is
+    # public, so any visitor could rotate it and, by stamping
+    # password_changed_at, instantly sign out every OTHER prospect's live demo
+    # session. Nothing is lost by refusing: the account's only door is
+    # /auth/demo, which never asks for a password.
+    if is_demo_user(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=DEMO_READ_ONLY_DETAIL,
+        )
+
     if not verify_password(body.current_password, current_user.password_hash):
         # 400, not 401: the session is perfectly valid, one field was wrong.
         # A 401 here would trip the admin client's log-out-on-401 handling and
@@ -472,4 +506,8 @@ def me(current_user: User = Depends(get_authenticated_user)):
         "role": current_user.role,
         "supplier_id": str(current_user.supplier_id) if current_user.supplier_id else None,
         "must_change_password": bool(current_user.must_change_password),
+        # Same server-signalled flag as the login payload — a reloaded tab
+        # rediscovers "this is the demo" here, so DEMO DATA stays forced on and
+        # the console stays marked without a fresh sign-in.
+        "is_demo": is_demo_user(current_user),
     }

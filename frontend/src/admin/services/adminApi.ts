@@ -29,6 +29,7 @@ import type { Message, MessageStatus, AssignedTo } from '@admin/types/messages';
 import type { PlatformEngagementSeries } from '@admin/types/engagement';
 import { bustSponsorCaches } from '@admin/services/swCache';
 import { isPasswordChangeRequired, passwordGate } from '@admin/services/passwordGate';
+import { demoReadOnlyNotice, isDemoReadOnly } from '@admin/services/demoReadOnly';
 
 // PATCH /api/admin/messages/{id} body — subset of MessageBase the admin UI can
 // mutate. Mirrors the contract Agent A is building in the backend.
@@ -87,6 +88,11 @@ adminClient.interceptors.response.use(
       // the user would be signed out of the only session that can clear the
       // flag. Raising the gate routes the SPA to /admin/change-password.
       passwordGate.set(true);
+    } else if (isDemoReadOnly(status, error.response?.data?.detail)) {
+      // The read-only demo gate. The session is perfectly valid and every GET
+      // still works — the prospect just tried to write. Raise the inline notice
+      // so the console explains itself instead of surfacing an error code.
+      demoReadOnlyNotice.raise();
     }
     return Promise.reject(error);
   }

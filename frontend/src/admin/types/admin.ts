@@ -26,6 +26,19 @@ export interface UserInfo {
    * so read it with `Boolean(...)` rather than trusting the shape.
    */
   must_change_password?: boolean;
+  /**
+   * The public demo account, signalled by the SERVER (`auth_service.is_demo_user`)
+   * on both /auth/login-shaped payloads and /auth/me — never inferred from the
+   * username or role, which the client could be lied to about.
+   *
+   * Drives two things: DEMO DATA mode is forced on and non-disableable (a
+   * prospect must not see real revenue, customer names or sponsor contacts),
+   * and the console marks itself with a "Demo" badge. It does NOT gate writes —
+   * the server's 403 `demo_account_read_only` does, on every mutating route.
+   *
+   * `?:` catches only the MISSING key: read it with `Boolean(...)`.
+   */
+  is_demo?: boolean;
 }
 
 // Dashboard
