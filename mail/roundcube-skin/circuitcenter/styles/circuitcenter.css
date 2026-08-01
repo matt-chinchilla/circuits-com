@@ -22,10 +22,18 @@
    per screen (the ENIG pad); everything else is glass or quiet.
 
    INVARIANTS — please keep these true:
-   * No @keyframes, no `animation`, no requestAnimationFrame, no <canvas>,
-     no will-change, no mix-blend-mode, no hue-rotate. Motion is
-     transitions-on-interaction only. (This repo has a documented history of
-     orphaned animation loops; a webmail tab stays open for eight hours.)
+   * No requestAnimationFrame, no <canvas>, no will-change, no mix-blend-mode,
+     no hue-rotate. (This repo has a documented history of orphaned animation
+     loops; a webmail tab stays open for eight hours.)
+   * Motion is transitions-on-interaction, plus EXACTLY ONE keyframe: `ccLive`,
+     the halo on a folder that just received mail. The no-keyframes rule this
+     file originally carried was aimed at the leak above — a JS-driven loop
+     with a lifecycle to get orphaned. A CSS keyframe animating one property on
+     one small element is a different animal: no JS, nothing to unmount, static
+     geometry, and the browser suspends it when the tab is hidden. The donor
+     system ships the same thing (`pfPulse`). If you add a second one, first
+     ask what state changed in the world to justify it — "live" has to mean
+     something or it is just noise.
    * backdrop-filter is STATIC only — applied to resting surfaces, never
      animated, and declared with BOTH -webkit- and unprefixed forms.
      It is dropped entirely <=768px (mobile GPU layer cost; see the
@@ -41,7 +49,8 @@
      re-measure if you change one (DESIGN.md has the math).
    * Nothing here reduces Elastic's list density or row heights.
 
-   Verify the invariants (expect matches in comment lines only):
+   Verify the invariants (expect ONLY comment lines, plus the two `ccLive`
+   declarations and its @keyframes block):
      grep -nE '@keyframes|animation:|@import|url\(https?:|will-change|mix-blend|hue-rotate' styles/circuitcenter.css
    =========================================================================== */
 
@@ -410,11 +419,21 @@ html.cc #layout > div > .footer a.button {
 	color: var(--cc-ink-2);
 }
 
-html.cc .header a.button.icon:not(.disabled):focus,
+/* Navigational chrome — back, the overflow menu, the sidebar toggle. These
+   get the glass on APPROACH rather than at rest: they are always present but
+   rarely the point, and a header wearing five resting pills competes with the
+   message list for attention. The material arriving on hover is also how the
+   platform this borrows from behaves. Background, radius and shadow only —
+   no border (Elastic forces it off) and no box metric, so nothing reflows. */
+html.cc .header a.button.icon:not(.disabled):focus-visible,
 html.cc .header a.button.icon:not(.disabled):hover {
 	color: var(--cc-ink);
-	background-color: var(--cc-tint-hover);
-	border-radius: 8px;
+	background: var(--cc-btn-glass);
+	border-radius: var(--cc-r-btn);
+	box-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.85),
+		0 0 0 1px rgba(15, 44, 30, 0.10),
+		0 2px 6px -2px rgba(5, 29, 19, 0.18);
 }
 
 /* Search — a recessed probe channel seated in the glass (the Perry
@@ -526,12 +545,42 @@ html.cc .folderlist li.mailbox .unreadcount {
 	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 1px 2px rgba(5, 29, 19, 0.25);
 }
 
+/* Fresh arrival — the power LED.
+   `.recent` is Roundcube's own flag for "mail landed since you last looked",
+   which is a genuinely different state from "unread" (a month-old unread
+   message is not news). It is the only thing in this console that is LIVE, so
+   it is the only thing that gets to move.
+
+   The halo pulses, never the number: animating the badge itself would make the
+   count flicker and cost you legibility for decoration. Geometry is static and
+   only opacity animates, so this stays on the compositor — and the browser
+   stops it outright when the tab is backgrounded. See the invariants note at
+   the top of this file for why this one keyframe is allowed where a rAF loop
+   is not. */
 html.cc .folderlist li.mailbox.recent > a .unreadcount {
+	position: relative;
 	color: #241a04;
 	box-shadow:
 		inset 0 1px 0 rgba(255, 255, 255, 0.5),
-		0 1px 2px rgba(5, 29, 19, 0.25),
-		0 0 0 2px rgba(68, 189, 19, 0.45);  /* phosphor ring = fresh arrival */
+		0 1px 2px rgba(5, 29, 19, 0.25);
+}
+
+html.cc .folderlist li.mailbox.recent > a .unreadcount::after {
+	content: '';
+	position: absolute;
+	inset: -2px;
+	border-radius: var(--cc-r-pill);
+	pointer-events: none;
+	box-shadow:
+		0 0 0 2px rgba(68, 189, 19, 0.55),
+		0 0 12px 2px rgba(68, 189, 19, 0.50);
+	animation: ccLive 1.8s var(--cc-ease-out) infinite;
+}
+
+@keyframes ccLive {
+	50% {
+		opacity: 0.3;
+	}
 }
 
 /* --- message list -------------------------------------------------------- */
@@ -1049,6 +1098,215 @@ html.cc .custom-switch .custom-control-label::after {
 }
 
 
+/* --- the toolbar controls: the glass you actually touch --------------------
+   Everything above dresses `.btn`, which Roundcube uses for dialog footers and
+   form actions. Real, but you only meet it inside a modal. The controls a
+   person works with all day — Reply, Reply all, Forward, Delete, Print, Mark —
+   are NOT `.btn`, and carry no `button` class at all: Roundcube renders them as
+   bare `<a class="reply">` inside `#mailtoolbar.toolbar.menu`. No rule in this
+   sheet matched them, which is why the console read flat no matter how good the
+   recipe above was. This section is that gap.
+
+   Two lines of Elastic's own compiled rule decide the technique:
+
+     .menu.toolbar a { border:0!important; height:58px; padding:.45rem;
+                       float:left; min-width:3.2rem; max-width:6rem }
+
+   A real border is impossible (`!important`), and these are flush floats on a
+   fixed height, so touching padding or margin would reflow the toolbar — this
+   skin promises not to change Elastic's density. So the pill is painted by an
+   `::after` layer inset INSIDE the anchor's existing box: no border, no box
+   metric touched, and the gap between neighbours comes from that inset instead
+   of from margin. `isolation: isolate` + `z-index: -1` is the donor system's
+   own documented pattern for this case ([data-pf-glass] in packages/ui) — it
+   puts the pill above the anchor's background but below its icon and label.
+   `:before` is already Elastic's icon glyph, which is why the pill is ::after.
+
+   The hairline is the box-shadow's outer 1px ring rather than a border, for
+   the same `!important` reason.
+
+   NO backdrop-filter on these. Perry applies it to a handful of controls; a
+   mail toolbar shows eight at once, and each is its own GPU layer. The veil,
+   the inset top-highlight and the cast carry the material on their own here,
+   because these sit on a pane that is ALREADY blurred glass — there is no
+   second backdrop worth sampling. That also keeps the skin's <=768px rule true
+   for free, and avoids a filter popping in on hover.
+
+   CONTRAST — the pill adds a layer UNDER the label, so the ratio was re-measured
+   rather than assumed. Worst case is the veil floor (.30) over the pane floor
+   (.88) over bench-deep, i.e. rgb(234,236,235): label --cc-ink-2 lands at
+   7.44:1, up from 6.90:1 on the bare pane, and hover swaps to --cc-ink which is
+   higher still. The pill lightens its own backing, so this direction of change
+   can only help — but re-measure if you ever darken the veil. */
+html.cc .menu.toolbar a {
+	position: relative;
+	isolation: isolate;
+	color: var(--cc-ink-2);
+	font-weight: var(--cc-w-control);
+	transition:
+		transform 0.18s var(--cc-ease-spring),
+		color 0.14s ease;
+}
+
+html.cc .menu.toolbar a::after {
+	content: '';
+	position: absolute;
+	inset: 7px 3px;
+	z-index: -1;
+	border-radius: var(--cc-r-btn);
+	background: var(--cc-btn-glass);
+	box-shadow:
+		inset 0 0 0 1px rgba(255, 255, 255, 0.38),
+		inset 0 1px 0 rgba(255, 255, 255, 0.85),
+		inset 0 -1px 1px rgba(0, 0, 0, 0.04),
+		0 0 0 1px rgba(15, 44, 30, 0.10),
+		0 1px 2px rgba(5, 29, 19, 0.10),
+		0 4px 12px -6px rgba(5, 29, 19, 0.18);
+	transition: box-shadow 0.18s var(--cc-ease-out);
+}
+
+html.cc .menu.toolbar a:not(.disabled):hover,
+html.cc .menu.toolbar a:not(.disabled):focus-visible {
+	color: var(--cc-ink);
+	transform: translateY(-1px);
+}
+
+html.cc .menu.toolbar a:not(.disabled):hover::after,
+html.cc .menu.toolbar a:not(.disabled):focus-visible::after {
+	box-shadow:
+		inset 0 0 0 1px rgba(255, 255, 255, 0.42),
+		inset 0 1px 0 rgba(255, 255, 255, 0.90),
+		inset 0 -1px 1px rgba(0, 0, 0, 0.05),
+		0 0 0 1px rgba(15, 44, 30, 0.12),
+		0 2px 4px rgba(5, 29, 19, 0.12),
+		0 10px 22px -8px rgba(5, 29, 19, 0.26);
+}
+
+html.cc .menu.toolbar a:not(.disabled):active {
+	transform: scale(0.97);
+}
+
+html.cc .menu.toolbar a:not(.disabled):active::after {
+	box-shadow:
+		inset 0 1px 3px rgba(5, 29, 19, 0.14),
+		0 0 0 1px rgba(15, 44, 30, 0.12);
+}
+
+/* Availability IS the material. A disabled action has no pill at all, so the
+   toolbar reads at a glance as "these three are live, the rest are not" —
+   rather than showing six identical buttons where two-thirds do nothing. */
+html.cc .menu.toolbar a.disabled::after {
+	display: none;
+}
+
+/* Pressed/held state (Mark, and any toggled action) sits in a recessed
+   channel instead of standing proud — the .pf-recessed idea, re-hued. */
+html.cc .menu.toolbar a.selected::after {
+	background: var(--cc-fill);
+	box-shadow:
+		inset 0 1px 2px rgba(5, 29, 19, 0.10),
+		0 0 0 1px rgba(15, 44, 30, 0.10);
+}
+
+/* Reply all and Forward are split controls — an action plus a chevron, which
+   Roundcube builds as TWO anchors inside one `span.dropbutton`. Giving each
+   anchor its own pill produced two boxes meeting at a doubled hairline, since
+   both painted their own outer ring on the shared edge. So the pill moves up
+   to the wrapper and the halves stop drawing their own: one control, one
+   outline, no seam. The chevron already says the button splits; a divider on
+   top of it is the accessory to take off before leaving the house. */
+html.cc .menu.toolbar .dropbutton {
+	position: relative;
+	isolation: isolate;
+	transition: transform 0.18s var(--cc-ease-spring);
+}
+
+html.cc .menu.toolbar .dropbutton > a::after {
+	display: none;
+}
+
+html.cc .menu.toolbar .dropbutton::after {
+	content: '';
+	position: absolute;
+	inset: 7px 3px;
+	z-index: -1;
+	border-radius: var(--cc-r-btn);
+	background: var(--cc-btn-glass);
+	box-shadow:
+		inset 0 0 0 1px rgba(255, 255, 255, 0.38),
+		inset 0 1px 0 rgba(255, 255, 255, 0.85),
+		inset 0 -1px 1px rgba(0, 0, 0, 0.04),
+		0 0 0 1px rgba(15, 44, 30, 0.10),
+		0 1px 2px rgba(5, 29, 19, 0.10),
+		0 4px 12px -6px rgba(5, 29, 19, 0.18);
+	transition: box-shadow 0.18s var(--cc-ease-out);
+}
+
+html.cc .menu.toolbar .dropbutton:not(.disabled):hover {
+	transform: translateY(-1px);
+}
+
+html.cc .menu.toolbar .dropbutton:not(.disabled):hover::after {
+	box-shadow:
+		inset 0 0 0 1px rgba(255, 255, 255, 0.42),
+		inset 0 1px 0 rgba(255, 255, 255, 0.90),
+		inset 0 -1px 1px rgba(0, 0, 0, 0.05),
+		0 0 0 1px rgba(15, 44, 30, 0.12),
+		0 2px 4px rgba(5, 29, 19, 0.12),
+		0 10px 22px -8px rgba(5, 29, 19, 0.26);
+}
+
+/* A split control whose action is unavailable loses its pill too, matching
+   the plain buttons above. Deliberately TWO rules, not one selector list: an
+   unsupported `:has()` invalidates the entire rule it appears in, which would
+   silently take the plain `.disabled` case down with it. Split, the first rule
+   always lands and `:has()` is pure enhancement. */
+html.cc .menu.toolbar .dropbutton.disabled::after {
+	display: none;
+}
+
+html.cc .menu.toolbar .dropbutton:has(> a.disabled)::after {
+	display: none;
+}
+
+/* The halves must not double-lift inside a wrapper that is already lifting. */
+html.cc .menu.toolbar .dropbutton > a:not(.disabled):hover {
+	transform: none;
+}
+
+/* Below ~1200px Elastic folds this same toolbar into a popup list, where a
+   row of pills would read as nonsense. The list gets Elastic's own menu
+   treatment instead. */
+html.cc .popover .menu.toolbar a::after {
+	display: none;
+}
+
+/* The ONE lit action: Compose. Same ENIG pad as .btn-primary, so "the filled
+   thing is the thing that starts something" holds across the whole console. */
+html.cc .menu.toolbar a.compose {
+	color: #241a04;
+	font-weight: var(--cc-w-emphasis);
+}
+
+html.cc .menu.toolbar a.compose::after {
+	background: linear-gradient(#eccc63, #d2a72b);
+	box-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.55),
+		inset 0 -1px 2px rgba(90, 62, 8, 0.35),
+		0 1px 2px rgba(5, 29, 19, 0.18),
+		0 6px 18px -5px rgba(232, 194, 82, 0.55);
+}
+
+html.cc .menu.toolbar a.compose:not(.disabled):hover::after {
+	background: linear-gradient(#f0d36e, #dcb136);
+	box-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.55),
+		inset 0 -1px 2px rgba(90, 62, 8, 0.35),
+		0 2px 4px rgba(5, 29, 19, 0.18),
+		0 12px 26px -7px rgba(232, 194, 82, 0.65);
+}
+
+
 /* ---------------------------------------------------------------------------
    9. MENUS, DIALOGS, NOTIFICATIONS
    Floating chrome is near-opaque porcelain glass — the one place the
@@ -1525,9 +1783,12 @@ html.cc #layout-menu .popover-header {
 
 /* ---------------------------------------------------------------------------
    14. REDUCED MOTION
-   This skin adds no keyframes and no loops; all it can produce is a hover or
-   focus transition. Honour the preference anyway, and neutralise Elastic's
-   own transitions and animations while we are here.
+   The skin produces hover/focus transitions and one keyframe (`ccLive`, the
+   fresh-mail halo). The blanket rule below stops all of it — including
+   Elastic's own transitions and animations — with `!important`, so `ccLive`
+   is covered by construction and needs no separate opt-out. The halo stays
+   VISIBLE when motion is reduced; it just holds still, so the signal survives
+   for anyone who turns motion off.
    --------------------------------------------------------------------------- */
 @media (prefers-reduced-motion: reduce) {
 	html.cc *,
