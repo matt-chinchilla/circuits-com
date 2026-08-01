@@ -1,4 +1,5 @@
 @use '@shared/styles/variables' as *;
+@use '../glass' as *;
 
 // Phase A9 — Settings page styling, ported from
 // design-import/circuits-com-design-system/project/ui_kits/admin/styles.css
@@ -127,10 +128,8 @@
 // ─── Panel ──────────────────────────────────────────────────────────────────
 
 .panel {
-  background: var(--a-card);
+  @include a-glass-pane;
   border-radius: var(--a-radius);
-  box-shadow: var(--a-shadow-sm);
-  border: 1px solid var(--a-border-soft);
   overflow: hidden;
 }
 
@@ -204,13 +203,13 @@
   }
 }
 
+// Form wells — the donor's recessed channel; focus swaps to the two-ring halo.
 .textInput,
 .select {
   font-family: inherit;
   font-size: 14px;
   color: var(--a-fg1);
-  background: var(--a-card);
-  border: 1px solid var(--a-border);
+  @include a-glass-well;
   border-radius: 6px;
   padding: 9px 12px;
   outline: none;
@@ -218,8 +217,7 @@
   transition: border-color 150ms ease, box-shadow 150ms ease;
 
   &:focus {
-    border-color: var(--a-primary);
-    box-shadow: 0 0 0 3px rgba(10, 74, 46, 0.08);
+    @include a-well-focus;
   }
 }
 
@@ -379,14 +377,14 @@
   flex-direction: column;
   gap: 2px;
   padding: 9px 12px;
-  background: var(--a-bg);
-  border: 1px solid var(--a-border-soft);
+  @include a-glass-well;
   border-radius: 6px;
 }
 
 .lastLoginIp {
   font-size: 12px;
-  color: var(--a-fg3);
+  // fg2, not fg3 — sits in the recessed well (fg3 fails 4.5:1 there).
+  color: var(--a-fg2);
 }
 
 .mono {
@@ -469,8 +467,7 @@
   font-family: $font-mono;
   font-size: 12px;
   color: var(--a-fg1);
-  background: var(--a-card);
-  border: 1px solid var(--a-border);
+  @include a-glass-well;
   border-radius: 6px;
   padding: 6px 10px;
   outline: none;
@@ -484,8 +481,7 @@
   }
 
   &:focus {
-    border-color: var(--a-primary);
-    box-shadow: 0 0 0 3px rgba(10, 74, 46, 0.08);
+    @include a-well-focus;
   }
 }
 
@@ -554,9 +550,13 @@
 
 // ─── Danger zone ───────────────────────────────────────────────────────────
 
+// Red-tinted glass: the warning tint layers OVER the pane veil (both are
+// background layers, so the panel keeps its glass body under the blush).
 .dangerPanel {
   border: 1px solid rgba(192, 57, 43, 0.25);
-  background: linear-gradient(180deg, rgba(192, 57, 43, 0.02), transparent 80%);
+  background:
+    linear-gradient(180deg, rgba(192, 57, 43, 0.03), transparent 80%),
+    var(--a-glass);
 }
 
 .dangerTitle {
@@ -650,22 +650,14 @@
 }
 
 .btnGhost {
-  background: var(--a-card);
-  color: var(--a-fg1);
-  border-color: var(--a-border);
-
-  &:hover:not(:disabled) {
-    background: var(--a-border-soft);
-  }
+  @include a-glass-ctl;
 }
 
+// Demoted from a filled red block — house law: danger never shouts. The
+// destructive CONFIRM lives in the shared ConfirmDialog, which keeps its own
+// filled primary; these page-surface triggers are text-red until hover.
 .btnDanger {
-  background: var(--a-danger);
-  color: #ffffff;
-
-  &:hover:not(:disabled) {
-    background: #a3271a;
-  }
+  @include a-ghost-danger;
 }
 
 .btnSm {

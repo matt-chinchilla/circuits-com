@@ -1,4 +1,5 @@
 @use '@shared/styles/variables' as *;
+@use '../../glass' as *;
 
 // Expenses list — same chrome vocabulary as the Sponsors list (page head,
 // panel, toolbar chips, inline search, table, row action) so the two admin
@@ -75,11 +76,11 @@
 
 // ─── Panel + toolbar ────────────────────────────────────────────────────────
 
+// Glass pane on the CONTAINER only — the table region inside stays flat
+// (opaque thead/tfoot, no filter anywhere near the tabular text).
 .panel {
-  background: var(--a-card);
+  @include a-glass-pane;
   border-radius: var(--a-radius);
-  box-shadow: var(--a-shadow-sm);
-  border: 1px solid var(--a-border-soft);
   overflow: hidden;
 }
 
@@ -97,6 +98,9 @@
   min-width: 0;
 }
 
+// Resting chips are quiet (transparent + hairline); the ACTIVE chip is the
+// raised glass pill with a primary rim — donor FilterPillGroup idiom, and it
+// keeps the screen at one filled action (the green Add Expense button).
 .filterChip {
   display: inline-flex;
   align-items: center;
@@ -106,14 +110,15 @@
   font-size: 13px;
   font-weight: 500;
   color: var(--a-fg2);
-  background: var(--a-card);
+  background: transparent;
   border: 1px solid var(--a-border);
   border-radius: 20px;
   cursor: pointer;
   transition:
     background-color 120ms ease,
     border-color 120ms ease,
-    color 120ms ease;
+    color 120ms ease,
+    box-shadow 120ms ease;
 
   &:hover:not(.filterChipActive) {
     border-color: var(--a-primary);
@@ -122,13 +127,14 @@
 }
 
 .filterChipActive {
-  background: var(--a-primary);
-  color: #ffffff;
+  @include a-glass-ctl($states: false);
   border-color: var(--a-primary);
+  font-weight: 600;
 
   .chipCount {
-    background: rgba(255, 255, 255, 0.2);
-    color: #ffffff;
+    @include a-glass-well;
+    border: none;
+    color: var(--a-fg1);
   }
 }
 
@@ -148,14 +154,12 @@
   align-items: center;
   gap: 6px;
   padding: 6px 10px;
-  background: var(--a-card);
-  border: 1px solid var(--a-border);
+  @include a-glass-well;
   border-radius: 6px;
   min-width: 260px;
 
   &:focus-within {
-    border-color: var(--a-primary);
-    box-shadow: 0 0 0 3px rgba(10, 74, 46, 0.08);
+    @include a-well-focus;
   }
 
   svg {

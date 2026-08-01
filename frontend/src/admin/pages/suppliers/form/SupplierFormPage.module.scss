@@ -1,5 +1,6 @@
 @use '@shared/styles/variables' as *;
 @use '@admin/styles/variables' as *;
+@use '../../glass' as *;
 
 // Supplier form (new + edit) — port of bundle's .form-grid pattern.
 // Stacked panels (Identity / Contact / Settings) → full-width form-actions row.
@@ -61,9 +62,8 @@
 }
 
 .panel {
-  background: var(--a-card);
+  @include a-glass-pane;
   border-radius: 8px;
-  box-shadow: var(--a-shadow-sm);
 }
 
 .panelHead {
@@ -120,7 +120,8 @@
 
 .fieldHint {
   font-size: 12px;
-  color: var(--a-fg4);
+  // fg3, not fg4 — small text on a resting glass pane.
+  color: var(--a-fg3);
 }
 
 .fieldError {
@@ -128,6 +129,7 @@
   color: var(--a-danger);
 }
 
+// Form wells — the donor's recessed channel; focus swaps to the two-ring halo.
 .input {
   width: 100%;
   height: 38px;
@@ -135,16 +137,14 @@
   font-size: 14px;
   font-family: inherit;
   color: var(--a-fg1);
-  background: var(--a-card);
-  border: 1px solid var(--a-border);
+  @include a-glass-well;
   border-radius: 6px;
   outline: none;
   box-sizing: border-box;
   transition: border-color 150ms ease, box-shadow 150ms ease;
 
   &:focus {
-    border-color: var(--a-primary);
-    box-shadow: 0 0 0 3px rgba(10, 74, 46, 0.08);
+    @include a-well-focus;
   }
 
   &::placeholder {
@@ -175,16 +175,14 @@
   align-items: stretch;
   width: 100%;
   height: 38px;
-  background: var(--a-card);
-  border: 1px solid var(--a-border);
+  @include a-glass-well;
   border-radius: 6px;
   overflow: hidden;
   box-sizing: border-box;
   transition: border-color 150ms ease, box-shadow 150ms ease;
 
   &:focus-within {
-    border-color: var(--a-primary);
-    box-shadow: 0 0 0 3px rgba(10, 74, 46, 0.08);
+    @include a-well-focus;
   }
 }
 
@@ -206,6 +204,7 @@
 .inputWithPrefix {
   flex: 1;
   min-width: 0;
+  background: transparent;
   border: none;
   border-radius: 0;
   height: 100%;
@@ -222,8 +221,7 @@
   font-size: 14px;
   font-family: inherit;
   color: var(--a-fg1);
-  background: var(--a-card);
-  border: 1px solid var(--a-border);
+  @include a-glass-well;
   border-radius: 6px;
   outline: none;
   resize: vertical;
@@ -231,8 +229,7 @@
   transition: border-color 150ms ease, box-shadow 150ms ease;
 
   &:focus {
-    border-color: var(--a-primary);
-    box-shadow: 0 0 0 3px rgba(10, 74, 46, 0.08);
+    @include a-well-focus;
   }
 
   &::placeholder {
@@ -281,13 +278,7 @@
 }
 
 .btnGhost {
-  background: var(--a-card);
-  color: var(--a-fg1);
-  border-color: var(--a-border);
-
-  &:hover {
-    background: var(--a-border-soft);
-  }
+  @include a-glass-ctl;
 }
 
 // ─── Toast ──────────────────────────────────────────────────────────────────
@@ -333,17 +324,24 @@
   flex: 1;
 }
 
+// Page-surface Delete is demoted to text-red (danger never shouts); the
+// filled red survives ONLY as the confirm modal's primary action below.
 .btnDanger {
-  background: var(--a-danger);
-  color: #ffffff;
-
-  &:hover:not(:disabled) {
-    background: #a3271a;
-  }
+  @include a-ghost-danger;
 
   &:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+  }
+}
+
+.modalActions .btnDanger {
+  background: var(--a-danger);
+  color: #ffffff;
+  border-color: transparent;
+
+  &:hover:not(:disabled) {
+    background: #a3271a;
   }
 }
 
@@ -352,6 +350,7 @@
   inset: 0;
   z-index: 1200;
   background: rgba(15, 20, 25, 0.6);
+  -webkit-backdrop-filter: blur(2px);
   backdrop-filter: blur(2px);
   display: flex;
   align-items: center;
@@ -364,13 +363,14 @@
   to { opacity: 1; }
 }
 
+// Floating glass sheet — fg1/fg2 text only (floating-glass rule).
 .modal {
-  background: var(--a-card);
+  @include a-glass-float;
   border-radius: 10px;
   padding: 24px;
   max-width: 460px;
   width: 90%;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--a-glass-hi), 0 20px 60px rgba(0, 0, 0, 0.3);
   animation: modalIn 200ms cubic-bezier(0.2, 0.9, 0.3, 1);
 }
 
@@ -388,8 +388,9 @@
 
 .modalBody {
   margin: 0 0 20px;
+  // fg2 — floating glass carries fg1/fg2 only.
+  color: var(--a-fg2);
   font-size: 14px;
-  color: var(--a-fg3);
   line-height: 1.5;
 }
 

@@ -1,13 +1,18 @@
 @use '@shared/styles/variables' as *;
+@use '../../glass' as *;
 
 // Supplier-detail Quick Actions hero strip — full-width row of 4 prominent
 // cards directly below the page head. Replaces both the compact sidebar
 // list (v6) AND the header "Add Part" button (now lives in the first card).
 // Each card pre-populates a destination form with this supplier's context,
 // so bulk inventory work skips the repeated supplier/manufacturer/category
-// typing the sales team would otherwise face. The first card is the
-// primary action (filled green); the rest carry their own hue so the strip
-// reads as a palette of distinct workflows rather than 4 identical cards.
+// typing the sales team would otherwise face.
+//
+// Liquid-glass pass (house law: ONE filled primary action per screen): only
+// the first card (Add Part) keeps the filled green treatment. The Blue /
+// Gold / Purple workflows are now GLASS cards that keep their identity
+// through a tonal icon tile + accent rim on hover — the strip still reads
+// as a palette of distinct workflows, without three extra filled blocks.
 
 .qaStrip {
   display: grid;
@@ -29,30 +34,36 @@
 }
 
 .qaCard {
+  // Per-card accent; the tonal variants below override it.
+  --qa-accent: var(--a-primary);
+
   display: grid;
   grid-template-columns: 40px 1fr auto;
   align-items: center;
   gap: 14px;
   padding: 16px 18px;
-  background: var(--a-card);
-  border: 1px solid var(--a-border);
+  @include a-glass-ctl($states: false);
   border-radius: 10px;
   text-align: left;
   cursor: pointer;
-  color: var(--a-primary);
   font: inherit;
-  box-shadow: var(--a-shadow-sm);
   transition: transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease,
     background-color 150ms ease;
 
   &:hover:not(:disabled) {
     transform: translateY(-1px);
-    border-color: var(--a-primary);
-    box-shadow: 0 4px 12px rgba(10, 74, 46, 0.10);
+    border-color: var(--qa-accent);
+    box-shadow: var(--a-glass-hi), var(--a-glass-shadow-hover);
   }
 
   &:active:not(:disabled) {
-    transform: translateY(0);
+    transform: scale(0.98);
+    box-shadow: var(--a-glass-press);
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: var(--a-focus-ring);
   }
 
   &:disabled {
@@ -67,13 +78,15 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: rgba(10, 74, 46, 0.08); // var(--a-accent-soft) fallback
+  // Tonal tile — carries each workflow's hue now that the card body is glass
+  // (each variant overrides the tint; no color-mix per house norms).
+  background: rgba(10, 74, 46, 0.1);
   border-radius: 8px;
   flex-shrink: 0;
 
   :global(i.ph-light) {
     font-size: 22px;
-    color: var(--a-primary);
+    color: var(--qa-accent);
     line-height: 1;
   }
 }
@@ -110,12 +123,12 @@
 
 .qaCard:hover .qaCardChev {
   transform: translateX(3px);
-  color: var(--a-primary);
+  color: var(--qa-accent);
 }
 
 // ─── Primary card — the page CTA (Add Part) ─────────────────────────────
-// Filled green background, white icon tile + text. Reads as the page's
-// most-used action without needing a separate header button.
+// The ONE filled action on this screen. Filled green background, white
+// icon tile + text.
 .qaCardPrimary {
   background: var(--a-primary);
   border-color: var(--a-primary);
@@ -159,84 +172,32 @@
 
 // ─── Tonal variants ────────────────────────────────────────────────────
 // Blue = data (Import CSV) · Gold = revenue (Sponsorship) · Purple = ops (Sync).
-// Same filled treatment as primary so the strip reads as one palette.
+// Glass bodies (one filled primary per screen); the hue lives in the icon
+// tile + the hover rim, so the strip still reads as distinct workflows.
+// Titles/hints inherit fg1/fg3 from the base card — accents are never ink.
 
 .qaCardBlue {
-  background: var(--a-blue);
-  border-color: var(--a-blue);
-  color: #ffffff;
-
-  &:hover:not(:disabled) {
-    background: #1d4ed8;
-    border-color: #1d4ed8;
-    box-shadow: 0 6px 16px rgba(37, 99, 235, 0.22);
-  }
+  --qa-accent: var(--a-blue);
 
   .qaCardIcon {
-    background: rgba(255, 255, 255, 0.16);
-
-    :global(i.ph-light) {
-      color: #ffffff;
-    }
+    background: rgba(37, 99, 235, 0.12);
   }
-
-  .qaCardTitle { color: #ffffff; }
-  .qaCardHint  { color: rgba(255, 255, 255, 0.78); }
-  .qaCardChev  { color: rgba(255, 255, 255, 0.7); }
-
-  &:hover .qaCardChev { color: #ffffff; }
 }
 
 .qaCardGold {
-  background: var(--a-warn);
-  border-color: var(--a-warn);
-  color: #ffffff;
-
-  &:hover:not(:disabled) {
-    background: #b45309;
-    border-color: #b45309;
-    box-shadow: 0 6px 16px rgba(217, 119, 6, 0.22);
-  }
+  --qa-accent: var(--a-warn);
 
   .qaCardIcon {
-    background: rgba(255, 255, 255, 0.18);
-
-    :global(i.ph-light) {
-      color: #ffffff;
-    }
+    background: rgba(217, 119, 6, 0.14);
   }
-
-  .qaCardTitle { color: #ffffff; }
-  .qaCardHint  { color: rgba(255, 255, 255, 0.82); }
-  .qaCardChev  { color: rgba(255, 255, 255, 0.7); }
-
-  &:hover .qaCardChev { color: #ffffff; }
 }
 
 .qaCardPurple {
-  background: var(--a-purple);
-  border-color: var(--a-purple);
-  color: #ffffff;
-
-  &:hover:not(:disabled) {
-    background: #6d28d9;
-    border-color: #6d28d9;
-    box-shadow: 0 6px 16px rgba(124, 58, 237, 0.22);
-  }
+  --qa-accent: var(--a-purple);
 
   .qaCardIcon {
-    background: rgba(255, 255, 255, 0.16);
-
-    :global(i.ph-light) {
-      color: #ffffff;
-    }
+    background: rgba(124, 58, 237, 0.12);
   }
-
-  .qaCardTitle { color: #ffffff; }
-  .qaCardHint  { color: rgba(255, 255, 255, 0.78); }
-  .qaCardChev  { color: rgba(255, 255, 255, 0.7); }
-
-  &:hover .qaCardChev { color: #ffffff; }
 }
 
 .qaSpin {

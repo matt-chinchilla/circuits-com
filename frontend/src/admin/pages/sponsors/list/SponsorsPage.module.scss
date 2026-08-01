@@ -1,4 +1,5 @@
 @use '@shared/styles/variables' as *;
+@use '../../glass' as *;
 
 // Phase A6 — Sponsors list page styling, ported from
 // design-import/circuits-com-design-system/project/ui_kits/admin/styles.css
@@ -79,11 +80,11 @@
 // table bounds and would be clipped by overflow:hidden (mirrors PartsPage).
 // The clip used to round the table flush with the panel's bottom edge, so the
 // last row's outer cells take the corner radii back explicitly.
+// Glass pane on the CONTAINER only — the table region inside stays flat
+// (opaque thead, no filter anywhere near the tabular text).
 .panel {
-  background: var(--a-card);
+  @include a-glass-pane;
   border-radius: var(--a-radius);
-  box-shadow: var(--a-shadow-sm);
-  border: 1px solid var(--a-border-soft);
   overflow: visible;
 
   .table tbody tr:last-child td:first-child {
@@ -109,6 +110,9 @@
   min-width: 0;
 }
 
+// Resting chips are quiet (transparent + hairline); the ACTIVE chip is the
+// raised glass pill with a primary rim — donor FilterPillGroup idiom, and it
+// keeps the screen at one filled action (the green Add Sponsor button).
 .filterChip {
   display: inline-flex;
   align-items: center;
@@ -118,11 +122,12 @@
   font-size: 13px;
   font-weight: 500;
   color: var(--a-fg2);
-  background: var(--a-card);
+  background: transparent;
   border: 1px solid var(--a-border);
   border-radius: 20px;
   cursor: pointer;
-  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease,
+    box-shadow 120ms ease;
 }
 
 .filterChip:hover:not(.filterChipActive) {
@@ -131,13 +136,14 @@
 }
 
 .filterChipActive {
-  background: var(--a-primary);
-  color: #ffffff;
+  @include a-glass-ctl($states: false);
   border-color: var(--a-primary);
+  font-weight: 600;
 
   .chipCount {
-    background: rgba(255, 255, 255, 0.2);
-    color: #ffffff;
+    @include a-glass-well;
+    border: none;
+    color: var(--a-fg1);
   }
 }
 
@@ -160,14 +166,12 @@
   align-items: center;
   gap: 6px;
   padding: 6px 10px;
-  background: var(--a-card);
-  border: 1px solid var(--a-border);
+  @include a-glass-well;
   border-radius: 6px;
   min-width: 280px;
 
   &:focus-within {
-    border-color: var(--a-primary);
-    box-shadow: 0 0 0 3px rgba(10, 74, 46, 0.08);
+    @include a-well-focus;
   }
 
   svg {
@@ -541,6 +545,9 @@
 }
 
 // Panel — positioned below the TH, opens with a small slide+fade.
+// Floating glass — the one surface here that genuinely passes over live
+// table content, so it carries the real backdrop-filter. Text inside is
+// fg1/fg2 ONLY (floating-glass rule, LIQUID-GLASS.md).
 .columnPanel {
   position: absolute;
   top: 100%;
@@ -548,10 +555,9 @@
   z-index: 30;
   min-width: 240px;
   max-width: 320px;
-  background: var(--a-card);
-  border: 1px solid var(--a-border);
+  @include a-glass-float;
   border-radius: 8px;
-  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.14);
+  box-shadow: var(--a-glass-hi), var(--a-glass-shadow-hover);
   margin-top: 4px;
   overflow: hidden;
   // Restore body-text styling inside (the TH is uppercase + small + tracked).
@@ -586,7 +592,8 @@
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--a-fg4);
+  // fg2 — floating glass carries fg1/fg2 only (fg4 fails over scrolled content).
+  color: var(--a-fg2);
 }
 
 .sectionDivider {
@@ -621,7 +628,8 @@
 }
 
 .panelBtnClear {
-  color: var(--a-fg3);
+  // fg2 — floating glass carries fg1/fg2 only.
+  color: var(--a-fg2);
 
   &:hover {
     color: var(--a-danger);
@@ -727,7 +735,8 @@
 .multiEmpty {
   padding: 12px;
   font-size: 12px;
-  color: var(--a-fg4);
+  // fg2 — floating glass carries fg1/fg2 only.
+  color: var(--a-fg2);
   text-align: center;
 }
 

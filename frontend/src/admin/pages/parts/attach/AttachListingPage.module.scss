@@ -1,4 +1,5 @@
 @use '@shared/styles/variables' as *;
+@use '../../glass' as *;
 
 // AttachListingPage — "add an existing part to a supplier's catalog".
 // Visual structure is lifted 1:1 from PartFormPage (.page-head → .form-grid
@@ -90,9 +91,8 @@ $a-shadow-sm: var(--a-shadow-sm);
 }
 
 .panel {
-  background: $a-card;
+  @include a-glass-pane;
   border-radius: $a-radius;
-  box-shadow: $a-shadow-sm;
   overflow: hidden;
 }
 
@@ -114,7 +114,8 @@ $a-shadow-sm: var(--a-shadow-sm);
 
 .panelNote {
   font-size: 12px;
-  color: $a-fg4;
+  // fg3, not fg4 — small text on a resting glass pane.
+  color: $a-fg3;
 }
 
 .panelBody {
@@ -166,7 +167,8 @@ $a-shadow-sm: var(--a-shadow-sm);
 .idLabel {
   font-size: 11px;
   font-weight: 600;
-  color: $a-fg4;
+  // fg3, not fg4 — small text on a resting glass pane.
+  color: $a-fg3;
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
@@ -226,7 +228,8 @@ $a-shadow-sm: var(--a-shadow-sm);
 
 .fieldHint {
   font-size: 12px;
-  color: $a-fg4;
+  // fg3, not fg4 — small text on a resting glass pane.
+  color: $a-fg3;
 }
 
 .fieldError {
@@ -237,13 +240,13 @@ $a-shadow-sm: var(--a-shadow-sm);
 
 // ─── Inputs ────────────────────────────────────────────────────────────────
 
+// Form wells — the donor's recessed channel; focus swaps to the two-ring halo.
 .input,
 .select {
   font-family: inherit;
   font-size: 14px;
   color: $a-fg1;
-  background: $a-card;
-  border: 1px solid $a-border;
+  @include a-glass-well;
   border-radius: 6px;
   padding: 9px 12px;
   outline: none;
@@ -252,8 +255,7 @@ $a-shadow-sm: var(--a-shadow-sm);
   box-sizing: border-box;
 
   &:focus {
-    border-color: $a-primary;
-    box-shadow: 0 0 0 3px rgba(10, 74, 46, 0.08);
+    @include a-well-focus;
   }
 
   &::placeholder {
@@ -377,13 +379,7 @@ $a-shadow-sm: var(--a-shadow-sm);
 }
 
 .btnGhost {
-  background: $a-card;
-  color: $a-fg1;
-  border-color: $a-border;
-
-  &:hover:not(:disabled) {
-    background: $a-border-soft;
-  }
+  @include a-glass-ctl;
 }
 
 // ─── Loading / error states ────────────────────────────────────────────────
@@ -397,9 +393,8 @@ $a-shadow-sm: var(--a-shadow-sm);
 
 .error {
   padding: 20px;
+  @include a-glass-pane;
   border-radius: $a-radius;
-  background: $a-card;
-  box-shadow: $a-shadow-sm;
   color: $a-danger;
   font-size: 14px;
 }

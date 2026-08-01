@@ -1,5 +1,6 @@
 @use '@shared/styles/variables' as *;
 @use '@admin/styles/variables' as *;
+@use '../../glass' as *;
 
 // Supplier detail — port of bundle's two-column .detail-grid layout.
 // Main column: identity + kv-list of company info.
@@ -132,27 +133,15 @@
 }
 
 .btnGhost {
-  background: var(--a-card);
-  color: var(--a-fg1);
-  border-color: var(--a-border);
-
-  &:hover {
-    background: var(--a-border-soft);
-  }
+  @include a-glass-ctl;
 }
 
-// Soft destructive variant for the page-head Delete button — reads as
-// secondary chrome until hover, then commits to danger-red. Pairs with
-// the confirm modal's primary .btnDanger button.
+// Soft destructive variant for the page-head Delete button — text-red on a
+// hairline until hover (danger never shouts). Pairs with the confirm
+// modal's primary .btnDanger button. (Also drops the old light-only literal
+// hexes, so it now themes correctly in dark.)
 .btnDangerGhost {
-  background: var(--a-card);
-  color: var(--a-danger);
-  border-color: #fee2e2;
-
-  &:hover {
-    background: #fef2f2;
-    border-color: #fca5a5;
-  }
+  @include a-ghost-danger;
 }
 
 .btnDanger {
@@ -177,13 +166,14 @@
   animation: fadeIn 150ms ease;
 }
 
+// Floating glass sheet — fg1/fg2 text only (floating-glass rule).
 .modal {
-  background: var(--a-card);
+  @include a-glass-float;
   border-radius: 12px;
   padding: 28px;
   max-width: 460px;
   width: 90%;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--a-glass-hi), 0 20px 60px rgba(0, 0, 0, 0.3);
   animation: modalIn 200ms ease;
 }
 
@@ -250,9 +240,8 @@
 }
 
 .panel {
-  background: var(--a-card);
+  @include a-glass-pane;
   border-radius: 8px;
-  box-shadow: var(--a-shadow-sm);
   // Flex column so the inner .panelBody (Description) can flex-grow into
   // any leftover height when this panel sits in the stretched detailGrid.
   display: flex;
@@ -391,7 +380,8 @@
 
 .miniStatHint {
   font-size: 12px;
-  color: var(--a-fg4);
+  // fg3, not fg4 — small text on a resting glass pane.
+  color: var(--a-fg3);
   margin-top: 4px;
 }
 
@@ -507,17 +497,10 @@
   padding: 0 16px;
   font-size: 13px;
   font-weight: 600;
-  border: 1px solid var(--a-border);
+  @include a-glass-ctl;
   border-radius: 6px;
-  background: var(--a-card);
-  color: var(--a-fg1);
   cursor: pointer;
   font-family: inherit;
-  transition: background-color 150ms ease;
-
-  &:hover:not(:disabled) {
-    background: var(--a-border-soft);
-  }
 
   &:disabled {
     opacity: 0.4;
@@ -537,9 +520,8 @@
   padding: 48px;
   text-align: center;
   font-size: 14px;
-  background: var(--a-card);
+  @include a-glass-pane;
   border-radius: 8px;
-  box-shadow: var(--a-shadow-sm);
 }
 
 .loading {

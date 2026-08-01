@@ -1,4 +1,5 @@
 @use '@shared/styles/variables' as *;
+@use '../../glass' as *;
 
 // Expense new/edit form — the same field/panel/action vocabulary as
 // SponsorFormPage so the two admin forms are indistinguishable in rhythm.
@@ -66,10 +67,8 @@
 }
 
 .panel {
-  background: var(--a-card);
+  @include a-glass-pane;
   border-radius: var(--a-radius);
-  box-shadow: var(--a-shadow-sm);
-  border: 1px solid var(--a-border-soft);
   overflow: hidden;
 }
 
@@ -117,7 +116,8 @@
 
 .fieldHint {
   font-size: 12px;
-  color: var(--a-fg4);
+  // fg3, not fg4 — small text on a resting glass pane.
+  color: var(--a-fg3);
   margin: 4px 0 0;
   line-height: 1.5;
 }
@@ -140,14 +140,14 @@
 
 // ─── Inputs ─────────────────────────────────────────────────────────────────
 
+// Form wells — the donor's recessed channel; focus swaps to the two-ring halo.
 .textInput,
 .textArea,
 .select {
   font-family: inherit;
   font-size: 14px;
   color: var(--a-fg1);
-  background: var(--a-card);
-  border: 1px solid var(--a-border);
+  @include a-glass-well;
   border-radius: 6px;
   padding: 9px 12px;
   outline: none;
@@ -161,8 +161,7 @@
 .textInput:focus,
 .textArea:focus,
 .select:focus {
-  border-color: var(--a-primary);
-  box-shadow: 0 0 0 3px rgba(10, 74, 46, 0.08);
+  @include a-well-focus;
 }
 
 .textInput.mono {
@@ -245,18 +244,19 @@
 }
 
 .btnGhost {
-  background: var(--a-card);
-  color: var(--a-fg1);
-  border-color: var(--a-border);
-
-  &:hover {
-    background: var(--a-border-soft);
-  }
+  @include a-glass-ctl;
 }
 
+// Page-surface Delete is demoted to text-red (danger never shouts); the
+// filled red survives ONLY as the confirm modal's primary action below.
 .btnDanger {
+  @include a-ghost-danger;
+}
+
+.modalActions .btnDanger {
   background: var(--a-danger);
   color: #ffffff;
+  border-color: transparent;
 
   &:hover:not(:disabled) {
     background: #a3271a;
@@ -308,6 +308,7 @@
   inset: 0;
   z-index: 200;
   background: rgba(15, 20, 25, 0.6);
+  -webkit-backdrop-filter: blur(2px);
   backdrop-filter: blur(2px);
   display: flex;
   align-items: center;
@@ -325,13 +326,14 @@
   }
 }
 
+// Floating glass sheet — fg1/fg2 text only (floating-glass rule).
 .modal {
-  background: var(--a-card);
+  @include a-glass-float;
   border-radius: 10px;
   padding: 24px;
   max-width: 440px;
   width: 90%;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--a-glass-hi), 0 20px 60px rgba(0, 0, 0, 0.3);
   animation: modalIn 200ms cubic-bezier(0.2, 0.9, 0.3, 1);
 }
 

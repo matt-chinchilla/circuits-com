@@ -1,4 +1,5 @@
 @use '@shared/styles/variables' as *;
+@use '../../glass' as *;
 
 // Phase A6 — Sponsor New/Edit form styling, ported from
 // design-import/circuits-com-design-system/project/ui_kits/admin/styles.css
@@ -69,10 +70,8 @@
 // ─── Panels ─────────────────────────────────────────────────────────────────
 
 .panel {
-  background: var(--a-card);
+  @include a-glass-pane;
   border-radius: var(--a-radius);
-  box-shadow: var(--a-shadow-sm);
-  border: 1px solid var(--a-border-soft);
   overflow: hidden;
 }
 
@@ -120,7 +119,8 @@
 
 .fieldHint {
   font-size: 12px;
-  color: var(--a-fg4);
+  // fg3, not fg4 — small text on a resting glass pane.
+  color: var(--a-fg3);
   margin: 4px 0 0;
 }
 
@@ -144,14 +144,14 @@
 
 // ─── Inputs ─────────────────────────────────────────────────────────────────
 
+// Form wells — the donor's recessed channel; focus swaps to the two-ring halo.
 .textInput,
 .textArea,
 .select {
   font-family: inherit;
   font-size: 14px;
   color: var(--a-fg1);
-  background: var(--a-card);
-  border: 1px solid var(--a-border);
+  @include a-glass-well;
   border-radius: 6px;
   padding: 9px 12px;
   outline: none;
@@ -163,8 +163,7 @@
 .textInput:focus,
 .textArea:focus,
 .select:focus {
-  border-color: var(--a-primary);
-  box-shadow: 0 0 0 3px rgba(10, 74, 46, 0.08);
+  @include a-well-focus;
 }
 
 .textInput.mono,
@@ -256,8 +255,7 @@
   font-family: inherit;
   font-size: 14px;
   color: var(--a-fg1);
-  background: var(--a-card);
-  border: 1px solid var(--a-border);
+  @include a-glass-well;
   border-radius: 6px;
   padding: 9px 32px 9px 12px;
   outline: none;
@@ -277,8 +275,7 @@
   }
 
   &:focus {
-    border-color: var(--a-primary);
-    box-shadow: 0 0 0 3px rgba(10, 74, 46, 0.08);
+    @include a-well-focus;
   }
 }
 
@@ -295,16 +292,16 @@
   flex: 1;
 }
 
+// Floating glass — passes over the form below it; fg1/fg2 text only.
 .iconSelectPopover {
   position: absolute;
   top: calc(100% + 4px);
   left: 0;
   right: 0;
   z-index: 50;
-  background: var(--a-card);
-  border: 1px solid var(--a-border);
+  @include a-glass-float;
   border-radius: 6px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+  box-shadow: var(--a-glass-hi), var(--a-glass-shadow-hover);
   padding: 4px;
   max-height: 280px;
   overflow-y: auto;
@@ -350,7 +347,8 @@
 .iconSelectEmpty {
   padding: 12px;
   font-size: 13px;
-  color: var(--a-fg4);
+  // fg2 — floating glass carries fg1/fg2 only.
+  color: var(--a-fg2);
   text-align: center;
 }
 
@@ -358,9 +356,8 @@
 
 .segControl {
   display: inline-flex;
-  border: 1px solid var(--a-border);
+  @include a-glass-well;
   border-radius: 6px;
-  background: var(--a-bg);
   padding: 3px;
   gap: 2px;
   width: fit-content;
@@ -383,10 +380,15 @@
   color: var(--a-fg1);
 }
 
+// Raised glass thumb on the recessed track. Borderless (base has none);
+// the rim rides the shadow stack. fg1 — primary-green is never ink on glass.
 .segBtnOn {
-  background: var(--a-card);
-  color: var(--a-primary);
-  box-shadow: var(--a-shadow-sm);
+  @include a-glass-ctl($states: false);
+  border: none;
+  box-shadow:
+    inset 0 0 0 1px var(--a-glass-rim),
+    var(--a-glass-hi),
+    var(--a-glass-shadow);
   font-weight: 600;
 }
 
@@ -436,18 +438,19 @@
 }
 
 .btnGhost {
-  background: var(--a-card);
-  color: var(--a-fg1);
-  border-color: var(--a-border);
-
-  &:hover {
-    background: var(--a-border-soft);
-  }
+  @include a-glass-ctl;
 }
 
+// Page-surface Delete is demoted to text-red (danger never shouts); the
+// filled red survives ONLY as the confirm modal's primary action below.
 .btnDanger {
+  @include a-ghost-danger;
+}
+
+.modalActions .btnDanger {
   background: var(--a-danger);
   color: #ffffff;
+  border-color: transparent;
 
   &:hover:not(:disabled) {
     background: #a3271a;
@@ -498,6 +501,7 @@
   inset: 0;
   z-index: 200;
   background: rgba(15, 20, 25, 0.6);
+  -webkit-backdrop-filter: blur(2px);
   backdrop-filter: blur(2px);
   display: flex;
   align-items: center;
@@ -514,13 +518,14 @@
   }
 }
 
+// Floating glass sheet — fg1/fg2 text only (floating-glass rule).
 .modal {
-  background: var(--a-card);
+  @include a-glass-float;
   border-radius: 10px;
   padding: 24px;
   max-width: 440px;
   width: 90%;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--a-glass-hi), 0 20px 60px rgba(0, 0, 0, 0.3);
   animation: modalIn 200ms cubic-bezier(0.2, 0.9, 0.3, 1);
 }
 

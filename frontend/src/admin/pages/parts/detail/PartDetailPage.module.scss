@@ -1,4 +1,5 @@
 @use '@shared/styles/variables' as *;
+@use '../../glass' as *;
 
 // PartDetailPage — ported from 2026-04-25 Claude Design bundle (Phase A5).
 // Bundle structure: .page-head with back link + actions, then .detail-grid
@@ -161,23 +162,11 @@ $a-shadow-sm: var(--a-shadow-sm);
 }
 
 .btnGhost {
-  background: var(--a-card);
-  color: $a-fg1;
-  border-color: $a-border;
-
-  &:hover:not(:disabled) {
-    background: $a-border-soft;
-  }
+  @include a-glass-ctl;
 }
 
 .btnDangerGhost {
-  background: var(--a-card);
-  color: $a-danger;
-  border-color: rgba(192, 57, 43, 0.3);
-
-  &:hover:not(:disabled) {
-    background: rgba(192, 57, 43, 0.06);
-  }
+  @include a-ghost-danger;
 }
 
 // ─── Detail grid (main + sidebar) ──────────────────────────────────────────
@@ -196,9 +185,8 @@ $a-shadow-sm: var(--a-shadow-sm);
 // ─── Panel ─────────────────────────────────────────────────────────────────
 
 .panel {
-  background: $a-card;
+  @include a-glass-pane;
   border-radius: $a-radius;
-  box-shadow: $a-shadow-sm;
   overflow: hidden;
 }
 
@@ -351,7 +339,8 @@ $a-shadow-sm: var(--a-shadow-sm);
 
 .miniStatHint {
   font-size: 12px;
-  color: $a-fg4;
+  // fg3, not fg4 — small text on a resting glass pane.
+  color: $a-fg3;
   margin-top: 4px;
 }
 
@@ -450,14 +439,15 @@ $a-shadow-sm: var(--a-shadow-sm);
 .priceBreaks {
   margin: 8px 20px 16px;
   padding: 10px 14px;
-  background: $a-bg;
+  @include a-glass-well;
   border-radius: 6px;
 }
 
 .priceBreakLabel {
   font-size: 11px;
   font-weight: 700;
-  color: $a-fg3;
+  // fg2, not fg3 — sits in the recessed well (fg3 fails 4.5:1 there).
+  color: $a-fg2;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   margin-bottom: 6px;
@@ -512,6 +502,7 @@ $a-shadow-sm: var(--a-shadow-sm);
   inset: 0;
   z-index: 200;
   background: rgba(15, 20, 25, 0.6);
+  -webkit-backdrop-filter: blur(2px);
   backdrop-filter: blur(2px);
   display: flex;
   align-items: center;
@@ -524,13 +515,14 @@ $a-shadow-sm: var(--a-shadow-sm);
   to { opacity: 1; }
 }
 
+// Floating glass sheet — fg1/fg2 text only (floating-glass rule).
 .modal {
-  background: var(--a-card);
+  @include a-glass-float;
   border-radius: 10px;
   padding: 24px;
   max-width: 440px;
   width: 90%;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--a-glass-hi), 0 20px 60px rgba(0, 0, 0, 0.3);
   animation: modalIn 200ms cubic-bezier(0.2, 0.9, 0.3, 1);
 }
 

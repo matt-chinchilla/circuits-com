@@ -1,0 +1,136 @@
+@use '@shared/styles/variables' as *;
+
+// ── Liquid-glass recipes for admin PAGE modules ──────────────────────────────
+// Sass-side companion to admin/styles/glass.scss (the global utility classes)
+// and the --a-glass* tokens on `.admin` in AdminLayout.module.scss. Page
+// modules can't reach the global utility classes from inside CSS-Modules
+// markup they don't own, so these mixins inline the SAME recipes into
+// existing page classes. Values all route through the token layer, so light
+// and dark theme-switch for free. See admin/styles/LIQUID-GLASS.md for the
+// token table, the computed contrast tables, and the house law.
+//
+// Two pane grades, on purpose:
+//
+//   glass-pane   RESTING panes — panels, stat cards, toolbars that sit on the
+//                flat admin bench. Deliberately carries NO backdrop-filter:
+//                blurring a flat solid color is a visual no-op, but each
+//                filter still costs a compositor layer that re-filters on
+//                every scrolled frame. The owner's own mail-skin precedent
+//                ("toolbars are a lighter veil WITHOUT their own filter —
+//                nothing scrolls under them, a second blur layer would buy
+//                nothing") is applied here to every surface whose backdrop is
+//                the bench. The material read comes from the veil + rim +
+//                top-highlight + contact/ambient shadows. This also keeps
+//                dense data tables blur-free by construction.
+//
+//   glass-float  FLOATING sheets — popovers, dropdown panels, modals: the
+//                only surfaces that genuinely pass over live content, so the
+//                real backdrop-filter earns its cost here. Binding text rule
+//                (LIQUID-GLASS.md): floating glass carries fg1/fg2 ONLY.
+//
+// Mobile (≤ $bp-admin-mobile): panes go OPAQUE (--a-card) and floats drop
+// their filter — phone GPUs pay for blur in DPR²-sized layers (documented
+// iPhone OOM history in this repo). All contrast ratios only improve.
+
+@mixin a-glass-pane {
+  background: var(--a-glass);
+  border: 1px solid var(--a-glass-rim);
+  box-shadow: var(--a-glass-hi), var(--a-glass-shadow);
+
+  @media (max-width: $bp-admin-mobile) {
+    background: var(--a-card);
+  }
+}
+
+@mixin a-glass-float {
+  background: var(--a-glass);
+  -webkit-backdrop-filter: var(--a-glass-filter);
+  backdrop-filter: var(--a-glass-filter);
+  border: 1px solid var(--a-glass-rim);
+
+  @media (max-width: $bp-admin-mobile) {
+    background: var(--a-card);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+// Control material — buttons, active filter pills, raised segmented thumbs.
+// No backdrop-filter (controls rest on flat panes — same no-op argument).
+// States are pure CSS: hover rises 1px + deepens the cast, press compresses,
+// focus swaps to the two-ring halo, disabled fades. Callers that need their
+// own hover/active grammar pass $states: false.
+@mixin a-glass-ctl($states: true) {
+  color: var(--a-fg1);
+  background: var(--a-glass-ctl);
+  border: 1px solid var(--a-glass-rim);
+  box-shadow: var(--a-glass-hi), var(--a-glass-shadow);
+
+  @if $states {
+    transition:
+      transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1),
+      box-shadow 0.18s ease,
+      background 0.18s ease,
+      color 0.18s ease,
+      border-color 0.18s ease;
+
+    &:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: var(--a-glass-hi), var(--a-glass-shadow-hover);
+    }
+
+    &:active:not(:disabled) {
+      transform: scale(0.97);
+      box-shadow: var(--a-glass-press);
+    }
+
+    &:focus-visible {
+      outline: none;
+      box-shadow: var(--a-focus-ring);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      transition: none;
+
+      &:hover,
+      &:active {
+        transform: none;
+      }
+    }
+  }
+}
+
+// Recessed channel — search fields, segmented tracks, form input wells.
+// Text inside: fg1/fg2 only (fg3 computes below 4.5:1 in the light well).
+@mixin a-glass-well {
+  background: var(--a-glass-well);
+  border: 1px solid transparent;
+  box-shadow: var(--a-glass-well-shadow);
+}
+
+// Focus grammar for well-recessed inputs: the two-ring halo replaces the old
+// border-color + soft-shadow pair (the well border stays transparent).
+@mixin a-well-focus {
+  border-color: transparent;
+  box-shadow: var(--a-glass-well-shadow), var(--a-focus-ring);
+}
+
+// Quiet destructive control — the house law's "danger never shouts":
+// text-red on a hairline, committing to a red tint only on hover. The filled
+// red .btnDanger survives ONLY as a modal-confirm primary (scoped at the
+// call sites via `.modalActions`).
+@mixin a-ghost-danger {
+  background: transparent;
+  color: var(--a-danger);
+  border: 1px solid rgba(192, 57, 43, 0.35);
+  box-shadow: none;
+
+  &:hover:not(:disabled) {
+    background: rgba(192, 57, 43, 0.08);
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(192, 57, 43, 0.18), 0 0 0 1.5px var(--a-danger);
+  }
+}

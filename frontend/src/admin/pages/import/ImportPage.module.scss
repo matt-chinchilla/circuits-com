@@ -1,4 +1,5 @@
 @use '@shared/styles/variables' as *;
+@use '../glass' as *;
 
 // Phase A9 — Import page styling, ported from
 // design-import/circuits-com-design-system/project/ui_kits/admin/styles.css
@@ -164,11 +165,10 @@
 
 // ─── Panel ──────────────────────────────────────────────────────────────────
 
+// Glass pane on the CONTAINER only — the mapping table inside stays flat.
 .panel {
-  background: var(--a-card);
+  @include a-glass-pane;
   border-radius: var(--a-radius);
-  box-shadow: var(--a-shadow-sm);
-  border: 1px solid var(--a-border-soft);
   overflow: hidden;
   margin-bottom: 20px;
 }
@@ -248,8 +248,7 @@
   font-family: inherit;
   font-size: 14px;
   color: var(--a-fg1);
-  background: var(--a-card);
-  border: 1px solid var(--a-border);
+  @include a-glass-well;
   border-radius: 6px;
   padding: 9px 12px;
   outline: none;
@@ -257,8 +256,7 @@
   cursor: pointer;
 
   &:focus {
-    border-color: var(--a-primary);
-    box-shadow: 0 0 0 3px rgba(10, 74, 46, 0.08);
+    @include a-well-focus;
   }
 }
 
@@ -335,8 +333,7 @@
   font-family: $font-mono;
   font-size: 12px;
   padding: 12px;
-  background: var(--a-bg);
-  border: 1px solid var(--a-border-soft);
+  @include a-glass-well;
   border-radius: 6px;
   margin: 8px 0 0;
   white-space: pre-wrap;
@@ -396,8 +393,7 @@
   font-family: inherit;
   font-size: 13px;
   color: var(--a-fg1);
-  background: var(--a-card);
-  border: 1px solid var(--a-border);
+  @include a-glass-well;
   border-radius: 6px;
   padding: 6px 10px;
   outline: none;
@@ -406,8 +402,7 @@
   transition: border-color 150ms ease, box-shadow 150ms ease;
 
   &:focus {
-    border-color: var(--a-primary);
-    box-shadow: 0 0 0 3px rgba(10, 74, 46, 0.08);
+    @include a-well-focus;
   }
 }
 
@@ -435,8 +430,7 @@
 }
 
 .rsCard {
-  background: var(--a-bg);
-  border: 1px solid var(--a-border-soft);
+  @include a-glass-well;
   border-radius: 6px;
   padding: 14px 16px;
 }
@@ -454,7 +448,8 @@
 .rsLabel {
   font-size: 11px;
   font-weight: 600;
-  color: var(--a-fg3);
+  // fg2, not fg3 — sits in the recessed well (fg3 fails 4.5:1 there).
+  color: var(--a-fg2);
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
@@ -585,13 +580,7 @@
 }
 
 .btnGhost {
-  background: var(--a-card);
-  color: var(--a-fg1);
-  border-color: var(--a-border);
-
-  &:hover:not(:disabled) {
-    background: var(--a-border-soft);
-  }
+  @include a-glass-ctl;
 }
 
 // ─── Mobile (<=820px) ──────────────────────────────────────────────────────

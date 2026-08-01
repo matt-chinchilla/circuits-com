@@ -1,5 +1,6 @@
 @use '@shared/styles/variables' as *;
 @use '@admin/styles/variables' as *;
+@use '../../glass' as *;
 
 // Suppliers list — port of 2026-04-25 Claude Design bundle .sup-* rules.
 // Three-column card grid, lettermark logo on gold gradient, tier pills.
@@ -75,21 +76,14 @@
 }
 
 .btnGhost {
-  background: var(--a-card);
-  color: var(--a-fg1);
-  border-color: var(--a-border);
-
-  &:hover {
-    background: var(--a-border-soft);
-  }
+  @include a-glass-ctl;
 }
 
 // ─── Panel + toolbar ────────────────────────────────────────────────────────
 
 .panel {
-  background: var(--a-card);
+  @include a-glass-pane;
   border-radius: 8px;
-  box-shadow: var(--a-shadow-sm);
 }
 
 .toolbar {
@@ -121,14 +115,15 @@
   }
 }
 
+// Active chip = raised glass pill with a primary rim (donor FilterPillGroup
+// idiom; fg1 label — primary-green is a fill color, never ink on glass).
 .filterChipActive {
-  background: rgba(10, 74, 46, 0.08);
-  color: var(--a-primary);
-  border-color: rgba(10, 74, 46, 0.18);
+  @include a-glass-ctl($states: false);
+  border-color: var(--a-primary);
+  font-weight: 600;
 
   &:hover {
-    background: rgba(10, 74, 46, 0.12);
-    color: var(--a-primary);
+    color: var(--a-fg1);
   }
 }
 
@@ -141,10 +136,13 @@
   align-items: center;
   gap: 6px;
   padding: 6px 12px;
-  background: var(--a-bg);
-  border: 1px solid var(--a-border);
+  @include a-glass-well;
   border-radius: 6px;
   min-width: 240px;
+
+  &:focus-within {
+    @include a-well-focus;
+  }
 
   svg {
     color: var(--a-fg4);
@@ -190,10 +188,8 @@
 }
 
 .supCard {
-  background: var(--a-card);
-  border: 1px solid var(--a-border);
+  @include a-glass-pane;
   border-radius: 8px;
-  box-shadow: var(--a-shadow-sm);
   padding: 20px;
   display: flex;
   flex-direction: column;
@@ -202,7 +198,7 @@
   transition: box-shadow 200ms ease, transform 200ms ease, border-color 200ms ease;
 
   &:hover {
-    box-shadow: var(--a-shadow-md);
+    box-shadow: var(--a-glass-hi), var(--a-glass-shadow-hover);
     transform: translateY(-2px);
     border-color: rgba(10, 74, 46, 0.2);
   }

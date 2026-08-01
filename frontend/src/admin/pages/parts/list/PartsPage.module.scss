@@ -1,4 +1,5 @@
 @use '@shared/styles/variables' as *;
+@use '../../glass' as *;
 
 // PartsPage — ported from 2026-04-25 Claude Design bundle (Phase A5).
 // Mirrors the bundle's `.panel`, `.a-toolbar`, `.filter-chip`, `.inline-search`,
@@ -96,13 +97,7 @@ $a-shadow-sm: var(--a-shadow-sm);
 }
 
 .btnGhost {
-  background: $a-card;
-  color: $a-fg1;
-  border-color: $a-border;
-
-  &:hover {
-    background: $a-border-soft;
-  }
+  @include a-glass-ctl;
 }
 
 // ─── Panel container (holds toolbar + table) ───────────────────────────────
@@ -111,10 +106,11 @@ $a-shadow-sm: var(--a-shadow-sm);
 // dropdown — the absolutely-positioned ColumnHeader panel extends below
 // the table bounds and would be clipped if this wrapper had overflow:hidden.
 // The rounded corners survive because the panel has no border, only shadow.
+// Glass pane on the CONTAINER only — the table region inside stays flat
+// (opaque thead, no filter anywhere near the tabular text).
 .panel {
-  background: $a-card;
+  @include a-glass-pane;
   border-radius: $a-radius;
-  box-shadow: $a-shadow-sm;
   overflow: visible;
   // Round the table's first row corners to match the panel border-radius
   // (since we lost the overflow:hidden clip).
@@ -138,17 +134,20 @@ $a-shadow-sm: var(--a-shadow-sm);
   flex-wrap: wrap;
 }
 
+// Resting chips are quiet (transparent + hairline); the ACTIVE chip is the
+// raised glass pill with a primary rim — donor FilterPillGroup idiom, and it
+// keeps the screen at one filled action (the green Add Part button).
 .filterChip {
   padding: 6px 12px;
   font-size: 13px;
   font-weight: 500;
   color: $a-fg2;
-  background: $a-card;
+  background: transparent;
   border: 1px solid $a-border;
   border-radius: 20px;
   cursor: pointer;
   font-family: inherit;
-  transition: background-color 150ms, color 150ms, border-color 150ms;
+  transition: background-color 150ms, color 150ms, border-color 150ms, box-shadow 150ms;
 
   &:hover:not(.filterChipActive) {
     border-color: $a-primary;
@@ -157,9 +156,9 @@ $a-shadow-sm: var(--a-shadow-sm);
 }
 
 .filterChipActive {
-  background: $a-primary;
-  color: #ffffff;
+  @include a-glass-ctl($states: false);
   border-color: $a-primary;
+  font-weight: 600;
 }
 
 .toolbarSpacer {
@@ -171,15 +170,13 @@ $a-shadow-sm: var(--a-shadow-sm);
   align-items: center;
   gap: 6px;
   padding: 6px 10px;
-  background: $a-card;
-  border: 1px solid $a-border;
+  @include a-glass-well;
   border-radius: 6px;
   min-width: 240px;
   transition: border-color 150ms, box-shadow 150ms;
 
   &:focus-within {
-    border-color: $a-primary;
-    box-shadow: 0 0 0 3px rgba(10, 74, 46, 0.08);
+    @include a-well-focus;
   }
 
   svg {
@@ -354,17 +351,9 @@ $a-shadow-sm: var(--a-shadow-sm);
   font-family: inherit;
   font-size: 13px;
   font-weight: 600;
-  background: $a-card;
-  color: $a-fg2;
-  border: 1px solid $a-border;
+  @include a-glass-ctl;
   border-radius: 6px;
   cursor: pointer;
-  transition: background-color 150ms, color 150ms;
-
-  &:hover:not(:disabled) {
-    background: $a-border-soft;
-    color: $a-fg1;
-  }
 
   &:disabled {
     opacity: 0.4;
@@ -453,6 +442,9 @@ $a-shadow-sm: var(--a-shadow-sm);
 }
 
 // Panel — positioned below the TH, opens with a small slide+fade.
+// Floating glass — the one surface here that genuinely passes over live
+// table content, so it carries the real backdrop-filter. Text inside is
+// fg1/fg2 ONLY (floating-glass rule, LIQUID-GLASS.md).
 .columnPanel {
   position: absolute;
   top: 100%;
@@ -460,10 +452,9 @@ $a-shadow-sm: var(--a-shadow-sm);
   z-index: 30;
   min-width: 240px;
   max-width: 320px;
-  background: $a-card;
-  border: 1px solid $a-border;
+  @include a-glass-float;
   border-radius: 8px;
-  box-shadow: var(--a-shadow-md);
+  box-shadow: var(--a-glass-hi), var(--a-glass-shadow-hover);
   margin-top: 4px;
   overflow: hidden;
   text-transform: none;
@@ -498,7 +489,8 @@ $a-shadow-sm: var(--a-shadow-sm);
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: $a-fg4;
+  // fg2 — floating glass carries fg1/fg2 only (fg4 fails over scrolled content).
+  color: $a-fg2;
 }
 
 .sectionDivider {
@@ -533,7 +525,8 @@ $a-shadow-sm: var(--a-shadow-sm);
 }
 
 .panelBtnClear {
-  color: $a-fg3;
+  // fg2 — floating glass carries fg1/fg2 only.
+  color: $a-fg2;
 
   &:hover {
     color: var(--a-danger);
@@ -638,7 +631,8 @@ $a-shadow-sm: var(--a-shadow-sm);
 .multiEmpty {
   padding: 12px;
   font-size: 12px;
-  color: $a-fg4;
+  // fg2 — floating glass carries fg1/fg2 only.
+  color: $a-fg2;
   text-align: center;
 }
 

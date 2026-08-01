@@ -1,5 +1,6 @@
 @use '@shared/styles/variables' as *;
 @use '@admin/styles/variables' as *;
+@use '../../glass' as *;
 
 // Detail header (datasheet card)
 .detailHead {
@@ -76,16 +77,9 @@
   font-family: inherit;
   font-size: 13px;
   font-weight: 600;
-  color: var(--a-fg1);
-  background: var(--a-card);
-  border: 1px solid var(--a-border);
+  @include a-glass-ctl;
   border-radius: 6px;
   cursor: pointer;
-  transition: background-color 150ms;
-}
-
-.btnGhost:hover {
-  background: var(--a-bg);
 }
 
 // Detail two-column grid
@@ -115,10 +109,8 @@
 
 // Body wrapper panel (the type-specific bodies render inside this)
 .bodyPanel {
-  background: var(--a-card);
-  border: 1px solid var(--a-border-soft);
+  @include a-glass-pane;
   border-radius: $admin-border-radius;
-  box-shadow: var(--a-shadow-sm);
   overflow: hidden;
 }
 
@@ -132,10 +124,8 @@
 
 // Status sidebar panel
 .statusPanel {
-  background: var(--a-card);
-  border: 1px solid var(--a-border-soft);
+  @include a-glass-pane;
   border-radius: $admin-border-radius;
-  box-shadow: var(--a-shadow-sm);
 }
 
 .statusPanelHead {
@@ -184,13 +174,11 @@
 
 // Not found
 .notFoundPanel {
-  background: var(--a-card);
-  border: 1px solid var(--a-border-soft);
+  @include a-glass-pane;
   border-radius: $admin-border-radius;
   padding: 48px 32px;
   text-align: center;
   color: var(--a-fg3);
-  box-shadow: var(--a-shadow-sm);
 }
 
 .notFoundPanel h2 {
