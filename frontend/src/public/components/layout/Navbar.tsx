@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { NavLink, Link, useLocation } from "react-router-dom";
 import SearchBar from "./SearchBar";
+import Logo from "@shared/components/Logo";
 import styles from "./Navbar.module.scss";
 
 const NAV_LINKS = [
@@ -57,8 +58,11 @@ export default function Navbar() {
     <header className={styles.header}>
       <div className={styles.topStrip}>
         <Link to="/" className={styles.brand}>
-          <span className={styles.brandDot} aria-hidden="true" />
-          <span className={styles.brandSquare} aria-hidden="true" />
+          {/* No `title` — the wordmark sits right beside it, and naming the
+              SVG too would make a screen reader say "Circuit Center" twice. */}
+          <span className={styles.brandMark}>
+            <Logo variant="mark" size={22} />
+          </span>
           Circuit Center
           <span className={styles.brandSuffix} aria-hidden="true">
             / REV-A

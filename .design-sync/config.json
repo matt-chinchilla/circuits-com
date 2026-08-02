@@ -1,0 +1,11 @@
+{
+  "projectId": "3bbc46a2-917c-4348-a7e1-3bb008cd9e2c",
+  "shape": "manual",
+  "note": "circuits-com is a private Vite app, not a bundlable component library (no main/module/exports, no Storybook, components coupled to react-router + useAuth + adminApi). The converter path (package-build.mjs) has no library entry point to compile. The Claude Design project is likewise hand-authored (ui_kits/ + preview/*.html), not the skill's components/<group>/<Name>/ layout. Syncs are therefore authored preview cards written in place, following the project's own conventions.",
+  "uploadPath": "additive",
+  "neverDelete": [
+    "scraps/**",
+    "uploads/**",
+    "screenshots/**"
+  ]
+}

@@ -15,29 +15,46 @@
   a non-slash path passes through untouched and just gains the ?s= cache-
   buster. See README "Install" step 3.
 
+  THE MARK. This now carries the real company logo (exploration 13a, "The
+  Master") rather than the generic IC-package placeholder that stood here
+  while no logo existed: a capacitor drawn inside the counter of a C, whose
+  right-hand terminals double as the feet of an omega.
+
+  It uses the GLYPH-ONLY variant, with no dark badge plate, because the
+  login screen is the bench itself — `.task-login #layout-content` is
+  transparent over the deep bench token, so the glyph already has a dark
+  ground and a plate would only box it in. Anywhere the mark might land on a
+  LIGHT surface it must use the badge variant instead, or the white C
+  disappears.
+
+  (Note for future edits: an XML comment may not contain a double hyphen, so
+  CSS custom properties cannot be named literally in here — that is why the
+  bench token is described rather than written out. ImageMagick and any
+  strict XML parser reject the file outright; browsers do not, which is how
+  such a break reaches production unnoticed.)
+
+  Stroke weights are the mid optical band (arc 23, electrodes 10, stem 12).
+  The skin renders this at 232px wide, i.e. 1:1 with the viewBox, putting
+  the mark at ~44px — the size that band is drawn for. Do not rescale the
+  glyph without moving to the matching band; the weights are tuned per size,
+  not derived by scaling one master.
+
   Self-contained: no external references; the text renders in the same
   OS-native stacks the skin uses (SF/Segoe sans for the name, the mono
-  stack for the MAIL tag). Drawn for the dark bench: silkscreen-white
-  IC outline, ENIG-gold leads and tag, one phosphor trace.
-  Sized by the skin (html.cc .task-login #logo — Elastic otherwise pins
-  #logo to a 100px square).
+  stack for the MAIL tag). Sized by the skin (html.cc .task-login #logo —
+  Elastic otherwise pins #logo to a 100px square).
 -->
 <svg xmlns="http://www.w3.org/2000/svg" width="232" height="56" viewBox="0 0 232 56" role="img" aria-label="Circuit Center Mail">
-	<!-- IC package -->
-	<rect x="10" y="11" width="34" height="34" rx="4" fill="rgba(255,255,255,0.06)" stroke="#d9e6de" stroke-width="1.6"/>
-	<!-- pin-1 index dot -->
-	<circle cx="17" cy="18" r="1.8" fill="#e8c252"/>
-	<!-- ENIG leads -->
-	<g fill="#e8c252">
-		<rect x="3" y="15" width="7" height="3.2" rx="1"/>
-		<rect x="3" y="26.4" width="7" height="3.2" rx="1"/>
-		<rect x="3" y="37.8" width="7" height="3.2" rx="1"/>
-		<rect x="44" y="15" width="7" height="3.2" rx="1"/>
-		<rect x="44" y="26.4" width="7" height="3.2" rx="1"/>
-		<rect x="44" y="37.8" width="7" height="3.2" rx="1"/>
+	<!-- The mark, 200-unit drawing scaled to 44px and set on the vertical centre. -->
+	<g transform="translate(5 6) scale(0.22)">
+		<path d="M 136.5 75.4 A 44 44 0 1 0 136.5 124.6" fill="none" stroke="#ffffff" stroke-width="23" stroke-linecap="round"/>
+		<path d="M 129.74 86.9 L 144 86.9 A 4 4 0 0 0 148 82.9 L 148 48 A 11.5 11.5 0 0 0 125 48 L 125 79.23 A 32.5 32.5 0 0 1 129.74 86.9 Z" fill="#ffffff"/>
+		<path d="M 129.74 113.1 L 144 113.1 A 4 4 0 0 1 148 117.1 L 148 152 A 11.5 11.5 0 0 1 125 152 L 125 120.77 A 32.5 32.5 0 0 0 129.74 113.1 Z" fill="#ffffff"/>
+		<line x1="89" y1="86.5" x2="89" y2="113.5" stroke="#44bd13" stroke-width="10" stroke-linecap="round"/>
+		<line x1="100.5" y1="79.5" x2="100.5" y2="120.5" stroke="#44bd13" stroke-width="10" stroke-linecap="round"/>
+		<line x1="112" y1="86.5" x2="112" y2="113.5" stroke="#44bd13" stroke-width="10" stroke-linecap="round"/>
+		<line x1="114" y1="100" x2="141" y2="100" stroke="#44bd13" stroke-width="12" stroke-linecap="round"/>
 	</g>
-	<!-- phosphor trace -->
-	<path d="M17 38 h7 l5 -7 h9" fill="none" stroke="#44bd13" stroke-width="1.6" stroke-linecap="square"/>
 	<!-- wordmark -->
 	<text x="60" y="28" font-family="-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',Inter,system-ui,sans-serif" font-size="20" font-weight="600" letter-spacing="-0.2" fill="#f2f7f4">Circuit Center</text>
 	<text x="61" y="45" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="10" font-weight="600" letter-spacing="4" fill="#e8c252">MAIL</text>

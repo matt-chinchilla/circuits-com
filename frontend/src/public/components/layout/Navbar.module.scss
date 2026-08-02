@@ -150,58 +150,28 @@
   }
 }
 
-.brandDot {
-  display: none;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--theme-pcb-dot);
-  box-shadow: 0 0 6px var(--theme-pcb-dot-glow);
-  animation: pulseLed 2.4s ease-in-out infinite;
+// The mark (@shared/components/Logo, exploration 13a). This replaced a
+// CSS-composed lockup — a pulsing LED dot, a schematic square outline and a
+// per-theme font swap — that stood in for a logo the company did not have.
+//
+// The glyph-only `mark` variant is used because three of the four navbars are
+// dark and the mark reads cleanest with no plate under it. BASE IS THE
+// EXCEPTION and the reason this class exists: its bar is #44bd13, the exact
+// green of the capacitor electrodes, so a bare mark would render its own
+// component invisible. Base (and the no-attribute default that resolves to it)
+// gets the badge's dark ground back, sized to sit tight around the glyph.
+.brandMark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
 }
 
-:global([data-theme="steel"]) .brandDot {
-  display: inline-block;
-}
-
-// Base theme — show a white pulsing dot (was missing pre-2026-04-25 design import).
-:global(:root[data-theme="base"]) .brandDot,
-:global(:root:not([data-theme])) .brandDot {
-  display: inline-block;
-  background: #ffffff;
-  box-shadow: 0 0 6px rgba(255, 255, 255, 0.6);
-}
-
-// Rounded-square outline icon — shown only on schematic theme (replaces dot).
-// Schematic-symbol vibe: hollow box with green outline + soft glow.
-.brandSquare {
-  display: none;
-  width: 12px;
-  height: 12px;
-  border: 1.5px solid #44bd13;
-  border-radius: 2px;
-  background: rgba(68, 189, 19, 0.15);
-  box-shadow: 0 0 8px rgba(68, 189, 19, 0.35);
-}
-
-:global([data-theme="schematic"]) .brandSquare {
-  display: inline-block;
-}
-
-:global([data-theme="pcb"]) .brandDot {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  background: radial-gradient(
-    circle at 35% 30%,
-    #e2c088 0%,
-    var(--theme-pcb-dot) 60%,
-    #8f6d3b 100%
-  );
-  box-shadow:
-    0 0 0 1px rgba(0, 0, 0, 0.35),
-    0 0 4px var(--theme-pcb-dot-glow);
-  animation: none;
+:global(:root[data-theme="base"]) .brandMark,
+:global(:root:not([data-theme])) .brandMark {
+  background: #1a1f23;
+  border-radius: 7px;
+  padding: 3px;
 }
 
 .brandSuffix {
@@ -218,16 +188,6 @@
 
   @media (max-width: 480px) {
     display: none;
-  }
-}
-
-@keyframes pulseLed {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.55;
   }
 }
 
