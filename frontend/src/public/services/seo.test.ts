@@ -7,6 +7,7 @@ import {
   WEBSITE_ID,
   categorySeo,
   homeSeo,
+  partSeo,
   type PageSeo,
 } from './seo';
 
@@ -75,8 +76,18 @@ const LDO = categorySeo({
   parent: { name: 'Power Management ICs (PMICs)', slug: 'power-management-ics-pmics' },
 });
 
+const PART = partSeo({
+  sku: 'ADP151AUJZ-3.3',
+  manufacturerName: 'Analog Devices',
+  slug: 'adp151aujz-3-3',
+  description: 'Ultra-low-noise 200 mA CMOS linear regulator in a TSOT package.',
+  categoryName: 'Voltage Regulators (LDOs)',
+  bestPrice: 1.234,
+  categoryPath: '/category/power-management-ics-pmics/ldo-regulators',
+});
+
 function allRoutes(): PageSeo[] {
-  return [homeSeo(), ...Object.values(STATIC_PAGE_SEO), PMIC, LDO];
+  return [homeSeo(), ...Object.values(STATIC_PAGE_SEO), PMIC, LDO, PART];
 }
 
 describe('page head model', () => {
@@ -163,5 +174,37 @@ describe('homeSeo', () => {
   it('exposes the top-level categories as crawlable links', () => {
     const seo = homeSeo([{ href: '/category/analog-ics', label: 'Analog ICs' }]);
     expect(seo.links[0]).toEqual({ href: '/category/analog-ics', label: 'Analog ICs' });
+  });
+});
+
+describe('partSeo', () => {
+  it('canonicalises to the slug URL, not the uuid the sitemap advertises', () => {
+    // Known gap: internal links and the sitemap use /part/{uuid} while the page
+    // canonicalises to /part/{slug}. Unifying them is the prerequisite for
+    // prerendering part pages at all — see vite.config.ts.
+    expect(PART.canonical).toBe(`${SITE_ORIGIN}/part/adp151aujz-3-3`);
+  });
+
+  it('builds a single-string title', () => {
+    // react-helmet-async on React 19 renders a real <title> element, and React
+    // silently drops one given multiple children — which is how every part page
+    // shipped an EMPTY title until this builder landed.
+    expect(PART.title).toBe(
+      'ADP151AUJZ-3.3 by Analog Devices — Buy from Distributors | Circuit Center',
+    );
+  });
+
+  it('quotes the best price when there is one', () => {
+    expect(PART.description).toContain('Best price: $1.23');
+    expect(
+      partSeo({ sku: 'X', manufacturerName: 'Y', slug: 'x', bestPrice: null }).description,
+    ).not.toContain('Best price');
+  });
+
+  it('withholds Product.offers while the prices are synthetic', () => {
+    const product = JSON.parse(PART.jsonLd[0]) as Record<string, unknown>;
+    expect(product['@type']).toBe('Product');
+    expect(product).not.toHaveProperty('offers');
+    expect(product.mpn).toBe('ADP151AUJZ-3.3');
   });
 });

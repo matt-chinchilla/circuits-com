@@ -187,6 +187,57 @@ export const STATIC_PAGE_SEO: Record<StaticPageKey, PageSeo> = {
   },
 };
 
+export interface PartSeoInput {
+  sku: string;
+  manufacturerName: string;
+  /** Part.slug — non-unique by design; duplicate SKUs share one canonical. */
+  slug: string;
+  description?: string | null;
+  categoryName?: string | null;
+  bestPrice?: number | null;
+  categoryPath?: string | null;
+}
+
+export function partSeo(input: PartSeoInput): PageSeo {
+  const url = `${SITE_ORIGIN}/part/${input.slug}`;
+  const price =
+    input.bestPrice != null ? ` Best price: $${input.bestPrice.toFixed(2)}` : '';
+
+  // `offers` is deliberately absent. The listing prices in this build are
+  // synthetic demo data, and Google treats Product offers that disagree with
+  // the real distributor price as deceptive markup (manual-action territory),
+  // so the table stays visible-only until a live price feed backs it. Optional
+  // properties are spread in rather than set to null — a JSON-LD property whose
+  // value is null fails validation.
+  const product = {
+    '@context': 'https://schema.org',
+    '@type': 'Product',
+    name: input.sku,
+    url,
+    // A Part row's SKU *is* the manufacturer part number — distributor-side
+    // SKUs live on PartListing.sku — so it fills both properties.
+    sku: input.sku,
+    mpn: input.sku,
+    brand: { '@type': 'Brand', name: input.manufacturerName },
+    ...(input.description ? { description: input.description } : {}),
+    ...(input.categoryName ? { category: input.categoryName } : {}),
+  };
+
+  return {
+    title: `${input.sku} by ${input.manufacturerName} — Buy from Distributors | Circuit Center`,
+    description: `${input.description || input.sku}. Compare prices from distributors.${price}`,
+    canonical: url,
+    jsonLd: [JSON.stringify(product)],
+    heading: input.sku,
+    links: [
+      { href: '/', label: 'Circuit Center' },
+      ...(input.categoryPath && input.categoryName
+        ? [{ href: input.categoryPath, label: input.categoryName }]
+        : []),
+    ],
+  };
+}
+
 export interface CategorySeoInput {
   name: string;
   /** Root-relative canonical path from `categoryPath(slug, parentSlug)`. */
