@@ -1,20 +1,13 @@
 import { motion } from "framer-motion";
-import { Helmet } from "react-helmet-async";
 import HeroSection from "./components/HeroSection";
 import CategoryGrid from "./components/CategoryGrid";
+import PageHead from "@public/components/PageHead";
 import { useCategories } from "@public/hooks/useCategories";
+import { homeSeo } from "@public/services/seo";
 
-const WEBSITE_JSONLD = JSON.stringify({
-  "@context": "https://schema.org",
-  "@type": "WebSite",
-  name: "Circuit Center",
-  url: "https://circuitcenter.ai/",
-  potentialAction: {
-    "@type": "SearchAction",
-    target: "https://circuitcenter.ai/search?q={search_term_string}",
-    "query-input": "required name=search_term_string",
-  },
-});
+// Built once: the JSON-LD graphs are stringified inside homeSeo(), and the
+// home route re-renders on every category fetch.
+const HOME_SEO = homeSeo();
 
 export default function HomePage() {
   const { categories, loading, error } = useCategories();
@@ -26,12 +19,7 @@ export default function HomePage() {
       exit={{ opacity: 0, x: -20 }}
       transition={{ duration: 0.15, ease: "easeInOut" as const }}
     >
-      <Helmet>
-        <title>The Integrated Circuits Directory — Compare Prices &amp; Distributors | Circuit Center</title>
-        <meta name="description" content="Compare prices and stock for 3,600+ electronic components from 57 distributors. ICs, MCUs, sensors, and more." />
-        <link rel="canonical" href="https://circuitcenter.ai/" />
-        <script type="application/ld+json">{WEBSITE_JSONLD}</script>
-      </Helmet>
+      <PageHead seo={HOME_SEO} />
       <HeroSection />
       <CategoryGrid categories={categories} loading={loading} error={error} />
     </motion.div>

@@ -1,0 +1,486 @@
+{
+  "generatedAt": "2026-08-03T23:23:12.358Z",
+  "source": "http://localhost/api",
+  "categories": [
+    {
+      "slug": "power-management-ics-pmics",
+      "name": "Power Management ICs (PMICs)",
+      "description": "Power Management ICs (PMICs) regulate, convert, and distribute electrical power within electronic systems. This category covers linear voltage regulators (LDOs), DC-DC converters including buck and boost topologies, battery management ICs for single-cell and multi-cell packs, power supervisors with reset outputs, and LED driver ICs. Common applications span portable devices, industrial automation, automotive ECUs, and server power rails. Leading manufacturers include Texas Instruments, Analog Devices, Monolithic Power Systems, ON Semiconductor, and STMicroelectronics. Compare datasheets, pricing, and stock across authorized distributors on Circuits.com.",
+      "children": [
+        {
+          "slug": "ldo-regulators",
+          "name": "Voltage Regulators (LDOs)",
+          "description": null
+        },
+        {
+          "slug": "dc-dc-converters",
+          "name": "DC-DC Converters (Buck/Boost)",
+          "description": null
+        },
+        {
+          "slug": "battery-management",
+          "name": "Battery Management ICs (BMS)",
+          "description": null
+        },
+        {
+          "slug": "power-supervisors",
+          "name": "Power Supervisors / Reset ICs",
+          "description": null
+        },
+        {
+          "slug": "led-drivers",
+          "name": "LED Drivers",
+          "description": null
+        }
+      ]
+    },
+    {
+      "slug": "microcontrollers-processors",
+      "name": "Microcontrollers & Processors",
+      "description": "Microcontrollers and processors form the computational heart of embedded systems. Browse 8-bit MCUs from Microchip and Renesas, 32-bit ARM Cortex-M devices from STMicroelectronics, NXP, and Infineon, application processors for Linux-class workloads, digital signal processors (DSPs) for real-time audio and motor control, and highly integrated systems-on-chip (SoCs) with built-in wireless such as the Espressif ESP32 family. These components power IoT nodes, wearables, robotics, automotive control modules, and consumer electronics. Compare prices and lead times from authorized distributors.",
+      "children": [
+        {
+          "slug": "8bit-mcus",
+          "name": "8-bit Microcontrollers",
+          "description": null
+        },
+        {
+          "slug": "32bit-mcus",
+          "name": "32-bit Microcontrollers (ARM Cortex-M)",
+          "description": null
+        },
+        {
+          "slug": "app-processors",
+          "name": "Application Processors",
+          "description": null
+        },
+        {
+          "slug": "dsps",
+          "name": "Digital Signal Processors (DSPs)",
+          "description": null
+        },
+        {
+          "slug": "soc",
+          "name": "System-on-Chip (SoC)",
+          "description": null
+        }
+      ]
+    },
+    {
+      "slug": "analog-ics",
+      "name": "Analog ICs",
+      "description": "Analog ICs process continuous signals in amplification, filtering, and signal conditioning applications. This category includes operational amplifiers (op-amps) ranging from general-purpose to precision and low-noise grades, voltage comparators, analog multiplexers and switches, precision voltage references, and instrumentation amplifiers for sensor front-ends. Key manufacturers are Texas Instruments, Analog Devices, Maxim Integrated, Microchip, and ON Semiconductor. Use Circuits.com to compare specifications, unit pricing at volume, and real-time stock levels across major distributors.",
+      "children": [
+        {
+          "slug": "op-amps",
+          "name": "Operational Amplifiers (Op-Amps)",
+          "description": null
+        },
+        {
+          "slug": "comparators",
+          "name": "Comparators",
+          "description": null
+        },
+        {
+          "slug": "analog-mux-switches",
+          "name": "Analog Multiplexers / Switches",
+          "description": null
+        },
+        {
+          "slug": "voltage-references",
+          "name": "Voltage References",
+          "description": null
+        },
+        {
+          "slug": "instrumentation-amps",
+          "name": "Instrumentation Amplifiers",
+          "description": null
+        }
+      ]
+    },
+    {
+      "slug": "interface-ics",
+      "name": "Interface ICs",
+      "description": "Interface ICs bridge communication between processors, peripherals, and external networks. This section covers UART and USART transceivers for legacy serial links, USB controllers and bridges (FTDI, Silicon Labs), I2C and SPI bus expanders, CAN and LIN transceivers for automotive and industrial fieldbus networks, and bidirectional level shifters for mixed-voltage designs. These devices are essential in automotive ECUs, industrial PLCs, medical instruments, and consumer gadgets. Manufacturers include Texas Instruments, Maxim Integrated, NXP, Microchip, and STMicroelectronics.",
+      "children": [
+        {
+          "slug": "uart-usart",
+          "name": "UART / USART Transceivers",
+          "description": null
+        },
+        {
+          "slug": "usb-interface",
+          "name": "USB Interface ICs",
+          "description": null
+        },
+        {
+          "slug": "i2c-spi",
+          "name": "I2C / SPI Interface ICs",
+          "description": null
+        },
+        {
+          "slug": "can-lin",
+          "name": "CAN / LIN Transceivers",
+          "description": null
+        },
+        {
+          "slug": "level-shifters",
+          "name": "Level Shifters",
+          "description": null
+        }
+      ]
+    },
+    {
+      "slug": "memory-ics",
+      "name": "Memory ICs",
+      "description": "Memory ICs store data and instructions for microcontrollers, processors, and FPGAs. Browse EEPROMs for configuration storage, NOR flash for execute-in-place firmware, NAND flash for high-density data logging, SRAM for low-latency cache and buffers, and DRAM for large working-memory pools. Leading suppliers include Micron, Samsung, Winbond, ISSI, Infineon, and Microchip. Circuits.com lets you compare pricing across package types, densities, and speed grades from dozens of authorized distributors worldwide.",
+      "children": [
+        {
+          "slug": "eeprom",
+          "name": "EEPROM",
+          "description": null
+        },
+        {
+          "slug": "nor-flash",
+          "name": "NOR Flash",
+          "description": null
+        },
+        {
+          "slug": "nand-flash",
+          "name": "NAND Flash",
+          "description": null
+        },
+        {
+          "slug": "sram",
+          "name": "SRAM",
+          "description": null
+        },
+        {
+          "slug": "dram",
+          "name": "DRAM",
+          "description": null
+        }
+      ]
+    },
+    {
+      "slug": "logic-ics",
+      "name": "Logic ICs",
+      "description": "Logic ICs implement fundamental digital building blocks used in virtually every electronic design. This category spans basic gates (AND, OR, NAND, NOR, XOR), flip-flops and latches for state storage, counters for timing and sequencing, shift registers for serial-to-parallel conversion, and programmable logic devices including CPLDs and FPGAs. Major manufacturers are Texas Instruments, NXP, ON Semiconductor, Lattice, and AMD-Xilinx. Compare pricing, package options, and stock availability from top distributors.",
+      "children": [
+        {
+          "slug": "logic-gates",
+          "name": "Logic Gates (AND, OR, NOT, etc.)",
+          "description": null
+        },
+        {
+          "slug": "flip-flops-latches",
+          "name": "Flip-Flops / Latches",
+          "description": null
+        },
+        {
+          "slug": "counters",
+          "name": "Counters",
+          "description": null
+        },
+        {
+          "slug": "shift-registers",
+          "name": "Shift Registers",
+          "description": null
+        },
+        {
+          "slug": "cpld-fpga",
+          "name": "Programmable Logic (CPLDs / FPGAs)",
+          "description": null
+        }
+      ]
+    },
+    {
+      "slug": "rf-wireless-ics",
+      "name": "RF & Wireless ICs",
+      "description": "RF and wireless ICs enable radio communication across Bluetooth, Wi-Fi, LoRa, cellular, and custom ISM-band protocols. Browse Bluetooth Low Energy SoCs, Wi-Fi transceivers, sub-GHz RF transceivers for IoT, GPS and GNSS receiver modules, and NFC/RFID reader ICs. These components are critical for connected devices, asset tracking, smart home systems, and wearable health monitors. Key suppliers include Nordic Semiconductor, Espressif, Texas Instruments, Silicon Labs, Semtech, and u-blox. Compare module specs, sensitivity, and pricing.",
+      "children": [
+        {
+          "slug": "bluetooth",
+          "name": "Bluetooth ICs",
+          "description": null
+        },
+        {
+          "slug": "wifi",
+          "name": "Wi-Fi ICs",
+          "description": null
+        },
+        {
+          "slug": "rf-transceivers",
+          "name": "RF Transceivers",
+          "description": null
+        },
+        {
+          "slug": "gps-gnss",
+          "name": "GPS / GNSS Receivers",
+          "description": null
+        },
+        {
+          "slug": "nfc-rfid",
+          "name": "NFC / RFID ICs",
+          "description": null
+        }
+      ]
+    },
+    {
+      "slug": "sensor-ics",
+      "name": "Sensor ICs",
+      "description": "Sensor ICs convert physical phenomena into electrical signals for measurement and control. This category includes temperature sensors (analog and digital), MEMS accelerometers, gyroscopes, and IMUs for motion sensing, barometric and differential pressure sensors, and proximity and ambient-light detectors. Applications range from industrial process monitoring and automotive ADAS to consumer wearables and environmental monitoring stations. Leading manufacturers are Bosch Sensortec, Honeywell, STMicroelectronics, TDK InvenSense, and TE Connectivity.",
+      "children": [
+        {
+          "slug": "temp-sensors",
+          "name": "Temperature Sensors",
+          "description": null
+        },
+        {
+          "slug": "accelerometers",
+          "name": "Accelerometers",
+          "description": null
+        },
+        {
+          "slug": "gyroscopes",
+          "name": "Gyroscopes",
+          "description": null
+        },
+        {
+          "slug": "pressure-sensors",
+          "name": "Pressure Sensors",
+          "description": null
+        },
+        {
+          "slug": "proximity-light",
+          "name": "Proximity / Light Sensors",
+          "description": null
+        }
+      ]
+    },
+    {
+      "slug": "audio-video-ics",
+      "name": "Audio & Video ICs",
+      "description": "Audio and video ICs handle signal amplification, encoding, decoding, and transmission for multimedia applications. Browse Class-D and Class-AB audio amplifiers, audio and video CODECs, video processing and scaling ICs, HDMI and DisplayPort interface controllers, and microphone preamplifiers with digital output. These devices power Bluetooth speakers, soundbars, conferencing systems, automotive infotainment, and professional AV equipment. Key manufacturers include Texas Instruments, Cirrus Logic, Analog Devices, Maxim Integrated, and Realtek.",
+      "children": [
+        {
+          "slug": "audio-amps",
+          "name": "Audio Amplifiers",
+          "description": null
+        },
+        {
+          "slug": "codecs",
+          "name": "CODECs (Audio/Video)",
+          "description": null
+        },
+        {
+          "slug": "video-processors",
+          "name": "Video Processors",
+          "description": null
+        },
+        {
+          "slug": "hdmi-display",
+          "name": "HDMI / Display Interface ICs",
+          "description": null
+        },
+        {
+          "slug": "mic-preamps",
+          "name": "Microphone Preamplifiers",
+          "description": null
+        }
+      ]
+    },
+    {
+      "slug": "clock-timing-ics",
+      "name": "Clock & Timing ICs",
+      "description": "Clock and timing ICs generate, distribute, and synchronize reference frequencies throughout electronic systems. This category covers crystal oscillators and MEMS oscillators, real-time clock (RTC) modules with battery backup, programmable clock generators and buffers, phase-locked loops (PLLs) for frequency synthesis, and classic timer ICs like the 555. Applications include telecom base stations, data-center switches, GPS receivers, and precision instrumentation. Key manufacturers are Silicon Labs, Texas Instruments, Microchip, Maxim Integrated, and Renesas.",
+      "children": [
+        {
+          "slug": "oscillators",
+          "name": "Oscillators",
+          "description": null
+        },
+        {
+          "slug": "rtc",
+          "name": "Real-Time Clocks (RTC)",
+          "description": null
+        },
+        {
+          "slug": "clock-generators",
+          "name": "Clock Generators",
+          "description": null
+        },
+        {
+          "slug": "pll",
+          "name": "PLL (Phase-Locked Loops)",
+          "description": null
+        },
+        {
+          "slug": "timer-ics",
+          "name": "Timer ICs",
+          "description": null
+        }
+      ]
+    },
+    {
+      "slug": "motor-motion-ics",
+      "name": "Motor & Motion Control ICs",
+      "description": "Motor and motion control ICs drive DC, stepper, and brushless DC motors in industrial, automotive, and consumer applications. This section covers integrated H-bridge motor drivers, servo controller ICs, MOSFET and IGBT gate drivers for high-power switching, dedicated motion-control processors, and PWM controller ICs. These components are essential for robotics, CNC machines, electric vehicles, HVAC blowers, and home appliances. Major manufacturers include Texas Instruments, STMicroelectronics, Infineon, ON Semiconductor, and Allegro MicroSystems.",
+      "children": [
+        {
+          "slug": "servo-controllers",
+          "name": "Servo Controllers",
+          "description": null
+        },
+        {
+          "slug": "gate-drivers",
+          "name": "Gate Drivers (MOSFET/IGBT)",
+          "description": null
+        },
+        {
+          "slug": "motion-control",
+          "name": "Motion Control ICs",
+          "description": null
+        },
+        {
+          "slug": "motor-drivers",
+          "name": "Motor Drivers (DC/Stepper/BLDC)",
+          "description": null
+        },
+        {
+          "slug": "pwm-controllers",
+          "name": "PWM Controllers",
+          "description": null
+        }
+      ]
+    },
+    {
+      "slug": "data-conversion-ics",
+      "name": "Data Conversion ICs",
+      "description": "Data conversion ICs translate signals between the analog and digital domains. Browse analog-to-digital converters (ADCs) from successive-approximation to delta-sigma architectures, digital-to-analog converters (DACs) for audio and precision output, sigma-delta modulators, voltage-to-frequency converters, and capacitive touchscreen controllers. These devices are critical in test and measurement equipment, audio interfaces, medical imaging, and industrial control loops. Leading suppliers are Analog Devices, Texas Instruments, Microchip, and Maxim Integrated.",
+      "children": [
+        {
+          "slug": "adc",
+          "name": "Analog-to-Digital Converters (ADC)",
+          "description": null
+        },
+        {
+          "slug": "dac",
+          "name": "Digital-to-Analog Converters (DAC)",
+          "description": null
+        },
+        {
+          "slug": "sigma-delta",
+          "name": "Sigma-Delta Converters",
+          "description": null
+        },
+        {
+          "slug": "vf-converters",
+          "name": "Voltage-to-Frequency Converters",
+          "description": null
+        },
+        {
+          "slug": "touchscreen",
+          "name": "Touchscreen Controllers",
+          "description": null
+        }
+      ]
+    },
+    {
+      "slug": "security-auth-ics",
+      "name": "Security & Authentication ICs",
+      "description": "Security and authentication ICs protect data, firmware, and hardware identity in connected devices. This category includes secure element chips for key storage, cryptographic coprocessors implementing AES, ECC, and RSA, trusted platform modules (TPMs) for platform integrity, hardware encryption engines, and ID/authentication ICs for accessory and consumable verification. These components are deployed in payment terminals, IoT edge nodes, automotive ECUs, and enterprise servers. Key manufacturers are Microchip, Infineon, NXP, STMicro, and Maxim Integrated.",
+      "children": [
+        {
+          "slug": "secure-elements",
+          "name": "Secure Elements",
+          "description": null
+        },
+        {
+          "slug": "crypto-coprocessors",
+          "name": "Cryptographic Coprocessors",
+          "description": null
+        },
+        {
+          "slug": "tpm",
+          "name": "TPM (Trusted Platform Modules)",
+          "description": null
+        },
+        {
+          "slug": "hw-encryption",
+          "name": "Hardware Encryption ICs",
+          "description": null
+        },
+        {
+          "slug": "id-auth",
+          "name": "ID / Authentication ICs",
+          "description": null
+        }
+      ]
+    },
+    {
+      "slug": "automotive-ics",
+      "name": "Automotive ICs",
+      "description": "Automotive ICs meet the stringent reliability and temperature requirements of vehicle electronics (AEC-Q100/Q200 qualified). Browse automotive-grade PMICs, CAN and LIN transceivers for in-vehicle networking, ADAS processing ICs for radar, lidar, and camera fusion, automotive sensor interfaces, and infotainment processors. These devices are used in powertrain control, body electronics, driver assistance systems, and in-cabin entertainment. Major suppliers include NXP, Infineon, Texas Instruments, STMicroelectronics, Renesas, and ON Semiconductor.",
+      "children": [
+        {
+          "slug": "auto-pmics",
+          "name": "Automotive PMICs",
+          "description": null
+        },
+        {
+          "slug": "auto-can-lin",
+          "name": "CAN / LIN Automotive ICs",
+          "description": null
+        },
+        {
+          "slug": "adas",
+          "name": "ADAS Processing ICs",
+          "description": null
+        },
+        {
+          "slug": "auto-sensors",
+          "name": "Automotive Sensors",
+          "description": null
+        },
+        {
+          "slug": "infotainment",
+          "name": "Infotainment Processors",
+          "description": null
+        }
+      ]
+    },
+    {
+      "slug": "display-led-ics",
+      "name": "Display & LED ICs",
+      "description": "Display and LED driver ICs control screens and lighting arrays across consumer, industrial, and automotive applications. This category includes LED matrix drivers for signage and indicators, LCD segment and TFT drivers, OLED driver ICs for wearables and phones, backlight controller ICs with dimming support, and display timing controllers (TCONs) for panels. These components enable everything from smart-watch faces to automotive instrument clusters. Key manufacturers include Texas Instruments, Maxim Integrated, Solomon Systech, Rohm, and STMicroelectronics.",
+      "children": [
+        {
+          "slug": "led-matrix",
+          "name": "LED Matrix Drivers",
+          "description": null
+        },
+        {
+          "slug": "lcd-drivers",
+          "name": "LCD Drivers",
+          "description": null
+        },
+        {
+          "slug": "oled-drivers",
+          "name": "OLED Drivers",
+          "description": null
+        },
+        {
+          "slug": "backlight",
+          "name": "Backlight Controllers",
+          "description": null
+        },
+        {
+          "slug": "tcon",
+          "name": "Display Timing Controllers (TCON)",
+          "description": null
+        }
+      ]
+    }
+  ]
+}

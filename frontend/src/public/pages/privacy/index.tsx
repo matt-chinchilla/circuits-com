@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { Helmet } from "react-helmet-async";
+import PageHead from "@public/components/PageHead";
+import { STATIC_PAGE_SEO } from "@public/services/seo";
 import { Link } from "react-router-dom";
 import PageHeaderBand from "@public/components/layout/PageHeaderBand";
 import styles from "./PrivacyPage.module.scss";
@@ -210,11 +211,7 @@ export default function PrivacyPage() {
       exit={{ opacity: 0, x: -20 }}
       transition={{ duration: 0.15, ease: "easeInOut" as const }}
     >
-      <Helmet>
-        <title>Privacy Policy | Circuit Center</title>
-        <meta name="description" content="Circuit Center privacy policy — how we handle your data, cookies, and third-party services." />
-        <link rel="canonical" href="https://circuitcenter.ai/privacy" />
-      </Helmet>
+      <PageHead seo={STATIC_PAGE_SEO.privacy} />
       <PageHeaderBand
         page="privacy"
         title="Privacy Policy"

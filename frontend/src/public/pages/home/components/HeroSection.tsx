@@ -15,8 +15,14 @@ export default function HeroSection() {
         <h1 className={styles.heading}>
           The Integrated Circuits Directory
         </h1>
+        {/* Stays a <p>: the page's only <h2> is CategoryGrid's "Browse Categories".
+            A heading here would sit in the outline labelling no section. */}
+        {/* Carries "PCB components" and the compare-price intent, and nothing
+            else: the h1 above already owns "integrated circuits", so repeating
+            it here would spend the site's most prominent line on a term it is
+            not competing for twice. */}
         <p className={styles.subtitle}>
-          ALL CIRCUITS ALL THE TIME
+          Compare prices and stock for PCB&nbsp;components
         </p>
         <SearchBar />
         <div className={styles.quickLinks}>

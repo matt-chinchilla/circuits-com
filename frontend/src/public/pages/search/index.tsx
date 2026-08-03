@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Helmet } from 'react-helmet-async';
+import PageHead from '@public/components/PageHead';
+import { STATIC_PAGE_SEO } from '@public/services/seo';
 import SearchBar from '@public/components/layout/SearchBar';
 import SkeletonLoader from '@public/components/widgets/SkeletonLoader';
 import GlowButton from '@public/components/widgets/GlowButton';
@@ -77,10 +78,13 @@ export default function SearchPage() {
       transition={{ duration: 0.15, ease: 'easeInOut' }}
     >
 
-      <Helmet>
-        <title>{q ? `${q} — Search Results | Circuit Center` : 'Search Electronic Components | Circuit Center'}</title>
-        <meta name="robots" content="noindex, follow" />
-      </Helmet>
+      <PageHead
+        seo={
+          q
+            ? { ...STATIC_PAGE_SEO.search, title: `${q} — Search Results | Circuit Center` }
+            : STATIC_PAGE_SEO.search
+        }
+      />
       <div className={styles.searchHeader}>
         <div className={styles.headerInner}>
           <h1 className={styles.title}>

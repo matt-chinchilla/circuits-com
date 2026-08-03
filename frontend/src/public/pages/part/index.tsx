@@ -4,6 +4,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import SkeletonLoader from '@public/components/widgets/SkeletonLoader';
 import { api } from '@public/services/api';
+import { SITE_ORIGIN } from '@public/services/seo';
 import { categoryPath } from '@shared/utils/categoryPath';
 import type { PartDetail, PartListing } from '@public/types/part';
 import styles from './PartPage.module.scss';
@@ -100,6 +101,28 @@ export default function PartPage() {
     : [];
   const bestPrice = sortedListings.length > 0 ? sortedListings[0].unit_price : null;
 
+  // `offers` is deliberately absent. The listing prices in this build are
+  // synthetic demo data, and Google treats Product offers that disagree with
+  // the real distributor price as deceptive markup (manual-action territory),
+  // so the table stays visible-only until a live price feed backs it. Optional
+  // properties are spread in rather than set to null — a JSON-LD property
+  // whose value is null fails validation, and `description`/`category_name`
+  // are both nullable on the API payload.
+  const partUrl = `${SITE_ORIGIN}/part/${part?.slug ?? id}`;
+  const productJsonLd = part ? {
+    '@context': 'https://schema.org',
+    '@type': 'Product',
+    name: part.sku,
+    url: partUrl,
+    // A Part row's SKU *is* the manufacturer part number — distributor-side
+    // SKUs live on PartListing.sku — so it fills both properties.
+    sku: part.sku,
+    mpn: part.sku,
+    brand: { '@type': 'Brand', name: part.manufacturer_name },
+    ...(part.description ? { description: part.description } : {}),
+    ...(part.category_name ? { category: part.category_name } : {}),
+  } : null;
+
   return (
     <motion.div
       initial={{ opacity: 0, x: 20 }}
@@ -114,14 +137,8 @@ export default function PartPage() {
             name="description"
             content={`${part.description || part.sku}. Compare prices from distributors.${part.best_price != null ? ` Best price: $${part.best_price.toFixed(2)}` : ''}`}
           />
-          <link rel="canonical" href={`https://circuitcenter.ai/part/${part.slug ?? id}`} />
-          <script type="application/ld+json">{JSON.stringify({
-            "@context": "https://schema.org",
-            "@type": "Product",
-            "name": part.sku,
-            "description": part.description,
-            "brand": { "@type": "Brand", "name": part.manufacturer_name },
-          })}</script>
+          <link rel="canonical" href={partUrl} />
+          <script type="application/ld+json">{JSON.stringify(productJsonLd)}</script>
         </Helmet>
       )}
 

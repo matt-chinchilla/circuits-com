@@ -50,7 +50,9 @@
   font-family: $font-body;
   font-size: 1.25rem;
   font-weight: 700;
-  letter-spacing: 0.18em;
+  // Sentence case, so tracking sits near zero — but never negative: the 6px
+  // text-shadow halo needs a sliver of gap or adjacent glyphs bleed together.
+  letter-spacing: 0.01em;
   color: #ffffff;
   margin: 0;
   animation: fade-in-up 0.6s ease 0.15s both;
@@ -101,7 +103,6 @@
 
   @include responsive($bp-mobile) {
     font-size: 1rem;
-    letter-spacing: 0.14em;
 
     &::before { width: 300px; height: 300px; }
     &::after { width: 250px; height: 90px; }

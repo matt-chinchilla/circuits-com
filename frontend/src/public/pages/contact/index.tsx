@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { motion } from "framer-motion";
-import { Helmet } from "react-helmet-async";
+import PageHead from "@public/components/PageHead";
+import { STATIC_PAGE_SEO } from "@public/services/seo";
 import { Link, useLocation } from "react-router-dom";
 import PageHeaderBand from "@public/components/layout/PageHeaderBand";
 import { api } from "@public/services/api";
@@ -92,11 +93,7 @@ export default function ContactPage() {
         exit={{ opacity: 0, x: -20 }}
         transition={{ duration: 0.15, ease: "easeInOut" as const }}
       >
-        <Helmet>
-          <title>Contact Circuit Center — Get in Touch</title>
-          <meta name="description" content="Contact Circuit Center for questions about electronic component pricing, distributor listings, or partnership opportunities." />
-          <link rel="canonical" href="https://circuitcenter.ai/contact" />
-        </Helmet>
+        <PageHead seo={STATIC_PAGE_SEO.contact} />
         <PageHeaderBand
           page="contact"
           title="Contact Us"

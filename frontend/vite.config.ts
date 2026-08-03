@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import path from 'path'
 import { SW_CACHE_API_CATEGORIES, SW_CACHE_API_GENERAL } from './src/shared/swCacheNames'
+import { seoPrerender } from './scripts/seoPrerender'
 
 export default defineConfig({
   plugins: [
@@ -46,6 +47,23 @@ export default defineConfig({
           },
         ],
       },
+    }),
+    // Writes one static HTML document per templated route so crawlers get a
+    // real per-page <title>/description/canonical/JSON-LD instead of the one
+    // byte-identical SPA shell every URL used to return. Build-time only: no
+    // Node in the request path, no bytes added to any JS chunk, and nginx keeps
+    // serving plain static files.
+    //
+    // Part pages (~3,600) are deliberately OUT of scope. Their crawlable URL is
+    // /part/{uuid} (sitemap + every internal link) while the page canonicalises
+    // to /part/{slug}, so prerendering them would bake 3,600 documents that
+    // declare themselves non-canonical; the listing prices behind them are also
+    // synthetic demo data, which is why the Product JSON-LD already withholds
+    // `offers`. Unifying that URL scheme is the prerequisite, not this step.
+    // Cost if it is ever done: ~8.6 KB x 3,600 = ~31 MB added to the image.
+    seoPrerender({
+      manifestPath: path.resolve(__dirname, './seo-manifest.json'),
+      outDir: path.resolve(__dirname, './dist'),
     }),
   ],
   resolve: {

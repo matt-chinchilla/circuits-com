@@ -1,6 +1,5 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
 import { useParams, useSearchParams, useLocation, useNavigate, Link } from 'react-router-dom';
-import { Helmet } from 'react-helmet-async';
 import { motion } from 'framer-motion';
 import SubcategoryChips from './components/SubcategoryChips';
 import PartsTable from './components/PartsTable';
@@ -9,8 +8,10 @@ import SilverPartners from './components/SilverPartners';
 import CategoryPartnersBanner from './components/CategoryPartnersBanner';
 import SkeletonLoader from '@public/components/widgets/SkeletonLoader';
 import Pagination from '@public/components/widgets/Pagination';
+import PageHead from '@public/components/PageHead';
 import Icon from '@shared/components/Icon';
 import { api } from '@public/services/api';
+import { categorySeo } from '@public/services/seo';
 import { getCategoryShell, setCategoryShell, type CategoryShell } from '@public/services/categoryShellMemo';
 import { getCategoryDetailMemo, setCategoryDetailMemo } from '@shared/services/categoryDetailMemo';
 import { categoryPath } from '@shared/utils/categoryPath';
@@ -258,26 +259,18 @@ export default function CategoryPage() {
   };
 
   const categoryName = category?.name ?? '';
-  const metaDescription = category?.description
-    ?? `Compare prices for ${categoryName} components from top distributors on Circuit Center.`;
 
-  const collectionPageJsonLd = category && canonicalPath ? {
-    '@context': 'https://schema.org',
-    '@type': 'CollectionPage',
-    name: categoryName,
-    description: category.description ?? metaDescription,
-    url: `https://circuitcenter.ai${canonicalPath}`,
-  } : null;
-
-  const breadcrumbJsonLd = category?.parent ? {
-    '@context': 'https://schema.org',
-    '@type': 'BreadcrumbList',
-    itemListElement: [
-      { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://circuitcenter.ai/' },
-      { '@type': 'ListItem', position: 2, name: category.parent.name, item: `https://circuitcenter.ai/category/${category.parent.slug}` },
-      { '@type': 'ListItem', position: 3, name: categoryName, item: `https://circuitcenter.ai${canonicalPath}` },
-    ],
-  } : null;
+  // Same builder the build-time prerender uses for this route's static HTML
+  // (scripts/seoPrerender.ts), so the tags helmet swaps in on mount are the
+  // tags the crawler already read.
+  const seo = category && canonicalPath
+    ? categorySeo({
+        name: categoryName,
+        canonicalPath,
+        description: category.description,
+        parent: category.parent,
+      })
+    : null;
 
   // Canonicalize the URL: a subcategory reached via the flat `/category/:slug`
   // (legacy/bookmarked/search link) or via a wrong parent slug redirects to its
@@ -307,19 +300,7 @@ export default function CategoryPage() {
       animate={{ opacity: 1 }}
       transition={{ duration: 0.15, ease: 'easeInOut' as const }}
     >
-      {category && canonicalPath && (
-        <Helmet>
-          <title>{categoryName} — Prices &amp; Distributors | Circuit Center</title>
-          <meta name="description" content={metaDescription} />
-          <link rel="canonical" href={`https://circuitcenter.ai${canonicalPath}`} />
-          {collectionPageJsonLd && (
-            <script type="application/ld+json">{JSON.stringify(collectionPageJsonLd)}</script>
-          )}
-          {breadcrumbJsonLd && (
-            <script type="application/ld+json">{JSON.stringify(breadcrumbJsonLd)}</script>
-          )}
-        </Helmet>
-      )}
+      {seo && <PageHead seo={seo} />}
       <div className={styles.categoryHeader}>
         <div className={styles.headerInner}>
           <nav className={styles.breadcrumb} aria-label="Breadcrumb">
@@ -485,6 +466,24 @@ export default function CategoryPage() {
                   <SponsorBlock sponsor={category.sponsor} />
                 </aside>
               </div>
+            )}
+
+            {/* The page's only unique indexable prose — the parts table is
+                data and everything above it is chrome. Same Category.description
+                that feeds <meta description> + the CollectionPage JSON-LD.
+                Sits BELOW the tier row so that landing it can never displace
+                the always-present Platinum band or the sponsor boards; only
+                the parts table (already a skeleton→content swap) moves down.
+                Today only the 15 top-level categories carry copy — every
+                subcategory row is NULL — so the block renders nothing at all
+                rather than reserving an empty box. */}
+            {category.description && (
+              <section className={styles.about} aria-labelledby="category-about">
+                <h2 id="category-about" className={styles.aboutTitle}>
+                  About {category.name}
+                </h2>
+                <p className={styles.aboutBody}>{category.description}</p>
+              </section>
             )}
 
             <section id="category-parts" className={styles.partsFull}>

@@ -116,8 +116,6 @@
   color: rgba(255, 255, 255, 0.4);
 }
 
-// ─── SEO description band ───────────────────────────────────────────────────
-
 // ─── Sticky subcategory pill-bar ─────────────────────────────────────────────
 
 .stickySubnav {
@@ -376,6 +374,36 @@
     > :last-child {
       flex: 0 0 auto;
     }
+  }
+}
+
+// ─── Category prose (SEO body copy) ─────────────────────────────────────────
+// Renders on the page surface below the sponsor boards, i.e. past the fixed
+// 420px BackdropLayer — so these are light-surface ratios, not hero ones.
+// Measured against body #eef1f5: heading --executive-blue #0a4a2e = 9.12:1,
+// body --fg1 #2a2a2a = 12.67:1. (--fg2 would be 4.27:1 here — AA fail.)
+// The 32px margins collapse with the band's 0 and .partsFull's 32 to keep the
+// page's single 32px content rhythm.
+.about {
+  max-width: 78ch;
+  margin: 32px 0;
+}
+
+.aboutTitle {
+  margin: 0 0 8px;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--executive-blue);
+}
+
+.aboutBody {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.7;
+  color: var(--fg1);
+
+  @include responsive($bp-mobile) {
+    font-size: 0.95rem;
   }
 }
 

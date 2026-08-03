@@ -18,12 +18,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Circuit Center — Electronic components directory. Compare prices and stock for 3,600+ ICs, MCUs, sensors, and more from 57 distributors. Find datasheets, check availability, and buy PCB components." />
     <meta name="keywords" content="electronic components, buy ICs, circuit components, PCB parts, integrated circuits, microcontrollers, sensors, capacitors, resistors, distributor comparison, component pricing, datasheets" />
-    <!-- No static canonical: react-helmet-async sets a per-page canonical on
-         every indexable route. A hardcoded one here was emitted on EVERY page
-         (Helmet appends a 2nd rather than replacing a tag it doesn't own), so
-         every page advertised two canonicals — home + the real one. Absent =
-         self-referential, which is correct for the JS-less pre-hydration state
-         and the few routes without an explicit canonical (2026-06-03). -->
+    <!-- No static canonical, and the title/description below are the GENERIC
+         ones on purpose. This file is both the shell scripts/seoPrerender.ts
+         rewrites per route at build time AND the SPA fallback still served for
+         every route the prerender doesn't cover (part pages, keyword profiles,
+         404s) — a canonical hardcoded here would be inherited by all ~3,600
+         part URLs. Helmet also appends rather than replaces a tag it doesn't
+         own, so a hardcoded one made every page advertise two canonicals
+         (2026-06-03); the prerendered documents carry helmet's data-rh marker
+         so the client swaps those tags instead of duplicating them. -->
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Circuit Center" />
     <meta property="og:title" content="Circuit Center — The Integrated Circuits Directory" />

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Helmet } from 'react-helmet-async'
+import PageHead from "@public/components/PageHead";
+import { STATIC_PAGE_SEO } from "@public/services/seo";
 import { Link } from 'react-router-dom'
 import PageHeaderBand from '@public/components/layout/PageHeaderBand'
 import Icon from '@shared/components/Icon'
@@ -136,11 +137,7 @@ export default function AboutPage() {
       transition={{ duration: 0.15, ease: 'easeInOut' as const }}
       className={styles.aboutPage}
     >
-      <Helmet>
-        <title>About Circuit Center — The Integrated Circuits Directory</title>
-        <meta name="description" content="Learn about Circuit Center — the integrated circuits directory connecting buyers, suppliers, and engineers. Compare prices from 57 distributors." />
-        <link rel="canonical" href="https://circuitcenter.ai/about" />
-      </Helmet>
+      <PageHead seo={STATIC_PAGE_SEO.about} />
       <PageHeaderBand
         page="about"
         title="About Circuit Center"
