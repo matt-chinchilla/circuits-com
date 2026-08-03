@@ -76,17 +76,8 @@
   }
 }
 
-@keyframes authPing {
-  0% {
-    transform: scale(0.7);
-    opacity: 0.8;
-  }
-  70%,
-  100% {
-    transform: scale(1.7);
-    opacity: 0;
-  }
-}
+// (authPing removed 2026-08-03 — it drove .logo-node, the pulsing dot that
+// stood in for a logo before the real badge existed.)
 
 @keyframes authBlink {
   0%,

@@ -81,30 +81,31 @@
     inset 0 -1px 0 rgba(196, 155, 93, 0.55);
 }
 
-// ── Liquid glass (2026-07-31) — smoked-glass toolbar on the dark themes ────
-// The donor spec's #1 surface ("top bar = macOS toolbar material"), taken in
-// the admin foundation's DARK direction: the veil smokes in the theme's own
-// ink (per-theme --glass-nav-veil in _themes.scss, floors .88–.90, contrast
-// computed there) so content scrolling beneath blurs through the bar instead
-// of being hidden by it. Base theme stays OPAQUE deliberately: a translucent
-// brand-green over white content lightens an already-marginal white-on-green
-// pairing, and the saturated flat green IS that theme's identity.
-// Desktop-only + @supports-gated: ≤768px and no-backdrop-filter browsers keep
-// the exact opaque substrate above (the fallbacks are the rules above, which
-// this block overrides only where the gate passes). PCB keeps its inset
-// box-shadow + copper ::after — separate properties, untouched.
-@supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
-  @media (min-width: #{$bp-mobile + 1}) {
-    :global([data-theme="steel"]) .topStrip,
-    :global([data-theme="schematic"]) .topStrip,
-    :global([data-theme="pcb"]) .topStrip {
-      background-color: transparent;
-      background-image: var(--glass-nav-veil);
-      -webkit-backdrop-filter: var(--glass-filter);
-      backdrop-filter: var(--glass-filter);
-    }
-  }
-}
+// ── The navbar is OPAQUE. Deliberately. (reverted 2026-08-03) ──────────────
+// A smoked-glass toolbar shipped here on 2026-07-31: above 768px the dark
+// themes went `background-color: transparent` under a ~.88-floor veil, so
+// content scrolling beneath blurred through the bar.
+//
+// It was removed because it made the bar the WRONG COLOUR, and only on
+// desktop. Measured on /about at steel: desktop composited to #272a2d, mobile
+// stayed #141719 — because glass is disabled ≤768px for GPU cost, so only the
+// small screen kept the real ink. Same page, two different bars, and the one
+// people actually see was a washed grey rather than the near-black the theme
+// specifies.
+//
+// This is not a tuning problem, it is the material: 12% of a near-white page
+// showing through a near-black veil CANNOT stay near-black. Raising the floor
+// to ~.97 matches the intended ink but leaves an effect too faint to be worth
+// the extra paint path, and anything below that is visibly grey.
+//
+// So the bar keeps `--theme-nav-bg` and its per-theme texture gradients above,
+// which are what give each theme its character anyway. If a translucent navbar
+// is ever wanted again, the trade must be made explicitly: the bar gets
+// lighter, at every scroll position, on every page with light content.
+//
+// Glass elsewhere is unaffected — it lives on surfaces that float over content
+// (popovers, menus, modals, admin chrome), where the lift is the point rather
+// than a defect.
 
 // PCB copper-trace bottom accent — never present on other themes
 :global([data-theme="pcb"]) .topStrip::after {
@@ -154,24 +155,16 @@
 // CSS-composed lockup — a pulsing LED dot, a schematic square outline and a
 // per-theme font swap — that stood in for a logo the company did not have.
 //
-// The glyph-only `mark` variant is used because three of the four navbars are
-// dark and the mark reads cleanest with no plate under it. BASE IS THE
-// EXCEPTION and the reason this class exists: its bar is #44bd13, the exact
-// green of the capacitor electrodes, so a bare mark would render its own
-// component invisible. Base (and the no-attribute default that resolves to it)
-// gets the badge's dark ground back, sized to sit tight around the glyph.
+// The BADGE variant is used on every theme, so the rounded square is a fixed
+// part of the mark rather than something that appears only where the
+// background happens to demand it. An earlier pass drew the plate here in CSS
+// for base alone (whose #44bd13 bar would otherwise swallow the green
+// electrodes at 1.00:1); that split the logo into two different objects
+// depending on theme. The plate now lives in the SVG, and its hairline rim is
+// what lets it read on the dark bars where the fill alone is ~1.1:1.
 .brandMark {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  display: block;
   flex: none;
-}
-
-:global(:root[data-theme="base"]) .brandMark,
-:global(:root:not([data-theme])) .brandMark {
-  background: #1a1f23;
-  border-radius: 7px;
-  padding: 3px;
 }
 
 .brandSuffix {

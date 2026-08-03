@@ -15,6 +15,7 @@ import {
   unreadCount,
 } from '@admin/services/messageStore';
 import { Wizard } from '@admin/wizard';
+import Logo from '@shared/components/Logo';
 import styles from './AdminLayout.module.scss';
 // Liquid-glass utility classes (global, static) — see styles/LIQUID-GLASS.md.
 // Side-effect import for admin pages that consume .a-glass-*; the chrome
@@ -316,7 +317,9 @@ export default function AdminLayout({ children, role = 'admin' }: AdminLayoutPro
           <X size={16} strokeWidth={2} />
         </button>
         <Link to="/admin" className={styles.sideBrand}>
-          <div className={styles.sideBrandMark}>C</div>
+          {/* Was a letter "C" on a green tile, standing in for a logo that did
+              not exist. No `title` — "Circuit Center" is spelled out beside it. */}
+          <Logo variant="badge" size={30} className={styles.sideBrandMark} />
           <div>
             <div className={styles.sideBrandName}>Circuit Center</div>
             <div className={styles.sideBrandRole}>Admin</div>

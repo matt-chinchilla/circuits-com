@@ -90,6 +90,20 @@ export interface LogoProps {
   /** `badge` carries its own dark plate; `mark` is glyph-only for dark surfaces. */
   variant?: 'badge' | 'mark';
   /**
+   * Hairline on the badge's edge. ON by default, and load-bearing: the plate is
+   * #1a1f23, which against the dark navbars measures 1.14:1 (steel), 1.06:1
+   * (schematic) and 1.30:1 (pcb) — i.e. the rounded square is effectively
+   * INVISIBLE by fill alone on every dark surface it sits on. The rim lets the
+   * shape read by its edge instead, so the mark stays one consistent object
+   * everywhere rather than being a plate on light backgrounds and a bare glyph
+   * on dark ones.
+   *
+   * Turn it off only where the badge sits on something clearly lighter than
+   * the plate (base's #44bd13 bar already gives 6.75:1), where the rim adds
+   * nothing and just softens the silhouette.
+   */
+  rim?: boolean;
+  /**
    * Accessible name. OMIT for decorative use beside a visible "Circuit Center"
    * wordmark — a title there makes a screen reader announce the brand twice.
    */
@@ -97,9 +111,19 @@ export interface LogoProps {
   className?: string;
 }
 
-export default function Logo({ size = 32, variant = 'badge', title, className }: LogoProps) {
+export default function Logo({
+  size = 32,
+  variant = 'badge',
+  rim = true,
+  title,
+  className,
+}: LogoProps) {
   const band = bandFor(variant, size);
   const [footTop, footBottom] = band.feet;
+  // Scale the hairline with the drawing so it stays a hairline on screen: the
+  // viewBox is 200 units wide however many pixels it renders at, so a fixed
+  // stroke-width would be 4x heavier at 48px than at 180px.
+  const rimWidth = (200 / size) * 1;
 
   return (
     <svg
@@ -120,6 +144,21 @@ export default function Logo({ size = 32, variant = 'badge', title, className }:
           height={200 - band.plate.inset * 2}
           rx={band.plate.r}
           fill="#1a1f23"
+        />
+      )}
+      {band.plate && rim && (
+        // Drawn INSET by half the stroke so the hairline lands fully inside the
+        // plate — a centred stroke would spill half its width outside the
+        // silhouette and fringe against the backdrop.
+        <rect
+          x={band.plate.inset + rimWidth / 2}
+          y={band.plate.inset + rimWidth / 2}
+          width={200 - band.plate.inset * 2 - rimWidth}
+          height={200 - band.plate.inset * 2 - rimWidth}
+          rx={band.plate.r - rimWidth / 2}
+          fill="none"
+          stroke="rgba(255,255,255,0.14)"
+          strokeWidth={rimWidth}
         />
       )}
       <path d={ARC} fill="none" stroke="#ffffff" strokeWidth={band.arc} strokeLinecap="round" />

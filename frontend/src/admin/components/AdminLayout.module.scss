@@ -209,16 +209,12 @@
   color: inherit;
 }
 
+// The real mark now (@shared/components/Logo). It draws its own dark plate and
+// rounded corners, so the green tile, centring and letter styling that framed
+// the old "C" placeholder are all gone — leaving them would paint a green
+// square behind the badge.
 .sideBrandMark {
-  width: 30px;
-  height: 30px;
-  border-radius: 7px;
-  background: var(--a-primary);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #ffffff;
-  font-weight: 700;
+  display: block;
   flex-shrink: 0;
 }
 

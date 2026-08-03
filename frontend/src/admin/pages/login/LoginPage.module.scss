@@ -524,24 +524,9 @@
       align-items: center;
       gap: 12px;
     }
-    .logo-node {
-      position: relative;
-      width: 16px;
-      height: 16px;
-      border-radius: 50%;
-      background: var(--nav-green);
-      box-shadow:
-        0 0 0 4px rgba(68, 189, 19, 0.16),
-        0 0 18px 2px rgba(68, 189, 19, 0.6);
-    }
-    .logo-node::after {
-      content: '';
-      position: absolute;
-      inset: -6px;
-      border-radius: 50%;
-      border: 1px solid rgba(68, 189, 19, 0.4);
-      animation: authPing 2.6s cubic-bezier(0.2, 0.7, 0.3, 1) infinite;
-    }
+    // .logo-node — a pulsing green dot that stood in for a logo — is gone; the
+    // real badge (@shared/components/Logo) sits in that slot now and draws its
+    // own plate. The authPing keyframe it drove is retired with it.
     .logo-word {
       font-family: var(--font-heading);
       font-size: 21px;
@@ -1298,7 +1283,6 @@
       }
     }
     @media (prefers-reduced-motion: reduce) {
-      .logo-node::after,
       .led,
       .iso-svg-lift,
       .iso-svg-flow,

@@ -104,6 +104,11 @@
   // backdrop-filter on >768px). Same sheen + graphite layers as the opaque
   // bar, minus the opaque background-color. Floor .88 over WHITE content
   // (worst case): resting nav text 5.85:1, hover 12.60:1 — computed.
+  // UNCONSUMED since 2026-08-03. The public navbar went back to opaque
+  // (see the reverted-glass note in Navbar.module.scss: a translucent
+  // near-black bar over light content reads grey, and did). Kept, not
+  // deleted, because the composited ratios below are the measured
+  // record — re-read them before any future translucent navbar.
   --glass-nav-veil:
     linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0) 70%),
     linear-gradient(180deg, rgba(14, 17, 19, 0.92), rgba(14, 17, 19, 0.88));
@@ -141,6 +146,11 @@
 
   // Smoked-glass navbar veil — sheen + pinstripe + graphite veil.
   // Floor .88 over white: resting nav text 6.65:1, hover 12.33:1 — computed.
+  // UNCONSUMED since 2026-08-03. The public navbar went back to opaque
+  // (see the reverted-glass note in Navbar.module.scss: a translucent
+  // near-black bar over light content reads grey, and did). Kept, not
+  // deleted, because the composited ratios below are the measured
+  // record — re-read them before any future translucent navbar.
   --glass-nav-veil:
     linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, transparent 40%),
     repeating-linear-gradient(90deg, transparent 0 3px, rgba(255, 255, 255, 0.012) 3px 4px),
@@ -185,6 +195,11 @@
   // overstates contrast. Computed through the FULL stack over white content,
   // worst case: resting 4.58:1, hover 9.9:1. Dropping the floor back to .90
   // puts resting at 4.19:1 — below AA.
+  // UNCONSUMED since 2026-08-03. The public navbar went back to opaque
+  // (see the reverted-glass note in Navbar.module.scss: a translucent
+  // near-black bar over light content reads grey, and did). Kept, not
+  // deleted, because the composited ratios below are the measured
+  // record — re-read them before any future translucent navbar.
   --glass-nav-veil:
     repeating-linear-gradient(0deg, transparent 0 23px, rgba(255, 255, 255, 0.025) 23px 24px),
     repeating-linear-gradient(90deg, transparent 0 23px, rgba(255, 255, 255, 0.025) 23px 24px),

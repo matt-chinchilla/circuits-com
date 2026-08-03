@@ -84,6 +84,11 @@
   font-size: 0.78rem;
   color: var(--theme-nav-text, rgba(255, 255, 255, 0.6));
   letter-spacing: 0.01em;
+  // inline-flex so the mark sits on the text baseline row rather than forcing
+  // its own line box and pushing the footer taller.
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 
   :global([data-theme='pcb']) & {
     font-family: $font-mono;
@@ -91,6 +96,13 @@
     letter-spacing: 0.14em;
     text-transform: uppercase;
   }
+}
+
+// The badge draws its own plate, so this only needs to stop the SVG picking up
+// the uppercase/letter-spacing treatment's baseline shifts.
+.copyrightMark {
+  display: block;
+  flex: none;
 }
 
 .links {

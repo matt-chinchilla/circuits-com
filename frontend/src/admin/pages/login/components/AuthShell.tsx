@@ -5,6 +5,7 @@
 // uses the design's literal class strings (scoped via .authRoot).
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
+import Logo from '@shared/components/Logo';
 import IsoBoard from './IsoBoard';
 import { I, Svg } from './icons';
 import '../LoginPage.keyframes.scss'; // global @keyframes (NOT hashed) — see file header
@@ -18,7 +19,9 @@ export default function AuthShell({ children }: { children: ReactNode }) {
         <aside className="brand">
           <div className="brand-top">
             <span className="logo">
-              <span className="logo-node" />
+              {/* Was a pulsing green dot standing in for a logo. Decorative —
+                  the name is spelled out immediately after it. */}
+              <Logo variant="badge" size={28} />
               <span className="logo-word">Circuit Center</span>
             </span>
             <span className="brand-tag">Account</span>

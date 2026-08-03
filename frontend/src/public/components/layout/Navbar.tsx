@@ -58,11 +58,12 @@ export default function Navbar() {
     <header className={styles.header}>
       <div className={styles.topStrip}>
         <Link to="/" className={styles.brand}>
-          {/* No `title` — the wordmark sits right beside it, and naming the
-              SVG too would make a screen reader say "Circuit Center" twice. */}
-          <span className={styles.brandMark}>
-            <Logo variant="mark" size={22} />
-          </span>
+          {/* Badge, not bare mark: the rounded square is part of the logo and
+              now shows on every theme. Its hairline rim is what makes the plate
+              read on the dark bars, where the fill alone is ~1.1:1 against
+              them. No `title` — the wordmark sits right beside it, and naming
+              the SVG too would make a screen reader say the brand twice. */}
+          <Logo variant="badge" size={26} className={styles.brandMark} />
           Circuit Center
           <span className={styles.brandSuffix} aria-hidden="true">
             / REV-A
