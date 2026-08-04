@@ -54,13 +54,18 @@ export default defineConfig({
     // Node in the request path, no bytes added to any JS chunk, and nginx keeps
     // serving plain static files.
     //
-    // Part pages (~3,600) are deliberately OUT of scope. Their crawlable URL is
-    // /part/{uuid} (sitemap + every internal link) while the page canonicalises
-    // to /part/{slug}, so prerendering them would bake 3,600 documents that
-    // declare themselves non-canonical; the listing prices behind them are also
-    // synthetic demo data, which is why the Product JSON-LD already withholds
-    // `offers`. Unifying that URL scheme is the prerequisite, not this step.
-    // Cost if it is ever done: ~8.6 KB x 3,600 = ~31 MB added to the image.
+    // Part pages (~3,600) ARE in scope as of 2026-08-03. They were excluded
+    // while the URL scheme disagreed with itself: the sitemap and every
+    // internal link used /part/{uuid} while the page canonicalised to
+    // /part/{slug} — a URL that 404'd, because nothing resolved slugs.
+    // Prerendering then would have baked 3,600 documents declaring themselves
+    // non-canonical. Fixing that (getPartDetail branches on the UUID grammar;
+    // the sitemap emits slugs) was the stated prerequisite, and it is done.
+    //
+    // Measured cost: build 12s -> 20s, dist 6 MB -> 48 MB. The Product JSON-LD
+    // still withholds `offers` — the listing prices are synthetic demo data,
+    // and markup that disagrees with the real distributor price is a manual
+    // action, not a ranking.
     seoPrerender({
       manifestPath: path.resolve(__dirname, './seo-manifest.json'),
       outDir: path.resolve(__dirname, './dist'),

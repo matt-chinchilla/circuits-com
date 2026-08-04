@@ -57,6 +57,48 @@ async function mapWithConcurrency(items, limit, fn) {
 const categories = await getJson(`${API_BASE}/categories/`);
 const topLevel = categories.filter((c) => Array.isArray(c.children));
 
+/**
+ * Every part, paged out of the list endpoint.
+ *
+ * Parts are ~97% of the sitemap, so leaving them out of the manifest left the
+ * overwhelming majority of the site on the generic shell. Only the fields
+ * `partSeo` reads are kept — the full payload carries listings and price
+ * breaks, which would bloat a committed file by two orders of magnitude for
+ * data no head tag uses.
+ *
+ * `description` is truncated here rather than at render: it only ever reaches
+ * a meta description, which search engines cut around 160 chars anyway, and
+ * the untruncated copy across 3,600 parts is most of the file size.
+ */
+async function fetchParts() {
+  // /api/parts/ caps per_page at 100 (le=100 in the route); the 500 ceiling
+  // belongs to the CATEGORY endpoint, not this one.
+  const perPage = 100;
+  const parts = [];
+  for (let page = 1; ; page += 1) {
+    const payload = await getJson(`${API_BASE}/parts/?page=${page}&per_page=${perPage}`);
+    const batch = payload.parts ?? payload.items ?? [];
+    for (const p of batch) {
+      if (!p.slug) continue; // no slug, no stable URL to prerender
+      parts.push({
+        slug: p.slug,
+        sku: p.sku,
+        manufacturerName: p.manufacturer_name ?? null,
+        description: (p.description ?? '').slice(0, 200) || null,
+        categoryName: p.category_name ?? null,
+        categorySlug: p.category_slug ?? null,
+        parentCategorySlug: p.parent_category_slug ?? null,
+        bestPrice: p.best_price ?? null,
+      });
+    }
+    if (batch.length < perPage) break;
+  }
+  // Duplicate slugs are expected (same SKU, two manufacturers). One file per
+  // URL: the first wins, matching what /parts/by-slug returns.
+  const seen = new Set();
+  return parts.filter((p) => !seen.has(p.slug) && seen.add(p.slug));
+}
+
 const manifest = {
   generatedAt: new Date().toISOString(),
   source: API_BASE,
@@ -70,6 +112,7 @@ const manifest = {
       description: await childDescription(child.slug),
     })),
   })),
+  parts: await fetchParts(),
 };
 
 writeFileSync(OUT, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
@@ -77,5 +120,6 @@ writeFileSync(OUT, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
 const childCount = manifest.categories.reduce((n, c) => n + c.children.length, 0);
 console.log(
   `wrote ${path.relative(process.cwd(), OUT)}: ` +
-    `${manifest.categories.length} categories + ${childCount} subcategories (source ${API_BASE})`,
+    `${manifest.categories.length} categories + ${childCount} subcategories + ` +
+    `${manifest.parts.length} parts (source ${API_BASE})`,
 );

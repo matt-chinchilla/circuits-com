@@ -9,9 +9,17 @@
 // with the try_files rule already in frontend/nginx.conf — no runtime cost, no
 // extra request-path service, and not one byte added to the JS bundle.
 //
-// Scope is deliberately bounded to the 97 templated routes (home, the static
-// pages, 15 categories, 75 subcategories). Part pages are NOT prerendered — see
-// the note in vite.config.ts for why.
+// Scope is every templated route: home, the static pages, 15 categories, 75
+// subcategories, and all ~3,600 part pages — 3,709 documents.
+//
+// Parts were excluded in the first pass on the assumption that prerendering
+// them would be expensive. It is not: renderRoute is regex replacement over the
+// built shell, not React SSR, so each document costs a few string operations
+// and one file write. Including them takes the build from ~12s to ~20s and
+// dist/ from 6 MB to 48 MB. That disk is worth it — parts are ~97% of the
+// sitemap, so excluding them left the overwhelming majority of the site on the
+// generic shell, and part-number searches are the long tail a components
+// directory actually wins.
 //
 // The route data comes from seo-manifest.json, a snapshot committed alongside
 // the code because the frontend build stage has no network and no database.
@@ -28,7 +36,8 @@ import {
   type PageSeo,
   type SeoLink,
 } from '../src/public/services/seo';
-import { STATIC_PAGE_SEO, categorySeo } from '../src/public/services/seoRoutes';
+import { STATIC_PAGE_SEO, categorySeo, partSeo } from '../src/public/services/seoRoutes';
+import { categoryPath } from '../src/shared/utils/categoryPath';
 
 interface ManifestCategory {
   slug: string;
@@ -37,8 +46,20 @@ interface ManifestCategory {
   children?: { slug: string; name: string; description?: string | null }[];
 }
 
+interface ManifestPart {
+  slug: string;
+  sku: string;
+  manufacturerName?: string | null;
+  description?: string | null;
+  categoryName?: string | null;
+  categorySlug?: string | null;
+  parentCategorySlug?: string | null;
+  bestPrice?: number | null;
+}
+
 interface SeoManifest {
   categories?: ManifestCategory[];
+  parts?: ManifestPart[];
 }
 
 interface PrerenderRoute {
@@ -225,6 +246,35 @@ function buildRoutes(manifest: SeoManifest | null): PrerenderRoute[] {
         }),
       });
     }
+  }
+
+  // Parts are ~97% of the sitemap. Leaving them client-rendered meant the
+  // overwhelming majority of the site served one byte-identical shell with no
+  // title, canonical or Product markup — which is where the long-tail
+  // part-number traffic a components directory actually wins would come from.
+  //
+  // Affordable because renderRoute is string templating, not React SSR: each
+  // document is a handful of regex replacements over the shell, so the cost is
+  // file writes rather than rendering. Only parts WITH a slug are here (the
+  // manifest drops the rest), since /part/<uuid> canonicalizes to the slug
+  // form anyway — prerendering both shapes would emit two documents that
+  // disagree about which is canonical.
+  for (const part of manifest?.parts ?? []) {
+    routes.push({
+      urlPath: `/part/${part.slug}`,
+      file: `part/${part.slug}/index.html`,
+      seo: partSeo({
+        sku: part.sku,
+        manufacturerName: part.manufacturerName ?? '',
+        slug: part.slug,
+        description: part.description ?? null,
+        categoryName: part.categoryName ?? null,
+        bestPrice: part.bestPrice ?? null,
+        categoryPath: part.categorySlug
+          ? categoryPath(part.categorySlug, part.parentCategorySlug ?? null)
+          : null,
+      }),
+    });
   }
 
   return routes;
