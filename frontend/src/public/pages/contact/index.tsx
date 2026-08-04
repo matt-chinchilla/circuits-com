@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { motion } from "framer-motion";
 import PageHead from "@public/components/PageHead";
-import { STATIC_PAGE_SEO } from "@public/services/seo";
+import { STATIC_PAGE_SEO } from "@public/services/seoRoutes";
 import { Link, useLocation } from "react-router-dom";
 import PageHeaderBand from "@public/components/layout/PageHeaderBand";
 import { api } from "@public/services/api";

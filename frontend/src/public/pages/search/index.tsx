@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import PageHead from '@public/components/PageHead';
-import { STATIC_PAGE_SEO } from '@public/services/seo';
+import { STATIC_PAGE_SEO } from '@public/services/seoRoutes';
 import SearchBar from '@public/components/layout/SearchBar';
 import SkeletonLoader from '@public/components/widgets/SkeletonLoader';
 import GlowButton from '@public/components/widgets/GlowButton';

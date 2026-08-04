@@ -38,8 +38,9 @@ export const ORGANIZATION_JSONLD = JSON.stringify({
 // ─────────────────────────────────────────────────────────────────────────────
 // Per-route head model
 //
-// This module is imported by TWO consumers that must never disagree:
-//   1. <PageHead> — react-helmet-async, running in the browser after hydration.
+// This module and its sibling ./seoRoutes are imported by TWO consumers that
+// must never disagree:
+//   1. <PageHead> — react-helmet-async, running in the browser after mount.
 //   2. scripts/seoPrerender.ts — the build-time step that bakes the same head
 //      into a static HTML file per route (see vite.config.ts).
 // A crawler that does not run JS reads (2); a browser ends up with (1). If the
@@ -47,8 +48,12 @@ export const ORGANIZATION_JSONLD = JSON.stringify({
 // HTML would advertise metadata the rendered page contradicts, so every field
 // a route needs comes from a builder below and nowhere else.
 //
-// Keep this file free of React and of `@`-alias imports: vite.config.ts pulls
-// it in through esbuild, where neither is resolvable.
+// Only the home-page half lives here — HomePage is eagerly imported for LCP, so
+// everything this file exports ships in the entry chunk. The nine lazy routes'
+// head models live in ./seoRoutes.
+//
+// Keep both files free of React and of `@`-alias imports: vite.config.ts pulls
+// them in through esbuild, where neither is resolvable.
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** A single crawler-visible link in the no-JS fallback body. */
@@ -76,7 +81,8 @@ export interface PageSeo {
   links: SeoLink[];
 }
 
-const SITE_LINKS: SeoLink[] = [
+/** Site-wide links for the no-JS fallback bodies. */
+export const SITE_LINKS: SeoLink[] = [
   { href: '/about', label: 'About Circuit Center' },
   { href: '/join', label: 'List your components' },
   { href: '/keyword', label: 'Keyword sponsorship' },
@@ -118,195 +124,5 @@ export function homeSeo(categories: SeoLink[] = []): PageSeo {
     jsonLd: [ORGANIZATION_JSONLD, WEBSITE_JSONLD],
     heading: 'Circuit Center — The Integrated Circuits Directory',
     links: [...categories, ...SITE_LINKS],
-  };
-}
-
-export type StaticPageKey = 'about' | 'contact' | 'join' | 'keyword' | 'privacy' | 'search';
-
-/**
- * Routes whose head is a fixed literal. `/terms` renders the same component as
- * `/privacy` and deliberately shares its canonical — the two URLs are one page.
- */
-export const STATIC_PAGE_SEO: Record<StaticPageKey, PageSeo> = {
-  about: {
-    title: 'About Circuit Center — The Integrated Circuits Directory',
-    description:
-      'Learn about Circuit Center — the integrated circuits directory connecting buyers, suppliers, and engineers. Compare prices from 57 distributors.',
-    canonical: `${SITE_ORIGIN}/about`,
-    jsonLd: [],
-    heading: 'About Circuit Center',
-    links: SITE_LINKS,
-  },
-  contact: {
-    title: 'Contact Circuit Center — Get in Touch',
-    description:
-      'Contact Circuit Center for questions about electronic component pricing, distributor listings, or partnership opportunities.',
-    canonical: `${SITE_ORIGIN}/contact`,
-    jsonLd: [],
-    heading: 'Contact Us',
-    links: SITE_LINKS,
-  },
-  join: {
-    title: 'Join Circuit Center — List Your Components | Distributors Welcome',
-    description:
-      'List your electronic components on Circuit Center. Reach engineers and buyers searching for ICs, MCUs, sensors, and more from 57+ distributors.',
-    canonical: `${SITE_ORIGIN}/join`,
-    jsonLd: [],
-    heading: 'Join Circuit Center',
-    links: SITE_LINKS,
-  },
-  keyword: {
-    title: 'Keyword Sponsorship — Promote Your Brand | Circuit Center',
-    description:
-      'Sponsor a keyword on Circuit Center. Own the search term your buyers type — one sponsor per keyword, live in 48 hours, month-to-month.',
-    canonical: `${SITE_ORIGIN}/keyword`,
-    jsonLd: [],
-    heading: 'Sponsor a Keyword',
-    links: SITE_LINKS,
-  },
-  privacy: {
-    title: 'Privacy Policy | Circuit Center',
-    description:
-      'Circuit Center privacy policy — how we handle your data, cookies, and third-party services.',
-    canonical: `${SITE_ORIGIN}/privacy`,
-    jsonLd: [],
-    heading: 'Privacy Policy',
-    links: SITE_LINKS,
-  },
-  // Result pages are noindex,follow: the query space is unbounded and every
-  // URL in it is a near-duplicate of the category pages it links to.
-  search: {
-    title: 'Search Electronic Components | Circuit Center',
-    description:
-      'Search 3,600+ electronic components across 57 distributors by part number, manufacturer, or category.',
-    canonical: null,
-    robots: 'noindex, follow',
-    jsonLd: [],
-    heading: 'Search',
-    links: SITE_LINKS,
-  },
-};
-
-export interface PartSeoInput {
-  sku: string;
-  manufacturerName: string;
-  /** Part.slug — non-unique by design; duplicate SKUs share one canonical. */
-  slug: string;
-  description?: string | null;
-  categoryName?: string | null;
-  bestPrice?: number | null;
-  categoryPath?: string | null;
-}
-
-export function partSeo(input: PartSeoInput): PageSeo {
-  const url = `${SITE_ORIGIN}/part/${input.slug}`;
-  const price =
-    input.bestPrice != null ? ` Best price: $${input.bestPrice.toFixed(2)}` : '';
-
-  // `offers` is deliberately absent. The listing prices in this build are
-  // synthetic demo data, and Google treats Product offers that disagree with
-  // the real distributor price as deceptive markup (manual-action territory),
-  // so the table stays visible-only until a live price feed backs it. Optional
-  // properties are spread in rather than set to null — a JSON-LD property whose
-  // value is null fails validation.
-  const product = {
-    '@context': 'https://schema.org',
-    '@type': 'Product',
-    name: input.sku,
-    url,
-    // A Part row's SKU *is* the manufacturer part number — distributor-side
-    // SKUs live on PartListing.sku — so it fills both properties.
-    sku: input.sku,
-    mpn: input.sku,
-    brand: { '@type': 'Brand', name: input.manufacturerName },
-    ...(input.description ? { description: input.description } : {}),
-    ...(input.categoryName ? { category: input.categoryName } : {}),
-  };
-
-  return {
-    title: `${input.sku} by ${input.manufacturerName} — Buy from Distributors | Circuit Center`,
-    description: `${input.description || input.sku}. Compare prices from distributors.${price}`,
-    canonical: url,
-    jsonLd: [JSON.stringify(product)],
-    heading: input.sku,
-    links: [
-      { href: '/', label: 'Circuit Center' },
-      ...(input.categoryPath && input.categoryName
-        ? [{ href: input.categoryPath, label: input.categoryName }]
-        : []),
-    ],
-  };
-}
-
-export interface CategorySeoInput {
-  name: string;
-  /** Root-relative canonical path from `categoryPath(slug, parentSlug)`. */
-  canonicalPath: string;
-  description?: string | null;
-  parent?: { name: string; slug: string } | null;
-  /** Subcategories, for the no-JS fallback's link list. */
-  children?: SeoLink[];
-}
-
-export function categorySeo(input: CategorySeoInput): PageSeo {
-  const url = `${SITE_ORIGIN}${input.canonicalPath}`;
-  // Subcategories carry no curated description (only the 15 top-level rows do),
-  // so the template below IS the shipped meta description for 75 of the 90
-  // category URLs. `??` and not `||` on purpose: an empty string from the API
-  // would be a data bug worth surfacing, not something to paper over.
-  const description =
-    input.description ??
-    `Compare prices for ${input.name} components from top distributors on Circuit Center.`;
-
-  const collectionPage = {
-    '@context': 'https://schema.org',
-    '@type': 'CollectionPage',
-    name: input.name,
-    description,
-    url,
-    isPartOf: { '@id': WEBSITE_ID },
-    publisher: { '@id': ORGANIZATION_ID },
-  };
-
-  // Emitted for top-level categories too (Home > Category), not just
-  // subcategories — the rendered breadcrumb has always had two rungs there and
-  // the markup has to agree with it.
-  const breadcrumb = {
-    '@context': 'https://schema.org',
-    '@type': 'BreadcrumbList',
-    itemListElement: [
-      { '@type': 'ListItem', position: 1, name: 'Home', item: `${SITE_ORIGIN}/` },
-      ...(input.parent
-        ? [
-            {
-              '@type': 'ListItem',
-              position: 2,
-              name: input.parent.name,
-              item: `${SITE_ORIGIN}/category/${input.parent.slug}`,
-            },
-          ]
-        : []),
-      {
-        '@type': 'ListItem',
-        position: input.parent ? 3 : 2,
-        name: input.name,
-        item: url,
-      },
-    ],
-  };
-
-  return {
-    title: `${input.name} — Prices & Distributors | Circuit Center`,
-    description,
-    canonical: url,
-    jsonLd: [JSON.stringify(collectionPage), JSON.stringify(breadcrumb)],
-    heading: input.name,
-    links: [
-      { href: '/', label: 'Circuit Center' },
-      ...(input.parent
-        ? [{ href: `/category/${input.parent.slug}`, label: input.parent.name }]
-        : []),
-      ...(input.children ?? []),
-    ],
   };
 }

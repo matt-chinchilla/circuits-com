@@ -3,13 +3,11 @@ import {
   ORGANIZATION_ID,
   ORGANIZATION_JSONLD,
   SITE_ORIGIN,
-  STATIC_PAGE_SEO,
   WEBSITE_ID,
-  categorySeo,
   homeSeo,
-  partSeo,
   type PageSeo,
 } from './seo';
+import { STATIC_PAGE_SEO, categorySeo, partSeo } from './seoRoutes';
 
 const org = JSON.parse(ORGANIZATION_JSONLD) as Record<string, unknown>;
 

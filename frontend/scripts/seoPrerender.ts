@@ -24,12 +24,11 @@ import path from 'node:path';
 import type { Plugin } from 'vite';
 import {
   SITE_ORIGIN,
-  STATIC_PAGE_SEO,
-  categorySeo,
   homeSeo,
   type PageSeo,
   type SeoLink,
 } from '../src/public/services/seo';
+import { STATIC_PAGE_SEO, categorySeo } from '../src/public/services/seoRoutes';
 
 interface ManifestCategory {
   slug: string;

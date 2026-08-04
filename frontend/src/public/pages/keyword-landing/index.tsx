@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import PageHead from "@public/components/PageHead";
-import { STATIC_PAGE_SEO } from "@public/services/seo";
+import { STATIC_PAGE_SEO } from "@public/services/seoRoutes";
 import { Link, useNavigate } from 'react-router-dom';
 import GlowButton from '@public/components/widgets/GlowButton';
 import PageHeaderBand from '@public/components/layout/PageHeaderBand';

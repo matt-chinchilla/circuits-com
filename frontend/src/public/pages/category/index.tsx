@@ -11,7 +11,7 @@ import Pagination from '@public/components/widgets/Pagination';
 import PageHead from '@public/components/PageHead';
 import Icon from '@shared/components/Icon';
 import { api } from '@public/services/api';
-import { categorySeo } from '@public/services/seo';
+import { categorySeo } from '@public/services/seoRoutes';
 import { getCategoryShell, setCategoryShell, type CategoryShell } from '@public/services/categoryShellMemo';
 import { getCategoryDetailMemo, setCategoryDetailMemo } from '@shared/services/categoryDetailMemo';
 import { categoryPath } from '@shared/utils/categoryPath';

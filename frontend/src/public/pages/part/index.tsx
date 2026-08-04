@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import SkeletonLoader from '@public/components/widgets/SkeletonLoader';
 import PageHead from '@public/components/PageHead';
 import { api } from '@public/services/api';
-import { partSeo } from '@public/services/seo';
+import { partSeo } from '@public/services/seoRoutes';
 import { categoryPath } from '@shared/utils/categoryPath';
 import type { PartDetail, PartListing } from '@public/types/part';
 import styles from './PartPage.module.scss';

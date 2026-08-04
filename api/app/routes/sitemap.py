@@ -61,10 +61,27 @@ def sitemap_xml(db: Session = Depends(get_db)):
             f"<priority>{priority}</priority></url>"
         )
 
-    parts = db.query(Part.id).all()
-    for (part_id,) in parts:
+    # Slug over id: the slug IS the manufacturer part number
+    # (slugify_sku(sku.lower())), which is what people actually search, whereas
+    # a UUID carries no signal at all. The frontend resolves both shapes —
+    # api.getPartDetail branches on the UUID grammar — and part pages
+    # canonicalize to the slug form, so the slug is the URL to advertise.
+    #
+    # Duplicate slugs are expected, not a data error: the same SKU from two
+    # manufacturers slugifies identically (CLAUDE.md). Emitting one <loc> twice
+    # is a malformed sitemap, so they collapse to a single entry. That entry
+    # resolves to whichever row by-slug returns first, which is the same page
+    # the canonical already points at — a pre-existing ambiguity this does not
+    # widen. Parts with no slug fall back to the id: an ugly URL still indexes,
+    # a missing one cannot.
+    seen_locs: set[str] = set()
+    for part_id, slug in db.query(Part.id, Part.slug).all():
+        loc = f"{base}/part/{slug or part_id}"
+        if loc in seen_locs:
+            continue
+        seen_locs.add(loc)
         urls.append(
-            f"<url><loc>{base}/part/{part_id}</loc>"
+            f"<url><loc>{loc}</loc>"
             f"<lastmod>{today}</lastmod>"
             f"<changefreq>weekly</changefreq>"
             f"<priority>0.6</priority></url>"

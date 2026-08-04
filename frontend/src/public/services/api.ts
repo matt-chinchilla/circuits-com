@@ -9,6 +9,9 @@ export { API_BASE_URL };
 
 const client = axios.create({ baseURL: API_BASE_URL });
 
+/** 8-4-4-4-12 hex. Distinguishes a part's UUID from its slug in `/part/:id`. */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 // Slugs already warmed via hover-prefetch this session — guards against
 // redundant network calls when a user hovers the same card repeatedly.
 const _prefetchedCategories = new Set<string>();
@@ -99,6 +102,29 @@ export const api = {
     message?: string;
   }) => client.post('/keyword-request', data),
 
-  getPartDetail: (id: string) =>
-    client.get<PartDetail>(`/parts/${id}`).then(r => r.data),
+  /**
+   * Resolve a part by EITHER its UUID or its slug.
+   *
+   * `/part/:id` has always accepted both shapes in the URL, but this only ever
+   * called `/parts/{id}` — the UUID endpoint, which 404s on anything that is
+   * not a UUID. So every slug URL was a SOFT 404: nginx served the SPA shell
+   * with a 200, the page rendered its error state, and no title, canonical or
+   * Product markup was emitted.
+   *
+   * That mattered because part pages canonicalize to the SLUG form
+   * (`partSeo({ slug: part.slug ?? id })`), so ~3,600 working UUID pages were
+   * pointing Google at URLs that resolved to nothing.
+   *
+   * Shape decides the endpoint. A slug is `slugify_sku(sku.lower())`, so a
+   * value matching the UUID grammar exactly — 8-4-4-4-12 hex with hyphens in
+   * those positions — is a UUID in practice, not a part number.
+   */
+  getPartDetail: (idOrSlug: string) =>
+    client
+      .get<PartDetail>(
+        UUID_RE.test(idOrSlug)
+          ? `/parts/${idOrSlug}`
+          : `/parts/by-slug/${encodeURIComponent(idOrSlug)}`,
+      )
+      .then(r => r.data),
 };

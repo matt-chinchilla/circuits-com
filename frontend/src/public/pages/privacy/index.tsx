@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import PageHead from "@public/components/PageHead";
-import { STATIC_PAGE_SEO } from "@public/services/seo";
+import { STATIC_PAGE_SEO } from "@public/services/seoRoutes";
 import { Link } from "react-router-dom";
 import PageHeaderBand from "@public/components/layout/PageHeaderBand";
 import styles from "./PrivacyPage.module.scss";

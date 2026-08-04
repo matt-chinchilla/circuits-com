@@ -65,3 +65,64 @@ def test_sitemap_child_has_parent_priority(client, seeded_db):
     block_start = xml.index(nested)
     block = xml[block_start : block_start + 200]
     assert "<priority>0.7</priority>" in block
+
+
+# ── Part URLs carry the MPN, not a UUID (2026-08-03) ──────────────────────
+# The sitemap advertised /part/<uuid> for ~3,600 parts, discarding the one
+# thing in the URL a person might search: the manufacturer part number, which
+# IS the slug. These guard the switch to slugs and the two data realities that
+# make it non-trivial — nullable slugs and slugs shared by more than one part.
+
+
+def test_part_urls_use_the_slug_not_the_uuid(client, seeded_db):
+    """The MPN must be in the URL; a UUID carries no search signal."""
+    from app.models import Part
+
+    db = seeded_db["db"] if isinstance(seeded_db, dict) and "db" in seeded_db else None
+    xml = client.get("/api/sitemap.xml").text
+    locs = _locs(xml)
+    part_locs = [loc for loc in locs if "/part/" in loc]
+    assert part_locs, "sitemap emitted no part URLs at all"
+
+    uuid_shaped = [
+        loc
+        for loc in part_locs
+        if __import__("re").search(
+            r"/part/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            loc,
+        )
+    ]
+    # A UUID is only acceptable as the fallback for a part with no slug.
+    if db is not None:
+        slugless = db.query(Part).filter((Part.slug.is_(None)) | (Part.slug == "")).count()
+        assert len(uuid_shaped) <= slugless, (
+            f"{len(uuid_shaped)} UUID part URLs but only {slugless} parts lack a slug — "
+            "the slug is being ignored for parts that have one"
+        )
+
+
+def test_part_urls_are_unique(client, seeded_db):
+    """Duplicate <loc> is a malformed sitemap.
+
+    Two manufacturers shipping the same SKU slugify identically (CLAUDE.md), so
+    collisions are expected data, not corruption — they must collapse to one
+    entry rather than being emitted twice.
+    """
+    part_locs = [loc for loc in _locs(client.get("/api/sitemap.xml").text) if "/part/" in loc]
+    dupes = {loc for loc in part_locs if part_locs.count(loc) > 1}
+    assert not dupes, f"duplicate part <loc> entries: {sorted(dupes)[:5]}"
+
+
+def test_slugless_part_still_appears(client, seeded_db, db):
+    """An ugly URL still indexes; a missing one cannot."""
+    from app.models import Part
+
+    orphan = db.query(Part).first()
+    assert orphan is not None
+    orphan.slug = None
+    db.commit()
+
+    locs = _locs(client.get("/api/sitemap.xml").text)
+    assert f"https://circuitcenter.ai/part/{orphan.id}" in locs, (
+        "a part with no slug was dropped from the sitemap entirely"
+    )
