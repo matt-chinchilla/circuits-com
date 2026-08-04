@@ -27,15 +27,18 @@
    * No requestAnimationFrame, no <canvas>, no will-change, no mix-blend-mode,
      no hue-rotate. (This repo has a documented history of orphaned animation
      loops; a webmail tab stays open for eight hours.)
-   * Motion is transitions-on-interaction, plus EXACTLY ONE keyframe: `ccLive`,
-     the halo on a folder that just received mail. The no-keyframes rule this
-     file originally carried was aimed at the leak above — a JS-driven loop
-     with a lifecycle to get orphaned. A CSS keyframe animating one property on
-     one small element is a different animal: no JS, nothing to unmount, static
-     geometry, and the browser suspends it when the tab is hidden. The donor
-     system ships the same thing (`pfPulse`). If you add a second one, first
-     ask what state changed in the world to justify it — "live" has to mean
-     something or it is just noise.
+   * Motion is transitions-on-interaction, plus EXACTLY ONE keyframe: `ccLive`.
+     It has TWO consumers — the halo on a folder that just received mail, and
+     the pip beside an unread message — which is deliberate: they are different
+     states but the same idea ("this wants you"), so they share a motion rather
+     than each inventing one. The no-keyframes rule this file originally
+     carried was aimed at the leak above — a JS-driven loop with a lifecycle to
+     get orphaned. A CSS keyframe animating one property on one small element
+     is a different animal: no JS, nothing to unmount, static geometry, and the
+     browser suspends it when the tab is hidden. The donor system ships the
+     same thing (`pfPulse`). Before adding a SECOND keyframe, ask what state
+     changed in the world to justify it — "live" has to mean something or it is
+     just noise — and check whether `ccLive` at a different duration says it.
    * backdrop-filter is STATIC only — applied to resting surfaces, never
      animated, and declared with BOTH -webkit- and unprefixed forms.
      It is dropped entirely <=768px (mobile GPU layer cost; see the
@@ -51,8 +54,8 @@
      re-measure if you change one (DESIGN.md has the math).
    * Nothing here reduces Elastic's list density or row heights.
 
-   Verify the invariants (expect ONLY comment lines, plus the two `ccLive`
-   declarations and its @keyframes block):
+   Verify the invariants (expect ONLY comment lines, plus the `ccLive`
+   declarations — two of them today — and its single @keyframes block):
      grep -nE '@keyframes|animation:|@import|url\(https?:|will-change|mix-blend|hue-rotate' styles/circuitcenter.css
    =========================================================================== */
 
@@ -90,6 +93,13 @@ html.cc {
 	--cc-pop-veil:   rgba(37, 45, 51, 0.97);      /* menus, dialogs — near-opaque */
 	--cc-pane-solid: #1b2227;                     /* <=768px, where blur is dropped */
 	--cc-strip:      rgba(255, 255, 255, 0.05);   /* toolbar band inside a pane   */
+	/* A surface RAISED off the pane — message-header coupon, attachment strip,
+	   recipient chips, thumbnails. On the light skin each of these was a white
+	   veil at 0.45-0.85, which is how you lift something off a light pane; the
+	   same declaration on a dark pane is a white card with light text on it.
+	   The dark equivalent is a WEAK white lift, not a strong one. Ink lands at
+	   11.3:1 on this over the worst-case pane. */
+	--cc-raise:      rgba(255, 255, 255, 0.06);
 	--cc-fill:       rgba(0, 0, 0, 0.22);         /* recessed channels: search, fields */
 	--cc-rim:        rgba(255, 255, 255, 0.17);   /* glass edge — 2.01 on the bench */
 	--cc-hair:       rgba(255, 255, 255, 0.10);   /* hairline on glass            */
@@ -129,7 +139,15 @@ html.cc {
 	--cc-enig:       #e8c252;  /* ENIG gold — the single gold source            9.40 */
 	--cc-enig-hi:    #f0d36e;  /* gold under the hover light                         */
 	--cc-legend:     var(--cc-enig);  /* silkscreen legends — gold's one remaining job */
-	--cc-led:        #44bd13;  /* unread LED dot (non-text)                     6.54 */
+	--cc-led:        #44bd13;  /* unread LED dot, lit                           6.54 */
+	/* The same indicator once the message has been read: the LED COOLS rather
+	   than going out. Blue is the owner's call (the iOS dot idiom) and it is
+	   the one hue outside the three-colour palette, so it is kept on a short
+	   leash — C* 20.9, against the phosphor's 88.7 and against the C* 44.5 of
+	   the Elastic blue this skin threw out. Desaturated enough to read as a
+	   dead indicator on an instrument, not as a second brand colour. 3.82:1,
+	   over the 3:1 floor for a non-text indicator. */
+	--cc-led-read:   #5c7f9e;
 	--cc-link:       #6ee03c;  /* links — phosphor at text weight               9.50 */
 	--cc-phosphor:   #44bd13;  /* oscilloscope phosphor — glow                       */
 	--cc-flag:       #ff8378;  /* flagged, errors — light-on-dark now           6.72 */
@@ -314,16 +332,23 @@ html.cc #layout-content {
 
 
 /* ---------------------------------------------------------------------------
-   4. THE EDGE CONNECTOR — the signature element, kept from the first pass
-   The task rail is the card edge of a board that is plugged in: the ONE
-   unglazed surface in the app. Bare bench, a full-height column of ENIG
-   contact fingers, and the active task's finger lit with a short phosphor
-   trace bleeding toward the glass. Everything else floats; this is where
-   the board is held.
+   4. THE TASK RAIL — bare bench, no ornament
+   The rail is the ONE unglazed surface in the app: everything else floats on
+   the bench, and this is where the board is held. The active task is lit with
+   a short phosphor trace bleeding toward the glass.
 
-   Peripheral by construction: a 6px strip at the screen edge, present all
-   day, never competing with a message. Phone widths turn #layout-menu into
-   a popover, so the fingers are scoped to >480px where the rail exists.
+   THE EDGE CONNECTOR IS GONE (owner's call). A 6px column of gold contact
+   fingers used to run the full height at left:0, as the card edge of a board
+   plugged into a slot. Two things were wrong with it. Taste first: the owner
+   does not like the PCB-lead motif, and that settles it. But it was also
+   misreading as a BUG — a bright band hard against the screen edge, with the
+   task icons sitting just inside it, made the whole rail look like it was
+   clipped by the viewport. It was not; measured, the widest label ("Contacts",
+   "Settings") runs x 14.7 to 63.3 inside a 78px rail, with room on both sides.
+   Ornament at an extreme edge reads as content falling off it.
+
+   The rail's right-hand border went neutral at the same time: a gold hairline
+   was the same motif in miniature, and gold is now trim only.
    --------------------------------------------------------------------------- */
 html.cc #layout-menu {
 	background-color: var(--cc-bench-deep);
@@ -333,33 +358,25 @@ html.cc #layout-menu {
 	html.cc #layout-menu {
 		position: relative;
 		background-color: var(--cc-bench-deep);
-		border-right: 1px solid rgba(232, 194, 82, 0.20);
-	}
-
-	/* The finger array. Static paint: one repeating gradient, no animation. */
-	html.cc #layout-menu::before {
-		content: '';
-		position: absolute;
-		z-index: 1;
-		top: 0;
-		bottom: 0;
-		left: 0;
-		width: 6px;
-		pointer-events: none;
-		background-image:
-			linear-gradient(to right, rgba(0, 0, 0, 0.5), transparent),
-			repeating-linear-gradient(
-				to bottom,
-				#b8902e 0 22px,
-				transparent 22px 32px
-			);
-		opacity: 0.42;
+		border-right: 1px solid rgba(255, 255, 255, 0.08);
 	}
 
 	/* Unlit tasks: silkscreen labels on the mask. */
 	html.cc #taskmenu a {
 		color: var(--cc-rail-silk);
 		background: transparent;
+	}
+
+	/* Centre the task icons. Elastic gives the icon pseudo-element
+	   `margin: 0 3.5px 0 0` — a RIGHT margin only, which is correct when the
+	   icon sits beside its label on a wide button, but this rail stacks the
+	   icon ABOVE the label as a block. A block-level box with one-sided margin
+	   inside a `text-align: center` parent does not centre; it sits half the
+	   margin left of centre, and every icon in the column drifted the same
+	   3.5px. Symmetric auto margins put them on the rail's axis. */
+	html.cc #taskmenu a::before {
+		margin-left: auto;
+		margin-right: auto;
 	}
 
 	html.cc #taskmenu a span.inner {
@@ -452,17 +469,25 @@ html.cc #layout > div > .footer {
 	background: transparent;
 }
 
-/* Silkscreen designators. Scoped to the sidebar and list headers only —
-   #layout-content's header title carries the message SUBJECT on narrow
-   viewports and must never be uppercased or badged. */
+/* Silkscreen designators.
+   All THREE columns are labelled now. The reading pane used to be the odd one
+   out — folders and list announced themselves, the biggest column said
+   nothing — which left the eye with no anchor for the widest thing on screen.
+
+   Sizing: these were 0.68rem (9.5px rendered), too small to function as
+   headers at all; they read as captions floating above the content rather
+   than as its label. 0.78rem with a wider tracking earns the row it occupies.
+   Colour moved from gold to --cc-ink-2, so a heading is not competing with
+   trim; the designator chip stays the quiet element. */
 html.cc #layout-sidebar > .header .header-title,
-html.cc #layout-list > .header .header-title {
+html.cc #layout-list > .header .header-title,
+html.cc #layout-content > .header .header-title {
 	font-family: var(--cc-mono);
-	font-size: 0.68rem;
+	font-size: 0.88rem;
 	font-weight: 600;
-	letter-spacing: 0.16em;
+	letter-spacing: 0.18em;
 	text-transform: uppercase;
-	color: var(--cc-legend);
+	color: var(--cc-ink-2);
 }
 
 @media screen and (min-width: 769px) {
@@ -472,18 +497,52 @@ html.cc #layout-list > .header .header-title {
 		display: inline-block;
 		vertical-align: -1px;
 		width: 22px;
-		height: 11px;
+		height: 12px;
 		margin-right: 8px;
 		background: no-repeat left center / contain;
-		opacity: 0.75;
+		opacity: 0.8;
 	}
 
+	/* The fill in these three SVGs is a PALETTE VALUE written as an escaped
+	   hex inside a data URI, which is why the light-to-dark migration could
+	   not reach it: it is neither a CSS colour token nor a literal the
+	   stylesheet parser sees. They were still #4d5f54, the old LIGHT theme's
+	   --cc-dim, and rendered all but invisible on the dark header. If a
+	   palette value ever changes again, grep the data URIs by hand. */
 	html.cc #layout-sidebar > .header .header-title::before {
-		background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='12'%3E%3Ctext x='0' y='10' font-family='Menlo,monospace' font-size='10' letter-spacing='1.5' fill='%234d5f54'%3EU1%3C/text%3E%3C/svg%3E");
+		background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='12'%3E%3Ctext x='0' y='10' font-family='Menlo,monospace' font-size='10' letter-spacing='1.5' fill='%2387939a'%3EU1%3C/text%3E%3C/svg%3E");
 	}
 
 	html.cc #layout-list > .header .header-title::before {
-		background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='12'%3E%3Ctext x='0' y='10' font-family='Menlo,monospace' font-size='10' letter-spacing='1.5' fill='%234d5f54'%3EU2%3C/text%3E%3C/svg%3E");
+		background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='12'%3E%3Ctext x='0' y='10' font-family='Menlo,monospace' font-size='10' letter-spacing='1.5' fill='%2387939a'%3EU2%3C/text%3E%3C/svg%3E");
+	}
+
+	/* The reading pane's label.
+	   This one CANNOT hang off .header-title the way U1 and U2 do. Roundcube
+	   writes the message subject into that element for the phone layout, and
+	   Elastic then sets it `display: none` on desktop because the subject is
+	   printed again, larger, in the header card below. A display:none element
+	   generates no pseudo-elements, so a label attached there paints nothing —
+	   which is exactly what happened on the first attempt.
+
+	   So the label hangs off the header BAND, which is a flex row; ::before
+	   becomes its first flex item and lands where U1/U2 sit in the other two
+	   columns. The designator rides along as a background-image rather than a
+	   second pseudo-element, since ::after on this band would be pushed to the
+	   far end of the row, away from the word it belongs to. */
+	html.cc #layout-content > .header::before {
+		content: 'Message';
+		align-self: center;
+		flex: none;
+		font-family: var(--cc-mono);
+		font-size: 0.88rem;
+		font-weight: 600;
+		letter-spacing: 0.18em;
+		text-transform: uppercase;
+		color: var(--cc-ink-2);
+		padding-left: 30px;
+		background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='12'%3E%3Ctext x='0' y='10' font-family='Menlo,monospace' font-size='10' letter-spacing='1.5' fill='%2387939a'%3EU3%3C/text%3E%3C/svg%3E") no-repeat left center / 22px 12px;
+		opacity: 0.95;
 	}
 }
 
@@ -548,7 +607,7 @@ html.cc .contactlist span.email {
 
 html.cc .menu.pagenav .pagenav-text {
 	font-family: var(--cc-mono);
-	font-size: 0.78rem;
+	font-size: 0.88rem;
 	letter-spacing: 0.04em;
 	font-variant-numeric: tabular-nums;
 }
@@ -720,16 +779,95 @@ html.cc .messagelist tr.unread td.subject span.fromto {
 	color: var(--cc-ink-2);
 }
 
-/* The status pip is a lit indicator LED: a deep-gold dot (3.80:1 — reads on
-   glass) haloed by bright ENIG. The halo is a static text-shadow; it never
-   pulses. */
-html.cc .messagelist td.subject span.msgicon.status.unread:before {
-	color: var(--cc-led);
-	text-shadow: 0 0 6px rgba(232, 194, 82, 0.8);
+/* The status pip is a lit indicator LED: a phosphor dot (6.54:1 on the pane)
+   with a halo that BREATHES. The halo was gold and static; it is green and
+   alive now, because the owner wanted unread mail to read as energy rather
+   than as a mark on a list.
+
+   How it is built matters more than that it pulses:
+
+   * The glow is a PRE-BAKED radial gradient on ::after, and only its OPACITY
+     animates. It is not an animated text-shadow or drop-shadow — this repo
+     has a standing rule against those, because a shadow re-rasterises every
+     frame and that cost lands on scroll, which is exactly when a list of
+     these is moving.
+   * The gradient is TRANSPARENT at its centre, so the ring paints around the
+     dot rather than over it. ::after paints above ::before, and a translucent
+     wash across the pip would have dulled the very thing it is advertising —
+     this avoids a z-index fight to fix a problem that need not exist.
+   * It reuses `ccLive`, the file's ONE keyframe, rather than adding a second.
+     The invariants at the top ask what changed in the world to justify a new
+     keyframe; nothing did. "Unread" and "just arrived" are different states,
+     but they are the same IDEA — this message wants you — so they can share a
+     motion. The folder badge stays faster and brighter, so `.recent` is still
+     the louder of the two.
+
+   Note this now animates once per unread row. It is opacity on a 14px square
+   with no layout or paint dependents, so it composites; but if a 200-message
+   unread inbox ever feels busy, this is the rule to scope back to `.recent`. */
+/* Put the pip ON the subject line.
+   Elastic stacks every child of td.subject as its own block, so the status
+   indicator was taking a full 28px line to itself, directly above the subject
+   it refers to. That cost a third of every row's height to show one 5.6px dot,
+   and it separated the indicator from the thing it indicates — you read the
+   dot, then dropped a line to find out what it was about.
+
+   Lifting it out of the flow puts it beside the subject AND gives the 28px
+   back to the list: rows get materially shorter and more of the inbox fits on
+   screen, with no loss of information. The two text lines take a matching
+   left inset so the column still has one clean left edge. */
+html.cc .messagelist td.subject {
+	position: relative;
 }
 
+html.cc .messagelist td.subject span.msgicon.status {
+	position: absolute;
+	left: 0;
+	top: 0;
+	width: 20px;
+	height: 28px;
+	display: flex;
+	align-items: center;
+	justify-content: flex-start;
+}
+
+html.cc .messagelist td.subject span.subject,
+html.cc .messagelist td.subject span.fromto {
+	padding-left: 20px;
+}
+
+html.cc .messagelist td.subject span.msgicon.status.unread:before {
+	color: var(--cc-led);
+	text-shadow: 0 0 6px rgba(68, 189, 19, 0.75);
+}
+
+html.cc .messagelist td.subject span.msgicon.status.unread::after {
+	content: '';
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	width: 15px;
+	height: 15px;
+	margin: -7.5px 0 0 -7.5px;
+	border-radius: 50%;
+	pointer-events: none;
+	background: radial-gradient(
+		circle,
+		transparent 26%,
+		rgba(68, 189, 19, 0.45) 42%,
+		rgba(68, 189, 19, 0.16) 58%,
+		transparent 74%
+	);
+	animation: ccLive 2.4s var(--cc-ease-out) infinite;
+}
+
+/* Read: the LED has cooled. Blue, unlit, no halo, no pulse — the pip stays
+   present so the column keeps its rhythm, but it stops asking for anything.
+   The state difference is carried by hue AND by brightness AND by whether it
+   moves, so it survives colour-blindness and reduced-motion alike. */
 html.cc .messagelist td.subject span.msgicon.status:before {
-	color: rgba(255, 255, 255, 0.24);
+	color: var(--cc-led-read);
+	text-shadow: none;
 }
 
 html.cc .messagelist span.attachment span,
@@ -775,7 +913,7 @@ html.cc table.listing > thead th {
 
 html.cc .attachmentslist {
 	border-color: var(--cc-hair-soft);
-	background-color: rgba(255, 255, 255, 0.45);
+	background-color: var(--cc-raise);
 }
 
 html.cc .attachmentslist li a.filename {
@@ -823,7 +961,7 @@ html.cc #message-header {
 	padding: 0.85rem 1rem;
 	border: 1px solid var(--cc-hair-soft);
 	border-radius: var(--cc-r-card);
-	background: rgba(255, 255, 255, 0.72);
+	background: var(--cc-raise);
 	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), var(--cc-shadow-s);
 }
 
@@ -843,39 +981,102 @@ html.cc #message-header .adr {
 	color: var(--cc-ink-2);
 }
 
+/* From / To / Date. These are a LABEL COLUMN, and they were styled as if they
+   were the content: the same weight as the values, in --cc-dim, with nothing
+   separating one row from the next. Three fixes, in order of how much each
+   does: the labels lose their weight and gain tracking so they read as a
+   column rather than as words; each row gets a hairline rule beneath it, so
+   the eye can run along a row without drifting; and the values move up to
+   --cc-ink so the label/value relationship is carried by contrast. */
+html.cc #message-header .headers-table td,
+html.cc #message-header .header-headers td {
+	padding: 0.22rem 0 0.26rem;
+	border-bottom: 1px solid var(--cc-hair-soft);
+	vertical-align: baseline;
+}
+
+html.cc #message-header .headers-table tr:last-child td,
+html.cc #message-header .header-headers tr:last-child td {
+	border-bottom: 0;
+}
+
+html.cc #message-header .headers-table td:not(.header-title),
+html.cc #message-header .header-headers td:not(.header-title) {
+	color: var(--cc-ink);
+	padding-left: 0.9rem;
+}
+
+html.cc #message-header .headers-table .header-title,
 html.cc #message-header .header-headers .header-title {
 	font-family: var(--cc-mono);
-	font-size: 0.68rem;
-	letter-spacing: 0.13em;
+	font-size: 0.7rem;
+	letter-spacing: 0.16em;
 	text-transform: uppercase;
 	color: var(--cc-dim);
-	font-weight: 600;
+	font-weight: 400;
+	white-space: nowrap;
+	width: 1%;
 }
 
 html.cc #message-header .header-links a {
 	color: var(--cc-link);
 }
 
-html.cc #message-header .date,
-html.cc #message-header span.rcmContactAddress a {
+/* Addresses ARE links — Roundcube renders each one as an anchor that opens a
+   composer to that person. Styling them as dead text hid a working control,
+   so they now look like every other link in the app and underline on hover. */
+html.cc #message-header .rcmContactAddress,
+html.cc #message-header span.rcmContactAddress a,
+html.cc #message-header .headers-table a[href^="mailto:"],
+html.cc #message-header .header-headers a[href^="mailto:"] {
+	color: var(--cc-link);
+	text-decoration: none;
+}
+
+html.cc #message-header span.rcmContactAddress a:hover,
+html.cc #message-header .headers-table a[href^="mailto:"]:hover,
+html.cc #message-header .header-headers a[href^="mailto:"]:hover {
+	color: #8fe05a;
+	text-decoration: underline;
+	text-underline-offset: 2px;
+}
+
+html.cc #message-header .date {
 	color: var(--cc-dim);
 }
 
-/* Plain-text parts stay on the glass and get real reading measure. */
+/* The body. Two things were wrong here.
+
+   It was flush to the container walls: `.message-part` set no padding, so a
+   line of text began at the exact pixel the pane ended. Reading matter needs
+   a gutter; without one the eye has no margin to return to and the column
+   edge competes with the first character of every line.
+
+   And it was --cc-ink-2 at 7.61:1, the "secondary" ink, while every subject,
+   label and button around it sat brighter. The longest-read text in the
+   application was the dimmest thing on screen. It is --cc-ink now, 12.52:1,
+   the same ink as a subject line.
+
+   Deliberately NOT pure #ffffff, which would be 15.9:1. On a dark ground that
+   is where halation starts — glyph edges bloom and the text buzzes over long
+   sessions, which is the exact failure this whole palette was chosen to
+   avoid. --cc-ink reads as white and does not do that. If you want the extra
+   stop anyway it is one token. */
 html.cc .message-part {
-	color: var(--cc-ink-2);
+	color: var(--cc-ink);
 	border-color: var(--cc-hair-soft);
-	line-height: 1.6;
+	line-height: 1.65;
+	padding: 1.15rem 1.35rem 1.35rem;
 }
 
 html.cc .message-part div.pre {
 	font-family: var(--cc-mono);
 	font-size: 0.82rem;
-	line-height: 1.6;
+	line-height: 1.65;
 }
 
 html.cc .message-part span.sig {
-	color: var(--cc-dim);
+	color: var(--cc-ink-2);
 }
 
 /* Quote levels as signal layers: phosphor / gold / flag. All three inks
@@ -901,7 +1102,7 @@ html.cc .message-part blockquote blockquote blockquote {
 
 html.cc .message-part blockquote span.blockquote-link {
 	color: var(--cc-ink-2);
-	background: rgba(255, 255, 255, 0.85);
+	background: var(--cc-raise);
 	border-color: var(--cc-edge);
 	font-family: var(--cc-sans);
 }
@@ -929,7 +1130,7 @@ html.cc .message-partheaders table.headers-table {
 
 html.cc p.image-attachment {
 	border-color: var(--cc-hair-soft);
-	background: rgba(255, 255, 255, 0.55);
+	background: var(--cc-raise);
 }
 
 html.cc p.image-attachment span,
@@ -1019,7 +1220,7 @@ html.cc .custom-file-label::after {
 }
 
 html.cc .multi-input:not(.is-invalid) > .content {
-	background: rgba(255, 255, 255, 0.45);
+	background: var(--cc-fill);
 	border-color: var(--cc-edge);
 }
 
@@ -1033,7 +1234,7 @@ html.cc .recipient-input li.recipient {
 	font-family: var(--cc-mono);
 	font-size: 0.8rem;
 	color: var(--cc-ink);
-	background: rgba(255, 255, 255, 0.85);
+	background: var(--cc-raise);
 	border: 1px solid var(--cc-hair);
 	border-radius: 6px;
 	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.23), 0 1px 2px rgba(255, 255, 255, 0.06);
@@ -1051,7 +1252,7 @@ html.cc .file-upload,
 html.cc .image-upload,
 html.cc .formcontent.raweditor {
 	color: var(--cc-ink-2);
-	background: rgba(255, 255, 255, 0.35);
+	background: var(--cc-fill);
 	border-color: var(--cc-hair);
 }
 
@@ -1540,7 +1741,7 @@ html.cc .popupmenu .listing li.separator {
 /* The scrim: bench-green shade, no blur — a full-viewport backdrop-filter
    is the one glass surface that is never worth its cost. */
 html.cc .ui-widget-overlay {
-	background-color: rgba(255, 255, 255, 0.20);
+	background-color: rgba(0, 0, 0, 0.55);
 }
 
 html.cc .ui-dialog .ui-dialog-titlebar {
@@ -1627,7 +1828,7 @@ html.cc .iframe-loader {
 }
 
 html.cc .skinselection .skinthumbnail {
-	background: rgba(255, 255, 255, 0.6);
+	background: var(--cc-raise);
 	border-color: var(--cc-hair);
 	border-radius: var(--cc-r-card);
 }
