@@ -144,5 +144,94 @@
         header.insertBefore(btn, header.firstChild);
     }
 
-    rcmail.addEventListener('init', addButton);
+    /* ── Checkbox mode, in one button ──────────────────────────────────────
+     *
+     * Turning on checkboxes took three clicks and a discovery: open Select,
+     * choose All, reopen Select, choose Selection. Nothing signposted that
+     * order, and the obvious route — Select > Selection — did nothing at all.
+     *
+     * That is not a misunderstanding of the menu, it is a bug in Elastic:
+     *
+     *     function toggle_list_selection(obj, list_id) {
+     *         if ($(obj).is('.active')) { ...toggle... }
+     *     }
+     *
+     * The menu item is rendered `class="selection disabled"` and only gains
+     * `.active` once a selection exists, so the control that turns selection
+     * mode ON is disabled until you have already selected something. Picking
+     * "All" first is not a step, it is a workaround for the guard.
+     *
+     * Rather than reimplement the toggle, this calls Elastic's own function
+     * with a detached element carrying `.active` — satisfying the guard so the
+     * real code runs, including `set_pref('list-selection', ...)`. The
+     * preference key, the persistence and the class stay Elastic's; if a future
+     * release changes any of them, this follows automatically instead of
+     * drifting out of sync with a private copy.
+     */
+    function listEl() {
+        return document.getElementById('messagelist');
+    }
+
+    function selectionOn() {
+        var l = listEl();
+        return !!l && l.classList.contains('withselection');
+    }
+
+    function syncToggle(btn) {
+        var on = selectionOn();
+        btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+        btn.classList.toggle('is-on', on);
+    }
+
+    function addSelectionToggle() {
+        if (rcmail.env.task !== 'mail' || rcmail.env.action || !listEl()) {
+            return;
+        }
+        if (document.getElementById('cc-select-toggle')) {
+            return;
+        }
+
+        var header = document.querySelector('#layout-list > .header');
+        if (!header) {
+            return;
+        }
+
+        var btn = document.createElement('a');
+        btn.id = 'cc-select-toggle';
+        btn.href = '#';
+        btn.className = 'button icon cc-select-toggle';
+        btn.setAttribute('role', 'button');
+        // One name for both states — the pressed state says which way it is,
+        // so the label does not have to flip and mean two things.
+        btn.title = 'Select items';
+        btn.setAttribute('aria-label', 'Select items');
+
+        var inner = document.createElement('span');
+        inner.className = 'inner';
+        inner.textContent = 'Select items';
+        btn.appendChild(inner);
+
+        btn.addEventListener('click', function (e) {
+            e.preventDefault();
+            if (typeof UI === 'undefined' || !UI.toggle_list_selection) {
+                return;
+            }
+            // The detached `.active` element is the whole trick: it satisfies
+            // Elastic's guard so its own toggle runs, preference and all.
+            var proxy = document.createElement('span');
+            proxy.className = 'active';
+            UI.toggle_list_selection(proxy, 'messagelist');
+            syncToggle(btn);
+        });
+
+        // Elastic restores the saved preference while building the list, so the
+        // button has to read the world rather than assume it starts off.
+        syncToggle(btn);
+        header.appendChild(btn);
+    }
+
+    rcmail.addEventListener('init', function () {
+        addButton();
+        addSelectionToggle();
+    });
 })();
