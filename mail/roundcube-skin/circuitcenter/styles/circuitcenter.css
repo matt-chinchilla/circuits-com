@@ -828,7 +828,14 @@ html.cc .messagelist td.subject span.msgicon.status {
 	height: 28px;
 	display: flex;
 	align-items: center;
-	justify-content: flex-start;
+	/* CENTER, not flex-start, and the halo depends on it. The glow below is
+	   positioned at 50% of THIS box; the glyph is a 15.39px Font Awesome cell
+	   inside a 20px box, so packing it to flex-start put its centre at 7.7px
+	   while the halo's stayed at 10px — the glow sat 2.3px right of the dot it
+	   was supposed to be lighting. Centring the glyph makes the two centres
+	   the same point by construction, rather than by an offset that would need
+	   re-deriving every time the icon metrics change. */
+	justify-content: center;
 }
 
 html.cc .messagelist td.subject span.subject,
