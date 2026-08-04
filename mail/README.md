@@ -285,6 +285,53 @@ $C exec -T mailserver fail2ban-client status < /dev/null   # jails listed => NET
 $C exec -T mailserver postconf -n postscreen_dnsbl_action smtpd_sender_login_maps < /dev/null
 ```
 
+## Email signatures
+
+Self-owned replacement for the WiseStamp subscription. Four files, one command:
+
+| File | What it is |
+|---|---|
+| `signature-roster.php` | **The only file you edit.** Every person's name, title, phone, links and headshot. Empty fields are correct and normal — each one removes its own row, label included, so a person with nothing but a name and an address still renders deliberately. Never guess at a value. |
+| `signature-template.php` | Roster row in, email HTML out. Pure functions, no I/O. The header explains why the markup is tables-and-inline-styles and how it survives dark mode; contrast ratios are recorded next to the colour tokens. |
+| `seed-signatures.php` | Writes the HTML into Roundcube's `identities` table. |
+| `seed-signatures.sh` | Runs the above inside the container, after backing the database up. |
+| `preview-signatures.php` | Prints signatures without touching anything. Runs anywhere PHP does. |
+
+```bash
+# see what a roster edit produced, before installing it (no box needed)
+php preview-signatures.php                          # all five, as HTML
+php preview-signatures.php --page > /tmp/sig.html    # a browsable page
+
+# on the MAIL box
+cd /opt/circuits-mail
+sudo ./seed-signatures.sh --dry-run   # report the changes, write nothing
+sudo ./seed-signatures.sh             # install
+```
+
+Idempotent: a signature that already matches the roster is not rewritten, so
+re-running is genuinely free. On an identity that already exists the seeder
+touches `signature`, `html_signature` and `changed` and nothing else — it never
+renames an identity, moves the default, or deletes anything.
+
+- **A pre-created user has no identity.** Roundcube builds a user and its first
+  identity together, in `rcube_user::create()`, on first login — but only for a
+  user it created itself. `seed-contacts.php` pre-creates `users` rows so a new
+  hire's address book is ready before they ever log in, and the side effect is
+  that those accounts never get an identity at all: daniel, anthony and ronald
+  had all logged in and had none. `seed-signatures.php` creates the missing
+  identity too, which is the only time it writes a name or an address (there is
+  no prior value to preserve). The `(username, mail_host)` pair is load-bearing
+  for the same reason it is in `seed-contacts.php`.
+- **An empty display name sends mail as a bare address.** `matthew`'s identity
+  predates all of this and has one. `./seed-signatures.sh --fill-blank-names`
+  fixes it; it is opt-in because it writes outside the signature columns, and it
+  only ever fills a name that is currently empty.
+- **Images must be hosted and absolute.** Gmail and Outlook both block `data:`
+  URIs, and neither renders SVG, so the company mark is the 180x180
+  `apple-touch-icon.png` already served from `frontend/public/images/`. A
+  headshot has to be deployed to the site (`./deploy.sh --frontend`) before it
+  will render in anyone's mail client.
+
 ## Operating notes
 
 - **`docker compose restart` does not re-read `/opt/circuits-com/.env`.** After

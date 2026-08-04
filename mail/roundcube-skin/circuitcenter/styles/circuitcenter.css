@@ -19,7 +19,9 @@
    text carry a HIGH-opacity veil (.92 -> .88) so body text clears WCAG-AA
    over the dark bench; the verbatim .62 -> .30 veil is reserved for
    controls, which sit on already-light panes. One filled primary action
-   per screen (the ENIG pad); everything else is glass or quiet.
+   per screen (the BLACKENED pad — black face, gold rim, gold legend,
+   gold light still spilling out from under it); everything else is glass
+   or quiet.
 
    INVARIANTS — please keep these true:
    * No requestAnimationFrame, no <canvas>, no will-change, no mix-blend-mode,
@@ -89,12 +91,38 @@ html.cc {
 	--cc-dim:        #4d5f54;  /* meta: from, date, size          5.33 /  4.91 */
 
 	/* --- signal ------------------------------------------------------------ */
-	--cc-enig:       #e8c252;  /* ENIG gold, bright — glows, tints, rail labels (10.30 on rail) */
+	--cc-enig:       #e8c252;  /* ENIG gold, bright — glows, tints, rail labels (10.30 on rail),
+	                              and the rim + legend of the blackened pad   (9.91 on --cc-pad) */
+	--cc-enig-hi:    #f0d36e;  /* ENIG under the hover light — the pad's rim and legend brighten
+	                              together, which is the hover tell on a black face (10.02 on
+	                              --cc-pad-lit; 1.26 against resting --cc-enig)                  */
 	--cc-legend:     #6d5211;  /* gold as TEXT on glass — silkscreen legends  5.73 / 5.28 */
 	--cc-led:        #96690a;  /* unread LED dot (non-text)       3.80 / 3.50 */
 	--cc-link:       #1a680f;  /* links — phosphor at text weight 5.41 / 4.99 (6.93 on white) */
 	--cc-phosphor:   #44bd13;  /* oscilloscope phosphor — GLOW ONLY, never a sole indicator */
 	--cc-flag:       #a42e22;  /* flagged, errors                 5.48 / 5.06 */
+
+	/* --- the pad ------------------------------------------------------------
+	   The filled surfaces — the one primary action per screen, and the unread
+	   counts that have always shared its material — are BLACKENED plating: a
+	   black face carrying a gold rim and a gold legend, with the gold cast left
+	   underneath so the pad still reads as lit. Ratios are the pad's LIGHTEST
+	   point (the top of its top-lit gradient), which is the worst case for
+	   figure/ground, against the worst pane rgb(225,228,227):
+
+	     --cc-pad vs worst pane      13.23   (the gold pad it replaces: 1.46)
+	     --cc-pad vs porcelain <=768 15.45   (the gold pad it replaces: 1.71)
+	     --cc-enig legend on the pad  9.91
+	     #fff switch knob on the pad 16.95
+
+	   Note what those first two lines say: a FILLED GOLD pad never met 3:1
+	   against the glass it sat on — it was legible by its legend, not by its
+	   shape. The black pad is the first version of this control whose SILHOUETTE
+	   carries the contrast.                                                    */
+	--cc-pad:        #131f1a;  /* pad face, top-lit end                                  */
+	--cc-pad-deep:   #060d0a;  /* pad face, shadow end — and the 1px outer lip (15.32)    */
+	--cc-pad-lit:    #22332c;  /* hover: the pad lifts into the light        (10.39 pane) */
+	--cc-pad-lit-deep: #0c1611;
 
 	/* --- structure ----------------------------------------------------------- */
 	--cc-edge:       #64756a;  /* form-control borders            3.36 on field fill (>=3 UI) */
@@ -532,17 +560,23 @@ html.cc:not(.touch) .listing.focus:not(.withselection) tbody tr.focused > td.sel
 	border-left-color: var(--cc-focus);
 }
 
-/* --- folder tree: unread counts are gold pads --------------------------- */
+/* --- folder tree: unread counts are blackened pads -----------------------
+   Same plating as the primary action, at chip scale: black face, 1px gold rim
+   set one pixel in from a black lip, gold numerals. 9.91:1 for the count,
+   13.23:1 for the chip against the pane (it was 7.74 / 1.46 on gold). */
 html.cc .folderlist li.mailbox .unreadcount {
 	font-family: var(--cc-mono);
 	font-size: 0.7rem;
 	font-weight: 600;
 	font-variant-numeric: tabular-nums;
 	letter-spacing: 0.02em;
-	color: #241a04;  /* 7.74:1 on the pad */
-	background: linear-gradient(#eccc63, #d3a92c);
+	color: var(--cc-enig);  /* 9.91:1 on the pad */
+	background: linear-gradient(var(--cc-pad), var(--cc-pad-deep));
 	border-radius: var(--cc-r-pill);
-	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 1px 2px rgba(5, 29, 19, 0.25);
+	box-shadow:
+		inset 0 0 0 1px var(--cc-pad-deep),
+		inset 0 0 0 2px var(--cc-enig),
+		0 1px 2px rgba(5, 29, 19, 0.25);
 }
 
 /* Fresh arrival — the power LED.
@@ -559,9 +593,10 @@ html.cc .folderlist li.mailbox .unreadcount {
    is not. */
 html.cc .folderlist li.mailbox.recent > a .unreadcount {
 	position: relative;
-	color: #241a04;
+	color: var(--cc-enig);
 	box-shadow:
-		inset 0 1px 0 rgba(255, 255, 255, 0.5),
+		inset 0 0 0 1px var(--cc-pad-deep),
+		inset 0 0 0 2px var(--cc-enig),
 		0 1px 2px rgba(5, 29, 19, 0.25);
 }
 
@@ -856,9 +891,10 @@ html.cc a:hover {
    Fields are recessed channels in the glass (.pf-recessed, re-hued); the
    focus halo is the two-ring gold treatment. Buttons are the Perry glass
    control — veil, hairline, bright inner rim, top highlight, contact +
-   ambient cast — with ONE filled primary per screen: the ENIG pad, dark
-   legend on gold, exactly how a plated pad carries its silkscreen.
-   Everything stays at Elastic's sizes.
+   ambient cast — with ONE filled primary per screen: the blackened pad,
+   a gold rim and gold legend on a black face, the way plating reads
+   through an opening in black solder mask. Everything stays at Elastic's
+   sizes.
    --------------------------------------------------------------------------- */
 html.cc .form-control,
 html.cc .custom-file-label,
@@ -1018,32 +1054,53 @@ html.cc .btn:disabled {
 	opacity: 0.45;
 }
 
-/* The ONE lit action per screen: an ENIG pad, top-lit, its legend printed
-   dark the way silkscreen sits on plating. 7.60:1. */
+/* The ONE lit action per screen: a BLACKENED pad, top-lit, wearing a gold rim
+   and a gold legend. 9.91:1 for the legend (it was 7.60 dark-on-gold).
+   ---------------------------------------------------------------------------
+   WHY THE RIM IS INSET RATHER THAN THE OUTER EDGE. A gold hairline sitting
+   directly against the glass measures 1.34:1 on the worst pane and 1.56:1 on
+   the <=768px porcelain — it does not exist as an edge, so an outline drawn
+   there would be a decoration that reads on a bench mockup and vanishes in the
+   product. No gold can fix that: the darkest one this palette owns
+   (--cc-focus #8a6a1c) only reaches 3.94:1 and stops looking like gold.
+   So the pad's OUTER pixel is its own black lip (the border, re-coloured to
+   --cc-pad-deep — 15.32:1 against the pane), and the gold ring is an inset
+   shadow one pixel inside it. The gold then has black on both sides, 9.91:1,
+   and the component's boundary against the glass is carried by the black at
+   13.23:1. That is also, exactly, what plating looks like through an opening
+   in black mask.
+   ---------------------------------------------------------------------------
+   WHY THIS IS STILL UNMISTAKABLY THE PRIMARY. Availability reads by SEPARATION
+   from the controls beside it, and this field is light: every neighbour is
+   white glass on a white-veiled pane. Measured against a neighbouring toolbar
+   pill, the gold pad stood 1.58:1 clear of it. The black pad stands 15.53:1
+   clear. It is the only filled-dark object anywhere on the glass, and it keeps
+   the gold ambient cast, so it still throws gold light onto the pane beneath —
+   the pad did not stop being lit, it stopped being made of light. */
 html.cc .btn-primary,
 html.cc .btn.mainaction {
-	color: #241a04;
+	color: var(--cc-enig);
 	font-weight: var(--cc-w-emphasis);
-	background: linear-gradient(#eccc63, #d2a72b);
+	background: linear-gradient(var(--cc-pad), var(--cc-pad-deep));
 	-webkit-backdrop-filter: none;
 	backdrop-filter: none;
-	border-color: rgba(122, 92, 20, 0.55);
+	border-color: var(--cc-pad-deep);
 	box-shadow:
-		inset 0 1px 0 rgba(255, 255, 255, 0.55),
-		inset 0 -1px 2px rgba(90, 62, 8, 0.35),
-		0 1px 2px rgba(5, 29, 19, 0.18),
+		inset 0 0 0 1px var(--cc-enig),
+		inset 0 2px 3px -2px rgba(255, 255, 255, 0.16),
+		0 1px 2px rgba(5, 29, 19, 0.28),
 		0 6px 18px -5px rgba(232, 194, 82, 0.55);
 }
 
 html.cc .btn-primary:hover:not(:disabled),
 html.cc .btn.mainaction:hover:not(:disabled) {
-	color: #241a04;
-	background: linear-gradient(#f0d36e, #dcb136);
+	color: var(--cc-enig-hi);
+	background: linear-gradient(var(--cc-pad-lit), var(--cc-pad-lit-deep));
 	transform: translateY(-1px);
 	box-shadow:
-		inset 0 1px 0 rgba(255, 255, 255, 0.55),
-		inset 0 -1px 2px rgba(90, 62, 8, 0.35),
-		0 2px 4px rgba(5, 29, 19, 0.18),
+		inset 0 0 0 1px var(--cc-enig-hi),
+		inset 0 2px 3px -2px rgba(255, 255, 255, 0.20),
+		0 2px 4px rgba(5, 29, 19, 0.28),
 		0 12px 26px -7px rgba(232, 194, 82, 0.65);
 }
 
@@ -1075,10 +1132,17 @@ html.cc .btn-danger:hover:not(:disabled) {
 	box-shadow: none;
 }
 
+/* The phone FAB is the same pad, rolled into a circle. No border of our own
+   here, so the black lip is the first inset ring and the gold is the second —
+   the two-shadow form of the same construction. */
 html.cc .floating-action-buttons a.button {
-	color: #241a04;
-	background: linear-gradient(#eccc63, #d2a72b);
-	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55), var(--cc-shadow-m);
+	color: var(--cc-enig);
+	background: linear-gradient(var(--cc-pad), var(--cc-pad-deep));
+	box-shadow:
+		inset 0 0 0 1px var(--cc-pad-deep),
+		inset 0 0 0 2px var(--cc-enig),
+		var(--cc-shadow-m),
+		0 6px 18px -5px rgba(232, 194, 82, 0.55);
 }
 
 html.cc .custom-switch .custom-control-label::before {
@@ -1087,9 +1151,13 @@ html.cc .custom-switch .custom-control-label::before {
 	box-shadow: inset 0 1px 2px rgba(5, 29, 19, 0.08);
 }
 
+/* Switched ON = the pad. The state difference is now black-vs-pale rather than
+   gold-vs-pale: 11.64:1 between the two tracks, and the white knob rides at
+   16.95:1 on the black one. */
 html.cc .custom-control-input:checked ~ .custom-control-label::before {
-	background: linear-gradient(#eccc63, #d2a72b);
-	border-color: rgba(122, 92, 20, 0.55);
+	background: linear-gradient(var(--cc-pad), var(--cc-pad-deep));
+	border-color: var(--cc-pad-deep);
+	box-shadow: inset 0 0 0 1px var(--cc-enig);
 }
 
 html.cc .custom-switch .custom-control-label::after {
@@ -1281,28 +1349,43 @@ html.cc .popover .menu.toolbar a::after {
 	display: none;
 }
 
-/* The ONE lit action: Compose. Same ENIG pad as .btn-primary, so "the filled
-   thing is the thing that starts something" holds across the whole console. */
+/* The ONE lit action: Compose. Same blackened pad as .btn-primary, so "the
+   filled thing is the thing that starts something" holds across the whole
+   console — and here it matters most, because this pill sits in a row of seven
+   glass ones. It is the only dark object in that row: 15.53:1 clear of its
+   neighbours, where the gold pad was 1.58:1 clear. */
 html.cc .menu.toolbar a.compose {
-	color: #241a04;
+	color: var(--cc-enig);
 	font-weight: var(--cc-w-emphasis);
 }
 
+/* The generic toolbar hover sets --cc-ink on every anchor and out-specifies the
+   rule above (five classes to four). On a gold pad that swapped one dark ink
+   for another and nobody noticed. On a BLACK pad it would put #16281f on
+   #131f1a — 1.14:1, a label that disappears the moment you point at it. So the
+   lit pad pins its own hover/focus ink, at six classes. */
+html.cc .menu.toolbar a.compose:not(.disabled):hover,
+html.cc .menu.toolbar a.compose:not(.disabled):focus-visible {
+	color: var(--cc-enig-hi);
+}
+
 html.cc .menu.toolbar a.compose::after {
-	background: linear-gradient(#eccc63, #d2a72b);
+	background: linear-gradient(var(--cc-pad), var(--cc-pad-deep));
 	box-shadow:
-		inset 0 1px 0 rgba(255, 255, 255, 0.55),
-		inset 0 -1px 2px rgba(90, 62, 8, 0.35),
-		0 1px 2px rgba(5, 29, 19, 0.18),
+		inset 0 0 0 1px var(--cc-pad-deep),
+		inset 0 0 0 2px var(--cc-enig),
+		inset 0 3px 4px -3px rgba(255, 255, 255, 0.16),
+		0 1px 2px rgba(5, 29, 19, 0.28),
 		0 6px 18px -5px rgba(232, 194, 82, 0.55);
 }
 
 html.cc .menu.toolbar a.compose:not(.disabled):hover::after {
-	background: linear-gradient(#f0d36e, #dcb136);
+	background: linear-gradient(var(--cc-pad-lit), var(--cc-pad-lit-deep));
 	box-shadow:
-		inset 0 1px 0 rgba(255, 255, 255, 0.55),
-		inset 0 -1px 2px rgba(90, 62, 8, 0.35),
-		0 2px 4px rgba(5, 29, 19, 0.18),
+		inset 0 0 0 1px var(--cc-pad-deep),
+		inset 0 0 0 2px var(--cc-enig-hi),
+		inset 0 3px 4px -3px rgba(255, 255, 255, 0.20),
+		0 2px 4px rgba(5, 29, 19, 0.28),
 		0 12px 26px -7px rgba(232, 194, 82, 0.65);
 }
 
@@ -1410,8 +1493,9 @@ html.cc .ui-datepicker td span {
 }
 
 html.cc .ui-datepicker .ui-state-active {
-	color: #241a04;
-	background: linear-gradient(#eccc63, #d2a72b);
+	color: var(--cc-enig);
+	background: linear-gradient(var(--cc-pad), var(--cc-pad-deep));
+	box-shadow: inset 0 0 0 1px var(--cc-pad-deep), inset 0 0 0 2px var(--cc-enig);
 }
 
 /* Alerts: ink on a soft tint — the iOS idiom — so the four states stay
@@ -1620,7 +1704,7 @@ html.cc .multi-input:not(.is-invalid) > .content.focused {
 
 /* jQuery-UI dialog buttons re-declare .btn colours inside the buttonset. */
 html.cc .ui-dialog .ui-dialog-buttonpane .ui-dialog-buttonset button.btn-primary:not(.btn-danger) {
-	color: #241a04;
+	color: var(--cc-enig);
 }
 
 html.cc .ui-dialog .ui-dialog-buttonpane .ui-dialog-buttonset button.btn-secondary {
@@ -1642,8 +1726,9 @@ html.cc .ui-menu .ui-state-active {
 
 /* Datepicker selected day: `background:#37beff!important;color:#fff!important`. */
 html.cc .ui-datepicker a.ui-state-active {
-	background: linear-gradient(#eccc63, #d2a72b) !important;
-	color: #241a04 !important;
+	background: linear-gradient(var(--cc-pad), var(--cc-pad-deep)) !important;
+	color: var(--cc-enig) !important;
+	box-shadow: inset 0 0 0 1px var(--cc-pad-deep), inset 0 0 0 2px var(--cc-enig) !important;
 }
 
 /* Compose HTML editor focus: `div.tox.focused` forces a blue ring. */
@@ -1663,7 +1748,18 @@ html.cc .image-tools a:hover {
 	background-color: rgba(232, 194, 82, 0.5) !important;
 }
 
-/* The rail's popover header (phone task menu) is pinned to slate #2f3a3f. */
+/* The rail's popover header is pinned to slate #2f3a3f by Elastic (and again,
+   separately, for the phone task menu). Repainted porcelain at every width.
+
+   This header is also the IN-APP LOGO SLOT: images/logo-badge.svg lands here
+   via the `circuitcenter:*` skin_logo key (README Install step 3). The badge
+   variant is used precisely BECAUSE this surface is light — the login
+   wordmark is glyph-only with a white C and would vanish on porcelain. The
+   badge brings its own near-black plate, so it survives either way, but if
+   this background ever goes dark again, re-check the plate: it is #1a1f23,
+   which reads 15.1:1 here and only ~1.1:1 on the bench, where the badge
+   would need its hairline rim back to hold an edge. Sizing is Elastic's
+   (58px tall, width clamped per breakpoint) and deliberately untouched. */
 html.cc #layout-menu .popover-header {
 	background-color: #f2f5f3 !important;
 	color: var(--cc-legend);
@@ -1721,9 +1817,12 @@ html.cc #layout-menu .popover-header {
 		backdrop-filter: none;
 	}
 
+	/* The pad is re-asserted here only because the rule above turns every other
+	   .btn opaque white. On porcelain it measures 15.45:1 — better than on the
+	   glass, so the palette holds in the direction the section header claims. */
 	html.cc .btn-primary,
 	html.cc .btn.mainaction {
-		background: linear-gradient(#eccc63, #d2a72b);
+		background: linear-gradient(var(--cc-pad), var(--cc-pad-deep));
 	}
 
 	html.cc .popover,

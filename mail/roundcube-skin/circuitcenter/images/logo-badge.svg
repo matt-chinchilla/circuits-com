@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Circuit Center webmail badge. This is the IN APP logo: the slot at the top
+  of the task rail, rendered by Elastic's templates/includes/menu.html into
+  its "popover header" div. The login screen uses the wide lockup in the
+  sibling logo.svg; this is deliberately a DIFFERENT drawing, not that one
+  rescaled.
+
+  WHY A SEPARATE FILE (the shape). Elastic fixes this slot at 58px tall and
+  clamps the image width per breakpoint (layout.less, the rule
+  "#layout-menu .popover-header img"), each clamp minus that rule's own
+  0.25rem padding:
+
+    481px to 1024px wide : max width 35.1px, giving about 27px square
+    1025px and wider     : max width 78px, height bound at about 50px
+    480px and narrower   : max width 222px, height bound at about 50px
+
+  The narrow middle band is the binding one. Note that the stock Roundcube
+  mark occupying this slot is itself square (its viewBox is 573.65 by
+  573.65), i.e. the slot was drawn around a square. Forcing the 232 by 56
+  login lockup through a 35px clamp would render it about 8px tall, taking
+  the wordmark and the mark down with it. A square badge scales uniformly and
+  stays legible in all three bands.
+
+  WHY THE BADGE VARIANT (the ground). This skin repaints the rail's header
+  porcelain (the popover header mirror in section 11 of circuitcenter.css),
+  at every width. The login file is the GLYPH ONLY variant, whose C and omega
+  feet are always white: on porcelain it would simply vanish. The badge
+  carries its own near black plate, so it reads on any surface. Measured:
+  plate on that porcelain 15.1:1, white glyph on the plate 16.6:1, green
+  capacitor on the plate 6.75:1. The hairline rim the badge wears on DARK
+  surfaces is omitted here on purpose; the plate already separates at 15.1:1
+  and the rim would only soften the silhouette.
+
+  WHY THESE STROKE WEIGHTS. Weights are optically tuned per size band, never
+  scaled from one master (the ladder lives in
+  frontend/src/shared/components/Logo.tsx). This file is the 32px BADGE band:
+  plate inset 14 at corner radius 40, arc 23, electrodes 10, ground stem 12,
+  the wider feet. That band is picked for the 27px case, the hardest one; at
+  50px it runs a hair heavy, which is invisible, whereas the master band at
+  27px would thin below what the ladder says survives. Those same weights are
+  what the login lockup's mark uses, so both files sit in one optical
+  register. The stem is kept: it is only dropped at 16px, and nothing here
+  renders that small.
+
+  ACTIVATION IS A CONFIG KEY, NOT FILE PLACEMENT. As with the sibling
+  logo.svg (see its note and README Install step 3), Roundcube resolves the
+  template's own leading slash src against the skin that OWNS the template,
+  which is elastic, so a child skin can never shadow the file. The key for
+  this one is a WILDCARD, because menu.html is an INCLUDE: rcmail_output_html
+  sets template_name for the top level template only, so the logo object here
+  reports the enclosing TASK template (mail, addressbook, settings, and so
+  on), never "menu". Enumerating tasks would silently miss any we forgot.
+
+    $config['skin_logo'] = [
+        'circuitcenter:login' => 'skins/circuitcenter/images/logo.svg',
+        'circuitcenter:*'     => 'skins/circuitcenter/images/logo-badge.svg',
+    ];
+
+  get_template_logo (release 1.6) tries "skin:template" BEFORE "skin:*", so
+  login keeps the lockup. Typed lookups (favicon, print, link) only ever match
+  bracket suffixed keys, and the print templates additionally pass
+  logo match "template", which strips wildcard keys, so neither of these keys
+  can leak into them. Values stay webroot relative with NO leading slash: a
+  leading slash gets re anchored right back into the elastic first search.
+
+  (An XML comment may not contain a double hyphen, which is why CSS custom
+  properties are described here rather than written literally. Browsers
+  tolerate the breach; ImageMagick and strict XML parsers reject the file
+  outright, which is how such a mistake reaches production unseen.)
+
+  Self contained: no external reference, no webfont, no script.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200" role="img" aria-label="Circuit Center">
+	<!-- Badge plate. No rim: this lands on porcelain, where the plate reads at 15.1:1. -->
+	<rect x="14" y="14" width="172" height="172" rx="40" fill="#1a1f23"/>
+	<!-- The C's counter arc. -->
+	<path d="M 136.5 75.4 A 44 44 0 1 0 136.5 124.6" fill="none" stroke="#ffffff" stroke-width="23" stroke-linecap="round"/>
+	<!-- Omega feet, mirrored about y=100; they double as the capacitor's right terminals. -->
+	<path d="M 129.74 86.9 L 144 86.9 A 4 4 0 0 0 148 82.9 L 148 48 A 11.5 11.5 0 0 0 125 48 L 125 79.23 A 32.5 32.5 0 0 1 129.74 86.9 Z" fill="#ffffff"/>
+	<path d="M 129.74 113.1 L 144 113.1 A 4 4 0 0 1 148 117.1 L 148 152 A 11.5 11.5 0 0 1 125 152 L 125 120.77 A 32.5 32.5 0 0 0 129.74 113.1 Z" fill="#ffffff"/>
+	<!-- Capacitor: outer plates short, centre plate tall, so it reads as a component. -->
+	<line x1="89" y1="86.5" x2="89" y2="113.5" stroke="#44bd13" stroke-width="10" stroke-linecap="round"/>
+	<line x1="100.5" y1="79.5" x2="100.5" y2="120.5" stroke="#44bd13" stroke-width="10" stroke-linecap="round"/>
+	<line x1="112" y1="86.5" x2="112" y2="113.5" stroke="#44bd13" stroke-width="10" stroke-linecap="round"/>
+	<line x1="114" y1="100" x2="141" y2="100" stroke="#44bd13" stroke-width="12" stroke-linecap="round"/>
+</svg>

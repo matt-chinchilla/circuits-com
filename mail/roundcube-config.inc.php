@@ -36,11 +36,32 @@ $ssl_no_verify = [
 $config['imap_conn_options'] = $ssl_no_verify;
 $config['smtp_conn_options'] = $ssl_no_verify;
 
-// 3. Logo. Elastic's login template hard-codes a leading-slash src, which
-//    Roundcube re-anchors into the template-owning skin (elastic), so a
-//    child-skin file can never shadow it. `skin_logo` is the supported hook.
-//    The value must NOT start with a slash, or it gets re-anchored right back
-//    to Elastic's cube.
+// 3. Logo. Elastic's templates hard-code a leading-slash src, which Roundcube
+//    re-anchors into the template-owning skin (elastic), so a child-skin file
+//    can never shadow it. `skin_logo` is the supported hook. Values must NOT
+//    start with a slash, or they get re-anchored right back to Elastic's cube.
+//
+//    TWO keys, because there are two logo slots with two different shapes:
+//
+//    - login  : templates/login.html, sized by the skin to the 232x56 lockup.
+//    - the app: the slot at the top of the task rail. That tag lives in
+//      Elastic's templates/includes/menu.html, which is an INCLUDE --
+//      rcmail_output_html sets template_name for the TOP-LEVEL template only,
+//      so the logo object there reports the enclosing TASK template ('mail',
+//      'addressbook', 'settings', ...), never 'menu'. A per-template key would
+//      therefore have to enumerate every task and would silently miss any new
+//      one, so this is the wildcard's job.
+//
+//    Order matters and is safe: get_template_logo (release 1.6, verified in
+//    program/include/rcmail_output_html.php on this container) tries
+//    'skin:template' BEFORE 'skin:*', so login keeps the wide lockup and
+//    everything else falls through to the square badge.
+//
+//    Not affected, by construction: favicon/print/link are TYPED lookups that
+//    only ever match bracket-suffixed keys ('[favicon]'), and the print
+//    templates additionally pass logo-match="template", which strips wildcard
+//    keys from the candidate list outright. Neither key can leak into them.
 $config['skin_logo'] = [
     'circuitcenter:login' => 'skins/circuitcenter/images/logo.svg',
+    'circuitcenter:*'     => 'skins/circuitcenter/images/logo-badge.svg',
 ];

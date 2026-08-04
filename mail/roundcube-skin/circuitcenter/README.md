@@ -10,7 +10,8 @@ circuitcenter/
 ├── meta.json                        skin manifest ("extends": "elastic")
 ├── templates/includes/layout.html   the ONE template override
 ├── styles/circuitcenter.css         the whole skin
-├── images/logo.svg                  wordmark (needs the skin_logo config line)
+├── images/logo.svg                  login wordmark (needs a skin_logo line)
+├── images/logo-badge.svg            in-app rail badge (needs a skin_logo line)
 ├── watermark.html                   empty reading pane
 ├── thumbnail.png                    Settings > Interface preview
 ├── DESIGN.md
@@ -75,21 +76,40 @@ cp -r mail/roundcube-skin/circuitcenter "$ROUNDCUBE_ROOT/skins/circuitcenter"
 #    if you have restricted the list, circuitcenter must be in it:
 #      $config['skins_allowed'] = ['circuitcenter', 'elastic'];
 
-# 3. REQUIRED for the login wordmark (config/config.inc.php):
-#      $config['skin_logo'] = ['circuitcenter:login' => 'skins/circuitcenter/images/logo.svg'];
-#    Without this line Roundcube's stock 3D cube renders. Why file
+# 3. REQUIRED for BOTH logos (config/config.inc.php):
+#      $config['skin_logo'] = [
+#          'circuitcenter:login' => 'skins/circuitcenter/images/logo.svg',
+#          'circuitcenter:*'     => 'skins/circuitcenter/images/logo-badge.svg',
+#      ];
+#    Without these lines Roundcube's stock 3D cube renders. Why file
 #    placement alone cannot replace it: the logo tag lives in ELASTIC's
-#    templates/login.html, and rcmail_output_html::file_callback resolves
-#    its "/images/logo.svg" src with the template's own skin (elastic)
-#    unshifted to the FRONT of the skin search (get_skin_file $add_path,
-#    release-1.6) — elastic ships that file, so it always wins. The config
-#    value must stay webroot-relative with NO leading slash: file_callback
-#    re-anchors leading-slash paths into that same elastic-first search,
-#    while a non-slash path passes through untouched (plus cache-buster).
-#    The 'circuitcenter:login' key scopes it to this skin's login template
-#    (the only Elastic 1.6 template that renders a logo object); favicon
-#    and typed logo variants are unaffected by design.
+#    templates (login.html and includes/menu.html), and
+#    rcmail_output_html::file_callback resolves its "/images/logo.svg" src
+#    with the template's own skin (elastic) unshifted to the FRONT of the
+#    skin search (get_skin_file $add_path, release-1.6) — elastic ships
+#    that file, so it always wins. The config values must stay
+#    webroot-relative with NO leading slash: file_callback re-anchors
+#    leading-slash paths into that same elastic-first search, while a
+#    non-slash path passes through untouched (plus cache-buster).
 ```
+
+Two keys, because there are two logo slots and they are different shapes.
+`login` is the 232x56 lockup on the sign-in screen. The wildcard covers the
+**in-app** slot at the top of the task rail, which gets the square badge
+(`logo-badge.svg` — its own header explains the size ladder and why the
+lockup cannot serve there).
+
+The in-app slot needs a wildcard rather than a named template because its tag
+lives in `templates/includes/menu.html`, an **include**: `rcmail_output_html`
+sets `template_name` for the top-level template only, so the logo object
+reports the enclosing *task* template (`mail`, `addressbook`, `settings`, …),
+never `menu`. Enumerating tasks would silently miss any we forgot.
+
+Order is safe. `get_template_logo()` tries `skin:template` before `skin:*`
+(release-1.6), so login keeps the lockup. Typed lookups — favicon, print,
+link — only ever match bracket-suffixed keys (`[favicon]`), and the print
+templates additionally pass `logo-match="template"`, which strips wildcard
+keys from the candidate list; neither key can leak into them.
 
 In a container, mount it read-only instead of copying so it survives image
 updates:
@@ -116,7 +136,17 @@ curl -sI https://mail.circuitcenter.ai/skins/elastic/styles/styles.min.css \
 curl -sI https://mail.circuitcenter.ai/skins/circuitcenter/styles/circuitcenter.css \
   | head -1
 
-# 3. No animation loop, no compositor traps, no external fetches.
+# 3. Both logos resolve. Expect 200 + image/svg+xml on each.
+curl -sI https://mail.circuitcenter.ai/skins/circuitcenter/images/logo.svg \
+  | grep -iE '^HTTP|^content-type'
+curl -sI https://mail.circuitcenter.ai/skins/circuitcenter/images/logo-badge.svg \
+  | grep -iE '^HTTP|^content-type'
+#    Serving is only half of it: the in-app badge also needs the wildcard
+#    skin_logo key above to be ACTIVE. Confirm on a logged-in page that the
+#    rail's top-left image is skins/circuitcenter/..., not skins/elastic/...:
+#      view-source, or DevTools, and read the #logo src.
+
+# 4. No animation loop, no compositor traps, no external fetches.
 #    Expect matches in COMMENT lines only (the sheet documents its own
 #    bans). The inline SVG data-URIs' xmlns is a namespace identifier, not
 #    a URL that is fetched — url(https?:...) is what would indicate a real

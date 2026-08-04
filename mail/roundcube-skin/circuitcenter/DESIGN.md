@@ -34,7 +34,8 @@ over `#051d13` = `rgb(225,228,227)`. Selected row: ENIG tint `.26` over that
 |---|---|---|---|---|
 | Bench green | `#0e4a2d` | Solder mask in raking light | The environment: substrate gradient (to `#051d13`), task rail, seen through and between the glass | — (backdrop) |
 | Silk ink | `#16281f` | Silkscreen ink, dark side | Primary text, unread subjects, button labels | 12.09 / 11.15 |
-| ENIG gold | `#e8c252` | Gold plating, lit | Rail labels (10.30 on rail), lit finger, selection tint, focus halo, LED glow — bright gold is *never* body text on glass | 10.30 on rail |
+| ENIG gold | `#e8c252` | Gold plating, lit | Rail labels (10.30 on rail), lit finger, selection tint, focus halo, LED glow, and the rim + legend of the blackened pad (9.91 on `--cc-pad`) — bright gold is *never* body text on glass | 10.30 on rail |
+| Pad black | `#131f1a` → `#060d0a` | Blackened plating, top-lit | The one filled action per screen and the unread count pads: black face, gold rim, gold legend | 13.23 pane / 15.45 porcelain |
 | Legend gold | `#6d5211` | Gold in shadow — plating at text weight | Silkscreen panel titles, fieldset legends, popover headers | 5.73 / 5.28 |
 | Phosphor | `#44bd13` | Oscilloscope trace | GLOW ONLY: the active task's trace stub, the fresh-mail ring, the bench grid. As text it is `#1a680f` (links: 5.41 / 4.99, 6.93 on white) | ≥3:1 where structural |
 | Flag red | `#a42e22` | Rework marker | Flagged rows, errors, destructive text buttons | 5.48 / 5.06 |
@@ -47,7 +48,12 @@ Supporting inks, same math: `--cc-ink-2 #3a4f43` read subjects (6.90 / 6.36),
 that clears 3:1 on both worlds). Alert pairs: info `#1c4e63`/`#ddeef7` 7.61,
 success `#1d5c10`/`#e1f3da` 6.96, warning `#6b4e0a`/`#f4e7c3` 6.28, error
 `#8f2417`/`#f7ddd8` 6.70. Quote inks on the quote fill: 5.02 / 5.31 / 5.08.
-Gold-pad legend `#241a04` on the pad: 7.60 (button), 7.74 (unread count).
+Pad legend `--cc-enig` on `--cc-pad`: 9.91 (button and unread count alike;
+it was a dark `#241a04` on gold at 7.60 / 7.74 before the pad was blackened).
+Hover lifts the pad to `--cc-pad-lit #22332c` and the rim/legend to
+`--cc-enig-hi #f0d36e` (10.02). The rim is drawn one pixel INSIDE the pad's
+own black lip, because gold against the glass measures 1.34 — see
+"The blackened pad" below.
 
 **Why these and not any other glass palette.** Every hue is something you can
 point to on hardware Circuit Center sells. `#0e4a2d` is the register of the
@@ -159,7 +165,7 @@ and the `collab-kit` static fork) was treated as the recipe, not a mood board.
   (`cubic-bezier(.2,.8,.2,1)` / `(.34,1.56,.64,1)`), the fractional weights
   (520/560/590/650), the radius scale (9/11/12/16/18/999 — no strays), the
   recessed-channel recipe, and the binding rule **one filled primary action
-  per screen** (here: Send/Save, the ENIG pad; delete is a text-red ghost
+  per screen** (here: Send/Save, the blackened pad; delete is a text-red ghost
   that never shouts).
 
 **Adapted (and why)**
@@ -180,12 +186,34 @@ and the `collab-kit` static fork) was treated as the recipe, not a mood board.
   `0 0 0 3px rgba(232,194,82,.38)` + a `#8a6a1c` stroke on fields; a plain
   2px `#8a6a1c` outline elsewhere (it must also read on the dark rail, where
   a box-shadow halo would vanish).
-- **The lit primary.** Donor is brand-red with white text. Circuit Center's
-  primary is an ENIG pad — top-lit gold gradient with a *dark* legend
-  (`#241a04`, 7.60:1), because white-on-gold is a ~2.4:1 failure and because
-  dark silkscreen on gold plating is how a real pad is labelled. Same
-  material grammar (top highlight, bottom shade, accent-tinted ambient),
-  different metallurgy.
+- **The lit primary — the blackened pad.** Donor is brand-red with white text.
+  Circuit Center's primary is a *blackened* pad: a top-lit black face
+  (`#131f1a → #060d0a`) carrying a gold rim and a gold legend
+  (`--cc-enig`, 9.91:1), with the gold ambient cast left underneath so the
+  control still throws gold light onto the pane. Same material grammar (top
+  highlight, bottom shade, accent-tinted ambient), different metallurgy.
+
+  Two measurements drive the construction, and both are easy to get wrong:
+
+  1. **The rim is inset, not the outer edge.** A gold hairline sitting
+     directly against the glass is **1.34:1** on the worst pane and 1.56:1 on
+     the ≤768px porcelain — it is not an edge, it is a rumour. No gold fixes
+     it: the darkest one the palette owns (`--cc-focus #8a6a1c`) reaches only
+     3.94 and has stopped looking like gold. So the pad's outermost pixel is
+     its own black lip (15.32:1 against the pane) and the gold ring is an
+     inset shadow one pixel inside it — gold with black on both sides at
+     9.91:1, and the component's boundary carried by the black at 13.23:1.
+     It is also, exactly, what plating looks like through an opening in
+     black mask.
+  2. **Black made it *more* primary, not less.** Availability reads by
+     separation from the controls beside it, and this field is light — every
+     neighbour is white glass on a white-veiled pane. Against a neighbouring
+     toolbar pill the gold pad stood **1.58:1** clear; the black pad stands
+     **15.53:1** clear. Against the pane itself, 1.46 → 14.38. A filled gold
+     pad never met 3:1 as a *shape*; it was legible by its legend alone. The
+     black pad is the first version of this control whose silhouette carries
+     the contrast, and it is the only filled-dark object anywhere on the
+     glass.
 - **Alert chips.** Donor chip idiom (tint-on-soft-tint, sentence case) applied
   to Roundcube's four alert states, hues from the hardware world.
 
@@ -239,6 +267,16 @@ clauses added:
 Computed, not eyeballed: every pair above was produced by compositing math
 (worst-case veil floor over darkest bench). Global minimum: **4.91:1**
 (metadata on a selected row); every non-text indicator ≥ **3.36:1**.
+
+Pad rework (2026-08-03, gold → black + gold rim) verified by rendering, not
+by inspection: the login screen was screenshotted before and after on the
+live install; the logged-in controls — compose pill, unread count pads,
+dialog primary, switches, datepicker, phone FAB — were rendered in a harness
+that pulls Elastic's real compiled sheet and inlines this skin verbatim, at
+980px and 390px, because the mailbox itself is behind a login the change
+did not have. Computed styles were read back for each control rather than
+judged from the pixels. The browser's own CSS parser accepts the sheet at
+208 rules / 1513 declarations (was 207 / 1504) with zero rules dropped.
 
 Rendered audit against the live install (mail.circuitcenter.ai, Roundcube
 1.6.x, 2026-07-31): the login screen was verified at 1440px and phone width
