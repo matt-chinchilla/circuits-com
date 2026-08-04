@@ -44,7 +44,13 @@ services:
       # Without CALENDAR_API_SECRET the Roundcube plugin's every call 401s and
       # the calendar is permanently unreachable from the webmail.
       CALENDAR_API_SECRET: ${CALENDAR_API_SECRET:-}
-      CALENDAR_RECIPIENTS: ${CALENDAR_RECIPIENTS:-}
+      # MUST mirror Settings.CALENDAR_RECIPIENTS. An empty default here does
+      # NOT fall back to the code default — pydantic-settings sees the empty
+      # string, the CSV validator parses it to [], and the roster is DESTROYED
+      # rather than inherited. Observed live: the job found a due event, took
+      # its ledger claim, then had nobody to send to. Same trap the
+      # MAIL_SYNC_MAILBOXES comment above records.
+      CALENDAR_RECIPIENTS: ${CALENDAR_RECIPIENTS:-anthony@circuitcenter.ai,daniel@circuitcenter.ai,matthew@circuitcenter.ai,ronald@circuitcenter.ai}
       CALENDAR_TIMEZONE: ${CALENDAR_TIMEZONE:-America/New_York}
       CALENDAR_REMINDER_LOOKBACK_MINUTES: ${CALENDAR_REMINDER_LOOKBACK_MINUTES:-720}
       # SMS reminders — OFF until a topic ARN exists. app/services/sms.py is
@@ -92,8 +98,16 @@ services:
     build:
       context: ./api
     restart: unless-stopped
+    # api, not db: `alembic upgrade head` runs in the api container's
+    # entrypoint, and this loop queries tables that migration creates. Ordering
+    # after api narrows the window — it does not close it, because
+    # service_started means "the container is up", not "migrations finished".
+    # The job handles the remaining gap itself: a missing table is one warning
+    # line and a skipped pass, not the UndefinedTable traceback every five
+    # minutes that the first boot of this service actually produced.
     depends_on:
       - db
+      - api
     command: >
       sh -c "while true; do
                python -m app.jobs.send_reminders || true;
@@ -101,7 +115,13 @@ services:
              done"
     environment:
       DATABASE_URL: postgresql://circuits:circuits@db:5432/circuits
-      CALENDAR_RECIPIENTS: ${CALENDAR_RECIPIENTS:-}
+      # MUST mirror Settings.CALENDAR_RECIPIENTS. An empty default here does
+      # NOT fall back to the code default — pydantic-settings sees the empty
+      # string, the CSV validator parses it to [], and the roster is DESTROYED
+      # rather than inherited. Observed live: the job found a due event, took
+      # its ledger claim, then had nobody to send to. Same trap the
+      # MAIL_SYNC_MAILBOXES comment above records.
+      CALENDAR_RECIPIENTS: ${CALENDAR_RECIPIENTS:-anthony@circuitcenter.ai,daniel@circuitcenter.ai,matthew@circuitcenter.ai,ronald@circuitcenter.ai}
       CALENDAR_TIMEZONE: ${CALENDAR_TIMEZONE:-America/New_York}
       CALENDAR_REMINDER_LOOKBACK_MINUTES: ${CALENDAR_REMINDER_LOOKBACK_MINUTES:-720}
       SMS_TOPIC_ARN: ${SMS_TOPIC_ARN:-}

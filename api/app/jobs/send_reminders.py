@@ -46,7 +46,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, OperationalError, ProgrammingError
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -183,15 +183,16 @@ def claim(db: Session, event_id: uuid.UUID, kind: str, channel: str) -> bool:
     return True
 
 
-def _send_email(due: _Due, kind: str) -> bool:
-    recipients = [r.strip() for r in settings.CALENDAR_RECIPIENTS if r and r.strip()]
-    if not recipients:
-        logger.warning("[calendar] CALENDAR_RECIPIENTS is empty — no reminder email sent")
-        return False
+def _email_recipients() -> list[str]:
+    """The roster, cleaned. Empty means email is not deliverable at all."""
+    return [r.strip() for r in settings.CALENDAR_RECIPIENTS if r and r.strip()]
 
-    # Demo mode (SMTP_HOST unset) is filtered in _channels_for, BEFORE a claim
-    # is taken — reaching here means a relay is configured and we are making a
-    # real attempt.
+
+def _send_email(due: _Due, kind: str) -> bool:
+    recipients = _email_recipients()
+
+    # Both "no relay" and "nobody to send to" are filtered in _channels_for,
+    # BEFORE a claim is taken — reaching here means a real attempt is possible.
     #
     # An attempt that fails must still be REPORTED as failed, which it was not:
     # this returned True unconditionally, so a refused relay produced a "sent"
@@ -202,7 +203,7 @@ def _send_email(due: _Due, kind: str) -> bool:
     # asyncio.run per message: this is a short-lived job, not a server, and one
     # loop for the whole pass buys nothing at five people and two reminders.
     try:
-        asyncio.run(
+        delivered = asyncio.run(
             email_service.send_event_reminder(
                 recipients,
                 title=due.title,
@@ -218,7 +219,10 @@ def _send_email(due: _Due, kind: str) -> bool:
     except Exception:
         logger.exception("[calendar] reminder email failed for %r", due.title)
         return False
-    return True
+    # _smtp_send catches its own SMTP errors rather than raising (its other
+    # callers are BackgroundTasks), so the try/except above is not enough on
+    # its own — a dead relay returns normally. The bool is the real signal.
+    return bool(delivered)
 
 
 def _send_sms(due: _Due, kind: str) -> bool:
@@ -245,21 +249,34 @@ def _channels_for(due: _Due) -> list[str]:
     """
     channels: list[str] = []
     if due.notify_email:
-        # Symmetric with SMS below, and for the same reason. An unset SMTP_HOST
-        # puts app.services.email in demo mode, where it logs and returns
-        # without sending — so treating email as "available" would claim a
-        # ledger row for a delivery that never happened, and the UNIQUE
-        # constraint would then block the retry forever once a relay WAS
-        # configured. Availability is checked BEFORE the claim; only a genuine
-        # attempt that fails keeps its slot.
-        if settings.SMTP_HOST:
-            channels.append("email")
-        else:
+        # Symmetric with SMS below, and for the same reason. A claim is a
+        # PROMISE that a delivery happened, so it must only be taken when a
+        # delivery is actually possible — the UNIQUE constraint makes it
+        # permanent, and a slot burned on a send that never occurred can never
+        # be retried once the deployment is fixed.
+        #
+        # Two ways email can be undeliverable, and BOTH were found by running
+        # this against the real stack rather than by reading it:
+        #   - no relay (SMTP_HOST unset) puts app.services.email in demo mode,
+        #     where it logs and returns without sending;
+        #   - no roster (CALENDAR_RECIPIENTS empty) means there is nobody to
+        #     send to. This one is easy to hit by accident: an empty compose
+        #     default does not inherit the code default, it overwrites it.
+        # Only a genuine attempt that then fails keeps its slot.
+        if not settings.SMTP_HOST:
             logger.warning(
                 "[calendar] event %s wants email but SMTP_HOST is unset — "
                 "skipping without claiming, so it can still send once a relay exists",
                 due.event_id,
             )
+        elif not _email_recipients():
+            logger.warning(
+                "[calendar] event %s wants email but CALENDAR_RECIPIENTS is empty — "
+                "skipping without claiming, so it can still send once a roster exists",
+                due.event_id,
+            )
+        else:
+            channels.append("email")
     if due.notify_sms:
         if sms_service.is_configured():
             channels.append("sms")
@@ -324,6 +341,29 @@ def main() -> int:
     db = SessionLocal()
     try:
         stats = run(db)
+    except OperationalError:
+        # The database is not accepting connections yet. This loop starts
+        # alongside everything else and Postgres is routinely still coming up.
+        db.rollback()
+        logger.warning("[calendar] database unreachable — skipping this pass")
+        return 0
+    except ProgrammingError as exc:
+        # The tables do not exist yet. `alembic upgrade head` runs in the API
+        # container's entrypoint, and nothing orders this loop after it — so on
+        # a fresh deploy, or any deploy carrying a new migration, there is a
+        # window where this job is running against a schema that has not caught
+        # up. Observed on the very first boot of this service: an
+        # UndefinedTable traceback, in full, every five minutes.
+        #
+        # Waiting quietly is right. The next pass is 300 seconds away, the work
+        # is idempotent, and nothing is lost by missing one — whereas a
+        # traceback on a five-minute timer trains everyone to ignore this
+        # container's logs, which is where a real failure would appear.
+        db.rollback()
+        if "does not exist" in str(exc.orig).lower():
+            logger.warning("[calendar] calendar tables are not migrated yet — skipping this pass")
+            return 0
+        raise
     finally:
         db.close()
     logger.info(

@@ -24,8 +24,21 @@ from app.models.calendar_event import safe_meeting_url
 logger = logging.getLogger(__name__)
 
 
-async def _smtp_send(message: EmailMessage) -> None:
-    """Send a prepared EmailMessage. Demo-mode aware. Catches SMTP errors."""
+async def _smtp_send(message: EmailMessage) -> bool:
+    """Send a prepared EmailMessage. Demo-mode aware. Catches SMTP errors.
+
+    Returns True only if the relay accepted the message; False for demo mode
+    and for any failure. It still does not RAISE — every original caller is a
+    BackgroundTask where the response is long gone and an exception has nowhere
+    to go, so that behaviour is unchanged and those callers simply ignore the
+    result.
+
+    The return value exists for the calendar reminder job, which is not a
+    background task: it records a permanent "this was sent" row, so it has to
+    be able to tell a delivery from a swallowed failure. Without this it read
+    a dead relay as success — verified against a real one, where a pass over a
+    due event reported `sent=1` while nothing left the building.
+    """
     if not settings.SMTP_HOST:
         # WARNING level so it surfaces under uvicorn's default log config
         # (which suppresses INFO from non-uvicorn loggers). Demo mode is a
@@ -35,7 +48,7 @@ async def _smtp_send(message: EmailMessage) -> None:
             message["To"],
             message["Subject"],
         )
-        return
+        return False
 
     try:
         await aiosmtplib.send(
@@ -55,6 +68,8 @@ async def _smtp_send(message: EmailMessage) -> None:
             message["To"],
             message["Subject"],
         )
+        return False
+    return True
 
 
 def _build_notification(
@@ -343,9 +358,14 @@ def _build_event_reminder(
     return msg
 
 
-async def send_event_reminder(to_emails: list[str], **event) -> None:
-    """Email the roster one calendar reminder. Demo-mode aware."""
-    await _smtp_send(_build_event_reminder(to_emails, **event))
+async def send_event_reminder(to_emails: list[str], **event) -> bool:
+    """Email the roster one calendar reminder. True only if the relay took it.
+
+    Unlike every other sender here this one is NOT fire-and-forget: the caller
+    writes a permanent ledger row on success, so it must be able to tell a
+    delivery from a swallowed failure.
+    """
+    return await _smtp_send(_build_event_reminder(to_emails, **event))
 
 
 async def send_password_reset(to_email: str, username: str, reset_url: str) -> None:

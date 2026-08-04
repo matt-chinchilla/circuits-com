@@ -38,6 +38,10 @@ def sent(monkeypatch):
 
     async def fake_email(recipients, **event):
         box["email"].append({"to": recipients, **event})
+        # Mirrors send_event_reminder's real contract: True only if the relay
+        # took it. Returning None here (the old stub) is exactly what a dead
+        # relay looks like, so the job would correctly refuse to count it.
+        return "email" not in box["fail"]
 
     def fake_sms(message, *, subject=None):
         box["sms"].append({"message": message, "subject": subject})
@@ -214,6 +218,7 @@ class TestIdempotency:
             if event["title"] == "boom":
                 raise RuntimeError("smtp exploded")
             sent["email"].append(event)
+            return True
 
         monkeypatch.setattr(job.email_service, "send_event_reminder", selective)
         stats = run(db)
@@ -414,10 +419,30 @@ class TestRecipientsAndComposition:
         assert "no-reply@circuitcenter.ai" not in settings.CALENDAR_RECIPIENTS
         assert len(settings.CALENDAR_RECIPIENTS) == 4
 
-    def test_an_empty_roster_is_a_failure_not_a_silent_success(self, db, sent, monkeypatch):
+    def test_an_empty_roster_skips_without_claiming(self, db, sent, monkeypatch):
+        """An empty roster means email is UNDELIVERABLE, not that a delivery
+        failed — so it must not burn the ledger slot.
+
+        This was found by running the job against the real stack: the compose
+        passthrough shipped `CALENDAR_RECIPIENTS: ${CALENDAR_RECIPIENTS:-}`,
+        and an empty string does not inherit the code default, it overwrites it
+        with []. The job then found a due event, took its claim, and had nobody
+        to send to — and the UNIQUE constraint would have made that reminder
+        unsendable forever, even after the roster was restored.
+        """
         monkeypatch.setattr(settings, "CALENDAR_RECIPIENTS", [])
-        make_event(db, starts_in=timedelta(days=1))
-        assert run(db)["failed"] == 1
+        event = make_event(db, starts_in=timedelta(days=1))
+        stats = run(db)
+
+        assert sent["email"] == []
+        assert stats["sent"] == 0
+        assert ledger(db, event.id) == [], "a slot was burned on an impossible send"
+
+        # And the corollary: restoring the roster recovers it.
+        monkeypatch.setattr(settings, "CALENDAR_RECIPIENTS", ["ops@circuitcenter.ai"])
+        run(db)
+        assert len(sent["email"]) == 1
+        assert len(ledger(db, event.id)) == 1
 
     def test_the_email_body_carries_the_event(self, db):
         from app.services.email import _build_event_reminder
@@ -549,3 +574,27 @@ class TestUnsentEmailIsNotClaimed:
         stats = run(db)
         assert stats["sent"] == 0, "a refused relay must never count as sent"
         assert len(ledger(db, event.id)) == 1, "at-most-once: the claim is kept"
+
+    def test_a_relay_that_swallows_its_own_failure_is_not_counted_as_sent(
+        self, db, sent, monkeypatch
+    ):
+        """The half of the bug a try/except could never have caught.
+
+        `email._smtp_send` catches its own SMTP errors rather than raising —
+        its other callers are BackgroundTasks where an exception has nowhere to
+        go — so a dead relay returns NORMALLY. Wrapping the call in try/except
+        therefore fixed nothing on its own; verified against a real dead relay,
+        where a pass over a due event reported `sent=1` while nothing left the
+        building. The bool return is the actual signal.
+        """
+
+        async def swallowed_failure(recipients, **event):
+            return False
+
+        monkeypatch.setattr(job.email_service, "send_event_reminder", swallowed_failure)
+        event = make_event(db, starts_in=timedelta(days=1))
+        stats = run(db)
+
+        assert stats["sent"] == 0, "a relay that refused must never count as sent"
+        assert stats["failed"] == 1
+        assert len(ledger(db, event.id)) == 1, "at-most-once: the claim is still kept"

@@ -107,7 +107,13 @@ services:
       # rather than admitted) but the calendar is then inert, so this is a
       # deploy-time checklist item, not an optional one.
       CALENDAR_API_SECRET: ${CALENDAR_API_SECRET:-}
-      CALENDAR_RECIPIENTS: ${CALENDAR_RECIPIENTS:-}
+      # MUST mirror Settings.CALENDAR_RECIPIENTS. An empty default here does
+      # NOT fall back to the code default — pydantic-settings sees the empty
+      # string, the CSV validator parses it to [], and the roster is DESTROYED
+      # rather than inherited. Observed live: the job found a due event, took
+      # its ledger claim, then had nobody to send to. Same trap the
+      # MAIL_SYNC_MAILBOXES comment above records.
+      CALENDAR_RECIPIENTS: ${CALENDAR_RECIPIENTS:-anthony@circuitcenter.ai,daniel@circuitcenter.ai,matthew@circuitcenter.ai,ronald@circuitcenter.ai}
       CALENDAR_TIMEZONE: ${CALENDAR_TIMEZONE:-America/New_York}
       CALENDAR_REMINDER_LOOKBACK_MINUTES: ${CALENDAR_REMINDER_LOOKBACK_MINUTES:-720}
       SMS_TOPIC_ARN: ${SMS_TOPIC_ARN:-}
@@ -124,7 +130,13 @@ services:
       SMTP_USERNAME: ${SMTP_USERNAME:-no-reply@circuitcenter.ai}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_FROM: ${SMTP_FROM:-no-reply@circuitcenter.ai}
-      CALENDAR_RECIPIENTS: ${CALENDAR_RECIPIENTS:-}
+      # MUST mirror Settings.CALENDAR_RECIPIENTS. An empty default here does
+      # NOT fall back to the code default — pydantic-settings sees the empty
+      # string, the CSV validator parses it to [], and the roster is DESTROYED
+      # rather than inherited. Observed live: the job found a due event, took
+      # its ledger claim, then had nobody to send to. Same trap the
+      # MAIL_SYNC_MAILBOXES comment above records.
+      CALENDAR_RECIPIENTS: ${CALENDAR_RECIPIENTS:-anthony@circuitcenter.ai,daniel@circuitcenter.ai,matthew@circuitcenter.ai,ronald@circuitcenter.ai}
       CALENDAR_TIMEZONE: ${CALENDAR_TIMEZONE:-America/New_York}
       CALENDAR_REMINDER_LOOKBACK_MINUTES: ${CALENDAR_REMINDER_LOOKBACK_MINUTES:-720}
       SMS_TOPIC_ARN: ${SMS_TOPIC_ARN:-}

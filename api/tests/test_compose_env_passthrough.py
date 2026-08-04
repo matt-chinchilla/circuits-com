@@ -177,3 +177,29 @@ def test_the_reminder_job_is_actually_scheduled():
             f"{name} is missing from calendar-reminders — the job would run with a "
             "different configuration from the API that writes the events."
         )
+
+
+def test_the_recipient_roster_default_is_not_empty_in_either_compose_file():
+    """An empty default DESTROYS the code default; it does not inherit it.
+
+    `CALENDAR_RECIPIENTS: ${CALENDAR_RECIPIENTS:-}` looks like "leave it to
+    config.py". It is not: pydantic-settings receives the empty string, the
+    CSV validator parses it to [], and the four-person roster in Settings is
+    overwritten with nobody. Caught by running the job against the real stack,
+    where it found a due event and had no one to send to. Exactly the trap the
+    MAIL_SYNC_MAILBOXES comment records, one setting over.
+    """
+    for path in (DEV_COMPOSE, PROD_COMPOSE):
+        block = _service_block(path, "api")
+        line = next(
+            ln for ln in block.splitlines() if ln.strip().startswith("CALENDAR_RECIPIENTS:")
+        )
+        default = line.split(":-", 1)[1].rstrip("}").strip()
+        assert default, (
+            f"CALENDAR_RECIPIENTS has an EMPTY default in {path.name}. That does not "
+            "fall back to Settings.CALENDAR_RECIPIENTS — it overwrites it with an "
+            "empty list and no reminder can ever be delivered."
+        )
+        assert set(default.split(",")) == set(Settings().CALENDAR_RECIPIENTS), (
+            f"the {path.name} roster has drifted from Settings.CALENDAR_RECIPIENTS"
+        )
