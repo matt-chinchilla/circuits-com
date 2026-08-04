@@ -7,9 +7,30 @@
 # - API port 8000 is NOT published — nginx is the only way in
 # - No source code volume mounts on frontend
 # - Nginx config updated to proxy to frontend on port 80
+# - Container logs are CAPPED (see below)
+
+# Docker's default json-file driver has NO rotation: a container log grows until
+# the disk fills. On 2026-08-03 the box was at 81% with nginx's access log alone
+# at 238 MB and climbing — every request since the container last started, kept
+# forever. The instance has a 20 GB root volume, so this is a slow disk-full
+# outage rather than a cosmetic problem.
+#
+# 20 MB x 3 files caps each service at 60 MB (300 MB across the five). Nothing
+# reads these logs as a data source — request analytics come from the PageView
+# table, not nginx — so they are for live debugging, and a few hundred MB of
+# recent history serves that better than unbounded history nobody reads.
+#
+# YAML anchor rather than five copies so a service added later without it is
+# visibly missing the cap.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "3"
 
 services:
   api:
+    logging: *default-logging
     build:
       context: ./api
     # --workers and the API_WORKERS env var below MUST stay on the SAME
@@ -81,6 +102,7 @@ services:
       MAIL_SYNC_MAILBOXES: ${MAIL_SYNC_MAILBOXES:-anthony@circuitcenter.ai,daniel@circuitcenter.ai,matthew@circuitcenter.ai,ronald@circuitcenter.ai,no-reply@circuitcenter.ai}
 
   frontend:
+    logging: *default-logging
     build:
       context: ./frontend
       target: prod
@@ -88,9 +110,20 @@ services:
     volumes: !reset []
 
   nginx:
+    logging: *default-logging
     ports:
       - "80:80"
       - "443:443"
     volumes:
       - ./nginx/nginx.ssl.conf:/etc/nginx/conf.d/default.conf:ro
       - /etc/letsencrypt:/etc/letsencrypt:ro
+
+  # db and n8n need no other prod override; they appear here ONLY to inherit the
+  # log cap. Their logs are small today (single-digit MB), but "small today" is
+  # what nginx's 238 MB access log also was — the cap is about the growth rate
+  # being unbounded, not the current size.
+  db:
+    logging: *default-logging
+
+  n8n:
+    logging: *default-logging
