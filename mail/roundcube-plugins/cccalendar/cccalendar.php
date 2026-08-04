@@ -49,6 +49,9 @@
  */
 class cccalendar extends rcube_plugin
 {
+    /** @var bool set when api_base() rejected a non-HTTPS URL */
+    private $base_rejected = false;
+
     /**
      * Bind to every task except login/logout.
      *
@@ -755,7 +758,7 @@ class cccalendar extends rcube_plugin
     private function config_problem()
     {
         if ($this->api_base() === '') {
-            return $this->gettext('errnobase');
+            return $this->gettext($this->base_rejected ? 'errbadbase' : 'errnobase');
         }
         if ($this->api_secret() === '') {
             return $this->gettext('errnosecret');
@@ -796,6 +799,11 @@ class cccalendar extends rcube_plugin
                     . ' (the shared secret travels in a header on every request).'
                     . ' Scheme was: ' . ($scheme === '' ? '(none)' : $scheme),
             ), true, false);
+
+            // Remembered so config_problem() can say WHICH failure this was.
+            // Both paths return '' and the operator cannot tell them apart from
+            // the UI otherwise.
+            $this->base_rejected = true;
 
             return '';
         }

@@ -119,6 +119,14 @@ a.button.icon.cccal-new:before  { content: "\f271"; }
 	padding: 0 0.6em;
 }
 
+/* The ID selector is required, not decoration. The skin styles
+   `html.cc #layout > div > .header a.button` at (1,3,3); this rule was
+   (0,4,2), so it LOST and the primary "new event" affordance rendered the
+   same grey as prev/next/today — the one control the page exists for was
+   visually indistinguishable from its neighbours. calendar.html puts
+   .cccal-nav inside #layout-content > .header, so matching that path is
+   what wins. */
+html.cc #layout-content > .header .cccal-nav a.button.cccal-new,
 html.cc .cccal-nav a.button.cccal-new {
 	color: var(--ccal-accent-2);
 }

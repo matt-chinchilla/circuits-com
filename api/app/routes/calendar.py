@@ -89,15 +89,23 @@ def _plugin_secret_matches(presented: str | None) -> bool:
     candidate = (presented or "").strip()
     if not candidate:
         return False
-    # Compare BYTES, not str. hmac.compare_digest raises TypeError on str
-    # arguments containing any character above U+007F, and Starlette decodes
-    # header bytes as latin-1 — so a single 0x80+ byte in this header turned an
-    # unauthenticated request into a 500 with a traceback, on all four routes,
-    # for anyone with curl. It also broke any operator who generated a
-    # passphrase-style secret containing an accent. encode() first; the
-    # constant-time property is what we actually want from this function and it
-    # is preserved.
-    return hmac.compare_digest(candidate.encode("utf-8"), configured.encode("utf-8"))
+    # Compare BYTES, not str: hmac.compare_digest raises TypeError on str
+    # arguments containing any character above U+007F, so a single 0x80+ byte
+    # in this header turned an unauthenticated request into a 500 with a
+    # traceback, on all four routes, for anyone with curl.
+    #
+    # The two sides are decoded by DIFFERENT codecs and must be re-encoded by
+    # the codec each one came through, or a non-ASCII secret can never match:
+    # Starlette decodes header bytes as latin-1, while os.environ decodes as
+    # UTF-8. Encoding both as UTF-8 double-encodes the header —
+    # b's\xc3\xa9' arrives, becomes 's\xc3\xa9' as text, and re-encodes to
+    # b's\xc3\x83\xc2\xa9'. Latent today because the documented way to generate
+    # this value (secrets.token_urlsafe) is pure ASCII, and it fails closed
+    # either way; but an operator using a passphrase would have hit a 401 with
+    # a correct secret and no way to tell why.
+    return hmac.compare_digest(
+        candidate.encode("latin-1", "replace"), configured.encode("utf-8")
+    )
 
 
 def _resolve_actor(db: Session, presented_email: str | None) -> User | None:

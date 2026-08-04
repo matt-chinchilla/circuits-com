@@ -114,11 +114,29 @@ deploy_frontend() {
 deploy_reseed() {
     echo "Deploying all services + clearing and reseeding database..."
     run_remote "cd $APP_DIR && sudo git pull && DOCKER_BUILDKIT=1 $COMPOSE_CMD build frontend && DOCKER_BUILDKIT=1 $COMPOSE_CMD build api calendar-reminders && $COMPOSE_CMD up -d && $COMPOSE_CMD restart nginx && sudo docker image prune -f"
+    # The calendar has to be carried across the TRUNCATE by hand.
+    #
+    # TRUNCATE ... CASCADE is TRANSITIVE, and the chain now reaches further than
+    # it used to: suppliers -> users (users.supplier_id) -> calendar_events
+    # (calendar_events.created_by_id) -> calendar_reminder_sends. So a routine
+    # catalog reseed would silently delete every company meeting. `messages`
+    # survives this only because nothing links it into that graph; the calendar
+    # does not have that luxury, and the price of the created_by_id attribution
+    # is exactly this backup.
+    #
+    # Same shape as the page_views/messages practice: dump to a file on the box
+    # before, restore after seeding. Restored AFTER the seed so the users rows
+    # the FK points at exist again; ON DELETE SET NULL means a creator who is no
+    # longer seeded simply loses attribution rather than blocking the restore.
+    echo "Backing up the calendar (TRUNCATE CASCADE reaches it via users)..."
+    run_remote "sudo docker exec circuits-com-db-1 pg_dump -U circuits -d circuits --data-only --table=calendar_events --table=calendar_reminder_sends > /tmp/calendar-backup.sql && wc -l < /tmp/calendar-backup.sql"
     echo "Clearing database..."
     run_remote "sudo docker exec circuits-com-db-1 psql -U circuits -d circuits -c 'TRUNCATE sponsors, category_suppliers, categories, suppliers CASCADE;'"
     echo "Reseeding..."
     run_remote "sudo docker exec circuits-com-api-1 python -m app.db.seed"
-    green "All services rebuilt, nginx restarted. Database cleared and reseeded."
+    echo "Restoring the calendar..."
+    run_remote "sudo docker exec -i circuits-com-db-1 psql -U circuits -d circuits -v ON_ERROR_STOP=1 < /tmp/calendar-backup.sql && sudo docker exec circuits-com-db-1 psql -U circuits -d circuits -tAc 'SELECT count(*) FROM calendar_events;'"
+    green "All services rebuilt, nginx restarted. Database cleared and reseeded; calendar restored."
 }
 
 show_status() {

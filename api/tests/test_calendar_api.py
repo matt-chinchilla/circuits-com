@@ -20,8 +20,12 @@ import bcrypt
 import pytest
 
 from app.config import settings
-from app.models import CalendarEvent, CalendarReminderSend
-from app.routes.calendar import CALENDAR_SECRET_HEADER, DEMO_CALENDAR_FORBIDDEN_DETAIL
+from app.models import CalendarEvent, CalendarReminderSend, User
+from app.routes.calendar import (
+    CALENDAR_ACTOR_HEADER,
+    CALENDAR_SECRET_HEADER,
+    DEMO_CALENDAR_FORBIDDEN_DETAIL,
+)
 
 BASE = "/api/calendar/events"
 DEMO_EMAIL = "demo@circuitcenter.ai"
@@ -483,3 +487,94 @@ class TestPluginSecret:
         monkeypatch.setattr(settings, "CALENDAR_API_SECRET", SECRET)
         resp = client.get(BASE, headers=demo_headers)
         assert resp.status_code == 403
+
+
+# ── The actor header (attribution over the plugin door) ─────────────────────
+
+
+class TestPluginActorAttribution:
+    """The plugin door's attribution, which shipped with no coverage at all.
+
+    Every event the webmail creates comes through the shared-secret door, and
+    that door returned no user — so `created_by_id` was NULL for every event in
+    the system while the column, its FK and its response field all existed. The
+    fix reads an `X-Calendar-Actor` header, and it is only safe because it is
+    read INSIDE the branch where the secret already matched: the secret
+    authenticates the caller, so the header is attribution from a trusted
+    server rather than a claim from a browser.
+
+    The cross-box assumption worth pinning: the plugin sends
+    `rcmail::get_user_name()`, which is a full address here because
+    docker-mailserver logins are addresses and no `username_domain` is set.
+    These tests fix the API's half of that contract — match on email,
+    case-insensitively, and never fail a write over it.
+    """
+
+    def test_the_actor_header_attributes_the_event(self, client, db, seeded_db, monkeypatch):
+        monkeypatch.setattr(settings, "CALENDAR_API_SECRET", SECRET)
+        actor = db.query(User).filter(User.email != DEMO_EMAIL).first()
+        assert actor is not None
+
+        resp = client.post(
+            BASE,
+            json=_payload(),
+            headers={CALENDAR_SECRET_HEADER: SECRET, CALENDAR_ACTOR_HEADER: actor.email},
+        )
+        assert resp.status_code == 201, resp.text
+        assert resp.json()["created_by_id"] == str(actor.id)
+
+    def test_the_match_is_case_insensitive(self, client, db, seeded_db, monkeypatch):
+        """Roundcube echoes whatever the user typed at the login prompt."""
+        monkeypatch.setattr(settings, "CALENDAR_API_SECRET", SECRET)
+        actor = db.query(User).filter(User.email != DEMO_EMAIL).first()
+
+        resp = client.post(
+            BASE,
+            json=_payload(),
+            headers={
+                CALENDAR_SECRET_HEADER: SECRET,
+                CALENDAR_ACTOR_HEADER: actor.email.upper(),
+            },
+        )
+        assert resp.status_code == 201, resp.text
+        assert resp.json()["created_by_id"] == str(actor.id)
+
+    def test_an_unknown_address_is_unattributed_not_an_error(
+        self, client, seeded_db, monkeypatch
+    ):
+        """Attribution is a nicety; it must never be able to fail a write."""
+        monkeypatch.setattr(settings, "CALENDAR_API_SECRET", SECRET)
+        resp = client.post(
+            BASE,
+            json=_payload(),
+            headers={
+                CALENDAR_SECRET_HEADER: SECRET,
+                CALENDAR_ACTOR_HEADER: "nobody@circuitcenter.ai",
+            },
+        )
+        assert resp.status_code == 201, resp.text
+        assert resp.json()["created_by_id"] is None
+
+    def test_the_demo_identity_cannot_be_laundered_through_the_header(
+        self, client, seeded_db, demo_headers, monkeypatch
+    ):
+        """Demo is refused at the front door; it must not reappear as an author."""
+        monkeypatch.setattr(settings, "CALENDAR_API_SECRET", SECRET)
+        resp = client.post(
+            BASE,
+            json=_payload(),
+            headers={CALENDAR_SECRET_HEADER: SECRET, CALENDAR_ACTOR_HEADER: DEMO_EMAIL},
+        )
+        assert resp.status_code == 201, resp.text
+        assert resp.json()["created_by_id"] is None
+
+    def test_a_garbage_header_does_not_500(self, client, seeded_db, monkeypatch):
+        monkeypatch.setattr(settings, "CALENDAR_API_SECRET", SECRET)
+        for junk in ("", "   ", "not-an-email", "a@b@c", "x" * 500):
+            resp = client.post(
+                BASE,
+                json=_payload(),
+                headers={CALENDAR_SECRET_HEADER: SECRET, CALENDAR_ACTOR_HEADER: junk},
+            )
+            assert resp.status_code == 201, f"{junk!r} -> {resp.status_code} {resp.text}"
+            assert resp.json()["created_by_id"] is None

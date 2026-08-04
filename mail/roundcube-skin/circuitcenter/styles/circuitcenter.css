@@ -111,7 +111,15 @@ html.cc {
 	   i.e. the <=768px fallback. */
 	--cc-ink:        #dde4e8;  /* primary text, unread subjects        12.52 */
 	--cc-ink-2:      #a9b4ba;  /* read subjects, body copy              7.61 */
-	--cc-dim:        #87939a;  /* meta: from, date, size                5.11 */
+	/* Measured against the WORST surface it is USED on, not the bare pane.
+	   At #87939a this read 5.11 on the pane and was recorded as passing — but
+	   six of its sites sit on --cc-raise or --cc-strip (the FROM/TO/DATE label
+	   column, the message date, attachment sizes, fieldset legends, list
+	   headers, menu separators), where a white lift takes it to 4.30 and 4.44.
+	   Both under the floor, and the direction is the wrong one: the desktop
+	   pane carries a veil that lightens it further, so the real figure is
+	   worse than the audited fallback rather than better. */
+	--cc-dim:        #939fa6;  /* meta: from, date, size   5.94 pane / 5.00 raise */
 
 	/* --- button legends ------------------------------------------------------
 	   Controls are lettered in PURE WHITE, not the --cc-ink grey that body copy
@@ -262,7 +270,8 @@ html.cc:not(.touch) ::-webkit-scrollbar-track {
 }
 
 html.cc:not(.touch) ::-webkit-scrollbar-thumb {
-	background-color: rgba(22, 40, 31, 0.28);
+	/* scrollbar thumb: old bench green, 1.01:1 on the pane — invisible in Chrome. Its :hover sibling and the Firefox scrollbar-color were both converted; this one was not. */
+	background-color: rgba(255, 255, 255, 0.24);
 	border-radius: 5px;
 	border: 2px solid transparent;
 	background-clip: content-box;
@@ -647,7 +656,8 @@ html.cc .listing li.selected ul {
 
 html.cc .listing li.droptarget > a,
 html.cc .listing tr.droptarget > td {
-	background-color: rgba(232, 194, 82, 0.45);
+	/* drop target: gold at .45 over a dark pane is a muddy olive that put --cc-ink at 4.18:1, on the folder you are actively dragging onto. The palette's own selection tint, at drag strength. */
+	background-color: rgba(68, 189, 19, 0.28);
 	color: var(--cc-ink);
 }
 
@@ -1407,7 +1417,8 @@ html.cc .btn-danger {
 
 html.cc .btn-danger:hover:not(:disabled) {
 	color: var(--cc-flag);
-	background: rgba(164, 46, 34, 0.09);
+	/* destructive hover: #a42e22 is the OLD --cc-flag, a colour no longer in the palette — 1.04:1, i.e. the delete button had no hover state at all. */
+	background: rgba(255, 131, 120, 0.12);
 	transform: none;
 	box-shadow: none;
 }
@@ -1724,9 +1735,14 @@ html.cc .menu a:not(.disabled):hover {
 
 /* Section 7 sets a global link colour. Menu entries are controls, not
    links, so pin them back to ink before that leaks in. */
+/* `html.cc .menu.toolbar a` is deliberately NOT in this list. It was, and at
+   specificity (0,3,2) — identical to the white-legend rule earlier in this
+   file — so being later it won, and every toolbar legend rendered --cc-ink-2
+   grey instead of white. The rationale comment up there described a treatment
+   that never reached the screen, while the white bloom meant to accompany it
+   still did. `html.cc .menu a` below already colours ordinary menu links. */
 html.cc .menu a,
 html.cc .popover .menu li a,
-html.cc .menu.toolbar a,
 html.cc .menu.toolbar a.button {
 	color: var(--cc-ink-2);
 }
@@ -1831,7 +1847,8 @@ html.cc .ui.alert a:not(.btn) {
 }
 
 html.cc .iframe-loader {
-	background-color: rgba(242, 245, 243, 0.8);
+	/* iframe loader: the light skin's porcelain #f2f5f3 written as rgba(), which is why the five literal conversions missed it. A near-white sheet flashed over EVERY message open. */
+	background-color: rgba(15, 19, 22, 0.72);
 }
 
 html.cc .skinselection .skinthumbnail {
@@ -1928,7 +1945,7 @@ html.cc #login-form::before {
 	height: 11px;
 	pointer-events: none;
 	opacity: 0.7;
-	background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='12'%3E%3Ctext x='0' y='10' font-family='Menlo,monospace' font-size='10' letter-spacing='1.5' fill='%234d5f54'%3ECN1%3C/text%3E%3C/svg%3E") no-repeat right center / contain;
+	background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='12'%3E%3Ctext x='0' y='10' font-family='Menlo,monospace' font-size='10' letter-spacing='1.5' fill='%2387939a'%3ECN1%3C/text%3E%3C/svg%3E") no-repeat right center / contain;
 }
 
 html.cc #login-form .input-group-text {
@@ -2028,7 +2045,8 @@ html.cc .input-group-text input:focus {
 /* Image viewer toolbar: hover/focus forces rgba(55,190,255,.5). */
 html.cc .image-tools a:focus,
 html.cc .image-tools a:hover {
-	background-color: rgba(232, 194, 82, 0.5) !important;
+	/* image-tools hover: the last gold FILL in a skin that moved every other one to the selection tint. */
+	background-color: var(--cc-tint-select) !important;
 }
 
 /* The rail's popover header is pinned to slate #2f3a3f by Elastic (and again,

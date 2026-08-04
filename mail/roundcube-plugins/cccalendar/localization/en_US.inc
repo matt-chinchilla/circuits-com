@@ -71,6 +71,11 @@ $messages['errnoevent']         = 'That event no longer exists.';
 $messages['notconfiguredhead'] = 'The calendar is not connected yet';
 $messages['notconfiguredhint'] = 'Set the values in /opt/circuits-mail/.env on the mail box, then recreate the roundcube container. Until then this month is shown empty and events cannot be created.';
 $messages['errnobase']         = 'CALENDAR_API_BASE is not set, so the webmail does not know where the calendar service is.';
+// Distinct from errnobase on purpose: api_base() returns '' for BOTH "unset"
+// and "rejected as non-TLS", and reporting the second as the first sends an
+// operator hunting for a variable that is present and looks correct, while
+// the real reason sits only in the Roundcube error log.
+$messages['errbadbase']        = 'CALENDAR_API_BASE must be an https:// address — the shared secret travels in a request header, so a plain http:// base would put it on the wire in clear text.';
 $messages['errnosecret']       = 'CALENDAR_API_SECRET is not set, so the webmail has no credential to read the calendar with.';
 
 // Transport
