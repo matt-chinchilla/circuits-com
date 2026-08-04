@@ -232,13 +232,26 @@ html.cc .cccal-nav a.button.cccal-new {
 /* The per-day "+". Faded at rest rather than removed, because a keyboard user
    has to be able to reach it: display:none would take it out of the tab order
    and leave the grid operable by mouse only. */
+/* The glyph is centred BY CONSTRUCTION, not by line-height arithmetic.
+   It used to rely on `line-height: 20px` matching the button's height, which
+   fails twice over: a <button> inherits body's `line-height: 1.6` (a trap this
+   repo has documented), and a Font Awesome glyph does not sit centred on its
+   own em box anyway — so the plus sat visibly off-centre inside the disc that
+   appears behind it on hover. A flex box with both axes centred cannot drift,
+   whatever the icon's metrics are.
+
+   50%, not 5px: the hover background reads as a disc, so it should be one. */
 .cccal-add {
 	flex: 0 0 auto;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	line-height: 1;
 	width: 20px;
 	height: 20px;
 	padding: 0;
 	border: 0;
-	border-radius: 5px;
+	border-radius: 50%;
 	background: transparent;
 	color: var(--ccal-dim);
 	cursor: pointer;
@@ -252,7 +265,8 @@ html.cc .cccal-nav a.button.cccal-new {
 	font-weight: 900;
 	font-style: normal;
 	font-size: 0.72rem;
-	line-height: 20px;
+	line-height: 1;
+	display: block;
 	speak: none;
 	-webkit-font-smoothing: antialiased;
 	-moz-osx-font-smoothing: grayscale;

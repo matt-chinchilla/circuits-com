@@ -374,6 +374,11 @@ html.cc #layout-menu {
 	html.cc #taskmenu a {
 		color: var(--cc-rail-silk);
 		background: transparent;
+		/* Exactly the two properties that change, so nothing can snap while
+		   something else eases. `transform` was listed here and never set. */
+		transition:
+			color 0.14s var(--cc-ease-out),
+			text-shadow 0.14s var(--cc-ease-out);
 	}
 
 	/* Centre the task icons. Elastic gives the icon pseudo-element
@@ -395,22 +400,38 @@ html.cc #layout-menu {
 		text-transform: uppercase;
 	}
 
+	/* ONLY the illumination changes. Moving along this rail used to alter three
+	   things at once — a solid background appeared, the selected item added a
+	   gradient, and an inset bar drew in — and of those only `color` was in the
+	   transition, so the fill SNAPPED while the text FADED. That mismatch is
+	   what read as clunky; it was two animations of different lengths playing
+	   against each other on one element.
+
+	   Now the button's box never moves: no background, no size, no transform.
+	   The glyph and its label light up, which is the whole vocabulary of an
+	   instrument panel and is what the rail was always trying to say. */
 	html.cc #taskmenu a:hover {
 		color: var(--cc-plate);
-		background: var(--cc-bench-hi);
+		text-shadow: 0 0 9px rgba(68, 189, 19, 0.45);
+		background: transparent;
 	}
 
 	/* Lit finger + phosphor trace stub. background-COLOR set explicitly:
 	   Elastic paints its own here, and overriding only background-image
 	   would leave that sitting under the glow. */
+	/* Selected is lit, plus ONE static edge marker. The background fill and the
+	   gradient are gone for the reason above; the inset bar stays because
+	   "which task am I on" has to survive the mouse leaving, and a bar at the
+	   rail's edge is a mark rather than a movement — it is not transitioned, so
+	   it never races the colour. Narrower than the old 6px+8px pair, which was
+	   doing a glow's job with a shadow. */
 	html.cc #taskmenu a.selected,
 	html.cc #taskmenu a.selected:hover {
 		color: var(--cc-plate);
-		background-color: var(--cc-bench-hi);
-		background-image: linear-gradient(to right, rgba(68, 189, 19, 0.22), transparent 72%);
-		box-shadow:
-			inset 6px 0 0 0 var(--cc-plate),
-			inset 8px 0 16px -6px var(--cc-plate);
+		text-shadow: 0 0 11px rgba(68, 189, 19, 0.5);
+		background-color: transparent;
+		background-image: none;
+		box-shadow: inset 3px 0 0 0 var(--cc-plate);
 	}
 
 	html.cc #taskmenu .action-buttons a {
