@@ -12,6 +12,7 @@ from app.routes import (
     admin_sponsors,
     analytics,
     auth,
+    calendar,
     categories,
     dashboard,
     forms,
@@ -49,6 +50,7 @@ app.include_router(admin_expenses.router)
 app.include_router(admin_media.router)
 app.include_router(admin_presence.router)
 app.include_router(analytics.router)
+app.include_router(calendar.router)
 app.include_router(sitemap.router)
 
 

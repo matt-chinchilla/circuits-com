@@ -29,12 +29,33 @@ services:
       # 25 MB — matches the mail server's own accepted message size.
       ROUNDCUBEMAIL_UPLOAD_MAX_FILESIZE: 25M
       ROUNDCUBEMAIL_SKIN: circuitcenter
-      ROUNDCUBEMAIL_PLUGINS: archive,zipdownload,newmail_notifier
+      ROUNDCUBEMAIL_PLUGINS: archive,zipdownload,newmail_notifier,cccalendar
+      # The shared company calendar. The plugin calls the FastAPI service on the
+      # WEB box from PHP, server-side, with this secret in an Authorization
+      # header — the browser never sees it and never makes a cross-origin
+      # request. Same class of credential as MAIL_SYNC_SECRET, same home:
+      # /opt/circuits-mail/.env on this box, and never in git.
+      #
+      # Both are `:-` (empty default), NOT `:?` (fail-fast), on purpose: an
+      # unset secret must degrade to the plugin's explanatory empty state, not
+      # stop the whole webmail from starting. Mail is the thing people cannot
+      # do without; the calendar is not.
+      #
+      # NOTE: `docker compose restart` does not re-evaluate these from .env —
+      # use `docker compose -f docker-compose.webmail.yml up -d --force-recreate
+      # roundcube` after changing either value.
+      CALENDAR_API_BASE: ${CALENDAR_API_BASE:-}
+      CALENDAR_API_SECRET: ${CALENDAR_API_SECRET:-}
     volumes:
       - roundcube-data:/var/roundcube/db
       # The skin ships read-only from the repo checkout — redeploying it is a
       # git pull plus a container restart, never an in-place edit on the box.
       - /opt/circuits-mail/skin/circuitcenter:/var/www/html/skins/circuitcenter:ro
+      # The calendar plugin, by the same mechanism: one more :ro mount and one
+      # more name in ROUNDCUBEMAIL_PLUGINS above. It has no composer
+      # dependencies, so the upstream image is untouched and Roundcube patch
+      # releases keep arriving for free.
+      - /opt/circuits-mail/plugins/cccalendar:/var/www/html/plugins/cccalendar:ro
       # Overrides env-generated config can't express: STARTTLS on the
       # internal IMAP/SMTP hop (Dovecot is ssl=required) and skin_logo.
       - /opt/circuits-mail/roundcube-config.inc.php:/var/www/html/config/config.inc.php:ro

@@ -36,6 +36,22 @@ services:
       # (docker-compose.prod.yml). Guarded by tests/test_compose_env_passthrough.py.
       DEMO_LOGIN_ENABLED: ${DEMO_LOGIN_ENABLED:-true}
       DEMO_LOGIN_EMAIL: ${DEMO_LOGIN_EMAIL:-demo@circuitcenter.ai}
+      # Shared calendar. Same rule as every block here: this list is an
+      # ALLOWLIST, not documentation. Settings declares no env_file and the api
+      # container has no volume mount, so a value absent from this block never
+      # reaches pydantic-settings however carefully it was written into a host
+      # .env — which is exactly how DEMO_LOGIN_ENABLED shipped inert.
+      # Without CALENDAR_API_SECRET the Roundcube plugin's every call 401s and
+      # the calendar is permanently unreachable from the webmail.
+      CALENDAR_API_SECRET: ${CALENDAR_API_SECRET:-}
+      CALENDAR_RECIPIENTS: ${CALENDAR_RECIPIENTS:-}
+      CALENDAR_TIMEZONE: ${CALENDAR_TIMEZONE:-America/New_York}
+      CALENDAR_REMINDER_LOOKBACK_MINUTES: ${CALENDAR_REMINDER_LOOKBACK_MINUTES:-720}
+      # SMS reminders — OFF until a topic ARN exists. app/services/sms.py is
+      # inert (never raises) when this is empty, so email reminders are
+      # unaffected by an unconfigured or broken SNS setup.
+      SMS_TOPIC_ARN: ${SMS_TOPIC_ARN:-}
+      SMS_REGION: ${SMS_REGION:-}
       # SMTP — empty defaults trigger demo mode in app.services.email.
       # Populate via .env on prod EC2 host (see CLAUDE.md gotcha).
       SMTP_HOST: ${SMTP_HOST:-}
@@ -55,6 +71,46 @@ services:
       # tests/test_mail_sync.py) — an empty value would disable syncing for
       # every account rather than for none.
       MAIL_SYNC_MAILBOXES: ${MAIL_SYNC_MAILBOXES:-anthony@circuitcenter.ai,daniel@circuitcenter.ai,matthew@circuitcenter.ai,ronald@circuitcenter.ai,no-reply@circuitcenter.ai}
+
+  # Calendar reminders. `app.jobs.send_reminders` is a one-shot: it finds the
+  # reminders that are due, sends them, and exits. Until this service existed
+  # NOTHING CALLED IT — the job was complete, tested, and never ran, so half
+  # the calendar was inert on delivery.
+  #
+  # A compose service rather than a host crontab, because everything else
+  # about this stack is declared in these files. A crontab is invisible state
+  # on one box: `docker compose ps` never shows it, a rebuilt instance loses
+  # it, and nothing tells you it stopped.
+  #
+  # Two details that look sloppy and are not. `|| true` keeps one failed pass
+  # from killing the container and silencing every future reminder. And a
+  # dumb sleep loop is adequate precisely BECAUSE idempotency lives in the
+  # database — UNIQUE(event_id, kind, channel) means running early, twice, or
+  # overlapping sends nothing extra, so there is nothing for a real scheduler
+  # to buy. Same image as api (already built, so no second build cost).
+  calendar-reminders:
+    build:
+      context: ./api
+    restart: unless-stopped
+    depends_on:
+      - db
+    command: >
+      sh -c "while true; do
+               python -m app.jobs.send_reminders || true;
+               sleep ${CALENDAR_REMINDER_INTERVAL_SECONDS:-300};
+             done"
+    environment:
+      DATABASE_URL: postgresql://circuits:circuits@db:5432/circuits
+      CALENDAR_RECIPIENTS: ${CALENDAR_RECIPIENTS:-}
+      CALENDAR_TIMEZONE: ${CALENDAR_TIMEZONE:-America/New_York}
+      CALENDAR_REMINDER_LOOKBACK_MINUTES: ${CALENDAR_REMINDER_LOOKBACK_MINUTES:-720}
+      SMS_TOPIC_ARN: ${SMS_TOPIC_ARN:-}
+      SMS_REGION: ${SMS_REGION:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-no-reply@circuitcenter.ai}
 
   frontend:
     build: ./frontend

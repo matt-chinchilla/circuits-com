@@ -109,3 +109,71 @@ def test_prod_does_not_publish_the_api_port():
     assert re.search(r"^\s*ports:\s*!reset\s*\[\]", api, re.M), (
         "docker-compose.prod.yml must reset the base compose's `8000:8000` publish."
     )
+
+
+# ── Calendar (2026-08-04) ───────────────────────────────────────────────────
+# These exist because the calendar shipped with EXACTLY the DEMO_LOGIN_ENABLED
+# bug this file was written to prevent: six settings declared in config.py,
+# documented in the plugin README as things you put in /opt/circuits-com/.env,
+# and enumerated in neither compose file. The failure was silent and total —
+# CALENDAR_API_SECRET stayed None, so every call from the Roundcube plugin was
+# refused and the calendar was unreachable from the webmail, with nothing in
+# the error pointing at compose. It fails closed, so it was never a leak; it
+# was simply inert. The guard the spec asked for was the one thing not written.
+
+CALENDAR_SETTINGS = (
+    "CALENDAR_API_SECRET",
+    "CALENDAR_RECIPIENTS",
+    "CALENDAR_TIMEZONE",
+    "CALENDAR_REMINDER_LOOKBACK_MINUTES",
+    "SMS_TOPIC_ARN",
+    "SMS_REGION",
+)
+
+
+def test_both_compose_files_pass_every_calendar_setting_through():
+    for path in (DEV_COMPOSE, PROD_COMPOSE):
+        block = _service_block(path, "api")
+        for name in CALENDAR_SETTINGS:
+            assert f"{name}:" in block, (
+                f"{name} is missing from the api environment block in {path.name}. "
+                "pydantic-settings reads process env only and the api container has "
+                "no volume mount, so a setting absent here can never be set from the "
+                "host — however carefully it is written into .env."
+            )
+
+
+def test_every_calendar_setting_is_host_overridable():
+    """No hard-coded values: each must interpolate from the host environment."""
+    block = _service_block(PROD_COMPOSE, "api")
+    for name in CALENDAR_SETTINGS:
+        line = next(ln for ln in block.splitlines() if ln.strip().startswith(f"{name}:"))
+        assert "${" in line, (
+            f"{name} is pinned in docker-compose.prod.yml instead of reading from "
+            "the host .env, so rotating it would need a redeploy."
+        )
+
+
+def test_the_reminder_job_is_actually_scheduled():
+    """The job existed, was tested, and nothing ran it.
+
+    `app.jobs.send_reminders` is a one-shot. Without a caller every reminder
+    silently never fires and half the calendar is inert — which is precisely
+    how it was first delivered. Asserting on the shipped compose text because
+    nothing else in CI would notice the service disappearing.
+    """
+    text = DEV_COMPOSE.read_text()
+    assert "calendar-reminders:" in text, (
+        "no calendar-reminders service in docker-compose.yml — the reminder job "
+        "has no caller and no reminder will ever be sent"
+    )
+    block = _service_block(DEV_COMPOSE, "calendar-reminders")
+    assert "app.jobs.send_reminders" in block, "the service does not invoke the job"
+    assert "|| true" in block, (
+        "one failed pass would kill the container and silence every future reminder"
+    )
+    for name in ("CALENDAR_RECIPIENTS", "CALENDAR_TIMEZONE", "SMTP_HOST"):
+        assert f"{name}:" in block, (
+            f"{name} is missing from calendar-reminders — the job would run with a "
+            "different configuration from the API that writes the events."
+        )

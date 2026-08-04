@@ -1,0 +1,120 @@
+<?php
+
+/**
+ * Circuit Center shared calendar - configuration template.
+ *
+ * READ THIS BEFORE COPYING THE FILE
+ * ---------------------------------
+ * In THIS deployment you almost certainly do not want to copy it. The plugin
+ * directory is bind-mounted into the container read-only from the git checkout
+ * (see mail/docker-compose.webmail.yml), so a config.inc.php cannot be written
+ * next to it on the box, and a secret must never be committed. The plugin
+ * therefore reads every setting from the process ENVIRONMENT when the matching
+ * Roundcube config key is absent, and docker-compose passes the values through
+ * from /opt/circuits-mail/.env.
+ *
+ * So the normal path is: put the two required values in /opt/circuits-mail/.env
+ * and recreate the container. This file exists to document what those values
+ * are and to serve the two cases where a file is genuinely easier:
+ *
+ *   1. a local checkout where you are hacking on the plugin - copy to
+ *      config.inc.php in this directory (it is gitignored by the repo's rule
+ *      for config files; check before you commit);
+ *   2. a host that will not pass environment through to PHP - drop this file at
+ *      /var/www/html/config/cccalendar.inc.php instead. rcube_plugin::load_config()
+ *      falls back to searching Roundcube's config directory for
+ *      <plugin-id>.inc.php when the plugin directory has no local config, so a
+ *      read-only plugin mount is not a dead end.
+ *
+ * A config value always WINS over the environment variable beside it.
+ */
+
+
+// ---------------------------------------------------------------------------
+// REQUIRED
+// ---------------------------------------------------------------------------
+
+/**
+ * Where the Circuit Center API lives, as reachable FROM THE MAIL BOX.
+ *
+ * Both of these work - the plugin appends '/api' when the path does not
+ * already end in it:
+ *      https://circuitcenter.ai
+ *      https://circuitcenter.ai/api
+ *
+ * Env: CALENDAR_API_BASE
+ *
+ * Leave empty and the calendar renders a month grid plus an explanatory
+ * notice naming this setting. It never renders a blank page.
+ */
+$config['cccalendar_api_base'] = '';
+
+/**
+ * The shared secret, sent on every request in the Authorization header.
+ *
+ * The SAME value must be set on the WEB box (in /opt/circuits-com/.env) for the
+ * API to accept it. Generate one with:
+ *
+ *      python3 -c "import secrets; print(secrets.token_urlsafe(48))"
+ *
+ * Env: CALENDAR_API_SECRET
+ *
+ * NEVER commit a filled-in value. This is the same class of credential as
+ * MAIL_SYNC_SECRET and lives in the same place.
+ */
+$config['cccalendar_api_secret'] = '';
+
+
+// ---------------------------------------------------------------------------
+// OPTIONAL - defaults shown; every one of these can be left alone
+// ---------------------------------------------------------------------------
+
+/**
+ * How the secret is presented. The defaults mirror the existing MAIL_SYNC_SECRET
+ * channel between these two boxes:
+ *
+ *      Authorization: Bearer <secret>
+ *
+ * The API also accepts a dedicated header, which is unambiguous for a client
+ * that is not carrying a user JWT. To use that form instead:
+ *
+ *      $config['cccalendar_auth_header'] = 'X-Calendar-Secret';
+ *      $config['cccalendar_auth_format'] = '%s';
+ *
+ * These settings exist so that a disagreement with the API half is a one-line
+ * fix on one box rather than a redeploy of both. `%s` is substituted literally
+ * (not through sprintf), so a stray % in the format cannot raise anything.
+ *
+ * Env: CALENDAR_AUTH_HEADER, CALENDAR_AUTH_FORMAT
+ */
+$config['cccalendar_auth_header'] = 'Authorization';
+$config['cccalendar_auth_format'] = 'Bearer %s';
+
+/**
+ * Request timeouts, in seconds. Kept short: this call is in the critical path
+ * of rendering a page, and a slow API should degrade to the "did not answer"
+ * notice rather than hang the webmail.
+ *
+ * Env: CALENDAR_API_TIMEOUT, CALENDAR_API_CONNECT_TIMEOUT
+ */
+$config['cccalendar_timeout']         = 8;
+$config['cccalendar_connect_timeout'] = 4;
+
+/**
+ * Verify the API's TLS certificate. Leave this true.
+ *
+ * The only defensible reason to turn it off is an internal hop reached by an
+ * address the certificate cannot name - and if you get there, prefer fixing
+ * the name over disabling verification, because unlike the IMAP hop in
+ * roundcube-config.inc.php this request carries a bearer token.
+ *
+ * Env: CALENDAR_API_VERIFY_TLS
+ */
+$config['cccalendar_verify_tls'] = true;
+
+/**
+ * First column of the month grid. 0 = Sunday, 1 = Monday.
+ *
+ * Env: CALENDAR_FIRST_WEEKDAY
+ */
+$config['cccalendar_first_weekday'] = 0;

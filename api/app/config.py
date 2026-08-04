@@ -98,6 +98,68 @@ class Settings(BaseSettings):
         "no-reply@circuitcenter.ai",
     ]
 
+    # ── Shared calendar (docs/…/2026-08-04-shared-calendar-design.md) ───────
+    # The Roundcube plugin calls /api/calendar/* SERVER-SIDE from PHP, never
+    # from the browser: no CORS, and no credential ever reaches a webmail
+    # user's tab. It authenticates with this shared secret, mirroring the
+    # MAIL_SYNC_SECRET channel between the same two boxes (the value lives in
+    # /opt/circuits-com/.env here and /opt/circuits-mail/.env there, never in
+    # git).
+    #
+    # UNSET = the door does not exist. An empty secret must never match an
+    # empty header, or leaving this blank would publish the company's meeting
+    # schedule to anyone who can reach the API. Human callers are unaffected —
+    # they authenticate with their normal admin bearer token.
+    CALENDAR_API_SECRET: str | None = None
+
+    # Who gets a meeting reminder. The fixed roster, NOT per-event attendees
+    # (attendees are the obvious next step and are not needed to ship). Same
+    # NoDecode + JSON/CSV handling as NOTIFY_RECIPIENTS so the .env line can be
+    # either form.
+    #
+    # The four humans, deliberately — MAIL_SYNC_MAILBOXES additionally carries
+    # no-reply@, which is a relay identity with nobody reading it.
+    CALENDAR_RECIPIENTS: Annotated[list[str], NoDecode] = [
+        "anthony@circuitcenter.ai",
+        "daniel@circuitcenter.ai",
+        "matthew@circuitcenter.ai",
+        "ronald@circuitcenter.ai",
+    ]
+
+    # Timezone the reminder emails render times in. Falls back to UTC if the
+    # container has no tzdata for the key (python:3.12-slim is Debian; the
+    # fallback is insurance, not an expectation) — a reminder that says the
+    # wrong time is worse than one that says "UTC" out loud.
+    CALENDAR_TIMEZONE: str = "America/New_York"
+
+    # How far BACK the reminder job looks (minutes). Windows are a lookback
+    # RANGE, not an instant, so a cron tick that runs late — or one that is
+    # missed entirely — still delivers. Must comfortably exceed the cron
+    # interval. Clamped per lead time inside the job so the hour-before window
+    # can never reach past an event's start (see app/jobs/send_reminders.py).
+    # 12 hours, not 30 minutes. The window only ever moves forward, so a
+    # day-before slot that passes while the box is down is never revisited by
+    # any later run — at 30 minutes, an hour of downtime silently dropped that
+    # reminder for good, with no ledger row and no log line to show for it.
+    # Twelve hours makes the day-before genuinely catch-up-able. It costs
+    # nothing when nothing is missed: the ledger's UNIQUE means a wider window
+    # re-examines rows it has already sent and sends none of them again.
+    # The hour-before is unaffected either way — the job clamps each window to
+    # its own lead time, so that one can never look back more than 60 minutes
+    # (you cannot send "in one hour" after the meeting has started).
+    CALENDAR_REMINDER_LOOKBACK_MINUTES: int = 720
+
+    # ── SMS reminders (app/services/sms.py) ─────────────────────────────────
+    # OFF by default and inert when off: with SMS_TOPIC_ARN unset the service
+    # sends nothing, raises nothing, and imports no AWS SDK. `notify_sms` on an
+    # event then silently does nothing while email keeps working — a calendar
+    # must not acquire a hard dependency on AWS credentials.
+    #
+    # The topic's SUBSCRIPTIONS are the recipient list; there is no phone
+    # number in this config. Region is parsed from the ARN unless overridden.
+    SMS_TOPIC_ARN: str | None = None
+    SMS_REGION: str | None = None
+
     # SMTP - when SMTP_HOST is unset, services/email.py runs in demo mode
     # (logs the email payload to stderr instead of sending). Lets local dev
     # work without exposing the prod mailbox password.
@@ -112,7 +174,9 @@ class Settings(BaseSettings):
     # submissions reach them; override via NOTIFY_RECIPIENTS env var.
     NOTIFY_RECIPIENTS: Annotated[list[str], NoDecode] = ["mc@matthew-chirichella.com"]
 
-    @field_validator("NOTIFY_RECIPIENTS", "MAIL_SYNC_MAILBOXES", mode="before")
+    @field_validator(
+        "NOTIFY_RECIPIENTS", "MAIL_SYNC_MAILBOXES", "CALENDAR_RECIPIENTS", mode="before"
+    )
     @classmethod
     def _split_csv(cls, v):
         """Accept either a JSON list OR a comma-separated string."""

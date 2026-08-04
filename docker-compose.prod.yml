@@ -100,6 +100,35 @@ services:
       # Settings.MAIL_SYNC_MAILBOXES — guarded by tests/test_mail_sync.py, and
       # an empty value would silently disable syncing for everyone.
       MAIL_SYNC_MAILBOXES: ${MAIL_SYNC_MAILBOXES:-anthony@circuitcenter.ai,daniel@circuitcenter.ai,matthew@circuitcenter.ai,ronald@circuitcenter.ai,no-reply@circuitcenter.ai}
+      # Shared calendar. CALENDAR_API_SECRET is the credential the Roundcube
+      # plugin on the MAIL box presents; it lives in /opt/circuits-com/.env
+      # here and /opt/circuits-mail/.env there, never in git. Fail-open is not
+      # a risk (an unset secret matches nothing, so the plugin is refused
+      # rather than admitted) but the calendar is then inert, so this is a
+      # deploy-time checklist item, not an optional one.
+      CALENDAR_API_SECRET: ${CALENDAR_API_SECRET:-}
+      CALENDAR_RECIPIENTS: ${CALENDAR_RECIPIENTS:-}
+      CALENDAR_TIMEZONE: ${CALENDAR_TIMEZONE:-America/New_York}
+      CALENDAR_REMINDER_LOOKBACK_MINUTES: ${CALENDAR_REMINDER_LOOKBACK_MINUTES:-720}
+      SMS_TOPIC_ARN: ${SMS_TOPIC_ARN:-}
+      SMS_REGION: ${SMS_REGION:-}
+
+  # The reminder loop inherits the prod SMTP relay and the log cap. Its env
+  # block is otherwise the base file's; only the values that differ in prod
+  # are repeated here, the same way the api service does it.
+  calendar-reminders:
+    logging: *default-logging
+    environment:
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-no-reply@circuitcenter.ai}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-no-reply@circuitcenter.ai}
+      CALENDAR_RECIPIENTS: ${CALENDAR_RECIPIENTS:-}
+      CALENDAR_TIMEZONE: ${CALENDAR_TIMEZONE:-America/New_York}
+      CALENDAR_REMINDER_LOOKBACK_MINUTES: ${CALENDAR_REMINDER_LOOKBACK_MINUTES:-720}
+      SMS_TOPIC_ARN: ${SMS_TOPIC_ARN:-}
+      SMS_REGION: ${SMS_REGION:-}
 
   frontend:
     logging: *default-logging

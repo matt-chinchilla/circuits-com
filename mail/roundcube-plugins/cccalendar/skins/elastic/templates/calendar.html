@@ -1,0 +1,56 @@
+<!--
+  Circuit Center shared calendar - month view.
+
+  WHY THIS FILE LIVES UNDER skins/elastic/ IN A PLUGIN NAMED cccalendar
+  --------------------------------------------------------------------
+  It is not a choice. rcmail_output_html::parse() resolves the template name
+  "cccalendar.calendar" by building, for every entry in the skin search stack,
+  the two candidate paths
+
+      plugins/<plugin>/<skin_path>/templates/<name>.html
+      <skin_path>/plugins/<plugin>/templates/<name>.html
+
+  and it explicitly SKIPS any candidate that does not contain the plugins
+  directory. There is no candidate of the form plugins/<plugin>/templates/,
+  so a template at the plugin root is never found. (Roundcube 1.6.11,
+  program/include/rcmail_output_html.php, the $plugin_skin_paths loop.)
+
+  Of the two skins in this deployment's stack, `elastic` is the one that is
+  ALWAYS present: circuitcenter declares "extends": "elastic" in its meta.json,
+  so skins/elastic stays in the search stack while circuitcenter is active, and
+  it is obviously there when a user switches to stock Elastic in Settings. One
+  file here therefore serves both skins; the same file under skins/circuitcenter
+  would 404 for anyone who switched. Every bundled Roundcube plugin that ships a
+  page does exactly this (see plugins/help/skins/elastic/templates/help.html).
+
+  The skinning lives in skins/circuitcenter/cccalendar.css instead, which is
+  where it belongs - that sheet is loaded explicitly by the plugin rather than
+  through local_skin_path(), for the reason noted at that call site.
+
+  WHAT THE INCLUDES RESOLVE TO
+  ----------------------------
+  includes/layout.html is searched across the whole stack, and Circuit Center
+  overrides it - so this page gets <html class="cc">, Elastic's compiled sheet,
+  and circuitcenter.css after it, exactly like every other page in the app.
+  Nothing here needs to know that. includes/menu.html is not overridden and
+  comes from Elastic, which is what renders the task rail this plugin's button
+  was added to.
+-->
+<roundcube:include file="includes/layout.html" />
+<roundcube:include file="includes/menu.html" />
+
+<h1 class="voice"><roundcube:label name="cccalendar.calendar" /></h1>
+
+<div id="layout-content" class="selected" role="main">
+	<div class="header">
+		<a class="button icon task-menu-button" href="#menu"><span class="inner"><roundcube:label name="menu" /></span></a>
+		<span class="header-title"><roundcube:object name="plugin.cccalendar_title" /></span>
+		<roundcube:object name="plugin.cccalendar_toolbar" />
+	</div>
+	<div class="scroller cccal-scroller">
+		<roundcube:object name="plugin.cccalendar_notice" />
+		<roundcube:object name="plugin.cccalendar_grid" />
+	</div>
+</div>
+
+<roundcube:include file="includes/footer.html" />

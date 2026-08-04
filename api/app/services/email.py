@@ -12,11 +12,14 @@ work without a real mailbox password.
 from __future__ import annotations
 
 import logging
+from datetime import UTC, datetime, tzinfo
 from email.message import EmailMessage
+from zoneinfo import ZoneInfo
 
 import aiosmtplib
 
 from app.config import settings
+from app.models.calendar_event import safe_meeting_url
 
 logger = logging.getLogger(__name__)
 
@@ -241,6 +244,108 @@ def _build_username_reminder(to_email: str, usernames: list[str]) -> EmailMessag
     msg["Subject"] = "Your Circuit Center username"
     msg.set_content(body)
     return msg
+
+
+# ── Calendar reminders (2026-08-04 shared calendar) ────────────────────────
+# Sent by app/jobs/send_reminders.py, not by a request. Addressed to the fixed
+# mailbox roster (settings.CALENDAR_RECIPIENTS), not to per-event attendees —
+# an attendees field is the obvious next step and is not needed to ship.
+
+
+def _event_timezone() -> tzinfo:
+    """The configured display timezone, falling back to UTC.
+
+    A reminder that states the WRONG time is worse than one that says "UTC" out
+    loud, so a missing tzdata entry degrades to UTC rather than guessing.
+    """
+    try:
+        return ZoneInfo(settings.CALENDAR_TIMEZONE)
+    except Exception:
+        logger.warning(
+            "[calendar] unknown CALENDAR_TIMEZONE %r — falling back to UTC",
+            settings.CALENDAR_TIMEZONE,
+        )
+        return UTC
+
+
+def _format_when(starts_at: datetime, ends_at: datetime, all_day: bool) -> str:
+    """Human "when" line, rendered in the configured timezone.
+
+    Inputs are aware-UTC (the job normalizes with
+    ``models.calendar_event.as_utc``); a naive value is read as UTC rather than
+    as the server's local clock, which is what every other datetime path in
+    this codebase does.
+    """
+    tz = _event_timezone()
+    start = (starts_at if starts_at.tzinfo else starts_at.replace(tzinfo=UTC)).astimezone(tz)
+    end = (ends_at if ends_at.tzinfo else ends_at.replace(tzinfo=UTC)).astimezone(tz)
+    if all_day:
+        return start.strftime("%A, %B %-d, %Y (all day)")
+    label = start.strftime("%A, %B %-d, %Y at %-I:%M %p")
+    if end.date() == start.date():
+        return f"{label} - {end.strftime('%-I:%M %p %Z')}"
+    return f"{label} {start.strftime('%Z')} - {end.strftime('%A, %B %-d at %-I:%M %p %Z')}"
+
+
+def format_event_when(starts_at: datetime, ends_at: datetime, *, all_day: bool = False) -> str:
+    """Public face of ``_format_when``, so the SMS channel can share the clock.
+
+    The two channels formatted the same event independently — this one through
+    CALENDAR_TIMEZONE, the SMS one hard-coded to UTC — and an event with both
+    switched on told you "2:00 PM EDT" in your inbox and "18:00 UTC" on your
+    phone. One formatter, one answer.
+    """
+    return _format_when(starts_at, ends_at, all_day)
+
+
+def _build_event_reminder(
+    to_emails: list[str],
+    *,
+    title: str,
+    starts_at: datetime,
+    ends_at: datetime,
+    all_day: bool = False,
+    location: str | None = None,
+    meeting_url: str | None = None,
+    notes: str | None = None,
+    lead_label: str = "soon",
+) -> EmailMessage:
+    """Compose one calendar reminder. Pure — returns the message, sends nothing.
+
+    ``meeting_url`` goes through ``safe_meeting_url`` even though the write
+    boundary already validated it and this body is plain text: a row written
+    before the validator existed (or by hand in psql) must not be able to put a
+    ``javascript:`` string in front of five people, and mail clients autolink.
+    """
+    lines = [
+        f"Reminder: {title}",
+        "",
+        f"When:  {_format_when(starts_at, ends_at, all_day)}",
+    ]
+    if location:
+        lines.append(f"Where: {location}")
+    link = safe_meeting_url(meeting_url)
+    if link:
+        lines.append(f"Join:  {link}")
+    if notes:
+        lines += ["", "Notes:", "---", notes, "---"]
+    lines += [
+        "",
+        "This is an automated reminder from the Circuit Center shared calendar.",
+        "",
+    ]
+
+    msg = EmailMessage()
+    msg["From"] = settings.SMTP_FROM
+    msg["To"] = ", ".join(to_emails)
+    msg["Subject"] = f"Reminder ({lead_label}): {title}"
+    msg.set_content("\n".join(lines))
+    return msg
+
+
+async def send_event_reminder(to_emails: list[str], **event) -> None:
+    """Email the roster one calendar reminder. Demo-mode aware."""
+    await _smtp_send(_build_event_reminder(to_emails, **event))
 
 
 async def send_password_reset(to_email: str, username: str, reset_url: str) -> None:
