@@ -63,5 +63,10 @@ $config['smtp_conn_options'] = $ssl_no_verify;
 //    keys from the candidate list outright. Neither key can leak into them.
 $config['skin_logo'] = [
     'circuitcenter:login' => 'skins/circuitcenter/images/logo.svg',
-    'circuitcenter:*'     => 'skins/circuitcenter/images/logo-badge.svg',
+    // Glyph-only since the skin went dark (D1 Instrument Dark). The badge
+    // variant's plate measures 1.03:1 on the new near-black rail header --
+    // an invisible rounded square -- and no surface in this palette gives it
+    // a usable fill. logo-badge.svg stays in the tree and becomes correct
+    // again the moment that header is light. See the note in logo-mark.svg.
+    'circuitcenter:*'     => 'skins/circuitcenter/images/logo-mark.svg',
 ];

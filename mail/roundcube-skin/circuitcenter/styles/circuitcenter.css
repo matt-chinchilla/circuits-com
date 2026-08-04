@@ -65,78 +65,117 @@
    .26 over that). Rail ratios are against the bench itself.
    --------------------------------------------------------------------------- */
 html.cc {
-	/* --- the bench (substrate, seen through and between the glass) ------- */
-	--cc-bench-hi:   #0e4a2d;  /* solder mask in light — brand $executive-blue register */
-	--cc-bench:      #093323;  /* mid bench                                              */
-	--cc-bench-deep: #051d13;  /* bench in shadow — rail, env gradient floor             */
+	/* --- the bench (substrate, seen through and between the glass) -------
+	   D1 "Instrument Dark". The bench is the LOGO's own near-black #1a1f23
+	   register rather than the old solder-mask green: chroma C* 2.5 instead
+	   of 19.9, because saturated color across a field this large is what
+	   tires the eye over an eight-hour session. */
+	--cc-bench-hi:   #171d21;  /* lifted bench — rail rows, hovered chrome   */
+	--cc-bench:      #0f1316;  /* the bench                                  */
+	--cc-bench-deep: #080b0d;  /* bench in shadow — rail, env gradient floor */
 
 	/* --- glass materials --------------------------------------------------
-	   Pane veil ADAPTED from the Perry recipe (high-opacity: dense text over
-	   a dark backdrop); button veil + both filters ADOPTED VERBATIM. */
-	--cc-pane-veil:  linear-gradient(rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.88));
+	   INVERTED from the light skin. Panes are now a dark wash that lands on
+	   #1b2227 over the bench, so the pane sits only 7.1 dL* above it — the
+	   halation that made the old skin harsh (74.5 dL*) is gone. The cost of
+	   that closeness is that the pane's FILL can no longer delineate it
+	   (1.16:1), so --cc-rim does the delineating at 2.01:1 on the bench.
+	   Button glass keeps the donor recipe's geometry with the veil flipped:
+	   a white veil at LOW alpha lifts a control off a dark pane the way a
+	   white veil at HIGH alpha sat one on a light pane. */
+	--cc-pane-veil:  linear-gradient(rgba(33, 41, 48, 0.94), rgba(28, 35, 40, 0.96));
 	--cc-glass-filter: saturate(180%) blur(20px);
-	--cc-btn-glass:  linear-gradient(rgba(255, 255, 255, 0.62), rgba(255, 255, 255, 0.30));
+	--cc-btn-glass:  linear-gradient(rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.06));
 	--cc-btn-glass-filter: blur(14px) saturate(170%);
-	--cc-pop-veil:   rgba(255, 255, 255, 0.96);   /* menus, dialogs — near-opaque */
-	--cc-strip:      rgba(255, 255, 255, 0.55);   /* toolbar band inside a pane   */
-	--cc-fill:       rgba(22, 40, 31, 0.07);      /* recessed channels: search, fields */
-	--cc-rim:        rgba(255, 255, 255, 0.55);   /* glass edge on the dark bench */
-	--cc-hair:       rgba(15, 44, 30, 0.14);      /* hairline on glass            */
-	--cc-hair-soft:  rgba(15, 44, 30, 0.09);      /* row separators               */
+	--cc-pop-veil:   rgba(37, 45, 51, 0.97);      /* menus, dialogs — near-opaque */
+	--cc-pane-solid: #1b2227;                     /* <=768px, where blur is dropped */
+	--cc-strip:      rgba(255, 255, 255, 0.05);   /* toolbar band inside a pane   */
+	--cc-fill:       rgba(0, 0, 0, 0.22);         /* recessed channels: search, fields */
+	--cc-rim:        rgba(255, 255, 255, 0.17);   /* glass edge — 2.01 on the bench */
+	--cc-hair:       rgba(255, 255, 255, 0.10);   /* hairline on glass            */
+	--cc-hair-soft:  rgba(255, 255, 255, 0.06);   /* row separators               */
 
 	/* --- ink (on glass) ---------------------------------------------------
-	   worst-pane / selected-row                                             */
-	--cc-ink:        #16281f;  /* primary text, unread subjects  12.09 / 11.15 */
-	--cc-ink-2:      #3a4f43;  /* read subjects, body copy        6.90 /  6.36 */
-	--cc-dim:        #4d5f54;  /* meta: from, date, size          5.33 /  4.91 */
+	   Measured against the WORST effective pane #1b2227 — the darker end of
+	   the veil composited over the bench with NO backdrop-filter lightening,
+	   i.e. the <=768px fallback. */
+	--cc-ink:        #dde4e8;  /* primary text, unread subjects        12.52 */
+	--cc-ink-2:      #a9b4ba;  /* read subjects, body copy              7.61 */
+	--cc-dim:        #87939a;  /* meta: from, date, size                5.11 */
 
-	/* --- signal ------------------------------------------------------------ */
-	--cc-enig:       #e8c252;  /* ENIG gold, bright — glows, tints, rail labels (10.30 on rail),
-	                              and the rim + legend of the blackened pad   (9.91 on --cc-pad) */
-	--cc-enig-hi:    #f0d36e;  /* ENIG under the hover light — the pad's rim and legend brighten
-	                              together, which is the hover tell on a black face (10.02 on
-	                              --cc-pad-lit; 1.26 against resting --cc-enig)                  */
-	--cc-legend:     #6d5211;  /* gold as TEXT on glass — silkscreen legends  5.73 / 5.28 */
-	--cc-led:        #96690a;  /* unread LED dot (non-text)       3.80 / 3.50 */
-	--cc-link:       #1a680f;  /* links — phosphor at text weight 5.41 / 4.99 (6.93 on white) */
-	--cc-phosphor:   #44bd13;  /* oscilloscope phosphor — GLOW ONLY, never a sole indicator */
-	--cc-flag:       #a42e22;  /* flagged, errors                 5.48 / 5.06 */
+	/* --- button legends ------------------------------------------------------
+	   Controls are lettered in PURE WHITE, not the --cc-ink grey that body copy
+	   uses, with a faint bloom under the glyphs. Reading copy and operating a
+	   control are different jobs: --cc-ink is deliberately held below white so
+	   that paragraphs of it are not glaring over a long session, but a button
+	   legend is three words you aim at, and at that size the same grey reads as
+	   dull rather than restful. White puts the label at 14.05:1 on the glass
+	   and separates control from prose.
+
+	   The bloom is 4px at 0.30 — enough to suggest a lit legend on a dark
+	   instrument, small enough that it never smears the glyph edges. It is a
+	   STATIC text-shadow: never animated, and not a filter, per the repo's
+	   standing rule against animated drop-shadows and compositor promotion. */
+	--cc-btn-ink:    #ffffff;
+	--cc-btn-glow:   0 0 4px rgba(255, 255, 255, 0.30);
+
+	/* --- signal ------------------------------------------------------------
+	   GREEN is now the working accent and gold is reduced to trim. The pad's
+	   rim and legend moved from gold to phosphor (the owner's call), and once
+	   green carries the primary action it has to carry the rest of the accent
+	   family too, or the interface speaks two colors for one idea. */
+	--cc-plate:      #44bd13;  /* pad rim + legend — 7.40 on the pad face, 6.54 vs pane */
+	--cc-plate-hi:   #63d62f;  /* the rim and legend brighten together on hover        */
+	--cc-enig:       #e8c252;  /* ENIG gold — the single gold source            9.40 */
+	--cc-enig-hi:    #f0d36e;  /* gold under the hover light                         */
+	--cc-legend:     var(--cc-enig);  /* silkscreen legends — gold's one remaining job */
+	--cc-led:        #44bd13;  /* unread LED dot (non-text)                     6.54 */
+	--cc-link:       #6ee03c;  /* links — phosphor at text weight               9.50 */
+	--cc-phosphor:   #44bd13;  /* oscilloscope phosphor — glow                       */
+	--cc-flag:       #ff8378;  /* flagged, errors — light-on-dark now           6.72 */
 
 	/* --- the pad ------------------------------------------------------------
-	   The filled surfaces — the one primary action per screen, and the unread
-	   counts that have always shared its material — are BLACKENED plating: a
-	   black face carrying a gold rim and a gold legend, with the gold cast left
-	   underneath so the pad still reads as lit. Ratios are the pad's LIGHTEST
-	   point (the top of its top-lit gradient), which is the worst case for
-	   figure/ground, against the worst pane rgb(225,228,227):
+	   Still one filled primary per screen, still a black face. What changed is
+	   the rim and legend: phosphor green, not gold.
 
-	     --cc-pad vs worst pane      13.23   (the gold pad it replaces: 1.46)
-	     --cc-pad vs porcelain <=768 15.45   (the gold pad it replaces: 1.71)
-	     --cc-enig legend on the pad  9.91
-	     #fff switch knob on the pad 16.95
+	   The black face CANNOT carry this control on a dark pane — #11161a is
+	   1.17:1 against #1b2227, invisible as a shape. That is the opposite of
+	   the light skin, where the same black pad read at 16.79:1 by silhouette
+	   alone. So here the RIM is load-bearing, not decoration:
 
-	   Note what those first two lines say: a FILLED GOLD pad never met 3:1
-	   against the glass it sat on — it was legible by its legend, not by its
-	   shape. The black pad is the first version of this control whose SILHOUETTE
-	   carries the contrast.                                                    */
-	--cc-pad:        #131f1a;  /* pad face, top-lit end                                  */
-	--cc-pad-deep:   #060d0a;  /* pad face, shadow end — and the 1px outer lip (15.32)    */
-	--cc-pad-lit:    #22332c;  /* hover: the pad lifts into the light        (10.39 pane) */
-	--cc-pad-lit-deep: #0c1611;
+	     --cc-plate rim vs pane        6.54   (the silhouette)
+	     --cc-plate legend on the face 7.40
+	     --cc-plate legend on lit face 5.85
+	     --cc-plate rim vs lit face    5.85
+
+	   Delete the rim and the primary action disappears. */
+	--cc-pad:        #1b2328;  /* pad face, top-lit end                       */
+	--cc-pad-deep:   #11161a;  /* pad face, shadow end                        */
+	--cc-pad-lit:    #222b31;  /* hover: the pad lifts into the light         */
+	--cc-pad-lit-deep: #171e23;
 
 	/* --- structure ----------------------------------------------------------- */
-	--cc-edge:       #64756a;  /* form-control borders            3.36 on field fill (>=3 UI) */
-	--cc-focus:      #8a6a1c;  /* focus ring stroke               3.95 pane / 3.49 rail       */
-	--cc-halo:       rgba(232, 194, 82, 0.38);
-	--cc-tint-select: rgba(232, 194, 82, 0.26);  /* selected rows */
-	--cc-tint-hover:  rgba(22, 40, 31, 0.05);
-	--cc-rail-silk:  #d9e6de;  /* rail labels                    13.70 on bench-deep */
-	--cc-rail-dim:   #92b0a2;  /*                                 7.51 on bench-deep */
+	--cc-edge:       #6c787e;  /* form-control borders     3.83 on field fill (>=3 UI) */
+	--cc-focus:      #8fdc63;  /* focus ring stroke        9.65 pane / 11.19 bench     */
+	--cc-halo:       rgba(68, 189, 19, 0.34);
+	--cc-tint-select: rgba(68, 189, 19, 0.16);   /* selected rows */
+	--cc-tint-hover:  rgba(255, 255, 255, 0.05);
+	--cc-rail-silk:  #c8d3d8;  /* rail labels                    12.94 on bench-deep */
+	--cc-rail-dim:   #93a1a8;  /*                                 7.43 on bench-deep */
 
-	/* --- elevation — ADOPTED VERBATIM (tight contact + deep ambient) ------- */
-	--cc-shadow-s: 0 1px 2px rgba(0, 0, 0, 0.05), 0 2px 8px rgba(0, 0, 0, 0.04);
-	--cc-shadow-m: 0 1px 2px rgba(0, 0, 0, 0.06), 0 10px 28px -10px rgba(0, 0, 0, 0.16);
-	--cc-shadow-l: 0 2px 6px rgba(0, 0, 0, 0.08), 0 28px 80px -20px rgba(0, 0, 0, 0.35);
+	/* --- status tints — the four Roundcube message states -------------------
+	   Elastic ships pale pastels for these. On a dark pane a pale fill is a
+	   flashbang, so each is re-cut as a dark tint of the same hue and the ink
+	   stays --cc-ink. */
+	--cc-st-info:    #1c2a33;
+	--cc-st-ok:      #16291a;
+	--cc-st-warn:    #2b2517;
+	--cc-st-err:     #2e1d1b;
+
+	/* --- elevation — deeper on a dark ground, where a soft shadow vanishes -- */
+	--cc-shadow-s: 0 1px 2px rgba(0, 0, 0, 0.30), 0 2px 8px rgba(0, 0, 0, 0.24);
+	--cc-shadow-m: 0 1px 2px rgba(0, 0, 0, 0.36), 0 10px 28px -10px rgba(0, 0, 0, 0.55);
+	--cc-shadow-l: 0 2px 6px rgba(0, 0, 0, 0.42), 0 28px 80px -20px rgba(0, 0, 0, 0.70);
 
 	/* --- motion — ADOPTED VERBATIM (two easings do everything) ------------- */
 	--cc-ease-out:    cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -154,13 +193,17 @@ html.cc {
 	--cc-w-btn: 520;  --cc-w-control: 560;  --cc-w-emphasis: 590;  --cc-w-heading: 650;
 
 	/* 24px PCB grid on the bench — the contact page's motif. Painted once,
-	   never animated. */
+	   never animated. Slightly stronger than the light skin's, because a
+	   0.05 green over a near-black bench is invisible. */
 	--cc-grid:
-		linear-gradient(rgba(68, 189, 19, 0.05) 1px, transparent 1px),
-		linear-gradient(90deg, rgba(68, 189, 19, 0.05) 1px, transparent 1px);
+		linear-gradient(rgba(68, 189, 19, 0.07) 1px, transparent 1px),
+		linear-gradient(90deg, rgba(68, 189, 19, 0.07) 1px, transparent 1px);
 
-	color-scheme: light;
-	scrollbar-color: rgba(22, 40, 31, 0.30) transparent;
+	/* Tells the browser to render native controls, scrollbars and form
+	   widgets dark. Without this the date pickers and select popups stay
+	   light and there is no CSS that can reach them. */
+	color-scheme: dark;
+	scrollbar-color: rgba(255, 255, 255, 0.24) transparent;
 }
 
 
@@ -185,9 +228,9 @@ html.cc body {
 
 /* Framed documents (message preview, compose editor chrome) cannot see the
    bench through the iframe boundary — glass would composite against
-   nothing. Inside frames the surface is opaque porcelain instead. */
+   nothing. Inside frames the surface is the opaque pane instead. */
 html.cc.iframe body {
-	background-color: #f2f5f3;
+	background-color: var(--cc-pane-solid);
 	background-image: none;
 }
 
@@ -208,12 +251,14 @@ html.cc:not(.touch) ::-webkit-scrollbar-thumb {
 }
 
 html.cc:not(.touch) ::-webkit-scrollbar-thumb:hover {
-	background-color: rgba(22, 40, 31, 0.42);
+	background-color: rgba(255, 255, 255, 0.38);
 }
 
+/* Selection is phosphor now, not gold — green is the accent that carries the
+   primary action, so it carries the highlight too. 7.63:1 for the text. */
 html.cc ::selection {
-	background: #f0d36e;
-	color: #241a04;
+	background: #44bd13;
+	color: #0b1408;
 }
 
 /* One focus treatment everywhere: the gold ring. 3.95:1 on glass, 3.49:1 on
@@ -258,7 +303,7 @@ html.cc #layout-content {
 	-webkit-backdrop-filter: var(--cc-glass-filter);
 	backdrop-filter: var(--cc-glass-filter);
 	box-shadow:
-		inset 0 1px 0 rgba(255, 255, 255, 0.75),
+		inset 0 1px 0 rgba(255, 255, 255, 0.2),
 		var(--cc-shadow-m);
 }
 
@@ -325,8 +370,8 @@ html.cc #layout-menu {
 	}
 
 	html.cc #taskmenu a:hover {
-		color: var(--cc-enig);
-		background: #0e3a26;
+		color: var(--cc-plate);
+		background: var(--cc-bench-hi);
 	}
 
 	/* Lit finger + phosphor trace stub. background-COLOR set explicitly:
@@ -334,12 +379,12 @@ html.cc #layout-menu {
 	   would leave that sitting under the glow. */
 	html.cc #taskmenu a.selected,
 	html.cc #taskmenu a.selected:hover {
-		color: var(--cc-enig);
-		background-color: #0e3a26;
+		color: var(--cc-plate);
+		background-color: var(--cc-bench-hi);
 		background-image: linear-gradient(to right, rgba(68, 189, 19, 0.22), transparent 72%);
 		box-shadow:
-			inset 6px 0 0 0 var(--cc-enig),
-			inset 8px 0 16px -6px var(--cc-enig);
+			inset 6px 0 0 0 var(--cc-plate),
+			inset 8px 0 16px -6px var(--cc-plate);
 	}
 
 	html.cc #taskmenu .action-buttons a {
@@ -347,13 +392,13 @@ html.cc #layout-menu {
 	}
 
 	html.cc #taskmenu .action-buttons a:hover {
-		color: var(--cc-enig);
-		background: #0e3a26;
+		color: var(--cc-plate);
+		background: var(--cc-bench-hi);
 	}
 
 	html.cc #taskmenu .special-buttons {
 		background-color: var(--cc-bench-deep);
-		border-top: 1px solid rgba(146, 176, 162, 0.18);
+		border-top: 1px solid rgba(255, 255, 255, 0.09);
 	}
 
 	html.cc #taskmenu a.logout,
@@ -365,7 +410,7 @@ html.cc #layout-menu {
 /* Phone: the rail is a popover list. Porcelain, plainly readable — no
    fingers; a card edge on a phone would be decoration without a job. */
 html.cc.layout-phone #layout-menu {
-	background-color: #f2f5f3;
+	background-color: var(--cc-pane-solid);
 }
 
 html.cc.layout-phone #taskmenu a {
@@ -459,9 +504,9 @@ html.cc .header a.button.icon:not(.disabled):hover {
 	background: var(--cc-btn-glass);
 	border-radius: var(--cc-r-btn);
 	box-shadow:
-		inset 0 1px 0 rgba(255, 255, 255, 0.85),
-		0 0 0 1px rgba(15, 44, 30, 0.10),
-		0 2px 6px -2px rgba(5, 29, 19, 0.18);
+		inset 0 1px 0 rgba(255, 255, 255, 0.22),
+		0 0 0 1px rgba(255, 255, 255, 0.06),
+		0 2px 6px -2px rgba(0, 0, 0, 0.35);
 }
 
 /* Search — a recessed probe channel seated in the glass (the Perry
@@ -471,7 +516,7 @@ html.cc .searchbar {
 	background: var(--cc-fill);
 	border: 1px solid transparent;
 	border-radius: var(--cc-r-input);
-	box-shadow: inset 0 1px 2px rgba(5, 29, 19, 0.06);
+	box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.05);
 }
 
 html.cc .searchbar input {
@@ -560,23 +605,45 @@ html.cc:not(.touch) .listing.focus:not(.withselection) tbody tr.focused > td.sel
 	border-left-color: var(--cc-focus);
 }
 
+/* --- folder labels ------------------------------------------------------
+   Elastic colours a `.recent` folder with its own blue (measured
+   rgb(0,140,208) falling straight through this skin), which is both off the
+   three-colour palette and the ONLY blue in the interface. The skin styled
+   the count but never the label, so the bug only appeared once the pane went
+   dark and the blue stopped being drowned out by a white background.
+
+   State is carried by WEIGHT and ink level, the way the message list carries
+   it — hue is never the sole signal here. */
+html.cc .folderlist li.mailbox > a {
+	color: var(--cc-ink-2);
+}
+
+html.cc .folderlist li.mailbox.unread > a,
+html.cc .folderlist li.mailbox.recent > a,
+html.cc .folderlist li.mailbox.selected > a {
+	color: var(--cc-ink);
+	font-weight: var(--cc-w-emphasis);
+}
+
 /* --- folder tree: unread counts are blackened pads -----------------------
-   Same plating as the primary action, at chip scale: black face, 1px gold rim
-   set one pixel in from a black lip, gold numerals. 9.91:1 for the count,
-   13.23:1 for the chip against the pane (it was 7.74 / 1.46 on gold). */
+   Same plating as the primary action, at chip scale: black face, 1px phosphor
+   rim set one pixel in from a black lip, phosphor numerals. The chip is
+   1.03:1 against the pane by fill, exactly like the pad, so the rim is what
+   makes it a chip: 7.40:1 for the numerals on the face, 6.54:1 for the rim
+   against the pane. */
 html.cc .folderlist li.mailbox .unreadcount {
 	font-family: var(--cc-mono);
 	font-size: 0.7rem;
 	font-weight: 600;
 	font-variant-numeric: tabular-nums;
 	letter-spacing: 0.02em;
-	color: var(--cc-enig);  /* 9.91:1 on the pad */
+	color: var(--cc-plate);  /* 7.40:1 on the pad */
 	background: linear-gradient(var(--cc-pad), var(--cc-pad-deep));
 	border-radius: var(--cc-r-pill);
 	box-shadow:
 		inset 0 0 0 1px var(--cc-pad-deep),
-		inset 0 0 0 2px var(--cc-enig),
-		0 1px 2px rgba(5, 29, 19, 0.25);
+		inset 0 0 0 2px var(--cc-plate),
+		0 1px 2px rgba(0, 0, 0, 0.42);
 }
 
 /* Fresh arrival — the power LED.
@@ -593,11 +660,11 @@ html.cc .folderlist li.mailbox .unreadcount {
    is not. */
 html.cc .folderlist li.mailbox.recent > a .unreadcount {
 	position: relative;
-	color: var(--cc-enig);
+	color: var(--cc-plate);
 	box-shadow:
 		inset 0 0 0 1px var(--cc-pad-deep),
-		inset 0 0 0 2px var(--cc-enig),
-		0 1px 2px rgba(5, 29, 19, 0.25);
+		inset 0 0 0 2px var(--cc-plate),
+		0 1px 2px rgba(0, 0, 0, 0.42);
 }
 
 html.cc .folderlist li.mailbox.recent > a .unreadcount::after {
@@ -662,7 +729,7 @@ html.cc .messagelist td.subject span.msgicon.status.unread:before {
 }
 
 html.cc .messagelist td.subject span.msgicon.status:before {
-	color: rgba(22, 40, 31, 0.30);
+	color: rgba(255, 255, 255, 0.24);
 }
 
 html.cc .messagelist span.attachment span,
@@ -748,7 +815,7 @@ html.cc .quota-widget .value.warning {
 /* ---------------------------------------------------------------------------
    7. THE READING PANE — a datasheet on the bench
    Long threads are read here for hours, so this is where the theme steps
-   back: the message header is a raised porcelain coupon, plain-text bodies
+   back: the message header is a raised coupon, plain-text bodies
    get real reading measure, and HTML mail keeps its white sheet — mounted,
    not recoloured.
    --------------------------------------------------------------------------- */
@@ -757,7 +824,7 @@ html.cc #message-header {
 	border: 1px solid var(--cc-hair-soft);
 	border-radius: var(--cc-r-card);
 	background: rgba(255, 255, 255, 0.72);
-	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85), var(--cc-shadow-s);
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), var(--cc-shadow-s);
 }
 
 html.cc #message-header > .subject {
@@ -815,7 +882,7 @@ html.cc .message-part span.sig {
    measured >=5:1 on the quote fill. */
 html.cc .message-part blockquote {
 	color: var(--cc-link);
-	background-color: rgba(22, 40, 31, 0.04);
+	background-color: rgba(255, 255, 255, 0.04);
 	border-left-color: var(--cc-link);
 	border-right-color: var(--cc-link);
 }
@@ -844,7 +911,7 @@ html.cc .message-part blockquote span.blockquote-link {
    so it reads as a datasheet page laid on the glass. */
 html.cc .message-htmlpart {
 	border-radius: var(--cc-r-card);
-	border: 1px solid rgba(15, 44, 30, 0.12);
+	border: 1px solid rgba(255, 255, 255, 0.08);
 	box-shadow: var(--cc-shadow-m);
 	overflow: hidden;
 	background: #fff;
@@ -881,8 +948,11 @@ html.cc .message-part a {
 	color: var(--cc-link);
 }
 
+/* On a dark ground "hover" has to mean BRIGHTER. The light skin darkened the
+   link here; doing that now would send it toward the pane and read as
+   disabled. 9.95:1, one step up from the resting link's 9.50:1. */
 html.cc a:hover {
-	color: #114d09;
+	color: #8fe05a;
 }
 
 
@@ -906,7 +976,7 @@ html.cc textarea.form-control {
 	background-image: linear-gradient(var(--cc-fill), var(--cc-fill));
 	border-color: var(--cc-edge);
 	border-radius: var(--cc-r-input);
-	box-shadow: inset 0 1px 2px rgba(5, 29, 19, 0.06);
+	box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.05);
 	font-family: var(--cc-sans);
 }
 
@@ -925,7 +995,7 @@ html.cc .form-control::placeholder {
 html.cc .form-control:focus,
 html.cc .custom-select:focus {
 	color: var(--cc-ink);
-	background-image: linear-gradient(rgba(22, 40, 31, 0.04), rgba(22, 40, 31, 0.04));
+	background-image: linear-gradient(rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.04));
 	border-color: var(--cc-focus);
 	box-shadow: 0 0 0 3px var(--cc-halo);
 }
@@ -934,7 +1004,7 @@ html.cc .form-control:disabled,
 html.cc input:disabled,
 html.cc select:disabled {
 	color: var(--cc-dim);
-	background-image: linear-gradient(rgba(22, 40, 31, 0.03), rgba(22, 40, 31, 0.03));
+	background-image: linear-gradient(rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.03));
 }
 
 html.cc .form-control-plaintext {
@@ -966,7 +1036,7 @@ html.cc .recipient-input li.recipient {
 	background: rgba(255, 255, 255, 0.85);
 	border: 1px solid var(--cc-hair);
 	border-radius: 6px;
-	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 1px 2px rgba(5, 29, 19, 0.10);
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.23), 0 1px 2px rgba(255, 255, 255, 0.06);
 }
 
 html.cc .recipient-input li.recipient a.button.icon.remove {
@@ -1012,20 +1082,21 @@ html.cc .hint {
    compresses. Transform + box-shadow only — compositor-friendly, no
    will-change, released the moment the interaction ends. */
 html.cc .btn {
-	color: var(--cc-ink);
+	color: var(--cc-btn-ink);
+	text-shadow: var(--cc-btn-glow);
 	font-family: var(--cc-sans);
 	font-weight: var(--cc-w-btn);
 	background: var(--cc-btn-glass);
 	-webkit-backdrop-filter: var(--cc-btn-glass-filter);
 	backdrop-filter: var(--cc-btn-glass-filter);
-	border: 1px solid rgba(15, 44, 30, 0.16);
+	border: 1px solid rgba(255, 255, 255, 0.10);
 	border-radius: var(--cc-r-btn);
 	box-shadow:
-		inset 0 0 0 1px rgba(255, 255, 255, 0.38),
-		inset 0 1px 0 rgba(255, 255, 255, 0.85),
+		inset 0 0 0 1px rgba(255, 255, 255, 0.1),
+		inset 0 1px 0 rgba(255, 255, 255, 0.22),
 		inset 0 -1px 1px rgba(0, 0, 0, 0.04),
-		0 1px 2px rgba(5, 29, 19, 0.10),
-		0 4px 12px -6px rgba(5, 29, 19, 0.18);
+		0 1px 2px rgba(0, 0, 0, 0.21),
+		0 4px 12px -6px rgba(0, 0, 0, 0.35);
 	transition:
 		transform 0.18s var(--cc-ease-spring),
 		box-shadow 0.18s var(--cc-ease-out),
@@ -1035,19 +1106,19 @@ html.cc .btn {
 }
 
 html.cc .btn:hover:not(:disabled) {
-	color: var(--cc-ink);
+	color: var(--cc-btn-ink);
 	transform: translateY(-1px);
 	box-shadow:
-		inset 0 0 0 1px rgba(255, 255, 255, 0.42),
-		inset 0 1px 0 rgba(255, 255, 255, 0.9),
+		inset 0 0 0 1px rgba(255, 255, 255, 0.11),
+		inset 0 1px 0 rgba(255, 255, 255, 0.23),
 		inset 0 -1px 1px rgba(0, 0, 0, 0.05),
-		0 2px 4px rgba(5, 29, 19, 0.12),
-		0 10px 22px -8px rgba(5, 29, 19, 0.26);
+		0 2px 4px rgba(0, 0, 0, 0.25),
+		0 10px 22px -8px rgba(0, 0, 0, 0.42);
 }
 
 html.cc .btn:active {
 	transform: scale(0.97);
-	box-shadow: inset 0 1px 3px rgba(5, 29, 19, 0.14);
+	box-shadow: inset 0 1px 3px rgba(255, 255, 255, 0.08);
 }
 
 html.cc .btn:disabled {
@@ -1059,7 +1130,7 @@ html.cc .btn:disabled {
    ---------------------------------------------------------------------------
    WHY THE RIM IS INSET RATHER THAN THE OUTER EDGE. A gold hairline sitting
    directly against the glass measures 1.34:1 on the worst pane and 1.56:1 on
-   the <=768px porcelain — it does not exist as an edge, so an outline drawn
+   the <=768px opaque pane — it does not exist as an edge, so an outline drawn
    there would be a decoration that reads on a bench mockup and vanishes in the
    product. No gold can fix that: the darkest one this palette owns
    (--cc-focus #8a6a1c) only reaches 3.94:1 and stops looking like gold.
@@ -1079,35 +1150,36 @@ html.cc .btn:disabled {
    the pad did not stop being lit, it stopped being made of light. */
 html.cc .btn-primary,
 html.cc .btn.mainaction {
-	color: var(--cc-enig);
+	color: var(--cc-plate);
 	font-weight: var(--cc-w-emphasis);
 	background: linear-gradient(var(--cc-pad), var(--cc-pad-deep));
 	-webkit-backdrop-filter: none;
 	backdrop-filter: none;
 	border-color: var(--cc-pad-deep);
 	box-shadow:
-		inset 0 0 0 1px var(--cc-enig),
+		inset 0 0 0 1px var(--cc-plate),
 		inset 0 2px 3px -2px rgba(255, 255, 255, 0.16),
-		0 1px 2px rgba(5, 29, 19, 0.28),
-		0 6px 18px -5px rgba(232, 194, 82, 0.55);
+		0 1px 2px rgba(0, 0, 0, 0.46),
+		0 6px 18px -5px rgba(68, 189, 19, 0.50);
 }
 
 html.cc .btn-primary:hover:not(:disabled),
 html.cc .btn.mainaction:hover:not(:disabled) {
-	color: var(--cc-enig-hi);
+	color: var(--cc-plate-hi);
 	background: linear-gradient(var(--cc-pad-lit), var(--cc-pad-lit-deep));
 	transform: translateY(-1px);
 	box-shadow:
-		inset 0 0 0 1px var(--cc-enig-hi),
+		inset 0 0 0 1px var(--cc-plate-hi),
 		inset 0 2px 3px -2px rgba(255, 255, 255, 0.20),
-		0 2px 4px rgba(5, 29, 19, 0.28),
-		0 12px 26px -7px rgba(232, 194, 82, 0.65);
+		0 2px 4px rgba(0, 0, 0, 0.46),
+		0 12px 26px -7px rgba(68, 189, 19, 0.60);
 }
 
 html.cc .btn-secondary {
-	color: var(--cc-ink);
+	color: var(--cc-btn-ink);
+	text-shadow: var(--cc-btn-glow);
 	background: var(--cc-btn-glass);
-	border-color: rgba(15, 44, 30, 0.16);
+	border-color: rgba(255, 255, 255, 0.10);
 }
 
 html.cc .btn-secondary:hover:not(:disabled) {
@@ -1136,13 +1208,13 @@ html.cc .btn-danger:hover:not(:disabled) {
    here, so the black lip is the first inset ring and the gold is the second —
    the two-shadow form of the same construction. */
 html.cc .floating-action-buttons a.button {
-	color: var(--cc-enig);
+	color: var(--cc-plate);
 	background: linear-gradient(var(--cc-pad), var(--cc-pad-deep));
 	box-shadow:
 		inset 0 0 0 1px var(--cc-pad-deep),
-		inset 0 0 0 2px var(--cc-enig),
+		inset 0 0 0 2px var(--cc-plate),
 		var(--cc-shadow-m),
-		0 6px 18px -5px rgba(232, 194, 82, 0.55);
+		0 6px 18px -5px rgba(68, 189, 19, 0.50);
 }
 
 html.cc .custom-switch .custom-control-label::before {
@@ -1157,12 +1229,12 @@ html.cc .custom-switch .custom-control-label::before {
 html.cc .custom-control-input:checked ~ .custom-control-label::before {
 	background: linear-gradient(var(--cc-pad), var(--cc-pad-deep));
 	border-color: var(--cc-pad-deep);
-	box-shadow: inset 0 0 0 1px var(--cc-enig);
+	box-shadow: inset 0 0 0 1px var(--cc-plate);
 }
 
 html.cc .custom-switch .custom-control-label::after {
 	background-color: #fff;
-	box-shadow: 0 1px 2px rgba(5, 29, 19, 0.3);
+	box-shadow: 0 1px 2px rgba(255, 255, 255, 0.14);
 }
 
 
@@ -1209,7 +1281,8 @@ html.cc .custom-switch .custom-control-label::after {
 html.cc .menu.toolbar a {
 	position: relative;
 	isolation: isolate;
-	color: var(--cc-ink-2);
+	color: var(--cc-btn-ink);
+	text-shadow: var(--cc-btn-glow);
 	font-weight: var(--cc-w-control);
 	transition:
 		transform 0.18s var(--cc-ease-spring),
@@ -1224,12 +1297,12 @@ html.cc .menu.toolbar a::after {
 	border-radius: var(--cc-r-btn);
 	background: var(--cc-btn-glass);
 	box-shadow:
-		inset 0 0 0 1px rgba(255, 255, 255, 0.38),
-		inset 0 1px 0 rgba(255, 255, 255, 0.85),
+		inset 0 0 0 1px rgba(255, 255, 255, 0.1),
+		inset 0 1px 0 rgba(255, 255, 255, 0.22),
 		inset 0 -1px 1px rgba(0, 0, 0, 0.04),
-		0 0 0 1px rgba(15, 44, 30, 0.10),
-		0 1px 2px rgba(5, 29, 19, 0.10),
-		0 4px 12px -6px rgba(5, 29, 19, 0.18);
+		0 0 0 1px rgba(255, 255, 255, 0.06),
+		0 1px 2px rgba(0, 0, 0, 0.21),
+		0 4px 12px -6px rgba(0, 0, 0, 0.35);
 	transition: box-shadow 0.18s var(--cc-ease-out);
 }
 
@@ -1242,12 +1315,12 @@ html.cc .menu.toolbar a:not(.disabled):focus-visible {
 html.cc .menu.toolbar a:not(.disabled):hover::after,
 html.cc .menu.toolbar a:not(.disabled):focus-visible::after {
 	box-shadow:
-		inset 0 0 0 1px rgba(255, 255, 255, 0.42),
-		inset 0 1px 0 rgba(255, 255, 255, 0.90),
+		inset 0 0 0 1px rgba(255, 255, 255, 0.11),
+		inset 0 1px 0 rgba(255, 255, 255, 0.23),
 		inset 0 -1px 1px rgba(0, 0, 0, 0.05),
-		0 0 0 1px rgba(15, 44, 30, 0.12),
-		0 2px 4px rgba(5, 29, 19, 0.12),
-		0 10px 22px -8px rgba(5, 29, 19, 0.26);
+		0 0 0 1px rgba(255, 255, 255, 0.08),
+		0 2px 4px rgba(0, 0, 0, 0.25),
+		0 10px 22px -8px rgba(0, 0, 0, 0.42);
 }
 
 html.cc .menu.toolbar a:not(.disabled):active {
@@ -1256,8 +1329,8 @@ html.cc .menu.toolbar a:not(.disabled):active {
 
 html.cc .menu.toolbar a:not(.disabled):active::after {
 	box-shadow:
-		inset 0 1px 3px rgba(5, 29, 19, 0.14),
-		0 0 0 1px rgba(15, 44, 30, 0.12);
+		inset 0 1px 3px rgba(255, 255, 255, 0.08),
+		0 0 0 1px rgba(255, 255, 255, 0.08);
 }
 
 /* Availability IS the material. A disabled action has no pill at all, so the
@@ -1272,8 +1345,8 @@ html.cc .menu.toolbar a.disabled::after {
 html.cc .menu.toolbar a.selected::after {
 	background: var(--cc-fill);
 	box-shadow:
-		inset 0 1px 2px rgba(5, 29, 19, 0.10),
-		0 0 0 1px rgba(15, 44, 30, 0.10);
+		inset 0 1px 2px rgba(255, 255, 255, 0.06),
+		0 0 0 1px rgba(255, 255, 255, 0.06);
 }
 
 /* Reply all and Forward are split controls — an action plus a chevron, which
@@ -1301,12 +1374,12 @@ html.cc .menu.toolbar .dropbutton::after {
 	border-radius: var(--cc-r-btn);
 	background: var(--cc-btn-glass);
 	box-shadow:
-		inset 0 0 0 1px rgba(255, 255, 255, 0.38),
-		inset 0 1px 0 rgba(255, 255, 255, 0.85),
+		inset 0 0 0 1px rgba(255, 255, 255, 0.1),
+		inset 0 1px 0 rgba(255, 255, 255, 0.22),
 		inset 0 -1px 1px rgba(0, 0, 0, 0.04),
-		0 0 0 1px rgba(15, 44, 30, 0.10),
-		0 1px 2px rgba(5, 29, 19, 0.10),
-		0 4px 12px -6px rgba(5, 29, 19, 0.18);
+		0 0 0 1px rgba(255, 255, 255, 0.06),
+		0 1px 2px rgba(0, 0, 0, 0.21),
+		0 4px 12px -6px rgba(0, 0, 0, 0.35);
 	transition: box-shadow 0.18s var(--cc-ease-out);
 }
 
@@ -1316,12 +1389,12 @@ html.cc .menu.toolbar .dropbutton:not(.disabled):hover {
 
 html.cc .menu.toolbar .dropbutton:not(.disabled):hover::after {
 	box-shadow:
-		inset 0 0 0 1px rgba(255, 255, 255, 0.42),
-		inset 0 1px 0 rgba(255, 255, 255, 0.90),
+		inset 0 0 0 1px rgba(255, 255, 255, 0.11),
+		inset 0 1px 0 rgba(255, 255, 255, 0.23),
 		inset 0 -1px 1px rgba(0, 0, 0, 0.05),
-		0 0 0 1px rgba(15, 44, 30, 0.12),
-		0 2px 4px rgba(5, 29, 19, 0.12),
-		0 10px 22px -8px rgba(5, 29, 19, 0.26);
+		0 0 0 1px rgba(255, 255, 255, 0.08),
+		0 2px 4px rgba(0, 0, 0, 0.25),
+		0 10px 22px -8px rgba(0, 0, 0, 0.42);
 }
 
 /* A split control whose action is unavailable loses its pill too, matching
@@ -1355,7 +1428,7 @@ html.cc .popover .menu.toolbar a::after {
    glass ones. It is the only dark object in that row: 15.53:1 clear of its
    neighbours, where the gold pad was 1.58:1 clear. */
 html.cc .menu.toolbar a.compose {
-	color: var(--cc-enig);
+	color: var(--cc-plate);
 	font-weight: var(--cc-w-emphasis);
 }
 
@@ -1366,33 +1439,33 @@ html.cc .menu.toolbar a.compose {
    lit pad pins its own hover/focus ink, at six classes. */
 html.cc .menu.toolbar a.compose:not(.disabled):hover,
 html.cc .menu.toolbar a.compose:not(.disabled):focus-visible {
-	color: var(--cc-enig-hi);
+	color: var(--cc-plate-hi);
 }
 
 html.cc .menu.toolbar a.compose::after {
 	background: linear-gradient(var(--cc-pad), var(--cc-pad-deep));
 	box-shadow:
 		inset 0 0 0 1px var(--cc-pad-deep),
-		inset 0 0 0 2px var(--cc-enig),
+		inset 0 0 0 2px var(--cc-plate),
 		inset 0 3px 4px -3px rgba(255, 255, 255, 0.16),
-		0 1px 2px rgba(5, 29, 19, 0.28),
-		0 6px 18px -5px rgba(232, 194, 82, 0.55);
+		0 1px 2px rgba(0, 0, 0, 0.46),
+		0 6px 18px -5px rgba(68, 189, 19, 0.50);
 }
 
 html.cc .menu.toolbar a.compose:not(.disabled):hover::after {
 	background: linear-gradient(var(--cc-pad-lit), var(--cc-pad-lit-deep));
 	box-shadow:
 		inset 0 0 0 1px var(--cc-pad-deep),
-		inset 0 0 0 2px var(--cc-enig-hi),
+		inset 0 0 0 2px var(--cc-plate-hi),
 		inset 0 3px 4px -3px rgba(255, 255, 255, 0.20),
-		0 2px 4px rgba(5, 29, 19, 0.28),
-		0 12px 26px -7px rgba(232, 194, 82, 0.65);
+		0 2px 4px rgba(0, 0, 0, 0.46),
+		0 12px 26px -7px rgba(68, 189, 19, 0.60);
 }
 
 
 /* ---------------------------------------------------------------------------
    9. MENUS, DIALOGS, NOTIFICATIONS
-   Floating chrome is near-opaque porcelain glass — the one place the
+   Floating chrome is near-opaque glass — the one place the
    backdrop-filter earns its keep at runtime, because menus really do float
    over live content. Dialog sheets take the modal shadow and the 18px
    sheet radius.
@@ -1414,14 +1487,14 @@ html.cc .ui-menu {
 	-webkit-backdrop-filter: var(--cc-glass-filter);
 	backdrop-filter: var(--cc-glass-filter);
 	border-radius: var(--cc-r-card);
-	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75), var(--cc-shadow-m);
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), var(--cc-shadow-m);
 }
 
 html.cc .ui-dialog {
 	-webkit-backdrop-filter: var(--cc-glass-filter);
 	backdrop-filter: var(--cc-glass-filter);
 	border-radius: var(--cc-r-sheet);
-	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75), var(--cc-shadow-l);
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), var(--cc-shadow-l);
 }
 
 html.cc .popover .popover-header {
@@ -1467,7 +1540,7 @@ html.cc .popupmenu .listing li.separator {
 /* The scrim: bench-green shade, no blur — a full-viewport backdrop-filter
    is the one glass surface that is never worth its cost. */
 html.cc .ui-widget-overlay {
-	background-color: rgba(5, 29, 19, 0.55);
+	background-color: rgba(255, 255, 255, 0.20);
 }
 
 html.cc .ui-dialog .ui-dialog-titlebar {
@@ -1493,41 +1566,43 @@ html.cc .ui-datepicker td span {
 }
 
 html.cc .ui-datepicker .ui-state-active {
-	color: var(--cc-enig);
+	color: var(--cc-plate);
 	background: linear-gradient(var(--cc-pad), var(--cc-pad-deep));
-	box-shadow: inset 0 0 0 1px var(--cc-pad-deep), inset 0 0 0 2px var(--cc-enig);
+	box-shadow: inset 0 0 0 1px var(--cc-pad-deep), inset 0 0 0 2px var(--cc-plate);
 }
 
-/* Alerts: ink on a soft tint — the iOS idiom — so the four states stay
-   readable AND tellable apart (each keeps its icon; hue is never the only
-   signal). Info's tint is conformal-coating blue, the one cool hue on real
-   hardware and the only one in this skin. All measured >= 6.2:1. */
+/* Alerts: a tint carrying its own hue at text weight — the iOS idiom — so the
+   four states stay readable AND tellable apart (each keeps its icon; hue is
+   never the only signal). INVERTED for the dark skin: the tints went dark, so
+   the ink went light, or all four would have been dark-on-dark. Info's hue is
+   conformal-coating blue, the one cool hue on real hardware and the only one
+   in this skin. Re-measured on the new tints, all >= 6.7:1. */
 html.cc .ui.alert.boxinformation,
 html.cc #messagestack .alert-info {
-	color: #1c4e63;
-	background-color: #ddeef7;
-	border-color: rgba(28, 78, 99, 0.25);
+	color: #9fd3ec;                        /* 9.10 on --cc-st-info */
+	background-color: var(--cc-st-info);
+	border-color: rgba(159, 211, 236, 0.28);
 }
 
 html.cc .ui.alert.boxconfirmation,
 html.cc #messagestack .alert-success {
-	color: #1d5c10;
-	background-color: #e1f3da;
-	border-color: rgba(29, 92, 16, 0.25);
+	color: #8fe06a;                        /* 9.54 on --cc-st-ok */
+	background-color: var(--cc-st-ok);
+	border-color: rgba(143, 224, 106, 0.28);
 }
 
 html.cc .ui.alert.boxwarning,
 html.cc #messagestack .alert-warning {
-	color: #6b4e0a;
-	background-color: #f4e7c3;
-	border-color: rgba(107, 78, 10, 0.3);
+	color: #e8c252;                        /* 8.89 on --cc-st-warn — gold as trim */
+	background-color: var(--cc-st-warn);
+	border-color: rgba(232, 194, 82, 0.30);
 }
 
 html.cc .ui.alert.boxerror,
 html.cc #messagestack .alert-danger {
-	color: #8f2417;
-	background-color: #f7ddd8;
-	border-color: rgba(143, 36, 23, 0.25);
+	color: #ff8378;                        /* 6.71 on --cc-st-err */
+	background-color: var(--cc-st-err);
+	border-color: rgba(255, 131, 120, 0.28);
 }
 
 html.cc #messagestack .loading,
@@ -1577,7 +1652,7 @@ html.cc body.task-login {
    section 3 glazes the whole bench and the page reads as one white sheet
    (found and verified on the live install, 2026-07-31). On login the card
    is the ONLY glass. Specificity (.task-login + id) also out-ranks the
-   mobile porcelain rule in section 12, so the bench shows on phones too. */
+   mobile opaque-pane rule in section 12, so the bench shows on phones too. */
 html.cc .task-login #layout {
 	gap: 0;
 	padding-right: 0;
@@ -1612,7 +1687,7 @@ html.cc #login-form {
 	backdrop-filter: var(--cc-glass-filter);
 	border: 1px solid var(--cc-rim);
 	border-radius: var(--cc-r-sheet);
-	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), var(--cc-shadow-l);
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.21), var(--cc-shadow-l);
 }
 
 /* Plated through-holes at the corners: a gold annular ring around a drill
@@ -1661,11 +1736,11 @@ html.cc #rcmloginsubmit {
    there, so the footer gets its own lighter tone: 5.53:1 on bench-hi,
    9.45:1 on bench-deep. */
 html.cc #login-footer {
-	color: #a9c4b6;
+	color: var(--cc-rail-dim);
 }
 
 html.cc #login-footer > div {
-	color: #a9c4b6;
+	color: var(--cc-rail-dim);
 	background: transparent;
 	border: 0;
 }
@@ -1704,7 +1779,7 @@ html.cc .multi-input:not(.is-invalid) > .content.focused {
 
 /* jQuery-UI dialog buttons re-declare .btn colours inside the buttonset. */
 html.cc .ui-dialog .ui-dialog-buttonpane .ui-dialog-buttonset button.btn-primary:not(.btn-danger) {
-	color: var(--cc-enig);
+	color: var(--cc-plate);
 }
 
 html.cc .ui-dialog .ui-dialog-buttonpane .ui-dialog-buttonset button.btn-secondary {
@@ -1727,8 +1802,8 @@ html.cc .ui-menu .ui-state-active {
 /* Datepicker selected day: `background:#37beff!important;color:#fff!important`. */
 html.cc .ui-datepicker a.ui-state-active {
 	background: linear-gradient(var(--cc-pad), var(--cc-pad-deep)) !important;
-	color: var(--cc-enig) !important;
-	box-shadow: inset 0 0 0 1px var(--cc-pad-deep), inset 0 0 0 2px var(--cc-enig) !important;
+	color: var(--cc-plate) !important;
+	box-shadow: inset 0 0 0 1px var(--cc-pad-deep), inset 0 0 0 2px var(--cc-plate) !important;
 }
 
 /* Compose HTML editor focus: `div.tox.focused` forces a blue ring. */
@@ -1749,23 +1824,30 @@ html.cc .image-tools a:hover {
 }
 
 /* The rail's popover header is pinned to slate #2f3a3f by Elastic (and again,
-   separately, for the phone task menu). Repainted porcelain at every width.
+   separately, for the phone task menu). Repainted at every width — now with
+   the bench's darkest value, because this header CAPS the task rail and
+   should read as part of it rather than as a pane floating on it.
 
-   This header is also the IN-APP LOGO SLOT: images/logo-badge.svg lands here
-   via the `circuitcenter:*` skin_logo key (README Install step 3). The badge
-   variant is used precisely BECAUSE this surface is light — the login
-   wordmark is glyph-only with a white C and would vanish on porcelain. The
-   badge brings its own near-black plate, so it survives either way, but if
-   this background ever goes dark again, re-check the plate: it is #1a1f23,
-   which reads 15.1:1 here and only ~1.1:1 on the bench, where the badge
-   would need its hairline rim back to hold an edge. Sizing is Elastic's
-   (58px tall, width clamped per breakpoint) and deliberately untouched. */
+   This header is also the IN-APP LOGO SLOT, and the variant that belongs in
+   it is decided by this background. The previous light version of this skin
+   took the BADGE (own near-black plate) precisely because the surface was
+   light. Going dark inverted that: the plate measures 1.03:1 on the header
+   and 1.19:1 even here on bench-deep, so the rounded square is invisible by
+   fill, and its hairline rim only reaches 1.83:1. No surface in this palette
+   rescues it — the palette is near-black by design.
+
+   So the slot now takes images/logo-mark.svg, the GLYPH-ONLY variant, via the
+   `circuitcenter:*` skin_logo key (README Install step 3). White C at 19.74:1
+   and green capacitor at 8.02:1 on this value; nothing invisible is drawn.
+   logo-badge.svg stays in the tree and is correct again if this ever returns
+   to a light header. Sizing is Elastic's (58px tall, width clamped per
+   breakpoint) and deliberately untouched. */
 html.cc #layout-menu .popover-header {
-	background-color: #f2f5f3 !important;
+	background-color: var(--cc-bench-deep) !important;
 	color: var(--cc-legend);
 }
 
-/* Rail entries carry `border-bottom:1px solid #f1f3f4!important` — pale grey
+/* Rail entries carry `border-bottom:1px solid var(--cc-hair)!important` — pale grey
    hairlines that would glow on the dark bench. Scoped to widths where the
    rail exists; the phone popover keeps its own separator rule (section 4). */
 @media screen and (min-width: 481px) {
@@ -1789,8 +1871,12 @@ html.cc #layout-menu .popover-header {
    Below 769px the panes go edge-to-edge and OPAQUE and every backdrop-filter
    is dropped: phone GPUs pay for blur layers in DPR-squared memory (this
    repo has crashed iPhones with cheaper effects than these). The measured
-   palette holds — the opaque porcelain #f2f5f3 is LIGHTER than the audited
-   worst case, so every ratio only improves.
+   palette holds — var(--cc-pane-solid) IS the audited worst case (the veil
+   composited over the bench with no blur to lighten it), so every ratio
+   recorded in the token block is exactly the ratio you get here. Under the
+   light skin this note said the opaque fallback was lighter than the worst
+   case and so could only improve; that is no longer true, and the reason it
+   is still safe is different: the worst case is what was measured.
    --------------------------------------------------------------------------- */
 @media screen and (max-width: 768px) {
 	html.cc #layout {
@@ -1804,22 +1890,30 @@ html.cc #layout-menu .popover-header {
 		margin: 0;
 		border: 0;
 		border-radius: 0;
-		background: #f2f5f3;
+		background: var(--cc-pane-solid);
 		-webkit-backdrop-filter: none;
 		backdrop-filter: none;
 		box-shadow: none;
 	}
 
+	/* Phones drop backdrop-filter entirely (GPU layer cost — see the repo's
+	   DPR^3 OOM history), so glass has to become a flat fill here. That fill
+	   used to be opaque WHITE, which was right when the veil it stood in for
+	   was white. Under the dark skin it would have painted a white button and
+	   left the white legend sitting on top of it, invisible — every secondary
+	   control on every phone. It is now an opaque lift of the pane instead:
+	   12.83:1 for the legend, and the 1px rim keeps the edge, since at 1.25:1
+	   against the pane the fill alone does not draw one. */
 	html.cc .btn,
 	html.cc .btn-secondary {
-		background: rgba(255, 255, 255, 0.9);
+		background: #2b333a;
 		-webkit-backdrop-filter: none;
 		backdrop-filter: none;
 	}
 
 	/* The pad is re-asserted here only because the rule above turns every other
-	   .btn opaque white. On porcelain it measures 15.45:1 — better than on the
-	   glass, so the palette holds in the direction the section header claims. */
+	   .btn into that flat lift. The pad keeps its own gradient and its green
+	   rim, which is what separates it from the pane (1.13:1 by fill). */
 	html.cc .btn-primary,
 	html.cc .btn.mainaction {
 		background: linear-gradient(var(--cc-pad), var(--cc-pad-deep));
@@ -1829,13 +1923,13 @@ html.cc #layout-menu .popover-header {
 	html.cc .popupmenu,
 	html.cc .ui-menu,
 	html.cc .ui-dialog {
-		background-color: #fdfefd;
+		background-color: var(--cc-pane-solid);
 		-webkit-backdrop-filter: none;
 		backdrop-filter: none;
 	}
 
 	html.cc #login-form {
-		background: #f2f5f3;
+		background: var(--cc-pane-solid);
 		-webkit-backdrop-filter: none;
 		backdrop-filter: none;
 	}
@@ -1848,6 +1942,32 @@ html.cc #layout-menu .popover-header {
    would otherwise carry the bench onto paper. Hand it back to ink-on-white.
    --------------------------------------------------------------------------- */
 @media print {
+	/* Paper is white, so the dark skin has to be undone at the TOKEN level, not
+	   selector by selector. While the ink was dark this block could get away
+	   with painting a handful of containers black and letting inheritance do
+	   the rest; now every token is a light value and anything this block does
+	   not name would print white on white — invisible, and invisible in a way
+	   nobody notices until a customer prints a quote. Redefining the tokens
+	   catches every descendant, including rules added later.
+
+	   color-scheme goes back to light too, or the browser prints native
+	   controls and scrollbars in their dark form. */
+	html.cc {
+		--cc-ink: #000;
+		--cc-ink-2: #000;
+		--cc-dim: #333;
+		--cc-btn-ink: #000;
+		--cc-btn-glow: none;
+		--cc-link: #000;
+		--cc-legend: #000;
+		--cc-plate: #000;
+		--cc-plate-hi: #000;
+		--cc-rail-silk: #000;
+		--cc-rail-dim: #333;
+		--cc-flag: #000;
+		color-scheme: light;
+	}
+
 	html.cc,
 	html.cc body,
 	html.cc #layout,
