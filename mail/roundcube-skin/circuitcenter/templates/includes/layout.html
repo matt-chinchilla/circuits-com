@@ -75,6 +75,14 @@
 		<roundcube:link rel="stylesheet" href="/styles/print.min.css" condition="env:action == 'print'" />
 	<roundcube:endif />
 	<link rel="stylesheet" href="/styles/circuitcenter.css">
+	<!-- The skin's only script. It adds ONE control: a close button for the
+	     compose window that saves your draft on the way out, which Roundcube
+	     hides on desktop layouts (compose.html's back button carries
+	     data-hidden="big"). Loaded here rather than by overriding
+	     templates/compose.html, so we are not forking a ~200-line upstream
+	     template and re-reconciling it on every Roundcube release. Purely
+	     additive: if it fails to load, compose behaves exactly as before. -->
+	<script src="/ui.js"></script>
 </head>
 <body class="task-<roundcube:exp expression="env:error_task ?: env:task ?: 'error'"> action-<roundcube:exp expression="asciiwords(env:action, true, '-') ?: 'none'">">
 	<roundcube:if condition="!env:framed || env:extwin" />
