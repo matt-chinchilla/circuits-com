@@ -203,3 +203,61 @@ def test_the_recipient_roster_default_is_not_empty_in_either_compose_file():
         assert set(default.split(",")) == set(Settings().CALENDAR_RECIPIENTS), (
             f"the {path.name} roster has drifted from Settings.CALENDAR_RECIPIENTS"
         )
+
+
+# ── Stripe (2026-08-05) ─────────────────────────────────────────────────────
+
+STRIPE_SETTINGS = ("STRIPE_SECRET_KEY", "STRIPE_PUBLIC_KEY")
+
+
+def test_both_compose_files_pass_the_stripe_keys_through():
+    """Same allowlist rule, and the same failure if it is forgotten.
+
+    A key written into /opt/circuits-com/.env but absent from the api
+    `environment:` block never reaches pydantic-settings, so billing would
+    silently do nothing while the operator believed it was configured.
+    """
+    for path in (DEV_COMPOSE, PROD_COMPOSE):
+        block = _service_block(path, "api")
+        for name in STRIPE_SETTINGS:
+            assert f"{name}:" in block, (
+                f"{name} is missing from the api environment block in {path.name}"
+            )
+
+
+def test_the_stripe_keys_are_host_supplied_and_never_literal():
+    """No key may be pinned in a compose file — that would commit a credential.
+
+    The secret key moves real money once it is a live key. It has to come from
+    the host environment, and the empty default has to stay empty: a fallback
+    value here would be a secret in git.
+    """
+    for path in (DEV_COMPOSE, PROD_COMPOSE):
+        block = _service_block(path, "api")
+        for name in STRIPE_SETTINGS:
+            line = next(ln for ln in block.splitlines() if ln.strip().startswith(f"{name}:"))
+            assert "${" in line, f"{name} is pinned in {path.name} instead of read from the host"
+            default = line.split(":-", 1)[1].rstrip("}").strip() if ":-" in line else ""
+            assert default == "", (
+                f"{name} has a literal default in {path.name} — a Stripe key must never "
+                "be committed, and an empty value correctly means 'billing not configured'."
+            )
+
+
+def test_the_secret_key_is_not_exposed_to_the_frontend_build():
+    """The publishable key is safe in a browser; the secret key is not.
+
+    Vite inlines anything prefixed VITE_ into the client bundle at build time,
+    so a secret key reaching the frontend service would be published to every
+    visitor with no way to un-publish it short of rotating the key.
+    """
+    for path in (DEV_COMPOSE, PROD_COMPOSE):
+        text = path.read_text()
+        frontend = text.split("  frontend:", 1)
+        if len(frontend) < 2:
+            continue
+        after = frontend[1].split("\n  ", 1)[0]
+        assert "STRIPE_SECRET_KEY" not in after, (
+            f"STRIPE_SECRET_KEY appears in the frontend service in {path.name}"
+        )
+        assert "VITE_STRIPE_SECRET" not in text, "a secret key must never carry a VITE_ prefix"

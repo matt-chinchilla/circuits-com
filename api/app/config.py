@@ -160,6 +160,25 @@ class Settings(BaseSettings):
     SMS_TOPIC_ARN: str | None = None
     SMS_REGION: str | None = None
 
+    # ── Stripe (Billing / Invoicing / Tax) ──────────────────────────────────
+    # Sponsorship placements bill as monthly subscriptions. Two keys, two very
+    # different risk profiles:
+    #
+    #   STRIPE_PUBLIC_KEY  — publishable. Designed to be public; it is safe in a
+    #                        browser bundle. Held here only so the API can hand
+    #                        it to a client that needs it, which on the current
+    #                        plan (hosted invoice pages) nothing does.
+    #   STRIPE_SECRET_KEY  — full account access, including moving money. Server
+    #                        side ONLY. It must never reach a template, a JSON
+    #                        response, a log line, or the Vite build.
+    #
+    # Both default to None so a deployment without them simply has no billing
+    # rather than failing to boot — the same posture as SMS and mail sync. A
+    # `sk_test_` key is a SANDBOX key and cannot move real money; swapping to
+    # `sk_live_` is the deliberate act that makes billing real.
+    STRIPE_SECRET_KEY: str | None = None
+    STRIPE_PUBLIC_KEY: str | None = None
+
     # SMTP - when SMTP_HOST is unset, services/email.py runs in demo mode
     # (logs the email payload to stderr instead of sending). Lets local dev
     # work without exposing the prod mailbox password.

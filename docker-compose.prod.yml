@@ -118,6 +118,13 @@ services:
       CALENDAR_REMINDER_LOOKBACK_MINUTES: ${CALENDAR_REMINDER_LOOKBACK_MINUTES:-720}
       SMS_TOPIC_ARN: ${SMS_TOPIC_ARN:-}
       SMS_REGION: ${SMS_REGION:-}
+      # Stripe. Same allowlist rule as every block here — see the dev compose.
+      # These live in /opt/circuits-com/.env and never in git. The secret key
+      # moves money once it is a `sk_live_` value, so treat a change to it the
+      # way ADMIN_SECRET_KEY is treated: host secret, then
+      # `up -d --force-recreate api`.
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_PUBLIC_KEY: ${STRIPE_PUBLIC_KEY:-}
 
   # The reminder loop inherits the prod SMTP relay and the log cap. Its env
   # block is otherwise the base file's; only the values that differ in prod

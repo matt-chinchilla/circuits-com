@@ -58,6 +58,17 @@ services:
       # unaffected by an unconfigured or broken SNS setup.
       SMS_TOPIC_ARN: ${SMS_TOPIC_ARN:-}
       SMS_REGION: ${SMS_REGION:-}
+      # ── Stripe (Billing / Invoicing / Tax) ────────────────────────────
+      # This block is an ALLOWLIST, not documentation. Settings declares no
+      # env_file and the api container has no volume mount, so a key sitting
+      # in /opt/circuits-com/.env that is not named here NEVER reaches the
+      # app. DEMO_LOGIN_ENABLED shipped inert exactly this way.
+      #
+      # SECRET is server-side only and must never be handed to the frontend
+      # build; PUBLIC is publishable by design and safe in a browser.
+      # A `sk_test_` key is sandbox and cannot move real money.
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_PUBLIC_KEY: ${STRIPE_PUBLIC_KEY:-}
       # SMTP — empty defaults trigger demo mode in app.services.email.
       # Populate via .env on prod EC2 host (see CLAUDE.md gotcha).
       SMTP_HOST: ${SMTP_HOST:-}
