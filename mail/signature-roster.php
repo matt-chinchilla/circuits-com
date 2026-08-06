@@ -110,7 +110,7 @@ return [
          * the PNG by hand.
          */
         'qr'      => 'https://circuitcenter.ai/images/sig/qr-circuitcenter.png',
-        'qr_size' => 220,
+        'qr_size' => 184,
     ],
 
     /* -------------------------------------------------------------------

@@ -44,11 +44,11 @@ URL = "https://circuitcenter.ai"
 INK, PLATE, EDGE = (26, 31, 35), "#ffffff", "#dfe4e7"
 INK_HEX = "#1a1f23"
 
-# The QR's ground. It matches SIG_PILL_BG in signature-template.php, so the code
-# sits directly on its panel instead of inside a white box inside a tinted box.
-# Keep the two in step: a mismatch is not subtle, it draws a hard rectangle
-# around the code. Contrast is unaffected -- ink on this is about 15:1, far
-# above anything a scanner needs.
+# The QR's ground. It must match whatever surface the code is placed on in
+# signature-template.php -- currently SIG_PILL_BG, the tinted panel inside the
+# white card. Keep the two in step: a mismatch is not subtle, it draws a hard
+# rectangle around the code. Contrast is unaffected either way -- ink on this is
+# about 15:1, far above anything a scanner needs.
 QR_BG = "#f4f7f6"
 
 
@@ -127,6 +127,111 @@ def build_icons(tmp):
 
         dest = os.path.join(DEST, f"icon-{name}.png")
         flat.convert("P", palette=Image.Palette.ADAPTIVE, colors=64).save(dest, optimize=True)
+        out.append((name, os.path.getsize(dest)))
+    return out
+
+
+# The pill icon discs and the social glyphs.
+#
+# V13 puts its social marks on the white card as BARE glyphs, and that is safe
+# there for the same reason the plated chips were safe standing alone: the card
+# declares its own white ground, so an inverting client flips card and glyph
+# together. The plate only ever existed to supply a ground that was missing.
+#
+# The pill icons keep a ground, but as a tinted DISC rather than a rounded
+# plate -- it is what the reference does, and a circle inside a capsule reads
+# as one component where a square inside a capsule reads as two.
+SOCIAL_SIZE = 60           # 60px source for a 20px render
+BADGE_SIZE, BADGE_SS = 88, 4   # 88px source for a 22px render
+BADGE_DISC = "#e4f0e0"     # SIG_SPINE washed down onto white
+BADGE_GLYPHS = ("phone", "email", "website")
+SOCIAL_GLYPHS = ("github", "linkedin", "instagram", "x")
+
+
+# The backdrop.
+#
+# V13's ground is a lavender wash: #f3f1ff flat, warming to #deccfb toward the
+# top right. Those are its brand hues, not ours, so the RELATIONSHIP is carried
+# over rather than the colours -- the same lightness and the same corner
+# warming, rotated onto the green this project already uses.
+#
+# Shipped as a PNG because CSS gradients do not render in Outlook, which uses
+# Word's engine. The template pairs it with a flat bgcolor, so Outlook gets the
+# flat tint and everyone else gets the wash. It is sized to the signature and
+# never tiled: background-size is not reliable in email either.
+BACKDROP_W, BACKDROP_H = 600, 360
+BACKDROP_BASE = (243, 248, 242)   # very light green-cast, V13's #f3f1ff rotated
+BACKDROP_WARM = (203, 229, 202)   # the corner wash, V13's #deccfb rotated
+
+
+def build_backdrop():
+    from math import hypot
+    w, h = BACKDROP_W, BACKDROP_H
+    img = Image.new("RGB", (w, h), BACKDROP_BASE)
+    px = img.load()
+    # Radial falloff anchored off the top-right corner, matching where the
+    # reference's wash sits.
+    cx, cy = w * 0.78, h * -0.05
+    far = hypot(w, h) * 0.72
+    for y in range(h):
+        for x in range(w):
+            t = max(0.0, 1.0 - hypot(x - cx, y - cy) / far) ** 1.6
+            px[x, y] = tuple(
+                int(BACKDROP_BASE[i] + (BACKDROP_WARM[i] - BACKDROP_BASE[i]) * t)
+                for i in range(3)
+            )
+    dest = os.path.join(DEST, "backdrop.png")
+    img.convert("P", palette=Image.Palette.ADAPTIVE, colors=64).save(dest, optimize=True)
+    return os.path.getsize(dest)
+
+
+def build_socials(tmp):
+    """Bare ink glyphs, for the white card. Returns [(name, bytes)]."""
+    S = SOCIAL_SIZE * GLYPH_SS
+    out = []
+    for name in SOCIAL_GLYPHS:
+        svg = (
+            f'<svg xmlns="http://www.w3.org/2000/svg" width="{S}" height="{S}" '
+            f'viewBox="0 0 24 24"><path d="{GLYPHS[name]}" fill="{INK_HEX}"/></svg>'
+        )
+        sp, bp = os.path.join(tmp, f"s-{name}.svg"), os.path.join(tmp, f"s-{name}.png")
+        with open(sp, "w") as fh:
+            fh.write(svg)
+        subprocess.run(["convert", "-background", "none", sp, bp], check=True)
+        im = Image.open(bp).convert("RGBA")
+        if im.size != (S, S):
+            im = im.resize((S, S), Image.Resampling.LANCZOS)
+        im = im.resize((SOCIAL_SIZE, SOCIAL_SIZE), Image.Resampling.LANCZOS)
+        dest = os.path.join(DEST, f"social-{name}.png")
+        im.save(dest, optimize=True)
+        out.append((name, os.path.getsize(dest)))
+    return out
+
+
+def build_badges(tmp):
+    """Tinted disc with a spine-green glyph, for inside the pills."""
+    S = BADGE_SIZE * BADGE_SS
+    inset = S * 0.27
+    scale = (S - inset * 2) / 24
+    out = []
+    for name in BADGE_GLYPHS:
+        svg = (
+            f'<svg xmlns="http://www.w3.org/2000/svg" width="{S}" height="{S}" '
+            f'viewBox="0 0 {S} {S}">'
+            f'<circle cx="{S/2}" cy="{S/2}" r="{S/2}" fill="{BADGE_DISC}"/>'
+            f'<g transform="translate({inset},{inset}) scale({scale})">'
+            f'<path d="{GLYPHS[name]}" fill="{SPINE_HEX}"/></g></svg>'
+        )
+        sp, bp = os.path.join(tmp, f"b-{name}.svg"), os.path.join(tmp, f"b-{name}.png")
+        with open(sp, "w") as fh:
+            fh.write(svg)
+        subprocess.run(["convert", "-background", "none", sp, bp], check=True)
+        im = Image.open(bp).convert("RGBA")
+        if im.size != (S, S):
+            im = im.resize((S, S), Image.Resampling.LANCZOS)
+        im = im.resize((BADGE_SIZE, BADGE_SIZE), Image.Resampling.LANCZOS)
+        dest = os.path.join(DEST, f"badge-{name}.png")
+        im.save(dest, optimize=True)
         out.append((name, os.path.getsize(dest)))
     return out
 
@@ -323,9 +428,17 @@ def main():
         print("icons (plated, for the social chips):")
         for name, size in build_icons(tmp):
             print(f"    icon-{name}.png  {size:,}B")
-        print("glyphs (plateless, for inside the contact pills):")
+        print("glyphs (plateless):")
         for name, size in build_glyphs(tmp):
             print(f"    glyph-{name}.png  {size:,}B")
+        print("badges (tinted disc, for inside the contact pills):")
+        for name, size in build_badges(tmp):
+            print(f"    badge-{name}.png  {size:,}B")
+        print("socials (bare ink, for the white card):")
+        for name, size in build_socials(tmp):
+            print(f"    social-{name}.png  {size:,}B")
+        print("backdrop:")
+        print(f"    backdrop.png  {build_backdrop():,}B")
         print("qr:")
         build_qr(tmp)
     print(f"\nwrote {DEST} -- deploy before the roster URLs resolve")

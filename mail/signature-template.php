@@ -113,6 +113,29 @@ if (!defined('SIG_ACCENT')) {
     define('SIG_PILL_EDGE', '#e2e9e5');
 
     /**
+     * The card and the ground it floats on.
+     *
+     * This is the one place the file's founding rule — declare no background
+     * anywhere, so a darkening client can invert the whole thing — is
+     * deliberately broken, because the reference design IS a card on a ground
+     * and there is no way to have that without saying so.
+     *
+     * What that costs, measured rather than guessed: in a client that darkens
+     * the surface but honours bgcolor, the card stays light and its dark text
+     * stays readable. The signature does not break; it reads as a bright card
+     * in a dark message. What it BUYS is that everything sitting on the card —
+     * bare social glyphs, pill text — now has a guaranteed ground, where before
+     * only images and the spine did. Before this, text outside a pill was the
+     * fragile part.
+     *
+     * SIG_GROUND is the flat fallback for Word, which renders no background
+     * image; everyone else gets the wash in backdrop.png on top of it.
+     */
+    define('SIG_CARD',       '#ffffff');
+    define('SIG_CARD_EDGE',  '#eef2ef');
+    define('SIG_GROUND',     '#f3f8f2');
+
+    /**
      * Type. Arial/Helvetica are appended to the site's native stacks
      * because a signature lands on machines the site never has to run on.
      * Word resolves the mono stack to Consolas.
@@ -298,6 +321,46 @@ function sig_glyph(string $base, string $name, string $alt, int $size): string
 }
 
 /**
+ * A bare glyph in the ink colour, for placing on the white card.
+ */
+function sig_social(string $base, string $name, string $alt, int $size): string
+{
+    $base = rtrim(trim($base), '/');
+    if ($base === '' || !preg_match('/^[a-z][a-z0-9-]*$/', $name)) {
+        return '';
+    }
+    $src = sig_safe_url($base . '/social-' . $name . '.png', ['http', 'https']);
+    if ($src === '') {
+        return '';
+    }
+
+    return '<img src="' . sig_esc($src) . '" width="' . $size . '" height="' . $size . '"'
+        . ' alt="' . sig_esc($alt) . '" border="0" style="display:block;width:' . $size
+        . 'px;height:' . $size . 'px;border:0;outline:none;text-decoration:none;">';
+}
+
+/**
+ * A tinted disc carrying a glyph — the pill's icon. Same contract as sig_glyph
+ * and sig_chip: returns '' when the images are unconfigured, which is what
+ * keeps the text fallback reachable.
+ */
+function sig_badge(string $base, string $name, string $alt, int $size): string
+{
+    $base = rtrim(trim($base), '/');
+    if ($base === '' || !preg_match('/^[a-z][a-z0-9-]*$/', $name)) {
+        return '';
+    }
+    $src = sig_safe_url($base . '/badge-' . $name . '.png', ['http', 'https']);
+    if ($src === '') {
+        return '';
+    }
+
+    return '<img src="' . sig_esc($src) . '" width="' . $size . '" height="' . $size . '"'
+        . ' alt="' . sig_esc($alt) . '" border="0" style="display:block;width:' . $size
+        . 'px;height:' . $size . 'px;border:0;outline:none;text-decoration:none;">';
+}
+
+/**
  * One contact pill: a rounded, tinted capsule holding a glyph and a value.
  *
  * Each pill is its OWN table in its own row rather than a row of a shared
@@ -315,7 +378,7 @@ function sig_pill(string $glyph, string $value): string
     $inner = '<table border="0" cellpadding="0" cellspacing="0" role="presentation"'
         . ' style="border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt;"><tr>';
     if ($glyph !== '') {
-        $inner .= '<td width="16" valign="middle" style="width:16px;padding:0 9px 0 0;'
+        $inner .= '<td width="22" valign="middle" style="width:22px;padding:0 10px 0 0;'
             . 'font-size:0;line-height:0;mso-line-height-rule:exactly;">' . $glyph . '</td>';
     }
     $inner .= '<td valign="middle" style="font-family:' . SIG_SANS . ';font-size:13px;'
@@ -326,7 +389,7 @@ function sig_pill(string $glyph, string $value): string
     return '<table border="0" cellpadding="0" cellspacing="0" role="presentation"'
         . ' style="border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt;">'
         . '<tr><td bgcolor="' . SIG_PILL_BG . '" style="background-color:' . SIG_PILL_BG
-        . ';border:1px solid ' . SIG_PILL_EDGE . ';border-radius:999px;padding:8px 16px;">'
+        . ';border:1px solid ' . SIG_PILL_EDGE . ';border-radius:999px;padding:7px 15px 7px 7px;">'
         . $inner . '</td></tr></table>';
 }
 
@@ -404,7 +467,7 @@ function sig_contact_grid(array $rows, string $iconBase): string
     foreach ($rows as $i => [$label, $icon, $value]) {
         $bottom = $i === $last ? 0 : 7;
         $out[]  = '<tr><td style="padding:0 0 ' . $bottom . 'px 0;">'
-            . sig_pill(sig_glyph($iconBase, $icon, $label, 16), $value) . '</td></tr>';
+            . sig_pill(sig_badge($iconBase, $icon, $label, 22), $value) . '</td></tr>';
     }
     $out[] = '</table>';
 
@@ -431,11 +494,18 @@ function sig_social_row(array $person, string $iconBase): string
         if ($label === '' || sig_safe_url($url, ['http', 'https']) === '') {
             continue;
         }
-        $chip = sig_chip($iconBase, strtolower($label), $label, 30);
-        if ($chip !== '') {
-            $chips[] = '<td valign="middle" style="padding:0 8px 0 0;font-size:0;line-height:0;'
+        // Bare glyph, not a plated chip. Safe here only because the card
+        // declares its own white ground — the plate existed to supply a ground
+        // that used to be missing. Reverting the card means reverting this.
+        $key  = strtolower($label);
+        $mark = sig_social($iconBase, $key, $label, 20);
+        if ($mark === '') {
+            $mark = sig_chip($iconBase, $key, $label, 30);
+        }
+        if ($mark !== '') {
+            $chips[] = '<td valign="middle" style="padding:0 16px 0 0;font-size:0;line-height:0;'
                 . 'mso-line-height-rule:exactly;"><a href="' . sig_esc($url)
-                . '" style="text-decoration:none;">' . $chip . '</a></td>';
+                . '" style="text-decoration:none;">' . $mark . '</a></td>';
         } else {
             $texts[] = sig_link($url, $label);
         }
@@ -558,7 +628,7 @@ function sig_qr_panel(array $company): string
         . 'height:100%;">'
         . '<tr><td bgcolor="' . SIG_PILL_BG . '" align="center" valign="middle"'
         . ' style="background-color:' . SIG_PILL_BG
-        . ';border:1px solid ' . SIG_PILL_EDGE . ';border-radius:16px;padding:' . $pad . 'px;'
+        . ';border-radius:16px;padding:' . $pad . 'px;'
         . 'font-size:0;line-height:0;mso-line-height-rule:exactly;">'
         // alt is a sentence, not "QR code": with images blocked the reader
         // needs to know where it would have taken them, and the destination is
@@ -678,31 +748,61 @@ function sig_build(array $person, array $company, string $mailbox): string
         $left[] = '<div style="line-height:0;font-size:0;height:16px;">&nbsp;</div>' . $pills;
     }
 
-    // ---- assemble ---------------------------------------------------------
-    // max-width 560 rather than the reference's 816. A signature is scaled to
-    // fit by mobile clients, so an 816px block on a 375px phone renders 13px
-    // text at about 6px. 560 is the widest this composition goes without that.
-    $out = ['<table border="0" cellpadding="0" cellspacing="0" role="presentation"'
+    // ---- the card ---------------------------------------------------------
+    // Two columns inside a white card: the person on the left, the QR standing
+    // as its own full-height section on the right.
+    //
+    // The reference runs its three contact pills horizontally across the card.
+    // That row needs about 540px on its own, and with a QR column beside it the
+    // block passes 780px -- which mobile clients scale to fit, rendering 13px
+    // text at about 6px on a 375px phone. So the pills stack and the QR takes
+    // the width the reference gave to their row. It is the one structural
+    // departure from V13, and it is what buys the QR its slot.
+    $card = ['<table border="0" cellpadding="0" cellspacing="0" role="presentation"'
         . ' style="border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt;'
-        . 'max-width:600px;font-family:' . SIG_SANS . ';'
-        . '-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;">',
-        '<tr style="height:100%;">'];
+        . 'width:100%;height:100%;"><tr style="height:100%;">'];
+    $card[] = '<td valign="top">' . implode('', $left) . '</td>';
 
-    $out[] = '<td valign="top">' . implode('', $left) . '</td>';
-
-    // Its own section, running the full height of the block rather than
-    // floating beside it. height:100% on the cell is honoured by the webmail
-    // and Apple clients; Word ignores it, and there the panel is simply as tall
-    // as the QR plus its padding, which is within a few pixels of the same
-    // thing because the QR is sized to the left column in the first place.
+    // height:100% on the cell is honoured by the webmail and Apple clients;
+    // Word ignores it, and there the panel is simply as tall as the QR plus its
+    // padding -- within a few pixels of the same thing, because the QR is sized
+    // to the left column to begin with.
     $panel = sig_qr_panel($company);
     if ($panel !== '') {
-        $out[] = '<td width="' . (max(112, (int) ($company['qr_size'] ?? 220)) + 34)
-            . '" align="right" valign="top" style="padding:0 0 0 20px;height:100%;">'
+        $card[] = '<td width="' . (max(112, (int) ($company['qr_size'] ?? 220)) + 34)
+            . '" align="right" valign="top" style="padding:0 0 0 18px;height:100%;">'
             . $panel . '</td>';
     }
+    $card[] = '</tr></table>';
 
-    $out[] = '</tr></table>';
+    // ---- the card on its ground -------------------------------------------
+    // 560px, not the reference's 816, for the scaling reason above.
+    //
+    // The ground is a flat bgcolor with the wash layered over it as a
+    // background IMAGE. Word renders no background image at all, so it gets the
+    // flat tint and the composition still reads; every other client gets the
+    // wash. Repeat is pinned rather than left to default -- a 600px image
+    // behind a narrower card would otherwise tile a visible seam down it.
+    $iconsBase = rtrim((string) ($company['icons'] ?? ''), '/');
+    $wash = $iconsBase !== ''
+        ? sig_safe_url($iconsBase . '/backdrop.png', ['http', 'https'])
+        : '';
+    $ground = 'background-color:' . SIG_GROUND . ';'
+        . ($wash !== '' ? "background-image:url('" . sig_esc($wash) . "');"
+            . 'background-position:top right;background-repeat:no-repeat;' : '')
+        . 'border-radius:22px;padding:20px 14px;';
 
-    return implode("\n", $out);
+    return '<table border="0" cellpadding="0" cellspacing="0" role="presentation"'
+        . ' style="border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt;'
+        . 'max-width:600px;font-family:' . SIG_SANS . ';'
+        . '-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;">'
+        . '<tr><td bgcolor="' . SIG_GROUND . '" style="' . $ground . '">'
+        . '<table border="0" cellpadding="0" cellspacing="0" role="presentation"'
+        . ' style="border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt;'
+        . 'width:100%;">'
+        . '<tr><td bgcolor="' . SIG_CARD . '" style="background-color:' . SIG_CARD
+        . ';border:1px solid ' . SIG_CARD_EDGE . ';border-radius:16px;padding:20px;">'
+        . implode('', $card)
+        . '</td></tr></table>'
+        . '</td></tr></table>';
 }
