@@ -75,3 +75,13 @@ tmp/
 # against the split. And the discount ladder is the negotiating position; a
 # distributor who can read it already knows the floor.
 circuits-ai-payments-addendum.md
+
+# Roundcube plugin configs. The .dist templates ARE committed; the real files
+# never are, because they hold shared secrets — CALENDAR_API_SECRET today, and
+# ccsignature's upload settings next.
+#
+# cccalendar's config.inc.php.dist has told people since it was written that
+# this file "is gitignored by the repo's rule". Until now that was simply not
+# true: `git check-ignore` exited 1. Nothing had leaked, because no real config
+# had been created yet — the trap was armed and had not been stepped on.
+mail/roundcube-plugins/*/config.inc.php
