@@ -33,6 +33,52 @@ T::same('kofi', sig_social_slug('Ko-fi'), 'a hyphen is dropped');
 T::same('buymeacoffee', sig_social_slug('Buy Me a Coffee'), 'several spaces are dropped');
 T::same('', sig_social_slug('!!!'), 'punctuation-only yields empty, not a bad filename');
 
+// ---------------------------------------------------------------------------
+T::group('social icons — an unknown label must NOT emit a broken image');
+
+$slugs = require __DIR__ . '/../signature-icon-slugs.php';
+$withIcons = COMPANY + ['icon_slugs' => $slugs];
+
+$known = sig_build(
+    ['name' => 'P', 'socials' => ['GitHub' => 'https://github.com/x']],
+    $withIcons, 'p@circuitcenter.ai'
+);
+T::contains('social-github.png', $known, 'a mark we have renders as an icon');
+
+// Slack was REMOVED from simple-icons at the brand owner's request, so there is
+// deliberately no file. Before the allow-list this emitted a 404 <img>.
+$absent = sig_build(
+    ['name' => 'P', 'socials' => ['Slack' => 'https://slack.com/x']],
+    $withIcons, 'p@circuitcenter.ai'
+);
+T::notContains('social-slack.png', $absent, 'a mark we do NOT have emits no <img>');
+T::contains('Slack', $absent, 'and falls back to a text link');
+
+$invented = sig_build(
+    ['name' => 'P', 'socials' => ['Totally Made Up' => 'https://example.com']],
+    $withIcons, 'p@circuitcenter.ai'
+);
+T::notContains('<img', explode('</table>', $invented)[0], 'an invented label emits no icon at all');
+T::contains('Totally Made Up', $invented, 'and is still linked as text');
+
+// The safe default: no list configured means no icons, never all icons.
+$noList = sig_build(
+    ['name' => 'P', 'socials' => ['GitHub' => 'https://github.com/x']],
+    COMPANY, 'p@circuitcenter.ai'
+);
+T::notContains('social-github.png', $noList, 'an absent icon_slugs list emits no icons');
+
+// The manifest must equal what is on disk, or the guarantee is theatre.
+$onDisk = array_map(
+    fn($f) => basename($f, '.png'),
+    glob(__DIR__ . '/../../frontend/public/images/sig/social-*.png') ?: []
+);
+$onDisk = array_map(fn($n) => substr($n, strlen('social-')), $onDisk);
+sort($onDisk);
+$listed = $slugs;
+sort($listed);
+T::same($onDisk, $listed, 'signature-icon-slugs.php matches the social-*.png files exactly');
+
 // Every generated icon must be reachable from the title it was generated from.
 $brands = json_decode(file_get_contents(__DIR__ . '/../signature-brand-icons.json'), true);
 $missing = [];

@@ -359,10 +359,24 @@ function sig_social_slug(string $label): string
 /**
  * A bare glyph in the ink colour, for placing on the white card.
  */
-function sig_social(string $base, string $name, string $alt, int $size): string
+function sig_social(string $base, string $name, string $alt, int $size, array $have): string
 {
     $base = rtrim(trim($base), '/');
-    if ($base === '' || !preg_match('/^[a-z][a-z0-9-]*$/', $name)) {
+    // $have is the list of marks that actually exist on disk, supplied by the
+    // company block. It is REQUIRED, and an empty list means no icons.
+    //
+    // This function builds a URL on another host, so it can never stat the
+    // file. Before the list existed it validated the slug's GRAMMAR and emitted
+    // an <img> regardless, which meant a label with no mark -- Slack, or
+    // anything a person simply typed -- produced a BROKEN IMAGE in the
+    // recipient's inbox instead of the text link the design promised.
+    //
+    // Defaulting to "no icons" rather than "all icons" is deliberate: a text
+    // link is a degraded rendering, a broken image is a wrong one.
+    if ($base === '' || !$have || !in_array($name, $have, true)) {
+        return '';
+    }
+    if (!preg_match('/^[a-z][a-z0-9-]*$/', $name)) {
         return '';
     }
     $src = sig_safe_url($base . '/social-' . $name . '.png', ['http', 'https']);
@@ -519,7 +533,7 @@ function sig_contact_grid(array $rows, string $iconBase): string
  * 'Calendly', 'Bluesky'); adding an icon for one is an optimisation, not a
  * precondition for listing it.
  */
-function sig_social_row(array $person, string $iconBase): string
+function sig_social_row(array $person, string $iconBase, array $have = []): string
 {
     $chips = [];
     $texts = [];
@@ -534,10 +548,11 @@ function sig_social_row(array $person, string $iconBase): string
         // declares its own white ground — the plate existed to supply a ground
         // that used to be missing. Reverting the card means reverting this.
         $key  = sig_social_slug($label);
-        $mark = sig_social($iconBase, $key, $label, 20);
-        if ($mark === '') {
-            $mark = sig_chip($iconBase, $key, $label, 30);
-        }
+        $mark = sig_social($iconBase, $key, $label, 20, $have);
+        // No plated-chip fallback here: sig_chip cannot check existence either,
+        // so falling back to it would reintroduce the broken image by another
+        // route. A mark we do not have becomes a text link, full stop.
+
         if ($mark !== '') {
             $chips[] = '<td valign="middle" class="cc-chip" style="padding:0 0 0 16px;'
                 . 'font-size:0;line-height:0;mso-line-height-rule:exactly;">'
@@ -772,7 +787,7 @@ function sig_build(array $person, array $company, string $mailbox): string
     // rather than holding a row of their own. That is what lets everything
     // below move up: the row is gone, the left column is shorter, and the
     // full-height QR panel shrinks to match it.
-    $socials = sig_social_row($person, $iconBase);
+    $socials = sig_social_row($person, $iconBase, (array) ($company['icon_slugs'] ?? []));
     if ($socials !== '') {
         $lines[] = '<table border="0" cellpadding="0" cellspacing="0" role="presentation"'
             . ' style="border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt;'
