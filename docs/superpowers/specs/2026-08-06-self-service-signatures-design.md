@@ -149,6 +149,30 @@ not the PHP allocator, and its own limits on this box are ~917MB memory /
 wall time and the library cache, but the test assertion is about PHP's own
 `memory_get_peak_usage()` staying under 64M.
 
+**The real ceiling is the CONTAINER, not PHP.** `roundcube` runs under
+`mem_limit: 192m` and sits at ~55MB idle, so there is about 137MB of headroom —
+while Imagick inside that container reports a memory limit of **917MB** and a
+map limit of 1.8GB. Those defaults are wildly larger than the cgroup, and
+exceeding a cgroup is not a failed request: the kernel OOM-kills the group and
+takes webmail down for everyone. The box has 916MB total, so an unbounded
+decode could take the mail server with it. `Imagick::setResourceLimit()` must
+therefore be called BEFORE any decode, not merely relied upon after.
+
+**Measured, on the box, against a real 4032×3024 photo** (2.3MB JPEG), with the
+limits set and an eighth-scale `setSize()` hint:
+
+| | |
+| --- | --- |
+| output | 288×288, 54KB |
+| PHP peak | **2.0 MB** against a 64M limit |
+| elapsed | 1.62 s |
+| container | 58.8MB → 54.3MB (no growth) |
+
+The full bitmap is never materialised at any layer, which is the whole point of
+the DCT-scaled read. The number to assert in a test is PHP's own
+`memory_get_peak_usage()`; the container's own ceiling is what the resource
+limits defend.
+
 `rcube_image::resize()` is deliberately NOT reused: it calls `new Imagick($file)`
 with no `setSize()` hint and falls back to `imagecreatefromjpeg` when Imagick is
 absent — the exact failure this section exists to avoid. `rcube_image::props()`
