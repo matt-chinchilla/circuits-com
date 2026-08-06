@@ -33,7 +33,7 @@ import os
 import subprocess
 import sys
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageEnhance
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PUB = os.path.normpath(os.path.join(HERE, "..", "frontend", "public", "images"))
@@ -306,6 +306,17 @@ QUIET, SS = 2, 4
 FINDER_R = 1.0  # module radii; measured ceiling, do not raise
 
 
+def _has_brand_green(rgb, threshold=200):
+    """Is the logo's green still present? Guards the quantisation step."""
+    hits = 0
+    for r, g, b in rgb.getdata():
+        if g > 60 and g > r + 25 and g > b + 25:
+            hits += 1
+            if hits >= threshold:
+                return True
+    return False
+
+
 def build_qr(tmp):
     import cv2
     import numpy as np
@@ -372,8 +383,20 @@ def build_qr(tmp):
         if logo_ratio > 0:
             d.ellipse([c0 - R - unit, c0 - R - unit, c0 + R + unit, c0 + R + unit],
                       fill=QR_BG)
+            # Saturation is boosted AFTER the resize, not before, and that
+            # order is the whole trick. The badge renders around 119px, where
+            # the mark's green strokes are only a few pixels wide; downscaling
+            # averages each one against the dark plate behind it, so the green
+            # survives as a muddy olive and the thinnest stroke -- the
+            # capacitor's lead -- reads as black. Re-saturating the already
+            # blended pixels pulls that chroma back. Boosting first would just
+            # feed brighter values into the same averaging.
             logo = Image.open(LOGO).convert("RGBA").resize((int(R * 2), int(R * 2)),
                                                            Image.Resampling.LANCZOS)
+            rgb_part, alpha = logo.convert("RGB"), logo.getchannel("A")
+            rgb_part = ImageEnhance.Color(rgb_part).enhance(1.7)
+            logo = rgb_part.convert("RGBA")
+            logo.putalpha(alpha)
             mk = Image.new("L", (logo.width * 4, logo.height * 4), 0)
             ImageDraw.Draw(mk).ellipse((0, 0, mk.width - 1, mk.height - 1), fill=255)
             logo.putalpha(mk.resize(logo.size, Image.Resampling.LANCZOS))
@@ -444,10 +467,35 @@ def build_qr(tmp):
     # it.
     img, _ = render(DISPLAY_PX * 3, ratio)
     dest = os.path.join(DEST, "qr-circuitcenter.png")
-    img.convert("P", palette=Image.Palette.ADAPTIVE, colors=64).save(dest, optimize=True)
 
-    if not decodes(Image.open(dest)):
-        sys.exit("    written file does not decode -- quantisation broke it")
+    # Quantise only if the BADGE SURVIVES it.
+    #
+    # An adaptive palette allocates its slots by frequency, and this image is
+    # overwhelmingly two colours. The brand green in the centre badge is a
+    # fraction of a percent of the pixels, so a 64-colour palette spent every
+    # slot on ink, ground and antialiasing and dropped the green entirely --
+    # the capacitor came out grey and nothing failed, because a quantiser has
+    # no opinion about which colours matter.
+    #
+    # So the property is checked rather than assumed: quantise, look for the
+    # green, and fall back to RGB if it is gone. Costs bytes only when it has
+    # to, and cannot silently regress.
+    best = None
+    for colours in (64, 128, 256):
+        cand = img.convert("P", palette=Image.Palette.ADAPTIVE, colors=colours)
+        if _has_brand_green(cand.convert("RGB")):
+            best = (cand, f"{colours}-colour palette")
+            break
+    if best is None:
+        best = (img, "RGB (palette dropped the badge green)")
+    best[0].save(dest, optimize=True)
+
+    written = Image.open(dest)
+    if not _has_brand_green(written.convert("RGB")):
+        sys.exit("    written file lost the badge green")
+    if not decodes(written):
+        sys.exit("    written file does not decode -- encoding broke it")
+    print(f"    badge green preserved via {best[1]}")
 
     print(f"    logo {int(ratio*100)}%: covers {covered}/{total} modules "
           f"({100*covered/total:.1f}%), decodes at >= {floor}px")
