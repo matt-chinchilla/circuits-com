@@ -29,7 +29,9 @@ environment. Use a virtualenv if that matters:
     /tmp/sigenv/bin/pip install pillow opencv-python-headless
     /tmp/sigenv/bin/python mail/make-signature-assets.py
 """
+import json
 import os
+import re
 import subprocess
 import sys
 
@@ -93,76 +95,162 @@ SPINE_HEX = "#2e8b1a"
 PILL_GLYPHS = ("phone", "email", "website")
 
 
-def build_icons(tmp):
-    """Rasterise each chip. Returns [(name, bytes)]."""
-    # ImageMagick's internal MSVG is the only renderer installed here. It draws
-    # the geometry correctly but antialiases badly at target size, so everything
-    # is supersampled and downsampled in Pillow instead.
-    S = ICON_SIZE * ICON_SS
-    inset = S * 0.30  # glyph occupies the middle 40%
-    scale = (S - inset * 2) / 24
-    out = []
-    for name, path in GLYPHS.items():
-        svg = (
-            f'<svg xmlns="http://www.w3.org/2000/svg" width="{S}" height="{S}" '
-            f'viewBox="0 0 {S} {S}">'
-            f'<rect x="{ICON_SS*1.5}" y="{ICON_SS*1.5}" width="{S-ICON_SS*3}" '
-            f'height="{S-ICON_SS*3}" rx="{S*0.28}" fill="{PLATE}" stroke="{EDGE}" '
-            f'stroke-width="{ICON_SS*2.2}"/>'
-            f'<g transform="translate({inset},{inset}) scale({scale})">'
-            f'<path d="{path}" fill="{INK_HEX}"/></g></svg>'
-        )
-        sp = os.path.join(tmp, f"{name}.svg")
-        bp = os.path.join(tmp, f"{name}.png")
-        with open(sp, "w") as fh:
-            fh.write(svg)
-        subprocess.run(["convert", "-background", "none", sp, bp], check=True)
-
-        im = Image.open(bp).convert("RGBA")
-        if im.size != (S, S):
-            im = im.resize((S, S), Image.Resampling.LANCZOS)
-        flat = Image.new("RGB", im.size, "white")
-        flat.paste(im, (0, 0), im)
-        flat = flat.resize((ICON_SIZE, ICON_SIZE), Image.Resampling.LANCZOS)
-
-        dest = os.path.join(DEST, f"icon-{name}.png")
-        flat.convert("P", palette=Image.Palette.ADAPTIVE, colors=64).save(dest, optimize=True)
-        out.append((name, os.path.getsize(dest)))
-    return out
-
-
-# The pill icon discs and the social glyphs.
+# The plateless social glyphs and the pill icon discs.
 #
-# V13 puts its social marks on the white card as BARE glyphs, and that is safe
-# there for the same reason the plated chips were safe standing alone: the card
-# declares its own white ground, so an inverting client flips card and glyph
-# together. The plate only ever existed to supply a ground that was missing.
+# The reference puts its social marks on the white card as BARE glyphs, and
+# that is safe there for the same reason a plated chip was safe standing alone:
+# the card declares its own white ground, so an inverting client flips card and
+# glyph together. The plate only ever existed to supply a ground that was
+# missing.
 #
 # The pill icons keep a ground, but as a tinted DISC rather than a rounded
-# plate -- it is what the reference does, and a circle inside a capsule reads
-# as one component where a square inside a capsule reads as two.
+# plate -- a circle inside a capsule reads as one component where a square
+# inside a capsule reads as two.
 SOCIAL_SIZE = 60           # 60px source for a 20px render
 BADGE_SIZE, BADGE_SS = 88, 4   # 88px source for a 22px render
 BADGE_DISC = "#e4f0e0"     # SIG_SPINE washed down onto white
 BADGE_GLYPHS = ("phone", "email", "website")
-SOCIAL_GLYPHS = ("github", "linkedin", "instagram", "x")
+BRANDS_JSON = os.path.join(HERE, "signature-brand-icons.json")
 
 
 # The backdrop.
 #
-# V13's ground is a lavender wash: #f3f1ff flat, warming to #deccfb toward the
-# top right. Those are its brand hues, not ours, so the RELATIONSHIP is carried
-# over rather than the colours -- the same lightness and the same corner
-# warming, rotated onto the green this project already uses.
+# V13's ground is a lavender wash, #f3f1ff flat warming to #deccfb toward the
+# top right. Those are its brand hues, not ours, so the RELATIONSHIP carries
+# over rather than the colours -- the same lightness and corner warming,
+# rotated onto the green this project already uses.
 #
 # Shipped as a PNG because CSS gradients do not render in Outlook, which uses
 # Word's engine. The template pairs it with a flat bgcolor, so Outlook gets the
-# flat tint and everyone else gets the wash. It is sized to the signature and
-# never tiled: background-size is not reliable in email either.
+# tint and everyone else the wash. Sized to the signature and never tiled:
+# background-size is not reliable in email either.
 BACKDROP_W, BACKDROP_H = 600, 360
 BACKDROP_BASE = (243, 248, 242)   # very light green-cast, V13's #f3f1ff rotated
 BACKDROP_WARM = (203, 229, 202)   # the corner wash, V13's #deccfb rotated
 
+
+# ---------------------------------------------------------------------------
+# Rasterisation
+# ---------------------------------------------------------------------------
+#
+# Through headless Chrome, not ImageMagick.
+#
+# `convert` here has only the internal MSVG renderer -- no rsvg, inkscape or
+# sharp delegate -- and MSVG is not a conforming SVG parser. It rejects path
+# data that is perfectly valid, dying on a relative lineto written `l3.263-.582`
+# with "non-conforming drawing primitive definition". Several of the brand marks
+# fail exactly that way, so this is a correctness fix and not a preference. It
+# also antialiases badly at target size, which is why the earlier icons were
+# supersampled 4x to compensate.
+#
+# Chrome is what the shipped favicons were rasterised with, for the same
+# reasons. Everything is laid out on ONE page and captured in ONE invocation
+# then sliced: 50-odd separate Chrome launches would dominate the runtime.
+CHROME = "google-chrome"
+RASTER_COLS = 8
+
+
+def rasterize(items, cell, tmp, tag):
+    """items: [(name, svg_markup)] -> {name: RGBA Image, `cell` px square}.
+
+    Each glyph is drawn into its own cell-sized box on a grid, so slicing is
+    arithmetic rather than detection.
+    """
+    if not items:
+        return {}
+    cols = min(RASTER_COLS, len(items))
+    rows = (len(items) + cols - 1) // cols
+    w, h = cols * cell, rows * cell
+
+    boxes = []
+    for i, (_, markup) in enumerate(items):
+        x, y = (i % cols) * cell, (i // cols) * cell
+        boxes.append(
+            f'<div style="position:absolute;left:{x}px;top:{y}px;'
+            f'width:{cell}px;height:{cell}px">{markup}</div>'
+        )
+    page = os.path.join(tmp, f"sheet-{tag}.html")
+    shot = os.path.join(tmp, f"sheet-{tag}.png")
+    with open(page, "w") as fh:
+        fh.write(
+            "<!doctype html><meta charset=utf-8>"
+            f'<body style="margin:0;background:transparent;width:{w}px;height:{h}px">'
+            + "".join(boxes) + "</body>"
+        )
+
+    subprocess.run(
+        [CHROME, "--headless=new", "--disable-gpu", "--no-sandbox", "--hide-scrollbars",
+         "--default-background-color=00000000", f"--window-size={w},{h}",
+         f"--screenshot={shot}", "file://" + page],
+        check=True, capture_output=True,
+    )
+
+    sheet = Image.open(shot).convert("RGBA")
+    if sheet.size != (w, h):
+        # A mismatch would silently slice the wrong pixels, so it is an error
+        # rather than something to resize around.
+        raise RuntimeError(f"{tag}: expected a {w}x{h} sheet, got {sheet.size}")
+
+    return {name: sheet.crop(((i % cols) * cell, (i // cols) * cell,
+                              (i % cols) * cell + cell, (i // cols) * cell + cell))
+            for i, (name, _) in enumerate(items)}
+
+
+def social_slug(label):
+    """Label -> filename key. MUST match sig_social_slug() in the template.
+
+    Lowercase, then drop anything that is not a letter or digit. Deliberately
+    NOT simple-icons' own slug field: for "dev.to" theirs is "devdotto" and this
+    gives "devto". One rule applied to the title beats importing a second
+    identifier that agrees 49 times in 50.
+    """
+    return re.sub(r"[^a-z0-9]+", "", label.lower())
+
+
+def brand_paths():
+    """Every social glyph to generate: the curated brand set, plus LinkedIn.
+
+    Brand paths come from signature-brand-icons.json, extracted once from
+    simple-icons rather than typed from memory -- a subtly wrong path renders a
+    subtly wrong logo, which is worse than no logo.
+
+    LinkedIn is carried in GLYPHS instead because it was REMOVED from
+    simple-icons at the brand owner's request; this path predates that file and
+    is verified visually. Slack, Skype, CodePen and AngelList were removed the
+    same way and are deliberately NOT reinstated -- a label with no icon file
+    renders as a text link, which the template already supports.
+    """
+    with open(BRANDS_JSON) as fh:
+        data = json.load(fh)
+    out = {social_slug(title): v["path"] for title, v in data["icons"].items()}
+    out["linkedin"] = GLYPHS["linkedin"]
+    return out
+
+
+def build_icons(tmp):
+    """Plated chips. Returns [(name, bytes)]."""
+    S = ICON_SIZE * ICON_SS
+    inset = S * 0.30  # glyph occupies the middle 40%
+    scale = (S - inset * 2) / 24
+    items = [(name, (
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{S}" height="{S}" '
+        f'viewBox="0 0 {S} {S}">'
+        f'<rect x="{ICON_SS*1.5}" y="{ICON_SS*1.5}" width="{S-ICON_SS*3}" '
+        f'height="{S-ICON_SS*3}" rx="{S*0.28}" fill="{PLATE}" stroke="{EDGE}" '
+        f'stroke-width="{ICON_SS*2.2}"/>'
+        f'<g transform="translate({inset},{inset}) scale({scale})">'
+        f'<path d="{path}" fill="{INK_HEX}"/></g></svg>'
+    )) for name, path in GLYPHS.items()]
+
+    out = []
+    for name, im in rasterize(items, S, tmp, "icons").items():
+        flat = Image.new("RGB", im.size, "white")
+        flat.paste(im, (0, 0), im)
+        flat = flat.resize((ICON_SIZE, ICON_SIZE), Image.Resampling.LANCZOS)
+        dest = os.path.join(DEST, f"icon-{name}.png")
+        flat.convert("P", palette=Image.Palette.ADAPTIVE, colors=64).save(dest, optimize=True)
+        out.append((name, os.path.getsize(dest)))
+    return sorted(out)
 
 def build_backdrop():
     from math import hypot
@@ -188,84 +276,60 @@ def build_backdrop():
 def build_socials(tmp):
     """Bare ink glyphs, for the white card. Returns [(name, bytes)]."""
     S = SOCIAL_SIZE * GLYPH_SS
+    items = [(name, (
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{S}" height="{S}" '
+        f'viewBox="0 0 24 24"><path d="{path}" fill="{INK_HEX}"/></svg>'
+    )) for name, path in sorted(brand_paths().items())]
+
     out = []
-    for name in SOCIAL_GLYPHS:
-        svg = (
-            f'<svg xmlns="http://www.w3.org/2000/svg" width="{S}" height="{S}" '
-            f'viewBox="0 0 24 24"><path d="{GLYPHS[name]}" fill="{INK_HEX}"/></svg>'
-        )
-        sp, bp = os.path.join(tmp, f"s-{name}.svg"), os.path.join(tmp, f"s-{name}.png")
-        with open(sp, "w") as fh:
-            fh.write(svg)
-        subprocess.run(["convert", "-background", "none", sp, bp], check=True)
-        im = Image.open(bp).convert("RGBA")
-        if im.size != (S, S):
-            im = im.resize((S, S), Image.Resampling.LANCZOS)
+    for name, im in rasterize(items, S, tmp, "socials").items():
         im = im.resize((SOCIAL_SIZE, SOCIAL_SIZE), Image.Resampling.LANCZOS)
         dest = os.path.join(DEST, f"social-{name}.png")
         im.save(dest, optimize=True)
         out.append((name, os.path.getsize(dest)))
-    return out
-
+    return sorted(out)
 
 def build_badges(tmp):
     """Tinted disc with a spine-green glyph, for inside the pills."""
     S = BADGE_SIZE * BADGE_SS
     inset = S * 0.27
     scale = (S - inset * 2) / 24
+    items = [(name, (
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{S}" height="{S}" '
+        f'viewBox="0 0 {S} {S}">'
+        f'<circle cx="{S/2}" cy="{S/2}" r="{S/2}" fill="{BADGE_DISC}"/>'
+        f'<g transform="translate({inset},{inset}) scale({scale})">'
+        f'<path d="{GLYPHS[name]}" fill="{SPINE_HEX}"/></g></svg>'
+    )) for name in BADGE_GLYPHS]
+
     out = []
-    for name in BADGE_GLYPHS:
-        svg = (
-            f'<svg xmlns="http://www.w3.org/2000/svg" width="{S}" height="{S}" '
-            f'viewBox="0 0 {S} {S}">'
-            f'<circle cx="{S/2}" cy="{S/2}" r="{S/2}" fill="{BADGE_DISC}"/>'
-            f'<g transform="translate({inset},{inset}) scale({scale})">'
-            f'<path d="{GLYPHS[name]}" fill="{SPINE_HEX}"/></g></svg>'
-        )
-        sp, bp = os.path.join(tmp, f"b-{name}.svg"), os.path.join(tmp, f"b-{name}.png")
-        with open(sp, "w") as fh:
-            fh.write(svg)
-        subprocess.run(["convert", "-background", "none", sp, bp], check=True)
-        im = Image.open(bp).convert("RGBA")
-        if im.size != (S, S):
-            im = im.resize((S, S), Image.Resampling.LANCZOS)
+    for name, im in rasterize(items, S, tmp, "badges").items():
         im = im.resize((BADGE_SIZE, BADGE_SIZE), Image.Resampling.LANCZOS)
         dest = os.path.join(DEST, f"badge-{name}.png")
         im.save(dest, optimize=True)
         out.append((name, os.path.getsize(dest)))
-    return out
-
+    return sorted(out)
 
 def build_glyphs(tmp):
     """Plateless glyphs in the spine green. Returns [(name, bytes)]."""
     S = GLYPH_SIZE * GLYPH_SS
     scale = S / 24
+    items = [(name, (
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{S}" height="{S}" '
+        f'viewBox="0 0 {S} {S}"><g transform="scale({scale})">'
+        f'<path d="{GLYPHS[name]}" fill="{SPINE_HEX}"/></g></svg>'
+    )) for name in PILL_GLYPHS]
+
     out = []
-    for name in PILL_GLYPHS:
-        svg = (
-            f'<svg xmlns="http://www.w3.org/2000/svg" width="{S}" height="{S}" '
-            f'viewBox="0 0 {S} {S}"><g transform="scale({scale})">'
-            f'<path d="{GLYPHS[name]}" fill="{SPINE_HEX}"/></g></svg>'
-        )
-        sp = os.path.join(tmp, f"glyph-{name}.svg")
-        bp = os.path.join(tmp, f"glyph-{name}.png")
-        with open(sp, "w") as fh:
-            fh.write(svg)
-        subprocess.run(["convert", "-background", "none", sp, bp], check=True)
-
-        im = Image.open(bp).convert("RGBA")
-        if im.size != (S, S):
-            im = im.resize((S, S), Image.Resampling.LANCZOS)
+    for name, im in rasterize(items, S, tmp, "glyphs").items():
         im = im.resize((GLYPH_SIZE, GLYPH_SIZE), Image.Resampling.LANCZOS)
-
-        # Kept RGBA rather than palette-quantised: the alpha edge is the whole
-        # point of a plateless glyph, and a 64-colour palette bands it visibly
-        # at 16px against a tinted pill.
+        # RGBA rather than palette-quantised: the alpha edge is the whole point
+        # of a plateless glyph, and 64 colours bands it visibly at 16px against
+        # a tinted pill.
         dest = os.path.join(DEST, f"glyph-{name}.png")
         im.save(dest, optimize=True)
         out.append((name, os.path.getsize(dest)))
-    return out
-
+    return sorted(out)
 
 # ---------------------------------------------------------------------------
 # QR
