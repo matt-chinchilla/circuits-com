@@ -285,7 +285,24 @@ def build_glyphs(tmp):
 # corrupts the ratio; the measured ceiling is 1.0 module of radius, above which
 # nothing decodes at any size.
 
-QUIET, SS = 4, 4
+# QUIET is 2 modules, not the spec's 4, and the difference is made up by the
+# tinted panel the template places the code on -- that padding is the same
+# colour as the code's ground, so a scanner reads one continuous quiet zone
+# across the join.
+#
+# It matters because the quiet zone is baked into the image and therefore eats
+# the display size: at 4 modules the border is 22% of the file, so a 184px
+# render put only 144px of actual code on screen -- about 5px per module, which
+# is where decoding starts failing. At 2 modules the same 184px carries 162px
+# of code. Fewer wasted pixels AND a smaller tinted margin, which is the shape
+# this design wanted anyway.
+# The size the TEMPLATE renders this at; the shipped file is 3x it for
+# resolution. Chosen by measuring browser-rendered decodes rather than by
+# theory -- see the note in build_qr. Keep in step with 'qr_size' in
+# signature-roster.php.
+DISPLAY_PX = 180
+
+QUIET, SS = 2, 4
 FINDER_R = 1.0  # module radii; measured ceiling, do not raise
 
 
@@ -402,12 +419,30 @@ def build_qr(tmp):
         sys.exit("    no logo size decoded -- refusing to write an unscannable code")
 
     ratio, floor, covered, total = chosen
-    # 640px source. The code renders around 220px, and a source under ~2.5x
-    # that leaves the browser downscaling module edges into mush -- which does
-    # not show up when you decode the source file, only when you decode a
-    # screenshot of the rendered page. Palette-quantised: two colours plus the
-    # badge, so RGB spends ~3x the bytes for no visible gain.
-    img, _ = render(640, ratio)
+    # Source at 3x the render size, for resolution on a 2x screen. The ratio
+    # itself buys nothing -- that was tested and is worth recording so nobody
+    # re-derives it.
+    #
+    # Decoding a BROWSER-RENDERED code is erratic with respect to display size
+    # in a way that has no threshold to find. From a 640px source it read at
+    # 180px, failed at 190 through 210, read again at 220 and 230. The obvious
+    # theory was that an integer downscale ratio would land module edges on
+    # whole pixels, so the source was pinned to exactly 3x -- and at exactly
+    # 3.00x it FAILED, while 3.25x and 2.66x read. The theory is wrong.
+    #
+    # What this actually is: OpenCV's detector binarizing badly at particular
+    # module-to-pixel ratios. The code is fine, and the proof is that the same
+    # failing render decodes perfectly when upscaled 3x with nearest-neighbour
+    # -- the geometry and the data are intact, the reader is not.
+    #
+    # So DISPLAY_PX is chosen EMPIRICALLY: 180 is the one size that decoded in
+    # both independent sweeps. Treat that as a weak signal, not a guarantee.
+    # A phone camera is a far better reader than this and works from a
+    # high-resolution capture rather than a fixed downscale, so it is more
+    # capable than anything measured here -- but it has to be tested on a real
+    # device, because nothing available in this environment can stand in for
+    # it.
+    img, _ = render(DISPLAY_PX * 3, ratio)
     dest = os.path.join(DEST, "qr-circuitcenter.png")
     img.convert("P", palette=Image.Palette.ADAPTIVE, colors=64).save(dest, optimize=True)
 
@@ -417,7 +452,7 @@ def build_qr(tmp):
     print(f"    logo {int(ratio*100)}%: covers {covered}/{total} modules "
           f"({100*covered/total:.1f}%), decodes at >= {floor}px")
     print(f"    qr-circuitcenter.png  {os.path.getsize(dest):,}B  "
-          f"(set qr_size >= {floor} in the roster)")
+          f"(render at EXACTLY {DISPLAY_PX}px; floor {floor}px)")
 
 
 def main():

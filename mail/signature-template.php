@@ -389,7 +389,7 @@ function sig_pill(string $glyph, string $value): string
     return '<table border="0" cellpadding="0" cellspacing="0" role="presentation"'
         . ' style="border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt;">'
         . '<tr><td bgcolor="' . SIG_PILL_BG . '" style="background-color:' . SIG_PILL_BG
-        . ';border:1px solid ' . SIG_PILL_EDGE . ';border-radius:999px;padding:7px 15px 7px 7px;">'
+        . ';border-radius:999px;padding:7px 15px 7px 7px;">'
         . $inner . '</td></tr></table>';
 }
 
@@ -503,9 +503,10 @@ function sig_social_row(array $person, string $iconBase): string
             $mark = sig_chip($iconBase, $key, $label, 30);
         }
         if ($mark !== '') {
-            $chips[] = '<td valign="middle" style="padding:0 16px 0 0;font-size:0;line-height:0;'
-                . 'mso-line-height-rule:exactly;"><a href="' . sig_esc($url)
-                . '" style="text-decoration:none;">' . $mark . '</a></td>';
+            $chips[] = '<td valign="middle" class="cc-chip" style="padding:0 0 0 16px;'
+                . 'font-size:0;line-height:0;mso-line-height-rule:exactly;">'
+                . '<a href="' . sig_esc($url) . '" style="text-decoration:none;">'
+                . $mark . '</a></td>';
         } else {
             $texts[] = sig_link($url, $label);
         }
@@ -517,7 +518,7 @@ function sig_social_row(array $person, string $iconBase): string
 
     $out = ['<table border="0" cellpadding="0" cellspacing="0" role="presentation"'
         . ' style="border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt;'
-        . 'margin-top:14px;"><tr>'];
+        . 'margin-top:8px;"><tr>'];
     $out = array_merge($out, $chips);
 
     if ($texts) {
@@ -621,7 +622,7 @@ function sig_qr_panel(array $company): string
     }
     $size = max(112, (int) ($company['qr_size'] ?? 220));
     $url  = trim((string) ($company['label'] ?? '')) ?: 'our site';
-    $pad  = 16;
+    $pad  = 12;
 
     return '<table border="0" cellpadding="0" cellspacing="0" role="presentation"'
         . ' style="border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt;'
@@ -731,21 +732,24 @@ function sig_build(array $person, array $company, string $mailbox): string
             . $whoLine . '</div>';
     }
 
+    // Socials ride INSIDE the text column, flushed right under the title,
+    // rather than holding a row of their own. That is what lets everything
+    // below move up: the row is gone, the left column is shorter, and the
+    // full-height QR panel shrinks to match it.
+    $socials = sig_social_row($person, $iconBase);
+    if ($socials !== '') {
+        $lines[] = '<table border="0" cellpadding="0" cellspacing="0" role="presentation"'
+            . ' style="border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt;'
+            . 'width:100%;"><tr><td align="right">' . $socials . '</td></tr></table>';
+    }
+
     $ident[] = '<td valign="middle">' . implode('', $lines) . '</td>';
     $ident[] = '</tr></table>';
 
-    $left    = [implode('', $ident)];
-    $pills   = sig_contact_grid(sig_contact_rows($person, $mailbox), $iconBase);
-    $socials = sig_social_row($person, $iconBase);
-
-    // Socials sit directly under the identity block, above the pills. They are
-    // small, and up here they read as part of who this is; parked under the
-    // pills they read as an afterthought at the bottom of a list.
-    if ($socials !== '') {
-        $left[] = $socials;
-    }
+    $left  = [implode('', $ident)];
+    $pills = sig_contact_grid(sig_contact_rows($person, $mailbox), $iconBase);
     if ($pills !== '') {
-        $left[] = '<div style="line-height:0;font-size:0;height:16px;">&nbsp;</div>' . $pills;
+        $left[] = '<div style="line-height:0;font-size:0;height:14px;">&nbsp;</div>' . $pills;
     }
 
     // ---- the card ---------------------------------------------------------
