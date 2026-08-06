@@ -68,6 +68,38 @@ return [
          */
         'mark'      => 'https://circuitcenter.ai/images/apple-touch-icon.png',
         'mark_size' => 40,
+
+        /**
+         * Base for the contact and social icons. The template appends
+         * '/icon-<name>.png', so the files are icon-phone.png, icon-github.png
+         * and so on, generated into frontend/public/images/sig/.
+         *
+         * Each is a dark glyph on its OWN light plate, for the reason the mark
+         * above is a full-bleed tile: a transparent monochrome glyph borrows
+         * whatever surface the client is painting, and a client that inverts
+         * that surface erases it. The plate is baked into the PNG, so the
+         * contrast is fixed by the file.
+         *
+         * Unset this and every icon reverts to the 10px mono text label it
+         * replaced. That is a real fallback, not a theoretical one: it is what
+         * makes the images safe to ship before they are deployed.
+         */
+        'icons' => 'https://circuitcenter.ai/images/sig',
+
+        /**
+         * QR to the site, with the company mark in the middle.
+         *
+         * 112px is a FLOOR, not a preference. The code is generated at error
+         * correction level H and the centre badge spends part of that budget;
+         * every candidate was decoded back at each size it might render at,
+         * and 112 is the smallest that still resolves. Shrinking this to fit a
+         * layout produces a decoration that looks like a QR code and is not
+         * one. Regenerate with `python3 mail/make-signature-assets.py` if the
+         * URL ever changes — it re-derives this floor and prints it. Do not
+         * edit the PNG by hand.
+         */
+        'qr'      => 'https://circuitcenter.ai/images/sig/qr-circuitcenter.png',
+        'qr_size' => 112,
     ],
 
     /* -------------------------------------------------------------------
@@ -114,8 +146,16 @@ return [
              *
              * Empty removes the entire left-hand column; it does not leave a
              * gap where a face should be.
+             *
+             * Supplied 2026-08-06. Source was a full-torso photograph, cropped
+             * to head-and-shoulders before shipping: at the 72px this renders
+             * at, the original framing left the face about twenty pixels
+             * across. 288px square (4x) so it is not soft on a retina screen,
+             * and square rather than pre-masked because the template rounds it
+             * with border-radius, which Outlook and Word ignore -- a
+             * pre-masked circle would show its corner fill as a grey box there.
              */
-            'headshot' => '',
+            'headshot' => 'https://circuitcenter.ai/images/team/matthew.jpg',
 
             /**
              * Socials. Label => absolute https URL, rendered as a LINKS row in

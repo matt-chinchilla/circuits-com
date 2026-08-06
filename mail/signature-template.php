@@ -229,6 +229,49 @@ function sig_link(string $href, string $text): string
  *
  * @return array<int, array{0:string, 1:string}> [LABEL, value HTML]
  */
+/**
+ * One icon chip.
+ *
+ * WHY A PLATE AND NOT A BARE GLYPH. A monochrome glyph on transparency
+ * disappears the instant a client renders it on a dark background, which is
+ * why this file carried text labels for its whole first life. Each PNG bakes
+ * in its own light plate, so the icon brings its own ground and an inverting
+ * client cannot erase it.
+ *
+ * WHY ALT TEXT IS NEVER EMPTY HERE. Most clients block remote images by
+ * default. When they do, `alt` is all that survives — so it carries the exact
+ * word the mono label used to print ("Mobile", "GitHub"). Images off degrades
+ * to the previous design rather than to a row of broken boxes. This is the
+ * opposite of the company mark, whose alt is empty precisely because the name
+ * is printed beside it.
+ *
+ * Returns '' when the icon base is unset, which is what makes the caller's
+ * text fallback reachable — a deployment that has not shipped the images
+ * shows labels rather than seven broken boxes.
+ */
+function sig_chip(string $base, string $name, string $alt, int $size): string
+{
+    $base = rtrim(trim($base), '/');
+    if ($base === '' || !preg_match('/^[a-z][a-z0-9-]*$/', $name)) {
+        return '';
+    }
+    $src = sig_safe_url($base . '/icon-' . $name . '.png', ['http', 'https']);
+    if ($src === '') {
+        return '';
+    }
+
+    return '<img src="' . sig_esc($src) . '" width="' . $size . '" height="' . $size . '"'
+        . ' alt="' . sig_esc($alt) . '" border="0" style="display:block;width:' . $size
+        . 'px;height:' . $size . 'px;border:0;outline:none;text-decoration:none;">';
+}
+
+/**
+ * Contact rows as [label, icon-name, value-html].
+ *
+ * The label survives alongside the icon name because it is not decoration:
+ * it is the alt text, and it is the whole rendering when no icons are
+ * configured.
+ */
 function sig_contact_rows(array $person, string $mailbox): array
 {
     $rows = [];
@@ -236,41 +279,32 @@ function sig_contact_rows(array $person, string $mailbox): array
     $phone = trim((string) ($person['phone'] ?? ''));
     if ($phone !== '') {
         $href   = trim((string) ($person['phone_href'] ?? '')) ?: sig_tel_href($phone);
-        $rows[] = ['Mobile', sig_link($href, $phone)];
+        $rows[] = ['Mobile', 'phone', sig_link($href, $phone)];
     }
 
     $site = trim((string) ($person['website'] ?? ''));
     if ($site !== '') {
         $href   = trim((string) ($person['website_href'] ?? '')) ?: sig_web_href($site);
-        $rows[] = ['Website', sig_link($href, $site)];
+        $rows[] = ['Website', 'website', sig_link($href, $site)];
     }
 
     // The published address, which is not always the mailbox — see the roster.
     $email = trim((string) ($person['email'] ?? '')) ?: $mailbox;
     if ($email !== '') {
-        $rows[] = ['Email', sig_link('mailto:' . $email, $email)];
-    }
-
-    $links = [];
-    foreach ((array) ($person['socials'] ?? []) as $label => $url) {
-        $label = trim((string) $label);
-        $url   = trim((string) $url);
-        if ($label !== '' && sig_safe_url($url, ['http', 'https']) !== '') {
-            $links[] = sig_link($url, $label);
-        }
-    }
-    if ($links) {
-        // &middot; as an entity, not the glyph: non-ASCII characters in source
-        // get mangled to escape literals by some editors in this repo.
-        $sep    = '<span style="color:' . SIG_LABEL . ';">&nbsp;&middot;&nbsp;</span>';
-        $rows[] = ['Links', implode($sep, $links)];
+        $rows[] = ['Email', 'email', sig_link('mailto:' . $email, $email)];
     }
 
     return $rows;
 }
 
-/** The grid itself. Returns '' when there is nothing to put in it. */
-function sig_contact_grid(array $rows): string
+/**
+ * The grid. Returns '' when there is nothing to put in it.
+ *
+ * The label column is an icon when the images are configured and the 10px
+ * mono word when they are not. Both are the same column at the same width, so
+ * the value column lines up either way.
+ */
+function sig_contact_grid(array $rows, string $iconBase): string
 {
     if (!$rows) {
         return '';
@@ -280,23 +314,85 @@ function sig_contact_grid(array $rows): string
         . ' style="border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt;">'];
 
     $last = count($rows) - 1;
-    foreach ($rows as $i => [$label, $value]) {
+    foreach ($rows as $i => [$label, $icon, $value]) {
         // 10px of air above the first row separates the grid from the title.
         $top    = $i === 0 ? 10 : 0;
-        $bottom = $i === $last ? 0 : 5;
+        $bottom = $i === $last ? 0 : 6;
+        $chip   = sig_chip($iconBase, $icon, $label, 22);
 
         $out[] = '<tr>';
-        $out[] = '<td valign="top" style="padding:' . $top . 'px 14px ' . $bottom . 'px 0;'
-            . 'font-family:' . SIG_MONO . ';font-size:10px;line-height:17px;letter-spacing:0.6px;'
-            . 'color:' . SIG_LABEL . ';white-space:nowrap;mso-line-height-rule:exactly;">'
-            . sig_esc(strtoupper($label)) . '</td>';
-        $out[] = '<td valign="top" style="padding:' . $top . 'px 0 ' . $bottom . 'px 0;'
+        if ($chip !== '') {
+            // valign middle, not top: a 22px chip beside a 17px line reads as
+            // slipped when both are flushed to the top of the row.
+            $out[] = '<td width="22" valign="middle" style="width:22px;padding:' . $top
+                . 'px 10px ' . $bottom . 'px 0;font-size:0;line-height:0;'
+                . 'mso-line-height-rule:exactly;">' . $chip . '</td>';
+        } else {
+            $out[] = '<td valign="top" style="padding:' . $top . 'px 14px ' . $bottom . 'px 0;'
+                . 'font-family:' . SIG_MONO . ';font-size:10px;line-height:17px;letter-spacing:0.6px;'
+                . 'color:' . SIG_LABEL . ';white-space:nowrap;mso-line-height-rule:exactly;">'
+                . sig_esc(strtoupper($label)) . '</td>';
+        }
+        $out[] = '<td valign="middle" style="padding:' . $top . 'px 0 ' . $bottom . 'px 0;'
             . 'font-family:' . SIG_SANS . ';font-size:13px;line-height:17px;'
             . 'color:' . SIG_INK . ';mso-line-height-rule:exactly;">' . $value . '</td>';
         $out[] = '</tr>';
     }
 
     $out[] = '</table>';
+
+    return implode('', $out);
+}
+
+/**
+ * The social row: one linked chip per network, or text links when the icons
+ * are not configured.
+ *
+ * A label with no matching icon file still renders — as a text link, in the
+ * same row. That keeps the roster's promise that ANY label works ('Scholar',
+ * 'Calendly', 'Bluesky'); adding an icon for one is an optimisation, not a
+ * precondition for listing it.
+ */
+function sig_social_row(array $person, string $iconBase): string
+{
+    $chips = [];
+    $texts = [];
+
+    foreach ((array) ($person['socials'] ?? []) as $label => $url) {
+        $label = trim((string) $label);
+        $url   = trim((string) $url);
+        if ($label === '' || sig_safe_url($url, ['http', 'https']) === '') {
+            continue;
+        }
+        $chip = sig_chip($iconBase, strtolower($label), $label, 26);
+        if ($chip !== '') {
+            $chips[] = '<td valign="middle" style="padding:0 8px 0 0;font-size:0;line-height:0;'
+                . 'mso-line-height-rule:exactly;"><a href="' . sig_esc($url)
+                . '" style="text-decoration:none;">' . $chip . '</a></td>';
+        } else {
+            $texts[] = sig_link($url, $label);
+        }
+    }
+
+    if (!$chips && !$texts) {
+        return '';
+    }
+
+    $out = ['<table border="0" cellpadding="0" cellspacing="0" role="presentation"'
+        . ' style="border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt;'
+        . 'margin-top:12px;"><tr>'];
+    $out = array_merge($out, $chips);
+
+    if ($texts) {
+        // &middot; as an entity, not the glyph: non-ASCII characters in source
+        // get mangled to escape literals by some editors in this repo.
+        $sep   = '<span style="color:' . SIG_LABEL . ';">&nbsp;&middot;&nbsp;</span>';
+        $out[] = '<td valign="middle" style="font-family:' . SIG_SANS . ';font-size:12px;'
+            . 'line-height:17px;color:' . SIG_INK . ';mso-line-height-rule:exactly;">'
+            . implode($sep, $texts) . '</td>';
+    }
+
+    $out[] = '</tr></table>';
 
     return implode('', $out);
 }
@@ -313,9 +409,16 @@ function sig_company_band(array $company): string
     $tagline = trim((string) ($company['tagline'] ?? ''));
     $mark    = sig_safe_url((string) ($company['mark'] ?? ''), ['http', 'https']);
     $size    = (int) ($company['mark_size'] ?? 40);
+    $qr      = sig_safe_url((string) ($company['qr'] ?? ''), ['http', 'https']);
+    $qrSize  = (int) ($company['qr_size'] ?? 112);
 
-    $out = ['<table border="0" cellpadding="0" cellspacing="0" role="presentation"'
-        . ' style="border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt;">', '<tr>'];
+    // width:100% only when there is a QR to push to the far edge. Without one
+    // the band must stay shrink-to-fit, or the company name is left stranded
+    // against a full-width row it does not fill.
+    $wide = $qr !== '' ? 'width:100%;' : '';
+    $out  = ['<table border="0" cellpadding="0" cellspacing="0" role="presentation"'
+        . ' style="border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt;'
+        . $wide . '">', '<tr>'];
 
     if ($mark !== '') {
         // alt is EMPTY on purpose. The company name is printed immediately to
@@ -353,7 +456,23 @@ function sig_company_band(array $company): string
             . implode($sep, $second) . '</div>';
     }
 
-    $out[] = '<td valign="top">' . implode('', $lines) . '</td>';
+    $out[] = '<td valign="middle">' . implode('', $lines) . '</td>';
+
+    if ($qr !== '') {
+        // The QR is the ONLY element here that has a hard minimum size. It was
+        // decode-tested down to 112px; below that it stops resolving, so
+        // qr_size is a floor rather than a taste setting. alt is a sentence
+        // and not "QR code", because with images blocked the reader needs to
+        // know where it would have gone -- the URL is the useful part.
+        $out[] = '<td width="' . $qrSize . '" align="right" valign="middle"'
+            . ' style="width:' . $qrSize . 'px;padding:0 0 0 14px;font-size:0;line-height:0;'
+            . 'mso-line-height-rule:exactly;">'
+            . '<img src="' . sig_esc($qr) . '" width="' . $qrSize . '" height="' . $qrSize . '"'
+            . ' alt="Scan for circuitcenter.ai" border="0" style="display:block;width:'
+            . $qrSize . 'px;height:' . $qrSize . 'px;border:0;outline:none;'
+            . 'text-decoration:none;"></td>';
+    }
+
     $out[] = '</tr></table>';
 
     return implode('', $out);
@@ -371,12 +490,20 @@ function sig_company_band(array $company): string
  *     +----------+---+--------------------------------+
  *     | headshot | | | Matthew Chirichella            |
  *     |  72x72   | | | Data Scientist                 |
- *     |          | | | MOBILE   (631) 560-9048        |
- *     |          | | | WEBSITE  matthew-chirichella…  |
+ *     |          | | | (o)  (631) 560-9048            |
+ *     |          | | | (o)  matthew-chirichella.com   |
+ *     |          | | | [gh][li][ig][x]                |
  *     +----------+---+--------------------------------+
  *     ------------------------------------------------   hairline
- *     [mark] Circuit Center
- *            circuitcenter.ai . Electronic components…
+ *     [mark] Circuit Center                    +------+
+ *            circuitcenter.ai . Electronic…    |  QR  |
+ *                                              +------+
+ *
+ * The QR sits in the COMPANY band rather than beside the contact grid, which
+ * is where it looks most natural on a wide screen. That row is the narrowest
+ * one here, and a 112px column added to the contact grid instead would leave
+ * roughly 170px for the text on a 375px phone -- not enough for an email
+ * address at 13px, so it would wrap mid-address on every mobile client.
  *
  * Everything above the hairline is optional. No headshot drops the left
  * column; no name drops the personal block entirely and leaves the company
@@ -434,7 +561,9 @@ function sig_build(array $person, array $company, string $mailbox): string
                 . sig_esc($title) . '</div>';
         }
 
-        $body[] = sig_contact_grid(sig_contact_rows($person, $mailbox));
+        $iconBase = (string) ($company['icons'] ?? '');
+        $body[]   = sig_contact_grid(sig_contact_rows($person, $mailbox), $iconBase);
+        $body[]   = sig_social_row($person, $iconBase);
 
         $out[] = '<td valign="top" style="padding:0 0 16px 14px;">' . implode('', $body) . '</td>';
         $out[] = '</tr>';
