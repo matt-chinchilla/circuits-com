@@ -63,3 +63,15 @@ tmp/
 
 # Playwright/Chrome-DevTools MCP artifacts (screenshots, traces) — regenerated
 .playwright-mcp/
+
+# Tax and pricing strategy notes. NOT committed, and the repo being PUBLIC is
+# the whole reason: the document works through how to present a bundled
+# transaction so the advertising half is not swept into the taxable half, and
+# it reasons about list prices against a discount ladder.
+#
+# Publishing that would be self-defeating twice over. The analysis itself warns
+# that contract and website language are substantial evidence of how a sale
+# should be taxed -- so a public note about how to frame the split is evidence
+# against the split. And the discount ladder is the negotiating position; a
+# distributor who can read it already knows the floor.
+circuits-ai-payments-addendum.md

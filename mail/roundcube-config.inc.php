@@ -70,3 +70,24 @@ $config['skin_logo'] = [
     // again the moment that header is light. See the note in logo-mark.svg.
     'circuitcenter:*'     => 'skins/circuitcenter/images/logo-mark.svg',
 ];
+
+// ---------------------------------------------------------------------------
+// COMPOSE IN HTML BY DEFAULT — this is what makes the signature appear.
+//
+// Roundcube ships `htmleditor = 0`, meaning compose opens as PLAIN TEXT, and a
+// plain-text compose cannot render an HTML signature. The identities were
+// correct the whole time -- standard=1, html_signature=1, the markup stored --
+// and the signature still did not show, because the editor it would have been
+// inserted into does not do markup.
+//
+// 1 = always HTML. Not 4 ("always except when replying to plain text"), which
+// looks tempting and is wrong here: it would drop the signature on exactly the
+// replies most likely to go to a distributor's ticketing system.
+//
+// This is a DEFAULT, not a lock. It applies because no user has an htmleditor
+// preference of their own; anyone who sets one in Settings keeps it.
+$config['htmleditor'] = 1;
+
+// Signature above the quoted text on a reply, rather than at the very bottom
+// beneath the entire thread. Roundcube's default buries it after the quote.
+$config['sig_above'] = true;
