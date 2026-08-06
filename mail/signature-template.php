@@ -341,6 +341,22 @@ function sig_glyph(string $base, string $name, string $alt, int $size): string
 }
 
 /**
+ * Label -> icon filename key. MUST match social_slug() in
+ * make-signature-assets.py, which names the files.
+ *
+ * Lowercase, then drop everything that is not a letter or a digit. Without
+ * this the guard in sig_social was `strtolower($label)` against
+ * /^[a-z][a-z0-9-]*$/, so any label with a space or a dot -- "Stack Overflow",
+ * "dev.to", "Ko-fi", "Product Hunt" -- failed the pattern and fell through to
+ * a text link. It failed silently, which is why it looked like those brands
+ * simply had no icon.
+ */
+function sig_social_slug(string $label): string
+{
+    return preg_replace('/[^a-z0-9]+/', '', strtolower($label)) ?? '';
+}
+
+/**
  * A bare glyph in the ink colour, for placing on the white card.
  */
 function sig_social(string $base, string $name, string $alt, int $size): string
@@ -517,7 +533,7 @@ function sig_social_row(array $person, string $iconBase): string
         // Bare glyph, not a plated chip. Safe here only because the card
         // declares its own white ground — the plate existed to supply a ground
         // that used to be missing. Reverting the card means reverting this.
-        $key  = strtolower($label);
+        $key  = sig_social_slug($label);
         $mark = sig_social($iconBase, $key, $label, 20);
         if ($mark === '') {
             $mark = sig_chip($iconBase, $key, $label, 30);
