@@ -1,7 +1,7 @@
 # Self-service signature fields, in Settings → Identities
 
 Date: 2026-08-06
-Status: awaiting review
+Status: awaiting review · corrected 2026-08-06 against Roundcube 1.6.17 source
 
 ## What this is
 
@@ -35,9 +35,18 @@ call it directly. The signature the plugin writes is byte-identical to what
 `preview-signatures.php` prints for the same inputs — there is no second
 renderer to keep in step.
 
-**Roundcube's own hooks do the work.** `identity_form` injects the fields;
-`identity_save` receives them. Both exist in 1.6 and are what the settings UI is
-built on, so nothing upstream is forked.
+**Roundcube's own hooks do the work.** `identity_form` injects the fields, and
+the save side binds `identity_update` (an existing identity) plus
+`identity_create_after` (a new one). Nothing upstream is forked.
+
+> **Correction, 2026-08-06.** This section originally named an `identity_save`
+> hook. **There is no such hook in Roundcube 1.6.17.** The name came from the
+> FILE `program/actions/settings/identity_save.php`; the hooks that file fires
+> are `identity_update` (:124) and `identity_create` / `identity_create_after`
+> (:163, :178). Registering `identity_save` would have failed **silently** —
+> no error, no log line, the identity saves normally and the signature simply
+> never regenerates. Caught by reading the running container rather than by
+> trusting the name.
 
 ## Ownership: a seam, not a precedence rule
 
@@ -96,6 +105,30 @@ A new writable volume, `signature-avatars`, mounted into `roundcube` (write) and
 `https://mail.circuitcenter.ai/avatars/<file>` as static files: no PHP in the
 fetch path, and cacheable.
 
+PHP in that container runs as **www-data**, not root, so the volume has to be
+www-data-writable. A root-owned mount fails only at the first real upload,
+which is the worst time to discover it.
+
+### The form cannot carry the upload
+
+The identity form is `application/x-www-form-urlencoded` and is submitted by a
+plain `form.submit()`. The `identity_form` hook receives the FIELD array, not
+the `<form>` tag, so a plugin cannot add `enctype` — and declaring
+`'type' => 'file'` in a field is rewritten to `type="text"` at
+`rcube_output.php:356-359` with no warning. Both paths look like they work in
+the UI and post the filename as a string, with `$_FILES` empty.
+
+The supported channel is an XHR `FormData` POST to a registered plugin action
+via `rcmail.file_upload()`. **Core already does exactly this on this very
+page** — `#identityImageUpload` at `identity_edit.php:228-236`, for the
+signature image picker — so this is a precedent to copy, not a mechanism to
+invent.
+
+Core's own `upload` action is NOT reused: it caps at 64KB
+(`identity_image_size`, a global that also governs signature images) and its
+allowed types include **SVG**, which is a script-execution vector this design
+excludes. A dedicated action avoids both.
+
 Two domains then appear in one signature — assets on `circuitcenter.ai`, the
 headshot on `mail.circuitcenter.ai`. Accepted deliberately: the alternative is a
 cross-box upload path to the web box, which means an authenticated API call, a
@@ -108,6 +141,19 @@ is up and saving a photo is not.
 is 4032×3024; `imagecreatefromjpeg` allocates roughly 48MB for the bitmap alone
 and would exhaust the limit before any resizing happened. This is not a
 theoretical edge — it is the first photo anyone uploads.
+
+**Refinement:** Imagick's pixel cache is allocated by the ImageMagick C library,
+not the PHP allocator, and its own limits on this box are ~917MB memory /
+256MP area — so Imagick does not spend `memory_limit` the way GD does. That is
+*why* GD is the one that dies. `setSize()` scaled decode remains correct, for
+wall time and the library cache, but the test assertion is about PHP's own
+`memory_get_peak_usage()` staying under 64M.
+
+`rcube_image::resize()` is deliberately NOT reused: it calls `new Imagick($file)`
+with no `setSize()` hint and falls back to `imagecreatefromjpeg` when Imagick is
+absent — the exact failure this section exists to avoid. `rcube_image::props()`
+IS reused: it is already the header-only `getimagesize()` sniff, and it is what
+core uses to decide whether a file is an image at all.
 
 So GD is not used for decoding. Imagick's `setSize()` hint lets libjpeg decode a
 JPEG at 1/2, 1/4 or 1/8 scale directly through DCT scaling, so peak memory is
@@ -157,9 +203,19 @@ implies endorsement.
 - **URLs**: every social link goes through the template's existing
   `sig_safe_url`, which allow-lists http(s). A `javascript:` URL in a field that
   becomes an `href` is the stored-XSS shape this repo has been bitten by before.
-- **Authorization**: a user can only write their own identities. Roundcube's
-  `identity_save` already scopes to the session's user; the plugin must not
-  accept an `identity_id` from the request without re-checking ownership.
+- **Authorization**: Roundcube scopes every identity read and write to the
+  session user at the SQL layer, so the core UPDATE against a foreign id safely
+  no-ops. But `identity_update` fires **before** that check and its `id` is
+  unvalidated POST input — so any file write, file delete or preference write
+  the plugin keys on it must first confirm `is_array($rcmail->user->get_identity($iid))`.
+  The core save fails safe; the plugin's side effects are the only thing that
+  can go wrong, and they would go wrong quietly.
+- **The signature is stored unwashed, and that is load-bearing.** `wash_html()`
+  runs at `identity_save.php:105`, nineteen lines BEFORE the `identity_update`
+  hook at :124, so a signature the plugin substitutes reaches the database
+  byte-identical to `sig_build()` output. That is what makes the "identical to
+  preview-signatures.php" property true. The plugin must also force
+  `html_signature = 1`, or the markup is stored and rendered as plain text.
 - **Rate**: uploads are capped per user per hour, so a writable public directory
   cannot be filled from a single session.
 
