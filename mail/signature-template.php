@@ -101,6 +101,18 @@ if (!defined('SIG_ACCENT')) {
     define('SIG_RULE',     '#dfe4e7');
 
     /**
+     * The contact pills and the panel the QR sits in.
+     *
+     * A very slightly green-cast neutral rather than a pure grey: the whole
+     * palette here is built around one green, and a neutral with no cast beside
+     * it reads as a different design's leftover. Both are backgrounds only —
+     * nothing is asked to carry text contrast except the ink on top of them,
+     * which is SIG_INK at better than 15:1.
+     */
+    define('SIG_PILL_BG',   '#f4f7f6');
+    define('SIG_PILL_EDGE', '#e2e9e5');
+
+    /**
      * Type. Arial/Helvetica are appended to the site's native stacks
      * because a signature lands on machines the site never has to run on.
      * Word resolves the mono stack to Consolas.
@@ -266,6 +278,59 @@ function sig_chip(string $base, string $name, string $alt, int $size): string
 }
 
 /**
+ * A plateless glyph, for use inside a pill. See sig_chip for why the two
+ * variants exist and why neither can be substituted for the other.
+ */
+function sig_glyph(string $base, string $name, string $alt, int $size): string
+{
+    $base = rtrim(trim($base), '/');
+    if ($base === '' || !preg_match('/^[a-z][a-z0-9-]*$/', $name)) {
+        return '';
+    }
+    $src = sig_safe_url($base . '/glyph-' . $name . '.png', ['http', 'https']);
+    if ($src === '') {
+        return '';
+    }
+
+    return '<img src="' . sig_esc($src) . '" width="' . $size . '" height="' . $size . '"'
+        . ' alt="' . sig_esc($alt) . '" border="0" style="display:block;width:' . $size
+        . 'px;height:' . $size . 'px;border:0;outline:none;text-decoration:none;">';
+}
+
+/**
+ * One contact pill: a rounded, tinted capsule holding a glyph and a value.
+ *
+ * Each pill is its OWN table in its own row rather than a row of a shared
+ * table, which is what makes them shrink to fit their contents and come out
+ * different widths. A shared table would column-align them to the widest, and
+ * three equal-width capsules read as a table with the borders drawn on.
+ *
+ * border-radius is ignored by Outlook and Word, which render a square-cornered
+ * tinted box. That degrades honestly — it still reads as a contained field,
+ * which is why the tint carries the design here and the radius only sharpens
+ * it.
+ */
+function sig_pill(string $glyph, string $value): string
+{
+    $inner = '<table border="0" cellpadding="0" cellspacing="0" role="presentation"'
+        . ' style="border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt;"><tr>';
+    if ($glyph !== '') {
+        $inner .= '<td width="16" valign="middle" style="width:16px;padding:0 9px 0 0;'
+            . 'font-size:0;line-height:0;mso-line-height-rule:exactly;">' . $glyph . '</td>';
+    }
+    $inner .= '<td valign="middle" style="font-family:' . SIG_SANS . ';font-size:13px;'
+        . 'line-height:18px;color:' . SIG_INK . ';white-space:nowrap;'
+        . 'mso-line-height-rule:exactly;">' . $value . '</td>';
+    $inner .= '</tr></table>';
+
+    return '<table border="0" cellpadding="0" cellspacing="0" role="presentation"'
+        . ' style="border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt;">'
+        . '<tr><td bgcolor="' . SIG_PILL_BG . '" style="background-color:' . SIG_PILL_BG
+        . ';border:1px solid ' . SIG_PILL_EDGE . ';border-radius:999px;padding:8px 16px;">'
+        . $inner . '</td></tr></table>';
+}
+
+/**
  * Contact rows as [label, icon-name, value-html].
  *
  * The label survives alongside the icon name because it is not decoration:
@@ -282,27 +347,30 @@ function sig_contact_rows(array $person, string $mailbox): array
         $rows[] = ['Mobile', 'phone', sig_link($href, $phone)];
     }
 
+    // The published address, which does not have to be the mailbox — see the
+    // roster. Ordered above the website deliberately: it is the one line a
+    // reader is most likely to be looking for.
+    $email = trim((string) ($person['email'] ?? '')) ?: $mailbox;
+    if ($email !== '') {
+        $rows[] = ['Email', 'email', sig_link('mailto:' . $email, $email)];
+    }
+
     $site = trim((string) ($person['website'] ?? ''));
     if ($site !== '') {
         $href   = trim((string) ($person['website_href'] ?? '')) ?: sig_web_href($site);
         $rows[] = ['Website', 'website', sig_link($href, $site)];
     }
 
-    // The published address, which is not always the mailbox — see the roster.
-    $email = trim((string) ($person['email'] ?? '')) ?: $mailbox;
-    if ($email !== '') {
-        $rows[] = ['Email', 'email', sig_link('mailto:' . $email, $email)];
-    }
-
     return $rows;
 }
 
 /**
- * The grid. Returns '' when there is nothing to put in it.
+ * The stack of contact pills. Returns '' when there is nothing to put in it.
  *
- * The label column is an icon when the images are configured and the 10px
- * mono word when they are not. Both are the same column at the same width, so
- * the value column lines up either way.
+ * Falls back to the original two-column grid — 10px mono label, then value —
+ * when the images are not configured. That fallback is not decoration either:
+ * it is what the signature looked like before the icons existed, and it is
+ * what ships if the assets are ever unreachable.
  */
 function sig_contact_grid(array $rows, string $iconBase): string
 {
@@ -310,35 +378,34 @@ function sig_contact_grid(array $rows, string $iconBase): string
         return '';
     }
 
-    $out = ['<table border="0" cellpadding="0" cellspacing="0" role="presentation"'
-        . ' style="border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt;">'];
-
     $last = count($rows) - 1;
-    foreach ($rows as $i => [$label, $icon, $value]) {
-        // 10px of air above the first row separates the grid from the title.
-        $top    = $i === 0 ? 10 : 0;
-        $bottom = $i === $last ? 0 : 6;
-        $chip   = sig_chip($iconBase, $icon, $label, 22);
 
-        $out[] = '<tr>';
-        if ($chip !== '') {
-            // valign middle, not top: a 22px chip beside a 17px line reads as
-            // slipped when both are flushed to the top of the row.
-            $out[] = '<td width="22" valign="middle" style="width:22px;padding:' . $top
-                . 'px 10px ' . $bottom . 'px 0;font-size:0;line-height:0;'
-                . 'mso-line-height-rule:exactly;">' . $chip . '</td>';
-        } else {
-            $out[] = '<td valign="top" style="padding:' . $top . 'px 14px ' . $bottom . 'px 0;'
+    if ($iconBase === '') {
+        $out = ['<table border="0" cellpadding="0" cellspacing="0" role="presentation"'
+            . ' style="border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt;">'];
+        foreach ($rows as $i => [$label, , $value]) {
+            $top    = $i === 0 ? 10 : 0;
+            $bottom = $i === $last ? 0 : 5;
+            $out[]  = '<tr><td valign="top" style="padding:' . $top . 'px 14px ' . $bottom . 'px 0;'
                 . 'font-family:' . SIG_MONO . ';font-size:10px;line-height:17px;letter-spacing:0.6px;'
                 . 'color:' . SIG_LABEL . ';white-space:nowrap;mso-line-height-rule:exactly;">'
-                . sig_esc(strtoupper($label)) . '</td>';
+                . sig_esc(strtoupper($label)) . '</td>'
+                . '<td valign="top" style="padding:' . $top . 'px 0 ' . $bottom . 'px 0;'
+                . 'font-family:' . SIG_SANS . ';font-size:13px;line-height:17px;'
+                . 'color:' . SIG_INK . ';mso-line-height-rule:exactly;">' . $value . '</td></tr>';
         }
-        $out[] = '<td valign="middle" style="padding:' . $top . 'px 0 ' . $bottom . 'px 0;'
-            . 'font-family:' . SIG_SANS . ';font-size:13px;line-height:17px;'
-            . 'color:' . SIG_INK . ';mso-line-height-rule:exactly;">' . $value . '</td>';
-        $out[] = '</tr>';
+        $out[] = '</table>';
+
+        return implode('', $out);
     }
 
+    $out = ['<table border="0" cellpadding="0" cellspacing="0" role="presentation"'
+        . ' style="border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt;">'];
+    foreach ($rows as $i => [$label, $icon, $value]) {
+        $bottom = $i === $last ? 0 : 7;
+        $out[]  = '<tr><td style="padding:0 0 ' . $bottom . 'px 0;">'
+            . sig_pill(sig_glyph($iconBase, $icon, $label, 16), $value) . '</td></tr>';
+    }
     $out[] = '</table>';
 
     return implode('', $out);
@@ -364,7 +431,7 @@ function sig_social_row(array $person, string $iconBase): string
         if ($label === '' || sig_safe_url($url, ['http', 'https']) === '') {
             continue;
         }
-        $chip = sig_chip($iconBase, strtolower($label), $label, 26);
+        $chip = sig_chip($iconBase, strtolower($label), $label, 30);
         if ($chip !== '') {
             $chips[] = '<td valign="middle" style="padding:0 8px 0 0;font-size:0;line-height:0;'
                 . 'mso-line-height-rule:exactly;"><a href="' . sig_esc($url)
@@ -380,7 +447,7 @@ function sig_social_row(array $person, string $iconBase): string
 
     $out = ['<table border="0" cellpadding="0" cellspacing="0" role="presentation"'
         . ' style="border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt;'
-        . 'margin-top:12px;"><tr>'];
+        . 'margin-top:14px;"><tr>'];
     $out = array_merge($out, $chips);
 
     if ($texts) {
@@ -457,25 +524,49 @@ function sig_company_band(array $company): string
     }
 
     $out[] = '<td valign="middle">' . implode('', $lines) . '</td>';
-
-    if ($qr !== '') {
-        // The QR is the ONLY element here that has a hard minimum size. It was
-        // decode-tested down to 112px; below that it stops resolving, so
-        // qr_size is a floor rather than a taste setting. alt is a sentence
-        // and not "QR code", because with images blocked the reader needs to
-        // know where it would have gone -- the URL is the useful part.
-        $out[] = '<td width="' . $qrSize . '" align="right" valign="middle"'
-            . ' style="width:' . $qrSize . 'px;padding:0 0 0 14px;font-size:0;line-height:0;'
-            . 'mso-line-height-rule:exactly;">'
-            . '<img src="' . sig_esc($qr) . '" width="' . $qrSize . '" height="' . $qrSize . '"'
-            . ' alt="Scan for circuitcenter.ai" border="0" style="display:block;width:'
-            . $qrSize . 'px;height:' . $qrSize . 'px;border:0;outline:none;'
-            . 'text-decoration:none;"></td>';
-    }
-
     $out[] = '</tr></table>';
 
     return implode('', $out);
+}
+
+/**
+ * The QR in its tinted panel.
+ *
+ * The panel is the one element carried over from the reference design that
+ * survives every client: it is a background colour on a table cell. The
+ * reference's outer white card is not here on purpose — a white card on the
+ * white background a signature actually lands on is invisible without a
+ * border, and Outlook squares the radius and drops the shadow, so it would
+ * cost a rectangle and buy nothing.
+ *
+ * qr_size is a FLOOR. The code was decoded back at every size it might render
+ * at and stops resolving below 112px, so shrinking this to fit a layout
+ * produces something shaped like a QR code that no phone will read.
+ */
+function sig_qr_panel(array $company): string
+{
+    $qr = sig_safe_url((string) ($company['qr'] ?? ''), ['http', 'https']);
+    if ($qr === '') {
+        return '';
+    }
+    $size = max(112, (int) ($company['qr_size'] ?? 220));
+    $url  = trim((string) ($company['label'] ?? '')) ?: 'our site';
+    $pad  = 16;
+
+    return '<table border="0" cellpadding="0" cellspacing="0" role="presentation"'
+        . ' style="border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt;'
+        . 'height:100%;">'
+        . '<tr><td bgcolor="' . SIG_PILL_BG . '" align="center" valign="middle"'
+        . ' style="background-color:' . SIG_PILL_BG
+        . ';border:1px solid ' . SIG_PILL_EDGE . ';border-radius:16px;padding:' . $pad . 'px;'
+        . 'font-size:0;line-height:0;mso-line-height-rule:exactly;">'
+        // alt is a sentence, not "QR code": with images blocked the reader
+        // needs to know where it would have taken them, and the destination is
+        // the only useful part of that.
+        . '<img src="' . sig_esc($qr) . '" width="' . $size . '" height="' . $size . '"'
+        . ' alt="Scan for ' . sig_esc($url) . '" border="0" style="display:block;width:'
+        . $size . 'px;height:' . $size . 'px;border:0;outline:none;text-decoration:none;'
+        . '"></td></tr></table>';
 }
 
 // ---------------------------------------------------------------------------
@@ -519,65 +610,99 @@ function sig_build(array $person, array $company, string $mailbox): string
     $name     = trim((string) ($person['name'] ?? ''));
     $title    = trim((string) ($person['title'] ?? ''));
     $headshot = sig_safe_url((string) ($person['headshot'] ?? ''), ['http', 'https']);
+    $iconBase = (string) ($company['icons'] ?? '');
 
-    $out = ['<table border="0" cellpadding="0" cellspacing="0" role="presentation"'
-        . ' style="border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt;'
-        . 'max-width:520px;font-family:' . SIG_SANS . ';'
-        . '-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;">'];
-
-    $columns = 1; // the company band alone
-
-    if ($name !== '') {
-        $columns = $headshot !== '' ? 3 : 2;
-
-        $out[] = '<tr>';
-
-        if ($headshot !== '') {
-            // Rendered at 72; the roster asks for a 144px source so it is not
-            // soft on a 2x screen. alt is empty for the same reason as the
-            // company mark: the name is right beside it. border-radius makes
-            // it a circle everywhere except Outlook/Word, which renders the
-            // square the file is — so crop the source square and it reads
-            // correctly either way.
-            $out[] = '<td width="72" valign="top" style="padding:0 16px 16px 0;">'
-                . '<img src="' . sig_esc($headshot) . '" width="72" height="72" alt="" border="0"'
-                . ' style="display:block;width:72px;height:72px;border:0;outline:none;'
-                . 'text-decoration:none;border-radius:36px;"></td>';
-        }
-
-        // The spine. font-size:0 keeps the &nbsp; from adding width — the cell
-        // has to hold SOMETHING because Word collapses a truly empty one.
-        $out[] = '<td width="3" valign="top" bgcolor="' . SIG_SPINE . '"'
-            . ' style="width:3px;min-width:3px;background-color:' . SIG_SPINE . ';'
-            . 'font-size:0;line-height:0;mso-line-height-rule:exactly;">&nbsp;</td>';
-
-        $body = ['<div style="font-family:' . SIG_SANS . ';font-size:17px;line-height:22px;'
-            . 'font-weight:700;letter-spacing:-0.2px;color:' . SIG_INK . ';'
-            . 'mso-line-height-rule:exactly;">' . sig_esc($name) . '</div>'];
-
-        if ($title !== '') {
-            $body[] = '<div style="font-family:' . SIG_SANS . ';font-size:13px;line-height:18px;'
-                . 'color:' . SIG_INK_SOFT . ';padding-top:2px;mso-line-height-rule:exactly;">'
-                . sig_esc($title) . '</div>';
-        }
-
-        $iconBase = (string) ($company['icons'] ?? '');
-        $body[]   = sig_contact_grid(sig_contact_rows($person, $mailbox), $iconBase);
-        $body[]   = sig_social_row($person, $iconBase);
-
-        $out[] = '<td valign="top" style="padding:0 0 16px 14px;">' . implode('', $body) . '</td>';
-        $out[] = '</tr>';
-
-        // Hairline. Same font-size:0 trick, so it is 1px and not a text line.
-        $out[] = '<tr><td colspan="' . $columns . '" height="1" bgcolor="' . SIG_RULE . '"'
-            . ' style="height:1px;line-height:1px;font-size:0;background-color:' . SIG_RULE
-            . ';mso-line-height-rule:exactly;">&nbsp;</td></tr>';
+    // No person: the company band IS the signature. Unchanged, and the reason
+    // that band still exists at all -- no-reply@ has no name, no photograph and
+    // no pills, and still has to say which company is writing.
+    if ($name === '') {
+        return '<table border="0" cellpadding="0" cellspacing="0" role="presentation"'
+            . ' style="border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt;'
+            . 'max-width:560px;font-family:' . SIG_SANS . ';'
+            . '-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;">'
+            . '<tr><td>' . sig_company_band($company) . '</td></tr></table>';
     }
 
-    $pad = $name !== '' ? ' style="padding-top:14px;"' : '';
-    $out[] = '<tr><td colspan="' . $columns . '"' . $pad . '>' . sig_company_band($company)
-        . '</td></tr>';
-    $out[] = '</table>';
+    // ---- left column: identity, pills, socials ----------------------------
+    $ident = ['<table border="0" cellpadding="0" cellspacing="0" role="presentation"'
+        . ' style="border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt;"><tr>'];
+
+    if ($headshot !== '') {
+        // Rendered at 72 from a 288px source. alt is empty for the same reason
+        // as the company mark: the name is printed immediately beside it.
+        // border-radius circles it everywhere except Outlook and Word, which
+        // render the square the file actually is -- which is why the roster
+        // insists the source is cropped square rather than pre-masked.
+        $ident[] = '<td width="72" valign="middle" style="width:72px;padding:0 16px 0 0;'
+            . 'font-size:0;line-height:0;mso-line-height-rule:exactly;">'
+            . '<img src="' . sig_esc($headshot) . '" width="72" height="72" alt="" border="0"'
+            . ' style="display:block;width:72px;height:72px;border:0;outline:none;'
+            . 'text-decoration:none;border-radius:36px;"></td>';
+    }
+
+    $lines = ['<div style="font-family:' . SIG_SANS . ';font-size:21px;line-height:27px;'
+        . 'font-weight:700;letter-spacing:-0.4px;color:' . SIG_INK . ';'
+        . 'mso-line-height-rule:exactly;">' . sig_esc($name) . '</div>'];
+
+    // "CEO & Founder at Circuit Center" on one line, the company linked. This
+    // is what replaced the separate company band for a person: the band cost a
+    // third horizontal register under an already two-column layout, and the
+    // mark it carried is still present -- it is in the middle of the QR.
+    $whoLine = $title !== '' ? sig_esc($title) : '';
+    $coName  = trim((string) ($company['name'] ?? ''));
+    $coUrl   = sig_safe_url(sig_web_href((string) ($company['url'] ?? '')), ['http', 'https']);
+    if ($coName !== '') {
+        $co = $coUrl !== '' ? sig_link($coUrl, $coName) : sig_esc($coName);
+        $whoLine = $whoLine !== '' ? $whoLine . ' at ' . $co : $co;
+    }
+    if ($whoLine !== '') {
+        $lines[] = '<div style="font-family:' . SIG_SANS . ';font-size:13px;line-height:19px;'
+            . 'color:' . SIG_INK_SOFT . ';padding-top:3px;mso-line-height-rule:exactly;">'
+            . $whoLine . '</div>';
+    }
+
+    $ident[] = '<td valign="middle">' . implode('', $lines) . '</td>';
+    $ident[] = '</tr></table>';
+
+    $left    = [implode('', $ident)];
+    $pills   = sig_contact_grid(sig_contact_rows($person, $mailbox), $iconBase);
+    $socials = sig_social_row($person, $iconBase);
+
+    // Socials sit directly under the identity block, above the pills. They are
+    // small, and up here they read as part of who this is; parked under the
+    // pills they read as an afterthought at the bottom of a list.
+    if ($socials !== '') {
+        $left[] = $socials;
+    }
+    if ($pills !== '') {
+        $left[] = '<div style="line-height:0;font-size:0;height:16px;">&nbsp;</div>' . $pills;
+    }
+
+    // ---- assemble ---------------------------------------------------------
+    // max-width 560 rather than the reference's 816. A signature is scaled to
+    // fit by mobile clients, so an 816px block on a 375px phone renders 13px
+    // text at about 6px. 560 is the widest this composition goes without that.
+    $out = ['<table border="0" cellpadding="0" cellspacing="0" role="presentation"'
+        . ' style="border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt;'
+        . 'max-width:600px;font-family:' . SIG_SANS . ';'
+        . '-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;">',
+        '<tr style="height:100%;">'];
+
+    $out[] = '<td valign="top">' . implode('', $left) . '</td>';
+
+    // Its own section, running the full height of the block rather than
+    // floating beside it. height:100% on the cell is honoured by the webmail
+    // and Apple clients; Word ignores it, and there the panel is simply as tall
+    // as the QR plus its padding, which is within a few pixels of the same
+    // thing because the QR is sized to the left column in the first place.
+    $panel = sig_qr_panel($company);
+    if ($panel !== '') {
+        $out[] = '<td width="' . (max(112, (int) ($company['qr_size'] ?? 220)) + 34)
+            . '" align="right" valign="top" style="padding:0 0 0 20px;height:100%;">'
+            . $panel . '</td>';
+    }
+
+    $out[] = '</tr></table>';
 
     return implode("\n", $out);
 }

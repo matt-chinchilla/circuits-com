@@ -21,10 +21,10 @@
  * WHICH ADDRESS IS WHICH
  * The array KEY is the MAILBOX — the account the signature is installed into,
  * and the address mail actually leaves from. The 'email' FIELD is the address
- * printed in the signature, which is not always the same thing: Matthew's mail
- * leaves matthew@circuitcenter.ai but he publishes mc@matthew-chirichella.com,
- * exactly as his WiseStamp signature did. Leave 'email' empty and it falls
- * back to the mailbox, which is what you want for everyone else.
+ * PRINTED in the signature, which does not have to be the same thing: it exists
+ * so someone can publish a different address from the one they send from.
+ * Nobody does at the moment. Leave it empty and it falls back to the mailbox,
+ * which is what you want unless there is a reason otherwise.
  *
  * NAMES MUST AGREE WITH seed-contacts.php
  * That script seeds the same four people into everyone's address book from its
@@ -70,36 +70,47 @@ return [
         'mark_size' => 40,
 
         /**
-         * Base for the contact and social icons. The template appends
-         * '/icon-<name>.png', so the files are icon-phone.png, icon-github.png
-         * and so on, generated into frontend/public/images/sig/.
+         * Base for both icon families, generated into
+         * frontend/public/images/sig/ by mail/make-signature-assets.py.
          *
-         * Each is a dark glyph on its OWN light plate, for the reason the mark
-         * above is a full-bleed tile: a transparent monochrome glyph borrows
-         * whatever surface the client is painting, and a client that inverts
-         * that surface erases it. The plate is baked into the PNG, so the
-         * contrast is fixed by the file.
+         *   icon-<name>.png    a dark glyph on its OWN light plate. Used for
+         *                      the social chips, which stand alone on whatever
+         *                      surface the client is painting. The plate is
+         *                      baked into the PNG for the same reason the mark
+         *                      above is a full-bleed tile: a transparent
+         *                      monochrome glyph is erased by a client that
+         *                      inverts its background.
          *
-         * Unset this and every icon reverts to the 10px mono text label it
-         * replaced. That is a real fallback, not a theoretical one: it is what
-         * makes the images safe to ship before they are deployed.
+         *   glyph-<name>.png   the same shape with no plate, in SIG_SPINE.
+         *                      Used INSIDE the contact pills, which supply
+         *                      their own ground — a plated chip in a pill is
+         *                      two containers where the design has one. Safe
+         *                      to leave plateless because SIG_SPINE was chosen
+         *                      to clear 3:1 on both light and dark surfaces.
+         *
+         * Unset this and the pills revert to the 10px mono label column they
+         * replaced. That fallback is real, not theoretical: it is what makes
+         * these safe to ship before they are deployed.
          */
         'icons' => 'https://circuitcenter.ai/images/sig',
 
         /**
          * QR to the site, with the company mark in the middle.
          *
-         * 112px is a FLOOR, not a preference. The code is generated at error
-         * correction level H and the centre badge spends part of that budget;
-         * every candidate was decoded back at each size it might render at,
-         * and 112 is the smallest that still resolves. Shrinking this to fit a
-         * layout produces a decoration that looks like a QR code and is not
-         * one. Regenerate with `python3 mail/make-signature-assets.py` if the
-         * URL ever changes — it re-derives this floor and prints it. Do not
-         * edit the PNG by hand.
+         * Sized to stand as its own full-height section beside the person,
+         * which is also what makes it reliably scannable. 112px is the
+         * absolute floor from decoding the source file, but decoding a
+         * SCREENSHOT of the rendered page — the honest test, since that is
+         * what a phone camera sees — failed at 128. The generator only ever
+         * proves the file; the render is what a reader points a camera at, so
+         * the two have to be checked separately.
+         *
+         * Regenerate with `python3 mail/make-signature-assets.py` if the URL
+         * ever changes — it re-derives the floor and prints it. Do not edit
+         * the PNG by hand.
          */
         'qr'      => 'https://circuitcenter.ai/images/sig/qr-circuitcenter.png',
-        'qr_size' => 112,
+        'qr_size' => 220,
     ],
 
     /* -------------------------------------------------------------------
@@ -109,10 +120,10 @@ return [
 
         'matthew@circuitcenter.ai' => [
             'name'    => 'Matthew Chirichella',
-            'title'   => 'Data Scientist',
+            'title'   => 'CEO & Founder',
             'phone'   => '(631) 560-9048',
-            'website' => 'matthew-chirichella.com',
-            'email'   => 'mc@matthew-chirichella.com',
+            'website' => 'circuitcenter.ai',
+            'email'   => 'matthew@circuitcenter.ai',
 
             /**
              * Optional overrides, both empty because both derive correctly.
@@ -130,22 +141,16 @@ return [
             'website_href' => '',
 
             /**
-             * Headshot. Empty, because no photograph of anyone here exists in
-             * this repository and one is not going to be invented.
+             * Headshot. Empty removes the entire left-hand column; it does not
+             * leave a gap where a face should be, which is why the other four
+             * still look finished without one.
              *
-             * To add one:
-             *   1. save a SQUARE image, at least 144px on a side (it renders
-             *      at 72, and half the world is on a 2x screen), as
-             *      frontend/public/images/team/matthew.jpg
-             *   2. deploy the site — ./deploy.sh --frontend — because the mail
-             *      client fetches this over the public internet and will show
-             *      a broken box until the file is actually being served
-             *   3. put the deployed URL here:
-             *      https://circuitcenter.ai/images/team/matthew.jpg
-             *   4. re-run ./seed-signatures.sh
-             *
-             * Empty removes the entire left-hand column; it does not leave a
-             * gap where a face should be.
+             * To add one for somebody else: save a SQUARE image at least 144px
+             * a side (it renders at 72, and half the world is on a 2x screen)
+             * into frontend/public/images/team/, deploy with
+             * ./deploy.sh --frontend — mail clients fetch this over the public
+             * internet and show a broken box until it is really being served —
+             * then put the deployed URL here and re-run ./seed-signatures.sh.
              *
              * Supplied 2026-08-06. Source was a full-torso photograph, cropped
              * to head-and-shoulders before shipping: at the 72px this renders
@@ -175,10 +180,13 @@ return [
              * monochrome glyph disappears the moment a client inverts the
              * background. Text cannot fail any of those ways.
              *
-             * Empty, because no handles have been supplied. Do not fill these
-             * in from a guess at someone's username.
+             * Supplied 2026-08-06. Order here is the order they render.
              */
-            'socials' => [],
+            'socials' => [
+                'GitHub'    => 'https://github.com/matt-chinchilla',
+                'LinkedIn'  => 'https://www.linkedin.com/in/matthew-chirichella/',
+                'Instagram' => 'https://www.instagram.com/matthewchirichella/',
+            ],
         ],
 
         'daniel@circuitcenter.ai' => [

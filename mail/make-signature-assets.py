@@ -44,6 +44,13 @@ URL = "https://circuitcenter.ai"
 INK, PLATE, EDGE = (26, 31, 35), "#ffffff", "#dfe4e7"
 INK_HEX = "#1a1f23"
 
+# The QR's ground. It matches SIG_PILL_BG in signature-template.php, so the code
+# sits directly on its panel instead of inside a white box inside a tinted box.
+# Keep the two in step: a mismatch is not subtle, it draws a hard rectangle
+# around the code. Contrast is unaffected -- ink on this is about 15:1, far
+# above anything a scanner needs.
+QR_BG = "#f4f7f6"
+
 
 # ---------------------------------------------------------------------------
 # Icon chips
@@ -70,6 +77,20 @@ GLYPHS = {
 }
 
 ICON_SIZE, ICON_SS = 96, 4  # 96px source for a 32px render
+
+# Bare glyphs, for use INSIDE the contact pills.
+#
+# A plated chip dropped into a pill reads as a chip inside a pill -- two
+# containers where the design has one. So these carry no plate, and they solve
+# the dark-mode problem a different way: they are drawn in SIG_SPINE, the value
+# signature-template.php already picked for the vertical rule because it clears
+# 3:1 as non-text content against BOTH ends of the range (4.35:1 on white,
+# 3.70:1 on a dark surface). A client that inverts the pill's background cannot
+# erase them, which is the same guarantee the plate gives the social chips by
+# a different route.
+GLYPH_SIZE, GLYPH_SS = 48, 4  # 48px source for a 16px render
+SPINE_HEX = "#2e8b1a"
+PILL_GLYPHS = ("phone", "email", "website")
 
 
 def build_icons(tmp):
@@ -106,6 +127,37 @@ def build_icons(tmp):
 
         dest = os.path.join(DEST, f"icon-{name}.png")
         flat.convert("P", palette=Image.Palette.ADAPTIVE, colors=64).save(dest, optimize=True)
+        out.append((name, os.path.getsize(dest)))
+    return out
+
+
+def build_glyphs(tmp):
+    """Plateless glyphs in the spine green. Returns [(name, bytes)]."""
+    S = GLYPH_SIZE * GLYPH_SS
+    scale = S / 24
+    out = []
+    for name in PILL_GLYPHS:
+        svg = (
+            f'<svg xmlns="http://www.w3.org/2000/svg" width="{S}" height="{S}" '
+            f'viewBox="0 0 {S} {S}"><g transform="scale({scale})">'
+            f'<path d="{GLYPHS[name]}" fill="{SPINE_HEX}"/></g></svg>'
+        )
+        sp = os.path.join(tmp, f"glyph-{name}.svg")
+        bp = os.path.join(tmp, f"glyph-{name}.png")
+        with open(sp, "w") as fh:
+            fh.write(svg)
+        subprocess.run(["convert", "-background", "none", sp, bp], check=True)
+
+        im = Image.open(bp).convert("RGBA")
+        if im.size != (S, S):
+            im = im.resize((S, S), Image.Resampling.LANCZOS)
+        im = im.resize((GLYPH_SIZE, GLYPH_SIZE), Image.Resampling.LANCZOS)
+
+        # Kept RGBA rather than palette-quantised: the alpha edge is the whole
+        # point of a plateless glyph, and a 64-colour palette bands it visibly
+        # at 16px against a tinted pill.
+        dest = os.path.join(DEST, f"glyph-{name}.png")
+        im.save(dest, optimize=True)
         out.append((name, os.path.getsize(dest)))
     return out
 
@@ -154,7 +206,7 @@ def build_qr(tmp):
     def render(px, logo_ratio):
         unit = max(2, round(px * SS / tot))
         size = unit * tot
-        img = Image.new("RGB", (size, size), "white")
+        img = Image.new("RGB", (size, size), QR_BG)
         d = ImageDraw.Draw(img)
         off = QUIET * unit
         c0 = size / 2
@@ -166,7 +218,7 @@ def build_qr(tmp):
             d.rounded_rectangle([X, Y, X + 7 * unit, Y + 7 * unit],
                                 radius=unit * FINDER_R, fill=INK)
             d.rounded_rectangle([X + unit, Y + unit, X + 6 * unit, Y + 6 * unit],
-                                radius=unit * FINDER_R * 0.7, fill="white")
+                                radius=unit * FINDER_R * 0.7, fill=QR_BG)
             d.rounded_rectangle([X + 2 * unit, Y + 2 * unit, X + 5 * unit, Y + 5 * unit],
                                 radius=unit * FINDER_R * 0.45, fill=INK)
 
@@ -197,7 +249,7 @@ def build_qr(tmp):
 
         if logo_ratio > 0:
             d.ellipse([c0 - R - unit, c0 - R - unit, c0 + R + unit, c0 + R + unit],
-                      fill="white")
+                      fill=QR_BG)
             logo = Image.open(LOGO).convert("RGBA").resize((int(R * 2), int(R * 2)),
                                                            Image.Resampling.LANCZOS)
             mk = Image.new("L", (logo.width * 4, logo.height * 4), 0)
@@ -220,8 +272,17 @@ def build_qr(tmp):
     total = sum(1 for y in range(n) for x in range(n) if dark(x, y))
     print(f"  matrix {n}x{n}, ECC=H, {total} data modules")
 
+    # Candidates START at 0.22, not at the largest badge that happens to pass.
+    #
+    # Decoding is erratic in a way that is not the code degrading: the same
+    # image reads at 330px, fails at 440px, and reads again at 640px. That is
+    # this detector, and a real phone camera is both more capable and working
+    # under worse conditions -- angle, glare, a screen refreshing under it. So
+    # the badge is deliberately smaller than the biggest one that passes,
+    # trading decoration for error-correction headroom. 0.26 passed and is not
+    # used; 0.22 covers 12.1% of data modules instead of 16.2%.
     chosen = None
-    for ratio in (0.30, 0.28, 0.26, 0.24, 0.22, 0.20):
+    for ratio in (0.22, 0.20, 0.18):
         img, covered = render(1200, ratio)
         if not decodes(img):
             print(f"    logo {int(ratio*100):>2}%  fails")
@@ -236,9 +297,12 @@ def build_qr(tmp):
         sys.exit("    no logo size decoded -- refusing to write an unscannable code")
 
     ratio, floor, covered, total = chosen
-    # 480px source for a 112px render. Palette-quantised: the image is two
-    # colours plus the badge, so RGB spends ~3x the bytes for no visible gain.
-    img, _ = render(480, ratio)
+    # 640px source. The code renders around 220px, and a source under ~2.5x
+    # that leaves the browser downscaling module edges into mush -- which does
+    # not show up when you decode the source file, only when you decode a
+    # screenshot of the rendered page. Palette-quantised: two colours plus the
+    # badge, so RGB spends ~3x the bytes for no visible gain.
+    img, _ = render(640, ratio)
     dest = os.path.join(DEST, "qr-circuitcenter.png")
     img.convert("P", palette=Image.Palette.ADAPTIVE, colors=64).save(dest, optimize=True)
 
@@ -256,9 +320,12 @@ def main():
 
     os.makedirs(DEST, exist_ok=True)
     with tempfile.TemporaryDirectory() as tmp:
-        print("icons:")
+        print("icons (plated, for the social chips):")
         for name, size in build_icons(tmp):
             print(f"    icon-{name}.png  {size:,}B")
+        print("glyphs (plateless, for inside the contact pills):")
+        for name, size in build_glyphs(tmp):
+            print(f"    glyph-{name}.png  {size:,}B")
         print("qr:")
         build_qr(tmp)
     print(f"\nwrote {DEST} -- deploy before the roster URLs resolve")
