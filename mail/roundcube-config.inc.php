@@ -105,3 +105,39 @@ $config['sig_above'] = true;
 // The size already agreed by accident and is left alone: 10pt is about 13.3px
 // against the signature's 13px body text.
 $config['default_font'] = 'Helvetica';
+
+// 12pt, up from Roundcube's 10pt. The signature's body text stays at 13px
+// rather than being raised to match: 12pt is about 16px, so the message now
+// reads slightly larger than the block signing it, which is the conventional
+// hierarchy. Matching them exactly would make the signature compete with the
+// message.
+$config['default_font_size'] = '12pt';
+
+// Give the compose editor an explicit ink colour.
+//
+// This REPLACES program/resources/tinymce/content.css rather than adding to
+// it, which is why the skin's copy carries that file's blockquote and pre
+// rules as well — see the header of styles/editor.css. Nothing in the stock
+// chain set a text colour at all, so the editor rendered whatever the iframe
+// defaulted to; this states it.
+$config['editor_css_location'] = '/styles/editor.css';
+
+// Remote images: allow from people you know, not from everyone.
+//
+//   0 - never, always ask          (the shipped default, and the prompt)
+//   1 - allow from my contacts     <- this
+//   2 - always allow
+//   3 - trusted senders only
+//
+// 1 covers the actual complaint without opening the door: the team are seeded
+// into each other's address books by seed-contacts.php, and collected_recipients
+// and collected_senders are both on by default, so an address is trusted as
+// soon as you have written to it — including your own, which is what makes a
+// test message to yourself load its images.
+//
+// NOT 2. Roundcube fetches remote images straight from the sender's server
+// with no proxy in front, so "always" would let any stranger's tracking pixel
+// confirm the address is live and log the IP that opened it. That is the
+// mechanism spam lists are built from, and it is not worth trading for the
+// handful of prompts it would additionally suppress.
+$config['show_images'] = 1;

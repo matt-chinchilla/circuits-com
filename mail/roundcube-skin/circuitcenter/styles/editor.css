@@ -1,0 +1,54 @@
+/* Compose editor content — the inside of the TinyMCE iframe.
+ *
+ * WHAT THIS IS AND IS NOT
+ * This styles what you SEE WHILE TYPING. It is not sent. Roundcube wraps the
+ * outgoing message in its own `<body style="font-family:…; font-size:…">` built
+ * from default_font and default_font_size, and nothing from this file travels
+ * with it. That separation is deliberate and worth keeping: the colour below
+ * exists so the editor is legible, and forcing a colour into SENT mail would
+ * override the recipient's own dark mode.
+ *
+ * WHY IT EXISTS
+ * Roundcube points content_css at program/resources/tinymce/content.css, which
+ * sets a font and a background and NO colour, so the text took whatever the
+ * iframe's default happened to be. Nothing in the chain was choosing black —
+ * it was simply unspecified, which is why it could come out grey. This file
+ * replaces that stock sheet (via editor_css_location) and says so explicitly.
+ *
+ * It therefore has to carry the stock sheet's rules too, because it REPLACES
+ * rather than supplements it — drop the blockquote rule and quoted text in a
+ * reply loses its bar.
+ *
+ * Font size is deliberately NOT set here. content_style is injected after this
+ * sheet and would win anyway, so default_font_size in roundcube-config.inc.php
+ * is the single place that decides it.
+ */
+
+body,
+td,
+pre {
+	/* Matches SIG_INK in signature-template.php — the same near-black the
+	   signature uses, so what you type and what sits under it are one colour
+	   as well as one typeface. */
+	color: #1a1f23;
+	font-family: Helvetica, Arial, sans-serif;
+}
+
+body {
+	background-color: #fff;
+	margin: 4px;
+}
+
+/* --- carried over from the stock sheet this one replaces ---------------- */
+
+div.pre {
+	margin: 0;
+	padding: 0;
+	font-family: monospace;
+}
+
+blockquote {
+	border-left: #1010ff 2px solid;
+	margin: 0;
+	padding: 0 0.4em;
+}
