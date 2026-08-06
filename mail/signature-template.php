@@ -136,11 +136,31 @@ if (!defined('SIG_ACCENT')) {
     define('SIG_GROUND',     '#f3f8f2');
 
     /**
-     * Type. Arial/Helvetica are appended to the site's native stacks
-     * because a signature lands on machines the site never has to run on.
-     * Word resolves the mono stack to Consolas.
+     * Type.
+     *
+     * This is NOT the site's native stack, and the reason is uniformity with
+     * the message it is attached to rather than taste.
+     *
+     * Roundcube wraps every HTML message in
+     * `<body style='font-family: ...'>` taken from `default_font`, and that
+     * setting is not free text: rcmail_action::font_defs is a fixed list of 13
+     * names and returns NULL for anything else, so a native stack cannot be
+     * set there. Meanwhile every element in this signature carries an inline
+     * font-family, and inline styles on descendants beat the body. So whatever
+     * the signature declares, it wins for itself -- and a native stack meant
+     * typed text rendered in the editor's font while the signature below it
+     * rendered in the OS UI font. Two typefaces in one message.
+     *
+     * This exactly matches what font_defs returns for 'Helvetica', which is
+     * what roundcube-config.inc.php now sets default_font to. Change one and
+     * change the other, or the mismatch comes back.
+     *
+     * Helvetica-first rather than Arial-first because macOS has a real
+     * Helvetica and Windows falls through to Arial, which was drawn as a
+     * Helvetica clone -- so the two platforms land on the same design rather
+     * than on a compromise. Word resolves the mono stack to Consolas.
      */
-    define('SIG_SANS', "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Helvetica,Arial,sans-serif");
+    define('SIG_SANS', "Helvetica,Arial,sans-serif");
     define('SIG_MONO', "ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,'Liberation Mono',monospace");
 }
 

@@ -91,3 +91,17 @@ $config['htmleditor'] = 1;
 // Signature above the quoted text on a reply, rather than at the very bottom
 // beneath the entire thread. Roundcube's default buries it after the quote.
 $config['sig_above'] = true;
+
+// Compose in the SAME face the signature declares, so a message is not two
+// typefaces stacked on each other.
+//
+// This is not free text. rcmail_action::font_defs is a fixed list of 13 names
+// and returns NULL for anything outside it, so the native OS stack the
+// signature used to carry could never have been set here -- uniformity had to
+// come from the signature's side, and it did. 'Helvetica' resolves to
+// "Helvetica,Arial,sans-serif", which is character-for-character what
+// SIG_SANS is now. Change one and change the other.
+//
+// The size already agreed by accident and is left alone: 10pt is about 13.3px
+// against the signature's 13px body text.
+$config['default_font'] = 'Helvetica';
