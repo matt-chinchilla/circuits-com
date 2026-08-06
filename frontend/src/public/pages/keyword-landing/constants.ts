@@ -1,5 +1,21 @@
-// PLACEHOLDER COPY — tier prices and FAQ Q&A are pending product/sales sign-off.
-// Per the keyword-sponsorship design brief (docs/design-briefs/keyword-sponsorship-landing.md).
+// Tier list prices, set 2026-08-05: Silver 200, Gold 600, Platinum 2400 per
+// month. These supersede the design-brief placeholders (99/299/899) and stand
+// until deal data says otherwise.
+//
+// They are LIST prices, and the distinction matters operationally: negotiated
+// deals are closed by applying a discount to these, never by minting a bespoke
+// price per customer. That keeps reporting able to show list-versus-realized
+// across deals — which is how the real clearing price gets discovered — and it
+// means raising list later doesn't touch anyone already subscribed.
+//
+// PRICING_NOTE below is not marketing copy. New York applies a primary-purpose
+// test to mixed transactions, and a single undifferentiated monthly charge
+// covering advertising plus reporting tools can be assessed in full as
+// prewritten software. Published website language is substantial evidence in
+// that analysis, so the two components have to be visibly separate here, not
+// only on the invoice. Don't collapse it back into one number.
+//
+// FAQ Q&A is still pending product/sales sign-off.
 // Update via this file only; pages/components consume from here.
 
 export interface SponsorTier {
@@ -26,7 +42,7 @@ export const SPONSOR_TIERS: readonly SponsorTier[] = [
   {
     id: 'silver',
     name: 'Silver',
-    price: '$99/mo',
+    price: '$200/mo',
     tag: 'Solo keyword',
     perks: [
       '1 keyword exclusive',
@@ -38,7 +54,7 @@ export const SPONSOR_TIERS: readonly SponsorTier[] = [
   {
     id: 'gold',
     name: 'Gold',
-    price: '$299/mo',
+    price: '$600/mo',
     tag: 'Most chosen',
     featured: true,
     perks: [
@@ -52,7 +68,7 @@ export const SPONSOR_TIERS: readonly SponsorTier[] = [
   {
     id: 'platinum',
     name: 'Platinum',
-    price: '$899/mo',
+    price: '$2,400/mo',
     tag: 'Category cap',
     perks: [
       '10 keywords + category lock',
@@ -63,6 +79,15 @@ export const SPONSOR_TIERS: readonly SponsorTier[] = [
     ],
   },
 ] as const;
+
+/**
+ * Shown beneath the tier grid. Says three true things the prices alone don't:
+ * that the figure is a starting point rather than a rate card, that it splits
+ * into two separately taxed charges, and that tax is added rather than
+ * included. See the tax note at the top of this file.
+ */
+export const PRICING_NOTE =
+  'Prices are per month, exclusive of tax. Each sponsorship is billed as two separately stated charges — advertising placement and platform access — itemized on every invoice. Annual terms and multi-placement packages are quoted individually.';
 
 export const SPONSOR_FAQS: readonly SponsorFAQItem[] = [
   {

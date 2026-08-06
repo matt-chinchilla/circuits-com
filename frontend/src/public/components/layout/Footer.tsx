@@ -9,6 +9,9 @@ const FOOTER_LINKS = [
   { to: '/contact', label: 'Contact' },
   { to: '/privacy', label: 'Privacy' },
   { to: '/terms', label: 'Terms' },
+  // Payment processors check that an ad-supported site publishes what it will
+  // and won't carry, and check that the policy is reachable rather than buried.
+  { to: '/acceptable-use', label: 'Acceptable Use' },
 ];
 
 export default function Footer() {

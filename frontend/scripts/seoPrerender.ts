@@ -213,9 +213,16 @@ function buildRoutes(manifest: SeoManifest | null): PrerenderRoute[] {
     { urlPath: '/join', file: 'join/index.html', seo: STATIC_PAGE_SEO.join },
     { urlPath: '/keyword', file: 'keyword/index.html', seo: STATIC_PAGE_SEO.keyword },
     { urlPath: '/privacy', file: 'privacy/index.html', seo: STATIC_PAGE_SEO.privacy },
-    // /terms renders the privacy component and shares its canonical — one page,
-    // two URLs, and the raw HTML has to say so.
-    { urlPath: '/terms', file: 'terms/index.html', seo: STATIC_PAGE_SEO.privacy },
+    // /terms shared the privacy canonical while it rendered the privacy
+    // component. It is its own document now, so it gets its own head — leaving
+    // the old alias would have every terms URL declare itself a duplicate of
+    // /privacy and drop out of the index.
+    { urlPath: '/terms', file: 'terms/index.html', seo: STATIC_PAGE_SEO.terms },
+    {
+      urlPath: '/acceptable-use',
+      file: 'acceptable-use/index.html',
+      seo: STATIC_PAGE_SEO.acceptableUse,
+    },
     { urlPath: '/search', file: 'search/index.html', seo: STATIC_PAGE_SEO.search },
   ];
 

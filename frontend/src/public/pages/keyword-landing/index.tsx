@@ -10,7 +10,7 @@ import { useKeywordRequestModal } from '@public/hooks/useKeywordRequestModal';
 import AvailabilityCheck from './components/AvailabilityCheck';
 import HowItWorksChip from './components/HowItWorksChip';
 import SponsorFAQ from './components/SponsorFAQ';
-import { SPONSOR_TIERS, HOW_STEPS } from './constants';
+import { SPONSOR_TIERS, HOW_STEPS, PRICING_NOTE } from './constants';
 import styles from './KeywordLandingPage.module.scss';
 
 // KeywordLandingPage — /keyword/ (no slug). Fills the bug where the route
@@ -228,6 +228,7 @@ export default function KeywordLandingPage() {
                 );
               })}
             </div>
+            <p className={styles.sponsorPricingNote}>{PRICING_NOTE}</p>
           </div>
         </section>
 

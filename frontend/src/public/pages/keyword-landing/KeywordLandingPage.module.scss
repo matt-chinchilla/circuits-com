@@ -579,3 +579,17 @@
     transform: none;
   }
 }
+
+// Sits under the tier grid. Deliberately quiet — it is a disclosure, not a
+// selling point — but it must stay legible: it is the published statement that
+// placement and platform access are billed and taxed as separate charges, and
+// a tax authority reading this page reads it at whatever size we set here.
+.sponsorPricingNote {
+  margin: 22px auto 0;
+  max-width: 68ch;
+  font-size: 0.8rem;
+  line-height: 1.6;
+  color: var(--fg2);
+  text-align: center;
+  text-wrap: pretty;
+}

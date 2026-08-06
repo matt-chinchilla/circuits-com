@@ -1,38 +1,34 @@
-import { useEffect, useMemo, useState } from "react";
-import { motion } from "framer-motion";
-import PageHead from "@public/components/PageHead";
+import LegalDoc, {
+  type LegalAppendix,
+  type LegalSection,
+} from "@public/components/legal/LegalDoc";
 import { STATIC_PAGE_SEO } from "@public/services/seoRoutes";
-import { Link } from "react-router-dom";
-import PageHeaderBand from "@public/components/layout/PageHeaderBand";
-import styles from "./PrivacyPage.module.scss";
+import {
+  CONTACT_EMAILS,
+  DOC_DATES,
+  DOC_VERSIONS,
+  noticeClause,
+} from "@public/services/businessInfo";
 
-// PrivacyPage — ported from 2026-05-12 Claude Design bundle. Both /privacy
-// and /terms render this single page (Claude Design intentionally consolidated
-// the two footer destinations; see chat transcript at design-import/
-// circuits-com-legal-design/.../chats/chat1.md lines 2178-2257).
+// Privacy Policy — content ported from the 2026-05-12 Claude Design bundle.
+//
+// The page chrome (contents rail, scroll-spy, sign-off) moved to
+// @public/components/legal/LegalDoc when Terms and Acceptable Use arrived;
+// this file is now the policy text and nothing else. Rendering is unchanged.
+//
+// Two corrections landed with that move, both in section 12:
+//
+//   The postal address was "1 Industry Park Way, Brookhaven, NY 11719" — a
+//   placeholder from the design mockup, published in the notice clause of a
+//   live policy. It now comes from businessInfo, which returns null until a
+//   real address exists, and noticeClause() omits the postal route entirely
+//   rather than printing somewhere nobody can be reached.
+//
+//   The effective date was formatted from `new Date()`, so the policy claimed
+//   to take effect on whatever day you loaded it, and the prerendered copy
+//   froze the last build date. It is now pinned in DOC_DATES.
 
-// Namespace prefix for the DOM `id` of each rendered section. Keeps the
-// SECTIONS data IDs semantic ("scope", "rights") while preventing collision
-// with same-named IDs elsewhere in the SPA (e.g. footer "contact" links).
-const SECTION_DOM_ID = (id: string) => `privacy-${id}`;
-
-function formatEffectiveDate(): string {
-  return new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/New_York",
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  }).format(new Date());
-}
-
-interface Section {
-  id: string;
-  num: string;
-  title: string;
-  body: string[];
-}
-
-const SECTIONS: Section[] = [
+const SECTIONS: LegalSection[] = [
   {
     id: "scope",
     num: "01",
@@ -66,8 +62,9 @@ const SECTIONS: Section[] = [
     num: "04",
     title: "How We Share Information",
     body: [
-      "Service providers. We share information with vendors who help us operate the Service (e.g. hosting, analytics, email delivery). These providers are contractually limited to processing data on our behalf.",
+      "Service providers. We share information with vendors who help us operate the Service (e.g. hosting, analytics, email delivery, payment processing). These providers are contractually limited to processing data on our behalf.",
       "Distributors. When you click a buy-link, you leave Circuit Center and enter the distributor's own website under their terms and privacy policy. We do not transmit your identity to the distributor unless you tell them yourself by signing in there.",
+      "Advertisers. Sponsors receive aggregate performance reporting about their own placements. They do not receive the identity of any visitor.",
       "Legal. We may disclose information when we believe in good faith that disclosure is required by law, court order, or to protect the rights, property, or safety of any person.",
       "Business transfers. If Circuit Center is involved in a merger, acquisition, or sale of assets, information may be transferred as part of that transaction.",
     ],
@@ -95,7 +92,7 @@ const SECTIONS: Section[] = [
     title: "Your Rights",
     body: [
       "Depending on where you live (including residents of the EEA, the United Kingdom, and California), you may have the right to access, correct, delete, or port your personal information; to object to or restrict certain processing; and to withdraw consent where we rely on it.",
-      "To exercise any of these rights, email privacy@circuitcenter.ai from the address associated with your information. We will respond within the timeframe required by applicable law.",
+      `To exercise any of these rights, email ${CONTACT_EMAILS.privacy} from the address associated with your information. We will respond within the timeframe required by applicable law.`,
     ],
   },
   {
@@ -111,7 +108,7 @@ const SECTIONS: Section[] = [
     num: "09",
     title: "Children's Privacy",
     body: [
-      "The Service is intended for engineering and purchasing professionals and is not directed to children under 13. We do not knowingly collect personal information from children under 13. If you believe a child has provided us with personal information, please contact privacy@circuitcenter.ai and we will delete it.",
+      `The Service is intended for engineering and purchasing professionals and is not directed to children under 13. We do not knowingly collect personal information from children under 13. If you believe a child has provided us with personal information, please contact ${CONTACT_EMAILS.privacy} and we will delete it.`,
     ],
   },
   {
@@ -127,7 +124,7 @@ const SECTIONS: Section[] = [
     num: "11",
     title: "Changes to This Policy",
     body: [
-      'We may update this Policy from time to time. When we do, we will revise the "Last revised" date at the top of the page and, for material changes, provide a more prominent notice. Your continued use of the Service after a change takes effect constitutes acceptance of the updated Policy.',
+      'We may update this Policy from time to time. When we do, we will revise the "Effective" date at the top of the page and, for material changes, provide a more prominent notice. Your continued use of the Service after a change takes effect constitutes acceptance of the updated Policy.',
     ],
   },
   {
@@ -135,215 +132,49 @@ const SECTIONS: Section[] = [
     num: "12",
     title: "Contact Us",
     body: [
-      "Questions, requests, or complaints regarding this Policy may be sent to privacy@circuitcenter.ai or by mail to Circuit Center, Attn: Privacy, 1 Industry Park Way, Brookhaven, NY 11719, USA.",
+      `Questions, requests, or complaints regarding this Policy may be sent to ${CONTACT_EMAILS.privacy}. ${noticeClause(CONTACT_EMAILS.privacy)}`,
     ],
   },
 ];
 
-interface License {
-  tag: string;
-  name: string;
-  body: string;
-}
-
-const LICENSES: License[] = [
-  {
-    tag: "MIT-style",
-    name: "Site Content License",
-    body: 'Copyright (c) 2003–2026 Circuit Center. Permission is hereby granted, free of charge, to any person obtaining a copy of the publicly displayed directory pages of circuitcenter.ai ("the Content"), to use, copy, reference, and link to the Content for personal, educational, or internal engineering use, subject to the following conditions: the above copyright notice and this permission notice shall be included in all substantial reproductions; bulk scraping, automated re-distribution, or resale of the Content is prohibited without written consent. THE CONTENT IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.',
-  },
-  {
-    tag: "Trademarks",
-    name: "Third-Party Marks",
-    body: "All manufacturer names, part numbers, logos, and trademarks displayed on circuitcenter.ai are the property of their respective owners and are used here solely for identification and reference purposes. Their appearance on this site does not imply endorsement, sponsorship, or affiliation.",
-  },
-  {
-    tag: "Datasheets",
-    name: "Distributor Data",
-    body: "Stock levels, pricing, and lead-time information are aggregated under license from participating authorized distributors and are subject to their own terms of use. Circuit Center makes no warranty as to the accuracy or timeliness of any third-party data displayed.",
-  },
-];
+const APPENDIX: LegalAppendix = {
+  title: "Appendix · Licenses",
+  intro:
+    "The following generic licenses govern the content displayed on circuitcenter.ai. They are provided for reference and do not modify any agreement you have entered into separately with us.",
+  cards: [
+    {
+      tag: "MIT-style",
+      name: "Site Content License",
+      body: 'Copyright (c) 2003–2026 Circuit Center. Permission is hereby granted, free of charge, to any person obtaining a copy of the publicly displayed directory pages of circuitcenter.ai ("the Content"), to use, copy, reference, and link to the Content for personal, educational, or internal engineering use, subject to the following conditions: the above copyright notice and this permission notice shall be included in all substantial reproductions; bulk scraping, automated re-distribution, or resale of the Content is prohibited without written consent. THE CONTENT IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.',
+    },
+    {
+      tag: "Trademarks",
+      name: "Third-Party Marks",
+      body: "All manufacturer names, part numbers, logos, and trademarks displayed on circuitcenter.ai are the property of their respective owners and are used here solely for identification and reference purposes. Their appearance on this site does not imply endorsement, sponsorship, or affiliation.",
+    },
+    {
+      tag: "Datasheets",
+      name: "Distributor Data",
+      body: "Stock levels, pricing, and lead-time information are aggregated under license from participating authorized distributors and are subject to their own terms of use. Circuit Center makes no warranty as to the accuracy or timeliness of any third-party data displayed.",
+    },
+  ],
+};
 
 export default function PrivacyPage() {
-  const [active, setActive] = useState<string>(SECTIONS[0].id);
-  const effectiveDate = useMemo(formatEffectiveDate, []);
-
-  useEffect(() => {
-    // rootMargin shrinks the observation band so a section is "active" only
-    // while its heading is near the top of the page, not when it's barely
-    // peeking in from the bottom.
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const visible = entries
-          .filter((e) => e.isIntersecting)
-          .sort(
-            (a, b) => a.boundingClientRect.top - b.boundingClientRect.top,
-          );
-        if (!visible[0]) return;
-        // Bare SECTIONS id ("scope"), not the prefixed DOM id — keeps `active`
-        // comparable to the same SECTIONS array used by the TOC render.
-        const next = visible[0].target.id.replace(/^privacy-/, "");
-        // Equality guard: IO can fire several callbacks with the same top
-        // section during fast scrolls; without this we reconcile all 12 TOC
-        // buttons every duplicate.
-        setActive((prev) => (prev === next ? prev : next));
-      },
-      { rootMargin: "-140px 0px -55% 0px", threshold: 0 },
-    );
-    SECTIONS.forEach((s) => {
-      const el = document.getElementById(SECTION_DOM_ID(s.id));
-      if (el) observer.observe(el);
-    });
-    return () => observer.disconnect();
-  }, []);
-
-  function jump(id: string) {
-    const el = document.getElementById(SECTION_DOM_ID(id));
-    // scroll-margin-top: 100px (PrivacyPage.module.scss) handles the offset,
-    // so scrollIntoView is the single source of truth for the landing spot.
-    el?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }
-
   return (
-    <motion.div
-      initial={{ opacity: 0, x: 20 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: -20 }}
-      transition={{ duration: 0.15, ease: "easeInOut" as const }}
-    >
-      <PageHead seo={STATIC_PAGE_SEO.privacy} />
-      <PageHeaderBand
-        page="privacy"
-        title="Privacy Policy"
-        subtitle={`The plain-English version · Effective ${effectiveDate}`}
-      />
-
-      <main className={styles.privacyPage}>
-        <div className={styles.privacyGrid}>
-          <aside className={styles.privacyToc} aria-label="Privacy policy sections">
-            <div className={styles.tocHead}>
-              <h2>Contents</h2>
-              <p className={styles.tocMeta}>
-                Privacy Policy &middot; Effective {effectiveDate}
-              </p>
-            </div>
-            <ol className={styles.tocList}>
-              {SECTIONS.map((s) => (
-                <li key={s.id}>
-                  <button
-                    type="button"
-                    className={`${styles.tocItem} ${active === s.id ? styles.on : ""}`}
-                    onClick={() => jump(s.id)}
-                    aria-current={active === s.id ? "true" : undefined}
-                  >
-                    <span className={styles.tocItemNum}>{s.num}</span>
-                    <span className={styles.tocItemTitle}>{s.title}</span>
-                  </button>
-                </li>
-              ))}
-            </ol>
-            <div className={styles.tocFoot}>
-              <Link to="/contact" className={styles.tocFootLink}>
-                Questions? Contact us &rarr;
-              </Link>
-            </div>
-          </aside>
-
-          <article className={styles.privacyDoc}>
-            <header className={styles.docHead}>
-              <p className={styles.docRev}>
-                Version 1.0 &middot; Effective {effectiveDate}
-              </p>
-              <p className={styles.docLede}>
-                We run a parts directory, not a profiling business. This
-                document explains, in plain English, what we collect, why, and
-                how to reach us about it.
-              </p>
-              <dl className={styles.docMeta}>
-                <div>
-                  <dt>Effective</dt>
-                  <dd>{effectiveDate}</dd>
-                </div>
-                <div>
-                  <dt>Version</dt>
-                  <dd>1.0</dd>
-                </div>
-                <div>
-                  <dt>Owner</dt>
-                  <dd>privacy@circuitcenter.ai</dd>
-                </div>
-              </dl>
-            </header>
-
-            {SECTIONS.map((s) => (
-              <section
-                key={s.id}
-                id={SECTION_DOM_ID(s.id)}
-                className={styles.section}
-              >
-                <header className={styles.sectionHead}>
-                  <span className={styles.sectionNum} aria-hidden="true">
-                    {s.num}
-                  </span>
-                  <h2 className={styles.sectionTitle}>{s.title}</h2>
-                </header>
-                {s.body.map((p, i) => (
-                  <p key={i} className={styles.p}>
-                    {p}
-                  </p>
-                ))}
-              </section>
-            ))}
-
-            <section
-              id={SECTION_DOM_ID("appendix")}
-              className={`${styles.section} ${styles.appendix}`}
-            >
-              <header className={styles.sectionHead}>
-                <span className={styles.sectionNum} aria-hidden="true">
-                  A
-                </span>
-                <h2 className={styles.sectionTitle}>Appendix &middot; Licenses</h2>
-              </header>
-              <p className={styles.p}>
-                The following generic licenses govern the content displayed on
-                circuitcenter.ai. They are provided for reference and do not
-                modify any agreement you have entered into separately with us.
-              </p>
-              <div className={styles.licenseGrid}>
-                {LICENSES.map((l) => (
-                  <article key={l.name} className={styles.licenseCard}>
-                    <span className={styles.licenseTag}>{l.tag}</span>
-                    <h3 className={styles.licenseName}>{l.name}</h3>
-                    <p className={styles.licenseBody}>{l.body}</p>
-                  </article>
-                ))}
-              </div>
-            </section>
-
-            <footer className={styles.docSign}>
-              <div className={styles.signRow}>
-                <span className={styles.signLabel}>Signed</span>
-                <span className={styles.signName}>
-                  M. Chirichella
-                </span>
-              </div>
-              <div className={styles.signRow}>
-                <span className={styles.signLabel}>Date</span>
-                <span>{effectiveDate}</span>
-              </div>
-              <div className={styles.signActions}>
-                <Link to="/contact" className={styles.signActionGhost}>
-                  Contact us
-                </Link>
-                <Link to="/" className={styles.signActionPrimary}>
-                  Back to Home &rarr;
-                </Link>
-              </div>
-            </footer>
-          </article>
-        </div>
-      </main>
-    </motion.div>
+    <LegalDoc
+      seo={STATIC_PAGE_SEO.privacy}
+      page="privacy"
+      title="Privacy Policy"
+      kicker="The plain-English version"
+      lede="We run a parts directory, not a profiling business. This document explains, in plain English, what we collect, why, and how to reach us about it."
+      effectiveDate={DOC_DATES.privacy}
+      version={DOC_VERSIONS.privacy}
+      owner={CONTACT_EMAILS.privacy}
+      idPrefix="privacy"
+      sections={SECTIONS}
+      appendix={APPENDIX}
+      signedBy="M. Chirichella"
+    />
   );
 }

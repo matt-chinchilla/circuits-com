@@ -13,14 +13,14 @@
 // go on the motion.div — that would cover the persistent BackdropLayer in
 // the area above where the body wrapper starts).
 
-.privacyPage {
+.legalPage {
   background: var(--theme-surface-bg);
   padding: 56px 20px 80px;
 }
 
 // ─── 2-col layout shell ─────────────────────────────────────────────────────
 
-.privacyGrid {
+.legalGrid {
   max-width: 1180px;
   margin: 0 auto;
   display: grid;
@@ -36,7 +36,7 @@
 
 // ─── Sticky TOC (left rail) ─────────────────────────────────────────────────
 
-.privacyToc {
+.legalToc {
   position: sticky;
   top: 88px;
   background: #fff;
@@ -165,7 +165,7 @@
 
 // ─── Document body (right) ──────────────────────────────────────────────────
 
-.privacyDoc {
+.legalDoc {
   background: #fff;
   border-radius: 10px;
   border: 1px solid rgba(0, 0, 0, 0.06);
@@ -295,6 +295,44 @@
 
   &:last-child {
     margin-bottom: 0;
+  }
+}
+
+// Enumerated obligations — the prohibited-content list, the data a sponsor
+// must own. Prose can carry two or three of these; a list of fourteen has to
+// be scannable, because the reader is checking whether one specific item
+// applies to them rather than reading top to bottom.
+.bullets {
+  margin: 4px 0 12px;
+  padding-left: 20px;
+  max-width: 70ch;
+  list-style: none;
+
+  li {
+    position: relative;
+    font-size: 0.95rem;
+    color: var(--fg1);
+    line-height: 1.65;
+    margin-bottom: 6px;
+    text-wrap: pretty;
+
+    &::before {
+      content: '';
+      position: absolute;
+      left: -14px;
+      // Centres the marker on the first line's optical middle. Tied to the
+      // 1.65 line-height above; revisit together.
+      top: 0.62em;
+      width: 5px;
+      height: 5px;
+      border-radius: 1px;
+      background: var(--theme-accent);
+      opacity: 0.75;
+    }
+
+    &:last-child {
+      margin-bottom: 0;
+    }
   }
 }
 

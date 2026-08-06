@@ -16,11 +16,22 @@ import {
   type SeoLink,
 } from './seo';
 
-export type StaticPageKey = 'about' | 'contact' | 'join' | 'keyword' | 'privacy' | 'search';
+export type StaticPageKey =
+  | 'about'
+  | 'acceptableUse'
+  | 'contact'
+  | 'join'
+  | 'keyword'
+  | 'privacy'
+  | 'search'
+  | 'terms';
 
 /**
- * Routes whose head is a fixed literal. `/terms` renders the same component as
- * `/privacy` and deliberately shares its canonical — the two URLs are one page.
+ * Routes whose head is a fixed literal.
+ *
+ * `/terms` used to render the privacy policy and share its canonical. It is a
+ * real document as of 2026-08-05 with its own canonical, so the two are now
+ * separate entries — do not re-merge them.
  */
 export const STATIC_PAGE_SEO: Record<StaticPageKey, PageSeo> = {
   about: {
@@ -30,6 +41,15 @@ export const STATIC_PAGE_SEO: Record<StaticPageKey, PageSeo> = {
     canonical: `${SITE_ORIGIN}/about`,
     jsonLd: [],
     heading: 'About Circuit Center',
+    links: SITE_LINKS,
+  },
+  acceptableUse: {
+    title: 'Acceptable Use Policy | Circuit Center',
+    description:
+      'What may be advertised on Circuit Center — prohibited content, supply-chain integrity rules for component advertisers, and how we enforce them.',
+    canonical: `${SITE_ORIGIN}/acceptable-use`,
+    jsonLd: [],
+    heading: 'Acceptable Use Policy',
     links: SITE_LINKS,
   },
   contact: {
@@ -66,6 +86,15 @@ export const STATIC_PAGE_SEO: Record<StaticPageKey, PageSeo> = {
     canonical: `${SITE_ORIGIN}/privacy`,
     jsonLd: [],
     heading: 'Privacy Policy',
+    links: SITE_LINKS,
+  },
+  terms: {
+    title: 'Terms of Service | Circuit Center',
+    description:
+      'Circuit Center terms of service — sponsorship placements, billing and tax, cancellation and refunds, and the limits of our directory data.',
+    canonical: `${SITE_ORIGIN}/terms`,
+    jsonLd: [],
+    heading: 'Terms of Service',
     links: SITE_LINKS,
   },
   // Result pages are noindex,follow: the query space is unbounded and every
