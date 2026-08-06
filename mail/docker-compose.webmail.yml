@@ -48,6 +48,10 @@ services:
       CALENDAR_API_SECRET: ${CALENDAR_API_SECRET:-}
     volumes:
       - roundcube-data:/var/roundcube/db
+      # Uploaded signature headshots. The ONLY writable path the plugin has,
+      # and deliberately outside the document root: nothing here is reachable
+      # through Roundcube at all. webmail-proxy serves it read-only instead.
+      - signature-avatars:/var/lib/ccsignature/avatars
       # The skin ships read-only from the repo checkout — redeploying it is a
       # git pull plus a container restart, never an in-place edit on the box.
       - /opt/circuits-mail/skin/circuitcenter:/var/www/html/skins/circuitcenter:ro
@@ -72,11 +76,19 @@ services:
     volumes:
       - /opt/circuits-mail/nginx-webmail.conf:/etc/nginx/conf.d/default.conf:ro
       - /etc/letsencrypt:/etc/letsencrypt:ro
+      # Read-ONLY here. The proxy publishes headshots; only roundcube writes
+      # them. A public path that the serving process can also write to is a
+      # different risk profile entirely.
+      - signature-avatars:/srv/avatars:ro
     networks: [mailnet]
     mem_limit: 64m
 
 volumes:
   roundcube-data:
+  # Survives container recreation, which matters more than usual here: with
+  # personal details living in Roundcube rather than the roster, a lost volume
+  # means every headshot is re-uploaded by hand.
+  signature-avatars:
 
 networks:
   mailnet:
