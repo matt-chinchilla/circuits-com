@@ -36,12 +36,41 @@ docker exec "${CONTAINER}" mkdir -p "${DST}/tests" "${DST}/roundcube-plugins/ccs
 # Only what the tests require. signature-roster.php and signature-template.php
 # come too, because test_fields.php asserts byte-identity against the real
 # roster rather than a fixture of it.
+#
+# SOURCED FROM INSIDE THE CONTAINER WHEN THEY ARE MOUNTED THERE, and from the
+# host only as a fallback. On the mail box the library lives in signature/ and
+# the plugin in plugins/ — not beside this script, as it is in a checkout — so
+# copying blindly from ${MAIL_DIR} aborted with "no such file or directory" the
+# first time this ran on the box. Preferring the mounted copy also means the
+# tests exercise the exact files the running plugin loads, which is the whole
+# reason for running them here rather than on a workstation.
+copy_in() {
+  local name="$1" dest="$2" src
+  for src in "$3" "$4"; do
+    if docker exec "${CONTAINER}" test -r "${src}" < /dev/null 2>/dev/null; then
+      docker exec "${CONTAINER}" cp "${src}" "${dest}" < /dev/null
+      return 0
+    fi
+  done
+  for src in "$5" "$6"; do
+    if [[ -n "${src}" && -f "${src}" ]]; then
+      docker cp "${src}" "${CONTAINER}:${dest}"
+      return 0
+    fi
+  done
+  echo "error: ${name} not found in the container or under ${MAIL_DIR}" >&2
+  exit 1
+}
+
+LIB=/var/lib/ccsignature/lib
+PLG=/var/www/html/plugins/ccsignature
+
 for f in signature-template.php signature-roster.php signature-icon-slugs.php signature-brand-icons.json; do
-  docker cp "${MAIL_DIR}/${f}" "${CONTAINER}:${DST}/${f}"
+  copy_in "${f}" "${DST}/${f}" "${LIB}/${f}" "" "${MAIL_DIR}/${f}" "${MAIL_DIR}/signature/${f}"
 done
 for f in ccsignature_fields.php ccsignature_image.php; do
-  docker cp "${MAIL_DIR}/roundcube-plugins/ccsignature/${f}" \
-            "${CONTAINER}:${DST}/roundcube-plugins/ccsignature/${f}"
+  copy_in "${f}" "${DST}/roundcube-plugins/ccsignature/${f}" "${PLG}/${f}" "" \
+          "${MAIL_DIR}/roundcube-plugins/ccsignature/${f}" "${MAIL_DIR}/plugins/ccsignature/${f}"
 done
 for f in run.php test_template.php test_fields.php test_image.php; do
   docker cp "${MAIL_DIR}/tests/${f}" "${CONTAINER}:${DST}/tests/${f}"
