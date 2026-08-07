@@ -287,11 +287,20 @@ $C exec -T mailserver postconf -n postscreen_dnsbl_action smtpd_sender_login_map
 
 ## Email signatures
 
-Self-owned replacement for the WiseStamp subscription. Four files, one command:
+Self-owned replacement for the WiseStamp subscription.
+
+**People maintain their own.** Settings → Identities in webmail carries a
+"Signature details" section — job title, phone, website, five social links, a
+headshot — and the card is rebuilt from those fields on every save. That is the
+`ccsignature` plugin; see `roundcube-plugins/ccsignature/README.md`.
+
+The roster below is what a person gets *until* they fill that form in, and what
+`no-reply@` gets forever. So it is now the **defaults**, not the source, and
+editing it is a fallback rather than the routine path.
 
 | File | What it is |
 |---|---|
-| `signature-roster.php` | **The only file you edit.** Every person's name, title, phone, links and headshot. Empty fields are correct and normal — each one removes its own row, label included, so a person with nothing but a name and an address still renders deliberately. Never guess at a value. |
+| `signature-roster.php` | **The defaults.** Every person's name, title, phone, links and headshot, used until they set their own in webmail. `name` is only ever read from here, which is what keeps `no-reply@` (name `''`) rendering the company band alone. Empty fields are correct and normal — each one removes its own row, label included, so a person with nothing but a name and an address still renders deliberately. Never guess at a value. |
 | `signature-template.php` | Roster row in, email HTML out. Pure functions, no I/O. The header explains why the markup is tables-and-inline-styles and how it survives dark mode; contrast ratios are recorded next to the colour tokens. |
 | `seed-signatures.php` | Writes the HTML into Roundcube's `identities` table. |
 | `seed-signatures.sh` | Runs the above inside the container, after backing the database up. |
@@ -302,16 +311,28 @@ Self-owned replacement for the WiseStamp subscription. Four files, one command:
 php preview-signatures.php                          # all five, as HTML
 php preview-signatures.php --page > /tmp/sig.html    # a browsable page
 
-# on the MAIL box
+# on the MAIL box — edit the MOUNTED roster, the copy the seeder AND the
+# running plugin both read: /opt/circuits-mail/signature/signature-roster.php
 cd /opt/circuits-mail
 sudo ./seed-signatures.sh --dry-run   # report the changes, write nothing
 sudo ./seed-signatures.sh             # install
 ```
 
-Idempotent: a signature that already matches the roster is not rewritten, so
-re-running is genuinely free. On an identity that already exists the seeder
-touches `signature`, `html_signature` and `changed` and nothing else — it never
-renames an identity, moves the default, or deletes anything.
+Every run prints the three files it resolved (`template:`, `roster:`, `seam:`).
+Check them if an edit appears to do nothing: a copy left at the box root by an
+older deploy is inert, and editing that one reports "signature already current"
+rather than failing.
+
+Idempotent: a signature that already matches is not rewritten, so re-running is
+genuinely free. On an identity that already exists the seeder touches
+`signature`, `html_signature` and `changed` and nothing else — it never renames
+an identity, moves the default, or deletes anything.
+
+**The seeder respects what people set for themselves.** It reads their stored
+fields and prefers them, falling back to the roster, through the same
+`ccsig_person()` the plugin uses — so running it after somebody corrected their
+own phone number no longer quietly puts the old one back. Anyone who unticked
+"Circuit Center signature" is skipped entirely.
 
 - **A pre-created user has no identity.** Roundcube builds a user and its first
   identity together, in `rcube_user::create()`, on first login — but only for a
@@ -329,8 +350,10 @@ renames an identity, moves the default, or deletes anything.
 - **Images must be hosted and absolute.** Gmail and Outlook both block `data:`
   URIs, and neither renders SVG, so the company mark is the 180x180
   `apple-touch-icon.png` already served from `frontend/public/images/`. A
-  headshot has to be deployed to the site (`./deploy.sh --frontend`) before it
-  will render in anyone's mail client.
+  headshot named in the *roster* has to be deployed to the site
+  (`./deploy.sh --frontend`) before it renders in anyone's mail client — one
+  uploaded through webmail does not, because it is published straight from
+  `https://mail.circuitcenter.ai/avatars/` by the `webmail-proxy` container.
 
 ## Operating notes
 

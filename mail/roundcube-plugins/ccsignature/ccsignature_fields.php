@@ -36,12 +36,53 @@ const CCSIG_MAX = [
 ];
 
 /**
- * At most three social links.
+ * At most five social links.
  *
  * Not a technical limit — the signature's chip row is laid out for a handful,
  * and a person with eleven links has a different problem than this form solves.
+ * Five is the point where the chip row stops matching the headshot's height, so
+ * raising it further is a layout change rather than a constant change.
  */
-const CCSIG_MAX_SOCIALS = 3;
+const CCSIG_MAX_SOCIALS = 5;
+
+/**
+ * Display name for each social mark, keyed by its icon slug.
+ *
+ * THE ROUND TRIP IS LOAD-BEARING. What gets stored and rendered is the LABEL;
+ * the icon is then chosen by sig_social_slug($label). So every name here must
+ * slugify back to its own key, or the icon silently vanishes and the entry
+ * degrades to a plain text link — which looks like a missing icon rather than a
+ * bug, and would never be reported. "DEV" would break; "DEV.to" does not.
+ *
+ * Only the names that ucfirst() gets wrong appear here; the other forty-odd
+ * fall through to the default. test_fields.php asserts the round trip for the
+ * whole generated slug list, defaults included.
+ */
+const CCSIG_SOCIAL_NAMES = [
+    'buymeacoffee'  => 'Buy Me a Coffee',
+    'devto'         => 'DEV.to',
+    'github'        => 'GitHub',
+    'gitlab'        => 'GitLab',
+    'huggingface'   => 'Hugging Face',
+    'kofi'          => 'Ko-fi',
+    'linkedin'      => 'LinkedIn',
+    'orcid'         => 'ORCID',
+    'producthunt'   => 'Product Hunt',
+    'researchgate'  => 'ResearchGate',
+    'soundcloud'    => 'SoundCloud',
+    'stackoverflow' => 'Stack Overflow',
+    'tiktok'        => 'TikTok',
+    'whatsapp'      => 'WhatsApp',
+    'x'             => 'X',
+    'xing'          => 'XING',
+    'youtube'       => 'YouTube',
+];
+
+/** The label to store for an icon slug the picker offered. */
+function ccsig_social_label(string $slug): string
+{
+    return CCSIG_SOCIAL_NAMES[$slug] ?? ucfirst($slug);
+}
 
 /**
  * Clamp to $max CHARACTERS, not bytes, without mbstring.
@@ -90,12 +131,26 @@ function ccsig_sanitize(array $raw): array
 {
     $out = [];
     foreach (['title', 'phone', 'website'] as $k) {
-        $out[$k] = ccsig_clamp(ccsig_clean((string) ($raw[$k] ?? '')), CCSIG_MAX[$k]);
+        // The array guard that ccsig_sanitize_socials() has always had, applied
+        // to the scalar fields too — the two halves of this function disagreed
+        // about a hazard one of them names explicitly. A POSTed `_ccsig_title[]`
+        // would otherwise raise "Array to string conversion" and store the
+        // literal string "Array" as somebody's job title, which then renders in
+        // every email they send.
+        $value   = $raw[$k] ?? '';
+        $out[$k] = is_scalar($value)
+            ? ccsig_clamp(ccsig_clean((string) $value), CCSIG_MAX[$k])
+            : '';
     }
 
     $out['socials'] = ccsig_sanitize_socials($raw['socials'] ?? []);
 
-    $head = (string) ($raw['headshot'] ?? '');
+    // Guarded like the three above it. Unreachable today — the plugin coerces
+    // this one before calling — but a seam that guards three of its four scalar
+    // fields and trusts its caller for the fourth is the asymmetry those guards
+    // exist to remove, and it is the caller that would have to remember.
+    $head = $raw['headshot'] ?? '';
+    $head = is_scalar($head) ? (string) $head : '';
     $out['headshot'] = ccsig_is_avatar_name($head) ? $head : '';
 
     return $out;
@@ -131,13 +186,49 @@ function ccsig_sanitize_socials($raw): array
         }
         // One bad URL drops ITS OWN entry. Dropping the whole map would let a
         // single paste silently remove links the person never touched.
-        if (sig_safe_url($url, ['http', 'https']) === '') {
+        $url = ccsig_http_url($url);
+        if ($url === '') {
             continue;
         }
         $out[$label] = $url;
     }
 
     return $out;
+}
+
+/**
+ * A link the way the rest of this codebase already treats links: prepend a
+ * scheme ONLY when there is none, then require the result to be http(s).
+ *
+ * sig_safe_url() alone does not prepend, so `linkedin.com/in/jsmith` failed its
+ * scheme test and the entry was dropped — no message, no error, and the row
+ * simply empty when the person reopened the form. It was also asymmetric with
+ * the Website field two rows above, which accepts a bare domain because
+ * sig_web_href() prepends at render time.
+ *
+ * PREPENDING ONLY WHEN THERE IS NO SCHEME is what keeps this safe, and it is
+ * the same shape as cccalendar::safe_http_url() and the site's own
+ * safeHttpUrl(): a value that already carries one KEEPS it, so `javascript:`,
+ * `data:` and `vbscript:` fall out at the allow-list rather than being
+ * helpfully "fixed" into something that runs. Control characters are already
+ * gone by here — ccsig_clean() strips them before this sees the string, which
+ * is what stops `java\nscript:` being read as scheme-less.
+ */
+function ccsig_http_url(string $url): string
+{
+    $url = trim($url);
+
+    if ($url === '') {
+        return '';
+    }
+
+    if (strpos($url, '//') === 0) {
+        $url = 'https:' . $url;
+    } elseif (!preg_match('~^[a-z][a-z0-9+.\-]*:~i', $url)) {
+        $url = 'https://' . $url;
+    }
+
+    return sig_safe_url($url, ['http', 'https']);
 }
 
 /**
@@ -217,6 +308,24 @@ function ccsig_person(array $fields, array $rosterPerson, string $avatarBase): a
     ];
 
     $person['headshot'] = ccsig_headshot_url($fields, $avatarBase);
+
+    // The one exception to "no hrefs", and the asymmetry is the whole point:
+    // these are read from the ROSTER, never from $fields. The roster is a
+    // git-tracked file only an administrator edits, and it documents these as
+    // the escape hatch for a number sig_tel_href() cannot derive — an
+    // international one, say. Routing the seeder through this function without
+    // them would have silently retired a documented feature, leaving the
+    // roster's own instructions describing something that no longer happened.
+    //
+    // A person still cannot set them for themselves. That is the rule the long
+    // comment above is about: a signature whose displayed number and dialled
+    // number disagree is worse than one that does not link at all.
+    foreach (['phone_href', 'website_href'] as $override) {
+        $value = trim((string) ($rosterPerson[$override] ?? ''));
+        if ($value !== '') {
+            $person[$override] = $value;
+        }
+    }
 
     return $person;
 }

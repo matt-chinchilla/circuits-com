@@ -29,7 +29,7 @@ services:
       # 25 MB — matches the mail server's own accepted message size.
       ROUNDCUBEMAIL_UPLOAD_MAX_FILESIZE: 25M
       ROUNDCUBEMAIL_SKIN: circuitcenter
-      ROUNDCUBEMAIL_PLUGINS: archive,zipdownload,newmail_notifier,cccalendar
+      ROUNDCUBEMAIL_PLUGINS: archive,zipdownload,newmail_notifier,cccalendar,ccsignature
       # The shared company calendar. The plugin calls the FastAPI service on the
       # WEB box from PHP, server-side, with this secret in an Authorization
       # header — the browser never sees it and never makes a cross-origin
@@ -46,6 +46,16 @@ services:
       # roundcube` after changing either value.
       CALENDAR_API_BASE: ${CALENDAR_API_BASE:-}
       CALENDAR_API_SECRET: ${CALENDAR_API_SECRET:-}
+      # Self-service signatures. No secret here — the plugin holds none.
+      #
+      # Each default MIRRORS the plugin's own default rather than being written
+      # as `${VAR:-}`. That empty form has bitten this repo four times: compose
+      # passes the EMPTY STRING, which is not the same as absent, and it
+      # overwrites the code default instead of deferring to it. Mirroring means
+      # an unset variable in /opt/circuits-mail/.env changes nothing.
+      CCSIGNATURE_LIB_DIR: ${CCSIGNATURE_LIB_DIR:-/var/lib/ccsignature/lib}
+      CCSIGNATURE_AVATAR_DIR: ${CCSIGNATURE_AVATAR_DIR:-/var/lib/ccsignature/avatars}
+      CCSIGNATURE_AVATAR_BASE: ${CCSIGNATURE_AVATAR_BASE:-https://mail.circuitcenter.ai/avatars}
     volumes:
       - roundcube-data:/var/roundcube/db
       # Uploaded signature headshots. The ONLY writable path the plugin has,
@@ -60,6 +70,19 @@ services:
       # dependencies, so the upstream image is untouched and Roundcube patch
       # releases keep arriving for free.
       - /opt/circuits-mail/plugins/cccalendar:/var/www/html/plugins/cccalendar:ro
+      # Self-service signatures, by the same mechanism.
+      - /opt/circuits-mail/plugins/ccsignature:/var/www/html/plugins/ccsignature:ro
+      # signature-template.php, signature-roster.php and signature-icon-slugs.php
+      # — the renderer and its data, shared with seed-signatures.php.
+      #
+      # A directory of its own rather than three file mounts, and OUTSIDE the
+      # plugin directory rather than inside it: nesting a bind mount under
+      # another bind mount's read-only tree is fragile, and /opt/circuits-mail
+      # itself cannot be mounted wholesale because .env lives there.
+      #
+      # Absent, the plugin disables itself and the identity form names the files
+      # it wanted. Mail is unaffected either way.
+      - /opt/circuits-mail/signature:/var/lib/ccsignature/lib:ro
       # Overrides env-generated config can't express: STARTTLS on the
       # internal IMAP/SMTP hop (Dovecot is ssl=required) and skin_logo.
       - /opt/circuits-mail/roundcube-config.inc.php:/var/www/html/config/config.inc.php:ro

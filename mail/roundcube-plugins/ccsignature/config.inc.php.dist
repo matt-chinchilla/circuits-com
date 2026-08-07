@@ -1,0 +1,38 @@
+<?php
+
+/**
+ * ccsignature — optional configuration.
+ *
+ * EVERY value here has a working default, so this file is genuinely optional:
+ * the plugin runs correctly on this deployment with no config.inc.php at all.
+ * Copy it to config.inc.php only to point the plugin somewhere else.
+ *
+ * On the mail box the plugin directory is bind-mounted READ-ONLY from the git
+ * checkout, so a config.inc.php cannot be created inside it there. The
+ * environment variables named beside each key are the channel that actually
+ * carries an override in production — set them in /opt/circuits-mail/.env and
+ * list them in docker-compose.webmail.yml. Config wins over environment.
+ *
+ * Nothing here is a secret. This plugin holds none.
+ *
+ * Real file: `mail/roundcube-plugins/*` config.inc.php is git-ignored.
+ */
+
+$config = [];
+
+// Where signature-template.php, signature-roster.php and
+// signature-icon-slugs.php are mounted. Missing directory = the plugin disables
+// itself and the identity form says which files it wanted. Env: CCSIGNATURE_LIB_DIR
+$config['ccsignature_lib_dir'] = '/var/lib/ccsignature/lib';
+
+// Where uploaded headshots are written. Must be writable by www-data, and must
+// NOT be inside the document root — nothing here is reachable through
+// Roundcube; the webmail-proxy container publishes it read-only instead.
+// Env: CCSIGNATURE_AVATAR_DIR
+$config['ccsignature_avatar_dir'] = '/var/lib/ccsignature/avatars';
+
+// The public URL prefix that same directory is served from. Goes into the
+// <img src> of every signature, so it has to be absolute and reachable from
+// outside — a recipient's mail client fetches it, not the sender's browser.
+// Env: CCSIGNATURE_AVATAR_BASE
+$config['ccsignature_avatar_base'] = 'https://mail.circuitcenter.ai/avatars';

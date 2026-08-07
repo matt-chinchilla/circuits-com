@@ -35,6 +35,25 @@ foreach ($ROSTER['people'] as $mailbox => $rosterPerson) {
 }
 
 // ---------------------------------------------------------------------------
+T::group('every platform name slugifies back to its own icon');
+
+// The picker stores a LABEL; sig_social_slug($label) then chooses the icon. A
+// name that does not round-trip produces no <img> at all and the entry degrades
+// to a plain text link — which reads as a missing icon rather than as a bug, so
+// nobody would ever report it. Asserted for the whole generated list, defaults
+// included, because ucfirst() is as capable of being wrong as the map is.
+$SLUGS = require __DIR__ . '/../signature-icon-slugs.php';
+
+foreach ($SLUGS as $slug) {
+    $label = ccsig_social_label($slug);
+    T::same($slug, sig_social_slug($label), "{$slug}: \"{$label}\" slugifies back");
+}
+
+foreach (array_keys(CCSIG_SOCIAL_NAMES) as $slug) {
+    T::ok(in_array($slug, $SLUGS, true), "CCSIG_SOCIAL_NAMES['{$slug}'] names a mark that exists");
+}
+
+// ---------------------------------------------------------------------------
 T::group('clamping is multibyte-safe and never calls mb_*');
 
 $src = file_get_contents(__DIR__ . '/../roundcube-plugins/ccsignature/ccsignature_fields.php');
@@ -73,6 +92,40 @@ foreach (['javascript:alert(1)', 'data:text/html,<script>', 'vbscript:x', 'file:
 }
 
 // ---------------------------------------------------------------------------
+T::group('a link typed without a scheme still works');
+
+// It used to be dropped in silence: sig_safe_url() does not prepend, so a bare
+// domain failed its scheme test, the entry vanished, and the row was simply
+// empty when the person reopened the form. It was also asymmetric with the
+// Website field, which accepts a bare domain because sig_web_href() prepends.
+foreach ([
+    'linkedin.com/in/jsmith' => 'https://linkedin.com/in/jsmith',
+    'www.github.com/me'      => 'https://www.github.com/me',
+    '//example.com/x'        => 'https://example.com/x',
+    'http://example.com/x'   => 'http://example.com/x',
+    'https://example.com/x'  => 'https://example.com/x',
+] as $typed => $expected) {
+    T::same(['L' => $expected], ccsig_sanitize(['socials' => ['L' => $typed]])['socials'],
+        "accepted: {$typed}");
+}
+
+// Prepending must happen ONLY when there is no scheme, or it "fixes" a hostile
+// value into something that runs. A value that already carries a scheme keeps
+// it, and therefore still dies at the allow-list.
+foreach (['javascript:alert(1)', 'vbscript:x', 'data:text/html,x', 'file:///etc/passwd'] as $bad) {
+    T::same([], ccsig_sanitize(['socials' => ['L' => $bad]])['socials'],
+        "still refused after the prepend change: {$bad}");
+}
+
+// ---------------------------------------------------------------------------
+T::group('a non-scalar field cannot become the string "Array"');
+
+foreach (['title', 'phone', 'website'] as $field) {
+    $r = ccsig_sanitize([$field => ['x']]);
+    T::same('', $r[$field], "{$field}: an array value yields '', never \"Array\"");
+}
+
+// ---------------------------------------------------------------------------
 T::group('socials: caps, empties, and values that are not strings');
 
 $many = [];
@@ -100,6 +153,22 @@ $p = ccsig_person(
 );
 T::ok(!array_key_exists('phone_href', $p), 'phone_href is not carried through');
 T::ok(!array_key_exists('website_href', $p), 'website_href is not carried through');
+
+// ...but the ROSTER may still set them, and must, or routing the seeder through
+// this function would silently retire the documented escape hatch for a number
+// sig_tel_href() cannot derive. Admin-authored file: yes. Anything a person can
+// type into the identity form: never.
+$override = ccsig_person(
+    ['phone' => '+44 20 7946 0958', 'website' => 'example.com',
+     'phone_href' => 'tel:+00000000000', 'website_href' => 'https://evil.example'],
+    ['name' => 'N', 'phone_href' => 'tel:+442079460958', 'website_href' => 'https://example.com/uk'],
+    AVATARS
+);
+T::same('tel:+442079460958', $override['phone_href'], 'the roster may override the dial target');
+T::same('https://example.com/uk', $override['website_href'], 'and the website target');
+
+$empty = ccsig_person(['phone' => '1'], ['name' => 'N', 'phone_href' => '   '], AVATARS);
+T::ok(!array_key_exists('phone_href', $empty), 'a blank roster override stays absent, not empty');
 
 // ---------------------------------------------------------------------------
 T::group('avatar filenames: only what we minted');
@@ -135,6 +204,39 @@ T::same('https://circuitcenter.ai/images/team/matthew.jpg', $passthrough['headsh
 T::same('', ccsig_person(['headshot' => '', 'headshot_url' => 'javascript:alert(1)'],
     ['name' => 'N'], AVATARS)['headshot'], 'a hostile passthrough is refused');
 T::same('', ccsig_person([], ['name' => 'N'], '')['headshot'], 'no base configured yields no photo');
+
+// ---------------------------------------------------------------------------
+T::group('saving does not silently drop a roster-hosted photo');
+
+// ccsig_sanitize() deliberately does NOT carry headshot_url — it sanitises what
+// a CLIENT sent, and a client-supplied photo URL would put an arbitrary remote
+// image into outgoing mail. The consequence is a trap: anything that stores only
+// its output drops the roster's hosted photo, so the first person to save any
+// unrelated change loses their own face from every email they send, visible
+// nowhere but the recipient's inbox. The plugin re-adds headshot_url from the
+// server side; this asserts both halves of that, because deleting either one
+// reintroduces the bug.
+$who    = 'matthew@circuitcenter.ai';
+$shown  = ccsig_fields_for(1, [], $who, $ROSTER);
+$hosted = $shown['headshot_url'];
+
+T::ok($hosted !== '', 'the fixture person really does have a roster-hosted photo');
+T::ok(!array_key_exists('headshot_url', ccsig_sanitize($shown)),
+    'ccsig_sanitize drops headshot_url — a client must never choose it');
+
+$naive = ccsig_person(ccsig_sanitize($shown), $ROSTER['people'][$who], AVATARS);
+T::same('', $naive['headshot'], 'storing sanitize() alone WOULD lose the photo');
+
+$stored = ccsig_sanitize($shown) + ['headshot_url' => $hosted];
+$kept   = ccsig_person($stored, $ROSTER['people'][$who], AVATARS);
+T::same($hosted, $kept['headshot'], 'carrying headshot_url forward keeps it');
+
+// An uploaded file must win over the passthrough, or replacing a photo would
+// appear to do nothing.
+$replaced = ccsig_person(
+    ['headshot' => 'matthew-deadbeef.jpg', 'headshot_url' => $hosted], ['name' => 'N'], AVATARS
+);
+T::same(AVATARS . '/matthew-deadbeef.jpg', $replaced['headshot'], 'an upload overrides the passthrough');
 
 // ---------------------------------------------------------------------------
 T::group('preferences reading tolerates rubbish');
