@@ -121,6 +121,24 @@ html.cc {
 	   worse than the audited fallback rather than better. */
 	--cc-dim:        #939fa6;  /* meta: from, date, size   5.94 pane / 5.00 raise */
 
+	/* --- ink (on the white sheet) --------------------------------------------
+	   The one place in this skin where the ground is LIGHT: an HTML message
+	   keeps its white sheet, because senders' inline styles assume light.
+	   Everything above is tuned for a dark ground and is therefore exactly
+	   wrong there — --cc-ink on #ffffff measures 1.29:1, against a 4.5 floor.
+	   That is not "a bit low", it is text you cannot read, and it applied to
+	   every HTML mail whose body does not set a colour of its own.
+
+	   The sheet needs its own ink for the same reason the print block below
+	   redefines the whole palette: a light ground is a different problem, not a
+	   darker version of the same one.
+
+	   #1a1f23 is the logo plate — the brand's own black — at 16.61:1. Not pure
+	   #000 (21:1) only because this is the value the mark already uses; at this
+	   size the two are indistinguishable, and reaching for a colour the brand
+	   already defines beats inventing a second one. */
+	--cc-sheet-ink:  #1a1f23;  /* body copy on the white HTML sheet     16.61 */
+
 	/* --- button legends ------------------------------------------------------
 	   Controls are lettered in PURE WHITE, not the --cc-ink grey that body copy
 	   uses, with a faint bloom under the glyphs. Reading copy and operating a
@@ -1257,13 +1275,31 @@ html.cc .message-part blockquote span.blockquote-link {
 
 /* HTML mail keeps its white sheet — senders' inline styles assume light.
    The sheet is MOUNTED: rounded, hairlined, floated on the ambient shadow,
-   so it reads as a datasheet page laid on the glass. */
+   so it reads as a datasheet page laid on the glass.
+
+   IT ALSO NEEDS ITS OWN INK, and for a long time it did not have one. This
+   rule flipped the ground to white and said nothing about the text, so the
+   content inherited `color: var(--cc-ink)` from `html.cc body` — a near-white
+   chosen for the dark bench. #dde4e8 on #ffffff is 1.29:1. Every HTML message
+   whose body does not set a colour of its own rendered as pale grey on white:
+   present, selectable, and effectively unreadable.
+
+   Note this is NOT inherited from `.message-part` — show.php:724 picks one
+   class or the other for the same container, so the two never nest and fixing
+   `.message-part` would not have touched this.
+
+   Set on the container, deliberately, and with no !important: text that the
+   SENDER coloured keeps its own colour, and only text that specified none
+   picks this up. That is the whole distinction between "default coloured
+   text" and "all text", and overriding the latter would rewrite mail we were
+   asked to display, not to restyle. */
 html.cc .message-htmlpart {
 	border-radius: var(--cc-r-card);
 	border: 1px solid rgba(255, 255, 255, 0.08);
 	box-shadow: var(--cc-shadow-m);
 	overflow: hidden;
 	background: #fff;
+	color: var(--cc-sheet-ink);
 }
 
 html.cc .message-partheaders {
