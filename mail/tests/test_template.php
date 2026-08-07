@@ -68,27 +68,37 @@ $noList = sig_build(
 );
 T::notContains('social-github.png', $noList, 'an absent icon_slugs list emits no icons');
 
-// The manifest must equal what is on disk, or the guarantee is theatre.
-$onDisk = array_map(
-    fn($f) => basename($f, '.png'),
-    glob(__DIR__ . '/../../frontend/public/images/sig/social-*.png') ?: []
-);
-$onDisk = array_map(fn($n) => substr($n, strlen('social-')), $onDisk);
-sort($onDisk);
-$listed = $slugs;
-sort($listed);
-T::same($onDisk, $listed, 'signature-icon-slugs.php matches the social-*.png files exactly');
+// The next two assertions read the GENERATED PNGs, which live in the web repo
+// (frontend/public/images/sig/). That directory does not exist on the mail box,
+// where these tests also run via run-in-container.sh — so they skip there with
+// a printed reason rather than failing for a reason that has nothing to do with
+// the code. Silence would be worse: this is exactly the pair that keeps the
+// icon guarantee from being theatre.
+$sigDir = __DIR__ . '/../../frontend/public/images/sig';
+if (!is_dir($sigDir)) {
+    echo "    \033[33mskip\033[0m the two on-disk icon checks — {$sigDir} is not present here\n";
+    echo "         (expected inside the roundcube container; run them from the repo)\n";
+} else {
+    // The manifest must equal what is on disk, or the guarantee is theatre.
+    $onDisk = array_map(
+        fn($n) => substr($n, strlen('social-')),
+        array_map(fn($f) => basename($f, '.png'), glob($sigDir . '/social-*.png') ?: [])
+    );
+    sort($onDisk);
+    $listed = $slugs;
+    sort($listed);
+    T::same($onDisk, $listed, 'signature-icon-slugs.php matches the social-*.png files exactly');
 
-// Every generated icon must be reachable from the title it was generated from.
-$brands = json_decode(file_get_contents(__DIR__ . '/../signature-brand-icons.json'), true);
-$missing = [];
-foreach (array_keys($brands['icons']) as $title) {
-    $f = __DIR__ . '/../../frontend/public/images/sig/social-' . sig_social_slug($title) . '.png';
-    if (!is_file($f)) {
-        $missing[] = $title;
+    // Every generated icon must be reachable from the title it was generated from.
+    $brands  = json_decode(file_get_contents(__DIR__ . '/../signature-brand-icons.json'), true);
+    $missing = [];
+    foreach (array_keys($brands['icons']) as $title) {
+        if (!is_file($sigDir . '/social-' . sig_social_slug($title) . '.png')) {
+            $missing[] = $title;
+        }
     }
+    T::same([], $missing, 'every brand in the JSON resolves to a generated icon file');
 }
-T::same([], $missing, 'every brand in the JSON resolves to a generated icon file');
 
 // ---------------------------------------------------------------------------
 T::group('sig_safe_url — the scheme allow-list');
