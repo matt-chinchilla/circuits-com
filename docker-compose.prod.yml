@@ -167,6 +167,9 @@ services:
     environment:
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
       ANTHROPIC_ADMIN_KEY: ${ANTHROPIC_ADMIN_KEY:-}
+      # Flat bills planted monthly (recurring.py). MIRRORS the Settings
+      # default — an empty ${VAR:-} would DESTROY it (allowlist rule).
+      RECURRING_MONTHLY_EXPENSES: ${RECURRING_MONTHLY_EXPENSES:-ai:Claude Max subscription:200.00}
       AWS_DEFAULT_REGION: us-east-1
 
   frontend:

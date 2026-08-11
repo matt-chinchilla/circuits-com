@@ -179,6 +179,14 @@ class Settings(BaseSettings):
     STRIPE_SECRET_KEY: str | None = None
     STRIPE_PUBLIC_KEY: str | None = None
 
+    # Flat recurring bills the cost sync plants monthly — semicolon-separated
+    # `category:vendor:amount` triples (see services/cost_sources/recurring.py).
+    # Ships defaulted to the Claude Max subscription because that bill exists
+    # TODAY and no API anywhere reports it; the compose files MIRROR this
+    # default (the allowlist rule — an empty `${VAR:-}` would DESTROY it).
+    # Override or blank it from the host .env when the plan changes.
+    RECURRING_MONTHLY_EXPENSES: str = "ai:Claude Max subscription:200.00"
+
     # STRIPE_WEBHOOK_SECRET — the `whsec_…` signing secret minted when the
     # webhook endpoint is registered (Dashboard → Developers → Webhooks) at
     # deploy time. Verifies that POST /api/stripe/webhook bodies were signed

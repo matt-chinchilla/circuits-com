@@ -72,9 +72,6 @@ services:
       # Webhook signing secret (whsec_…) — verifies POST /api/stripe/webhook.
       # Empty = the route 404s and billing events change nothing.
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
-      # Anthropic ORGANIZATION admin key (sk-ant-admin…) for the cost report.
-      # Unset is the normal state today — services/cost_sources/anthropic.py is
-      # a stub and the Anthropic expense line stays a manual entry. Named here
       # NOTE deliberately ABSENT here: ANTHROPIC_ADMIN_KEY. It is an
       # ORGANIZATION-level admin credential and only the cost-sync service
       # reads it — the internet-facing api container must not carry a secret
@@ -181,6 +178,9 @@ services:
       # Free to call, so it syncs every pass. Empty = no fee sync at all.
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
       ANTHROPIC_ADMIN_KEY: ${ANTHROPIC_ADMIN_KEY:-}
+      # Flat bills planted monthly (recurring.py). MIRRORS the Settings
+      # default — an empty ${VAR:-} would DESTROY it (allowlist rule).
+      RECURRING_MONTHLY_EXPENSES: ${RECURRING_MONTHLY_EXPENSES:-ai:Claude Max subscription:200.00}
       # Cost Explorer has ONE endpoint region for every account. The client
       # pins us-east-1 itself; this is here so anything else in the container
       # that reaches AWS agrees with it.

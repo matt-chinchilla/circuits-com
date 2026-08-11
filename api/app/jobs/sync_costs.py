@@ -54,6 +54,7 @@ from app.services.cost_sources import (
     CostSourceUnavailable,
     fetch_anthropic_cost_lines,
     fetch_aws_cost_lines,
+    fetch_recurring_lines,
     fetch_stripe_fee_lines,
     upsert_synced_costs,
 )
@@ -138,6 +139,16 @@ def _record(stats: dict[str, int], written: dict[str, int]) -> None:
         stats[key] = stats.get(key, 0) + value
 
 
+def _sync_recurring(db: Session, stats: dict[str, int]) -> None:
+    # Declared flat bills (the Claude Max subscription) — no network, no
+    # gate: parsing a settings string every pass costs nothing, and the
+    # upsert is idempotent.
+    lines = fetch_recurring_lines(settings.RECURRING_MONTHLY_EXPENSES)
+    if lines:
+        _record(stats, upsert_synced_costs(db, lines))
+        stats["synced_recurring"] = 1
+
+
 def _sync_stripe(db: Session, stats: dict[str, int]) -> None:
     if not settings.STRIPE_SECRET_KEY:
         logger.debug("[cost-sync] STRIPE_SECRET_KEY unset — no fee sync")
@@ -215,6 +226,7 @@ def run_sync_pass(
     """One pass over every source. Returns counters for the log line and tests."""
     stats: dict[str, int] = {"created": 0, "updated": 0, "superseded": 0, "unavailable": 0}
     try:
+        _sync_recurring(db, stats)
         _sync_stripe(db, stats)
         _sync_aws(db, stats, now=now, force=force_aws, months_override=aws_months)
         _sync_anthropic(db, stats)

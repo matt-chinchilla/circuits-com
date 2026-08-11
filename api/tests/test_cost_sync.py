@@ -38,6 +38,7 @@ from app.services.cost_sources.base import (
     SyncedCost,
     upsert_synced_costs,
 )
+from app.services.cost_sources.recurring import fetch_recurring_lines
 from app.services.cost_sources.stripe_fees import fetch_stripe_fee_lines
 
 JULY = date(2026, 7, 1)
@@ -671,6 +672,12 @@ def no_stripe(monkeypatch):
     monkeypatch.setattr(settings, "STRIPE_SECRET_KEY", None)
 
 
+@pytest.fixture
+def no_recurring(monkeypatch):
+    """Blank the flat-bill spec so AWS-focused pass tests count only AWS rows."""
+    monkeypatch.setattr(settings, "RECURRING_MONTHLY_EXPENSES", "")
+
+
 class TestStalenessGate:
     def test_an_empty_table_asks_for_the_thirteen_month_backfill(self, db, spy_aws, no_stripe):
         sync_costs.run_sync_pass(db)
@@ -721,7 +728,7 @@ class TestStalenessGate:
         sync_costs.run_sync_pass(db)
         assert spy_aws == [13]
 
-    def test_a_pass_writes_what_it_fetched(self, db, spy_aws, no_stripe):
+    def test_a_pass_writes_what_it_fetched(self, db, spy_aws, no_stripe, no_recurring):
         add_expense(db, source="estimate")
         stats = sync_costs.run_sync_pass(db)
 
@@ -769,7 +776,7 @@ class TestPassBehaviour:
         assert "NoCredentialsError" in caplog.text
         assert "Traceback" not in caplog.text
 
-    def test_one_dead_source_does_not_stop_the_other(self, db, monkeypatch):
+    def test_one_dead_source_does_not_stop_the_other(self, db, monkeypatch, no_recurring):
         monkeypatch.setattr(settings, "STRIPE_SECRET_KEY", "sk_test_key")
 
         def dead(secret_key):
@@ -989,3 +996,56 @@ def test_the_alembic_revision_chain_is_unbroken():
     chain = list(scripts.walk_revisions())
     assert len(chain) >= 27
     assert scripts.get_current_head() is not None
+
+
+class TestRecurringSource:
+    """Flat bills no API reports — the Claude Max subscription is the case
+    that motivated this. Spec-driven, planted for the current month only."""
+
+    def test_the_shipped_default_is_the_claude_subscription(self):
+        assert settings.RECURRING_MONTHLY_EXPENSES == "ai:Claude Max subscription:200.00"
+
+    def test_a_spec_becomes_this_months_lines(self):
+        lines = fetch_recurring_lines(
+            "ai:Claude Max subscription:200.00;domain:Name.com:1.50",
+            today=date(2026, 8, 11),
+        )
+        assert [(l.category, l.vendor, l.amount) for l in lines] == [
+            ("ai", "Claude Max subscription", Decimal("200.00")),
+            ("domain", "Name.com", Decimal("1.50")),
+        ]
+        assert all(l.source == "recurring" for l in lines)
+        assert all(l.period_start == AUGUST and l.period_end == AUGUST_END for l in lines)
+
+    @pytest.mark.parametrize(
+        "bad",
+        ["", "   ", "no-colons here", "ai:only-two", "nope:Claude:5.00", "ai:Claude:abc",
+         "ai::5.00", "ai:Claude:-3"],
+    )
+    def test_malformed_entries_are_skipped_not_fatal(self, bad):
+        assert fetch_recurring_lines(bad, today=date(2026, 8, 11)) == []
+
+    def test_one_bad_entry_does_not_silence_the_good_one(self):
+        lines = fetch_recurring_lines(
+            "garbage;ai:Claude Max subscription:200.00", today=date(2026, 8, 11)
+        )
+        assert len(lines) == 1 and lines[0].vendor == "Claude Max subscription"
+
+    def test_the_recurring_actual_retires_the_seeded_anthropic_estimate(self, db):
+        add_expense(
+            db, source="estimate", category="ai", vendor="Anthropic", amount=Decimal("120.00")
+        )
+        stats = upsert_synced_costs(
+            db, fetch_recurring_lines("ai:Claude Max subscription:200.00", today=date(2026, 8, 11))
+        )
+        assert stats["superseded"] == 1
+        rows = db.query(Expense).filter(Expense.category == "ai").all()
+        assert [(r.vendor, r.source) for r in rows] == [("Claude Max subscription", "recurring")]
+
+    def test_the_job_plants_it_every_pass(self, db, spy_aws, no_stripe):
+        add_expense(db, source="aws", updated_at=datetime.now(UTC))  # AWS gate closed
+        stats = sync_costs.run_sync_pass(db)
+        assert stats.get("synced_recurring") == 1
+        row = db.query(Expense).filter(Expense.source == "recurring").one()
+        assert row.vendor == "Claude Max subscription"
+        assert Decimal(str(row.amount)) == Decimal("200.00")

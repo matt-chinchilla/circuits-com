@@ -45,6 +45,9 @@ CENTS = Decimal("0.01")
 AWS_SOURCE = "aws"
 STRIPE_SOURCE = "stripe"
 ANTHROPIC_SOURCE = "anthropic"
+# Flat bills declared in settings rather than fetched from a provider — the
+# Claude Max subscription is the canonical case (no API reports it anywhere).
+RECURRING_SOURCE = "recurring"
 
 
 class CostSourceUnavailable(Exception):
