@@ -971,3 +971,21 @@ class TestStripeFeeTypeTransactions:
         )
         assert len(lines) == 1
         assert lines[0].amount == Decimal("1.89")  # 59¢ + 130¢
+
+
+def test_the_alembic_revision_chain_is_unbroken():
+    """A down_revision naming a nonexistent id doesn't fail here — it fails in
+    the api container's entrypoint, which means EVERY api boot dies and /api/*
+    is a 502 until someone reads the crash loop. Shipped once (027 pointing at
+    '026_add_expense_source' when 026's id is plain '026'); never again."""
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
+
+    root = Path(__file__).resolve().parents[1]
+    config = Config(str(root / "alembic.ini"))
+    config.set_main_option("script_location", str(root / "alembic"))
+    scripts = ScriptDirectory.from_config(config)
+    # Walking the whole map raises on any dangling down_revision.
+    chain = list(scripts.walk_revisions())
+    assert len(chain) >= 27
+    assert scripts.get_current_head() is not None

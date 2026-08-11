@@ -16,14 +16,14 @@ vendor name is never relabeled into something a sync may delete.
 Idempotent and replayable: the UPDATE matches only rows still labeled
 'manual', so a partial `upgrade head` replay changes nothing the second time.
 
-Revision ID: 027_placeholder_sources
-Revises: 026_add_expense_source
+Revision ID: 027
+Revises: 026
 """
 
 from alembic import op
 
-revision = "027_placeholder_sources"
-down_revision = "026_add_expense_source"
+revision = "027"
+down_revision = "026"
 branch_labels = None
 depends_on = None
 
