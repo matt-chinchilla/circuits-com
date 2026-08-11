@@ -178,11 +178,19 @@ export default function ExpensesPage() {
                       <span className={styles.categoryCell}>
                         <Icon name={meta.icon} />
                         <span>{expenseCategoryLabel(e.category)}</span>
-                        {meta.estimated && <span className={styles.estTag}>est.</span>}
+                        {/* Row-driven, not meta-driven: an AWS actual must not
+                            wear the badge its category used to earn. */}
+                        {e.source === 'estimate' && <span className={styles.estTag}>est.</span>}
                       </span>
                     </td>
                     <td>
                       <strong>{e.vendor || '—'}</strong>
+                      {e.source !== 'manual' && e.source !== 'estimate' && (
+                        <span className={styles.estTag} title="Written by the cost sync — editing takes ownership; deleting is refused.">
+                          {'auto · '}
+                          {e.source}
+                        </span>
+                      )}
                     </td>
                     <td className={styles.descCell}>{e.description || '—'}</td>
                     <td>

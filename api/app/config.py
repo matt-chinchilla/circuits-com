@@ -179,6 +179,28 @@ class Settings(BaseSettings):
     STRIPE_SECRET_KEY: str | None = None
     STRIPE_PUBLIC_KEY: str | None = None
 
+    # STRIPE_WEBHOOK_SECRET — the `whsec_…` signing secret minted when the
+    # webhook endpoint is registered (Dashboard → Developers → Webhooks) at
+    # deploy time. Verifies that POST /api/stripe/webhook bodies were signed
+    # by Stripe; it cannot CALL Stripe, so its blast radius is forged events,
+    # not money. Unset, the route 404s — the demo-door posture: an
+    # unconfigured endpoint does not exist, and nothing unsigned can ever
+    # reach the sponsors table.
+    STRIPE_WEBHOOK_SECRET: str | None = None
+
+    # ── Automated cost sync (app/jobs/sync_costs.py) ────────────────────────
+    # ANTHROPIC_ADMIN_KEY — an ORGANIZATION admin key (`sk-ant-admin…`), not a
+    # regular API key: the Admin API's cost report is the only way to get real
+    # Claude spend, and that key can read and manage the whole organization.
+    # None by default and the source is a stub today
+    # (services/cost_sources/anthropic.py), so an unset key is the normal
+    # state, not a misconfiguration — the Anthropic line stays a manual entry
+    # typed from the invoice. AWS needs no setting at all: Cost Explorer is
+    # reached through boto3's default credential chain (the
+    # circuits-cost-explorer-read instance profile in prod), and Stripe reuses
+    # STRIPE_SECRET_KEY above.
+    ANTHROPIC_ADMIN_KEY: str | None = None
+
     # SMTP - when SMTP_HOST is unset, services/email.py runs in demo mode
     # (logs the email payload to stderr instead of sending). Lets local dev
     # work without exposing the prod mailbox password.

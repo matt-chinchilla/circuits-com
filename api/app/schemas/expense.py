@@ -28,7 +28,15 @@ class ExpenseResponse(BaseModel):
     description: str | None = None
     period_start: date
     period_end: date
+    # Who wrote the row: 'manual' | 'estimate' | 'aws' | 'stripe' (migration
+    # 026). READ-ONLY — deliberately absent from Create/Update below, because
+    # a client that could set it could label a hand-typed number 'aws' and have
+    # the next sync silently overwrite it. The column default keeps every row
+    # the admin CRUD creates 'manual', which is what makes "a sync never
+    # touches what a person typed" enforceable as a query filter.
+    source: str = "manual"
     created_at: datetime | None = None
+    updated_at: datetime | None = None
 
     model_config = ConfigDict(from_attributes=True)
 

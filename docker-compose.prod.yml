@@ -125,6 +125,12 @@ services:
       # `up -d --force-recreate api`.
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
       STRIPE_PUBLIC_KEY: ${STRIPE_PUBLIC_KEY:-}
+      # Webhook signing secret (whsec_…), minted when the endpoint is
+      # registered at deploy time. Same host-secret handling as the keys.
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      # Anthropic ORGANIZATION admin key (sk-ant-admin…). Unset today — the
+      # ANTHROPIC_ADMIN_KEY deliberately absent: an org-level admin credential
+      # only the cost-sync service reads — see the dev compose note.
 
   # The reminder loop inherits the prod SMTP relay and the log cap. Its env
   # block is otherwise the base file's; only the values that differ in prod
@@ -148,6 +154,20 @@ services:
       CALENDAR_REMINDER_LOOKBACK_MINUTES: ${CALENDAR_REMINDER_LOOKBACK_MINUTES:-720}
       SMS_TOPIC_ARN: ${SMS_TOPIC_ARN:-}
       SMS_REGION: ${SMS_REGION:-}
+
+  # The cost sync inherits the log cap, and — the line that matters — DROPS the
+  # dev compose's ${HOME}/.aws bind mount. On EC2 there is no such directory to
+  # mount, and credentials must come from the circuits-cost-explorer-read
+  # instance profile via IMDS (hop limit 2, so a container can reach it).
+  # Without the reset, compose would try to mount root's empty ~/.aws over the
+  # container's and boto3's chain would find an empty credentials file first.
+  cost-sync:
+    logging: *default-logging
+    volumes: !reset []
+    environment:
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      ANTHROPIC_ADMIN_KEY: ${ANTHROPIC_ADMIN_KEY:-}
+      AWS_DEFAULT_REGION: us-east-1
 
   frontend:
     logging: *default-logging

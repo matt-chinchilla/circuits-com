@@ -101,6 +101,15 @@ def update_expense(
     for key, value in update_data.items():
         setattr(expense, key, value)
 
+    # Editing a machine-written row TAKES OWNERSHIP: promoted to 'manual', the
+    # sync's own rule (never touch manual) protects the human's number from
+    # being silently reverted an hour later — and a changed vendor can no
+    # longer make the next pass insert a duplicate beside it. Without this,
+    # ownership was decided at INSERT only, and a PATCH left the row wearing
+    # a source label the sync still considered its own.
+    if update_data and expense.source != "manual":
+        expense.source = "manual"
+
     db.commit()
     db.refresh(expense)
     return expense
@@ -113,5 +122,18 @@ def delete_expense(
     current_user: User = Depends(get_current_user),
 ):
     expense = _get_or_404(db, expense_id)
+    if expense.source not in ("manual", "estimate"):
+        # Deleting a synced row is futile — the next pass re-creates it within
+        # the hour — so refuse loudly instead of silently un-deleting later.
+        # (Estimates ARE deletable: the seed's get_or_create only re-plants
+        # them on an empty month, and the sync supersedes them anyway.)
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"This row is written by the {expense.source} sync and would be "
+                "re-created within the hour. Edit it instead — editing takes "
+                "ownership and the sync stops touching it."
+            ),
+        )
     db.delete(expense)
     db.commit()

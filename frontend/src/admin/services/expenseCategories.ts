@@ -18,7 +18,13 @@ export interface ExpenseCategoryMeta {
   hint: string;
   /** True when the amount is a list-price ESTIMATE rather than an invoiced
    *  actual — AWS is metered and only reconciles at month end, so the
-   *  dashboard tags it rather than implying a settled number. */
+   *  dashboard tags it rather than implying a settled number.
+   *
+   *  FALLBACK ONLY as of the cost sync: `/dashboard/expenses/breakdown` now
+   *  sends `estimated` PER CATEGORY, computed from the source of every row
+   *  behind it, and a category holding a real synced AWS/Stripe charge is not
+   *  an estimate however this static flag reads. Prefer the response; use this
+   *  when the payload predates the flag (demo data, an older cached reply). */
   estimated?: boolean;
   /** Vibrant categorical accent for the cost-breakdown row (bar + icon). A
    *  distinct hue per category so the breakdown reads as a spectrum, not a
@@ -58,7 +64,7 @@ export const EXPENSE_CATEGORY_META: Record<ExpenseCategory, ExpenseCategoryMeta>
   email: {
     label: 'Email',
     icon: 'envelope-simple',
-    hint: 'Transactional mail relay for the contact + join forms.',
+    hint: 'The mail server (its AWS bill syncs here) + the transactional relay.',
     color: '#0ea5e9', // sky
   },
   domain: {

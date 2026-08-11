@@ -9,6 +9,7 @@ from app.routes import (
     admin_media,
     admin_messages,
     admin_presence,
+    admin_quotes,
     admin_sponsors,
     analytics,
     auth,
@@ -20,6 +21,7 @@ from app.routes import (
     search,
     sitemap,
     sponsors,
+    stripe_webhooks,
     suppliers,
 )
 
@@ -52,6 +54,8 @@ app.include_router(admin_presence.router)
 app.include_router(analytics.router)
 app.include_router(calendar.router)
 app.include_router(sitemap.router)
+app.include_router(stripe_webhooks.router)
+app.include_router(admin_quotes.router)
 
 
 setup_admin(app)

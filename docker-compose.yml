@@ -69,6 +69,16 @@ services:
       # A `sk_test_` key is sandbox and cannot move real money.
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
       STRIPE_PUBLIC_KEY: ${STRIPE_PUBLIC_KEY:-}
+      # Webhook signing secret (whsec_…) — verifies POST /api/stripe/webhook.
+      # Empty = the route 404s and billing events change nothing.
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      # Anthropic ORGANIZATION admin key (sk-ant-admin…) for the cost report.
+      # Unset is the normal state today — services/cost_sources/anthropic.py is
+      # a stub and the Anthropic expense line stays a manual entry. Named here
+      # NOTE deliberately ABSENT here: ANTHROPIC_ADMIN_KEY. It is an
+      # ORGANIZATION-level admin credential and only the cost-sync service
+      # reads it — the internet-facing api container must not carry a secret
+      # it never uses (2026-08-11 review finding).
       # SMTP — empty defaults trigger demo mode in app.services.email.
       # Populate via .env on prod EC2 host (see CLAUDE.md gotcha).
       SMTP_HOST: ${SMTP_HOST:-}
@@ -142,6 +152,46 @@ services:
       SMTP_USERNAME: ${SMTP_USERNAME:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_FROM: ${SMTP_FROM:-no-reply@circuitcenter.ai}
+
+  # Automated cost sync. `app.jobs.sync_costs` pulls REAL spend (AWS Cost
+  # Explorer, Stripe settlement fees) into the `expenses` table so the admin
+  # Cost Breakdown shows actuals instead of the seeded list-price estimate.
+  #
+  # Unlike calendar-reminders this one loops INSIDE python (`main()` sleeps an
+  # hour between passes) rather than in a shell `while`, because the pass has
+  # real state to protect: the AWS staleness gate reads the newest synced row
+  # before deciding to spend a $0.01 Cost Explorer call, and a process that
+  # exits and restarts each pass makes a crash loop expensive. `restart:
+  # unless-stopped` still covers a genuine crash, and the gate makes the
+  # restart cheap.
+  cost-sync:
+    build:
+      context: ./api
+    restart: unless-stopped
+    # Same ordering caveat as calendar-reminders: `alembic upgrade head` runs
+    # in the api container's entrypoint, so service_started narrows the window
+    # but does not close it. The job tolerates the gap itself — a missing
+    # column is one warning and a skipped pass, not a traceback.
+    depends_on:
+      - db
+      - api
+    command: python -m app.jobs.sync_costs
+    environment:
+      DATABASE_URL: postgresql://circuits:circuits@db:5432/circuits
+      # Free to call, so it syncs every pass. Empty = no fee sync at all.
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      ANTHROPIC_ADMIN_KEY: ${ANTHROPIC_ADMIN_KEY:-}
+      # Cost Explorer has ONE endpoint region for every account. The client
+      # pins us-east-1 itself; this is here so anything else in the container
+      # that reaches AWS agrees with it.
+      AWS_DEFAULT_REGION: us-east-1
+    # DEV ONLY: boto3's default credential chain finds the operator's CLI
+    # credentials here, so a local run reads the real account read-only. PROD
+    # resets this mount (docker-compose.prod.yml) — the EC2 box uses the
+    # circuits-cost-explorer-read instance profile through IMDS instead, and
+    # there is no ~/.aws on it to mount.
+    volumes:
+      - ${HOME}/.aws:/root/.aws:ro
 
   frontend:
     build: ./frontend

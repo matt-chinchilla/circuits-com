@@ -559,3 +559,69 @@
   gap: 10px;
   justify-content: flex-end;
 }
+
+/* ── Stripe billing panel (QuotePanel.tsx) ─────────────────────────────── */
+
+.quoteList {
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.quoteRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  border: 1px solid var(--a-border);
+  border-radius: 8px;
+  background: var(--a-bg2);
+}
+
+.quoteNumber {
+  font-family: var(--a-mono, ui-monospace, monospace);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.quoteBadge {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--a-border);
+  color: var(--a-fg2);
+}
+
+.quoteBadge[data-status='open'] {
+  color: var(--a-blue);
+  border-color: var(--a-blue);
+}
+
+.quoteBadge[data-status='accepted'] {
+  color: var(--a-green, #2e7d32);
+  border-color: currentColor;
+}
+
+.quoteAmount {
+  font-size: 13px;
+  color: var(--a-fg2);
+  margin-left: auto;
+}
+
+.quoteActions {
+  display: flex;
+  gap: 8px;
+}
+
+.quoteAddressRow {
+  display: grid;
+  grid-template-columns: 1fr 64px 110px;
+  gap: 8px;
+}

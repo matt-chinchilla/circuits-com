@@ -65,6 +65,44 @@ export interface PartListingCreate {
   currency?: string;
 }
 
+// GET /api/admin/quote-ladder — the fixed all-in price ladder (tax-inclusive
+// monthly totals in whole DOLLARS; first step is the list price). Single home
+// is the backend's QUOTE_LADDER; the UI never hardcodes a step.
+export interface QuoteLadderResponse {
+  tiers: Record<string, { list: number; steps: number[] }>;
+}
+
+// One row of GET /api/admin/sponsors/{id}/quotes. `amount_total` is CENTS.
+export interface SponsorQuote {
+  quote_id: string;
+  number: string | null;
+  status: string;
+  amount_total: number;
+  created?: number | null;
+}
+
+// No email field ON PURPOSE: quotes bill to the supplier's email on file —
+// a per-quote override would create quotes the sponsor's list view (keyed on
+// that same email) could never find or accept. Fix the supplier record.
+export interface QuoteCreateBody {
+  monthly_total: number;
+  address: {
+    line1: string;
+    line2?: string;
+    city: string;
+    state: string;
+    postal_code: string;
+  };
+}
+
+export interface QuoteCreateResult {
+  quote_id: string;
+  number: string | null;
+  amount_total: number;
+  customer_id: string;
+  status: string;
+}
+
 const adminClient = axios.create({ baseURL: API_BASE_URL });
 
 adminClient.interceptors.request.use((config) => {
@@ -225,9 +263,20 @@ export const adminApi = {
       .get<MonthlyCompare>('/dashboard/expenses', { params: { months } })
       .then((r) => r.data),
 
-  /** GET /dashboard/expenses/breakdown — current month, by category. */
-  getExpensesBreakdown: () =>
-    adminClient.get<ExpensesBreakdown>('/dashboard/expenses/breakdown').then((r) => r.data),
+  /** GET /dashboard/expenses/breakdown[?month=YYYY-MM] — one month, by
+   *  category. Omit `month` for the current one; the reply's
+   *  `available_months` lists the months that actually hold rows, which is what
+   *  the dashboard pager steps through.
+   *
+   *  The param is only sent when set — the server pattern-validates `month`,
+   *  so shipping `?month=` (empty) would be a 422 rather than "default". */
+  getExpensesBreakdown: (month?: string) =>
+    adminClient
+      .get<ExpensesBreakdown>(
+        '/dashboard/expenses/breakdown',
+        month ? { params: { month } } : undefined,
+      )
+      .then((r) => r.data),
 
   // ── Expense CRUD ─────────────────────────────────────────────────────────
   // No `bustingAfter` here on purpose: expenses are admin-internal and feed no
@@ -375,6 +424,37 @@ export const adminApi = {
 
   deleteSponsor: (id: string) =>
     bustingAfter(adminClient.delete(`/admin/sponsors/${id}`).then((r) => r.data)),
+
+  // ── Stripe quotes (sales-led billing; routes/admin_quotes.py) ────────────
+  // No bustingAfter: creating/accepting a quote changes nothing the public
+  // site renders — sponsors.status only ever moves via the Stripe webhook.
+  // All four 404 when STRIPE_SECRET_KEY is unconfigured server-side; the
+  // panel treats that as "billing not set up" rather than an error.
+
+  getQuoteLadder: () =>
+    adminClient.get<QuoteLadderResponse>('/admin/quote-ladder').then((r) => r.data),
+
+  getSponsorQuotes: (sponsorId: string) =>
+    adminClient
+      .get<{ quotes: SponsorQuote[] }>(`/admin/sponsors/${sponsorId}/quotes`)
+      .then((r) => r.data.quotes),
+
+  createSponsorQuote: (sponsorId: string, body: QuoteCreateBody) =>
+    adminClient
+      .post<QuoteCreateResult>(`/admin/sponsors/${sponsorId}/quote`, body)
+      .then((r) => r.data),
+
+  acceptQuote: (quoteId: string) =>
+    adminClient
+      .post<{ quote_id: string; status: string; subscription_id: string | null }>(
+        `/admin/quotes/${quoteId}/accept`
+      )
+      .then((r) => r.data),
+
+  downloadQuotePdf: (quoteId: string) =>
+    adminClient
+      .get<Blob>(`/admin/quotes/${quoteId}/pdf`, { responseType: 'blob' })
+      .then((r) => r.data),
 
   // "Feature" a supplier on a category = a Featured sponsorship on that
   // (top-level) category — the single source of truth as of 2026-06-03

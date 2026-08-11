@@ -207,7 +207,7 @@ def test_the_recipient_roster_default_is_not_empty_in_either_compose_file():
 
 # ── Stripe (2026-08-05) ─────────────────────────────────────────────────────
 
-STRIPE_SETTINGS = ("STRIPE_SECRET_KEY", "STRIPE_PUBLIC_KEY")
+STRIPE_SETTINGS = ("STRIPE_SECRET_KEY", "STRIPE_PUBLIC_KEY", "STRIPE_WEBHOOK_SECRET")
 
 
 def test_both_compose_files_pass_the_stripe_keys_through():
@@ -242,6 +242,108 @@ def test_the_stripe_keys_are_host_supplied_and_never_literal():
                 f"{name} has a literal default in {path.name} — a Stripe key must never "
                 "be committed, and an empty value correctly means 'billing not configured'."
             )
+
+
+# ── Automated cost sync (2026-08-11) ────────────────────────────────────────
+# app/jobs/sync_costs.py has exactly one caller — the `cost-sync` compose
+# service. Same failure mode as the reminder job before its service existed:
+# complete, tested, and never run, so the Cost Breakdown would keep showing the
+# seeded list-price estimate forever with nothing to indicate why.
+
+
+def test_the_cost_sync_job_is_actually_scheduled():
+    text = DEV_COMPOSE.read_text()
+    assert "cost-sync:" in text, (
+        "no cost-sync service in docker-compose.yml — app.jobs.sync_costs has no "
+        "caller and no real cost ever reaches the expenses table"
+    )
+    block = _service_block(DEV_COMPOSE, "cost-sync")
+    assert "app.jobs.sync_costs" in block, "the service does not invoke the job"
+    assert "restart:" in block, (
+        "without a restart policy one crash silences cost sync until the next deploy"
+    )
+
+
+COST_SYNC_SETTINGS = ("DATABASE_URL", "STRIPE_SECRET_KEY", "ANTHROPIC_ADMIN_KEY")
+
+
+def test_the_cost_sync_service_carries_its_own_configuration():
+    """It is a SEPARATE container from api — it inherits none of api's env."""
+    block = _service_block(DEV_COMPOSE, "cost-sync")
+    for name in COST_SYNC_SETTINGS:
+        assert f"{name}:" in block, (
+            f"{name} is missing from cost-sync in docker-compose.yml. The job runs in "
+            "its own container, so the api service's allowlist does nothing for it."
+        )
+    assert "AWS_DEFAULT_REGION: us-east-1" in block, (
+        "Cost Explorer has ONE endpoint region for the whole account; anything else "
+        "resolves to an endpoint that does not exist."
+    )
+
+
+def test_the_anthropic_admin_key_reaches_only_the_cost_sync_service():
+    """An ORGANIZATION admin credential goes where it is read and nowhere
+    else: cost-sync consumes it; the internet-facing api container never
+    does, so carrying it there was pure blast radius (2026-08-11 review)."""
+    for path in (DEV_COMPOSE, PROD_COMPOSE):
+        sync_block = _service_block(path, "cost-sync")
+        assert re.search(r"^\s*ANTHROPIC_ADMIN_KEY:\s*\$\{ANTHROPIC_ADMIN_KEY", sync_block, re.M), (
+            f"{path.name}: ANTHROPIC_ADMIN_KEY must be host-overridable on cost-sync, or "
+            "the key can never reach Settings (no env_file, no volume mount)."
+        )
+        api_block = _service_block(path, "api")
+        # Matched as an ENV LINE (key + colon at line start), not a substring:
+        # the block legitimately mentions the key by name in a comment that
+        # explains exactly why it is absent.
+        assert not re.search(r"^\s*ANTHROPIC_ADMIN_KEY:", api_block, re.M), (
+            f"{path.name}: the api service must NOT carry ANTHROPIC_ADMIN_KEY — "
+            "nothing in the api reads it, and it is an org-level admin secret."
+        )
+
+
+def test_the_anthropic_key_is_never_pinned_in_a_compose_file():
+    """An organization ADMIN key — a larger credential than the Stripe secret."""
+    for path in (DEV_COMPOSE, PROD_COMPOSE):
+        for service in ("api", "cost-sync"):
+            block = _service_block(path, service)
+            lines = [
+                ln for ln in block.splitlines() if ln.strip().startswith("ANTHROPIC_ADMIN_KEY:")
+            ]
+            for line in lines:
+                default = line.split(":-", 1)[1].rstrip("}").strip() if ":-" in line else ""
+                assert "${" in line and default == "", (
+                    f"{path.name}/{service}: an admin key must come from the host and "
+                    "never be committed with a literal default."
+                )
+
+
+def test_dev_mounts_the_operator_credentials_and_prod_does_not():
+    """Dev reads the real account through the operator's CLI credentials; prod
+    uses the circuits-cost-explorer-read instance profile over IMDS.
+
+    Without the prod `volumes: !reset []`, compose would mount root's (empty)
+    ~/.aws over the container's and boto3's chain would find an empty
+    credentials file BEFORE it ever asked IMDS — cost sync would be dead on the
+    one box where it matters, with a credentials error as the only clue.
+    """
+    dev = _service_block(DEV_COMPOSE, "cost-sync")
+    assert re.search(r"\$\{HOME\}/\.aws:/root/\.aws:ro", dev), (
+        "dev cost-sync must mount ~/.aws READ-ONLY so a local run can reach Cost Explorer"
+    )
+
+    prod = _service_block(PROD_COMPOSE, "cost-sync")
+    assert re.search(r"^\s*volumes:\s*!reset\s*\[\]", prod, re.M), (
+        "docker-compose.prod.yml must reset the dev ~/.aws bind mount — EC2 has no "
+        "such directory and credentials come from the instance profile."
+    )
+
+
+def test_the_cost_sync_service_inherits_the_prod_log_cap():
+    prod = _service_block(PROD_COMPOSE, "cost-sync")
+    assert "logging: *default-logging" in prod, (
+        "an hourly loop with an uncapped json-file log is the 238 MB nginx access log "
+        "again — see the x-logging anchor's comment."
+    )
 
 
 def test_the_secret_key_is_not_exposed_to_the_frontend_build():

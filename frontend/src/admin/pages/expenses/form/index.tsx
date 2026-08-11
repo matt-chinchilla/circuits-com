@@ -184,7 +184,9 @@ export default function ExpenseFormPage() {
       setTimeout(() => navigate('/admin/expenses'), 500);
     } catch (err) {
       console.error('[ExpenseFormPage] delete failed', err);
-      setToast('Delete failed — try again');
+      // The 409 for machine-synced rows explains itself ("…would be
+      // re-created within the hour. Edit it instead…") — surface it.
+      setToast(apiErrorDetail(err) ?? 'Delete failed — try again');
     }
   }
 

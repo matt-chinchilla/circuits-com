@@ -36,6 +36,7 @@ from app.models import (
     Supplier,
     User,
 )
+from app.models.expense import ESTIMATE_SOURCE, MANUAL_SOURCE
 from app.models.roles import ADMIN_ROLES
 from app.models.sponsor import is_single_slot
 from app.services.aws_cost import estimate_monthly_aws_cost
@@ -2104,20 +2105,34 @@ def _seed_expenses(db: Session) -> None:
 
     aws_estimate = estimate_monthly_aws_cost()
 
-    # (category, vendor, monthly amount, description)
-    recurring: list[tuple[str, str, Decimal, str]] = [
+    # (category, vendor, monthly amount, description, source)
+    #
+    # `source` is what keeps the seeded AWS figure honest once real actuals
+    # start arriving (migration 026). It is the only line here that is not
+    # 'manual': marked 'estimate', it is the FALLBACK the Cost Breakdown shows
+    # until app/jobs/sync_costs.py writes a real Cost Explorer number for that
+    # month — at which point `upsert_synced_costs` DELETES the estimate for
+    # that month, because showing both would double-count one AWS bill.
+    #
+    # The other four stay 'manual': they are placeholders a person will
+    # eventually replace by hand in /admin/expenses, and 'manual' is precisely
+    # the label that means "no sync may overwrite this".
+    recurring: list[tuple[str, str, Decimal, str, str]] = [
         (
             "infrastructure",
             "Amazon Web Services",
             aws_estimate,
             "ESTIMATE (list price, not an invoice): EC2 t3.small + 30 GB gp3 + "
-            "Elastic IP + egress, us-east-1. Computed by app/services/aws_cost.py.",
+            "Elastic IP + egress, us-east-1. Computed by app/services/aws_cost.py. "
+            "Superseded automatically once Cost Explorer reports the month's actual.",
+            ESTIMATE_SOURCE,
         ),
         (
             "domain",
             "Name.com",
             Decimal("1.50"),
             "circuitcenter.ai registration — ~$18/yr amortized to a monthly figure.",
+            MANUAL_SOURCE,
         ),
         (
             "email",
@@ -2125,27 +2140,32 @@ def _seed_expenses(db: Session) -> None:
             Decimal("5.00"),
             "PLACEHOLDER — Hover SMTP mailbox (no-reply@circuitcenter.ai). "
             "Replace with the billed amount.",
+            ESTIMATE_SOURCE,
         ),
         (
             "payment",
             "Stripe",
             Decimal("30.00"),
             "PLACEHOLDER — processor fees (2.9% + $0.30 per transaction). Flat "
-            "stand-in until real settlement data is wired up.",
+            "stand-in until real settlement data is wired up. app/jobs/sync_costs.py "
+            "adds a separate 'Stripe fees' line from settlement data once billing is live.",
+            ESTIMATE_SOURCE,
         ),
         (
             "ai",
             "Anthropic",
             Decimal("120.00"),
-            "PLACEHOLDER — Claude API / subscription usage. Anthropic exposes no "
-            "public billing API, so this must be entered manually each month.",
+            "PLACEHOLDER — Claude API / subscription usage. Wiring the Anthropic "
+            "Admin API cost report is a later step (services/cost_sources/anthropic.py); "
+            "until then this must be entered by hand each month.",
+            ESTIMATE_SOURCE,
         ),
     ]
 
     today = date.today()
     for months_ago in range(2, -1, -1):  # oldest → current month
         period_start, period_end = _calendar_month_bounds(today, months_ago)
-        for category, vendor, amount, description in recurring:
+        for category, vendor, amount, description, source in recurring:
             db.add(
                 Expense(
                     category=category,
@@ -2154,6 +2174,7 @@ def _seed_expenses(db: Session) -> None:
                     description=description,
                     period_start=period_start,
                     period_end=period_end,
+                    source=source,
                 )
             )
 

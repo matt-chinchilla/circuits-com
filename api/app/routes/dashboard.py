@@ -21,7 +21,7 @@ from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import extract, func, or_
 from sqlalchemy.orm import Session
 
@@ -53,6 +53,33 @@ EASTERN = ZoneInfo("America/New_York")
 # an unbounded series (each point is a dict in the JSON response).
 _MAX_TREND_DAYS = 365
 _MAX_COMPARE_MONTHS = 24
+
+# How many distinct months the breakdown pager may advertise. Same ceiling as
+# the compare charts, for the same reason: the list is materialized in JSON.
+_MAX_AVAILABLE_MONTHS = 24
+
+# `?month=` grammar. The regex is enforced by FastAPI (→ 422 before the handler
+# runs); `_parse_month` still catches the values it lets through that aren't
+# real dates, e.g. year 0000.
+_MONTH_PARAM_PATTERN = r"^\d{4}-(0[1-9]|1[0-2])$"
+
+# Spelled out rather than `strftime("%B")` / `calendar.month_name`, both of
+# which read LC_TIME — a container with a different locale would otherwise ship
+# "août 2026" to an English-only UI.
+_MONTH_LABELS = (
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+)
 
 # PLACEHOLDER billing figures — used only when a Sponsor row has no explicit
 # `amount`, so the sales-rep rollup still shows a plausible book value instead
@@ -233,6 +260,38 @@ def _current_month_bounds() -> tuple[date, date]:
     return first, _month_end(first)
 
 
+def _parse_month(month: str | None) -> date:
+    """First day of the requested ``YYYY-MM``; the current EST month when absent."""
+    if month is None:
+        return _today_est().replace(day=1)
+    year, _, mon = month.partition("-")
+    try:
+        return date(int(year), int(mon), 1)
+    except ValueError as exc:
+        # "0000-01" clears the regex but is not a representable date.
+        raise HTTPException(status_code=422, detail="month must be YYYY-MM") from exc
+
+
+def _month_label(first: date) -> str:
+    """Human month heading, e.g. ``August 2026`` (locale-independent)."""
+    return f"{_MONTH_LABELS[first.month - 1]} {first.year:04d}"
+
+
+def _available_expense_months(db: Session) -> list[str]:
+    """Distinct ``YYYY-MM`` months that hold expense rows, newest first, capped.
+
+    Bucketed in Python rather than via SQL ``EXTRACT``/``date_trunc`` so one code
+    path serves SQLite (tests) and Postgres (prod). The scan is a DISTINCT over
+    an indexed Date column holding a handful of rows per month, not a table load.
+    """
+    keys = {
+        f"{period_start.year:04d}-{period_start.month:02d}"
+        for (period_start,) in db.query(Expense.period_start).distinct().all()
+        if period_start is not None
+    }
+    return sorted(keys, reverse=True)[:_MAX_AVAILABLE_MONTHS]
+
+
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
@@ -324,16 +383,30 @@ def get_expenses_compare(
 
 @router.get("/expenses/breakdown")
 def get_expenses_breakdown(
+    month: str | None = Query(default=None, pattern=_MONTH_PARAM_PATTERN),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Current-month spend grouped by category.
+    """One month's spend grouped by category — ``?month=YYYY-MM``, default current.
+
+    Months are ``period_start`` buckets (same convention as /expenses), so a row
+    belongs to the month it was billed FOR. ``available_months`` lists every
+    month that actually holds rows so the UI pager can only step onto months
+    with data, and it is independent of the month being served — a client can
+    render the pager from any response.
 
     One entry PER CATEGORY (never duplicated), so the frontend can key a
     pie/legend on ``category`` safely; when several vendors share a category
-    their names are comma-joined into ``vendor``. Sorted by amount desc.
+    their names are comma-joined into ``vendor`` and itemized under ``vendors``.
+    Sorted by amount desc.
+
+    ``estimated`` is true only when EVERY row behind the category is an
+    ``estimate`` (the AWS list-price projection). The moment a real invoice
+    lands as an ``aws``-sourced row the category stops claiming to be a guess —
+    which is the whole point of the flag, so don't relax it to "any".
     """
-    month_start, month_end = _current_month_bounds()
+    month_start = _parse_month(month)
+    month_end = _month_end(month_start)
     rows = (
         db.query(Expense)
         .filter(Expense.period_start >= month_start, Expense.period_start <= month_end)
@@ -343,27 +416,52 @@ def get_expenses_breakdown(
     grouped: dict[str, dict] = {}
     for row in rows:
         key = (row.category or "other").strip().lower()
-        bucket = grouped.setdefault(key, {"amount": Decimal(0), "vendors": []})
-        bucket["amount"] += Decimal(str(row.amount or 0))
+        bucket = grouped.setdefault(
+            key, {"amount": Decimal(0), "vendors": [], "by_vendor": {}, "sources": set()}
+        )
+        amount = Decimal(str(row.amount or 0))
+        bucket["amount"] += amount
         vendor = (row.vendor or "").strip()
         if vendor and vendor not in bucket["vendors"]:
             bucket["vendors"].append(vendor)
+        # `Expense.source` arrives in a separate migration; until it lands (and
+        # for rows written before it) everything reads as hand-entered. Never
+        # filtered in SQL for the same reason.
+        source = (getattr(row, "source", None) or "manual").strip().lower()
+        bucket["sources"].add(source)
+        # Keyed by (vendor, source): one vendor can hold both an estimate and a
+        # settled invoice, and collapsing them would have to pick a lie.
+        vendor_key = (vendor or None, source)
+        bucket["by_vendor"][vendor_key] = bucket["by_vendor"].get(vendor_key, Decimal(0)) + amount
 
-    categories = [
-        {
-            "category": key,
-            "label": expense_category_label(key),
-            "amount": float(bucket["amount"]),
-            "vendor": ", ".join(bucket["vendors"]),
-        }
-        for key, bucket in sorted(grouped.items(), key=lambda kv: (-kv[1]["amount"], kv[0]))
-    ]
+    categories = []
+    for key, bucket in sorted(grouped.items(), key=lambda kv: (-kv[1]["amount"], kv[0])):
+        categories.append(
+            {
+                "category": key,
+                "label": expense_category_label(key),
+                "amount": float(bucket["amount"]),
+                "vendor": ", ".join(bucket["vendors"]),
+                "estimated": bucket["sources"] == {"estimate"},
+                # `vendor` is serialized as null, never omitted — an absent key
+                # reads as `undefined` in TS and slips past a `?:`-typed field.
+                "vendors": [
+                    {"vendor": vendor, "amount": float(amount), "source": source}
+                    for (vendor, source), amount in sorted(
+                        bucket["by_vendor"].items(),
+                        key=lambda kv: (-kv[1], kv[0][0] or "", kv[0][1]),
+                    )
+                ],
+            }
+        )
     total = sum((Decimal(str(row.amount or 0)) for row in rows), Decimal(0))
 
     return {
         "month": f"{month_start.year:04d}-{month_start.month:02d}",
+        "label": _month_label(month_start),
         "total": float(total),
         "categories": categories,
+        "available_months": _available_expense_months(db),
     }
 
 

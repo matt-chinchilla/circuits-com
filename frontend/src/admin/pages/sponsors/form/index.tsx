@@ -21,6 +21,7 @@ import Icon from '@shared/components/Icon';
 import { BrandColorPicker } from '@shared/components/BrandColorPicker';
 import { BrandColorSelectModal } from '@shared/components/BrandColorSelectModal';
 import ImageUploadField from '@admin/components/ImageUploadField';
+import QuotePanel from './QuotePanel';
 import styles from './SponsorFormPage.module.scss';
 
 // Tier visual palette — the three tiers (Platinum/Gold/Silver) get flat fills.
@@ -193,6 +194,11 @@ export default function SponsorFormPage() {
   }, [id]);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(isEdit);
+  // The tier as PERSISTED — what the backend will actually price a quote
+  // against. `form.tier` drifts with unsaved clicks (choosePlacement rewrites
+  // it on any placement change), and a ladder rendered from the unsaved value
+  // would offer prices the create route then 422s.
+  const [persistedTier, setPersistedTier] = useState('');
   const [suppliers, setSuppliers] = useState<AdminSupplier[]>([]);
   const [categories, setCategories] = useState<AdminCategory[]>([]);
   // Admin-role usernames from GET /api/admin/sales-reps — the `sold_by`
@@ -261,6 +267,7 @@ export default function SponsorFormPage() {
           // accidental downgrade with no signal. A known lowercase ('gold')
           // still resolves through normalizeSponsorTier and is unaffected.
           setUnknownTier(!storedTier && rawTier ? rawTier : null);
+          setPersistedTier(storedTier ?? rawTier);
           setForm({
             supplier_id: existing.supplier_id,
             // Placeholder only when the stored tier is unknown — `unknownTier`
@@ -1210,6 +1217,12 @@ export default function SponsorFormPage() {
           </button>
         </div>
       </form>
+
+      {/* Outside the <form> on purpose: the panel's buttons must never submit
+          the sponsorship. Only an EXISTING sponsor can be quoted — the quote
+          stamps this row's id into the subscription metadata. Priced off the
+          PERSISTED tier, never unsaved form state. */}
+      {isEdit && id && persistedTier && <QuotePanel sponsorId={id} tier={persistedTier} />}
 
       {showDeleteConfirm && (
         <div className={styles.modalBackdrop} role="dialog" aria-modal="true">

@@ -187,19 +187,51 @@ export type ExpenseCategory =
   | 'payment'
   | 'other';
 
+/** One vendor line inside a breakdown category — the itemization behind the
+ *  comma-joined `vendor` string.
+ *
+ *  GOTCHA: `vendor` is serialized as NULL (never omitted) for an unattributed
+ *  row, and a `vendor?: string` would let that null past `?:`, which only
+ *  catches `undefined`. */
+export interface ExpenseBreakdownVendor {
+  vendor: string | null;
+  amount: number;
+  /** Where the row came from — `manual` | `estimate` | `aws` | `stripe` |
+   *  `anthropic`. A free string: the nightly cost sync may add sources this
+   *  build has never heard of, and an unknown one must not fail a render. */
+  source: string;
+}
+
 export interface ExpenseBreakdownRow {
   category: string;
   label: string;
   amount: number;
+  /** Vendors sharing this category, comma-joined by the server. May be "". */
   vendor: string;
+  /** True only when EVERY backing row is the list-price estimate — a category
+   *  with one real synced invoice in it is NOT an estimate.
+   *
+   *  Optional because it post-dates the endpoint: a payload without it (demo
+   *  data, a cached older response) falls back to the static
+   *  `EXPENSE_CATEGORY_META.estimated` flag. */
+  estimated?: boolean;
+  vendors?: ExpenseBreakdownVendor[];
 }
 
-/** GET /api/dashboard/expenses/breakdown — the CURRENT month only. */
+/** GET /api/dashboard/expenses/breakdown[?month=YYYY-MM] — ONE month, grouped
+ *  by category (one entry per category, sorted by amount desc). */
 export interface ExpensesBreakdown {
   /** `YYYY-MM`. */
   month: string;
+  /** `August 2026`, rendered server-side. Optional: pre-pager payloads and the
+   *  demo generator omit it. */
+  label?: string;
   total: number;
   categories: ExpenseBreakdownRow[];
+  /** Every month that actually HOLDS rows — desc, distinct, capped at 24, and
+   *  independent of the month being served, so the pager can be built from any
+   *  response. Optional for the same reason as `label`. */
+  available_months?: string[];
 }
 
 /**
@@ -220,6 +252,11 @@ export interface AdminExpense {
   period_start: string;
   period_end: string;
   created_at: string | null;
+  /** Row provenance: 'manual' (typed by a person) | 'estimate' (seeded
+   *  stand-in) | 'aws' | 'stripe' | 'anthropic' (machine-synced). Synced
+   *  rows are re-written by the hourly job: editing one promotes it to
+   *  'manual' (the human takes ownership), deleting one is refused (409). */
+  source: string;
 }
 
 /** POST /api/admin/expenses/ body. `vendor`/`description` are optional

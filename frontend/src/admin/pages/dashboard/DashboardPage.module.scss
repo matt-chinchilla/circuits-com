@@ -468,6 +468,62 @@
     var(--a-glass-shadow);
 }
 
+// ─── Month pager (cost breakdown) ───────────────────────────────────────────
+// The segmented-control idiom narrowed to two arrows around a label: the
+// breakdown steps through the months that HAVE data, so this is a walk along a
+// list, not a date picker — there is nothing to type and nothing to pick.
+
+.monthPager {
+  display: inline-flex;
+  align-items: center;
+  @include a-glass-well;
+  border-radius: 6px;
+  padding: 2px;
+  gap: 2px;
+}
+
+.monthPagerBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  font-family: inherit;
+  font-size: 16px;
+  // Buttons inherit body line-height 1.6, which overflows a 22px box.
+  line-height: 1;
+  // fg2, not fg3 — the glyph sits in the recessed well (fg3 fails 4.5:1 there).
+  color: var(--a-fg2);
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition:
+    background-color 120ms,
+    color 120ms;
+
+  &:hover:not(:disabled) {
+    color: var(--a-fg1);
+    background: var(--a-track);
+  }
+
+  &:disabled {
+    color: var(--a-fg4);
+    cursor: default;
+  }
+}
+
+.monthPagerLabel {
+  // Reserves the widest month so stepping does not shuffle the total beside it.
+  min-width: 96px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--a-fg2);
+  white-space: nowrap;
+}
+
 // ─── Comparator figure + footer ─────────────────────────────────────────────
 
 .chartFigure {

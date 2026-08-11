@@ -45,6 +45,14 @@ EXPENSE_CATEGORY_LABELS: dict[str, str] = {
 }
 
 
+# `Expense.source` values. 'manual' is the ONLY one a human ever writes (it is
+# the column default and the admin CRUD cannot set the field at all), which is
+# what lets a sync say "never touch rows I did not write" as a query filter
+# rather than as a convention.
+MANUAL_SOURCE = "manual"
+ESTIMATE_SOURCE = "estimate"
+
+
 def expense_category_label(category: str | None) -> str:
     """Human label for a stored category value; unknown values pass through
     title-cased so a hand-inserted row never renders as an empty cell."""
@@ -63,8 +71,30 @@ class Expense(Base):
     # Indexed because the dashboard buckets by period_start (migration 020).
     period_start = Column(Date, nullable=False, index=True)
     period_end = Column(Date, nullable=False)
+    # WHO wrote this row (migration 026). Server-controlled: the admin CRUD
+    # schemas do not accept it, so anything a human types stays 'manual' and is
+    # never overwritten by a sync. `app/services/cost_sources/` writes 'aws',
+    # 'stripe' and (later) 'anthropic'; `db/seed.py` writes 'estimate' for the
+    # list-price AWS figure, which a real 'aws' actual for the same month
+    # SUPERSEDES — keeping both would double-count the same bill.
+    #
+    # A plain VARCHAR with a server_default rather than an enum, for the same
+    # reason `category` is: the set will grow, and a row inserted by hand in
+    # psql must land somewhere sane rather than violating NOT NULL.
+    source = Column(String(20), nullable=False, server_default="manual", default=MANUAL_SOURCE)
     created_at = Column(
         DateTime(timezone=True),
         default=lambda: datetime.now(UTC),
         nullable=False,
+    )
+    # Mirrors models/sponsor.py. The cost-sync job's staleness gate reads this
+    # (falling back to created_at) to decide whether the once-a-day, $0.01-per-
+    # call Cost Explorer request is due — so `upsert_synced_costs` stamps it
+    # EXPLICITLY on every touch rather than relying on `onupdate`, which does
+    # not fire when a re-sync writes the identical amount.
+    updated_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
+        nullable=True,
     )

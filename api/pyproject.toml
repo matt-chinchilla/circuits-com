@@ -16,6 +16,10 @@ dependencies = [
     "bcrypt>=4.0.0",
     "pyjwt>=2.8.0",
     "aiosmtplib>=3.0.0",
+    # AWS Cost Explorer, for app/services/cost_sources/aws.py. Imported LAZILY
+    # inside `_ce_client()` so the API process never pays for it and the test
+    # suite never needs it installed.
+    "boto3>=1.34.0",
 ]
 
 [project.optional-dependencies]
