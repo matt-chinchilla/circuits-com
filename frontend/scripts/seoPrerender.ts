@@ -211,6 +211,7 @@ function buildRoutes(manifest: SeoManifest | null): PrerenderRoute[] {
     { urlPath: '/about', file: 'about/index.html', seo: STATIC_PAGE_SEO.about },
     { urlPath: '/contact', file: 'contact/index.html', seo: STATIC_PAGE_SEO.contact },
     { urlPath: '/join', file: 'join/index.html', seo: STATIC_PAGE_SEO.join },
+    { urlPath: '/pricing', file: 'pricing/index.html', seo: STATIC_PAGE_SEO.pricing },
     { urlPath: '/keyword', file: 'keyword/index.html', seo: STATIC_PAGE_SEO.keyword },
     { urlPath: '/privacy', file: 'privacy/index.html', seo: STATIC_PAGE_SEO.privacy },
     // /terms shared the privacy canonical while it rendered the privacy

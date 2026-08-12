@@ -22,6 +22,7 @@ export type StaticPageKey =
   | 'contact'
   | 'join'
   | 'keyword'
+  | 'pricing'
   | 'privacy'
   | 'search'
   | 'terms';
@@ -77,6 +78,15 @@ export const STATIC_PAGE_SEO: Record<StaticPageKey, PageSeo> = {
     canonical: `${SITE_ORIGIN}/keyword`,
     jsonLd: [],
     heading: 'Sponsor a Keyword',
+    links: SITE_LINKS,
+  },
+  pricing: {
+    title: 'Sponsorship Pricing — Advertise on Circuit Center',
+    description:
+      'Sponsorship pricing for Circuit Center: Silver board placements at $100/mo self-serve, Gold at $600 and Platinum at $2,400 arranged with the partners desk.',
+    canonical: `${SITE_ORIGIN}/pricing`,
+    jsonLd: [],
+    heading: 'Sponsorship pricing',
     links: SITE_LINKS,
   },
   privacy: {

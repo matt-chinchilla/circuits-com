@@ -14,6 +14,7 @@ const ContactPage = lazy(() => import("@public/pages/contact"));
 const AboutPage = lazy(() => import("@public/pages/about"));
 const KeywordSponsorPage = lazy(() => import("@public/pages/keyword"));
 const KeywordLandingPage = lazy(() => import("@public/pages/keyword-landing"));
+const PricingPage = lazy(() => import("@public/pages/pricing"));
 const PartPage = lazy(() => import("@public/pages/part"));
 const PrivacyPage = lazy(() => import("@public/pages/privacy"));
 const TermsPage = lazy(() => import("@public/pages/terms"));
@@ -224,6 +225,7 @@ function App() {
           <Route path="/contact" element={<ContactPage />} />
           <Route path="/about" element={<AboutPage />} />
           <Route path="/keyword" element={<KeywordLandingPage />} />
+          <Route path="/pricing" element={<PricingPage />} />
           <Route path="/keyword/:keyword" element={<KeywordSponsorPage />} />
           <Route path="/part/:id" element={<PartPage />} />
           {/* Three separate legal documents sharing one chrome component.

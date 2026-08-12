@@ -199,6 +199,17 @@
   width: 100%;
   max-width: 360px;
 
+  // Clearance band. Brand and nav are pinned to the viewport EDGES and this
+  // bar is centered independently, so nothing in the layout stops them from
+  // overlapping — they only stay apart while the sides are narrow enough.
+  // Just above the appearance threshold they are not, and a full-width
+  // centre grazed the nav links (covering a link and swallowing the SEARCH
+  // button's clicks). Narrowing here keeps the search usable AND clear;
+  // above 1400px there is room for the full 360.
+  @media (max-width: 1400px) {
+    max-width: 280px;
+  }
+
   @include responsive($bp-desktop) {
     display: none;
   }

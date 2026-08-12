@@ -4,10 +4,16 @@ import SearchBar from "./SearchBar";
 import Logo from "@shared/components/Logo";
 import styles from "./Navbar.module.scss";
 
+// No "Home" entry on purpose: the brand mark to its left is already the
+// home link, and a fifth item pushed this absolutely-positioned cluster into
+// the absolutely-centered search bar between 1200 and ~1385px — the search
+// input covered "Home" and swallowed the SEARCH button's clicks. The navbar
+// pins its side content to the viewport edges (see CLAUDE.md), so the centre
+// only stays clear while the sides stay narrow.
 const NAV_LINKS = [
-  { to: "/", label: "Home" },
   { to: "/about", label: "About" },
   { to: "/join", label: "Join" },
+  { to: "/pricing", label: "Advertise" },
   { to: "/contact", label: "Contact" },
 ];
 

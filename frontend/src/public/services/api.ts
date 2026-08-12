@@ -137,6 +137,24 @@ export const api = {
       .get<{ monthly_total: number; tax_included: boolean }>('/checkout/silver')
       .then(r => r.data),
 
+  // The /pricing placement picker: every subcategory board with its open
+  // Silver slot count. Choosing one deep-links to that category page with
+  // ?sponsor=1, so the purchase still happens standing on the slot.
+  getSilverBoards: () =>
+    client
+      .get<{
+        monthly_total: number;
+        boards: {
+          category_id: string;
+          name: string;
+          parent_name: string;
+          path: string;
+          open_slots: number;
+          total_slots: number;
+        }[];
+      }>('/checkout/silver/boards')
+      .then(r => r.data),
+
   createSilverCheckout: (body: {
     category_id?: string;
     keyword?: string;

@@ -22,11 +22,12 @@ from collections import defaultdict
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.db.session import get_db
-from app.models import Category
+from app.models import Category, Sponsor
 from app.services import stripe_checkout, stripe_quotes
 from app.services.rate_limit import client_ip
 from app.services.stripe_checkout import silver_monthly_usd
@@ -84,6 +85,68 @@ def silver_info() -> dict:
     return {"monthly_total": silver_monthly_usd(), "tax_included": True}
 
 
+# Every Silver board shows five slots (SVP_SLOTS in SilverPartners.tsx). The
+# two must agree: a picker offering a "full" board would send a buyer to a
+# page with nothing to buy.
+SILVER_SLOTS_PER_BOARD = 5
+
+
+@router.get("/silver/boards")
+def silver_boards(db: Session = Depends(get_db)) -> dict:
+    """Every subcategory board with its open Silver slot count.
+
+    Feeds the /pricing placement picker: a buyer chooses a board here and
+    lands on THAT category page with the purchase panel open, so the sale
+    still happens standing on the slot. Public and cheap — two grouped
+    queries, no per-category N+1 — and it exposes only what the boards
+    already render.
+    """
+    _secret_key()
+
+    taken: dict[str, int] = {
+        str(row[0]): row[1]
+        for row in (
+            db.query(Sponsor.category_id, func.count(Sponsor.id))
+            .filter(
+                Sponsor.category_id.isnot(None),
+                func.lower(Sponsor.tier) == "silver",
+                # NULL status counts as Active — the legacy-seed rule.
+                or_(Sponsor.status == "Active", Sponsor.status.is_(None)),
+            )
+            .group_by(Sponsor.category_id)
+            .all()
+        )
+    }
+
+    parents = {
+        cat.id: cat for cat in db.query(Category).filter(Category.parent_id.is_(None)).all()
+    }
+    children = (
+        db.query(Category)
+        .filter(Category.parent_id.isnot(None))
+        .order_by(Category.name)
+        .all()
+    )
+
+    boards = []
+    for child in children:
+        parent = parents.get(child.parent_id)
+        if parent is None:
+            continue
+        open_slots = max(0, SILVER_SLOTS_PER_BOARD - taken.get(str(child.id), 0))
+        boards.append(
+            {
+                "category_id": str(child.id),
+                "name": child.name,
+                "parent_name": parent.name,
+                "path": f"/category/{parent.slug}/{child.slug}",
+                "open_slots": open_slots,
+                "total_slots": SILVER_SLOTS_PER_BOARD,
+            }
+        )
+    return {"monthly_total": silver_monthly_usd(), "boards": boards}
+
+
 @router.post("/silver")
 async def create_silver_checkout(
     body: SilverCheckoutBody,
@@ -114,6 +177,36 @@ async def create_silver_checkout(
         # included) would refuse the row later anyway. Refuse it now.
         if child is None or child.parent_id is None:
             raise HTTPException(status_code=404, detail="Subcategory not found")
+
+        # CAPACITY — the board holds five. Nothing downstream enforces this:
+        # migration 016's partial unique indexes back only the single-slot
+        # tiers, because Silver is deliberately multi-occupant, and the
+        # webhook's gates are about money, not occupancy. So without this
+        # check a stale `?sponsor=1` link (a bookmark, a rep's email sent
+        # before the board filled) or two buyers racing the last slot ends
+        # with someone paying for a slot that does not exist — the
+        # refund-and-an-apology outcome self-serve exists to avoid. Checked
+        # at session-mint because that is the last moment before Stripe has
+        # the customer's money.
+        taken = (
+            db.query(func.count(Sponsor.id))
+            .filter(
+                Sponsor.category_id == child.id,
+                func.lower(Sponsor.tier) == "silver",
+                or_(Sponsor.status == "Active", Sponsor.status.is_(None)),
+            )
+            .scalar()
+            or 0
+        )
+        if taken >= SILVER_SLOTS_PER_BOARD:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"{child.name} is full — all {SILVER_SLOTS_PER_BOARD} Silver slots "
+                    "are taken. The partners desk can tell you what's opening next."
+                ),
+            )
+
         parent = db.query(Category).filter(Category.id == child.parent_id).first()
         category_id = str(child.id)
         placement_label = child.name

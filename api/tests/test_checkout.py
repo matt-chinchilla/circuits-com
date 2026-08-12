@@ -415,3 +415,161 @@ def test_route_end_to_end_signed_delivery(client, db, seeded_db, monkeypatch):
     assert resp.status_code == 200, resp.text
     assert resp.json()["outcome"] == "checkout_activated"
     assert db.query(Sponsor).filter(Sponsor.keyword == "igbts").count() == 1
+
+
+class TestSilverBoards:
+    """The /pricing placement picker's data — open slot counts per board."""
+
+    def test_404_without_a_key(self, client, seeded_db):
+        assert client.get("/api/checkout/silver/boards").status_code == 404
+
+    def test_lists_subcategories_with_open_slots(self, client, stripe_key, seeded_db):
+        body = client.get("/api/checkout/silver/boards").json()
+        assert body["monthly_total"] == 100
+        child = seeded_db["child"]
+        board = next(b for b in body["boards"] if b["category_id"] == str(child.id))
+        assert board["name"] == child.name
+        assert board["parent_name"] == seeded_db["parent"].name
+        assert board["path"] == f"/category/{seeded_db['parent'].slug}/{child.slug}"
+        assert board["total_slots"] == 5
+        # seeded_db plants a GOLD sponsor on this child — Gold must not
+        # consume a Silver slot.
+        assert board["open_slots"] == 5
+
+    def test_top_level_categories_are_never_listed(self, client, stripe_key, seeded_db):
+        body = client.get("/api/checkout/silver/boards").json()
+        ids = {b["category_id"] for b in body["boards"]}
+        assert str(seeded_db["parent"].id) not in ids
+
+    def test_an_active_silver_sponsor_consumes_a_slot(self, client, stripe_key, db, seeded_db):
+        child = seeded_db["child"]
+        db.add(
+            Sponsor(
+                supplier_id=seeded_db["supplier1"].id,
+                category_id=child.id,
+                tier="Silver",
+                status="Active",
+            )
+        )
+        db.commit()
+        body = client.get("/api/checkout/silver/boards").json()
+        board = next(b for b in body["boards"] if b["category_id"] == str(child.id))
+        assert board["open_slots"] == 4
+
+    def test_a_null_status_silver_row_still_counts_as_taken(
+        self, client, stripe_key, db, seeded_db
+    ):
+        """Legacy seed rows carry NULL status and ARE active — counting them
+        as free would sell a slot that is visibly occupied."""
+        child = seeded_db["child"]
+        db.add(
+            Sponsor(
+                supplier_id=seeded_db["supplier1"].id,
+                category_id=child.id,
+                tier="silver",  # lowercase legacy casing too
+                status=None,
+            )
+        )
+        db.commit()
+        body = client.get("/api/checkout/silver/boards").json()
+        board = next(b for b in body["boards"] if b["category_id"] == str(child.id))
+        assert board["open_slots"] == 4
+
+    def test_an_expired_sponsor_frees_its_slot(self, client, stripe_key, db, seeded_db):
+        child = seeded_db["child"]
+        db.add(
+            Sponsor(
+                supplier_id=seeded_db["supplier1"].id,
+                category_id=child.id,
+                tier="Silver",
+                status="Expired",
+            )
+        )
+        db.commit()
+        body = client.get("/api/checkout/silver/boards").json()
+        board = next(b for b in body["boards"] if b["category_id"] == str(child.id))
+        assert board["open_slots"] == 5
+
+
+class TestBoardCapacity:
+    """A full board cannot be sold a sixth slot.
+
+    Nothing downstream enforces this — migration 016's partial unique indexes
+    back only the single-slot tiers (Silver is deliberately multi-occupant)
+    and the webhook's gates are about money, not occupancy. So the check at
+    session-mint is the last moment before Stripe holds the customer's cash.
+    """
+
+    def _fill(self, db, seeded_db, count):
+        for i in range(count):
+            supplier = Supplier(name=f"Filler {i}")
+            db.add(supplier)
+            db.flush()
+            db.add(
+                Sponsor(
+                    supplier_id=supplier.id,
+                    category_id=seeded_db["child"].id,
+                    tier="Silver",
+                    status="Active",
+                )
+            )
+        db.commit()
+
+    def test_a_full_board_refuses_the_session(self, client, stripe_key, db, seeded_db):
+        self._fill(db, seeded_db, 5)
+        resp = client.post(
+            URL,
+            json={"company_name": "Latecomer", "category_id": str(seeded_db["child"].id)},
+        )
+        assert resp.status_code == 409
+        assert "full" in resp.json()["detail"].lower()
+
+    def test_the_last_slot_is_still_sellable(self, client, stripe_key, db, seeded_db, monkeypatch):
+        async def fake_create(client_, **kwargs):
+            return {"session_id": "cs_x", "url": "https://checkout.stripe.com/c/pay/cs_x"}
+
+        monkeypatch.setattr(stripe_checkout, "create_silver_checkout_session", fake_create)
+        self._fill(db, seeded_db, 4)
+        resp = client.post(
+            URL,
+            json={"company_name": "Fifth", "category_id": str(seeded_db["child"].id)},
+        )
+        assert resp.status_code == 200
+
+    def test_expired_rows_do_not_hold_capacity(self, client, stripe_key, db, seeded_db, monkeypatch):
+        async def fake_create(client_, **kwargs):
+            return {"session_id": "cs_x", "url": "https://checkout.stripe.com/c/pay/cs_x"}
+
+        monkeypatch.setattr(stripe_checkout, "create_silver_checkout_session", fake_create)
+        self._fill(db, seeded_db, 5)
+        for row in db.query(Sponsor).filter(Sponsor.category_id == seeded_db["child"].id).all():
+            if row.tier == "Silver":
+                row.status = "Expired"
+        db.commit()
+        resp = client.post(
+            URL,
+            json={"company_name": "Returning", "category_id": str(seeded_db["child"].id)},
+        )
+        assert resp.status_code == 200
+
+    def test_gold_does_not_consume_a_silver_slot(self, client, stripe_key, db, seeded_db, monkeypatch):
+        async def fake_create(client_, **kwargs):
+            return {"session_id": "cs_x", "url": "https://checkout.stripe.com/c/pay/cs_x"}
+
+        monkeypatch.setattr(stripe_checkout, "create_silver_checkout_session", fake_create)
+        # seeded_db already plants a GOLD sponsor on this child.
+        self._fill(db, seeded_db, 4)
+        resp = client.post(
+            URL, json={"company_name": "Fifth", "category_id": str(seeded_db["child"].id)}
+        )
+        assert resp.status_code == 200
+
+    def test_keyword_placements_are_not_capacity_checked(self, client, stripe_key, monkeypatch):
+        """Keywords are multi-occupant with no five-slot board behind them."""
+
+        async def fake_create(client_, **kwargs):
+            return {"session_id": "cs_x", "url": "https://checkout.stripe.com/c/pay/cs_x"}
+
+        monkeypatch.setattr(stripe_checkout, "create_silver_checkout_session", fake_create)
+        resp = client.post(URL, json={"company_name": "Anyone", "keyword": "mosfets"})
+        assert resp.status_code == 200

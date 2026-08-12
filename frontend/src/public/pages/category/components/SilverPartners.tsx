@@ -330,7 +330,23 @@ export default function SilverPartners({
     api
       .getSilverCheckoutInfo()
       .then(info => {
-        if (!cancelled) setCheckoutMonthly(info.monthly_total);
+        if (cancelled) return;
+        setCheckoutMonthly(info.monthly_total);
+        // ?sponsor=1 — the deep link /pricing (and any rep's email) uses to
+        // land a buyer on THIS board with the panel already open. Read from
+        // the live URL, not a prop: this component is not the router's owner.
+        //
+        // Gated on BOTH checkout availability and a genuinely open slot. The
+        // slot check is the important half: before this param existed the
+        // only door to the panel was an "Advertise here" row, so the UI WAS
+        // the capacity gate. A link is durable and inventory is not — a
+        // bookmark, or a rep's email sent before the board filled, would
+        // otherwise open a purchase panel for a board with nothing to sell.
+        // The server refuses it too (409); this just never offers it.
+        const slotsOpen = SVP_SLOTS - (suppliers || []).length > 0;
+        if (slotsOpen && new URLSearchParams(window.location.search).get('sponsor') === '1') {
+          setBuying(true);
+        }
       })
       .catch(() => {});
     return () => {

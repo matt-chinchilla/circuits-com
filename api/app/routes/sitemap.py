@@ -15,6 +15,7 @@ STATIC_PAGES = [
     ("/join", "monthly", "0.5"),
     ("/contact", "monthly", "0.4"),
     ("/search", "weekly", "0.6"),
+    ("/pricing", "monthly", "0.6"),
     ("/keyword", "weekly", "0.5"),
     ("/privacy", "yearly", "0.2"),
 ]

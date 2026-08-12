@@ -1,0 +1,406 @@
+@use 'sass:color';
+@use '@shared/styles/variables' as *;
+@use '@shared/styles/mixins' as *;
+
+// The sendable purchase page. Deliberately quiet: the boards themselves are
+// the loud surface, and a price list that shouts reads like a pitch. One
+// accent (the gold trim the tier boards already use) and one green (the
+// site's energized trace) for the action.
+
+.page {
+  @include container;
+  padding: 32px 0 72px;
+  display: flex;
+  flex-direction: column;
+  gap: 34px;
+}
+
+.kicker {
+  display: block;
+  font-family: $font-mono;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: $sponsor-gold;
+  margin-bottom: 6px;
+}
+
+.tierName {
+  font-size: 1.55rem;
+  letter-spacing: -0.02em;
+  color: $executive-blue;
+  margin: 0;
+}
+
+.tierLine {
+  margin: 8px 0 0;
+  font-size: 0.94rem;
+  line-height: 1.55;
+  color: var(--fg2, #4b5560);
+  max-width: 62ch;
+}
+
+.priceBlock {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  white-space: nowrap;
+}
+
+.price {
+  font-family: $font-mono;
+  font-size: 2.1rem;
+  font-weight: 700;
+  line-height: 1;
+  color: $executive-blue;
+}
+
+.per {
+  font-size: 0.76rem;
+  color: var(--fg2, #67727d);
+  margin-top: 4px;
+}
+
+.perks {
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 4px 20px;
+  font-size: 0.9rem;
+  color: var(--fg2, #39424b);
+
+  li {
+    position: relative;
+    padding: 4px 0 4px 22px;
+  }
+
+  li::before {
+    content: '\2713';
+    position: absolute;
+    left: 2px;
+    color: $nav-blue;
+    font-weight: 700;
+  }
+}
+
+.sectionTitle {
+  font-size: 1.25rem;
+  letter-spacing: -0.018em;
+  color: $executive-blue;
+  margin: 0;
+}
+
+.sectionLine {
+  margin: 7px 0 0;
+  font-size: 0.92rem;
+  line-height: 1.55;
+  color: var(--fg2, #4b5560);
+  max-width: 70ch;
+}
+
+/* ── Silver, the self-serve tier ─────────────────────────────────────────── */
+
+.silver {
+  @include card-base;
+  padding: 26px 28px 28px;
+  border-top: 3px solid $sponsor-gold;
+}
+
+.silverHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.picker {
+  margin-top: 22px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border, #e2e8ee);
+}
+
+.pickerLabel {
+  display: block;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: $executive-blue;
+  margin-bottom: 8px;
+}
+
+.pickerNote {
+  margin: 18px 0 0;
+  font-size: 0.88rem;
+  color: var(--fg2, #67727d);
+
+  a {
+    color: $executive-blue;
+    font-weight: 600;
+  }
+}
+
+.search {
+  width: 100%;
+  padding: 10px 13px;
+  border: 1px solid var(--border, #d7dee5);
+  border-radius: 9px;
+  font-size: 0.92rem;
+
+  &:focus {
+    outline: 2px solid rgba($executive-blue, 0.35);
+    border-color: $executive-blue;
+  }
+}
+
+.boardList {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 8px;
+}
+
+.board {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas: 'name slots' 'name go';
+  align-items: center;
+  gap: 2px 12px;
+  padding: 11px 14px;
+  border: 1px solid var(--border, #e2e8ee);
+  border-radius: 10px;
+  background: var(--surface-2, #fff);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s, background 0.15s;
+
+  &:hover {
+    border-color: $sponsor-gold;
+    background: rgba($sponsor-gold, 0.05);
+  }
+}
+
+.boardName {
+  grid-area: name;
+  font-size: 0.94rem;
+  font-weight: 600;
+  color: $executive-blue;
+
+  small {
+    display: block;
+    font-weight: 400;
+    font-size: 0.76rem;
+    color: var(--fg2, #8a95a0);
+  }
+}
+
+.boardSlots {
+  grid-area: slots;
+  font-family: $font-mono;
+  font-size: 0.72rem;
+  color: var(--fg2, #67727d);
+  white-space: nowrap;
+}
+
+.boardGo {
+  grid-area: go;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: $nav-blue;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.moreBtn {
+  margin-top: 12px;
+  border: 1px solid var(--border, #d7dee5);
+  background: none;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: $executive-blue;
+  cursor: pointer;
+
+  &:hover {
+    border-color: $executive-blue;
+  }
+}
+
+/* ── Gold + Platinum ─────────────────────────────────────────────────────── */
+
+.exclusives {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tierGrid {
+  margin-top: 16px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+.tierCard {
+  @include card-base;
+  padding: 22px 24px 24px;
+  display: flex;
+  flex-direction: column;
+  border-top: 3px solid $sponsor-gold;
+
+  .priceBlock {
+    align-items: flex-start;
+    margin-top: 10px;
+  }
+
+  .perks {
+    grid-template-columns: 1fr;
+    flex: 1;
+  }
+}
+
+.tierCard[data-tier='platinum'] {
+  border-top-color: color.adjust($sponsor-gold, $lightness: 22%);
+}
+
+.tierCta {
+  margin-top: 18px;
+  align-self: flex-start;
+  padding: 10px 16px;
+  border-radius: 9px;
+  background: $executive-blue;
+  color: #fff;
+  font-size: 0.88rem;
+  font-weight: 600;
+  text-decoration: none;
+  line-height: 1;
+
+  &:hover {
+    background: color.adjust($executive-blue, $lightness: 6%);
+  }
+}
+
+/* ── The partners desk ───────────────────────────────────────────────────── */
+
+.desk {
+  @include card-base;
+  padding: 24px 26px 26px;
+}
+
+.deskHead {
+  display: flex;
+  flex-direction: column;
+}
+
+.deskDes {
+  display: block;
+  font-family: $font-mono;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: $sponsor-gold;
+  margin-bottom: 6px;
+}
+
+.repList {
+  list-style: none;
+  margin: 18px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.rep {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--border, #e2e8ee);
+  border-radius: 10px;
+}
+
+.repAva {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #1a1f23;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-family: $font-mono;
+  font-size: 14px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16);
+}
+
+.repId {
+  font-size: 0.92rem;
+  color: $executive-blue;
+}
+
+.repDes {
+  display: block;
+  font-family: $font-mono;
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  color: $sponsor-gold;
+}
+
+.repMail {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: $executive-blue;
+  text-decoration: none;
+  border: 1px solid var(--border, #d7dee5);
+  border-radius: 7px;
+  padding: 6px 11px;
+  line-height: 1;
+
+  &:hover {
+    border-color: $executive-blue;
+  }
+}
+
+/* ── Keyword handoff ─────────────────────────────────────────────────────── */
+
+.keywordCard {
+  @include card-base;
+  padding: 22px 26px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.keywordCta {
+  padding: 10px 16px;
+  border: 1px solid $executive-blue;
+  border-radius: 9px;
+  color: $executive-blue;
+  font-size: 0.88rem;
+  font-weight: 600;
+  text-decoration: none;
+  line-height: 1;
+  white-space: nowrap;
+
+  &:hover {
+    background: rgba($executive-blue, 0.06);
+  }
+}
+
+@include responsive(mobile) {
+  .silverHead {
+    flex-direction: column;
+  }
+
+  .priceBlock {
+    align-items: flex-start;
+  }
+}
