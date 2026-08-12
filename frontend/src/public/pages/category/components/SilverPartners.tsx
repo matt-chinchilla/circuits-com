@@ -22,6 +22,8 @@ import type { PartnerSupplier } from '@public/types/sponsor';
 import { isDataImage, safeHttpUrl, safeImageUrl } from '@shared/utils/url';
 import { formatPhone } from '@shared/utils/phone';
 import { CsCopy, csTelHref } from './csFx';
+import { api } from '@public/services/api';
+import SilverCheckoutModal from './SilverCheckoutModal';
 import './categorySponsor.scss';
 import './silverPartners.scss';
 
@@ -196,10 +198,14 @@ const SvSlotEmpty = ({
   i,
   categoryName,
   onAdvertise,
+  monthly,
 }: {
   i: number;
   categoryName: string;
   onAdvertise: () => void;
+  /** All-in monthly price when self-serve checkout is live; null keeps the
+   *  classic contact-page CTA. */
+  monthly: number | null;
 }): ReactElement => {
   const where = categoryName || 'this subcategory';
   return (
@@ -230,7 +236,14 @@ const SvSlotEmpty = ({
           <span className="svp-slot-sub">Feature your company in {where}</span>
         </span>
         <span className="svp-slot-cta" aria-hidden="true">
-          Become a Preferred Partner{' →'}
+          {monthly != null ? (
+            <>
+              <strong className="svp-slot-price">${monthly}/mo</strong>
+              {' · Sponsor this slot →'}
+            </>
+          ) : (
+            <>Become a Preferred Partner{' →'}</>
+          )}
         </span>
       </div>
     </div>
@@ -240,11 +253,16 @@ const SvSlotEmpty = ({
 export interface SilverPartnersProps {
   suppliers: PartnerSupplier[];
   categoryName: string;
+  /** The subcategory's id — what a self-serve purchase is FOR. Absent (or
+   *  with billing unconfigured server-side) the open slots keep their
+   *  classic contact-page routing. */
+  categoryId?: string;
 }
 
 export default function SilverPartners({
   suppliers,
   categoryName,
+  categoryId,
 }: SilverPartnersProps): ReactElement {
   const ref = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
@@ -300,14 +318,40 @@ export default function SilverPartners({
 
   const list = (suppliers || []).map(toChipData);
   const emptyCount = Math.max(0, SVP_SLOTS - list.length);
-  // "Advertise here" placeholders route to the Contact page, prefilled with the
-  // subcategory context (lands as a Message), mirroring the Platinum open-slot CTA.
-  const advertise = () =>
+
+  // Self-serve checkout, when the server offers it. One probe per mount
+  // (cancel-flagged); a 404 means billing is unconfigured and every open
+  // slot keeps its classic contact-page routing — graceful in both worlds.
+  const [checkoutMonthly, setCheckoutMonthly] = useState<number | null>(null);
+  const [buying, setBuying] = useState(false);
+  useEffect(() => {
+    if (!categoryId) return;
+    let cancelled = false;
+    api
+      .getSilverCheckoutInfo()
+      .then(info => {
+        if (!cancelled) setCheckoutMonthly(info.monthly_total);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [categoryId]);
+
+  // "Advertise here" placeholders open the purchase panel when self-serve is
+  // live, else route to the Contact page prefilled with the subcategory
+  // context (lands as a Message), mirroring the Platinum open-slot CTA.
+  const advertise = () => {
+    if (checkoutMonthly != null && categoryId) {
+      setBuying(true);
+      return;
+    }
     navigate('/contact', {
       state: {
         prefillMessage: `I'd like to advertise in the ${categoryName} Silver partner directory.`,
       },
     });
+  };
   return (
     <div
       className="csb svp"
@@ -365,12 +409,34 @@ export default function SilverPartners({
                   i={slot}
                   categoryName={categoryName}
                   onAdvertise={advertise}
+                  monthly={checkoutMonthly}
                 />
               );
             })}
           </div>
         </div>
       </div>
+      {/* The partners desk — the humans behind every placement. Q-series
+          designators on purpose: transistors amplify, and so do reps. Plain
+          mailto anchors (the Contact-page rule: no JS handlers). */}
+      <div className="svp-desk">
+        <span className="svp-desk-des" aria-hidden="true">Q1{'–'}Q3 {'·'} PARTNERS DESK</span>
+        <span className="svp-desk-txt">
+          Placement questions?{' '}
+          <a href="mailto:anthony@circuitcenter.ai">Anthony</a>,{' '}
+          <a href="mailto:daniel@circuitcenter.ai">Daniel</a> &amp;{' '}
+          <a href="mailto:ronald@circuitcenter.ai">Ronald</a> answer same-day.
+        </span>
+        <span className="svp-desk-hrs">Mon{'–'}Fri 9a{'–'}5p ET</span>
+      </div>
+      {buying && categoryId && checkoutMonthly != null && (
+        <SilverCheckoutModal
+          categoryId={categoryId}
+          categoryName={categoryName}
+          monthlyTotal={checkoutMonthly}
+          onClose={() => setBuying(false)}
+        />
+      )}
     </div>
   );
 }

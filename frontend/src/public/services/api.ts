@@ -127,4 +127,23 @@ export const api = {
           : `/parts/by-slug/${encodeURIComponent(idOrSlug)}`,
       )
       .then(r => r.data),
+
+  // ── Self-serve Silver checkout (routes/checkout.py) ────────────────────
+  // Both 404 when billing is unconfigured server-side; SilverPartners treats
+  // that as "no self-serve here" and falls back to the Contact page.
+
+  getSilverCheckoutInfo: () =>
+    client
+      .get<{ monthly_total: number; tax_included: boolean }>('/checkout/silver')
+      .then(r => r.data),
+
+  createSilverCheckout: (body: {
+    category_id?: string;
+    keyword?: string;
+    company_name: string;
+    website?: string;
+  }) =>
+    client
+      .post<{ session_id: string; url: string }>('/checkout/silver', body)
+      .then(r => r.data),
 };

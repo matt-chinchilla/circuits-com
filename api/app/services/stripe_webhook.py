@@ -150,9 +150,194 @@ def sponsor_id_from_event(event: dict) -> str | None:
     return None
 
 
+def _handle_checkout_completed(db: Session, event: dict) -> str:
+    """Self-serve Silver purchase: create the supplier + the ACTIVE sponsor.
+
+    Four gates before anything is written, all acking 200 (a non-2xx makes
+    Stripe retry for days then disable the endpoint): payment actually cleared;
+    the subscription id exists to OWN the row; the total is the sticker price;
+    and this subscription has not already been recorded (idempotency). A
+    self-serve buyer ALWAYS gets a fresh supplier row — the buyer-typed name is
+    a label, never an identity to match against the catalog. The subscription
+    id is stamped on the row so later renew/cancel events resolve by it, not by
+    the public, forgeable company name.
+
+    ``sold_by`` is stamped with the onboarding rep so the dashboard's sales-reps
+    chart credits the desk for deals it onboards, not only deals it closes.
+    """
+    from decimal import Decimal
+
+    from app.config import settings
+    from app.models import Supplier
+
+    from .stripe_checkout import silver_monthly_usd
+
+    obj = _dig(event, "data", "object")
+    if not isinstance(obj, dict):
+        return "bad_checkout_metadata"
+    meta = obj.get("metadata")
+    if not isinstance(meta, dict):
+        meta = {}
+    if meta.get("self_serve") != "silver" or meta.get("managed_by") != "circuits-com":
+        return "ignored_checkout"
+
+    # GATE 1 — money actually cleared. checkout.session.completed fires for
+    # subscription sessions even when the first payment is still 'unpaid'
+    # (an incomplete subscription). Activating on that would put a
+    # never-paid company on the board. Only 'paid' (or the no-charge case)
+    # may activate.
+    if obj.get("payment_status") not in ("paid", "no_payment_required"):
+        logger.info(
+            "stripe: checkout session %s completed unpaid (%s) — not activated",
+            obj.get("id"),
+            obj.get("payment_status"),
+        )
+        return "checkout_unpaid"
+
+    # GATE 2 — the subscription id is the row's OWNER. Without it there is no
+    # safe way to resolve later renew/cancel events, so refuse rather than
+    # create an unowned row.
+    subscription_id = obj.get("subscription")
+    if not isinstance(subscription_id, str) or not subscription_id.strip():
+        logger.warning("stripe: checkout session %s carried no subscription id", obj.get("id"))
+        return "bad_checkout_metadata"
+    subscription_id = subscription_id.strip()
+
+    company = str(meta.get("company_name") or "").strip()[:200]
+    category_id = str(meta.get("category_id") or "").strip() or None
+    keyword = str(meta.get("keyword") or "").strip() or None
+    if not company or bool(category_id) == bool(keyword):
+        logger.warning("stripe: checkout session %s carried unusable metadata", obj.get("id"))
+        return "bad_checkout_metadata"
+    category_key: uuid.UUID | None = None
+    if category_id:
+        try:
+            category_key = uuid.UUID(category_id)
+        except ValueError:
+            logger.warning("stripe: checkout session %s carried bad category id", obj.get("id"))
+            return "bad_checkout_metadata"
+
+    # GATE 3 — the sticker is the price. Tax-inclusive Silver bills exactly
+    # $100; anything else means a misconfigured price, not a sale to publish.
+    expected_cents = silver_monthly_usd() * 100
+    amount_total = obj.get("amount_total")
+    if isinstance(amount_total, int) and amount_total != expected_cents:
+        logger.error(
+            "stripe: checkout session %s totalled %s, expected %s — not activated",
+            obj.get("id"),
+            amount_total,
+            expected_cents,
+        )
+        return "amount_mismatch"
+
+    # Idempotency by the OWNER id, not by (supplier, placement): a redelivered
+    # event resolves to the exact row this subscription already created.
+    if (
+        db.query(Sponsor.id)
+        .filter(Sponsor.stripe_subscription_id == subscription_id)
+        .first()
+        is not None
+    ):
+        logger.info("stripe: checkout for subscription %s already recorded", subscription_id)
+        return "duplicate_checkout"
+
+    raw_email = _dig(obj, "customer_details", "email")
+    email = str(raw_email).strip()[:200] if isinstance(raw_email, str) and raw_email.strip() else None
+    website = str(meta.get("website") or "").strip()[:200] or None
+
+    # A self-serve buyer ALWAYS gets a fresh supplier row. Matching the
+    # buyer-typed name against the catalog let an anonymous payer publish an
+    # existing distributor's identity ("pay $100, become 'Avnet'"). Name is a
+    # label here, never an identity; deduping real duplicates is an admin
+    # concern, and merging on an unverified string is the vulnerability.
+    supplier = Supplier(name=company, email=email, website=website)
+    db.add(supplier)
+    db.flush()
+
+    sponsor = Sponsor(
+        supplier_id=supplier.id,
+        category_id=category_key,
+        keyword=keyword,
+        tier="Silver",
+        status="Active",
+        amount=Decimal(silver_monthly_usd()),
+        sold_by=settings.SELF_SERVE_ONBOARDING_REP,
+        stripe_subscription_id=subscription_id,
+    )
+    db.add(sponsor)
+    try:
+        db.commit()
+    except IntegrityError:
+        # The only expected conflict is uq_sponsor_stripe_subscription under a
+        # race with a redelivered event — already handled above, so reaching
+        # here means an UNEXPECTED integrity failure. Roll back, log the real
+        # error, ack 200 (a non-2xx makes Stripe retry-storm) with a DISTINCT
+        # outcome so it is visible rather than hidden as "duplicate".
+        db.rollback()
+        logger.error(
+            "stripe: checkout for subscription %s failed to commit — needs a human",
+            subscription_id,
+            exc_info=True,
+        )
+        return "checkout_conflict"
+    logger.info(
+        "stripe: self-serve Silver activated — %s on %s (sub %s, onboarding: %s)",
+        company,
+        category_id or keyword,
+        subscription_id,
+        settings.SELF_SERVE_ONBOARDING_REP,
+    )
+    return "checkout_activated"
+
+
+def _subscription_id_from_event(event: dict) -> str | None:
+    """The subscription id a lifecycle event concerns, wherever Stripe put it.
+
+    ``customer.subscription.*`` → the object IS the subscription (``id``).
+    ``invoice.*`` → the invoice's ``subscription`` (legacy) or
+    ``parent.subscription_details.subscription`` (2025+ API).
+    """
+    obj = _dig(event, "data", "object")
+    if not isinstance(obj, dict):
+        return None
+    event_type = event.get("type") or ""
+    if event_type.startswith("customer.subscription."):
+        sub = obj.get("id")
+        return sub if isinstance(sub, str) and sub else None
+    for value in (
+        obj.get("subscription"),
+        _dig(obj, "parent", "subscription_details", "subscription"),
+        _dig(obj, "subscription_details", "subscription"),
+    ):
+        if isinstance(value, str) and value:
+            return value
+    return None
+
+
+def _resolve_self_serve_sponsor(db: Session, event: dict) -> Sponsor | None:
+    """Find the sponsor a self-serve subscription's LATER events belong to.
+
+    Resolved STRICTLY by the subscription id Stripe controls — never by the
+    buyer-typed company name, which is public on the board and forgeable. An
+    unknown subscription id simply matches nothing, so a stranger's checkout
+    can never address someone else's placement.
+    """
+    subscription_id = _subscription_id_from_event(event)
+    if not subscription_id:
+        return None
+    return (
+        db.query(Sponsor)
+        .filter(Sponsor.stripe_subscription_id == subscription_id)
+        .first()
+    )
+
+
 def apply_stripe_event(db: Session, event: dict) -> str:
     """Apply one verified event to the sponsors table; returns the outcome."""
     event_type = event.get("type")
+
+    if event_type == "checkout.session.completed":
+        return _handle_checkout_completed(db, event)
 
     if event_type == "invoice.paid":
         new_status = "Active"
@@ -172,17 +357,24 @@ def apply_stripe_event(db: Session, event: dict) -> str:
         return "ignored_event_type"
 
     raw_id = sponsor_id_from_event(event)
+    sponsor: Sponsor | None = None
     if raw_id is None:
-        # A one-off invoice, or a subscription created without the stamp.
-        logger.info("stripe: %s carried no sponsor_id — ignored", event_type)
-        return "no_sponsor_id"
-    try:
-        sponsor_uuid = uuid.UUID(raw_id)
-    except ValueError:
-        logger.warning("stripe: %s carried malformed sponsor_id %r", event_type, raw_id)
-        return "bad_sponsor_id"
+        # Self-serve subscriptions exist BEFORE their sponsor row, so they
+        # can never carry sponsor_id — but they carry the checkout metadata,
+        # which addresses the row the webhook created just as uniquely.
+        sponsor = _resolve_self_serve_sponsor(db, event)
+        if sponsor is None:
+            # A one-off invoice, or a subscription created without the stamp.
+            logger.info("stripe: %s carried no sponsor_id — ignored", event_type)
+            return "no_sponsor_id"
+    else:
+        try:
+            sponsor_uuid = uuid.UUID(raw_id)
+        except ValueError:
+            logger.warning("stripe: %s carried malformed sponsor_id %r", event_type, raw_id)
+            return "bad_sponsor_id"
+        sponsor = db.query(Sponsor).filter(Sponsor.id == sponsor_uuid).first()
 
-    sponsor = db.query(Sponsor).filter(Sponsor.id == sponsor_uuid).first()
     if sponsor is None:
         logger.warning("stripe: %s names unknown sponsor %s", event_type, raw_id)
         return "unknown_sponsor"

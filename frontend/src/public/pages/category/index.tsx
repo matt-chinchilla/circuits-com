@@ -56,6 +56,24 @@ export default function CategoryPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const pageParam = Math.max(1, parseInt(searchParams.get('p') || '1', 10) || 1);
 
+  // Post-checkout greeting (?welcome=silver — the Stripe success_url). Read
+  // ONCE at mount, then stripped from the URL so a refresh or share doesn't
+  // replay the banner. Functional setSearchParams — never in effect deps
+  // (the RR v7 identity trap in CLAUDE.md).
+  const [welcome, setWelcome] = useState(
+    () => new URLSearchParams(window.location.search).get('welcome') === 'silver',
+  );
+  useEffect(() => {
+    if (!welcome) return;
+    setSearchParams(
+      prev => {
+        prev.delete('welcome');
+        return prev;
+      },
+      { replace: true },
+    );
+  }, []);
+
   // Warm navigations paint parts + counts synchronously from the session memo
   // (no loading flash); cold ones fall back to null + the skeleton.
   const [category, setCategory] = useState<CategoryDetail | null>(
@@ -454,13 +472,38 @@ export default function CategoryPage() {
           </>
         ) : category ? (
           <>
+            {welcome && (
+              <div className={styles.welcomeBanner} role="status">
+                <span>
+                  <strong>Payment received {'—'} welcome aboard.</strong> Your slot goes live
+                  within a minute; <button
+                    type="button"
+                    className={styles.welcomeRefresh}
+                    onClick={() => window.location.reload()}
+                  >refresh</button> to see it. Daniel from the partners desk emails you today
+                  to get your logo up.
+                </span>
+                <button
+                  type="button"
+                  className={styles.welcomeDismiss}
+                  onClick={() => setWelcome(false)}
+                  aria-label="Dismiss"
+                >
+                  {'×'}
+                </button>
+              </div>
+            )}
             {/* SUBPAGES ONLY: the tier row — Silver directory (main) beside the
                 Gold-tier SponsorBlock (aside). Parent pages skip it (no per-
                 subcategory Gold/Silver), so parts span full width directly. */}
             {category.parent != null && (
               <div className={styles.tierRow}>
                 <div className={styles.tierRowMain}>
-                  <SilverPartners suppliers={category.silver ?? []} categoryName={category.name} />
+                  <SilverPartners
+                    suppliers={category.silver ?? []}
+                    categoryName={category.name}
+                    categoryId={category.id}
+                  />
                 </div>
                 <aside className={styles.tierRowSide}>
                   <SponsorBlock sponsor={category.sponsor} />

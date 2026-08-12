@@ -179,6 +179,11 @@ class Settings(BaseSettings):
     STRIPE_SECRET_KEY: str | None = None
     STRIPE_PUBLIC_KEY: str | None = None
 
+    # Who onboards self-serve Silver buyers. Stamped into Sponsor.sold_by by
+    # the checkout webhook so the dashboard's sales-reps chart credits the
+    # partners desk for deals it onboards, not only deals it closes by hand.
+    SELF_SERVE_ONBOARDING_REP: str = "Daniel"
+
     # Flat recurring bills the cost sync plants monthly — semicolon-separated
     # `category:vendor:amount` triples (see services/cost_sources/recurring.py).
     # Ships defaulted to the Claude Max subscription because that bill exists

@@ -72,6 +72,8 @@ services:
       # Webhook signing secret (whsec_…) — verifies POST /api/stripe/webhook.
       # Empty = the route 404s and billing events change nothing.
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      # Onboarding rep credited (Sponsor.sold_by) for self-serve checkout sales.
+      SELF_SERVE_ONBOARDING_REP: ${SELF_SERVE_ONBOARDING_REP:-Daniel}
       # NOTE deliberately ABSENT here: ANTHROPIC_ADMIN_KEY. It is an
       # ORGANIZATION-level admin credential and only the cost-sync service
       # reads it — the internet-facing api container must not carry a secret

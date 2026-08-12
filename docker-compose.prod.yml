@@ -128,6 +128,8 @@ services:
       # Webhook signing secret (whsec_…), minted when the endpoint is
       # registered at deploy time. Same host-secret handling as the keys.
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      # Onboarding rep credited (Sponsor.sold_by) for self-serve checkout sales.
+      SELF_SERVE_ONBOARDING_REP: ${SELF_SERVE_ONBOARDING_REP:-Daniel}
       # Anthropic ORGANIZATION admin key (sk-ant-admin…). Unset today — the
       # ANTHROPIC_ADMIN_KEY deliberately absent: an org-level admin credential
       # only the cost-sync service reads — see the dev compose note.

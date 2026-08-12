@@ -506,3 +506,272 @@
     display: none;
   }
 }
+
+/* ── Partners desk strip (.svp-desk) — the humans behind the board ──────── */
+
+.svp-desk {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 2px 0;
+  padding: 8px 14px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  font-size: 12px;
+  color: #b9c3cb;
+}
+
+.svp-desk-des {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: var(--gold, #a88d2e);
+  white-space: nowrap;
+}
+
+.svp-desk-txt a {
+  color: #e6ecf0;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.svp-desk-txt a:hover {
+  text-decoration: underline;
+}
+
+.svp-desk-hrs {
+  margin-left: auto;
+  color: #8b98a2;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.svp-slot-price {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  color: var(--gold, #a88d2e);
+  font-weight: 700;
+}
+
+/* ── Self-serve confirm panel (.svco-*) — SilverCheckoutModal.tsx ───────── */
+
+.svco-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(10, 14, 17, 0.62);
+}
+
+.svco-card {
+  position: relative;
+  width: min(430px, 100%);
+  background: #fff;
+  border-radius: 14px;
+  padding: 20px 22px 18px;
+  box-shadow: 0 18px 50px rgba(10, 16, 20, 0.45);
+  color: #1a1f23;
+}
+
+.svco-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e5eaef;
+}
+
+.svco-head h3 {
+  margin: 2px 0 0;
+  font-size: 17px;
+  letter-spacing: -0.015em;
+}
+
+.svco-des {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  color: #a88d2e;
+}
+
+.svco-price {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 21px;
+  font-weight: 700;
+  color: #0a4a2e;
+  white-space: nowrap;
+}
+
+.svco-price small {
+  display: block;
+  font-size: 11px;
+  font-weight: 400;
+  color: #67727d;
+  text-align: right;
+}
+
+.svco-benefits {
+  list-style: none;
+  margin: 12px 0 4px;
+  padding: 0;
+  font-size: 13px;
+  color: #39424b;
+}
+
+.svco-benefits li {
+  position: relative;
+  padding: 3px 0 3px 22px;
+}
+
+.svco-benefits li::before {
+  content: '\2713';
+  position: absolute;
+  left: 2px;
+  color: #44bd13;
+  font-weight: 700;
+}
+
+.svco-label {
+  display: block;
+  margin-top: 10px;
+  font-size: 11.5px;
+  color: #67727d;
+}
+
+.svco-label .svco-opt {
+  color: #9aa5af;
+}
+
+.svco-input {
+  width: 100%;
+  margin-top: 3px;
+  padding: 9px 11px;
+  border: 1px solid #d7dee5;
+  border-radius: 8px;
+  font-size: 13.5px;
+  line-height: 1.2;
+}
+
+.svco-input:focus {
+  outline: 2px solid rgba(10, 74, 46, 0.35);
+  border-color: #0a4a2e;
+}
+
+.svco-error {
+  margin: 10px 0 0;
+  font-size: 12.5px;
+  color: #c0392b;
+}
+
+.svco-cta {
+  display: block;
+  width: 100%;
+  margin-top: 14px;
+  padding: 12px;
+  border: 0;
+  border-radius: 9px;
+  background: #0a4a2e;
+  color: #fff;
+  font-size: 14.5px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.svco-cta:hover {
+  background: #0c5836;
+}
+
+.svco-cta:disabled {
+  opacity: 0.65;
+  cursor: default;
+}
+
+.svco-sub {
+  margin: 9px 0 0;
+  font-size: 11.5px;
+  color: #67727d;
+  text-align: center;
+}
+
+.svco-rep {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 12px;
+  align-items: center;
+  margin-top: 13px;
+  padding-top: 12px;
+  border-top: 1px solid #e5eaef;
+}
+
+.svco-ava {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: #1a1f23;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 14px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16);
+}
+
+.svco-rep-id {
+  font-size: 13px;
+}
+
+.svco-rep-id small {
+  display: block;
+  color: #67727d;
+  font-size: 11.5px;
+}
+
+.svco-qdes {
+  display: block;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: #a88d2e;
+}
+
+.svco-rep-mail {
+  font-size: 12px;
+  font-weight: 600;
+  color: #0a4a2e;
+  text-decoration: none;
+  border: 1px solid #d7dee5;
+  border-radius: 7px;
+  padding: 6px 11px;
+  line-height: 1;
+}
+
+.svco-rep-mail:hover {
+  border-color: #0a4a2e;
+}
+
+.svco-note {
+  margin: 9px 0 0;
+  font-size: 11.5px;
+  color: #67727d;
+}
+
+.svco-note b {
+  color: #39424b;
+}
+
+.svco-close {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  border: 0;
+  background: none;
+  font-size: 20px;
+  line-height: 1;
+  color: #8a95a0;
+  cursor: pointer;
+  padding: 4px 6px;
+}

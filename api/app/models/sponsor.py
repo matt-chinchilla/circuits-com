@@ -34,6 +34,14 @@ class Sponsor(Base):
     end_date = Column(Date, nullable=True)
     amount = Column(Numeric(10, 2), nullable=True)
     status = Column(String(20), nullable=True)
+    # The Stripe subscription that OWNS this row (migration 028). Set only for
+    # self-serve purchases, where the row is created by the webhook AFTER
+    # Stripe made the subscription — so it cannot carry sponsor_id, and its
+    # lifecycle events (renew/cancel) MUST resolve by this id, never by the
+    # buyer-typed company name (which is public and forgeable). Rep-quoted
+    # sponsorships leave it NULL and resolve by subscription metadata
+    # sponsor_id as before. Unique so a redelivered checkout is a clean no-op.
+    stripe_subscription_id = Column(String(64), nullable=True)
     # Sales rep who closed the deal — an admin User.username (migration 019).
     # ADMIN-ONLY: exposed on AdminSponsorCreate/Update/Response, never on the
     # public SponsorResponse (routes/sponsors.py is unauthenticated). Free
@@ -63,6 +71,9 @@ class Sponsor(Base):
         # (≤15 top-level + ≤75 child = the taxonomy size) fall out of this.
         UniqueConstraint("supplier_id", "category_id", name="uq_sponsor_supplier_category"),
         UniqueConstraint("supplier_id", "keyword", name="uq_sponsor_supplier_keyword"),
+        # A Stripe subscription owns at most one sponsor row — the webhook's
+        # idempotency key for a redelivered checkout.session.completed.
+        UniqueConstraint("stripe_subscription_id", name="uq_sponsor_stripe_subscription"),
     )
 
     supplier = relationship("Supplier")
