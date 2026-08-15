@@ -608,10 +608,17 @@ export default function CategorySponsor({
           <span className="dot"></span>Phone<span className="csbA-pinno">P3</span>
         </span>
         <span className="csbA-val mono">
-          <a href={csTelHref(s.phone)}>{formatPhone(s.phone)}</a>
+          {/* Pitch preview: the slot belongs to NO company yet, so nothing here
+              may be a live link — a tester clicking a fabricated tel: got an OS
+              "open Phone Link?" dialog for a number nobody input (2026-08-14). */}
+          {isPitch ? (
+            <span className="csbA-ph">Your phone number</span>
+          ) : (
+            <a href={csTelHref(s.phone)}>{formatPhone(s.phone)}</a>
+          )}
         </span>
         <span className="csbA-fieldfoot">
-          <CsCopy text={formatPhone(s.phone)} />
+          {!isPitch && <CsCopy text={formatPhone(s.phone)} />}
           <span className="csbA-sub">{s.hours}</span>
         </span>
       </div>
@@ -620,10 +627,16 @@ export default function CategorySponsor({
           <span className="dot"></span>Email<span className="csbA-pinno">P4</span>
         </span>
         <span className="csbA-val mono">
-          <a href={'mailto:' + s.email}>{s.email}</a>
+          {/* Same rule as Phone: a domain guessed from the prospect's typed name
+              could be a real stranger's mailbox — placeholder text, no mailto. */}
+          {isPitch ? (
+            <span className="csbA-ph">Your sales email</span>
+          ) : (
+            <a href={'mailto:' + s.email}>{s.email}</a>
+          )}
         </span>
         <span className="csbA-fieldfoot">
-          <CsCopy text={s.email} />
+          {!isPitch && <CsCopy text={s.email} />}
         </span>
       </div>
     </div>
@@ -638,9 +651,11 @@ export default function CategorySponsor({
       logo: pitch.logo,
       contact: 'Your sales rep',
       role: 'Name & title here',
-      phone: '1-800-555-0199',
+      // No fabricated phone/email — the pitch renderRail shows inert
+      // placeholder copy for P3/P4 (isPitch branch), never a live link.
+      phone: '',
       hours: 'Your coverage hours',
-      email: 'sales@' + pitch.name.toLowerCase().replace(/[^a-z0-9]+/g, '') + '.com',
+      email: '',
     };
     return (
       <div className="cs-band">

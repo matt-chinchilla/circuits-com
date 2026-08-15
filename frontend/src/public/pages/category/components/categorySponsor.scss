@@ -552,6 +552,11 @@ a.csbA-coname:hover {
   font-size: 0.76rem;
   color: var(--cream-mut);
 }
+/* Pitch-preview placeholder value (P3/P4): reads as a fill-in-the-blank like
+ * "Your sales rep", never as live contact data. */
+.csbA-ph {
+  color: var(--cream-mut);
+}
 .csbA-fieldfoot {
   display: flex;
   align-items: center;
