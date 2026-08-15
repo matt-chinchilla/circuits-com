@@ -190,11 +190,12 @@ const SvChip = ({
   </div>
 );
 
-// An OPEN Silver slot — a simple "Advertise here" placeholder filling an unsold
-// row so every subcategory shows a full U1–U5 directory. Mirrors the real chip's
-// grid (refdes + open land pad in the id column) with a body spanning the rest;
-// the whole row is a button routing to the Contact page.
-const SvSlotEmpty = ({
+// An OPEN Silver slot — a dashed silver-ink row filling an unsold position so
+// every subcategory shows a full U1–U5 directory. The refdes sits at reduced
+// opacity beside "Your company here", with the purchase CTA right-aligned; a
+// real <button>, so Enter/Space and focus come from the platform rather than
+// a hand-rolled role="button".
+const SvSlotOpen = ({
   i,
   categoryName,
   onAdvertise,
@@ -209,44 +210,27 @@ const SvSlotEmpty = ({
 }): ReactElement => {
   const where = categoryName || 'this subcategory';
   return (
-    <div
+    <button
+      type="button"
       data-enter
-      className="svp-chip svp-slot"
-      role="button"
-      tabIndex={0}
+      className="svp-chip svp-open"
       onClick={onAdvertise}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          onAdvertise();
-        }
-      }}
       aria-label={'Advertise in ' + where + ' — open Silver slot U' + (i + 1)}
     >
       <span className="svp-via" aria-hidden="true"></span>
-      <div className="svp-idcol">
-        <span className="svp-refdes">U{i + 1}</span>
-        <span className="svp-pad svp-pad-open" aria-hidden="true">
-          <i>+</i>
-        </span>
-      </div>
-      <div className="svp-slot-body">
-        <span className="svp-slot-text">
-          <span className="svp-slot-title">Advertise here</span>
-          <span className="svp-slot-sub">Feature your company in {where}</span>
-        </span>
-        <span className="svp-slot-cta" aria-hidden="true">
-          {monthly != null ? (
-            <>
-              <strong className="svp-slot-price">${monthly}/mo</strong>
-              {' · Sponsor this slot →'}
-            </>
-          ) : (
-            <>Become a Preferred Partner{' →'}</>
-          )}
-        </span>
-      </div>
-    </div>
+      <span className="svp-refdes">U{i + 1}</span>
+      <span className="svp-open-label">Your company here</span>
+      <span className="svp-open-cta" aria-hidden="true">
+        {monthly != null ? (
+          <>
+            <strong className="svp-open-price">${monthly}/mo</strong>
+            {' · Sponsor this slot →'}
+          </>
+        ) : (
+          <>Become a Preferred Partner{' →'}</>
+        )}
+      </span>
+    </button>
   );
 };
 
@@ -420,7 +404,7 @@ export default function SilverPartners({
             {Array.from({ length: emptyCount }).map((_, k) => {
               const slot = list.length + k;
               return (
-                <SvSlotEmpty
+                <SvSlotOpen
                   key={`slot${slot}`}
                   i={slot}
                   categoryName={categoryName}

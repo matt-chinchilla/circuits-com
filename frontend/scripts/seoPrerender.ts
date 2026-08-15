@@ -210,8 +210,10 @@ function buildRoutes(manifest: SeoManifest | null): PrerenderRoute[] {
     { urlPath: '/', file: 'home.html', seo: homeSeo(topLevelLinks) },
     { urlPath: '/about', file: 'about/index.html', seo: STATIC_PAGE_SEO.about },
     { urlPath: '/contact', file: 'contact/index.html', seo: STATIC_PAGE_SEO.contact },
+    // No '/pricing' entry: that route merged into /join on 2026-08-14 and now
+    // client-redirects there. Prerendering a document for it would serve a
+    // self-canonical page for a URL whose content lives somewhere else.
     { urlPath: '/join', file: 'join/index.html', seo: STATIC_PAGE_SEO.join },
-    { urlPath: '/pricing', file: 'pricing/index.html', seo: STATIC_PAGE_SEO.pricing },
     { urlPath: '/keyword', file: 'keyword/index.html', seo: STATIC_PAGE_SEO.keyword },
     { urlPath: '/privacy', file: 'privacy/index.html', seo: STATIC_PAGE_SEO.privacy },
     // /terms shared the privacy canonical while it rendered the privacy

@@ -5,6 +5,7 @@ import SubcategoryChips from './components/SubcategoryChips';
 import PartsTable from './components/PartsTable';
 import SponsorBlock from './components/SponsorBlock';
 import SilverPartners from './components/SilverPartners';
+import SilverCheckoutModal from './components/SilverCheckoutModal';
 import CategoryPartnersBanner from './components/CategoryPartnersBanner';
 import SkeletonLoader from '@public/components/widgets/SkeletonLoader';
 import Pagination from '@public/components/widgets/Pagination';
@@ -472,26 +473,17 @@ export default function CategoryPage() {
           </>
         ) : category ? (
           <>
+            {/* The buyer's receipt, on the way back from Stripe — the same
+                placement-ticket panel they bought through, in its receipt
+                state (was a dismissible strip above the tier row). The
+                `welcome` param is already stripped from the URL by the mount
+                effect above; closing just retires the panel. */}
             {welcome && (
-              <div className={styles.welcomeBanner} role="status">
-                <span>
-                  <strong>Payment received {'—'} welcome aboard.</strong> Your slot goes live
-                  within a minute; <button
-                    type="button"
-                    className={styles.welcomeRefresh}
-                    onClick={() => window.location.reload()}
-                  >refresh</button> to see it. Daniel from the partners desk emails you today
-                  to get your logo up.
-                </span>
-                <button
-                  type="button"
-                  className={styles.welcomeDismiss}
-                  onClick={() => setWelcome(false)}
-                  aria-label="Dismiss"
-                >
-                  {'×'}
-                </button>
-              </div>
+              <SilverCheckoutModal
+                variant="receipt"
+                categoryName={category.name}
+                onClose={() => setWelcome(false)}
+              />
             )}
             {/* SUBPAGES ONLY: the tier row — Silver directory (main) beside the
                 Gold-tier SponsorBlock (aside). Parent pages skip it (no per-

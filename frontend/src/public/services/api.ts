@@ -155,10 +155,15 @@ export const api = {
       }>('/checkout/silver/boards')
       .then(r => r.data),
 
+  // `email` is the confirm panel's second field: Stripe's page opens
+  // pre-filled with it and the customer record carries it, so the receipt and
+  // every renewal invoice reach the buyer. Optional on the wire — the server
+  // keeps accepting a request without one.
   createSilverCheckout: (body: {
     category_id?: string;
     keyword?: string;
     company_name: string;
+    email?: string;
     website?: string;
   }) =>
     client

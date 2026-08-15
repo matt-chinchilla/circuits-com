@@ -5,7 +5,9 @@ import styles from './Footer.module.scss';
 const FOOTER_LINKS = [
   { to: '/', label: 'Home' },
   { to: '/about', label: 'About' },
-  { to: '/pricing', label: 'Advertise' },
+  // Advertising lives on /join since the 2026-08-14 merge; the label stays
+  // "Advertise" because that is the word a sponsor scans the footer for.
+  { to: '/join', label: 'Advertise' },
   { to: '/keyword', label: 'Sponsor a Keyword' },
   { to: '/contact', label: 'Contact' },
   { to: '/privacy', label: 'Privacy' },

@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useRef } from "react";
-import { Routes, Route, useLocation } from "react-router-dom";
+import { Routes, Route, useLocation, useNavigate } from "react-router-dom";
 
 // 2026-04-19 Tier-3 #7 perf: Home stays eager (LCP target; must render
 // on first paint). All other routes lazy-loaded — each gets its own
@@ -14,7 +14,6 @@ const ContactPage = lazy(() => import("@public/pages/contact"));
 const AboutPage = lazy(() => import("@public/pages/about"));
 const KeywordSponsorPage = lazy(() => import("@public/pages/keyword"));
 const KeywordLandingPage = lazy(() => import("@public/pages/keyword-landing"));
-const PricingPage = lazy(() => import("@public/pages/pricing"));
 const PartPage = lazy(() => import("@public/pages/part"));
 const PrivacyPage = lazy(() => import("@public/pages/privacy"));
 const TermsPage = lazy(() => import("@public/pages/terms"));
@@ -70,6 +69,22 @@ import { AdminThemeProvider } from "@admin/contexts/AdminThemeContext";
 
 // Admin fallback (PublicLayout provides the equivalent on public routes).
 const RouteFallback = () => <div style={{ minHeight: 420 }} aria-busy="true" />;
+
+// /pricing → /join. The redirect is an EFFECT, not a rendered <Navigate>:
+// ErrorBoundary is keyed on pathname, so a remount drops a rendered child's
+// navigation and the visitor is left on an empty page with a frozen URL (the
+// same trap as the category canonical redirect — see CLAUDE.md).
+function PricingRedirect() {
+  const navigate = useNavigate();
+  const { search, hash } = useLocation();
+  useEffect(() => {
+    // Carry the query and fragment: reps' outstanding /pricing?utm_* links are
+    // the reason this route still exists, and stripping the params here would
+    // silently zero their campaign attribution in the PageView analytics.
+    navigate({ pathname: "/join", search, hash }, { replace: true });
+  }, [navigate, search, hash]);
+  return null;
+}
 
 function App() {
   const location = useLocation();
@@ -225,7 +240,11 @@ function App() {
           <Route path="/contact" element={<ContactPage />} />
           <Route path="/about" element={<AboutPage />} />
           <Route path="/keyword" element={<KeywordLandingPage />} />
-          <Route path="/pricing" element={<PricingPage />} />
+          {/* /pricing (nav "Advertise") merged INTO /join on 2026-08-14 — the
+              tiers, the board picker and the partners desk all live on the
+              staged Join page now. The old URL is in reps' emails and in the
+              index, so it keeps resolving. */}
+          <Route path="/pricing" element={<PricingRedirect />} />
           <Route path="/keyword/:keyword" element={<KeywordSponsorPage />} />
           <Route path="/part/:id" element={<PartPage />} />
           {/* Three separate legal documents sharing one chrome component.

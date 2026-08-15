@@ -12,10 +12,13 @@ router = APIRouter(tags=["sitemap"])
 STATIC_PAGES = [
     ("/", "daily", "1.0"),
     ("/about", "monthly", "0.4"),
-    ("/join", "monthly", "0.5"),
+    # 0.6 (was 0.5): /join absorbed /pricing's audience in the 2026-08-14
+    # merge, so it inherits the higher of the two priorities.
+    ("/join", "monthly", "0.6"),
     ("/contact", "monthly", "0.4"),
     ("/search", "weekly", "0.6"),
-    ("/pricing", "monthly", "0.6"),
+    # /pricing merged into /join (2026-08-14) and redirects there — a sitemap
+    # entry for a redirecting URL is a crawl-budget leak, not a listing.
     ("/keyword", "weekly", "0.5"),
     ("/privacy", "yearly", "0.2"),
 ]

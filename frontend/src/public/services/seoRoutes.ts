@@ -22,7 +22,6 @@ export type StaticPageKey =
   | 'contact'
   | 'join'
   | 'keyword'
-  | 'pricing'
   | 'privacy'
   | 'search'
   | 'terms';
@@ -62,10 +61,13 @@ export const STATIC_PAGE_SEO: Record<StaticPageKey, PageSeo> = {
     heading: 'Contact Us',
     links: SITE_LINKS,
   },
+  // /join absorbed /pricing (nav "Advertise") on 2026-08-14 — one page now
+  // answers "what do I get and what does it cost", so the description carries
+  // the real ladder rather than the old listing-only pitch.
   join: {
-    title: 'Join Circuit Center — List Your Components | Distributors Welcome',
+    title: 'Join Circuit Center — Get Listed & Advertise | Sponsorship Tiers',
     description:
-      'List your electronic components on Circuit Center. Reach engineers and buyers searching for ICs, MCUs, sensors, and more from 57+ distributors.',
+      'List your components on Circuit Center and sponsor the boards buyers browse: Silver $100/mo self-serve, Gold $600 and Platinum $2,400 through the partners desk.',
     canonical: `${SITE_ORIGIN}/join`,
     jsonLd: [],
     heading: 'Join Circuit Center',
@@ -78,15 +80,6 @@ export const STATIC_PAGE_SEO: Record<StaticPageKey, PageSeo> = {
     canonical: `${SITE_ORIGIN}/keyword`,
     jsonLd: [],
     heading: 'Sponsor a Keyword',
-    links: SITE_LINKS,
-  },
-  pricing: {
-    title: 'Sponsorship Pricing — Advertise on Circuit Center',
-    description:
-      'Sponsorship pricing for Circuit Center: Silver board placements at $100/mo self-serve, Gold at $600 and Platinum at $2,400 arranged with the partners desk.',
-    canonical: `${SITE_ORIGIN}/pricing`,
-    jsonLd: [],
-    heading: 'Sponsorship pricing',
     links: SITE_LINKS,
   },
   privacy: {

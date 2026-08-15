@@ -53,6 +53,7 @@ async def create_silver_checkout_session(
     company_name: str,
     website: str | None,
     return_path: str,
+    email: str | None = None,
 ) -> dict:
     """Create + return a hosted Checkout Session for one Silver placement.
 
@@ -61,6 +62,13 @@ async def create_silver_checkout_session(
     ``?welcome=silver`` flag so the board can greet them. The origin comes
     from settings.APP_BASE_URL, NEVER from the request (the reset-link
     poisoning rule).
+
+    ``email`` becomes Stripe's ``customer_email``: the hosted page opens
+    pre-filled and the customer record carries the buyer's own address, which
+    is what the webhook later writes onto the supplier row. It rides the
+    normal form body (``_flatten`` → httpx ``data=``), so ``+`` in a
+    plus-addressed AP inbox is percent-encoded rather than reaching Stripe as
+    a space — the encoding lesson the quote service paid for.
     """
     price_ids = await _resolve_prices(client, SILVER_TIER)
     base = settings.APP_BASE_URL.rstrip("/")
@@ -92,6 +100,8 @@ async def create_silver_checkout_session(
         "success_url": f"{base}{return_path}?welcome=silver",
         "cancel_url": f"{base}{return_path}",
     }
+    if email:
+        body["customer_email"] = email
     session = await _call(client, "POST", "/v1/checkout/sessions", body)
     url = session.get("url")
     if not url:

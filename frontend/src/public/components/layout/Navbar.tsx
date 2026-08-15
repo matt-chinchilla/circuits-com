@@ -10,10 +10,12 @@ import styles from "./Navbar.module.scss";
 // input covered "Home" and swallowed the SEARCH button's clicks. The navbar
 // pins its side content to the viewport edges (see CLAUDE.md), so the centre
 // only stays clear while the sides stay narrow.
+// "Advertise" (/pricing) folded into "Join" on 2026-08-14 — the staged Join
+// page now carries the tiers, the board picker and the partners desk, so a
+// separate entry would point two labels at one surface.
 const NAV_LINKS = [
   { to: "/about", label: "About" },
   { to: "/join", label: "Join" },
-  { to: "/pricing", label: "Advertise" },
   { to: "/contact", label: "Contact" },
 ];
 

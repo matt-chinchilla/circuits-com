@@ -134,6 +134,52 @@ def test_create_builds_the_session_from_the_placement(client, stripe_key, seeded
     assert seen["return_path"] == f"/category/{parent.slug}/{child.slug}"
 
 
+def test_buyer_email_is_forwarded_and_validated(client, stripe_key, seeded_db, monkeypatch):
+    """The confirm panel's second field crosses the boundary; a malformed one
+    is refused here rather than becoming a Stripe 400 the buyer sees."""
+    seen = {}
+
+    async def fake_create(client_, **kwargs):
+        seen.update(kwargs)
+        return {"session_id": "cs_x", "url": "https://checkout.stripe.com/c/pay/cs_x"}
+
+    monkeypatch.setattr(stripe_checkout, "create_silver_checkout_session", fake_create)
+    child = seeded_db["child"]
+    resp = client.post(
+        URL,
+        json={
+            "company_name": "Acme Components",
+            "category_id": str(child.id),
+            "email": "buyer@acme.example",
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    assert seen["email"] == "buyer@acme.example"
+
+    assert (
+        client.post(
+            URL,
+            json={"company_name": "Acme", "category_id": str(child.id), "email": "not-an-email"},
+        ).status_code
+        == 422
+    )
+
+
+def test_email_stays_optional_for_older_clients(client, stripe_key, monkeypatch):
+    """A cached pre-redesign bundle omits the field entirely — the session
+    must still mint, with no email threaded through."""
+    seen = {}
+
+    async def fake_create(client_, **kwargs):
+        seen.update(kwargs)
+        return {"session_id": "cs_x", "url": "https://checkout.stripe.com/c/pay/cs_x"}
+
+    monkeypatch.setattr(stripe_checkout, "create_silver_checkout_session", fake_create)
+    resp = client.post(URL, json={"company_name": "Acme", "keyword": "fets"})
+    assert resp.status_code == 200
+    assert seen["email"] is None
+
+
 def test_keyword_placement_builds_its_return_path(client, stripe_key, monkeypatch):
     seen = {}
 
@@ -162,14 +208,19 @@ def test_session_minting_is_rate_limited_per_ip(client, stripe_key, monkeypatch)
 # ── The session builder (real httpx, scripted Stripe) ───────────────────────
 
 
-def test_session_carries_the_contract(monkeypatch):
+def _mint_session(**overrides):
+    """Run the real builder against a scripted Stripe; return (result, tape).
+
+    ``tape`` is the POSTed form body parsed back out — the same parse Stripe
+    performs, so a value that would arrive mangled (a ``+`` in a
+    plus-addressed email decoded as a space) shows up here as mangled.
+    """
     import asyncio
+    from urllib.parse import parse_qsl
 
     tape = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
-        from urllib.parse import parse_qsl
-
         if request.url.path == "/v1/prices":
             keys = request.url.params.get_list("lookup_keys[]")
             return httpx.Response(
@@ -178,23 +229,28 @@ def test_session_carries_the_contract(monkeypatch):
         tape.update(dict(parse_qsl(request.content.decode())))
         return httpx.Response(200, json={"id": "cs_live", "url": "https://checkout.stripe.com/x"})
 
-    monkeypatch.setattr(settings, "APP_BASE_URL", "https://circuitcenter.ai")
+    kwargs = {
+        "category_id": "cat-1",
+        "keyword": None,
+        "placement_label": "Clock and Timing",
+        "company_name": "Acme Components",
+        "website": "acme.example",
+        "return_path": "/category/ics/clock-and-timing",
+    }
+    kwargs.update(overrides)
 
     async def go():
         async with stripe_quotes.make_client(
             "sk_test_x", transport=httpx.MockTransport(handler)
         ) as client:
-            return await create_silver_checkout_session(
-                client,
-                category_id="cat-1",
-                keyword=None,
-                placement_label="Clock and Timing",
-                company_name="Acme Components",
-                website="acme.example",
-                return_path="/category/ics/clock-and-timing",
-            )
+            return await create_silver_checkout_session(client, **kwargs)
 
-    result = asyncio.run(go())
+    return asyncio.run(go()), tape
+
+
+def test_session_carries_the_contract(monkeypatch):
+    monkeypatch.setattr(settings, "APP_BASE_URL", "https://circuitcenter.ai")
+    result, tape = _mint_session()
     assert result["url"] == "https://checkout.stripe.com/x"
     assert tape["mode"] == "subscription"
     assert tape["automatic_tax[enabled]"] == "true"
@@ -211,9 +267,23 @@ def test_session_carries_the_contract(monkeypatch):
         == "https://circuitcenter.ai/category/ics/clock-and-timing?welcome=silver"
     )
     assert tape["cancel_url"] == "https://circuitcenter.ai/category/ics/clock-and-timing"
+    # No email collected → Stripe must not receive an empty customer_email
+    # (it would 400 the create, and a blank customer address is worse than
+    # letting Stripe's own page ask for one).
+    assert "customer_email" not in tape
 
 
-# ── The webhook handler ─────────────────────────────────────────────────────
+def test_buyer_email_reaches_stripe_intact(monkeypatch):
+    """The panel's Work email becomes the session's ``customer_email``.
+
+    The plus-addressed case is the one that matters: shared AP inboxes really
+    are written ``billing+ads@acme.example``, and a query-string f-string
+    would hand Stripe a SPACE where the ``+`` was — a different address, a
+    duplicate customer, an invoice nobody receives.
+    """
+    monkeypatch.setattr(settings, "APP_BASE_URL", "https://circuitcenter.ai")
+    _, tape = _mint_session(email="billing+ads@acme.example")
+    assert tape["customer_email"] == "billing+ads@acme.example"
 
 
 class TestCheckoutCompleted:

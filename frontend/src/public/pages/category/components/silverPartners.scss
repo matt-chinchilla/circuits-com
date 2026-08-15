@@ -359,90 +359,74 @@
   color: var(--gold-bright);
 }
 
-/* ── Open "Advertise here" slot (.svp-slot) ───────────────────────────────
-   A simple placeholder filling an unsold Silver row so every subcategory shows a
-   full U1–U5 directory. Dashed/ghost treatment vs the solid sponsor chips; the
-   whole row is a button routing to Contact. */
-.svp-slot {
+/* ── Open Silver slot (.svp-open) ─────────────────────────────────────────
+   An unsold row, as a dashed silver-ink card inside the stack: refdes at
+   reduced opacity, "Your company here", purchase CTA right-aligned. A real
+   <button>, so `font: inherit` and the reset below are what keep it reading
+   as a row rather than a control.
+
+   Geometry note: the row is inset (margin 10px) but the copper bus is
+   positioned against the RAIL, so `.svp-via` shifts left by the same 10px and
+   the left padding clears it — the open row's via lands on the bus exactly
+   where a sponsor chip's does. */
+.svp-open {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: auto;
+  margin: 6px 10px;
+  padding: 12px 16px 12px 28px;
+  text-align: left;
+  font: inherit;
   cursor: pointer;
+  color: inherit;
+  border: 1px dashed color-mix(in srgb, var(--gold) 50%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--gold) 7%, transparent);
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
 }
-.svp-slot .svp-via {
+.svp-open:hover {
+  border-color: var(--gold);
+  background: color-mix(in srgb, var(--gold) 14%, transparent);
+}
+.svp-open .svp-via {
+  left: 13px;
   border-style: dashed;
   opacity: 0.55;
 }
-.svp-slot:hover {
-  background: color-mix(in srgb, var(--gold) 6%, transparent);
-}
-.svp-slot:hover .svp-via {
+.svp-open:hover .svp-via {
   border-color: var(--gold);
   opacity: 1;
 }
-/* open land pad — a dashed footprint awaiting a "chip", with a + drop cue */
-.svp-pad.svp-pad-open {
-  background: transparent;
-  border: 1.5px dashed color-mix(in srgb, var(--gold) 42%, transparent);
-  box-shadow: none;
+.svp-open .svp-refdes {
+  opacity: 0.75;
+  flex: 0 0 auto;
 }
-.svp-pad-open i {
-  font-style: normal;
-  font-size: 1rem;
-  line-height: 1;
-  color: color-mix(in srgb, var(--gold) 70%, transparent);
-}
-.svp-slot:hover .svp-pad-open {
-  border-color: var(--gold);
-}
-.svp-slot:hover .svp-pad-open i {
-  color: var(--gold-bright);
-}
-/* body spans the data columns (company→email) with a right-aligned CTA pill */
-.svp-slot-body {
-  grid-column: 2 / -1;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  min-width: 0;
-}
-.svp-slot-text {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-.svp-slot-title {
-  font-family: var(--font-heading);
-  font-size: 0.9rem;
-  font-weight: 700;
-  letter-spacing: 0.01em;
-  color: color-mix(in srgb, var(--cream) 72%, transparent);
-}
-.svp-slot-sub {
-  font-size: 0.74rem;
+.svp-open-label {
+  font-size: 0.82rem;
   color: var(--cream-mut);
-  white-space: nowrap;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.svp-slot-cta {
+.svp-open-cta {
+  margin-left: auto;
   flex: 0 0 auto;
-  font-family: var(--font-mono);
-  font-size: 0.64rem;
+  font-size: 0.8rem;
   font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
   color: var(--gold-bright);
   white-space: nowrap;
-  padding: 5px 11px;
-  border: 1px dashed color-mix(in srgb, var(--gold) 42%, transparent);
-  border-radius: 999px;
-  transition:
-    background 0.15s ease,
-    border-color 0.15s ease;
+  transition: color 0.15s ease;
 }
-.svp-slot:hover .svp-slot-cta {
-  background: color-mix(in srgb, var(--gold) 14%, transparent);
-  border-color: var(--gold);
+.svp-open:hover .svp-open-cta {
+  color: var(--cream);
+}
+.svp-open-price {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-weight: 700;
 }
 
 /* ── Mobile reflow (≤768px) ───────────────────────────────────────────────
@@ -486,17 +470,17 @@
   .svp-col:empty {
     display: none;
   }
-  /* Open "Advertise here" slot: spanned cols 2/-1 on desktop → col 2 here, and
-     stack the CTA under the pitch so the sub-text reads in full instead of being
-     truncated to "Feature your compan…" beside the pill. */
-  .svp-slot-body {
-    grid-column: 2;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
+  /* Open slot: the via is hidden below (decorative), so drop the padding that
+     cleared it, and let the CTA wrap under the label instead of being squeezed
+     against it on a narrow screen. */
+  .svp-open {
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    padding-left: 16px;
   }
-  .svp-slot-sub {
-    white-space: normal;
+  .svp-open-cta {
+    margin-left: 0;
+    flex-basis: 100%;
   }
   /* The copper bus + per-row via are positioned for the wide desktop id column
      and misalign under the narrow rail. They're decorative (aria-hidden) — drop
@@ -547,231 +531,469 @@
   white-space: nowrap;
 }
 
-.svp-slot-price {
-  font-family: var(--font-mono, ui-monospace, monospace);
-  color: var(--gold, #a88d2e);
-  font-weight: 700;
-}
+/* ── Placement ticket (.sck-*) — SilverCheckoutModal.tsx ──────────────────
+   The self-serve Silver panel in both of its states: `confirm` (the buyer is
+   standing on the slot behind the scrim) and `receipt` (the return trip from
+   Stripe, ?welcome=silver). Ported from the design kit's checkout.css; the
+   kit's Stripe-page MOCK is deliberately absent — production hands off to
+   Stripe's own hosted page and never renders a payment surface.
 
-/* ── Self-serve confirm panel (.svco-*) — SilverCheckoutModal.tsx ───────── */
+   Dark PCB header band (dot grid, crop-mark corners, gold edge fingers) over a
+   light body. The panel is PORTALED to <body>, i.e. outside the board's
+   `.csb[data-tier='silver']` scope, so the silver palette is redeclared as
+   LOCAL custom properties on `.sck-panel` — the same values the board resolves
+   (#9db4c6 / #d4e6f2 / #6f8696), just reachable from here. */
 
-.svco-backdrop {
+.sck-scrim {
   position: fixed;
   inset: 0;
-  z-index: 60;
+  /* Above the navbar (z-index 100): a portaled modal that site chrome paints
+     over is not a modal. */
+  z-index: 900;
   display: grid;
   place-items: center;
-  padding: 18px;
-  background: rgba(10, 14, 17, 0.62);
+  padding: 24px;
+  overflow: auto;
+  background: rgba(8, 14, 10, 0.74);
+  animation: sck-fade 0.2s ease both;
 }
 
-.svco-card {
-  position: relative;
-  width: min(430px, 100%);
-  background: #fff;
+@keyframes sck-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.sck-panel {
+  --sv: #5d7383;
+  --sv-b: #9db4c6;
+  --sv-l: #d4e6f2;
+  --sv-e: #2f7df6;
+  --sv-g3: #9db4c6;
+  --sv-g4: #2f7df6;
+  --sv-g5: #6f8696;
+  width: 100%;
+  max-width: 580px;
+  overflow: hidden;
   border-radius: 14px;
-  padding: 20px 22px 18px;
-  box-shadow: 0 18px 50px rgba(10, 16, 20, 0.45);
-  color: #1a1f23;
+  background: var(--theme-card-bg, #fff);
+  color: var(--fg1, #1a1f23);
+  box-shadow:
+    0 30px 80px -20px rgba(6, 16, 11, 0.55),
+    0 0 0 1px rgba(93, 115, 131, 0.18);
+  animation: sck-pop 0.32s cubic-bezier(0.32, 1.25, 0.5, 1) both;
 }
 
-.svco-head {
+@keyframes sck-pop {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* header band — PCB dot grid + crop marks + edge fingers */
+.sck-head {
+  position: relative;
+  padding: 22px 30px 24px;
+  color: #fff;
+  background-color: #0e1a16;
+  background-image: radial-gradient(circle, rgba(244, 247, 250, 0.08) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+.sck-head::before,
+.sck-head::after {
+  content: '';
+  position: absolute;
+  top: 10px;
+  width: 10px;
+  height: 10px;
+  border-top: 1px solid rgba(157, 180, 198, 0.5);
+  pointer-events: none;
+}
+.sck-head::before {
+  left: 10px;
+  border-left: 1px solid rgba(157, 180, 198, 0.5);
+}
+.sck-head::after {
+  right: 10px;
+  border-right: 1px solid rgba(157, 180, 198, 0.5);
+}
+.sck-head-top {
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
-  gap: 10px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid #e5eaef;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
 }
-
-.svco-head h3 {
-  margin: 2px 0 0;
-  font-size: 17px;
-  letter-spacing: -0.015em;
-}
-
-.svco-des {
+.sck-kicker {
   font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 10.5px;
-  letter-spacing: 0.08em;
-  color: #a88d2e;
+  font-size: 0.66rem;
+  letter-spacing: 0.14em;
+  color: var(--sv-b);
 }
-
-.svco-price {
+.sck-slotchip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border: 1px solid rgba(157, 180, 198, 0.4);
+  border-radius: 999px;
+  background: rgba(157, 180, 198, 0.08);
   font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 21px;
-  font-weight: 700;
-  color: #0a4a2e;
+  font-size: 0.62rem;
+  letter-spacing: 0.12em;
+  color: var(--sv-l);
   white-space: nowrap;
 }
+.sck-slotchip i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #44bd13;
+  box-shadow: 0 0 6px rgba(68, 189, 19, 0.9);
+  animation: sck-led 1.6s ease-in-out infinite;
+}
 
-.svco-price small {
-  display: block;
-  font-size: 11px;
+@keyframes sck-led {
+  50% {
+    opacity: 0.4;
+  }
+}
+
+.sck-title {
+  margin: 10px 0 12px;
+  font-size: 1.5rem;
+  letter-spacing: -0.015em;
+  color: #fff;
+  text-wrap: pretty;
+}
+.sck-pricerow {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.sck-price {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 2.15rem;
+  font-weight: 700;
+  background: linear-gradient(120deg, #f4f7fa, var(--sv-g3) 55%, var(--sv-e));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.sck-per {
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: rgba(212, 230, 242, 0.72);
+}
+/* gold edge-connector fingers along the band's bottom edge */
+.sck-fingers {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 5px;
+  opacity: 0.9;
+  background: repeating-linear-gradient(90deg, #dabe41 0 26px, transparent 26px 40px);
+}
+
+.sck-body {
+  padding: 20px 30px 24px;
+}
+.sck-perks {
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sck-perks li {
+  position: relative;
+  padding-left: 26px;
+  font-size: 0.92rem;
+}
+.sck-perks li::before {
+  content: '\2713';
+  position: absolute;
+  left: 0;
+  top: 1px;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 0.6rem;
+  font-weight: 700;
+  background: color-mix(in srgb, var(--sv) 14%, #fff);
+  color: var(--sv);
+}
+
+.sck-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 4px 0 2px;
+}
+.sck-f {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+/* The optional website row spans both columns beneath company + email. */
+.sck-f-wide {
+  grid-column: 1 / -1;
+}
+.sck-opt {
+  font-style: normal;
   font-weight: 400;
-  color: #67727d;
+  color: var(--fg3, #9ca3af);
+}
+.sck-f > span {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--fg2, #6b7076);
+}
+.sck-f .req {
+  margin-left: 2px;
+  font-style: normal;
+  color: var(--error-red, #c0392b);
+}
+.sck-f input {
+  font: inherit;
+  font-size: 0.92rem;
+  line-height: 1;
+  padding: 10px 12px;
+  border: 1px solid #d5dae1;
+  border-radius: 6px;
+  background: #fff;
+  color: var(--fg1, #1a1f23);
+}
+.sck-f input:focus {
+  outline: none;
+  border-color: var(--sv-e);
+  box-shadow: 0 0 0 3px rgba(47, 125, 246, 0.12);
+}
+
+.sck-error {
+  margin: 10px 0 0;
+  font-size: 0.82rem;
+  color: var(--error-red, #c0392b);
+}
+
+/* the partners desk, demoted to one line — a human is an option, not a detour */
+.sck-rep {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 14px 0 0;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--sv) 16%, #fff);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--sv) 7%, #fff);
+  font-size: 0.88rem;
+}
+.sck-rep-id {
+  flex: 1;
+  min-width: 0;
+}
+.sck-link {
+  flex: 0 0 auto;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--sv) 55%, transparent);
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--sv);
+  cursor: pointer;
+}
+.sck-link:hover {
+  border-bottom-color: var(--sv);
+  filter: brightness(0.8);
+}
+
+.sck-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 18px;
+}
+.sck-actions .sck-cancel {
+  margin-right: auto;
+}
+/* Buttons: the kit's shared glow-btn, localized to this panel (the public
+   site has no global button class) with its silver-tier treatment. `filter`
+   is intentionally OUT of the transition list — a transitioned filter is the
+   scroll-lag pattern the project bans. */
+.sck-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 22px;
+  border: 1.5px solid transparent;
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 0.92rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    transform 200ms ease,
+    box-shadow 200ms ease,
+    background-color 200ms,
+    color 200ms,
+    border-color 200ms;
+}
+.sck-btn-primary {
+  background: linear-gradient(135deg, var(--sv-g3), var(--sv-g5));
+  color: #0a1d14;
+  border-color: transparent;
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--sv-g4) 38%, transparent);
+}
+.sck-btn-primary:hover:not(:disabled) {
+  filter: brightness(1.06);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 22px color-mix(in srgb, var(--sv-g4) 52%, transparent);
+}
+.sck-btn-primary:disabled {
+  filter: grayscale(0.3) brightness(1.04);
+  box-shadow: none;
+  cursor: default;
+}
+.sck-btn-ghost {
+  background: transparent;
+  color: var(--sv);
+  border-color: color-mix(in srgb, var(--sv) 55%, transparent);
+}
+.sck-btn-ghost:hover {
+  border-color: var(--sv);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--sv-g4) 30%, transparent);
+}
+
+.sck-foot {
+  margin: 14px 0 0;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.62rem;
+  letter-spacing: 0.1em;
+  color: var(--fg3, #9ca3af);
   text-align: right;
 }
 
-.svco-benefits {
-  list-style: none;
-  margin: 12px 0 4px;
-  padding: 0;
-  font-size: 13px;
-  color: #39424b;
-}
-
-.svco-benefits li {
-  position: relative;
-  padding: 3px 0 3px 22px;
-}
-
-.svco-benefits li::before {
-  content: '\2713';
-  position: absolute;
-  left: 2px;
-  color: #44bd13;
-  font-weight: 700;
-}
-
-.svco-label {
-  display: block;
-  margin-top: 10px;
-  font-size: 11.5px;
-  color: #67727d;
-}
-
-.svco-label .svco-opt {
-  color: #9aa5af;
-}
-
-.svco-input {
-  width: 100%;
-  margin-top: 3px;
-  padding: 9px 11px;
-  border: 1px solid #d7dee5;
-  border-radius: 8px;
-  font-size: 13.5px;
-  line-height: 1.2;
-}
-
-.svco-input:focus {
-  outline: 2px solid rgba(10, 74, 46, 0.35);
-  border-color: #0a4a2e;
-}
-
-.svco-error {
-  margin: 10px 0 0;
-  font-size: 12.5px;
-  color: #c0392b;
-}
-
-.svco-cta {
-  display: block;
-  width: 100%;
-  margin-top: 14px;
-  padding: 12px;
-  border: 0;
-  border-radius: 9px;
-  background: #0a4a2e;
-  color: #fff;
-  font-size: 14.5px;
-  font-weight: 600;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.svco-cta:hover {
-  background: #0c5836;
-}
-
-.svco-cta:disabled {
-  opacity: 0.65;
-  cursor: default;
-}
-
-.svco-sub {
-  margin: 9px 0 0;
-  font-size: 11.5px;
-  color: #67727d;
-  text-align: center;
-}
-
-.svco-rep {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  gap: 12px;
-  align-items: center;
-  margin-top: 13px;
-  padding-top: 12px;
-  border-top: 1px solid #e5eaef;
-}
-
-.svco-ava {
-  width: 38px;
-  height: 38px;
-  border-radius: 50%;
-  background: #1a1f23;
+/* ── Receipt state (.sck-done) ────────────────────────────────────────────
+   Deliberately NOT the kit's version: it invented a SUB-ID and a NEXT INVOICE
+   date and called the placement ACTIVE. The sponsor row is created by the
+   Stripe webhook, which may not have landed when this paints, so the panel
+   reports only what is known here — the payment — and the board itself is the
+   proof once refreshed. */
+.sck-done .sck-mark {
   display: grid;
   place-items: center;
-  color: #fff;
-  font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 14px;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16);
+  width: 40px;
+  height: 40px;
+  margin: 14px 0 2px;
+  border-radius: 50%;
+  background: rgba(68, 189, 19, 0.16);
+  color: #7dec45;
+  box-shadow: 0 0 18px rgba(68, 189, 19, 0.3);
+  font-size: 20px;
 }
-
-.svco-rep-id {
-  font-size: 13px;
+.sck-done-line {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--fg1, #1a1f23);
 }
-
-.svco-rep-id small {
-  display: block;
-  color: #67727d;
-  font-size: 11.5px;
+.sck-done-line + .sck-done-line {
+  margin-top: 8px;
 }
-
-.svco-qdes {
-  display: block;
-  font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 10px;
-  letter-spacing: 0.1em;
-  color: #a88d2e;
+.sck-done-line strong {
+  color: var(--sv);
 }
-
-.svco-rep-mail {
-  font-size: 12px;
-  font-weight: 600;
-  color: #0a4a2e;
-  text-decoration: none;
-  border: 1px solid #d7dee5;
-  border-radius: 7px;
-  padding: 6px 11px;
-  line-height: 1;
+.sck-done-line code {
+  padding: 1px 5px;
+  border-radius: 4px;
+  color: var(--sv);
+  background: color-mix(in srgb, var(--sv) 9%, #fff);
 }
-
-.svco-rep-mail:hover {
-  border-color: #0a4a2e;
-}
-
-.svco-note {
-  margin: 9px 0 0;
-  font-size: 11.5px;
-  color: #67727d;
-}
-
-.svco-note b {
-  color: #39424b;
-}
-
-.svco-close {
-  position: absolute;
-  top: 8px;
-  right: 10px;
+.sck-refresh {
+  padding: 0;
   border: 0;
   background: none;
-  font-size: 20px;
-  line-height: 1;
-  color: #8a95a0;
+  font: inherit;
+  font-weight: 600;
+  color: var(--sv);
+  text-decoration: underline;
   cursor: pointer;
-  padding: 4px 6px;
+}
+.sck-receipt {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin: 16px 0 2px;
+  padding: 12px 14px;
+  border: 1px dashed #cfd6de;
+  border-radius: 8px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.8rem;
+  background-image: radial-gradient(circle, rgba(93, 115, 131, 0.1) 1px, transparent 1px);
+  background-size: 13px 13px;
+}
+.sck-receipt div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.sck-receipt span:first-child {
+  color: var(--fg3, #9ca3af);
+}
+.sck-receipt .ok {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  color: #15803d;
+}
+.sck-receipt .ok::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #15803d;
+  box-shadow: 0 0 6px rgba(21, 128, 61, 0.8);
+  animation: sck-led 1.6s ease-in-out infinite;
+}
+
+@media (max-width: 560px) {
+  .sck-fields {
+    grid-template-columns: 1fr;
+  }
+  .sck-head {
+    padding: 18px 20px 22px;
+  }
+  .sck-body {
+    padding: 16px 20px 20px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sck-panel,
+  .sck-scrim {
+    animation: none;
+  }
+  .sck-slotchip i,
+  .sck-receipt .ok::before {
+    animation: none;
+  }
 }

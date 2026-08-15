@@ -21,7 +21,7 @@ import uuid
 from collections import defaultdict
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
@@ -75,6 +75,14 @@ class SilverCheckoutBody(BaseModel):
     category_id: str | None = None
     keyword: str | None = Field(default=None, max_length=100)
     company_name: str = Field(min_length=2, max_length=120)
+    # The buyer's work email, collected by the confirm panel. Prefills Stripe's
+    # hosted page and becomes the customer's address, so the receipt and every
+    # renewal invoice reach the person who actually bought. OPTIONAL on the
+    # wire: the panel always sends it, but a cached pre-redesign bundle does
+    # not, and a checkout that still works beats a 422 nobody can see.
+    email: EmailStr | None = None
+    # Still accepted (a rep-built request may carry it) though the redesigned
+    # panel no longer collects one — see stripe_checkout's metadata.
     website: str | None = Field(default=None, max_length=200)
 
 
@@ -221,6 +229,7 @@ async def create_silver_checkout(
                 placement_label=placement_label,
                 company_name=body.company_name.strip(),
                 website=(body.website or "").strip() or None,
+                email=(str(body.email).strip() or None) if body.email else None,
                 return_path=return_path,
             )
         except StripeApiError as exc:
