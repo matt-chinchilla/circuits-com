@@ -164,6 +164,8 @@ Brand (`left: 20px`) + nav+LOGIN (`right: 20px`) are `position: absolute` on `.t
 ### Seed data (idempotent)
 15 cats, 75 subcats (5 × 2 levels), 7+ suppliers, 2 sponsors, 59 parts/179 listings/193 revenue (plus real-catalog). `get_or_create_*` skips existing. `CATEGORY_DATA` slugs EXPLICIT per row — `get_or_create_category(name, slug, ...)` requires slug arg (some like `motor-motion-ics` don't match `slugify(name)`).
 
+**Seed data carries NO phone numbers (owner rule, 2026-08-15)** — a rendered number must come from the company itself, and checkout collects none. The old seeds were all someone else's digits: invented ones on fictional sponsors, staff personal cells on the `* Test` companies, real support lines on distributors shown as "partners". Both DBs were blanket-nulled; boards guard absence (`{phone && …}`, Platinum rail dashes) and the pitch preview never links contacts. Test fixtures use reserved `555-01xx` only.
+
 ## Gotchas
 
 (Each is a recurring trap. One-liners by design.)

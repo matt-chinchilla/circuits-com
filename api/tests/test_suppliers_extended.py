@@ -187,7 +187,7 @@ class TestUpdateSupplier:
         assert data["name"] == "Avnet Updated"
         assert data["website"] == "avnet-new.com"
         # Unchanged fields preserved
-        assert data["phone"] == "480-643-2000"
+        assert data["phone"] == "631-555-0142"
 
     def test_update_supplier_requires_auth(self, client, seeded_db):
         supplier_id = str(seeded_db["supplier1"].id)

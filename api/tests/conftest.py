@@ -196,7 +196,7 @@ def seeded_db(db):
     supplier1 = Supplier(
         id=uuid.uuid4(),
         name="Avnet",
-        phone="480-643-2000",
+        phone="631-555-0142",
         website="avnet.com",
         email="info@avnet.com",
         contact_name="Jordan Avery",
@@ -208,7 +208,7 @@ def seeded_db(db):
     supplier2 = Supplier(
         id=uuid.uuid4(),
         name="Kennedy Electronics",
-        phone="631-555-5555",
+        phone="631-555-0143",
         website="kennedy.com",
         email="info@kennedy.com",
         contact_name="Casey Kennedy",

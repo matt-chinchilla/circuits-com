@@ -613,12 +613,16 @@ export default function CategorySponsor({
               "open Phone Link?" dialog for a number nobody input (2026-08-14). */}
           {isPitch ? (
             <span className="csbA-ph">Your phone number</span>
-          ) : (
+          ) : s.phone ? (
             <a href={csTelHref(s.phone)}>{formatPhone(s.phone)}</a>
+          ) : (
+            // Sponsors arrive through checkout, which collects no phone — an
+            // absent number is the NORMAL state, never an empty tel: link.
+            <span className="csbA-ph">&#8212;</span>
           )}
         </span>
         <span className="csbA-fieldfoot">
-          {!isPitch && <CsCopy text={formatPhone(s.phone)} />}
+          {!isPitch && s.phone !== '' && <CsCopy text={formatPhone(s.phone)} />}
           <span className="csbA-sub">{s.hours}</span>
         </span>
       </div>
@@ -631,12 +635,14 @@ export default function CategorySponsor({
               could be a real stranger's mailbox — placeholder text, no mailto. */}
           {isPitch ? (
             <span className="csbA-ph">Your sales email</span>
-          ) : (
+          ) : s.email ? (
             <a href={'mailto:' + s.email}>{s.email}</a>
+          ) : (
+            <span className="csbA-ph">&#8212;</span>
           )}
         </span>
         <span className="csbA-fieldfoot">
-          {!isPitch && <CsCopy text={s.email} />}
+          {!isPitch && s.email !== '' && <CsCopy text={s.email} />}
         </span>
       </div>
     </div>
