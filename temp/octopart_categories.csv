@@ -1,0 +1,347 @@
+Category,Subcategory,Sub-subcategory,Octopart ID,URL Path,Number of parts
+Cables and Wire,,,4393,/electronic-parts/cables-and-wire,5302801
+Cables and Wire,Audio / Video Cables,,5031,/electronic-parts/cables-and-wire/audio-video-cables,8285
+Cables and Wire,Bulk Hook-up Wire,,4394,/electronic-parts/cables-and-wire/bulk-hook-up-wire,11247
+Cables and Wire,Bulk Multiple Conductor Cables,,4399,/electronic-parts/cables-and-wire/bulk-multiple-conductor-cables,15563
+Cables and Wire,Coaxial / RF Cable Assemblies,,4396,/electronic-parts/cables-and-wire/coaxial-rf-cable-assemblies,3781378
+Cables and Wire,D-Sub Cables,,4378,/electronic-parts/cables-and-wire/d-sub-cables,2617
+Cables and Wire,Ethernet Cables,,4387,/electronic-parts/cables-and-wire/ethernet-cables,84608
+Cables and Wire,FFC / FPC Cables,,5032,/electronic-parts/cables-and-wire/ffc-fpc-cables,6355
+Cables and Wire,Fiber Optic Cables,,4398,/electronic-parts/cables-and-wire/fiber-optic-cables,60537
+Cables and Wire,Flat Ribbon Cables,,4395,/electronic-parts/cables-and-wire/flat-ribbon-cables,15046
+Cables and Wire,USB Cables,,4373,/electronic-parts/cables-and-wire/usb-cables,6688
+Cables and Wire,Wire Protection and Management,,5326,/electronic-parts/cables-and-wire/wire-protection-and-management,96276
+Cables and Wire,Wire Protection and Management,Cable Markers,5384,/electronic-parts/cables-and-wire/wire-protection-and-management/cable-markers,26706
+Cables and Wire,Wire Protection and Management,Cable Ties,5385,/electronic-parts/cables-and-wire/wire-protection-and-management/cable-ties,7282
+Cables and Wire,Wire Protection and Management,Heat Shrink Tubing,5392,/electronic-parts/cables-and-wire/wire-protection-and-management/heat-shrink-tubing,39150
+Cables and Wire,Wire Protection and Management,Non-Heat Shrink Tubing and Sleeves,5391,/electronic-parts/cables-and-wire/wire-protection-and-management/non-heat-shrink-tubing-and-sleeves,113
+Cables and Wire,Wire Protection and Management,Wire Ducting,5388,/electronic-parts/cables-and-wire/wire-protection-and-management/wire-ducting,5385
+Circuit Protection,,,4569,/electronic-parts/circuit-protection,897632
+Circuit Protection,Circuit Breakers,,4587,/electronic-parts/circuit-protection/circuit-breakers,345319
+Circuit Protection,ESD and Circuit Protection ICs,,5421,/electronic-parts/circuit-protection/esd-and-circuit-protection-ics,531
+Circuit Protection,ESD Protection Diodes,,6351,/electronic-parts/circuit-protection/esd-protection-diodes,334
+Circuit Protection,Fuse Holders,,4589,/electronic-parts/circuit-protection/fuse-holders,11563
+Circuit Protection,Fuses,,4588,/electronic-parts/circuit-protection/fuses,71617
+Circuit Protection,PTC Resettable Fuses,,6321,/electronic-parts/circuit-protection/ptc-resettable-fuses,6703
+Circuit Protection,TVS Diodes,,6322,/electronic-parts/circuit-protection/tvs-diodes,205870
+Circuit Protection,Varistors,,4250,/electronic-parts/circuit-protection/varistors,9724
+Connectors,,,4364,/electronic-parts/connectors,14707834
+Connectors,Accessories,,6466,/electronic-parts/connectors/accessories,807051
+Connectors,Audio / Video Connectors,,5142,/electronic-parts/connectors/audio-video-connectors,7508
+Connectors,Automotive Connectors,,5429,/electronic-parts/connectors/automotive-connectors,21755
+Connectors,Backplane Connectors,,6326,/electronic-parts/connectors/backplane-connectors,11295
+Connectors,Backplane Connectors,DIN 41612 Connectors,5279,/electronic-parts/connectors/backplane-connectors/din-41612-connectors,2696
+Connectors,Backplane Connectors,Hard Metric Connectors,6327,/electronic-parts/connectors/backplane-connectors/hard-metric-connectors,2371
+Connectors,Board to Board Connectors,,5704,/electronic-parts/connectors/board-to-board-connectors,288779
+Connectors,Card Edge Connectors,,5159,/electronic-parts/connectors/card-edge-connectors,1290860
+Connectors,Circular Connectors,,6339,/electronic-parts/connectors/circular-connectors,6273339
+Connectors,D-Sub Connectors,,5182,/electronic-parts/connectors/d-sub-connectors,1142633
+Connectors,FFC / FPC,,6329,/electronic-parts/connectors/ffc-fpc,11736
+Connectors,Fiber Optic Connectors,,5183,/electronic-parts/connectors/fiber-optic-connectors,8529
+Connectors,Headers and Wire Housings,,5193,/electronic-parts/connectors/headers-and-wire-housings,761052
+Connectors,IC and Component Sockets,,5194,/electronic-parts/connectors/ic-and-component-sockets,13633
+Connectors,Memory Connectors,,6328,/electronic-parts/connectors/memory-connectors,2942
+Connectors,Modular / Ethernet Connectors,,5399,/electronic-parts/connectors/modular-ethernet-connectors,26499
+Connectors,Photovoltaic / Solar Connectors,,6330,/electronic-parts/connectors/photovoltaic-solar-connectors,566
+Connectors,Power Connectors,,4406,/electronic-parts/connectors/power-connectors,122813
+Connectors,Rectangular Connectors,,6381,/electronic-parts/connectors/rectangular-connectors,48923
+Connectors,RF / Coaxial Connectors,,5219,/electronic-parts/connectors/rf-coaxial-connectors,51180
+Connectors,Shunts and Jumpers,,6474,/electronic-parts/connectors/shunts-and-jumpers,6108
+Connectors,Terminal Blocks,,5267,/electronic-parts/connectors/terminal-blocks,425726
+Connectors,Terminals,,5224,/electronic-parts/connectors/terminals,32581
+Connectors,Test Points,,6475,/electronic-parts/connectors/test-points,1843
+Connectors,USB Connectors,,5272,/electronic-parts/connectors/usb-connectors,2460
+Discrete Semiconductors,,,4219,/electronic-parts/discrete-semiconductors,686181
+Discrete Semiconductors,Diodes,,4220,/electronic-parts/discrete-semiconductors/diodes,361707
+Discrete Semiconductors,Diodes,Bridge Rectifier Diodes,6359,/electronic-parts/discrete-semiconductors/diodes/bridge-rectifier-diodes,23462
+Discrete Semiconductors,Diodes,Current Regulators,6361,/electronic-parts/discrete-semiconductors/diodes/current-regulators,3376
+Discrete Semiconductors,Diodes,Rectifier Diodes,4226,/electronic-parts/discrete-semiconductors/diodes/rectifier-diodes,127812
+Discrete Semiconductors,Diodes,RF Diodes,6384,/electronic-parts/discrete-semiconductors/diodes/rf-diodes,4382
+Discrete Semiconductors,Diodes,Schottky Diodes,4227,/electronic-parts/discrete-semiconductors/diodes/schottky-diodes,20006
+Discrete Semiconductors,Diodes,Varactors - Varicap Diodes,6360,/electronic-parts/discrete-semiconductors/diodes/varactors-varicap-diodes,3768
+Discrete Semiconductors,Diodes,Zener Diodes,4221,/electronic-parts/discrete-semiconductors/diodes/zener-diodes,153158
+Discrete Semiconductors,Thyristors,,4243,/electronic-parts/discrete-semiconductors/thyristors,24184
+Discrete Semiconductors,Thyristors,"DIACs, SIDACs",4245,/electronic-parts/discrete-semiconductors/thyristors/diacs-sidacs,1839
+Discrete Semiconductors,Thyristors,SCRs,4244,/electronic-parts/discrete-semiconductors/thyristors/scrs,6584
+Discrete Semiconductors,Thyristors,TRIACs,4249,/electronic-parts/discrete-semiconductors/thyristors/triacs,6836
+Discrete Semiconductors,Transistors,,4228,/electronic-parts/discrete-semiconductors/transistors,293518
+Discrete Semiconductors,Transistors,BJTs,4237,/electronic-parts/discrete-semiconductors/transistors/bjts,62356
+Discrete Semiconductors,Transistors,IGBTs,4241,/electronic-parts/discrete-semiconductors/transistors/igbts,10159
+Discrete Semiconductors,Transistors,JFETs,4233,/electronic-parts/discrete-semiconductors/transistors/jfets,1405
+Discrete Semiconductors,Transistors,MOSFETs,4229,/electronic-parts/discrete-semiconductors/transistors/mosfets,175540
+Discrete Semiconductors,Transistors,RF BJT,6386,/electronic-parts/discrete-semiconductors/transistors/rf-bjt,980
+Discrete Semiconductors,Transistors,RF MOSFET,6385,/electronic-parts/discrete-semiconductors/transistors/rf-mosfet,2774
+Electromechanical,,,6310,/electronic-parts/electromechanical,2007645
+Electromechanical,Audio Products,,4592,/electronic-parts/electromechanical/audio-products,27238
+Electromechanical,Audio Products,Buzzers,6313,/electronic-parts/electromechanical/audio-products/buzzers,1030
+Electromechanical,Audio Products,Microphones,4615,/electronic-parts/electromechanical/audio-products/microphones,2149
+Electromechanical,Audio Products,Speakers,4629,/electronic-parts/electromechanical/audio-products/speakers,4235
+Electromechanical,Motors and Drives,,4878,/electronic-parts/electromechanical/motors-and-drives,466357
+Electromechanical,Motors and Drives,"AC, DC and Servo Motors",4882,/electronic-parts/electromechanical/motors-and-drives/ac-dc-and-servo-motors,42193
+Electromechanical,Motors and Drives,Brushless DC Motors,6380,/electronic-parts/electromechanical/motors-and-drives/brushless-dc-motors,138
+Electromechanical,Motors and Drives,Motor Drives,4881,/electronic-parts/electromechanical/motors-and-drives/motor-drives,38432
+Electromechanical,Motors and Drives,Stepper Motors,4880,/electronic-parts/electromechanical/motors-and-drives/stepper-motors,1635
+Electromechanical,Relays,,4850,/electronic-parts/electromechanical/relays,211922
+Electromechanical,Relays,Power Relays,4860,/electronic-parts/electromechanical/relays/power-relays,42231
+Electromechanical,Relays,Signal Relays,4858,/electronic-parts/electromechanical/relays/signal-relays,15143
+Electromechanical,Relays,Solid State Relays,4863,/electronic-parts/electromechanical/relays/solid-state-relays,21227
+Electromechanical,Relays,Time Delay Relays,4862,/electronic-parts/electromechanical/relays/time-delay-relays,18099
+Electromechanical,Switches,,4809,/electronic-parts/electromechanical/switches,1055827
+Electromechanical,Switches,DIP Switches,4816,/electronic-parts/electromechanical/switches/dip-switches,11077
+Electromechanical,Switches,Encoders,4204,/electronic-parts/electromechanical/switches/encoders,92906
+Electromechanical,Switches,Keylock Switches,4821,/electronic-parts/electromechanical/switches/keylock-switches,2763
+Electromechanical,Switches,Pushbutton Switches,4811,/electronic-parts/electromechanical/switches/pushbutton-switches,260560
+Electromechanical,Switches,Rocker Switches,4814,/electronic-parts/electromechanical/switches/rocker-switches,120952
+Electromechanical,Switches,Rotary Switches,4815,/electronic-parts/electromechanical/switches/rotary-switches,49380
+Electromechanical,Switches,Slide Switches,4819,/electronic-parts/electromechanical/switches/slide-switches,3796
+Electromechanical,Switches,Snap Action / Limit Switches,4817,/electronic-parts/electromechanical/switches/snap-action-limit-switches,63517
+Electromechanical,Switches,Switch Accessories,4822,/electronic-parts/electromechanical/switches/switch-accessories,47482
+Electromechanical,Switches,Tactile Switches,4812,/electronic-parts/electromechanical/switches/tactile-switches,17624
+Electromechanical,Switches,Toggle Switches,4810,/electronic-parts/electromechanical/switches/toggle-switches,49986
+Electromechanical,Thermal Management,,6316,/electronic-parts/electromechanical/thermal-management,243650
+Electromechanical,Thermal Management,Fans and Blowers,4792,/electronic-parts/electromechanical/thermal-management/fans-and-blowers,48888
+Electromechanical,Thermal Management,Heat Sinks,4784,/electronic-parts/electromechanical/thermal-management/heat-sinks,118501
+Industrial Control,,,4780,/electronic-parts/industrial-control,1779635
+Industrial Control,Human Machine Interface (HMI),,6405,/electronic-parts/industrial-control/human-machine-interface-hmi,18975
+Industrial Control,Hydraulics,,6142,/electronic-parts/industrial-control/hydraulics,6317
+Industrial Control,Industrial Actuators,,6407,/electronic-parts/industrial-control/industrial-actuators,92544
+Industrial Control,Industrial Contactors,,6406,/electronic-parts/industrial-control/industrial-contactors,71847
+Industrial Control,Industrial Lighting,,6404,/electronic-parts/industrial-control/industrial-lighting,15565
+Industrial Control,Industrial Relays,,6387,/electronic-parts/industrial-control/industrial-relays,9107
+Industrial Control,Panel Meters,,5092,/electronic-parts/industrial-control/panel-meters,19624
+Industrial Control,Pneumatics,,5737,/electronic-parts/industrial-control/pneumatics,354367
+Industrial Control,Programmable Logic Controllers (PLC),,6314,/electronic-parts/industrial-control/programmable-logic-controllers-plc,2035
+Industrial Control,Temperature Controllers,,4781,/electronic-parts/industrial-control/temperature-controllers,2819
+Integrated Circuits (ICs),,,4215,/electronic-parts/integrated-circuits-ics,2731728
+Integrated Circuits (ICs),Clock and Timing,,4260,/electronic-parts/integrated-circuits-ics/clock-and-timing,708123
+Integrated Circuits (ICs),Clock and Timing,"Clock Buffers, Drivers",4261,/electronic-parts/integrated-circuits-ics/clock-and-timing/clock-buffers-drivers,20102
+Integrated Circuits (ICs),Clock and Timing,"Clock Generators, PLLs, Frequency Synthesizers",4263,/electronic-parts/integrated-circuits-ics/clock-and-timing/clock-generators-plls-frequency-synthesizers,49673
+Integrated Circuits (ICs),Clock and Timing,Controlled Oscillators,6347,/electronic-parts/integrated-circuits-ics/clock-and-timing/controlled-oscillators,554647
+Integrated Circuits (ICs),Clock and Timing,Delay Lines,6393,/electronic-parts/integrated-circuits-ics/clock-and-timing/delay-lines,20204
+Integrated Circuits (ICs),Clock and Timing,Real Time Clocks,4264,/electronic-parts/integrated-circuits-ics/clock-and-timing/real-time-clocks,3045
+Integrated Circuits (ICs),Clock and Timing,Timers and Oscillators,5411,/electronic-parts/integrated-circuits-ics/clock-and-timing/timers-and-oscillators,13710
+Integrated Circuits (ICs),Data Converter ICs,,4216,/electronic-parts/integrated-circuits-ics/data-converter-ics,52566
+Integrated Circuits (ICs),Data Converter ICs,Analog Front End (AFE),6392,/electronic-parts/integrated-circuits-ics/data-converter-ics/analog-front-end-afe,1497
+Integrated Circuits (ICs),Data Converter ICs,Analog to Digital Converters (ADCs),4217,/electronic-parts/integrated-circuits-ics/data-converter-ics/analog-to-digital-converters-adcs,31118
+Integrated Circuits (ICs),Data Converter ICs,Digital Potentiometers,5378,/electronic-parts/integrated-circuits-ics/data-converter-ics/digital-potentiometers,6612
+Integrated Circuits (ICs),Data Converter ICs,Digital to Analog Converters (DACs),4218,/electronic-parts/integrated-circuits-ics/data-converter-ics/digital-to-analog-converters-dacs,10004
+Integrated Circuits (ICs),Data Converter ICs,Touch Screen Controllers,5413,/electronic-parts/integrated-circuits-ics/data-converter-ics/touch-screen-controllers,957
+Integrated Circuits (ICs),Embedded Processors and Controllers,,4267,/electronic-parts/integrated-circuits-ics/embedded-processors-and-controllers,348257
+Integrated Circuits (ICs),Embedded Processors and Controllers,CPLDs - Complex Programming Logic Devices,4270,/electronic-parts/integrated-circuits-ics/embedded-processors-and-controllers/cplds-complex-programming-logic-devices,15253
+Integrated Circuits (ICs),Embedded Processors and Controllers,DSPs - Digital Signal Processors,4302,/electronic-parts/integrated-circuits-ics/embedded-processors-and-controllers/dsps-digital-signal-processors,9004
+Integrated Circuits (ICs),Embedded Processors and Controllers,FPGAs - Field Programmable Gate Arrays,4271,/electronic-parts/integrated-circuits-ics/embedded-processors-and-controllers/fpgas-field-programmable-gate-arrays,59599
+Integrated Circuits (ICs),Embedded Processors and Controllers,Microcontrollers,4300,/electronic-parts/integrated-circuits-ics/embedded-processors-and-controllers/microcontrollers,180046
+Integrated Circuits (ICs),Embedded Processors and Controllers,Microprocessors,4299,/electronic-parts/integrated-circuits-ics/embedded-processors-and-controllers/microprocessors,21654
+Integrated Circuits (ICs),Embedded Processors and Controllers,Single Board Computers (SBCs),6249,/electronic-parts/integrated-circuits-ics/embedded-processors-and-controllers/single-board-computers-sbcs,7451
+Integrated Circuits (ICs),Embedded Processors and Controllers,SPLD - Simple Programmable Logic Devices,6344,/electronic-parts/integrated-circuits-ics/embedded-processors-and-controllers/spld-simple-programmable-logic-devices,1013
+Integrated Circuits (ICs),Embedded Processors and Controllers,System on Chip (SoC),6388,/electronic-parts/integrated-circuits-ics/embedded-processors-and-controllers/system-on-chip-soc,17756
+Integrated Circuits (ICs),Embedded Processors and Controllers,System on Modules - SOM,6341,/electronic-parts/integrated-circuits-ics/embedded-processors-and-controllers/system-on-modules-som,184
+Integrated Circuits (ICs),Interface ICs,,5414,/electronic-parts/integrated-circuits-ics/interface-ics,77431
+Integrated Circuits (ICs),Interface ICs,CAN Transceivers,6358,/electronic-parts/integrated-circuits-ics/interface-ics/can-transceivers,2223
+Integrated Circuits (ICs),Interface ICs,CODECs,5402,/electronic-parts/integrated-circuits-ics/interface-ics/codecs,1615
+Integrated Circuits (ICs),Interface ICs,Digital Isolators,6362,/electronic-parts/integrated-circuits-ics/interface-ics/digital-isolators,9515
+Integrated Circuits (ICs),Interface ICs,Display Drivers,6395,/electronic-parts/integrated-circuits-ics/interface-ics/display-drivers,8516
+Integrated Circuits (ICs),Interface ICs,Ethernet Controller,6471,/electronic-parts/integrated-circuits-ics/interface-ics/ethernet-controller,1590
+Integrated Circuits (ICs),Interface ICs,Ethernet Interface ICs,5491,/electronic-parts/integrated-circuits-ics/interface-ics/ethernet-interface-ics,2725
+Integrated Circuits (ICs),Interface ICs,I/O Expanders,6363,/electronic-parts/integrated-circuits-ics/interface-ics/io-expanders,2077
+Integrated Circuits (ICs),Interface ICs,RS-232 / RS-422 / RS-485 Interface ICs,5456,/electronic-parts/integrated-circuits-ics/interface-ics/rs-232-rs-422-rs-485-interface-ics,8145
+Integrated Circuits (ICs),Interface ICs,Sensor and Detector Interfaces,6394,/electronic-parts/integrated-circuits-ics/interface-ics/sensor-and-detector-interfaces,1441
+Integrated Circuits (ICs),Interface ICs,"Signal Buffers, Repeaters, Splitters",6472,/electronic-parts/integrated-circuits-ics/interface-ics/signal-buffers-repeaters-splitters,1450
+Integrated Circuits (ICs),Interface ICs,UART Interface ICs,5466,/electronic-parts/integrated-circuits-ics/interface-ics/uart-interface-ics,2049
+Integrated Circuits (ICs),Interface ICs,USB Interface ICs,5467,/electronic-parts/integrated-circuits-ics/interface-ics/usb-interface-ics,1854
+Integrated Circuits (ICs),Linear ICs,,4251,/electronic-parts/integrated-circuits-ics/linear-ics,102715
+Integrated Circuits (ICs),Linear ICs,Active Filters,6367,/electronic-parts/integrated-circuits-ics/linear-ics/active-filters,1366
+Integrated Circuits (ICs),Linear ICs,Amplifiers - Audio,5312,/electronic-parts/integrated-circuits-ics/linear-ics/amplifiers-audio,6483
+Integrated Circuits (ICs),Linear ICs,Amplifiers - Current Sense,6382,/electronic-parts/integrated-circuits-ics/linear-ics/amplifiers-current-sense,1949
+Integrated Circuits (ICs),Linear ICs,"Amplifiers - Op Amps, Buffer, Instrumentation",4252,/electronic-parts/integrated-circuits-ics/linear-ics/amplifiers-op-amps-buffer-instrumentation,61285
+Integrated Circuits (ICs),Linear ICs,Amplifiers - Video,6364,/electronic-parts/integrated-circuits-ics/linear-ics/amplifiers-video,5570
+Integrated Circuits (ICs),Linear ICs,Analog Switches and Multiplexers,6350,/electronic-parts/integrated-circuits-ics/linear-ics/analog-switches-and-multiplexers,10656
+Integrated Circuits (ICs),Linear ICs,Comparators,5363,/electronic-parts/integrated-circuits-ics/linear-ics/comparators,4945
+Integrated Circuits (ICs),Linear ICs,Programmable Gain Amplifiers,6383,/electronic-parts/integrated-circuits-ics/linear-ics/programmable-gain-amplifiers,396
+Integrated Circuits (ICs),Logic ICs,,4273,/electronic-parts/integrated-circuits-ics/logic-ics,176958
+Integrated Circuits (ICs),Logic ICs,"Buffers, Drivers and Transceivers",6337,/electronic-parts/integrated-circuits-ics/logic-ics/buffers-drivers-and-transceivers,50801
+Integrated Circuits (ICs),Logic ICs,Counters,4291,/electronic-parts/integrated-circuits-ics/logic-ics/counters,11363
+Integrated Circuits (ICs),Logic ICs,Decoders and Multiplexers,4287,/electronic-parts/integrated-circuits-ics/logic-ics/decoders-and-multiplexers,25747
+Integrated Circuits (ICs),Logic ICs,Latches and Flip Flops,4286,/electronic-parts/integrated-circuits-ics/logic-ics/latches-and-flip-flops,11555
+Integrated Circuits (ICs),Logic ICs,Logic Gates,4274,/electronic-parts/integrated-circuits-ics/logic-ics/logic-gates,52674
+Integrated Circuits (ICs),Logic ICs,Multivibrators,6368,/electronic-parts/integrated-circuits-ics/logic-ics/multivibrators,3140
+Integrated Circuits (ICs),Logic ICs,Shift Registers,4283,/electronic-parts/integrated-circuits-ics/logic-ics/shift-registers,7931
+Integrated Circuits (ICs),Logic ICs,Voltage Level Shifters,6296,/electronic-parts/integrated-circuits-ics/logic-ics/voltage-level-shifters,4137
+Integrated Circuits (ICs),Memory,,4293,/electronic-parts/integrated-circuits-ics/memory,308751
+Integrated Circuits (ICs),Memory,EEPROM,4296,/electronic-parts/integrated-circuits-ics/memory/eeprom,34695
+Integrated Circuits (ICs),Memory,FIFO,4290,/electronic-parts/integrated-circuits-ics/memory/fifo,25443
+Integrated Circuits (ICs),Memory,Flash,5499,/electronic-parts/integrated-circuits-ics/memory/flash,57529
+Integrated Circuits (ICs),Memory,Memory Cards,6401,/electronic-parts/integrated-circuits-ics/memory/memory-cards,10750
+Integrated Circuits (ICs),Memory,RAM,4297,/electronic-parts/integrated-circuits-ics/memory/ram,135047
+Integrated Circuits (ICs),Power Management ICs,,4305,/electronic-parts/integrated-circuits-ics/power-management-ics,685305
+Integrated Circuits (ICs),Power Management ICs,AC-DC Converters,6356,/electronic-parts/integrated-circuits-ics/power-management-ics/ac-dc-converters,18882
+Integrated Circuits (ICs),Power Management ICs,Battery Management,4308,/electronic-parts/integrated-circuits-ics/power-management-ics/battery-management,296261
+Integrated Circuits (ICs),Power Management ICs,DC-DC Switching Controllers,6355,/electronic-parts/integrated-circuits-ics/power-management-ics/dc-dc-switching-controllers,8078
+Integrated Circuits (ICs),Power Management ICs,Gate Drivers,4315,/electronic-parts/integrated-circuits-ics/power-management-ics/gate-drivers,12765
+Integrated Circuits (ICs),Power Management ICs,Hot Swap Controllers,4311,/electronic-parts/integrated-circuits-ics/power-management-ics/hot-swap-controllers,3360
+Integrated Circuits (ICs),Power Management ICs,LDO Voltage Regulators,6343,/electronic-parts/integrated-circuits-ics/power-management-ics/ldo-voltage-regulators,90955
+Integrated Circuits (ICs),Power Management ICs,LED Drivers,5053,/electronic-parts/integrated-circuits-ics/power-management-ics/led-drivers,9532
+Integrated Circuits (ICs),Power Management ICs,Motor Drivers,5052,/electronic-parts/integrated-circuits-ics/power-management-ics/motor-drivers,5423
+Integrated Circuits (ICs),Power Management ICs,Power Factor Correction (PFC) Controllers,6357,/electronic-parts/integrated-circuits-ics/power-management-ics/power-factor-correction-pfc-controllers,1263
+Integrated Circuits (ICs),Power Management ICs,Power Management - Specialized,6345,/electronic-parts/integrated-circuits-ics/power-management-ics/power-management-specialized,10009
+Integrated Circuits (ICs),Power Management ICs,Power Over Ethernet (PoE) Controllers,6396,/electronic-parts/integrated-circuits-ics/power-management-ics/power-over-ethernet-poe-controllers,1330
+Integrated Circuits (ICs),Power Management ICs,Power Switch ICs - Power Distribution,6346,/electronic-parts/integrated-circuits-ics/power-management-ics/power-switch-ics-power-distribution,8055
+Integrated Circuits (ICs),Power Management ICs,Voltage References,4309,/electronic-parts/integrated-circuits-ics/power-management-ics/voltage-references,13508
+Integrated Circuits (ICs),Power Management ICs,Voltage Regulators - Linear,4320,/electronic-parts/integrated-circuits-ics/power-management-ics/voltage-regulators-linear,21095
+Integrated Circuits (ICs),Power Management ICs,Voltage Regulators - Switching,4312,/electronic-parts/integrated-circuits-ics/power-management-ics/voltage-regulators-switching,79340
+Integrated Circuits (ICs),Power Management ICs,Voltage Supervisors,4318,/electronic-parts/integrated-circuits-ics/power-management-ics/voltage-supervisors,89041
+Integrated Circuits (ICs),RF Semiconductors and Devices,,4321,/electronic-parts/integrated-circuits-ics/rf-semiconductors-and-devices,160668
+Integrated Circuits (ICs),RF Semiconductors and Devices,CATV Amplifiers,6371,/electronic-parts/integrated-circuits-ics/rf-semiconductors-and-devices/catv-amplifiers,198
+Integrated Circuits (ICs),RF Semiconductors and Devices,NFC / RFID Components,6370,/electronic-parts/integrated-circuits-ics/rf-semiconductors-and-devices/nfc-rfid-components,56200
+Integrated Circuits (ICs),RF Semiconductors and Devices,RF Amplifiers,4325,/electronic-parts/integrated-circuits-ics/rf-semiconductors-and-devices/rf-amplifiers,22038
+Integrated Circuits (ICs),RF Semiconductors and Devices,RF Antennas,4326,/electronic-parts/integrated-circuits-ics/rf-semiconductors-and-devices/rf-antennas,21071
+Integrated Circuits (ICs),RF Semiconductors and Devices,RF Attenuators,6348,/electronic-parts/integrated-circuits-ics/rf-semiconductors-and-devices/rf-attenuators,9517
+Integrated Circuits (ICs),RF Semiconductors and Devices,RF Mixers,6338,/electronic-parts/integrated-circuits-ics/rf-semiconductors-and-devices/rf-mixers,552
+Integrated Circuits (ICs),RF Semiconductors and Devices,RF Multiplexers,6469,/electronic-parts/integrated-circuits-ics/rf-semiconductors-and-devices/rf-multiplexers,1820
+Integrated Circuits (ICs),RF Semiconductors and Devices,"RF Receivers, Transceivers",6298,/electronic-parts/integrated-circuits-ics/rf-semiconductors-and-devices/rf-receivers-transceivers,10236
+Integrated Circuits (ICs),RF Semiconductors and Devices,RF Switches,6369,/electronic-parts/integrated-circuits-ics/rf-semiconductors-and-devices/rf-switches,15790
+Integrated Circuits (ICs),RF Semiconductors and Devices,RF Transceiver Modules and Modems,6400,/electronic-parts/integrated-circuits-ics/rf-semiconductors-and-devices/rf-transceiver-modules-and-modems,6890
+Machining,,,5706,/electronic-parts/machining,1058587
+Machining,Indexable Inserts,,5710,/electronic-parts/machining/indexable-inserts,60886
+Machining,Indexable Inserts,Milling Inserts,5719,/electronic-parts/machining/indexable-inserts/milling-inserts,11979
+Machining,Indexable Inserts,Parting and Grooving Inserts,5718,/electronic-parts/machining/indexable-inserts/parting-and-grooving-inserts,2415
+Machining,Indexable Inserts,Threading Inserts,5729,/electronic-parts/machining/indexable-inserts/threading-inserts,6943
+Machining,Indexable Inserts,Turning Inserts,5711,/electronic-parts/machining/indexable-inserts/turning-inserts,37989
+Machining,Indexable Tools,,5752,/electronic-parts/machining/indexable-tools,104159
+Machining,Machine Cutting Tools,,5714,/electronic-parts/machining/machine-cutting-tools,369299
+Machining,Machine Cutting Tools,Countersinks and Center Reamers,5727,/electronic-parts/machining/machine-cutting-tools/countersinks-and-center-reamers,1593
+Machining,Machine Cutting Tools,Grooving Tools,5732,/electronic-parts/machining/machine-cutting-tools/grooving-tools,1098
+Machining,Machine Cutting Tools,Jobber Length Drill Bits,5716,/electronic-parts/machining/machine-cutting-tools/jobber-length-drill-bits,14172
+Machining,Machine Cutting Tools,Routing End Mills,5726,/electronic-parts/machining/machine-cutting-tools/routing-end-mills,1158
+Machining,Machine Cutting Tools,Screw Machine Length Drill Bits,5720,/electronic-parts/machining/machine-cutting-tools/screw-machine-length-drill-bits,5643
+Machining,Machine Cutting Tools,Solid Boring Bars,5722,/electronic-parts/machining/machine-cutting-tools/solid-boring-bars,1726
+Machining,Machine Cutting Tools,Taper Length Drill Bits,5819,/electronic-parts/machining/machine-cutting-tools/taper-length-drill-bits,1765
+Machining,Machine Cutting Tools,Taps,5715,/electronic-parts/machining/machine-cutting-tools/taps,54466
+Machining,Machine Cutting Tools,Thread Mills,5735,/electronic-parts/machining/machine-cutting-tools/thread-mills,5829
+Machining,Machine Fluids,,5757,/electronic-parts/machining/machine-fluids,170
+Machining,Machine Tool Accessories,,5707,/electronic-parts/machining/machine-tool-accessories,27320
+Machining,Machine Tool Accessories,Collets,5721,/electronic-parts/machining/machine-tool-accessories/collets,8120
+Machining,Machine Tool Accessories,Drill Bushings,5708,/electronic-parts/machining/machine-tool-accessories/drill-bushings,9635
+Machining,Machine Tool Accessories,Hand Knobs and Wheels,5741,/electronic-parts/machining/machine-tool-accessories/hand-knobs-and-wheels,4560
+Machining,Machinery,,5758,/electronic-parts/machining/machinery,173
+Optoelectronics,,,4408,/electronic-parts/optoelectronics,493393
+Optoelectronics,Displays,,4986,/electronic-parts/optoelectronics/displays,10273
+Optoelectronics,Displays,"LCD, OLED, Graphic Displays",4987,/electronic-parts/optoelectronics/displays/lcd-oled-graphic-displays,5374
+Optoelectronics,Displays,LED Displays,5700,/electronic-parts/optoelectronics/displays/led-displays,4552
+Optoelectronics,Fiber Optics,,4495,/electronic-parts/optoelectronics/fiber-optics,17648
+Optoelectronics,Lamps,,4444,/electronic-parts/optoelectronics/lamps,1510
+Optoelectronics,Laser Products,,4450,/electronic-parts/optoelectronics/laser-products,1105
+Optoelectronics,Laser Products,Laser Drivers,6391,/electronic-parts/optoelectronics/laser-products/laser-drivers,658
+Optoelectronics,LEDs,,4409,/electronic-parts/optoelectronics/leds,235331
+Optoelectronics,LEDs,Light Pipes,6467,/electronic-parts/optoelectronics/leds/light-pipes,40770
+Optoelectronics,Optocouplers,,4493,/electronic-parts/optoelectronics/optocouplers,18008
+Passive Components,,,4165,/electronic-parts/passive-components,13788460
+Passive Components,Capacitors,,4166,/electronic-parts/passive-components/capacitors,3503104
+Passive Components,Capacitors,Aluminum Electrolytic Capacitors,6331,/electronic-parts/passive-components/capacitors/aluminum-electrolytic-capacitors,274296
+Passive Components,Capacitors,Capacitor Arrays,4169,/electronic-parts/passive-components/capacitors/capacitor-arrays,17189
+Passive Components,Capacitors,Capacitor Kits,4172,/electronic-parts/passive-components/capacitors/capacitor-kits,346
+Passive Components,Capacitors,Ceramic Capacitors,6332,/electronic-parts/passive-components/capacitors/ceramic-capacitors,2265857
+Passive Components,Capacitors,Electric Double Layer Capacitors,6372,/electronic-parts/passive-components/capacitors/electric-double-layer-capacitors,4732
+Passive Components,Capacitors,Film Capacitors,6333,/electronic-parts/passive-components/capacitors/film-capacitors,342601
+Passive Components,Capacitors,Mica Capacitors,6334,/electronic-parts/passive-components/capacitors/mica-capacitors,13025
+Passive Components,Capacitors,Niobium Capacitors,6373,/electronic-parts/passive-components/capacitors/niobium-capacitors,603
+Passive Components,Capacitors,Polymer Capacitors,6335,/electronic-parts/passive-components/capacitors/polymer-capacitors,9077
+Passive Components,Capacitors,Silicon Capacitors,6374,/electronic-parts/passive-components/capacitors/silicon-capacitors,396
+Passive Components,Capacitors,Tantalum Capacitors,6336,/electronic-parts/passive-components/capacitors/tantalum-capacitors,330109
+Passive Components,Capacitors,Trimmer / Variable Capacitors,4168,/electronic-parts/passive-components/capacitors/trimmer-variable-capacitors,4714
+Passive Components,Crystals and Oscillators,,4199,/electronic-parts/passive-components/crystals-and-oscillators,1767399
+Passive Components,Crystals and Oscillators,Crystals,4200,/electronic-parts/passive-components/crystals-and-oscillators/crystals,1114469
+Passive Components,Crystals and Oscillators,Oscillators,4201,/electronic-parts/passive-components/crystals-and-oscillators/oscillators,169927
+Passive Components,Crystals and Oscillators,Resonators,4202,/electronic-parts/passive-components/crystals-and-oscillators/resonators,1072
+Passive Components,EMI / RFI Components,,4205,/electronic-parts/passive-components/emi-rfi-components,493370
+Passive Components,EMI / RFI Components,Common Mode Chokes,4195,/electronic-parts/passive-components/emi-rfi-components/common-mode-chokes,13988
+Passive Components,EMI / RFI Components,EMI / RFI Filters,6473,/electronic-parts/passive-components/emi-rfi-components/emi-rfi-filters,425734
+Passive Components,EMI / RFI Components,Ferrite Beads and Chips,4209,/electronic-parts/passive-components/emi-rfi-components/ferrite-beads-and-chips,10819
+Passive Components,EMI / RFI Components,RF Circulators and Isolators,6397,/electronic-parts/passive-components/emi-rfi-components/rf-circulators-and-isolators,3745
+Passive Components,EMI / RFI Components,RF Directional Coupler,6398,/electronic-parts/passive-components/emi-rfi-components/rf-directional-coupler,5521
+Passive Components,EMI / RFI Components,RF Shields,6399,/electronic-parts/passive-components/emi-rfi-components/rf-shields,17909
+Passive Components,Filters,,6375,/electronic-parts/passive-components/filters,47322
+Passive Components,Filters,Ceramic Filters,6378,/electronic-parts/passive-components/filters/ceramic-filters,4055
+Passive Components,Filters,Feed Through Capacitors,6403,/electronic-parts/passive-components/filters/feed-through-capacitors,4287
+Passive Components,Filters,Power Line Filter Modules,6402,/electronic-parts/passive-components/filters/power-line-filter-modules,22194
+Passive Components,Filters,RF Filters,6377,/electronic-parts/passive-components/filters/rf-filters,6327
+Passive Components,Filters,SAW Filters,6376,/electronic-parts/passive-components/filters/saw-filters,10399
+Passive Components,Inductors,,4190,/electronic-parts/passive-components/inductors,362721
+Passive Components,Inductors,Fixed Inductors,4193,/electronic-parts/passive-components/inductors/fixed-inductors,339347
+Passive Components,Inductors,Inductor Kits,6259,/electronic-parts/passive-components/inductors/inductor-kits,308
+Passive Components,Inductors,Variable Inductors,4191,/electronic-parts/passive-components/inductors/variable-inductors,313
+Passive Components,Resistors,,4173,/electronic-parts/passive-components/resistors,7494274
+Passive Components,Resistors,Chassis Mount Resistors,6379,/electronic-parts/passive-components/resistors/chassis-mount-resistors,64895
+Passive Components,Resistors,Chip SMD Resistors,6309,/electronic-parts/passive-components/resistors/chip-smd-resistors,3484852
+Passive Components,Resistors,Resistor Arrays,4175,/electronic-parts/passive-components/resistors/resistor-arrays,698578
+Passive Components,Resistors,Resistor Kits,6258,/electronic-parts/passive-components/resistors/resistor-kits,404
+Passive Components,Resistors,Thermistors,4189,/electronic-parts/passive-components/resistors/thermistors,11655
+Passive Components,Resistors,Through-Hole Resistors,6312,/electronic-parts/passive-components/resistors/through-hole-resistors,1247331
+Passive Components,Resistors,Variable Resistors and Potentiometers,4180,/electronic-parts/passive-components/resistors/variable-resistors-and-potentiometers,814018
+Passive Components,Resistors,Wirewound Resistors,6311,/electronic-parts/passive-components/resistors/wirewound-resistors,12009
+Passive Components,Transformers,,4197,/electronic-parts/passive-components/transformers,111948
+Passive Components,Transformers,Balun Transformers,6468,/electronic-parts/passive-components/transformers/balun-transformers,136
+Power Products,,,4337,/electronic-parts/power-products,1118183
+Power Products,Batteries and Accessories,,4351,/electronic-parts/power-products/batteries-and-accessories,11914
+Power Products,DC to AC Inverters,,4341,/electronic-parts/power-products/dc-to-ac-inverters,56
+Power Products,Power Cords,,6465,/electronic-parts/power-products/power-cords,22281
+Power Products,Power Supply Modules,,6317,/electronic-parts/power-products/power-supply-modules,679688
+Power Products,Power Supply Modules,Board Mount Modules,6318,/electronic-parts/power-products/power-supply-modules/board-mount-modules,282327
+Power Products,Power Supply Modules,Off-Board Modules,6319,/electronic-parts/power-products/power-supply-modules/off-board-modules,270483
+Power Products,Power Supply Modules,Wall Adapters,6320,/electronic-parts/power-products/power-supply-modules/wall-adapters,13988
+Power Products,Surge Protectors,,4584,/electronic-parts/power-products/surge-protectors,24606
+Power Products,Uninterruptible Power Supply (UPS),,4586,/electronic-parts/power-products/uninterruptible-power-supply-ups,975
+Sensors,,,5510,/electronic-parts/sensors,856250
+Sensors,Current Sensors,,6323,/electronic-parts/sensors/current-sensors,1665
+Sensors,Flow Sensors,,5513,/electronic-parts/sensors/flow-sensors,1031
+Sensors,Gas Sensors,,6353,/electronic-parts/sensors/gas-sensors,3404
+Sensors,Magnetic Sensors,,5521,/electronic-parts/sensors/magnetic-sensors,9002
+Sensors,Magnetic Sensors,Hall Effect Sensors,6354,/electronic-parts/sensors/magnetic-sensors/hall-effect-sensors,5404
+Sensors,Motion Sensors,,6304,/electronic-parts/sensors/motion-sensors,7600
+Sensors,Motion Sensors,Accelerometers,4330,/electronic-parts/sensors/motion-sensors/accelerometers,3205
+Sensors,Motion Sensors,Gyroscopes,6243,/electronic-parts/sensors/motion-sensors/gyroscopes,253
+Sensors,Motion Sensors,Inertial Measurement Units (IMUs),6324,/electronic-parts/sensors/motion-sensors/inertial-measurement-units-imus,298
+Sensors,Motion Sensors,Vibration and Shock Sensors,6352,/electronic-parts/sensors/motion-sensors/vibration-and-shock-sensors,1056
+Sensors,Optical Sensors,,5522,/electronic-parts/sensors/optical-sensors,34978
+Sensors,Optical Sensors,Image Sensors,6342,/electronic-parts/sensors/optical-sensors/image-sensors,5876
+Sensors,Optical Sensors,Photodiodes,4483,/electronic-parts/sensors/optical-sensors/photodiodes,623
+Sensors,Optical Sensors,Photoelectric Sensors,5525,/electronic-parts/sensors/optical-sensors/photoelectric-sensors,15834
+Sensors,Optical Sensors,Phototransistor,4487,/electronic-parts/sensors/optical-sensors/phototransistor,560
+Sensors,Position Sensors,,6349,/electronic-parts/sensors/position-sensors,2492
+Sensors,Pressure Sensors,,5515,/electronic-parts/sensors/pressure-sensors,249169
+Sensors,Proximity Sensors,,5523,/electronic-parts/sensors/proximity-sensors,40197
+Sensors,Temperature and Humidity Sensors,,5524,/electronic-parts/sensors/temperature-and-humidity-sensors,25519
+Test Equipment,,,4885,/electronic-parts/test-equipment,63573
+Test Equipment,Benchtop Power Supplies,,5135,/electronic-parts/test-equipment/benchtop-power-supplies,57
+Test Equipment,Function Generators,,4888,/electronic-parts/test-equipment/function-generators,963
+Test Equipment,Multimeters,,4905,/electronic-parts/test-equipment/multimeters,2072
+Test Equipment,Oscilloscopes,,4902,/electronic-parts/test-equipment/oscilloscopes,2648
+Test Equipment,Spectrum Analyzers,,4909,/electronic-parts/test-equipment/spectrum-analyzers,177
+Test Equipment,"Test Probes, Leads and Clips",,5136,/electronic-parts/test-equipment/test-probes-leads-and-clips,6447
+Test Equipment,Thermometers,,4804,/electronic-parts/test-equipment/thermometers,400
+Tools and Supplies,,,4920,/electronic-parts/tools-and-supplies,2140504
+Tools and Supplies,Anti-Static Control,,5318,/electronic-parts/tools-and-supplies/anti-static-control,1234
+Tools and Supplies,Chemicals,,4934,/electronic-parts/tools-and-supplies/chemicals,6641
+Tools and Supplies,Enclosures,,4643,/electronic-parts/tools-and-supplies/enclosures,64827
+Tools and Supplies,Flashlights,,4944,/electronic-parts/tools-and-supplies/flashlights,903
+Tools and Supplies,Hand Tools,,4921,/electronic-parts/tools-and-supplies/hand-tools,130691
+Tools and Supplies,Hand Tools,Drills,4927,/electronic-parts/tools-and-supplies/hand-tools/drills,2981
+Tools and Supplies,Hand Tools,Hammers,4929,/electronic-parts/tools-and-supplies/hand-tools/hammers,4445
+Tools and Supplies,Hand Tools,Heat Guns,5589,/electronic-parts/tools-and-supplies/hand-tools/heat-guns,1773
+Tools and Supplies,Hand Tools,Knives and Blades,4928,/electronic-parts/tools-and-supplies/hand-tools/knives-and-blades,1269
+Tools and Supplies,Hand Tools,Micrometers,4897,/electronic-parts/tools-and-supplies/hand-tools/micrometers,2356
+Tools and Supplies,Hand Tools,Pliers and Tweezers,5487,/electronic-parts/tools-and-supplies/hand-tools/pliers-and-tweezers,5332
+Tools and Supplies,Hand Tools,Screw and Nut Drivers,5485,/electronic-parts/tools-and-supplies/hand-tools/screw-and-nut-drivers,11569
+Tools and Supplies,Hand Tools,Wrenches,4926,/electronic-parts/tools-and-supplies/hand-tools/wrenches,6780
+Tools and Supplies,"Hardware, Fasteners",,4952,/electronic-parts/tools-and-supplies/hardware-fasteners,256926
+Tools and Supplies,"Hardware, Fasteners",Anchors,6118,/electronic-parts/tools-and-supplies/hardware-fasteners/anchors,1516
+Tools and Supplies,"Hardware, Fasteners",Screws and Fasteners,4965,/electronic-parts/tools-and-supplies/hardware-fasteners/screws-and-fasteners,26618
+Tools and Supplies,"Hardware, Fasteners","Spacers, Standoffs",4958,/electronic-parts/tools-and-supplies/hardware-fasteners/spacers-standoffs,218679
+Tools and Supplies,"Hardware, Fasteners",Thread Inserts,6103,/electronic-parts/tools-and-supplies/hardware-fasteners/thread-inserts,1996
+Tools and Supplies,"Hardware, Fasteners",Washers,4966,/electronic-parts/tools-and-supplies/hardware-fasteners/washers,6632
+Tools and Supplies,"Packaging, Labels, Tape",,6464,/electronic-parts/tools-and-supplies/packaging-labels-tape,282
+Tools and Supplies,Prototype Boards and Breadboards,,6325,/electronic-parts/tools-and-supplies/prototype-boards-and-breadboards,939
+Tools and Supplies,Raw Materials,,5742,/electronic-parts/tools-and-supplies/raw-materials,4504
+Tools and Supplies,Soldering Supplies and Tools,,4975,/electronic-parts/tools-and-supplies/soldering-supplies-and-tools,9090
+Tools and Supplies,Storage Bins,,4911,/electronic-parts/tools-and-supplies/storage-bins,3294
+Tools and Supplies,Wire Crimpers and Strippers,,4938,/electronic-parts/tools-and-supplies/wire-crimpers-and-strippers,24448
