@@ -313,6 +313,7 @@ export interface Part {
   best_price: number | null;
   total_stock: number | null;
   datasheet_url: string | null;
+  image_url: string | null;
   lifecycle_status: string;
   created_at: string | null;
   updated_at: string | null;

@@ -1,12 +1,16 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import SkeletonLoader from '@public/components/widgets/SkeletonLoader';
 import PageHead from '@public/components/PageHead';
+import Icon from '@shared/components/Icon';
 import { api } from '@public/services/api';
 import { partSeo } from '@public/services/seoRoutes';
 import { categoryPath } from '@shared/utils/categoryPath';
-import type { PartDetail, PartListing } from '@public/types/part';
+import { safeHttpUrl, safeImageUrl } from '@shared/utils/url';
+import type { PartDetail, PartListing, RelatedPart, RelatedParts } from '@public/types/part';
+import InventoryChart from './InventoryChart';
+import { extractSpecs } from './partSynth';
 import styles from './PartPage.module.scss';
 
 const rowVariants = {
@@ -78,28 +82,114 @@ function statusClass(status: string): string {
   }
 }
 
+function median(values: number[]): number | null {
+  if (values.length === 0) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[mid] : Math.round((sorted[mid - 1] + sorted[mid]) / 2);
+}
+
+// The four datasheet-style crop marks framing the header sheet.
+function CropMarks() {
+  return (
+    <>
+      <i className={styles.crop} data-corner="tl" aria-hidden="true" />
+      <i className={styles.crop} data-corner="tr" aria-hidden="true" />
+      <i className={styles.crop} data-corner="bl" aria-hidden="true" />
+      <i className={styles.crop} data-corner="br" aria-hidden="true" />
+    </>
+  );
+}
+
+function RelatedCard({ part }: { part: RelatedPart }) {
+  return (
+    <Link to={`/part/${part.slug ?? part.id}`} className={styles.relCard}>
+      <span className={styles.relSku}>{part.sku}</span>
+      <span className={styles.relMfr}>{part.manufacturer_name}</span>
+      {part.description && <span className={styles.relDesc}>{part.description}</span>}
+      <span className={styles.relMeta}>
+        {part.best_price != null && (
+          <span className={styles.relPrice}>{formatPrice(part.best_price)}</span>
+        )}
+        {part.total_stock != null && (
+          <span className={styles.relStock}>{part.total_stock.toLocaleString()} in stock</span>
+        )}
+      </span>
+    </Link>
+  );
+}
+
 export default function PartPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [part, setPart] = useState<PartDetail | null>(null);
+  const [related, setRelated] = useState<RelatedParts | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
+    let cancelled = false;
     setLoading(true);
     setError(null);
+    setRelated(null);
 
     api.getPartDetail(id)
-      .then((data) => setPart(data))
-      .catch(() => setError('Failed to load part details. Please try again later.'))
-      .finally(() => setLoading(false));
+      .then((data) => {
+        if (cancelled) return;
+        setPart(data);
+      })
+      .catch(() => {
+        if (!cancelled) setError('Failed to load part details. Please try again later.');
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [id]);
+
+  // Related rows load after the part resolves (needs the real UUID — the
+  // route param may be a slug). Best-effort: a failure just hides the rows.
+  useEffect(() => {
+    if (!part?.id) return;
+    let cancelled = false;
+    api.getRelatedParts(part.id)
+      .then((data) => {
+        if (!cancelled) setRelated(data);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [part?.id]);
 
   const sortedListings = part
     ? [...part.listings].sort((a, b) => a.unit_price - b.unit_price)
     : [];
   const bestPrice = sortedListings.length > 0 ? sortedListings[0].unit_price : null;
+  const worstPrice = sortedListings.length > 0
+    ? sortedListings[sortedListings.length - 1].unit_price
+    : null;
+  const totalStock = part?.total_stock
+    ?? sortedListings.reduce((sum, li) => sum + (li.stock_quantity || 0), 0);
+  const medianLead = median(
+    sortedListings
+      .map((li) => li.lead_time_days)
+      .filter((d): d is number => d != null),
+  );
+
+  const specs = useMemo(() => extractSpecs(part?.description ?? null), [part?.description]);
+  const partImage = safeImageUrl(part?.image_url ?? null);
+  // Stored external href — must pass safeHttpUrl before reaching href=
+  // (same stored-XSS rule as sponsor websites; null hides the link).
+  const datasheetHref = safeHttpUrl(part?.datasheet_url ?? null);
+  const updatedLabel = part?.updated_at
+    ? new Date(part.updated_at).toLocaleDateString(undefined, {
+        year: 'numeric', month: 'short', day: 'numeric',
+      })
+    : null;
 
   const seo = part
     ? partSeo({
@@ -165,205 +255,320 @@ export default function PartPage() {
               </>
             ) : null}
           </nav>
-
-          {loading ? (
-            <>
-              <SkeletonLoader width="300px" height="36px" borderRadius="4px" />
-              <SkeletonLoader width="200px" height="20px" borderRadius="4px" />
-            </>
-          ) : part ? (
-            <>
-              <motion.h1
-                className={styles.title}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.4, ease: 'easeOut' as const }}
-              >
-                {part.sku}
-              </motion.h1>
-              <motion.p
-                className={styles.manufacturer}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.4, delay: 0.05, ease: 'easeOut' as const }}
-              >
-                {part.manufacturer_name}
-              </motion.p>
-            </>
-          ) : null}
         </div>
       </div>
 
       <div className={styles.content}>
-        {error && (
-          <p className={styles.error}>{error}</p>
-        )}
+        {error && <p className={styles.error}>{error}</p>}
 
         {loading ? (
-          <div className={styles.contentInner}>
-            <div className={styles.left}>
-              <div className={styles.tableSkeleton}>
-                <SkeletonLoader width="100%" height="40px" borderRadius="4px" />
-                {Array.from({ length: 4 }).map((_, i) => (
-                  <SkeletonLoader key={i} width="100%" height="48px" borderRadius="4px" />
-                ))}
+          <div className={styles.sheet}>
+            <div className={styles.sheetGrid}>
+              <SkeletonLoader width="180px" height="180px" borderRadius="8px" />
+              <div className={styles.sheetBody}>
+                <SkeletonLoader width="300px" height="40px" borderRadius="4px" />
+                <SkeletonLoader width="200px" height="20px" borderRadius="4px" />
+                <SkeletonLoader width="100%" height="60px" borderRadius="4px" />
               </div>
-            </div>
-            <div className={styles.right}>
-              <SkeletonLoader width="100%" height="200px" borderRadius="8px" />
             </div>
           </div>
         ) : part ? (
-          <div className={styles.contentInner}>
-            <div className={styles.left}>
-              <h2 className={styles.sectionTitle}>
-                Distributor Comparison
-                <span className={styles.sectionCount}>
-                  ({sortedListings.length} listing{sortedListings.length !== 1 ? 's' : ''})
-                </span>
-              </h2>
-              {sortedListings.length > 0 ? (
-                <div className={styles.tableWrap}>
-                  <table className={styles.table}>
-                    <thead>
-                      <tr className={styles.headerRow}>
-                        <th className={styles.th}>Supplier</th>
-                        <th className={styles.th}>Supplier SKU</th>
-                        <th className={styles.th}>Stock</th>
-                        <th className={styles.th}>Qty 1</th>
-                        <th className={styles.th}>Qty 10</th>
-                        <th className={styles.th}>Qty 100</th>
-                        <th className={styles.th}>Qty 1k</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {sortedListings.map((listing, i) => {
-                        const isBest = listing.unit_price === bestPrice;
-                        const url = distributorUrl(listing.supplier_website, part.sku);
-                        return (
-                          <motion.tr
-                            key={listing.id}
-                            className={`${styles.row} ${isBest ? styles.bestRow : ''} ${url ? styles.clickableRow : ''}`}
-                            custom={i}
-                            variants={rowVariants}
-                            initial="hidden"
-                            animate="visible"
-                            whileHover={{ y: -2, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                            onClick={url ? (e) => {
-                              if ((e.target as HTMLElement).closest('a')) return;
-                              window.open(url, '_blank', 'noopener,noreferrer');
-                            } : undefined}
-                            title={url ? `Buy from ${listing.supplier_name}` : undefined}
-                          >
-                            <td className={styles.td}>
-                              {url ? (
-                                <a
-                                  href={url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className={styles.supplierLink}
-                                >
-                                  {listing.supplier_name}
-                                  <span className={styles.externalIcon} aria-hidden="true">&#8599;</span>
-                                </a>
-                              ) : (
-                                <span className={styles.supplierName}>{listing.supplier_name}</span>
-                              )}
-                              {isBest && <span className={styles.bestBadge}>Best Price</span>}
-                            </td>
-                            <td className={styles.td}>
-                              <span className={styles.listingSku}>
-                                {listing.sku || '\u2014'}
-                              </span>
-                            </td>
-                            <td className={styles.td}>
-                              <span className={styles.stock}>
-                                {listing.stock_quantity.toLocaleString()}
-                              </span>
-                            </td>
-                            <td className={styles.td}>
-                              <span className={styles.price}>{formatPrice(priceAtQty(listing, 1))}</span>
-                            </td>
-                            <td className={styles.td}>
-                              <span className={styles.price}>{formatPrice(priceAtQty(listing, 10))}</span>
-                            </td>
-                            <td className={styles.td}>
-                              <span className={styles.price}>{formatPrice(priceAtQty(listing, 100))}</span>
-                            </td>
-                            <td className={styles.td}>
-                              <span className={styles.price}>{formatPrice(priceAtQty(listing, 1000))}</span>
-                            </td>
-                          </motion.tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+          <>
+            {/* ── The "live datasheet" sheet ────────────────────────────── */}
+            <motion.section
+              className={styles.sheet}
+              aria-label="Part summary"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, ease: 'easeOut' as const }}
+            >
+              <CropMarks />
+              <span className={`${styles.stamp} ${statusClass(part.lifecycle_status)}`} aria-hidden="true">
+                {part.lifecycle_status}
+              </span>
+              <div className={styles.sheetGrid}>
+                <figure className={styles.plate}>
+                  {partImage ? (
+                    <img className={styles.plateImg} src={partImage} alt={`${part.sku} product photo`} />
+                  ) : (
+                    <span className={styles.plateIcon} aria-hidden="true">
+                      <Icon name={part.category_icon ?? 'cpu'} />
+                    </span>
+                  )}
+                  <figcaption className={styles.plateLabel}>
+                    {part.category_name ?? 'Component'}
+                  </figcaption>
+                </figure>
+                <div className={styles.sheetBody}>
+                  <h1 className={styles.sheetSku}>{part.sku}</h1>
+                  <p className={styles.sheetMfr}>{part.manufacturer_name}</p>
+                  <h2 className={styles.genDescLabel}>General description</h2>
+                  <p className={styles.genDesc}>
+                    {part.description ??
+                      `${part.category_name ?? 'Electronic component'} from ${part.manufacturer_name}.`}
+                  </p>
+                  <div className={styles.sheetMeta}>
+                    {datasheetHref && (
+                      <a
+                        href={datasheetHref}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={styles.datasheetLink}
+                      >
+                        View datasheet {'↗'}
+                      </a>
+                    )}
+                    {part.category_name && part.category_slug && (
+                      <Link
+                        to={categoryPath(part.category_slug, part.parent_category_slug)}
+                        className={styles.metaChip}
+                      >
+                        <Icon name={part.category_icon ?? ''} /> {part.category_name}
+                      </Link>
+                    )}
+                    {updatedLabel && (
+                      <span className={styles.revLine}>REV &mdash; {updatedLabel}</span>
+                    )}
+                  </div>
                 </div>
-              ) : (
-                <div className={styles.emptyListings}>
-                  <p>No distributor listings available for this part yet.</p>
-                </div>
-              )}
-            </div>
+              </div>
+            </motion.section>
 
-            <div className={styles.right}>
-              <div className={styles.infoCard}>
-                <h3 className={styles.infoCardTitle}>Part Details</h3>
-                <dl className={styles.detailList}>
-                  <div className={styles.detailItem}>
-                    <dt className={styles.detailLabel}>SKU</dt>
-                    <dd className={styles.detailValue}>{part.sku}</dd>
+            {/* ── Supply-chain strip (all real listing data) ────────────── */}
+            {sortedListings.length > 0 && (
+              <section className={styles.stripGrid} aria-label="Supply chain summary">
+                <div className={styles.stripTile}>
+                  <span className={styles.stripValue}>{totalStock.toLocaleString()}</span>
+                  <span className={styles.stripLabel}>Units in stock</span>
+                </div>
+                <div className={styles.stripTile}>
+                  <span className={styles.stripValue}>{sortedListings.length}</span>
+                  <span className={styles.stripLabel}>Distributors</span>
+                </div>
+                {bestPrice != null && (
+                  <div className={styles.stripTile}>
+                    <span className={styles.stripValue}>{formatPrice(bestPrice)}</span>
+                    <span className={styles.stripLabel}>Best price</span>
                   </div>
-                  <div className={styles.detailItem}>
-                    <dt className={styles.detailLabel}>Manufacturer</dt>
-                    <dd className={styles.detailValue}>{part.manufacturer_name}</dd>
+                )}
+                {bestPrice != null && worstPrice != null && worstPrice > bestPrice && (
+                  <div className={styles.stripTile}>
+                    <span className={styles.stripValue}>
+                      {formatPrice(bestPrice)}&ndash;{formatPrice(worstPrice)}
+                    </span>
+                    <span className={styles.stripLabel}>Price spread</span>
                   </div>
-                  {part.description && (
-                    <div className={styles.detailItem}>
-                      <dt className={styles.detailLabel}>Description</dt>
-                      <dd className={styles.detailValue}>{part.description}</dd>
+                )}
+                {medianLead != null && (
+                  <div className={styles.stripTile}>
+                    <span className={styles.stripValue}>{medianLead} days</span>
+                    <span className={styles.stripLabel}>Median lead time</span>
+                  </div>
+                )}
+              </section>
+            )}
+
+            <div className={styles.contentInner}>
+              <div className={styles.left}>
+                <h2 className={styles.sectionTitle}>
+                  Distributor Comparison
+                  <span className={styles.sectionCount}>
+                    ({sortedListings.length} listing{sortedListings.length !== 1 ? 's' : ''})
+                  </span>
+                </h2>
+                {sortedListings.length > 0 ? (
+                  <div className={styles.tableWrap}>
+                    <table className={styles.table}>
+                      <thead>
+                        <tr className={styles.headerRow}>
+                          <th className={styles.th}>Supplier</th>
+                          <th className={`${styles.th} ${styles.colSku}`}>Supplier SKU</th>
+                          <th className={styles.th}>Stock</th>
+                          <th className={styles.th}>Lead Time</th>
+                          <th className={styles.th}>Qty 1</th>
+                          <th className={styles.th}>Qty 10</th>
+                          <th className={styles.th}>Qty 100</th>
+                          <th className={styles.th}>Qty 1k</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sortedListings.map((listing, i) => {
+                          const isBest = listing.unit_price === bestPrice;
+                          const url = distributorUrl(listing.supplier_website, part.sku);
+                          return (
+                            <motion.tr
+                              key={listing.id}
+                              className={`${styles.row} ${isBest ? styles.bestRow : ''} ${url ? styles.clickableRow : ''}`}
+                              custom={i}
+                              variants={rowVariants}
+                              initial="hidden"
+                              animate="visible"
+                              whileHover={{ y: -2, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                              onClick={url ? (e) => {
+                                if ((e.target as HTMLElement).closest('a')) return;
+                                window.open(url, '_blank', 'noopener,noreferrer');
+                              } : undefined}
+                              title={url ? `Buy from ${listing.supplier_name}` : undefined}
+                            >
+                              <td className={styles.td}>
+                                {url ? (
+                                  <a
+                                    href={url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className={styles.supplierLink}
+                                  >
+                                    {listing.supplier_name}
+                                    <span className={styles.externalIcon} aria-hidden="true">&#8599;</span>
+                                  </a>
+                                ) : (
+                                  <span className={styles.supplierName}>{listing.supplier_name}</span>
+                                )}
+                                {isBest && <span className={styles.bestBadge}>Best Price</span>}
+                              </td>
+                              <td className={`${styles.td} ${styles.colSku}`}>
+                                <span className={styles.listingSku}>
+                                  {listing.sku || '—'}
+                                </span>
+                              </td>
+                              <td className={styles.td}>
+                                <span className={styles.stock}>
+                                  {listing.stock_quantity.toLocaleString()}
+                                </span>
+                              </td>
+                              <td className={styles.td}>
+                                <span className={styles.stock}>
+                                  {listing.lead_time_days != null
+                                    ? `${listing.lead_time_days} days`
+                                    : '—'}
+                                </span>
+                              </td>
+                              <td className={styles.td}>
+                                <span className={styles.price}>{formatPrice(priceAtQty(listing, 1))}</span>
+                              </td>
+                              <td className={styles.td}>
+                                <span className={styles.price}>{formatPrice(priceAtQty(listing, 10))}</span>
+                              </td>
+                              <td className={styles.td}>
+                                <span className={styles.price}>{formatPrice(priceAtQty(listing, 100))}</span>
+                              </td>
+                              <td className={styles.td}>
+                                <span className={styles.price}>{formatPrice(priceAtQty(listing, 1000))}</span>
+                              </td>
+                            </motion.tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className={styles.emptyListings}>
+                    <p>No distributor listings available for this part yet.</p>
+                  </div>
+                )}
+
+                {sortedListings.length > 0 && (
+                  <>
+                    <h2 className={`${styles.sectionTitle} ${styles.sectionSpaced}`}>
+                      Inventory History
+                    </h2>
+                    <div className={styles.chartCard}>
+                      <InventoryChart seedKey={part.id} currentStock={totalStock} />
                     </div>
-                  )}
-                  <div className={styles.detailItem}>
-                    <dt className={styles.detailLabel}>Lifecycle Status</dt>
-                    <dd className={styles.detailValue}>
-                      <span className={`${styles.statusBadge} ${statusClass(part.lifecycle_status)}`}>
-                        {part.lifecycle_status}
-                      </span>
-                    </dd>
-                  </div>
-                  {part.category_name && (
-                    <div className={styles.detailItem}>
-                      <dt className={styles.detailLabel}>Category</dt>
-                      <dd className={styles.detailValue}>{part.category_name}</dd>
-                    </div>
-                  )}
-                  {part.best_price != null && (
-                    <div className={styles.detailItem}>
-                      <dt className={styles.detailLabel}>Best Price</dt>
-                      <dd className={`${styles.detailValue} ${styles.detailPrice}`}>
-                        {formatPrice(part.best_price)}
-                      </dd>
-                    </div>
-                  )}
-                  <div className={styles.detailItem}>
-                    <dt className={styles.detailLabel}>Distributors</dt>
-                    <dd className={styles.detailValue}>{part.listings_count}</dd>
-                  </div>
-                </dl>
-                {part.datasheet_url && (
-                  <a
-                    href={part.datasheet_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className={styles.datasheetLink}
-                  >
-                    View Datasheet
-                  </a>
+                  </>
                 )}
               </div>
+
+              <div className={styles.right}>
+                <div className={styles.infoCard}>
+                  <h3 className={styles.infoCardTitle}>Technical Specifications</h3>
+                  {specs.length > 0 && (
+                    <dl className={styles.detailList}>
+                      {specs.map((s) => (
+                        <div key={s.label} className={styles.detailItem}>
+                          <dt className={styles.detailLabel}>{s.label}</dt>
+                          <dd className={`${styles.detailValue} ${styles.specValue}`}>{s.value}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  )}
+                  <h4 className={styles.specGroupTitle}>Catalog data</h4>
+                  <dl className={styles.detailList}>
+                    <div className={styles.detailItem}>
+                      <dt className={styles.detailLabel}>MPN</dt>
+                      <dd className={`${styles.detailValue} ${styles.specValue}`}>{part.sku}</dd>
+                    </div>
+                    <div className={styles.detailItem}>
+                      <dt className={styles.detailLabel}>Manufacturer</dt>
+                      <dd className={styles.detailValue}>{part.manufacturer_name}</dd>
+                    </div>
+                    {part.category_name && (
+                      <div className={styles.detailItem}>
+                        <dt className={styles.detailLabel}>Category</dt>
+                        <dd className={styles.detailValue}>{part.category_name}</dd>
+                      </div>
+                    )}
+                    <div className={styles.detailItem}>
+                      <dt className={styles.detailLabel}>Lifecycle</dt>
+                      <dd className={styles.detailValue}>
+                        <span className={`${styles.statusBadge} ${statusClass(part.lifecycle_status)}`}>
+                          {part.lifecycle_status}
+                        </span>
+                      </dd>
+                    </div>
+                    {part.best_price != null && (
+                      <div className={styles.detailItem}>
+                        <dt className={styles.detailLabel}>Best Price</dt>
+                        <dd className={`${styles.detailValue} ${styles.detailPrice}`}>
+                          {formatPrice(part.best_price)}
+                        </dd>
+                      </div>
+                    )}
+                    <div className={styles.detailItem}>
+                      <dt className={styles.detailLabel}>Distributors</dt>
+                      {/* listings_count only exists on the LIST payload; the
+                          detail endpoint ships the listings themselves. */}
+                      <dd className={styles.detailValue}>{sortedListings.length}</dd>
+                    </div>
+                    {totalStock > 0 && (
+                      <div className={styles.detailItem}>
+                        <dt className={styles.detailLabel}>Total stock</dt>
+                        <dd className={styles.detailValue}>{totalStock.toLocaleString()}</dd>
+                      </div>
+                    )}
+                  </dl>
+                  {datasheetHref && (
+                    <a
+                      href={datasheetHref}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={styles.datasheetBtn}
+                    >
+                      View Datasheet
+                    </a>
+                  )}
+                </div>
+              </div>
             </div>
-          </div>
+
+            {/* ── Related rows ──────────────────────────────────────────── */}
+            {related && related.alternates.length > 0 && (
+              <section className={styles.relatedSection} aria-label="Alternate parts">
+                <h2 className={styles.sectionTitle}>Alternate Parts</h2>
+                <div className={styles.relatedGrid}>
+                  {related.alternates.map((p) => <RelatedCard key={p.id} part={p} />)}
+                </div>
+              </section>
+            )}
+            {related && related.companions.length > 0 && (
+              <section className={styles.relatedSection} aria-label="Frequently paired parts">
+                <h2 className={styles.sectionTitle}>Often Paired With</h2>
+                <div className={styles.relatedGrid}>
+                  {related.companions.map((p) => <RelatedCard key={p.id} part={p} />)}
+                </div>
+              </section>
+            )}
+          </>
         ) : null}
       </div>
     </motion.div>

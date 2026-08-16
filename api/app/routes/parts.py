@@ -4,13 +4,14 @@ from decimal import Decimal
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.models import Category, Part, PartListing, PriceBreak, Supplier, User
 from app.services.auth_service import get_current_user
+from app.utils.image_url import validate_optional_image_url
 
 router = APIRouter(prefix="/api/parts", tags=["parts"])
 
@@ -124,6 +125,19 @@ class ListingCreate(_ListingNumbers):
 LifecycleStatus = Literal["active", "nrnd", "obsolete", "unknown"]
 
 
+def _reject_non_http_scheme(v: str | None) -> str | None:
+    """Write-side half of the stored-href defense: a datasheet URL may be
+    schemeless (the admin form prepends https) or http(s), never an executable
+    scheme — 'javascript:'/'data:text/html' in href is stored DOM-XSS. The
+    read side mirrors this with safeHttpUrl at every render site."""
+    if v is None or not v.strip():
+        return v
+    low = v.strip().lower()
+    if re.match(r"^[a-z][a-z0-9+.-]*:", low) and not low.startswith(("http://", "https://")):
+        raise ValueError("datasheet_url must be an http(s) link")
+    return v
+
+
 class PartCreate(BaseModel):
     sku: str = Field(..., max_length=100)
     description: str | None = None
@@ -131,8 +145,19 @@ class PartCreate(BaseModel):
     category_id: str | None = None
     sub_slug: str | None = Field(None, max_length=80)
     datasheet_url: str | None = Field(None, max_length=500)
+    image_url: str | None = Field(None, max_length=500)
     lifecycle_status: LifecycleStatus = "active"
     initial_listing: InitialListing | None = None
+
+    @field_validator("image_url")
+    @classmethod
+    def _check_image_url(cls, v: str | None) -> str | None:
+        return validate_optional_image_url(v)
+
+    @field_validator("datasheet_url")
+    @classmethod
+    def _check_datasheet_url(cls, v: str | None) -> str | None:
+        return _reject_non_http_scheme(v)
 
 
 class PartUpdate(BaseModel):
@@ -142,7 +167,18 @@ class PartUpdate(BaseModel):
     category_id: str | None = None
     sub_slug: str | None = Field(None, max_length=80)
     datasheet_url: str | None = Field(None, max_length=500)
+    image_url: str | None = Field(None, max_length=500)
     lifecycle_status: LifecycleStatus | None = None
+
+    @field_validator("image_url")
+    @classmethod
+    def _check_image_url(cls, v: str | None) -> str | None:
+        return validate_optional_image_url(v)
+
+    @field_validator("datasheet_url")
+    @classmethod
+    def _check_datasheet_url(cls, v: str | None) -> str | None:
+        return _reject_non_http_scheme(v)
 
 
 class BatchPartItem(_ListingNumbers):
@@ -205,6 +241,7 @@ def part_to_dict(part: Part, db: Session | None = None) -> dict:
         "best_price": best_price,
         "total_stock": total_stock,
         "datasheet_url": part.datasheet_url,
+        "image_url": part.image_url,
         "lifecycle_status": part.lifecycle_status,
         "created_at": part.created_at.isoformat() if part.created_at else None,
         "updated_at": part.updated_at.isoformat() if part.updated_at else None,
@@ -298,6 +335,7 @@ def create_part(
         category_id=_to_uuid(body.category_id) if body.category_id else None,
         sub_slug=derived_sub_slug,
         datasheet_url=body.datasheet_url,
+        image_url=body.image_url,
         lifecycle_status=body.lifecycle_status,
     )
     db.add(part)
@@ -449,6 +487,95 @@ def get_part(part_id: str, db: Session = Depends(get_db)):
     result = part_to_dict(part, db)
     result["listings"] = [listing_to_dict(ls) for ls in part.listings]
     return result
+
+
+@router.get("/{part_id}/related")
+def related_parts(part_id: str, db: Session = Depends(get_db)):
+    """Alternates and companions for the part page, from taxonomy proximity.
+
+    Alternates = other parts in the SAME subcategory, different manufacturer
+    first, then closest best-price — the "can I swap this?" list. Companions =
+    one part from each SIBLING subcategory under the same parent (an LDO's
+    neighbors are DC-DC converters and supervisors) — real design adjacency
+    with no hand-maintained pairing map to drift. Both empty when the part has
+    no category; the page hides the sections.
+    """
+    part = db.query(Part).filter(Part.id == _to_uuid(part_id)).first()
+    if not part:
+        raise HTTPException(404, "Part not found")
+
+    def best_price(p: Part) -> float | None:
+        return min((float(li.unit_price) for li in (p.listings or [])), default=None)
+
+    alternates: list[Part] = []
+    companions: list[tuple[Part, Category]] = []
+    cat: Category | None = None
+    parent: Category | None = None
+    if part.category_id:
+        cat = db.query(Category).filter(Category.id == part.category_id).first()
+        if cat is not None and cat.parent_id is not None:
+            parent = db.query(Category).filter(Category.id == cat.parent_id).first()
+
+        candidates = (
+            db.query(Part)
+            .filter(Part.category_id == part.category_id, Part.id != part.id)
+            .order_by(Part.sku)
+            .limit(24)
+            .all()
+        )
+        own_best = best_price(part)
+
+        def sort_key(p: Part) -> tuple:
+            # `is None` checks, not `or` — a genuine $0.00 best price is a
+            # real distance, and an unpriced part must sort LAST, not first
+            # (the falsy-zero trap CLAUDE.md flags).
+            bp = best_price(p)
+            same_mfr = p.manufacturer_name == part.manufacturer_name
+            if bp is None or own_best is None:
+                return (same_mfr, True, 0.0, p.sku)
+            return (same_mfr, False, abs(bp - own_best), p.sku)
+
+        candidates.sort(key=sort_key)
+        alternates = candidates[:4]
+
+        if cat is not None and cat.parent_id is not None:
+            siblings = (
+                db.query(Category)
+                .filter(Category.parent_id == cat.parent_id, Category.id != cat.id)
+                .order_by(Category.name)
+                .all()
+            )
+            for sib in siblings:
+                pick = (
+                    db.query(Part)
+                    .filter(Part.category_id == sib.id)
+                    .order_by(Part.sku)
+                    .first()
+                )
+                if pick is not None:
+                    companions.append((pick, sib))
+                if len(companions) >= 4:
+                    break
+
+    def serialize(p: Part, c: Category | None) -> dict:
+        # part_to_dict without db skips its per-part Category (+parent)
+        # queries; the category objects are already in hand, so stamp them in
+        # directly — otherwise every page view pays ~16 redundant round-trips.
+        d = part_to_dict(p)
+        if c is not None:
+            d["category_name"] = c.name
+            d["category_slug"] = c.slug
+            d["category_icon"] = c.icon
+        if parent is not None:
+            d["parent_category_name"] = parent.name
+            d["parent_category_slug"] = parent.slug
+            d["parent_category_icon"] = parent.icon
+        return d
+
+    return {
+        "alternates": [serialize(p, cat) for p in alternates],
+        "companions": [serialize(p, c) for p, c in companions],
+    }
 
 
 @router.put("/{part_id}")

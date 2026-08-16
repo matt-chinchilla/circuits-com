@@ -1,10 +1,26 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft, Check, Trash2 } from 'lucide-react';
+import axios from 'axios';
 import { adminApi } from '@admin/services/adminApi';
 import { consumePrefill, type PartPrefill } from '@admin/services/prefillBus';
 import type { AdminCategory } from '@admin/types/admin';
+import { prependScheme } from '@shared/utils/url';
 import styles from './PartFormPage.module.scss';
+
+// A pydantic field-validator 422 carries an ARRAY detail that apiErrorDetail
+// deliberately drops — pull the failing field names out so the admin gets a
+// named error instead of the generic toast (and an endless retry loop).
+function rejectedUrlField(err: unknown): 'image_url' | 'datasheet_url' | null {
+  if (!axios.isAxiosError(err) || err.response?.status !== 422) return null;
+  const detail: unknown = err.response.data?.detail;
+  const locs = Array.isArray(detail)
+    ? detail.flatMap((d: { loc?: unknown[] }) => (Array.isArray(d.loc) ? d.loc : []))
+    : [];
+  if (locs.includes('image_url')) return 'image_url';
+  if (locs.includes('datasheet_url')) return 'datasheet_url';
+  return null;
+}
 
 // ─── Form shape ────────────────────────────────────────────────────────────
 
@@ -14,6 +30,7 @@ interface FormData {
   description: string;
   category_id: string;
   datasheet_url: string;
+  image_url: string;
   lifecycle_status: string;
 }
 
@@ -46,6 +63,7 @@ function emptyForm(): FormData {
     description: '',
     category_id: '',
     datasheet_url: '',
+    image_url: '',
     lifecycle_status: 'active',
   };
 }
@@ -114,6 +132,7 @@ export default function PartFormPage() {
           description: p.description ?? '',
           category_id: p.category_id ?? '',
           datasheet_url: p.datasheet_url ?? '',
+          image_url: p.image_url ?? '',
           lifecycle_status: p.lifecycle_status,
         });
       })
@@ -167,15 +186,10 @@ export default function PartFormPage() {
         category_id: form.category_id || null,
         // Auto-prepend scheme so a user pasting `acme.com/datasheet.pdf`
         // ends up with a clickable absolute URL instead of a path the
-        // browser interprets as relative to the current page. Mirrors the
-        // Supplier form's prependScheme helper but kept local to avoid
-        // a cross-file import for a single one-shot transform.
-        datasheet_url: ((s: string) => {
-          const t = s.trim();
-          if (!t) return null;
-          if (/^[a-z][a-z0-9+.-]*:/i.test(t) || t.startsWith('//')) return t;
-          return `https://${t}`;
-        })(form.datasheet_url),
+        // browser interprets as relative to the current page. The shared
+        // helper is RFC-3986-aware (skips already-schemed values).
+        datasheet_url: form.datasheet_url.trim() ? prependScheme(form.datasheet_url.trim()) : null,
+        image_url: form.image_url.trim() ? prependScheme(form.image_url.trim()) : null,
         lifecycle_status: form.lifecycle_status,
       };
       // Bundle the optional initial listing only when supplier context is
@@ -211,8 +225,16 @@ export default function PartFormPage() {
         setToast({ type: 'success', msg: 'Part created successfully.' });
         setTimeout(() => navigate(`/admin/parts/${created.id}`), 900);
       }
-    } catch {
-      setToast({ type: 'error', msg: 'Failed to save part. Please try again.' });
+    } catch (err) {
+      const field = rejectedUrlField(err);
+      setToast({
+        type: 'error',
+        msg: field === 'image_url'
+          ? 'Product image URL was rejected — use a direct http(s) image link.'
+          : field === 'datasheet_url'
+            ? 'Datasheet URL was rejected — use a direct http(s) link.'
+            : 'Failed to save part. Please try again.',
+      });
     } finally {
       setSaving(false);
     }
@@ -416,6 +438,24 @@ export default function PartFormPage() {
                 />
                 <div className={styles.fieldHint}>
                   Public PDF link — engineers click through from the part detail page.
+                </div>
+              </div>
+              <div className={styles.field} data-field="image_url">
+                <label className={styles.fieldLabel}>Product image URL</label>
+                <input
+                  type="text"
+                  inputMode="url"
+                  className={styles.input}
+                  value={form.image_url}
+                  onChange={(e) => set('image_url', e.target.value)}
+                  placeholder="https://example.com/part-photo.jpg"
+                  autoCapitalize="off"
+                  autoCorrect="off"
+                  spellCheck={false}
+                />
+                <div className={styles.fieldHint}>
+                  Optional — the part page shows the category icon when empty. The
+                  distributor-feed sync will fill these automatically later.
                 </div>
               </div>
             </div>

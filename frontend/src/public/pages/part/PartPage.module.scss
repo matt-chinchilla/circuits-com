@@ -72,28 +72,6 @@
   font-weight: 500;
 }
 
-// ─── Title ───────────────────────────────────────────────────────────────────
-
-.title {
-  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
-  font-size: 2rem;
-  font-weight: 700;
-  color: #ffffff;
-  margin: 0;
-  letter-spacing: -0.02em;
-
-  @include responsive($bp-mobile) {
-    font-size: 1.5rem;
-  }
-}
-
-.manufacturer {
-  font-size: 1.05rem;
-  font-weight: 400;
-  color: rgba(255, 255, 255, 0.7);
-  margin: 0;
-}
-
 // ─── Content layout ──────────────────────────────────────────────────────────
 
 .content {
@@ -137,12 +115,13 @@
 
 // ─── Section heading ─────────────────────────────────────────────────────────
 
-// Sits on the dark backdrop (above the light surface), so text is white.
+// The datasheet sheet pushes every section below the 420px backdrop, so
+// titles sit on the LIGHT surface now — dark ink, not the old white.
 .sectionTitle {
   font-family: $font-heading;
   font-size: 1.15rem;
   font-weight: 600;
-  color: #ffffff;
+  color: $text-primary;
   margin: 0 0 16px;
   display: flex;
   align-items: center;
@@ -152,7 +131,7 @@
 .sectionCount {
   font-size: 0.85rem;
   font-weight: 400;
-  color: rgba(255, 255, 255, 0.7);
+  color: $text-secondary;
 }
 
 // ─── Distributor table ───────────────────────────────────────────────────────
@@ -250,6 +229,15 @@
   font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
   font-size: 0.85rem;
   color: $text-secondary;
+}
+
+// The supplier-SKU column is the least load-bearing — hide it before the
+// price tiers start clipping (the right rail leaves the table ~670px on a
+// 1440 desktop; PartsTable hides Description the same way).
+.colSku {
+  @media (max-width: 1500px) {
+    display: none;
+  }
 }
 
 .stock {
@@ -356,9 +344,241 @@
   border: 1px solid rgba(239, 68, 68, 0.3);
 }
 
-// ─── Datasheet link ──────────────────────────────────────────────────────────
+// ─── Error ───────────────────────────────────────────────────────────────────
 
+.error {
+  @include card-base;
+  padding: 24px;
+  text-align: center;
+  color: #c0392b;
+  font-size: 0.95rem;
+}
+
+// ─── The "live datasheet" sheet ─────────────────────────────────────────────
+// Page 1 of the component's datasheet, wired to live data. Same motif family
+// as the Contact page's datasheet card: crop-mark corners, PCB-grid plate,
+// designator-style labels.
+
+.sheet {
+  @include card-base;
+  position: relative;
+  padding: 32px 36px;
+  margin-bottom: 24px;
+
+  @include responsive($bp-mobile) {
+    padding: 24px 20px;
+  }
+}
+
+.crop {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  color: rgba($executive-blue, 0.45);
+
+  &::before,
+  &::after {
+    content: '';
+    position: absolute;
+    background: currentColor;
+  }
+
+  &::before { width: 14px; height: 2px; }
+  &::after { width: 2px; height: 14px; }
+
+  &[data-corner='tl'] { top: 10px; left: 10px; }
+  &[data-corner='tr'] { top: 10px; right: 10px; transform: scaleX(-1); }
+  &[data-corner='bl'] { bottom: 10px; left: 10px; transform: scaleY(-1); }
+  &[data-corner='br'] { bottom: 10px; right: 10px; transform: scale(-1); }
+
+  &[data-corner='tl']::before, &[data-corner='tr']::before { top: 0; left: 0; }
+  &[data-corner='tl']::after, &[data-corner='tr']::after { top: 0; left: 0; }
+  &[data-corner='bl']::before, &[data-corner='br']::before { bottom: 0; left: 0; }
+  &[data-corner='bl']::after, &[data-corner='br']::after { bottom: 0; left: 0; }
+}
+
+// Lifecycle stamp — a datasheet status mark. Whole-degree rotation only
+// (sub-pixel text blur gotcha); colors reuse the status badge palette.
+.stamp {
+  position: absolute;
+  top: 26px;
+  right: 34px;
+  padding: 4px 14px;
+  font-family: $font-mono;
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  border: 2px solid currentColor;
+  border-radius: 3px;
+  transform: rotate(-7deg);
+  opacity: 0.85;
+
+  @include responsive($bp-mobile) {
+    top: 18px;
+    right: 16px;
+    font-size: 0.68rem;
+    padding: 3px 9px;
+  }
+}
+
+.sheetGrid {
+  display: flex;
+  gap: 32px;
+  align-items: flex-start;
+
+  @include responsive($bp-mobile) {
+    flex-direction: column;
+    gap: 20px;
+  }
+}
+
+// Package-drawing plate: real photo when we have one, the category's
+// schematic icon on a PCB grid when we don't.
+.plate {
+  flex: 0 0 180px;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.plateImg,
+.plateIcon {
+  width: 180px;
+  height: 180px;
+  border: 1px solid rgba($executive-blue, 0.25);
+  border-radius: 8px;
+  background-color: rgba($nav-blue, 0.02);
+  background-image:
+    linear-gradient(rgba($nav-blue, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba($nav-blue, 0.035) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.plateImg {
+  object-fit: contain;
+  padding: 12px;
+}
+
+.plateIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 64px;
+  color: rgba($executive-blue, 0.55);
+}
+
+.plateLabel {
+  font-family: $font-mono;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: $text-secondary;
+}
+
+.sheetBody {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sheetSku {
+  font-family: $font-mono;
+  font-size: 2.1rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: $text-primary;
+  margin: 0;
+  padding-right: 120px; // clear the stamp
+  overflow-wrap: anywhere;
+
+  @include responsive($bp-mobile) {
+    font-size: 1.4rem;
+    padding-right: 90px;
+  }
+}
+
+.sheetMfr {
+  font-size: 1.02rem;
+  color: $text-secondary;
+  margin: 0;
+}
+
+.genDescLabel {
+  font-family: $font-mono;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: $text-secondary;
+  margin: 12px 0 0;
+}
+
+.genDesc {
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: $text-primary;
+  margin: 0;
+  max-width: 68ch;
+}
+
+.sheetMeta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.metaChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--executive-blue);
+  border: 1px solid rgba($executive-blue, 0.3);
+  border-radius: 999px;
+  text-decoration: none;
+  transition: background $transition-fast;
+
+  &:hover {
+    background: rgba($executive-blue, 0.06);
+  }
+}
+
+.revLine {
+  font-family: $font-mono;
+  font-size: 0.74rem;
+  letter-spacing: 0.05em;
+  color: $text-secondary;
+}
+
+// Inline datasheet link inside the sheet meta row.
 .datasheetLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--theme-cta-text);
+  background: var(--theme-cta-bg);
+  border-radius: 999px;
+  text-decoration: none;
+
+  &:hover {
+    background: var(--theme-cta-hover-bg);
+  }
+}
+
+// Block CTA in the sidebar card (was .datasheetLink before the redesign).
+.datasheetBtn {
   display: block;
   margin-top: 20px;
   padding: 10px 16px;
@@ -369,30 +589,200 @@
   background: var(--theme-cta-bg);
   border-radius: 6px;
   text-decoration: none;
-  transition: background $transition-fast, filter $transition-fast;
+  transition: background $transition-fast;
 
   &:hover {
     background: var(--theme-cta-hover-bg);
   }
 }
 
-// ─── Skeleton ────────────────────────────────────────────────────────────────
+// ─── Supply-chain strip ─────────────────────────────────────────────────────
 
-.tableSkeleton {
-  @include card-base;
-  padding: 0;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+.stripGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin-bottom: 28px;
 }
 
-// ─── Error ───────────────────────────────────────────────────────────────────
-
-.error {
+.stripTile {
   @include card-base;
-  padding: 24px;
-  text-align: center;
-  color: #c0392b;
-  font-size: 0.95rem;
+  padding: 14px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stripValue {
+  font-family: $font-mono;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: $executive-blue;
+}
+
+.stripLabel {
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: $text-secondary;
+}
+
+// ─── Inventory chart ────────────────────────────────────────────────────────
+
+.sectionSpaced {
+  margin-top: 28px;
+}
+
+.chartCard {
+  @include card-base;
+  padding: 20px;
+}
+
+.presetRow {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.presetBtn {
+  padding: 4px 12px;
+  font-family: $font-mono;
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.4;
+  color: $text-secondary;
+  background: transparent;
+  border: 1px solid rgba($executive-blue, 0.25);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background $transition-fast, color $transition-fast;
+
+  &:hover {
+    background: rgba($executive-blue, 0.06);
+  }
+
+  &[aria-pressed='true'] {
+    color: #ffffff;
+    background: $executive-blue;
+    border-color: $executive-blue;
+  }
+}
+
+.chartSvg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.chartGrid {
+  stroke: rgba($executive-blue, 0.12);
+  stroke-width: 1;
+}
+
+.chartTick {
+  font-family: $font-mono;
+  font-size: 10px;
+  fill: $text-secondary;
+}
+
+.chartLine {
+  fill: none;
+  stroke: $nav-blue;
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+
+.chartArea {
+  fill: rgba($nav-blue, 0.1);
+  stroke: none;
+}
+
+.chartDot {
+  fill: $nav-blue;
+}
+
+.chartCaption {
+  margin: 10px 0 0;
+  font-size: 0.76rem;
+  color: $text-secondary;
+}
+
+// ─── Spec card ──────────────────────────────────────────────────────────────
+
+.specValue {
+  font-family: $font-mono;
+  font-size: 0.85rem;
+}
+
+.specGroupTitle {
+  font-family: $font-mono;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: $text-secondary;
+  margin: 18px 0 4px;
+}
+
+// ─── Related rows ───────────────────────────────────────────────────────────
+
+.relatedSection {
+  margin-top: 36px;
+}
+
+.relatedGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 14px;
+}
+
+.relCard {
+  @include card-base;
+  @include hover-lift;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px 18px;
+  text-decoration: none;
+  color: inherit;
+}
+
+.relSku {
+  font-family: $font-mono;
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--executive-blue);
+  overflow-wrap: anywhere;
+}
+
+.relMfr {
+  font-size: 0.8rem;
+  color: $text-secondary;
+}
+
+.relDesc {
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: $text-primary;
+  @include line-clamp(2);
+}
+
+.relMeta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.relPrice {
+  font-family: $font-mono;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: $executive-blue;
+}
+
+.relStock {
+  font-size: 0.74rem;
+  color: $text-secondary;
 }

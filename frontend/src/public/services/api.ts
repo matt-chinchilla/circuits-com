@@ -2,7 +2,7 @@ import axios from 'axios';
 import type { Category, CategoryDetail, CategoryPartners } from '@public/types/category';
 import type { Supplier } from '@public/types/supplier';
 import type { Sponsor } from '@public/types/sponsor';
-import type { PublicPart, PartDetail } from '@public/types/part';
+import type { PublicPart, PartDetail, RelatedParts } from '@public/types/part';
 
 import { API_BASE_URL } from '@shared/services/constants';
 export { API_BASE_URL };
@@ -127,6 +127,11 @@ export const api = {
           : `/parts/by-slug/${encodeURIComponent(idOrSlug)}`,
       )
       .then(r => r.data),
+
+  // Alternates + companions for the part page. Called with the RESOLVED
+  // part.id (a UUID) after getPartDetail lands, never with a slug.
+  getRelatedParts: (id: string) =>
+    client.get<RelatedParts>(`/parts/${id}/related`).then(r => r.data),
 
   // ── Self-serve Silver checkout (routes/checkout.py) ────────────────────
   // Both 404 when billing is unconfigured server-side; SilverPartners treats

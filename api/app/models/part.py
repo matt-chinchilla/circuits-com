@@ -26,6 +26,9 @@ class Part(Base):
     # Backfilled from category.parent.slug for existing rows via migration 006.
     sub_slug = Column(String(80), nullable=True, index=True)
     datasheet_url = Column(String(500), nullable=True)
+    # Product photo URL. Populated by the (future) distributor-API sync, not
+    # hand-entered — the part page falls back to the category icon when NULL.
+    image_url = Column(String(500), nullable=True)
     lifecycle_status = Column(
         Enum("active", "nrnd", "obsolete", "unknown", name="lifecycle_status"),
         nullable=False,

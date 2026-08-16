@@ -4,6 +4,7 @@ import { ArrowLeft, Edit, Trash2, ExternalLink, Check, Plus } from 'lucide-react
 import { adminApi } from '@admin/services/adminApi';
 import Icon from '@shared/components/Icon';
 import { lettermark } from '@shared/utils/lettermark';
+import { safeHttpUrl, safeImageUrl } from '@shared/utils/url';
 import type { PartDetail, PartListing } from '@admin/types/admin';
 import styles from './PartDetailPage.module.scss';
 import rowStyles from './ListingRowActions.module.scss';
@@ -266,14 +267,32 @@ export default function PartDetailPage() {
             <div>
               <dt>Datasheet</dt>
               <dd>
-                {part.datasheet_url ? (
+                {safeHttpUrl(part.datasheet_url) ? (
                   <a
-                    href={part.datasheet_url}
+                    href={safeHttpUrl(part.datasheet_url) ?? undefined}
                     target="_blank"
                     rel="noopener noreferrer"
                     className={styles.datasheetLink}
                   >
                     View datasheet
+                    <ExternalLink />
+                  </a>
+                ) : (
+                  '—'
+                )}
+              </dd>
+            </div>
+            <div>
+              <dt>Product image</dt>
+              <dd>
+                {safeImageUrl(part.image_url) ? (
+                  <a
+                    href={safeImageUrl(part.image_url) ?? undefined}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={styles.datasheetLink}
+                  >
+                    View image
                     <ExternalLink />
                   </a>
                 ) : (
