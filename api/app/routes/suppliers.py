@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.models import (
+    ActivityEvent,
     Category,
     CategorySupplier,
     Part,
@@ -211,7 +212,8 @@ def delete_supplier(
 
     PartListings (and their PriceBreaks), Sponsors, CategorySupplier links,
     and Revenue rows are removed. Linked Users have `supplier_id` set to
-    NULL — admin/company-user accounts must survive.
+    NULL — admin/company-user accounts must survive — and so do ActivityEvents,
+    which record what actually happened and outlive the company row.
     """
     supplier = db.query(Supplier).filter(Supplier.id == _to_uuid(supplier_id)).first()
     if not supplier:
@@ -235,6 +237,11 @@ def delete_supplier(
     db.query(Revenue).filter(Revenue.supplier_id == supplier.id).delete(synchronize_session=False)
     db.query(User).filter(User.supplier_id == supplier.id).update(
         {User.supplier_id: None}, synchronize_session=False
+    )
+    # Activity events are history, not dependents: what the sync did stays true
+    # after the company row goes away, so unlink rather than delete.
+    db.query(ActivityEvent).filter(ActivityEvent.supplier_id == supplier.id).update(
+        {ActivityEvent.supplier_id: None}, synchronize_session=False
     )
 
     # Bulk deletes bypass session sync; expire the supplier so the upcoming

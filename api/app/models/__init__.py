@@ -1,3 +1,4 @@
+from .activity_event import ActivityEvent
 from .calendar_event import CalendarEvent, CalendarReminderSend
 from .category import Category
 from .expense import Expense
@@ -25,4 +26,5 @@ __all__ = [
     "PageView",
     "CalendarEvent",
     "CalendarReminderSend",
+    "ActivityEvent",
 ]
