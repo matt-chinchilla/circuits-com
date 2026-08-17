@@ -71,9 +71,13 @@ def _get_or_create_supplier(db: Session, provider: PartFeedProvider) -> Supplier
     return supplier
 
 
-def _upsert_listing(db: Session, part: Part, supplier: Supplier, fp: FeedPart) -> None:
+def _upsert_listing(db: Session, part: Part, supplier: Supplier, fp: FeedPart) -> bool:
+    """Create/refresh this supplier's listing for `part`. Returns True if it
+    wrote anything — False means the feed row carried no price, so there was
+    nothing worth storing (callers report that honestly instead of claiming an
+    update)."""
     if not fp.price_breaks:
-        return  # a listing without a price is not a comparison row
+        return False  # a listing without a price is not a comparison row
     lowest_qty_break = min(fp.price_breaks, key=lambda b: b.min_quantity)
     listing = (
         db.query(PartListing)
@@ -108,6 +112,7 @@ def _upsert_listing(db: Session, part: Part, supplier: Supplier, fp: FeedPart) -
                 unit_price=Decimal(str(pb.unit_price)),
             )
         )
+    return True
 
 
 def _sync_event(
@@ -178,19 +183,18 @@ def sync_supplier_listings(
         .all()
     )
     category_names = _category_names(db, parts)
-    synced = media_filled = not_found = 0
+    synced = media_filled = not_found = no_data = 0
 
     def _finished() -> dict:
-        event = _sync_event(
-            "sync_finished",
-            supplier_id,
-            supplier_name,
-            f"{synced} synced · {media_filled} images filled · {not_found} not found",
-        )
+        detail = f"{synced} synced · {media_filled} images filled · {not_found} not found"
+        if no_data:
+            detail += f" · {no_data} no data"
+        event = _sync_event("sync_finished", supplier_id, supplier_name, detail)
         event["counts"] = {
             "synced": synced,
             "media_filled": media_filled,
             "not_found": not_found,
+            "no_data": no_data,
         }
         return event
 
@@ -204,20 +208,30 @@ def sync_supplier_listings(
                 not_found += 1
                 yield _sync_event("part_synced", supplier_id, sku, category, action="not_found")
                 continue
-            _upsert_listing(db, part, supplier, fp)
+            wrote_listing = _upsert_listing(db, part, supplier, fp)
             media = _fill_part_media(part, fp)
             image_url = part.image_url
             db.commit()
-            synced += 1
             if media:
+                # media IS a real write, priced feed row or not
+                action = "media_filled"
+                synced += 1
                 media_filled += 1
+            elif wrote_listing:
+                action = "updated"
+                synced += 1
+            else:
+                # found, but the feed carried no price and no new media —
+                # counting it as synced would overstate what the run did
+                action = "no_data"
+                no_data += 1
             yield _sync_event(
                 "part_synced",
                 supplier_id,
                 f"{sku} — {fp.manufacturer}",
                 category,
                 image_url,
-                "media_filled" if media else "updated",
+                action,
             )
     except FeedFatalError as exc:
         # str(exc) carries no API key — mouser.py never puts one in a message.

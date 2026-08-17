@@ -411,7 +411,12 @@ class TestSyncSupplierListings:
 
         finished = next(gen)
         assert finished["kind"] == "sync_finished"
-        assert finished["counts"] == {"synced": 2, "media_filled": 2, "not_found": 0}
+        assert finished["counts"] == {
+            "synced": 2,
+            "media_filled": 2,
+            "not_found": 0,
+            "no_data": 0,
+        }
         assert finished["title"] == "Avnet"
         with pytest.raises(StopIteration):
             next(gen)
@@ -461,7 +466,12 @@ class TestSyncSupplierListings:
             (1, 0.10),
             (100, 0.08),
         ]
-        assert events[-1]["counts"] == {"synced": 1, "media_filled": 0, "not_found": 0}
+        assert events[-1]["counts"] == {
+            "synced": 1,
+            "media_filled": 0,
+            "not_found": 0,
+            "no_data": 0,
+        }
 
     def test_unresolvable_part_reports_not_found(self, db, seeded_db):
         supplier, part1 = seeded_db["supplier1"], seeded_db["part1"]
@@ -475,7 +485,89 @@ class TestSyncSupplierListings:
         assert miss["title"] == part1.sku
         assert miss["detail"] == "Clock and Timing"
         assert miss["image_url"] is None
-        assert events[-1]["counts"] == {"synced": 0, "media_filled": 0, "not_found": 1}
+        assert events[-1]["counts"] == {
+            "synced": 0,
+            "media_filled": 0,
+            "not_found": 1,
+            "no_data": 0,
+        }
+
+    def test_priceless_feed_part_reports_no_data(self, db, seeded_db):
+        """A hit with no price breaks writes NOTHING (`_upsert_listing` bails —
+        a listing without a price is not a comparison row) and the part's media
+        is already there, so the honest action is `no_data`, not `updated`."""
+        supplier, part1 = seeded_db["supplier1"], seeded_db["part1"]
+        part1.image_url = "https://cdn.example/original.jpg"
+        part1.datasheet_url = "https://cdn.example/original.pdf"
+        db.commit()
+        listing = seeded_db["listing1"]
+        before = (
+            listing.sku,
+            listing.stock_quantity,
+            listing.lead_time_days,
+            listing.unit_price,
+        )
+        provider = _FakeProvider(
+            by_mpn={part1.sku: _feed_part(mpn=part1.sku, breaks=False)}
+        )
+
+        events = list(sync_supplier_listings(db, provider, supplier, limit=10))
+
+        synced = [e for e in events if e["kind"] == "part_synced"]
+        assert [e["action"] for e in synced] == ["no_data"]
+        assert events[-1]["counts"] == {
+            "synced": 0,
+            "media_filled": 0,
+            "not_found": 0,
+            "no_data": 1,
+        }
+        assert events[-1]["detail"].endswith("· 1 no data")
+        db.refresh(listing)
+        assert (
+            listing.sku,
+            listing.stock_quantity,
+            listing.lead_time_days,
+            listing.unit_price,
+        ) == before
+
+    def test_priceless_hit_that_fills_media_still_counts_as_synced(self, db, seeded_db):
+        """Media IS a real write — only a hit that changed nothing is no_data."""
+        supplier, part1 = seeded_db["supplier1"], seeded_db["part1"]
+        provider = _FakeProvider(
+            by_mpn={part1.sku: _feed_part(mpn=part1.sku, breaks=False)}
+        )
+
+        events = list(sync_supplier_listings(db, provider, supplier, limit=10))
+
+        assert [e["action"] for e in events if e["kind"] == "part_synced"] == [
+            "media_filled"
+        ]
+        assert events[-1]["counts"] == {
+            "synced": 1,
+            "media_filled": 1,
+            "not_found": 0,
+            "no_data": 0,
+        }
+        assert "no data" not in events[-1]["detail"]
+
+    def test_supplier_with_no_listings_streams_an_empty_run(self, db, seeded_db):
+        empty = Supplier(
+            id=uuid.uuid4(), name="No Listings Co", website="nolistings.example"
+        )
+        db.add(empty)
+        db.commit()
+
+        events = list(sync_supplier_listings(db, _FakeProvider(), empty, limit=10))
+
+        assert [e["kind"] for e in events] == ["sync_started", "sync_finished"]
+        assert events[0]["detail"] == "0 parts queued"
+        assert events[-1]["counts"] == {
+            "synced": 0,
+            "media_filled": 0,
+            "not_found": 0,
+            "no_data": 0,
+        }
+        assert events[-1]["detail"] == "0 synced · 0 images filled · 0 not found"
 
     def test_only_this_suppliers_parts_are_candidates(self, db, seeded_db):
         """part2 has no listing on supplier1 — it must not be swept in."""
@@ -540,7 +632,12 @@ class TestSyncSupplierListings:
         assert err["title"] == "Feed unavailable"
         assert "429" in err["detail"]
         assert err["image_url"] is None
-        assert events[-1]["counts"] == {"synced": 1, "media_filled": 1, "not_found": 0}
+        assert events[-1]["counts"] == {
+            "synced": 1,
+            "media_filled": 1,
+            "not_found": 0,
+            "no_data": 0,
+        }
         # the first part's work survived the abort's rollback
         listing = (
             db.query(PartListing)
