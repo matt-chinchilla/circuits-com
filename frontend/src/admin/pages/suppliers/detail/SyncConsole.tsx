@@ -14,9 +14,9 @@
 //      commits per part, so a quota wall mid-run keeps everything it already
 //      reported.
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import Icon from '@shared/components/Icon';
-import { safeImageUrl } from '@shared/utils/url';
+import PartThumb from '@admin/components/PartThumb';
 import { tallyCounts, terminalState, type SyncAction, type SyncEvent } from '@admin/services/syncStream';
 import styles from './SyncConsole.module.scss';
 
@@ -30,53 +30,18 @@ interface Props {
   error: string | null;
 }
 
-const ACTION_LABEL: Record<SyncAction, string> = {
-  updated: 'updated',
-  media_filled: 'image filled',
-  not_found: 'not found',
-  no_data: 'no data',
-};
-
 // `no_data` reads muted alongside `not_found` on purpose: the feed answered,
 // but had nothing to add — nothing was written, so nothing should look written.
-const ACTION_CLASS: Record<SyncAction, string> = {
-  updated: styles.chipUpdated,
-  media_filled: styles.chipMedia,
-  not_found: styles.chipMuted,
-  no_data: styles.chipMuted,
+const ACTION_CHIP: Record<SyncAction, { label: string; cls: string }> = {
+  updated: { label: 'updated', cls: styles.chipUpdated },
+  media_filled: { label: 'image filled', cls: styles.chipMedia },
+  not_found: { label: 'not found', cls: styles.chipMuted },
+  no_data: { label: 'no data', cls: styles.chipMuted },
 };
 
 // How close to the bottom still counts as "following along". Anything above
 // that and the operator is reading history — do not yank them back down.
 const STICK_THRESHOLD_PX = 48;
-
-/**
- * Part thumbnail with a glyph fallback.
- *
- * The broken-image swap is React state, not a mutation of the <img> element:
- * an `onError` handler that rewrites `src`/`style` in place fights the next
- * render and leaves the DOM disagreeing with the component.
- */
-function EventThumb({ src }: { src?: string | null }) {
-  const [broken, setBroken] = useState(false);
-  const safe = safeImageUrl(src);
-  if (!safe || broken) {
-    return (
-      <span className={styles.thumbFallback} aria-hidden="true">
-        <Icon name="package" />
-      </span>
-    );
-  }
-  return (
-    <img
-      className={styles.thumb}
-      src={safe}
-      alt=""
-      loading="lazy"
-      onError={() => setBroken(true)}
-    />
-  );
-}
 
 export default function SyncConsole({ supplierName, running, events, error }: Props) {
   const feedRef = useRef<HTMLDivElement>(null);
@@ -164,21 +129,18 @@ export default function SyncConsole({ supplierName, running, events, error }: Pr
               );
             }
 
-            const action = event.action ?? null;
             // The lookup, not the type, decides whether a chip renders: an
             // action the backend grows later would otherwise paint an empty
             // chip with `class="chip undefined"` rather than nothing.
-            const label = action ? ACTION_LABEL[action] : null;
+            const chip = event.action ? ACTION_CHIP[event.action] : null;
             return (
               <div key={key} className={styles.row}>
-                <EventThumb src={event.image_url} />
+                <PartThumb src={event.image_url} />
                 <span className={styles.rowBody}>
                   <span className={styles.rowTitle}>{event.title}</span>
                   {event.detail ? <span className={styles.rowMeta}>{event.detail}</span> : null}
                 </span>
-                {action && label ? (
-                  <span className={`${styles.chip} ${ACTION_CLASS[action]}`}>{label}</span>
-                ) : null}
+                {chip ? <span className={`${styles.chip} ${chip.cls}`}>{chip.label}</span> : null}
               </div>
             );
           })}

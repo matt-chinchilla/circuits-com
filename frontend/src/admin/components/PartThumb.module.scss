@@ -1,0 +1,29 @@
+// One look for feed thumbnails everywhere: a small white plate (part photos
+// are shot on white — `contain` on the plate beats `cover` cropping a chip's
+// legs off), with a muted package glyph when there is no usable image.
+
+.thumb {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  border-radius: 6px;
+  background: #ffffff;
+  border: 1px solid var(--a-border-soft);
+}
+
+.fallback {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: var(--a-glass-well);
+  border: 1px solid var(--a-border-soft);
+
+  :global(i.ph-light) {
+    font-size: 16px;
+    color: var(--a-fg4);
+    line-height: 1;
+  }
+}

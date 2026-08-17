@@ -126,130 +126,60 @@
   color: var(--qa-accent);
 }
 
-// ─── Primary card — the page CTA (Add Part) ─────────────────────────────
-// The ONE filled action on this screen. Filled green background, white
-// icon tile + text.
-.qaCardPrimary {
-  background: var(--a-primary);
-  border-color: var(--a-primary);
+// ─── Filled cards ──────────────────────────────────────────────────────
+// One filled treatment, four hues — green = primary CTA (Add Part), blue =
+// data (Import CSV), gold = revenue (Sponsorship), purple = ops (Sync). The
+// strip reads as a single palette, and a change to the card anatomy is one
+// edit, not four (hoisted at exactly the four-site threshold the house rule
+// names). The hover hexes are the original design's, predating the tokens.
+@mixin qa-filled($bg, $bg-hover, $shadow, $icon-alpha: 0.16, $hint-alpha: 0.78) {
+  background: $bg;
+  border-color: $bg;
   color: #ffffff;
 
   &:hover:not(:disabled) {
-    background: var(--a-primary-hover);
-    border-color: var(--a-primary-hover);
-    box-shadow: 0 6px 16px rgba(10, 74, 46, 0.22);
+    background: $bg-hover;
+    border-color: $bg-hover;
+    box-shadow: 0 6px 16px $shadow;
   }
 
   .qaCardIcon {
-    background: rgba(255, 255, 255, 0.16);
+    background: rgba(255, 255, 255, $icon-alpha);
 
     :global(i.ph-light) {
       color: #ffffff;
     }
   }
 
-  .qaCardTitle {
-    color: #ffffff;
-  }
+  .qaCardTitle { color: #ffffff; }
+  .qaCardHint  { color: rgba(255, 255, 255, $hint-alpha); }
+  .qaCardChev  { color: rgba(255, 255, 255, 0.7); }
 
+  &:hover .qaCardChev { color: #ffffff; }
+}
+
+.qaCardPrimary {
+  @include qa-filled(var(--a-primary), var(--a-primary-hover), rgba(10, 74, 46, 0.22));
+
+  // The primary hint bolds the supplier name to full white for emphasis.
   .qaCardHint {
-    color: rgba(255, 255, 255, 0.78);
-
     strong,
     b {
       color: #ffffff;
     }
   }
-
-  .qaCardChev {
-    color: rgba(255, 255, 255, 0.7);
-  }
-
-  &:hover .qaCardChev {
-    color: #ffffff;
-  }
 }
 
-// ─── Filled variants ───────────────────────────────────────────────────
-// Blue = data (Import CSV) · Gold = revenue (Sponsorship) · Purple = ops (Sync).
-// Same filled treatment as the primary card, each with its own hue.
-
 .qaCardBlue {
-  background: var(--a-blue);
-  border-color: var(--a-blue);
-  color: #ffffff;
-
-  &:hover:not(:disabled) {
-    background: #1d4ed8;
-    border-color: #1d4ed8;
-    box-shadow: 0 6px 16px rgba(37, 99, 235, 0.22);
-  }
-
-  .qaCardIcon {
-    background: rgba(255, 255, 255, 0.16);
-
-    :global(i.ph-light) {
-      color: #ffffff;
-    }
-  }
-
-  .qaCardTitle { color: #ffffff; }
-  .qaCardHint  { color: rgba(255, 255, 255, 0.78); }
-  .qaCardChev  { color: rgba(255, 255, 255, 0.7); }
-
-  &:hover .qaCardChev { color: #ffffff; }
+  @include qa-filled(var(--a-blue), #1d4ed8, rgba(37, 99, 235, 0.22));
 }
 
 .qaCardGold {
-  background: var(--a-warn);
-  border-color: var(--a-warn);
-  color: #ffffff;
-
-  &:hover:not(:disabled) {
-    background: #b45309;
-    border-color: #b45309;
-    box-shadow: 0 6px 16px rgba(217, 119, 6, 0.22);
-  }
-
-  .qaCardIcon {
-    background: rgba(255, 255, 255, 0.18);
-
-    :global(i.ph-light) {
-      color: #ffffff;
-    }
-  }
-
-  .qaCardTitle { color: #ffffff; }
-  .qaCardHint  { color: rgba(255, 255, 255, 0.82); }
-  .qaCardChev  { color: rgba(255, 255, 255, 0.7); }
-
-  &:hover .qaCardChev { color: #ffffff; }
+  @include qa-filled(var(--a-warn), #b45309, rgba(217, 119, 6, 0.22), 0.18, 0.82);
 }
 
 .qaCardPurple {
-  background: var(--a-purple);
-  border-color: var(--a-purple);
-  color: #ffffff;
-
-  &:hover:not(:disabled) {
-    background: #6d28d9;
-    border-color: #6d28d9;
-    box-shadow: 0 6px 16px rgba(124, 58, 237, 0.22);
-  }
-
-  .qaCardIcon {
-    background: rgba(255, 255, 255, 0.16);
-
-    :global(i.ph-light) {
-      color: #ffffff;
-    }
-  }
-
-  .qaCardTitle { color: #ffffff; }
-  .qaCardHint  { color: rgba(255, 255, 255, 0.78); }
-  .qaCardChev  { color: rgba(255, 255, 255, 0.7); }
-
-  &:hover .qaCardChev { color: #ffffff; }
+  @include qa-filled(var(--a-purple), #6d28d9, rgba(124, 58, 237, 0.22));
 }
 
 .qaSpin {

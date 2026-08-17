@@ -989,14 +989,10 @@
   min-width: 0;
 }
 
+// Layout only — sizing, fit, plate and fallback all live in the shared
+// PartThumb component so this thumb matches the sync console's exactly.
 .activityThumb {
   flex: 0 0 auto;
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
-  object-fit: cover;
-  background: var(--a-track);
-  border: 1px solid var(--a-border-soft);
 }
 
 .activityText {

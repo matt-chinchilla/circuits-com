@@ -10,12 +10,12 @@ Rate limits (free tier): ~30 calls/min, ~1,000/day — the provider sleeps
 between calls, so batch sizes (--limit) are the real throttle knob.
 """
 
-import os
 import re
 import time
 
 import httpx
 
+from app.config import settings
 from app.services.part_feed.base import FeedPart, FeedPriceBreak
 
 _BASE = "https://api.mouser.com/api/v1"
@@ -103,14 +103,20 @@ class MouserProvider:
     supplier_website = "mouser.com"
 
     def __init__(self, api_key: str | None = None, client: httpx.Client | None = None):
-        self.api_key = api_key or os.environ.get("MOUSER_API_KEY") or None
+        self.api_key = api_key or (settings.MOUSER_API_KEY or "").strip() or None
         if not self.api_key:
             raise RuntimeError(
-                "MOUSER_API_KEY is not set — pass it via "
-                "`docker compose exec -e MOUSER_API_KEY=... api ...`"
+                "MOUSER_API_KEY is not set — set MOUSER_SEARCH_API_KEY in the host "
+                ".env; docker-compose maps it into the container (see module docstring)"
             )
         self._client = client or httpx.Client(timeout=30)
         self._last_call = 0.0
+
+    def close(self) -> None:
+        """Release the HTTP connection pool. The sync route builds one
+        provider per run and closes it when the stream ends; without this the
+        keep-alive sockets sit until GC."""
+        self._client.close()
 
     def _throttle(self) -> None:
         wait = _CALL_GAP_SECONDS - (time.monotonic() - self._last_call)

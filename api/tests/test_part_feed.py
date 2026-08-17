@@ -7,7 +7,7 @@ import pytest
 from sqlalchemy import event as sa_event
 
 from app.models import Part, PartListing, PriceBreak, Supplier
-from app.services.part_feed.base import FeedPart, FeedPriceBreak
+from app.services.part_feed.base import FeedPriceBreak
 from app.services.part_feed.importer import (
     _fill_part_media,
     backfill_images,
@@ -21,6 +21,8 @@ from app.services.part_feed.mouser import (
     _parse_price,
     part_from_mouser,
 )
+from tests.feed_helpers import FakeProvider as _FakeProvider
+from tests.feed_helpers import feed_part as _feed_part
 
 MOUSER_RAW = {
     "MouserPartNumber": "621-AOZ1282CI",
@@ -91,35 +93,6 @@ class TestMouserParsing:
         except FeedFatalError as e:
             assert "SUPER-SECRET-KEY-1234" not in str(e)
             assert "401" in str(e)
-
-
-class _FakeProvider:
-    supplier_name = "Mouser Electronics"
-    supplier_website = "mouser.com"
-
-    def __init__(self, by_mpn=None, search_results=None):
-        self.by_mpn = by_mpn or {}
-        self.search_results = search_results or []
-
-    def search(self, keyword, limit=50):
-        return self.search_results[:limit]
-
-    def lookup_mpn(self, mpn):
-        return self.by_mpn.get(mpn)
-
-
-def _feed_part(mpn="FEED-001", image="https://img.example/p.jpg", breaks=True):
-    return FeedPart(
-        mpn=mpn,
-        manufacturer="Feed Mfr",
-        description="10uF 25V ceramic capacitor 0805",
-        image_url=image,
-        datasheet_url="https://docs.example/d.pdf",
-        supplier_sku=f"621-{mpn}",
-        stock_quantity=500,
-        lead_time_days=7,
-        price_breaks=[FeedPriceBreak(1, 0.10), FeedPriceBreak(100, 0.08)] if breaks else [],
-    )
 
 
 def _attach_listing(db, part, supplier, sku="EXIST-1"):

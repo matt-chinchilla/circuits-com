@@ -26,52 +26,19 @@ import uuid
 import bcrypt
 import pytest
 
+from app.config import settings
 from app.models import ActivityEvent, Supplier, User
-from app.services.part_feed.base import FeedPart, FeedPriceBreak
 from app.services.part_feed.registry import resolve_provider
+from tests.feed_helpers import FakeProvider as _FakeProvider
+from tests.feed_helpers import feed_part as _feed_part
 
 FAKE_KEY = "test-key-not-real"  # never a real credential; the route only checks truthiness
 DEMO_EMAIL = "demo@circuitcenter.ai"
 
 
-class _FakeProvider:
-    """A provider that answers from a dict — no network, no key, no sleep."""
-
-    supplier_name = "Mouser Electronics"
-    supplier_website = "mouser.com"
-
-    def __init__(self, by_mpn=None):
-        self.by_mpn = by_mpn or {}
-
-    def search(self, keyword, limit=50):
-        return []
-
-    def lookup_mpn(self, mpn):
-        return self.by_mpn.get(mpn)
-
-
 class _ExplodingProvider(_FakeProvider):
     def lookup_mpn(self, mpn):
         raise RuntimeError("Mouser API HTTP 500 on /search/partnumber")
-
-
-def _feed_part(
-    mpn: str,
-    manufacturer: str = "Feed Mfr",
-    image: str | None = "https://img.example/p.jpg",
-    breaks: bool = True,
-) -> FeedPart:
-    return FeedPart(
-        mpn=mpn,
-        manufacturer=manufacturer,
-        description="10uF 25V ceramic capacitor 0805",
-        image_url=image,
-        datasheet_url="https://docs.example/d.pdf",
-        supplier_sku=f"621-{mpn}",
-        stock_quantity=500,
-        lead_time_days=7,
-        price_breaks=[FeedPriceBreak(1, 0.10), FeedPriceBreak(100, 0.08)] if breaks else [],
-    )
 
 
 def _events(resp):
@@ -82,7 +49,7 @@ def _events(resp):
 @pytest.fixture
 def feed_key(monkeypatch):
     """The feature is ON. The value is a placeholder: nothing calls Mouser here."""
-    monkeypatch.setenv("MOUSER_API_KEY", FAKE_KEY)
+    monkeypatch.setattr(settings, "MOUSER_API_KEY", FAKE_KEY)
 
 
 @pytest.fixture
@@ -117,7 +84,7 @@ class TestGuards:
         `resolve_provider` must not be reached — MouserProvider's constructor
         raises without a key, which would surface as a 500 instead of a 404.
         """
-        monkeypatch.delenv("MOUSER_API_KEY", raising=False)
+        monkeypatch.setattr(settings, "MOUSER_API_KEY", None)
 
         def _boom(supplier):
             raise AssertionError("resolve_provider ran before the key check")
@@ -380,8 +347,8 @@ class TestProviderRegistry:
 
     def test_the_provider_is_built_lazily_so_the_key_check_comes_first(self, monkeypatch):
         """Construction is what demands the key. That is exactly why the route
-        checks the environment BEFORE it resolves — see TestGuards."""
-        monkeypatch.delenv("MOUSER_API_KEY", raising=False)
+        checks the key BEFORE it resolves — see TestGuards."""
+        monkeypatch.setattr(settings, "MOUSER_API_KEY", None)
         supplier = Supplier(id=uuid.uuid4(), name="Mouser", website="mouser.com")
 
         with pytest.raises(RuntimeError):

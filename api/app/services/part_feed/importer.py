@@ -115,7 +115,7 @@ def _upsert_listing(db: Session, part: Part, supplier: Supplier, fp: FeedPart) -
     return True
 
 
-def _sync_event(
+def sync_event(
     kind: str,
     supplier_id: str,
     title: str,
@@ -189,7 +189,7 @@ def sync_supplier_listings(
         detail = f"{synced} synced · {media_filled} images filled · {not_found} not found"
         if no_data:
             detail += f" · {no_data} no data"
-        event = _sync_event("sync_finished", supplier_id, supplier_name, detail)
+        event = sync_event("sync_finished", supplier_id, supplier_name, detail)
         event["counts"] = {
             "synced": synced,
             "media_filled": media_filled,
@@ -198,7 +198,7 @@ def sync_supplier_listings(
         }
         return event
 
-    yield _sync_event("sync_started", supplier_id, supplier_name, f"{len(parts)} parts queued")
+    yield sync_event("sync_started", supplier_id, supplier_name, f"{len(parts)} parts queued")
     try:
         for part in parts:
             sku = part.sku
@@ -206,7 +206,7 @@ def sync_supplier_listings(
             fp = provider.lookup_mpn(sku)
             if fp is None:
                 not_found += 1
-                yield _sync_event("part_synced", supplier_id, sku, category, action="not_found")
+                yield sync_event("part_synced", supplier_id, sku, category, action="not_found")
                 continue
             wrote_listing = _upsert_listing(db, part, supplier, fp)
             media = _fill_part_media(part, fp)
@@ -225,7 +225,7 @@ def sync_supplier_listings(
                 # counting it as synced would overstate what the run did
                 action = "no_data"
                 no_data += 1
-            yield _sync_event(
+            yield sync_event(
                 "part_synced",
                 supplier_id,
                 f"{sku} — {fp.manufacturer}",
@@ -236,7 +236,7 @@ def sync_supplier_listings(
     except FeedFatalError as exc:
         # str(exc) carries no API key — mouser.py never puts one in a message.
         db.rollback()
-        yield _sync_event("sync_error", supplier_id, "Feed unavailable", str(exc))
+        yield sync_event("sync_error", supplier_id, "Feed unavailable", str(exc))
         yield _finished()
         return
     yield _finished()

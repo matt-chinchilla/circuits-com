@@ -17,6 +17,7 @@
  */
 
 import { API_BASE_URL } from '@shared/services/constants';
+import { authHeaders, onUnauthorized } from '@admin/services/adminApi';
 import { bustSponsorCaches } from '@admin/services/swCache';
 import { DEMO_READ_ONLY_MESSAGE, isDemoReadOnly } from '@admin/services/demoReadOnly';
 
@@ -101,12 +102,7 @@ export function parseNdjson(buffer: string): { events: SyncEvent[]; rest: string
 const ZERO_COUNTS: SyncCounts = { synced: 0, media_filled: 0, not_found: 0, no_data: 0 };
 
 function isZeroCounts(counts: SyncCounts): boolean {
-  return (
-    counts.synced === 0 &&
-    counts.media_filled === 0 &&
-    counts.not_found === 0 &&
-    counts.no_data === 0
-  );
+  return Object.values(counts).every((n) => n === 0);
 }
 
 /**
@@ -252,17 +248,16 @@ export async function syncSupplier(
   supplierId: string,
   onEvent: (event: SyncEvent) => void
 ): Promise<void> {
-  const token = localStorage.getItem('admin_token') ?? '';
   const res = await fetch(
     `${API_BASE_URL}/suppliers/${encodeURIComponent(supplierId)}/sync?limit=25`,
-    { method: 'POST', headers: { Authorization: `Bearer ${token}` } }
+    { method: 'POST', headers: authHeaders() }
   );
 
   if (!res.ok) {
     if (res.status === 401) {
-      // Mirrors adminApi's response interceptor: the token is retired, so drop
-      // it and let the next render bounce to sign-in.
-      localStorage.removeItem('admin_token');
+      // Same retirement rule as adminApi's response interceptor — and the
+      // same function, so the two transports cannot drift.
+      onUnauthorized();
     }
     throw new SyncStreamError(res.status, await readDetail(res));
   }

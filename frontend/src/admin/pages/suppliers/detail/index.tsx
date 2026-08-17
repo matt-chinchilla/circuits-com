@@ -140,10 +140,10 @@ export default function SupplierDetailPage() {
     // still committed everything it reported (the importer commits per part),
     // so a refetch is owed whenever ANY event arrived — success or not. A run
     // that never started (no feed key, wrong supplier) owes nothing.
-    let delivered = 0;
+    let receivedAny = false;
     const isCurrentRun = () => mountedRef.current && syncOwnerRef.current === id;
     syncSupplier(id, (event) => {
-      delivered += 1;
+      receivedAny = true;
       if (!isCurrentRun()) return;
       setSyncState((prev) => ({ ...prev, events: [...prev.events, event] }));
     })
@@ -156,7 +156,7 @@ export default function SupplierDetailPage() {
       .catch((err) => {
         if (!isCurrentRun()) return;
         setSyncState((prev) => ({ ...prev, running: false, error: syncErrorMessage(err) }));
-        if (delivered > 0) {
+        if (receivedAny) {
           quietRefetchRef.current = true;
           setRefreshNonce((n) => n + 1);
         }

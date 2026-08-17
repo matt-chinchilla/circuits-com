@@ -4,8 +4,8 @@
 // console; live mode renders `/dashboard/activity` rows verbatim.
 
 import type { ReactNode } from 'react';
+import PartThumb from '@admin/components/PartThumb';
 import type { ActivityItem } from '@admin/types/admin';
-import { safeImageUrl } from '@shared/utils/url';
 import styles from '../DashboardPage.module.scss';
 
 type ActivityKind = 'ok' | 'info' | 'warn';
@@ -15,9 +15,9 @@ export interface ActivityRow {
   glyph: string;
   text: ReactNode;
   when: string;
-  // Sync rows only. Already through `safeImageUrl` by the time it lands here —
-  // the value is a distributor-CDN part-photo URL (`image_url` off the sync
-  // feed), so a `javascript:`/`data:text/html` string must never reach an `src`.
+  // Sync rows only: a distributor-CDN part-photo URL (`image_url` off the
+  // sync feed), passed RAW — PartThumb owns the safeImageUrl guard and the
+  // broken-image fallback, same as the sync console's rows.
   thumb?: string | null;
 }
 
@@ -82,7 +82,7 @@ export default function ActivityPanel({ activity, demoMode }: ActivityPanelProps
         glyph: '·',
         text: a.description,
         when: a.created_at ? new Date(a.created_at).toLocaleDateString() : '',
-        thumb: safeImageUrl(a.image_url),
+        thumb: a.image_url,
       }));
 
   return (
@@ -98,20 +98,7 @@ export default function ActivityPanel({ activity, demoMode }: ActivityPanelProps
             <div key={idx} className={styles.activityRow}>
               <div className={`${styles.activityIcon} ${KIND_CLASS[row.kind]}`}>{row.glyph}</div>
               <div className={styles.activityBody}>
-                {row.thumb && (
-                  <img
-                    className={styles.activityThumb}
-                    src={row.thumb}
-                    alt=""
-                    loading="lazy"
-                    // A dead distributor image must leave the line readable, not
-                    // a broken-image glyph. Hiding the element beats a state
-                    // hook: the row is keyed by index and never re-fetches.
-                    onError={(e) => {
-                      e.currentTarget.style.display = 'none';
-                    }}
-                  />
-                )}
+                {row.thumb && <PartThumb src={row.thumb} className={styles.activityThumb} />}
                 <div className={styles.activityText}>{row.text}</div>
               </div>
               <div className={styles.activityTime}>{row.when}</div>

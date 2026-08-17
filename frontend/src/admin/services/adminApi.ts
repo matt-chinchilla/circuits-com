@@ -105,10 +105,24 @@ export interface QuoteCreateResult {
 
 const adminClient = axios.create({ baseURL: API_BASE_URL });
 
-adminClient.interceptors.request.use((config) => {
+/** The Bearer header for the admin session — the ONE reader of the token
+ * storage key. Non-axios transports (syncStream's streaming fetch) consume
+ * this too, so a change to where the token lives cannot silently miss one. */
+export function authHeaders(): Record<string, string> {
   const token = localStorage.getItem('admin_token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+/** Retire the session token (expired/revoked 401) — shared with streaming
+ * transports for the same single-owner reason as `authHeaders`. */
+export function onUnauthorized(): void {
+  localStorage.removeItem('admin_token');
+}
+
+adminClient.interceptors.request.use((config) => {
+  const auth = authHeaders();
+  if (auth.Authorization) {
+    config.headers.Authorization = auth.Authorization;
   }
   return config;
 });
@@ -120,7 +134,7 @@ adminClient.interceptors.response.use(
     if (status === 401) {
       // Unchanged behavior: an expired/retired token is dropped so the next
       // render bounces to the sign-in screen.
-      localStorage.removeItem('admin_token');
+      onUnauthorized();
     } else if (isPasswordChangeRequired(status, error.response?.data?.detail)) {
       // The forced-reset gate. The token is still VALID — do not clear it, or
       // the user would be signed out of the only session that can clear the

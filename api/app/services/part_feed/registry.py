@@ -13,6 +13,7 @@ the one route that needs a key. Callers must do the key check FIRST — see the
 404 in ``routes/suppliers.sync_supplier``.
 """
 
+from app.config import settings
 from app.models import Supplier
 from app.services.part_feed.base import PartFeedProvider
 from app.services.part_feed.mouser import MouserProvider
@@ -20,6 +21,15 @@ from app.services.part_feed.mouser import MouserProvider
 # (domain fragment, provider class). Adding Digi-Key/Farnell is one row here
 # plus the provider itself — nothing else in the sync path knows a brand name.
 _PROVIDERS: tuple[tuple[str, type], ...] = (("mouser", MouserProvider),)
+
+
+def feed_configured() -> bool:
+    """Single truth for "is a feed key present" — the route's 404 gate asks
+    here instead of re-reading the environment, mirroring how the Stripe
+    routes gate on `settings.STRIPE_SECRET_KEY`. `.strip()` so a
+    whitespace-only value reads as unconfigured, not as a key.
+    """
+    return bool((settings.MOUSER_API_KEY or "").strip())
 
 
 def resolve_provider(supplier: Supplier) -> PartFeedProvider | None:

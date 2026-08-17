@@ -1,5 +1,4 @@
 import json
-import os
 import uuid
 from collections.abc import Iterator
 
@@ -24,11 +23,15 @@ from app.models import (
 )
 from app.services.auth_service import get_current_user
 
-# `_sync_event` is the ONE definition of the wire shape (importer.py owns it).
+# `sync_event` is the ONE definition of the wire shape (importer.py owns it).
 # The abort path below has to emit the same key set, and re-typing the dict
 # here is how a stream ends up with an event the client's parser drops.
-from app.services.part_feed.importer import _sync_event, sync_supplier_listings
-from app.services.part_feed.registry import resolve_provider
+from app.services.part_feed import (
+    feed_configured,
+    resolve_provider,
+    sync_event,
+    sync_supplier_listings,
+)
 from app.utils.color import validate_optional_hex_color
 from app.utils.image_url import validate_optional_image_url
 
@@ -272,8 +275,6 @@ def delete_supplier(
 # the operator can see exactly what the feed did and did not answer.
 _RECORDED_PART_ACTIONS = frozenset({"updated", "media_filled"})
 
-_ABORTED_COUNTS = {"synced": 0, "media_filled": 0, "not_found": 0, "no_data": 0}
-
 
 def _record_event(db: Session, supplier_id: uuid.UUID, event: dict) -> None:
     """Append one activity row for `event` — its own commit, so an abort
@@ -296,17 +297,23 @@ def _record_event(db: Session, supplier_id: uuid.UUID, event: dict) -> None:
         # Unreachable through the importer; a dropped thumbnail still beats a
         # truncated (broken) URL, and beats aborting the run.
         image_url = None
-    db.add(
-        ActivityEvent(
-            id=uuid.uuid4(),
-            kind=str(event.get("kind"))[:40],
-            supplier_id=supplier_id,
-            title=str(event.get("title") or "")[:255],
-            detail=detail[:500] if detail else None,
-            image_url=image_url,
+    try:
+        db.add(
+            ActivityEvent(
+                id=uuid.uuid4(),
+                kind=str(event.get("kind"))[:40],
+                supplier_id=supplier_id,
+                title=str(event.get("title") or "")[:255],
+                detail=detail[:500] if detail else None,
+                image_url=image_url,
+            )
         )
-    )
-    db.commit()
+        db.commit()
+    except Exception:  # noqa: BLE001
+        # An activity row is bookkeeping. If the DB hiccups mid-run, losing
+        # one row must not cut the NDJSON stream off mid-line — roll back and
+        # let the stream keep reporting.
+        db.rollback()
 
 
 @router.post("/{supplier_id}/sync")
@@ -341,7 +348,7 @@ def sync_supplier(
     blocking is harmless. As an `async def` it would stall the event loop for
     the whole run.
     """
-    if not os.environ.get("MOUSER_API_KEY"):
+    if not feed_configured():
         raise HTTPException(404, "sync_unavailable")
     supplier_uuid = _to_uuid(supplier_id)
     supplier = db.query(Supplier).filter(Supplier.id == supplier_uuid).first()
@@ -370,15 +377,21 @@ def sync_supplier(
             # FeedFatalError (auth/quota) is already handled inside
             # `sync_supplier_listings`; this is for everything else.
             db.rollback()
-            failed = _sync_event("sync_error", supplier_key, "Sync failed", str(exc))
+            failed = sync_event("sync_error", supplier_key, "Sync failed", str(exc))
             _record_event(db, supplier_uuid, failed)
             yield json.dumps(failed) + "\n"
             # The counts are genuinely unknown at this point — zeros plus
             # "sync aborted" says so, rather than inventing a total.
-            aborted = _sync_event("sync_finished", supplier_key, supplier_name, "sync aborted")
-            aborted["counts"] = dict(_ABORTED_COUNTS)
+            aborted = sync_event("sync_finished", supplier_key, supplier_name, "sync aborted")
+            aborted["counts"] = {"synced": 0, "media_filled": 0, "not_found": 0, "no_data": 0}
             _record_event(db, supplier_uuid, aborted)
             yield json.dumps(aborted) + "\n"
+        finally:
+            # One provider (and its HTTP connection pool) per run — release it
+            # whether the run finished, aborted, or the client disconnected.
+            close = getattr(provider, "close", None)
+            if callable(close):
+                close()
 
     return StreamingResponse(
         stream(),

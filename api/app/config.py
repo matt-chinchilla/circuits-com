@@ -201,6 +201,14 @@ class Settings(BaseSettings):
     # reach the sponsors table.
     STRIPE_WEBHOOK_SECRET: str | None = None
 
+    # MOUSER_API_KEY — the Mouser SEARCH API key powering the supplier
+    # inventory sync (routes/suppliers.py) and the import_parts CLI. Compose
+    # maps it from the HOST variable MOUSER_SEARCH_API_KEY (the host .env's own
+    # MOUSER_API_KEY line is a dead Order-API key — never pass that through).
+    # Unset → POST /suppliers/{id}/sync 404s, the same feature-off posture as
+    # Stripe. `registry.feed_configured()` is the one place that asks.
+    MOUSER_API_KEY: str | None = None
+
     # ── Automated cost sync (app/jobs/sync_costs.py) ────────────────────────
     # ANTHROPIC_ADMIN_KEY — an ORGANIZATION admin key (`sk-ant-admin…`), not a
     # regular API key: the Admin API's cost report is the only way to get real
