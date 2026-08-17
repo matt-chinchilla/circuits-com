@@ -24,6 +24,7 @@ import type {
   MonthlyCompare,
   SalesRepOptions,
   SalesRepsResponse,
+  FeedCredentialStatus,
 } from '@admin/types/admin';
 import type { Message, MessageStatus, AssignedTo } from '@admin/types/messages';
 import type { PlatformEngagementSeries } from '@admin/types/engagement';
@@ -469,6 +470,33 @@ export const adminApi = {
     adminClient
       .get<Blob>(`/admin/quotes/${quoteId}/pdf`, { responseType: 'blob' })
       .then((r) => r.data),
+
+  // ── Distributor feed keys (routes/feed_credentials.py) ──────────────────
+  // No bustingAfter: a feed key changes nothing the public site renders — it
+  // only decides whether POST /suppliers/{id}/sync has a credential to run
+  // with. All three answer the SAME status list (provider/label/configured/
+  // source/last4/updated_at) and NEVER the stored value, so a caller can
+  // repaint the card straight off the mutation's response.
+
+  getFeedCredentials: () =>
+    adminClient
+      .get<{ providers: FeedCredentialStatus[] }>('/admin/feed-credentials/')
+      .then((r) => r.data.providers),
+
+  putFeedCredential: (provider: string, apiKey: string) =>
+    adminClient
+      .put<{ providers: FeedCredentialStatus[] }>(
+        `/admin/feed-credentials/${encodeURIComponent(provider)}`,
+        { api_key: apiKey }
+      )
+      .then((r) => r.data.providers),
+
+  deleteFeedCredential: (provider: string) =>
+    adminClient
+      .delete<{ providers: FeedCredentialStatus[] }>(
+        `/admin/feed-credentials/${encodeURIComponent(provider)}`
+      )
+      .then((r) => r.data.providers),
 
   // "Feature" a supplier on a category = a Featured sponsorship on that
   // (top-level) category — the single source of truth as of 2026-06-03

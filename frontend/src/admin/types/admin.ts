@@ -443,6 +443,25 @@ export interface AdminSponsor {
   sold_by?: string | null;
 }
 
+// ── Distributor feed credentials (GET/PUT/DELETE /api/admin/feed-credentials) ─
+// The status shape carries NO key: the stored value never leaves the server.
+// `source` says which one a sync would actually use, and `last4` is filled ONLY
+// for a database-stored key — four characters of the server's own environment
+// secret would be a leak the admin cannot even rotate from this screen.
+
+export type FeedCredentialSource = 'database' | 'environment';
+
+export interface FeedCredentialStatus {
+  provider: string;
+  label: string;
+  configured: boolean;
+  // `?: T | null` per the repo rule — Python `None` arrives as JSON `null`,
+  // which a bare `?:` would let through untyped.
+  source?: FeedCredentialSource | null;
+  last4?: string | null;
+  updated_at?: string | null;
+}
+
 // ── Social / ad engagement (frontend-only contract; no backend yet) ─────────
 // Re-exported TYPE-ONLY so `@admin/types/admin` stays the one import site for
 // admin wire types while the values (SOCIAL_PLATFORMS, PLATFORM_META,

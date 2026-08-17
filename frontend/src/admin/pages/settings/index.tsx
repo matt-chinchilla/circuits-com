@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import ConfirmDialog from '@admin/components/ConfirmDialog';
 import { useAuth } from '@admin/contexts/AuthContext';
+import FeedCredentialsCard from './FeedCredentialsCard';
 import styles from './SettingsPage.module.scss';
 
 // Phase A9 — full SettingsPage buildout, ported & extended from
@@ -640,6 +641,11 @@ export default function SettingsPage() {
           {/* Integrations */}
           {tab === 'integrations' && (
             <>
+              {/* The only server-backed card on this page: real keys, real
+                  endpoints. Everything below it is still localStorage demo
+                  state. */}
+              <FeedCredentialsCard onToast={showToast} />
+
               <div className={styles.panel}>
                 <div className={styles.panelHead}>
                   <h3 className={styles.panelTitle}>API keys</h3>

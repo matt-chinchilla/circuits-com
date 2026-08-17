@@ -6,6 +6,7 @@ from .message import Message
 from .page_view import PageView
 from .part import Part
 from .part_listing import PartListing, PriceBreak
+from .provider_credential import ProviderCredential
 from .revenue import Revenue
 from .sponsor import Sponsor
 from .supplier import CategorySupplier, Supplier
@@ -27,4 +28,5 @@ __all__ = [
     "CalendarEvent",
     "CalendarReminderSend",
     "ActivityEvent",
+    "ProviderCredential",
 ]

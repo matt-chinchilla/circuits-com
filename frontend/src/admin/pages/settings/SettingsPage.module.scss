@@ -559,6 +559,42 @@
   font-size: 13px;
 }
 
+// ─── Integrations: distributor feed keys ───────────────────────────────────
+// One row per provider: label + status on the left, the write controls on the
+// right. Stacks on narrow admin widths so the input never squeezes to a slit.
+
+.feedRow {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.feedMeta {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.feedControls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  flex: 1 1 280px;
+  justify-content: flex-end;
+
+  // An <input> carries an intrinsic min-width (~170px) that `width: 100%`
+  // does not clear, and that is what makes a flex row OVERFLOW instead of
+  // shrink at the 420px admin-compact width.
+  .textInput {
+    flex: 1 1 180px;
+    min-width: 0;
+  }
+}
+
 // ─── Danger zone ───────────────────────────────────────────────────────────
 
 // Red-tinted glass: the warning tint layers OVER the pane veil (both are

@@ -17,6 +17,7 @@ from app.routes import (
     categories,
     checkout,
     dashboard,
+    feed_credentials,
     forms,
     parts,
     search,
@@ -57,6 +58,7 @@ app.include_router(calendar.router)
 app.include_router(sitemap.router)
 app.include_router(stripe_webhooks.router)
 app.include_router(admin_quotes.router)
+app.include_router(feed_credentials.router)
 app.include_router(checkout.router)
 
 

@@ -28,12 +28,13 @@ import bcrypt
 import pytest
 
 from app.config import settings
-from app.models import ActivityEvent, PartListing, Supplier, User
-from app.services.part_feed.registry import resolve_provider
+from app.models import ActivityEvent, PartListing, ProviderCredential, Supplier, User
+from app.services.part_feed.registry import feed_configured, get_feed_key, resolve_provider
 from tests.feed_helpers import FakeProvider as _FakeProvider
 from tests.feed_helpers import feed_part as _feed_part
 
 FAKE_KEY = "test-key-not-real"  # never a real credential; the route only checks truthiness
+DB_KEY = "stored-key-not-real"  # the same, stored in provider_credentials
 DEMO_EMAIL = "demo@circuitcenter.ai"
 
 
@@ -70,10 +71,22 @@ def feed_key(monkeypatch):
 
 @pytest.fixture
 def use_fake_provider(monkeypatch):
-    """Swap the registry lookup the ROUTE uses for a scripted provider."""
+    """Swap the registry lookup the ROUTE uses for a scripted provider.
+
+    The stand-in takes `api_key` because the route passes its RESOLVED key
+    through — a one-argument fake would pass while the real signature no longer
+    matched. `seen_keys` records what it was handed, which is how the
+    key-precedence tests below check that the DB key is the one actually used.
+    """
+    seen_keys: list[str | None] = []
 
     def _install(provider):
-        monkeypatch.setattr("app.routes.suppliers.resolve_provider", lambda supplier: provider)
+        def _resolve(supplier, api_key=None):
+            seen_keys.append(api_key)
+            return provider
+
+        monkeypatch.setattr("app.routes.suppliers.resolve_provider", _resolve)
+        provider.seen_keys = seen_keys
         return provider
 
     return _install
@@ -102,7 +115,7 @@ class TestGuards:
         """
         monkeypatch.setattr(settings, "MOUSER_API_KEY", None)
 
-        def _boom(supplier):
+        def _boom(supplier, api_key=None):
             raise AssertionError("resolve_provider ran before the key check")
 
         monkeypatch.setattr("app.routes.suppliers.resolve_provider", _boom)
@@ -150,6 +163,77 @@ class TestGuards:
 
         assert resp.status_code == 403
         assert resp.json()["detail"] == "demo_account_read_only"
+
+
+class TestKeyPrecedence:
+    """A key stored from Admin → Settings beats the environment, and the key the
+    route resolved is the one the provider is built with.
+
+    The second half is the part that could silently rot: gating on one key and
+    then constructing the provider with another would still 200 in every
+    environment that has both, and would call the distributor with the key the
+    admin thought they had replaced.
+    """
+
+    def test_a_stored_key_runs_the_sync_with_no_environment_key(
+        self, client, db, seeded_db, auth_header, use_fake_provider, monkeypatch
+    ):
+        monkeypatch.setattr(settings, "MOUSER_API_KEY", None)
+        db.add(ProviderCredential(provider="mouser", api_key=DB_KEY))
+        db.commit()
+        use_fake_provider(_FakeProvider())
+
+        resp = _sync(client, seeded_db["supplier1"], auth_header)
+
+        assert resp.status_code == 200
+        assert [e["kind"] for e in _events(resp)][0] == "sync_started"
+
+    def test_the_stored_key_is_the_one_the_provider_is_built_with(
+        self, client, db, seeded_db, auth_header, feed_key, use_fake_provider
+    ):
+        """Both sources present — the DB row wins, all the way through."""
+        db.add(ProviderCredential(provider="mouser", api_key=DB_KEY))
+        db.commit()
+        provider = use_fake_provider(_FakeProvider())
+
+        _sync(client, seeded_db["supplier1"], auth_header)
+
+        assert provider.seen_keys == [DB_KEY]
+
+    def test_the_environment_key_is_used_when_nothing_is_stored(
+        self, client, seeded_db, auth_header, feed_key, use_fake_provider
+    ):
+        provider = use_fake_provider(_FakeProvider())
+
+        _sync(client, seeded_db["supplier1"], auth_header)
+
+        assert provider.seen_keys == [FAKE_KEY]
+
+    def test_a_blanked_stored_key_falls_back_instead_of_syncing_with_nothing(
+        self, client, db, seeded_db, auth_header, feed_key, use_fake_provider
+    ):
+        """A row someone emptied is not a key. Treating it as one would call the
+        distributor with an empty credential and fail every part."""
+        db.add(ProviderCredential(provider="mouser", api_key="   "))
+        db.commit()
+        provider = use_fake_provider(_FakeProvider())
+
+        _sync(client, seeded_db["supplier1"], auth_header)
+
+        assert provider.seen_keys == [FAKE_KEY]
+
+    def test_404_needs_both_sources_empty(
+        self, client, db, seeded_db, auth_header, use_fake_provider, monkeypatch
+    ):
+        monkeypatch.setattr(settings, "MOUSER_API_KEY", None)
+        db.add(ProviderCredential(provider="mouser", api_key="   "))
+        db.commit()
+        use_fake_provider(_FakeProvider())
+
+        resp = _sync(client, seeded_db["supplier1"], auth_header)
+
+        assert resp.status_code == 404
+        assert resp.json()["detail"] == "sync_unavailable"
 
 
 class TestStream:
@@ -423,3 +507,38 @@ class TestProviderRegistry:
 
         with pytest.raises(RuntimeError):
             resolve_provider(supplier)
+
+    def test_an_explicit_key_builds_the_provider_with_no_environment_key(self, monkeypatch):
+        """The admin-stored key path: nothing is in the environment and the
+        provider is still constructible, because the caller brought the key."""
+        from app.services.part_feed.mouser import MouserProvider
+
+        monkeypatch.setattr(settings, "MOUSER_API_KEY", None)
+        supplier = Supplier(id=uuid.uuid4(), name="Mouser", website="mouser.com")
+
+        provider = resolve_provider(supplier, api_key=DB_KEY)
+
+        assert isinstance(provider, MouserProvider)
+        assert provider.api_key == DB_KEY
+
+    def test_get_feed_key_prefers_the_stored_row_over_the_environment(self, db, feed_key):
+        assert get_feed_key(db) == FAKE_KEY
+
+        db.add(ProviderCredential(provider="mouser", api_key=DB_KEY))
+        db.commit()
+
+        assert get_feed_key(db) == DB_KEY
+
+    def test_feed_configured_is_the_same_question_as_a_key_being_resolvable(self, db, monkeypatch):
+        monkeypatch.setattr(settings, "MOUSER_API_KEY", None)
+        assert feed_configured(db) is False
+
+        db.add(ProviderCredential(provider="mouser", api_key=DB_KEY))
+        db.commit()
+
+        assert feed_configured(db) is True
+
+    def test_a_provider_with_no_environment_variable_has_no_fallback(self, db, feed_key):
+        """MOUSER_API_KEY is Mouser's. A second distributor gets a stored row or
+        nothing — it must never inherit another company's key."""
+        assert get_feed_key(db, "digikey") is None

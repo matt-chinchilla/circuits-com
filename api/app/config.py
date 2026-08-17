@@ -205,8 +205,11 @@ class Settings(BaseSettings):
     # inventory sync (routes/suppliers.py) and the import_parts CLI. Compose
     # maps it from the HOST variable MOUSER_SEARCH_API_KEY (the host .env's own
     # MOUSER_API_KEY line is a dead Order-API key — never pass that through).
-    # Unset → POST /suppliers/{id}/sync 404s, the same feature-off posture as
-    # Stripe. `registry.feed_configured()` is the one place that asks.
+    # A FALLBACK since migration 031: a key stored from Admin → Settings
+    # (provider_credentials) WINS over this one, so rotating no longer needs a
+    # host .env edit and a container recreate. With neither present, POST
+    # /suppliers/{id}/sync 404s — the same feature-off posture as Stripe.
+    # `registry.get_feed_key()` is the one place that asks.
     MOUSER_API_KEY: str | None = None
 
     # ── Automated cost sync (app/jobs/sync_costs.py) ────────────────────────

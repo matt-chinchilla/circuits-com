@@ -10,6 +10,10 @@ import { DEMO_READ_ONLY_DETAIL, DEMO_READ_ONLY_MESSAGE } from '@admin/services/d
  */
 const CODE_MESSAGES: Record<string, string> = {
   [DEMO_READ_ONLY_DETAIL]: DEMO_READ_ONLY_MESSAGE,
+  // routes/feed_credentials.py 422. The server deliberately does NOT quote the
+  // rejected key back (a validation message is a classic place for a secret to
+  // escape), so the sentence has to describe the rule instead of the value.
+  invalid_api_key: 'That key doesn’t look usable — 8 to 128 plain-text characters.',
 };
 
 /**
