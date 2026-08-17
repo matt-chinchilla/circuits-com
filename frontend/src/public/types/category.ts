@@ -14,6 +14,9 @@ export interface Category {
   slug: string;
   icon: string;
   description?: string | null;
+  // OWN-count only — parts attach to subcategories, so a top-level card's
+  // real total is this plus the children's counts (summed client-side).
+  parts_count?: number | null;
   children: Subcategory[];
 }
 

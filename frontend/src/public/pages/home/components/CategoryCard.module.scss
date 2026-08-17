@@ -23,6 +23,26 @@
   gap: 12px;
 }
 
+// Per-category part count — top-right pill, ported 1:1 from the design kit's
+// .cat-card-count (mono, tabular numerals, accent tint 10% -> 18% on hover).
+.count {
+  margin-left: auto;
+  font-family: $font-mono;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 3px 9px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--theme-accent, $nav-blue) 10%, transparent);
+  color: var(--theme-accent, $nav-blue);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.card:hover .count {
+  background: color-mix(in srgb, var(--theme-accent, $nav-blue) 18%, transparent);
+}
+
 .icon {
   font-size: 1.5rem;
   line-height: 1;

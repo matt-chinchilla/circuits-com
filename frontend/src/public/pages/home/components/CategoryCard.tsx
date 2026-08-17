@@ -15,6 +15,13 @@ interface CategoryCardProps {
 export default function CategoryCard({ category, index }: CategoryCardProps) {
   const navigate = useNavigate();
 
+  // The API's top-level parts_count is own-only (parts attach to
+  // subcategories), so the card's number is own + children — the same
+  // rollup the category page itself shows.
+  const totalParts =
+    (category.parts_count ?? 0) +
+    category.children.reduce((sum, sub) => sum + (sub.parts_count ?? 0), 0);
+
   function handleCardClick(e: React.MouseEvent) {
     if ((e.target as HTMLElement).closest("a")) return;
     navigate(`/category/${category.slug}`);
@@ -45,6 +52,14 @@ export default function CategoryCard({ category, index }: CategoryCardProps) {
           <Icon name={category.icon} />
         </span>
         <h3 className={styles.name}>{category.name}</h3>
+        {totalParts > 0 && (
+          <span
+            className={styles.count}
+            aria-label={`${totalParts.toLocaleString()} parts`}
+          >
+            {totalParts.toLocaleString()}
+          </span>
+        )}
       </div>
       {category.children.length > 0 && (
         <div className={styles.subcategories}>
