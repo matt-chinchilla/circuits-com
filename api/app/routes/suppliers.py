@@ -1,6 +1,10 @@
+import json
+import os
 import uuid
+from collections.abc import Iterator
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, field_validator
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -19,6 +23,12 @@ from app.models import (
     User,
 )
 from app.services.auth_service import get_current_user
+
+# `_sync_event` is the ONE definition of the wire shape (importer.py owns it).
+# The abort path below has to emit the same key set, and re-typing the dict
+# here is how a stream ends up with an event the client's parser drops.
+from app.services.part_feed.importer import _sync_event, sync_supplier_listings
+from app.services.part_feed.registry import resolve_provider
 from app.utils.color import validate_optional_hex_color
 from app.utils.image_url import validate_optional_image_url
 
@@ -251,6 +261,133 @@ def delete_supplier(
     db.delete(supplier)
     db.commit()
     return {"status": "ok"}
+
+
+# ── Live inventory sync ─────────────────────────────────────────────────────
+
+# Only an action that WROTE something becomes a row. The dashboard renders a
+# part_synced event as "Synced X into Y" and ActivityEvent has no action column
+# to tell the kinds apart afterwards, so a `not_found` / `no_data` row would
+# read as a sync that never happened. Both still travel the live stream, where
+# the operator can see exactly what the feed did and did not answer.
+_RECORDED_PART_ACTIONS = frozenset({"updated", "media_filled"})
+
+_ABORTED_COUNTS = {"synced": 0, "media_filled": 0, "not_found": 0, "no_data": 0}
+
+
+def _record_event(db: Session, supplier_id: uuid.UUID, event: dict) -> None:
+    """Append one activity row for `event` — its own commit, so an abort
+    (client disconnect, provider blowing up) keeps everything already reported.
+
+    Values are clamped to their columns here rather than trusted: `title` is
+    the feed's own `sku — manufacturer` string and nothing upstream bounds the
+    manufacturer, and Postgres answers an over-long value with
+    StringDataRightTruncation, which would kill the run mid-stream. SQLite
+    accepts it silently, so the test suite alone would never catch it.
+    """
+    if event.get("kind") == "part_synced" and event.get("action") not in _RECORDED_PART_ACTIONS:
+        return
+    detail = event.get("detail")
+    # ONLY the event's own image (a feed part photo, already bounded to 500 by
+    # the importer's `_safe_image`). Never `supplier.logo_url` — that column is
+    # Text and routinely holds a 64KB data URL from the admin's cropper.
+    image_url = event.get("image_url")
+    if image_url and len(image_url) > 500:
+        # Unreachable through the importer; a dropped thumbnail still beats a
+        # truncated (broken) URL, and beats aborting the run.
+        image_url = None
+    db.add(
+        ActivityEvent(
+            id=uuid.uuid4(),
+            kind=str(event.get("kind"))[:40],
+            supplier_id=supplier_id,
+            title=str(event.get("title") or "")[:255],
+            detail=detail[:500] if detail else None,
+            image_url=image_url,
+        )
+    )
+    db.commit()
+
+
+@router.post("/{supplier_id}/sync")
+def sync_supplier(
+    supplier_id: str,
+    limit: int = 25,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Refresh this supplier's listings from its distributor feed, streaming
+    NDJSON — one JSON object per line, flushed as each part is done.
+
+    A sync takes minutes (the provider throttles itself under the free tier's
+    ~30 calls/min), so the admin watches it happen instead of staring at a
+    spinner. The route is deliberately thin: `sync_supplier_listings` owns the
+    import and commits per part; this adds an activity row per event and
+    serializes.
+
+    ORDER OF REFUSAL, and it matters:
+
+    1. No ``MOUSER_API_KEY`` → **404 sync_unavailable**. Same feature-off
+       posture as the Stripe routes: an unconfigured environment has no such
+       endpoint. It comes FIRST because `resolve_provider` constructs the
+       provider, whose constructor raises without a key — resolving first would
+       turn "not configured" into a 500.
+    2. Unknown/malformed id → 404.
+    3. No provider covers this supplier → **409 no_feed_for_supplier**: the
+       endpoint exists, this row just has no feed behind it.
+
+    `def`, not `async def`: the provider sleeps between calls to stay under the
+    rate limit, and Starlette runs a sync generator in a threadpool where that
+    blocking is harmless. As an `async def` it would stall the event loop for
+    the whole run.
+    """
+    if not os.environ.get("MOUSER_API_KEY"):
+        raise HTTPException(404, "sync_unavailable")
+    supplier_uuid = _to_uuid(supplier_id)
+    supplier = db.query(Supplier).filter(Supplier.id == supplier_uuid).first()
+    if not supplier:
+        raise HTTPException(404, "Supplier not found")
+    provider = resolve_provider(supplier)
+    if provider is None:
+        raise HTTPException(409, "no_feed_for_supplier")
+    # A negative LIMIT is a Postgres error and a huge one is an unbounded run
+    # against a rate-limited API; both clamp rather than 422 — the number is a
+    # batch size, not a request the caller can get wrong.
+    limit = max(1, min(50, limit))
+    # Read off the row BEFORE the body runs: the abort path rolls back, and
+    # these two values must survive that without re-querying.
+    supplier_key = str(supplier.id)
+    supplier_name = supplier.name
+
+    def stream() -> Iterator[str]:
+        try:
+            for event in sync_supplier_listings(db, provider, supplier, limit=limit):
+                _record_event(db, supplier_uuid, event)
+                yield json.dumps(event) + "\n"
+        except Exception as exc:  # noqa: BLE001
+            # A raise inside a response body cuts the NDJSON off mid-line: the
+            # client sees a half-written run with no ending and no reason.
+            # FeedFatalError (auth/quota) is already handled inside
+            # `sync_supplier_listings`; this is for everything else.
+            db.rollback()
+            failed = _sync_event("sync_error", supplier_key, "Sync failed", str(exc))
+            _record_event(db, supplier_uuid, failed)
+            yield json.dumps(failed) + "\n"
+            # The counts are genuinely unknown at this point — zeros plus
+            # "sync aborted" says so, rather than inventing a total.
+            aborted = _sync_event("sync_finished", supplier_key, supplier_name, "sync aborted")
+            aborted["counts"] = dict(_ABORTED_COUNTS)
+            _record_event(db, supplier_uuid, aborted)
+            yield json.dumps(aborted) + "\n"
+
+    return StreamingResponse(
+        stream(),
+        media_type="application/x-ndjson",
+        # nginx buffers a proxied response by default (and its gzip_types cover
+        # application/json but not x-ndjson), which would hold the whole run
+        # back and deliver it in one lump — the opposite of the point.
+        headers={"X-Accel-Buffering": "no", "Cache-Control": "no-cache"},
+    )
 
 
 @router.get("/{supplier_id}/parts")

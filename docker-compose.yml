@@ -74,6 +74,17 @@ services:
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
       # Onboarding rep credited (Sponsor.sold_by) for self-serve checkout sales.
       SELF_SERVE_ONBOARDING_REP: ${SELF_SERVE_ONBOARDING_REP:-Daniel}
+      # ── Distributor part feed (Mouser Search API) ─────────────────────
+      # Powers POST /api/suppliers/{id}/sync. Empty = the route 404s
+      # ("sync_unavailable") and the admin console shows the feature as
+      # unconfigured — same feature-off posture as the Stripe routes.
+      #
+      # The HOST variable is deliberately NOT named MOUSER_API_KEY: a stale,
+      # INVALID key by that name already lives in some host environments, and
+      # `${MOUSER_API_KEY:-}` would hand it straight to the container, where a
+      # 401 from Mouser is a FeedFatalError — the sync would fail while
+      # looking configured. MOUSER_SEARCH_API_KEY is the working key's home.
+      MOUSER_API_KEY: ${MOUSER_SEARCH_API_KEY:-}
       # NOTE deliberately ABSENT here: ANTHROPIC_ADMIN_KEY. It is an
       # ORGANIZATION-level admin credential and only the cost-sync service
       # reads it — the internet-facing api container must not carry a secret

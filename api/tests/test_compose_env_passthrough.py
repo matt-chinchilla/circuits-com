@@ -346,6 +346,54 @@ def test_the_cost_sync_service_inherits_the_prod_log_cap():
     )
 
 
+# ── Distributor part feed (2026-08-17) ──────────────────────────────────────
+# POST /api/suppliers/{id}/sync reads MOUSER_API_KEY from process env and 404s
+# without it. Absent from this allowlist the key can never arrive, so the
+# feature would be permanently "unavailable" on a box whose .env sets it —
+# the DEMO_LOGIN_ENABLED failure again.
+
+
+def test_both_compose_files_pass_the_part_feed_key_through():
+    for path in (DEV_COMPOSE, PROD_COMPOSE):
+        block = _service_block(path, "api")
+        assert re.search(r"^\s*MOUSER_API_KEY:\s*\$\{MOUSER_SEARCH_API_KEY:-\}\s*$", block, re.M), (
+            f"{path.name}: the api service must map MOUSER_API_KEY to the HOST variable "
+            "MOUSER_SEARCH_API_KEY with an empty default (empty = the sync route 404s, "
+            "which is the correct 'not configured' state)."
+        )
+
+
+def test_neither_compose_file_passes_the_host_mouser_api_key_through():
+    """The container variable and the host variable share a name ONLY by
+    accident of history, and that accident is a trap: a stale, INVALID
+    MOUSER_API_KEY already exists in host environments. Interpolating it would
+    hand the app a key that authenticates as nobody — every sync would fail
+    with a 401 (a FeedFatalError) while the deployment looked configured.
+    The working key lives in MOUSER_SEARCH_API_KEY; nothing may read the other.
+    """
+    for path in (DEV_COMPOSE, PROD_COMPOSE):
+        # Comment lines are skipped deliberately: both files EXPLAIN this trap
+        # by naming the variable, the same way the ANTHROPIC_ADMIN_KEY guard
+        # above matches an env LINE rather than a substring.
+        live = [ln for ln in path.read_text().splitlines() if not ln.strip().startswith("#")]
+        assert "${MOUSER_API_KEY" not in "\n".join(live), (
+            f"{path.name} interpolates the HOST MOUSER_API_KEY. Read from "
+            "MOUSER_SEARCH_API_KEY instead — the same-named host value is a "
+            "known-invalid key and would silently break every sync."
+        )
+
+
+def test_the_part_feed_key_is_never_pinned_in_a_compose_file():
+    for path in (DEV_COMPOSE, PROD_COMPOSE):
+        block = _service_block(path, "api")
+        line = next(ln for ln in block.splitlines() if ln.strip().startswith("MOUSER_API_KEY:"))
+        default = line.split(":-", 1)[1].rstrip("}").strip() if ":-" in line else "<unset>"
+        assert default == "", (
+            f"{path.name}: a distributor API key must come from the host, never be "
+            "committed with a literal default."
+        )
+
+
 def test_the_secret_key_is_not_exposed_to_the_frontend_build():
     """The publishable key is safe in a browser; the secret key is not.
 

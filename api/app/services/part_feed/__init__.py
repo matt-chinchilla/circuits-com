@@ -7,5 +7,12 @@ touches import logic. Provider choice is per-run, keyed by API-key presence.
 
 from app.services.part_feed.base import FeedPart, FeedPriceBreak, PartFeedProvider
 from app.services.part_feed.mouser import MouserProvider
+from app.services.part_feed.registry import resolve_provider
 
-__all__ = ["FeedPart", "FeedPriceBreak", "PartFeedProvider", "MouserProvider"]
+__all__ = [
+    "FeedPart",
+    "FeedPriceBreak",
+    "PartFeedProvider",
+    "MouserProvider",
+    "resolve_provider",
+]

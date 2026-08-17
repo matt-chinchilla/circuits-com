@@ -130,6 +130,12 @@ services:
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
       # Onboarding rep credited (Sponsor.sold_by) for self-serve checkout sales.
       SELF_SERVE_ONBOARDING_REP: ${SELF_SERVE_ONBOARDING_REP:-Daniel}
+      # Distributor part feed (Mouser Search API) — see the dev compose note.
+      # Lives in /opt/circuits-com/.env, never in git. Empty = the sync route
+      # 404s, which is the correct "not configured" state. The host variable is
+      # MOUSER_SEARCH_API_KEY on purpose: an invalid legacy MOUSER_API_KEY
+      # exists in host environments and must never be the one passed through.
+      MOUSER_API_KEY: ${MOUSER_SEARCH_API_KEY:-}
       # Anthropic ORGANIZATION admin key (sk-ant-admin…). Unset today — the
       # ANTHROPIC_ADMIN_KEY deliberately absent: an org-level admin credential
       # only the cost-sync service reads — see the dev compose note.
