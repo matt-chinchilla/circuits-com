@@ -144,19 +144,21 @@
   flex-wrap: wrap;
   gap: 10px;
 
-  // Mobile: ONE-ROW horizontal snap rail, not a wrapping grid — the 2026-08-16
-  // taxonomy expansion gave some families 23 subcategories, and 12 rows of
-  // pills buried the page. A rail keeps the sticky bar at CONSTANT height for
-  // any chip count; the thin scrollbar is the "more this way" affordance
-  // (no edge-fade mask — it would falsely dim the last chip at scroll end).
+  // Mobile, ≤6 subs: chips wrap (two rows worst-case — inside Material's
+  // cap). Families ABOVE 6 subs don't render this bar on mobile at all;
+  // they collapse to the SubcatSheet trigger (the owner rejected both the
+  // 12-row wrap and the swipe rail; NN/g: horizontally scrolling chip rows
+  // get ignored past ~6 items).
   @media (max-width: $bp-mobile) {
-    flex-wrap: nowrap;
     gap: 8px;
-    padding: 2px 4px 8px;
-    overflow-x: auto;
-    scroll-snap-type: x proximity;
-    -webkit-overflow-scrolling: touch;
-    @include scrollbar-thin(4px, 2px);
+    padding: 0 4px;
+  }
+}
+
+// Families >6 subs: chips are desktop-only (mobile gets the sheet trigger).
+.chipBarWideOnly {
+  @media (max-width: $bp-mobile) {
+    display: none;
   }
 }
 
@@ -166,11 +168,6 @@
   align-items: center;
   gap: 6px;
   padding: 6px 18px;
-
-  @media (max-width: $bp-mobile) {
-    scroll-snap-align: start;
-    white-space: nowrap;
-  }
   border-radius: 20px;
   border: 1.5px solid rgba(255, 255, 255, 0.35);
   background: transparent;

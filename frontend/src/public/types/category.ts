@@ -3,6 +3,9 @@ export interface Subcategory {
   name: string;
   slug: string;
   icon: string;
+  // Server sends it on category detail children; optional because older
+  // cached shells may predate it. `| null` per the ?:-misses-null gotcha.
+  parts_count?: number | null;
 }
 
 export interface Category {

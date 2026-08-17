@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo, useRef } from 'react';
 import { useParams, useSearchParams, useLocation, useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import SubcategoryChips from './components/SubcategoryChips';
+import SubcatSheet from './components/SubcatSheet';
 import PartsTable from './components/PartsTable';
 import SponsorBlock from './components/SponsorBlock';
 import SilverPartners from './components/SilverPartners';
@@ -384,7 +385,22 @@ export default function CategoryPage() {
       {shell && !needsCanonicalRedirect ? (
         <nav className={styles.stickySubnav} aria-label="Subcategories">
           <div className={styles.subnavInner}>
-            <div className={styles.chipBar}>
+            {/* >6 subs on mobile: the chip bar collapses to a 44px trigger +
+                bottom-sheet index (constant height at any count). Desktop and
+                small families keep the chips. */}
+            {shell.children.length > 6 && (
+              <SubcatSheet
+                familyName={shell.name}
+                familySlug={shell.slug}
+                subcategories={shell.children}
+                activeSlug={onChild ? childSlug ?? null : null}
+                counts={subCounts}
+                totalParts={allParts.length}
+              />
+            )}
+            <div
+              className={`${styles.chipBar} ${shell.children.length > 6 ? styles.chipBarWideOnly : ''}`}
+            >
               {onChild ? (
                 <SubcategoryChips
                   subcategories={shell.children}

@@ -1,0 +1,200 @@
+@use '@shared/styles/variables' as *;
+@use '@shared/styles/mixins' as *;
+
+// Mobile-only bottom-sheet subcategory picker. The trigger replaces the chip
+// bar ONLY under $bp-mobile and only for families with >6 subcategories —
+// desktop never renders any of this (display: none).
+
+.trigger {
+  display: none;
+
+  @media (max-width: $bp-mobile) {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    min-height: 44px;
+    padding: 8px 14px;
+    font: inherit;
+    font-size: 0.9rem;
+    font-weight: 600;
+    text-align: left;
+    color: rgba(255, 255, 255, 0.92);
+    background: rgba(255, 255, 255, 0.07);
+    border: 1.5px solid rgba(255, 255, 255, 0.3);
+    border-radius: 10px;
+    cursor: pointer;
+  }
+}
+
+.triggerIcon {
+  flex: 0 0 auto;
+  display: inline-flex;
+  font-size: 1.05rem;
+  opacity: 0.85;
+}
+
+.triggerLabel {
+  @include truncate;
+  flex: 1 1 auto;
+}
+
+.triggerMeta {
+  flex: 0 0 auto;
+  font-family: $font-mono;
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+// ─── Sheet ──────────────────────────────────────────────────────────────────
+
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: flex-end;
+  background: rgba(0, 0, 0, 0.55);
+  // opacity-only entrance — the scrim never translates, so a light blur is
+  // safe per the standing perf rule.
+  backdrop-filter: blur(2px);
+  animation: sheet-scrim-in 0.18s ease-out both;
+}
+
+.sheet {
+  width: 100%;
+  max-height: 72vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--theme-nav-bg, #0e1113);
+  color: rgba(255, 255, 255, 0.92);
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 16px 16px 0 0;
+  padding-bottom: env(safe-area-inset-bottom, 0);
+  animation: sheet-rise 0.22s ease-out both;
+}
+
+.grabber {
+  align-self: center;
+  width: 42px;
+  height: 4px;
+  margin: 8px 0 2px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.sheetHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 16px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.sheetTitle {
+  font-family: $font-mono;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.close {
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.9rem;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.08);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.list {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 6px 8px 14px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  padding: 10px 10px;
+  color: rgba(255, 255, 255, 0.88);
+  text-decoration: none;
+  border-radius: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  &:active {
+    background: rgba(255, 255, 255, 0.08);
+  }
+}
+
+.rowAll {
+  font-weight: 600;
+}
+
+.rowActive {
+  background: color-mix(in srgb, var(--theme-accent, #44bd13) 14%, transparent);
+
+  .rowName::after {
+    content: ' \25CF current';
+    font-family: $font-mono;
+    font-size: 0.62rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--theme-accent, #44bd13);
+  }
+}
+
+.rowIcon {
+  flex: 0 0 auto;
+  display: inline-flex;
+  font-size: 1.05rem;
+  opacity: 0.8;
+}
+
+.rowName {
+  @include truncate;
+  flex: 1 1 auto;
+  font-size: 0.92rem;
+}
+
+.rowCount {
+  flex: 0 0 auto;
+  font-family: $font-mono;
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+@keyframes sheet-scrim-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes sheet-rise {
+  from { transform: translateY(28px); opacity: 0.4; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scrim,
+  .sheet {
+    animation: none;
+  }
+}
