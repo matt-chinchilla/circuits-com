@@ -5,7 +5,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
@@ -545,13 +545,34 @@ def related_parts(part_id: str, db: Session = Depends(get_db)):
                 .order_by(Category.name)
                 .all()
             )
-            for sib in siblings:
-                pick = (
-                    db.query(Part)
-                    .filter(Part.category_id == sib.id)
-                    .order_by(Part.sku)
-                    .first()
+            # Batched pick instead of a per-sibling .first() — the loop shape
+            # was an N+1 (~2 round-trips per sibling once each row's selectin
+            # listings load fires). A window function keeps the fetch at one
+            # row per sibling (fetching ALL sibling parts would be worse than
+            # the N+1 at real catalog sizes), then one Part query loads the
+            # picks with a single shared selectin batch for their listings.
+            sib_ids = [s.id for s in siblings]
+            picks_by_cat: dict = {}
+            if sib_ids:
+                rn = (
+                    func.row_number()
+                    .over(partition_by=Part.category_id, order_by=Part.sku)
+                    .label("rn")
                 )
+                ranked = (
+                    db.query(Part.id.label("pid"), rn)
+                    .filter(Part.category_id.in_(sib_ids))
+                    .subquery()
+                )
+                first_ids = [
+                    row.pid for row in db.query(ranked.c.pid).filter(ranked.c.rn == 1)
+                ]
+                picks_by_cat = {
+                    p.category_id: p
+                    for p in db.query(Part).filter(Part.id.in_(first_ids))
+                }
+            for sib in siblings:
+                pick = picks_by_cat.get(sib.id)
                 if pick is not None:
                     companions.append((pick, sib))
                 if len(companions) >= 4:

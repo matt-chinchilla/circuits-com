@@ -11,15 +11,25 @@ import styles from './PartFormPage.module.scss';
 // A pydantic field-validator 422 carries an ARRAY detail that apiErrorDetail
 // deliberately drops — pull the failing field names out so the admin gets a
 // named error instead of the generic toast (and an endless retry loop).
-function rejectedUrlField(err: unknown): 'image_url' | 'datasheet_url' | null {
+// Every schema-rejectable field is mapped, not just the URL pair — a pasted
+// 101-char SKU deserves a "which field" signal too.
+const FIELD_LABELS: Record<string, string> = {
+  sku: 'SKU',
+  manufacturer_name: 'Manufacturer',
+  sub_slug: 'Subcategory slug',
+  lifecycle_status: 'Lifecycle status',
+  image_url: 'Product image URL',
+  datasheet_url: 'Datasheet URL',
+};
+
+function rejectedField(err: unknown): string | null {
   if (!axios.isAxiosError(err) || err.response?.status !== 422) return null;
   const detail: unknown = err.response.data?.detail;
   const locs = Array.isArray(detail)
     ? detail.flatMap((d: { loc?: unknown[] }) => (Array.isArray(d.loc) ? d.loc : []))
     : [];
-  if (locs.includes('image_url')) return 'image_url';
-  if (locs.includes('datasheet_url')) return 'datasheet_url';
-  return null;
+  const hit = locs.find((l): l is string => typeof l === 'string' && l in FIELD_LABELS);
+  return hit ?? null;
 }
 
 // ─── Form shape ────────────────────────────────────────────────────────────
@@ -226,13 +236,13 @@ export default function PartFormPage() {
         setTimeout(() => navigate(`/admin/parts/${created.id}`), 900);
       }
     } catch (err) {
-      const field = rejectedUrlField(err);
+      const field = rejectedField(err);
       setToast({
         type: 'error',
-        msg: field === 'image_url'
-          ? 'Product image URL was rejected — use a direct http(s) image link.'
-          : field === 'datasheet_url'
-            ? 'Datasheet URL was rejected — use a direct http(s) link.'
+        msg: field === 'image_url' || field === 'datasheet_url'
+          ? `${FIELD_LABELS[field]} was rejected — use a direct http(s) link.`
+          : field
+            ? `${FIELD_LABELS[field]} was rejected — check its value and length.`
             : 'Failed to save part. Please try again.',
       });
     } finally {

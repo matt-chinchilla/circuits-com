@@ -62,4 +62,19 @@ describe('extractSpecs', () => {
     const labels = specs.map(s => s.label);
     expect(new Set(labels).size).toBe(labels.length);
   });
+
+  it('does not misread a TO-220A package as a 220 A current rating', () => {
+    const byLabel = Object.fromEntries(
+      extractSpecs('TO-220A rectifier').map(s => [s.label, s.value]),
+    );
+    expect(byLabel['Current rating']).toBeUndefined();
+    expect(byLabel['Package']).toBe('TO-220A');
+  });
+
+  it('parses the Ω symbol, not just spelled-out Ohm', () => {
+    const byLabel = Object.fromEntries(
+      extractSpecs('10kΩ pull-up resistor, 0402').map(s => [s.label, s.value]),
+    );
+    expect(byLabel['Resistance']).toBe('10 kΩ');
+  });
 });

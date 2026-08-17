@@ -169,6 +169,11 @@ export default function PartDetailPage() {
     );
   }
 
+  // One sanitizing parse per render, referenced twice in the JSX below —
+  // mirrors the public PartPage's partImage/datasheetHref locals.
+  const datasheetHref = safeHttpUrl(part.datasheet_url);
+  const productImageHref = safeImageUrl(part.image_url);
+
   return (
     <div className={styles.page}>
       <div className={styles.pageHead}>
@@ -267,9 +272,9 @@ export default function PartDetailPage() {
             <div>
               <dt>Datasheet</dt>
               <dd>
-                {safeHttpUrl(part.datasheet_url) ? (
+                {datasheetHref ? (
                   <a
-                    href={safeHttpUrl(part.datasheet_url) ?? undefined}
+                    href={datasheetHref}
                     target="_blank"
                     rel="noopener noreferrer"
                     className={styles.datasheetLink}
@@ -285,9 +290,9 @@ export default function PartDetailPage() {
             <div>
               <dt>Product image</dt>
               <dd>
-                {safeImageUrl(part.image_url) ? (
+                {productImageHref ? (
                   <a
-                    href={safeImageUrl(part.image_url) ?? undefined}
+                    href={productImageHref}
                     target="_blank"
                     rel="noopener noreferrer"
                     className={styles.datasheetLink}

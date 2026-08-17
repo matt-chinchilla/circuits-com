@@ -82,13 +82,18 @@ export function extractSpecs(description: string | null): SpecRow[] {
   const volts = description.match(/\b(\d+(?:\.\d+)?)\s?(k?V)\b/i);
   if (volts) push('Voltage rating', `${volts[1]} ${volts[2].replace(/v/, 'V')}`);
 
-  const amps = description.match(/\b(\d+(?:\.\d+)?)\s?(m|µ|u)?A\b/);
+  // Lookbehind blocks digits glued to a hyphen/word so package designators
+  // like TO-220A don't read as a 220 A current rating (a lookahead after the
+  // A can't catch this — the char after the package's A is a space).
+  const amps = description.match(/(?<![\w-])(\d+(?:\.\d+)?)\s?(m|µ|u)?A\b/);
   if (amps) push('Current rating', `${amps[1]} ${(amps[2] ?? '').replace('u', 'µ')}A`);
 
   const farads = description.match(/\b(\d+(?:\.\d+)?)\s?(p|n|µ|u|m)?F\b/);
   if (farads) push('Capacitance', `${farads[1]} ${(farads[2] ?? '').replace('u', 'µ')}F`);
 
-  const ohms = description.match(/\b(\d+(?:\.\d+)?)\s?(k|M|m)?(?:ohm|Ω)s?\b/i);
+  // (?!\w) not \b — a trailing \b after Ω is a no-op without the /u flag
+  // (Ω is non-ASCII, so Ω→space never forms an ASCII word boundary).
+  const ohms = description.match(/\b(\d+(?:\.\d+)?)\s?(k|M|m)?(?:ohm|Ω)s?(?!\w)/i);
   if (ohms) push('Resistance', `${ohms[1]} ${ohms[2] ?? ''}Ω`);
 
   const hertz = description.match(/\b(\d+(?:\.\d+)?)\s?(k|M|G)?Hz\b/);
