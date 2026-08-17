@@ -1,12 +1,26 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   parseNdjson,
   tallyCounts,
   terminalState,
   syncErrorMessage,
+  syncSupplier,
   SyncStreamError,
   type SyncEvent,
 } from '@admin/services/syncStream';
+import { bustSponsorCaches } from '@admin/services/swCache';
+
+// Both collaborators reach for browser globals this node-env suite has no
+// business booting (localStorage for the token, `caches` for the SW bust).
+// Stubbing them keeps the reader loop itself — the part these cases are about
+// — the only real code under test.
+vi.mock('@admin/services/adminApi', () => ({
+  authHeaders: () => ({}),
+  onUnauthorized: vi.fn(),
+}));
+vi.mock('@admin/services/swCache', () => ({
+  bustSponsorCaches: vi.fn(async () => {}),
+}));
 
 // The wire shapes below are copied from the backend's `_sync_event`
 // (api/app/services/part_feed/importer.py) — the ONE definition of the
@@ -236,5 +250,141 @@ describe('syncErrorMessage', () => {
   it('falls back to one generic sentence for anything else', () => {
     expect(syncErrorMessage(new Error('network down'))).toContain('Sync failed');
     expect(syncErrorMessage(new SyncStreamError(500, null))).toContain('Sync failed');
+  });
+
+  // A socket that drops AFTER the 200 is a different event from one that never
+  // opened, and `syncSupplier` re-badges it as status 0 / 'stream_interrupted'
+  // so this branch can say so. The generic line ("failed to start") would be
+  // flatly false with parts already on screen, and it hides the two things the
+  // operator most needs: the server-side run is probably still going, and
+  // everything already listed was committed.
+  it('distinguishes a stream that died mid-run from one that never started', () => {
+    const msg = syncErrorMessage(new SyncStreamError(0, 'stream_interrupted'));
+    expect(msg).toBe(
+      'Connection interrupted — the run may still finish server-side. Progress shown here is saved.'
+    );
+    expect(msg).not.toContain('failed to start');
+  });
+
+  it('does not claim an interruption for an ordinary status-0 failure', () => {
+    expect(syncErrorMessage(new SyncStreamError(0, null))).toContain('Sync failed');
+  });
+
+  // An abort is the operator navigating away, which `syncSupplier` swallows —
+  // it resolves instead of rejecting, so nothing reaches this function at all.
+  // Were an AbortError to leak through, it must NOT read as an interruption:
+  // that sentence promises a run is still finishing somewhere.
+  it('never reads an abort as an interruption', () => {
+    const aborted = new DOMException('The operation was aborted.', 'AbortError');
+    expect(syncErrorMessage(aborted)).toBe(
+      'Sync failed to start. Check the connection and try again.'
+    );
+  });
+});
+
+// How the reader loop ENDS, which is the whole difference between the three
+// sentences above. A hand-built ReadableStream stands in for the response body:
+// real `fetch` errors the stream with an AbortError when its signal aborts, and
+// with an ordinary Error when the socket drops, so those are the two endings
+// scripted here.
+describe('syncSupplier endings', () => {
+  const fetchMock = vi.fn();
+
+  /** A body that yields `chunks`, then ends the way `ending` says. */
+  function bodyOf(chunks: string[], ending: 'close' | 'drop' | 'abort'): ReadableStream {
+    const encoder = new TextEncoder();
+    let i = 0;
+    return new ReadableStream({
+      pull(controller) {
+        if (i < chunks.length) {
+          controller.enqueue(encoder.encode(chunks[i++]));
+          return;
+        }
+        if (ending === 'drop') controller.error(new Error('network dropped'));
+        else if (ending === 'abort')
+          controller.error(new DOMException('The operation was aborted.', 'AbortError'));
+        else controller.close();
+      },
+    });
+  }
+
+  function respondWith(chunks: string[], ending: 'close' | 'drop' | 'abort') {
+    fetchMock.mockResolvedValue({ ok: true, status: 200, body: bodyOf(chunks, ending) });
+  }
+
+  beforeEach(() => {
+    fetchMock.mockReset();
+    vi.mocked(bustSponsorCaches).mockClear();
+    vi.stubGlobal('fetch', fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('resolves when the server closes the stream cleanly', async () => {
+    respondWith([`${started}\n`, `${partA}\n`], 'close');
+    const seen: SyncEvent[] = [];
+
+    await expect(syncSupplier('s1', (e) => seen.push(e))).resolves.toBeUndefined();
+
+    expect(seen.map((e) => e.kind)).toEqual(['sync_started', 'part_synced']);
+  });
+
+  it('re-badges a drop that happened AFTER events flowed', async () => {
+    respondWith([`${started}\n`, `${partA}\n`], 'drop');
+    const seen: SyncEvent[] = [];
+
+    const err = await syncSupplier('s1', (e) => seen.push(e)).catch((e) => e);
+
+    expect(err).toBeInstanceOf(SyncStreamError);
+    expect(syncErrorMessage(err)).toContain('may still finish server-side');
+    expect(seen).toHaveLength(2); // the rows are on screen and stay there
+  });
+
+  it('leaves a drop BEFORE any event as the generic start failure', async () => {
+    respondWith([], 'drop');
+
+    const err = await syncSupplier('s1', () => {}).catch((e) => e);
+
+    expect(err).not.toBeInstanceOf(SyncStreamError);
+    expect(syncErrorMessage(err)).toContain('failed to start');
+  });
+
+  it('ends silently on an abort — no rejection for the caller to report', async () => {
+    respondWith([`${started}\n`, `${partA}\n`], 'abort');
+    const seen: SyncEvent[] = [];
+
+    await expect(syncSupplier('s1', (e) => seen.push(e))).resolves.toBeUndefined();
+
+    expect(seen).toHaveLength(2);
+  });
+
+  it('still busts the SW caches on an abort, because the writes landed', async () => {
+    // The importer commits per part, so an aborted run has changed rows the
+    // public site may still be serving from its cache — the bust is owed
+    // however the stream ended.
+    respondWith([`${started}\n`, `${partA}\n`], 'abort');
+
+    await syncSupplier('s1', () => {});
+
+    expect(bustSponsorCaches).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not bust the caches when nothing was written', async () => {
+    respondWith([`${started}\n`, `${partB}\n`], 'abort'); // not_found only
+
+    await syncSupplier('s1', () => {});
+
+    expect(bustSponsorCaches).not.toHaveBeenCalled();
+  });
+
+  it('passes the caller signal straight to fetch', async () => {
+    respondWith([], 'close');
+    const controller = new AbortController();
+
+    await syncSupplier('s1', () => {}, { signal: controller.signal });
+
+    expect(fetchMock.mock.calls[0][1].signal).toBe(controller.signal);
   });
 });

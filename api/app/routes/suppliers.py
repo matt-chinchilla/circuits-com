@@ -1,4 +1,5 @@
 import json
+import logging
 import uuid
 from collections.abc import Iterator
 
@@ -34,6 +35,8 @@ from app.services.part_feed import (
 )
 from app.utils.color import validate_optional_hex_color
 from app.utils.image_url import validate_optional_image_url
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/suppliers", tags=["suppliers"])
 
@@ -312,7 +315,11 @@ def _record_event(db: Session, supplier_id: uuid.UUID, event: dict) -> None:
     except Exception:  # noqa: BLE001
         # An activity row is bookkeeping. If the DB hiccups mid-run, losing
         # one row must not cut the NDJSON stream off mid-line — roll back and
-        # let the stream keep reporting.
+        # let the stream keep reporting. It still gets logged: silently
+        # dropping rows is how "the dashboard is missing runs" becomes
+        # unexplainable. NEVER log the event's contents — `title`/`detail`
+        # are unbounded feed strings, and the traceback is the actual signal.
+        logger.warning("activity event persist failed for supplier %s", supplier_id, exc_info=True)
         db.rollback()
 
 
@@ -367,8 +374,32 @@ def sync_supplier(
     supplier_name = supplier.name
 
     def stream() -> Iterator[str]:
+        # Running totals, tallied as the events go past. The generator owns the
+        # authoritative arithmetic (`importer._finished`) and this MIRRORS it,
+        # for one reason: when the generator raises, its own totals die with
+        # it, and the abort path still has to report what the run did. The
+        # importer commits per part BEFORE yielding its event, so everything
+        # counted here is work that survived the rollback below.
+        counts = {"synced": 0, "media_filled": 0, "not_found": 0, "no_data": 0}
+
+        def tally(event: dict) -> None:
+            if event.get("kind") != "part_synced":
+                return
+            action = event.get("action")
+            # media_filled counts in BOTH — filling an image IS a write.
+            if action == "media_filled":
+                counts["synced"] += 1
+                counts["media_filled"] += 1
+            elif action == "updated":
+                counts["synced"] += 1
+            elif action == "not_found":
+                counts["not_found"] += 1
+            elif action == "no_data":
+                counts["no_data"] += 1
+
         try:
             for event in sync_supplier_listings(db, provider, supplier, limit=limit):
+                tally(event)
                 _record_event(db, supplier_uuid, event)
                 yield json.dumps(event) + "\n"
         except Exception as exc:  # noqa: BLE001
@@ -380,10 +411,12 @@ def sync_supplier(
             failed = sync_event("sync_error", supplier_key, "Sync failed", str(exc))
             _record_event(db, supplier_uuid, failed)
             yield json.dumps(failed) + "\n"
-            # The counts are genuinely unknown at this point — zeros plus
-            # "sync aborted" says so, rather than inventing a total.
+            # Real totals, not zeros: the parts already on screen were each
+            # committed before they were reported, so blanking the counters
+            # would understate the run directly above a line promising the
+            # progress was saved. "sync aborted" still says it did not finish.
             aborted = sync_event("sync_finished", supplier_key, supplier_name, "sync aborted")
-            aborted["counts"] = {"synced": 0, "media_filled": 0, "not_found": 0, "no_data": 0}
+            aborted["counts"] = dict(counts)
             _record_event(db, supplier_uuid, aborted)
             yield json.dumps(aborted) + "\n"
         finally:

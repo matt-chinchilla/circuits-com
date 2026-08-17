@@ -22,12 +22,13 @@ Three contracts are pinned here because nothing else would notice them break:
 
 import json
 import uuid
+from decimal import Decimal
 
 import bcrypt
 import pytest
 
 from app.config import settings
-from app.models import ActivityEvent, Supplier, User
+from app.models import ActivityEvent, PartListing, Supplier, User
 from app.services.part_feed.registry import resolve_provider
 from tests.feed_helpers import FakeProvider as _FakeProvider
 from tests.feed_helpers import feed_part as _feed_part
@@ -37,8 +38,23 @@ DEMO_EMAIL = "demo@circuitcenter.ai"
 
 
 class _ExplodingProvider(_FakeProvider):
+    """Answers `explode_after` lookups normally, then blows up.
+
+    The default (0) explodes on the very first part. A non-zero value is how a
+    test gets REAL work committed before the failure — which is the only way to
+    assert the abort path reports a non-zero tally.
+    """
+
+    def __init__(self, by_mpn=None, explode_after=0):
+        super().__init__(by_mpn=by_mpn)
+        self.explode_after = explode_after
+        self.calls = 0
+
     def lookup_mpn(self, mpn):
-        raise RuntimeError("Mouser API HTTP 500 on /search/partnumber")
+        self.calls += 1
+        if self.calls > self.explode_after:
+            raise RuntimeError("Mouser API HTTP 500 on /search/partnumber")
+        return super().lookup_mpn(mpn)
 
 
 def _events(resp):
@@ -268,25 +284,79 @@ class TestStream:
     ):
         """`sync_supplier_listings` handles FeedFatalError itself; anything else
         (a 500 from the provider, a bug) would raise mid-body and cut the
-        NDJSON off with no ending event."""
+        NDJSON off with no ending event.
+
+        The run syncs ONE part before the provider explodes, because the
+        interesting half of the abort path is its TALLY: the generator's own
+        totals die with it, so the route keeps its own — and the part it counts
+        was committed before it was reported. Zeros here would blank the
+        counters above rows that are still on screen.
+        """
+        supplier, part1, part2 = (
+            seeded_db["supplier1"],
+            seeded_db["part1"],
+            seeded_db["part2"],
+        )
+        # Two listed parts, both with media already, so the sync order falls to
+        # sku (LM7805CT before STM32F407VGT6) and the first part is a plain
+        # `updated` rather than a media fill.
+        for part in (part1, part2):
+            part.image_url = "https://img.example/p.jpg"
+            part.datasheet_url = "https://docs.example/d.pdf"
+        db.add(
+            PartListing(
+                id=uuid.uuid4(),
+                part_id=part2.id,
+                supplier_id=supplier.id,
+                sku=f"AVN-{part2.sku}",
+                unit_price=Decimal("1.2500"),
+            )
+        )
+        db.commit()
+        use_fake_provider(
+            _ExplodingProvider(by_mpn={part1.sku: _feed_part(part1.sku)}, explode_after=1)
+        )
+
+        resp = _sync(client, supplier, auth_header)
+
+        assert resp.status_code == 200
+        events = _events(resp)  # every line still parses
+        assert [e["kind"] for e in events] == [
+            "sync_started",
+            "part_synced",
+            "sync_error",
+            "sync_finished",
+        ]
+        assert events[1]["action"] == "updated"
+        assert events[2]["title"] == "Sync failed"
+        assert events[2]["detail"] == "Mouser API HTTP 500 on /search/partnumber"
+        assert events[-1]["detail"] == "sync aborted"
+        assert events[-1]["counts"] == {
+            "synced": 1,
+            "media_filled": 0,
+            "not_found": 0,
+            "no_data": 0,
+        }
+        kinds = [r.kind for r in db.query(ActivityEvent).all()]
+        assert kinds == ["sync_started", "part_synced", "sync_error", "sync_finished"]
+
+    def test_an_abort_before_any_part_still_reports_zeros(
+        self, client, db, seeded_db, auth_header, feed_key, use_fake_provider
+    ):
+        """The other half of the same contract: a run that died on its FIRST
+        lookup really did nothing, and must not invent a total."""
         use_fake_provider(_ExplodingProvider())
 
         resp = _sync(client, seeded_db["supplier1"], auth_header)
 
-        assert resp.status_code == 200
-        events = _events(resp)  # every line still parses
+        events = _events(resp)
         assert [e["kind"] for e in events] == ["sync_started", "sync_error", "sync_finished"]
-        assert events[1]["title"] == "Sync failed"
-        assert events[1]["detail"] == "Mouser API HTTP 500 on /search/partnumber"
-        assert events[-1]["detail"] == "sync aborted"
         assert events[-1]["counts"] == {
             "synced": 0,
             "media_filled": 0,
             "not_found": 0,
             "no_data": 0,
         }
-        kinds = [r.kind for r in db.query(ActivityEvent).all()]
-        assert kinds == ["sync_started", "sync_error", "sync_finished"]
 
     def test_the_suppliers_logo_never_becomes_an_event_image(
         self, client, db, seeded_db, auth_header, feed_key, use_fake_provider

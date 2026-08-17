@@ -58,17 +58,19 @@ export default function SupplierDetailPage() {
   // whole supplier view with the "supplier not found" fallback.
   const [deleteError, setDeleteError] = useState('');
 
-  // The page is alive across an async sync, so state written after an unmount
-  // (or after the operator has navigated to another supplier) has to be
-  // dropped. Effects use their own cancel flag; this covers the sync handler,
-  // which is not an effect and outlives any single render.
-  const mountedRef = useRef(true);
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
+  // A sync outlives the click that started it, so leaving the page has to END
+  // it rather than let it run on invisibly: an orphaned stream keeps spending
+  // the feed's rate-limited quota and holds a server-side generator open for a
+  // console nobody is watching. Admin routes remount per `:id` (App.tsx keys
+  // the ErrorBoundary on pathname), so this cleanup covers both unmount and
+  // navigating to another supplier.
+  const syncAbortRef = useRef<AbortController | null>(null);
+  useEffect(
+    () => () => {
+      syncAbortRef.current?.abort();
+    },
+    [id]
+  );
 
   // Raised by a finishing sync so the refetch it triggers stays SILENT. The
   // loading curtain replaces the whole page, console included, so a noisy
@@ -121,40 +123,35 @@ export default function SupplierDetailPage() {
     };
   }, [id]);
 
-  // A run belongs to the supplier it was started for, and this route reuses ONE
-  // component instance across `:id` changes — so navigating to another supplier
-  // mid-sync would otherwise leave the still-open stream appending someone
-  // else's parts under the new supplier's name. The ref is also what the
-  // in-flight run checks before writing state.
-  const syncOwnerRef = useRef(id);
-  useEffect(() => {
-    if (syncOwnerRef.current === id) return;
-    syncOwnerRef.current = id;
-    setSyncState({ running: false, events: [], error: null });
-  }, [id]);
-
   const handleSync = () => {
     if (!id || syncState.running) return;
+    const controller = new AbortController();
+    syncAbortRef.current = controller;
     setSyncState({ running: true, events: [], error: null });
     // Tracked out here rather than read off state: a run that dies mid-stream
     // still committed everything it reported (the importer commits per part),
     // so a refetch is owed whenever ANY event arrived — success or not. A run
     // that never started (no feed key, wrong supplier) owes nothing.
     let receivedAny = false;
-    const isCurrentRun = () => mountedRef.current && syncOwnerRef.current === id;
-    syncSupplier(id, (event) => {
-      receivedAny = true;
-      if (!isCurrentRun()) return;
-      setSyncState((prev) => ({ ...prev, events: [...prev.events, event] }));
-    })
+    syncSupplier(
+      id,
+      (event) => {
+        receivedAny = true;
+        setSyncState((prev) => ({ ...prev, events: [...prev.events, event] }));
+      },
+      { signal: controller.signal }
+    )
+      // An abort resolves like a clean finish, so both settle paths check the
+      // signal first: there is nobody left to show a refetch or an error to,
+      // and bumping the nonce would fire a request for a page being torn down.
       .then(() => {
-        if (!isCurrentRun()) return;
+        if (controller.signal.aborted) return;
         setSyncState((prev) => ({ ...prev, running: false }));
         quietRefetchRef.current = true;
         setRefreshNonce((n) => n + 1);
       })
       .catch((err) => {
-        if (!isCurrentRun()) return;
+        if (controller.signal.aborted) return;
         setSyncState((prev) => ({ ...prev, running: false, error: syncErrorMessage(err) }));
         if (receivedAny) {
           quietRefetchRef.current = true;

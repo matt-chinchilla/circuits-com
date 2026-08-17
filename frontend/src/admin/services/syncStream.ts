@@ -193,12 +193,35 @@ export function terminalState(events: SyncEvent[]): SyncTerminalState | null {
 const GENERIC_ERROR = 'Sync failed to start. Check the connection and try again.';
 
 /**
+ * The marker for a stream that DIED MID-RUN, as opposed to one that never
+ * opened. Status 0 because no response carried it — the socket dropped after
+ * the 200. It matters because the two failures need opposite sentences: the
+ * generic line says "failed to start", which is a lie once parts have scrolled
+ * past, and it hides the fact that the server-side run is probably continuing.
+ */
+const STREAM_INTERRUPTED = 'stream_interrupted';
+
+/**
+ * True for the DOMException `fetch`/`reader.read()` reject with when their
+ * signal is aborted. Structural rather than `instanceof DOMException` so it
+ * also holds under a test DOM and in a worker-less runtime.
+ */
+function isAbortError(err: unknown): boolean {
+  return (
+    typeof err === 'object' && err !== null && (err as { name?: unknown }).name === 'AbortError'
+  );
+}
+
+/**
  * One plain sentence for whatever went wrong, for the console's quiet hint.
  * Each branch names a state the operator can actually act on; everything else
  * collapses to the generic line rather than leaking a status code at them.
  */
 export function syncErrorMessage(err: unknown): string {
   if (!(err instanceof SyncStreamError)) return GENERIC_ERROR;
+  if (err.status === 0 && err.detail === STREAM_INTERRUPTED) {
+    return 'Connection interrupted — the run may still finish server-side. Progress shown here is saved.';
+  }
   if (err.status === 404) {
     // The route 404s when MOUSER_API_KEY is unset — the same feature-off
     // posture as the Stripe routes — which is indistinguishable from a real
@@ -233,25 +256,47 @@ function isMutation(event: SyncEvent): boolean {
   );
 }
 
+/** Extra knobs for `syncSupplier`. */
+export interface SyncSupplierOptions {
+  /**
+   * Ends the run early. An abort is a SILENT termination — the promise
+   * resolves like a clean finish and no error reaches the caller — because
+   * the only thing that aborts a run is the operator leaving the page, and
+   * they are not waiting to be told about it.
+   */
+  signal?: AbortSignal;
+}
+
 /**
  * Open the sync stream and call `onEvent` for each event as it lands.
  *
- * Resolves when the server closes the stream; rejects with a `SyncStreamError`
- * for a non-OK status (callers branch on it via `syncErrorMessage`).
+ * Resolves when the server closes the stream, or when `options.signal` aborts;
+ * rejects with a `SyncStreamError` for a non-OK status, and for a mid-stream
+ * death after events flowed (callers branch via `syncErrorMessage`).
  *
  * The cache bust sits in a `finally` and is gated on a real write, because the
  * importer commits PER PART: a run that dies halfway — quota wall, dropped
  * connection, the operator navigating away — has still changed parts the public
- * site may be serving from a SW cache.
+ * site may be serving from a SW cache. That holds for an abort too, which is
+ * why the silent return still goes out through the `finally`.
  */
 export async function syncSupplier(
   supplierId: string,
-  onEvent: (event: SyncEvent) => void
+  onEvent: (event: SyncEvent) => void,
+  options: SyncSupplierOptions = {}
 ): Promise<void> {
-  const res = await fetch(
-    `${API_BASE_URL}/suppliers/${encodeURIComponent(supplierId)}/sync?limit=25`,
-    { method: 'POST', headers: authHeaders() }
-  );
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE_URL}/suppliers/${encodeURIComponent(supplierId)}/sync?limit=25`, {
+      method: 'POST',
+      headers: authHeaders(),
+      signal: options.signal,
+    });
+  } catch (err) {
+    // Aborted before the response even landed: nothing ran, nothing to say.
+    if (isAbortError(err)) return;
+    throw err;
+  }
 
   if (!res.ok) {
     if (res.status === 401) {
@@ -271,10 +316,14 @@ export async function syncSupplier(
   const decoder = new TextDecoder();
   let buffer = '';
   let mutated = false;
+  // Whether the operator has SEEN anything. It is what separates "the sync
+  // never started" from "the sync was running and the pipe broke".
+  let delivered = false;
 
   const emit = (events: SyncEvent[]) => {
     for (const event of events) {
       if (isMutation(event)) mutated = true;
+      delivered = true;
       onEvent(event);
     }
   };
@@ -294,6 +343,16 @@ export async function syncSupplier(
     // A stream that ends without a trailing newline leaves its last event in
     // the remainder; the added '\n' completes it.
     if (buffer.trim()) emit(parseNdjson(`${buffer}\n`).events);
+  } catch (err) {
+    if (isAbortError(err)) return;
+    // The socket died mid-run. Re-badge it so the console can say so:
+    // the generic "failed to start" line is plainly false with rows on
+    // screen, and the run itself is very likely STILL GOING server-side —
+    // the importer is driven by its own generator, not by this reader.
+    if (delivered && !(err instanceof SyncStreamError)) {
+      throw new SyncStreamError(0, STREAM_INTERRUPTED);
+    }
+    throw err;
   } finally {
     if (mutated) await bustSponsorCaches();
   }

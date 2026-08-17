@@ -11,6 +11,7 @@ between calls, so batch sizes (--limit) are the real throttle knob.
 """
 
 import re
+import threading
 import time
 
 import httpx
@@ -102,6 +103,16 @@ class MouserProvider:
     supplier_name = "Mouser Electronics"
     supplier_website = "mouser.com"
 
+    # The rate ceiling belongs to the API KEY, not to a provider instance, and
+    # the sync route builds ONE provider per run — two admins syncing at once
+    # are two instances in two threadpool threads. Per-instance timestamps let
+    # them both fire at full speed and blow the ~30/min limit for the account,
+    # so the last-call stamp and its lock are CLASS-level shared state.
+    # 0.0 means "long ago" (monotonic() - 0 is huge), so a first call in a
+    # fresh process never sleeps — exactly the previous behaviour.
+    _throttle_lock = threading.Lock()
+    _last_call = 0.0
+
     def __init__(self, api_key: str | None = None, client: httpx.Client | None = None):
         self.api_key = api_key or (settings.MOUSER_API_KEY or "").strip() or None
         if not self.api_key:
@@ -110,7 +121,6 @@ class MouserProvider:
                 ".env; docker-compose maps it into the container (see module docstring)"
             )
         self._client = client or httpx.Client(timeout=30)
-        self._last_call = 0.0
 
     def close(self) -> None:
         """Release the HTTP connection pool. The sync route builds one
@@ -119,16 +129,26 @@ class MouserProvider:
         self._client.close()
 
     def _throttle(self) -> None:
-        wait = _CALL_GAP_SECONDS - (time.monotonic() - self._last_call)
+        """Hold the account-wide gap before the next call.
+
+        SLOT RESERVATION, not a plain stamp-after-sleep: under the lock the
+        caller computes its wait and immediately moves `_last_call` to when
+        its own call will actually FIRE (now + wait), then sleeps outside the
+        lock. Two threads therefore reserve consecutive slots and queue up.
+        Stamping only after the sleep would let both read the same old value,
+        both compute zero wait, and both fire at once — the exact burst the
+        gap exists to prevent. Sleeping under the lock would work but would
+        block every other thread inside the critical section.
+        """
+        with MouserProvider._throttle_lock:
+            wait = max(0.0, _CALL_GAP_SECONDS - (time.monotonic() - MouserProvider._last_call))
+            MouserProvider._last_call = time.monotonic() + wait
         if wait > 0:
             time.sleep(wait)
-        self._last_call = time.monotonic()
 
     def _post(self, path: str, body: dict) -> dict:
         self._throttle()
-        resp = self._client.post(
-            f"{_BASE}{path}", params={"apiKey": self.api_key}, json=body
-        )
+        resp = self._client.post(f"{_BASE}{path}", params={"apiKey": self.api_key}, json=body)
         # NEVER raise_for_status / chain httpx errors: their messages embed
         # the full request URL, and the key rides the query string — a bad
         # key would print itself into the operator's terminal (review-caught).
