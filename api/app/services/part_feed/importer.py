@@ -8,6 +8,7 @@ only when missing, stock/lead/prices refresh on every run.
 
 import re
 import uuid
+from collections.abc import Iterator
 from decimal import Decimal
 
 from sqlalchemy.orm import Session
@@ -34,6 +35,27 @@ def _safe_image(url: str | None) -> str | None:
         return validate_optional_image_url(url)
     except ValueError:
         return None
+
+
+def _fill_part_media(part: Part, fp: FeedPart) -> bool:
+    """Fill image/datasheet ONLY where the part has none. Returns True if it
+    wrote anything.
+
+    Never overwrites a value a human or an earlier feed already set, and both
+    URLs are bounded by their String(500) columns (image via `_safe_image`,
+    which also rejects hostile schemes)."""
+    changed = False
+    if not part.image_url:
+        image = _safe_image(fp.image_url)
+        if image:
+            part.image_url = image
+            changed = True
+    # datasheet fills on its own merits — an imageless part with a real
+    # datasheet must not be refetched forever.
+    if not part.datasheet_url and fp.datasheet_url and len(fp.datasheet_url) <= 500:
+        part.datasheet_url = fp.datasheet_url
+        changed = True
+    return changed
 
 
 def _get_or_create_supplier(db: Session, provider: PartFeedProvider) -> Supplier:
@@ -86,6 +108,124 @@ def _upsert_listing(db: Session, part: Part, supplier: Supplier, fp: FeedPart) -
                 unit_price=Decimal(str(pb.unit_price)),
             )
         )
+
+
+def _sync_event(
+    kind: str,
+    supplier_id: str,
+    title: str,
+    detail: str | None = None,
+    image_url: str | None = None,
+    action: str | None = None,
+) -> dict:
+    """One wire event. Serialized verbatim as NDJSON by the streaming route —
+    keep the key set stable (`counts` is added by `sync_finished` alone)."""
+    return {
+        "kind": kind,
+        "supplier_id": supplier_id,
+        "title": title,
+        "detail": detail,
+        "image_url": image_url,
+        "action": action,
+    }
+
+
+def _category_names(db: Session, parts: list[Part]) -> dict:
+    """id -> name for the candidate set, in ONE query (no per-part lookup)."""
+    ids = {p.category_id for p in parts if p.category_id is not None}
+    if not ids:
+        return {}
+    rows = db.query(Category.id, Category.name).filter(Category.id.in_(ids)).all()
+    return {row[0]: row[1] for row in rows}
+
+
+def sync_supplier_listings(
+    db: Session,
+    provider: PartFeedProvider,
+    supplier: Supplier,
+    limit: int = 25,
+) -> Iterator[dict]:
+    """Refresh one supplier's own listings from the provider, event per part.
+
+    Identity rule: every listing attaches to the PASSED supplier row — the one
+    the admin clicked. `_get_or_create_supplier` is deliberately NOT called
+    here: a row named "Mouser" would not match the provider's own
+    "Mouser Electronics" and a twin supplier would split the catalog.
+
+    Commits PER PART, before the event is yielded, so a client disconnect or
+    the quota wall never discards work already reported as done. A
+    FeedFatalError is the wall, not a bug: it ends the stream with an error
+    event plus the counts so far instead of raising out of the generator.
+    """
+    supplier_id = str(supplier.id)
+    supplier_name = supplier.name
+    parts = (
+        db.query(Part)
+        # EXISTS, not a JOIN: nothing stops a (part, supplier) pair from
+        # holding two listing rows, and a join would then spend the `limit`
+        # budget twice on the same part.
+        .filter(
+            db.query(PartListing.id)
+            .filter(
+                PartListing.part_id == Part.id,
+                PartListing.supplier_id == supplier.id,
+            )
+            .exists()
+        )
+        # imageless parts first — they are what a sync visibly fixes
+        .order_by(Part.image_url.is_(None).desc(), Part.sku)
+        .limit(limit)
+        .all()
+    )
+    category_names = _category_names(db, parts)
+    synced = media_filled = not_found = 0
+
+    def _finished() -> dict:
+        event = _sync_event(
+            "sync_finished",
+            supplier_id,
+            supplier_name,
+            f"{synced} synced · {media_filled} images filled · {not_found} not found",
+        )
+        event["counts"] = {
+            "synced": synced,
+            "media_filled": media_filled,
+            "not_found": not_found,
+        }
+        return event
+
+    yield _sync_event("sync_started", supplier_id, supplier_name, f"{len(parts)} parts queued")
+    try:
+        for part in parts:
+            sku = part.sku
+            category = category_names.get(part.category_id)
+            fp = provider.lookup_mpn(sku)
+            if fp is None:
+                not_found += 1
+                yield _sync_event("part_synced", supplier_id, sku, category, action="not_found")
+                continue
+            _upsert_listing(db, part, supplier, fp)
+            media = _fill_part_media(part, fp)
+            image_url = part.image_url
+            db.commit()
+            synced += 1
+            if media:
+                media_filled += 1
+            yield _sync_event(
+                "part_synced",
+                supplier_id,
+                f"{sku} — {fp.manufacturer}",
+                category,
+                image_url,
+                "media_filled" if media else "updated",
+            )
+    except FeedFatalError as exc:
+        # str(exc) carries no API key — mouser.py never puts one in a message.
+        db.rollback()
+        yield _sync_event("sync_error", supplier_id, "Feed unavailable", str(exc))
+        yield _finished()
+        return
+    yield _finished()
 
 
 def backfill_images(
@@ -228,10 +368,7 @@ def fill_category(
             # into this one (and never count it as this category's fill).
             skipped += 1
             continue
-        if not part.image_url:
-            part.image_url = _safe_image(fp.image_url)
-        if not part.datasheet_url and fp.datasheet_url and len(fp.datasheet_url) <= 500:
-            part.datasheet_url = fp.datasheet_url
+        _fill_part_media(part, fp)
         _upsert_listing(db, part, supplier, fp)
     db.commit()
     return {

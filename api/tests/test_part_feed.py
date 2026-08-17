@@ -1,13 +1,19 @@
 """Part-feed provider parsing + importer upsert behavior (no network)."""
 
 import uuid
+from decimal import Decimal
+
+import pytest
+from sqlalchemy import event as sa_event
 
 from app.models import Part, PartListing, PriceBreak, Supplier
 from app.services.part_feed.base import FeedPart, FeedPriceBreak
 from app.services.part_feed.importer import (
+    _fill_part_media,
     backfill_images,
     fill_all_empty,
     fill_category,
+    sync_supplier_listings,
 )
 from app.services.part_feed.mouser import (
     _parse_availability,
@@ -114,6 +120,21 @@ def _feed_part(mpn="FEED-001", image="https://img.example/p.jpg", breaks=True):
         lead_time_days=7,
         price_breaks=[FeedPriceBreak(1, 0.10), FeedPriceBreak(100, 0.08)] if breaks else [],
     )
+
+
+def _attach_listing(db, part, supplier, sku="EXIST-1"):
+    """Give `part` a listing on `supplier` — the sync candidate condition."""
+    listing = PartListing(
+        id=uuid.uuid4(),
+        part_id=part.id,
+        supplier_id=supplier.id,
+        sku=sku,
+        stock_quantity=1,
+        unit_price=Decimal("1.0000"),
+    )
+    db.add(listing)
+    db.commit()
+    return listing
 
 
 class TestBackfillImages:
@@ -303,3 +324,228 @@ class TestFillAllEmpty:
         assert _FatalProvider.calls == 1
         assert len(results) == 1
         assert results[0]["aborted"] is True
+
+
+class TestFillPartMedia:
+    """The extracted fill helper — image only-if-missing, datasheet on its own
+    merits, both bounded by the String(500) columns they land in."""
+
+    def _bare_part(self):
+        return Part(id=uuid.uuid4(), sku="MEDIA-1", manufacturer_name="Feed Mfr")
+
+    def test_fills_missing_media_and_reports_the_change(self):
+        part = self._bare_part()
+        assert _fill_part_media(part, _feed_part(mpn=part.sku)) is True
+        assert part.image_url == "https://img.example/p.jpg"
+        assert part.datasheet_url == "https://docs.example/d.pdf"
+        # nothing left to fill — a second pass changes nothing
+        assert _fill_part_media(part, _feed_part(mpn=part.sku)) is False
+
+    def test_existing_values_are_never_overwritten(self):
+        part = self._bare_part()
+        part.image_url = "https://cdn.example/original.jpg"
+        part.datasheet_url = "https://cdn.example/original.pdf"
+        assert _fill_part_media(part, _feed_part(mpn=part.sku)) is False
+        assert part.image_url == "https://cdn.example/original.jpg"
+        assert part.datasheet_url == "https://cdn.example/original.pdf"
+
+    def test_oversized_urls_are_rejected(self):
+        # parts.image_url / datasheet_url are String(500) — a longer value
+        # would be silently truncated by Postgres-side varchar limits.
+        part = self._bare_part()
+        fp = _feed_part(mpn=part.sku, image="https://img.example/" + "a" * 500 + ".jpg")
+        fp.datasheet_url = "https://docs.example/" + "b" * 500 + ".pdf"
+        assert _fill_part_media(part, fp) is False
+        assert part.image_url is None
+        assert part.datasheet_url is None
+
+    def test_hostile_image_is_not_stored(self):
+        part = self._bare_part()
+        fp = _feed_part(mpn=part.sku, image="javascript:alert(1)")
+        fp.datasheet_url = None
+        assert _fill_part_media(part, fp) is False
+        assert part.image_url is None
+
+
+class TestSyncSupplierListings:
+    def test_happy_stream_sequence_counts_and_per_part_commits(self, db, seeded_db):
+        supplier = seeded_db["supplier1"]  # already carries listing1 -> part1
+        part1, part2 = seeded_db["part1"], seeded_db["part2"]
+        _attach_listing(db, part2, supplier)
+        provider = _FakeProvider(
+            by_mpn={
+                part1.sku: _feed_part(mpn=part1.sku),
+                part2.sku: _feed_part(mpn=part2.sku),
+            }
+        )
+        commits: list[int] = []
+        sa_event.listen(db, "after_commit", lambda s: commits.append(1))
+
+        gen = sync_supplier_listings(db, provider, supplier, limit=10)
+        started = next(gen)
+        assert started == {
+            "kind": "sync_started",
+            "supplier_id": str(supplier.id),
+            "title": "Avnet",
+            "detail": "2 parts queued",
+            "image_url": None,
+            "action": None,
+        }
+        assert commits == []  # nothing written before the first part
+
+        first = next(gen)
+        # the per-part commit lands BEFORE the event reaches the client, so an
+        # aborted stream never claims work it did not persist
+        assert len(commits) == 1
+        assert first["kind"] == "part_synced"
+        assert first["supplier_id"] == str(supplier.id)
+        assert first["action"] == "media_filled"
+        assert first["title"] == f"{part1.sku} — Feed Mfr"
+        assert first["detail"] == "Clock and Timing"
+        assert first["image_url"] == "https://img.example/p.jpg"
+        assert "counts" not in first
+
+        second = next(gen)
+        assert len(commits) == 2
+        assert second["title"] == f"{part2.sku} — Feed Mfr"
+
+        finished = next(gen)
+        assert finished["kind"] == "sync_finished"
+        assert finished["counts"] == {"synced": 2, "media_filled": 2, "not_found": 0}
+        assert finished["title"] == "Avnet"
+        with pytest.raises(StopIteration):
+            next(gen)
+
+    def test_listings_attach_to_the_clicked_supplier_row(self, db, seeded_db):
+        """Identity rule: the sync writes to the row the admin clicked, even
+        when its name differs from the provider's own supplier_name — matching
+        by name would mint a twin supplier and split the catalog."""
+        supplier = seeded_db["supplier1"]
+        supplier.name = "Mouser"  # != provider.supplier_name
+        db.commit()
+        part1 = seeded_db["part1"]
+        provider = _FakeProvider(by_mpn={part1.sku: _feed_part(mpn=part1.sku)})
+
+        events = list(sync_supplier_listings(db, provider, supplier, limit=10))
+
+        assert events[0]["title"] == "Mouser"
+        assert db.query(Supplier).filter(Supplier.name == "Mouser Electronics").count() == 0
+        assert db.query(Supplier).count() == 2  # no twin row
+        listing = (
+            db.query(PartListing)
+            .filter(PartListing.part_id == part1.id, PartListing.supplier_id == supplier.id)
+            .one()
+        )
+        assert listing.stock_quantity == 500
+        assert listing.sku == f"621-{part1.sku}"
+
+    def test_existing_media_kept_and_price_breaks_replaced(self, db, seeded_db):
+        supplier, part1 = seeded_db["supplier1"], seeded_db["part1"]
+        part1.image_url = "https://cdn.example/original.jpg"
+        part1.datasheet_url = "https://cdn.example/original.pdf"
+        db.commit()
+        listing = seeded_db["listing1"]
+        assert db.query(PriceBreak).filter(PriceBreak.listing_id == listing.id).count() == 3
+        provider = _FakeProvider(by_mpn={part1.sku: _feed_part(mpn=part1.sku)})
+
+        events = list(sync_supplier_listings(db, provider, supplier, limit=10))
+
+        synced = [e for e in events if e["kind"] == "part_synced"]
+        assert [e["action"] for e in synced] == ["updated"]
+        assert synced[0]["image_url"] == "https://cdn.example/original.jpg"
+        db.refresh(part1)
+        assert part1.image_url == "https://cdn.example/original.jpg"
+        assert part1.datasheet_url == "https://cdn.example/original.pdf"
+        breaks = db.query(PriceBreak).filter(PriceBreak.listing_id == listing.id).all()
+        assert sorted((b.min_quantity, float(b.unit_price)) for b in breaks) == [
+            (1, 0.10),
+            (100, 0.08),
+        ]
+        assert events[-1]["counts"] == {"synced": 1, "media_filled": 0, "not_found": 0}
+
+    def test_unresolvable_part_reports_not_found(self, db, seeded_db):
+        supplier, part1 = seeded_db["supplier1"], seeded_db["part1"]
+        provider = _FakeProvider()  # resolves nothing
+
+        events = list(sync_supplier_listings(db, provider, supplier, limit=10))
+
+        miss = events[1]
+        assert miss["kind"] == "part_synced"
+        assert miss["action"] == "not_found"
+        assert miss["title"] == part1.sku
+        assert miss["detail"] == "Clock and Timing"
+        assert miss["image_url"] is None
+        assert events[-1]["counts"] == {"synced": 0, "media_filled": 0, "not_found": 1}
+
+    def test_only_this_suppliers_parts_are_candidates(self, db, seeded_db):
+        """part2 has no listing on supplier1 — it must not be swept in."""
+        supplier = seeded_db["supplier1"]
+        provider = _FakeProvider(
+            by_mpn={
+                seeded_db["part1"].sku: _feed_part(mpn=seeded_db["part1"].sku),
+                seeded_db["part2"].sku: _feed_part(mpn=seeded_db["part2"].sku),
+            }
+        )
+        events = list(sync_supplier_listings(db, provider, supplier, limit=10))
+        assert events[0]["detail"] == "1 parts queued"
+        titles = [e["title"] for e in events if e["kind"] == "part_synced"]
+        assert titles == [f"{seeded_db['part1'].sku} — Feed Mfr"]
+
+    def test_limit_prefers_parts_missing_an_image(self, db, seeded_db):
+        supplier = seeded_db["supplier1"]
+        part1, part2 = seeded_db["part1"], seeded_db["part2"]
+        part1.image_url = "https://cdn.example/have-one.jpg"  # sku-first, but filled
+        _attach_listing(db, part2, supplier)
+        db.commit()
+        provider = _FakeProvider(
+            by_mpn={
+                part1.sku: _feed_part(mpn=part1.sku),
+                part2.sku: _feed_part(mpn=part2.sku),
+            }
+        )
+        events = list(sync_supplier_listings(db, provider, supplier, limit=1))
+        assert events[0]["detail"] == "1 parts queued"
+        assert [e["title"] for e in events if e["kind"] == "part_synced"] == [
+            f"{part2.sku} — Feed Mfr"
+        ]
+
+    def test_fatal_error_ends_the_stream_without_raising(self, db, seeded_db):
+        from app.services.part_feed.mouser import FeedFatalError
+
+        supplier = seeded_db["supplier1"]
+        part1, part2 = seeded_db["part1"], seeded_db["part2"]
+        _attach_listing(db, part2, supplier)
+        feed = {part1.sku: _feed_part(mpn=part1.sku)}
+
+        class _FatalOnSecond(_FakeProvider):
+            def __init__(self):
+                super().__init__(by_mpn=feed)
+                self.calls = 0
+
+            def lookup_mpn(self, mpn):
+                self.calls += 1
+                if self.calls > 1:
+                    raise FeedFatalError("Mouser API HTTP 429 on /search/partnumber")
+                return super().lookup_mpn(mpn)
+
+        events = list(sync_supplier_listings(db, _FatalOnSecond(), supplier, limit=10))
+
+        assert [e["kind"] for e in events] == [
+            "sync_started",
+            "part_synced",
+            "sync_error",
+            "sync_finished",
+        ]
+        err = events[2]
+        assert err["title"] == "Feed unavailable"
+        assert "429" in err["detail"]
+        assert err["image_url"] is None
+        assert events[-1]["counts"] == {"synced": 1, "media_filled": 1, "not_found": 0}
+        # the first part's work survived the abort's rollback
+        listing = (
+            db.query(PartListing)
+            .filter(PartListing.part_id == part1.id, PartListing.supplier_id == supplier.id)
+            .one()
+        )
+        assert listing.stock_quantity == 500
+        assert db.query(PriceBreak).filter(PriceBreak.listing_id == listing.id).count() == 2
