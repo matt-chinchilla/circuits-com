@@ -8,11 +8,9 @@
 // so bulk inventory work skips the repeated supplier/manufacturer/category
 // typing the sales team would otherwise face.
 //
-// Liquid-glass pass (house law: ONE filled primary action per screen): only
-// the first card (Add Part) keeps the filled green treatment. The Blue /
-// Gold / Purple workflows are now GLASS cards that keep their identity
-// through a tonal icon tile + accent rim on hover — the strip still reads
-// as a palette of distinct workflows, without three extra filled blocks.
+// All four cards use the original FILLED treatment — green (Add Part),
+// blue (Import CSV), gold (Sponsorship), purple (Sync) — each a solid
+// color block with a white icon tile and white text.
 
 .qaStrip {
   display: grid;
@@ -34,7 +32,9 @@
 }
 
 .qaCard {
-  // Per-card accent; the tonal variants below override it.
+  // Fallback accent for hover border/chev on any card that doesn't set its
+  // own filled colors; every current variant (Primary/Blue/Gold/Purple)
+  // overrides border-color + chev color directly, so this is a safety net.
   --qa-accent: var(--a-primary);
 
   display: grid;
@@ -78,8 +78,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  // Tonal tile — carries each workflow's hue now that the card body is glass
-  // (each variant overrides the tint; no color-mix per house norms).
+  // Default icon tile; each filled variant below overrides both this
+  // background and the icon color to a translucent white-on-color tile.
   background: rgba(10, 74, 46, 0.1);
   border-radius: 8px;
   flex-shrink: 0;
@@ -170,34 +170,86 @@
   }
 }
 
-// ─── Tonal variants ────────────────────────────────────────────────────
+// ─── Filled variants ───────────────────────────────────────────────────
 // Blue = data (Import CSV) · Gold = revenue (Sponsorship) · Purple = ops (Sync).
-// Glass bodies (one filled primary per screen); the hue lives in the icon
-// tile + the hover rim, so the strip still reads as distinct workflows.
-// Titles/hints inherit fg1/fg3 from the base card — accents are never ink.
+// Same filled treatment as the primary card, each with its own hue.
 
 .qaCardBlue {
-  --qa-accent: var(--a-blue);
+  background: var(--a-blue);
+  border-color: var(--a-blue);
+  color: #ffffff;
+
+  &:hover:not(:disabled) {
+    background: #1d4ed8;
+    border-color: #1d4ed8;
+    box-shadow: 0 6px 16px rgba(37, 99, 235, 0.22);
+  }
 
   .qaCardIcon {
-    background: rgba(37, 99, 235, 0.12);
+    background: rgba(255, 255, 255, 0.16);
+
+    :global(i.ph-light) {
+      color: #ffffff;
+    }
   }
+
+  .qaCardTitle { color: #ffffff; }
+  .qaCardHint  { color: rgba(255, 255, 255, 0.78); }
+  .qaCardChev  { color: rgba(255, 255, 255, 0.7); }
+
+  &:hover .qaCardChev { color: #ffffff; }
 }
 
 .qaCardGold {
-  --qa-accent: var(--a-warn);
+  background: var(--a-warn);
+  border-color: var(--a-warn);
+  color: #ffffff;
+
+  &:hover:not(:disabled) {
+    background: #b45309;
+    border-color: #b45309;
+    box-shadow: 0 6px 16px rgba(217, 119, 6, 0.22);
+  }
 
   .qaCardIcon {
-    background: rgba(217, 119, 6, 0.14);
+    background: rgba(255, 255, 255, 0.18);
+
+    :global(i.ph-light) {
+      color: #ffffff;
+    }
   }
+
+  .qaCardTitle { color: #ffffff; }
+  .qaCardHint  { color: rgba(255, 255, 255, 0.82); }
+  .qaCardChev  { color: rgba(255, 255, 255, 0.7); }
+
+  &:hover .qaCardChev { color: #ffffff; }
 }
 
 .qaCardPurple {
-  --qa-accent: var(--a-purple);
+  background: var(--a-purple);
+  border-color: var(--a-purple);
+  color: #ffffff;
+
+  &:hover:not(:disabled) {
+    background: #6d28d9;
+    border-color: #6d28d9;
+    box-shadow: 0 6px 16px rgba(124, 58, 237, 0.22);
+  }
 
   .qaCardIcon {
-    background: rgba(124, 58, 237, 0.12);
+    background: rgba(255, 255, 255, 0.16);
+
+    :global(i.ph-light) {
+      color: #ffffff;
+    }
   }
+
+  .qaCardTitle { color: #ffffff; }
+  .qaCardHint  { color: rgba(255, 255, 255, 0.78); }
+  .qaCardChev  { color: rgba(255, 255, 255, 0.7); }
+
+  &:hover .qaCardChev { color: #ffffff; }
 }
 
 .qaSpin {
