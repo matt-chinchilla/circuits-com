@@ -100,6 +100,15 @@ export function parseNdjson(buffer: string): { events: SyncEvent[]; rest: string
 
 const ZERO_COUNTS: SyncCounts = { synced: 0, media_filled: 0, not_found: 0, no_data: 0 };
 
+function isZeroCounts(counts: SyncCounts): boolean {
+  return (
+    counts.synced === 0 &&
+    counts.media_filled === 0 &&
+    counts.not_found === 0 &&
+    counts.no_data === 0
+  );
+}
+
 /**
  * The counters for the console header.
  *
@@ -109,12 +118,17 @@ const ZERO_COUNTS: SyncCounts = { synced: 0, media_filled: 0, not_found: 0, no_d
  * mirrors the server's arithmetic exactly, including the part that reads oddly:
  * a `media_filled` part counts in BOTH `synced` and `media_filled`, because
  * filling an image IS a write.
+ *
+ * ONE exception, and it is not the server being wrong. The route's catch-all
+ * abort ends the stream with all-zero counts and the detail "sync aborted",
+ * because at that point the totals are genuinely unknown TO IT — it rolled back
+ * and never saw the generator's running tally. But the importer commits per
+ * part BEFORE reporting it, so every part already on screen is real work that
+ * survived. Adopting those zeros would blank the counters above rows that are
+ * still sitting there, directly under a line promising progress was saved. So
+ * an all-zero finish loses to a non-empty local tally.
  */
 export function tallyCounts(events: SyncEvent[]): SyncCounts {
-  for (let i = events.length - 1; i >= 0; i -= 1) {
-    const counts = events[i].counts;
-    if (events[i].kind === 'sync_finished' && counts) return counts;
-  }
   const totals: SyncCounts = { ...ZERO_COUNTS };
   for (const event of events) {
     if (event.kind !== 'part_synced') continue;
@@ -136,7 +150,48 @@ export function tallyCounts(events: SyncEvent[]): SyncCounts {
         break;
     }
   }
+  for (let i = events.length - 1; i >= 0; i -= 1) {
+    const counts = events[i].counts;
+    if (events[i].kind !== 'sync_finished' || !counts) continue;
+    return isZeroCounts(counts) && !isZeroCounts(totals) ? totals : counts;
+  }
   return totals;
+}
+
+/** How a finished run ended. `aborted` = a `sync_error` cut it short. */
+export interface SyncTerminalState {
+  outcome: 'done' | 'aborted';
+  detail: string | null;
+}
+
+/**
+ * The console's footer: whether the run has ended, and how.
+ *
+ * Split out of the JSX because the distinction is a judgement about the event
+ * sequence, not a layout detail — a run that hit the quota wall still ends with
+ * `sync_finished`, and rendering that under a green check would tell the
+ * operator it completed. `detail` is passed through untouched; the server's
+ * summary sentence is the server's to write.
+ */
+export function terminalState(events: SyncEvent[]): SyncTerminalState | null {
+  let finished: SyncEvent | null = null;
+  let erroredBeforeFinish = false;
+  let errorSeen = false;
+  for (const event of events) {
+    if (event.kind === 'sync_error') {
+      errorSeen = true;
+    } else if (event.kind === 'sync_finished') {
+      finished = event;
+      // Snapshot rather than read at the end: only an error that PRECEDED this
+      // finish is what aborted it.
+      erroredBeforeFinish = errorSeen;
+    }
+  }
+  if (!finished) return null;
+  return {
+    outcome: erroredBeforeFinish ? 'aborted' : 'done',
+    detail: finished.detail ?? null,
+  };
 }
 
 const GENERIC_ERROR = 'Sync failed to start. Check the connection and try again.';

@@ -17,7 +17,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Icon from '@shared/components/Icon';
 import { safeImageUrl } from '@shared/utils/url';
-import { tallyCounts, type SyncAction, type SyncEvent } from '@admin/services/syncStream';
+import { tallyCounts, terminalState, type SyncAction, type SyncEvent } from '@admin/services/syncStream';
 import styles from './SyncConsole.module.scss';
 
 interface Props {
@@ -49,13 +49,6 @@ const ACTION_CLASS: Record<SyncAction, string> = {
 // How close to the bottom still counts as "following along". Anything above
 // that and the operator is reading history — do not yank them back down.
 const STICK_THRESHOLD_PX = 48;
-
-function lastFinished(events: SyncEvent[]): SyncEvent | null {
-  for (let i = events.length - 1; i >= 0; i -= 1) {
-    if (events[i].kind === 'sync_finished') return events[i];
-  }
-  return null;
-}
 
 /**
  * Part thumbnail with a glyph fallback.
@@ -104,7 +97,7 @@ export default function SyncConsole({ supplierName, running, events, error }: Pr
   }, [events.length]);
 
   const counts = tallyCounts(events);
-  const finished = lastFinished(events);
+  const terminal = terminalState(events);
 
   return (
     <section className={styles.console} aria-label={`Inventory sync — ${supplierName}`}>
@@ -203,15 +196,24 @@ export default function SyncConsole({ supplierName, running, events, error }: Pr
 
         {error && <p className={styles.hint}>{error}</p>}
 
-        {finished && (
-          <div className={styles.footer}>
-            <Icon name="check-circle" className={styles.footerIcon} />
-            {/* Verbatim from the server — it already reads
-                "X synced · Y images filled · Z not found" and appends
-                " · W no data" only when there is any. */}
-            <span>Done &mdash; {finished.detail}</span>
-          </div>
-        )}
+        {terminal &&
+          (terminal.outcome === 'done' ? (
+            <div className={styles.footer}>
+              <Icon name="check-circle" className={styles.footerIcon} />
+              {/* Verbatim from the server — it already reads
+                  "X synced · Y images filled · Z not found" and appends
+                  " · W no data" only when there is any. */}
+              <span>Done &mdash; {terminal.detail}</span>
+            </div>
+          ) : (
+            // A run the feed cut short still ends with sync_finished, but it did
+            // not complete: no green check and no "Done", or the footer would
+            // contradict the error row directly above it.
+            <div className={`${styles.footer} ${styles.footerAborted}`}>
+              <Icon name="warning-circle" className={styles.footerIcon} />
+              <span>{terminal.detail}</span>
+            </div>
+          ))}
       </div>
     </section>
   );

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   parseNdjson,
   tallyCounts,
+  terminalState,
   syncErrorMessage,
   SyncStreamError,
   type SyncEvent,
@@ -122,6 +123,84 @@ describe('tallyCounts', () => {
       },
     ];
     expect(tallyCounts(events)).toEqual({ synced: 9, media_filled: 4, not_found: 2, no_data: 1 });
+  });
+
+  // The route's catch-all abort (suppliers.py) ends the stream with
+  // ALL-ZERO counts and the detail "sync aborted", because at that point the
+  // real totals are genuinely unknown to it. Adopting those zeros would wipe
+  // the counters while the parts they counted are still on screen — and every
+  // one of those parts was committed before it was reported.
+  it('keeps the local tally when an aborted run reports all-zero counts', () => {
+    const events: SyncEvent[] = [
+      part('updated'),
+      part('media_filled'),
+      part('not_found'),
+      { kind: 'sync_error', supplier_id: 's1', title: 'Sync failed', detail: 'boom' },
+      {
+        kind: 'sync_finished',
+        supplier_id: 's1',
+        title: 'Mouser',
+        detail: 'sync aborted',
+        counts: { synced: 0, media_filled: 0, not_found: 0, no_data: 0 },
+      },
+    ];
+    expect(tallyCounts(events)).toEqual({
+      synced: 2,
+      media_filled: 1,
+      not_found: 1,
+      no_data: 0,
+    });
+  });
+
+  it('still reports zeros when a run genuinely did nothing', () => {
+    const events: SyncEvent[] = [
+      { kind: 'sync_started', supplier_id: 's1', title: 'Mouser', detail: '0 parts queued' },
+      {
+        kind: 'sync_finished',
+        supplier_id: 's1',
+        title: 'Mouser',
+        counts: { synced: 0, media_filled: 0, not_found: 0, no_data: 0 },
+      },
+    ];
+    expect(tallyCounts(events)).toEqual({ synced: 0, media_filled: 0, not_found: 0, no_data: 0 });
+  });
+});
+
+describe('terminalState', () => {
+  const finished = (detail: string): SyncEvent => ({
+    kind: 'sync_finished',
+    supplier_id: 's1',
+    title: 'Mouser',
+    detail,
+  });
+  const errored: SyncEvent = {
+    kind: 'sync_error',
+    supplier_id: 's1',
+    title: 'Feed unavailable',
+    detail: 'quota',
+  };
+
+  it('is null while the run is still going', () => {
+    expect(terminalState([part('updated')])).toBeNull();
+  });
+
+  it('reads a clean finish as done, carrying the detail verbatim', () => {
+    expect(terminalState([part('updated'), finished('1 synced · 0 images filled · 0 not found')]))
+      .toEqual({ outcome: 'done', detail: '1 synced · 0 images filled · 0 not found' });
+  });
+
+  it('reads a finish that followed an error as aborted', () => {
+    expect(terminalState([part('updated'), errored, finished('sync aborted')])).toEqual({
+      outcome: 'aborted',
+      detail: 'sync aborted',
+    });
+  });
+
+  it('ignores an error that arrives AFTER the finish it did not abort', () => {
+    expect(terminalState([finished('2 synced · 0 images filled · 0 not found'), errored])).toEqual({
+      outcome: 'done',
+      detail: '2 synced · 0 images filled · 0 not found',
+    });
   });
 });
 

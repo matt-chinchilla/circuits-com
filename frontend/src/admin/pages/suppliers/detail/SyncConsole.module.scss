@@ -321,6 +321,18 @@
   line-height: 1;
 }
 
+// A run the feed cut short. Neutral, not alarming: the work it reported is
+// committed and real — it simply did not get to the end. The green success
+// glyph is what would be a lie here, not the amber.
+.footerAborted {
+  color: var(--a-fg2);
+  font-weight: 600;
+
+  .footerIcon {
+    color: var(--a-warn);
+  }
+}
+
 @media (max-width: 600px) {
   .head {
     align-items: flex-start;
