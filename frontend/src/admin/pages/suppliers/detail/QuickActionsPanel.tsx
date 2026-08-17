@@ -5,8 +5,8 @@
 // supplier shows up across many parts/sponsorships.
 //
 // The first card is the primary action (filled green) — it replaces the
-// header "Add Part" button. The other three use blue/gold/purple tonal
-// fills so the strip reads as a palette of distinct workflows.
+// header "Add Part" button. The other three use filled blue/gold/purple
+// variants so the strip reads as a palette of distinct workflows.
 
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';

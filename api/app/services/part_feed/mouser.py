@@ -1,9 +1,10 @@
 """Mouser Search API provider (free key: mouser.com/api-search).
 
-Key handling: pass MOUSER_API_KEY as a process env var. Do NOT wire it
-through docker-compose `environment:` (the allowlist gotcha) — run one-off
-imports with `docker compose exec -e MOUSER_API_KEY=... api python -m
-app.jobs.import_parts ...` so the key never lives in a file.
+Key handling: the api container reads MOUSER_API_KEY, mapped in
+docker-compose.yml / docker-compose.prod.yml from the HOST env var
+MOUSER_SEARCH_API_KEY (empty default = feature off, 404 posture). Never
+pass the key on a command line (shell history keeps it) and never let it
+reach code, logs, or error text — `_post` already guarantees the latter.
 
 Rate limits (free tier): ~30 calls/min, ~1,000/day — the provider sleeps
 between calls, so batch sizes (--limit) are the real throttle knob.

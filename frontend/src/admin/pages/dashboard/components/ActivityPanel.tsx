@@ -16,8 +16,8 @@ export interface ActivityRow {
   text: ReactNode;
   when: string;
   // Sync rows only. Already through `safeImageUrl` by the time it lands here —
-  // the value is a supplier feed's URL (or an admin upload's data URL), so a
-  // `javascript:`/`data:text/html` string must never reach an `src`.
+  // the value is a distributor-CDN part-photo URL (`image_url` off the sync
+  // feed), so a `javascript:`/`data:text/html` string must never reach an `src`.
   thumb?: string | null;
 }
 
