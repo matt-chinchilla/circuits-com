@@ -25,7 +25,9 @@ export default function CategoryCard({ category, index }: CategoryCardProps) {
       className={styles.card}
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.05, duration: 0.4, ease: "easeOut" }}
+      // Cap the stagger: with 28 categories a linear delay left the last
+      // cards invisible for 1.35s (review-caught).
+      transition={{ delay: Math.min(index, 12) * 0.05, duration: 0.4, ease: "easeOut" }}
       whileHover={{ y: -4 }}
       onMouseEnter={() => {
         import("@public/pages/category").catch(() => {});

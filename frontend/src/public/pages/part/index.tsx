@@ -10,6 +10,7 @@ import { categoryPath } from '@shared/utils/categoryPath';
 import { safeHttpUrl, safeImageUrl } from '@shared/utils/url';
 import type { PartDetail, PartListing, RelatedPart, RelatedParts } from '@public/types/part';
 import InventoryChart from './InventoryChart';
+import PackageArt, { packageFamily } from './packageArt';
 import { extractSpecs } from './partSynth';
 import styles from './PartPage.module.scss';
 
@@ -126,6 +127,9 @@ export default function PartPage() {
   const [related, setRelated] = useState<RelatedParts | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // A dead remote image must fall through to the package art / icon tiers,
+  // not render a broken-image glyph.
+  const [imgFailed, setImgFailed] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -133,6 +137,7 @@ export default function PartPage() {
     setLoading(true);
     setError(null);
     setRelated(null);
+    setImgFailed(false);
 
     api.getPartDetail(id)
       .then((data) => {
@@ -182,6 +187,9 @@ export default function PartPage() {
 
   const specs = useMemo(() => extractSpecs(part?.description ?? null), [part?.description]);
   const partImage = safeImageUrl(part?.image_url ?? null);
+  // Image tier 2: a representative package render keyed off the parsed
+  // package token (the distributor "image is a representation only" pattern).
+  const pkgFamily = packageFamily(specs.find((s) => s.label === 'Package')?.value);
   // Stored external href — must pass safeHttpUrl before reaching href=
   // (same stored-XSS rule as sponsor websites; null hides the link).
   const datasheetHref = safeHttpUrl(part?.datasheet_url ?? null);
@@ -288,15 +296,34 @@ export default function PartPage() {
               </span>
               <div className={styles.sheetGrid}>
                 <figure className={styles.plate}>
-                  {partImage ? (
-                    <img className={styles.plateImg} src={partImage} alt={`${part.sku} product photo`} />
+                  {partImage && !imgFailed ? (
+                    <img
+                      className={styles.plateImg}
+                      src={partImage}
+                      alt={`${part.sku} product photo`}
+                      onError={() => setImgFailed(true)}
+                    />
+                  ) : pkgFamily ? (
+                    <span className={`${styles.plateIcon} ${styles.plateArt}`} aria-hidden="true">
+                      <PackageArt family={pkgFamily} />
+                    </span>
                   ) : (
                     <span className={styles.plateIcon} aria-hidden="true">
                       <Icon name={part.category_icon ?? 'cpu'} />
                     </span>
                   )}
-                  <figcaption className={styles.plateLabel}>
-                    {part.category_name ?? 'Component'}
+                  {/* figcaption must be first or last child of figure — the
+                      disclaimer lives INSIDE it, not after it. */}
+                  <figcaption className={styles.plateCaption}>
+                    <span className={styles.plateLabel}>
+                      {part.category_name ?? 'Component'}
+                    </span>
+                    {(!partImage || imgFailed) && pkgFamily && (
+                      <span className={styles.plateDisclaimer}>
+                        Representative image only &mdash; refer to the datasheet for
+                        exact specifications.
+                      </span>
+                    )}
                   </figcaption>
                 </figure>
                 <div className={styles.sheetBody}>

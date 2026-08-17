@@ -209,26 +209,37 @@ const SvSlotOpen = ({
   monthly: number | null;
 }): ReactElement => {
   const where = categoryName || 'this subcategory';
+  // Re-skin (2026-08-16, owner request): the CLASSIC "Advertise here" slot
+  // treatment — dashed footprint pad with a + drop cue, pitch text, mono CTA
+  // pill — carrying the NEW self-serve function. Look restored from the
+  // pre-checkout design; only the CTA copy reflects the live price.
   return (
     <button
       type="button"
       data-enter
-      className="svp-chip svp-open"
+      className="svp-chip svp-slot"
       onClick={onAdvertise}
       aria-label={'Advertise in ' + where + ' — open Silver slot U' + (i + 1)}
     >
       <span className="svp-via" aria-hidden="true"></span>
-      <span className="svp-refdes">U{i + 1}</span>
-      <span className="svp-open-label">Your company here</span>
-      <span className="svp-open-cta" aria-hidden="true">
-        {monthly != null ? (
-          <>
-            <strong className="svp-open-price">${monthly}/mo</strong>
-            {' · Sponsor this slot →'}
-          </>
-        ) : (
-          <>Become a Preferred Partner{' →'}</>
-        )}
+      <span className="svp-idcol">
+        <span className="svp-refdes">U{i + 1}</span>
+        <span className="svp-pad svp-pad-open" aria-hidden="true">
+          <i>+</i>
+        </span>
+      </span>
+      <span className="svp-slot-body">
+        <span className="svp-slot-text">
+          <span className="svp-slot-title">Advertise here</span>
+          <span className="svp-slot-sub">Feature your company in {where}</span>
+        </span>
+        <span className="svp-slot-cta" aria-hidden="true">
+          {monthly != null ? (
+            <>${monthly}/mo · Sponsor this slot{' →'}</>
+          ) : (
+            <>Become a Preferred Partner{' →'}</>
+          )}
+        </span>
       </span>
     </button>
   );

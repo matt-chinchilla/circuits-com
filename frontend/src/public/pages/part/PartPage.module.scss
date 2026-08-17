@@ -478,6 +478,28 @@
   color: $text-secondary;
 }
 
+// Representative package render (tier 2) — line art inherits this color.
+.plateArt {
+  padding: 26px;
+  color: rgba($executive-blue, 0.6);
+}
+
+.plateCaption {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.plateDisclaimer {
+  margin: 0;
+  max-width: 180px;
+  font-size: 0.68rem;
+  line-height: 1.45;
+  text-align: center;
+  color: $text-secondary;
+}
+
 .sheetBody {
   flex: 1 1 0;
   min-width: 0;

@@ -13,7 +13,7 @@ const ABOUT_STEPS = [
     num: '01',
     title: 'Search',
     description:
-      'Browse our curated directory of 15 component categories or search by manufacturer part number, keyword, or specification.',
+      'Browse our curated directory of 28 component categories or search by manufacturer part number, keyword, or specification.',
   },
   {
     icon: 'chart-bar',
@@ -32,8 +32,8 @@ const ABOUT_STEPS = [
 ] as const
 
 const ABOUT_STATS = [
-  { num: '15', label: 'Component Categories', suffix: '' },
-  { num: '75', label: 'Subcategories', suffix: '+' },
+  { num: '28', label: 'Component Categories', suffix: '' },
+  { num: '189', label: 'Subcategories', suffix: '' },
   { num: '13.8', label: 'Distributor Parts', suffix: 'M' },
   { num: '23', label: 'Years Online', suffix: '' },
 ] as const

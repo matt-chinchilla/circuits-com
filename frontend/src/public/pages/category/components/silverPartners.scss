@@ -359,74 +359,101 @@
   color: var(--gold-bright);
 }
 
-/* ── Open Silver slot (.svp-open) ─────────────────────────────────────────
-   An unsold row, as a dashed silver-ink card inside the stack: refdes at
-   reduced opacity, "Your company here", purchase CTA right-aligned. A real
-   <button>, so `font: inherit` and the reset below are what keep it reading
-   as a row rather than a control.
-
-   Geometry note: the row is inset (margin 10px) but the copper bus is
-   positioned against the RAIL, so `.svp-via` shifts left by the same 10px and
-   the left padding clears it — the open row's via lands on the bus exactly
-   where a sponsor chip's does. */
-.svp-open {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  width: auto;
-  margin: 6px 10px;
-  padding: 12px 16px 12px 28px;
-  text-align: left;
+/* ── Open "Advertise here" slot (.svp-slot) ───────────────────────────────
+   The CLASSIC dashed-footprint treatment, restored 2026-08-16 by owner
+   request (the flat "$100/mo" row read worse on the all-empty boards the new
+   categories surfaced). A placeholder filling an unsold Silver row so every
+   subcategory shows a full U1–U5 directory — dashed/ghost vs the solid
+   sponsor chips. Function is the NEW one: a real <button> opening the
+   self-serve checkout (price folded into the CTA pill) or the classic
+   contact route when checkout is unconfigured. The button reset keeps the
+   .svp-chip grid reading as a row rather than a control. */
+.svp-slot {
   font: inherit;
-  cursor: pointer;
+  text-align: left;
   color: inherit;
-  border: 1px dashed color-mix(in srgb, var(--gold) 50%, transparent);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--gold) 7%, transparent);
-  transition:
-    border-color 0.15s ease,
-    background 0.15s ease;
+  background: transparent;
+  border: none;
+  width: 100%;
+  cursor: pointer;
 }
-.svp-open:hover {
-  border-color: var(--gold);
-  background: color-mix(in srgb, var(--gold) 14%, transparent);
-}
-.svp-open .svp-via {
-  left: 13px;
+.svp-slot .svp-via {
   border-style: dashed;
   opacity: 0.55;
 }
-.svp-open:hover .svp-via {
+.svp-slot:hover {
+  background: color-mix(in srgb, var(--gold) 6%, transparent);
+}
+.svp-slot:hover .svp-via {
   border-color: var(--gold);
   opacity: 1;
 }
-.svp-open .svp-refdes {
-  opacity: 0.75;
-  flex: 0 0 auto;
+/* open land pad — a dashed footprint awaiting a "chip", with a + drop cue */
+.svp-pad.svp-pad-open {
+  background: transparent;
+  border: 1.5px dashed color-mix(in srgb, var(--gold) 42%, transparent);
+  box-shadow: none;
 }
-.svp-open-label {
-  font-size: 0.82rem;
-  color: var(--cream-mut);
+.svp-pad-open i {
+  font-style: normal;
+  font-size: 1rem;
+  line-height: 1;
+  color: color-mix(in srgb, var(--gold) 70%, transparent);
+}
+.svp-slot:hover .svp-pad-open {
+  border-color: var(--gold);
+}
+.svp-slot:hover .svp-pad-open i {
+  color: var(--gold-bright);
+}
+/* body spans the data columns (company→email) with a right-aligned CTA pill */
+.svp-slot-body {
+  grid-column: 2 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   min-width: 0;
+}
+.svp-slot-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.svp-slot-title {
+  font-family: var(--font-heading);
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: color-mix(in srgb, var(--cream) 72%, transparent);
+}
+.svp-slot-sub {
+  font-size: 0.74rem;
+  color: var(--cream-mut);
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
 }
-.svp-open-cta {
-  margin-left: auto;
+.svp-slot-cta {
   flex: 0 0 auto;
-  font-size: 0.8rem;
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
   font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
   color: var(--gold-bright);
   white-space: nowrap;
-  transition: color 0.15s ease;
+  padding: 5px 11px;
+  border: 1px dashed color-mix(in srgb, var(--gold) 42%, transparent);
+  border-radius: 999px;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
 }
-.svp-open:hover .svp-open-cta {
-  color: var(--cream);
-}
-.svp-open-price {
-  font-family: var(--font-mono, ui-monospace, monospace);
-  font-weight: 700;
+.svp-slot:hover .svp-slot-cta {
+  background: color-mix(in srgb, var(--gold) 14%, transparent);
+  border-color: var(--gold);
 }
 
 /* ── Mobile reflow (≤768px) ───────────────────────────────────────────────
@@ -470,17 +497,17 @@
   .svp-col:empty {
     display: none;
   }
-  /* Open slot: the via is hidden below (decorative), so drop the padding that
-     cleared it, and let the CTA wrap under the label instead of being squeezed
-     against it on a narrow screen. */
-  .svp-open {
-    flex-wrap: wrap;
-    gap: 8px 12px;
-    padding-left: 16px;
+  /* Open "Advertise here" slot: spanned cols 2/-1 on desktop → col 2 here, and
+     stack the CTA under the pitch so the sub-text reads in full instead of being
+     truncated to "Feature your compan…" beside the pill. */
+  .svp-slot-body {
+    grid-column: 2;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
   }
-  .svp-open-cta {
-    margin-left: 0;
-    flex-basis: 100%;
+  .svp-slot-sub {
+    white-space: normal;
   }
   /* The copper bus + per-row via are positioned for the wide desktop id column
      and misalign under the narrow rail. They're decorative (aria-hidden) — drop

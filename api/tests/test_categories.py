@@ -173,9 +173,38 @@ def test_seed_category_slugs_match_canonical_data_js():
     assert "accelerometers" in sensor_subs
     assert "proximity-light" in sensor_subs
 
-    # Sanity: every category has exactly 5 subs (matches data.js)
+    # Sanity: the ORIGINAL 15 IC families each have exactly 5 subs (data.js).
+    # The 2026-08-16 Octopart-derived expansion families import level-2 nodes
+    # verbatim, so their sub counts vary.
+    original_15 = {
+        "power-management-ics-pmics", "microcontrollers-processors", "analog-ics",
+        "interface-ics", "memory-ics", "logic-ics", "rf-wireless-ics", "sensor-ics",
+        "audio-video-ics", "clock-timing-ics", "motor-motion-ics",
+        "data-conversion-ics", "security-auth-ics", "automotive-ics",
+        "display-led-ics",
+    }
+    assert original_15 <= set(top_slugs), "an original IC family slug went missing"
+    for slug in original_15:
+        assert len(top_slugs[slug]) == 5, (
+            f"Original category {slug!r} has {len(top_slugs[slug])} subs, expected 5"
+        )
     for slug, subs in top_slugs.items():
-        assert len(subs) == 5, f"Category {slug!r} has {len(subs)} subs, expected 5"
+        assert len(subs) >= 1, f"Category {slug!r} has no subcategories"
 
-    # Sanity: 15 top-level categories total
-    assert len(top_slugs) == 15, f"Expected 15 top-level categories, got {len(top_slugs)}"
+    # Sanity: 15 originals + 13 expansion families
+    assert len(top_slugs) == 28, f"Expected 28 top-level categories, got {len(top_slugs)}"
+
+    # Expansion spot-checks: families present, and the pressure-sensing node
+    # stays de-conflicted on BOTH axes (Sensor ICs owns 'pressure-sensors' and
+    # the "Pressure Sensors" display name).
+    assert "passive-components" in top_slugs
+    assert "connectors" in top_slugs
+    assert "pressure-transducers" in top_slugs["sensors"]
+    assert "pressure-sensors" not in top_slugs["sensors"]
+
+    # seed() keys its category dict by NAME — a duplicate display name
+    # ANYWHERE silently re-points existing parts (2026-08-16 near-miss).
+    all_names = [n for n, _s, _i, subs in CATEGORY_DATA for n in [n]]
+    all_names += [sn for _n, _s, _i, subs in CATEGORY_DATA for sn, _ss, _si in subs]
+    dupes = {n for n in all_names if all_names.count(n) > 1}
+    assert not dupes, f"duplicate category display names: {dupes}"

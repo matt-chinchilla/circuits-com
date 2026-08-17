@@ -46,9 +46,18 @@ export default function PartsTable({
   subSlugToName, subSlugToIcon,
 }: PartsTableProps) {
   if (parts.length === 0) {
+    // "No parts match the filters" is a LIE on a category that simply has no
+    // inventory yet (the default state of the 2026-08-16 expansion pages) —
+    // only claim filtering when a filter is actually active.
+    const filtersActive =
+      skuSearch.trim() !== '' || mfgSelected.size > 0 || (subSelected?.size ?? 0) > 0;
     return (
       <div className={styles.empty}>
-        <p>No parts match the current filters.</p>
+        <p>
+          {filtersActive
+            ? 'No parts match the current filters.'
+            : 'No parts listed here yet — inventory for this category is on its way.'}
+        </p>
       </div>
     );
   }

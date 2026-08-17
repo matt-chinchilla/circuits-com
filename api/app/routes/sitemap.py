@@ -44,10 +44,28 @@ def sitemap_xml(db: Session = Depends(get_db)):
     # (duplicate content + wasted crawl budget). See test_sitemap.py.
     categories = db.query(Category.id, Category.slug, Category.parent_id).all()
     slug_by_id = {cat_id: slug for cat_id, slug, _ in categories}
-    for _cat_id, slug, parent_id in categories:
+    # Thin-page guard (2026-08-16 expansion): a category with ZERO parts —
+    # its own or any child's — stays OUT of the sitemap until inventory
+    # lands. The pages exist and are reachable; we just don't advertise
+    # empty shelves to crawlers. Self-heals as the part importer fills them.
+    stocked = {
+        row[0]
+        for row in db.query(Part.category_id)
+        .filter(Part.category_id.isnot(None))
+        .distinct()
+    }
+    stocked_tops = {
+        parent_id for cat_id, _slug, parent_id in categories
+        if parent_id is not None and cat_id in stocked
+    }
+    for cat_id, slug, parent_id in categories:
         if parent_id is None:
+            if cat_id not in stocked and cat_id not in stocked_tops:
+                continue
             loc = f"{base}/category/{slug}"
             priority = "0.8"
+        elif cat_id not in stocked:
+            continue
         else:
             parent_slug = slug_by_id.get(parent_id)
             # Orphaned child (parent row missing): fall back to the flat URL

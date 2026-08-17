@@ -276,6 +276,228 @@ CATEGORY_DATA: list[tuple[str, str, str, list[tuple[str, str, str]]]] = [
             ("Display Timing Controllers (TCON)", "tcon", "timer"),
         ],
     ),
+    # ── Octopart-derived expansion (2026-08-16) ──────────────────────────
+    # 13 non-IC families + 114 subcategories imported from the researched
+    # taxonomy (temp/octopart_categories.csv). Level-3 Octopart nodes are
+    # folded into their level-2 parent (site taxonomy is 2-level). Slugs
+    # follow Octopart's path segments; the pressure-sensing node was renamed
+    # "Pressure Transducers" / 'pressure-transducers' because BOTH its Octopart
+    # name and auto-slug collide with the existing Sensor ICs subcategory —
+    # and seed() keys its category dict by NAME, so a duplicate name silently
+    # re-points existing parts (caught by review, 2026-08-16).
+    (
+        "Cables and Wire",
+        "cables-and-wire",
+        "plugs-connected",
+        [
+            ("Audio / Video Cables", "audio-video-cables", "speaker-high"),
+            ("Bulk Hook-up Wire", "bulk-hook-up-wire", "plugs-connected"),
+            ("Bulk Multiple Conductor Cables", "bulk-multiple-conductor-cables", "plugs-connected"),
+            ("Coaxial / RF Cable Assemblies", "coaxial-rf-cable-assemblies", "plugs-connected"),
+            ("D-Sub Cables", "d-sub-cables", "plugs"),
+            ("Ethernet Cables", "ethernet-cables", "plugs-connected"),
+            ("FFC / FPC Cables", "ffc-fpc-cables", "plugs"),
+            ("Fiber Optic Cables", "fiber-optic-cables", "broadcast"),
+            ("Flat Ribbon Cables", "flat-ribbon-cables", "plugs-connected"),
+            ("USB Cables", "usb-cables", "usb"),
+            ("Wire Protection and Management", "wire-protection-and-management", "shield"),
+        ],
+    ),
+    (
+        "Circuit Protection",
+        "circuit-protection",
+        "shield",
+        [
+            ("Circuit Breakers", "circuit-breakers", "shield"),
+            ("ESD and Circuit Protection ICs", "esd-and-circuit-protection-ics", "shield"),
+            ("ESD Protection Diodes", "esd-protection-diodes", "arrow-right"),
+            ("Fuse Holders", "fuse-holders", "shield"),
+            ("Fuses", "fuses", "shield"),
+            ("PTC Resettable Fuses", "ptc-resettable-fuses", "shield"),
+            ("TVS Diodes", "tvs-diodes", "arrow-right"),
+            ("Varistors", "varistors", "shield"),
+        ],
+    ),
+    (
+        "Connectors",
+        "connectors",
+        "plugs",
+        [
+            ("Accessories", "accessories", "plugs"),
+            ("Audio / Video Connectors", "audio-video-connectors", "speaker-high"),
+            ("Automotive Connectors", "automotive-connectors", "plugs"),
+            ("Backplane Connectors", "backplane-connectors", "plugs"),
+            ("Board to Board Connectors", "board-to-board-connectors", "plugs"),
+            ("Card Edge Connectors", "card-edge-connectors", "plugs"),
+            ("Circular Connectors", "circular-connectors", "plugs"),
+            ("D-Sub Connectors", "d-sub-connectors", "plugs"),
+            ("FFC / FPC", "ffc-fpc", "plugs"),
+            ("Fiber Optic Connectors", "fiber-optic-connectors", "plugs"),
+            ("Headers and Wire Housings", "headers-and-wire-housings", "plugs"),
+            ("IC and Component Sockets", "ic-and-component-sockets", "plugs"),
+            ("Memory Connectors", "memory-connectors", "plugs"),
+            ("Modular / Ethernet Connectors", "modular-ethernet-connectors", "plugs"),
+            ("Photovoltaic / Solar Connectors", "photovoltaic-solar-connectors", "plugs"),
+            ("Power Connectors", "power-connectors", "plugs"),
+            ("Rectangular Connectors", "rectangular-connectors", "plugs"),
+            ("RF / Coaxial Connectors", "rf-coaxial-connectors", "plugs"),
+            ("Shunts and Jumpers", "shunts-and-jumpers", "plugs"),
+            ("Terminal Blocks", "terminal-blocks", "plugs"),
+            ("Terminals", "terminals", "plugs"),
+            ("Test Points", "test-points", "plugs"),
+            ("USB Connectors", "usb-connectors", "usb"),
+        ],
+    ),
+    (
+        "Discrete Semiconductors",
+        "discrete-semiconductors",
+        "wave-square",
+        [
+            ("Diodes", "diodes", "arrow-right"),
+            ("Thyristors", "thyristors", "wave-square"),
+            ("Transistors", "transistors", "wave-square"),
+        ],
+    ),
+    (
+        "Electromechanical",
+        "electromechanical",
+        "arrows-clockwise",
+        [
+            ("Audio Products", "audio-products", "speaker-high"),
+            ("Motors and Drives", "motors-and-drives", "arrows-clockwise"),
+            ("Relays", "relays", "arrows-left-right"),
+            ("Switches", "switches", "hand-pointing"),
+            ("Thermal Management", "thermal-management", "thermometer"),
+        ],
+    ),
+    (
+        "Industrial Control",
+        "industrial-control",
+        "gear",
+        [
+            ("Human Machine Interface (HMI)", "human-machine-interface-hmi", "wrench"),
+            ("Hydraulics", "hydraulics", "gear"),
+            ("Industrial Actuators", "industrial-actuators", "arrows-clockwise"),
+            ("Industrial Contactors", "industrial-contactors", "gear"),
+            ("Industrial Lighting", "industrial-lighting", "lightbulb"),
+            ("Industrial Relays", "industrial-relays", "arrows-left-right"),
+            ("Panel Meters", "panel-meters", "gauge"),
+            ("Pneumatics", "pneumatics", "gear"),
+            ("Programmable Logic Controllers (PLC)", "programmable-logic-controllers-plc", "gear"),
+            ("Temperature Controllers", "temperature-controllers", "thermometer"),
+        ],
+    ),
+    (
+        "Machining",
+        "machining",
+        "target",
+        [
+            ("Indexable Inserts", "indexable-inserts", "wrench"),
+            ("Indexable Tools", "indexable-tools", "wrench"),
+            ("Machine Cutting Tools", "machine-cutting-tools", "wrench"),
+            ("Machine Fluids", "machine-fluids", "wrench"),
+            ("Machine Tool Accessories", "machine-tool-accessories", "plugs"),
+            ("Machinery", "machinery", "wrench"),
+        ],
+    ),
+    (
+        "Optoelectronics",
+        "optoelectronics",
+        "lightbulb",
+        [
+            ("Displays", "displays", "monitor"),
+            ("Fiber Optics", "fiber-optics", "broadcast"),
+            ("Lamps", "lamps", "sun-dim"),
+            ("Laser Products", "laser-products", "sparkle"),
+            ("LEDs", "leds", "lightbulb"),
+            ("Optocouplers", "optocouplers", "squares-four"),
+        ],
+    ),
+    (
+        "Passive Components",
+        "passive-components",
+        "wave-sine",
+        [
+            ("Capacitors", "capacitors", "battery-charging"),
+            ("Crystals and Oscillators", "crystals-and-oscillators", "clock"),
+            ("EMI / RFI Components", "emi-rfi-components", "wave-sine"),
+            ("Filters", "filters", "wave-sine"),
+            ("Inductors", "inductors", "wave-sine"),
+            ("Resistors", "resistors", "function"),
+            ("Transformers", "transformers", "wave-sine"),
+        ],
+    ),
+    (
+        "Power Products",
+        "power-products",
+        "battery-full",
+        [
+            ("Batteries and Accessories", "batteries-and-accessories", "plugs"),
+            ("DC to AC Inverters", "dc-to-ac-inverters", "lightning"),
+            ("Power Cords", "power-cords", "lightning"),
+            ("Power Supply Modules", "power-supply-modules", "lightning"),
+            ("Surge Protectors", "surge-protectors", "shield"),
+            ("Uninterruptible Power Supply (UPS)", "uninterruptible-power-supply-ups", "lightning"),
+        ],
+    ),
+    (
+        "Sensors",
+        "sensors",
+        "gauge",
+        [
+            ("Current Sensors", "current-sensors", "gauge"),
+            ("Flow Sensors", "flow-sensors", "gauge"),
+            ("Gas Sensors", "gas-sensors", "gauge"),
+            ("Magnetic Sensors", "magnetic-sensors", "wave-sine"),
+            ("Motion Sensors", "motion-sensors", "person-simple-run"),
+            ("Optical Sensors", "optical-sensors", "eye"),
+            ("Position Sensors", "position-sensors", "gauge"),
+            # NOT "Pressure Sensors" — that NAME belongs to the Sensor ICs
+            # subcategory, and seed()'s cats dict is keyed by name, so a
+            # duplicate name re-points the original's 50 real parts here.
+            # Distinct name + clean slug fix the collision on both axes.
+            ("Pressure Transducers", "pressure-transducers", "gauge"),
+            ("Proximity Sensors", "proximity-sensors", "gauge"),
+            ("Temperature and Humidity Sensors", "temperature-and-humidity-sensors", "thermometer"),
+        ],
+    ),
+    (
+        "Test Equipment",
+        "test-equipment",
+        "ruler",
+        [
+            ("Benchtop Power Supplies", "benchtop-power-supplies", "lightning"),
+            ("Function Generators", "function-generators", "gauge"),
+            ("Multimeters", "multimeters", "gauge"),
+            ("Oscilloscopes", "oscilloscopes", "gauge"),
+            ("Spectrum Analyzers", "spectrum-analyzers", "gauge"),
+            ("Test Probes, Leads and Clips", "test-probes-leads-and-clips", "gauge"),
+            ("Thermometers", "thermometers", "gauge"),
+        ],
+    ),
+    (
+        "Tools and Supplies",
+        "tools-and-supplies",
+        "wrench",
+        [
+            ("Anti-Static Control", "anti-static-control", "sparkle"),
+            ("Chemicals", "chemicals", "wave-sine"),
+            ("Enclosures", "enclosures", "squares-four"),
+            ("Flashlights", "flashlights", "sparkle"),
+            ("Hand Tools", "hand-tools", "wrench"),
+            ("Hardware, Fasteners", "hardware-fasteners", "squares-four"),
+            ("Packaging, Labels, Tape", "packaging-labels-tape", "wrench"),
+            (
+                "Prototype Boards and Breadboards",
+                "prototype-boards-and-breadboards",
+                "squares-four",
+            ),
+            ("Raw Materials", "raw-materials", "squares-four"),
+            ("Soldering Supplies and Tools", "soldering-supplies-and-tools", "wrench"),
+            ("Storage Bins", "storage-bins", "squares-four"),
+            ("Wire Crimpers and Strippers", "wire-crimpers-and-strippers", "plugs-connected"),
+        ],
+    ),
 ]
 
 # ---------------------------------------------------------------------------
@@ -428,6 +650,101 @@ CATEGORY_DESCRIPTIONS: dict[str, str] = {
         " everything from smart-watch faces to automotive instrument clusters. Key"
         " manufacturers include Texas Instruments, Maxim Integrated, Solomon Systech,"
         " Rohm, and STMicroelectronics."
+    ),
+    # ── 2026-08-16 expansion families ────────────────────────────────────────
+    "discrete-semiconductors": (
+        "Discrete semiconductors are single-function devices — diodes, transistors,"
+        " and thyristors — that switch, rectify, and amplify at the board level."
+        " This category covers rectifier, Schottky, and Zener diodes, BJTs, MOSFETs,"
+        " IGBTs, and SCR/TRIAC thyristors across through-hole and surface-mount"
+        " packages. Key manufacturers include onsemi, Vishay, Nexperia, Infineon,"
+        " and Diodes Incorporated."
+    ),
+    "passive-components": (
+        "Passive components store, resist, and filter electrical energy without"
+        " amplification. This category spans capacitors from ceramic to tantalum,"
+        " fixed and variable resistors, inductors and transformers, crystals and"
+        " oscillators for timing, and EMI/RFI suppression parts. Leading"
+        " manufacturers include Murata, Vishay, Yageo, TDK, KYOCERA AVX, and"
+        " Samsung Electro-Mechanics."
+    ),
+    "electromechanical": (
+        "Electromechanical components turn electrical signals into motion, contact,"
+        " and sound. The category includes power and signal relays, switches of"
+        " every actuation style, AC, DC, and stepper motors with their drives,"
+        " audio transducers, and thermal-management fans and heat sinks. Key"
+        " manufacturers include Omron, TE Connectivity, Panasonic, C&K, and"
+        " Sanyo Denki."
+    ),
+    "connectors": (
+        "Connectors join boards, cables, and systems reliably across thousands of"
+        " mating cycles. This category covers board-to-board, circular, D-sub, RF"
+        " coaxial, USB, terminal blocks, headers, card-edge, and fiber-optic"
+        " interconnects with their accessories. Leading manufacturers include TE"
+        " Connectivity, Amphenol, Molex, Samtec, JST, and Hirose."
+    ),
+    "sensors": (
+        "Sensors and transducers convert physical phenomena — pressure, motion,"
+        " light, temperature, magnetic fields, and flow — into electrical signals."
+        " The category spans pressure transducers, proximity and photoelectric"
+        " sensors, accelerometers and gyroscopes, gas sensors, and Hall-effect"
+        " devices. Key manufacturers include Honeywell, TE Connectivity, Omron,"
+        " Sensata, and SICK."
+    ),
+    "optoelectronics": (
+        "Optoelectronics emit, detect, and route light: LEDs and light pipes, LCD,"
+        " OLED, and LED display modules, laser products, optocouplers for galvanic"
+        " isolation, lamps, and fiber-optic emitters and receivers. Leading"
+        " manufacturers include ams-OSRAM, Broadcom, Lite-On, Kingbright, Lumileds,"
+        " and Vishay."
+    ),
+    "circuit-protection": (
+        "Circuit protection devices absorb the faults that would otherwise destroy"
+        " a design: fuses and fuse holders, circuit breakers, TVS and ESD diodes,"
+        " PTC resettable fuses, and varistors for surge clamping. Key manufacturers"
+        " include Littelfuse, Bourns, Eaton, Bel Fuse, and TDK-EPC."
+    ),
+    "power-products": (
+        "Power products deliver and condition energy at the system level — AC-DC"
+        " and DC-DC power-supply modules, batteries and accessories, DC-AC"
+        " inverters, surge protectors, UPS systems, and power cords. Leading"
+        " manufacturers include Mean Well, TDK-Lambda, RECOM, CUI, Vicor, and"
+        " Phoenix Contact."
+    ),
+    "cables-and-wire": (
+        "Cables and wire carry the signals and power everything else depends on:"
+        " coaxial and RF assemblies, Ethernet and fiber cables, bulk hook-up wire,"
+        " ribbon cable, and the heat-shrink, markers, and ducting that manage it"
+        " all. Key manufacturers include Belden, Alpha Wire, Amphenol, Samtec,"
+        " and HellermannTyton."
+    ),
+    "test-equipment": (
+        "Test equipment measures what designs actually do: oscilloscopes, digital"
+        " multimeters, function generators, spectrum analyzers, benchtop power"
+        " supplies, thermometers, and the probes, leads, and clips that connect"
+        " them. Leading manufacturers include Keysight, Tektronix, Fluke, Rigol,"
+        " and B&K Precision."
+    ),
+    "tools-and-supplies": (
+        "Tools and supplies cover the workbench side of electronics: soldering"
+        " stations and consumables, hand tools, crimpers and strippers, ESD"
+        " control, enclosures, hardware and fasteners, chemicals, and prototyping"
+        " boards. Key manufacturers include Weller, Hakko, Klein Tools, Wiha,"
+        " Desco, and Bud Industries."
+    ),
+    "machining": (
+        "Machining supplies serve the fabrication shop attached to every hardware"
+        " program: indexable inserts and tooling, drills, taps, end mills, machine"
+        " fluids, and machine-tool accessories such as collets and bushings."
+        " Leading manufacturers include Dormer, Sandvik-family brands, GearWrench,"
+        " and Starrett."
+    ),
+    "industrial-control": (
+        "Industrial control components run factories and machines: PLCs, HMIs,"
+        " industrial relays and contactors, panel meters, temperature controllers,"
+        " pneumatics and hydraulics, actuators, and industrial lighting. Key"
+        " manufacturers include Siemens, Schneider Electric, Omron, TURCK, and"
+        " Phoenix Contact."
     ),
 }
 
@@ -1100,7 +1417,7 @@ def seed(db: Session) -> None:
     # DB trigger rejects any other combo.
 
     # Platinum Category Sponsor (single-slot) on the TWO flagship categories only.
-    # The other 13 top-level categories are intentionally left UNSOLD so the
+    # Every other top-level category is intentionally left UNSOLD so the
     # Category Sponsor board renders its Open-Placement state ("Sponsor This
     # Category" pitch) by default — that empty state is a designed surface, not a
     # gap (matches the design's "Memory ICs" open example). Kennedy headlines both

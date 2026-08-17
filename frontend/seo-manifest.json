@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-04T01:14:31.689Z",
+  "generatedAt": "2026-08-17T02:11:45.878Z",
   "source": "http://localhost/api",
   "categories": [
     {
@@ -478,6 +478,667 @@
         {
           "slug": "tcon",
           "name": "Display Timing Controllers (TCON)",
+          "description": null
+        }
+      ]
+    },
+    {
+      "slug": "cables-and-wire",
+      "name": "Cables and Wire",
+      "description": "Cables and wire carry the signals and power everything else depends on: coaxial and RF assemblies, Ethernet and fiber cables, bulk hook-up wire, ribbon cable, and the heat-shrink, markers, and ducting that manage it all. Key manufacturers include Belden, Alpha Wire, Amphenol, Samtec, and HellermannTyton.",
+      "children": [
+        {
+          "slug": "audio-video-cables",
+          "name": "Audio / Video Cables",
+          "description": null
+        },
+        {
+          "slug": "bulk-hook-up-wire",
+          "name": "Bulk Hook-up Wire",
+          "description": null
+        },
+        {
+          "slug": "bulk-multiple-conductor-cables",
+          "name": "Bulk Multiple Conductor Cables",
+          "description": null
+        },
+        {
+          "slug": "coaxial-rf-cable-assemblies",
+          "name": "Coaxial / RF Cable Assemblies",
+          "description": null
+        },
+        {
+          "slug": "d-sub-cables",
+          "name": "D-Sub Cables",
+          "description": null
+        },
+        {
+          "slug": "ethernet-cables",
+          "name": "Ethernet Cables",
+          "description": null
+        },
+        {
+          "slug": "ffc-fpc-cables",
+          "name": "FFC / FPC Cables",
+          "description": null
+        },
+        {
+          "slug": "fiber-optic-cables",
+          "name": "Fiber Optic Cables",
+          "description": null
+        },
+        {
+          "slug": "flat-ribbon-cables",
+          "name": "Flat Ribbon Cables",
+          "description": null
+        },
+        {
+          "slug": "usb-cables",
+          "name": "USB Cables",
+          "description": null
+        },
+        {
+          "slug": "wire-protection-and-management",
+          "name": "Wire Protection and Management",
+          "description": null
+        }
+      ]
+    },
+    {
+      "slug": "circuit-protection",
+      "name": "Circuit Protection",
+      "description": "Circuit protection devices absorb the faults that would otherwise destroy a design: fuses and fuse holders, circuit breakers, TVS and ESD diodes, PTC resettable fuses, and varistors for surge clamping. Key manufacturers include Littelfuse, Bourns, Eaton, Bel Fuse, and TDK-EPC.",
+      "children": [
+        {
+          "slug": "circuit-breakers",
+          "name": "Circuit Breakers",
+          "description": null
+        },
+        {
+          "slug": "esd-and-circuit-protection-ics",
+          "name": "ESD and Circuit Protection ICs",
+          "description": null
+        },
+        {
+          "slug": "esd-protection-diodes",
+          "name": "ESD Protection Diodes",
+          "description": null
+        },
+        {
+          "slug": "fuse-holders",
+          "name": "Fuse Holders",
+          "description": null
+        },
+        {
+          "slug": "fuses",
+          "name": "Fuses",
+          "description": null
+        },
+        {
+          "slug": "ptc-resettable-fuses",
+          "name": "PTC Resettable Fuses",
+          "description": null
+        },
+        {
+          "slug": "tvs-diodes",
+          "name": "TVS Diodes",
+          "description": null
+        },
+        {
+          "slug": "varistors",
+          "name": "Varistors",
+          "description": null
+        }
+      ]
+    },
+    {
+      "slug": "connectors",
+      "name": "Connectors",
+      "description": "Connectors join boards, cables, and systems reliably across thousands of mating cycles. This category covers board-to-board, circular, D-sub, RF coaxial, USB, terminal blocks, headers, card-edge, and fiber-optic interconnects with their accessories. Leading manufacturers include TE Connectivity, Amphenol, Molex, Samtec, JST, and Hirose.",
+      "children": [
+        {
+          "slug": "accessories",
+          "name": "Accessories",
+          "description": null
+        },
+        {
+          "slug": "audio-video-connectors",
+          "name": "Audio / Video Connectors",
+          "description": null
+        },
+        {
+          "slug": "automotive-connectors",
+          "name": "Automotive Connectors",
+          "description": null
+        },
+        {
+          "slug": "backplane-connectors",
+          "name": "Backplane Connectors",
+          "description": null
+        },
+        {
+          "slug": "board-to-board-connectors",
+          "name": "Board to Board Connectors",
+          "description": null
+        },
+        {
+          "slug": "card-edge-connectors",
+          "name": "Card Edge Connectors",
+          "description": null
+        },
+        {
+          "slug": "circular-connectors",
+          "name": "Circular Connectors",
+          "description": null
+        },
+        {
+          "slug": "d-sub-connectors",
+          "name": "D-Sub Connectors",
+          "description": null
+        },
+        {
+          "slug": "ffc-fpc",
+          "name": "FFC / FPC",
+          "description": null
+        },
+        {
+          "slug": "fiber-optic-connectors",
+          "name": "Fiber Optic Connectors",
+          "description": null
+        },
+        {
+          "slug": "headers-and-wire-housings",
+          "name": "Headers and Wire Housings",
+          "description": null
+        },
+        {
+          "slug": "ic-and-component-sockets",
+          "name": "IC and Component Sockets",
+          "description": null
+        },
+        {
+          "slug": "memory-connectors",
+          "name": "Memory Connectors",
+          "description": null
+        },
+        {
+          "slug": "modular-ethernet-connectors",
+          "name": "Modular / Ethernet Connectors",
+          "description": null
+        },
+        {
+          "slug": "photovoltaic-solar-connectors",
+          "name": "Photovoltaic / Solar Connectors",
+          "description": null
+        },
+        {
+          "slug": "power-connectors",
+          "name": "Power Connectors",
+          "description": null
+        },
+        {
+          "slug": "rectangular-connectors",
+          "name": "Rectangular Connectors",
+          "description": null
+        },
+        {
+          "slug": "rf-coaxial-connectors",
+          "name": "RF / Coaxial Connectors",
+          "description": null
+        },
+        {
+          "slug": "shunts-and-jumpers",
+          "name": "Shunts and Jumpers",
+          "description": null
+        },
+        {
+          "slug": "terminal-blocks",
+          "name": "Terminal Blocks",
+          "description": null
+        },
+        {
+          "slug": "terminals",
+          "name": "Terminals",
+          "description": null
+        },
+        {
+          "slug": "test-points",
+          "name": "Test Points",
+          "description": null
+        },
+        {
+          "slug": "usb-connectors",
+          "name": "USB Connectors",
+          "description": null
+        }
+      ]
+    },
+    {
+      "slug": "discrete-semiconductors",
+      "name": "Discrete Semiconductors",
+      "description": "Discrete semiconductors are single-function devices — diodes, transistors, and thyristors — that switch, rectify, and amplify at the board level. This category covers rectifier, Schottky, and Zener diodes, BJTs, MOSFETs, IGBTs, and SCR/TRIAC thyristors across through-hole and surface-mount packages. Key manufacturers include onsemi, Vishay, Nexperia, Infineon, and Diodes Incorporated.",
+      "children": [
+        {
+          "slug": "diodes",
+          "name": "Diodes",
+          "description": null
+        },
+        {
+          "slug": "thyristors",
+          "name": "Thyristors",
+          "description": null
+        },
+        {
+          "slug": "transistors",
+          "name": "Transistors",
+          "description": null
+        }
+      ]
+    },
+    {
+      "slug": "electromechanical",
+      "name": "Electromechanical",
+      "description": "Electromechanical components turn electrical signals into motion, contact, and sound. The category includes power and signal relays, switches of every actuation style, AC, DC, and stepper motors with their drives, audio transducers, and thermal-management fans and heat sinks. Key manufacturers include Omron, TE Connectivity, Panasonic, C&K, and Sanyo Denki.",
+      "children": [
+        {
+          "slug": "audio-products",
+          "name": "Audio Products",
+          "description": null
+        },
+        {
+          "slug": "motors-and-drives",
+          "name": "Motors and Drives",
+          "description": null
+        },
+        {
+          "slug": "relays",
+          "name": "Relays",
+          "description": null
+        },
+        {
+          "slug": "switches",
+          "name": "Switches",
+          "description": null
+        },
+        {
+          "slug": "thermal-management",
+          "name": "Thermal Management",
+          "description": null
+        }
+      ]
+    },
+    {
+      "slug": "industrial-control",
+      "name": "Industrial Control",
+      "description": "Industrial control components run factories and machines: PLCs, HMIs, industrial relays and contactors, panel meters, temperature controllers, pneumatics and hydraulics, actuators, and industrial lighting. Key manufacturers include Siemens, Schneider Electric, Omron, TURCK, and Phoenix Contact.",
+      "children": [
+        {
+          "slug": "human-machine-interface-hmi",
+          "name": "Human Machine Interface (HMI)",
+          "description": null
+        },
+        {
+          "slug": "hydraulics",
+          "name": "Hydraulics",
+          "description": null
+        },
+        {
+          "slug": "industrial-actuators",
+          "name": "Industrial Actuators",
+          "description": null
+        },
+        {
+          "slug": "industrial-contactors",
+          "name": "Industrial Contactors",
+          "description": null
+        },
+        {
+          "slug": "industrial-lighting",
+          "name": "Industrial Lighting",
+          "description": null
+        },
+        {
+          "slug": "industrial-relays",
+          "name": "Industrial Relays",
+          "description": null
+        },
+        {
+          "slug": "panel-meters",
+          "name": "Panel Meters",
+          "description": null
+        },
+        {
+          "slug": "pneumatics",
+          "name": "Pneumatics",
+          "description": null
+        },
+        {
+          "slug": "programmable-logic-controllers-plc",
+          "name": "Programmable Logic Controllers (PLC)",
+          "description": null
+        },
+        {
+          "slug": "temperature-controllers",
+          "name": "Temperature Controllers",
+          "description": null
+        }
+      ]
+    },
+    {
+      "slug": "machining",
+      "name": "Machining",
+      "description": "Machining supplies serve the fabrication shop attached to every hardware program: indexable inserts and tooling, drills, taps, end mills, machine fluids, and machine-tool accessories such as collets and bushings. Leading manufacturers include Dormer, Sandvik-family brands, GearWrench, and Starrett.",
+      "children": [
+        {
+          "slug": "indexable-inserts",
+          "name": "Indexable Inserts",
+          "description": null
+        },
+        {
+          "slug": "indexable-tools",
+          "name": "Indexable Tools",
+          "description": null
+        },
+        {
+          "slug": "machine-cutting-tools",
+          "name": "Machine Cutting Tools",
+          "description": null
+        },
+        {
+          "slug": "machine-fluids",
+          "name": "Machine Fluids",
+          "description": null
+        },
+        {
+          "slug": "machine-tool-accessories",
+          "name": "Machine Tool Accessories",
+          "description": null
+        },
+        {
+          "slug": "machinery",
+          "name": "Machinery",
+          "description": null
+        }
+      ]
+    },
+    {
+      "slug": "optoelectronics",
+      "name": "Optoelectronics",
+      "description": "Optoelectronics emit, detect, and route light: LEDs and light pipes, LCD, OLED, and LED display modules, laser products, optocouplers for galvanic isolation, lamps, and fiber-optic emitters and receivers. Leading manufacturers include ams-OSRAM, Broadcom, Lite-On, Kingbright, Lumileds, and Vishay.",
+      "children": [
+        {
+          "slug": "displays",
+          "name": "Displays",
+          "description": null
+        },
+        {
+          "slug": "fiber-optics",
+          "name": "Fiber Optics",
+          "description": null
+        },
+        {
+          "slug": "lamps",
+          "name": "Lamps",
+          "description": null
+        },
+        {
+          "slug": "laser-products",
+          "name": "Laser Products",
+          "description": null
+        },
+        {
+          "slug": "leds",
+          "name": "LEDs",
+          "description": null
+        },
+        {
+          "slug": "optocouplers",
+          "name": "Optocouplers",
+          "description": null
+        }
+      ]
+    },
+    {
+      "slug": "passive-components",
+      "name": "Passive Components",
+      "description": "Passive components store, resist, and filter electrical energy without amplification. This category spans capacitors from ceramic to tantalum, fixed and variable resistors, inductors and transformers, crystals and oscillators for timing, and EMI/RFI suppression parts. Leading manufacturers include Murata, Vishay, Yageo, TDK, KYOCERA AVX, and Samsung Electro-Mechanics.",
+      "children": [
+        {
+          "slug": "capacitors",
+          "name": "Capacitors",
+          "description": null
+        },
+        {
+          "slug": "crystals-and-oscillators",
+          "name": "Crystals and Oscillators",
+          "description": null
+        },
+        {
+          "slug": "emi-rfi-components",
+          "name": "EMI / RFI Components",
+          "description": null
+        },
+        {
+          "slug": "filters",
+          "name": "Filters",
+          "description": null
+        },
+        {
+          "slug": "inductors",
+          "name": "Inductors",
+          "description": null
+        },
+        {
+          "slug": "resistors",
+          "name": "Resistors",
+          "description": null
+        },
+        {
+          "slug": "transformers",
+          "name": "Transformers",
+          "description": null
+        }
+      ]
+    },
+    {
+      "slug": "power-products",
+      "name": "Power Products",
+      "description": "Power products deliver and condition energy at the system level — AC-DC and DC-DC power-supply modules, batteries and accessories, DC-AC inverters, surge protectors, UPS systems, and power cords. Leading manufacturers include Mean Well, TDK-Lambda, RECOM, CUI, Vicor, and Phoenix Contact.",
+      "children": [
+        {
+          "slug": "batteries-and-accessories",
+          "name": "Batteries and Accessories",
+          "description": null
+        },
+        {
+          "slug": "dc-to-ac-inverters",
+          "name": "DC to AC Inverters",
+          "description": null
+        },
+        {
+          "slug": "power-cords",
+          "name": "Power Cords",
+          "description": null
+        },
+        {
+          "slug": "power-supply-modules",
+          "name": "Power Supply Modules",
+          "description": null
+        },
+        {
+          "slug": "surge-protectors",
+          "name": "Surge Protectors",
+          "description": null
+        },
+        {
+          "slug": "uninterruptible-power-supply-ups",
+          "name": "Uninterruptible Power Supply (UPS)",
+          "description": null
+        }
+      ]
+    },
+    {
+      "slug": "sensors",
+      "name": "Sensors",
+      "description": "Sensors and transducers convert physical phenomena — pressure, motion, light, temperature, magnetic fields, and flow — into electrical signals. The category spans pressure transducers, proximity and photoelectric sensors, accelerometers and gyroscopes, gas sensors, and Hall-effect devices. Key manufacturers include Honeywell, TE Connectivity, Omron, Sensata, and SICK.",
+      "children": [
+        {
+          "slug": "current-sensors",
+          "name": "Current Sensors",
+          "description": null
+        },
+        {
+          "slug": "flow-sensors",
+          "name": "Flow Sensors",
+          "description": null
+        },
+        {
+          "slug": "gas-sensors",
+          "name": "Gas Sensors",
+          "description": null
+        },
+        {
+          "slug": "magnetic-sensors",
+          "name": "Magnetic Sensors",
+          "description": null
+        },
+        {
+          "slug": "motion-sensors",
+          "name": "Motion Sensors",
+          "description": null
+        },
+        {
+          "slug": "optical-sensors",
+          "name": "Optical Sensors",
+          "description": null
+        },
+        {
+          "slug": "position-sensors",
+          "name": "Position Sensors",
+          "description": null
+        },
+        {
+          "slug": "proximity-sensors",
+          "name": "Proximity Sensors",
+          "description": null
+        },
+        {
+          "slug": "temperature-and-humidity-sensors",
+          "name": "Temperature and Humidity Sensors",
+          "description": null
+        },
+        {
+          "slug": "pressure-transducers",
+          "name": "Pressure Transducers",
+          "description": null
+        }
+      ]
+    },
+    {
+      "slug": "test-equipment",
+      "name": "Test Equipment",
+      "description": "Test equipment measures what designs actually do: oscilloscopes, digital multimeters, function generators, spectrum analyzers, benchtop power supplies, thermometers, and the probes, leads, and clips that connect them. Leading manufacturers include Keysight, Tektronix, Fluke, Rigol, and B&K Precision.",
+      "children": [
+        {
+          "slug": "benchtop-power-supplies",
+          "name": "Benchtop Power Supplies",
+          "description": null
+        },
+        {
+          "slug": "function-generators",
+          "name": "Function Generators",
+          "description": null
+        },
+        {
+          "slug": "multimeters",
+          "name": "Multimeters",
+          "description": null
+        },
+        {
+          "slug": "oscilloscopes",
+          "name": "Oscilloscopes",
+          "description": null
+        },
+        {
+          "slug": "spectrum-analyzers",
+          "name": "Spectrum Analyzers",
+          "description": null
+        },
+        {
+          "slug": "test-probes-leads-and-clips",
+          "name": "Test Probes, Leads and Clips",
+          "description": null
+        },
+        {
+          "slug": "thermometers",
+          "name": "Thermometers",
+          "description": null
+        }
+      ]
+    },
+    {
+      "slug": "tools-and-supplies",
+      "name": "Tools and Supplies",
+      "description": "Tools and supplies cover the workbench side of electronics: soldering stations and consumables, hand tools, crimpers and strippers, ESD control, enclosures, hardware and fasteners, chemicals, and prototyping boards. Key manufacturers include Weller, Hakko, Klein Tools, Wiha, Desco, and Bud Industries.",
+      "children": [
+        {
+          "slug": "anti-static-control",
+          "name": "Anti-Static Control",
+          "description": null
+        },
+        {
+          "slug": "chemicals",
+          "name": "Chemicals",
+          "description": null
+        },
+        {
+          "slug": "enclosures",
+          "name": "Enclosures",
+          "description": null
+        },
+        {
+          "slug": "flashlights",
+          "name": "Flashlights",
+          "description": null
+        },
+        {
+          "slug": "hand-tools",
+          "name": "Hand Tools",
+          "description": null
+        },
+        {
+          "slug": "hardware-fasteners",
+          "name": "Hardware, Fasteners",
+          "description": null
+        },
+        {
+          "slug": "packaging-labels-tape",
+          "name": "Packaging, Labels, Tape",
+          "description": null
+        },
+        {
+          "slug": "prototype-boards-and-breadboards",
+          "name": "Prototype Boards and Breadboards",
+          "description": null
+        },
+        {
+          "slug": "raw-materials",
+          "name": "Raw Materials",
+          "description": null
+        },
+        {
+          "slug": "soldering-supplies-and-tools",
+          "name": "Soldering Supplies and Tools",
+          "description": null
+        },
+        {
+          "slug": "storage-bins",
+          "name": "Storage Bins",
+          "description": null
+        },
+        {
+          "slug": "wire-crimpers-and-strippers",
+          "name": "Wire Crimpers and Strippers",
           "description": null
         }
       ]
