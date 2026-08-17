@@ -1,11 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Edit, ExternalLink, Upload, Trash2 } from 'lucide-react';
 import Breadcrumbs from '@admin/components/Breadcrumbs';
 import { adminApi } from '@admin/services/adminApi';
 import { useDemo } from '@admin/contexts/DemoContext';
+import { syncSupplier, syncErrorMessage, type SyncEvent } from '@admin/services/syncStream';
 import type { AdminSupplier, Part, PaginatedResponse } from '@admin/types/admin';
 import QuickActionsPanel from './QuickActionsPanel';
+import SyncConsole from './SyncConsole';
 import {
   buildSponsorshipBySupplier,
   supplierSponsorship,
@@ -39,10 +41,16 @@ export default function SupplierDetailPage() {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  // Sync action stamps a fake "Last sync just now" hint after the simulated
-  // delta lands. Stays local until a real /sync endpoint exists.
-  const [lastSyncStamp, setLastSyncStamp] = useState<string | null>(null);
-  const [syncDelta, setSyncDelta] = useState<number | null>(null);
+  // The live inventory-sync run. Owned HERE, not in QuickActionsPanel, so the
+  // console's feed survives every re-render of the strip that starts it.
+  const [syncState, setSyncState] = useState<{
+    running: boolean;
+    events: SyncEvent[];
+    error: string | null;
+  }>({ running: false, events: [], error: null });
+  // Bumped when a run ends so the load effect refetches — the supplier's real
+  // counts and the parts table both move underneath us during a sync.
+  const [refreshNonce, setRefreshNonce] = useState(0);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   // Separate from the load-error sentinel so a failed delete shows a
@@ -50,17 +58,48 @@ export default function SupplierDetailPage() {
   // whole supplier view with the "supplier not found" fallback.
   const [deleteError, setDeleteError] = useState('');
 
+  // The page is alive across an async sync, so state written after an unmount
+  // (or after the operator has navigated to another supplier) has to be
+  // dropped. Effects use their own cancel flag; this covers the sync handler,
+  // which is not an effect and outlives any single render.
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  // Raised by a finishing sync so the refetch it triggers stays SILENT. The
+  // loading curtain replaces the whole page, console included, so a noisy
+  // refetch would erase the feed the operator just watched — at the exact
+  // moment its summary line appears. Consumed by the next effect run.
+  const quietRefetchRef = useRef(false);
   useEffect(() => {
     if (!id) return;
-    setLoading(true);
+    let cancelled = false;
+    const quiet = quietRefetchRef.current;
+    quietRefetchRef.current = false;
+    if (!quiet) setLoading(true);
     Promise.all([adminApi.getSupplier(id), adminApi.getSupplierParts(id, { page })])
       .then(([s, p]) => {
+        if (cancelled) return;
         setSupplier(s);
         setParts(p);
       })
-      .catch(() => setError('Failed to load supplier details.'))
-      .finally(() => setLoading(false));
-  }, [id, page]);
+      .catch(() => {
+        if (cancelled) return;
+        // A failed quiet refetch leaves the (now slightly stale) counts and the
+        // run's own summary standing; only a failed FIRST load is fatal.
+        if (!quiet) setError('Failed to load supplier details.');
+      })
+      .finally(() => {
+        if (!cancelled && !quiet) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [id, page, refreshNonce]);
 
   // Badge = this supplier's actual active sponsorship (highest tier) or 'None'.
   // AdminSupplier has no sponsorship field, so cross-reference the sponsor rows.
@@ -81,6 +120,48 @@ export default function SupplierDetailPage() {
       cancelled = true;
     };
   }, [id]);
+
+  // A run belongs to the supplier it was started for, and this route reuses ONE
+  // component instance across `:id` changes — so navigating to another supplier
+  // mid-sync would otherwise leave the still-open stream appending someone
+  // else's parts under the new supplier's name. The ref is also what the
+  // in-flight run checks before writing state.
+  const syncOwnerRef = useRef(id);
+  useEffect(() => {
+    if (syncOwnerRef.current === id) return;
+    syncOwnerRef.current = id;
+    setSyncState({ running: false, events: [], error: null });
+  }, [id]);
+
+  const handleSync = () => {
+    if (!id || syncState.running) return;
+    setSyncState({ running: true, events: [], error: null });
+    // Tracked out here rather than read off state: a run that dies mid-stream
+    // still committed everything it reported (the importer commits per part),
+    // so a refetch is owed whenever ANY event arrived — success or not. A run
+    // that never started (no feed key, wrong supplier) owes nothing.
+    let delivered = 0;
+    const isCurrentRun = () => mountedRef.current && syncOwnerRef.current === id;
+    syncSupplier(id, (event) => {
+      delivered += 1;
+      if (!isCurrentRun()) return;
+      setSyncState((prev) => ({ ...prev, events: [...prev.events, event] }));
+    })
+      .then(() => {
+        if (!isCurrentRun()) return;
+        setSyncState((prev) => ({ ...prev, running: false }));
+        quietRefetchRef.current = true;
+        setRefreshNonce((n) => n + 1);
+      })
+      .catch((err) => {
+        if (!isCurrentRun()) return;
+        setSyncState((prev) => ({ ...prev, running: false, error: syncErrorMessage(err) }));
+        if (delivered > 0) {
+          quietRefetchRef.current = true;
+          setRefreshNonce((n) => n + 1);
+        }
+      });
+  };
 
   const handleDelete = async () => {
     if (!supplier) return;
@@ -198,11 +279,20 @@ export default function SupplierDetailPage() {
       <QuickActionsPanel
         supplier={supplier}
         partRows={partRows}
-        onAfterSync={(delta) => {
-          setSyncDelta(delta);
-          setLastSyncStamp('just now');
-        }}
+        onSync={handleSync}
+        syncing={syncState.running}
       />
+
+      {/* The run itself, live. Mounts on the first click and stays up
+          afterwards so the summary is still readable. */}
+      {(syncState.running || syncState.events.length > 0 || syncState.error) && (
+        <SyncConsole
+          supplierName={supplier.name}
+          running={syncState.running}
+          events={syncState.events}
+          error={syncState.error}
+        />
+      )}
 
       <div className={styles.detailGrid}>
         <div className={styles.panel}>
@@ -247,13 +337,11 @@ export default function SupplierDetailPage() {
           <div className={`${styles.panel} ${styles.miniStat}`}>
             <div className={styles.miniStatLabel}>Parts in catalog</div>
             <div className={styles.miniStatValue}>
-              {demoMode
-                ? ((supplier.parts_count ?? 0) + (syncDelta ?? 0)).toLocaleString()
-                : partsTotal.toLocaleString()}
+              {demoMode ? (supplier.parts_count ?? 0).toLocaleString() : partsTotal.toLocaleString()}
             </div>
             <div className={styles.miniStatHint}>
               {demoMode
-                ? `Last sync ${lastSyncStamp ?? '6h ago'}`
+                ? 'Last sync 6h ago'
                 : partsTotal > 0
                   ? `${partsTotal} live SKU${partsTotal === 1 ? '' : 's'}`
                   : 'No live listings yet'}

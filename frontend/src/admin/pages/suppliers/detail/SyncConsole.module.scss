@@ -1,0 +1,334 @@
+@use '@admin/styles/variables' as *;
+@use '../../glass' as *;
+
+// Live sync console — house admin panel chrome (same pane material as the
+// detail page's panels) with a scrollable event feed inside it.
+//
+// Motion budget is deliberately tiny: rows fade in on opacity ONLY, the live
+// dot pulses opacity, and nothing animates a shadow, filter or transform. A
+// long run appends dozens of rows, and anything heavier would make the panel
+// the most expensive thing on the page.
+
+.console {
+  @include a-glass-pane;
+  border-radius: 8px;
+  margin: 0 0 20px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+// ─── Header: identity + live counters ───────────────────────────────────────
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--a-border-soft);
+}
+
+.headLeft {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--a-fg1);
+  letter-spacing: -0.005em;
+}
+
+.titleSep {
+  color: var(--a-fg4);
+}
+
+.titleName {
+  font-weight: 600;
+  color: var(--a-fg2);
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.dotIdle {
+  background: var(--a-fg4);
+}
+
+.dotLive {
+  background: var(--a-ok);
+  animation: syncPulse 1.4s ease-in-out infinite;
+}
+
+@keyframes syncPulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dotLive {
+    animation: none;
+  }
+}
+
+.counters {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.counter {
+  font-size: 12px;
+  color: var(--a-fg3);
+  white-space: nowrap;
+
+  b {
+    font-family: $admin-font-mono;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--a-fg1);
+    margin-right: 4px;
+  }
+}
+
+// ─── Feed ───────────────────────────────────────────────────────────────────
+
+.feed {
+  max-height: 320px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 30px 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 18px;
+  border-bottom: 1px solid var(--a-border-soft);
+  animation: syncRowIn 180ms ease-out;
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+@keyframes syncRowIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .row {
+    animation: none;
+  }
+}
+
+.thumb {
+  width: 30px;
+  height: 30px;
+  object-fit: contain;
+  border-radius: 5px;
+  background: #ffffff;
+  border: 1px solid var(--a-border-soft);
+}
+
+.thumbFallback {
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 5px;
+  background: var(--a-glass-well);
+  border: 1px solid var(--a-border-soft);
+
+  :global(i.ph-light) {
+    font-size: 16px;
+    color: var(--a-fg4);
+    line-height: 1;
+  }
+}
+
+.rowBody {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.rowTitle {
+  font-family: $admin-font-mono;
+  font-size: 13px;
+  color: var(--a-fg1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rowMeta {
+  font-size: 11px;
+  color: var(--a-fg3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// ─── Action chips ───────────────────────────────────────────────────────────
+
+.chip {
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 4px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+
+.chipUpdated {
+  color: var(--a-blue);
+  background: rgba(37, 99, 235, 0.1);
+  border-color: rgba(37, 99, 235, 0.2);
+}
+
+.chipMedia {
+  color: var(--a-ok);
+  background: rgba(21, 128, 61, 0.1);
+  border-color: rgba(21, 128, 61, 0.2);
+}
+
+// Nothing was written, so nothing reads written.
+.chipMuted {
+  color: var(--a-fg3);
+  background: var(--a-glass-well);
+  border-color: var(--a-border-soft);
+}
+
+// ─── System + error rows ────────────────────────────────────────────────────
+
+.rowIcon {
+  width: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  :global(i.ph-light) {
+    font-size: 16px;
+    line-height: 1;
+    color: var(--a-fg4);
+  }
+}
+
+.rowSystem {
+  grid-template-columns: 30px 1fr;
+}
+
+.systemText {
+  font-size: 12px;
+  color: var(--a-fg3);
+}
+
+.rowError {
+  grid-template-columns: 30px 1fr;
+  background: rgba(217, 119, 6, 0.07);
+
+  .rowIcon :global(i.ph-light) {
+    color: var(--a-warn);
+  }
+}
+
+.errorText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+  color: var(--a-fg2);
+  min-width: 0;
+
+  b {
+    font-size: 13px;
+    color: var(--a-fg1);
+  }
+}
+
+.errorDetail {
+  color: var(--a-fg2);
+  overflow-wrap: anywhere;
+}
+
+.errorReassure {
+  color: var(--a-fg3);
+  font-style: italic;
+}
+
+// ─── Placeholder / hint / footer ────────────────────────────────────────────
+
+.waiting {
+  margin: 0;
+  padding: 16px 18px;
+  font-size: 13px;
+  color: var(--a-fg3);
+}
+
+// One quiet sentence for a run that never started (no feed key, no provider
+// for this supplier, expired session). Deliberately not styled as an alarm —
+// nothing broke, the feature just isn't available here.
+.hint {
+  margin: 0;
+  padding: 14px 18px;
+  font-size: 13px;
+  color: var(--a-fg2);
+  background: var(--a-glass-well);
+  border-top: 1px solid var(--a-border-soft);
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 18px;
+  border-top: 1px solid var(--a-border-soft);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--a-fg1);
+  background: var(--a-glass-well);
+}
+
+.footerIcon {
+  font-size: 16px;
+  color: var(--a-ok);
+  line-height: 1;
+}
+
+@media (max-width: 600px) {
+  .head {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .counters {
+    gap: 10px;
+  }
+}

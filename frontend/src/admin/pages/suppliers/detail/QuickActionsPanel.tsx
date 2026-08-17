@@ -8,7 +8,7 @@
 // header "Add Part" button. The other three use blue/gold/purple tonal
 // fills so the strip reads as a palette of distinct workflows.
 
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Icon from '@shared/components/Icon';
 import { setPrefill } from '@admin/services/prefillBus';
@@ -19,13 +19,18 @@ import styles from './QuickActionsPanel.module.scss';
 interface Props {
   supplier: AdminSupplier;
   partRows: Part[];
-  /** Called after the "Sync now" action so the parent can refresh stats. */
-  onAfterSync?: (delta: number) => void;
+  /**
+   * Opens the live inventory-sync stream. The PARENT owns the request, the
+   * event state and the console panel — this card is only the trigger, so the
+   * feed survives anything that re-renders the strip.
+   */
+  onSync?: () => void;
+  /** True while that stream is open; drives the card's spinner + disabled state. */
+  syncing?: boolean;
 }
 
-export default function QuickActionsPanel({ supplier, partRows, onAfterSync }: Props) {
+export default function QuickActionsPanel({ supplier, partRows, onSync, syncing }: Props) {
   const navigate = useNavigate();
-  const [syncing, setSyncing] = useState(false);
 
   // Smart-default category — whichever category this supplier already has
   // the most listings in. Falls back to empty for brand-new suppliers.
@@ -76,20 +81,6 @@ export default function QuickActionsPanel({ supplier, partRows, onAfterSync }: P
   const handleImportCSV = () => {
     setPrefill('import', { supplier_id: supplier.id, supplier_name: supplier.name });
     navigate('/admin/import');
-  };
-
-  const handleSync = () => {
-    if (syncing) return;
-    setSyncing(true);
-    // Client-side simulated catalog sync — production would hit the
-    // supplier's distributor API and merge deltas. Bumps a fake count
-    // so the UI reflects what a real flow would do; replace with a real
-    // POST /api/suppliers/{id}/sync when the upstream API lands.
-    window.setTimeout(() => {
-      const delta = Math.floor(Math.random() * 40) + 8;
-      setSyncing(false);
-      onAfterSync?.(delta);
-    }, 700);
   };
 
   const cardHostHint = supplier.website
@@ -156,8 +147,8 @@ export default function QuickActionsPanel({ supplier, partRows, onAfterSync }: P
       <button
         type="button"
         className={`${styles.qaCard} ${styles.qaCardPurple}`}
-        onClick={handleSync}
-        disabled={syncing}
+        onClick={onSync}
+        disabled={syncing || !onSync}
       >
         <span className={styles.qaCardIcon}>
           <Icon
