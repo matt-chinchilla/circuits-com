@@ -27,6 +27,7 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.models import (
+    ActivityEvent,
     Category,
     Expense,
     PageView,
@@ -57,6 +58,14 @@ _MAX_COMPARE_MONTHS = 24
 # How many distinct months the breakdown pager may advertise. Same ceiling as
 # the compare charts, for the same reason: the list is materialized in JSON.
 _MAX_AVAILABLE_MONTHS = 24
+
+# Recent Activity depth. One number, applied per source AND to the merged list:
+# a source may only contribute rows that could survive the merge anyway.
+_ACTIVITY_LIMIT = 10
+
+# Which `activity_events.kind` values reach the dashboard. The table also holds
+# `sync_started` / `sync_error` — see `get_activity` for why they stay out.
+_ACTIVITY_EVENT_KINDS = ("part_synced", "sync_finished")
 
 # `?month=` grammar. The regex is enforced by FastAPI (→ 422 before the handler
 # runs); `_parse_month` still catches the values it lets through that aren't
@@ -548,38 +557,90 @@ def list_sales_reps(
     return {"reps": sorted(usernames, key=str.lower)}
 
 
+def _event_description(event: ActivityEvent) -> str:
+    """The human line for one sync event.
+
+    `part_synced` rows are only ever written for an action that WROTE something
+    (`routes/suppliers.py::_RECORDED_PART_ACTIONS`), so "Synced …" is honest for
+    every row that exists. `detail` carries the part's category and is NULL for
+    an uncategorized part — "Synced X into None" would be worse than dropping
+    the clause. `sync_finished.detail` already holds the counts sentence; the
+    fallback names the supplier (`title`) rather than inventing counts.
+    """
+    if event.kind == "part_synced":
+        if event.detail:
+            return f"Synced {event.title} into {event.detail}"
+        return f"Synced {event.title}"
+    return f"Inventory sync — {event.detail or event.title}"
+
+
 @router.get("/activity")
 def get_activity(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    """The dashboard's Recent Activity feed — newest `_ACTIVITY_LIMIT` rows.
+
+    Three sources merged by recency: parts added, revenue booked, and the
+    supplier-sync events. Every item carries `image_url` (None for the two
+    legacy sources) so the panel can render a part thumbnail without branching
+    on the item type.
+    """
     items = []
 
     # Recent parts
-    recent_parts = db.query(Part).order_by(Part.created_at.desc()).limit(10).all()
+    recent_parts = db.query(Part).order_by(Part.created_at.desc()).limit(_ACTIVITY_LIMIT).all()
     for p in recent_parts:
         items.append(
             {
                 "type": "part_added",
                 "description": f"Part {p.sku} ({p.manufacturer_name}) added",
                 "created_at": p.created_at.isoformat() if p.created_at else None,
+                "image_url": None,
             }
         )
 
     # Recent revenue entries
-    recent_revenue = db.query(Revenue).order_by(Revenue.created_at.desc()).limit(10).all()
+    recent_revenue = (
+        db.query(Revenue).order_by(Revenue.created_at.desc()).limit(_ACTIVITY_LIMIT).all()
+    )
     for r in recent_revenue:
         items.append(
             {
                 "type": "revenue",
                 "description": f"Revenue ${r.amount} ({r.type}) recorded",
                 "created_at": r.created_at.isoformat() if r.created_at else None,
+                "image_url": None,
             }
         )
 
-    # Sort combined by created_at desc, take top 10
+    # Supplier-sync events. The kind filter is READ-side on purpose: the table
+    # keeps `sync_started`/`sync_error` (the operator's audit trail lives
+    # there), but a dashboard strip is a record of what changed, and a started
+    # run that never finished would sit in the feed forever claiming progress.
+    recent_events = (
+        db.query(ActivityEvent)
+        .filter(ActivityEvent.kind.in_(_ACTIVITY_EVENT_KINDS))
+        .order_by(ActivityEvent.created_at.desc())
+        .limit(_ACTIVITY_LIMIT)
+        .all()
+    )
+    for e in recent_events:
+        items.append(
+            {
+                "type": e.kind,
+                "description": _event_description(e),
+                "created_at": e.created_at.isoformat() if e.created_at else None,
+                "image_url": e.image_url,
+            }
+        )
+
+    # Sort combined by created_at desc, take the newest few. The key is the
+    # isoformat STRING, as it has always been — every source reads the same
+    # column type through the same dialect, so the text order is the instant
+    # order, and normalizing to datetime would trip over SQLite's naive values.
     items.sort(key=lambda x: x["created_at"] or "", reverse=True)
-    return items[:10]
+    return items[:_ACTIVITY_LIMIT]
 
 
 @router.get("/revenue")

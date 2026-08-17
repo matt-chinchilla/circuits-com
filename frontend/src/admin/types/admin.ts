@@ -78,6 +78,10 @@ export interface ActivityItem {
   type: string;
   description: string;
   created_at: string | null;
+  // Set only on supplier-sync rows (`part_synced` carries the feed's part
+  // photo); the part/revenue sources always send null. `| null` is required —
+  // `?:` alone would let Python's None through untyped.
+  image_url?: string | null;
 }
 
 export interface RevenueDataPoint {

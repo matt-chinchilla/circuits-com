@@ -5,6 +5,7 @@
 
 import type { ReactNode } from 'react';
 import type { ActivityItem } from '@admin/types/admin';
+import { safeImageUrl } from '@shared/utils/url';
 import styles from '../DashboardPage.module.scss';
 
 type ActivityKind = 'ok' | 'info' | 'warn';
@@ -14,6 +15,10 @@ export interface ActivityRow {
   glyph: string;
   text: ReactNode;
   when: string;
+  // Sync rows only. Already through `safeImageUrl` by the time it lands here —
+  // the value is a supplier feed's URL (or an admin upload's data URL), so a
+  // `javascript:`/`data:text/html` string must never reach an `src`.
+  thumb?: string | null;
 }
 
 const DEMO_ACTIVITY: ActivityRow[] = [
@@ -77,6 +82,7 @@ export default function ActivityPanel({ activity, demoMode }: ActivityPanelProps
         glyph: '·',
         text: a.description,
         when: a.created_at ? new Date(a.created_at).toLocaleDateString() : '',
+        thumb: safeImageUrl(a.image_url),
       }));
 
   return (
@@ -91,7 +97,23 @@ export default function ActivityPanel({ activity, demoMode }: ActivityPanelProps
           rows.map((row, idx) => (
             <div key={idx} className={styles.activityRow}>
               <div className={`${styles.activityIcon} ${KIND_CLASS[row.kind]}`}>{row.glyph}</div>
-              <div className={styles.activityText}>{row.text}</div>
+              <div className={styles.activityBody}>
+                {row.thumb && (
+                  <img
+                    className={styles.activityThumb}
+                    src={row.thumb}
+                    alt=""
+                    loading="lazy"
+                    // A dead distributor image must leave the line readable, not
+                    // a broken-image glyph. Hiding the element beats a state
+                    // hook: the row is keyed by index and never re-fetches.
+                    onError={(e) => {
+                      e.currentTarget.style.display = 'none';
+                    }}
+                  />
+                )}
+                <div className={styles.activityText}>{row.text}</div>
+              </div>
               <div className={styles.activityTime}>{row.when}</div>
             </div>
           ))

@@ -977,10 +977,33 @@
   background: rgba(37, 99, 235, 0.12);
 }
 
+// Thumbnail + copy share the row's middle grid track. A wrapper rather than a
+// fourth column: the thumb exists on sync rows only, and a real column would
+// indent every text-only line to match it.
+.activityBody {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  // Keeps the grid's minmax(0, 1fr) honest — without it a long unbroken SKU
+  // pushes the timestamp off the panel.
+  min-width: 0;
+}
+
+.activityThumb {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  object-fit: cover;
+  background: var(--a-track);
+  border: 1px solid var(--a-border-soft);
+}
+
 .activityText {
   font-size: 14px;
   color: var(--a-fg1);
   line-height: 1.4;
+  min-width: 0;
 
   b {
     font-weight: 600;
