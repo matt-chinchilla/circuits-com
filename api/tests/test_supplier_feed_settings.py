@@ -573,6 +573,18 @@ class TestMigration032:
             assert line and "NOT NULL" in line.group(0)
 
 
+    def test_the_toggle_defaults_off_in_the_database_too(self):
+        line = re.search(r"^\s+auto_import_enabled\s+.*$", MIGRATION, re.M)
+        assert line and "DEFAULT false" in line.group(0)
+
+    def test_updated_at_is_stamped_by_the_database(self):
+        line = re.search(r"^\s+updated_at\s+.*$", MIGRATION, re.M)
+        assert line and "DEFAULT now()" in line.group(0)
+
+    def test_downgrade_drops_the_table_if_it_exists(self):
+        assert "DROP TABLE IF EXISTS supplier_feeds" in MIGRATION
+
+
 class TestMigration033:
     """`import_cursor` — the per-category import sweep depth."""
 
@@ -592,13 +604,3 @@ class TestMigration033:
         assert isinstance(SupplierFeed.__table__.c.import_cursor.type, JSON)
         assert SupplierFeed.__table__.c.import_cursor.nullable
 
-    def test_the_toggle_defaults_off_in_the_database_too(self):
-        line = re.search(r"^\s+auto_import_enabled\s+.*$", MIGRATION, re.M)
-        assert line and "DEFAULT false" in line.group(0)
-
-    def test_updated_at_is_stamped_by_the_database(self):
-        line = re.search(r"^\s+updated_at\s+.*$", MIGRATION, re.M)
-        assert line and "DEFAULT now()" in line.group(0)
-
-    def test_downgrade_drops_the_table_if_it_exists(self):
-        assert "DROP TABLE IF EXISTS supplier_feeds" in MIGRATION
