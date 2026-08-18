@@ -127,6 +127,10 @@ class MouserProvider:
         # run that set it, and the sync/import routes build one provider per
         # run. Counting is what the import sweep spends against `call_budget`.
         self.calls_made = 0
+        # RAW rows the last `search` received (see the Protocol in base.py):
+        # the import cursor advances by this, so it counts rows the API
+        # returned, not the ones that decoded.
+        self.last_raw_count = 0
 
     def close(self) -> None:
         """Release the HTTP connection pool. The sync route builds one
@@ -173,7 +177,7 @@ class MouserProvider:
             raise RuntimeError(f"Mouser API error: {errors}")
         return data
 
-    def search(self, keyword: str, limit: int = 50) -> list[FeedPart]:
+    def search(self, keyword: str, limit: int = 50, start_at: int = 0) -> list[FeedPart]:
         """Keyword search. COSTS AT MOST ``ceil(limit / records_per_call)``
         calls — one per page — so a caller with a call budget bounds the spend
         by the SIZE it asks for (pagination happens in here, out of the
@@ -184,11 +188,23 @@ class MouserProvider:
         fail to decode (no MPN/manufacturer) would otherwise leave
         `len(out) < limit` and buy another page — a caller who budgeted one
         call spending two. Undecodable rows shorten the RESULT; they never
-        raise the COST."""
+        raise the COST.
+
+        ``start_at`` is where in Mouser's result set to begin (its
+        ``startingRecord``) — the depth an import cursor keeps per category so
+        the next run reads PAST what the last one absorbed. It shifts the
+        window; it does NOT widen it, so the page cap above stays relative to
+        ``limit`` alone.
+
+        ``last_raw_count`` is left holding the RAW rows this call received
+        (decoded or not) — the number the cursor must advance by."""
         # Mouser pages at 50 records; paginate so --count above 50 delivers
         # what it promised instead of silently capping.
         out: list[FeedPart] = []
-        start = 0
+        start = start_at
+        # Per-search, never cumulative: a stale count would make an empty
+        # category look like a full page and never register as exhausted.
+        self.last_raw_count = 0
         pages_left = max(1, math.ceil(limit / self.records_per_call))
         while len(out) < limit and pages_left > 0:
             pages_left -= 1
@@ -206,6 +222,7 @@ class MouserProvider:
             raw_parts = (data.get("SearchResults") or {}).get("Parts") or []
             if not raw_parts:
                 break
+            self.last_raw_count += len(raw_parts)
             for raw in raw_parts:
                 part = part_from_mouser(raw)
                 if part is not None:

@@ -14,7 +14,7 @@ from decimal import Decimal
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.models import Category, Part, PartListing, PriceBreak, Supplier
+from app.models import Category, Part, PartListing, PriceBreak, Supplier, SupplierFeed
 from app.services.part_feed.base import FeedPart, PartFeedProvider
 from app.services.part_feed.mouser import FeedFatalError
 from app.utils.image_url import validate_optional_image_url
@@ -277,6 +277,44 @@ def sync_supplier_listings(
     yield _finished()
 
 
+IMPORT_CURSOR_EXHAUSTED = -1
+"""`import_cursor` value meaning "this category has no more rows to read"."""
+
+
+def _load_import_cursor(db: Session, supplier_id) -> dict[str, int]:
+    """This supplier's sweep depth per category: {category_slug: next start_at}.
+
+    No row, or no stored value, is a FRESH catalog — which is exactly what the
+    first import of every supplier sees, so run 1 behaves as it always did.
+    """
+    row = db.query(SupplierFeed).filter(SupplierFeed.supplier_id == supplier_id).first()
+    if row is None or not row.import_cursor:
+        return {}
+    return dict(row.import_cursor)
+
+
+def _save_import_cursor(db: Session, supplier_id, cursor: dict[str, int]) -> None:
+    """Persist the whole cursor map, creating the feed row if it is missing.
+
+    Re-queries instead of holding the row across the run's per-part commits
+    (each of which expires it) — the same shape as the nightly job's
+    `_stamp_run`. Creation mirrors the feed-settings PATCH upsert: `supplier_id`
+    IS the primary key, so the two writers converge on ONE row, and
+    `auto_import_enabled` is left at its default False — a cursor write must
+    never switch a nightly job on.
+
+    The value is REASSIGNED, never mutated in place: SQLAlchemy does not track
+    mutations inside a plain JSON column, so an in-place edit would be dropped
+    at commit without a word.
+    """
+    row = db.query(SupplierFeed).filter(SupplierFeed.supplier_id == supplier_id).first()
+    if row is None:
+        row = SupplierFeed(supplier_id=supplier_id)
+        db.add(row)
+    row.import_cursor = dict(cursor)
+    db.commit()
+
+
 def _thinnest_subcategories(db: Session) -> list[Category]:
     """Every subcategory, emptiest first.
 
@@ -318,9 +356,24 @@ def grow_catalog(
     An MPN that already lives in ANOTHER category is never hijacked into this
     one, and yields NO event — a stream of skips a human cannot act on is
     noise; the finish line carries the tally.
+
+    DEPTH is what keeps repeat runs useful. `supplier_feeds.import_cursor`
+    remembers how far into each category's search results this supplier has
+    already read, so every run asks the provider for the NEXT page rather than
+    re-reading page one (the owner-reported plateau: after the first sweep,
+    Import found nothing new). A category that answers with fewer raw rows than
+    it asked for is EXHAUSTED and stops consuming budget; when every category
+    is exhausted the map is cleared and the sweep starts from the top again —
+    a nightly run then re-verifies the catalog and picks up whatever the
+    distributor has listed since. The cursor is persisted PER CATEGORY, on its
+    own commit, so a quota wall mid-run keeps the depth the finished categories
+    already paid for.
     """
     supplier_id = str(supplier.id)
     supplier_name = supplier.name
+    # The PK itself, read once: every per-part commit expires `supplier`, and
+    # the cursor writes need the UUID rather than the event string.
+    supplier_pk = supplier.id
     created = synced = media_filled = no_data = skipped_elsewhere = 0
     # An import never looks a known MPN up, so nothing can be "not found" —
     # the key stays because every run reports the same five counters.
@@ -341,14 +394,28 @@ def grow_catalog(
         }
         return event
 
-    yield sync_event(
-        "sync_started",
-        supplier_id,
-        supplier_name,
-        f"growing catalog · budget {call_budget} calls",
+    categories = _thinnest_subcategories(db)
+    cursor = _load_import_cursor(db, supplier_pk)
+    wrapped = bool(categories) and all(
+        cursor.get(cat.slug) == IMPORT_CURSOR_EXHAUSTED for cat in categories
     )
+    if wrapped:
+        # Every shelf has answered "no more rows". Sweeping them again is the
+        # useful thing to do — it re-verifies what is listed and catches parts
+        # the distributor added since — so clear the map rather than idling
+        # forever. The cleared state persists with the first category's write,
+        # which stores the whole map.
+        cursor = {}
+    pending = [cat for cat in categories if cursor.get(cat.slug) != IMPORT_CURSOR_EXHAUSTED]
+    started_detail = (
+        f"growing catalog · budget {call_budget} calls · {len(pending)} categories to sweep"
+    )
+    if wrapped:
+        started_detail += " · catalog fully swept — restarting from the top"
+
+    yield sync_event("sync_started", supplier_id, supplier_name, started_detail)
     try:
-        for cat in _thinnest_subcategories(db):
+        for cat in pending:
             remaining_calls = call_budget - provider.calls_made
             if remaining_calls <= 0:
                 break
@@ -361,8 +428,9 @@ def grow_catalog(
             # would re-SELECT it for each row.
             cat_id, cat_slug = cat.id, cat.slug
             cat_name, keyword = cat.name, _search_keyword(cat)
+            start_at = cursor.get(cat_slug, 0)
             seen: set[str] = set()
-            for fp in provider.search(keyword, want):
+            for fp in provider.search(keyword, want, start_at=start_at):
                 key = fp.mpn.upper()
                 if key in seen:
                     # One page can carry the same MPN twice (generic numbers
@@ -411,6 +479,13 @@ def grow_catalog(
                     image_url,
                     action,
                 )
+            # Advance by the RAW rows the provider consumed, not by the parts
+            # kept: rows that failed to decode still took their place in the
+            # result set, and advancing by the survivors would re-fetch the
+            # junk every run. Short of what was asked for = the shelf ran out.
+            raw_rows = provider.last_raw_count
+            cursor[cat_slug] = IMPORT_CURSOR_EXHAUSTED if raw_rows < want else start_at + raw_rows
+            _save_import_cursor(db, supplier_pk, cursor)
     except FeedFatalError as exc:
         # str(exc) carries no API key — mouser.py never puts one in a message.
         db.rollback()

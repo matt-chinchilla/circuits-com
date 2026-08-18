@@ -38,8 +38,18 @@ class PartFeedProvider(Protocol):
     calls_made: int
     records_per_call: int
 
-    def search(self, keyword: str, limit: int = 50) -> list[FeedPart]:
-        """Keyword search — used to fill a category with parts."""
+    # RAW rows the LAST `search` received — not the FeedParts it returned.
+    # Rows that fail to decode still consumed their place in the distributor's
+    # result set, so the import cursor advances by this number; advancing by
+    # what parsed would park the next run back on top of the junk forever.
+    last_raw_count: int
+
+    def search(self, keyword: str, limit: int = 50, start_at: int = 0) -> list[FeedPart]:
+        """Keyword search — used to fill a category with parts.
+
+        `start_at` is the 0-based offset into the provider's result set: it is
+        what lets a second import of the same category read PAST what the
+        first one already absorbed."""
         ...
 
     def lookup_mpn(self, mpn: str) -> FeedPart | None:

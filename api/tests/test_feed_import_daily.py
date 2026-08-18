@@ -477,7 +477,7 @@ class _FatalProvider(FakeProvider):
     """Hits the quota wall on its first search — the way a spent free tier
     answers every caller for the rest of the day."""
 
-    def search(self, keyword, limit=50):
+    def search(self, keyword, limit=50, start_at=0):
         self.calls_made += 1
         raise FeedFatalError("Mouser API HTTP 429 on /search/keyword")
 
@@ -485,7 +485,7 @@ class _FatalProvider(FakeProvider):
 class _BrokenProvider(FakeProvider):
     """A NON-fatal failure: one bad response, one supplier's problem."""
 
-    def search(self, keyword, limit=50):
+    def search(self, keyword, limit=50, start_at=0):
         self.calls_made += 1
         raise RuntimeError("Mouser API HTTP 500 on /search/keyword")
 

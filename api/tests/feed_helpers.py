@@ -28,16 +28,24 @@ class FakeProvider:
         # keyword -> results, for sweeps that must answer per category
         self.results_by_keyword = results_by_keyword or {}
         self.calls_made = 0
-        self.search_calls: list[tuple[str, int]] = []
+        # (keyword, limit, start_at) — the depth is part of the record, so a
+        # cursor test can prove the second run asked a DIFFERENT page.
+        self.search_calls: list[tuple[str, int, int]] = []
+        self.last_raw_count = 0
 
-    def search(self, keyword, limit=50):
+    def search(self, keyword, limit=50, start_at=0):
         # PAGE-aware, like MouserProvider: a search for more than one page
         # costs more than one call, so budget tests exercise the real ratio
         # instead of a flattering 1-per-category.
         self.calls_made += max(1, math.ceil(limit / self.records_per_call))
-        self.search_calls.append((keyword, limit))
+        self.search_calls.append((keyword, limit, start_at))
         results = self.results_by_keyword.get(keyword, self.search_results)
-        return results[:limit]
+        page = results[start_at : start_at + limit]
+        # Every fake row parses, so raw == returned here. The attribute exists
+        # anyway because the import cursor advances by RAW rows: a provider
+        # that dropped undecodable rows must not re-fetch them forever.
+        self.last_raw_count = len(page)
+        return page
 
     def lookup_mpn(self, mpn):
         self.calls_made += 1

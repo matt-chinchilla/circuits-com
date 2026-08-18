@@ -39,7 +39,7 @@ from pathlib import Path
 
 import bcrypt
 import pytest
-from sqlalchemy import Text
+from sqlalchemy import JSON, Text
 
 from app.config import settings
 from app.models import ProviderCredential, Supplier, SupplierFeed, User
@@ -47,7 +47,16 @@ from app.models import ProviderCredential, Supplier, SupplierFeed, User
 MIGRATION = (
     Path(__file__).resolve().parents[1] / "alembic" / "versions" / "032_supplier_feeds.py"
 ).read_text()
+MIGRATION_033 = (
+    Path(__file__).resolve().parents[1]
+    / "alembic"
+    / "versions"
+    / "033_supplier_feed_import_cursor.py"
+).read_text()
 
+# What 032 CREATEs. Columns added by a later migration go in ADDED_COLUMNS —
+# the two together are asserted to be the whole model, so a column added to
+# the model and forgotten in every migration fails here rather than in prod.
 COLUMNS = {
     "supplier_id",
     "feed_url",
@@ -56,6 +65,7 @@ COLUMNS = {
     "last_synced_at",
     "updated_at",
 }
+ADDED_COLUMNS = {"import_cursor"}  # 033
 
 # Fake credentials — nothing here ever reaches Mouser. Distinctive strings so a
 # leak assertion (`KEY not in resp.text`) can only fail on a real leak.
@@ -121,7 +131,11 @@ def demo_header(client, db):
 
 class TestModelShape:
     def test_the_table_has_exactly_the_designed_columns(self):
-        assert set(SupplierFeed.__table__.c.keys()) == COLUMNS
+        """032's CREATE plus everything a later migration ADDs. The two sets
+        together are the model, so a column that exists on the model (and so in
+        the `create_all` every test builds from) but in no migration fails here
+        rather than in production."""
+        assert set(SupplierFeed.__table__.c.keys()) == COLUMNS | ADDED_COLUMNS
 
     def test_table_name(self):
         assert SupplierFeed.__tablename__ == "supplier_feeds"
@@ -557,6 +571,26 @@ class TestMigration032:
         for column in ("auto_import_enabled", "updated_at"):
             line = re.search(rf"^\s+{column}\s+.*$", MIGRATION, re.M)
             assert line and "NOT NULL" in line.group(0)
+
+
+class TestMigration033:
+    """`import_cursor` — the per-category import sweep depth."""
+
+    def test_it_sits_on_the_head_that_is_actually_on_disk(self):
+        assert re.search(r'^revision = "033"', MIGRATION_033, re.M)
+        assert re.search(r'^down_revision = "032"', MIGRATION_033, re.M)
+
+    def test_it_adds_the_column_idempotently(self):
+        """Same reason as 032: a replayed migration that dies on "column
+        already exists" crash-loops the api with /api/* at 502."""
+        assert "ADD COLUMN IF NOT EXISTS import_cursor JSON" in MIGRATION_033
+        assert "DROP COLUMN IF EXISTS import_cursor" in MIGRATION_033
+
+    def test_the_column_is_json_on_the_model_too(self):
+        """`sa.JSON` renders on Postgres AND on the SQLite the suite builds —
+        a Postgres-only JSONB would leave every test blind to this column."""
+        assert isinstance(SupplierFeed.__table__.c.import_cursor.type, JSON)
+        assert SupplierFeed.__table__.c.import_cursor.nullable
 
     def test_the_toggle_defaults_off_in_the_database_too(self):
         line = re.search(r"^\s+auto_import_enabled\s+.*$", MIGRATION, re.M)

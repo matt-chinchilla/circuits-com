@@ -15,6 +15,15 @@ from this row). ``last_synced_at`` IS live: the nightly job stamps it after
 each supplier's run — it means "calls were spent on this supplier that night",
 not "the run succeeded" (a quota wall mid-run still stamps).
 
+``import_cursor`` is the import sweep's own bookkeeping: a JSON map of
+``{category_slug: next_start_at}`` recording how deep into each category's
+search results this supplier's imports have already read. ``-1`` means that
+category is EXHAUSTED (a sweep returned fewer raw rows than it asked for) and
+is skipped until every category is exhausted, at which point ``grow_catalog``
+clears the whole map and sweeps again from the top. Written ONLY by
+``grow_catalog`` (one write per category, its own commit); resetting it by
+hand is ``UPDATE supplier_feeds SET import_cursor = NULL``.
+
 ``key_configured`` on the endpoints is NOT this column: it is
 ``registry.get_feed_key`` — the Admin → Settings row, else the environment —
 because that is the credential a run would present today.
@@ -30,7 +39,7 @@ forgotten step there instead of failing on it.
 this last changed" must stay true for a writer that forgets to set it.
 """
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, String, Text, func
+from sqlalchemy import JSON, Boolean, Column, DateTime, ForeignKey, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 
 from app.db.session import Base
@@ -48,6 +57,10 @@ class SupplierFeed(Base):
     # supplier id must not enable a nightly job by accident.
     auto_import_enabled = Column(Boolean, nullable=False, default=False)
     last_synced_at = Column(DateTime(timezone=True), nullable=True)
+    # {category_slug: next start_at}, -1 = exhausted. `sa.JSON`, not JSONB:
+    # the suite builds on SQLite via create_all, and nothing queries INTO the
+    # value — it is read whole, per supplier.
+    import_cursor = Column(JSON, nullable=True)
     updated_at = Column(
         DateTime(timezone=True),
         server_default=func.now(),

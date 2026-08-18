@@ -84,6 +84,38 @@ Both live in `/opt/circuits-com/.env` on the server; changing one needs
 `docker compose ... up -d --force-recreate feed-import` (a plain `restart` does
 not re-read `.env`).
 
+### Digging deeper each run (the import cursor)
+
+Every import — the nightly job and the **Import new parts** button alike —
+remembers how far into each category's search results it has already read, per
+distributor. The first run of a category reads the first page, the next run
+reads the page after it, and so on. That is what makes repeated clicks keep
+finding new parts instead of re-reading the same first page and reporting
+`0 created`.
+
+A category that answers with fewer parts than were asked for is treated as
+**exhausted** — the distributor has nothing more under that keyword — and it is
+skipped from then on, so the budget flows to categories that still have depth.
+The run's first console line says how many are left: *"growing catalog · budget
+850 calls · 42 categories to sweep"*.
+
+When every category is exhausted the depth is **cleared automatically** and the
+next run starts again from the top, saying so in the console (*"catalog fully
+swept — restarting from the top"*). That is deliberate: a second pass
+re-verifies stock and prices and picks up whatever the distributor has listed
+since. Nothing to schedule and no lever to pull.
+
+Depth is stored per supplier in `supplier_feeds.import_cursor`. To force one
+distributor to start over from the first page (engineering, on the server):
+
+```bash
+docker compose exec -T db psql -U circuits -d circuits \
+    -c "UPDATE supplier_feeds SET import_cursor = NULL WHERE supplier_id = '<uuid>';"
+```
+
+Safe at any time — the imports are idempotent, so a re-read refreshes what is
+already there rather than duplicating it.
+
 ### Watch the daily quota
 
 A free Mouser key allows **~1,000 calls/day**, and there are two spenders:

@@ -6,7 +6,7 @@ from decimal import Decimal
 import pytest
 from sqlalchemy import event as sa_event
 
-from app.models import Category, Part, PartListing, PriceBreak, Supplier
+from app.models import Category, Part, PartListing, PriceBreak, Supplier, SupplierFeed
 from app.services.part_feed.base import FeedPriceBreak
 from app.services.part_feed.importer import (
     _fill_part_media,
@@ -717,6 +717,92 @@ class TestProviderCallAccounting:
         assert provider.lookup_mpn("LM7805CT") is None
         assert provider.calls_made == 1
 
+    def test_start_at_becomes_the_starting_record(self):
+        """Depth is the whole point of the import cursor: without a
+        `startingRecord` every run re-reads page one and finds nothing new."""
+        import json
+
+        import httpx
+
+        seen: list[int] = []
+
+        def handler(request):
+            body = json.loads(request.content)["SearchByKeywordRequest"]
+            seen.append(body["startingRecord"])
+            parts = [
+                {
+                    "ManufacturerPartNumber": f"MPN-{body['startingRecord'] + i}",
+                    "Manufacturer": "Feed Mfr",
+                    "PriceBreaks": [],
+                }
+                for i in range(body["records"])
+            ]
+            return httpx.Response(200, json={"SearchResults": {"Parts": parts}})
+
+        provider = self._provider(handler)
+
+        out = provider.search("resistor", 120, start_at=200)
+
+        # paging RESUMES at the offset, and the cap is still ceil(limit/page)
+        assert seen == [200, 250, 300]
+        assert provider.calls_made == 3
+        assert out[0].mpn == "MPN-200"
+        assert provider.last_raw_count == 120
+
+    def test_last_raw_count_reports_rows_RETURNED_not_rows_kept(self):
+        """The cursor advances by RAW rows. Advancing by the PARSED ones would
+        park the next run back on top of the undecodable rows, forever."""
+        import httpx
+
+        def handler(request):
+            parts = [
+                {
+                    "ManufacturerPartNumber": f"MPN-{i}",
+                    # every third row is undecodable and gets dropped
+                    "Manufacturer": "" if i % 3 == 0 else "Feed Mfr",
+                    "PriceBreaks": [],
+                }
+                for i in range(50)
+            ]
+            return httpx.Response(200, json={"SearchResults": {"Parts": parts}})
+
+        provider = self._provider(handler)
+
+        out = provider.search("resistor", 50)
+
+        assert provider.last_raw_count == 50
+        assert len(out) < 50
+
+    def test_last_raw_count_belongs_to_the_LAST_search(self):
+        """It is per-search state, not a running total — a stale value would
+        make an empty category look like a full page and never exhaust."""
+        import httpx
+
+        responses = [
+            httpx.Response(
+                200,
+                json={
+                    "SearchResults": {
+                        "Parts": [
+                            {
+                                "ManufacturerPartNumber": "MPN-1",
+                                "Manufacturer": "Feed Mfr",
+                                "PriceBreaks": [],
+                            }
+                        ]
+                    }
+                },
+            ),
+            httpx.Response(200, json={"SearchResults": {"Parts": []}}),
+        ]
+        provider = self._provider(lambda request: responses.pop(0))
+
+        provider.search("resistor", 50)
+        assert provider.last_raw_count == 1
+
+        provider.search("capacitor", 50)
+        assert provider.last_raw_count == 0
+
 
 def _subcategory(db, name, slug, parent, parts=0):
     """A child category holding `parts` throwaway parts — the sweep order is
@@ -765,7 +851,7 @@ class TestGrowCatalog:
             "kind": "sync_started",
             "supplier_id": str(supplier.id),
             "title": "Avnet",
-            "detail": "growing catalog · budget 1 calls",
+            "detail": "growing catalog · budget 1 calls · 2 categories to sweep",
             "image_url": None,
             "action": None,
         }
@@ -894,7 +980,7 @@ class TestGrowCatalog:
         list(grow_catalog(db, provider, supplier, call_budget=4))
 
         # 0 parts (name-tiebroken), then 1, then the seeded child's 2
-        assert [kw for kw, _ in provider.search_calls] == [
+        assert [kw for kw, _, _ in provider.search_calls] == [
             "Amplifiers",
             "Zener Diodes",
             "Sensor ICs",
@@ -909,7 +995,7 @@ class TestGrowCatalog:
         provider = _FakeProvider()
         events = list(grow_catalog(db, provider, supplier, call_budget=2))
 
-        assert [kw for kw, _ in provider.search_calls] == ["Amplifiers", "Zener Diodes"]
+        assert [kw for kw, _, _ in provider.search_calls] == ["Amplifiers", "Zener Diodes"]
         assert provider.calls_made == 2
         assert events[-1]["detail"].endswith("· 2 calls used")
 
@@ -930,7 +1016,7 @@ class TestGrowCatalog:
 
         list(grow_catalog(db, provider, seeded_db["supplier1"], call_budget=1, per_category=200))
 
-        assert provider.search_calls == [("Clock and Timing", 50)]
+        assert provider.search_calls == [("Clock and Timing", 50, 0)]
 
     def test_a_category_wider_than_one_page_costs_more_than_one_call(self, db, seeded_db):
         """`per_category` above a page is a REAL multi-call ask — the budget
@@ -943,7 +1029,7 @@ class TestGrowCatalog:
         events = list(grow_catalog(db, provider, supplier, call_budget=2, per_category=100))
 
         # one category, two pages — and the sweep stops there
-        assert provider.search_calls == [("Amplifiers", 100)]
+        assert provider.search_calls == [("Amplifiers", 100, 0)]
         assert provider.calls_made == 2
         assert events[-1]["detail"].endswith("· 2 calls used")
 
@@ -968,11 +1054,11 @@ class TestGrowCatalog:
         _subcategory(db, "Zener Diodes", "zener-diodes", parent)
 
         class _FatalOnSecondSearch(_FakeProvider):
-            def search(self, keyword, limit=50):
+            def search(self, keyword, limit=50, start_at=0):
                 if self.calls_made >= 1:
                     self.calls_made += 1
                     raise FeedFatalError("Mouser API HTTP 429 on /search/keyword")
-                return super().search(keyword, limit)
+                return super().search(keyword, limit, start_at)
 
         provider = _FatalOnSecondSearch(results_by_keyword={"Amplifiers": [_feed_part("NEW-1")]})
 
@@ -995,3 +1081,170 @@ class TestGrowCatalog:
             .count()
             == 1
         )
+
+
+def _cursor(db, supplier) -> dict:
+    row = db.query(SupplierFeed).filter(SupplierFeed.supplier_id == supplier.id).first()
+    return dict(row.import_cursor or {}) if row else {}
+
+
+class TestImportCursor:
+    """Per-(supplier, category) sweep depth — the fix for the discovery
+    plateau, where every Import click re-read page one and found nothing.
+
+    The cursor lives on `supplier_feeds.import_cursor` as
+    `{category_slug: next_start_at}`, with -1 for EXHAUSTED.
+    """
+
+    def test_a_swept_category_records_its_depth(self, db, seeded_db):
+        supplier, parent = seeded_db["supplier1"], seeded_db["parent"]
+        _subcategory(db, "Voltage References", "voltage-references", parent)
+        provider = _FakeProvider(
+            results_by_keyword={"Voltage References": [_feed_part(f"NEW-{i}") for i in range(3)]}
+        )
+
+        list(grow_catalog(db, provider, supplier, call_budget=1, per_category=3))
+
+        row = db.query(SupplierFeed).filter_by(supplier_id=supplier.id).one()
+        assert row.import_cursor == {"voltage-references": 3}
+        # the row this run had to create must never switch the nightly job on
+        assert row.auto_import_enabled is False
+
+    def test_a_short_page_marks_the_category_exhausted(self, db, seeded_db):
+        """Fewer rows than asked for means the shelf ran out — spending the
+        next run's budget on it again is exactly the plateau."""
+        supplier, parent = seeded_db["supplier1"], seeded_db["parent"]
+        _subcategory(db, "Voltage References", "voltage-references", parent)
+        provider = _FakeProvider(results_by_keyword={"Voltage References": [_feed_part("NEW-1")]})
+
+        list(grow_catalog(db, provider, supplier, call_budget=1))
+
+        assert _cursor(db, supplier) == {"voltage-references": -1}
+
+    def test_the_next_run_starts_where_the_last_one_stopped(self, db, seeded_db):
+        supplier, parent = seeded_db["supplier1"], seeded_db["parent"]
+        _subcategory(db, "Voltage References", "voltage-references", parent)
+        results = [_feed_part(f"NEW-{i}") for i in range(5)]
+
+        first = _FakeProvider(results_by_keyword={"Voltage References": results})
+        list(grow_catalog(db, first, supplier, call_budget=1, per_category=2))
+        # budget 2 on the second run: the two parts run 1 imported moved this
+        # category out of the thinnest slot, so the sweep reaches it second
+        second = _FakeProvider(results_by_keyword={"Voltage References": results})
+        list(grow_catalog(db, second, supplier, call_budget=2, per_category=2))
+
+        assert first.search_calls == [("Voltage References", 2, 0)]
+        assert ("Voltage References", 2, 2) in second.search_calls
+        assert {p.sku for p in db.query(Part).filter(Part.sku.like("NEW-%")).all()} == {
+            "NEW-0",
+            "NEW-1",
+            "NEW-2",
+            "NEW-3",
+        }
+        assert _cursor(db, supplier)["voltage-references"] == 4
+
+    def test_the_cursor_advances_by_RAW_rows_not_by_parts_kept(self, db, seeded_db):
+        """A page whose rows partly fail to decode still consumed those rows.
+        Advancing by what survived would re-fetch the junk every single run."""
+        supplier, parent = seeded_db["supplier1"], seeded_db["parent"]
+        _subcategory(db, "Voltage References", "voltage-references", parent)
+
+        class _HalfUndecodable(_FakeProvider):
+            def search(self, keyword, limit=50, start_at=0):
+                page = super().search(keyword, limit, start_at)
+                # the distributor answered a FULL page; only these parsed
+                self.last_raw_count = limit
+                return page
+
+        first = _HalfUndecodable(results_by_keyword={"Voltage References": [_feed_part("NEW-1")]})
+        list(grow_catalog(db, first, supplier, call_budget=1, per_category=2))
+
+        assert _cursor(db, supplier) == {"voltage-references": 2}
+        second = _HalfUndecodable(results_by_keyword={"Voltage References": []})
+        list(grow_catalog(db, second, supplier, call_budget=1, per_category=2))
+        assert second.search_calls == [("Voltage References", 2, 2)]
+
+    def test_an_exhausted_category_is_skipped_and_its_budget_moves_on(self, db, seeded_db):
+        supplier, parent = seeded_db["supplier1"], seeded_db["parent"]
+        _subcategory(db, "Amplifiers", "amplifiers", parent)
+        _subcategory(db, "Zener Diodes", "zener-diodes", parent)
+        db.add(SupplierFeed(supplier_id=supplier.id, import_cursor={"amplifiers": -1}))
+        db.commit()
+        provider = _FakeProvider()
+
+        events = list(grow_catalog(db, provider, supplier, call_budget=1))
+
+        # Amplifiers is thinnest and would have gone first — the call went to
+        # the next unexhausted shelf instead
+        assert [kw for kw, _, _ in provider.search_calls] == ["Zener Diodes"]
+        assert events[0]["detail"] == "growing catalog · budget 1 calls · 2 categories to sweep"
+        assert _cursor(db, supplier) == {"amplifiers": -1, "zener-diodes": -1}
+
+    def test_all_exhausted_wraps_around_and_sweeps_fresh(self, db, seeded_db):
+        """Otherwise a fully-swept catalog turns the nightly run into a no-op
+        forever, and parts the distributor added later are never seen."""
+        supplier, parent = seeded_db["supplier1"], seeded_db["parent"]
+        _subcategory(db, "Amplifiers", "amplifiers", parent)
+        db.add(
+            SupplierFeed(
+                supplier_id=supplier.id,
+                import_cursor={"amplifiers": -1, "clock-and-timing": -1},
+            )
+        )
+        db.commit()
+        provider = _FakeProvider()
+
+        events = list(grow_catalog(db, provider, supplier, call_budget=1))
+
+        assert events[0]["detail"] == (
+            "growing catalog · budget 1 calls · 2 categories to sweep · "
+            "catalog fully swept — restarting from the top"
+        )
+        assert provider.search_calls == [("Amplifiers", 50, 0)]
+        # the clear PERSISTED: the old -1s are gone, not carried forward
+        assert _cursor(db, supplier) == {"amplifiers": -1}
+
+    def test_an_existing_feed_row_keeps_its_switch(self, db, seeded_db):
+        """Same natural key as the PATCH upsert (supplier_id IS the pk) — the
+        cursor write must never rebuild the row or flip the nightly toggle."""
+        supplier, parent = seeded_db["supplier1"], seeded_db["parent"]
+        _subcategory(db, "Amplifiers", "amplifiers", parent)
+        db.add(SupplierFeed(supplier_id=supplier.id, auto_import_enabled=True))
+        db.commit()
+
+        list(grow_catalog(db, _FakeProvider(), supplier, call_budget=1))
+
+        row = db.query(SupplierFeed).filter_by(supplier_id=supplier.id).one()
+        assert row.auto_import_enabled is True
+        assert row.import_cursor == {"amplifiers": -1}
+        assert db.query(SupplierFeed).count() == 1
+
+    def test_a_run_that_sweeps_nothing_writes_no_row(self, db, seeded_db):
+        supplier = seeded_db["supplier1"]
+
+        list(grow_catalog(db, _FakeProvider(), supplier, call_budget=0))
+
+        assert db.query(SupplierFeed).filter_by(supplier_id=supplier.id).first() is None
+
+    def test_a_quota_wall_keeps_the_depth_of_finished_categories(self, db, seeded_db):
+        """Per-category persistence is what makes the wall survivable: the
+        calls already spent are not re-spent tomorrow."""
+        from app.services.part_feed.mouser import FeedFatalError
+
+        supplier, parent = seeded_db["supplier1"], seeded_db["parent"]
+        _subcategory(db, "Amplifiers", "amplifiers", parent)
+        _subcategory(db, "Zener Diodes", "zener-diodes", parent)
+
+        class _FatalOnSecondSearch(_FakeProvider):
+            def search(self, keyword, limit=50, start_at=0):
+                if self.calls_made >= 1:
+                    self.calls_made += 1
+                    raise FeedFatalError("Mouser API HTTP 429 on /search/keyword")
+                return super().search(keyword, limit, start_at)
+
+        provider = _FatalOnSecondSearch(results_by_keyword={"Amplifiers": [_feed_part("NEW-1")]})
+
+        events = list(grow_catalog(db, provider, supplier, call_budget=10))
+
+        assert [e["kind"] for e in events][-2:] == ["sync_error", "sync_finished"]
+        assert _cursor(db, supplier) == {"amplifiers": -1}
