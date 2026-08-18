@@ -411,3 +411,96 @@ def test_the_secret_key_is_not_exposed_to_the_frontend_build():
             f"STRIPE_SECRET_KEY appears in the frontend service in {path.name}"
         )
         assert "VITE_STRIPE_SECRET" not in text, "a secret key must never carry a VITE_ prefix"
+
+
+# ── Nightly feed import (2026-08-18) ────────────────────────────────────────
+# app/jobs/feed_import_daily.py has exactly one caller — the `feed-import`
+# compose service — and it runs in its OWN container, so the api service's
+# allowlist does nothing for it. Third time this pattern is guarded: the
+# reminder job and the cost sync were both complete, tested, and unscheduled.
+
+
+def test_the_nightly_import_job_is_actually_scheduled():
+    text = DEV_COMPOSE.read_text()
+    assert "feed-import:" in text, (
+        "no feed-import service in docker-compose.yml — app.jobs.feed_import_daily "
+        "has no caller, so every supplier's nightly toggle is a switch wired to "
+        "nothing and the catalog stops growing silently"
+    )
+    block = _service_block(DEV_COMPOSE, "feed-import")
+    assert "app.jobs.feed_import_daily" in block, "the service does not invoke the job"
+    assert "restart:" in block, (
+        "without a restart policy one crash silences the nightly import until the next deploy"
+    )
+
+
+FEED_IMPORT_SETTINGS = ("DATABASE_URL", "FEED_IMPORT_HOUR_UTC", "FEED_IMPORT_CALL_BUDGET")
+
+
+def test_the_feed_import_service_carries_its_own_configuration():
+    block = _service_block(DEV_COMPOSE, "feed-import")
+    for name in FEED_IMPORT_SETTINGS:
+        assert f"{name}:" in block, (
+            f"{name} is missing from feed-import in docker-compose.yml. The job runs in "
+            "its own container, so the api service's allowlist does nothing for it."
+        )
+    assert re.search(r"^\s*MOUSER_API_KEY:\s*\$\{MOUSER_SEARCH_API_KEY:-\}\s*$", block, re.M), (
+        "feed-import must map MOUSER_API_KEY to the HOST variable MOUSER_SEARCH_API_KEY "
+        "(the same-named host value is a known-invalid legacy key). Without it, a box "
+        "configured only through .env has a nightly job that can never find a key."
+    )
+
+
+def test_the_feed_import_defaults_mirror_the_code_defaults():
+    """An empty — or a DIFFERENT — default here does not defer to config.py, it
+    overwrites it. The budget is money: a compose default of 900 against a code
+    default of 850 would silently spend the difference every night, and nothing
+    would ever report the disagreement.
+    """
+    expected = {
+        "FEED_IMPORT_HOUR_UTC": str(Settings.model_fields["FEED_IMPORT_HOUR_UTC"].default),
+        "FEED_IMPORT_CALL_BUDGET": str(Settings.model_fields["FEED_IMPORT_CALL_BUDGET"].default),
+    }
+    block = _service_block(DEV_COMPOSE, "feed-import")
+    for name, code_default in expected.items():
+        line = next(ln for ln in block.splitlines() if ln.strip().startswith(f"{name}:"))
+        assert "${" in line, f"{name} is pinned instead of host-overridable"
+        default = line.split(":-", 1)[1].rstrip("}").strip() if ":-" in line else ""
+        assert default == code_default, (
+            f"the docker-compose.yml default for {name} ({default!r}) has drifted from "
+            f"Settings.{name} ({code_default!r})"
+        )
+
+
+def test_the_nightly_budget_leaves_room_under_the_free_tier():
+    """The click ceiling (routes/suppliers.py clamps an import to 900) and this
+    nightly budget CAN jointly exceed the ~1,000 calls/day a free key allows —
+    documented in config.py and the runbook, and deliberately not tracked at
+    runtime (the two are separate processes with no shared counter). What must
+    stay true is that the nightly run alone leaves headroom for a human to click
+    something the next day.
+    """
+    assert Settings.model_fields["FEED_IMPORT_CALL_BUDGET"].default <= 900
+
+
+def test_the_feed_import_service_inherits_the_prod_log_cap():
+    prod = _service_block(PROD_COMPOSE, "feed-import")
+    assert "logging: *default-logging" in prod, (
+        "an uncapped json-file log is the 238 MB nginx access log again — see the "
+        "x-logging anchor's comment."
+    )
+
+
+def test_deploy_names_the_feed_import_service_in_every_build_list():
+    """`up -d` NEVER rebuilds an existing image. A service missing from the
+    build list keeps running first-deploy code forever — the cost-sync lesson,
+    which is why this is asserted on the shipped script rather than remembered.
+    """
+    deploy = (ROOT / "deploy.sh").read_text()
+    build_lines = [ln for ln in deploy.splitlines() if "COMPOSE_CMD build api" in ln]
+    assert build_lines, "no `build api ...` line found in deploy.sh"
+    for line in build_lines:
+        assert "feed-import" in line, (
+            "deploy.sh builds api without feed-import: the nightly import container "
+            "would keep whatever code it was first built with, forever."
+        )

@@ -206,6 +206,51 @@ services:
     volumes:
       - ${HOME}/.aws:/root/.aws:ro
 
+  # Nightly catalog import. `app.jobs.feed_import_daily` sleeps to the next
+  # FEED_IMPORT_HOUR_UTC boundary, then runs one import for every supplier
+  # whose "Nightly auto-import" switch is on, inside ONE shared call budget.
+  #
+  # A separate service rather than a thread in api, for the same reason
+  # calendar-reminders and cost-sync are: the run takes hours (the provider
+  # sleeps ~2.1s between calls under the free tier's ~30/min), and a long
+  # blocking job inside the request container is a request container that is
+  # sometimes not answering requests.
+  #
+  # The loop lives INSIDE python (like cost-sync, unlike calendar-reminders'
+  # shell `while`) because the schedule is a CLOCK BOUNDARY, not an interval:
+  # the job computes the seconds to the next 06:00 UTC and sleeps exactly
+  # that, so a restart cannot walk the run time across the day. It also sleeps
+  # BEFORE its first pass — a crash loop must never spend the day's quota on
+  # every boot.
+  feed-import:
+    build:
+      context: ./api
+    restart: unless-stopped
+    # Same ordering caveat as calendar-reminders: `alembic upgrade head` runs
+    # in the api container's entrypoint, so service_started narrows the window
+    # but does not close it. The job tolerates the gap itself — a missing
+    # table is one warning and a skipped pass, not a traceback.
+    depends_on:
+      - db
+      - api
+    command: python -m app.jobs.feed_import_daily
+    environment:
+      DATABASE_URL: postgresql://circuits:circuits@db:5432/circuits
+      # This block is an ALLOWLIST and this is a SEPARATE container — it
+      # inherits nothing from the api service. Both defaults MIRROR
+      # app/config.py; an empty `${VAR:-}` would not fall back to the code
+      # default, it would overwrite it (the CALENDAR_RECIPIENTS trap).
+      FEED_IMPORT_HOUR_UTC: ${FEED_IMPORT_HOUR_UTC:-6}
+      FEED_IMPORT_CALL_BUDGET: ${FEED_IMPORT_CALL_BUDGET:-850}
+      # The provider key, mapped from the HOST variable MOUSER_SEARCH_API_KEY
+      # exactly as the api service does (the same-named host value is a
+      # known-invalid legacy key). A key stored from Admin → Settings WINS
+      # over this one — `registry.get_feed_key` asks the DB first — so this is
+      # the fallback for a box configured only through .env. Empty = every
+      # supplier is skipped with a log line, which is the correct "not
+      # configured" state.
+      MOUSER_API_KEY: ${MOUSER_SEARCH_API_KEY:-}
+
   frontend:
     build: ./frontend
     ports:

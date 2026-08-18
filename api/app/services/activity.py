@@ -12,12 +12,33 @@ keeps everything already reported.
 
 import logging
 import uuid
+from collections.abc import Mapping
 
 from sqlalchemy.orm import Session
 
 from app.models import ActivityEvent
 
 logger = logging.getLogger(__name__)
+
+# The label an IMPORT run stores its run-level events under.
+#
+# The WIRE is untouched — every generator yields `sync_started`/`sync_finished`
+# and the console parses one shape — but the two runs are different jobs and
+# the dashboard is the only place that has to tell them apart afterwards.
+# `activity_events` has no mode column, so the KIND is the only thing that can
+# carry it, exactly as `part_imported` carries "this part is new" for a row
+# whose `action` did not survive the table.
+#
+# One home, because both import callers need the identical table: the route's
+# `_stream_feed_run` (an operator clicking "Import new parts") and
+# `app.jobs.feed_import_daily` (the nightly run, which has no socket at all and
+# exists ONLY as these rows). `sync_error` is deliberately absent — it is not
+# read by the dashboard on either path, and a kind nothing renders is a
+# template branch nobody writes.
+IMPORT_EVENT_KINDS: Mapping[str, str] = {
+    "sync_started": "import_started",
+    "sync_finished": "import_finished",
+}
 
 # Which `part_synced` actions become a row, and under WHICH stored kind.
 #
@@ -39,8 +60,20 @@ _PART_ACTION_KINDS: dict[str, str] = {
 }
 
 
-def record_stream_event(db: Session, supplier_id: uuid.UUID, event: dict) -> None:
+def record_stream_event(
+    db: Session,
+    supplier_id: uuid.UUID,
+    event: dict,
+    kind_overrides: Mapping[str, str] | None = None,
+) -> None:
     """Append one activity row for `event` — its own commit (see module docs).
+
+    `kind_overrides` relabels the STORED kind (post-mapping, so it can key on
+    `part_imported` as readily as on `sync_finished`) and never touches the
+    event: the caller passes :data:`IMPORT_EVENT_KINDS` to file its run under
+    the import labels while the NDJSON the console reads stays byte-identical.
+    Relabelling here rather than at the three call sites is what keeps the
+    route and the nightly job from drifting into two different tables.
 
     Values are clamped to their columns here rather than trusted: `title` is
     the feed's own `sku — manufacturer` string and nothing upstream bounds the
@@ -55,6 +88,8 @@ def record_stream_event(db: Session, supplier_id: uuid.UUID, event: dict) -> Non
         if stored_kind is None:
             return
         kind = stored_kind
+    if kind_overrides:
+        kind = kind_overrides.get(kind, kind)
     detail = event.get("detail")
     # ONLY the event's own image (a feed part photo, already bounded to 500 by
     # the importer's `_safe_image`). Never `supplier.logo_url` — that column is

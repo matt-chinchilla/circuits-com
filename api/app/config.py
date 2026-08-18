@@ -212,6 +212,34 @@ class Settings(BaseSettings):
     # `registry.get_feed_key()` is the one place that asks.
     MOUSER_API_KEY: str | None = None
 
+    # ── Nightly feed import (app/jobs/feed_import_daily.py) ─────────────────
+    # The hour (UTC) the nightly catalog import runs, and the provider-call
+    # budget it may spend across every supplier whose "Nightly auto-import"
+    # switch is on. Both need the compose passthrough in BOTH files (the job
+    # runs in its OWN container — `feed-import` — which inherits nothing from
+    # api), and the compose defaults MUST MIRROR these numbers: an empty
+    # `${VAR:-}` does not fall back to the code default, it overwrites it.
+    #
+    # 06:00 UTC is ~01:00/02:00 ET — after Mouser's daily quota reset and well
+    # clear of the working day, so a run that takes hours (the provider sleeps
+    # ~2.1s between calls to stay under ~30/min) is finished before anyone
+    # clicks anything.
+    #
+    # BUDGET ARITHMETIC, and its honest limit: the free tier allows ~1,000
+    # calls/day. One click of "Import new parts" may spend up to 900
+    # (routes/suppliers.py clamps there) and this nightly run spends up to 850,
+    # so the two CAN jointly exceed the tier — a heavy day of manual imports
+    # followed by the nightly run will hit the quota wall. That is deliberate:
+    # nothing here tracks daytime spend (the click path and this job are
+    # separate processes with no shared counter, and inventing one would be a
+    # new distributed-state problem to keep correct), so the failure is left
+    # visible instead of guessed at — the wall arrives as a FeedFatalError,
+    # which ends the run with a `sync_error` event carrying Mouser's own
+    # message. Lower this number, or the click ceiling, if that trade is wrong
+    # for a given key. See docs/part-import-runbook.md.
+    FEED_IMPORT_HOUR_UTC: int = 6
+    FEED_IMPORT_CALL_BUDGET: int = 850
+
     # ── Automated cost sync (app/jobs/sync_costs.py) ────────────────────────
     # ANTHROPIC_ADMIN_KEY — an ORGANIZATION admin key (`sk-ant-admin…`), not a
     # regular API key: the Admin API's cost report is the only way to get real

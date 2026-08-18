@@ -180,6 +180,13 @@ services:
       RECURRING_MONTHLY_EXPENSES: ${RECURRING_MONTHLY_EXPENSES:-ai:Claude Max subscription:200.00}
       AWS_DEFAULT_REGION: us-east-1
 
+  # The nightly import inherits the log cap and NOTHING else: its whole
+  # environment block lives in the base file and compose merges it per key, so
+  # repeating values here would only create two places for the budget to drift.
+  # No `ports:`/`volumes:` to reset — it publishes nothing and mounts nothing.
+  feed-import:
+    logging: *default-logging
+
   frontend:
     logging: *default-logging
     build:

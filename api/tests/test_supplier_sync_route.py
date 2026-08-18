@@ -48,6 +48,7 @@ from app.models import (
     Supplier,
     User,
 )
+from app.services.activity import IMPORT_EVENT_KINDS, record_stream_event
 from app.services.part_feed.importer import sync_event
 from app.services.part_feed.registry import feed_configured, get_feed_key, match_provider
 from tests.feed_helpers import FakeProvider as _FakeProvider
@@ -698,10 +699,13 @@ class TestImportStream:
             "created": 1,
         }
 
+        # The WIRE said sync_started/sync_finished (one shape, one parser); the
+        # ROWS say import_started/import_finished, because the table is the only
+        # place the two runs can be told apart afterwards.
         assert sorted(r.kind for r in db.query(ActivityEvent).all()) == [
+            "import_finished",
+            "import_started",
             "part_imported",
-            "sync_finished",
-            "sync_started",
         ]
         row = db.query(ActivityEvent).filter(ActivityEvent.kind == "part_imported").one()
         assert row.title == "NEW-1 — Feed Mfr"
@@ -753,7 +757,10 @@ class TestImportStream:
         resp = _import(client, seeded_db["supplier1"], auth_header)
 
         assert [e["action"] for e in _events(resp) if e["kind"] == "part_synced"] == ["no_data"]
-        assert [r.kind for r in db.query(ActivityEvent).all()] == ["sync_started", "sync_finished"]
+        assert [r.kind for r in db.query(ActivityEvent).all()] == [
+            "import_started",
+            "import_finished",
+        ]
 
     def test_an_abort_reports_the_created_parts_it_already_committed(
         self, client, db, seeded_db, auth_header, feed_key, use_fake_provider, monkeypatch
@@ -781,6 +788,9 @@ class TestImportStream:
         events = _events(_import(client, supplier, auth_header))
 
         assert [e["kind"] for e in events] == ["part_synced", "sync_error", "sync_finished"]
+        # An import that dies says so: "Sync failed" would name a run the
+        # operator never started (the two buttons are side by side).
+        assert events[1]["title"] == "Import failed"
         assert events[-1]["detail"] == "sync aborted"
         assert events[-1]["counts"] == {
             "synced": 0,
@@ -792,7 +802,7 @@ class TestImportStream:
         assert [r.kind for r in db.query(ActivityEvent).all()] == [
             "part_imported",
             "sync_error",
-            "sync_finished",
+            "import_finished",
         ]
 
     def test_calls_is_clamped_to_a_sane_window(
@@ -818,6 +828,60 @@ class TestImportStream:
         _import(client, supplier, auth_header, calls=10)
 
         assert seen == [200, 1, 1, 900, 10]
+
+
+class TestRecorderLabels:
+    """`record_stream_event`'s optional label table, at unit level.
+
+    The routes above exercise it end to end; these pin the two properties that
+    make it safe to hand the same recorder to the nightly job: it relabels only
+    what it is asked to, and it never touches the event the caller is about to
+    put on the wire.
+    """
+
+    def test_the_import_table_relabels_only_the_run_level_kinds(self, db, seeded_db):
+        supplier = seeded_db["supplier1"]
+        for kind in ("sync_started", "sync_finished", "sync_error"):
+            record_stream_event(
+                db, supplier.id, sync_event(kind, str(supplier.id), "Avnet"), IMPORT_EVENT_KINDS
+            )
+
+        assert [r.kind for r in db.query(ActivityEvent).all()] == [
+            "import_started",
+            "import_finished",
+            # untouched: nothing renders it, so relabelling it would only add a
+            # kind with no template behind it
+            "sync_error",
+        ]
+
+    def test_part_rows_keep_their_action_derived_kinds_under_the_import_table(self, db, seeded_db):
+        """The override is applied AFTER the action mapping, and the import
+        table names no part kind — so `created` still lands as `part_imported`
+        and a refresh still lands as `part_synced`."""
+        supplier = seeded_db["supplier1"]
+        for action in ("created", "updated", "not_found"):
+            record_stream_event(
+                db,
+                supplier.id,
+                sync_event("part_synced", str(supplier.id), "NEW-1 — Feed Mfr", action=action),
+                IMPORT_EVENT_KINDS,
+            )
+
+        # `not_found` wrote nothing, so it is still not a row.
+        assert [r.kind for r in db.query(ActivityEvent).all()] == ["part_imported", "part_synced"]
+
+    def test_the_event_dict_is_never_mutated(self, db, seeded_db):
+        """The caller serializes this same dict to NDJSON right afterwards. A
+        recorder that rewrote `kind` in place would change the wire shape the
+        console parses — which is the one thing the label override exists to
+        avoid."""
+        supplier = seeded_db["supplier1"]
+        event = sync_event("sync_finished", str(supplier.id), "Avnet", "1 created")
+
+        record_stream_event(db, supplier.id, event, IMPORT_EVENT_KINDS)
+
+        assert event["kind"] == "sync_finished"
+        assert db.query(ActivityEvent).one().kind == "import_finished"
 
 
 class TestProviderRegistry:

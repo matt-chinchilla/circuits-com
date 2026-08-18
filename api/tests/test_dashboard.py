@@ -170,6 +170,36 @@ class TestActivitySyncEvents:
         assert "sync_error" not in types
         assert "part_synced" in types
 
+    def test_import_finished_uses_the_import_template(self, client, db, seeded_db, auth_header):
+        """A nightly (or clicked) IMPORT files its finish line under its own
+        kind — `services/activity.IMPORT_EVENT_KINDS` — so the strip does not
+        report a run that discovered new inventory as an inventory refresh.
+        The wire event both runs emit is identical; the row is where they part.
+        """
+        _event(
+            db,
+            "import_finished",
+            "Mouser Electronics",
+            detail="12 created · 3 updated · 0 already elsewhere · 40 calls used",
+        )
+        data = client.get("/api/dashboard/activity", headers=auth_header()).json()
+        finished = [i for i in data if i["type"] == "import_finished"]
+        assert len(finished) == 1
+        assert finished[0]["description"] == (
+            "Inventory import — 12 created · 3 updated · 0 already elsewhere · 40 calls used"
+        )
+
+    def test_import_started_is_excluded_like_sync_started(self, client, db, seeded_db, auth_header):
+        """Same policy, relabelled: a started run that never finished would sit
+        in the feed forever claiming progress."""
+        _event(db, "import_started", "Mouser Electronics", detail="budget 425 calls", minute=1)
+        _event(db, "import_finished", "Mouser Electronics", detail="1 created", minute=2)
+        types = {
+            i["type"] for i in client.get("/api/dashboard/activity", headers=auth_header()).json()
+        }
+        assert "import_started" not in types
+        assert "import_finished" in types
+
     def test_legacy_items_carry_null_image_url(self, client, seeded_db, auth_header):
         data = client.get("/api/dashboard/activity", headers=auth_header()).json()
         legacy = [i for i in data if i["type"] in ("part_added", "revenue")]
@@ -186,6 +216,52 @@ class TestActivitySyncEvents:
         # events — the newest 10, newest first.
         assert [i["description"] for i in data] == [
             f"Synced SKU-{i:02d} into Clock and Timing" for i in range(13, 3, -1)
+        ]
+
+
+class TestActivityPartDedup:
+    """One part, one line.
+
+    A feed import writes the Part row AND an event about that same part inside
+    the same second, so both sources described it and the strip printed it
+    twice — "Part X (Mfr) added" stacked on "Imported X into Y". The event row
+    is the richer one (it names the category and carries the thumbnail), so the
+    plain row is the one dropped.
+    """
+
+    def test_a_part_reported_by_an_event_is_not_also_reported_as_added(
+        self, client, db, seeded_db, auth_header
+    ):
+        _event(db, "part_imported", "LM7805CT — Texas Instruments", detail="Clock and Timing")
+        data = client.get("/api/dashboard/activity", headers=auth_header()).json()
+        assert [i["description"] for i in data if "LM7805CT" in i["description"]] == [
+            "Imported LM7805CT — Texas Instruments into Clock and Timing"
+        ]
+
+    def test_the_same_rule_applies_to_a_synced_part(self, client, db, seeded_db, auth_header):
+        _event(db, "part_synced", "LM7805CT — Texas Instruments", detail="Clock and Timing")
+        data = client.get("/api/dashboard/activity", headers=auth_header()).json()
+        assert not [i for i in data if i["type"] == "part_added" and "LM7805CT" in i["description"]]
+
+    def test_a_part_no_event_covers_is_still_reported(self, client, db, seeded_db, auth_header):
+        """The dedup must be per-SKU, not "any event suppresses the parts
+        source" — a sync of one part would otherwise hide every other."""
+        _event(db, "part_synced", "LM7805CT — Texas Instruments", detail="Clock and Timing")
+        data = client.get("/api/dashboard/activity", headers=auth_header()).json()
+        added = [i["description"] for i in data if i["type"] == "part_added"]
+        assert added == ["Part STM32F407VGT6 (STMicroelectronics) added"]
+
+    def test_a_run_level_row_titled_with_a_supplier_name_hides_nothing(
+        self, client, db, seeded_db, auth_header
+    ):
+        """`sync_finished`/`import_finished` title themselves with the SUPPLIER
+        name, which is not a SKU. Reading one as a part number would silently
+        drop a real part from the feed the day a supplier is named like one."""
+        _event(db, "import_finished", "LM7805CT", detail="1 created")
+        data = client.get("/api/dashboard/activity", headers=auth_header()).json()
+        assert [i["description"] for i in data if i["type"] == "part_added"] == [
+            "Part STM32F407VGT6 (STMicroelectronics) added",
+            "Part LM7805CT (Texas Instruments) added",
         ]
 
 

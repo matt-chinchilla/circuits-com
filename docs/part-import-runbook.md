@@ -57,6 +57,87 @@ listings by (part, distributor). Re-running refreshes stock/prices in place —
 it never duplicates rows, and it never overwrites a photo or datasheet that
 is already set.
 
+## Nightly auto-import (hands-off catalog growth)
+
+Each distributor row in the admin console has a **Nightly auto-import** switch
+(Suppliers → open a supplier). With it on, the `feed-import` service imports
+new parts for that supplier every night at **06:00 UTC** (~1–2 AM ET, after the
+distributor's daily quota resets and well clear of the working day).
+
+The switch only turns on for a supplier that could actually run — one a feed
+provider covers *and* that has an API key saved (Settings → distributor feed
+keys, or the host `.env`). If the key is later removed or the supplier's
+website edited, the switch stays where you left it and the job simply skips
+that supplier for the night, saying so in its log.
+
+Nothing else is needed. To see what a night did: **Dashboard → Recent
+Activity**, where each run appears as `Inventory import — N created · …`.
+
+### The two levers
+
+| Setting | Default | What it does |
+| --- | --- | --- |
+| `FEED_IMPORT_HOUR_UTC` | `6` | The hour (UTC) the run starts |
+| `FEED_IMPORT_CALL_BUDGET` | `850` | API calls the whole night may spend, split evenly across the enabled suppliers |
+
+Both live in `/opt/circuits-com/.env` on the server; changing one needs
+`docker compose ... up -d --force-recreate feed-import` (a plain `restart` does
+not re-read `.env`).
+
+### Watch the daily quota
+
+A free Mouser key allows **~1,000 calls/day**, and there are two spenders:
+
+- one click of **Import new parts** in the admin console — up to **900** calls,
+- the nightly run — up to **850** calls.
+
+They can jointly exceed the daily allowance, and **nothing tracks the total**:
+the two run in separate containers with no shared counter, and guessing at one
+would be worse than not having it. So the honest failure is the wall itself —
+the run stops with the distributor's own "quota exceeded" message, visible in
+the console for a click and in the activity feed for a night. A day of heavy
+manual importing is a night the nightly run may not finish.
+
+If that happens regularly, lower `FEED_IMPORT_CALL_BUDGET` (leaving more room
+for clicks) or use a smaller `calls` on the manual import.
+
+A quota wall stops the **whole night**, not just the supplier that hit it — the
+quota belongs to the key, so every remaining supplier would only spend requests
+to be refused identically.
+
+### Running it by hand
+
+```bash
+docker compose run --rm feed-import python -m app.jobs.feed_import_daily --once
+```
+
+One pass now, then exit — same selection, same budget, same activity rows.
+
+## After a big import: refresh the SEO manifest
+
+New parts are new public pages, and the site is **prerendered**: every URL is
+served as its own static HTML document, built from the committed snapshot at
+`frontend/seo-manifest.json`. A part that is not in that snapshot still works,
+but it serves the generic shell — no title, no canonical, no product markup —
+which is the difference between a page search engines index and one they
+ignore.
+
+So after a batch of imports (a few nights of nightly runs, or a big manual
+fill), regenerate and redeploy the frontend:
+
+```bash
+node frontend/scripts/gen-seo-manifest.mjs https://circuitcenter.ai/api
+git add frontend/seo-manifest.json && git commit -m "chore(seo): refresh manifest"
+git push && ./deploy.sh --frontend
+```
+
+(The argument is the API base — it must end in `/api`. Point it at the server
+that actually holds the parts; the default is the local stack.)
+
+Monthly is plenty while imports are steady; do it sooner after a large
+one-off. Nothing breaks if it is skipped — the new pages simply do not carry
+their own head tags until it runs.
+
 ## Adding categories
 
 - **One-off**: use the admin console (Categories → New) — it appears on the

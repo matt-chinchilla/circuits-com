@@ -64,10 +64,16 @@ _MAX_AVAILABLE_MONTHS = 24
 _ACTIVITY_LIMIT = 10
 
 # Which `activity_events.kind` values reach the dashboard. The table also holds
-# `sync_started` / `sync_error` — see `get_activity` for why they stay out.
-# Every kind here needs its own branch in `_event_description`; a kind added to
-# one list and not the other is exactly the drift that sentence guards against.
-_ACTIVITY_EVENT_KINDS = ("part_synced", "part_imported", "sync_finished")
+# `sync_started` / `import_started` / `sync_error` — see `get_activity` for why
+# they stay out. Every kind here needs its own branch in `_event_description`; a
+# kind added to one list and not the other is exactly the drift that sentence
+# guards against.
+#
+# `import_finished` is the nightly (and click-to-import) run's finish line, filed
+# apart from `sync_finished` by `services/activity.IMPORT_EVENT_KINDS` because
+# the two runs did different jobs and the row has no other place to say which.
+# `import_started` stays out for the same reason `sync_started` does.
+_ACTIVITY_EVENT_KINDS = ("part_synced", "part_imported", "sync_finished", "import_finished")
 
 # `?month=` grammar. The regex is enforced by FastAPI (→ 422 before the handler
 # runs); `_parse_month` still catches the values it lets through that aren't
@@ -559,6 +565,20 @@ def list_sales_reps(
     return {"reps": sorted(usernames, key=str.lower)}
 
 
+def _event_sku(event: ActivityEvent) -> str | None:
+    """The part number a part event is about, or None for a run-level row.
+
+    Part events title themselves `"{sku} — {manufacturer}"` (importer.py owns
+    that string); a `sync_finished` / `import_finished` row titles itself with
+    the SUPPLIER name, which is not a SKU and must never match one. Splitting on
+    the em dash rather than parsing the manufacturer out: the separator is the
+    only part of the format this file needs to know.
+    """
+    if event.kind not in ("part_synced", "part_imported"):
+        return None
+    return (event.title or "").split(" — ", 1)[0].strip() or None
+
+
 def _event_description(event: ActivityEvent) -> str:
     """The human line for one feed event.
 
@@ -588,6 +608,8 @@ def _event_description(event: ActivityEvent) -> str:
         return f"Imported {event.title}"
     if event.kind == "sync_finished":
         return f"Inventory sync — {event.detail or event.title}"
+    if event.kind == "import_finished":
+        return f"Inventory import — {event.detail or event.title}"
     return event.title
 
 
@@ -598,16 +620,51 @@ def get_activity(
 ):
     """The dashboard's Recent Activity feed — newest `_ACTIVITY_LIMIT` rows.
 
-    Three sources merged by recency: parts added, revenue booked, and the
-    supplier-sync events. Every item carries `image_url` (None for the two
-    legacy sources) so the panel can render a part thumbnail without branching
-    on the item type.
+    Three sources merged by recency: the supplier-feed events, parts added, and
+    revenue booked. Every item carries `image_url` (None for the two legacy
+    sources) so the panel can render a part thumbnail without branching on the
+    item type.
+
+    The first two sources OVERLAP — a feed import writes a Part row and an
+    event about that same part — so a SKU an event already covers is dropped
+    from the parts source rather than reported twice.
     """
     items = []
 
-    # Recent parts
+    # Supplier-feed events FIRST, because the parts source below has to know
+    # which SKUs they already cover. The kind filter is READ-side on purpose:
+    # the table keeps `sync_started`/`import_started`/`sync_error` (the
+    # operator's audit trail lives there), but a dashboard strip is a record of
+    # what changed, and a started run that never finished would sit in the feed
+    # forever claiming progress.
+    recent_events = (
+        db.query(ActivityEvent)
+        .filter(ActivityEvent.kind.in_(_ACTIVITY_EVENT_KINDS))
+        .order_by(ActivityEvent.created_at.desc())
+        .limit(_ACTIVITY_LIMIT)
+        .all()
+    )
+    for e in recent_events:
+        items.append(
+            {
+                "type": e.kind,
+                "description": _event_description(e),
+                "created_at": e.created_at.isoformat() if e.created_at else None,
+                "image_url": e.image_url,
+            }
+        )
+    covered_skus = {sku for sku in (_event_sku(e) for e in recent_events) if sku}
+
+    # Recent parts — MINUS the ones the events above already report. A feed
+    # import writes the Part row and its own event within the same second, so
+    # both sources describe the identical part and the strip showed it twice
+    # ("Part X (Mfr) added" over "Imported X into Y"). The event row is the
+    # richer of the two — it names the category and carries the thumbnail — so
+    # the plain row is the one that goes.
     recent_parts = db.query(Part).order_by(Part.created_at.desc()).limit(_ACTIVITY_LIMIT).all()
     for p in recent_parts:
+        if p.sku in covered_skus:
+            continue
         items.append(
             {
                 "type": "part_added",
@@ -628,27 +685,6 @@ def get_activity(
                 "description": f"Revenue ${r.amount} ({r.type}) recorded",
                 "created_at": r.created_at.isoformat() if r.created_at else None,
                 "image_url": None,
-            }
-        )
-
-    # Supplier-sync events. The kind filter is READ-side on purpose: the table
-    # keeps `sync_started`/`sync_error` (the operator's audit trail lives
-    # there), but a dashboard strip is a record of what changed, and a started
-    # run that never finished would sit in the feed forever claiming progress.
-    recent_events = (
-        db.query(ActivityEvent)
-        .filter(ActivityEvent.kind.in_(_ACTIVITY_EVENT_KINDS))
-        .order_by(ActivityEvent.created_at.desc())
-        .limit(_ACTIVITY_LIMIT)
-        .all()
-    )
-    for e in recent_events:
-        items.append(
-            {
-                "type": e.kind,
-                "description": _event_description(e),
-                "created_at": e.created_at.isoformat() if e.created_at else None,
-                "image_url": e.image_url,
             }
         )
 

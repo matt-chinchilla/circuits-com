@@ -22,7 +22,7 @@ from app.models import (
     SupplierFeed,
     User,
 )
-from app.services.activity import record_stream_event
+from app.services.activity import IMPORT_EVENT_KINDS, record_stream_event
 from app.services.auth_service import get_current_user
 
 # `sync_event` is the ONE definition of the wire shape (importer.py owns it).
@@ -324,6 +324,7 @@ def _stream_feed_run(
     provider: PartFeedProvider,
     supplier: Supplier,
     run: Callable[[], Iterator[dict]],
+    mode: str = "sync",
 ) -> StreamingResponse:
     """Wrap a feed generator as the NDJSON response — one JSON object per line,
     flushed as each part is done.
@@ -333,12 +334,21 @@ def _stream_feed_run(
     release the provider. `run` is a THUNK rather than an iterator so the
     generator is created inside the try — a callable that raises on the way in
     still ends the stream properly instead of 500ing after the headers.
+
+    `mode` is the ONE thing the two routes disagree about, and it changes
+    nothing on the wire: it picks the activity LABELS an import files its run
+    under (`IMPORT_EVENT_KINDS`) and the abort event's title, so a failed
+    import reads "Import failed" rather than announcing a sync the operator
+    never started. The stream itself stays one shape for one parser.
     """
     # Read off the row BEFORE the body runs: the abort path rolls back, and
     # these three values must survive that without re-querying.
     supplier_uuid = supplier.id
     supplier_key = str(supplier.id)
     supplier_name = supplier.name
+    is_import = mode == "import"
+    stored_kinds = IMPORT_EVENT_KINDS if is_import else None
+    abort_title = "Import failed" if is_import else "Sync failed"
 
     def stream() -> Iterator[str]:
         # Running totals, tallied as the events go past. The generator owns the
@@ -381,7 +391,7 @@ def _stream_feed_run(
         try:
             for event in run():
                 tally(event)
-                record_stream_event(db, supplier_uuid, event)
+                record_stream_event(db, supplier_uuid, event, stored_kinds)
                 yield json.dumps(event) + "\n"
         except Exception as exc:  # noqa: BLE001
             # A raise inside a response body cuts the NDJSON off mid-line: the
@@ -389,8 +399,8 @@ def _stream_feed_run(
             # FeedFatalError (auth/quota) is already handled inside the
             # generators; this is for everything else.
             db.rollback()
-            failed = sync_event("sync_error", supplier_key, "Sync failed", str(exc))
-            record_stream_event(db, supplier_uuid, failed)
+            failed = sync_event("sync_error", supplier_key, abort_title, str(exc))
+            record_stream_event(db, supplier_uuid, failed, stored_kinds)
             yield json.dumps(failed) + "\n"
             # Real totals, not zeros: the parts already on screen were each
             # committed before they were reported, so blanking the counters
@@ -398,7 +408,7 @@ def _stream_feed_run(
             # progress was saved. "sync aborted" still says it did not finish.
             aborted = sync_event("sync_finished", supplier_key, supplier_name, "sync aborted")
             aborted["counts"] = dict(counts)
-            record_stream_event(db, supplier_uuid, aborted)
+            record_stream_event(db, supplier_uuid, aborted, stored_kinds)
             yield json.dumps(aborted) + "\n"
         finally:
             # One provider (and its HTTP connection pool) per run — release it
@@ -480,6 +490,7 @@ def import_supplier_parts(
         provider,
         supplier,
         lambda: grow_catalog(db, provider, supplier, call_budget=calls),
+        mode="import",
     )
 
 

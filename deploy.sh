@@ -101,7 +101,7 @@ deploy_all() {
     # DOCKER_BUILDKIT=1 enables BuildKit cache mounts in the Dockerfiles
     # (~5-10× speedup on dep-install when package-lock/pyproject hasn't
     # changed). Docker 23+ defaults to BuildKit; the export is belt+braces.
-    run_remote "cd $APP_DIR && sudo git pull && DOCKER_BUILDKIT=1 $COMPOSE_CMD build frontend && DOCKER_BUILDKIT=1 $COMPOSE_CMD build api calendar-reminders cost-sync && $COMPOSE_CMD up -d && $COMPOSE_CMD restart nginx && sudo docker image prune -f"
+    run_remote "cd $APP_DIR && sudo git pull && DOCKER_BUILDKIT=1 $COMPOSE_CMD build frontend && DOCKER_BUILDKIT=1 $COMPOSE_CMD build api calendar-reminders cost-sync feed-import && $COMPOSE_CMD up -d && $COMPOSE_CMD restart nginx && sudo docker image prune -f"
     green "All services rebuilt, nginx restarted."
 }
 
@@ -113,7 +113,7 @@ deploy_frontend() {
 
 deploy_reseed() {
     echo "Deploying all services + clearing and reseeding database..."
-    run_remote "cd $APP_DIR && sudo git pull && DOCKER_BUILDKIT=1 $COMPOSE_CMD build frontend && DOCKER_BUILDKIT=1 $COMPOSE_CMD build api calendar-reminders cost-sync && $COMPOSE_CMD up -d && $COMPOSE_CMD restart nginx && sudo docker image prune -f"
+    run_remote "cd $APP_DIR && sudo git pull && DOCKER_BUILDKIT=1 $COMPOSE_CMD build frontend && DOCKER_BUILDKIT=1 $COMPOSE_CMD build api calendar-reminders cost-sync feed-import && $COMPOSE_CMD up -d && $COMPOSE_CMD restart nginx && sudo docker image prune -f"
     # The calendar has to be carried across the TRUNCATE by hand.
     #
     # TRUNCATE ... CASCADE is TRANSITIVE, and the chain now reaches further than
