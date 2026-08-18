@@ -4,10 +4,16 @@ import { ArrowLeft, Edit, ExternalLink, Upload, Trash2 } from 'lucide-react';
 import Breadcrumbs from '@admin/components/Breadcrumbs';
 import { adminApi } from '@admin/services/adminApi';
 import { useDemo } from '@admin/contexts/DemoContext';
-import { syncSupplier, syncErrorMessage, type SyncEvent } from '@admin/services/syncStream';
+import {
+  syncSupplier,
+  importSupplier,
+  syncErrorMessage,
+  type SyncEvent,
+} from '@admin/services/syncStream';
 import type { AdminSupplier, Part, PaginatedResponse } from '@admin/types/admin';
 import QuickActionsPanel from './QuickActionsPanel';
 import SyncConsole from './SyncConsole';
+import NightlyImportToggle from './NightlyImportToggle';
 import {
   buildSponsorshipBySupplier,
   supplierSponsorship,
@@ -41,13 +47,17 @@ export default function SupplierDetailPage() {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  // The live inventory-sync run. Owned HERE, not in QuickActionsPanel, so the
-  // console's feed survives every re-render of the strip that starts it.
-  const [syncState, setSyncState] = useState<{
+  // The live feed run — a SYNC (refresh what this supplier lists) or an IMPORT
+  // (go find what it doesn't). ONE piece of state for both, because one console
+  // renders them and only one may be open at a time; `mode` is what the header
+  // names. Owned HERE, not in QuickActionsPanel, so the console's feed survives
+  // every re-render of the strip that starts it.
+  const [runState, setRunState] = useState<{
+    mode: 'sync' | 'import';
     running: boolean;
     events: SyncEvent[];
     error: string | null;
-  }>({ running: false, events: [], error: null });
+  }>({ mode: 'sync', running: false, events: [], error: null });
   // Bumped when a run ends so the load effect refetches — the supplier's real
   // counts and the parts table both move underneath us during a sync.
   const [refreshNonce, setRefreshNonce] = useState(0);
@@ -58,21 +68,22 @@ export default function SupplierDetailPage() {
   // whole supplier view with the "supplier not found" fallback.
   const [deleteError, setDeleteError] = useState('');
 
-  // A sync outlives the click that started it, so leaving the page has to END
+  // A run outlives the click that started it, so leaving the page has to END
   // it rather than let it run on invisibly: an orphaned stream keeps spending
   // the feed's rate-limited quota and holds a server-side generator open for a
-  // console nobody is watching. Admin routes remount per `:id` (App.tsx keys
-  // the ErrorBoundary on pathname), so this cleanup covers both unmount and
-  // navigating to another supplier.
-  const syncAbortRef = useRef<AbortController | null>(null);
+  // console nobody is watching. ONE controller is enough — one run at a time.
+  // Admin routes remount per `:id` (App.tsx keys the ErrorBoundary on
+  // pathname), so this cleanup covers both unmount and navigating to another
+  // supplier.
+  const runAbortRef = useRef<AbortController | null>(null);
   useEffect(
     () => () => {
-      syncAbortRef.current?.abort();
+      runAbortRef.current?.abort();
     },
     [id]
   );
 
-  // Raised by a finishing sync so the refetch it triggers stays SILENT. The
+  // Raised by a finishing run so the refetch it triggers stays SILENT. The
   // loading curtain replaces the whole page, console included, so a noisy
   // refetch would erase the feed the operator just watched — at the exact
   // moment its summary line appears. Consumed by the next effect run.
@@ -123,21 +134,27 @@ export default function SupplierDetailPage() {
     };
   }, [id]);
 
-  const handleSync = () => {
-    if (!id || syncState.running) return;
+  // Both runs, one function: the two transports are the same reader behind two
+  // paths, and everything the page does with them — abort on leave, quiet
+  // refetch afterwards, one error sentence — is identical. An import moves MORE
+  // than a sync does (new parts, new counts), so the refetch matters at least
+  // as much there.
+  const startRun = (mode: 'sync' | 'import') => {
+    if (!id || runState.running) return;
     const controller = new AbortController();
-    syncAbortRef.current = controller;
-    setSyncState({ running: true, events: [], error: null });
+    runAbortRef.current = controller;
+    setRunState({ mode, running: true, events: [], error: null });
     // Tracked out here rather than read off state: a run that dies mid-stream
     // still committed everything it reported (the importer commits per part),
     // so a refetch is owed whenever ANY event arrived — success or not. A run
     // that never started (no feed key, wrong supplier) owes nothing.
     let receivedAny = false;
-    syncSupplier(
+    const openStream = mode === 'import' ? importSupplier : syncSupplier;
+    openStream(
       id,
       (event) => {
         receivedAny = true;
-        setSyncState((prev) => ({ ...prev, events: [...prev.events, event] }));
+        setRunState((prev) => ({ ...prev, events: [...prev.events, event] }));
       },
       { signal: controller.signal }
     )
@@ -146,13 +163,13 @@ export default function SupplierDetailPage() {
       // and bumping the nonce would fire a request for a page being torn down.
       .then(() => {
         if (controller.signal.aborted) return;
-        setSyncState((prev) => ({ ...prev, running: false }));
+        setRunState((prev) => ({ ...prev, running: false }));
         quietRefetchRef.current = true;
         setRefreshNonce((n) => n + 1);
       })
       .catch((err) => {
         if (controller.signal.aborted) return;
-        setSyncState((prev) => ({ ...prev, running: false, error: syncErrorMessage(err) }));
+        setRunState((prev) => ({ ...prev, running: false, error: syncErrorMessage(err) }));
         if (receivedAny) {
           quietRefetchRef.current = true;
           setRefreshNonce((n) => n + 1);
@@ -276,18 +293,26 @@ export default function SupplierDetailPage() {
       <QuickActionsPanel
         supplier={supplier}
         partRows={partRows}
-        onSync={handleSync}
-        syncing={syncState.running}
+        onSync={() => startRun('sync')}
+        syncing={runState.running && runState.mode === 'sync'}
+        onImport={() => startRun('import')}
+        importing={runState.running && runState.mode === 'import'}
       />
+
+      {/* The standing-order version of the Import card above: same job, every
+          night. Renders nothing until its own fetch lands (and nothing at all
+          if that fetch fails). */}
+      <NightlyImportToggle supplierId={supplier.id} />
 
       {/* The run itself, live. Mounts on the first click and stays up
           afterwards so the summary is still readable. */}
-      {(syncState.running || syncState.events.length > 0 || syncState.error) && (
+      {(runState.running || runState.events.length > 0 || runState.error) && (
         <SyncConsole
           supplierName={supplier.name}
-          running={syncState.running}
-          events={syncState.events}
-          error={syncState.error}
+          mode={runState.mode}
+          running={runState.running}
+          events={runState.events}
+          error={runState.error}
         />
       )}
 

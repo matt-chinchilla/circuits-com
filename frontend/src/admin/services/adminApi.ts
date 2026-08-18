@@ -25,6 +25,7 @@ import type {
   SalesRepOptions,
   SalesRepsResponse,
   FeedCredentialStatus,
+  FeedSettings,
 } from '@admin/types/admin';
 import type { Message, MessageStatus, AssignedTo } from '@admin/types/messages';
 import type { PlatformEngagementSeries } from '@admin/types/engagement';
@@ -497,6 +498,30 @@ export const adminApi = {
         `/admin/feed-credentials/${encodeURIComponent(provider)}`
       )
       .then((r) => r.data.providers),
+
+  // ── Per-supplier feed settings (routes/suppliers.py) ────────────────────
+  // No bustingAfter on either: this is a SETTING, not catalog data — nothing
+  // the public site renders moves until the nightly job actually runs, and
+  // that run busts on its own writes.
+  //
+  // The GET does NOT 404 when the feature is unconfigured (unlike sync/import):
+  // the switch has to render greyed WITH a reason, and a missing endpoint gives
+  // the UI nothing to say. The PATCH answers 409 `feed_not_configured` when
+  // asked to ENABLE a feed that could never run; disabling is always allowed,
+  // so send it unconditionally — a key can vanish while the toggle is on, and
+  // an off switch that refuses to work traps the operator.
+
+  getFeedSettings: (id: string) =>
+    adminClient
+      .get<FeedSettings>(`/suppliers/${encodeURIComponent(id)}/feed-settings`)
+      .then((r) => r.data),
+
+  patchFeedSettings: (id: string, enabled: boolean) =>
+    adminClient
+      .patch<FeedSettings>(`/suppliers/${encodeURIComponent(id)}/feed-settings`, {
+        auto_import_enabled: enabled,
+      })
+      .then((r) => r.data),
 
   // "Feature" a supplier on a category = a Featured sponsorship on that
   // (top-level) category — the single source of truth as of 2026-06-03

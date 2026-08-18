@@ -192,6 +192,15 @@
   border-color: rgba(21, 128, 61, 0.2);
 }
 
+// A brand-new catalog row — the one action that PUBLISHED something. Teal
+// rather than the media green so the two writes stay tellable apart in a feed
+// that scrolls, and it matches the Import card that started the run.
+.chipCreated {
+  color: var(--a-teal);
+  background: rgba(15, 118, 110, 0.12);
+  border-color: rgba(15, 118, 110, 0.24);
+}
+
 // Nothing was written, so nothing reads written.
 .chipMuted {
   color: var(--a-fg3);

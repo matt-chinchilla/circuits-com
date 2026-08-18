@@ -1,11 +1,18 @@
 /**
- * Client for `POST /api/suppliers/{id}/sync` — the live inventory-sync stream.
+ * Client for the two live feed streams — `POST /api/suppliers/{id}/sync`
+ * (refresh the listings this supplier ALREADY has) and
+ * `POST /api/suppliers/{id}/import` (grow the catalog with parts it does not).
  *
  * This is the admin SPA's FIRST non-axios transport, and deliberately so: the
- * route answers with NDJSON over minutes (the provider throttles itself under
+ * routes answer with NDJSON over minutes (the provider throttles itself under
  * the free tier), and axios has no way to hand back lines as they arrive — it
  * resolves once, with the whole body. `fetch` + a stream reader is the only
  * shape that lets the console show work as it happens.
+ *
+ * Both routes speak the SAME envelope (`part_feed.sync_event`) and are read by
+ * the same console, so ONE reader — `streamSupplierRun` — serves both and the
+ * two exports differ only in the path they open. A second copy of the loop is
+ * how one of them ends up missing a cache bust or a re-badged interruption.
  *
  * The cost of leaving axios is that NONE of `adminApi`'s interceptors run here,
  * so this module handles its own statuses:
@@ -26,19 +33,30 @@ export type SyncEventKind = 'sync_started' | 'part_synced' | 'sync_error' | 'syn
 
 /**
  * What the feed did with ONE part.
+ *  - `created`      — a part the catalog did not have before (import only)
  *  - `updated`      — a listing was written (price/stock refreshed)
  *  - `media_filled` — an image and/or datasheet was filled in (also counts as synced)
  *  - `not_found`    — the provider does not carry this MPN
  *  - `no_data`      — found, but the feed carried no price and no new media
  */
-export type SyncAction = 'updated' | 'media_filled' | 'not_found' | 'no_data';
+export type SyncAction = 'created' | 'updated' | 'media_filled' | 'not_found' | 'no_data';
 
-/** The four running totals. All keys are always present on `sync_finished`. */
+/**
+ * The five running totals. All keys are always present on `sync_finished`, on
+ * BOTH routes — a sync reports `created: 0` and an import reports
+ * `not_found: 0` rather than omitting the key, so the console never has to
+ * tell a missing counter from a zero one (`importer._finished`).
+ *
+ * `created` is counted APART from `synced`, exactly as the server counts it: a
+ * brand-new catalog row is not a refreshed listing, and folding the two would
+ * make an import's headline number unreadable.
+ */
 export interface SyncCounts {
   synced: number;
   media_filled: number;
   not_found: number;
   no_data: number;
+  created: number;
 }
 
 /** One wire event. `counts` rides on `sync_finished` alone. */
@@ -52,7 +70,7 @@ export interface SyncEvent {
   counts?: SyncCounts | null;
 }
 
-/** A non-OK response from the sync route. `detail` is the API's own string. */
+/** A non-OK response from either feed route. `detail` is the API's own string. */
 export class SyncStreamError extends Error {
   readonly status: number;
   readonly detail: string | null;
@@ -99,7 +117,13 @@ export function parseNdjson(buffer: string): { events: SyncEvent[]; rest: string
   return { events, rest };
 }
 
-const ZERO_COUNTS: SyncCounts = { synced: 0, media_filled: 0, not_found: 0, no_data: 0 };
+const ZERO_COUNTS: SyncCounts = {
+  synced: 0,
+  media_filled: 0,
+  not_found: 0,
+  no_data: 0,
+  created: 0,
+};
 
 function isZeroCounts(counts: SyncCounts): boolean {
   return Object.values(counts).every((n) => n === 0);
@@ -129,6 +153,11 @@ export function tallyCounts(events: SyncEvent[]): SyncCounts {
   for (const event of events) {
     if (event.kind !== 'part_synced') continue;
     switch (event.action) {
+      // A NEW part, not a refreshed one — the server keeps these apart and so
+      // does this, or an import would read as if it had re-priced the catalog.
+      case 'created':
+        totals.created += 1;
+        break;
       case 'media_filled':
         totals.synced += 1;
         totals.media_filled += 1;
@@ -190,7 +219,7 @@ export function terminalState(events: SyncEvent[]): SyncTerminalState | null {
   };
 }
 
-const GENERIC_ERROR = 'Sync failed to start. Check the connection and try again.';
+const GENERIC_ERROR = 'The run failed to start. Check the connection and try again.';
 
 /**
  * The marker for a stream that DIED MID-RUN, as opposed to one that never
@@ -216,6 +245,11 @@ function isAbortError(err: unknown): boolean {
  * One plain sentence for whatever went wrong, for the console's quiet hint.
  * Each branch names a state the operator can actually act on; everything else
  * collapses to the generic line rather than leaking a status code at them.
+ *
+ * Shared by both runs, so the wording says "run" rather than "sync": the two
+ * routes fail for identical reasons (no key, no provider, expired session), and
+ * a sentence that named the wrong one would be the only inaccurate thing on
+ * screen.
  */
 export function syncErrorMessage(err: unknown): string {
   if (!(err instanceof SyncStreamError)) return GENERIC_ERROR;
@@ -231,9 +265,9 @@ export function syncErrorMessage(err: unknown): string {
       : 'That supplier no longer exists — reload the page.';
   }
   if (err.status === 409) return 'No feed integration for this supplier yet.';
-  if (err.status === 401) return 'Your session expired — sign in again to run a sync.';
+  if (err.status === 401) return 'Your session expired — sign in again to start a run.';
   if (isDemoReadOnly(err.status, err.detail)) return DEMO_READ_ONLY_MESSAGE;
-  if (err.status === 403) return 'This account is not allowed to run a sync.';
+  if (err.status === 403) return 'This account is not allowed to run the feed.';
   return GENERIC_ERROR;
 }
 
@@ -248,15 +282,20 @@ async function readDetail(res: Response): Promise<string | null> {
   }
 }
 
-/** Did this event write something a public page could be showing? */
+/**
+ * Did this event write something a public page could be showing?
+ *
+ * `created` counts hardest of the three: an import that adds parts changes the
+ * category counts and the parts table the SW may still be serving from cache.
+ */
 function isMutation(event: SyncEvent): boolean {
   return (
     event.kind === 'part_synced' &&
-    (event.action === 'updated' || event.action === 'media_filled')
+    (event.action === 'updated' || event.action === 'media_filled' || event.action === 'created')
   );
 }
 
-/** Extra knobs for `syncSupplier`. */
+/** Extra knobs shared by both runs. */
 export interface SyncSupplierOptions {
   /**
    * Ends the run early. An abort is a SILENT termination — the promise
@@ -267,8 +306,23 @@ export interface SyncSupplierOptions {
   signal?: AbortSignal;
 }
 
+/** `importSupplier` also spends a provider CALL budget, not a row count. */
+export interface ImportSupplierOptions extends SyncSupplierOptions {
+  /**
+   * How many provider calls this one click may spend. The server clamps it to
+   * 1–900 (the free tier allows ~1,000/day), so this is a batch size rather
+   * than a value a caller can get wrong.
+   */
+  calls?: number;
+}
+
 /**
- * Open the sync stream and call `onEvent` for each event as it lands.
+ * Open a feed stream at `path` and call `onEvent` for each event as it lands.
+ *
+ * The whole transport, shared by sync and import: the two routes differ only in
+ * the path and the batch knob in its query string, and everything downstream —
+ * the NDJSON reader, the 401 retirement, the mid-stream re-badge, the cache
+ * bust — is the same job for both.
  *
  * Resolves when the server closes the stream, or when `options.signal` aborts;
  * rejects with a `SyncStreamError` for a non-OK status, and for a mid-stream
@@ -280,14 +334,14 @@ export interface SyncSupplierOptions {
  * site may be serving from a SW cache. That holds for an abort too, which is
  * why the silent return still goes out through the `finally`.
  */
-export async function syncSupplier(
-  supplierId: string,
+async function streamSupplierRun(
+  path: string,
   onEvent: (event: SyncEvent) => void,
   options: SyncSupplierOptions = {}
 ): Promise<void> {
   let res: Response;
   try {
-    res = await fetch(`${API_BASE_URL}/suppliers/${encodeURIComponent(supplierId)}/sync?limit=25`, {
+    res = await fetch(`${API_BASE_URL}${path}`, {
       method: 'POST',
       headers: authHeaders(),
       signal: options.signal,
@@ -356,4 +410,43 @@ export async function syncSupplier(
   } finally {
     if (mutated) await bustSponsorCaches();
   }
+}
+
+/**
+ * Refresh the listings this supplier ALREADY carries — one provider call per
+ * part, so the bound is a row count.
+ */
+export function syncSupplier(
+  supplierId: string,
+  onEvent: (event: SyncEvent) => void,
+  options: SyncSupplierOptions = {}
+): Promise<void> {
+  return streamSupplierRun(
+    `/suppliers/${encodeURIComponent(supplierId)}/sync?limit=25`,
+    onEvent,
+    options
+  );
+}
+
+/**
+ * Grow the catalog with parts this supplier does NOT carry yet, thinnest
+ * subcategory first.
+ *
+ * The bound is a CALL budget, not a row count: an import spends one call per
+ * PAGE of results, so the same number buys wildly different amounts of catalog
+ * depending on how much of each page is already known. 200 is the default for a
+ * click — a fifth of the free tier's day, leaving room for the nightly job and
+ * for a second click.
+ */
+export function importSupplier(
+  supplierId: string,
+  onEvent: (event: SyncEvent) => void,
+  options: ImportSupplierOptions = {}
+): Promise<void> {
+  const { calls = 200, ...rest } = options;
+  return streamSupplierRun(
+    `/suppliers/${encodeURIComponent(supplierId)}/import?calls=${encodeURIComponent(calls)}`,
+    onEvent,
+    rest
+  );
 }

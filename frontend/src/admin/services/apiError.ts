@@ -14,6 +14,10 @@ const CODE_MESSAGES: Record<string, string> = {
   // rejected key back (a validation message is a classic place for a secret to
   // escape), so the sentence has to describe the rule instead of the value.
   invalid_api_key: 'That key doesn’t look usable — 8 to 128 plain-text characters.',
+  // routes/suppliers.py 409 — the nightly auto-import was switched ON for a
+  // supplier with no feed provider, or no key for the one it has. Names the fix
+  // rather than the code, and matches the greyed switch's own hint.
+  feed_not_configured: 'Add this supplier’s API key in Settings to enable nightly imports.',
 };
 
 /**

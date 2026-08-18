@@ -451,6 +451,23 @@ export interface AdminSponsor {
 
 export type FeedCredentialSource = 'database' | 'environment';
 
+/**
+ * `GET/PATCH /api/suppliers/{id}/feed-settings` — what the nightly-import
+ * switch renders from, and nothing else (no key ever rides in this payload).
+ *
+ * `provider` is the feed that covers this supplier, or `null` when none does —
+ * spelled `| null` because Python's `None` arrives as JSON `null`, which a bare
+ * `?:` would wave through. `key_configured` is about THAT provider's key, so a
+ * supplier can have a provider and still be unrunnable. `auto_import_enabled`
+ * is reported as STORED even when the run could not happen right now: a key
+ * removed after the fact must not silently flip the operator's switch.
+ */
+export interface FeedSettings {
+  provider: string | null;
+  key_configured: boolean;
+  auto_import_enabled: boolean;
+}
+
 export interface FeedCredentialStatus {
   provider: string;
   label: string;

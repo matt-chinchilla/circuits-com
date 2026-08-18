@@ -1,12 +1,17 @@
-// Supplier-detail Quick Actions hero strip — full-width 4-card row directly
+// Supplier-detail Quick Actions hero strip — full-width 5-card row directly
 // below the page head. Each card stashes a supplier-context packet on the
 // prefill bus and navigates, so the destination form lands half-filled.
 // Aimed at non-technical staff doing bulk inventory entry where the same
 // supplier shows up across many parts/sponsorships.
 //
 // The first card is the primary action (filled green) — it replaces the
-// header "Add Part" button. The other three use filled blue/gold/purple
+// header "Add Part" button. The others use filled blue/gold/purple/teal
 // variants so the strip reads as a palette of distinct workflows.
+//
+// The last two cards start LIVE FEED RUNS rather than navigating: sync
+// refreshes the listings this supplier already has, import goes looking for
+// parts it does not. Only one stream may be open per page (the console below
+// renders one run), so each disables while EITHER is going.
 
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -27,10 +32,28 @@ interface Props {
   onSync?: () => void;
   /** True while that stream is open; drives the card's spinner + disabled state. */
   syncing?: boolean;
+  /**
+   * Opens the live catalog-import stream — same ownership rule as `onSync`,
+   * and the same console renders it.
+   */
+  onImport?: () => void;
+  /** True while the IMPORT stream is open. */
+  importing?: boolean;
 }
 
-export default function QuickActionsPanel({ supplier, partRows, onSync, syncing }: Props) {
+export default function QuickActionsPanel({
+  supplier,
+  partRows,
+  onSync,
+  syncing,
+  onImport,
+  importing,
+}: Props) {
   const navigate = useNavigate();
+  // One stream per page: the console shows ONE run, and two concurrent runs
+  // would also race the same provider quota. Whichever started, both cards go
+  // out of service until it ends.
+  const feedBusy = Boolean(syncing || importing);
 
   // Smart-default category — whichever category this supplier already has
   // the most listings in. Falls back to empty for brand-new suppliers.
@@ -148,7 +171,7 @@ export default function QuickActionsPanel({ supplier, partRows, onSync, syncing 
         type="button"
         className={`${styles.qaCard} ${styles.qaCardPurple}`}
         onClick={onSync}
-        disabled={syncing || !onSync}
+        disabled={feedBusy || !onSync}
       >
         <span className={styles.qaCardIcon}>
           <Icon
@@ -162,6 +185,25 @@ export default function QuickActionsPanel({ supplier, partRows, onSync, syncing 
           </span>
           <span className={styles.qaCardHint}>
             Pull stock + price from <strong>{cardHostHint}</strong>
+          </span>
+        </span>
+      </button>
+
+      <button
+        type="button"
+        className={`${styles.qaCard} ${styles.qaCardTeal}`}
+        onClick={onImport}
+        disabled={feedBusy || !onImport}
+      >
+        <span className={styles.qaCardIcon}>
+          <Icon name="download-simple" className={importing ? styles.qaPulse : undefined} />
+        </span>
+        <span className={styles.qaCardBody}>
+          <span className={styles.qaCardTitle}>
+            {importing ? 'Importing…' : 'Import new parts'}
+          </span>
+          <span className={styles.qaCardHint}>
+            Discover new inventory from <strong>{cardHostHint}</strong>
           </span>
         </span>
       </button>

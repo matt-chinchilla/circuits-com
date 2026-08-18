@@ -1,10 +1,13 @@
-// Live sync console — the feed panel that appears under the Quick Actions
-// strip while `POST /api/suppliers/{id}/sync` is streaming.
+// Live feed console — the panel that appears under the Quick Actions strip
+// while `POST /api/suppliers/{id}/sync` or `.../import` is streaming.
 //
-// A sync takes minutes (the provider throttles itself under the free tier), so
-// the point of this panel is that the operator watches the run happen instead
-// of staring at a spinner and guessing. Purely presentational: the parent owns
-// the stream, this renders whatever has arrived.
+// ONE panel for both runs: the two routes speak the same NDJSON envelope and
+// the operator is watching the same thing happen, so the only difference is
+// which run the header names (`mode`). A run takes minutes (the provider
+// throttles itself under the free tier), so the point of this panel is that
+// the operator watches it happen instead of staring at a spinner and guessing.
+// Purely presentational: the parent owns the stream, this renders whatever has
+// arrived.
 //
 // Two honesty rules, both load-bearing:
 //   1. The FOOTER prints the server's own `sync_finished` detail verbatim. The
@@ -22,6 +25,12 @@ import styles from './SyncConsole.module.scss';
 
 interface Props {
   supplierName: string;
+  /**
+   * Which run is on screen. Names the header only — the counters, chips and
+   * footer are identical, because the server reports the same five counters
+   * on both routes (a sync creates nothing, an import looks nothing up).
+   */
+  mode?: 'sync' | 'import';
   /** True while the stream is open — drives the live dot and the placeholder. */
   running: boolean;
   /** Every event received so far, in arrival order. Append-only. */
@@ -32,7 +41,11 @@ interface Props {
 
 // `no_data` reads muted alongside `not_found` on purpose: the feed answered,
 // but had nothing to add — nothing was written, so nothing should look written.
+// `created` gets its own hue: it is the one action that added a page to the
+// public site, and reading it as an update would undersell an import's whole
+// point.
 const ACTION_CHIP: Record<SyncAction, { label: string; cls: string }> = {
+  created: { label: 'created', cls: styles.chipCreated },
   updated: { label: 'updated', cls: styles.chipUpdated },
   media_filled: { label: 'image filled', cls: styles.chipMedia },
   not_found: { label: 'not found', cls: styles.chipMuted },
@@ -43,7 +56,14 @@ const ACTION_CHIP: Record<SyncAction, { label: string; cls: string }> = {
 // that and the operator is reading history — do not yank them back down.
 const STICK_THRESHOLD_PX = 48;
 
-export default function SyncConsole({ supplierName, running, events, error }: Props) {
+export default function SyncConsole({
+  supplierName,
+  mode = 'sync',
+  running,
+  events,
+  error,
+}: Props) {
+  const runLabel = mode === 'import' ? 'Inventory import' : 'Inventory sync';
   const feedRef = useRef<HTMLDivElement>(null);
   // Starts true so the first rows scroll into view; flips off the moment the
   // operator scrolls up to re-read something.
@@ -65,7 +85,7 @@ export default function SyncConsole({ supplierName, running, events, error }: Pr
   const terminal = terminalState(events);
 
   return (
-    <section className={styles.console} aria-label={`Inventory sync — ${supplierName}`}>
+    <section className={styles.console} aria-label={`${runLabel} — ${supplierName}`}>
       <div className={styles.head}>
         <div className={styles.headLeft}>
           <span
@@ -73,11 +93,17 @@ export default function SyncConsole({ supplierName, running, events, error }: Pr
             aria-hidden="true"
           />
           <h3 className={styles.title}>
-            Inventory sync <span className={styles.titleSep}>&mdash;</span>{' '}
+            {runLabel} <span className={styles.titleSep}>&mdash;</span>{' '}
             <span className={styles.titleName}>{supplierName}</span>
           </h3>
         </div>
+        {/* All five counters, on both runs. The server reports the same five
+            keys either way, so a zero here is a zero — never a counter this
+            panel decided not to show. */}
         <div className={styles.counters}>
+          <span className={styles.counter}>
+            <b>{counts.created}</b> created
+          </span>
           <span className={styles.counter}>
             <b>{counts.synced}</b> synced
           </span>

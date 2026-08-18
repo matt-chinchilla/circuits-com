@@ -5,6 +5,7 @@ import {
   terminalState,
   syncErrorMessage,
   syncSupplier,
+  importSupplier,
   SyncStreamError,
   type SyncEvent,
 } from '@admin/services/syncStream';
@@ -30,6 +31,9 @@ vi.mock('@admin/services/swCache', () => ({
 const started = '{"kind":"sync_started","supplier_id":"s1","title":"Mouser","detail":"3 parts queued","image_url":null,"action":null}';
 const partA = '{"kind":"part_synced","supplier_id":"s1","title":"STM32F103 — ST","detail":"Microcontrollers","image_url":"https://ex.test/a.jpg","action":"updated"}';
 const partB = '{"kind":"part_synced","supplier_id":"s1","title":"LM358","detail":null,"image_url":null,"action":"not_found"}';
+// An IMPORT's own action — a part the catalog did not have before. Same
+// envelope, different route (`grow_catalog`).
+const partNew = '{"kind":"part_synced","supplier_id":"s1","title":"NE555P — TI","detail":"Timers","image_url":null,"action":"created"}';
 
 describe('parseNdjson', () => {
   it('returns every complete line and an empty remainder', () => {
@@ -84,9 +88,15 @@ describe('parseNdjson', () => {
 
   it('keeps the counts object that rides on sync_finished', () => {
     const finished =
-      '{"kind":"sync_finished","supplier_id":"s1","title":"Mouser","detail":"2 synced · 1 images filled · 1 not found","image_url":null,"action":null,"counts":{"synced":2,"media_filled":1,"not_found":1,"no_data":0}}';
+      '{"kind":"sync_finished","supplier_id":"s1","title":"Mouser","detail":"2 synced · 1 images filled · 1 not found","image_url":null,"action":null,"counts":{"synced":2,"media_filled":1,"not_found":1,"no_data":0,"created":0}}';
     const { events } = parseNdjson(`${finished}\n`);
-    expect(events[0].counts).toEqual({ synced: 2, media_filled: 1, not_found: 1, no_data: 0 });
+    expect(events[0].counts).toEqual({
+      synced: 2,
+      media_filled: 1,
+      not_found: 1,
+      no_data: 0,
+      created: 0,
+    });
     expect(events[0].detail).toBe('2 synced · 1 images filled · 1 not found');
   });
 });
@@ -99,7 +109,32 @@ function part(action: SyncEvent['action']): SyncEvent {
 
 describe('tallyCounts', () => {
   it('is all zeros before anything arrives', () => {
-    expect(tallyCounts([])).toEqual({ synced: 0, media_filled: 0, not_found: 0, no_data: 0 });
+    expect(tallyCounts([])).toEqual({
+      synced: 0,
+      media_filled: 0,
+      not_found: 0,
+      no_data: 0,
+      created: 0,
+    });
+  });
+
+  // An import's headline number. `created` is counted APART from `synced` —
+  // exactly as `grow_catalog` counts it — because a brand-new catalog row is
+  // not a refreshed listing, and folding them would overstate the sync half.
+  it('counts a created part on its own, never as synced', () => {
+    expect(tallyCounts([part('created'), part('created')])).toEqual({
+      synced: 0,
+      media_filled: 0,
+      not_found: 0,
+      no_data: 0,
+      created: 2,
+    });
+  });
+
+  it('tallies a mixed import run the way the server does', () => {
+    expect(
+      tallyCounts([part('created'), part('updated'), part('media_filled'), part('no_data')])
+    ).toEqual({ synced: 2, media_filled: 1, not_found: 0, no_data: 1, created: 1 });
   });
 
   it('counts a media_filled part as BOTH synced and media filled', () => {
@@ -108,13 +143,14 @@ describe('tallyCounts', () => {
       media_filled: 1,
       not_found: 0,
       no_data: 0,
+      created: 0,
     });
   });
 
   it('counts updated as synced, and keeps not_found / no_data out of synced', () => {
     expect(
       tallyCounts([part('updated'), part('updated'), part('not_found'), part('no_data')])
-    ).toEqual({ synced: 2, media_filled: 0, not_found: 1, no_data: 1 });
+    ).toEqual({ synced: 2, media_filled: 0, not_found: 1, no_data: 1, created: 0 });
   });
 
   it('ignores non-part events', () => {
@@ -133,10 +169,16 @@ describe('tallyCounts', () => {
         kind: 'sync_finished',
         supplier_id: 's1',
         title: 'Mouser',
-        counts: { synced: 9, media_filled: 4, not_found: 2, no_data: 1 },
+        counts: { synced: 9, media_filled: 4, not_found: 2, no_data: 1, created: 3 },
       },
     ];
-    expect(tallyCounts(events)).toEqual({ synced: 9, media_filled: 4, not_found: 2, no_data: 1 });
+    expect(tallyCounts(events)).toEqual({
+      synced: 9,
+      media_filled: 4,
+      not_found: 2,
+      no_data: 1,
+      created: 3,
+    });
   });
 
   // The route's catch-all abort (suppliers.py) ends the stream with
@@ -148,21 +190,22 @@ describe('tallyCounts', () => {
     const events: SyncEvent[] = [
       part('updated'),
       part('media_filled'),
-      part('not_found'),
+      part('created'),
       { kind: 'sync_error', supplier_id: 's1', title: 'Sync failed', detail: 'boom' },
       {
         kind: 'sync_finished',
         supplier_id: 's1',
         title: 'Mouser',
         detail: 'sync aborted',
-        counts: { synced: 0, media_filled: 0, not_found: 0, no_data: 0 },
+        counts: { synced: 0, media_filled: 0, not_found: 0, no_data: 0, created: 0 },
       },
     ];
     expect(tallyCounts(events)).toEqual({
       synced: 2,
       media_filled: 1,
-      not_found: 1,
+      not_found: 0,
       no_data: 0,
+      created: 1,
     });
   });
 
@@ -173,10 +216,16 @@ describe('tallyCounts', () => {
         kind: 'sync_finished',
         supplier_id: 's1',
         title: 'Mouser',
-        counts: { synced: 0, media_filled: 0, not_found: 0, no_data: 0 },
+        counts: { synced: 0, media_filled: 0, not_found: 0, no_data: 0, created: 0 },
       },
     ];
-    expect(tallyCounts(events)).toEqual({ synced: 0, media_filled: 0, not_found: 0, no_data: 0 });
+    expect(tallyCounts(events)).toEqual({
+      synced: 0,
+      media_filled: 0,
+      not_found: 0,
+      no_data: 0,
+      created: 0,
+    });
   });
 });
 
@@ -247,9 +296,12 @@ describe('syncErrorMessage', () => {
     );
   });
 
+  // The sentence says "run", not "sync": the same mapper answers for the import
+  // stream, and naming the wrong route would be the one inaccurate thing on a
+  // console that otherwise prints the server verbatim.
   it('falls back to one generic sentence for anything else', () => {
-    expect(syncErrorMessage(new Error('network down'))).toContain('Sync failed');
-    expect(syncErrorMessage(new SyncStreamError(500, null))).toContain('Sync failed');
+    expect(syncErrorMessage(new Error('network down'))).toContain('The run failed to start');
+    expect(syncErrorMessage(new SyncStreamError(500, null))).toContain('The run failed to start');
   });
 
   // A socket that drops AFTER the 200 is a different event from one that never
@@ -267,7 +319,7 @@ describe('syncErrorMessage', () => {
   });
 
   it('does not claim an interruption for an ordinary status-0 failure', () => {
-    expect(syncErrorMessage(new SyncStreamError(0, null))).toContain('Sync failed');
+    expect(syncErrorMessage(new SyncStreamError(0, null))).toContain('The run failed to start');
   });
 
   // An abort is the operator navigating away, which `syncSupplier` swallows —
@@ -277,17 +329,18 @@ describe('syncErrorMessage', () => {
   it('never reads an abort as an interruption', () => {
     const aborted = new DOMException('The operation was aborted.', 'AbortError');
     expect(syncErrorMessage(aborted)).toBe(
-      'Sync failed to start. Check the connection and try again.'
+      'The run failed to start. Check the connection and try again.'
     );
   });
 });
 
 // How the reader loop ENDS, which is the whole difference between the three
-// sentences above. A hand-built ReadableStream stands in for the response body:
-// real `fetch` errors the stream with an AbortError when its signal aborts, and
-// with an ordinary Error when the socket drops, so those are the two endings
-// scripted here.
-describe('syncSupplier endings', () => {
+// sentences above — plus which route each export opens, since both now share
+// ONE reader and the path is the only thing that separates them. A hand-built
+// ReadableStream stands in for the response body: real `fetch` errors the
+// stream with an AbortError when its signal aborts, and with an ordinary Error
+// when the socket drops, so those are the two endings scripted here.
+describe('stream transport', () => {
   const fetchMock = vi.fn();
 
   /** A body that yields `chunks`, then ends the way `ending` says. */
@@ -386,5 +439,73 @@ describe('syncSupplier endings', () => {
     await syncSupplier('s1', () => {}, { signal: controller.signal });
 
     expect(fetchMock.mock.calls[0][1].signal).toBe(controller.signal);
+  });
+
+  // Both exports are now the same reader behind two paths, so the path IS the
+  // difference between refreshing the listings a supplier has and adding ones
+  // it does not. A wrapper that opened the wrong one would look identical on
+  // screen right up until it spent the day's provider quota on the wrong job.
+  it('opens the SYNC route with its per-run row limit', async () => {
+    respondWith([], 'close');
+
+    await syncSupplier('s1', () => {});
+
+    expect(fetchMock.mock.calls[0][0]).toContain('/suppliers/s1/sync?limit=25');
+    expect(fetchMock.mock.calls[0][1].method).toBe('POST');
+  });
+
+  it('opens the IMPORT route with the default call budget', async () => {
+    respondWith([], 'close');
+
+    await importSupplier('s1', () => {});
+
+    expect(fetchMock.mock.calls[0][0]).toContain('/suppliers/s1/import?calls=200');
+    expect(fetchMock.mock.calls[0][1].method).toBe('POST');
+  });
+
+  it('lets the caller spend a different call budget', async () => {
+    respondWith([], 'close');
+
+    await importSupplier('s1', () => {}, { calls: 500 });
+
+    expect(fetchMock.mock.calls[0][0]).toContain('/suppliers/s1/import?calls=500');
+  });
+
+  it('escapes the supplier id it is handed', async () => {
+    respondWith([], 'close');
+
+    await importSupplier('a b/c', () => {});
+
+    expect(fetchMock.mock.calls[0][0]).toContain('/suppliers/a%20b%2Fc/import');
+  });
+
+  // `importSupplier` destructures `calls` off its options — the signal has to
+  // survive that, or leaving the page would no longer end the run.
+  it('still passes the caller signal through the import wrapper', async () => {
+    respondWith([], 'close');
+    const controller = new AbortController();
+
+    await importSupplier('s1', () => {}, { signal: controller.signal, calls: 5 });
+
+    expect(fetchMock.mock.calls[0][1].signal).toBe(controller.signal);
+  });
+
+  it('streams import events through the same reader', async () => {
+    respondWith([`${started}\n`, `${partNew}\n`], 'close');
+    const seen: SyncEvent[] = [];
+
+    await importSupplier('s1', (e) => seen.push(e));
+
+    expect(seen.map((e) => e.action)).toEqual([null, 'created']);
+  });
+
+  // A created part is the biggest public-facing write of the lot: a part page
+  // that did not exist, plus a category count that moved.
+  it('busts the SW caches for a created part', async () => {
+    respondWith([`${partNew}\n`], 'close');
+
+    await importSupplier('s1', () => {});
+
+    expect(bustSponsorCaches).toHaveBeenCalledTimes(1);
   });
 });

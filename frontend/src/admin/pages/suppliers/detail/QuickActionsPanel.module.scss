@@ -1,22 +1,32 @@
 @use '@shared/styles/variables' as *;
 @use '../../glass' as *;
 
-// Supplier-detail Quick Actions hero strip — full-width row of 4 prominent
+// Supplier-detail Quick Actions hero strip — full-width row of 5 prominent
 // cards directly below the page head. Replaces both the compact sidebar
 // list (v6) AND the header "Add Part" button (now lives in the first card).
 // Each card pre-populates a destination form with this supplier's context,
 // so bulk inventory work skips the repeated supplier/manufacturer/category
 // typing the sales team would otherwise face.
 //
-// All four cards use the original FILLED treatment — green (Add Part),
-// blue (Import CSV), gold (Sponsorship), purple (Sync) — each a solid
-// color block with a white icon tile and white text.
+// All five cards use the original FILLED treatment — green (Add Part),
+// blue (Import CSV), gold (Sponsorship), purple (Sync), teal (Import new
+// parts) — each a solid color block with a white icon tile and white text.
 
 .qaStrip {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 12px;
   margin: 0 0 20px;
+}
+
+// Five across needs the full-width admin content column: at 1500px the content
+// column (viewport − 240px sidebar − 64px padding) still leaves each card
+// ~230px, which is where "Add sponsorship" stops wrapping its title. Below
+// that the row steps down rather than squeezing five cards into it.
+@media (max-width: 1500px) {
+  .qaStrip {
+    grid-template-columns: repeat(3, 1fr);
+  }
 }
 
 @media (max-width: 1100px) {
@@ -33,7 +43,7 @@
 
 .qaCard {
   // Fallback accent for hover border/chev on any card that doesn't set its
-  // own filled colors; every current variant (Primary/Blue/Gold/Purple)
+  // own filled colors; every current variant (Primary/Blue/Gold/Purple/Teal)
   // overrides border-color + chev color directly, so this is a safety net.
   --qa-accent: var(--a-primary);
 
@@ -127,11 +137,12 @@
 }
 
 // ─── Filled cards ──────────────────────────────────────────────────────
-// One filled treatment, four hues — green = primary CTA (Add Part), blue =
-// data (Import CSV), gold = revenue (Sponsorship), purple = ops (Sync). The
-// strip reads as a single palette, and a change to the card anatomy is one
-// edit, not four (hoisted at exactly the four-site threshold the house rule
-// names). The hover hexes are the original design's, predating the tokens.
+// One filled treatment, five hues — green = primary CTA (Add Part), blue =
+// data (Import CSV), gold = revenue (Sponsorship), purple = ops (Sync), teal
+// = growth (Import new parts). The strip reads as a single palette, and a
+// change to the card anatomy is one edit, not five (hoisted at exactly the
+// four-site threshold the house rule names). The hover hexes are the original
+// design's, predating the tokens; teal follows that convention.
 @mixin qa-filled($bg, $bg-hover, $shadow, $icon-alpha: 0.16, $hint-alpha: 0.78) {
   background: $bg;
   border-color: $bg;
@@ -182,6 +193,13 @@
   @include qa-filled(var(--a-purple), #6d28d9, rgba(124, 58, 237, 0.22));
 }
 
+// Teal reads as the sibling of purple (both are feed runs) without being
+// mistaken for it at a glance. --a-teal is themed, so the fill lifts in dark
+// mode the way --a-primary does and keeps white text legible on both.
+.qaCardTeal {
+  @include qa-filled(var(--a-teal), #115e59, rgba(15, 118, 110, 0.22));
+}
+
 .qaSpin {
   animation: qaSpin 800ms linear infinite;
 }
@@ -189,5 +207,28 @@
 @keyframes qaSpin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+// The import icon breathes rather than spins: an arrow that spins reads as
+// "retrying", and opacity is the cheapest thing this strip can animate.
+.qaPulse {
+  animation: qaPulse 1.4s ease-in-out infinite;
+}
+
+@keyframes qaPulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .qaSpin,
+  .qaPulse {
+    animation: none;
   }
 }

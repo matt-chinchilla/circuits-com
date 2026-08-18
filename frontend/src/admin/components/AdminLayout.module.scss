@@ -45,6 +45,12 @@
   // so palette variants (e.g. high-contrast themes) can override centrally.
   --a-blue: #2563eb;
   --a-purple: #7c3aed;
+  // Teal — the FILLED quick-action hue for "import new parts" (supplier
+  // detail). Dark enough to carry white text on the filled card (5.48:1) and
+  // still legible as chip INK on a pane (5.48:1 light / 4.4:1 dark), which is
+  // why it is themed rather than a static hex like the chip tints beside it.
+  // Not a chart series: it is never validated against the --a-grad-* slots.
+  --a-teal: #0f766e;
   // Chart kit (dataviz-validated 2026-07-30) — see components/charts/README.md.
   // Marks render on --a-card (#fff). Validator, light/#ffffff:
   //   adjacent order green→blue→gold→purple: worst CVD ΔE 25.6, normal 27.6,
@@ -140,6 +146,11 @@
     --a-fg4: #647080;
     --a-primary: #1f9d63;
     --a-primary-hover: #26b374;
+    // Lifted for dark exactly as --a-primary is: the card stays FILLED with
+    // white text on both themes, so the token cannot lighten past the point
+    // where white stops reading (white on #0d9488 = 3.79:1, the same footing
+    // as the dark primary CTA beside it).
+    --a-teal: #0d9488;
     --a-grid: #232d3d;
     --a-axis: #38445a;
     --a-track: #202a39;
