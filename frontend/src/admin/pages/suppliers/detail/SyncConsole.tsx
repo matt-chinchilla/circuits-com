@@ -85,7 +85,11 @@ export default function SyncConsole({
   const followToBottom = () => {
     const el = feedRef.current;
     if (!el) return;
-    el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+    // Instant for the same reason as the follow effect: a smooth glide's own
+    // scroll events would read as the operator scrolling and cancel the
+    // following this button exists to resume.
+    stickRef.current = true;
+    el.scrollTop = el.scrollHeight;
     seenRef.current = events.length;
     setBehind(0);
   };
@@ -105,7 +109,10 @@ export default function SyncConsole({
     const el = feedRef.current;
     if (!el) return;
     if (stickRef.current) {
-      el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+      // INSTANT, not smooth — a smooth glide fires scroll events on the way
+      // down, the handler below reads them as the operator scrolling, and
+      // following switches itself off mid-animation (owner-reported).
+      el.scrollTop = el.scrollHeight;
       seenRef.current = events.length;
       if (behind !== 0) setBehind(0);
     } else {
