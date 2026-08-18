@@ -13,7 +13,7 @@ from app.services.part_feed.registry import (
     env_feed_key,
     feed_configured,
     get_feed_key,
-    resolve_provider,
+    match_provider,
 )
 
 __all__ = [
@@ -25,7 +25,7 @@ __all__ = [
     "env_feed_key",
     "feed_configured",
     "get_feed_key",
-    "resolve_provider",
+    "match_provider",
     "sync_event",
     "sync_supplier_listings",
 ]

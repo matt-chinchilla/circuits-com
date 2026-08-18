@@ -7,10 +7,11 @@ ActivityEvent per event on the way past.
 
 Three contracts are pinned here because nothing else would notice them break:
 
-1. **Order of refusal.** Feature-off (no key) 404s BEFORE the supplier lookup
-   and before `resolve_provider` — the Mouser provider's constructor raises
-   without a key, so resolving first would turn "sync is not configured" into a
-   500.
+1. **Order of refusal.** Matching runs first — it is what separates 409
+   `no_feed_for_supplier` from a missing key — but the provider is never
+   CONSTRUCTED until its OWN key is in hand. The Mouser provider's constructor
+   raises without one, so building first would turn "sync is not configured"
+   into a 500 instead of a 404.
 2. **What gets persisted.** The wire stream carries every event; the
    activity_events table only takes the ones that describe a real change.
    `not_found` / `no_data` part events are honest on the wire and would be lies
@@ -29,12 +30,13 @@ import pytest
 
 from app.config import settings
 from app.models import ActivityEvent, PartListing, ProviderCredential, Supplier, User
-from app.services.part_feed.registry import feed_configured, get_feed_key, resolve_provider
+from app.services.part_feed.registry import feed_configured, get_feed_key, match_provider
 from tests.feed_helpers import FakeProvider as _FakeProvider
 from tests.feed_helpers import feed_part as _feed_part
 
 FAKE_KEY = "test-key-not-real"  # never a real credential; the route only checks truthiness
 DB_KEY = "stored-key-not-real"  # the same, stored in provider_credentials
+OTHER_KEY = "second-feed-key-not-real"  # a SECOND provider's stored key
 DEMO_EMAIL = "demo@circuitcenter.ai"
 
 
@@ -73,19 +75,25 @@ def feed_key(monkeypatch):
 def use_fake_provider(monkeypatch):
     """Swap the registry lookup the ROUTE uses for a scripted provider.
 
-    The stand-in takes `api_key` because the route passes its RESOLVED key
-    through — a one-argument fake would pass while the real signature no longer
-    matched. `seen_keys` records what it was handed, which is how the
-    key-precedence tests below check that the DB key is the one actually used.
+    `match_provider` returns a (slug, CLASS) pair and the route builds it with
+    the key it resolved for THAT slug, so the stand-in has to hand back a class
+    — a fake returning an instance would pass here while the real route
+    unpacked a tuple. `__new__` yields the pre-built scripted provider so the
+    test keeps its handle on it, and `seen_keys` records what the constructor
+    was given, which is how the key-precedence tests below check that the DB key
+    is the one actually used.
     """
     seen_keys: list[str | None] = []
 
-    def _install(provider):
-        def _resolve(supplier, api_key=None):
-            seen_keys.append(api_key)
-            return provider
+    def _install(provider, slug="mouser"):
+        class _Scripted:
+            def __new__(cls, api_key=None):
+                seen_keys.append(api_key)
+                return provider
 
-        monkeypatch.setattr("app.routes.suppliers.resolve_provider", _resolve)
+        monkeypatch.setattr(
+            "app.routes.suppliers.match_provider", lambda supplier: (slug, _Scripted)
+        )
         provider.seen_keys = seen_keys
         return provider
 
@@ -105,22 +113,31 @@ class TestGuards:
         resp = client.post(f"/api/suppliers/{seeded_db['supplier1'].id}/sync")
         assert resp.status_code == 401
 
-    def test_missing_key_404s_before_anything_else_runs(
-        self, client, seeded_db, auth_header, monkeypatch
+    def test_missing_key_404s_before_the_provider_is_built(
+        self, client, db, seeded_db, auth_header, monkeypatch
     ):
         """Feature-off posture (same as Stripe): the route simply isn't there.
 
-        `resolve_provider` must not be reached — MouserProvider's constructor
-        raises without a key, which would surface as a 500 instead of a 404.
+        Matching is allowed to run — it is what separates 409
+        `no_feed_for_supplier` from this 404 — but CONSTRUCTION must not be
+        reached: MouserProvider's constructor raises without a key, which would
+        surface as a 500.
         """
         monkeypatch.setattr(settings, "MOUSER_API_KEY", None)
 
-        def _boom(supplier, api_key=None):
-            raise AssertionError("resolve_provider ran before the key check")
+        class _Boom(_FakeProvider):
+            def __init__(self, api_key=None):
+                raise AssertionError("provider was built before the key check")
 
-        monkeypatch.setattr("app.routes.suppliers.resolve_provider", _boom)
+        monkeypatch.setattr("app.services.part_feed.registry._PROVIDERS", (("mouser", _Boom),))
+        # supplier1 is Avnet, which matches no provider at all — that is the 409
+        # below. This contract is the other one: a provider WAS matched and has
+        # no key, so give the row a website the registry covers.
+        supplier = seeded_db["supplier1"]
+        supplier.website = "mouser.com"
+        db.commit()
 
-        resp = _sync(client, seeded_db["supplier1"], auth_header)
+        resp = _sync(client, supplier, auth_header)
 
         assert resp.status_code == 404
         assert resp.json()["detail"] == "sync_unavailable"
@@ -221,6 +238,68 @@ class TestKeyPrecedence:
         _sync(client, seeded_db["supplier1"], auth_header)
 
         assert provider.seen_keys == [FAKE_KEY]
+
+    def test_each_provider_is_called_with_ITS_OWN_key(
+        self, client, db, seeded_db, auth_header, feed_key, monkeypatch
+    ):
+        """The registry says adding a distributor is one row and no route change.
+        That only holds if the route resolves the key for the provider it
+        MATCHED — resolving "mouser" unconditionally would post Mouser's
+        credential to Digi-Key's API the day a second row lands.
+        """
+
+        class _Recorder(_FakeProvider):
+            keys: list[str | None] = []
+
+            def __init__(self, api_key=None):
+                super().__init__()
+                type(self).keys.append(api_key)
+
+        class _MouserLike(_Recorder):
+            keys: list[str | None] = []
+
+        class _DigiKeyLike(_Recorder):
+            keys: list[str | None] = []
+
+        monkeypatch.setattr(
+            "app.services.part_feed.registry._PROVIDERS",
+            (("mouser", _MouserLike), ("digikey", _DigiKeyLike)),
+        )
+        db.add(ProviderCredential(provider="mouser", api_key=DB_KEY))
+        db.add(ProviderCredential(provider="digikey", api_key=OTHER_KEY))
+        supplier = seeded_db["supplier1"]
+        supplier.website = "https://www.digikey.com/"
+        db.commit()
+
+        resp = _sync(client, supplier, auth_header)
+
+        assert resp.status_code == 200
+        assert _DigiKeyLike.keys == [OTHER_KEY]
+        assert _MouserLike.keys == []
+
+    def test_a_provider_with_no_key_of_its_own_is_404_even_with_mousers_set(
+        self, client, db, seeded_db, auth_header, feed_key, monkeypatch
+    ):
+        """The same crossing, seen from the gate: Mouser being configured must
+        not make a second distributor look configured."""
+
+        class _DigiKeyLike(_FakeProvider):
+            def __init__(self, api_key=None):
+                super().__init__()
+                raise AssertionError("constructed without a key of its own")
+
+        monkeypatch.setattr(
+            "app.services.part_feed.registry._PROVIDERS",
+            (("mouser", _FakeProvider), ("digikey", _DigiKeyLike)),
+        )
+        supplier = seeded_db["supplier1"]
+        supplier.website = "digikey.com"
+        db.commit()
+
+        resp = _sync(client, supplier, auth_header)
+
+        assert resp.status_code == 404
+        assert resp.json()["detail"] == "sync_unavailable"
 
     def test_404_needs_both_sources_empty(
         self, client, db, seeded_db, auth_header, use_fake_provider, monkeypatch
@@ -483,30 +562,37 @@ class TestStream:
 
 
 class TestProviderRegistry:
-    def test_a_mouser_supplier_resolves_to_the_mouser_provider(self, feed_key):
+    def test_a_mouser_supplier_matches_the_mouser_provider(self, feed_key):
+        """The SLUG comes back too, not just the class: it is what the route
+        resolves the key for, so a match that lost it would send this
+        distributor's credential to the next one added."""
         from app.services.part_feed.mouser import MouserProvider
 
         supplier = Supplier(id=uuid.uuid4(), name="Mouser", website="mouser.com")
-        assert isinstance(resolve_provider(supplier), MouserProvider)
+        assert match_provider(supplier) == ("mouser", MouserProvider)
 
     def test_matching_tolerates_scheme_case_and_subdomain(self, feed_key):
         for website in ("https://WWW.Mouser.com/", "eu.mouser.com", "MOUSER.COM"):
             supplier = Supplier(id=uuid.uuid4(), name="Mouser", website=website)
-            assert resolve_provider(supplier) is not None, website
+            assert match_provider(supplier) is not None, website
 
-    def test_unknown_or_missing_website_resolves_to_nothing(self, feed_key):
+    def test_unknown_or_missing_website_matches_nothing(self, feed_key):
         for website in ("avnet.com", "", None):
             supplier = Supplier(id=uuid.uuid4(), name="Other", website=website)
-            assert resolve_provider(supplier) is None, website
+            assert match_provider(supplier) is None, website
 
-    def test_the_provider_is_built_lazily_so_the_key_check_comes_first(self, monkeypatch):
-        """Construction is what demands the key. That is exactly why the route
-        checks the key BEFORE it resolves — see TestGuards."""
+    def test_matching_never_constructs_so_the_key_check_can_come_first(self, monkeypatch):
+        """Construction is what demands the key. Matching stays free of it, which
+        is what lets the route answer 404 rather than leak the constructor's
+        RuntimeError as a 500 — see TestGuards."""
         monkeypatch.setattr(settings, "MOUSER_API_KEY", None)
         supplier = Supplier(id=uuid.uuid4(), name="Mouser", website="mouser.com")
 
+        slug, provider_cls = match_provider(supplier)
+
+        assert slug == "mouser"
         with pytest.raises(RuntimeError):
-            resolve_provider(supplier)
+            provider_cls()
 
     def test_an_explicit_key_builds_the_provider_with_no_environment_key(self, monkeypatch):
         """The admin-stored key path: nothing is in the environment and the
@@ -516,7 +602,8 @@ class TestProviderRegistry:
         monkeypatch.setattr(settings, "MOUSER_API_KEY", None)
         supplier = Supplier(id=uuid.uuid4(), name="Mouser", website="mouser.com")
 
-        provider = resolve_provider(supplier, api_key=DB_KEY)
+        _slug, provider_cls = match_provider(supplier)
+        provider = provider_cls(api_key=DB_KEY)
 
         assert isinstance(provider, MouserProvider)
         assert provider.api_key == DB_KEY

@@ -29,7 +29,7 @@ from app.services.auth_service import get_current_user
 # here is how a stream ends up with an event the client's parser drops.
 from app.services.part_feed import (
     get_feed_key,
-    resolve_provider,
+    match_provider,
     sync_event,
     sync_supplier_listings,
 )
@@ -341,34 +341,38 @@ def sync_supplier(
 
     ORDER OF REFUSAL, and it matters:
 
-    1. No feed key at all → **404 sync_unavailable**. `get_feed_key` reads the
-       key stored from Admin → Settings first and falls back to
-       ``MOUSER_API_KEY``; with NEITHER present this is the same feature-off
-       posture as the Stripe routes — an unconfigured environment has no such
-       endpoint. It comes FIRST because `resolve_provider` constructs the
-       provider, whose constructor raises without a key, so resolving first
-       would turn "not configured" into a 500. The key resolved HERE is then
-       handed to `resolve_provider`: the run cannot gate on one key and then
-       call the distributor with another.
-    2. Unknown/malformed id → 404.
-    3. No provider covers this supplier → **409 no_feed_for_supplier**: the
+    1. Unknown/malformed id → 404.
+    2. No provider covers this supplier → **409 no_feed_for_supplier**: the
        endpoint exists, this row just has no feed behind it.
+    3. No key for THAT provider → **404 sync_unavailable**, the same feature-off
+       posture as the Stripe routes: an unconfigured feed has no such endpoint.
+       `get_feed_key` reads the key stored from Admin → Settings first and falls
+       back to the environment.
+
+    The key is resolved for the MATCHED slug, not for a default: a second
+    distributor in the registry must not be reachable on Mouser's credential
+    (nor be gated open by Mouser's key being present). Matching does NOT
+    construct — `match_provider` returns the CLASS — so the provider is only
+    ever built once its own key is in hand, which is what keeps a missing key a
+    404 instead of the constructor's RuntimeError as a 500.
 
     `def`, not `async def`: the provider sleeps between calls to stay under the
     rate limit, and Starlette runs a sync generator in a threadpool where that
     blocking is harmless. As an `async def` it would stall the event loop for
     the whole run.
     """
-    key = get_feed_key(db)
-    if not key:
-        raise HTTPException(404, "sync_unavailable")
     supplier_uuid = _to_uuid(supplier_id)
     supplier = db.query(Supplier).filter(Supplier.id == supplier_uuid).first()
     if not supplier:
         raise HTTPException(404, "Supplier not found")
-    provider = resolve_provider(supplier, api_key=key)
-    if provider is None:
+    match = match_provider(supplier)
+    if match is None:
         raise HTTPException(409, "no_feed_for_supplier")
+    provider_slug, provider_cls = match
+    key = get_feed_key(db, provider_slug)
+    if not key:
+        raise HTTPException(404, "sync_unavailable")
+    provider = provider_cls(api_key=key)
     # A negative LIMIT is a Postgres error and a huge one is an unbounded run
     # against a rate-limited API; both clamp rather than 422 — the number is a
     # batch size, not a request the caller can get wrong.

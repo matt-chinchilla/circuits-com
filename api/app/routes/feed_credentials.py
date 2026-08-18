@@ -18,8 +18,12 @@ them; a key that buys distributor part data is a different blast radius from one
 that moves money.
 
 Auth is `get_current_user` on all three verbs — the demo account keeps its READ
-(the Settings card must render for a prospect, and the shape carries no secret)
-and is refused both writes by the global demo read-only gate in auth_service.
+(the Settings card must render for a prospect) and is refused both writes by the
+global demo read-only gate in auth_service. The demo READ is narrowed further:
+`POST /api/auth/demo` hands a session to any anonymous visitor, so `last4` and
+`updated_at` are BLANKED for that caller. Four characters of the live key plus
+the date it was last rotated is reconnaissance for a stranger, and the card
+reads perfectly well without either ("Configured — stored").
 """
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -28,7 +32,7 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.models import ProviderCredential, User
-from app.services.auth_service import get_current_user
+from app.services.auth_service import get_current_user, is_demo_user
 from app.services.part_feed import FEED_PROVIDERS, env_feed_key
 
 router = APIRouter(prefix="/api/admin/feed-credentials", tags=["admin-feed-credentials"])
@@ -73,8 +77,13 @@ def _validated_key(raw: str) -> str:
     return key
 
 
-def _status(db: Session, provider: str) -> dict:
-    """One provider's row of the card. Contains no secret, by construction."""
+def _status(db: Session, provider: str, *, redact: bool = False) -> dict:
+    """One provider's row of the card. Contains no secret, by construction.
+
+    `redact` blanks the two fields that describe a stored key without being the
+    key — see the demo note in the module docstring. `configured` and `source`
+    stay: the card must still say the feed is set up and where from.
+    """
     row = db.query(ProviderCredential).filter(ProviderCredential.provider == provider).first()
     stored = (row.api_key or "").strip() if row else ""
     if stored:
@@ -83,8 +92,10 @@ def _status(db: Session, provider: str) -> dict:
             "label": _LABELS[provider],
             "configured": True,
             "source": "database",
-            "last4": stored[-4:],
-            "updated_at": row.updated_at.isoformat() if row and row.updated_at else None,
+            "last4": None if redact else stored[-4:],
+            "updated_at": (
+                None if redact or not (row and row.updated_at) else row.updated_at.isoformat()
+            ),
         }
     configured = env_feed_key(provider) is not None
     return {
@@ -99,8 +110,8 @@ def _status(db: Session, provider: str) -> dict:
     }
 
 
-def _all_statuses(db: Session) -> dict:
-    return {"providers": [_status(db, slug) for slug in _LABELS]}
+def _all_statuses(db: Session, *, redact: bool = False) -> dict:
+    return {"providers": [_status(db, slug, redact=redact) for slug in _LABELS]}
 
 
 @router.get("/")
@@ -108,8 +119,12 @@ def list_feed_credentials(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Every known provider and where its key is coming from — never the key."""
-    return _all_statuses(db)
+    """Every known provider and where its key is coming from — never the key.
+
+    The demo session reads a REDACTED row (no last4, no updated_at): that door
+    opens for anyone.
+    """
+    return _all_statuses(db, redact=is_demo_user(current_user))
 
 
 @router.put("/{provider}")
@@ -129,7 +144,9 @@ def set_feed_credential(
     else:
         row.api_key = key
     db.commit()
-    return _all_statuses(db)
+    # Redacted for the demo like GET is. Unreachable for that account (the
+    # global read-only gate 403s first) — one rule everywhere beats three.
+    return _all_statuses(db, redact=is_demo_user(current_user))
 
 
 @router.delete("/{provider}")
@@ -150,4 +167,4 @@ def clear_feed_credential(
         synchronize_session=False
     )
     db.commit()
-    return _all_statuses(db)
+    return _all_statuses(db, redact=is_demo_user(current_user))

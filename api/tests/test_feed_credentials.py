@@ -15,7 +15,11 @@ The contract these tests pin, in the order it matters:
    accepted and cannot rotate.
 2. **Auth.** Admin session on all three verbs. The demo account keeps its READ
    (the Settings card must render for a prospect) and is refused both writes by
-   the global demo read-only gate.
+   the global demo read-only gate — but it sees NO metadata about a stored key.
+   `POST /api/auth/demo` hands a session to any anonymous visitor, so `last4`
+   and `updated_at` are blanked for that caller: four characters of the live key
+   plus the date it was rotated is reconnaissance handed to a stranger, and the
+   card renders fine without either.
 3. **Source transitions.** database → environment → none, so the card can say
    which one is answering. Deleting a DB row while the env key is set is not
    "removed", it is "back to the environment", and the response says so.
@@ -92,6 +96,38 @@ class TestGuards:
         assert resp.status_code == 200
         assert _mouser(resp)["source"] == "environment"
         assert ENV_KEY not in resp.text
+
+    def test_demo_never_sees_a_stored_keys_metadata(
+        self, client, db, seeded_db, demo_header, no_env_key
+    ):
+        """The demo door is open to anyone. `configured`/`source` are fine — the
+        card has to render — but the last four characters of the live key and
+        the date it was last rotated are not a prospect's business."""
+        db.add(ProviderCredential(provider="mouser", api_key=STORED_KEY))
+        db.commit()
+
+        resp = client.get(f"{BASE}/", headers=demo_header)
+
+        row = _mouser(resp)
+        assert row["configured"] is True
+        assert row["source"] == "database"
+        assert row["last4"] is None
+        assert row["updated_at"] is None
+        assert STORED_KEY not in resp.text
+        assert STORED_KEY[-4:] not in resp.text
+
+    def test_a_real_admin_still_sees_the_metadata(
+        self, client, db, seeded_db, auth_header, no_env_key
+    ):
+        """The other half of the blackout: blanking it for everyone would make
+        the card useless for the person who actually has to rotate the key."""
+        db.add(ProviderCredential(provider="mouser", api_key=STORED_KEY))
+        db.commit()
+
+        row = _mouser(client.get(f"{BASE}/", headers=auth_header()))
+
+        assert row["last4"] == STORED_KEY[-4:]
+        assert row["updated_at"]
 
     def test_demo_cannot_store_a_key(self, client, seeded_db, demo_header):
         resp = client.put(MOUSER, headers=demo_header, json={"api_key": STORED_KEY})

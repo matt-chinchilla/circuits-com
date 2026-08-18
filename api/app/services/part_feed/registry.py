@@ -77,22 +77,25 @@ def feed_configured(db: Session, provider: str = "mouser") -> bool:
     return bool(get_feed_key(db, provider))
 
 
-def resolve_provider(supplier: Supplier, api_key: str | None = None) -> PartFeedProvider | None:
-    """The feed provider for this supplier, or None when no feed covers it.
+def match_provider(supplier: Supplier) -> tuple[str, type[PartFeedProvider]] | None:
+    """The (slug, provider class) covering this supplier, or None.
 
     None is not an error: most suppliers in the catalog have no API at all, and
     the route turns it into a 409 against that row rather than a 404 on the
     endpoint.
 
-    `api_key` is passed through to the constructor so the caller's ALREADY
-    RESOLVED key is the one used — otherwise the route could gate on a DB key
-    and then call with the environment's. Omitted (the CLI path), the provider
-    falls back to the environment itself.
+    Matching and CONSTRUCTING are deliberately separate calls. The caller has to
+    resolve THIS provider's key — `get_feed_key(db, slug)` — before it can build
+    anything, and a single `resolve_provider(supplier)` gave it no way to learn
+    which slug it had matched: it would resolve the default ("mouser") and hand
+    Mouser's credential to the second distributor the day one is added, which is
+    exactly the edit this table advertises as free. Returning the class rather
+    than an instance is what makes the key mandatory at the construction site.
     """
     website = (supplier.website or "").strip().lower()
     if not website:
         return None
     for fragment, provider_cls in _PROVIDERS:
         if fragment in website:
-            return provider_cls(api_key=api_key)
+            return fragment, provider_cls
     return None
