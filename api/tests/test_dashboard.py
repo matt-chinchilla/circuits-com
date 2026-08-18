@@ -4,6 +4,7 @@ import uuid
 from datetime import datetime
 
 from app.models import ActivityEvent
+from app.routes.dashboard import _event_description
 
 
 class TestDashboardAuth:
@@ -113,6 +114,41 @@ class TestActivitySyncEvents:
         assert len(synced) == 1
         assert synced[0]["description"] == "Synced NE555P — Texas Instruments"
         assert synced[0]["image_url"] is None
+
+    def test_part_imported_uses_the_import_template(self, client, db, seeded_db, auth_header):
+        """A `part_imported` row is a part that did not exist before the run.
+        ActivityEvent has no action column, so the KIND is the only thing that
+        can keep the feed from calling a brand-new part a refresh."""
+        _event(
+            db,
+            "part_imported",
+            "NE555P — Texas Instruments",
+            detail="Sensors",
+            image_url="https://cdn.example.com/ne555.png",
+        )
+        data = client.get("/api/dashboard/activity", headers=auth_header()).json()
+        imported = [i for i in data if i["type"] == "part_imported"]
+        assert len(imported) == 1
+        assert imported[0]["description"] == "Imported NE555P — Texas Instruments into Sensors"
+        assert imported[0]["image_url"] == "https://cdn.example.com/ne555.png"
+
+    def test_part_imported_without_detail_degrades(self, client, db, seeded_db, auth_header):
+        """Same rule as a sync row: no dangling "into"."""
+        _event(db, "part_imported", "NE555P — Texas Instruments")
+        data = client.get("/api/dashboard/activity", headers=auth_header()).json()
+        imported = [i for i in data if i["type"] == "part_imported"]
+        assert len(imported) == 1
+        assert imported[0]["description"] == "Imported NE555P — Texas Instruments"
+        assert imported[0]["image_url"] is None
+
+    def test_an_unknown_kind_falls_back_to_the_title(self):
+        """Every template is reached by an EXPLICIT kind. A catch-all `else`
+        would hand the next kind somebody adds a sentence written for a
+        different event — silently, in production, with no test failing."""
+        assert (
+            _event_description(ActivityEvent(kind="something_new", title="Avnet", detail="42"))
+            == "Avnet"
+        )
 
     def test_sync_finished_renders_counts_detail(self, client, db, seeded_db, auth_header):
         _event(db, "sync_finished", "Avnet", detail="3 synced · 1 images filled · 0 not found")

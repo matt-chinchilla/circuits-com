@@ -1,24 +1,34 @@
-"""POST /api/suppliers/{id}/sync — the live NDJSON sync stream.
+"""The two live NDJSON feed streams — POST /api/suppliers/{id}/{sync,import}.
 
-The admin clicks "Sync inventory" on a supplier and watches the parts go by.
-The route is the thin part: it decides WHETHER a sync may run, then hands the
-socket to `sync_supplier_listings` (which owns the actual import) and writes an
-ActivityEvent per event on the way past.
+The admin clicks "Sync inventory" (refresh what this supplier already lists) or
+"Import new parts" (discover inventory the catalog does not have yet) and
+watches the parts go by. Both routes are the thin part: each decides WHETHER a
+run may start, then hands the socket to its generator — `sync_supplier_listings`
+or `grow_catalog`, which own the actual import — and writes an ActivityEvent per
+event on the way past.
 
-Three contracts are pinned here because nothing else would notice them break:
+Four contracts are pinned here because nothing else would notice them break:
 
-1. **Order of refusal.** Matching runs first — it is what separates 409
-   `no_feed_for_supplier` from a missing key — but the provider is never
-   CONSTRUCTED until its OWN key is in hand. The Mouser provider's constructor
-   raises without one, so building first would turn "sync is not configured"
-   into a 500 instead of a 404.
-2. **What gets persisted.** The wire stream carries every event; the
-   activity_events table only takes the ones that describe a real change.
-   `not_found` / `no_data` part events are honest on the wire and would be lies
-   in the dashboard, which renders a part_synced row as "Synced X into Y".
+1. **Order of refusal, IDENTICAL on both routes.** Matching runs first — it is
+   what separates 409 `no_feed_for_supplier` from a missing key — but the
+   provider is never CONSTRUCTED until its OWN key is in hand. The Mouser
+   provider's constructor raises without one, so building first would turn
+   "the feed is not configured" into a 500 instead of a 404. `TestGuards` is
+   parametrized over both paths precisely so the newer route cannot drift.
+2. **What gets persisted, and under which kind.** The wire stream carries every
+   event; the activity_events table only takes the ones that describe a real
+   change. `not_found` / `no_data` part events are honest on the wire and would
+   be lies in the dashboard. An `updated` / `media_filled` action is stored as
+   `part_synced`; a `created` action is stored as **`part_imported`**, because
+   ActivityEvent has no action column and "Synced X into Y" would describe a
+   brand-new part as a refresh of something that already existed.
 3. **The stream never truncates.** A raise inside the response body cuts the
    NDJSON mid-line and the client sees a half-written run with no ending. Any
-   non-fatal exception is turned into `sync_error` + `sync_finished` instead.
+   non-fatal exception is turned into `sync_error` + `sync_finished` instead,
+   carrying the run's REAL tally (including `created`, which is the one counter
+   an import exists to produce).
+4. **The numbers a run may be asked for are clamped**, never 422'd: `limit` and
+   `calls` are batch sizes, not requests a caller can get wrong.
 """
 
 import json
@@ -29,7 +39,15 @@ import bcrypt
 import pytest
 
 from app.config import settings
-from app.models import ActivityEvent, PartListing, ProviderCredential, Supplier, User
+from app.models import (
+    ActivityEvent,
+    Category,
+    Part,
+    PartListing,
+    ProviderCredential,
+    Supplier,
+    User,
+)
 from app.services.part_feed.importer import sync_event
 from app.services.part_feed.registry import feed_configured, get_feed_key, match_provider
 from tests.feed_helpers import FakeProvider as _FakeProvider
@@ -101,21 +119,37 @@ def use_fake_provider(monkeypatch):
     return _install
 
 
-def _sync(client, supplier, auth_header, **params):
+def _run(client, supplier, auth_header, path="sync", **params):
     return client.post(
-        f"/api/suppliers/{supplier.id}/sync",
+        f"/api/suppliers/{supplier.id}/{path}",
         headers=auth_header(),
         params=params,
     )
 
 
+def _sync(client, supplier, auth_header, **params):
+    return _run(client, supplier, auth_header, "sync", **params)
+
+
+def _import(client, supplier, auth_header, **params):
+    return _run(client, supplier, auth_header, "import", **params)
+
+
+@pytest.mark.parametrize("path", ("sync", "import"))
 class TestGuards:
-    def test_unauthenticated_is_refused(self, client, seeded_db, feed_key):
-        resp = client.post(f"/api/suppliers/{seeded_db['supplier1'].id}/sync")
+    """Both streams refuse in the SAME order, for the same reasons.
+
+    Parametrized rather than duplicated: the import route was added second and
+    the only thing stopping it from resolving a key before matching a provider
+    (or from 500ing where sync 404s) is that these run against both.
+    """
+
+    def test_unauthenticated_is_refused(self, client, seeded_db, feed_key, path):
+        resp = client.post(f"/api/suppliers/{seeded_db['supplier1'].id}/{path}")
         assert resp.status_code == 401
 
     def test_missing_key_404s_before_the_provider_is_built(
-        self, client, db, seeded_db, auth_header, monkeypatch
+        self, client, db, seeded_db, auth_header, monkeypatch, path
     ):
         """Feature-off posture (same as Stripe): the route simply isn't there.
 
@@ -138,29 +172,31 @@ class TestGuards:
         supplier.website = "mouser.com"
         db.commit()
 
-        resp = _sync(client, supplier, auth_header)
+        resp = _run(client, supplier, auth_header, path)
 
         assert resp.status_code == 404
         assert resp.json()["detail"] == "sync_unavailable"
 
-    def test_bad_uuid_is_404(self, client, seeded_db, auth_header, feed_key):
-        resp = client.post("/api/suppliers/not-a-uuid/sync", headers=auth_header())
+    def test_bad_uuid_is_404(self, client, seeded_db, auth_header, feed_key, path):
+        resp = client.post(f"/api/suppliers/not-a-uuid/{path}", headers=auth_header())
         assert resp.status_code == 404
 
-    def test_unknown_supplier_is_404(self, client, seeded_db, auth_header, feed_key):
-        resp = client.post(f"/api/suppliers/{uuid.uuid4()}/sync", headers=auth_header())
+    def test_unknown_supplier_is_404(self, client, seeded_db, auth_header, feed_key, path):
+        resp = client.post(f"/api/suppliers/{uuid.uuid4()}/{path}", headers=auth_header())
         assert resp.status_code == 404
 
-    def test_supplier_with_no_matching_feed_is_409(self, client, seeded_db, auth_header, feed_key):
+    def test_supplier_with_no_matching_feed_is_409(
+        self, client, seeded_db, auth_header, feed_key, path
+    ):
         """Avnet is a real distributor with no provider in the registry — that
         is a conflict with the supplier row, not a missing endpoint."""
-        resp = _sync(client, seeded_db["supplier1"], auth_header)
+        resp = _run(client, seeded_db["supplier1"], auth_header, path)
 
         assert resp.status_code == 409
         assert resp.json()["detail"] == "no_feed_for_supplier"
 
-    def test_demo_account_cannot_start_a_sync(self, client, db, seeded_db, feed_key):
-        """The demo session is handed to any anonymous visitor; a sync spends
+    def test_demo_account_cannot_start_a_run(self, client, db, seeded_db, feed_key, path):
+        """The demo session is handed to any anonymous visitor; a run spends
         real API quota and writes to the real catalog."""
         db.add(
             User(
@@ -175,7 +211,7 @@ class TestGuards:
         token = client.post("/api/auth/demo").json()["token"]
 
         resp = client.post(
-            f"/api/suppliers/{seeded_db['supplier1'].id}/sync",
+            f"/api/suppliers/{seeded_db['supplier1'].id}/{path}",
             headers={"Authorization": f"Bearer {token}"},
         )
 
@@ -596,6 +632,192 @@ class TestStream:
         _sync(client, supplier, auth_header, limit=10)
 
         assert seen == [25, 1, 1, 50, 10]
+
+
+@pytest.fixture
+def empty_subcategory(db, seeded_db):
+    """A second, EMPTY subcategory — the shelf an import sweeps FIRST.
+
+    `grow_catalog` walks subcategories thinnest-first, so a category with zero
+    parts is what puts a known name at the head of the sweep and lets a test
+    say which shelf a created part landed on (and makes the seeded parts, which
+    live in the other child, the "already elsewhere" case).
+    """
+    cat = Category(
+        id=uuid.uuid4(),
+        name="Sensors",
+        slug="sensors",
+        icon="thermometer",
+        parent_id=seeded_db["parent"].id,
+        sort_order=1,
+    )
+    db.add(cat)
+    db.commit()
+    return cat
+
+
+class TestImportStream:
+    """POST /{id}/import — the discovery run, whose whole point is NEW rows."""
+
+    def test_created_parts_stream_and_persist_as_part_imported(
+        self, client, db, seeded_db, auth_header, feed_key, use_fake_provider, empty_subcategory
+    ):
+        """The kind is the mapping's entire job: ActivityEvent has no action
+        column, so a `created` part stored as `part_synced` would reach the
+        dashboard as "Synced X into Y" — a refresh of a row that did not exist
+        until this run.
+
+        The second feed hit is an MPN that already lives in ANOTHER category:
+        no hijack, no event, no row — only the finish line's tally.
+        """
+        supplier, part1 = seeded_db["supplier1"], seeded_db["part1"]
+        use_fake_provider(
+            _FakeProvider(
+                results_by_keyword={"Sensors": [_feed_part("NEW-1"), _feed_part(part1.sku)]}
+            )
+        )
+
+        resp = _import(client, supplier, auth_header)
+
+        assert resp.status_code == 200
+        assert resp.headers["content-type"].startswith("application/x-ndjson")
+        assert resp.headers["x-accel-buffering"] == "no"
+        assert resp.headers["cache-control"] == "no-cache"
+
+        events = _events(resp)
+        assert [e["kind"] for e in events] == ["sync_started", "part_synced", "sync_finished"]
+        assert events[1]["action"] == "created"
+        assert events[1]["title"] == "NEW-1 — Feed Mfr"
+        assert events[1]["detail"] == "Sensors"
+        assert events[-1]["detail"] == "1 created · 0 updated · 1 already elsewhere · 2 calls used"
+        assert events[-1]["counts"] == {
+            "synced": 0,
+            "media_filled": 0,
+            "not_found": 0,
+            "no_data": 0,
+            "created": 1,
+        }
+
+        assert sorted(r.kind for r in db.query(ActivityEvent).all()) == [
+            "part_imported",
+            "sync_finished",
+            "sync_started",
+        ]
+        row = db.query(ActivityEvent).filter(ActivityEvent.kind == "part_imported").one()
+        assert row.title == "NEW-1 — Feed Mfr"
+        assert row.detail == "Sensors"
+        assert row.image_url == "https://img.example/p.jpg"
+        assert str(row.supplier_id) == str(supplier.id)
+
+        # The catalog really grew, and the skipped MPN really stayed put.
+        assert db.query(Part).filter(Part.sku == "NEW-1").one().category_id == empty_subcategory.id
+        assert (
+            db.query(Part).filter(Part.sku == part1.sku).one().category_id == seeded_db["child"].id
+        )
+
+    def test_a_part_already_on_the_swept_shelf_is_recorded_as_part_synced(
+        self, client, db, seeded_db, auth_header, feed_key, use_fake_provider
+    ):
+        """Only `created` changes kind. An import that refreshes a part the
+        category already holds did exactly what a sync does, and says so."""
+        part1 = seeded_db["part1"]
+        part1.image_url = "https://img.example/p.jpg"
+        part1.datasheet_url = "https://docs.example/d.pdf"
+        db.commit()
+        use_fake_provider(
+            _FakeProvider(results_by_keyword={"Clock and Timing": [_feed_part(part1.sku)]})
+        )
+
+        resp = _import(client, seeded_db["supplier1"], auth_header)
+
+        assert [e["action"] for e in _events(resp) if e["kind"] == "part_synced"] == ["updated"]
+        assert [r.kind for r in db.query(ActivityEvent).all() if r.kind.startswith("part_")] == [
+            "part_synced"
+        ]
+
+    def test_no_data_import_events_stream_but_are_never_recorded(
+        self, client, db, seeded_db, auth_header, feed_key, use_fake_provider
+    ):
+        """Found on the shelf, priced nothing, media already there — honest on
+        the wire, and nothing worth claiming in the dashboard."""
+        part1 = seeded_db["part1"]
+        part1.image_url = "https://cdn.example/original.jpg"
+        part1.datasheet_url = "https://cdn.example/original.pdf"
+        db.commit()
+        use_fake_provider(
+            _FakeProvider(
+                results_by_keyword={"Clock and Timing": [_feed_part(part1.sku, breaks=False)]}
+            )
+        )
+
+        resp = _import(client, seeded_db["supplier1"], auth_header)
+
+        assert [e["action"] for e in _events(resp) if e["kind"] == "part_synced"] == ["no_data"]
+        assert [r.kind for r in db.query(ActivityEvent).all()] == ["sync_started", "sync_finished"]
+
+    def test_an_abort_reports_the_created_parts_it_already_committed(
+        self, client, db, seeded_db, auth_header, feed_key, use_fake_provider, monkeypatch
+    ):
+        """`grow_catalog` handles FeedFatalError itself; anything else would
+        raise mid-body and cut the NDJSON off with no ending. The counters must
+        survive that — a run whose only product is `created` rows would
+        otherwise report zeros above parts still on screen."""
+        supplier = seeded_db["supplier1"]
+        use_fake_provider(_FakeProvider())
+
+        def _created_then_boom(db_, provider, supplier_, call_budget=200, per_category=50):
+            yield sync_event(
+                "part_synced",
+                str(supplier_.id),
+                "NEW-1 — Feed Mfr",
+                "Sensors",
+                None,
+                "created",
+            )
+            raise RuntimeError("Mouser API HTTP 500 on /search/keyword")
+
+        monkeypatch.setattr("app.routes.suppliers.grow_catalog", _created_then_boom)
+
+        events = _events(_import(client, supplier, auth_header))
+
+        assert [e["kind"] for e in events] == ["part_synced", "sync_error", "sync_finished"]
+        assert events[-1]["detail"] == "sync aborted"
+        assert events[-1]["counts"] == {
+            "synced": 0,
+            "media_filled": 0,
+            "not_found": 0,
+            "no_data": 0,
+            "created": 1,
+        }
+        assert [r.kind for r in db.query(ActivityEvent).all()] == [
+            "part_imported",
+            "sync_error",
+            "sync_finished",
+        ]
+
+    def test_calls_is_clamped_to_a_sane_window(
+        self, client, seeded_db, auth_header, feed_key, use_fake_provider, monkeypatch
+    ):
+        """A budget of zero would sweep nothing and a huge one is an unbounded
+        run against a rate-limited API — the number is a batch size, not a
+        request the caller can get wrong, so it clamps rather than 422s."""
+        use_fake_provider(_FakeProvider())
+        seen = []
+
+        def _record(db_, provider, supplier_, call_budget=200, per_category=50):
+            seen.append(call_budget)
+            return iter(())
+
+        monkeypatch.setattr("app.routes.suppliers.grow_catalog", _record)
+
+        supplier = seeded_db["supplier1"]
+        _import(client, supplier, auth_header)
+        _import(client, supplier, auth_header, calls=0)
+        _import(client, supplier, auth_header, calls=-5)
+        _import(client, supplier, auth_header, calls=99999)
+        _import(client, supplier, auth_header, calls=10)
+
+        assert seen == [200, 1, 1, 900, 10]
 
 
 class TestProviderRegistry:

@@ -65,7 +65,9 @@ _ACTIVITY_LIMIT = 10
 
 # Which `activity_events.kind` values reach the dashboard. The table also holds
 # `sync_started` / `sync_error` — see `get_activity` for why they stay out.
-_ACTIVITY_EVENT_KINDS = ("part_synced", "sync_finished")
+# Every kind here needs its own branch in `_event_description`; a kind added to
+# one list and not the other is exactly the drift that sentence guards against.
+_ACTIVITY_EVENT_KINDS = ("part_synced", "part_imported", "sync_finished")
 
 # `?month=` grammar. The regex is enforced by FastAPI (→ 422 before the handler
 # runs); `_parse_month` still catches the values it lets through that aren't
@@ -558,20 +560,35 @@ def list_sales_reps(
 
 
 def _event_description(event: ActivityEvent) -> str:
-    """The human line for one sync event.
+    """The human line for one feed event.
 
-    `part_synced` rows are only ever written for an action that WROTE something
-    (`routes/suppliers.py::_RECORDED_PART_ACTIONS`), so "Synced …" is honest for
-    every row that exists. `detail` carries the part's category and is NULL for
-    an uncategorized part — "Synced X into None" would be worse than dropping
-    the clause. `sync_finished.detail` already holds the counts sentence; the
-    fallback names the supplier (`title`) rather than inventing counts.
+    Part rows are only ever written for an action that WROTE something
+    (`services/activity.py::_PART_ACTION_KINDS`), so both verbs are honest for
+    every row that exists — and the KIND is what tells them apart, because the
+    wire's `action` has no column to survive in: a refresh is `part_synced`, a
+    part the import just added is `part_imported`. `detail` carries the part's
+    category and is NULL for an uncategorized part — "Synced X into None" would
+    be worse than dropping the clause. `sync_finished.detail` already holds the
+    counts sentence; it names the supplier (`title`) rather than inventing
+    counts.
+
+    Every kind is matched EXPLICITLY. A catch-all `else` reads as a safe
+    default and is not one: the next kind somebody adds to
+    `_ACTIVITY_EVENT_KINDS` would silently inherit a sentence written for a
+    different event, in production, with nothing failing. An unknown kind gets
+    its own title, which is the one thing that cannot be wrong.
     """
     if event.kind == "part_synced":
         if event.detail:
             return f"Synced {event.title} into {event.detail}"
         return f"Synced {event.title}"
-    return f"Inventory sync — {event.detail or event.title}"
+    if event.kind == "part_imported":
+        if event.detail:
+            return f"Imported {event.title} into {event.detail}"
+        return f"Imported {event.title}"
+    if event.kind == "sync_finished":
+        return f"Inventory sync — {event.detail or event.title}"
+    return event.title
 
 
 @router.get("/activity")

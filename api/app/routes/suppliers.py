@@ -1,7 +1,6 @@
 import json
-import logging
 import uuid
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
@@ -22,21 +21,22 @@ from app.models import (
     Supplier,
     User,
 )
+from app.services.activity import record_stream_event
 from app.services.auth_service import get_current_user
 
 # `sync_event` is the ONE definition of the wire shape (importer.py owns it).
 # The abort path below has to emit the same key set, and re-typing the dict
 # here is how a stream ends up with an event the client's parser drops.
 from app.services.part_feed import (
+    PartFeedProvider,
     get_feed_key,
+    grow_catalog,
     match_provider,
     sync_event,
     sync_supplier_listings,
 )
 from app.utils.color import validate_optional_hex_color
 from app.utils.image_url import validate_optional_image_url
-
-logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/suppliers", tags=["suppliers"])
 
@@ -269,77 +269,14 @@ def delete_supplier(
     return {"status": "ok"}
 
 
-# ── Live inventory sync ─────────────────────────────────────────────────────
-
-# Only an action that WROTE something becomes a row. The dashboard renders a
-# part_synced event as "Synced X into Y" and ActivityEvent has no action column
-# to tell the kinds apart afterwards, so a `not_found` / `no_data` row would
-# read as a sync that never happened. Both still travel the live stream, where
-# the operator can see exactly what the feed did and did not answer.
-_RECORDED_PART_ACTIONS = frozenset({"updated", "media_filled"})
+# ── Live feed runs: sync (refresh what we list) and import (find new) ───────
 
 
-def _record_event(db: Session, supplier_id: uuid.UUID, event: dict) -> None:
-    """Append one activity row for `event` — its own commit, so an abort
-    (client disconnect, provider blowing up) keeps everything already reported.
+def _resolve_feed_provider(db: Session, supplier_id: str) -> tuple[Supplier, PartFeedProvider]:
+    """The supplier row and a provider built for ITS feed — or the refusal.
 
-    Values are clamped to their columns here rather than trusted: `title` is
-    the feed's own `sku — manufacturer` string and nothing upstream bounds the
-    manufacturer, and Postgres answers an over-long value with
-    StringDataRightTruncation, which would kill the run mid-stream. SQLite
-    accepts it silently, so the test suite alone would never catch it.
-    """
-    if event.get("kind") == "part_synced" and event.get("action") not in _RECORDED_PART_ACTIONS:
-        return
-    detail = event.get("detail")
-    # ONLY the event's own image (a feed part photo, already bounded to 500 by
-    # the importer's `_safe_image`). Never `supplier.logo_url` — that column is
-    # Text and routinely holds a 64KB data URL from the admin's cropper.
-    image_url = event.get("image_url")
-    if image_url and len(image_url) > 500:
-        # Unreachable through the importer; a dropped thumbnail still beats a
-        # truncated (broken) URL, and beats aborting the run.
-        image_url = None
-    try:
-        db.add(
-            ActivityEvent(
-                id=uuid.uuid4(),
-                kind=str(event.get("kind"))[:40],
-                supplier_id=supplier_id,
-                title=str(event.get("title") or "")[:255],
-                detail=detail[:500] if detail else None,
-                image_url=image_url,
-            )
-        )
-        db.commit()
-    except Exception:  # noqa: BLE001
-        # An activity row is bookkeeping. If the DB hiccups mid-run, losing
-        # one row must not cut the NDJSON stream off mid-line — roll back and
-        # let the stream keep reporting. It still gets logged: silently
-        # dropping rows is how "the dashboard is missing runs" becomes
-        # unexplainable. NEVER log the event's contents — `title`/`detail`
-        # are unbounded feed strings, and the traceback is the actual signal.
-        logger.warning("activity event persist failed for supplier %s", supplier_id, exc_info=True)
-        db.rollback()
-
-
-@router.post("/{supplier_id}/sync")
-def sync_supplier(
-    supplier_id: str,
-    limit: int = 25,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """Refresh this supplier's listings from its distributor feed, streaming
-    NDJSON — one JSON object per line, flushed as each part is done.
-
-    A sync takes minutes (the provider throttles itself under the free tier's
-    ~30 calls/min), so the admin watches it happen instead of staring at a
-    spinner. The route is deliberately thin: `sync_supplier_listings` owns the
-    import and commits per part; this adds an activity row per event and
-    serializes.
-
-    ORDER OF REFUSAL, and it matters:
+    ORDER OF REFUSAL, and it matters (shared by both streams, which is why it
+    is one function and not two copies):
 
     1. Unknown/malformed id → 404.
     2. No provider covers this supplier → **409 no_feed_for_supplier**: the
@@ -355,14 +292,8 @@ def sync_supplier(
     construct — `match_provider` returns the CLASS — so the provider is only
     ever built once its own key is in hand, which is what keeps a missing key a
     404 instead of the constructor's RuntimeError as a 500.
-
-    `def`, not `async def`: the provider sleeps between calls to stay under the
-    rate limit, and Starlette runs a sync generator in a threadpool where that
-    blocking is harmless. As an `async def` it would stall the event loop for
-    the whole run.
     """
-    supplier_uuid = _to_uuid(supplier_id)
-    supplier = db.query(Supplier).filter(Supplier.id == supplier_uuid).first()
+    supplier = db.query(Supplier).filter(Supplier.id == _to_uuid(supplier_id)).first()
     if not supplier:
         raise HTTPException(404, "Supplier not found")
     match = match_provider(supplier)
@@ -372,13 +303,27 @@ def sync_supplier(
     key = get_feed_key(db, provider_slug)
     if not key:
         raise HTTPException(404, "sync_unavailable")
-    provider = provider_cls(api_key=key)
-    # A negative LIMIT is a Postgres error and a huge one is an unbounded run
-    # against a rate-limited API; both clamp rather than 422 — the number is a
-    # batch size, not a request the caller can get wrong.
-    limit = max(1, min(50, limit))
+    return supplier, provider_cls(api_key=key)
+
+
+def _stream_feed_run(
+    db: Session,
+    provider: PartFeedProvider,
+    supplier: Supplier,
+    run: Callable[[], Iterator[dict]],
+) -> StreamingResponse:
+    """Wrap a feed generator as the NDJSON response — one JSON object per line,
+    flushed as each part is done.
+
+    Shared by sync and import because everything outside the generator is the
+    same job: record each event, serialize it, survive a mid-run raise, and
+    release the provider. `run` is a THUNK rather than an iterator so the
+    generator is created inside the try — a callable that raises on the way in
+    still ends the stream properly instead of 500ing after the headers.
+    """
     # Read off the row BEFORE the body runs: the abort path rolls back, and
-    # these two values must survive that without re-querying.
+    # these three values must survive that without re-querying.
+    supplier_uuid = supplier.id
     supplier_key = str(supplier.id)
     supplier_name = supplier.name
 
@@ -390,10 +335,9 @@ def sync_supplier(
         # importer commits per part BEFORE yielding its event, so everything
         # counted here is work that survived the rollback below.
         # Five keys, always — the same set `importer._finished` reports, so a
-        # console never has to tell a missing counter from a zero one.
-        # `created` is the IMPORT stream's counter (`grow_catalog`); a sync
-        # leaves it at 0, and the tally counts it rather than dropping it
-        # because this arithmetic is shared with that stream.
+        # console never has to tell a missing counter from a zero one. A sync
+        # leaves `created` at 0 and an import is mostly `created`; the
+        # arithmetic is shared, so every counter is counted on both paths.
         counts = {
             "synced": 0,
             "media_filled": 0,
@@ -422,18 +366,18 @@ def sync_supplier(
                 counts["no_data"] += 1
 
         try:
-            for event in sync_supplier_listings(db, provider, supplier, limit=limit):
+            for event in run():
                 tally(event)
-                _record_event(db, supplier_uuid, event)
+                record_stream_event(db, supplier_uuid, event)
                 yield json.dumps(event) + "\n"
         except Exception as exc:  # noqa: BLE001
             # A raise inside a response body cuts the NDJSON off mid-line: the
             # client sees a half-written run with no ending and no reason.
-            # FeedFatalError (auth/quota) is already handled inside
-            # `sync_supplier_listings`; this is for everything else.
+            # FeedFatalError (auth/quota) is already handled inside the
+            # generators; this is for everything else.
             db.rollback()
             failed = sync_event("sync_error", supplier_key, "Sync failed", str(exc))
-            _record_event(db, supplier_uuid, failed)
+            record_stream_event(db, supplier_uuid, failed)
             yield json.dumps(failed) + "\n"
             # Real totals, not zeros: the parts already on screen were each
             # committed before they were reported, so blanking the counters
@@ -441,7 +385,7 @@ def sync_supplier(
             # progress was saved. "sync aborted" still says it did not finish.
             aborted = sync_event("sync_finished", supplier_key, supplier_name, "sync aborted")
             aborted["counts"] = dict(counts)
-            _record_event(db, supplier_uuid, aborted)
+            record_stream_event(db, supplier_uuid, aborted)
             yield json.dumps(aborted) + "\n"
         finally:
             # One provider (and its HTTP connection pool) per run — release it
@@ -457,6 +401,72 @@ def sync_supplier(
         # application/json but not x-ndjson), which would hold the whole run
         # back and deliver it in one lump — the opposite of the point.
         headers={"X-Accel-Buffering": "no", "Cache-Control": "no-cache"},
+    )
+
+
+@router.post("/{supplier_id}/sync")
+def sync_supplier(
+    supplier_id: str,
+    limit: int = 25,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Refresh this supplier's listings from its distributor feed.
+
+    A sync takes minutes (the provider throttles itself under the free tier's
+    ~30 calls/min), so the admin watches it happen instead of staring at a
+    spinner. The route is deliberately thin: `sync_supplier_listings` owns the
+    import and commits per part; `_stream_feed_run` records and serializes, and
+    `_resolve_feed_provider` holds the order of refusal.
+
+    `def`, not `async def`: the provider sleeps between calls to stay under the
+    rate limit, and Starlette runs a sync generator in a threadpool where that
+    blocking is harmless. As an `async def` it would stall the event loop for
+    the whole run.
+    """
+    supplier, provider = _resolve_feed_provider(db, supplier_id)
+    # A negative LIMIT is a Postgres error and a huge one is an unbounded run
+    # against a rate-limited API; both clamp rather than 422 — the number is a
+    # batch size, not a request the caller can get wrong.
+    limit = max(1, min(50, limit))
+    return _stream_feed_run(
+        db,
+        provider,
+        supplier,
+        lambda: sync_supplier_listings(db, provider, supplier, limit=limit),
+    )
+
+
+@router.post("/{supplier_id}/import")
+def import_supplier_parts(
+    supplier_id: str,
+    calls: int = 200,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Import NEW inventory for this supplier, thinnest subcategory first.
+
+    The mirror image of `sync_supplier`'s economics and its twin in every other
+    respect (same refusal order, same NDJSON envelope, same activity rows): a
+    sync spends one provider call per part it ALREADY lists, an import spends
+    one call per PAGE of parts the catalog does not have yet. So the bound here
+    is a CALL BUDGET, not a row count — `grow_catalog` walks as far down the
+    thin-first category order as `calls` can pay for.
+
+    900 is the ceiling because the free tier allows ~1,000 calls/day
+    (`docs/part-import-runbook.md`): one click must not be able to spend the
+    whole day's allowance in a single request, and a budget of 0 would start a
+    run that can never do anything. Both ends clamp rather than 422 — same call
+    as `sync`'s `limit`: this is a batch size, not a request a caller can get
+    wrong.
+    """
+    supplier, provider = _resolve_feed_provider(db, supplier_id)
+    calls = max(1, min(900, calls))
+    return _stream_feed_run(
+        db,
+        provider,
+        supplier,
+        lambda: grow_catalog(db, provider, supplier, call_budget=calls),
     )
 
 
