@@ -345,6 +345,7 @@ class TestStream:
             "media_filled": 0,
             "not_found": 0,
             "no_data": 0,
+            "created": 0,
         }
 
         rows = db.query(ActivityEvent).order_by(ActivityEvent.kind).all()

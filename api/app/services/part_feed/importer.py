@@ -11,6 +11,7 @@ import uuid
 from collections.abc import Iterator
 from decimal import Decimal
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models import Category, Part, PartListing, PriceBreak, Supplier
@@ -24,6 +25,32 @@ def _slugify_sku(sku: str) -> str:
     # rather than importing a route module from a service.
     slug = re.sub(r"[^a-z0-9]+", "-", sku.lower())
     return re.sub(r"-+", "-", slug).strip("-")
+
+
+def _search_keyword(cat: Category) -> str:
+    """The query a category is filled with — its display name.
+
+    One home so the import sweep and `fill_category` can never drift into
+    asking the distributor two different questions about the same shelf."""
+    return cat.name
+
+
+def _new_part(cat: Category, fp: FeedPart) -> Part:
+    """The Part row a new feed hit becomes — constructed, NOT added: the
+    caller owns the transaction.
+
+    Single home for `fill_category` and `grow_catalog`: the same MPN must land
+    identically whichever entry point found it first (slug derivation and
+    `sub_slug` especially — the category page filters on `sub_slug`)."""
+    return Part(
+        id=uuid.uuid4(),
+        sku=fp.mpn,
+        slug=_slugify_sku(fp.mpn),
+        manufacturer_name=fp.manufacturer,
+        description=fp.description,
+        category_id=cat.id,
+        sub_slug=cat.slug,
+    )
 
 
 def _safe_image(url: str | None) -> str | None:
@@ -195,6 +222,10 @@ def sync_supplier_listings(
             "media_filled": media_filled,
             "not_found": not_found,
             "no_data": no_data,
+            # A sync creates nothing — only `grow_catalog` does. The key is
+            # here anyway so every run reports the same five counters and the
+            # console never has to guess whether a number is missing or zero.
+            "created": 0,
         }
         return event
 
@@ -233,6 +264,148 @@ def sync_supplier_listings(
                 image_url,
                 action,
             )
+    except FeedFatalError as exc:
+        # str(exc) carries no API key — mouser.py never puts one in a message.
+        db.rollback()
+        yield sync_event("sync_error", supplier_id, "Feed unavailable", str(exc))
+        yield _finished()
+        return
+    yield _finished()
+
+
+def _thinnest_subcategories(db: Session) -> list[Category]:
+    """Every subcategory, emptiest first.
+
+    A call spent on a bare shelf adds a whole page to the site; the same call
+    spent on a full one adds a few rows nobody was missing. Name breaks ties so
+    two runs over the same data sweep in the same order.
+    """
+    return (
+        db.query(Category)
+        .outerjoin(Part, Part.category_id == Category.id)
+        .filter(Category.parent_id.isnot(None))
+        .group_by(Category.id)
+        .order_by(func.count(Part.id).asc(), Category.name.asc())
+        .all()
+    )
+
+
+def grow_catalog(
+    db: Session,
+    provider: PartFeedProvider,
+    supplier: Supplier,
+    call_budget: int,
+    per_category: int = 50,
+) -> Iterator[dict]:
+    """Import NEW inventory, thinnest subcategory first, for at most
+    `call_budget` provider calls.
+
+    The mirror image of `sync_supplier_listings` economics: a sync spends one
+    call per part it already has, an import spends one call per PAGE of parts
+    it does not. The budget — not the category list — is the loop bound, so a
+    nightly run with a fixed daily quota simply walks as far down the
+    thin-first order as it can pay for and stops.
+
+    Shares the sync's rails: listings attach to the PASSED supplier row (a
+    name-matched twin would split the catalog), work COMMITS PER PART before
+    its event is yielded, and a FeedFatalError ends the stream with an error
+    plus the counts so far instead of raising out of the generator.
+
+    An MPN that already lives in ANOTHER category is never hijacked into this
+    one, and yields NO event — a stream of skips a human cannot act on is
+    noise; the finish line carries the tally.
+    """
+    supplier_id = str(supplier.id)
+    supplier_name = supplier.name
+    created = synced = media_filled = no_data = skipped_elsewhere = 0
+    # An import never looks a known MPN up, so nothing can be "not found" —
+    # the key stays because every run reports the same five counters.
+    not_found = 0
+
+    def _finished() -> dict:
+        detail = (
+            f"{created} created · {synced} updated · "
+            f"{skipped_elsewhere} already elsewhere · {provider.calls_made} calls used"
+        )
+        event = sync_event("sync_finished", supplier_id, supplier_name, detail)
+        event["counts"] = {
+            "synced": synced,
+            "media_filled": media_filled,
+            "not_found": not_found,
+            "no_data": no_data,
+            "created": created,
+        }
+        return event
+
+    yield sync_event(
+        "sync_started",
+        supplier_id,
+        supplier_name,
+        f"growing catalog · budget {call_budget} calls",
+    )
+    try:
+        for cat in _thinnest_subcategories(db):
+            remaining_calls = call_budget - provider.calls_made
+            if remaining_calls <= 0:
+                break
+            # `search` paginates INSIDE the provider, so the size asked for is
+            # the only place the budget can bound pages: N records cost
+            # ceil(N / records_per_call) calls.
+            want = min(per_category, remaining_calls * provider.records_per_call)
+            # Read the category's own fields ONCE: every per-part commit
+            # expires the instance, so touching `cat` inside the page loop
+            # would re-SELECT it for each row.
+            cat_id, cat_name, keyword = cat.id, cat.name, _search_keyword(cat)
+            seen: set[str] = set()
+            for fp in provider.search(keyword, want):
+                key = fp.mpn.upper()
+                if key in seen:
+                    # One page can carry the same MPN twice (generic numbers
+                    # like 1N4148 ship from several manufacturers) — a feed
+                    # artifact, not something this run did to the catalog.
+                    continue
+                seen.add(key)
+                part = db.query(Part).filter(Part.sku == fp.mpn).first()
+                if part is not None and part.category_id != cat_id:
+                    skipped_elsewhere += 1
+                    continue
+                is_new = part is None
+                if is_new:
+                    part = _new_part(cat, fp)
+                    db.add(part)
+                    # autoflush=False — the listing needs a real part.id, and
+                    # the next existence query has to see this row.
+                    db.flush()
+                wrote_listing = _upsert_listing(db, part, supplier, fp)
+                media = _fill_part_media(part, fp)
+                image_url = part.image_url
+                db.commit()
+                if is_new:
+                    # A new catalog row IS the win, priced or not: the part
+                    # page exists now and the next run can price it.
+                    created += 1
+                    action = "created"
+                elif media:
+                    # media IS a real write, priced feed row or not
+                    synced += 1
+                    media_filled += 1
+                    action = "media_filled"
+                elif wrote_listing:
+                    synced += 1
+                    action = "updated"
+                else:
+                    # found, but nothing changed — counting it as updated
+                    # would overstate what the run did
+                    no_data += 1
+                    action = "no_data"
+                yield sync_event(
+                    "part_synced",
+                    supplier_id,
+                    f"{fp.mpn} — {fp.manufacturer}",
+                    cat_name,
+                    image_url,
+                    action,
+                )
     except FeedFatalError as exc:
         # str(exc) carries no API key — mouser.py never puts one in a message.
         db.rollback()
@@ -302,17 +475,12 @@ def fill_all_empty(
     error row and moves on — it never kills the run.
     """
     children = (
-        db.query(Category)
-        .filter(Category.parent_id.isnot(None))
-        .order_by(Category.name)
-        .all()
+        db.query(Category).filter(Category.parent_id.isnot(None)).order_by(Category.name).all()
     )
     results: list[dict] = []
     processed = 0
     for cat in children:
-        has_parts = (
-            db.query(Part.id).filter(Part.category_id == cat.id).first() is not None
-        )
+        has_parts = db.query(Part.id).filter(Part.category_id == cat.id).first() is not None
         if has_parts:
             continue
         try:
@@ -352,7 +520,7 @@ def fill_category(
     supplier = _get_or_create_supplier(db, provider)
     created = updated = skipped = 0
     seen_mpns: set[str] = set()
-    for fp in provider.search(keyword or cat.name, count):
+    for fp in provider.search(keyword or _search_keyword(cat), count):
         # Search pages can repeat an MPN (generic numbers like 1N4148 exist
         # from several manufacturers as separate distributor rows) — first
         # (highest-ranked) row wins, repeats are skipped.
@@ -363,15 +531,7 @@ def fill_category(
         seen_mpns.add(key)
         part = db.query(Part).filter(Part.sku == fp.mpn).first()
         if part is None:
-            part = Part(
-                id=uuid.uuid4(),
-                sku=fp.mpn,
-                slug=_slugify_sku(fp.mpn),
-                manufacturer_name=fp.manufacturer,
-                description=fp.description,
-                category_id=cat.id,
-                sub_slug=cat.slug,
-            )
+            part = _new_part(cat, fp)
             db.add(part)
             db.flush()
             created += 1

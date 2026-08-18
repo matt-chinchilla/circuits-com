@@ -102,6 +102,7 @@ def part_from_mouser(raw: dict) -> FeedPart | None:
 class MouserProvider:
     supplier_name = "Mouser Electronics"
     supplier_website = "mouser.com"
+    records_per_call = 50  # Mouser's keyword-search page size
 
     # The rate ceiling belongs to the API KEY, not to a provider instance, and
     # the sync route builds ONE provider per run — two admins syncing at once
@@ -121,6 +122,10 @@ class MouserProvider:
                 ".env; docker-compose maps it into the container (see module docstring)"
             )
         self._client = client or httpx.Client(timeout=30)
+        # Per-INSTANCE (unlike the throttle stamp): a budget belongs to the
+        # run that set it, and the sync/import routes build one provider per
+        # run. Counting is what the import sweep spends against `call_budget`.
+        self.calls_made = 0
 
     def close(self) -> None:
         """Release the HTTP connection pool. The sync route builds one
@@ -148,6 +153,10 @@ class MouserProvider:
 
     def _post(self, path: str, body: dict) -> dict:
         self._throttle()
+        # Counted BEFORE the request, not after a 2xx: the quota is spent when
+        # the call leaves, and a run that only counted successes would loop on
+        # a failing key forever.
+        self.calls_made += 1
         resp = self._client.post(f"{_BASE}{path}", params={"apiKey": self.api_key}, json=body)
         # NEVER raise_for_status / chain httpx errors: their messages embed
         # the full request URL, and the key rides the query string — a bad
@@ -164,12 +173,15 @@ class MouserProvider:
         return data
 
     def search(self, keyword: str, limit: int = 50) -> list[FeedPart]:
+        """Keyword search. COSTS ``ceil(limit / records_per_call)`` calls —
+        one per page — so a caller with a call budget bounds it by the SIZE it
+        asks for (pagination happens in here, out of the caller's reach)."""
         # Mouser pages at 50 records; paginate so --count above 50 delivers
         # what it promised instead of silently capping.
         out: list[FeedPart] = []
         start = 0
         while len(out) < limit:
-            page = min(50, limit - len(out))
+            page = min(self.records_per_call, limit - len(out))
             data = self._post(
                 "/search/keyword",
                 {

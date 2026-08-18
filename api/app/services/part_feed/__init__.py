@@ -6,7 +6,11 @@ touches import logic. Provider choice is per-run, keyed by API-key presence.
 """
 
 from app.services.part_feed.base import FeedPart, FeedPriceBreak, PartFeedProvider
-from app.services.part_feed.importer import sync_event, sync_supplier_listings
+from app.services.part_feed.importer import (
+    grow_catalog,
+    sync_event,
+    sync_supplier_listings,
+)
 from app.services.part_feed.mouser import MouserProvider
 from app.services.part_feed.registry import (
     FEED_PROVIDERS,
@@ -26,6 +30,7 @@ __all__ = [
     "feed_configured",
     "get_feed_key",
     "match_provider",
+    "grow_catalog",
     "sync_event",
     "sync_supplier_listings",
 ]

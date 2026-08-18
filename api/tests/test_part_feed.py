@@ -6,13 +6,14 @@ from decimal import Decimal
 import pytest
 from sqlalchemy import event as sa_event
 
-from app.models import Part, PartListing, PriceBreak, Supplier
+from app.models import Category, Part, PartListing, PriceBreak, Supplier
 from app.services.part_feed.base import FeedPriceBreak
 from app.services.part_feed.importer import (
     _fill_part_media,
     backfill_images,
     fill_all_empty,
     fill_category,
+    grow_catalog,
     sync_supplier_listings,
 )
 from app.services.part_feed.mouser import (
@@ -167,9 +168,7 @@ class TestFillCategory:
         assert db.query(Part).filter(Part.sku == "FEED-001").count() == 1
         assert db.query(PartListing).filter(PartListing.part_id == part.id).count() == 1
         assert db.query(PriceBreak).filter(PriceBreak.listing_id == listing.id).count() == 2
-        assert (
-            db.query(Supplier).filter(Supplier.name == "Mouser Electronics").count() == 1
-        )
+        assert db.query(Supplier).filter(Supplier.name == "Mouser Electronics").count() == 1
 
     def test_top_level_slug_is_rejected(self, db, seeded_db):
         provider = _FakeProvider()
@@ -279,10 +278,16 @@ class TestFillAllEmpty:
 
         parent = seeded_db["parent"]
         for n in ("Fatal A", "Fatal B", "Fatal C"):
-            db.add(Category(
-                id=uuid.uuid4(), name=n, slug=n.lower().replace(" ", "-"),
-                icon="⚙", parent_id=parent.id, sort_order=20,
-            ))
+            db.add(
+                Category(
+                    id=uuid.uuid4(),
+                    name=n,
+                    slug=n.lower().replace(" ", "-"),
+                    icon="⚙",
+                    parent_id=parent.id,
+                    sort_order=20,
+                )
+            )
         db.commit()
 
         class _FatalProvider(_FakeProvider):
@@ -389,6 +394,7 @@ class TestSyncSupplierListings:
             "media_filled": 2,
             "not_found": 0,
             "no_data": 0,
+            "created": 0,
         }
         assert finished["title"] == "Avnet"
         with pytest.raises(StopIteration):
@@ -444,6 +450,7 @@ class TestSyncSupplierListings:
             "media_filled": 0,
             "not_found": 0,
             "no_data": 0,
+            "created": 0,
         }
 
     def test_unresolvable_part_reports_not_found(self, db, seeded_db):
@@ -463,6 +470,7 @@ class TestSyncSupplierListings:
             "media_filled": 0,
             "not_found": 1,
             "no_data": 0,
+            "created": 0,
         }
 
     def test_priceless_feed_part_reports_no_data(self, db, seeded_db):
@@ -480,9 +488,7 @@ class TestSyncSupplierListings:
             listing.lead_time_days,
             listing.unit_price,
         )
-        provider = _FakeProvider(
-            by_mpn={part1.sku: _feed_part(mpn=part1.sku, breaks=False)}
-        )
+        provider = _FakeProvider(by_mpn={part1.sku: _feed_part(mpn=part1.sku, breaks=False)})
 
         events = list(sync_supplier_listings(db, provider, supplier, limit=10))
 
@@ -493,6 +499,7 @@ class TestSyncSupplierListings:
             "media_filled": 0,
             "not_found": 0,
             "no_data": 1,
+            "created": 0,
         }
         assert events[-1]["detail"].endswith("· 1 no data")
         db.refresh(listing)
@@ -506,27 +513,22 @@ class TestSyncSupplierListings:
     def test_priceless_hit_that_fills_media_still_counts_as_synced(self, db, seeded_db):
         """Media IS a real write — only a hit that changed nothing is no_data."""
         supplier, part1 = seeded_db["supplier1"], seeded_db["part1"]
-        provider = _FakeProvider(
-            by_mpn={part1.sku: _feed_part(mpn=part1.sku, breaks=False)}
-        )
+        provider = _FakeProvider(by_mpn={part1.sku: _feed_part(mpn=part1.sku, breaks=False)})
 
         events = list(sync_supplier_listings(db, provider, supplier, limit=10))
 
-        assert [e["action"] for e in events if e["kind"] == "part_synced"] == [
-            "media_filled"
-        ]
+        assert [e["action"] for e in events if e["kind"] == "part_synced"] == ["media_filled"]
         assert events[-1]["counts"] == {
             "synced": 1,
             "media_filled": 1,
             "not_found": 0,
             "no_data": 0,
+            "created": 0,
         }
         assert "no data" not in events[-1]["detail"]
 
     def test_supplier_with_no_listings_streams_an_empty_run(self, db, seeded_db):
-        empty = Supplier(
-            id=uuid.uuid4(), name="No Listings Co", website="nolistings.example"
-        )
+        empty = Supplier(id=uuid.uuid4(), name="No Listings Co", website="nolistings.example")
         db.add(empty)
         db.commit()
 
@@ -539,6 +541,7 @@ class TestSyncSupplierListings:
             "media_filled": 0,
             "not_found": 0,
             "no_data": 0,
+            "created": 0,
         }
         assert events[-1]["detail"] == "0 synced · 0 images filled · 0 not found"
 
@@ -610,6 +613,7 @@ class TestSyncSupplierListings:
             "media_filled": 1,
             "not_found": 0,
             "no_data": 0,
+            "created": 0,
         }
         # the first part's work survived the abort's rollback
         listing = (
@@ -619,3 +623,330 @@ class TestSyncSupplierListings:
         )
         assert listing.stock_quantity == 500
         assert db.query(PriceBreak).filter(PriceBreak.listing_id == listing.id).count() == 2
+
+
+class TestProviderCallAccounting:
+    """`calls_made` is the currency the import budget spends — it has to
+    count what the API actually charged for, pages included."""
+
+    def _provider(self, handler):
+        import httpx
+
+        from app.services.part_feed.mouser import MouserProvider
+
+        provider = MouserProvider(
+            api_key="SUPER-SECRET-KEY-1234",
+            client=httpx.Client(transport=httpx.MockTransport(handler)),
+        )
+        provider._throttle = lambda: None
+        return provider
+
+    def test_search_costs_one_call_per_page(self):
+        import json
+
+        import httpx
+
+        def handler(request):
+            body = json.loads(request.content)["SearchByKeywordRequest"]
+            parts = [
+                {
+                    "ManufacturerPartNumber": f"MPN-{body['startingRecord'] + i}",
+                    "Manufacturer": "Feed Mfr",
+                    "PriceBreaks": [],
+                }
+                for i in range(body["records"])
+            ]
+            return httpx.Response(200, json={"SearchResults": {"Parts": parts}})
+
+        provider = self._provider(handler)
+        assert provider.calls_made == 0
+
+        out = provider.search("resistor", 120)
+
+        assert len(out) == 120
+        assert provider.calls_made == 3  # ceil(120 / 50 records per call)
+
+    def test_a_rejected_call_still_counts_against_the_budget(self):
+        """The quota is spent when the request leaves, not when it succeeds —
+        counting only successes would let a failing key loop forever."""
+        import httpx
+
+        from app.services.part_feed.mouser import FeedFatalError
+
+        provider = self._provider(lambda req: httpx.Response(429, json={}))
+        with pytest.raises(FeedFatalError):
+            provider.search("resistor", 5)
+        assert provider.calls_made == 1
+
+    def test_lookup_counts_one_call(self):
+        import httpx
+
+        provider = self._provider(
+            lambda req: httpx.Response(200, json={"SearchResults": {"Parts": []}})
+        )
+        assert provider.lookup_mpn("LM7805CT") is None
+        assert provider.calls_made == 1
+
+
+def _subcategory(db, name, slug, parent, parts=0):
+    """A child category holding `parts` throwaway parts — the sweep order is
+    by part count, so the fixture has to be able to make one fatter."""
+    cat = Category(
+        id=uuid.uuid4(),
+        name=name,
+        slug=slug,
+        icon="cpu",
+        parent_id=parent.id,
+        sort_order=0,
+    )
+    db.add(cat)
+    db.flush()
+    for i in range(parts):
+        db.add(
+            Part(
+                id=uuid.uuid4(),
+                sku=f"{slug.upper()}-FILLER-{i}",
+                description="filler",
+                manufacturer_name="Filler Co",
+                category_id=cat.id,
+            )
+        )
+    db.commit()
+    return cat
+
+
+class TestGrowCatalog:
+    def test_new_mpns_become_parts_listings_and_breaks(self, db, seeded_db):
+        supplier, parent = seeded_db["supplier1"], seeded_db["parent"]
+        thin = _subcategory(db, "Voltage References", "voltage-references", parent)
+        provider = _FakeProvider(
+            results_by_keyword={"Voltage References": [_feed_part("NEW-1"), _feed_part("NEW-2")]}
+        )
+
+        events = list(grow_catalog(db, provider, supplier, call_budget=1))
+
+        assert [e["kind"] for e in events] == [
+            "sync_started",
+            "part_synced",
+            "part_synced",
+            "sync_finished",
+        ]
+        assert events[0] == {
+            "kind": "sync_started",
+            "supplier_id": str(supplier.id),
+            "title": "Avnet",
+            "detail": "growing catalog · budget 1 calls",
+            "image_url": None,
+            "action": None,
+        }
+        assert [e["action"] for e in events[1:3]] == ["created", "created"]
+        assert events[1]["title"] == "NEW-1 — Feed Mfr"
+        assert events[1]["detail"] == "Voltage References"
+        assert events[1]["image_url"] == "https://img.example/p.jpg"
+
+        part = db.query(Part).filter(Part.sku == "NEW-1").one()
+        assert (part.slug, part.sub_slug, part.category_id) == (
+            "new-1",
+            "voltage-references",
+            thin.id,
+        )
+        assert part.image_url == "https://img.example/p.jpg"
+        assert part.datasheet_url == "https://docs.example/d.pdf"
+        listing = (
+            db.query(PartListing)
+            .filter(PartListing.part_id == part.id, PartListing.supplier_id == supplier.id)
+            .one()
+        )
+        assert listing.stock_quantity == 500
+        assert db.query(PriceBreak).filter(PriceBreak.listing_id == listing.id).count() == 2
+        # identity rule: the clicked row, never a twin named after the provider
+        assert db.query(Supplier).count() == 2
+
+        assert events[-1]["counts"] == {
+            "synced": 0,
+            "media_filled": 0,
+            "not_found": 0,
+            "no_data": 0,
+            "created": 2,
+        }
+        assert events[-1]["detail"] == (
+            "2 created · 0 updated · 0 already elsewhere · 1 calls used"
+        )
+
+    def test_each_part_commits_before_its_event(self, db, seeded_db):
+        supplier, parent = seeded_db["supplier1"], seeded_db["parent"]
+        _subcategory(db, "Voltage References", "voltage-references", parent)
+        provider = _FakeProvider(
+            results_by_keyword={"Voltage References": [_feed_part("NEW-1"), _feed_part("NEW-2")]}
+        )
+        commits: list[int] = []
+        sa_event.listen(db, "after_commit", lambda s: commits.append(1))
+
+        gen = grow_catalog(db, provider, supplier, call_budget=1)
+        next(gen)
+        assert commits == []  # nothing written before the first part
+        next(gen)
+        assert len(commits) == 1
+        next(gen)
+        assert len(commits) == 2
+
+    def test_existing_part_in_this_category_is_refreshed_not_duplicated(self, db, seeded_db):
+        supplier, part1 = seeded_db["supplier1"], seeded_db["part1"]
+        before = db.query(Part).count()
+        provider = _FakeProvider(results_by_keyword={"Clock and Timing": [_feed_part(part1.sku)]})
+
+        events = list(grow_catalog(db, provider, supplier, call_budget=1))
+
+        assert [e["action"] for e in events if e["kind"] == "part_synced"] == ["media_filled"]
+        assert db.query(Part).count() == before
+        assert events[-1]["counts"] == {
+            "synced": 1,
+            "media_filled": 1,
+            "not_found": 0,
+            "no_data": 0,
+            "created": 0,
+        }
+        assert events[-1]["detail"].startswith("0 created · 1 updated")
+
+    def test_a_hit_that_writes_nothing_reports_no_data(self, db, seeded_db):
+        """Same honesty rail as the sync: found, but nothing changed — calling
+        that `updated` would overstate what the run did."""
+        supplier, part1 = seeded_db["supplier1"], seeded_db["part1"]
+        part1.image_url = "https://cdn.example/original.jpg"
+        part1.datasheet_url = "https://cdn.example/original.pdf"
+        db.commit()
+        provider = _FakeProvider(
+            results_by_keyword={"Clock and Timing": [_feed_part(part1.sku, breaks=False)]}
+        )
+
+        events = list(grow_catalog(db, provider, supplier, call_budget=1))
+
+        assert [e["action"] for e in events if e["kind"] == "part_synced"] == ["no_data"]
+        assert events[-1]["counts"]["no_data"] == 1
+        assert events[-1]["counts"]["synced"] == 0
+
+    def test_an_mpn_living_elsewhere_is_skipped_with_no_event(self, db, seeded_db):
+        """No-hijack: the part stays in its category, and a skip a human
+        cannot act on never reaches the console — only the finish line."""
+        supplier, parent, part1 = (
+            seeded_db["supplier1"],
+            seeded_db["parent"],
+            seeded_db["part1"],
+        )
+        _subcategory(db, "Voltage References", "voltage-references", parent)
+        provider = _FakeProvider(results_by_keyword={"Voltage References": [_feed_part(part1.sku)]})
+        before = db.query(Part).count()
+
+        events = list(grow_catalog(db, provider, supplier, call_budget=1))
+
+        assert [e["kind"] for e in events] == ["sync_started", "sync_finished"]
+        assert db.query(Part).count() == before
+        db.refresh(part1)
+        assert part1.category_id == seeded_db["child"].id
+        assert events[-1]["counts"] == {
+            "synced": 0,
+            "media_filled": 0,
+            "not_found": 0,
+            "no_data": 0,
+            "created": 0,
+        }
+        assert events[-1]["detail"] == (
+            "0 created · 0 updated · 1 already elsewhere · 1 calls used"
+        )
+
+    def test_thinnest_subcategories_are_swept_first(self, db, seeded_db):
+        supplier, parent = seeded_db["supplier1"], seeded_db["parent"]
+        _subcategory(db, "Zener Diodes", "zener-diodes", parent)
+        _subcategory(db, "Amplifiers", "amplifiers", parent)
+        _subcategory(db, "Sensor ICs", "sensor-ics", parent, parts=1)
+
+        provider = _FakeProvider()
+        list(grow_catalog(db, provider, supplier, call_budget=4))
+
+        # 0 parts (name-tiebroken), then 1, then the seeded child's 2
+        assert [kw for kw, _ in provider.search_calls] == [
+            "Amplifiers",
+            "Zener Diodes",
+            "Sensor ICs",
+            "Clock and Timing",
+        ]
+
+    def test_the_budget_stops_the_sweep_mid_order(self, db, seeded_db):
+        supplier, parent = seeded_db["supplier1"], seeded_db["parent"]
+        _subcategory(db, "Zener Diodes", "zener-diodes", parent)
+        _subcategory(db, "Amplifiers", "amplifiers", parent)
+
+        provider = _FakeProvider()
+        events = list(grow_catalog(db, provider, supplier, call_budget=2))
+
+        assert [kw for kw, _ in provider.search_calls] == ["Amplifiers", "Zener Diodes"]
+        assert provider.calls_made == 2
+        assert events[-1]["detail"].endswith("· 2 calls used")
+
+    def test_zero_budget_spends_nothing(self, db, seeded_db):
+        provider = _FakeProvider()
+
+        events = list(grow_catalog(db, provider, seeded_db["supplier1"], call_budget=0))
+
+        assert [e["kind"] for e in events] == ["sync_started", "sync_finished"]
+        assert provider.search_calls == []
+        assert events[-1]["detail"].endswith("· 0 calls used")
+
+    def test_the_page_it_asks_for_never_outruns_the_budget(self, db, seeded_db):
+        """A search of N records costs ceil(N/page) calls and paginates INSIDE
+        the provider — so the size asked for is the only place the budget can
+        bound pages."""
+        provider = _FakeProvider()
+
+        list(grow_catalog(db, provider, seeded_db["supplier1"], call_budget=1, per_category=200))
+
+        assert provider.search_calls == [("Clock and Timing", 50)]
+
+    def test_a_repeated_mpn_in_one_page_creates_one_part(self, db, seeded_db):
+        supplier, parent = seeded_db["supplier1"], seeded_db["parent"]
+        _subcategory(db, "Voltage References", "voltage-references", parent)
+        provider = _FakeProvider(
+            results_by_keyword={"Voltage References": [_feed_part("NEW-1"), _feed_part("new-1")]}
+        )
+
+        events = list(grow_catalog(db, provider, supplier, call_budget=1))
+
+        assert [e["action"] for e in events if e["kind"] == "part_synced"] == ["created"]
+        assert db.query(Part).filter(Part.sku.in_(["NEW-1", "new-1"])).count() == 1
+        assert events[-1]["counts"]["created"] == 1
+
+    def test_fatal_error_ends_the_stream_and_keeps_committed_parts(self, db, seeded_db):
+        from app.services.part_feed.mouser import FeedFatalError
+
+        supplier, parent = seeded_db["supplier1"], seeded_db["parent"]
+        _subcategory(db, "Amplifiers", "amplifiers", parent)
+        _subcategory(db, "Zener Diodes", "zener-diodes", parent)
+
+        class _FatalOnSecondSearch(_FakeProvider):
+            def search(self, keyword, limit=50):
+                if self.calls_made >= 1:
+                    self.calls_made += 1
+                    raise FeedFatalError("Mouser API HTTP 429 on /search/keyword")
+                return super().search(keyword, limit)
+
+        provider = _FatalOnSecondSearch(results_by_keyword={"Amplifiers": [_feed_part("NEW-1")]})
+
+        events = list(grow_catalog(db, provider, supplier, call_budget=10))
+
+        assert [e["kind"] for e in events] == [
+            "sync_started",
+            "part_synced",
+            "sync_error",
+            "sync_finished",
+        ]
+        assert events[2]["title"] == "Feed unavailable"
+        assert "429" in events[2]["detail"]
+        assert events[-1]["counts"]["created"] == 1
+        # the first category's work survived the abort's rollback
+        part = db.query(Part).filter(Part.sku == "NEW-1").one()
+        assert (
+            db.query(PartListing)
+            .filter(PartListing.part_id == part.id, PartListing.supplier_id == supplier.id)
+            .count()
+            == 1
+        )

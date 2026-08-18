@@ -10,19 +10,32 @@ from app.services.part_feed.base import FeedPart, FeedPriceBreak
 
 
 class FakeProvider:
-    """A provider that answers from a dict — no network, no key, no sleep."""
+    """A provider that answers from a dict — no network, no key, no sleep.
+
+    Mirrors the real provider's call accounting: `calls_made` counts every
+    search/lookup, which is what an import run's budget actually spends.
+    """
 
     supplier_name = "Mouser Electronics"
     supplier_website = "mouser.com"
+    records_per_call = 50
 
-    def __init__(self, by_mpn=None, search_results=None):
+    def __init__(self, by_mpn=None, search_results=None, results_by_keyword=None):
         self.by_mpn = by_mpn or {}
         self.search_results = search_results or []
+        # keyword -> results, for sweeps that must answer per category
+        self.results_by_keyword = results_by_keyword or {}
+        self.calls_made = 0
+        self.search_calls: list[tuple[str, int]] = []
 
     def search(self, keyword, limit=50):
-        return self.search_results[:limit]
+        self.calls_made += 1
+        self.search_calls.append((keyword, limit))
+        results = self.results_by_keyword.get(keyword, self.search_results)
+        return results[:limit]
 
     def lookup_mpn(self, mpn):
+        self.calls_made += 1
         return self.by_mpn.get(mpn)
 
 

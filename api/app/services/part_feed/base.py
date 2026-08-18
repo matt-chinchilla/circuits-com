@@ -30,6 +30,14 @@ class PartFeedProvider(Protocol):
     supplier_name: str
     supplier_website: str
 
+    # Call accounting — the import sweep spends a fixed daily budget of API
+    # calls, so it has to read what a run has already cost. `calls_made`
+    # counts every request the provider sent (a rejected call spent quota
+    # too); `records_per_call` is the provider's page size, which is what
+    # turns a requested record count back into a number of calls.
+    calls_made: int
+    records_per_call: int
+
     def search(self, keyword: str, limit: int = 50) -> list[FeedPart]:
         """Keyword search — used to fill a category with parts."""
         ...
