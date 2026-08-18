@@ -17,7 +17,7 @@
 //      commits per part, so a quota wall mid-run keeps everything it already
 //      reported.
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Icon from '@shared/components/Icon';
 import PartThumb from '@admin/components/PartThumb';
 import { tallyCounts, terminalState, type SyncAction, type SyncEvent } from '@admin/services/syncStream';
@@ -68,17 +68,51 @@ export default function SyncConsole({
   // Starts true so the first rows scroll into view; flips off the moment the
   // operator scrolls up to re-read something.
   const stickRef = useRef(true);
+  // How many rows arrived while following was paused — drives the resume pill.
+  const seenRef = useRef(0);
+  const [behind, setBehind] = useState(0);
+
+  // A NEW run must always follow: without this reset, scrolling up once in
+  // run 1 left every later run un-followed (review-caught — the ref outlives
+  // the events array the page resets between runs).
+  useEffect(() => {
+    if (!running) return;
+    stickRef.current = true;
+    seenRef.current = 0;
+    setBehind(0);
+  }, [running]);
+
+  const followToBottom = () => {
+    const el = feedRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+    seenRef.current = events.length;
+    setBehind(0);
+  };
 
   const handleScroll = () => {
     const el = feedRef.current;
     if (!el) return;
-    stickRef.current = el.scrollHeight - el.scrollTop - el.clientHeight <= STICK_THRESHOLD_PX;
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight <= STICK_THRESHOLD_PX;
+    stickRef.current = atBottom;
+    if (atBottom) {
+      seenRef.current = events.length;
+      setBehind(0); // same-value updates bail out — no render loop
+    }
   };
 
   useEffect(() => {
     const el = feedRef.current;
-    if (!el || !stickRef.current) return;
-    el.scrollTop = el.scrollHeight;
+    if (!el) return;
+    if (stickRef.current) {
+      el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+      seenRef.current = events.length;
+      if (behind !== 0) setBehind(0);
+    } else {
+      setBehind(events.length - seenRef.current);
+    }
+    // `behind` is output, not input, of this effect — deliberately absent
+    // from the deps, or the scroll would re-run on every pill update.
   }, [events.length]);
 
   const counts = tallyCounts(events);
@@ -170,6 +204,13 @@ export default function SyncConsole({
               </div>
             );
           })}
+          {behind > 0 && (
+            /* Sticky inside the scroll area, so it floats over the last rows
+               while the operator reads history above. */
+            <button type="button" className={styles.followPill} onClick={followToBottom}>
+              {'↓'} {behind} new {behind === 1 ? 'row' : 'rows'} &mdash; resume following
+            </button>
+          )}
         </div>
       )}
 

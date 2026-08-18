@@ -5,7 +5,7 @@
 // supplier shows up across many parts/sponsorships.
 //
 // The first card is the primary action (filled green) — it replaces the
-// header "Add Part" button. The others use filled blue/gold/purple/teal
+// header "Add Part" button. The others use filled blue/gold/purple/red
 // variants so the strip reads as a palette of distinct workflows.
 //
 // The last two cards start LIVE FEED RUNS rather than navigating: sync
@@ -191,7 +191,7 @@ export default function QuickActionsPanel({
 
       <button
         type="button"
-        className={`${styles.qaCard} ${styles.qaCardTeal}`}
+        className={`${styles.qaCard} ${styles.qaCardRed}`}
         onClick={onImport}
         disabled={feedBusy || !onImport}
       >

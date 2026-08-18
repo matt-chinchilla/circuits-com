@@ -51,6 +51,7 @@
   // why it is themed rather than a static hex like the chip tints beside it.
   // Not a chart series: it is never validated against the --a-grad-* slots.
   --a-teal: #0f766e;
+  --a-red: #dc2626;
   // Chart kit (dataviz-validated 2026-07-30) — see components/charts/README.md.
   // Marks render on --a-card (#fff). Validator, light/#ffffff:
   //   adjacent order green→blue→gold→purple: worst CVD ΔE 25.6, normal 27.6,
@@ -151,6 +152,7 @@
     // where white stops reading (white on #0d9488 = 3.79:1, the same footing
     // as the dark primary CTA beside it).
     --a-teal: #0d9488;
+    --a-red: #dc2626;
     --a-grid: #232d3d;
     --a-axis: #38445a;
     --a-track: #202a39;
