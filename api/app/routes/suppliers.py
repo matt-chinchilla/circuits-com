@@ -389,7 +389,18 @@ def sync_supplier(
         # it, and the abort path still has to report what the run did. The
         # importer commits per part BEFORE yielding its event, so everything
         # counted here is work that survived the rollback below.
-        counts = {"synced": 0, "media_filled": 0, "not_found": 0, "no_data": 0}
+        # Five keys, always — the same set `importer._finished` reports, so a
+        # console never has to tell a missing counter from a zero one.
+        # `created` is the IMPORT stream's counter (`grow_catalog`); a sync
+        # leaves it at 0, and the tally counts it rather than dropping it
+        # because this arithmetic is shared with that stream.
+        counts = {
+            "synced": 0,
+            "media_filled": 0,
+            "not_found": 0,
+            "no_data": 0,
+            "created": 0,
+        }
 
         def tally(event: dict) -> None:
             if event.get("kind") != "part_synced":
@@ -401,6 +412,10 @@ def sync_supplier(
                 counts["media_filled"] += 1
             elif action == "updated":
                 counts["synced"] += 1
+            elif action == "created":
+                # a NEW part, not a refreshed one — counted apart from
+                # `synced` exactly as the generator counts it
+                counts["created"] += 1
             elif action == "not_found":
                 counts["not_found"] += 1
             elif action == "no_data":

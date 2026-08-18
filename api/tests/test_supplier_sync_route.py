@@ -30,6 +30,7 @@ import pytest
 
 from app.config import settings
 from app.models import ActivityEvent, PartListing, ProviderCredential, Supplier, User
+from app.services.part_feed.importer import sync_event
 from app.services.part_feed.registry import feed_configured, get_feed_key, match_provider
 from tests.feed_helpers import FakeProvider as _FakeProvider
 from tests.feed_helpers import feed_part as _feed_part
@@ -500,6 +501,7 @@ class TestStream:
             "media_filled": 0,
             "not_found": 0,
             "no_data": 0,
+            "created": 0,
         }
         kinds = [r.kind for r in db.query(ActivityEvent).all()]
         assert kinds == ["sync_started", "part_synced", "sync_error", "sync_finished"]
@@ -520,6 +522,40 @@ class TestStream:
             "media_filled": 0,
             "not_found": 0,
             "no_data": 0,
+            "created": 0,
+        }
+
+    def test_the_abort_tally_counts_created_parts_too(
+        self, client, db, seeded_db, auth_header, feed_key, use_fake_provider, monkeypatch
+    ):
+        """The tally is shared with the IMPORT stream (`grow_catalog`), whose
+        events carry action `created`. Dropping it here would blank the one
+        counter an import run exists to produce — and the abort path is the
+        only place the route does its own arithmetic."""
+        supplier = seeded_db["supplier1"]
+        use_fake_provider(_FakeProvider())
+
+        def _created_then_boom(db_, provider, supplier_, limit=25):
+            yield sync_event(
+                "part_synced",
+                str(supplier_.id),
+                "NEW-1 — Feed Mfr",
+                "Clock and Timing",
+                None,
+                "created",
+            )
+            raise RuntimeError("Mouser API HTTP 500 on /search/keyword")
+
+        monkeypatch.setattr("app.routes.suppliers.sync_supplier_listings", _created_then_boom)
+
+        events = _events(_sync(client, supplier, auth_header))
+
+        assert events[-1]["counts"] == {
+            "synced": 0,
+            "media_filled": 0,
+            "not_found": 0,
+            "no_data": 0,
+            "created": 1,
         }
 
     def test_the_suppliers_logo_never_becomes_an_event_image(

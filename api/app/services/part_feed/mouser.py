@@ -10,6 +10,7 @@ Rate limits (free tier): ~30 calls/min, ~1,000/day — the provider sleeps
 between calls, so batch sizes (--limit) are the real throttle knob.
 """
 
+import math
 import re
 import threading
 import time
@@ -173,14 +174,24 @@ class MouserProvider:
         return data
 
     def search(self, keyword: str, limit: int = 50) -> list[FeedPart]:
-        """Keyword search. COSTS ``ceil(limit / records_per_call)`` calls —
-        one per page — so a caller with a call budget bounds it by the SIZE it
-        asks for (pagination happens in here, out of the caller's reach)."""
+        """Keyword search. COSTS AT MOST ``ceil(limit / records_per_call)``
+        calls — one per page — so a caller with a call budget bounds the spend
+        by the SIZE it asks for (pagination happens in here, out of the
+        caller's reach).
+
+        That ceiling is a HARD PAGE CAP, not a by-product of the loop
+        condition: the loop measures PARSED parts, so a page whose rows partly
+        fail to decode (no MPN/manufacturer) would otherwise leave
+        `len(out) < limit` and buy another page — a caller who budgeted one
+        call spending two. Undecodable rows shorten the RESULT; they never
+        raise the COST."""
         # Mouser pages at 50 records; paginate so --count above 50 delivers
         # what it promised instead of silently capping.
         out: list[FeedPart] = []
         start = 0
-        while len(out) < limit:
+        pages_left = max(1, math.ceil(limit / self.records_per_call))
+        while len(out) < limit and pages_left > 0:
+            pages_left -= 1
             page = min(self.records_per_call, limit - len(out))
             data = self._post(
                 "/search/keyword",

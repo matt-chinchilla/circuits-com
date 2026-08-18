@@ -666,6 +666,36 @@ class TestProviderCallAccounting:
         assert len(out) == 120
         assert provider.calls_made == 3  # ceil(120 / 50 records per call)
 
+    def test_unparseable_rows_never_buy_an_extra_page(self):
+        """The page loop measures PARSED parts, so a page whose rows partly
+        fail to decode (no manufacturer) left `len(out) < limit` and fired
+        another page — a caller who budgeted ONE call silently spending two.
+        The cap is on pages, not on parts kept."""
+        import httpx
+
+        pages: list[int] = []
+
+        def handler(request):
+            pages.append(1)
+            parts = [
+                {
+                    "ManufacturerPartNumber": f"MPN-{i}",
+                    # every third row is undecodable and gets dropped
+                    "Manufacturer": "" if i % 3 == 0 else "Feed Mfr",
+                    "PriceBreaks": [],
+                }
+                for i in range(50)
+            ]
+            return httpx.Response(200, json={"SearchResults": {"Parts": parts}})
+
+        provider = self._provider(handler)
+
+        out = provider.search("resistor", 50)
+
+        assert len(pages) == 1
+        assert provider.calls_made == 1
+        assert 0 < len(out) < 50  # an honest short page, not a second call
+
     def test_a_rejected_call_still_counts_against_the_budget(self):
         """The quota is spent when the request leaves, not when it succeeds —
         counting only successes would let a failing key loop forever."""
@@ -901,6 +931,21 @@ class TestGrowCatalog:
         list(grow_catalog(db, provider, seeded_db["supplier1"], call_budget=1, per_category=200))
 
         assert provider.search_calls == [("Clock and Timing", 50)]
+
+    def test_a_category_wider_than_one_page_costs_more_than_one_call(self, db, seeded_db):
+        """`per_category` above a page is a REAL multi-call ask — the budget
+        has to be charged for the pages, not for the categories, or a nightly
+        run would overspend its quota by the page factor."""
+        supplier, parent = seeded_db["supplier1"], seeded_db["parent"]
+        _subcategory(db, "Amplifiers", "amplifiers", parent)
+        provider = _FakeProvider()
+
+        events = list(grow_catalog(db, provider, supplier, call_budget=2, per_category=100))
+
+        # one category, two pages — and the sweep stops there
+        assert provider.search_calls == [("Amplifiers", 100)]
+        assert provider.calls_made == 2
+        assert events[-1]["detail"].endswith("· 2 calls used")
 
     def test_a_repeated_mpn_in_one_page_creates_one_part(self, db, seeded_db):
         supplier, parent = seeded_db["supplier1"], seeded_db["parent"]

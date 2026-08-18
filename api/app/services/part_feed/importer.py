@@ -35,21 +35,25 @@ def _search_keyword(cat: Category) -> str:
     return cat.name
 
 
-def _new_part(cat: Category, fp: FeedPart) -> Part:
+def _new_part(fp: FeedPart, category_id: uuid.UUID, sub_slug: str) -> Part:
     """The Part row a new feed hit becomes — constructed, NOT added: the
     caller owns the transaction.
 
     Single home for `fill_category` and `grow_catalog`: the same MPN must land
     identically whichever entry point found it first (slug derivation and
-    `sub_slug` especially — the category page filters on `sub_slug`)."""
+    `sub_slug` especially — the category page filters on `sub_slug`).
+
+    Takes the category's two SCALARS rather than the Category row: the import
+    sweep commits per part, which EXPIRES that row, and an ORM attribute read
+    in here would re-SELECT the category once per created part."""
     return Part(
         id=uuid.uuid4(),
         sku=fp.mpn,
         slug=_slugify_sku(fp.mpn),
         manufacturer_name=fp.manufacturer,
         description=fp.description,
-        category_id=cat.id,
-        sub_slug=cat.slug,
+        category_id=category_id,
+        sub_slug=sub_slug,
     )
 
 
@@ -355,7 +359,8 @@ def grow_catalog(
             # Read the category's own fields ONCE: every per-part commit
             # expires the instance, so touching `cat` inside the page loop
             # would re-SELECT it for each row.
-            cat_id, cat_name, keyword = cat.id, cat.name, _search_keyword(cat)
+            cat_id, cat_slug = cat.id, cat.slug
+            cat_name, keyword = cat.name, _search_keyword(cat)
             seen: set[str] = set()
             for fp in provider.search(keyword, want):
                 key = fp.mpn.upper()
@@ -371,7 +376,7 @@ def grow_catalog(
                     continue
                 is_new = part is None
                 if is_new:
-                    part = _new_part(cat, fp)
+                    part = _new_part(fp, cat_id, cat_slug)
                     db.add(part)
                     # autoflush=False — the listing needs a real part.id, and
                     # the next existence query has to see this row.
@@ -531,7 +536,7 @@ def fill_category(
         seen_mpns.add(key)
         part = db.query(Part).filter(Part.sku == fp.mpn).first()
         if part is None:
-            part = _new_part(cat, fp)
+            part = _new_part(fp, cat.id, cat.slug)
             db.add(part)
             db.flush()
             created += 1

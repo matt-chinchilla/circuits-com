@@ -6,6 +6,8 @@ instead of leaving one suite green and the other stale (review-caught: the two
 files had drifted into near-identical private copies).
 """
 
+import math
+
 from app.services.part_feed.base import FeedPart, FeedPriceBreak
 
 
@@ -29,7 +31,10 @@ class FakeProvider:
         self.search_calls: list[tuple[str, int]] = []
 
     def search(self, keyword, limit=50):
-        self.calls_made += 1
+        # PAGE-aware, like MouserProvider: a search for more than one page
+        # costs more than one call, so budget tests exercise the real ratio
+        # instead of a flattering 1-per-category.
+        self.calls_made += max(1, math.ceil(limit / self.records_per_call))
         self.search_calls.append((keyword, limit))
         results = self.results_by_keyword.get(keyword, self.search_results)
         return results[:limit]
