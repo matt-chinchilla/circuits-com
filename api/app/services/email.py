@@ -156,7 +156,7 @@ async def send_join_autoreply(form) -> None:
         "\n"
         "Our team will review your submission and get back to you within\n"
         "1-2 business days. If you have time-sensitive questions, you can reach\n"
-        "us directly at contact@circuitcenter.ai.\n"
+        "us directly at matthew@circuitcenter.ai.\n"
         "\n"
         "- The Circuit Center Team\n"
     )

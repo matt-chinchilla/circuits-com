@@ -14,7 +14,7 @@ const CONTACTS = [
   {
     name: "Matthew Chirichella",
     title: "Founder",
-    email: "contact@circuitcenter.ai",
+    email: "matthew@circuitcenter.ai",
     initials: "MC",
     des: "U1",
   },
