@@ -5,14 +5,15 @@ supplier?** The admin's "Nightly auto-import" switch writes
 ``auto_import_enabled`` and the job's selection query reads it, alongside the
 provider match and the key the run would actually use.
 
-The other three columns are SCHEMA-ONLY for now, deliberately. The partner-feed
-phase gives a distributor its own inventory URL and its own credential —
-``feed_url`` and ``api_key`` — and ``last_synced_at`` is what a "last imported"
-column will read. Building the shape once, in the migration that creates the
-table, is cheaper than a second migration against a table that will by then have
-production rows; nothing reads or writes them yet, and **nothing returns
-``api_key`` to a client, ever** (the endpoints answer with
-provider/key_configured/auto_import_enabled and no value from this row).
+``feed_url`` and ``api_key`` are SCHEMA-ONLY for now, deliberately. The
+partner-feed phase gives a distributor its own inventory URL and its own
+credential; building the shape once, in the migration that creates the table,
+is cheaper than a second migration against a table that will by then have
+production rows. **Nothing returns ``api_key`` to a client, ever** (the
+endpoints answer with provider/key_configured/auto_import_enabled and no value
+from this row). ``last_synced_at`` IS live: the nightly job stamps it after
+each supplier's run — it means "calls were spent on this supplier that night",
+not "the run succeeded" (a quota wall mid-run still stamps).
 
 ``key_configured`` on the endpoints is NOT this column: it is
 ``registry.get_feed_key`` — the Admin → Settings row, else the environment —
@@ -39,8 +40,8 @@ class SupplierFeed(Base):
     __tablename__ = "supplier_feeds"
 
     supplier_id = Column(UUID(as_uuid=True), ForeignKey("suppliers.id"), primary_key=True)
-    # Phase-A partner-feed columns: written by nothing yet, returned by nothing
-    # ever. See the module docstring.
+    # Phase-A partner-feed columns (these two): written by nothing yet,
+    # returned by nothing ever. See the module docstring.
     feed_url = Column(String(500), nullable=True)
     api_key = Column(Text, nullable=True)
     # Default OFF in Python AND in the DDL: a row written with nothing but a

@@ -405,8 +405,11 @@ def _stream_feed_run(
             # Real totals, not zeros: the parts already on screen were each
             # committed before they were reported, so blanking the counters
             # would understate the run directly above a line promising the
-            # progress was saved. "sync aborted" still says it did not finish.
-            aborted = sync_event("sync_finished", supplier_key, supplier_name, "sync aborted")
+            # progress was saved. The detail still says it did not finish —
+            # named for the run the operator actually started (review-caught:
+            # an aborted IMPORT read "Inventory import — sync aborted").
+            abort_detail = "import aborted" if is_import else "sync aborted"
+            aborted = sync_event("sync_finished", supplier_key, supplier_name, abort_detail)
             aborted["counts"] = dict(counts)
             record_stream_event(db, supplier_uuid, aborted, stored_kinds)
             yield json.dumps(aborted) + "\n"

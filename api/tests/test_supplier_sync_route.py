@@ -791,7 +791,7 @@ class TestImportStream:
         # An import that dies says so: "Sync failed" would name a run the
         # operator never started (the two buttons are side by side).
         assert events[1]["title"] == "Import failed"
-        assert events[-1]["detail"] == "sync aborted"
+        assert events[-1]["detail"] == "import aborted"
         assert events[-1]["counts"] == {
             "synced": 0,
             "media_filled": 0,

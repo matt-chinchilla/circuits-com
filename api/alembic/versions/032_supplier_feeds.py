@@ -4,11 +4,12 @@ One row per supplier that has a feed. `auto_import_enabled` is the only column
 anything reads today — the admin's "Nightly auto-import" switch writes it and
 the nightly job's selection query reads it.
 
-`feed_url`, `api_key` and `last_synced_at` are created here but written by
-nothing yet: the partner-feed phase gives a distributor its own inventory URL
-and its own credential, and adding them now — while the table is empty — is
-cheaper than a second migration against a table that will by then carry
-production rows. `api_key` is TEXT with no length cap for the same reason as
+`feed_url` and `api_key` are created here but written by nothing yet: the
+partner-feed phase gives a distributor its own inventory URL and its own
+credential, and adding them now — while the table is empty — is cheaper than a
+second migration against a table that will by then carry production rows.
+(`last_synced_at` went live with the nightly job: stamped after each
+supplier's run.) `api_key` is TEXT with no length cap for the same reason as
 `provider_credentials.api_key`: the format belongs to another company. Nothing
 returns it to a client.
 
