@@ -10,6 +10,7 @@ from .provider_credential import ProviderCredential
 from .revenue import Revenue
 from .sponsor import Sponsor
 from .supplier import CategorySupplier, Supplier
+from .supplier_feed import SupplierFeed
 from .user import User
 
 __all__ = [
@@ -29,4 +30,5 @@ __all__ = [
     "CalendarReminderSend",
     "ActivityEvent",
     "ProviderCredential",
+    "SupplierFeed",
 ]

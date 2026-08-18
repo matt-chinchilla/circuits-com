@@ -19,6 +19,7 @@ from app.models import (
     Revenue,
     Sponsor,
     Supplier,
+    SupplierFeed,
     User,
 )
 from app.services.activity import record_stream_event
@@ -47,6 +48,19 @@ def _to_uuid(val: str) -> uuid.UUID:
         return uuid.UUID(val)
     except (ValueError, AttributeError):
         raise HTTPException(404, "Not found")
+
+
+def _supplier_or_404(db: Session, supplier_id: str) -> Supplier:
+    """The supplier row, or the 404 every route on this file answers with.
+
+    One definition so a malformed id and an unknown one keep giving the same
+    answer everywhere — a route that grew its own copy is how an id shape ends
+    up 500ing on one endpoint and 404ing on the next.
+    """
+    supplier = db.query(Supplier).filter(Supplier.id == _to_uuid(supplier_id)).first()
+    if not supplier:
+        raise HTTPException(404, "Supplier not found")
+    return supplier
 
 
 class SupplierCreate(BaseModel):
@@ -173,9 +187,7 @@ def create_supplier(
 
 @router.get("/{supplier_id}")
 def get_supplier(supplier_id: str, db: Session = Depends(get_db)):
-    supplier = db.query(Supplier).filter(Supplier.id == _to_uuid(supplier_id)).first()
-    if not supplier:
-        raise HTTPException(404, "Supplier not found")
+    supplier = _supplier_or_404(db, supplier_id)
 
     parts_count = (
         db.query(func.count(PartListing.id)).filter(PartListing.supplier_id == supplier.id).scalar()
@@ -205,9 +217,7 @@ def update_supplier(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    supplier = db.query(Supplier).filter(Supplier.id == _to_uuid(supplier_id)).first()
-    if not supplier:
-        raise HTTPException(404, "Supplier not found")
+    supplier = _supplier_or_404(db, supplier_id)
 
     update_data = body.model_dump(exclude_unset=True)
     for key, value in update_data.items():
@@ -227,13 +237,12 @@ def delete_supplier(
     """Cascade-delete a supplier and every dependent row.
 
     PartListings (and their PriceBreaks), Sponsors, CategorySupplier links,
-    and Revenue rows are removed. Linked Users have `supplier_id` set to
-    NULL — admin/company-user accounts must survive — and so do ActivityEvents,
-    which record what actually happened and outlive the company row.
+    Revenue rows and the supplier's feed settings are removed. Linked Users have
+    `supplier_id` set to NULL — admin/company-user accounts must survive — and
+    so do ActivityEvents, which record what actually happened and outlive the
+    company row.
     """
-    supplier = db.query(Supplier).filter(Supplier.id == _to_uuid(supplier_id)).first()
-    if not supplier:
-        raise HTTPException(404, "Supplier not found")
+    supplier = _supplier_or_404(db, supplier_id)
 
     listing_ids = [
         row[0]
@@ -258,6 +267,12 @@ def delete_supplier(
     # after the company row goes away, so unlink rather than delete.
     db.query(ActivityEvent).filter(ActivityEvent.supplier_id == supplier.id).update(
         {ActivityEvent.supplier_id: None}, synchronize_session=False
+    )
+    # Feed settings are the other way round: a dependent, not history. A company
+    # that is gone has no nightly import, and the FK carries no cascade, so this
+    # row has to go before the supplier does or the DELETE dies on it.
+    db.query(SupplierFeed).filter(SupplierFeed.supplier_id == supplier.id).delete(
+        synchronize_session=False
     )
 
     # Bulk deletes bypass session sync; expire the supplier so the upcoming
@@ -293,9 +308,7 @@ def _resolve_feed_provider(db: Session, supplier_id: str) -> tuple[Supplier, Par
     ever built once its own key is in hand, which is what keeps a missing key a
     404 instead of the constructor's RuntimeError as a 500.
     """
-    supplier = db.query(Supplier).filter(Supplier.id == _to_uuid(supplier_id)).first()
-    if not supplier:
-        raise HTTPException(404, "Supplier not found")
+    supplier = _supplier_or_404(db, supplier_id)
     match = match_provider(supplier)
     if match is None:
         raise HTTPException(409, "no_feed_for_supplier")
@@ -470,6 +483,91 @@ def import_supplier_parts(
     )
 
 
+# ── Per-supplier feed settings: does the nightly import run for this row? ───
+
+
+class FeedSettingsUpdate(BaseModel):
+    auto_import_enabled: bool
+
+
+def _feed_settings(db: Session, supplier: Supplier) -> dict:
+    """What the admin's switch renders from — and nothing else.
+
+    Three fields, none of them a secret: which provider covers this supplier (if
+    any), whether a key exists for THAT provider, and whether the nightly import
+    is switched on. `key_configured` is `get_feed_key` — the Admin → Settings
+    row first, the environment as fallback — so this endpoint agrees with what a
+    run would actually present, rather than with one of the two sources.
+
+    `supplier_feeds` also carries `feed_url` and `api_key` (the partner-feed
+    phase writes them); neither is read here and neither is ever returned.
+
+    The stored toggle is reported as STORED even when the feed could not run
+    right now: a key removed after the fact does not silently flip the operator's
+    switch, and the UI greys it on `provider`/`key_configured` instead.
+    """
+    match = match_provider(supplier)
+    provider_slug = match[0] if match else None
+    row = db.query(SupplierFeed).filter(SupplierFeed.supplier_id == supplier.id).first()
+    return {
+        "provider": provider_slug,
+        "key_configured": bool(get_feed_key(db, provider_slug)) if provider_slug else False,
+        "auto_import_enabled": bool(row.auto_import_enabled) if row else False,
+    }
+
+
+@router.get("/{supplier_id}/feed-settings")
+def get_feed_settings(
+    supplier_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Whether this supplier has a feed, a key, and the nightly run switched on.
+
+    Unlike the sync/import routes this one does NOT 404 when the feature is
+    unconfigured: the switch has to render greyed with a reason, and "no
+    endpoint" gives the UI nothing to say. The demo account reads it as-is —
+    there is no secret in the payload to withhold.
+    """
+    return _feed_settings(db, _supplier_or_404(db, supplier_id))
+
+
+@router.patch("/{supplier_id}/feed-settings")
+def update_feed_settings(
+    supplier_id: str,
+    body: FeedSettingsUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Flip the nightly auto-import for this supplier.
+
+    ENABLING requires a feed that could actually run — a provider match AND a
+    key for that provider — else **409 `feed_not_configured`**. A switch that
+    turns on a job which can never do anything is a lie told to the operator
+    every night, and the 409 is what makes the UI say why.
+
+    DISABLING is always allowed, deliberately: the key may have been removed
+    since, and an off switch that refuses to work traps the toggle in whatever
+    state it was left in.
+
+    Upserts the row, touching ONE column — a blind rebuild would drop the
+    partner-feed `feed_url`/`api_key` the next phase stores beside it. The demo
+    account never reaches here (the global read-only gate 403s first).
+    """
+    supplier = _supplier_or_404(db, supplier_id)
+    state = _feed_settings(db, supplier)
+    if body.auto_import_enabled and not (state["provider"] and state["key_configured"]):
+        raise HTTPException(409, "feed_not_configured")
+
+    row = db.query(SupplierFeed).filter(SupplierFeed.supplier_id == supplier.id).first()
+    if row is None:
+        row = SupplierFeed(supplier_id=supplier.id)
+        db.add(row)
+    row.auto_import_enabled = body.auto_import_enabled
+    db.commit()
+    return _feed_settings(db, supplier)
+
+
 @router.get("/{supplier_id}/parts")
 def get_supplier_parts(
     supplier_id: str,
@@ -477,9 +575,7 @@ def get_supplier_parts(
     per_page: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
 ):
-    supplier = db.query(Supplier).filter(Supplier.id == _to_uuid(supplier_id)).first()
-    if not supplier:
-        raise HTTPException(404, "Supplier not found")
+    supplier = _supplier_or_404(db, supplier_id)
 
     query = (
         db.query(Part)
