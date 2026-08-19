@@ -99,9 +99,14 @@ def test_a_prod_shaped_seed_completes_with_the_real_catalog_only(db, demo_catalo
     )
     assert _demo_sponsor_count(db) == 0, "no showcase sponsorship may reference a demo company"
 
-    # The real catalog is untouched by the flag.
+    # The real catalog is untouched by the flag. The count threshold is
+    # deliberate: `> 0` passes on the 59 synthetic _DEMO_CATALOG parts alone,
+    # so a regression that skipped _seed_real_catalog entirely would sail
+    # through it (review-caught). The real catalog seeds thousands.
     assert _REAL_SUPPLIER in names
-    assert db.query(Part).count() > 0
+    assert db.query(Part).count() > 500, (
+        "the real catalog did not seed — only the synthetic demo parts are present"
+    )
     assert db.query(Sponsor).count() > 0, (
         "the real distributors' Silver + keyword sponsorships still seed"
     )

@@ -399,6 +399,7 @@ Set via `.env` at repo root (gitignored). Defaults work for local dev.
 | `DEMO_LOGIN_ENABLED` / `DEMO_LOGIN_EMAIL` | One-click demo access (`POST /api/auth/demo`); disabling makes the route 404 with no frontend redeploy | `true` / `demo@circuitcenter.ai` |
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USERNAME` / `SMTP_PASSWORD` / `SMTP_FROM` | Outbound relay for form + recovery mail (AWS SES in prod) | unset → demo mode (logs only) |
 | `NOTIFY_RECIPIENTS` | JSON or CSV of admin notify emails | owner inbox |
+| `SEED_DEMO_CATALOG` | Seeds the fictional demo companies (Kennedy Electronics, Mike's Electric, …) and their showcase sponsorships. **Prod defaults to `false`** so deleting them in /admin sticks — the seed runs on every container start and would otherwise re-create them | `true` (dev) / `false` (prod) |
 | `SEED_PW_MATTHEW` / `SEED_PW_ANTHONY` / `SEED_PW_DANIEL` / `SEED_PW_RONALD` | Seed passwords for the staff accounts | `admin` / `changeme-dev` |
 | `ADMIN_USERNAME` / `ADMIN_PASSWORD` | SQLAdmin credentials (unreachable in prod) | `admin` / `admin` |
 | `ADMIN_SECRET_KEY` | JWT signing key — **required** in prod (`docker-compose.prod.yml` fails fast without it) | dev-only placeholder |
