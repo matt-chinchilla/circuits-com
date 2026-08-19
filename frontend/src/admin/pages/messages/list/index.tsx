@@ -504,15 +504,22 @@ export default function MessagesListPage() {
       }
     } catch (err) {
       failure = err;
+    } finally {
+      // Re-read the server either way: a failure can still be PARTIAL (one
+      // batch landed, the next did not), and the list must not keep showing
+      // rows that are gone. The prune effect drops their selection on the
+      // next render.
+      //
+      // `finally`, not trailing statements: the in-flight ref is what re-arms
+      // the Delete button, so ANY future throw between here and the reset
+      // would wedge it shut for the rest of the session with no way back but
+      // a reload (review-caught — safe today only because nothing in this
+      // window happens to throw).
+      await refreshMessages();
+      setMessages(loadMessages());
+      setDeleting(false);
+      deleteInFlight.current = false;
     }
-
-    // Re-read the server either way: a failure can still be PARTIAL (one batch
-    // landed, the next did not), and the list must not keep showing rows that
-    // are gone. The prune effect drops their selection on the next render.
-    await refreshMessages();
-    setMessages(loadMessages());
-    setDeleting(false);
-    deleteInFlight.current = false;
 
     if (failure) {
       const { status, detail } = httpFailure(failure);
