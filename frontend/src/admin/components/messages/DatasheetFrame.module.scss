@@ -12,6 +12,55 @@
   box-shadow: var(--a-shadow-sm);
   overflow: hidden;
   margin-bottom: 16px;
+
+  // ── The sheet is a LIGHT-MODE ISLAND ──────────────────────────────────
+  // The paper opts out of theming (above) but its CONTENTS did not, so in dark
+  // mode every child reading --a-fg1 painted near-white ink on white paper:
+  // the subject headline measured 1.05:1 and the ghost buttons vanished
+  // outright (white text, translucent-white fill, white rim). Owner-reported.
+  //
+  // Re-declaring the tokens HERE rather than overriding each child is what
+  // makes it durable: anything rendered on this sheet — today's headline and
+  // buttons, tomorrow's additions — inherits ink that suits paper, with no
+  // per-element dark-mode rule to remember. Values are the light palette from
+  // AdminLayout.module.scss; the guard test pins the two lists together.
+  --a-card: #ffffff;
+  --a-border: #e5e7eb;
+  --a-border-soft: #f0f2f5;
+  --a-hover: #f7f9fb;
+  --a-track: #f0f2f5;
+  --a-fg1: #111827;
+  --a-fg2: #4b5563;
+  --a-fg3: #6b7280;
+  --a-fg4: #9ca3af;
+  --a-primary: #{$executive-blue};
+  --a-primary-hover: #083b24;
+  // Controls printed on paper are light-mode controls: the dark set is a
+  // WHITE veil with a WHITE rim, which is invisible here rather than merely
+  // low-contrast.
+  --a-glass: linear-gradient(rgba(255, 255, 255, 0.88), rgba(255, 255, 255, 0.78));
+  --a-glass-ctl: linear-gradient(rgba(255, 255, 255, 0.62), rgba(255, 255, 255, 0.3));
+  --a-glass-rim: rgba(17, 24, 39, 0.1);
+  --a-glass-hi: inset 0 1px 0 rgba(255, 255, 255, 0.75);
+  --a-glass-shadow: 0 1px 2px rgba(0, 0, 0, 0.05), 0 8px 24px -12px rgba(0, 0, 0, 0.14);
+  --a-glass-shadow-hover: 0 2px 4px rgba(0, 0, 0, 0.07), 0 14px 28px -10px rgba(0, 0, 0, 0.2);
+  --a-glass-press: inset 0 1px 3px rgba(0, 0, 0, 0.12);
+  --a-glass-well: rgba(17, 24, 39, 0.06);
+  --a-glass-well-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.06);
+  --a-glass-sheet: linear-gradient(rgba(255, 255, 255, 0.98), rgba(255, 255, 255, 0.94));
+  --a-focus-ring: 0 0 0 3px rgba(10, 74, 46, 0.18), 0 0 0 1.5px var(--a-primary);
+}
+
+// A lit sheet on a dark desk. The paper is the same white either way, so in
+// dark mode the depth has to come from the cast shadow and a hairline edge —
+// otherwise a 21:1 slab reads as pasted-on glare rather than as a document
+// lying on the bench. (The un-themed border above still draws the paper edge
+// in light mode, where a dark rim would be wrong.)
+:global(html[data-admin-theme='dark']) .datasheetCard {
+  border-color: rgba(255, 255, 255, 0.14);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.5),
+    0 18px 40px -14px rgba(0, 0, 0, 0.75);
 }
 
 .datasheetCard::before {
