@@ -63,3 +63,13 @@ export type Message =
   | (MessageBase & { type: 'join'; payload: JoinPayload })
   | (MessageBase & { type: 'keyword'; payload: KeywordPayload })
   | (MessageBase & { type: 'reply'; payload: ReplyPayload });
+
+/**
+ * Response body of POST /api/admin/messages/bulk-delete.
+ * `missing` = ids the server no longer held (already deleted elsewhere, or a
+ * stale list) — reported separately so the UI never claims them as deleted.
+ */
+export interface BulkDeleteResult {
+  deleted: number;
+  missing: number;
+}

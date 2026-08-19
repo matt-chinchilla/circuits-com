@@ -40,6 +40,12 @@ export function fullStamp(iso: string): string {
   );
 }
 
+// MSG-0042 — the printed designator for a message, single home so the chip and
+// every aria-label read the same string.
+export function designatorLabel(seq: number): string {
+  return `MSG-${String(seq).padStart(4, '0')}`;
+}
+
 export function subjectFor(m: Message): string {
   switch (m.type) {
     case 'contact':

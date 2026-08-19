@@ -27,7 +27,12 @@ import type {
   FeedCredentialStatus,
   FeedSettings,
 } from '@admin/types/admin';
-import type { Message, MessageStatus, AssignedTo } from '@admin/types/messages';
+import type {
+  Message,
+  MessageStatus,
+  AssignedTo,
+  BulkDeleteResult,
+} from '@admin/types/messages';
 import type { PlatformEngagementSeries } from '@admin/types/engagement';
 import { bustSponsorCaches } from '@admin/services/swCache';
 import { isPasswordChangeRequired, passwordGate } from '@admin/services/passwordGate';
@@ -425,6 +430,25 @@ export const adminApi = {
   updateMessage: (id: string, update: Partial<MessageUpdate>) =>
     adminClient
       .patch<Message>(`/admin/messages/${id}`, update)
+      .then((r) => r.data),
+
+  // Message deletion is a HARD delete server-side — there is no trash to
+  // restore from, which is why every call site confirms first. No
+  // `bustingAfter`: an inbox row is not catalog data, so nothing the public
+  // site caches can change.
+  deleteMessage: (id: string) =>
+    adminClient
+      .delete<{ status: string }>(`/admin/messages/${id}`)
+      .then((r) => r.data),
+
+  // POST /api/admin/messages/bulk-delete -> { deleted, missing }. `missing`
+  // counts ids the server no longer had (someone else deleted them, or the
+  // list was stale) — the UI reports it rather than claiming they were all
+  // deleted. Caller must keep each batch within BULK_DELETE_MAX (200) ids;
+  // past that the route answers 422 `too_many_ids`.
+  bulkDeleteMessages: (ids: string[]) =>
+    adminClient
+      .post<BulkDeleteResult>('/admin/messages/bulk-delete', { ids })
       .then((r) => r.data),
 
   getSponsors: () =>

@@ -1,7 +1,7 @@
 import { AlertCircle, Archive, Briefcase, CheckCircle2, Eye, Hash, Inbox, Mail, Reply } from 'lucide-react';
 import type { ComponentType } from 'react';
 import type { Message, MessageStatus, MessageType } from '@admin/types/messages';
-import { TYPE_META } from './messageHelpers';
+import { TYPE_META, designatorLabel } from './messageHelpers';
 import styles from './MessageChips.module.scss';
 
 const TYPE_ICON: Record<MessageType, ComponentType<{ size?: number; strokeWidth?: number }>> = {
@@ -14,9 +14,7 @@ const TYPE_ICON: Record<MessageType, ComponentType<{ size?: number; strokeWidth?
 // MSG-0042 designator — JetBrains Mono, mirrors the U1/U2 pattern from the
 // public Contact page (datasheet motif).
 export function Designator({ seq }: { seq: number }) {
-  return (
-    <span className={styles.des}>MSG-{String(seq).padStart(4, '0')}</span>
-  );
+  return <span className={styles.des}>{designatorLabel(seq)}</span>;
 }
 
 export function MessageTypeChip({ type }: { type: MessageType }) {

@@ -8,6 +8,8 @@ import {
   Eye,
   MoreVertical,
   Search,
+  Trash2,
+  X,
 } from 'lucide-react';
 import {
   Designator,
@@ -24,6 +26,7 @@ import {
 } from '@admin/components/messages/messageHelpers';
 import InboxZeroEmptyState from '@admin/components/messages/InboxZeroEmptyState';
 import KeyboardHintFooter from '@admin/components/messages/KeyboardHintFooter';
+import ConfirmDialog from '@admin/components/ConfirmDialog';
 import {
   archive as archiveMsg,
   assignTo,
@@ -32,8 +35,24 @@ import {
   refreshMessages,
   toggleRead,
 } from '@admin/services/messageStore';
-import type { Message } from '@admin/types/messages';
+import { adminApi } from '@admin/services/adminApi';
+import { apiErrorDetail } from '@admin/services/apiError';
+import { isDemoReadOnly } from '@admin/services/demoReadOnly';
+import type { BulkDeleteResult, Message } from '@admin/types/messages';
 import { useAuth } from '@admin/contexts/AuthContext';
+import {
+  chunkIds,
+  confirmDeleteCopy,
+  deleteOutcomeMessage,
+  headerSelectionState,
+  normalizeBulkResult,
+  pruneSelection,
+  selectRowLabel,
+  selectionLabel,
+  toggleAllVisible,
+  toggleSelected,
+  visibleSelectedIds,
+} from './selection';
 import styles from './MessagesListPage.module.scss';
 
 /** Where the company's mail lives. The address is derived from the signed-in
@@ -43,6 +62,8 @@ import styles from './MessagesListPage.module.scss';
 const WEBMAIL_URL = 'https://mail.circuitcenter.ai';
 const MAIL_DOMAIN = 'circuitcenter.ai';
 
+const DELETE_FAILED = 'Could not delete. Nothing was removed — try again.';
+
 type Filter = 'all' | 'contact' | 'join' | 'keyword' | 'archived';
 type Sort = 'unread' | 'newest' | 'oldest';
 
@@ -50,7 +71,10 @@ interface RowProps {
   m: Message;
   onOpen: (id: string) => void;
   onAction: (kind: ActionKind, m: Message) => void;
+  onDelete: (m: Message) => void;
   isFresh: boolean;
+  selected: boolean;
+  onToggleSelect: (id: string) => void;
 }
 
 type ActionKind =
@@ -61,13 +85,30 @@ type ActionKind =
   | 'assign_ronald'
   | 'spam';
 
-function MessageRow({ m, onOpen, onAction, isFresh }: RowProps) {
+/** The axios error's HTTP status + `detail`, without dragging axios in here. */
+function httpFailure(err: unknown): { status?: number; detail?: unknown } {
+  const res = (
+    err as { response?: { status?: number; data?: { detail?: unknown } } } | null
+  )?.response;
+  return { status: res?.status, detail: res?.data?.detail };
+}
+
+function MessageRow({
+  m,
+  onOpen,
+  onAction,
+  onDelete,
+  isFresh,
+  selected,
+  onToggleSelect,
+}: RowProps) {
   const [menuOpen, setMenuOpen] = useState(false);
 
   const rowClass = [
     styles.row,
     m.status === 'new' && styles.isNew,
     m.status === 'archived' && styles.isArc,
+    selected && styles.isSel,
   ]
     .filter(Boolean)
     .join(' ');
@@ -79,6 +120,17 @@ function MessageRow({ m, onOpen, onAction, isFresh }: RowProps) {
       data-msg-status={m.status}
       onClick={() => onOpen(m.id)}
     >
+      {/* Same stopPropagation guard as the row-action cell below: a click that
+          selects must never also navigate to the detail page. */}
+      <td className={styles.cSel} onClick={(e) => e.stopPropagation()}>
+        <input
+          type="checkbox"
+          className={styles.checkbox}
+          checked={selected}
+          onChange={() => onToggleSelect(m.id)}
+          aria-label={selectRowLabel(m.seq)}
+        />
+      </td>
       <td className={styles.cDot}>
         <StatusDot status={m.status} isFresh={isFresh} />
       </td>
@@ -175,11 +227,53 @@ function MessageRow({ m, onOpen, onAction, isFresh }: RowProps) {
                 <AlertCircle size={13} strokeWidth={2} />
                 Mark as spam
               </button>
+              <button
+                type="button"
+                className={styles.danger}
+                onClick={() => {
+                  onDelete(m);
+                  setMenuOpen(false);
+                }}
+              >
+                <Trash2 size={13} strokeWidth={2} />
+                Delete
+              </button>
             </div>
           </>
         )}
       </td>
     </tr>
+  );
+}
+
+/** Header checkbox. `indeterminate` is a DOM property with no HTML attribute,
+ *  so it can only be set through a ref. */
+function SelectAllCheckbox({
+  state,
+  onToggle,
+}: {
+  state: 'none' | 'some' | 'all';
+  onToggle: () => void;
+}) {
+  const ref = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (ref.current) ref.current.indeterminate = state === 'some';
+  }, [state]);
+
+  return (
+    <input
+      ref={ref}
+      type="checkbox"
+      className={styles.checkbox}
+      checked={state === 'all'}
+      onChange={onToggle}
+      aria-label={
+        state === 'all'
+          ? 'Clear selection of all messages in view'
+          : 'Select all messages in view'
+      }
+    />
   );
 }
 
@@ -196,6 +290,12 @@ export default function MessagesListPage() {
   const [q, setQ] = useState('');
   const [kbdHint, setKbdHint] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  // Ids awaiting confirmation. null = dialog closed; deletion is irreversible,
+  // so nothing is ever sent without passing through here.
+  const [pendingIds, setPendingIds] = useState<string[] | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // Track which messages were 'new' on first server-load so the dot pulse
   // fires exactly once per page-mount cycle. Populated lazily by the refresh
@@ -281,6 +381,21 @@ export default function MessagesListPage() {
     return rows;
   }, [messages, filter, sort, q]);
 
+  const visibleIds = useMemo(() => filtered.map((m) => m.id), [filtered]);
+
+  // Rows selected AND still on screen — the only ones any bulk action touches.
+  const chosenIds = useMemo(
+    () => visibleSelectedIds(selected, visibleIds),
+    [selected, visibleIds],
+  );
+
+  // A filter change (or a completed delete) must not leave invisible rows armed
+  // for deletion. pruneSelection returns the same Set when nothing dropped, so
+  // this settles in one pass instead of looping.
+  useEffect(() => {
+    setSelected((prev) => pruneSelection(prev, visibleIds));
+  }, [visibleIds]);
+
   // Group by day-bucket cluster header.
   const grouped = useMemo<
     Array<{ kind: 'header'; label: string } | { kind: 'row'; m: Message }>
@@ -345,8 +460,71 @@ export default function MessagesListPage() {
     refresh();
   }
 
+  /** One id goes through DELETE /{id}; a 404 there means the same thing the
+   *  bulk route calls `missing`, so both paths report identically. */
+  async function deleteOne(id: string): Promise<BulkDeleteResult> {
+    try {
+      await adminApi.deleteMessage(id);
+      return { deleted: 1, missing: 0 };
+    } catch (err) {
+      if (httpFailure(err).status === 404) return { deleted: 0, missing: 1 };
+      throw err;
+    }
+  }
+
+  async function runDelete(ids: string[]) {
+    setPendingIds(null);
+    if (ids.length === 0 || deleting) return;
+    setDeleting(true);
+    setDeleteError(null);
+
+    const tally: BulkDeleteResult = { deleted: 0, missing: 0 };
+    let failure: unknown = null;
+    try {
+      if (ids.length === 1) {
+        const one = await deleteOne(ids[0]);
+        tally.deleted += one.deleted;
+        tally.missing += one.missing;
+      } else {
+        // Batched: the route 422s past BULK_DELETE_MAX ids, and an inbox
+        // filtered to "All" can hold more than that.
+        for (const batch of chunkIds(ids)) {
+          const part = normalizeBulkResult(
+            await adminApi.bulkDeleteMessages(batch),
+          );
+          tally.deleted += part.deleted;
+          tally.missing += part.missing;
+        }
+      }
+    } catch (err) {
+      failure = err;
+    }
+
+    // Re-read the server either way: a failure can still be PARTIAL (one batch
+    // landed, the next did not), and the list must not keep showing rows that
+    // are gone. The prune effect drops their selection on the next render.
+    await refreshMessages();
+    setMessages(loadMessages());
+    setDeleting(false);
+
+    if (failure) {
+      const { status, detail } = httpFailure(failure);
+      // The demo 403 already raised the console-wide read-only notice inside
+      // the axios interceptor — a second sentence here would just repeat it.
+      if (!isDemoReadOnly(status, detail)) {
+        setDeleteError(apiErrorDetail(failure) ?? DELETE_FAILED);
+      }
+      return;
+    }
+
+    setSelected(new Set());
+    setToast(deleteOutcomeMessage(tally));
+  }
+
   const empty = filtered.length === 0;
   const isInboxZero = empty && q === '' && filter === 'all';
+  const headerState = headerSelectionState(selected, visibleIds);
+  const confirmCopy = confirmDeleteCopy(pendingIds?.length ?? 0);
 
   const FILTER_TABS: ReadonlyArray<[Filter, string, number]> = [
     ['all', 'All', counts.all],
@@ -427,6 +605,46 @@ export default function MessagesListPage() {
           </div>
         </div>
 
+        {chosenIds.length > 0 && (
+          <div className={styles.selBar} onClick={(e) => e.stopPropagation()}>
+            <span className={styles.selCount}>
+              {selectionLabel(chosenIds.length)}
+            </span>
+            <div className={styles.selSpacer} />
+            <button
+              type="button"
+              className={styles.selClear}
+              onClick={() => setSelected(new Set())}
+            >
+              Clear
+            </button>
+            <button
+              type="button"
+              className={styles.selDelete}
+              onClick={() => setPendingIds(chosenIds)}
+              disabled={deleting}
+            >
+              <Trash2 size={13} strokeWidth={2} />
+              {deleting ? 'Deleting…' : 'Delete'}
+            </button>
+          </div>
+        )}
+
+        {deleteError && (
+          <div className={styles.selError} role="alert">
+            <AlertCircle size={14} strokeWidth={2} />
+            <span>{deleteError}</span>
+            <button
+              type="button"
+              className={styles.selErrorClose}
+              onClick={() => setDeleteError(null)}
+              aria-label="Dismiss error"
+            >
+              <X size={13} strokeWidth={2} />
+            </button>
+          </div>
+        )}
+
         {isInboxZero ? (
           <InboxZeroEmptyState />
         ) : empty ? (
@@ -446,7 +664,8 @@ export default function MessagesListPage() {
         ) : (
           <table className={styles.table}>
             <colgroup>
-              <col style={{ width: 32 }} />
+              <col style={{ width: 40 }} />
+              <col style={{ width: 26 }} />
               <col style={{ width: 92 }} />
               <col style={{ width: 96 }} />
               {/* sender + subject auto-size to content; subject grows last */}
@@ -455,11 +674,26 @@ export default function MessagesListPage() {
               <col style={{ width: 80 }} />
               <col style={{ width: 36 }} />
             </colgroup>
+            <thead>
+              <tr className={styles.headRow}>
+                <th className={styles.cSel} scope="col">
+                  <SelectAllCheckbox
+                    state={headerState}
+                    onToggle={() =>
+                      setSelected((prev) => toggleAllVisible(prev, visibleIds))
+                    }
+                  />
+                </th>
+                <th colSpan={7} scope="col">
+                  <span className={styles.srOnly}>Message</span>
+                </th>
+              </tr>
+            </thead>
             <tbody>
               {grouped.map((g, i) =>
                 g.kind === 'header' ? (
                   <tr key={`h-${i}`} className={styles.cluster}>
-                    <td colSpan={7}>{g.label}</td>
+                    <td colSpan={8}>{g.label}</td>
                   </tr>
                 ) : (
                   <MessageRow
@@ -467,7 +701,12 @@ export default function MessagesListPage() {
                     m={g.m}
                     onOpen={(id) => navigate(`/admin/messages/${id}`)}
                     onAction={onAction}
+                    onDelete={(m) => setPendingIds([m.id])}
                     isFresh={freshIds.has(g.m.id)}
+                    selected={selected.has(g.m.id)}
+                    onToggleSelect={(id) =>
+                      setSelected((prev) => toggleSelected(prev, id))
+                    }
                   />
                 ),
               )}
@@ -475,6 +714,17 @@ export default function MessagesListPage() {
           </table>
         )}
       </div>
+
+      <ConfirmDialog
+        open={pendingIds !== null}
+        title={confirmCopy.title}
+        message={confirmCopy.message}
+        confirmLabel={confirmCopy.confirmLabel}
+        cancelLabel="Keep them"
+        danger
+        onConfirm={() => runDelete(pendingIds ?? [])}
+        onCancel={() => setPendingIds(null)}
+      />
 
       <KeyboardHintFooter visible={kbdHint} />
 
