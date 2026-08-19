@@ -38,7 +38,11 @@ import {
 import { adminApi } from '@admin/services/adminApi';
 import { apiErrorDetail } from '@admin/services/apiError';
 import { isDemoReadOnly } from '@admin/services/demoReadOnly';
-import { canDeleteMessages } from '@admin/services/permissions';
+import {
+  canDeleteMessages,
+  isOwnerOnly,
+  OWNER_ONLY_MESSAGE,
+} from '@admin/services/permissions';
 import type { BulkDeleteResult, Message } from '@admin/types/messages';
 import { useAuth } from '@admin/contexts/AuthContext';
 import {
@@ -551,7 +555,13 @@ export default function MessagesListPage() {
       if (!isDemoReadOnly(status, detail)) {
         // `tally` is passed, NOT dropped: a batch that landed before the throw
         // deleted real messages for good, and the operator has to be told.
-        setDeleteError(deleteFailureMessage(tally, apiErrorDetail(failure)));
+        // The owner-only 403 gets a sentence rather than the raw `owner_only`
+        // code — reachable if a role changed under a tab that still has the
+        // button (review-caught).
+        const reason = isOwnerOnly(status, detail)
+          ? OWNER_ONLY_MESSAGE
+          : apiErrorDetail(failure);
+        setDeleteError(deleteFailureMessage(tally, reason));
       }
       return;
     }
