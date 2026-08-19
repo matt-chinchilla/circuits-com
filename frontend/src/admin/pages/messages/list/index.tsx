@@ -43,7 +43,9 @@ import { useAuth } from '@admin/contexts/AuthContext';
 import {
   chunkIds,
   confirmDeleteCopy,
+  deleteFailureMessage,
   deleteOutcomeMessage,
+  deselectIds,
   headerSelectionState,
   normalizeBulkResult,
   pruneSelection,
@@ -61,8 +63,6 @@ import styles from './MessagesListPage.module.scss';
  *  the mail host ever changes. */
 const WEBMAIL_URL = 'https://mail.circuitcenter.ai';
 const MAIL_DOMAIN = 'circuitcenter.ai';
-
-const DELETE_FAILED = 'Could not delete. Nothing was removed — try again.';
 
 type Filter = 'all' | 'contact' | 'join' | 'keyword' | 'archived';
 type Sort = 'unread' | 'newest' | 'oldest';
@@ -295,6 +295,11 @@ export default function MessagesListPage() {
   // so nothing is ever sent without passing through here.
   const [pendingIds, setPendingIds] = useState<string[] | null>(null);
   const [deleting, setDeleting] = useState(false);
+  // The BUTTON is disabled while `deleting`, but a double-click can dispatch
+  // both clicks before that state lands (and runDelete's own read of it is a
+  // stale closure). A ref is set synchronously, so the second call bails —
+  // otherwise the re-run's all-`missing` toast would overwrite the true one.
+  const deleteInFlight = useRef(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // Track which messages were 'new' on first server-load so the dot pulse
@@ -474,7 +479,8 @@ export default function MessagesListPage() {
 
   async function runDelete(ids: string[]) {
     setPendingIds(null);
-    if (ids.length === 0 || deleting) return;
+    if (ids.length === 0 || deleteInFlight.current) return;
+    deleteInFlight.current = true;
     setDeleting(true);
     setDeleteError(null);
 
@@ -506,18 +512,23 @@ export default function MessagesListPage() {
     await refreshMessages();
     setMessages(loadMessages());
     setDeleting(false);
+    deleteInFlight.current = false;
 
     if (failure) {
       const { status, detail } = httpFailure(failure);
       // The demo 403 already raised the console-wide read-only notice inside
       // the axios interceptor — a second sentence here would just repeat it.
       if (!isDemoReadOnly(status, detail)) {
-        setDeleteError(apiErrorDetail(failure) ?? DELETE_FAILED);
+        // `tally` is passed, NOT dropped: a batch that landed before the throw
+        // deleted real messages for good, and the operator has to be told.
+        setDeleteError(deleteFailureMessage(tally, apiErrorDetail(failure)));
       }
       return;
     }
 
-    setSelected(new Set());
+    // Only the ids this run touched — a row deleted from its own menu must not
+    // clear a selection the operator built up elsewhere.
+    setSelected((prev) => deselectIds(prev, ids));
     setToast(deleteOutcomeMessage(tally));
   }
 

@@ -3,7 +3,10 @@ import {
   BULK_DELETE_MAX,
   chunkIds,
   confirmDeleteCopy,
+  DELETE_NOTHING_REMOVED,
+  deleteFailureMessage,
   deleteOutcomeMessage,
+  deselectIds,
   headerSelectionState,
   normalizeBulkResult,
   pruneSelection,
@@ -165,6 +168,64 @@ describe('deleteOutcomeMessage', () => {
   it('says so when nothing was there to delete', () => {
     expect(deleteOutcomeMessage({ deleted: 0, missing: 2 })).toBe(
       'Nothing deleted · 2 were already gone',
+    );
+  });
+});
+
+describe('deselectIds', () => {
+  it('removes only the ids the delete touched', () => {
+    expect([...deselectIds(set('a', 'b', 'c'), ['b'])]).toEqual(['a', 'c']);
+  });
+
+  it('returns the SAME instance when none of them were selected', () => {
+    const before = set('a');
+    expect(deselectIds(before, ['z'])).toBe(before);
+  });
+
+  it('empties the set when everything selected was deleted', () => {
+    expect([...deselectIds(set('a', 'b'), ['a', 'b'])]).toEqual([]);
+  });
+});
+
+describe('deleteFailureMessage', () => {
+  it('leads with what a half-finished batch REALLY deleted', () => {
+    expect(deleteFailureMessage({ deleted: 200, missing: 0 })).toBe(
+      'Deleted 200 messages — the rest could not be deleted.',
+    );
+  });
+
+  it('keeps the already-gone count honest in a partial failure', () => {
+    expect(deleteFailureMessage({ deleted: 3, missing: 2 })).toBe(
+      'Deleted 3 messages · 2 were already gone — the rest could not be deleted.',
+    );
+  });
+
+  it('still reports progress when only missing rows came back', () => {
+    expect(deleteFailureMessage({ deleted: 0, missing: 1 })).toBe(
+      'Nothing deleted · 1 was already gone — the rest could not be deleted.',
+    );
+  });
+
+  it('appends the server reason WITHOUT hiding the deletions', () => {
+    const msg = deleteFailureMessage({ deleted: 200, missing: 0 }, 'Bad Gateway');
+    expect(msg).toBe(
+      'Deleted 200 messages — the rest could not be deleted. (Bad Gateway)',
+    );
+  });
+
+  it('says nothing was removed ONLY when nothing was', () => {
+    expect(deleteFailureMessage({ deleted: 0, missing: 0 })).toBe(
+      DELETE_NOTHING_REMOVED,
+    );
+    expect(DELETE_NOTHING_REMOVED).toContain('Nothing was removed');
+  });
+
+  it('prefers a server reason over the generic sentence when nothing happened', () => {
+    expect(deleteFailureMessage({ deleted: 0, missing: 0 }, 'Not Found')).toBe(
+      'Not Found',
+    );
+    expect(deleteFailureMessage({ deleted: 0, missing: 0 }, '   ')).toBe(
+      DELETE_NOTHING_REMOVED,
     );
   });
 });

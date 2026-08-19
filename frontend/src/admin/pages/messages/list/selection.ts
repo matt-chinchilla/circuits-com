@@ -121,9 +121,13 @@ export function confirmDeleteCopy(count: number): {
   };
 }
 
-// Written as an escape, not the glyph: non-ASCII literals in source get mangled
-// by edit tooling in this repo (see CLAUDE.md).
+// Punctuation used by the sentences below, hoisted so every phrase separates
+// the same way (and so a mangled glyph shows up in ONE place, not five).
 const SEP = ' · ';
+const DASH = '—';
+
+/** The ONLY sentence that may tell the operator nothing happened. */
+export const DELETE_NOTHING_REMOVED = `Could not delete. Nothing was removed ${DASH} try again.`;
 
 /** Coerce a server body into a result even if a field is missing or junk. */
 export function normalizeBulkResult(raw: unknown): BulkDeleteResult {
@@ -150,4 +154,39 @@ export function deleteOutcomeMessage(result: BulkDeleteResult): string {
   if (missing === 0) return head;
   const tail = missing === 1 ? '1 was already gone' : `${missing} were already gone`;
   return `${head}${SEP}${tail}`;
+}
+
+/** Drop specific ids from the selection — used after a delete so rows that went
+ *  away stop counting, WITHOUT wiping a selection the operator still holds
+ *  elsewhere (deleting one row from its own menu must not clear the other five). */
+export function deselectIds(
+  selected: Set<string>,
+  ids: readonly string[],
+): Set<string> {
+  const gone = new Set(ids);
+  const kept = [...selected].filter((id) => !gone.has(id));
+  if (kept.length === selected.size) return selected;
+  return new Set(kept);
+}
+
+/**
+ * What the operator is told when a delete THREW.
+ *
+ * A batched delete can fail halfway: the first 200 ids are already gone — and
+ * unrecoverable — when the next request dies. Reporting "Nothing was removed"
+ * there would understate irreversible damage, so whatever DID happen is stated
+ * first and the failure is appended. The nothing-happened sentence is reserved
+ * for a tally that really is empty.
+ */
+export function deleteFailureMessage(
+  result: BulkDeleteResult,
+  reason?: string | null,
+): string {
+  const tally = normalizeBulkResult(result);
+  const detail = reason?.trim() ? reason.trim() : null;
+  if (tally.deleted + tally.missing === 0) {
+    return detail ?? DELETE_NOTHING_REMOVED;
+  }
+  const head = `${deleteOutcomeMessage(tally)} ${DASH} the rest could not be deleted.`;
+  return detail ? `${head} (${detail})` : head;
 }
