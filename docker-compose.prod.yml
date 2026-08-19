@@ -82,6 +82,13 @@ services:
       # until 2026-07-31. Guarded by tests/test_compose_env_passthrough.py.
       DEMO_LOGIN_ENABLED: ${DEMO_LOGIN_ENABLED:-false}
       DEMO_LOGIN_EMAIL: ${DEMO_LOGIN_EMAIL:-demo@circuitcenter.ai}
+      # Fictional demo catalog in the seed — OFF on prod. The seed re-runs on
+      # every api container start, so with this on, deleting "Kennedy
+      # Electronics" or "Mike's Electric" in /admin was undone by the next
+      # deploy, forever. Off = real catalog only; nothing is deleted by the
+      # flag itself (seeding is get-or-create), and category boards with no
+      # real sponsor render their designed Open-Placement state.
+      SEED_DEMO_CATALOG: ${SEED_DEMO_CATALOG:-false}
       # Same ${API_WORKERS} the `command` above passes to uvicorn — see the
       # comment there and app/services/rate_limit.py.
       API_WORKERS: ${API_WORKERS:-1}

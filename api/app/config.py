@@ -40,6 +40,26 @@ class Settings(BaseSettings):
     DEMO_LOGIN_ENABLED: bool = False
     DEMO_LOGIN_EMAIL: str = "demo@circuitcenter.ai"
 
+    # Fictional demo catalog in `python -m app.db.seed` (runs on EVERY api
+    # container start — see the entrypoint).
+    #
+    # True (default, local/dev/demo): seeds the invented demo companies
+    # ("Kennedy Electronics", "Mike's Electric", …) plus their showcase
+    # sponsorships, so a fresh laptop DB has sold Platinum/Gold boards to look at.
+    #
+    # False (prod): seeds ONLY the real catalog — real distributors, real parts.
+    # This is a data-HYGIENE switch, not a feature flag: with it on, an owner who
+    # deletes a fictional supplier in /admin finds it re-created by the next
+    # deploy, forever. Turning it off never DELETES anything (seeding is
+    # get-or-create); it just stops resurrecting rows a human removed, and the
+    # now-unsold category boards render their designed Open-Placement state.
+    #
+    # Both compose files pass this through (`SEED_DEMO_CATALOG: ${SEED_DEMO_CATALOG:-…}`)
+    # — pydantic-settings reads process env only and the api container has no
+    # volume mount, so without that passthrough the switch is inert whatever
+    # /opt/circuits-com/.env says. Guarded by tests/test_compose_env_passthrough.py.
+    SEED_DEMO_CATALOG: bool = True
+
     # uvicorn worker count the container actually runs. COUPLED to the
     # `--workers` flag in docker-compose.prod.yml: the same ${API_WORKERS}
     # interpolation feeds both the command and this env var, so the process

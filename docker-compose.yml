@@ -36,6 +36,14 @@ services:
       # (docker-compose.prod.yml). Guarded by tests/test_compose_env_passthrough.py.
       DEMO_LOGIN_ENABLED: ${DEMO_LOGIN_ENABLED:-true}
       DEMO_LOGIN_EMAIL: ${DEMO_LOGIN_EMAIL:-demo@circuitcenter.ai}
+      # Fictional demo catalog in the seed (Kennedy Electronics, Mike's Electric,
+      # + their showcase Platinum/Gold sponsorships). Dev keeps them so a fresh
+      # local DB has sold boards to look at; prod defaults this OFF
+      # (docker-compose.prod.yml) so an owner's /admin deletion of a fictional
+      # company isn't undone by the next container start. MIRRORS the code
+      # default in app/config.py — an allowlist entry that contradicts the code
+      # default silently overrides it.
+      SEED_DEMO_CATALOG: ${SEED_DEMO_CATALOG:-true}
       # Shared calendar. Same rule as every block here: this list is an
       # ALLOWLIST, not documentation. Settings declares no env_file and the api
       # container has no volume mount, so a value absent from this block never

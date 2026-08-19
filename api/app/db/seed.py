@@ -23,6 +23,7 @@ import bcrypt
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.db.session import SessionLocal
 from app.models import (
     Category,
@@ -796,6 +797,17 @@ def get_or_create_supplier(
     return obj
 
 
+def _drop_absent_suppliers(rows: list[tuple]) -> list[tuple]:
+    """Drop association rows whose supplier (element 0) is None.
+
+    With SEED_DEMO_CATALOG off the fictional demo companies are never created,
+    so `kennedy`/`honeywell` are None while the real distributors sharing the
+    same list still seed. `is_featured`/`rank` are vestigial no-ops (columns
+    dropped in migration 011), so the rank gap this leaves behind is cosmetic.
+    """
+    return [row for row in rows if row[0] is not None]
+
+
 def get_or_create_category_supplier(
     db: Session,
     category: Category,
@@ -1286,7 +1298,14 @@ def seed(db: Session) -> None:
         ),
     ]
 
-    supplier_data: list[dict] = _demo_suppliers + _real_suppliers
+    # SEED_DEMO_CATALOG=False (prod default) drops the fictional companies
+    # entirely — an owner who deletes "Kennedy Electronics" or "Mike's Electric"
+    # in /admin must not find them re-created by the next container start (the
+    # entrypoint re-runs this seed on EVERY api start). Nothing here deletes an
+    # existing demo row: seeding is get-or-create, so flipping the flag off just
+    # stops resurrecting what a human removed.
+    demo_enabled = settings.SEED_DEMO_CATALOG
+    supplier_data: list[dict] = (_demo_suppliers if demo_enabled else []) + _real_suppliers
 
     suppliers: dict[str, Supplier] = {}
     for data in supplier_data:
@@ -1297,10 +1316,12 @@ def seed(db: Session) -> None:
     digikey = suppliers["Digi-Key Electronics"]
     tti = suppliers["TTI"]
     future = suppliers["Future Electronics"]
-    kennedy = suppliers["Kennedy Electronics"]
+    # None when SEED_DEMO_CATALOG is off — every use below is guarded, and an
+    # unguarded `suppliers["…"]` here would KeyError and 502-loop the prod api.
+    kennedy = suppliers.get("Kennedy Electronics")
     mouser = suppliers["Mouser Electronics"]
     arrow = suppliers["Arrow Electronics"]
-    honeywell = suppliers["Honeywell Sensing"]
+    honeywell = suppliers.get("Honeywell Sensing")
 
     # ------------------------------------------------------------------
     # 3. CategorySupplier associations
@@ -1310,13 +1331,15 @@ def seed(db: Session) -> None:
 
     # Power Management ICs — Kennedy featured
     pmic = cats["Power Management ICs (PMICs)"]
-    for sup, featured, rank in [
-        (kennedy, True, 1),
-        (digikey, False, 2),
-        (mouser, False, 3),
-        (avnet, False, 4),
-        (arrow, False, 5),
-    ]:
+    for sup, featured, rank in _drop_absent_suppliers(
+        [
+            (kennedy, True, 1),
+            (digikey, False, 2),
+            (mouser, False, 3),
+            (avnet, False, 4),
+            (arrow, False, 5),
+        ]
+    ):
         get_or_create_category_supplier(db, pmic, sup, is_featured=featured, rank=rank)
 
     # Kennedy featured in PMIC subcategories
@@ -1328,18 +1351,21 @@ def seed(db: Session) -> None:
         "LED Drivers",
     ]:
         sub_cat = cats[sub_name]
-        get_or_create_category_supplier(db, sub_cat, kennedy, is_featured=True, rank=1)
+        if kennedy is not None:
+            get_or_create_category_supplier(db, sub_cat, kennedy, is_featured=True, rank=1)
         get_or_create_category_supplier(db, sub_cat, digikey, is_featured=False, rank=2)
         get_or_create_category_supplier(db, sub_cat, mouser, is_featured=False, rank=3)
 
     # Microcontrollers & Processors — Kennedy featured
     mcu = cats["Microcontrollers & Processors"]
-    for sup, featured, rank in [
-        (kennedy, True, 1),
-        (digikey, False, 2),
-        (mouser, False, 3),
-        (arrow, False, 4),
-    ]:
+    for sup, featured, rank in _drop_absent_suppliers(
+        [
+            (kennedy, True, 1),
+            (digikey, False, 2),
+            (mouser, False, 3),
+            (arrow, False, 4),
+        ]
+    ):
         get_or_create_category_supplier(db, mcu, sup, is_featured=featured, rank=rank)
 
     # Analog ICs
@@ -1369,7 +1395,9 @@ def seed(db: Session) -> None:
 
     # Sensor ICs
     sensor = cats["Sensor ICs"]
-    for sup, rank in [(digikey, 1), (mouser, 2), (avnet, 3), (tti, 4), (honeywell, 5)]:
+    for sup, rank in _drop_absent_suppliers(
+        [(digikey, 1), (mouser, 2), (avnet, 3), (tti, 4), (honeywell, 5)]
+    ):
         get_or_create_category_supplier(db, sensor, sup, rank=rank)
 
     # Audio & Video ICs
@@ -1422,45 +1450,52 @@ def seed(db: Session) -> None:
     # Category" pitch) by default — that empty state is a designed surface, not a
     # gap (matches the design's "Memory ICs" open example). Kennedy headlines both
     # flagships. (To sell more categories in the demo, add rows here + reseed.)
-    platinum_by_top: list[tuple[str, Supplier, str]] = [
-        (
-            "Power Management ICs (PMICs)",
-            kennedy,
-            "Your premier semiconductor supplier in the Northeast",
-        ),
-        (
-            "Microcontrollers & Processors",
-            kennedy,
-            "Your premier semiconductor supplier in the Northeast",
-        ),
-    ]
-    for top_name, plat_supplier, blurb in platinum_by_top:
-        get_or_create_sponsor(
-            db,
-            supplier=plat_supplier,
-            category=cats[top_name],
-            description=blurb,
-            tier="Platinum",
-        )
+    #
+    # Kennedy is a FICTIONAL demo company, so both blocks below are showcase-only
+    # and skipped wholesale when SEED_DEMO_CATALOG is off: prod's boards then
+    # render that same designed Open-Placement state until a real sponsor is sold.
+    if kennedy is not None:
+        platinum_by_top: list[tuple[str, Supplier, str]] = [
+            (
+                "Power Management ICs (PMICs)",
+                kennedy,
+                "Your premier semiconductor supplier in the Northeast",
+            ),
+            (
+                "Microcontrollers & Processors",
+                kennedy,
+                "Your premier semiconductor supplier in the Northeast",
+            ),
+        ]
+        for top_name, plat_supplier, blurb in platinum_by_top:
+            get_or_create_sponsor(
+                db,
+                supplier=plat_supplier,
+                category=cats[top_name],
+                description=blurb,
+                tier="Platinum",
+            )
 
-    # Subcategory Gold sponsors (single slot) → SponsorBlock.
-    for sub_name in [
-        "Voltage Regulators (LDOs)",
-        "DC-DC Converters (Buck/Boost)",
-        "Battery Management ICs (BMS)",
-        "Power Supervisors / Reset ICs",
-        "LED Drivers",
-    ]:
-        get_or_create_sponsor(
-            db,
-            supplier=kennedy,
-            category=cats[sub_name],
-            description="Authorized regional distributor",
-            tier="Gold",
-        )
+        # Subcategory Gold sponsors (single slot) → SponsorBlock.
+        for sub_name in [
+            "Voltage Regulators (LDOs)",
+            "DC-DC Converters (Buck/Boost)",
+            "Battery Management ICs (BMS)",
+            "Power Supervisors / Reset ICs",
+            "LED Drivers",
+        ]:
+            get_or_create_sponsor(
+                db,
+                supplier=kennedy,
+                category=cats[sub_name],
+                description="Authorized regional distributor",
+                tier="Gold",
+            )
 
     # Subcategory Silver sponsors (the directory, multi-occupant) → SilverPartners.
-    # Several companies coexist on the same subcategory.
+    # Several companies coexist on the same subcategory. Every occupant here (and
+    # the keyword sponsor below) is a REAL distributor, so these are NOT gated on
+    # SEED_DEMO_CATALOG.
     for sub_name, silver_suppliers in [
         ("Voltage Regulators (LDOs)", [avnet, digikey, mouser]),
         ("DC-DC Converters (Buck/Boost)", [arrow, future]),

@@ -71,6 +71,44 @@ def test_prod_defaults_the_demo_endpoint_off():
     )
 
 
+# ── The fictional demo catalog stays out of prod (2026-08-18) ───────────────
+# The seed re-runs on EVERY api container start, so a demo company the owner
+# deleted in /admin came straight back on the next deploy. The switch is only
+# real if it reaches the container — same allowlist trap as everything above.
+
+
+def test_the_shipped_demo_catalog_default_seeds_it():
+    """Code default True: a laptop that configures nothing still gets the
+    showcase sponsorships. Prod opts OUT via compose, not the other way round."""
+    assert Settings.model_fields["SEED_DEMO_CATALOG"].default is True
+
+
+def test_both_compose_files_pass_the_seed_switch_through():
+    for path in (DEV_COMPOSE, PROD_COMPOSE):
+        api = _service_block(path, "api")
+        assert re.search(r"^\s*SEED_DEMO_CATALOG:\s*\$\{SEED_DEMO_CATALOG", api, re.M), (
+            f"{path.name}: the api service must pass SEED_DEMO_CATALOG through, or the "
+            "seed keeps re-creating the fictional demo companies (no env_file, no "
+            "volume mount)."
+        )
+
+
+def test_dev_default_mirrors_the_code_default():
+    api = _service_block(DEV_COMPOSE, "api")
+    assert "SEED_DEMO_CATALOG: ${SEED_DEMO_CATALOG:-true}" in api, (
+        "the dev passthrough must MIRROR Settings.SEED_DEMO_CATALOG (True) — a compose "
+        "default that contradicts the code default silently overrides it."
+    )
+
+
+def test_prod_defaults_the_demo_catalog_off():
+    api = _service_block(PROD_COMPOSE, "api")
+    assert "SEED_DEMO_CATALOG: ${SEED_DEMO_CATALOG:-false}" in api, (
+        "prod must seed the REAL catalog only; with the fictional companies on, "
+        "deleting one in /admin is undone by the next container start."
+    )
+
+
 # ── Worker count ↔ rate-limit thresholds ────────────────────────────────────
 
 
