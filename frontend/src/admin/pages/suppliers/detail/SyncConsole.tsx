@@ -17,7 +17,7 @@
 //      commits per part, so a quota wall mid-run keeps everything it already
 //      reported.
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import Icon from '@shared/components/Icon';
 import PartThumb from '@admin/components/PartThumb';
 import { tallyCounts, terminalState, type SyncAction, type SyncEvent } from '@admin/services/syncStream';
@@ -65,11 +65,13 @@ export default function SyncConsole({
 }: Props) {
   const runLabel = mode === 'import' ? 'Inventory import' : 'Inventory sync';
   const feedRef = useRef<HTMLDivElement>(null);
-  // Starts true so the first rows scroll into view; flips off the moment the
-  // operator scrolls up to re-read something.
+  // Starts true so the first rows scroll into view; flips off ONLY when the
+  // operator genuinely scrolls UP (see handleScroll).
   const stickRef = useRef(true);
   // How many rows arrived while following was paused — drives the resume pill.
   const seenRef = useRef(0);
+  // Last observed scrollTop — the direction detector's memory.
+  const lastTopRef = useRef(0);
   const [behind, setBehind] = useState(0);
 
   // A NEW run must always follow: without this reset, scrolling up once in
@@ -79,40 +81,52 @@ export default function SyncConsole({
     if (!running) return;
     stickRef.current = true;
     seenRef.current = 0;
+    lastTopRef.current = 0;
     setBehind(0);
   }, [running]);
 
   const followToBottom = () => {
     const el = feedRef.current;
     if (!el) return;
-    // Instant for the same reason as the follow effect: a smooth glide's own
-    // scroll events would read as the operator scrolling and cancel the
-    // following this button exists to resume.
     stickRef.current = true;
     el.scrollTop = el.scrollHeight;
+    lastTopRef.current = el.scrollTop;
     seenRef.current = events.length;
     setBehind(0);
   };
 
+  // Following is cancelled by DIRECTION, not by distance-from-bottom: during a
+  // fast burst the feed grows again between our pin and the browser's queued
+  // scroll event, so measuring "how far from the bottom" against the new,
+  // taller feed reads as the operator scrolling when nobody touched anything
+  // (owner-reported — the pill appeared immediately on every burst). Only a
+  // human makes scrollTop go DOWN; growth never can. Scrolling back to the
+  // bottom, by any means, resumes following.
   const handleScroll = () => {
     const el = feedRef.current;
     if (!el) return;
+    const prevTop = lastTopRef.current;
+    lastTopRef.current = el.scrollTop;
     const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight <= STICK_THRESHOLD_PX;
-    stickRef.current = atBottom;
+    if (el.scrollTop < prevTop - 1) {
+      stickRef.current = false;
+    }
     if (atBottom) {
+      stickRef.current = true;
       seenRef.current = events.length;
       setBehind(0); // same-value updates bail out — no render loop
     }
   };
 
-  useEffect(() => {
+  // useLayoutEffect, not useEffect: the pin must land BEFORE paint or every
+  // burst briefly paints the feed un-scrolled and the console visibly trails
+  // the stream it is supposed to be following.
+  useLayoutEffect(() => {
     const el = feedRef.current;
     if (!el) return;
     if (stickRef.current) {
-      // INSTANT, not smooth — a smooth glide fires scroll events on the way
-      // down, the handler below reads them as the operator scrolling, and
-      // following switches itself off mid-animation (owner-reported).
       el.scrollTop = el.scrollHeight;
+      lastTopRef.current = el.scrollTop;
       seenRef.current = events.length;
       if (behind !== 0) setBehind(0);
     } else {
