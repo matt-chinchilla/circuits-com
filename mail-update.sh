@@ -12,9 +12,11 @@
 # (docker-compose.webmail.yml), so a CSS/PHP change is live on the next request:
 # no container restart, just a hard refresh in the browser.
 #
-# SSH to this box is IP-allowlisted. If your ISP has moved you since the rule
-# was written, the preflight below says so and prints the exact command to fix
-# it — it does NOT change the firewall for you.
+# Access goes through an EC2 Instance Connect ENDPOINT (eice-08c30f642437bb8f5),
+# not a firewall hole: the CLI opens a tunnel to a private-network listener and
+# AWS authorizes it with your IAM identity. That is why this works from any
+# network and does not break when your ISP rotates your address — the previous
+# per-IP allowlist did both. Requires `ec2-instance-connect:OpenTunnel`.
 set -euo pipefail
 
 MAIL_HOST="mail.circuitcenter.ai"
@@ -30,8 +32,11 @@ MODE="${1:---all}"
 DRY=""
 [[ "$MODE" == "--dry-run" ]] && { DRY="yes"; MODE="--all"; }
 
-MAIL_IP="$(dig +short "$MAIL_HOST" | tail -1)"
-[[ -n "$MAIL_IP" ]] || { echo "!! $MAIL_HOST does not resolve"; exit 1; }
+# Sanity only — routing is the tunnel's job, not DNS's. A host that stops
+# resolving still means something is wrong worth saying out loud.
+dig +short "$MAIL_HOST" > /dev/null 2>&1 || echo "note: $MAIL_HOST did not resolve (the tunnel does not need it)"
+
+EICE_ID="eice-08c30f642437bb8f5"
 
 push_key() {
   # Instance Connect keys live ~60s — push one right before each ssh/scp.
@@ -39,28 +44,34 @@ push_key() {
     --instance-id "$MAIL_INSTANCE" --instance-os-user ec2-user \
     --ssh-public-key "file://$HOME/.ssh/id_ed25519.pub" --output text > /dev/null
 }
-SSH_OPTS=(-o ConnectTimeout=8 -o StrictHostKeyChecking=no)
 
-# ── Preflight: can we even reach it? ────────────────────────────────────────
+# Every hop rides the endpoint: ProxyCommand streams the session over the
+# tunnel, so ssh/scp never touch the box's public address at all.
+PROXY="aws ec2-instance-connect open-tunnel --instance-connect-endpoint-id $EICE_ID --instance-id $MAIL_INSTANCE"
+SSH_OPTS=(-o ConnectTimeout=15 -o StrictHostKeyChecking=no -o "ProxyCommand=$PROXY")
+TARGET="ec2-user@$MAIL_INSTANCE"   # a name for ssh; the tunnel does the routing
+
+# ── Preflight ───────────────────────────────────────────────────────────────
 push_key 2>/dev/null || true
-if ! ssh "${SSH_OPTS[@]}" "ec2-user@$MAIL_IP" true 2>/dev/null; then
-  MY_IP="$(curl -s --max-time 10 https://checkip.amazonaws.com || echo unknown)"
+if ! ssh "${SSH_OPTS[@]}" "$TARGET" true 2>/dev/null; then
   cat <<EOF
-!! Cannot SSH to $MAIL_HOST ($MAIL_IP).
+!! Cannot reach $MAIL_HOST through the Instance Connect endpoint ($EICE_ID).
 
-   SSH on that box is allowlisted per-IP and this machine is $MY_IP.
-   Current rules:
-$(aws ec2 describe-security-groups --group-ids "$MAIL_SG" \
-    --query 'SecurityGroups[0].IpPermissions[?FromPort==`22`].IpRanges[].CidrIp' \
-    --output text 2>/dev/null | tr '\t' '\n' | sed 's/^/     /')
+   Nothing here is about your IP address — the endpoint replaced per-IP
+   allowlisting. Check, in order:
 
-   If $MY_IP is not listed, authorize it (this OPENS A FIREWALL PORT — your
-   call, not the script's), then re-run:
+     1. endpoint is up:
+        aws ec2 describe-instance-connect-endpoints \\
+          --instance-connect-endpoint-ids $EICE_ID \\
+          --query 'InstanceConnectEndpoints[0].State' --output text
+        (want: create-complete)
 
-     aws ec2 authorize-security-group-ingress --group-id $MAIL_SG \\
-       --protocol tcp --port 22 --cidr $MY_IP/32
+     2. your IAM identity may open a tunnel:
+        needs ec2-instance-connect:OpenTunnel + ec2:DescribeInstances
 
-   Revoke it the same way with 'revoke-security-group-ingress' when done.
+     3. the instance is running:
+        aws ec2 describe-instances --instance-ids $MAIL_INSTANCE \\
+          --query 'Reservations[0].Instances[0].State.Name' --output text
 EOF
   exit 1
 fi
@@ -72,7 +83,7 @@ copy() { # copy <label> <local dir> <remote dest dir>
     push_key
     echo "== $label — would change:"
     rsync -rin --delete -e "ssh ${SSH_OPTS[*]}" --rsync-path="sudo rsync" \
-      "$src/" "ec2-user@$MAIL_IP:$dest/" | sed 's/^/     /' || echo "     (rsync unavailable on the box — full copy)"
+      "$src/" "$TARGET:$dest/" | sed 's/^/     /' || echo "     (rsync unavailable on the box — full copy)"
     return
   fi
   echo "== $label"
@@ -80,11 +91,11 @@ copy() { # copy <label> <local dir> <remote dest dir>
   # Stage in /tmp (ec2-user-writable), then sudo-move into place: the mounts
   # are root-owned and scp cannot sudo.
   local stage="/tmp/mailupd-$(basename "$dest")"
-  ssh "${SSH_OPTS[@]}" "ec2-user@$MAIL_IP" "rm -rf $stage && mkdir -p $stage"
+  ssh "${SSH_OPTS[@]}" "$TARGET" "rm -rf $stage && mkdir -p $stage"
   push_key
-  scp -q -r "${SSH_OPTS[@]}" "$src/." "ec2-user@$MAIL_IP:$stage/"
+  scp -q -r "${SSH_OPTS[@]}" "$src/." "$TARGET:$stage/"
   push_key
-  ssh "${SSH_OPTS[@]}" "ec2-user@$MAIL_IP" \
+  ssh "${SSH_OPTS[@]}" "$TARGET" \
     "sudo mkdir -p $dest && sudo cp -r $stage/. $dest/ && sudo chown -R root:root $dest && rm -rf $stage && echo '   ok'"
 }
 

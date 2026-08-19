@@ -1120,29 +1120,26 @@ html.cc .attachmentslist li span.attachment-size {
 	color: var(--cc-dim);
 }
 
-/* The message view's attachment REGION (`.leftcol[aria-labelledby=
-   "aria-label-messageattachments"]`), which is a different container from the
-   `.attachmentslist` above and was inheriting Elastic's light-theme ink — dark
-   grey on our dark pane, so filenames could not be read at all (owner-reported).
-   Scoped by the aria attribute rather than by `.leftcol`, which Elastic also
-   uses for unrelated two-column layouts that are already correct. */
-html.cc .leftcol[aria-labelledby='aria-label-messageattachments'],
-html.cc .leftcol[aria-labelledby='aria-label-messageattachments'] li,
-html.cc .leftcol[aria-labelledby='aria-label-messageattachments'] span,
-html.cc .leftcol[aria-labelledby='aria-label-messageattachments'] a {
-	color: var(--cc-ink-2);
-}
+/* Attachment filenames were unreadable — dark grey on our dark pane, in the
+   message view's `.leftcol` attachments region (owner-reported).
 
-/* The filename is the thing being read — full ink, and it stays legible on
-   hover/focus rather than dropping back to the muted tone. */
-html.cc .leftcol[aria-labelledby='aria-label-messageattachments'] a.filename,
-html.cc .leftcol[aria-labelledby='aria-label-messageattachments'] a:hover,
-html.cc .leftcol[aria-labelledby='aria-label-messageattachments'] a:focus-visible {
+   The rule above targets `a.filename`, which Roundcube 1.6 does not render:
+   the name is a `span.attachment-name` INSIDE the link, so our override never
+   applied and upstream's light-theme `#2c363a` won. Upstream does ship a fix
+   for its own dark theme — `html.dark-mode .attachmentslist li
+   .attachment-name` — but that hook is inert here, because this skin themes
+   under `html.cc` and never sets `dark-mode` (see README: ~325 upstream
+   dark-mode rules are dormant for that reason, and each one we need is
+   re-stated in our own tokens like this).
+
+   Stated on `.attachmentslist` rather than on the region, so the COMPOSE
+   screen's attachment list — same markup, same upstream colour — is fixed by
+   the same rule. */
+html.cc .attachmentslist li .attachment-name {
 	color: var(--cc-ink);
 }
 
-/* Size/meta stays deliberately quieter than the name it annotates. */
-html.cc .leftcol[aria-labelledby='aria-label-messageattachments'] span.attachment-size {
+html.cc .attachmentslist li .attachment-size {
 	color: var(--cc-dim);
 }
 
