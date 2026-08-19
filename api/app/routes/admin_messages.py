@@ -19,7 +19,7 @@ from app.schemas.messages import (
     MessageResponse,
     MessageUpdate,
 )
-from app.services.auth_service import get_current_user, is_demo_user
+from app.services.auth_service import get_current_user, is_demo_user, require_owner
 from app.services.demo_messages import demo_messages, find_demo_message
 
 router = APIRouter(prefix="/api/admin/messages", tags=["admin-messages"])
@@ -54,16 +54,20 @@ def list_messages(
 # with that id. Registration order is what keeps the two apart — do not move
 # these below.
 #
-# The demo account never reaches either body: both are mutating verbs, and
-# `get_current_user` 403s `demo_account_read_only` on every write from that
-# session (allowlist, not blocklist — no per-route opt-in to forget).
+# Both are OWNER-ONLY (2026-08-19 owner decision): deletion is irreversible and
+# these rows are real public correspondence, so `require_owner` 403s
+# `owner_only` for every other admin. It composes with — never replaces —
+# get_current_user, which still runs first: an unauthenticated caller gets 401
+# and the demo account never reaches either body, because both are mutating
+# verbs and `get_current_user` 403s `demo_account_read_only` on every write from
+# that session (allowlist, not blocklist — no per-route opt-in to forget).
 
 
 @router.post("/bulk-delete", response_model=MessageBulkDeleteResponse)
 def bulk_delete_messages(
     body: MessageBulkDeleteRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_owner),
 ):
     """Delete many messages in ONE transaction.
 
@@ -92,7 +96,7 @@ def bulk_delete_messages(
 def delete_message(
     message_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_owner),
 ):
     msg = db.query(Message).filter(Message.id == message_id).first()
     if not msg:

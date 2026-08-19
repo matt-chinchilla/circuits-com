@@ -347,3 +347,44 @@ def get_current_user(request: Request, user: User = Depends(get_authenticated_us
             detail=DEMO_READ_ONLY_DETAIL,
         )
     return user
+
+
+# ── Owner-only routes ───────────────────────────────────────────────────────
+# Message deletion is irreversible and the rows are real members of the public
+# writing in, so the owner decided (2026-08-19) that only the owner account may
+# destroy them. `user_role` carries exactly one `owner` today (matthew, alembic
+# 022) on BOTH local and prod; every other admin is `admin`.
+OWNER_ONLY_DETAIL = "owner_only"
+
+
+def is_owner(user: User | None) -> bool:
+    """True when this user holds the `owner` role.
+
+    ``getattr(role, "value", role)`` because SQLAlchemy's ``Enum(...)`` with
+    native strings hands back a plain ``str`` here, but the same column read
+    through a mapping that resolves to a Python enum member would give an enum
+    — comparing the raw attribute would then silently be False for the real
+    owner and lock the ONLY account that may delete out of its own inbox.
+    """
+    if user is None:
+        return False
+    role = getattr(user.role, "value", user.role)
+    return isinstance(role, str) and role.strip().lower() == "owner"
+
+
+def require_owner(user: User = Depends(get_current_user)) -> User:
+    """Gate a route on the owner role — 403 ``owner_only`` for anyone else.
+
+    COMPOSES with :func:`get_current_user` rather than replacing it, and the
+    ordering is deliberate: get_current_user runs FIRST, so an unauthenticated
+    caller still gets 401, a flagged user still gets ``password_change_required``
+    and the demo account still gets ``demo_account_read_only`` on these writes —
+    the demo message is the useful one for a demo session, and the demo row is
+    role `admin` anyway, so it would fail this check second regardless.
+    """
+    if not is_owner(user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=OWNER_ONLY_DETAIL,
+        )
+    return user

@@ -16,8 +16,10 @@ export interface AuthResponse {
 export interface UserInfo {
   id: string;
   username: string;
-  // 'owner' arrived with alembic 022 (matthew). Nothing in the UI branches on
-  // role — it is displayed — but the union must not lie about what can arrive.
+  // 'owner' arrived with alembic 022 (matthew). The console DOES branch on it
+  // now: `@admin/services/permissions.canDeleteMessages` gates the message
+  // inbox's delete affordances on `owner` (the server's `owner_only` 403 is the
+  // real enforcement), so the union must not lie about what can arrive.
   role: 'admin' | 'company' | 'owner';
   supplier_id?: string;
   /**

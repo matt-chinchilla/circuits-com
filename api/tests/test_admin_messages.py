@@ -45,6 +45,36 @@ def _auth_header(client):
     return {"Authorization": f"Bearer {token}"}
 
 
+OWNER_EMAIL = "owner@test.example"
+
+
+@pytest.fixture
+def owner_header(client, db, seeded_db):
+    """A session for the OWNER account — the only role that may delete.
+
+    Minted HERE rather than in `seeded_db` because other modules assert that
+    fixture's user roster verbatim (dashboard's /admin/sales-reps returns
+    exactly ["admin"]), and widening the shared roster to prove a messages rule
+    would silently rewrite what those tests mean. Same shape as `demo_header`
+    above: the module that needs a role creates it.
+    """
+    db.add(
+        User(
+            username="owner",
+            password_hash=bcrypt.hashpw(b"testpass123", bcrypt.gensalt()).decode(),
+            role="owner",
+            email=OWNER_EMAIL,
+        )
+    )
+    db.commit()
+    resp = client.post(
+        "/api/auth/login",
+        json={"email": OWNER_EMAIL, "password": "testpass123"},
+    )
+    assert resp.status_code == 200, resp.text
+    return {"Authorization": f"Bearer {resp.json()['token']}"}
+
+
 def _insert_message(
     db,
     *,
@@ -296,9 +326,9 @@ class TestPatchMessage:
 class TestDeleteMessage:
     """DELETE /api/admin/messages/{id} — the inbox's row-level delete."""
 
-    def test_delete_removes_the_row(self, client, seeded_db, db):
+    def test_delete_removes_the_row(self, client, seeded_db, db, owner_header):
         msg = _insert_message(db, seq=1)
-        headers = _auth_header(client)
+        headers = owner_header
 
         resp = client.delete(f"/api/admin/messages/{msg.id}", headers=headers)
         assert resp.status_code == 200
@@ -307,25 +337,25 @@ class TestDeleteMessage:
         assert client.get(f"/api/admin/messages/{msg.id}", headers=headers).status_code == 404
         assert db.query(Message).count() == 0
 
-    def test_delete_leaves_other_rows_alone(self, client, seeded_db, db):
+    def test_delete_leaves_other_rows_alone(self, client, seeded_db, db, owner_header):
         keep = _insert_message(db, seq=1)
         drop = _insert_message(db, seq=2)
-        headers = _auth_header(client)
+        headers = owner_header
 
         assert client.delete(f"/api/admin/messages/{drop.id}", headers=headers).status_code == 200
 
         remaining = db.query(Message).all()
         assert [m.id for m in remaining] == [keep.id]
 
-    def test_delete_unknown_id_returns_404(self, client, seeded_db):
-        headers = _auth_header(client)
+    def test_delete_unknown_id_returns_404(self, client, seeded_db, owner_header):
+        headers = owner_header
         resp = client.delete(f"/api/admin/messages/{uuid.uuid4()}", headers=headers)
         assert resp.status_code == 404
         assert resp.json()["detail"] == "Message not found"
 
-    def test_delete_is_idempotent_only_once(self, client, seeded_db, db):
+    def test_delete_is_idempotent_only_once(self, client, seeded_db, db, owner_header):
         msg = _insert_message(db, seq=1)
-        headers = _auth_header(client)
+        headers = owner_header
 
         assert client.delete(f"/api/admin/messages/{msg.id}", headers=headers).status_code == 200
         assert client.delete(f"/api/admin/messages/{msg.id}", headers=headers).status_code == 404
@@ -351,19 +381,19 @@ class TestBulkDeleteMessages:
 
     URL = "/api/admin/messages/bulk-delete"
 
-    def test_bulk_delete_removes_every_named_row(self, client, seeded_db, db):
+    def test_bulk_delete_removes_every_named_row(self, client, seeded_db, db, owner_header):
         msgs = [_insert_message(db, seq=i) for i in (1, 2, 3)]
-        headers = _auth_header(client)
+        headers = owner_header
 
         resp = client.post(self.URL, json={"ids": [m.id for m in msgs]}, headers=headers)
         assert resp.status_code == 200
         assert resp.json() == {"deleted": 3, "missing": 0}
         assert db.query(Message).count() == 0
 
-    def test_bulk_delete_splits_known_from_unknown(self, client, seeded_db, db):
+    def test_bulk_delete_splits_known_from_unknown(self, client, seeded_db, db, owner_header):
         known = [_insert_message(db, seq=i) for i in (1, 2)]
         survivor = _insert_message(db, seq=3)
-        headers = _auth_header(client)
+        headers = owner_header
 
         ids = [known[0].id, str(uuid.uuid4()), known[1].id, str(uuid.uuid4())]
         resp = client.post(self.URL, json={"ids": ids}, headers=headers)
@@ -373,53 +403,53 @@ class TestBulkDeleteMessages:
 
         assert [m.id for m in db.query(Message).all()] == [survivor.id]
 
-    def test_bulk_delete_empty_ids_is_a_no_op(self, client, seeded_db, db):
+    def test_bulk_delete_empty_ids_is_a_no_op(self, client, seeded_db, db, owner_header):
         _insert_message(db, seq=1)
-        headers = _auth_header(client)
+        headers = owner_header
 
         resp = client.post(self.URL, json={"ids": []}, headers=headers)
         assert resp.status_code == 200
         assert resp.json() == {"deleted": 0, "missing": 0}
         assert db.query(Message).count() == 1
 
-    def test_bulk_delete_missing_ids_key_is_a_no_op(self, client, seeded_db, db):
+    def test_bulk_delete_missing_ids_key_is_a_no_op(self, client, seeded_db, db, owner_header):
         _insert_message(db, seq=1)
-        headers = _auth_header(client)
+        headers = owner_header
 
         resp = client.post(self.URL, json={}, headers=headers)
         assert resp.status_code == 200
         assert resp.json() == {"deleted": 0, "missing": 0}
         assert db.query(Message).count() == 1
 
-    def test_bulk_delete_counts_duplicate_ids_once(self, client, seeded_db, db):
+    def test_bulk_delete_counts_duplicate_ids_once(self, client, seeded_db, db, owner_header):
         msg = _insert_message(db, seq=1)
-        headers = _auth_header(client)
+        headers = owner_header
 
         resp = client.post(self.URL, json={"ids": [msg.id, msg.id, msg.id]}, headers=headers)
         assert resp.status_code == 200
         assert resp.json() == {"deleted": 1, "missing": 0}
         assert db.query(Message).count() == 0
 
-    def test_bulk_delete_counts_duplicate_unknown_ids_once(self, client, seeded_db):
-        headers = _auth_header(client)
+    def test_bulk_delete_counts_duplicate_unknown_ids_once(self, client, seeded_db, owner_header):
+        headers = owner_header
         ghost = str(uuid.uuid4())
 
         resp = client.post(self.URL, json={"ids": [ghost, ghost]}, headers=headers)
         assert resp.status_code == 200
         assert resp.json() == {"deleted": 0, "missing": 1}
 
-    def test_bulk_delete_accepts_exactly_the_cap(self, client, seeded_db, db):
+    def test_bulk_delete_accepts_exactly_the_cap(self, client, seeded_db, db, owner_header):
         msg = _insert_message(db, seq=1)
-        headers = _auth_header(client)
+        headers = owner_header
         ids = [msg.id] + [str(uuid.uuid4()) for _ in range(199)]
 
         resp = client.post(self.URL, json={"ids": ids}, headers=headers)
         assert resp.status_code == 200
         assert resp.json() == {"deleted": 1, "missing": 199}
 
-    def test_bulk_delete_over_cap_is_422(self, client, seeded_db, db):
+    def test_bulk_delete_over_cap_is_422(self, client, seeded_db, db, owner_header):
         _insert_message(db, seq=1)
-        headers = _auth_header(client)
+        headers = owner_header
         ids = [str(uuid.uuid4()) for _ in range(201)]
 
         resp = client.post(self.URL, json={"ids": ids}, headers=headers)
@@ -442,10 +472,12 @@ class TestBulkDeleteMessages:
         assert resp.json()["detail"] == "demo_account_read_only"
         assert db.query(Message).count() == 2
 
-    def test_bulk_delete_commits_exactly_once(self, client, seeded_db, db, monkeypatch):
+    def test_bulk_delete_commits_exactly_once(
+        self, client, seeded_db, db, monkeypatch, owner_header
+    ):
         """One transaction for the batch — never a commit per id."""
         msgs = [_insert_message(db, seq=i) for i in (1, 2, 3)]
-        headers = _auth_header(client)  # log in BEFORE counting commits
+        headers = owner_header  # the session is minted BEFORE commits are counted
 
         commits = []
         real_commit = db.commit
@@ -456,10 +488,10 @@ class TestBulkDeleteMessages:
         assert len(commits) == 1
         assert db.query(Message).count() == 0
 
-    def test_bulk_delete_is_all_or_nothing(self, client, seeded_db, db, monkeypatch):
+    def test_bulk_delete_is_all_or_nothing(self, client, seeded_db, db, monkeypatch, owner_header):
         """A failed commit leaves EVERY row — no half-deleted batch."""
         msgs = [_insert_message(db, seq=i) for i in (1, 2, 3)]
-        headers = _auth_header(client)
+        headers = owner_header
 
         def boom():
             raise RuntimeError("commit exploded")
@@ -477,10 +509,132 @@ class TestBulkDeleteMessages:
 class TestBulkDeleteRouteOrder:
     """`/bulk-delete` must not be swallowed by the `/{message_id}` routes."""
 
-    def test_bulk_delete_path_is_not_matched_as_a_message_id(self, client, seeded_db):
-        headers = _auth_header(client)
+    def test_bulk_delete_path_is_not_matched_as_a_message_id(self, client, seeded_db, owner_header):
+        headers = owner_header
         # If registration order were wrong this would 404 ("Message not found")
         # from a path-param route instead of running the batch handler.
         resp = client.post("/api/admin/messages/bulk-delete", json={"ids": []}, headers=headers)
         assert resp.status_code == 200
         assert resp.json() == {"deleted": 0, "missing": 0}
+
+
+class TestDeleteIsOwnerOnly:
+    """Only the OWNER account may destroy messages (2026-08-19 owner decision).
+
+    Enforced server-side by `auth_service.require_owner`, because the admin UI
+    hiding the button is a convenience, not a control: the routes are reachable
+    with any staff token.
+    """
+
+    BULK_URL = "/api/admin/messages/bulk-delete"
+
+    def test_admin_role_cannot_delete_one(self, client, seeded_db, db):
+        msg = _insert_message(db, seq=1)
+
+        resp = client.delete(f"/api/admin/messages/{msg.id}", headers=_auth_header(client))
+        assert resp.status_code == 403
+        assert resp.json()["detail"] == "owner_only"
+        assert db.query(Message).count() == 1
+
+    def test_admin_role_cannot_bulk_delete(self, client, seeded_db, db):
+        msgs = [_insert_message(db, seq=i) for i in (1, 2)]
+
+        resp = client.post(
+            self.BULK_URL,
+            json={"ids": [m.id for m in msgs]},
+            headers=_auth_header(client),
+        )
+        assert resp.status_code == 403
+        assert resp.json()["detail"] == "owner_only"
+        # Refused before the statement ran — every row survives.
+        assert db.query(Message).count() == 2
+
+    def test_admin_role_keeps_every_non_destructive_route(self, client, seeded_db, db):
+        """The gate is on the two deletes ONLY — staff lose nothing else."""
+        msg = _insert_message(db, seq=1)
+        headers = _auth_header(client)
+
+        assert client.get("/api/admin/messages/", headers=headers).status_code == 200
+        assert client.get(f"/api/admin/messages/{msg.id}", headers=headers).status_code == 200
+        patch = client.patch(
+            f"/api/admin/messages/{msg.id}",
+            json={"status": "archived"},
+            headers=headers,
+        )
+        assert patch.status_code == 200
+        assert patch.json()["status"] == "archived"
+
+    def test_owner_role_may_delete_one(self, client, seeded_db, db, owner_header):
+        msg = _insert_message(db, seq=1)
+
+        resp = client.delete(f"/api/admin/messages/{msg.id}", headers=owner_header)
+        assert resp.status_code == 200
+        assert db.query(Message).count() == 0
+
+    def test_owner_role_may_bulk_delete(self, client, seeded_db, db, owner_header):
+        msgs = [_insert_message(db, seq=i) for i in (1, 2)]
+
+        resp = client.post(
+            self.BULK_URL,
+            json={"ids": [m.id for m in msgs]},
+            headers=owner_header,
+        )
+        assert resp.status_code == 200
+        assert resp.json() == {"deleted": 2, "missing": 0}
+        assert db.query(Message).count() == 0
+
+    def test_demo_still_gets_the_demo_message_not_owner_only(
+        self, client, seeded_db, db, demo_header
+    ):
+        """Ordering is deliberate: `get_current_user` runs BEFORE require_owner.
+
+        The demo row is role `admin`, so it would fail the owner check too — but
+        "editing is disabled in the demo" is the useful sentence for a demo
+        session, and the client keys its read-only notice off that exact string.
+        """
+        msg = _insert_message(db, seq=1)
+
+        one = client.delete(f"/api/admin/messages/{msg.id}", headers=demo_header)
+        assert one.status_code == 403
+        assert one.json()["detail"] == "demo_account_read_only"
+
+        bulk = client.post(self.BULK_URL, json={"ids": [msg.id]}, headers=demo_header)
+        assert bulk.status_code == 403
+        assert bulk.json()["detail"] == "demo_account_read_only"
+        assert db.query(Message).count() == 1
+
+    def test_unauthenticated_is_still_401_not_403(self, client, seeded_db, db):
+        """The owner gate must not turn an anonymous caller into a 403 — that
+        would tell a stranger the route exists AND what would open it."""
+        msg = _insert_message(db, seq=1)
+
+        assert client.delete(f"/api/admin/messages/{msg.id}").status_code == 401
+        assert client.post(self.BULK_URL, json={"ids": [msg.id]}).status_code == 401
+        assert db.query(Message).count() == 1
+
+    def test_role_is_compared_through_the_value_accessor(self, client, seeded_db, db):
+        """`user.role` may hydrate as a str OR as an enum member.
+
+        `is_owner` reads `getattr(role, "value", role)` for exactly that reason;
+        a bare `==` would silently lock the only account that may delete out of
+        its own inbox. Pinned here with a stand-in enum member.
+        """
+        import enum
+
+        from app.services.auth_service import is_owner
+
+        class Role(enum.Enum):
+            OWNER = "owner"
+            ADMIN = "admin"
+
+        class FakeUser:
+            def __init__(self, role):
+                self.role = role
+
+        assert is_owner(FakeUser(Role.OWNER))
+        assert is_owner(FakeUser("owner"))
+        assert is_owner(FakeUser(" Owner "))
+        assert not is_owner(FakeUser(Role.ADMIN))
+        assert not is_owner(FakeUser("admin"))
+        assert not is_owner(FakeUser(None))
+        assert not is_owner(None)

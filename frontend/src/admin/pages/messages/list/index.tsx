@@ -38,6 +38,7 @@ import {
 import { adminApi } from '@admin/services/adminApi';
 import { apiErrorDetail } from '@admin/services/apiError';
 import { isDemoReadOnly } from '@admin/services/demoReadOnly';
+import { canDeleteMessages } from '@admin/services/permissions';
 import type { BulkDeleteResult, Message } from '@admin/types/messages';
 import { useAuth } from '@admin/contexts/AuthContext';
 import {
@@ -64,6 +65,16 @@ import styles from './MessagesListPage.module.scss';
 const WEBMAIL_URL = 'https://mail.circuitcenter.ai';
 const MAIL_DOMAIN = 'circuitcenter.ai';
 
+/**
+ * Columns after the leading select checkbox: dot, designator, type, sender,
+ * subject, time, actions. The select column only exists for the owner (it is
+ * the entry point to a delete), so the table renders at 7 or 8 columns and the
+ * <col> list, every <td> and every colSpan below are computed from these two
+ * numbers rather than hard-coded — a literal 8 would silently misalign the
+ * cluster headers for staff.
+ */
+const CONTENT_COLUMNS = 7;
+
 type Filter = 'all' | 'contact' | 'join' | 'keyword' | 'archived';
 type Sort = 'unread' | 'newest' | 'oldest';
 
@@ -75,6 +86,8 @@ interface RowProps {
   isFresh: boolean;
   selected: boolean;
   onToggleSelect: (id: string) => void;
+  /** Owner-only: renders the select cell AND the row-menu Delete item. */
+  canDelete: boolean;
 }
 
 type ActionKind =
@@ -101,6 +114,7 @@ function MessageRow({
   isFresh,
   selected,
   onToggleSelect,
+  canDelete,
 }: RowProps) {
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -122,15 +136,17 @@ function MessageRow({
     >
       {/* Same stopPropagation guard as the row-action cell below: a click that
           selects must never also navigate to the detail page. */}
-      <td className={styles.cSel} onClick={(e) => e.stopPropagation()}>
-        <input
-          type="checkbox"
-          className={styles.checkbox}
-          checked={selected}
-          onChange={() => onToggleSelect(m.id)}
-          aria-label={selectRowLabel(m.seq)}
-        />
-      </td>
+      {canDelete && (
+        <td className={styles.cSel} onClick={(e) => e.stopPropagation()}>
+          <input
+            type="checkbox"
+            className={styles.checkbox}
+            checked={selected}
+            onChange={() => onToggleSelect(m.id)}
+            aria-label={selectRowLabel(m.seq)}
+          />
+        </td>
+      )}
       <td className={styles.cDot}>
         <StatusDot status={m.status} isFresh={isFresh} />
       </td>
@@ -227,17 +243,19 @@ function MessageRow({
                 <AlertCircle size={13} strokeWidth={2} />
                 Mark as spam
               </button>
-              <button
-                type="button"
-                className={styles.danger}
-                onClick={() => {
-                  onDelete(m);
-                  setMenuOpen(false);
-                }}
-              >
-                <Trash2 size={13} strokeWidth={2} />
-                Delete
-              </button>
+              {canDelete && (
+                <button
+                  type="button"
+                  className={styles.danger}
+                  onClick={() => {
+                    onDelete(m);
+                    setMenuOpen(false);
+                  }}
+                >
+                  <Trash2 size={13} strokeWidth={2} />
+                  Delete
+                </button>
+              )}
             </div>
           </>
         )}
@@ -284,6 +302,11 @@ export default function MessagesListPage() {
   // clicking through to a login screen they can't pass is a dead end.
   const mailboxAddress =
     user && !user.is_demo ? `${user.username.toLowerCase()}@${MAIL_DOMAIN}` : null;
+  // Owner-only (2026-08-19). The server's `owner_only` 403 is the enforcement;
+  // this keeps staff from ever meeting a control that only 403s. It gates BOTH
+  // ways into a delete — the multi-select column with its selection bar, and
+  // the row menu's Delete item.
+  const canDelete = canDeleteMessages(user);
   const [messages, setMessages] = useState<Message[]>(() => loadMessages());
   const [filter, setFilter] = useState<Filter>('all');
   const [sort, setSort] = useState<Sort>('unread');
@@ -542,6 +565,8 @@ export default function MessagesListPage() {
   const empty = filtered.length === 0;
   const isInboxZero = empty && q === '' && filter === 'all';
   const headerState = headerSelectionState(selected, visibleIds);
+  // Keeps <col>, <td> and every colSpan agreeing in BOTH states.
+  const columnCount = canDelete ? CONTENT_COLUMNS + 1 : CONTENT_COLUMNS;
   const confirmCopy = confirmDeleteCopy(pendingIds?.length ?? 0);
 
   const FILTER_TABS: ReadonlyArray<[Filter, string, number]> = [
@@ -623,7 +648,7 @@ export default function MessagesListPage() {
           </div>
         </div>
 
-        {chosenIds.length > 0 && (
+        {canDelete && chosenIds.length > 0 && (
           <div className={styles.selBar} onClick={(e) => e.stopPropagation()}>
             <span className={styles.selCount}>
               {selectionLabel(chosenIds.length)}
@@ -682,7 +707,7 @@ export default function MessagesListPage() {
         ) : (
           <table className={styles.table}>
             <colgroup>
-              <col style={{ width: 40 }} />
+              {canDelete && <col style={{ width: 40 }} />}
               <col style={{ width: 26 }} />
               <col style={{ width: 92 }} />
               <col style={{ width: 96 }} />
@@ -694,15 +719,17 @@ export default function MessagesListPage() {
             </colgroup>
             <thead>
               <tr className={styles.headRow}>
-                <th className={styles.cSel} scope="col">
-                  <SelectAllCheckbox
-                    state={headerState}
-                    onToggle={() =>
-                      setSelected((prev) => toggleAllVisible(prev, visibleIds))
-                    }
-                  />
-                </th>
-                <th colSpan={7} scope="col">
+                {canDelete && (
+                  <th className={styles.cSel} scope="col">
+                    <SelectAllCheckbox
+                      state={headerState}
+                      onToggle={() =>
+                        setSelected((prev) => toggleAllVisible(prev, visibleIds))
+                      }
+                    />
+                  </th>
+                )}
+                <th colSpan={CONTENT_COLUMNS} scope="col">
                   <span className={styles.srOnly}>Message</span>
                 </th>
               </tr>
@@ -711,7 +738,7 @@ export default function MessagesListPage() {
               {grouped.map((g, i) =>
                 g.kind === 'header' ? (
                   <tr key={`h-${i}`} className={styles.cluster}>
-                    <td colSpan={8}>{g.label}</td>
+                    <td colSpan={columnCount}>{g.label}</td>
                   </tr>
                 ) : (
                   <MessageRow
@@ -725,6 +752,7 @@ export default function MessagesListPage() {
                     onToggleSelect={(id) =>
                       setSelected((prev) => toggleSelected(prev, id))
                     }
+                    canDelete={canDelete}
                   />
                 ),
               )}
