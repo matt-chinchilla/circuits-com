@@ -7,7 +7,33 @@ table so the admin inbox shows real rows instead of localStorage seeds.
 import uuid
 from datetime import UTC, datetime, timedelta
 
-from app.models import Message
+import bcrypt
+import pytest
+
+from app.models import Message, User
+
+DEMO_EMAIL = "demo@circuitcenter.ai"
+
+
+@pytest.fixture
+def demo_header(client, db, seeded_db):
+    """A live demo session — minted the only way a visitor can get one.
+
+    `POST /api/auth/demo` hands a real admin session to any anonymous visitor,
+    so the delete routes have to refuse it server-side.
+    """
+    db.add(
+        User(
+            username="demo",
+            password_hash=bcrypt.hashpw(b"demo", bcrypt.gensalt()).decode(),
+            role="admin",
+            email=DEMO_EMAIL,
+        )
+    )
+    db.commit()
+    resp = client.post("/api/auth/demo")
+    assert resp.status_code == 200, resp.text
+    return {"Authorization": f"Bearer {resp.json()['token']}"}
 
 
 def _auth_header(client):
@@ -265,3 +291,196 @@ class TestPatchMessage:
         assert data["status"] == "read"
         # assigned_to preserved across the partial update
         assert data["assigned_to"] == "Daniel"
+
+
+class TestDeleteMessage:
+    """DELETE /api/admin/messages/{id} — the inbox's row-level delete."""
+
+    def test_delete_removes_the_row(self, client, seeded_db, db):
+        msg = _insert_message(db, seq=1)
+        headers = _auth_header(client)
+
+        resp = client.delete(f"/api/admin/messages/{msg.id}", headers=headers)
+        assert resp.status_code == 200
+        assert resp.json() == {"status": "ok"}
+
+        assert client.get(f"/api/admin/messages/{msg.id}", headers=headers).status_code == 404
+        assert db.query(Message).count() == 0
+
+    def test_delete_leaves_other_rows_alone(self, client, seeded_db, db):
+        keep = _insert_message(db, seq=1)
+        drop = _insert_message(db, seq=2)
+        headers = _auth_header(client)
+
+        assert client.delete(f"/api/admin/messages/{drop.id}", headers=headers).status_code == 200
+
+        remaining = db.query(Message).all()
+        assert [m.id for m in remaining] == [keep.id]
+
+    def test_delete_unknown_id_returns_404(self, client, seeded_db):
+        headers = _auth_header(client)
+        resp = client.delete(f"/api/admin/messages/{uuid.uuid4()}", headers=headers)
+        assert resp.status_code == 404
+        assert resp.json()["detail"] == "Message not found"
+
+    def test_delete_is_idempotent_only_once(self, client, seeded_db, db):
+        msg = _insert_message(db, seq=1)
+        headers = _auth_header(client)
+
+        assert client.delete(f"/api/admin/messages/{msg.id}", headers=headers).status_code == 200
+        assert client.delete(f"/api/admin/messages/{msg.id}", headers=headers).status_code == 404
+
+    def test_delete_requires_auth(self, client, seeded_db, db):
+        msg = _insert_message(db, seq=1)
+        resp = client.delete(f"/api/admin/messages/{msg.id}")
+        assert resp.status_code == 401
+        assert db.query(Message).count() == 1
+
+    def test_demo_account_cannot_delete(self, client, seeded_db, db, demo_header):
+        msg = _insert_message(db, seq=1)
+
+        resp = client.delete(f"/api/admin/messages/{msg.id}", headers=demo_header)
+        assert resp.status_code == 403
+        assert resp.json()["detail"] == "demo_account_read_only"
+        # The REAL row is untouched — the demo never reaches the table.
+        assert db.query(Message).count() == 1
+
+
+class TestBulkDeleteMessages:
+    """POST /api/admin/messages/bulk-delete — multi-select delete."""
+
+    URL = "/api/admin/messages/bulk-delete"
+
+    def test_bulk_delete_removes_every_named_row(self, client, seeded_db, db):
+        msgs = [_insert_message(db, seq=i) for i in (1, 2, 3)]
+        headers = _auth_header(client)
+
+        resp = client.post(self.URL, json={"ids": [m.id for m in msgs]}, headers=headers)
+        assert resp.status_code == 200
+        assert resp.json() == {"deleted": 3, "missing": 0}
+        assert db.query(Message).count() == 0
+
+    def test_bulk_delete_splits_known_from_unknown(self, client, seeded_db, db):
+        known = [_insert_message(db, seq=i) for i in (1, 2)]
+        survivor = _insert_message(db, seq=3)
+        headers = _auth_header(client)
+
+        ids = [known[0].id, str(uuid.uuid4()), known[1].id, str(uuid.uuid4())]
+        resp = client.post(self.URL, json={"ids": ids}, headers=headers)
+        assert resp.status_code == 200
+        # A stale selection list is normal, not an error.
+        assert resp.json() == {"deleted": 2, "missing": 2}
+
+        assert [m.id for m in db.query(Message).all()] == [survivor.id]
+
+    def test_bulk_delete_empty_ids_is_a_no_op(self, client, seeded_db, db):
+        _insert_message(db, seq=1)
+        headers = _auth_header(client)
+
+        resp = client.post(self.URL, json={"ids": []}, headers=headers)
+        assert resp.status_code == 200
+        assert resp.json() == {"deleted": 0, "missing": 0}
+        assert db.query(Message).count() == 1
+
+    def test_bulk_delete_missing_ids_key_is_a_no_op(self, client, seeded_db, db):
+        _insert_message(db, seq=1)
+        headers = _auth_header(client)
+
+        resp = client.post(self.URL, json={}, headers=headers)
+        assert resp.status_code == 200
+        assert resp.json() == {"deleted": 0, "missing": 0}
+        assert db.query(Message).count() == 1
+
+    def test_bulk_delete_counts_duplicate_ids_once(self, client, seeded_db, db):
+        msg = _insert_message(db, seq=1)
+        headers = _auth_header(client)
+
+        resp = client.post(self.URL, json={"ids": [msg.id, msg.id, msg.id]}, headers=headers)
+        assert resp.status_code == 200
+        assert resp.json() == {"deleted": 1, "missing": 0}
+        assert db.query(Message).count() == 0
+
+    def test_bulk_delete_counts_duplicate_unknown_ids_once(self, client, seeded_db):
+        headers = _auth_header(client)
+        ghost = str(uuid.uuid4())
+
+        resp = client.post(self.URL, json={"ids": [ghost, ghost]}, headers=headers)
+        assert resp.status_code == 200
+        assert resp.json() == {"deleted": 0, "missing": 1}
+
+    def test_bulk_delete_accepts_exactly_the_cap(self, client, seeded_db, db):
+        msg = _insert_message(db, seq=1)
+        headers = _auth_header(client)
+        ids = [msg.id] + [str(uuid.uuid4()) for _ in range(199)]
+
+        resp = client.post(self.URL, json={"ids": ids}, headers=headers)
+        assert resp.status_code == 200
+        assert resp.json() == {"deleted": 1, "missing": 199}
+
+    def test_bulk_delete_over_cap_is_422(self, client, seeded_db, db):
+        _insert_message(db, seq=1)
+        headers = _auth_header(client)
+        ids = [str(uuid.uuid4()) for _ in range(201)]
+
+        resp = client.post(self.URL, json={"ids": ids}, headers=headers)
+        assert resp.status_code == 422
+        assert resp.json()["detail"] == "too_many_ids"
+        # Refused before it touched anything.
+        assert db.query(Message).count() == 1
+
+    def test_bulk_delete_requires_auth(self, client, seeded_db, db):
+        msg = _insert_message(db, seq=1)
+        resp = client.post(self.URL, json={"ids": [msg.id]})
+        assert resp.status_code == 401
+        assert db.query(Message).count() == 1
+
+    def test_demo_account_cannot_bulk_delete(self, client, seeded_db, db, demo_header):
+        msgs = [_insert_message(db, seq=i) for i in (1, 2)]
+
+        resp = client.post(self.URL, json={"ids": [m.id for m in msgs]}, headers=demo_header)
+        assert resp.status_code == 403
+        assert resp.json()["detail"] == "demo_account_read_only"
+        assert db.query(Message).count() == 2
+
+    def test_bulk_delete_commits_exactly_once(self, client, seeded_db, db, monkeypatch):
+        """One transaction for the batch — never a commit per id."""
+        msgs = [_insert_message(db, seq=i) for i in (1, 2, 3)]
+        headers = _auth_header(client)  # log in BEFORE counting commits
+
+        commits = []
+        real_commit = db.commit
+        monkeypatch.setattr(db, "commit", lambda: (commits.append(1), real_commit())[1])
+
+        resp = client.post(self.URL, json={"ids": [m.id for m in msgs]}, headers=headers)
+        assert resp.status_code == 200
+        assert len(commits) == 1
+        assert db.query(Message).count() == 0
+
+    def test_bulk_delete_is_all_or_nothing(self, client, seeded_db, db, monkeypatch):
+        """A failed commit leaves EVERY row — no half-deleted batch."""
+        msgs = [_insert_message(db, seq=i) for i in (1, 2, 3)]
+        headers = _auth_header(client)
+
+        def boom():
+            raise RuntimeError("commit exploded")
+
+        monkeypatch.setattr(db, "commit", boom)
+
+        with pytest.raises(RuntimeError):
+            client.post(self.URL, json={"ids": [m.id for m in msgs]}, headers=headers)
+
+        monkeypatch.undo()
+        db.rollback()
+        assert db.query(Message).count() == 3
+
+
+class TestBulkDeleteRouteOrder:
+    """`/bulk-delete` must not be swallowed by the `/{message_id}` routes."""
+
+    def test_bulk_delete_path_is_not_matched_as_a_message_id(self, client, seeded_db):
+        headers = _auth_header(client)
+        # If registration order were wrong this would 404 ("Message not found")
+        # from a path-param route instead of running the batch handler.
+        resp = client.post("/api/admin/messages/bulk-delete", json={"ids": []}, headers=headers)
+        assert resp.status_code == 200
+        assert resp.json() == {"deleted": 0, "missing": 0}

@@ -12,11 +12,22 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.models import Message, User
-from app.schemas.messages import MessageResponse, MessageUpdate
+from app.schemas.messages import (
+    MessageBulkDeleteRequest,
+    MessageBulkDeleteResponse,
+    MessageDeleteResponse,
+    MessageResponse,
+    MessageUpdate,
+)
 from app.services.auth_service import get_current_user, is_demo_user
 from app.services.demo_messages import demo_messages, find_demo_message
 
 router = APIRouter(prefix="/api/admin/messages", tags=["admin-messages"])
+
+# One request may name at most this many ids. The inbox selects rows the
+# operator can actually see, so a legitimate batch is small; the cap is what
+# stops a single crafted request turning into a table-wide DELETE.
+MAX_BULK_DELETE_IDS = 200
 
 # ── Why the demo gets a different inbox ──────────────────────────────────────
 # These rows are REAL public form submissions: the name, email, phone and
@@ -35,6 +46,62 @@ def list_messages(
     if is_demo_user(current_user):
         return demo_messages()
     return db.query(Message).order_by(Message.created_at.desc()).all()
+
+
+# ── Deletes ─────────────────────────────────────────────────────────────────
+# DECLARED BEFORE the `/{message_id}` routes on purpose: a path parameter would
+# happily match the literal segment "bulk-delete" and try to delete a message
+# with that id. Registration order is what keeps the two apart — do not move
+# these below.
+#
+# The demo account never reaches either body: both are mutating verbs, and
+# `get_current_user` 403s `demo_account_read_only` on every write from that
+# session (allowlist, not blocklist — no per-route opt-in to forget).
+
+
+@router.post("/bulk-delete", response_model=MessageBulkDeleteResponse)
+def bulk_delete_messages(
+    body: MessageBulkDeleteRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Delete many messages in ONE transaction.
+
+    Unknown ids are counted, not fatal: the client's selection list is a
+    snapshot and rows legitimately disappear underneath it.
+    """
+    if len(body.ids) > MAX_BULK_DELETE_IDS:
+        raise HTTPException(422, "too_many_ids")
+
+    # dict.fromkeys dedups while preserving the caller's order, so a list that
+    # names the same row twice reports one deletion, not two.
+    unique_ids = list(dict.fromkeys(body.ids))
+    if not unique_ids:
+        # An empty selection is a no-op, not an error.
+        return {"deleted": 0, "missing": 0}
+
+    # ONE statement, ONE commit: the batch lands whole or not at all. Never a
+    # per-id loop with a commit inside — a failure halfway would leave the
+    # inbox in a state neither the operator nor the client asked for.
+    deleted = db.query(Message).filter(Message.id.in_(unique_ids)).delete(synchronize_session=False)
+    db.commit()
+    return {"deleted": deleted, "missing": len(unique_ids) - deleted}
+
+
+@router.delete("/{message_id}", response_model=MessageDeleteResponse)
+def delete_message(
+    message_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    msg = db.query(Message).filter(Message.id == message_id).first()
+    if not msg:
+        raise HTTPException(404, "Message not found")
+    # Nothing references messages (no FK, no association row), so the delete is
+    # a single-table operation — unlike suppliers, which cascade 8 surfaces.
+    db.delete(msg)
+    db.commit()
+    return {"status": "ok"}
 
 
 @router.get("/{message_id}", response_model=MessageResponse)
