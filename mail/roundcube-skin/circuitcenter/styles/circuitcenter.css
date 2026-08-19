@@ -726,6 +726,34 @@ html.cc .header a.button.icon:not(.disabled):hover {
 		0 2px 6px -2px rgba(0, 0, 0, 0.35);
 }
 
+/* The overflow ("More") button, while its menu is OPEN.
+   Elastic marks it `.active` and fills it — but the anchor is a stretch item in
+   the flex header, so the fill ran the full height of the row and read as a
+   band behind the header rather than a pressed button (owner-reported).
+   `align-self: center` plus a bounded box is the whole fix: the paint is
+   constrained to the control, and because only the item's own alignment
+   changes, nothing else in the header reflows. */
+html.cc .header a.button.more,
+html.cc .header a#messagemenulink.more {
+	align-self: center;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: var(--cc-r-btn);
+}
+
+html.cc .header a.button.more.active,
+html.cc .header a#messagemenulink.more.active {
+	color: var(--cc-ink);
+	background: var(--cc-btn-glass);
+	border-radius: var(--cc-r-btn);
+	/* Pressed, not raised: the menu it opened is the thing with elevation, so
+	   this reads as recessed rather than competing with it. */
+	box-shadow:
+		inset 0 1px 3px rgba(0, 0, 0, 0.38),
+		0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
 /* Search — a recessed probe channel seated in the glass (the Perry
    .pf-recessed recipe, re-hued). */
 html.cc .searchbar {
@@ -1089,6 +1117,32 @@ html.cc .attachmentslist li a.filename {
 html.cc .attachmentslist li span.attachment-size {
 	font-family: var(--cc-mono);
 	font-variant-numeric: tabular-nums;
+	color: var(--cc-dim);
+}
+
+/* The message view's attachment REGION (`.leftcol[aria-labelledby=
+   "aria-label-messageattachments"]`), which is a different container from the
+   `.attachmentslist` above and was inheriting Elastic's light-theme ink — dark
+   grey on our dark pane, so filenames could not be read at all (owner-reported).
+   Scoped by the aria attribute rather than by `.leftcol`, which Elastic also
+   uses for unrelated two-column layouts that are already correct. */
+html.cc .leftcol[aria-labelledby='aria-label-messageattachments'],
+html.cc .leftcol[aria-labelledby='aria-label-messageattachments'] li,
+html.cc .leftcol[aria-labelledby='aria-label-messageattachments'] span,
+html.cc .leftcol[aria-labelledby='aria-label-messageattachments'] a {
+	color: var(--cc-ink-2);
+}
+
+/* The filename is the thing being read — full ink, and it stays legible on
+   hover/focus rather than dropping back to the muted tone. */
+html.cc .leftcol[aria-labelledby='aria-label-messageattachments'] a.filename,
+html.cc .leftcol[aria-labelledby='aria-label-messageattachments'] a:hover,
+html.cc .leftcol[aria-labelledby='aria-label-messageattachments'] a:focus-visible {
+	color: var(--cc-ink);
+}
+
+/* Size/meta stays deliberately quieter than the name it annotates. */
+html.cc .leftcol[aria-labelledby='aria-label-messageattachments'] span.attachment-size {
 	color: var(--cc-dim);
 }
 
