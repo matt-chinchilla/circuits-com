@@ -16,7 +16,8 @@ import {
 // @public/components/legal/LegalDoc when Terms and Acceptable Use arrived;
 // this file is now the policy text and nothing else. Rendering is unchanged.
 //
-// Two corrections landed with that move, both in section 12:
+// Two corrections landed with that move, both in the Contact Us section
+// (numbered 12 at the time, 13 since section 06 was inserted):
 //
 //   The postal address was "1 Industry Park Way, Brookhaven, NY 11719" — a
 //   placeholder from the design mockup, published in the notice clause of a
@@ -27,6 +28,14 @@ import {
 //   The effective date was formatted from `new Date()`, so the policy claimed
 //   to take effect on whatever day you loaded it, and the prerendered copy
 //   froze the last build date. It is now pinned in DOC_DATES.
+
+// Section 06 (Social Media Integrations) was added for the LinkedIn Community
+// Management API application. Its two retention figures are LinkedIn's own
+// platform caps, restated here as a commitment we make to readers: one year for
+// organization Page administration and reporting data, 48 hours for members'
+// social activity data. They are ceilings, not targets. They may be shortened,
+// never lengthened, and whatever the integration actually stores must not
+// outlive what this section promises.
 
 const SECTIONS: LegalSection[] = [
   {
@@ -79,16 +88,32 @@ const SECTIONS: LegalSection[] = [
     ],
   },
   {
-    id: "retention",
+    id: "social",
     num: "06",
+    title: "Social Media Integrations (LinkedIn)",
+    body: [
+      "Authorization. Our admin console connects to LinkedIn using OAuth 2.0, authorized by an administrator of our own LinkedIn Company Page. The access and refresh tokens LinkedIn issues in return are held server-side only. They are never sent to your browser, embedded in any page we serve, or disclosed to anyone else.",
+      "What we receive. Two kinds of data reach us through that connection: content we ourselves author and publish to our own LinkedIn Company Page, and aggregate engagement metrics about that content, such as impressions, clicks, reactions, comments, and follower counts.",
+      "Whose data it is not. The integration reads only our own Company Page and the posts published by the authorizing administrator. It does not collect data about other LinkedIn members or visitors.",
+      "How we use it. We use this information to publish and manage our own LinkedIn Company Page and to understand how the content we publish there performs.",
+      "Retention. LinkedIn's own terms cap how long this data may be kept, and we honor those caps: organization Page administration and reporting data is retained for no longer than one year, and members' social activity data is retained for no longer than 48 hours.",
+      "Sharing. We do not sell LinkedIn data, and we do not share it with any third party.",
+      "Revoking access. An administrator of our LinkedIn Company Page can revoke our authorization at any time from LinkedIn. Revocation stops all further collection.",
+      `Questions about this integration may be sent to ${CONTACT_EMAILS.privacy}.`,
+    ],
+  },
+  {
+    id: "retention",
+    num: "07",
     title: "Data Retention",
     body: [
       "We retain personal information only for as long as needed to fulfill the purposes described in this Policy, to comply with our legal obligations, to resolve disputes, and to enforce our agreements. When information is no longer needed, we delete or anonymize it.",
+      "Data received through the LinkedIn integration is subject to the shorter, fixed caps stated in Section 06, which apply regardless of the general rule above.",
     ],
   },
   {
     id: "rights",
-    num: "07",
+    num: "08",
     title: "Your Rights",
     body: [
       "Depending on where you live (including residents of the EEA, the United Kingdom, and California), you may have the right to access, correct, delete, or port your personal information; to object to or restrict certain processing; and to withdraw consent where we rely on it.",
@@ -97,7 +122,7 @@ const SECTIONS: LegalSection[] = [
   },
   {
     id: "security",
-    num: "08",
+    num: "09",
     title: "Security",
     body: [
       "We use commercially reasonable administrative, technical, and physical safeguards designed to protect the information we hold. No method of transmission or storage is 100% secure, however, and we cannot guarantee absolute security.",
@@ -105,7 +130,7 @@ const SECTIONS: LegalSection[] = [
   },
   {
     id: "children",
-    num: "09",
+    num: "10",
     title: "Children's Privacy",
     body: [
       `The Service is intended for engineering and purchasing professionals and is not directed to children under 13. We do not knowingly collect personal information from children under 13. If you believe a child has provided us with personal information, please contact ${CONTACT_EMAILS.privacy} and we will delete it.`,
@@ -113,7 +138,7 @@ const SECTIONS: LegalSection[] = [
   },
   {
     id: "intl",
-    num: "10",
+    num: "11",
     title: "International Transfers",
     body: [
       "Circuit Center is operated from the United States. If you access the Service from outside the United States, your information may be transferred to, stored in, and processed in the United States or other countries with different data protection laws than your jurisdiction.",
@@ -121,7 +146,7 @@ const SECTIONS: LegalSection[] = [
   },
   {
     id: "changes",
-    num: "11",
+    num: "12",
     title: "Changes to This Policy",
     body: [
       'We may update this Policy from time to time. When we do, we will revise the "Effective" date at the top of the page and, for material changes, provide a more prominent notice. Your continued use of the Service after a change takes effect constitutes acceptance of the updated Policy.',
@@ -129,7 +154,7 @@ const SECTIONS: LegalSection[] = [
   },
   {
     id: "contact",
-    num: "12",
+    num: "13",
     title: "Contact Us",
     body: [
       `Questions, requests, or complaints regarding this Policy may be sent to ${CONTACT_EMAILS.privacy}. ${noticeClause(CONTACT_EMAILS.privacy)}`,

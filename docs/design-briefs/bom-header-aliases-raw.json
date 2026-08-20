@@ -1,0 +1,3857 @@
+{
+ "byRole": {
+  "distributor_pn": {
+   "lcsc|jlc (case-insensitive re.match prefix pattern over footprint field names; value must match ^C\\d+$)": [
+    "kicad-jlcpcb-tools"
+   ],
+   "lcsc|jlc (same pattern applied to legacy fp.GetProperties() keys)": [
+    "kicad-jlcpcb-tools"
+   ],
+   "LCSC": [
+    "kicad-jlcpcb-tools",
+    "kicad-jlcpcb-tools",
+    "kicad-jlcpcb-tools",
+    "kicad-jlcpcb-tools",
+    "kicad-jlcpcb-tools",
+    "kicad-jlcpcb-tools",
+    "kicad-jlcpcb-tools",
+    "kicad-jlcpcb-tools",
+    "kicad-jlcpcb-tools",
+    "kibot",
+    "fabrication-toolkit"
+   ],
+   "LCSC_PN": [
+    "kicad-jlcpcb-tools"
+   ],
+   "JLC_PN": [
+    "kicad-jlcpcb-tools"
+   ],
+   "LCSC Part": [
+    "kicad-jlcpcb-tools",
+    "kicad-jlcpcb-tools",
+    "kicad-jlcpcb-tools",
+    "fabrication-toolkit"
+   ],
+   "lcsc": [
+    "kicad-jlcpcb-tools",
+    "kicad-jlcpcb-tools",
+    "kicost",
+    "kibot",
+    "kibot"
+   ],
+   "digikey#": [
+    "kicost"
+   ],
+   "mouser#": [
+    "kicost"
+   ],
+   "part#": [
+    "kicost",
+    "kibot"
+   ],
+   "cat#": [
+    "kicost"
+   ],
+   "digikey": [
+    "kicost",
+    "kibot"
+   ],
+   "mouser": [
+    "kicost",
+    "kibot"
+   ],
+   "arrow": [
+    "kicost",
+    "kibot"
+   ],
+   "farnell": [
+    "kicost",
+    "kibot"
+   ],
+   "newark": [
+    "kicost",
+    "kibot"
+   ],
+   "rs": [
+    "kicost",
+    "kibot"
+   ],
+   "tme": [
+    "kicost",
+    "kibot"
+   ],
+   "Cat#": [
+    "kicost"
+   ],
+   "LCSC Part #(optional)": [
+    "kicost"
+   ],
+   "#": [
+    "kibot"
+   ],
+   "p#": [
+    "kibot"
+   ],
+   "pn": [
+    "kibot"
+   ],
+   "vendor#": [
+    "kibot"
+   ],
+   "vp#": [
+    "kibot"
+   ],
+   "vpn": [
+    "kibot"
+   ],
+   "num": [
+    "kibot"
+   ],
+   "LCSC#": [
+    "kibot"
+   ],
+   "LCSC Part #": [
+    "fabrication-toolkit",
+    "fabrication-toolkit"
+   ],
+   "LCSC PN": [
+    "fabrication-toolkit"
+   ],
+   "LCSC P/N": [
+    "fabrication-toolkit"
+   ],
+   "LCSC Part No.": [
+    "fabrication-toolkit"
+   ],
+   "LCSC Part Number": [
+    "fabrication-toolkit"
+   ],
+   "JLCPCB Part #": [
+    "fabrication-toolkit"
+   ],
+   "JLCPCB Part": [
+    "fabrication-toolkit"
+   ],
+   "JLCPCB PN": [
+    "fabrication-toolkit"
+   ],
+   "JLCPCB P/N": [
+    "fabrication-toolkit"
+   ],
+   "JLCPCB Part No.": [
+    "fabrication-toolkit"
+   ],
+   "JLCPCB Part Number": [
+    "fabrication-toolkit"
+   ],
+   "JLC": [
+    "fabrication-toolkit"
+   ]
+  },
+  "value": {
+   "Comment": [
+    "kicad-jlcpcb-tools"
+   ],
+   "Val": [
+    "kicad-jlcpcb-tools"
+   ],
+   "Part Value": [
+    "kicad-jlcpcb-tools"
+   ],
+   "value": [
+    "kicad-jlcpcb-tools",
+    "interactivehtmlbom"
+   ],
+   "Value": [
+    "kibom",
+    "kicost",
+    "kicost",
+    "interactivehtmlbom",
+    "interactivehtmlbom",
+    "interactivehtmlbom",
+    "kibot",
+    "fabrication-toolkit"
+   ]
+  },
+  "refs": {
+   "Designator": [
+    "kicad-jlcpcb-tools",
+    "kicad-jlcpcb-tools",
+    "fabrication-toolkit"
+   ],
+   "reference": [
+    "kicad-jlcpcb-tools",
+    "kicost"
+   ],
+   "References": [
+    "kibom",
+    "interactivehtmlbom",
+    "interactivehtmlbom",
+    "kibot"
+   ],
+   "designator": [
+    "kicost"
+   ],
+   "part reference": [
+    "kicost"
+   ],
+   "reference designator": [
+    "kicost"
+   ],
+   "references": [
+    "kicost"
+   ],
+   "customer no": [
+    "kicost"
+   ],
+   "parts": [
+    "kicost"
+   ],
+   "part": [
+    "kicost"
+   ],
+   "refs": [
+    "kicost"
+   ],
+   "Refs": [
+    "kicost"
+   ],
+   "Reference": [
+    "kibot"
+   ]
+  },
+  "footprint": {
+   "Footprint": [
+    "kicad-jlcpcb-tools",
+    "kicad-jlcpcb-tools",
+    "kibom",
+    "kicost",
+    "kicost",
+    "interactivehtmlbom",
+    "interactivehtmlbom",
+    "interactivehtmlbom",
+    "kibot",
+    "fabrication-toolkit"
+   ],
+   "Package": [
+    "kicad-jlcpcb-tools",
+    "kicad-jlcpcb-tools",
+    "kicad-jlcpcb-tools"
+   ],
+   "footprint": [
+    "kicad-jlcpcb-tools"
+   ],
+   "Footprint Lib": [
+    "kibom",
+    "kibot"
+   ],
+   "package": [
+    "kicost",
+    "interactivehtmlbom",
+    "interactivehtmlbom"
+   ],
+   "pcb footprint": [
+    "kicost"
+   ],
+   "pcb package": [
+    "kicost"
+   ],
+   "Footprint Full": [
+    "kibot"
+   ]
+  },
+  "qty": {
+   "Quantity": [
+    "kicad-jlcpcb-tools",
+    "interactivehtmlbom",
+    "interactivehtmlbom",
+    "interactivehtmlbom",
+    "fabrication-toolkit"
+   ],
+   "Quantity Per PCB": [
+    "kibom",
+    "kibot"
+   ],
+   "Build Quantity": [
+    "kibom",
+    "kibot"
+   ],
+   "order qty": [
+    "kicost"
+   ],
+   "quantity": [
+    "kicost"
+   ],
+   "qty": [
+    "kicost"
+   ],
+   "manf#_qty": [
+    "kicost"
+   ],
+   "Qty": [
+    "kicost"
+   ],
+   "${QUANTITY}": [
+    "kibot"
+   ]
+  },
+  "other": {
+   "Mid X": [
+    "kicad-jlcpcb-tools"
+   ],
+   "Mid Y": [
+    "kicad-jlcpcb-tools"
+   ],
+   "Rotation": [
+    "kicad-jlcpcb-tools"
+   ],
+   "Layer": [
+    "kicad-jlcpcb-tools"
+   ],
+   "Price": [
+    "kicad-jlcpcb-tools"
+   ],
+   "Stock": [
+    "kicad-jlcpcb-tools"
+   ],
+   "Library Type": [
+    "kicad-jlcpcb-tools"
+   ],
+   "Part": [
+    "kibom",
+    "kibot"
+   ],
+   "Part Lib": [
+    "kibom",
+    "kibot"
+   ],
+   "Sheetpath": [
+    "kibom",
+    "kibot"
+   ],
+   "Total Cost": [
+    "kibom"
+   ],
+   "Component": [
+    "kibom",
+    "kibom"
+   ],
+   "digikey_link": [
+    "kibom"
+   ],
+   "mouser_link": [
+    "kibom"
+   ],
+   "lcsc_link": [
+    "kibom"
+   ],
+   "version": [
+    "kicost",
+    "kibot"
+   ],
+   "variant": [
+    "kicost"
+   ],
+   "Unit$": [
+    "kicost"
+   ],
+   "Ext$": [
+    "kicost"
+   ],
+   "Avail": [
+    "kicost"
+   ],
+   "Purch": [
+    "kicost"
+   ],
+   "MOQ": [
+    "kicost"
+   ],
+   "checkboxes": [
+    "interactivehtmlbom"
+   ],
+   "<none>": [
+    "interactivehtmlbom"
+   ],
+   "Value": [
+    "interactivehtmlbom"
+   ],
+   "Footprint X": [
+    "kibot"
+   ],
+   "Footprint Y": [
+    "kibot"
+   ],
+   "Footprint Rot": [
+    "kibot"
+   ],
+   "Footprint Side": [
+    "kibot"
+   ],
+   "Footprint Type": [
+    "kibot"
+   ],
+   "Footprint Type NV": [
+    "kibot"
+   ],
+   "Footprint Populate": [
+    "kibot"
+   ],
+   "Footprint X-Size": [
+    "kibot"
+   ],
+   "Footprint Y-Size": [
+    "kibot"
+   ],
+   "Row": [
+    "kibot"
+   ],
+   "${ITEM_NUMBER}": [
+    "kibot"
+   ],
+   "Status": [
+    "kibot"
+   ],
+   "Net Name": [
+    "kibot"
+   ],
+   "Net Label": [
+    "kibot"
+   ],
+   "Net Class": [
+    "kibot"
+   ],
+   "${EXCLUDE_FROM_BOARD}": [
+    "kibot"
+   ],
+   "${EXCLUDE_FROM_SIM}": [
+    "kibot"
+   ],
+   "Source BoM": [
+    "kibot"
+   ],
+   "tolerance": [
+    "kibot"
+   ],
+   "tol": [
+    "kibot"
+   ],
+   "voltage": [
+    "kibot"
+   ],
+   "v": [
+    "kibot"
+   ],
+   "package": [
+    "kibot"
+   ],
+   "pkg": [
+    "kibot"
+   ],
+   "temp_coef": [
+    "kibot"
+   ],
+   "tmp_coef": [
+    "kibot"
+   ],
+   "power": [
+    "kibot"
+   ],
+   "pow": [
+    "kibot"
+   ],
+   "current": [
+    "kibot"
+   ],
+   "i": [
+    "kibot"
+   ],
+   "FT Layer Override": [
+    "fabrication-toolkit"
+   ],
+   "Layer Override": [
+    "fabrication-toolkit"
+   ],
+   "LayerOverride": [
+    "fabrication-toolkit"
+   ],
+   "FT Rotation Offset": [
+    "fabrication-toolkit"
+   ],
+   "Rotation Offset": [
+    "fabrication-toolkit"
+   ],
+   "RotOffset": [
+    "fabrication-toolkit"
+   ],
+   "FT Position Offset": [
+    "fabrication-toolkit"
+   ],
+   "Position Offset": [
+    "fabrication-toolkit"
+   ],
+   "PosOffset": [
+    "fabrication-toolkit"
+   ],
+   "FT Origin": [
+    "fabrication-toolkit"
+   ],
+   "Origin": [
+    "fabrication-toolkit"
+   ]
+  },
+  "mpn": {
+   "MFR.Part": [
+    "kicad-jlcpcb-tools",
+    "kicad-jlcpcb-tools"
+   ],
+   "mpn": [
+    "kicost",
+    "interactivehtmlbom",
+    "kibot",
+    "fabrication-toolkit"
+   ],
+   "pn": [
+    "kicost",
+    "kibot"
+   ],
+   "manf_num": [
+    "kicost",
+    "kibot"
+   ],
+   "manf-num": [
+    "kicost",
+    "kibot"
+   ],
+   "mfg_num": [
+    "kicost",
+    "kibot"
+   ],
+   "mfg-num": [
+    "kicost",
+    "kibot"
+   ],
+   "mfg#": [
+    "kicost",
+    "kibot"
+   ],
+   "mfg part#": [
+    "kicost",
+    "kibot"
+   ],
+   "mfr. no": [
+    "kicost"
+   ],
+   "man#": [
+    "kicost",
+    "kibot"
+   ],
+   "man_num": [
+    "kicost",
+    "kibot"
+   ],
+   "man-num": [
+    "kicost",
+    "kibot"
+   ],
+   "manpartno": [
+    "kicost"
+   ],
+   "manufacturer part number": [
+    "kicost"
+   ],
+   "mnf_num": [
+    "kicost",
+    "kibot"
+   ],
+   "mnf-num": [
+    "kicost",
+    "kibot"
+   ],
+   "mnf#": [
+    "kicost",
+    "kibot"
+   ],
+   "mfr_num": [
+    "kicost",
+    "kibot"
+   ],
+   "mfr-num": [
+    "kicost",
+    "kibot"
+   ],
+   "mfr#": [
+    "kicost",
+    "kibot"
+   ],
+   "part-num": [
+    "kicost",
+    "kibot"
+   ],
+   "part_num": [
+    "kicost",
+    "kibot"
+   ],
+   "p#": [
+    "kicost",
+    "kibot"
+   ],
+   "part#": [
+    "kicost",
+    "kibot"
+   ],
+   "stock code": [
+    "kicost"
+   ],
+   "manf#": [
+    "kicost",
+    "kibot"
+   ],
+   "Manf#": [
+    "kicost"
+   ],
+   "Mpn": [
+    "interactivehtmlbom",
+    "fabrication-toolkit"
+   ],
+   "MPN": [
+    "interactivehtmlbom",
+    "fabrication-toolkit"
+   ]
+  },
+  "manufacturer": {
+   "Manufacturer": [
+    "kicad-jlcpcb-tools",
+    "kicad-jlcpcb-tools"
+   ],
+   "manufacturer": [
+    "kicost",
+    "kibot"
+   ],
+   "manufacturer name": [
+    "kicost"
+   ],
+   "mnf": [
+    "kicost",
+    "kibot"
+   ],
+   "man": [
+    "kicost",
+    "kibot"
+   ],
+   "mfg": [
+    "kicost",
+    "kibot"
+   ],
+   "mfr": [
+    "kicost",
+    "kibot"
+   ],
+   "manf": [
+    "kicost"
+   ],
+   "Manf": [
+    "kicost"
+   ]
+  },
+  "description": {
+   "Description": [
+    "kicad-jlcpcb-tools",
+    "kicad-jlcpcb-tools",
+    "kibom",
+    "interactivehtmlbom",
+    "interactivehtmlbom",
+    "kibot"
+   ],
+   "description": [
+    "kicost",
+    "kibot"
+   ],
+   "desc": [
+    "kicost"
+   ],
+   "Desc": [
+    "kicost"
+   ]
+  },
+  "datasheet": {
+   "Datasheet": [
+    "kicad-jlcpcb-tools",
+    "kibom",
+    "kicost",
+    "interactivehtmlbom",
+    "interactivehtmlbom",
+    "kibot"
+   ],
+   "pdf": [
+    "kicost",
+    "kibot"
+   ]
+  },
+  "dnp": {
+   "Config": [
+    "kibom",
+    "kibot"
+   ],
+   "fit_field": [
+    "kibom"
+   ],
+   "fit_field = Config": [
+    "kibom"
+   ],
+   "dnp": [
+    "kibom",
+    "kicost",
+    "interactivehtmlbom",
+    "interactivehtmlbom",
+    "interactivehtmlbom",
+    "fabrication-toolkit",
+    "fabrication-toolkit"
+   ],
+   "exclude_from_bom": [
+    "kibom"
+   ],
+   "nopop": [
+    "kicost",
+    "kibot"
+   ],
+   "kicad_dnp": [
+    "interactivehtmlbom",
+    "interactivehtmlbom",
+    "interactivehtmlbom"
+   ],
+   "DNP": [
+    "interactivehtmlbom"
+   ],
+   "${DNP}": [
+    "kibot"
+   ]
+  }
+ },
+ "web": {
+  "tool": "vendor-templates",
+  "aliases": [
+   {
+    "role": "value",
+    "name": "Comment",
+    "direction": "reads_bom_column",
+    "evidence_file": "https://jlcpcb.com/help/article/bill-of-materials-for-pcb-assembly",
+    "evidence_line": 23,
+    "quote": "- **Comment** \\- Specify the type, specification, tolerance and so on. (e.g. 100nF 80% -20% 50CV)"
+   },
+   {
+    "role": "refs",
+    "name": "Designator",
+    "direction": "reads_bom_column",
+    "evidence_file": "https://jlcpcb.com/help/article/bill-of-materials-for-pcb-assembly",
+    "evidence_line": 24,
+    "quote": "- **Designator** \\- Mark the location of components on your board. (e.g. R201, R20, C100, U1 )"
+   },
+   {
+    "role": "footprint",
+    "name": "Footprint",
+    "direction": "reads_bom_column",
+    "evidence_file": "https://jlcpcb.com/help/article/bill-of-materials-for-pcb-assembly",
+    "evidence_line": 27,
+    "quote": "- **Footprint**\\- The part package. (e.g. 0402, 0805, SSOP-8)"
+   },
+   {
+    "role": "distributor_pn",
+    "name": "JLCPCB Part #",
+    "direction": "reads_bom_column",
+    "evidence_file": "https://s3.amazonaws.com/helpscout.net/docs/assets/59f1de7804286313cffbb22c/attachments/60ee4acd9e87cb3d0124d284/Sample-BOM_JLCSMT.xlsx",
+    "evidence_line": 1,
+    "quote": "<si><t>Comment</t></si><si><t>Designator</t></si><si><t>Footprint</t></si><si><r><rPr><sz val=\"11\"/><color rgb=\"FFAFABAB\"/><rFont val=\"Arial\"/><charset val=\"134\"/></rPr><t>JLCPCB Part #</t></r><r>...<t>\uff08</t></r><r>...<t>optional</t></r><r>...<t>\uff09</t></r></si>  [xl/sharedStrings.xml; sheet1.xml row 1 maps A1..D1 to these four shared strings]"
+   },
+   {
+    "role": "distributor_pn",
+    "name": "LCSC PN",
+    "direction": "reads_symbol_field",
+    "evidence_file": "https://jlcpcb.com/help/article/how-to-generate-bom-and-centroid-files-from-kicad-8",
+    "evidence_line": 45,
+    "quote": "- **LCSC PN** \\- Exact component part number from JLCPCB part supplier LCSC"
+   },
+   {
+    "role": "distributor_pn",
+    "name": "LCSC PN",
+    "direction": "reads_symbol_field",
+    "evidence_file": "https://jlcpcb.com/help/article/how-to-generate-bom-and-centroid-files-from-kicad-8",
+    "evidence_line": 93,
+    "quote": "If you are looking to be fully compatible with the installed \"JLCPCB Fabrication Toolkit\" script, it's very important to add \"LCSC PN\" section to each component, as well as it's related barcode. This can be done through the \"Schematic editor\" by clicking on each component."
+   },
+   {
+    "role": "distributor_pn",
+    "name": "Mouser Part Number",
+    "direction": "reads_bom_column",
+    "evidence_file": "https://www.mouser.com/help/tools/how-to-create-a-new-bom/",
+    "evidence_line": 291,
+    "quote": "- Mouser Part Number or"
+   },
+   {
+    "role": "mpn",
+    "name": "Manufacturer Part Number",
+    "direction": "reads_bom_column",
+    "evidence_file": "https://www.mouser.com/help/tools/how-to-create-a-new-bom/",
+    "evidence_line": 292,
+    "quote": "- Manufacturer Part Number"
+   },
+   {
+    "role": "other",
+    "name": "Customer Reference",
+    "direction": "reads_bom_column",
+    "evidence_file": "https://www.digikey.com/en/blog/q-a-from-digi-keys-list-management-webinar",
+    "evidence_line": 1262,
+    "quote": "As a registered user, you can save your internal numbers and use them to create a quote or place an order. When uploading your spreadsheet to myLists, you can map your internal part number column to the heading \u201cCustomer Reference,\u201d this will connect your internal part number to the DigiKey and Manufacturer part numbers."
+   },
+   {
+    "role": "other",
+    "name": "CompareState",
+    "direction": "writes_bom_header",
+    "evidence_file": "https://www.altium.com/documentation/altium-designer/activebom/finalizing-bom",
+    "evidence_line": 298,
+    "quote": "- CompareState"
+   },
+   {
+    "role": "other",
+    "name": "Line number",
+    "direction": "writes_bom_header",
+    "evidence_file": "https://www.altium.com/documentation/altium-designer/activebom/finalizing-bom",
+    "evidence_line": 300,
+    "quote": "- Line number"
+   },
+   {
+    "role": "other",
+    "name": "Name",
+    "direction": "writes_bom_header",
+    "evidence_file": "https://www.altium.com/documentation/altium-designer/activebom/finalizing-bom",
+    "evidence_line": 302,
+    "quote": "- Name"
+   },
+   {
+    "role": "description",
+    "name": "Description",
+    "direction": "writes_bom_header",
+    "evidence_file": "https://www.altium.com/documentation/altium-designer/activebom/finalizing-bom",
+    "evidence_line": 304,
+    "quote": "- Description"
+   },
+   {
+    "role": "refs",
+    "name": "Designator",
+    "direction": "writes_bom_header",
+    "evidence_file": "https://www.altium.com/documentation/altium-designer/activebom/finalizing-bom",
+    "evidence_line": 306,
+    "quote": "- Designator"
+   },
+   {
+    "role": "mpn",
+    "name": "Manufacturer Part Number 1",
+    "direction": "writes_bom_header",
+    "evidence_file": "https://www.altium.com/documentation/altium-designer/activebom/finalizing-bom",
+    "evidence_line": 308,
+    "quote": "- Manufacturer Part Number 1"
+   },
+   {
+    "role": "qty",
+    "name": "Qty",
+    "direction": "writes_bom_header",
+    "evidence_file": "https://www.altium.com/documentation/altium-designer/activebom/finalizing-bom",
+    "evidence_line": 310,
+    "quote": "- Qty"
+   },
+   {
+    "role": "refs",
+    "name": "Part",
+    "direction": "writes_bom_header",
+    "evidence_file": "https://raw.githubusercontent.com/igalloway/NXPhlite-kit/master/NXP-Eagle-7.5.0/ulp/bom.ulp",
+    "evidence_line": 378,
+    "quote": "  Lines[NumLines ++] = tr (\"Part\\tValue\\tDevice\\tPackage\\tDescription\\t\") + s;"
+   },
+   {
+    "role": "value",
+    "name": "Value",
+    "direction": "writes_bom_header",
+    "evidence_file": "https://raw.githubusercontent.com/igalloway/NXPhlite-kit/master/NXP-Eagle-7.5.0/ulp/bom.ulp",
+    "evidence_line": 378,
+    "quote": "  Lines[NumLines ++] = tr (\"Part\\tValue\\tDevice\\tPackage\\tDescription\\t\") + s;"
+   },
+   {
+    "role": "other",
+    "name": "Device",
+    "direction": "writes_bom_header",
+    "evidence_file": "https://raw.githubusercontent.com/igalloway/NXPhlite-kit/master/NXP-Eagle-7.5.0/ulp/bom.ulp",
+    "evidence_line": 378,
+    "quote": "  Lines[NumLines ++] = tr (\"Part\\tValue\\tDevice\\tPackage\\tDescription\\t\") + s;"
+   },
+   {
+    "role": "footprint",
+    "name": "Package",
+    "direction": "writes_bom_header",
+    "evidence_file": "https://raw.githubusercontent.com/igalloway/NXPhlite-kit/master/NXP-Eagle-7.5.0/ulp/bom.ulp",
+    "evidence_line": 378,
+    "quote": "  Lines[NumLines ++] = tr (\"Part\\tValue\\tDevice\\tPackage\\tDescription\\t\") + s;"
+   },
+   {
+    "role": "description",
+    "name": "Description",
+    "direction": "writes_bom_header",
+    "evidence_file": "https://raw.githubusercontent.com/igalloway/NXPhlite-kit/master/NXP-Eagle-7.5.0/ulp/bom.ulp",
+    "evidence_line": 378,
+    "quote": "  Lines[NumLines ++] = tr (\"Part\\tValue\\tDevice\\tPackage\\tDescription\\t\") + s;"
+   },
+   {
+    "role": "qty",
+    "name": "Qty",
+    "direction": "writes_bom_header",
+    "evidence_file": "https://raw.githubusercontent.com/igalloway/NXPhlite-kit/master/NXP-Eagle-7.5.0/ulp/bom.ulp",
+    "evidence_line": 403,
+    "quote": "  Lines[NumLines ++] = tr (\"Qty\\tValue\\tDevice\\tPackage\\tParts\\tDescription\\t\") + s;                 // 2011-04-08"
+   },
+   {
+    "role": "refs",
+    "name": "Parts",
+    "direction": "writes_bom_header",
+    "evidence_file": "https://raw.githubusercontent.com/igalloway/NXPhlite-kit/master/NXP-Eagle-7.5.0/ulp/bom.ulp",
+    "evidence_line": 403,
+    "quote": "  Lines[NumLines ++] = tr (\"Qty\\tValue\\tDevice\\tPackage\\tParts\\tDescription\\t\") + s;                 // 2011-04-08"
+   },
+   {
+    "role": "distributor_pn",
+    "name": "Digi-Key Part Number",
+    "direction": "unknown",
+    "evidence_file": "https://raw.githubusercontent.com/im-tomu/tomu-hardware/master/bom-digikey.csv",
+    "evidence_line": 1,
+    "quote": "Digi-Key Part Number,Manufacturer,Manufacturer Part Number,Customer Reference,Quantity 1,Quantity 2,Quantity 3,Mfg Std Lead Time,Description,Comments,RoHS Status,Lead Free Status,REACH Status"
+   },
+   {
+    "role": "manufacturer",
+    "name": "Manufacturer",
+    "direction": "unknown",
+    "evidence_file": "https://raw.githubusercontent.com/im-tomu/tomu-hardware/master/bom-digikey.csv",
+    "evidence_line": 1,
+    "quote": "Digi-Key Part Number,Manufacturer,Manufacturer Part Number,Customer Reference,Quantity 1,Quantity 2,Quantity 3,Mfg Std Lead Time,Description,Comments,RoHS Status,Lead Free Status,REACH Status"
+   },
+   {
+    "role": "mpn",
+    "name": "Manufacturer Part Number",
+    "direction": "unknown",
+    "evidence_file": "https://raw.githubusercontent.com/im-tomu/tomu-hardware/master/bom-digikey.csv",
+    "evidence_line": 1,
+    "quote": "Digi-Key Part Number,Manufacturer,Manufacturer Part Number,Customer Reference,Quantity 1,Quantity 2,Quantity 3,Mfg Std Lead Time,Description,Comments,RoHS Status,Lead Free Status,REACH Status"
+   },
+   {
+    "role": "other",
+    "name": "Customer Reference",
+    "direction": "unknown",
+    "evidence_file": "https://raw.githubusercontent.com/im-tomu/tomu-hardware/master/bom-digikey.csv",
+    "evidence_line": 1,
+    "quote": "Digi-Key Part Number,Manufacturer,Manufacturer Part Number,Customer Reference,Quantity 1,Quantity 2,Quantity 3,Mfg Std Lead Time,Description,Comments,RoHS Status,Lead Free Status,REACH Status"
+   },
+   {
+    "role": "qty",
+    "name": "Quantity 1",
+    "direction": "unknown",
+    "evidence_file": "https://raw.githubusercontent.com/im-tomu/tomu-hardware/master/bom-digikey.csv",
+    "evidence_line": 1,
+    "quote": "Digi-Key Part Number,Manufacturer,Manufacturer Part Number,Customer Reference,Quantity 1,Quantity 2,Quantity 3,Mfg Std Lead Time,Description,Comments,RoHS Status,Lead Free Status,REACH Status"
+   },
+   {
+    "role": "description",
+    "name": "Description",
+    "direction": "unknown",
+    "evidence_file": "https://raw.githubusercontent.com/im-tomu/tomu-hardware/master/bom-digikey.csv",
+    "evidence_line": 1,
+    "quote": "Digi-Key Part Number,Manufacturer,Manufacturer Part Number,Customer Reference,Quantity 1,Quantity 2,Quantity 3,Mfg Std Lead Time,Description,Comments,RoHS Status,Lead Free Status,REACH Status"
+   }
+  ],
+  "could_not_verify": [
+   "Digi-Key myLists official BOM-upload TEMPLATE and its literal column-header row \u2014 https://www.digikey.com/en/mylists and https://www.digikey.com/en/help-support/place-an-order/build-a-bom both scraped to site navigation only (JS-rendered / login-gated); the upload File Mapping screen is behind sign-in. Only the single mapping heading 'Customer Reference' is attested, from Digi-Key's own blog.",
+   "Digi-Key myLists full mapping-target list (whether the headings are 'Digi-Key Part Number' / 'Manufacturer Part Number' / 'Quantity' verbatim in the myLists mapper) \u2014 NOT retrieved from any digikey.com URL.",
+   "Mouser's downloadable sample BOM template file \u2014 mouser.com serves an Akamai 'Access to this page has been denied' page to non-browser fetches (HTTP 200 with a denial body). Only the two REQUIRED mapping field names on the help page were retrievable; the remaining Mouser mapping dropdown options (e.g. any quantity / customer-part-number / designator targets) were not.",
+   "Altium Designer's default BOM export header row from an official default template file (BOM Default Template*.xlt / .XLSX) \u2014 not retrieved. The Altium strings reported above come from the ActiveBOM 'Finalizing Your BOM' page's 'default columns displayed in the Report Manager dialog' list, which appears in that page's BOM-COMPARISON section (hence 'CompareState' and 'Line number'); the 'Preparing a BOM in the Report Manager' page contains no explicit default-column list.",
+   "JLCPCB literal string 'LCSC Part #' \u2014 NOT found. What is attested is 'JLCPCB Part #' (sample XLSX header D1) and 'LCSC PN' (KiCad article symbol field). The KiCad-10 JLCPCB article was not scraped.",
+   "EAGLE/Fusion bom.ulp from an Autodesk-hosted URL \u2014 the file quoted is a third-party GitHub copy of a stock EAGLE 7.5.0 install tree (NXP-Eagle-7.5.0/ulp/bom.ulp). Autodesk does not publish the ULP source at a fetchable URL, so provenance is a mirror, not the vendor.",
+   "Fusion (Electronics) BOM export default headers as distinct from legacy EAGLE bom.ulp \u2014 not investigated/retrieved."
+  ],
+  "notes": "Line numbers for HTML sources are line numbers in the firecrawl --only-main-content markdown render of that URL (saved under the session scratchpad), not in the raw HTML; quotes are verbatim from that render including its markdown escaping (e.g. \"\\\\-\"). Line numbers for bom.ulp and the CSV are true file line numbers.\n\nJLCPCB: the help page enumerates only Comment / Designator / Footprint as the mandatory fields; the downloadable \"JLC Sample BOM\" XLSX (linked from that page) has a 4-column header row A1..D1 whose D1 is rich text \"JLCPCB Part #\" + \"\uff08optional\uff09\" \u2014 the literal token is \"JLCPCB Part #\". The \"Recommendations for BOM / CPL File Preparation\" page says \"Please modify the column headers in your files to match the standard field names recognized by our system\" but publishes NO alias/synonym table \u2014 no jackpot table was found for any of the five tools.\n\nMouser: \"Mouser Part Number\" and \"Manufacturer Part Number\" are mapping TARGETS in the FORTE BOM tool's column-mapping step (\"At least one of the following options must be mapped\"), not headers Mouser writes.\n\nDigi-Key: the five aliases sourced from raw.githubusercontent.com/im-tomu/tomu-hardware are the header row of a file named bom-digikey.csv in a third-party hardware repo \u2014 it has the shape of a Digi-Key BOM Manager/list export, but I could NOT confirm Digi-Key generated it, so direction is \"unknown\" and it must not be treated as an attested vendor template. The only Digi-Key-attested string is \"Customer Reference\".\n\nAltium: reported strings are dialog/report column names, quoted verbatim from Altium's own documentation; the surrounding section is BOM Comparison. Treat with the caveat above.\n\nEAGLE bom.ulp emits two different header rows depending on list type: Parts list (line 378) = Part / Value / Device / Package / Description, Values list (line 403) = Qty / Value / Device / Package / Parts / Description. Both are wrapped in tr() so a localized EAGLE emits translated headers (the German catalog at lines 113-117 shows \"Bauteil\\tWert\\tDevice\\tPackage\\tDescription\" and \"Menge\\tWert\\tDevice\\tGeh\u00e4use\\tBauteile\")."
+ },
+ "verdict": {
+  "upheld_count": 301,
+  "refuted": [
+   "fabrication-toolkit/LCSC Part #",
+   "fabrication-toolkit/LCSC Part",
+   "fabrication-toolkit/LCSC PN",
+   "fabrication-toolkit/LCSC P/N",
+   "fabrication-toolkit/LCSC Part No.",
+   "fabrication-toolkit/LCSC Part Number",
+   "fabrication-toolkit/JLCPCB Part #",
+   "fabrication-toolkit/JLCPCB Part",
+   "fabrication-toolkit/JLCPCB PN",
+   "fabrication-toolkit/JLCPCB P/N",
+   "fabrication-toolkit/JLCPCB Part No.",
+   "fabrication-toolkit/JLCPCB Part Number",
+   "kicost/digikey#",
+   "kicost/mouser#"
+  ],
+  "corrections": [
+   "REFUTED (claims 281-292, fabrication-toolkit): the quote at plugins/process.py:465 is verbatim correct (`keys = [(sn + \" \" + abr) for sn in supplier_names for abr in pn_abbrevs]`) but that line contains NONE of the 12 claimed field-name strings. They are a runtime cross-product of line 463 (`supplier_names = ['LCSC', 'JLCPCB']`) and line 464 (`pn_abbrevs = ['Part #', 'Part', 'PN', 'P/N', 'Part No.', 'Part Number']`). The derivation is sound, but no literal appears at the cited line. Correct literal citation for 'LCSC Part #' is plugins/process.py:290 (`'LCSC Part #': self._get_mpn_from_footprint(footprint),`), which is claim 304 and is exact; the other 11 strings appear nowhere as literals.",
+   "REFUTED (claims 128-129, kicost): the quotes at kicost/edas/eda.py:95 and :96 are verbatim correct, but neither line contains the literal strings 'digikey#' or 'mouser#'. Those are runtime-constructed (`dist + '#'` over `get_distributors_iter()` inside the stub loop starting at line 92). No literal 'digikey#'/'mouser#' key exists at the cited lines.",
+   "LINE DRIFT, otherwise upheld (claims 31,32): store.py \u2014 quote is at line 445, not 444 (line 444 is `csvreader = csv.DictReader(`).",
+   "LINE DRIFT +1, otherwise upheld (claims 33-39): partselector_columns.py \u2014 the PARTSELECTOR_COLUMNS entries are one line lower than cited (lcsc=22 not 21, mfr_number=23 not 22, package=24 not 23, stock=27 not 26, mfr=28 not 27, description=29 not 28, price=30 not 29). Claim 40 (type/'Library Type' at 25) is exact, so the offset is inconsistent within the same block. All quoted text and casing verified correct.",
+   "LINE DRIFT -1, otherwise upheld (claims 42-46): common/translate.py \u2014 MFR.Part is at 282 (not 283), Package 283 (not 284), Manufacturer 285 (not 286), Description 287 (not 288), Datasheet 288 (not 289). Claim 41 ('LCSC Part' at 279) is exact.",
+   "LINE DRIFT +1, otherwise upheld (claim 62): kibom/preferences.py \u2014 `OPT_CONFIG_FIELD = \"fit_field\"` is at line 46, not 45.",
+   "QUOTE INDENTATION WRONG, otherwise upheld (claim 170): netlistparser.py:50 actually reads `                ref_fields['kicad_dnp'] = \"DNP\"` (16 spaces), the quote shows 20. Field name 'kicad_dnp' is present at exactly the cited line.",
+   "QUOTE INDENTATION + LINE DRIFT, otherwise upheld (claim 171): xmlparser.py \u2014 `field_set.add('Datasheet')` is at line 26 with 20 spaces of indent (quote shows line 25 with 16). Line 25 is `if datasheet != '~':`.",
+   "LINE DRIFT +1, otherwise upheld (claim 172): netlistparser.py \u2014 `field_set.add('Datasheet')` is at line 41, not 40.",
+   "QUOTE INDENTATION WRONG, otherwise upheld (claim 234): kibot/optionable.py:675 actually reads `            GS.sch._field_lcsc_part = 'LCSC'` (12 spaces), the quote shows 16. The 'LCSC' literal is at exactly the cited line.",
+   "TRUNCATED QUOTES (claims 101, 300) \u2014 accepted: the quoted text is a correct prefix of the real line. dist_local_template.py:54 continues `...get_distributors_iter()])`; process.py:285 continues `..., unique_id),`. Field names 'manf' and 'Designator' verified present at the cited lines.",
+   "No file was missing; all 41 distinct cited paths resolved inside the clones (kicost/kibom/kibot paths resolve under the nested package dir, e.g. kicost/kicost/edas/eda.py). No casing discrepancy was found in any upheld claim \u2014 every claimed name string matched the source byte-for-byte in case."
+  ]
+ },
+ "raw": [
+  {
+   "tool": "kicad-jlcpcb-tools",
+   "aliases": [
+    {
+     "role": "distributor_pn",
+     "name": "lcsc|jlc (case-insensitive re.match prefix pattern over footprint field names; value must match ^C\\d+$)",
+     "evidence_file": "footprint_helpers.py",
+     "evidence_line": 13,
+     "quote": "            if re.match(r\"lcsc|jlc\", field.GetName(), re.IGNORECASE) and re.match(",
+     "direction": "reads_symbol_field"
+    },
+    {
+     "role": "distributor_pn",
+     "name": "lcsc|jlc (same pattern applied to legacy fp.GetProperties() keys)",
+     "evidence_file": "footprint_helpers.py",
+     "evidence_line": 19,
+     "quote": "            if re.match(r\"lcsc|jlc\", key, re.IGNORECASE) and re.match(r\"^C\\d+$\", value):",
+     "direction": "reads_symbol_field"
+    },
+    {
+     "role": "distributor_pn",
+     "name": "LCSC",
+     "evidence_file": "footprint_helpers.py",
+     "evidence_line": 36,
+     "quote": "        fp.SetField(\"LCSC\", lcsc)",
+     "direction": "unknown"
+    },
+    {
+     "role": "distributor_pn",
+     "name": "LCSC",
+     "evidence_file": "footprint_helpers.py",
+     "evidence_line": 38,
+     "quote": "            fp.GetFieldByName(\"LCSC\").SetVisible(False)",
+     "direction": "unknown"
+    },
+    {
+     "role": "distributor_pn",
+     "name": "LCSC",
+     "evidence_file": "schematicexport.py",
+     "evidence_line": 227,
+     "quote": "                if key in {\"LCSC\", \"LCSC_PN\", \"JLC_PN\"}:",
+     "direction": "reads_symbol_field"
+    },
+    {
+     "role": "distributor_pn",
+     "name": "LCSC_PN",
+     "evidence_file": "schematicexport.py",
+     "evidence_line": 227,
+     "quote": "                if key in {\"LCSC\", \"LCSC_PN\", \"JLC_PN\"}:",
+     "direction": "reads_symbol_field"
+    },
+    {
+     "role": "distributor_pn",
+     "name": "JLC_PN",
+     "evidence_file": "schematicexport.py",
+     "evidence_line": 227,
+     "quote": "                if key in {\"LCSC\", \"LCSC_PN\", \"JLC_PN\"}:",
+     "direction": "reads_symbol_field"
+    },
+    {
+     "role": "distributor_pn",
+     "name": "LCSC",
+     "evidence_file": "schematicexport.py",
+     "evidence_line": 77,
+     "quote": "                if key == \"LCSC\":",
+     "direction": "reads_symbol_field"
+    },
+    {
+     "role": "distributor_pn",
+     "name": "LCSC",
+     "evidence_file": "schematicexport.py",
+     "evidence_line": 152,
+     "quote": "                if key == \"LCSC\":",
+     "direction": "reads_symbol_field"
+    },
+    {
+     "role": "distributor_pn",
+     "name": "LCSC",
+     "evidence_file": "schematicexport.py",
+     "evidence_line": 98,
+     "quote": "                    newTxt = f'    (property \"LCSC\" \"{newLcsc}\" (id {lastID + 1}) (at {lastLoc} 0)'",
+     "direction": "unknown"
+    },
+    {
+     "role": "distributor_pn",
+     "name": "LCSC",
+     "evidence_file": "schematicexport.py",
+     "evidence_line": 173,
+     "quote": "                    newTxt = f'    (property \"LCSC\" \"{newLcsc}\" (at {lastLoc} 0)'",
+     "direction": "unknown"
+    },
+    {
+     "role": "distributor_pn",
+     "name": "LCSC",
+     "evidence_file": "schematicexport.py",
+     "evidence_line": 259,
+     "quote": "                    newTxt = f'\\t\\t(property \"LCSC\" \"{newLcsc}\"\\n\\t\\t\\t(at {lastLoc} 0)'",
+     "direction": "unknown"
+    },
+    {
+     "role": "value",
+     "name": "Comment",
+     "evidence_file": "fabrication.py",
+     "evidence_line": 456,
+     "quote": "            writer.writerow([\"Comment\", \"Designator\", \"Footprint\", \"LCSC\", \"Quantity\"])",
+     "direction": "writes_bom_header"
+    },
+    {
+     "role": "refs",
+     "name": "Designator",
+     "evidence_file": "fabrication.py",
+     "evidence_line": 456,
+     "quote": "            writer.writerow([\"Comment\", \"Designator\", \"Footprint\", \"LCSC\", \"Quantity\"])",
+     "direction": "writes_bom_header"
+    },
+    {
+     "role": "footprint",
+     "name": "Footprint",
+     "evidence_file": "fabrication.py",
+     "evidence_line": 456,
+     "quote": "            writer.writerow([\"Comment\", \"Designator\", \"Footprint\", \"LCSC\", \"Quantity\"])",
+     "direction": "writes_bom_header"
+    },
+    {
+     "role": "distributor_pn",
+     "name": "LCSC",
+     "evidence_file": "fabrication.py",
+     "evidence_line": 456,
+     "quote": "            writer.writerow([\"Comment\", \"Designator\", \"Footprint\", \"LCSC\", \"Quantity\"])",
+     "direction": "writes_bom_header"
+    },
+    {
+     "role": "qty",
+     "name": "Quantity",
+     "evidence_file": "fabrication.py",
+     "evidence_line": 456,
+     "quote": "            writer.writerow([\"Comment\", \"Designator\", \"Footprint\", \"LCSC\", \"Quantity\"])",
+     "direction": "writes_bom_header"
+    },
+    {
+     "role": "refs",
+     "name": "Designator",
+     "evidence_file": "fabrication.py",
+     "evidence_line": 410,
+     "quote": "                [\"Designator\", \"Val\", \"Package\", \"Mid X\", \"Mid Y\", \"Rotation\", \"Layer\"]",
+     "direction": "writes_bom_header"
+    },
+    {
+     "role": "value",
+     "name": "Val",
+     "evidence_file": "fabrication.py",
+     "evidence_line": 410,
+     "quote": "                [\"Designator\", \"Val\", \"Package\", \"Mid X\", \"Mid Y\", \"Rotation\", \"Layer\"]",
+     "direction": "writes_bom_header"
+    },
+    {
+     "role": "footprint",
+     "name": "Package",
+     "evidence_file": "fabrication.py",
+     "evidence_line": 410,
+     "quote": "                [\"Designator\", \"Val\", \"Package\", \"Mid X\", \"Mid Y\", \"Rotation\", \"Layer\"]",
+     "direction": "writes_bom_header"
+    },
+    {
+     "role": "other",
+     "name": "Mid X",
+     "evidence_file": "fabrication.py",
+     "evidence_line": 410,
+     "quote": "                [\"Designator\", \"Val\", \"Package\", \"Mid X\", \"Mid Y\", \"Rotation\", \"Layer\"]",
+     "direction": "writes_bom_header"
+    },
+    {
+     "role": "other",
+     "name": "Mid Y",
+     "evidence_file": "fabrication.py",
+     "evidence_line": 410,
+     "quote": "                [\"Designator\", \"Val\", \"Package\", \"Mid X\", \"Mid Y\", \"Rotation\", \"Layer\"]",
+     "direction": "writes_bom_header"
+    },
+    {
+     "role": "other",
+     "name": "Rotation",
+     "evidence_file": "fabrication.py",
+     "evidence_line": 410,
+     "quote": "                [\"Designator\", \"Val\", \"Package\", \"Mid X\", \"Mid Y\", \"Rotation\", \"Layer\"]",
+     "direction": "writes_bom_header"
+    },
+    {
+     "role": "other",
+     "name": "Layer",
+     "evidence_file": "fabrication.py",
+     "evidence_line": 410,
+     "quote": "                [\"Designator\", \"Val\", \"Package\", \"Mid X\", \"Mid Y\", \"Rotation\", \"Layer\"]",
+     "direction": "writes_bom_header"
+    },
+    {
+     "role": "footprint",
+     "name": "Footprint",
+     "evidence_file": "partmapper.py",
+     "evidence_line": 256,
+     "quote": "            csvwriter.writerow([\"Footprint\", \"Part Value\", \"LCSC Part\"])",
+     "direction": "writes_bom_header"
+    },
+    {
+     "role": "value",
+     "name": "Part Value",
+     "evidence_file": "partmapper.py",
+     "evidence_line": 256,
+     "quote": "            csvwriter.writerow([\"Footprint\", \"Part Value\", \"LCSC Part\"])",
+     "direction": "writes_bom_header"
+    },
+    {
+     "role": "distributor_pn",
+     "name": "LCSC Part",
+     "evidence_file": "partmapper.py",
+     "evidence_line": 256,
+     "quote": "            csvwriter.writerow([\"Footprint\", \"Part Value\", \"LCSC Part\"])",
+     "direction": "writes_bom_header"
+    },
+    {
+     "role": "footprint",
+     "name": "footprint",
+     "evidence_file": "partmapper.py",
+     "evidence_line": 237,
+     "quote": "                csvreader = csv.DictReader(f, fieldnames=(\"footprint\", \"value\", \"lcsc\"))",
+     "direction": "reads_bom_column"
+    },
+    {
+     "role": "value",
+     "name": "value",
+     "evidence_file": "partmapper.py",
+     "evidence_line": 237,
+     "quote": "                csvreader = csv.DictReader(f, fieldnames=(\"footprint\", \"value\", \"lcsc\"))",
+     "direction": "reads_bom_column"
+    },
+    {
+     "role": "distributor_pn",
+     "name": "lcsc",
+     "evidence_file": "partmapper.py",
+     "evidence_line": 237,
+     "quote": "                csvreader = csv.DictReader(f, fieldnames=(\"footprint\", \"value\", \"lcsc\"))",
+     "direction": "reads_bom_column"
+    },
+    {
+     "role": "refs",
+     "name": "reference",
+     "evidence_file": "store.py",
+     "evidence_line": 444,
+     "quote": "                    f, fieldnames=(\"reference\", \"lcsc\", \"bom\", \"pos\")",
+     "direction": "reads_bom_column"
+    },
+    {
+     "role": "distributor_pn",
+     "name": "lcsc",
+     "evidence_file": "store.py",
+     "evidence_line": 444,
+     "quote": "                    f, fieldnames=(\"reference\", \"lcsc\", \"bom\", \"pos\")",
+     "direction": "reads_bom_column"
+    },
+    {
+     "role": "distributor_pn",
+     "name": "LCSC Part",
+     "evidence_file": "partselector_columns.py",
+     "evidence_line": 21,
+     "quote": "    PartSelectorColumn(\"lcsc\", \"LCSC\", \"LCSC Part\", 60, \"center\"),",
+     "direction": "unknown"
+    },
+    {
+     "role": "mpn",
+     "name": "MFR.Part",
+     "evidence_file": "partselector_columns.py",
+     "evidence_line": 22,
+     "quote": "    PartSelectorColumn(\"mfr_number\", \"MFR Number\", \"MFR.Part\", 140, \"left\"),",
+     "direction": "unknown"
+    },
+    {
+     "role": "footprint",
+     "name": "Package",
+     "evidence_file": "partselector_columns.py",
+     "evidence_line": 23,
+     "quote": "    PartSelectorColumn(\"package\", \"Package\", \"Package\", 100, \"left\"),",
+     "direction": "unknown"
+    },
+    {
+     "role": "manufacturer",
+     "name": "Manufacturer",
+     "evidence_file": "partselector_columns.py",
+     "evidence_line": 27,
+     "quote": "    PartSelectorColumn(\"mfr\", \"Manufacturer\", \"Manufacturer\", 100, \"left\"),",
+     "direction": "unknown"
+    },
+    {
+     "role": "description",
+     "name": "Description",
+     "evidence_file": "partselector_columns.py",
+     "evidence_line": 28,
+     "quote": "    PartSelectorColumn(\"description\", \"Description\", \"Description\", 300, \"left\"),",
+     "direction": "unknown"
+    },
+    {
+     "role": "other",
+     "name": "Price",
+     "evidence_file": "partselector_columns.py",
+     "evidence_line": 29,
+     "quote": "    PartSelectorColumn(\"price\", \"Price\", \"Price\", 100, \"left\"),",
+     "direction": "unknown"
+    },
+    {
+     "role": "other",
+     "name": "Stock",
+     "evidence_file": "partselector_columns.py",
+     "evidence_line": 26,
+     "quote": "    PartSelectorColumn(\"stock\", \"Stock\", \"Stock\", 50, \"center\"),",
+     "direction": "unknown"
+    },
+    {
+     "role": "other",
+     "name": "Library Type",
+     "evidence_file": "partselector_columns.py",
+     "evidence_line": 25,
+     "quote": "    PartSelectorColumn(\"type\", \"Type\", \"Library Type\", 50, \"left\"),",
+     "direction": "unknown"
+    },
+    {
+     "role": "distributor_pn",
+     "name": "LCSC Part",
+     "evidence_file": "common/translate.py",
+     "evidence_line": 279,
+     "quote": "            \"LCSC Part\": f\"C{lcsc}\",",
+     "direction": "unknown"
+    },
+    {
+     "role": "mpn",
+     "name": "MFR.Part",
+     "evidence_file": "common/translate.py",
+     "evidence_line": 283,
+     "quote": "            \"MFR.Part\": component_row[\"mfr\"],",
+     "direction": "unknown"
+    },
+    {
+     "role": "manufacturer",
+     "name": "Manufacturer",
+     "evidence_file": "common/translate.py",
+     "evidence_line": 286,
+     "quote": "            \"Manufacturer\": self.manufacturers[manufacturer_id],",
+     "direction": "unknown"
+    },
+    {
+     "role": "datasheet",
+     "name": "Datasheet",
+     "evidence_file": "common/translate.py",
+     "evidence_line": 289,
+     "quote": "            \"Datasheet\": component_row[\"datasheet\"],",
+     "direction": "unknown"
+    },
+    {
+     "role": "description",
+     "name": "Description",
+     "evidence_file": "common/translate.py",
+     "evidence_line": 288,
+     "quote": "            \"Description\": description,",
+     "direction": "unknown"
+    },
+    {
+     "role": "footprint",
+     "name": "Package",
+     "evidence_file": "common/translate.py",
+     "evidence_line": 284,
+     "quote": "            \"Package\": component_row[\"package\"],",
+     "direction": "unknown"
+    }
+   ],
+   "could_not_verify": [
+    "No 'MPN' / 'manf#' / 'Manufacturer Part Number' symbol-field alias table \u2014 the plugin only ever resolves an LCSC/JLC distributor number off symbols/footprints; MPN strings ('MFR.Part') exist solely as JLCPCB parts-database column names, not as symbol fields it reads.",
+    "No DNP field-name string \u2014 DNP is read from the KiCad API attribute bits (EXCLUDE_FROM_BOM=3 / EXCLUDE_FROM_POS=2 in footprint_helpers.py, get_is_dnp), not from a named text field/column.",
+    "No BOM-CSV importer: the tool never reads a third-party BOM CSV's header row. The only CSV reads are its own fixed-position files (partmapper mapping export, legacy jlcpcb/part_assignments.csv), both with hardcoded fieldnames and next(csvreader) skipping the header.",
+    "No configurable/user-overridable alias or synonym table for field names anywhere in the repo (settings.json holds no field-name mapping)."
+   ],
+   "notes": "Clone: /tmp/claude-1000/-home-matthew-circuits-com/1a91b583-5ce8-47da-87b4-dd08761fbeb2/scratchpad/alias-harvest/kicad-jlcpcb-tools (depth-1, HEAD). Key facts: (1) The symbol/footprint LCSC alias is a REGEX, not a list \u2014 footprint_helpers.get_lcsc_value accepts ANY field whose name matches re.match(r\"lcsc|jlc\", name, re.IGNORECASE) (prefix match, so 'LCSC', 'lcsc', 'LCSC Part #', 'JLCPCB', 'JLC_PN' all hit) AND whose VALUE matches ^C\\\\d+$ \u2014 the value grammar is half the detector. When writing back it reuses the existing field's name, else creates literally \"LCSC\" (hidden). (2) schematicexport.py (KiCad 8+ path) hardcodes the set {\"LCSC\",\"LCSC_PN\",\"JLC_PN\"} for schematic properties; the KiCad 6 and 7 paths (lines 77, 152) accept only \"LCSC\". New properties are always written as \"LCSC\". (3) The JLCPCB BOM header written by fabrication.generate_bom is exactly: Comment,Designator,Footprint,LCSC,Quantity. The CPL/placement header is: Designator,Val,Package,Mid X,Mid Y,Rotation,Layer. (4) 'LCSC Part' / 'MFR.Part' / 'Library Type' / 'First Category' / 'Second Category' / 'Solder Joint' are JLCPCB parts-DATABASE (sqlite/CSV) column names used for search + the partmapper export header, not symbol fields."
+  },
+  {
+   "tool": "kibom",
+   "aliases": [
+    {
+     "role": "refs",
+     "name": "References",
+     "evidence_file": "kibom/columns.py",
+     "evidence_line": 7,
+     "quote": "    COL_REFERENCE = 'References'",
+     "direction": "writes_bom_header"
+    },
+    {
+     "role": "description",
+     "name": "Description",
+     "evidence_file": "kibom/columns.py",
+     "evidence_line": 8,
+     "quote": "    COL_DESCRIPTION = 'Description'",
+     "direction": "writes_bom_header"
+    },
+    {
+     "role": "value",
+     "name": "Value",
+     "evidence_file": "kibom/columns.py",
+     "evidence_line": 9,
+     "quote": "    COL_VALUE = 'Value'",
+     "direction": "writes_bom_header"
+    },
+    {
+     "role": "footprint",
+     "name": "Footprint",
+     "evidence_file": "kibom/columns.py",
+     "evidence_line": 10,
+     "quote": "    COL_FP = 'Footprint'",
+     "direction": "writes_bom_header"
+    },
+    {
+     "role": "footprint",
+     "name": "Footprint Lib",
+     "evidence_file": "kibom/columns.py",
+     "evidence_line": 11,
+     "quote": "    COL_FP_LIB = 'Footprint Lib'",
+     "direction": "writes_bom_header"
+    },
+    {
+     "role": "other",
+     "name": "Part",
+     "evidence_file": "kibom/columns.py",
+     "evidence_line": 12,
+     "quote": "    COL_PART = 'Part'",
+     "direction": "writes_bom_header"
+    },
+    {
+     "role": "other",
+     "name": "Part Lib",
+     "evidence_file": "kibom/columns.py",
+     "evidence_line": 13,
+     "quote": "    COL_PART_LIB = 'Part Lib'",
+     "direction": "writes_bom_header"
+    },
+    {
+     "role": "other",
+     "name": "Sheetpath",
+     "evidence_file": "kibom/columns.py",
+     "evidence_line": 14,
+     "quote": "    COL_SHEETPATH = 'Sheetpath'",
+     "direction": "writes_bom_header"
+    },
+    {
+     "role": "datasheet",
+     "name": "Datasheet",
+     "evidence_file": "kibom/columns.py",
+     "evidence_line": 15,
+     "quote": "    COL_DATASHEET = 'Datasheet'",
+     "direction": "writes_bom_header"
+    },
+    {
+     "role": "qty",
+     "name": "Quantity Per PCB",
+     "evidence_file": "kibom/columns.py",
+     "evidence_line": 18,
+     "quote": "    COL_GRP_QUANTITY = 'Quantity Per PCB'",
+     "direction": "writes_bom_header"
+    },
+    {
+     "role": "other",
+     "name": "Total Cost",
+     "evidence_file": "kibom/columns.py",
+     "evidence_line": 19,
+     "quote": "    COL_GRP_TOTAL_COST = 'Total Cost'",
+     "direction": "writes_bom_header"
+    },
+    {
+     "role": "qty",
+     "name": "Build Quantity",
+     "evidence_file": "kibom/columns.py",
+     "evidence_line": 20,
+     "quote": "    COL_GRP_BUILD_QUANTITY = 'Build Quantity'",
+     "direction": "writes_bom_header"
+    },
+    {
+     "role": "other",
+     "name": "Component",
+     "evidence_file": "kibom/csv_writer.py",
+     "evidence_line": 47,
+     "quote": "            comp = \"Component\"",
+     "direction": "writes_bom_header"
+    },
+    {
+     "role": "other",
+     "name": "Component",
+     "evidence_file": "kibom/xlsx_writer.py",
+     "evidence_line": 37,
+     "quote": "            comp = \"Component\"",
+     "direction": "writes_bom_header"
+    },
+    {
+     "role": "dnp",
+     "name": "Config",
+     "evidence_file": "kibom/preferences.py",
+     "evidence_line": 76,
+     "quote": "        self.configField = \"Config\"  # Default field used for part fitting config",
+     "direction": "reads_symbol_field"
+    },
+    {
+     "role": "dnp",
+     "name": "fit_field",
+     "evidence_file": "kibom/preferences.py",
+     "evidence_line": 45,
+     "quote": "    OPT_CONFIG_FIELD = \"fit_field\"",
+     "direction": "unknown"
+    },
+    {
+     "role": "dnp",
+     "name": "fit_field = Config",
+     "evidence_file": "test/bom.ini",
+     "evidence_line": 24,
+     "quote": "fit_field = Config",
+     "direction": "reads_symbol_field"
+    },
+    {
+     "role": "dnp",
+     "name": "dnp",
+     "evidence_file": "kibom/component.py",
+     "evidence_line": 359,
+     "quote": "                if name == 'dnp' or name == 'exclude_from_bom':",
+     "direction": "reads_symbol_field"
+    },
+    {
+     "role": "dnp",
+     "name": "exclude_from_bom",
+     "evidence_file": "kibom/component.py",
+     "evidence_line": 359,
+     "quote": "                if name == 'dnp' or name == 'exclude_from_bom':",
+     "direction": "reads_symbol_field"
+    },
+    {
+     "role": "other",
+     "name": "digikey_link",
+     "evidence_file": "kibom/preferences.py",
+     "evidence_line": 30,
+     "quote": "    OPT_DIGIKEY_LINK = \"digikey_link\"",
+     "direction": "unknown"
+    },
+    {
+     "role": "other",
+     "name": "mouser_link",
+     "evidence_file": "kibom/preferences.py",
+     "evidence_line": 31,
+     "quote": "    OPT_MOUSER_LINK = \"mouser_link\"",
+     "direction": "unknown"
+    },
+    {
+     "role": "other",
+     "name": "lcsc_link",
+     "evidence_file": "kibom/preferences.py",
+     "evidence_line": 32,
+     "quote": "    OPT_LCSC_LINK = \"lcsc_link\"",
+     "direction": "unknown"
+    }
+   ],
+   "could_not_verify": [
+    "No per-column field-name alias/synonym table exists anywhere in KiBoM. The FOCUS premise (explicit ALIAS lists for part number / quantity / references in bomlib/columns.py) is not borne out: kibom/columns.py (the package is `kibom/`, not `bomlib/`, in the current HEAD) contains ONLY the single canonical name per column plus the _COLUMNS_DEFAULT / _COLUMNS_PROTECTED / _COLUMNS_GEN groupings of those same constants.",
+    "No manufacturer-part-number field name of any spelling ('MPN', 'manf#', 'Manufacturer Part Number', 'Part Number', 'PN') appears in any .py file. grep -rni 'manf|mpn|part number|partno' over the sources returns no field-name literal.",
+    "No manufacturer-name field literal ('manf', 'Manufacturer', 'Mfr') appears in the sources.",
+    "No distributor part-number field literals ('Digi-Key PN', 'digikeypn', 'Mouser Part Number', 'LCSC Part #'). The digikey_link/mouser_link/lcsc_link options are INI OPTION names whose VALUE is a user-supplied field name; KiBoM ships no default and never hard-codes a distributor field name (kibom/preferences.py:69-71 set them all to False; kibom/html_writer.py:56-66 only splits whatever the user configured). README.md:268 shows 'digikey_link = digikeypn' as a user EXAMPLE, not a code default.",
+    "No 'Qnty', 'Qty', or 'Quantity' bare alias \u2014 the only quantity headers are 'Quantity Per PCB' and 'Build Quantity'.",
+    "No 'Ref', 'Refs', 'RefDes', or 'Designator' alias for the references column.",
+    "No BOM-column READING anywhere: KiBoM only consumes KiCad XML netlists (kibom/netlist_reader.py) and WRITES csv/tsv/html/xlsx/xml. There is no CSV-column auto-detection code to harvest."
+   ],
+   "notes": "Clone: /tmp/claude-1000/-home-matthew-circuits-com/1a91b583-5ce8-47da-87b4-dd08761fbeb2/scratchpad/alias-harvest/kibom (shallow, github.com/SchrodingersGat/KiBoM). Paths above are repo-relative to that clone.\n\nDirection nuance: the columns.py constants are simultaneously (a) the default BOM output headers via _COLUMNS_DEFAULT (kibom/columns.py:29-41) and (b) names matched case-insensitively when pulling data off a component \u2014 kibom/component.py:282-316 special-cases each one against intrinsic netlist data, and kibom/component.py:319-321 (\"# Other fields (case insensitive)\" / \"for f in self.getFieldNames(): if f.lower() == name.lower():\") is the ONLY generic symbol-field lookup. That single case-fold is the entirety of KiBoM's \"alias\" tolerance: any column name a user adds is matched to a symbol field by lowercase equality, nothing more.\n\nThe thing named \"aliases\" in this repo is NOT a field-name table. [COMPONENT_ALIASES] (kibom/preferences.py:23 SECTION_ALIASES = \"COMPONENT_ALIASES\"; defaults at kibom/preferences.py:114-121) lists equivalent SYMBOL NAME VALUES for grouping: [\"c\", \"c_small\", \"cap\", \"capacitor\"], [\"r\", \"r_small\", \"res\", \"resistor\"], [\"sw\", \"switch\"], [\"l\", \"l_small\", \"inductor\"], [\"zener\", \"zenersmall\"], [\"d\", \"diode\", \"d_small\"] \u2014 cell values in the Part column, consumed at kibom/component.py:86-87. Reported as notes, not as aliases, since they are not field/column names.\n\nLikewise the DNF/DNC lists (kibom/component.py:14-28 and 31-36) are VALUES a fit field may hold, not field names: DNF = \"dnf\",\"dnl\",\"dnp\",\"do not fit\",\"do not place\",\"do not load\",\"nofit\",\"nostuff\",\"noplace\",\"noload\",\"not fitted\",\"not loaded\",\"not placed\",\"no stuff\"; DNC = \"dnc\",\"do not change\",\"no change\",\"fixed\". Note \"dnp\" appears in BOTH senses \u2014 as a DNF cell value (component.py:17) and as a KiCad 7 property NAME (component.py:359).\n\nColumn renaming is user-driven only: SECTION_COLUMN_RENAME = \"COLUMN_RENAME\" (kibom/preferences.py:28) maps a column to a display name at write time (csv_writer.py:48-49); it ships empty (self.colRename = {} at preferences.py:98).\n\nDefault ignored columns are 'Part Lib' / 'Footprint Lib' (preferences.py:55-59; test/bom.ini:39-40); default grouping fields are Part, Part Lib, Value, Footprint, Footprint Lib (preferences.py:88-94)."
+  },
+  {
+   "tool": "kicost",
+   "notes": "JACKPOT: kicost/edas/eda.py:35-90 is an explicit alias/synonym dictionary `field_name_translations` mapping lowercased user spellings -> KiCost canonical field names. Lookups are case-INSENSITIVE: every call lowercases+strips first (eda.py:178 `f = f.lower().strip()`; generic_csv.py:165 `hdr.strip().lower()`). The SAME table is applied to BOTH symbol fields (eda.py:181 in eda_class.process_fields) and CSV BOM column headers (generic_csv.py:165) \u2014 I tagged table entries `reads_symbol_field` because that module owns them, but each is equally a BOM-column alias.\n\nDistributor part-number fields are GENERATED, not literal (eda.py:92-97): for each distributor slug in {arrow, digikey, farnell, mouser, newark, rs, tme, lcsc} (distributors_info.py:63-113) and each stub in ['part#','#','p#','pn','vendor#','vp#','vpn','num'], the table gains `<dist><stub>`, `<dist>_<stub>` and `<dist>-<stub>` -> `<dist>#`. So 'digikey#', 'digikeypart#', 'digikey_pn', 'mouser-vpn' all normalize to 'digikey#'/'mouser#'. I report canonical generated forms plus the generating lines rather than enumerating ~200 combinations.\n\nOther conventions: `kicost:FIELD` and `kicost.VARIANT:FIELD` prefixed fields override plain ones (eda.py:196-209); `DISTRIBUTOR:FIELD` (SEPRTR=':') scopes a field to one distributor (eda.py:127-144); bare 'cat#', 'pricing', 'link' auto-assign to the 'Local' distributor (eda.py:156-158). Per-part quantity uses 'manf#_qty' and '<dist>#_qty' (kicost.py:197).\n\nHeaderless-CSV fallback (generic_csv.py:186-190): 1 col => manf#; 2 cols => manf#, refs; 3+ => qty, manf#, refs.",
+   "aliases": [
+    {
+     "role": "mpn",
+     "name": "mpn",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kicost/edas/eda.py",
+     "evidence_line": 41,
+     "quote": "    'mpn': 'manf#',"
+    },
+    {
+     "role": "mpn",
+     "name": "pn",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kicost/edas/eda.py",
+     "evidence_line": 42,
+     "quote": "    'pn': 'manf#',"
+    },
+    {
+     "role": "mpn",
+     "name": "manf_num",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kicost/edas/eda.py",
+     "evidence_line": 43,
+     "quote": "    'manf_num': 'manf#',"
+    },
+    {
+     "role": "mpn",
+     "name": "manf-num",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kicost/edas/eda.py",
+     "evidence_line": 44,
+     "quote": "    'manf-num': 'manf#',"
+    },
+    {
+     "role": "mpn",
+     "name": "mfg_num",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kicost/edas/eda.py",
+     "evidence_line": 45,
+     "quote": "    'mfg_num': 'manf#',"
+    },
+    {
+     "role": "mpn",
+     "name": "mfg-num",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kicost/edas/eda.py",
+     "evidence_line": 46,
+     "quote": "    'mfg-num': 'manf#',"
+    },
+    {
+     "role": "mpn",
+     "name": "mfg#",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kicost/edas/eda.py",
+     "evidence_line": 47,
+     "quote": "    'mfg#': 'manf#',"
+    },
+    {
+     "role": "mpn",
+     "name": "mfg part#",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kicost/edas/eda.py",
+     "evidence_line": 48,
+     "quote": "    'mfg part#': 'manf#',"
+    },
+    {
+     "role": "mpn",
+     "name": "mfr. no",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kicost/edas/eda.py",
+     "evidence_line": 49,
+     "quote": "    'mfr. no': 'manf#',"
+    },
+    {
+     "role": "mpn",
+     "name": "man#",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kicost/edas/eda.py",
+     "evidence_line": 50,
+     "quote": "    'man#': 'manf#',"
+    },
+    {
+     "role": "mpn",
+     "name": "man_num",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kicost/edas/eda.py",
+     "evidence_line": 51,
+     "quote": "    'man_num': 'manf#',"
+    },
+    {
+     "role": "mpn",
+     "name": "man-num",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kicost/edas/eda.py",
+     "evidence_line": 52,
+     "quote": "    'man-num': 'manf#',"
+    },
+    {
+     "role": "mpn",
+     "name": "manpartno",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kicost/edas/eda.py",
+     "evidence_line": 53,
+     "quote": "    'manpartno': 'manf#',"
+    },
+    {
+     "role": "mpn",
+     "name": "manufacturer part number",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kicost/edas/eda.py",
+     "evidence_line": 54,
+     "quote": "    'manufacturer part number': 'manf#',  # Use on `http://upverter.com/`."
+    },
+    {
+     "role": "mpn",
+     "name": "mnf_num",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kicost/edas/eda.py",
+     "evidence_line": 55,
+     "quote": "    'mnf_num': 'manf#',"
+    },
+    {
+     "role": "mpn",
+     "name": "mnf-num",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kicost/edas/eda.py",
+     "evidence_line": 56,
+     "quote": "    'mnf-num': 'manf#',"
+    },
+    {
+     "role": "mpn",
+     "name": "mnf#",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kicost/edas/eda.py",
+     "evidence_line": 57,
+     "quote": "    'mnf#': 'manf#',"
+    },
+    {
+     "role": "mpn",
+     "name": "mfr_num",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kicost/edas/eda.py",
+     "evidence_line": 58,
+     "quote": "    'mfr_num': 'manf#',"
+    },
+    {
+     "role": "mpn",
+     "name": "mfr-num",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kicost/edas/eda.py",
+     "evidence_line": 59,
+     "quote": "    'mfr-num': 'manf#',"
+    },
+    {
+     "role": "mpn",
+     "name": "mfr#",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kicost/edas/eda.py",
+     "evidence_line": 60,
+     "quote": "    'mfr#': 'manf#',"
+    },
+    {
+     "role": "mpn",
+     "name": "part-num",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kicost/edas/eda.py",
+     "evidence_line": 61,
+     "quote": "    'part-num': 'manf#',"
+    },
+    {
+     "role": "mpn",
+     "name": "part_num",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kicost/edas/eda.py",
+     "evidence_line": 62,
+     "quote": "    'part_num': 'manf#',"
+    },
+    {
+     "role": "mpn",
+     "name": "p#",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kicost/edas/eda.py",
+     "evidence_line": 63,
+     "quote": "    'p#': 'manf#',"
+    },
+    {
+     "role": "mpn",
+     "name": "part#",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kicost/edas/eda.py",
+     "evidence_line": 64,
+     "quote": "    'part#': 'manf#',"
+    },
+    {
+     "role": "mpn",
+     "name": "stock code",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kicost/edas/eda.py",
+     "evidence_line": 65,
+     "quote": "    'stock code': 'manf#',"
+    },
+    {
+     "role": "mpn",
+     "name": "manf#",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kicost/kicost.py",
+     "evidence_line": 195,
+     "quote": "    FIELDS_SPREADSHEET = ['refs', 'value', 'desc', 'footprint', 'manf', 'manf#']"
+    },
+    {
+     "role": "manufacturer",
+     "name": "manufacturer",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kicost/edas/eda.py",
+     "evidence_line": 67,
+     "quote": "    'manufacturer': 'manf',"
+    },
+    {
+     "role": "manufacturer",
+     "name": "manufacturer name",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kicost/edas/eda.py",
+     "evidence_line": 68,
+     "quote": "    'manufacturer name': 'manf',  # Used for some web site tools to part generator in Altium."
+    },
+    {
+     "role": "manufacturer",
+     "name": "mnf",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kicost/edas/eda.py",
+     "evidence_line": 69,
+     "quote": "    'mnf': 'manf',"
+    },
+    {
+     "role": "manufacturer",
+     "name": "man",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kicost/edas/eda.py",
+     "evidence_line": 70,
+     "quote": "    'man': 'manf',"
+    },
+    {
+     "role": "manufacturer",
+     "name": "mfg",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kicost/edas/eda.py",
+     "evidence_line": 71,
+     "quote": "    'mfg': 'manf',"
+    },
+    {
+     "role": "manufacturer",
+     "name": "mfr",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kicost/edas/eda.py",
+     "evidence_line": 72,
+     "quote": "    'mfr': 'manf',"
+    },
+    {
+     "role": "manufacturer",
+     "name": "manf",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kicost/distributors/dist_local_template.py",
+     "evidence_line": 54,
+     "quote": "    FIELDS_NOT_HASH = (['manf#_qty', 'manf'] + FIELDS_MANFCAT + [d + '#_qty' for d in distributor_class.get_distributors_iter()])"
+    },
+    {
+     "role": "refs",
+     "name": "designator",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kicost/edas/eda.py",
+     "evidence_line": 74,
+     "quote": "    'designator': 'refs',"
+    },
+    {
+     "role": "refs",
+     "name": "part reference",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kicost/edas/eda.py",
+     "evidence_line": 75,
+     "quote": "    'part reference': 'refs',"
+    },
+    {
+     "role": "refs",
+     "name": "reference",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kicost/edas/eda.py",
+     "evidence_line": 76,
+     "quote": "    'reference': 'refs',"
+    },
+    {
+     "role": "refs",
+     "name": "reference designator",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kicost/edas/eda.py",
+     "evidence_line": 77,
+     "quote": "    'reference designator': 'refs',"
+    },
+    {
+     "role": "refs",
+     "name": "references",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kicost/edas/eda.py",
+     "evidence_line": 78,
+     "quote": "    'references': 'refs',"
+    },
+    {
+     "role": "refs",
+     "name": "customer no",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kicost/edas/eda.py",
+     "evidence_line": 79,
+     "quote": "    'customer no': 'refs',"
+    },
+    {
+     "role": "refs",
+     "name": "parts",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kicost/edas/eda.py",
+     "evidence_line": 80,
+     "quote": "    'parts': 'refs',"
+    },
+    {
+     "role": "refs",
+     "name": "part",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kicost/edas/eda.py",
+     "evidence_line": 81,
+     "quote": "    'part': 'refs',"
+    },
+    {
+     "role": "refs",
+     "name": "refs",
+     "direction": "reads_bom_column",
+     "evidence_file": "kicost/edas/generic_csv.py",
+     "evidence_line": 188,
+     "quote": "            header = ['manf#', 'refs']"
+    },
+    {
+     "role": "qty",
+     "name": "order qty",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kicost/edas/eda.py",
+     "evidence_line": 83,
+     "quote": "    'order qty': 'qty',"
+    },
+    {
+     "role": "qty",
+     "name": "quantity",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kicost/edas/eda.py",
+     "evidence_line": 84,
+     "quote": "    'quantity': 'qty',"
+    },
+    {
+     "role": "qty",
+     "name": "qty",
+     "direction": "reads_bom_column",
+     "evidence_file": "kicost/edas/generic_csv.py",
+     "evidence_line": 190,
+     "quote": "            header = ['qty', 'manf#', 'refs']"
+    },
+    {
+     "role": "qty",
+     "name": "manf#_qty",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kicost/edas/tools.py",
+     "evidence_line": 540,
+     "quote": "    qty = component.fields.get('manf#_qty')"
+    },
+    {
+     "role": "footprint",
+     "name": "package",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kicost/edas/eda.py",
+     "evidence_line": 37,
+     "quote": "    'package': 'footprint',"
+    },
+    {
+     "role": "footprint",
+     "name": "pcb footprint",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kicost/edas/eda.py",
+     "evidence_line": 38,
+     "quote": "    'pcb footprint': 'footprint',"
+    },
+    {
+     "role": "footprint",
+     "name": "pcb package",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kicost/edas/eda.py",
+     "evidence_line": 39,
+     "quote": "    'pcb package': 'footprint',  # Used at Proteus."
+    },
+    {
+     "role": "footprint",
+     "name": "Footprint",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kicost/edas/eda_kicad.py",
+     "evidence_line": 143,
+     "quote": "            fields['Footprint'] = str(c.find('footprint').string)"
+    },
+    {
+     "role": "datasheet",
+     "name": "pdf",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kicost/edas/eda.py",
+     "evidence_line": 86,
+     "quote": "    'pdf': 'datasheet',"
+    },
+    {
+     "role": "datasheet",
+     "name": "Datasheet",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kicost/edas/eda_kicad.py",
+     "evidence_line": 144,
+     "quote": "            fields['Datasheet'] = str(c.find('datasheet').string)"
+    },
+    {
+     "role": "description",
+     "name": "description",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kicost/edas/eda.py",
+     "evidence_line": 87,
+     "quote": "    'description': 'desc',"
+    },
+    {
+     "role": "description",
+     "name": "desc",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kicost/kicost.py",
+     "evidence_line": 195,
+     "quote": "    FIELDS_SPREADSHEET = ['refs', 'value', 'desc', 'footprint', 'manf', 'manf#']"
+    },
+    {
+     "role": "dnp",
+     "name": "nopop",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kicost/edas/eda.py",
+     "evidence_line": 88,
+     "quote": "    'nopop': 'dnp',"
+    },
+    {
+     "role": "dnp",
+     "name": "dnp",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kicost/edas/eda.py",
+     "evidence_line": 252,
+     "quote": "            dnp = fields.get('dnp', '0')"
+    },
+    {
+     "role": "other",
+     "name": "version",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kicost/edas/eda.py",
+     "evidence_line": 89,
+     "quote": "    'version': 'variant',"
+    },
+    {
+     "role": "other",
+     "name": "variant",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kicost/edas/eda.py",
+     "evidence_line": 265,
+     "quote": "            variants = fields.get('variant', None)"
+    },
+    {
+     "role": "value",
+     "name": "Value",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kicost/edas/eda_kicad.py",
+     "evidence_line": 142,
+     "quote": "            fields['Value'] = str(c.find('value').string)"
+    },
+    {
+     "role": "distributor_pn",
+     "name": "digikey#",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kicost/edas/eda.py",
+     "evidence_line": 95,
+     "quote": "            field_name_translations[dist + stub] = dist + '#'"
+    },
+    {
+     "role": "distributor_pn",
+     "name": "mouser#",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kicost/edas/eda.py",
+     "evidence_line": 96,
+     "quote": "        field_name_translations[dist + '_' + stub] = dist + '#'"
+    },
+    {
+     "role": "distributor_pn",
+     "name": "part#",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kicost/edas/eda.py",
+     "evidence_line": 92,
+     "quote": "for stub in ['part#', '#', 'p#', 'pn', 'vendor#', 'vp#', 'vpn', 'num']:"
+    },
+    {
+     "role": "distributor_pn",
+     "name": "cat#",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kicost/edas/eda.py",
+     "evidence_line": 156,
+     "quote": "            if f in ('cat#', 'pricing', 'link'):"
+    },
+    {
+     "role": "distributor_pn",
+     "name": "digikey",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kicost/distributors/distributors_info.py",
+     "evidence_line": 69,
+     "quote": "    'digikey': DistributorInfo("
+    },
+    {
+     "role": "distributor_pn",
+     "name": "mouser",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kicost/distributors/distributors_info.py",
+     "evidence_line": 83,
+     "quote": "    'mouser': DistributorInfo("
+    },
+    {
+     "role": "distributor_pn",
+     "name": "arrow",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kicost/distributors/distributors_info.py",
+     "evidence_line": 63,
+     "quote": "    'arrow': DistributorInfo("
+    },
+    {
+     "role": "distributor_pn",
+     "name": "farnell",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kicost/distributors/distributors_info.py",
+     "evidence_line": 76,
+     "quote": "    'farnell': DistributorInfo("
+    },
+    {
+     "role": "distributor_pn",
+     "name": "newark",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kicost/distributors/distributors_info.py",
+     "evidence_line": 92,
+     "quote": "    'newark': DistributorInfo("
+    },
+    {
+     "role": "distributor_pn",
+     "name": "rs",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kicost/distributors/distributors_info.py",
+     "evidence_line": 98,
+     "quote": "    'rs': DistributorInfo("
+    },
+    {
+     "role": "distributor_pn",
+     "name": "tme",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kicost/distributors/distributors_info.py",
+     "evidence_line": 104,
+     "quote": "    'tme': DistributorInfo("
+    },
+    {
+     "role": "distributor_pn",
+     "name": "lcsc",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kicost/distributors/distributors_info.py",
+     "evidence_line": 113,
+     "quote": "    'lcsc': DistributorInfo("
+    },
+    {
+     "role": "refs",
+     "name": "Refs",
+     "direction": "writes_bom_header",
+     "evidence_file": "kicost/spreadsheet.py",
+     "evidence_line": 124,
+     "quote": "            'label': 'Refs',"
+    },
+    {
+     "role": "value",
+     "name": "Value",
+     "direction": "writes_bom_header",
+     "evidence_file": "kicost/spreadsheet.py",
+     "evidence_line": 132,
+     "quote": "            'label': 'Value',"
+    },
+    {
+     "role": "description",
+     "name": "Desc",
+     "direction": "writes_bom_header",
+     "evidence_file": "kicost/spreadsheet.py",
+     "evidence_line": 140,
+     "quote": "            'label': 'Desc',"
+    },
+    {
+     "role": "footprint",
+     "name": "Footprint",
+     "direction": "writes_bom_header",
+     "evidence_file": "kicost/spreadsheet.py",
+     "evidence_line": 148,
+     "quote": "            'label': 'Footprint',"
+    },
+    {
+     "role": "manufacturer",
+     "name": "Manf",
+     "direction": "writes_bom_header",
+     "evidence_file": "kicost/spreadsheet.py",
+     "evidence_line": 156,
+     "quote": "            'label': 'Manf',"
+    },
+    {
+     "role": "mpn",
+     "name": "Manf#",
+     "direction": "writes_bom_header",
+     "evidence_file": "kicost/spreadsheet.py",
+     "evidence_line": 164,
+     "quote": "            'label': 'Manf#',"
+    },
+    {
+     "role": "qty",
+     "name": "Qty",
+     "direction": "writes_bom_header",
+     "evidence_file": "kicost/spreadsheet.py",
+     "evidence_line": 173,
+     "quote": "            'label': 'Qty',"
+    },
+    {
+     "role": "distributor_pn",
+     "name": "Cat#",
+     "direction": "writes_bom_header",
+     "evidence_file": "kicost/spreadsheet.py",
+     "evidence_line": 244,
+     "quote": "            'label': 'Cat#',"
+    },
+    {
+     "role": "other",
+     "name": "Unit$",
+     "direction": "writes_bom_header",
+     "evidence_file": "kicost/spreadsheet.py",
+     "evidence_line": 185,
+     "quote": "            'label': 'Unit$',"
+    },
+    {
+     "role": "other",
+     "name": "Ext$",
+     "direction": "writes_bom_header",
+     "evidence_file": "kicost/spreadsheet.py",
+     "evidence_line": 193,
+     "quote": "            'label': 'Ext$',"
+    },
+    {
+     "role": "other",
+     "name": "Avail",
+     "direction": "writes_bom_header",
+     "evidence_file": "kicost/spreadsheet.py",
+     "evidence_line": 205,
+     "quote": "            'label': 'Avail',  # Column header label."
+    },
+    {
+     "role": "other",
+     "name": "Purch",
+     "direction": "writes_bom_header",
+     "evidence_file": "kicost/spreadsheet.py",
+     "evidence_line": 214,
+     "quote": "            'label': 'Purch',"
+    },
+    {
+     "role": "other",
+     "name": "MOQ",
+     "direction": "writes_bom_header",
+     "evidence_file": "kicost/spreadsheet.py",
+     "evidence_line": 229,
+     "quote": "            'label': 'MOQ',"
+    },
+    {
+     "role": "distributor_pn",
+     "name": "LCSC Part #(optional)",
+     "direction": "writes_bom_header",
+     "evidence_file": "kicost/distributors/distributors_info.py",
+     "evidence_line": 116,
+     "quote": "                    header='Quantity,Comment,Designator,Footprint,LCSC Part #(optional)',"
+    }
+   ],
+   "could_not_verify": [
+    "'Qnty' \u2014 no occurrence anywhere in the KiCost source tree.",
+    "'LCSC Part #' as a standalone alias \u2014 the only in-source literal is 'LCSC Part #(optional)' inside the lcsc order header (distributors_info.py:116), an OUTPUT purchase-list header for JLCPCB, not an input alias.",
+    "'manufacturer part no' / 'mfr part number' / 'MPN#' \u2014 not present in field_name_translations.",
+    "A KiCad-specific alias table separate from field_name_translations \u2014 none exists; eda_kicad.py only injects the netlist elements Value/Footprint/Datasheet (lines 142-144) and defers everything else to the shared table.",
+    "Any explicit 'DNP' / 'Do Not Populate' spelling beyond 'nopop' \u2014 only 'nopop' -> 'dnp' is mapped."
+   ]
+  },
+  {
+   "tool": "interactivehtmlbom",
+   "aliases": [
+    {
+     "role": "value",
+     "name": "Value",
+     "evidence_file": "InteractiveHtmlBom/core/config.py",
+     "evidence_line": 44,
+     "quote": "    default_show_group_fields = [\"Value\", \"Footprint\"]",
+     "direction": "reads_symbol_field"
+    },
+    {
+     "role": "footprint",
+     "name": "Footprint",
+     "evidence_file": "InteractiveHtmlBom/core/config.py",
+     "evidence_line": 44,
+     "quote": "    default_show_group_fields = [\"Value\", \"Footprint\"]",
+     "direction": "reads_symbol_field"
+    },
+    {
+     "role": "value",
+     "name": "Value",
+     "evidence_file": "InteractiveHtmlBom/web/ibom.js",
+     "evidence_line": 612,
+     "quote": "        tr.appendChild(createColumnHeader(\"Value\", \"value\", (a, b) => {",
+     "direction": "writes_bom_header"
+    },
+    {
+     "role": "footprint",
+     "name": "Footprint",
+     "evidence_file": "InteractiveHtmlBom/web/ibom.js",
+     "evidence_line": 621,
+     "quote": "          \"Footprint\", \"footprint\", stringFieldCompareClosure(footprintIndex)));",
+     "direction": "writes_bom_header"
+    },
+    {
+     "role": "refs",
+     "name": "References",
+     "evidence_file": "InteractiveHtmlBom/web/ibom.js",
+     "evidence_line": 603,
+     "quote": "        tr.appendChild(createColumnHeader(\"References\", \"references\", (a, b) => {",
+     "direction": "writes_bom_header"
+    },
+    {
+     "role": "qty",
+     "name": "Quantity",
+     "evidence_file": "InteractiveHtmlBom/web/ibom.js",
+     "evidence_line": 623,
+     "quote": "        tr.appendChild(createColumnHeader(\"Quantity\", \"quantity\", (a, b) => {",
+     "direction": "writes_bom_header"
+    },
+    {
+     "role": "refs",
+     "name": "References",
+     "evidence_file": "InteractiveHtmlBom/web/util.js",
+     "evidence_line": 587,
+     "quote": "  var fields = [\"checkboxes\", \"References\"].concat(config.fields).concat([\"Quantity\"]);",
+     "direction": "writes_bom_header"
+    },
+    {
+     "role": "qty",
+     "name": "Quantity",
+     "evidence_file": "InteractiveHtmlBom/web/util.js",
+     "evidence_line": 587,
+     "quote": "  var fields = [\"checkboxes\", \"References\"].concat(config.fields).concat([\"Quantity\"]);",
+     "direction": "writes_bom_header"
+    },
+    {
+     "role": "other",
+     "name": "checkboxes",
+     "evidence_file": "InteractiveHtmlBom/web/util.js",
+     "evidence_line": 587,
+     "quote": "  var fields = [\"checkboxes\", \"References\"].concat(config.fields).concat([\"Quantity\"]);",
+     "direction": "writes_bom_header"
+    },
+    {
+     "role": "qty",
+     "name": "Quantity",
+     "evidence_file": "InteractiveHtmlBom/web/table-util.js",
+     "evidence_line": 60,
+     "quote": "      hiddenColumns.push(\"Quantity\");",
+     "direction": "writes_bom_header"
+    },
+    {
+     "role": "dnp",
+     "name": "dnp",
+     "evidence_file": "InteractiveHtmlBom/ecad/kicad.py",
+     "evidence_line": 62,
+     "quote": "        if \"dnp\" in props and props[\"dnp\"] == \"\":",
+     "direction": "reads_symbol_field"
+    },
+    {
+     "role": "dnp",
+     "name": "kicad_dnp",
+     "evidence_file": "InteractiveHtmlBom/ecad/kicad.py",
+     "evidence_line": 64,
+     "quote": "            props[\"kicad_dnp\"] = \"DNP\"",
+     "direction": "writes_bom_header"
+    },
+    {
+     "role": "dnp",
+     "name": "DNP",
+     "evidence_file": "InteractiveHtmlBom/ecad/kicad.py",
+     "evidence_line": 67,
+     "quote": "                props[\"kicad_dnp\"] = \"DNP\"",
+     "direction": "writes_bom_header"
+    },
+    {
+     "role": "dnp",
+     "name": "dnp",
+     "evidence_file": "InteractiveHtmlBom/ecad/kicad_extra/xmlparser.py",
+     "evidence_line": 38,
+     "quote": "                if f.attributes['name'].value == 'dnp':",
+     "direction": "reads_symbol_field"
+    },
+    {
+     "role": "dnp",
+     "name": "kicad_dnp",
+     "evidence_file": "InteractiveHtmlBom/ecad/kicad_extra/xmlparser.py",
+     "evidence_line": 40,
+     "quote": "                    ref_fields['kicad_dnp'] = \"DNP\"",
+     "direction": "writes_bom_header"
+    },
+    {
+     "role": "dnp",
+     "name": "dnp",
+     "evidence_file": "InteractiveHtmlBom/ecad/kicad_extra/netlistparser.py",
+     "evidence_line": 35,
+     "quote": "                        f[1][0] == 'name' and f[1][1] == 'dnp':",
+     "direction": "reads_symbol_field"
+    },
+    {
+     "role": "dnp",
+     "name": "kicad_dnp",
+     "evidence_file": "InteractiveHtmlBom/ecad/kicad_extra/netlistparser.py",
+     "evidence_line": 50,
+     "quote": "                    ref_fields['kicad_dnp'] = \"DNP\"",
+     "direction": "writes_bom_header"
+    },
+    {
+     "role": "datasheet",
+     "name": "Datasheet",
+     "evidence_file": "InteractiveHtmlBom/ecad/kicad_extra/xmlparser.py",
+     "evidence_line": 25,
+     "quote": "                field_set.add('Datasheet')",
+     "direction": "writes_bom_header"
+    },
+    {
+     "role": "datasheet",
+     "name": "Datasheet",
+     "evidence_file": "InteractiveHtmlBom/ecad/kicad_extra/netlistparser.py",
+     "evidence_line": 40,
+     "quote": "                field_set.add('Datasheet')",
+     "direction": "writes_bom_header"
+    },
+    {
+     "role": "description",
+     "name": "Description",
+     "evidence_file": "InteractiveHtmlBom/ecad/kicad_extra/xmlparser.py",
+     "evidence_line": 32,
+     "quote": "                ref_fields['Description'] = attr.value",
+     "direction": "writes_bom_header"
+    },
+    {
+     "role": "description",
+     "name": "Description",
+     "evidence_file": "InteractiveHtmlBom/ecad/kicad_extra/netlistparser.py",
+     "evidence_line": 47,
+     "quote": "                        ref_fields['Description'] = lib_field[1]",
+     "direction": "writes_bom_header"
+    },
+    {
+     "role": "mpn",
+     "name": "mpn",
+     "evidence_file": "InteractiveHtmlBom/ecad/common.py",
+     "evidence_line": 65,
+     "quote": "                               \"mpn\", \"Mpn\", \"MPN\" fields are combined",
+     "direction": "reads_symbol_field"
+    },
+    {
+     "role": "mpn",
+     "name": "Mpn",
+     "evidence_file": "InteractiveHtmlBom/ecad/common.py",
+     "evidence_line": 65,
+     "quote": "                               \"mpn\", \"Mpn\", \"MPN\" fields are combined",
+     "direction": "reads_symbol_field"
+    },
+    {
+     "role": "mpn",
+     "name": "MPN",
+     "evidence_file": "InteractiveHtmlBom/ecad/common.py",
+     "evidence_line": 65,
+     "quote": "                               \"mpn\", \"Mpn\", \"MPN\" fields are combined",
+     "direction": "reads_symbol_field"
+    },
+    {
+     "role": "footprint",
+     "name": "Footprint",
+     "evidence_file": "InteractiveHtmlBom/ecad/genericjson.py",
+     "evidence_line": 154,
+     "quote": "        extra_fields.discard(\"Footprint\")",
+     "direction": "reads_bom_column"
+    },
+    {
+     "role": "value",
+     "name": "Value",
+     "evidence_file": "InteractiveHtmlBom/ecad/genericjson.py",
+     "evidence_line": 155,
+     "quote": "        extra_fields.discard(\"Value\")",
+     "direction": "reads_bom_column"
+    },
+    {
+     "role": "footprint",
+     "name": "package",
+     "evidence_file": "InteractiveHtmlBom/ecad/easyeda.py",
+     "evidence_line": 334,
+     "quote": "        if 'package' in attr:",
+     "direction": "reads_symbol_field"
+    },
+    {
+     "role": "footprint",
+     "name": "package",
+     "evidence_file": "InteractiveHtmlBom/ecad/fusion_eagle.py",
+     "evidence_line": 827,
+     "quote": "                             footprint=el.attrib['package'],",
+     "direction": "reads_symbol_field"
+    },
+    {
+     "role": "value",
+     "name": "value",
+     "evidence_file": "InteractiveHtmlBom/ecad/fusion_eagle.py",
+     "evidence_line": 825,
+     "quote": "                             val='' if 'value' not in el.attrib else el.attrib[",
+     "direction": "reads_symbol_field"
+    },
+    {
+     "role": "other",
+     "name": "<none>",
+     "evidence_file": "InteractiveHtmlBom/dialog/settings_dialog.py",
+     "evidence_line": 220,
+     "quote": "    NONE_STRING = '<none>'",
+     "direction": "unknown"
+    },
+    {
+     "role": "other",
+     "name": "Value",
+     "evidence_file": "InteractiveHtmlBom/dialog/settings_dialog.py",
+     "evidence_line": 346,
+     "quote": "            self._setFieldsList([\"Value\", \"Footprint\"] + field_list)",
+     "direction": "reads_symbol_field"
+    }
+   ],
+   "could_not_verify": [
+    "No alias/synonym TABLE exists anywhere in the repo. The only normalization is case-folding: EcadParser.normalize_field_names() lowercases every field name so 'mpn'/'Mpn'/'MPN' collapse (InteractiveHtmlBom/ecad/common.py:36-50), gated by config.normalize_field_case / --normalize-field-case (core/config.py:80, 474-481). There is no mapping of distinct spellings (e.g. 'manf#' -> 'Manufacturer').",
+    "No distributor-specific field names ('LCSC Part #', 'Digi-Key PN', 'Mouser', 'manf#', 'Qnty') appear anywhere in the source.",
+    "No hard-coded manufacturer / distributor_pn / qty SYMBOL field names \u2014 field discovery is fully dynamic: every field present on the footprint/netlist/xml component is collected into field_set (kicad.py get_footprint_fields via GetProperties()/GetFieldsShownText(); xmlparser.py:34-36; netlistparser.py:53-56; easyeda.py attr dict; fusion_eagle.py <attribute name=...>). The user selects which to show via --show-fields / --group-fields / --extra-fields.",
+    "DNP field name is NOT fixed by the tool: config.dnp_field defaults to '' (core/config.py:84) and is user-supplied via --dnp-field; any component whose named field is non-empty is excluded (core/ibom.py:68-70). The only literals the tool itself produces are the KiCad-native 'dnp' property key it reads and the 'kicad_dnp' pseudo-field it writes with value 'DNP'.",
+    "Board-variant field name is also user-supplied (config.board_variant_field default '', --variant-field); no default literal."
+   ],
+   "notes": "Directions: 'reads_symbol_field' = read off the footprint/symbol/netlist component; 'writes_bom_header' = string the tool emits as a BOM column or synthesized extra field (the HTML table headers are also exactly what the CSV/TSV export writes \u2014 web/util.js:69-79 serializes bomhead text nodes verbatim). Fixed BOM column order is checkboxes, References, <config.fields...>, Quantity (web/util.js:587); config.fields comes from show_fields, defaulting to ['Value','Footprint']."
+  },
+  {
+   "tool": "kibot",
+   "aliases": [
+    {
+     "role": "mpn",
+     "name": "mpn",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kibot/fil_base.py",
+     "evidence_line": 28,
+     "quote": "    'mpn': 'manf#',"
+    },
+    {
+     "role": "mpn",
+     "name": "pn",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kibot/fil_base.py",
+     "evidence_line": 29,
+     "quote": "    'pn': 'manf#',"
+    },
+    {
+     "role": "mpn",
+     "name": "manf_num",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kibot/fil_base.py",
+     "evidence_line": 30,
+     "quote": "    'manf_num': 'manf#',"
+    },
+    {
+     "role": "mpn",
+     "name": "manf-num",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kibot/fil_base.py",
+     "evidence_line": 31,
+     "quote": "    'manf-num': 'manf#',"
+    },
+    {
+     "role": "mpn",
+     "name": "mfg_num",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kibot/fil_base.py",
+     "evidence_line": 32,
+     "quote": "    'mfg_num': 'manf#',"
+    },
+    {
+     "role": "mpn",
+     "name": "mfg-num",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kibot/fil_base.py",
+     "evidence_line": 33,
+     "quote": "    'mfg-num': 'manf#',"
+    },
+    {
+     "role": "mpn",
+     "name": "mfg#",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kibot/fil_base.py",
+     "evidence_line": 34,
+     "quote": "    'mfg#': 'manf#',"
+    },
+    {
+     "role": "mpn",
+     "name": "mfg part#",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kibot/fil_base.py",
+     "evidence_line": 35,
+     "quote": "    'mfg part#': 'manf#',"
+    },
+    {
+     "role": "mpn",
+     "name": "man_num",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kibot/fil_base.py",
+     "evidence_line": 36,
+     "quote": "    'man_num': 'manf#',"
+    },
+    {
+     "role": "mpn",
+     "name": "man-num",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kibot/fil_base.py",
+     "evidence_line": 37,
+     "quote": "    'man-num': 'manf#',"
+    },
+    {
+     "role": "mpn",
+     "name": "man#",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kibot/fil_base.py",
+     "evidence_line": 38,
+     "quote": "    'man#': 'manf#',"
+    },
+    {
+     "role": "mpn",
+     "name": "mnf_num",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kibot/fil_base.py",
+     "evidence_line": 39,
+     "quote": "    'mnf_num': 'manf#',"
+    },
+    {
+     "role": "mpn",
+     "name": "mnf-num",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kibot/fil_base.py",
+     "evidence_line": 40,
+     "quote": "    'mnf-num': 'manf#',"
+    },
+    {
+     "role": "mpn",
+     "name": "mnf#",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kibot/fil_base.py",
+     "evidence_line": 41,
+     "quote": "    'mnf#': 'manf#',"
+    },
+    {
+     "role": "mpn",
+     "name": "mfr_num",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kibot/fil_base.py",
+     "evidence_line": 42,
+     "quote": "    'mfr_num': 'manf#',"
+    },
+    {
+     "role": "mpn",
+     "name": "mfr-num",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kibot/fil_base.py",
+     "evidence_line": 43,
+     "quote": "    'mfr-num': 'manf#',"
+    },
+    {
+     "role": "mpn",
+     "name": "mfr#",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kibot/fil_base.py",
+     "evidence_line": 44,
+     "quote": "    'mfr#': 'manf#',"
+    },
+    {
+     "role": "mpn",
+     "name": "part-num",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kibot/fil_base.py",
+     "evidence_line": 45,
+     "quote": "    'part-num': 'manf#',"
+    },
+    {
+     "role": "mpn",
+     "name": "part_num",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kibot/fil_base.py",
+     "evidence_line": 46,
+     "quote": "    'part_num': 'manf#',"
+    },
+    {
+     "role": "mpn",
+     "name": "p#",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kibot/fil_base.py",
+     "evidence_line": 47,
+     "quote": "    'p#': 'manf#',"
+    },
+    {
+     "role": "mpn",
+     "name": "part#",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kibot/fil_base.py",
+     "evidence_line": 48,
+     "quote": "    'part#': 'manf#',"
+    },
+    {
+     "role": "mpn",
+     "name": "manf#",
+     "direction": "writes_bom_header",
+     "evidence_file": "kibot/out_bom.py",
+     "evidence_line": 1234,
+     "quote": "        mpn_set.add('manf#')"
+    },
+    {
+     "role": "manufacturer",
+     "name": "manufacturer",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kibot/fil_base.py",
+     "evidence_line": 50,
+     "quote": "    'manufacturer': 'manf',"
+    },
+    {
+     "role": "manufacturer",
+     "name": "mnf",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kibot/fil_base.py",
+     "evidence_line": 51,
+     "quote": "    'mnf': 'manf',"
+    },
+    {
+     "role": "manufacturer",
+     "name": "man",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kibot/fil_base.py",
+     "evidence_line": 52,
+     "quote": "    'man': 'manf',"
+    },
+    {
+     "role": "manufacturer",
+     "name": "mfg",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kibot/fil_base.py",
+     "evidence_line": 53,
+     "quote": "    'mfg': 'manf',"
+    },
+    {
+     "role": "manufacturer",
+     "name": "mfr",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kibot/fil_base.py",
+     "evidence_line": 54,
+     "quote": "    'mfr': 'manf',"
+    },
+    {
+     "role": "other",
+     "name": "version",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kibot/fil_base.py",
+     "evidence_line": 56,
+     "quote": "    'version': 'variant',"
+    },
+    {
+     "role": "dnp",
+     "name": "nopop",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kibot/fil_base.py",
+     "evidence_line": 57,
+     "quote": "    'nopop': 'dnp',"
+    },
+    {
+     "role": "description",
+     "name": "description",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kibot/fil_base.py",
+     "evidence_line": 58,
+     "quote": "    'description': 'desc',"
+    },
+    {
+     "role": "datasheet",
+     "name": "pdf",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kibot/fil_base.py",
+     "evidence_line": 59,
+     "quote": "    'pdf': 'datasheet',"
+    },
+    {
+     "role": "dnp",
+     "name": "Config",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kibot/fil_generic.py",
+     "evidence_line": 46,
+     "quote": "            self.config_field = 'Config'"
+    },
+    {
+     "role": "distributor_pn",
+     "name": "arrow",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kibot/misc.py",
+     "evidence_line": 161,
+     "quote": "DISTRIBUTORS = ['arrow', 'digikey', 'farnell', 'lcsc', 'mouser', 'newark', 'rs', 'tme']"
+    },
+    {
+     "role": "distributor_pn",
+     "name": "digikey",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kibot/misc.py",
+     "evidence_line": 161,
+     "quote": "DISTRIBUTORS = ['arrow', 'digikey', 'farnell', 'lcsc', 'mouser', 'newark', 'rs', 'tme']"
+    },
+    {
+     "role": "distributor_pn",
+     "name": "farnell",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kibot/misc.py",
+     "evidence_line": 161,
+     "quote": "DISTRIBUTORS = ['arrow', 'digikey', 'farnell', 'lcsc', 'mouser', 'newark', 'rs', 'tme']"
+    },
+    {
+     "role": "distributor_pn",
+     "name": "lcsc",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kibot/misc.py",
+     "evidence_line": 161,
+     "quote": "DISTRIBUTORS = ['arrow', 'digikey', 'farnell', 'lcsc', 'mouser', 'newark', 'rs', 'tme']"
+    },
+    {
+     "role": "distributor_pn",
+     "name": "mouser",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kibot/misc.py",
+     "evidence_line": 161,
+     "quote": "DISTRIBUTORS = ['arrow', 'digikey', 'farnell', 'lcsc', 'mouser', 'newark', 'rs', 'tme']"
+    },
+    {
+     "role": "distributor_pn",
+     "name": "newark",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kibot/misc.py",
+     "evidence_line": 161,
+     "quote": "DISTRIBUTORS = ['arrow', 'digikey', 'farnell', 'lcsc', 'mouser', 'newark', 'rs', 'tme']"
+    },
+    {
+     "role": "distributor_pn",
+     "name": "rs",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kibot/misc.py",
+     "evidence_line": 161,
+     "quote": "DISTRIBUTORS = ['arrow', 'digikey', 'farnell', 'lcsc', 'mouser', 'newark', 'rs', 'tme']"
+    },
+    {
+     "role": "distributor_pn",
+     "name": "tme",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kibot/misc.py",
+     "evidence_line": 161,
+     "quote": "DISTRIBUTORS = ['arrow', 'digikey', 'farnell', 'lcsc', 'mouser', 'newark', 'rs', 'tme']"
+    },
+    {
+     "role": "distributor_pn",
+     "name": "part#",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kibot/misc.py",
+     "evidence_line": 163,
+     "quote": "DISTRIBUTORS_STUBS = ['part#', '#', 'p#', 'pn', 'vendor#', 'vp#', 'vpn', 'num']"
+    },
+    {
+     "role": "distributor_pn",
+     "name": "#",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kibot/misc.py",
+     "evidence_line": 163,
+     "quote": "DISTRIBUTORS_STUBS = ['part#', '#', 'p#', 'pn', 'vendor#', 'vp#', 'vpn', 'num']"
+    },
+    {
+     "role": "distributor_pn",
+     "name": "p#",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kibot/misc.py",
+     "evidence_line": 163,
+     "quote": "DISTRIBUTORS_STUBS = ['part#', '#', 'p#', 'pn', 'vendor#', 'vp#', 'vpn', 'num']"
+    },
+    {
+     "role": "distributor_pn",
+     "name": "pn",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kibot/misc.py",
+     "evidence_line": 163,
+     "quote": "DISTRIBUTORS_STUBS = ['part#', '#', 'p#', 'pn', 'vendor#', 'vp#', 'vpn', 'num']"
+    },
+    {
+     "role": "distributor_pn",
+     "name": "vendor#",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kibot/misc.py",
+     "evidence_line": 163,
+     "quote": "DISTRIBUTORS_STUBS = ['part#', '#', 'p#', 'pn', 'vendor#', 'vp#', 'vpn', 'num']"
+    },
+    {
+     "role": "distributor_pn",
+     "name": "vp#",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kibot/misc.py",
+     "evidence_line": 163,
+     "quote": "DISTRIBUTORS_STUBS = ['part#', '#', 'p#', 'pn', 'vendor#', 'vp#', 'vpn', 'num']"
+    },
+    {
+     "role": "distributor_pn",
+     "name": "vpn",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kibot/misc.py",
+     "evidence_line": 163,
+     "quote": "DISTRIBUTORS_STUBS = ['part#', '#', 'p#', 'pn', 'vendor#', 'vp#', 'vpn', 'num']"
+    },
+    {
+     "role": "distributor_pn",
+     "name": "num",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kibot/misc.py",
+     "evidence_line": 163,
+     "quote": "DISTRIBUTORS_STUBS = ['part#', '#', 'p#', 'pn', 'vendor#', 'vp#', 'vpn', 'num']"
+    },
+    {
+     "role": "distributor_pn",
+     "name": "lcsc",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kibot/optionable.py",
+     "evidence_line": 664,
+     "quote": "            fld = 'lcsc'+stub"
+    },
+    {
+     "role": "distributor_pn",
+     "name": "LCSC",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kibot/optionable.py",
+     "evidence_line": 675,
+     "quote": "                GS.sch._field_lcsc_part = 'LCSC'"
+    },
+    {
+     "role": "distributor_pn",
+     "name": "LCSC#",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kibot/optionable.py",
+     "evidence_line": 658,
+     "quote": "            return '' if empty_when_none else 'LCSC#'"
+    },
+    {
+     "role": "refs",
+     "name": "References",
+     "direction": "writes_bom_header",
+     "evidence_file": "kibot/bom/columnlist.py",
+     "evidence_line": 24,
+     "quote": "    COL_REFERENCE = 'References'"
+    },
+    {
+     "role": "description",
+     "name": "Description",
+     "direction": "writes_bom_header",
+     "evidence_file": "kibot/bom/columnlist.py",
+     "evidence_line": 26,
+     "quote": "    COL_DESCRIPTION = 'Description'"
+    },
+    {
+     "role": "value",
+     "name": "Value",
+     "direction": "writes_bom_header",
+     "evidence_file": "kibot/bom/columnlist.py",
+     "evidence_line": 28,
+     "quote": "    COL_VALUE = 'Value'"
+    },
+    {
+     "role": "footprint",
+     "name": "Footprint",
+     "direction": "writes_bom_header",
+     "evidence_file": "kibot/bom/columnlist.py",
+     "evidence_line": 30,
+     "quote": "    COL_FP = 'Footprint'"
+    },
+    {
+     "role": "footprint",
+     "name": "Footprint Lib",
+     "direction": "writes_bom_header",
+     "evidence_file": "kibot/bom/columnlist.py",
+     "evidence_line": 32,
+     "quote": "    COL_FP_LIB = 'Footprint Lib'"
+    },
+    {
+     "role": "footprint",
+     "name": "Footprint Full",
+     "direction": "writes_bom_header",
+     "evidence_file": "kibot/bom/columnlist.py",
+     "evidence_line": 34,
+     "quote": "    COL_FP_FULL = 'Footprint Full'"
+    },
+    {
+     "role": "other",
+     "name": "Footprint X",
+     "direction": "writes_bom_header",
+     "evidence_file": "kibot/bom/columnlist.py",
+     "evidence_line": 36,
+     "quote": "    COL_FP_X = 'Footprint X'"
+    },
+    {
+     "role": "other",
+     "name": "Footprint Y",
+     "direction": "writes_bom_header",
+     "evidence_file": "kibot/bom/columnlist.py",
+     "evidence_line": 38,
+     "quote": "    COL_FP_Y = 'Footprint Y'"
+    },
+    {
+     "role": "other",
+     "name": "Footprint Rot",
+     "direction": "writes_bom_header",
+     "evidence_file": "kibot/bom/columnlist.py",
+     "evidence_line": 40,
+     "quote": "    COL_FP_ROT = 'Footprint Rot'"
+    },
+    {
+     "role": "other",
+     "name": "Footprint Side",
+     "direction": "writes_bom_header",
+     "evidence_file": "kibot/bom/columnlist.py",
+     "evidence_line": 42,
+     "quote": "    COL_FP_SIDE = 'Footprint Side'"
+    },
+    {
+     "role": "other",
+     "name": "Footprint Type",
+     "direction": "writes_bom_header",
+     "evidence_file": "kibot/bom/columnlist.py",
+     "evidence_line": 44,
+     "quote": "    COL_FP_TYPE = 'Footprint Type'"
+    },
+    {
+     "role": "other",
+     "name": "Footprint Type NV",
+     "direction": "writes_bom_header",
+     "evidence_file": "kibot/bom/columnlist.py",
+     "evidence_line": 46,
+     "quote": "    COL_FP_TYPE_NV = 'Footprint Type NV'"
+    },
+    {
+     "role": "other",
+     "name": "Footprint Populate",
+     "direction": "writes_bom_header",
+     "evidence_file": "kibot/bom/columnlist.py",
+     "evidence_line": 48,
+     "quote": "    COL_FP_FIT = 'Footprint Populate'"
+    },
+    {
+     "role": "other",
+     "name": "Footprint X-Size",
+     "direction": "writes_bom_header",
+     "evidence_file": "kibot/bom/columnlist.py",
+     "evidence_line": 50,
+     "quote": "    COL_FP_XS = 'Footprint X-Size'"
+    },
+    {
+     "role": "other",
+     "name": "Footprint Y-Size",
+     "direction": "writes_bom_header",
+     "evidence_file": "kibot/bom/columnlist.py",
+     "evidence_line": 52,
+     "quote": "    COL_FP_YS = 'Footprint Y-Size'"
+    },
+    {
+     "role": "other",
+     "name": "Part",
+     "direction": "writes_bom_header",
+     "evidence_file": "kibot/bom/columnlist.py",
+     "evidence_line": 54,
+     "quote": "    COL_PART = 'Part'"
+    },
+    {
+     "role": "other",
+     "name": "Part Lib",
+     "direction": "writes_bom_header",
+     "evidence_file": "kibot/bom/columnlist.py",
+     "evidence_line": 56,
+     "quote": "    COL_PART_LIB = 'Part Lib'"
+    },
+    {
+     "role": "datasheet",
+     "name": "Datasheet",
+     "direction": "writes_bom_header",
+     "evidence_file": "kibot/bom/columnlist.py",
+     "evidence_line": 58,
+     "quote": "    COL_DATASHEET = 'Datasheet'"
+    },
+    {
+     "role": "other",
+     "name": "Sheetpath",
+     "direction": "writes_bom_header",
+     "evidence_file": "kibot/bom/columnlist.py",
+     "evidence_line": 60,
+     "quote": "    COL_SHEETPATH = 'Sheetpath'"
+    },
+    {
+     "role": "other",
+     "name": "Row",
+     "direction": "writes_bom_header",
+     "evidence_file": "kibot/bom/columnlist.py",
+     "evidence_line": 62,
+     "quote": "    COL_ROW_NUMBER = 'Row'"
+    },
+    {
+     "role": "other",
+     "name": "${ITEM_NUMBER}",
+     "direction": "writes_bom_header",
+     "evidence_file": "kibot/bom/columnlist.py",
+     "evidence_line": 65,
+     "quote": "    COL_ITEM_NUMBER = '${ITEM_NUMBER}'"
+    },
+    {
+     "role": "other",
+     "name": "Status",
+     "direction": "writes_bom_header",
+     "evidence_file": "kibot/bom/columnlist.py",
+     "evidence_line": 67,
+     "quote": "    COL_STATUS = 'Status'"
+    },
+    {
+     "role": "other",
+     "name": "Net Name",
+     "direction": "writes_bom_header",
+     "evidence_file": "kibot/bom/columnlist.py",
+     "evidence_line": 69,
+     "quote": "    COL_NET_NAME = 'Net Name'"
+    },
+    {
+     "role": "other",
+     "name": "Net Label",
+     "direction": "writes_bom_header",
+     "evidence_file": "kibot/bom/columnlist.py",
+     "evidence_line": 71,
+     "quote": "    COL_NET_LABEL = 'Net Label'"
+    },
+    {
+     "role": "other",
+     "name": "Net Class",
+     "direction": "writes_bom_header",
+     "evidence_file": "kibot/bom/columnlist.py",
+     "evidence_line": 73,
+     "quote": "    COL_NET_CLASS = 'Net Class'"
+    },
+    {
+     "role": "dnp",
+     "name": "${DNP}",
+     "direction": "writes_bom_header",
+     "evidence_file": "kibot/bom/columnlist.py",
+     "evidence_line": 76,
+     "quote": "    COL_DNP = '${DNP}'"
+    },
+    {
+     "role": "other",
+     "name": "${EXCLUDE_FROM_BOARD}",
+     "direction": "writes_bom_header",
+     "evidence_file": "kibot/bom/columnlist.py",
+     "evidence_line": 78,
+     "quote": "    COL_EXCLUDE_FROM_BOARD = '${EXCLUDE_FROM_BOARD}'"
+    },
+    {
+     "role": "other",
+     "name": "${EXCLUDE_FROM_SIM}",
+     "direction": "writes_bom_header",
+     "evidence_file": "kibot/bom/columnlist.py",
+     "evidence_line": 80,
+     "quote": "    COL_EXCLUDE_FROM_SIM = '${EXCLUDE_FROM_SIM}'"
+    },
+    {
+     "role": "qty",
+     "name": "Quantity Per PCB",
+     "direction": "writes_bom_header",
+     "evidence_file": "kibot/bom/columnlist.py",
+     "evidence_line": 84,
+     "quote": "    COL_GRP_QUANTITY = 'Quantity Per PCB'"
+    },
+    {
+     "role": "qty",
+     "name": "${QUANTITY}",
+     "direction": "writes_bom_header",
+     "evidence_file": "kibot/bom/columnlist.py",
+     "evidence_line": 87,
+     "quote": "    COL_QUANTITY = '${QUANTITY}'"
+    },
+    {
+     "role": "qty",
+     "name": "Build Quantity",
+     "direction": "writes_bom_header",
+     "evidence_file": "kibot/bom/columnlist.py",
+     "evidence_line": 89,
+     "quote": "    COL_GRP_BUILD_QUANTITY = 'Build Quantity'"
+    },
+    {
+     "role": "other",
+     "name": "Source BoM",
+     "direction": "writes_bom_header",
+     "evidence_file": "kibot/bom/columnlist.py",
+     "evidence_line": 91,
+     "quote": "    COL_SOURCE_BOM = 'Source BoM'"
+    },
+    {
+     "role": "refs",
+     "name": "Reference",
+     "direction": "writes_bom_header",
+     "evidence_file": "kibot/bom/columnlist.py",
+     "evidence_line": 158,
+     "quote": "        COL_REFERENCE_L[:-1],  # The column is References and the field Reference"
+    },
+    {
+     "role": "other",
+     "name": "tolerance",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kibot/globals.py",
+     "evidence_line": 154,
+     "quote": "    _default = ['tolerance', 'tol']"
+    },
+    {
+     "role": "other",
+     "name": "tol",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kibot/globals.py",
+     "evidence_line": 154,
+     "quote": "    _default = ['tolerance', 'tol']"
+    },
+    {
+     "role": "other",
+     "name": "voltage",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kibot/globals.py",
+     "evidence_line": 158,
+     "quote": "    _default = ['voltage', 'v']"
+    },
+    {
+     "role": "other",
+     "name": "v",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kibot/globals.py",
+     "evidence_line": 158,
+     "quote": "    _default = ['voltage', 'v']"
+    },
+    {
+     "role": "other",
+     "name": "package",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kibot/globals.py",
+     "evidence_line": 162,
+     "quote": "    _default = ['package', 'pkg']"
+    },
+    {
+     "role": "other",
+     "name": "pkg",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kibot/globals.py",
+     "evidence_line": 162,
+     "quote": "    _default = ['package', 'pkg']"
+    },
+    {
+     "role": "other",
+     "name": "temp_coef",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kibot/globals.py",
+     "evidence_line": 166,
+     "quote": "    _default = ['temp_coef', 'tmp_coef']"
+    },
+    {
+     "role": "other",
+     "name": "tmp_coef",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kibot/globals.py",
+     "evidence_line": 166,
+     "quote": "    _default = ['temp_coef', 'tmp_coef']"
+    },
+    {
+     "role": "other",
+     "name": "power",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kibot/globals.py",
+     "evidence_line": 170,
+     "quote": "    _default = ['power', 'pow']"
+    },
+    {
+     "role": "other",
+     "name": "pow",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kibot/globals.py",
+     "evidence_line": 170,
+     "quote": "    _default = ['power', 'pow']"
+    },
+    {
+     "role": "other",
+     "name": "current",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kibot/globals.py",
+     "evidence_line": 174,
+     "quote": "    _default = ['current', 'i']"
+    },
+    {
+     "role": "other",
+     "name": "i",
+     "direction": "reads_symbol_field",
+     "evidence_file": "kibot/globals.py",
+     "evidence_line": 174,
+     "quote": "    _default = ['current', 'i']"
+    }
+   ],
+   "could_not_verify": [
+    "No BOM/CSV READER exists in KiBot \u2014 grep for Altium/KiCad-import header names ('Designator', 'Comment', 'Qnty', 'LCSC Part #') returned zero source hits. Every alias here is either a schematic-symbol field name that is READ, or a column header that is WRITTEN. Therefore direction 'reads_bom_column' is unattested for this tool.",
+    "No literal 'LCSC Part #' / 'JLCPCB Part #' string anywhere in kibot/*.py.",
+    "No default value for globals field_part_number / field_manufacturer / field_dist_part_number / field_distributor \u2014 they are empty strings (kibot/globals.py:342,345,348,351) with no autodiscovery fallback (only field_lcsc_part has one, in kibot/optionable.py:646-698)."
+   ],
+   "notes": "Clone: /tmp/claude-1000/-home-matthew-circuits-com/1a91b583-5ce8-47da-87b4-dd08761fbeb2/scratchpad/alias-harvest/kibot (depth 1, INTI-CMNB/KiBot).\n\nJACKPOT TABLE: kibot/fil_base.py:26-60 `KICOST_NAME_TRANSLATIONS` \u2014 an explicit lower-cased alias->canonical dict (KiCost naming). 21 aliases collapse to 'manf#', 5 to 'manf', plus version->variant, nopop->dnp, description->desc, pdf->datasheet. Matching is case-insensitive: consumers lower-case field names before lookup (e.g. kibot/out_bom.py:1229 `fld_names_l = [f.lower() for f in fld_names]`, kibot/out_bom.py:1233-1235 builds the mpn set from this dict's values).\n\nDISTRIBUTOR PN NAMES ARE COMPOSED, NOT LITERAL. kibot/misc.py:161-164 defines DISTRIBUTORS (8 names), DISTRIBUTORS_STUBS (8 stubs) and DISTRIBUTORS_STUBS_SEPS = '_- '. The cross-product is built at kibot/out_bom.py:1238-1244: `dpn_set.add(dist+stub)` and, when stub != '#', `dpn_set.add(dist+sep+stub)`. So the recognized set is e.g. digikey#, digikey_part#, digikey-pn, mouser vpn, lcsc num, etc. \u2014 8 dists x (1 + 7x3) = 176 names, all lowercase. I reported the literal component strings only; do not treat 'arrow'/'part#' alone as a column name. Same cross-product drives LCSC autodiscovery at kibot/optionable.py:663-672, with bare 'lcsc' (line 674) and hard fallback 'LCSC#' (lines 658, 695).\n\nDEFAULT COLUMN SET (written): kibot/bom/columnlist.py:105-120 COLUMNS_DEFAULT = Row, Description, Part, Part Lib, References, Value, Footprint, Footprint Lib, Quantity Per PCB, Build Quantity, Status, Datasheet, Sheetpath, Source BoM. COLUMNS_EXTRA (lines 135-154) is the not-by-default set (the ${...} KiCad attrs, footprint XYRS, net columns). COLUMNS_PROTECTED_L (157-184) are immutable names \u2014 note line 158 makes both 'reference' and 'references' protected, and kibot/out_bom.py:787-791 explicitly rewrites a user's 'Reference' column to 'References'.\n\nDEFAULT GROUPING KEYS: kibot/bom/columnlist.py:187-193 DEFAULT_GROUPING = part, part lib, value, footprint, footprint lib (lowercase); kibot/out_bom.py:446 extends it with 'voltage','tolerance','current','power'; the KiBoM-compat output repeats it TitleCased at kibot/out_kibom.py:108 `_default = ['Part', 'Part Lib', 'Value', 'Footprint', 'Footprint Lib']`.\n\nDNP VALUE VOCABULARY (values, not field names \u2014 so not listed as aliases): kibot/misc.py:137-151 DNF = {dnf, dnl, dnp, do not fit, do not place, do not load, nofit, nostuff, noplace, noload, not fitted, not loaded, not placed, no stuff}; kibot/misc.py:154-158 DNC = {dnc, do not change, no change, fixed}. These are matched against the value of the field named by fil_generic.py:46 `self.config_field = 'Config'`.\n\nValue-joining property fields (kibot/globals.py:153-174) each ship a 2-entry default alias list; kibot/out_bom.py:1260 intersects the schematic's fields with {'tolerance','voltage','power','current'}."
+  },
+  {
+   "tool": "fabrication-toolkit",
+   "aliases": [
+    {
+     "role": "distributor_pn",
+     "name": "LCSC Part #",
+     "evidence_file": "plugins/process.py",
+     "evidence_line": 465,
+     "quote": "        keys = [(sn + \" \" + abr) for sn in supplier_names for abr in pn_abbrevs]",
+     "direction": "reads_symbol_field"
+    },
+    {
+     "role": "distributor_pn",
+     "name": "LCSC Part",
+     "evidence_file": "plugins/process.py",
+     "evidence_line": 465,
+     "quote": "        keys = [(sn + \" \" + abr) for sn in supplier_names for abr in pn_abbrevs]",
+     "direction": "reads_symbol_field"
+    },
+    {
+     "role": "distributor_pn",
+     "name": "LCSC PN",
+     "evidence_file": "plugins/process.py",
+     "evidence_line": 465,
+     "quote": "        keys = [(sn + \" \" + abr) for sn in supplier_names for abr in pn_abbrevs]",
+     "direction": "reads_symbol_field"
+    },
+    {
+     "role": "distributor_pn",
+     "name": "LCSC P/N",
+     "evidence_file": "plugins/process.py",
+     "evidence_line": 465,
+     "quote": "        keys = [(sn + \" \" + abr) for sn in supplier_names for abr in pn_abbrevs]",
+     "direction": "reads_symbol_field"
+    },
+    {
+     "role": "distributor_pn",
+     "name": "LCSC Part No.",
+     "evidence_file": "plugins/process.py",
+     "evidence_line": 465,
+     "quote": "        keys = [(sn + \" \" + abr) for sn in supplier_names for abr in pn_abbrevs]",
+     "direction": "reads_symbol_field"
+    },
+    {
+     "role": "distributor_pn",
+     "name": "LCSC Part Number",
+     "evidence_file": "plugins/process.py",
+     "evidence_line": 465,
+     "quote": "        keys = [(sn + \" \" + abr) for sn in supplier_names for abr in pn_abbrevs]",
+     "direction": "reads_symbol_field"
+    },
+    {
+     "role": "distributor_pn",
+     "name": "JLCPCB Part #",
+     "evidence_file": "plugins/process.py",
+     "evidence_line": 465,
+     "quote": "        keys = [(sn + \" \" + abr) for sn in supplier_names for abr in pn_abbrevs]",
+     "direction": "reads_symbol_field"
+    },
+    {
+     "role": "distributor_pn",
+     "name": "JLCPCB Part",
+     "evidence_file": "plugins/process.py",
+     "evidence_line": 465,
+     "quote": "        keys = [(sn + \" \" + abr) for sn in supplier_names for abr in pn_abbrevs]",
+     "direction": "reads_symbol_field"
+    },
+    {
+     "role": "distributor_pn",
+     "name": "JLCPCB PN",
+     "evidence_file": "plugins/process.py",
+     "evidence_line": 465,
+     "quote": "        keys = [(sn + \" \" + abr) for sn in supplier_names for abr in pn_abbrevs]",
+     "direction": "reads_symbol_field"
+    },
+    {
+     "role": "distributor_pn",
+     "name": "JLCPCB P/N",
+     "evidence_file": "plugins/process.py",
+     "evidence_line": 465,
+     "quote": "        keys = [(sn + \" \" + abr) for sn in supplier_names for abr in pn_abbrevs]",
+     "direction": "reads_symbol_field"
+    },
+    {
+     "role": "distributor_pn",
+     "name": "JLCPCB Part No.",
+     "evidence_file": "plugins/process.py",
+     "evidence_line": 465,
+     "quote": "        keys = [(sn + \" \" + abr) for sn in supplier_names for abr in pn_abbrevs]",
+     "direction": "reads_symbol_field"
+    },
+    {
+     "role": "distributor_pn",
+     "name": "JLCPCB Part Number",
+     "evidence_file": "plugins/process.py",
+     "evidence_line": 465,
+     "quote": "        keys = [(sn + \" \" + abr) for sn in supplier_names for abr in pn_abbrevs]",
+     "direction": "reads_symbol_field"
+    },
+    {
+     "role": "distributor_pn",
+     "name": "LCSC",
+     "evidence_file": "plugins/process.py",
+     "evidence_line": 466,
+     "quote": "        fallback_keys = ['LCSC', 'JLC', 'MPN', 'Mpn', 'mpn']",
+     "direction": "reads_symbol_field"
+    },
+    {
+     "role": "distributor_pn",
+     "name": "JLC",
+     "evidence_file": "plugins/process.py",
+     "evidence_line": 466,
+     "quote": "        fallback_keys = ['LCSC', 'JLC', 'MPN', 'Mpn', 'mpn']",
+     "direction": "reads_symbol_field"
+    },
+    {
+     "role": "mpn",
+     "name": "MPN",
+     "evidence_file": "plugins/process.py",
+     "evidence_line": 466,
+     "quote": "        fallback_keys = ['LCSC', 'JLC', 'MPN', 'Mpn', 'mpn']",
+     "direction": "reads_symbol_field"
+    },
+    {
+     "role": "mpn",
+     "name": "Mpn",
+     "evidence_file": "plugins/process.py",
+     "evidence_line": 466,
+     "quote": "        fallback_keys = ['LCSC', 'JLC', 'MPN', 'Mpn', 'mpn']",
+     "direction": "reads_symbol_field"
+    },
+    {
+     "role": "mpn",
+     "name": "mpn",
+     "evidence_file": "plugins/process.py",
+     "evidence_line": 466,
+     "quote": "        fallback_keys = ['LCSC', 'JLC', 'MPN', 'Mpn', 'mpn']",
+     "direction": "reads_symbol_field"
+    },
+    {
+     "role": "dnp",
+     "name": "dnp",
+     "evidence_file": "plugins/process.py",
+     "evidence_line": 468,
+     "quote": "        if footprint_has_field(footprint, 'dnp'):",
+     "direction": "reads_symbol_field"
+    },
+    {
+     "role": "dnp",
+     "name": "dnp",
+     "evidence_file": "plugins/process.py",
+     "evidence_line": 209,
+     "quote": "            is_dnp = (footprint_has_field(footprint, 'dnp')",
+     "direction": "reads_symbol_field"
+    },
+    {
+     "role": "refs",
+     "name": "Designator",
+     "evidence_file": "plugins/process.py",
+     "evidence_line": 285,
+     "quote": "                        'Designator': \"{}{}{}\".format(footprint.GetReference().upper(), \"\" if unique_id == \"\" else \"_\", unique_id),",
+     "direction": "writes_bom_header"
+    },
+    {
+     "role": "footprint",
+     "name": "Footprint",
+     "evidence_file": "plugins/process.py",
+     "evidence_line": 286,
+     "quote": "                        'Footprint': self._normalize_footprint_name(footprint_name),",
+     "direction": "writes_bom_header"
+    },
+    {
+     "role": "qty",
+     "name": "Quantity",
+     "evidence_file": "plugins/process.py",
+     "evidence_line": 287,
+     "quote": "                        'Quantity': 1,",
+     "direction": "writes_bom_header"
+    },
+    {
+     "role": "value",
+     "name": "Value",
+     "evidence_file": "plugins/process.py",
+     "evidence_line": 288,
+     "quote": "                        'Value': footprint.GetValue(),",
+     "direction": "writes_bom_header"
+    },
+    {
+     "role": "distributor_pn",
+     "name": "LCSC Part #",
+     "evidence_file": "plugins/process.py",
+     "evidence_line": 290,
+     "quote": "                        'LCSC Part #': self._get_mpn_from_footprint(footprint),",
+     "direction": "writes_bom_header"
+    },
+    {
+     "role": "other",
+     "name": "FT Layer Override",
+     "evidence_file": "plugins/process.py",
+     "evidence_line": 477,
+     "quote": "        keys = ['FT Layer Override']",
+     "direction": "reads_symbol_field"
+    },
+    {
+     "role": "other",
+     "name": "Layer Override",
+     "evidence_file": "plugins/process.py",
+     "evidence_line": 478,
+     "quote": "        fallback_keys = ['Layer Override', 'LayerOverride']",
+     "direction": "reads_symbol_field"
+    },
+    {
+     "role": "other",
+     "name": "LayerOverride",
+     "evidence_file": "plugins/process.py",
+     "evidence_line": 478,
+     "quote": "        fallback_keys = ['Layer Override', 'LayerOverride']",
+     "direction": "reads_symbol_field"
+    },
+    {
+     "role": "other",
+     "name": "FT Rotation Offset",
+     "evidence_file": "plugins/process.py",
+     "evidence_line": 500,
+     "quote": "        keys = ['FT Rotation Offset']",
+     "direction": "reads_symbol_field"
+    },
+    {
+     "role": "other",
+     "name": "Rotation Offset",
+     "evidence_file": "plugins/process.py",
+     "evidence_line": 501,
+     "quote": "        fallback_keys = ['Rotation Offset', 'RotOffset']",
+     "direction": "reads_symbol_field"
+    },
+    {
+     "role": "other",
+     "name": "RotOffset",
+     "evidence_file": "plugins/process.py",
+     "evidence_line": 501,
+     "quote": "        fallback_keys = ['Rotation Offset', 'RotOffset']",
+     "direction": "reads_symbol_field"
+    },
+    {
+     "role": "other",
+     "name": "FT Position Offset",
+     "evidence_file": "plugins/process.py",
+     "evidence_line": 520,
+     "quote": "        keys = ['FT Position Offset']",
+     "direction": "reads_symbol_field"
+    },
+    {
+     "role": "other",
+     "name": "Position Offset",
+     "evidence_file": "plugins/process.py",
+     "evidence_line": 521,
+     "quote": "        fallback_keys = ['Position Offset', 'PosOffset']",
+     "direction": "reads_symbol_field"
+    },
+    {
+     "role": "other",
+     "name": "PosOffset",
+     "evidence_file": "plugins/process.py",
+     "evidence_line": 521,
+     "quote": "        fallback_keys = ['Position Offset', 'PosOffset']",
+     "direction": "reads_symbol_field"
+    },
+    {
+     "role": "other",
+     "name": "FT Origin",
+     "evidence_file": "plugins/process.py",
+     "evidence_line": 541,
+     "quote": "        keys = ['FT Origin']",
+     "direction": "reads_symbol_field"
+    },
+    {
+     "role": "other",
+     "name": "Origin",
+     "evidence_file": "plugins/process.py",
+     "evidence_line": 542,
+     "quote": "        fallback_keys = ['Origin']",
+     "direction": "reads_symbol_field"
+    }
+   ],
+   "could_not_verify": [
+    "No manufacturer-name field alias (no 'Manufacturer'/'manf'/'MFR' key is read or written anywhere in the repo).",
+    "No description field alias (no 'Description'/'Comment' symbol-field read or BOM column).",
+    "No datasheet field alias.",
+    "No BOM-READING code path at all \u2014 the tool only WRITES bom.csv from the pcbnew board; it never parses an existing BOM CSV, so there are no 'reads_bom_column' aliases. (The only csv.DictReader in the repo, plugins/process.py:343, reads the rotations/offsets database with fieldnames [\"footprint\",\"rotation\",\"x\",\"y\"], not a BOM.)",
+    "No user-configurable alias/override list \u2014 the key lists are hardcoded in plugins/process.py, not exposed in fabrication-toolkit-options.json."
+   ],
+   "notes": "Clone: /tmp/claude-1000/-home-matthew-circuits-com/1a91b583-5ce8-47da-87b4-dd08761fbeb2/scratchpad/alias-harvest/fabrication-toolkit (depth 1, default branch). All aliases live in one file, plugins/process.py.\n\nJACKPOT TABLE \u2014 _get_mpn_from_footprint (plugins/process.py:461-473) is the JLC/LCSC part-number alias resolver. It is built as a CROSS PRODUCT, so the 12 combined names above do not appear as string literals; they are generated at line 465 from these literals:\n  463: supplier_names = ['LCSC', 'JLCPCB']\n  464: pn_abbrevs = ['Part #', 'Part', 'PN', 'P/N', 'Part No.', 'Part Number']\n  465: keys = [(sn + \" \" + abr) for sn in supplier_names for abr in pn_abbrevs]\n  466: fallback_keys = ['LCSC', 'JLC', 'MPN', 'Mpn', 'mpn']\nPrecedence is list order: all 12 \"<supplier> <abbrev>\" combos first (LCSC before JLCPCB, abbrevs in the order listed), then the 5 bare fallbacks. First non-empty wins (471-473). A footprint carrying a field literally named 'dnp' short-circuits to the string 'DNP' (468-469) before any part-number lookup.\n\nField lookup is name-based across KiCad API generations via plugins/utils.py:48-66 (HasField / HasFieldByName / HasProperty), i.e. exact-string, case-SENSITIVE matching \u2014 hence the explicit MPN/Mpn/mpn triple.\n\nBOM WRITE SCHEMA \u2014 bom.csv (config.py:8 bomFileName = 'bom.csv'), header row emitted from the first dict's keys (process.py:312 csv_writer.writerow(self.bom[0].keys())), so column order is exactly the insertion order at 284-291:\n  Designator, Footprint, Quantity, Value, LCSC Part #\nEncoding utf-8-sig (BOM-prefixed UTF-8), plain csv.writer. A commented-out 'Mount' column sits at line 289. Merge/dedup key is Footprint + Value(upper) + 'LCSC Part #' with Quantity < bomRowLimit (200, config.py:11); merged rows join designators with \", \" (277).\n\nCompanion positions.csv (config.py:7 placementFileName), same header-from-keys mechanism (299), columns from process.py:253-259: Designator, Mid X, Mid Y, Rotation, Layer. Reported here for completeness only \u2014 it is a placement file, not a BOM."
+  },
+  {
+   "tool": "vendor-templates",
+   "aliases": [
+    {
+     "role": "value",
+     "name": "Comment",
+     "direction": "reads_bom_column",
+     "evidence_file": "https://jlcpcb.com/help/article/bill-of-materials-for-pcb-assembly",
+     "evidence_line": 23,
+     "quote": "- **Comment** \\- Specify the type, specification, tolerance and so on. (e.g. 100nF 80% -20% 50CV)"
+    },
+    {
+     "role": "refs",
+     "name": "Designator",
+     "direction": "reads_bom_column",
+     "evidence_file": "https://jlcpcb.com/help/article/bill-of-materials-for-pcb-assembly",
+     "evidence_line": 24,
+     "quote": "- **Designator** \\- Mark the location of components on your board. (e.g. R201, R20, C100, U1 )"
+    },
+    {
+     "role": "footprint",
+     "name": "Footprint",
+     "direction": "reads_bom_column",
+     "evidence_file": "https://jlcpcb.com/help/article/bill-of-materials-for-pcb-assembly",
+     "evidence_line": 27,
+     "quote": "- **Footprint**\\- The part package. (e.g. 0402, 0805, SSOP-8)"
+    },
+    {
+     "role": "distributor_pn",
+     "name": "JLCPCB Part #",
+     "direction": "reads_bom_column",
+     "evidence_file": "https://s3.amazonaws.com/helpscout.net/docs/assets/59f1de7804286313cffbb22c/attachments/60ee4acd9e87cb3d0124d284/Sample-BOM_JLCSMT.xlsx",
+     "evidence_line": 1,
+     "quote": "<si><t>Comment</t></si><si><t>Designator</t></si><si><t>Footprint</t></si><si><r><rPr><sz val=\"11\"/><color rgb=\"FFAFABAB\"/><rFont val=\"Arial\"/><charset val=\"134\"/></rPr><t>JLCPCB Part #</t></r><r>...<t>\uff08</t></r><r>...<t>optional</t></r><r>...<t>\uff09</t></r></si>  [xl/sharedStrings.xml; sheet1.xml row 1 maps A1..D1 to these four shared strings]"
+    },
+    {
+     "role": "distributor_pn",
+     "name": "LCSC PN",
+     "direction": "reads_symbol_field",
+     "evidence_file": "https://jlcpcb.com/help/article/how-to-generate-bom-and-centroid-files-from-kicad-8",
+     "evidence_line": 45,
+     "quote": "- **LCSC PN** \\- Exact component part number from JLCPCB part supplier LCSC"
+    },
+    {
+     "role": "distributor_pn",
+     "name": "LCSC PN",
+     "direction": "reads_symbol_field",
+     "evidence_file": "https://jlcpcb.com/help/article/how-to-generate-bom-and-centroid-files-from-kicad-8",
+     "evidence_line": 93,
+     "quote": "If you are looking to be fully compatible with the installed \"JLCPCB Fabrication Toolkit\" script, it's very important to add \"LCSC PN\" section to each component, as well as it's related barcode. This can be done through the \"Schematic editor\" by clicking on each component."
+    },
+    {
+     "role": "distributor_pn",
+     "name": "Mouser Part Number",
+     "direction": "reads_bom_column",
+     "evidence_file": "https://www.mouser.com/help/tools/how-to-create-a-new-bom/",
+     "evidence_line": 291,
+     "quote": "- Mouser Part Number or"
+    },
+    {
+     "role": "mpn",
+     "name": "Manufacturer Part Number",
+     "direction": "reads_bom_column",
+     "evidence_file": "https://www.mouser.com/help/tools/how-to-create-a-new-bom/",
+     "evidence_line": 292,
+     "quote": "- Manufacturer Part Number"
+    },
+    {
+     "role": "other",
+     "name": "Customer Reference",
+     "direction": "reads_bom_column",
+     "evidence_file": "https://www.digikey.com/en/blog/q-a-from-digi-keys-list-management-webinar",
+     "evidence_line": 1262,
+     "quote": "As a registered user, you can save your internal numbers and use them to create a quote or place an order. When uploading your spreadsheet to myLists, you can map your internal part number column to the heading \u201cCustomer Reference,\u201d this will connect your internal part number to the DigiKey and Manufacturer part numbers."
+    },
+    {
+     "role": "other",
+     "name": "CompareState",
+     "direction": "writes_bom_header",
+     "evidence_file": "https://www.altium.com/documentation/altium-designer/activebom/finalizing-bom",
+     "evidence_line": 298,
+     "quote": "- CompareState"
+    },
+    {
+     "role": "other",
+     "name": "Line number",
+     "direction": "writes_bom_header",
+     "evidence_file": "https://www.altium.com/documentation/altium-designer/activebom/finalizing-bom",
+     "evidence_line": 300,
+     "quote": "- Line number"
+    },
+    {
+     "role": "other",
+     "name": "Name",
+     "direction": "writes_bom_header",
+     "evidence_file": "https://www.altium.com/documentation/altium-designer/activebom/finalizing-bom",
+     "evidence_line": 302,
+     "quote": "- Name"
+    },
+    {
+     "role": "description",
+     "name": "Description",
+     "direction": "writes_bom_header",
+     "evidence_file": "https://www.altium.com/documentation/altium-designer/activebom/finalizing-bom",
+     "evidence_line": 304,
+     "quote": "- Description"
+    },
+    {
+     "role": "refs",
+     "name": "Designator",
+     "direction": "writes_bom_header",
+     "evidence_file": "https://www.altium.com/documentation/altium-designer/activebom/finalizing-bom",
+     "evidence_line": 306,
+     "quote": "- Designator"
+    },
+    {
+     "role": "mpn",
+     "name": "Manufacturer Part Number 1",
+     "direction": "writes_bom_header",
+     "evidence_file": "https://www.altium.com/documentation/altium-designer/activebom/finalizing-bom",
+     "evidence_line": 308,
+     "quote": "- Manufacturer Part Number 1"
+    },
+    {
+     "role": "qty",
+     "name": "Qty",
+     "direction": "writes_bom_header",
+     "evidence_file": "https://www.altium.com/documentation/altium-designer/activebom/finalizing-bom",
+     "evidence_line": 310,
+     "quote": "- Qty"
+    },
+    {
+     "role": "refs",
+     "name": "Part",
+     "direction": "writes_bom_header",
+     "evidence_file": "https://raw.githubusercontent.com/igalloway/NXPhlite-kit/master/NXP-Eagle-7.5.0/ulp/bom.ulp",
+     "evidence_line": 378,
+     "quote": "  Lines[NumLines ++] = tr (\"Part\\tValue\\tDevice\\tPackage\\tDescription\\t\") + s;"
+    },
+    {
+     "role": "value",
+     "name": "Value",
+     "direction": "writes_bom_header",
+     "evidence_file": "https://raw.githubusercontent.com/igalloway/NXPhlite-kit/master/NXP-Eagle-7.5.0/ulp/bom.ulp",
+     "evidence_line": 378,
+     "quote": "  Lines[NumLines ++] = tr (\"Part\\tValue\\tDevice\\tPackage\\tDescription\\t\") + s;"
+    },
+    {
+     "role": "other",
+     "name": "Device",
+     "direction": "writes_bom_header",
+     "evidence_file": "https://raw.githubusercontent.com/igalloway/NXPhlite-kit/master/NXP-Eagle-7.5.0/ulp/bom.ulp",
+     "evidence_line": 378,
+     "quote": "  Lines[NumLines ++] = tr (\"Part\\tValue\\tDevice\\tPackage\\tDescription\\t\") + s;"
+    },
+    {
+     "role": "footprint",
+     "name": "Package",
+     "direction": "writes_bom_header",
+     "evidence_file": "https://raw.githubusercontent.com/igalloway/NXPhlite-kit/master/NXP-Eagle-7.5.0/ulp/bom.ulp",
+     "evidence_line": 378,
+     "quote": "  Lines[NumLines ++] = tr (\"Part\\tValue\\tDevice\\tPackage\\tDescription\\t\") + s;"
+    },
+    {
+     "role": "description",
+     "name": "Description",
+     "direction": "writes_bom_header",
+     "evidence_file": "https://raw.githubusercontent.com/igalloway/NXPhlite-kit/master/NXP-Eagle-7.5.0/ulp/bom.ulp",
+     "evidence_line": 378,
+     "quote": "  Lines[NumLines ++] = tr (\"Part\\tValue\\tDevice\\tPackage\\tDescription\\t\") + s;"
+    },
+    {
+     "role": "qty",
+     "name": "Qty",
+     "direction": "writes_bom_header",
+     "evidence_file": "https://raw.githubusercontent.com/igalloway/NXPhlite-kit/master/NXP-Eagle-7.5.0/ulp/bom.ulp",
+     "evidence_line": 403,
+     "quote": "  Lines[NumLines ++] = tr (\"Qty\\tValue\\tDevice\\tPackage\\tParts\\tDescription\\t\") + s;                 // 2011-04-08"
+    },
+    {
+     "role": "refs",
+     "name": "Parts",
+     "direction": "writes_bom_header",
+     "evidence_file": "https://raw.githubusercontent.com/igalloway/NXPhlite-kit/master/NXP-Eagle-7.5.0/ulp/bom.ulp",
+     "evidence_line": 403,
+     "quote": "  Lines[NumLines ++] = tr (\"Qty\\tValue\\tDevice\\tPackage\\tParts\\tDescription\\t\") + s;                 // 2011-04-08"
+    },
+    {
+     "role": "distributor_pn",
+     "name": "Digi-Key Part Number",
+     "direction": "unknown",
+     "evidence_file": "https://raw.githubusercontent.com/im-tomu/tomu-hardware/master/bom-digikey.csv",
+     "evidence_line": 1,
+     "quote": "Digi-Key Part Number,Manufacturer,Manufacturer Part Number,Customer Reference,Quantity 1,Quantity 2,Quantity 3,Mfg Std Lead Time,Description,Comments,RoHS Status,Lead Free Status,REACH Status"
+    },
+    {
+     "role": "manufacturer",
+     "name": "Manufacturer",
+     "direction": "unknown",
+     "evidence_file": "https://raw.githubusercontent.com/im-tomu/tomu-hardware/master/bom-digikey.csv",
+     "evidence_line": 1,
+     "quote": "Digi-Key Part Number,Manufacturer,Manufacturer Part Number,Customer Reference,Quantity 1,Quantity 2,Quantity 3,Mfg Std Lead Time,Description,Comments,RoHS Status,Lead Free Status,REACH Status"
+    },
+    {
+     "role": "mpn",
+     "name": "Manufacturer Part Number",
+     "direction": "unknown",
+     "evidence_file": "https://raw.githubusercontent.com/im-tomu/tomu-hardware/master/bom-digikey.csv",
+     "evidence_line": 1,
+     "quote": "Digi-Key Part Number,Manufacturer,Manufacturer Part Number,Customer Reference,Quantity 1,Quantity 2,Quantity 3,Mfg Std Lead Time,Description,Comments,RoHS Status,Lead Free Status,REACH Status"
+    },
+    {
+     "role": "other",
+     "name": "Customer Reference",
+     "direction": "unknown",
+     "evidence_file": "https://raw.githubusercontent.com/im-tomu/tomu-hardware/master/bom-digikey.csv",
+     "evidence_line": 1,
+     "quote": "Digi-Key Part Number,Manufacturer,Manufacturer Part Number,Customer Reference,Quantity 1,Quantity 2,Quantity 3,Mfg Std Lead Time,Description,Comments,RoHS Status,Lead Free Status,REACH Status"
+    },
+    {
+     "role": "qty",
+     "name": "Quantity 1",
+     "direction": "unknown",
+     "evidence_file": "https://raw.githubusercontent.com/im-tomu/tomu-hardware/master/bom-digikey.csv",
+     "evidence_line": 1,
+     "quote": "Digi-Key Part Number,Manufacturer,Manufacturer Part Number,Customer Reference,Quantity 1,Quantity 2,Quantity 3,Mfg Std Lead Time,Description,Comments,RoHS Status,Lead Free Status,REACH Status"
+    },
+    {
+     "role": "description",
+     "name": "Description",
+     "direction": "unknown",
+     "evidence_file": "https://raw.githubusercontent.com/im-tomu/tomu-hardware/master/bom-digikey.csv",
+     "evidence_line": 1,
+     "quote": "Digi-Key Part Number,Manufacturer,Manufacturer Part Number,Customer Reference,Quantity 1,Quantity 2,Quantity 3,Mfg Std Lead Time,Description,Comments,RoHS Status,Lead Free Status,REACH Status"
+    }
+   ],
+   "could_not_verify": [
+    "Digi-Key myLists official BOM-upload TEMPLATE and its literal column-header row \u2014 https://www.digikey.com/en/mylists and https://www.digikey.com/en/help-support/place-an-order/build-a-bom both scraped to site navigation only (JS-rendered / login-gated); the upload File Mapping screen is behind sign-in. Only the single mapping heading 'Customer Reference' is attested, from Digi-Key's own blog.",
+    "Digi-Key myLists full mapping-target list (whether the headings are 'Digi-Key Part Number' / 'Manufacturer Part Number' / 'Quantity' verbatim in the myLists mapper) \u2014 NOT retrieved from any digikey.com URL.",
+    "Mouser's downloadable sample BOM template file \u2014 mouser.com serves an Akamai 'Access to this page has been denied' page to non-browser fetches (HTTP 200 with a denial body). Only the two REQUIRED mapping field names on the help page were retrievable; the remaining Mouser mapping dropdown options (e.g. any quantity / customer-part-number / designator targets) were not.",
+    "Altium Designer's default BOM export header row from an official default template file (BOM Default Template*.xlt / .XLSX) \u2014 not retrieved. The Altium strings reported above come from the ActiveBOM 'Finalizing Your BOM' page's 'default columns displayed in the Report Manager dialog' list, which appears in that page's BOM-COMPARISON section (hence 'CompareState' and 'Line number'); the 'Preparing a BOM in the Report Manager' page contains no explicit default-column list.",
+    "JLCPCB literal string 'LCSC Part #' \u2014 NOT found. What is attested is 'JLCPCB Part #' (sample XLSX header D1) and 'LCSC PN' (KiCad article symbol field). The KiCad-10 JLCPCB article was not scraped.",
+    "EAGLE/Fusion bom.ulp from an Autodesk-hosted URL \u2014 the file quoted is a third-party GitHub copy of a stock EAGLE 7.5.0 install tree (NXP-Eagle-7.5.0/ulp/bom.ulp). Autodesk does not publish the ULP source at a fetchable URL, so provenance is a mirror, not the vendor.",
+    "Fusion (Electronics) BOM export default headers as distinct from legacy EAGLE bom.ulp \u2014 not investigated/retrieved."
+   ],
+   "notes": "Line numbers for HTML sources are line numbers in the firecrawl --only-main-content markdown render of that URL (saved under the session scratchpad), not in the raw HTML; quotes are verbatim from that render including its markdown escaping (e.g. \"\\\\-\"). Line numbers for bom.ulp and the CSV are true file line numbers.\n\nJLCPCB: the help page enumerates only Comment / Designator / Footprint as the mandatory fields; the downloadable \"JLC Sample BOM\" XLSX (linked from that page) has a 4-column header row A1..D1 whose D1 is rich text \"JLCPCB Part #\" + \"\uff08optional\uff09\" \u2014 the literal token is \"JLCPCB Part #\". The \"Recommendations for BOM / CPL File Preparation\" page says \"Please modify the column headers in your files to match the standard field names recognized by our system\" but publishes NO alias/synonym table \u2014 no jackpot table was found for any of the five tools.\n\nMouser: \"Mouser Part Number\" and \"Manufacturer Part Number\" are mapping TARGETS in the FORTE BOM tool's column-mapping step (\"At least one of the following options must be mapped\"), not headers Mouser writes.\n\nDigi-Key: the five aliases sourced from raw.githubusercontent.com/im-tomu/tomu-hardware are the header row of a file named bom-digikey.csv in a third-party hardware repo \u2014 it has the shape of a Digi-Key BOM Manager/list export, but I could NOT confirm Digi-Key generated it, so direction is \"unknown\" and it must not be treated as an attested vendor template. The only Digi-Key-attested string is \"Customer Reference\".\n\nAltium: reported strings are dialog/report column names, quoted verbatim from Altium's own documentation; the surrounding section is BOM Comparison. Treat with the caveat above.\n\nEAGLE bom.ulp emits two different header rows depending on list type: Parts list (line 378) = Part / Value / Device / Package / Description, Values list (line 403) = Qty / Value / Device / Package / Parts / Description. Both are wrapped in tr() so a localized EAGLE emits translated headers (the German catalog at lines 113-117 shows \"Bauteil\\tWert\\tDevice\\tPackage\\tDescription\" and \"Menge\\tWert\\tDevice\\tGeh\u00e4use\\tBauteile\")."
+  }
+ ]
+}

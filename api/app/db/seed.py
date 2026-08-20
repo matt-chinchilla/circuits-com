@@ -2074,8 +2074,27 @@ def _seed_real_catalog(
     total_parts = 0
     total_listings = 0
 
-    for jf in json_files:
-        data = json.loads(jf.read_text())
+    # One scoped query replaces the old per-row existence probe (2026-08-20
+    # audit: the per-row .first() hydrated the selectin listings+breaks cascade
+    # per part — ~209k ORM objects built and discarded, 93.8% of every
+    # container start at 62k parts). Keyed HERE, after _seed_parts has flushed:
+    # the session is autoflush=False, so a SELECT issued earlier would not see
+    # its pending rows, and 17 demo SKUs collide with the catalog — hoisting
+    # this above step 6 recreates them as duplicates.
+    parsed = [json.loads(jf.read_text()) for jf in json_files]
+    all_skus = {
+        p["sku"]
+        for data in parsed
+        for parts_list in data.values()
+        for p in parts_list
+    }
+    existing_skus: set[str] = (
+        {row[0] for row in db.query(Part.sku).filter(Part.sku.in_(all_skus)).all()}
+        if all_skus
+        else set()
+    )
+
+    for data in parsed:
         for sub_slug, parts_list in data.items():
             target_cat = None
             for cat in cats.values():
@@ -2092,9 +2111,12 @@ def _seed_real_catalog(
                 eligible = list(suppliers.values())[:10]
 
             for p in parts_list:
-                existing = db.query(Part).filter(Part.sku == p["sku"]).first()
-                if existing:
+                if p["sku"] in existing_skus:
                     continue
+                # Add on create: 77 excess rows in the JSON share a SKU with an
+                # earlier row (73 duplicate SKUs, some cross-file) — without
+                # this, a fresh DB inserts them all.
+                existing_skus.add(p["sku"])
 
                 part = Part(
                     sku=p["sku"],
@@ -2106,8 +2128,10 @@ def _seed_real_catalog(
                     datasheet_url=p.get("datasheet_url"),
                     lifecycle_status=p.get("lifecycle", "active"),
                 )
+                # No per-row flush: listings/breaks attach via relationships,
+                # so FK ids resolve at the chunked flush below (create path
+                # went from 3 flushes/part to 1 per 500 parts).
                 db.add(part)
-                db.flush()
                 total_parts += 1
 
                 base_cents = p.get("price_cents", 500)
@@ -2124,21 +2148,18 @@ def _seed_real_catalog(
                     )
                     stock_lo, stock_hi = _STOCK_TIERS.get(str(sup.name), _DEFAULT_STOCK)
                     listing = PartListing(
-                        part_id=part.id,
                         supplier_id=sup.id,
                         sku=f"{sup.name[:3].upper()}-{p['sku']}",
                         stock_quantity=random.randint(stock_lo, stock_hi),
                         lead_time_days=random.choice([0, 0, 0, 1, 3, 7, 14]),
                         unit_price=unit_price,
                     )
-                    db.add(listing)
-                    db.flush()
+                    part.listings.append(listing)
                     total_listings += 1
 
                     for qty, discount in [(10, 0.95), (100, 0.85), (1000, 0.70), (5000, 0.58)]:
-                        db.add(
+                        listing.price_breaks.append(
                             PriceBreak(
-                                listing_id=listing.id,
                                 min_quantity=qty,
                                 unit_price=max(
                                     Decimal("0.01"),
@@ -2324,13 +2345,6 @@ def _seed_sponsor_sold_by(db: Session) -> None:
     if not reps:
         return
 
-    listing_counts = {
-        str(row[0]): row[1]
-        for row in db.query(PartListing.supplier_id, func.count(PartListing.id))
-        .group_by(PartListing.supplier_id)
-        .all()
-    }
-
     sponsors = (
         db.query(Sponsor)
         .filter(
@@ -2339,7 +2353,19 @@ def _seed_sponsor_sold_by(db: Session) -> None:
         )
         .all()
     )
+    if not sponsors:
+        # Steady state on every container start: nothing to attribute, so skip
+        # the full-table listings GROUP BY below (linear in part_listings —
+        # ~20ms at 100k rows and growing with every import).
+        return
     sponsors.sort(key=lambda s: (str(s.created_at or ""), str(s.id)))
+
+    listing_counts = {
+        str(row[0]): row[1]
+        for row in db.query(PartListing.supplier_id, func.count(PartListing.id))
+        .group_by(PartListing.supplier_id)
+        .all()
+    }
 
     rr_index = 0
     to_rep = 0

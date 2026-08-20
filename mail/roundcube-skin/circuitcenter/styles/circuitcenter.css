@@ -717,13 +717,48 @@ html.cc #layout > div > .footer a.button {
    no border (Elastic forces it off) and no box metric, so nothing reflows. */
 html.cc .header a.button.icon:not(.disabled):focus-visible,
 html.cc .header a.button.icon:not(.disabled):hover {
+	/* INK ONLY on hover (owner request, 2026-08-19). The glass fill this rule
+	   used to paint could not be contained: these anchors are stretch items in
+	   the flex header, so the wash ran the full row height and read as a band
+	   behind the toolbar rather than as a button lighting up. Brightening the
+	   glyph is the whole affordance now — no background, no shadow, no box
+	   metric, so nothing reflows and nothing bleeds. */
 	color: var(--cc-ink);
-	background: var(--cc-btn-glass);
-	border-radius: var(--cc-r-btn);
-	box-shadow:
-		inset 0 1px 0 rgba(255, 255, 255, 0.22),
-		0 0 0 1px rgba(255, 255, 255, 0.06),
-		0 2px 6px -2px rgba(0, 0, 0, 0.35);
+}
+
+/* Same rule for the list header's own toolbar, which sits in a separate
+   container and would otherwise keep the wash. */
+html.cc #messagelist-header a.button:not(.disabled):focus-visible,
+html.cc #messagelist-header a.button:not(.disabled):hover,
+html.cc .header[role='toolbar'] a.button:not(.disabled):focus-visible,
+html.cc .header[role='toolbar'] a.button:not(.disabled):hover {
+	color: var(--cc-ink);
+	background: none;
+	box-shadow: none;
+}
+
+/* Delete reads as destructive — bin glyph AND the word, in the palette's red
+   (owner request, 2026-08-19). The icon is a `:before` pseudo-element, so it
+   inherits this `color` and the two cannot drift apart.
+
+   Stated AFTER the hover rules above on purpose: those set `--cc-ink` for
+   every toolbar button, and a delete that turned white on approach would
+   announce itself as ordinary at the exact moment the pointer is on it. The
+   hover state brightens the red instead. Disabled is left alone — Elastic
+   dims it, and a dimmed red still reads as the same control. */
+html.cc .header a.button.delete:not(.disabled),
+html.cc #messagelist-header a.button.delete:not(.disabled),
+html.cc .header[role='toolbar'] a.button.delete:not(.disabled),
+html.cc .menu a.delete:not(.disabled),
+html.cc .header a.button.delete:not(.disabled):hover,
+html.cc .header a.button.delete:not(.disabled):focus-visible,
+html.cc #messagelist-header a.button.delete:not(.disabled):hover,
+html.cc #messagelist-header a.button.delete:not(.disabled):focus-visible,
+html.cc .header[role='toolbar'] a.button.delete:not(.disabled):hover,
+html.cc .header[role='toolbar'] a.button.delete:not(.disabled):focus-visible,
+html.cc .menu a.delete:not(.disabled):hover,
+html.cc .menu a.delete:not(.disabled):focus-visible {
+	color: var(--cc-flag);
 }
 
 /* The overflow ("More") button, while its menu is OPEN.
@@ -735,10 +770,13 @@ html.cc .header a.button.icon:not(.disabled):hover {
    changes, nothing else in the header reflows. */
 html.cc .header a.button.more,
 html.cc .header a#messagemenulink.more {
+	/* `align-self` ONLY — deliberately no `display` change. Setting
+	   inline-flex here pulled the ••• glyph out of Elastic's stacked layout
+	   (the `:before` is a floated block, so the icon sits ABOVE the label) and
+	   dropped it to the left of the word (owner-reported). Alignment alone
+	   stops the anchor stretching to the full header height, which was the
+	   actual problem, and leaves the icon where the skin put it. */
 	align-self: center;
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
 	border-radius: var(--cc-r-btn);
 }
 
@@ -1943,12 +1981,34 @@ html.cc .popover .popover-header {
 	text-transform: uppercase;
 }
 
+/* Hover fills belong to LIST rows, not to toolbar controls.
+   `.menu.toolbar .dropbutton` — the wrapper around a split control like Reply
+   all or Forward — used to be in this list, which is why that one button still
+   washed green after the toolbar hover fills were removed: the fill was landing
+   on the wrapper, not on the `a.button` those rules targeted (owner-reported,
+   traced from the screenshot). A dropdown row inside an OPEN popup menu is a
+   list row and keeps its fill; the toolbar control does not. */
 html.cc .popupmenu .listing li > a:not(.disabled):hover,
-html.cc .menu.toolbar .dropbutton:not(.disabled):hover,
-html.cc .menu a:not(.disabled):focus,
-html.cc .menu a:not(.disabled):hover {
+html.cc .menu:not(.toolbar) a:not(.disabled):focus,
+html.cc .menu:not(.toolbar) a:not(.disabled):hover {
 	color: var(--cc-ink);
 	background-color: var(--cc-tint-select);
+}
+
+/* Toolbar controls: ink only, matching the header buttons. Stated explicitly
+   rather than left to inheritance so a future edit to the list rule above
+   cannot quietly hand the toolbar a fill again.
+
+   `:not(.selected)` is load-bearing: this rule is one class more specific than
+   `.menu.toolbar a.selected`, so without it, pointing at an ALREADY-SELECTED
+   toolbar item would strip the fill that says it is selected. Compose is
+   unaffected either way — its lit pad is painted by an `::after`, not by the
+   anchor's own background. */
+html.cc .menu.toolbar .dropbutton:not(.disabled):hover,
+html.cc .menu.toolbar a:not(.disabled):not(.selected):hover,
+html.cc .menu.toolbar a:not(.disabled):not(.selected):focus {
+	color: var(--cc-ink);
+	background-color: transparent;
 }
 
 /* Section 7 sets a global link colour. Menu entries are controls, not

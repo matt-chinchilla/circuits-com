@@ -26,10 +26,31 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
+from app.models.presence_fake import PresenceFake
 from app.models.user import User
 from app.services.auth_service import get_current_user
 
 router = APIRouter(prefix="/api/admin", tags=["admin-presence"])
+
+# ── Fake-presence roster (the `circuits --fakeuser` lever) ──────────────────
+# When presence_fakes.count > 0, the first `count` entries below are appended
+# to every ping response as synthetic online users. Everyone in this list is
+# FICTIONAL — never a real staff member (their real rows drive real presence).
+# ids are "fake-N" so they can never collide with real user UUIDs, and the
+# frontend's self-filter (which matches on user_id) can never hide them.
+#
+FAKE_PRESENCE_ROSTER: list[tuple[str, str]] = [
+    ("Daniella", "Daniella LoCascio"),
+    ("James", "James Chirichella"),
+    ("Mark", "Mark LoCascio"),
+    ("Theo", "Theo Vonn"),
+    ("Jesus", "Jesus Christ"),
+    ("Mom", "My Mom"),
+    ("Con", "Gussy Parpounas"),
+    ("Olivia", "Olivia Auriemmo"),
+    ("Dominick", "Dominick Letteri"),
+    ("Bandit", "Bandit TheDog"),
+]
 
 # A client heartbeats every 15s; 40s tolerates two dropped pings (plus slack)
 # before a user is considered gone. Tightened from 75s so a colleague closing
@@ -71,7 +92,7 @@ def presence_ping(
         .order_by(User.username)
         .all()
     )
-    return [
+    roster = [
         PresenceUser(
             user_id=str(u.id),
             username=u.username,
@@ -82,3 +103,16 @@ def presence_ping(
         )
         for u in active
     ]
+
+    # Fake-presence union: a missing row (fresh SQLite test DB — create_all
+    # builds the table but not migration 034's seed row) means 0. The 0-10
+    # CHECK holds on both engines; the clamp below only guards a roster
+    # shorter than the ceiling.
+    fake_row = db.get(PresenceFake, 1)
+    fake_count = 0 if fake_row is None else int(fake_row.count or 0)
+    fake_count = max(0, min(fake_count, len(FAKE_PRESENCE_ROSTER)))
+    roster.extend(
+        PresenceUser(user_id=f"fake-{i}", username=username, name=display, role="admin")
+        for i, (username, display) in enumerate(FAKE_PRESENCE_ROSTER[:fake_count], start=1)
+    )
+    return roster

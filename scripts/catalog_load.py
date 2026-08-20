@@ -22,7 +22,7 @@ LISTING_NATURAL = {"part_sku", "part_manufacturer", "supplier_name", "price_brea
 db = SessionLocal()
 cats = {c.slug: c for c in db.query(Category).all()}
 sups = {s.name: s for s in db.query(Supplier).all()}
-parts = {(p.sku, p.manufacturer_name): p for p in db.query(Part).yield_per(500)}
+parts = {p.sku: p for p in db.query(Part).yield_per(500)}
 
 counts = {
     "suppliers_new": 0, "suppliers_updated": 0,
@@ -72,7 +72,12 @@ for line_no, line in enumerate(open(sys.argv[1], encoding="utf-8"), 1):
         if cat is None:
             counts["parts_skipped_no_category"] += 1
             continue
-        key = (rec["sku"], rec["manufacturer_name"])
+        # Keyed on sku ALONE (2026-08-20 unification): seed.py and
+        # part_feed/importer.py both key on sku; the old (sku, manufacturer)
+        # key created a SECOND row when the same part arrived under a
+        # different manufacturer spelling ("Diodes Inc." vs "Diodes
+        # Incorporated") — prerequisite for a future UNIQUE(sku).
+        key = rec["sku"]
         row = parts.get(key)
         if row is None:
             row = Part(id=uuid.uuid4(), sku=rec["sku"], category_id=cat.id)
@@ -90,7 +95,7 @@ for line_no, line in enumerate(open(sys.argv[1], encoding="utf-8"), 1):
                 counts["parts_updated"] += 1
 
     elif kind == "listing":
-        part = parts.get((rec["part_sku"], rec["part_manufacturer"]))
+        part = parts.get(rec["part_sku"])
         sup = sups.get(rec["supplier_name"])
         if part is None or sup is None:
             counts["listings_skipped"] += 1
