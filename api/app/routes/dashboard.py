@@ -28,6 +28,9 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models import (
     ActivityEvent,
+    Lead,
+    LeadContact,
+    Manufacturer,
     Category,
     Expense,
     PageView,
@@ -40,6 +43,7 @@ from app.models import (
 )
 from app.models.expense import expense_category_label
 from app.models.roles import ADMIN_ROLES
+from app.routes.admin_leads import require_leads_access
 from app.services.auth_service import get_current_user
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
@@ -330,6 +334,7 @@ def get_stats(
     suppliers_count = db.query(func.count(Supplier.id)).scalar() or 0
     revenue_total = db.query(func.sum(Revenue.amount)).scalar() or Decimal("0.00")
     sponsors_count = db.query(func.count(Sponsor.id)).scalar() or 0
+    manufacturers_count = db.query(func.count(Manufacturer.id)).scalar() or 0
 
     # Current calendar month (EST). "Covers" = the row's period OVERLAPS the
     # month, so a multi-month contract counts toward the month it spans, not
@@ -342,6 +347,7 @@ def get_stats(
     return {
         "parts_count": parts_count,
         "suppliers_count": suppliers_count,
+        "manufacturers_count": manufacturers_count,
         "revenue_total": float(revenue_total),
         "sponsors_count": sponsors_count,
         "monthly_revenue": float(monthly_revenue),
@@ -772,4 +778,46 @@ def get_popular(
     return {
         "top_categories": [{"name": name, "parts_count": count} for name, count in top_categories],
         "top_suppliers": [{"name": name, "listings_count": count} for name, count in top_suppliers],
+    }
+
+
+@router.get("/leads/recent")
+def recent_lead_contacts(
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    user=Depends(require_leads_access),
+):
+    """The Dashboard Leads panel feed — most recent contact attempts.
+
+    Gated by the SAME demo read-refusal as /api/admin/leads (the easy-to-miss
+    second door: the demo account must not read real people's outcomes here
+    either). Hand-built dicts, no response_model.
+    """
+    limit = max(1, min(limit, 100))
+    contacts = (
+        db.query(LeadContact)
+        .order_by(LeadContact.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+    lead_ids = {c.lead_id for c in contacts}
+    leads = (
+        {lead.id: lead for lead in db.query(Lead).filter(Lead.id.in_(lead_ids)).all()}
+        if lead_ids
+        else {}
+    )
+    return {
+        "contacts": [
+            {
+                "id": str(c.id),
+                "lead_id": str(c.lead_id),
+                "company_name": leads[c.lead_id].company_name if c.lead_id in leads else None,
+                "contact_name": leads[c.lead_id].contact_name if c.lead_id in leads else None,
+                "outcome": c.outcome,
+                "sale_tier": c.sale_tier,
+                "recorded_by": c.recorded_by,
+                "created_at": c.created_at.isoformat(),
+            }
+            for c in contacts
+        ]
     }

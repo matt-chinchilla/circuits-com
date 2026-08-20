@@ -6,6 +6,8 @@ from app.admin import setup_admin
 from app.config import settings
 from app.routes import (
     admin_expenses,
+    admin_leads,
+    admin_manufacturers,
     admin_media,
     admin_messages,
     admin_presence,
@@ -60,6 +62,8 @@ app.include_router(stripe_webhooks.router)
 app.include_router(admin_quotes.router)
 app.include_router(feed_credentials.router)
 app.include_router(checkout.router)
+app.include_router(admin_manufacturers.router)
+app.include_router(admin_leads.router)
 
 
 setup_admin(app)
