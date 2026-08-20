@@ -265,6 +265,10 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  // 44px hit floor (mobile-layout-guard rule): the disc stays 28px visually;
+  // the transparent padding is the tap target. Measured 32px before this.
+  min-width: 44px;
+  min-height: 44px;
   padding: 2px;
   background: transparent;
   border: none;
