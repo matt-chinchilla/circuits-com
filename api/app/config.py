@@ -59,6 +59,10 @@ class Settings(BaseSettings):
     # volume mount, so without that passthrough the switch is inert whatever
     # /opt/circuits-com/.env says. Guarded by tests/test_compose_env_passthrough.py.
     SEED_DEMO_CATALOG: bool = True
+    # Leads CRM seeds (2026-08-20). True everywhere by owner decision L6: the
+    # CSVs are the source of truth and a deploy always restores the roster.
+    SEED_MANUFACTURERS: bool = True
+    SEED_LEADS: bool = True
 
     # uvicorn worker count the container actually runs. COUPLED to the
     # `--workers` flag in docker-compose.prod.yml: the same ${API_WORKERS}

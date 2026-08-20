@@ -44,6 +44,8 @@ services:
       # default in app/config.py — an allowlist entry that contradicts the code
       # default silently overrides it.
       SEED_DEMO_CATALOG: ${SEED_DEMO_CATALOG:-true}
+      SEED_MANUFACTURERS: ${SEED_MANUFACTURERS:-true}
+      SEED_LEADS: ${SEED_LEADS:-true}
       # Shared calendar. Same rule as every block here: this list is an
       # ALLOWLIST, not documentation. Settings declares no env_file and the api
       # container has no volume mount, so a value absent from this block never

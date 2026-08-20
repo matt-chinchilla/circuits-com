@@ -1538,6 +1538,18 @@ def seed(db: Session) -> None:
     _seed_real_catalog(db, cats, suppliers)
 
     # ------------------------------------------------------------------
+    # 7b. Manufacturers + Leads CRM (2026-08-20; flags mirror compose)
+    # ------------------------------------------------------------------
+    if settings.SEED_MANUFACTURERS:
+        from app.db.seed_manufacturers import seed_manufacturers
+
+        seed_manufacturers(db)
+    if settings.SEED_LEADS:
+        from app.db.seed_leads import seed_leads
+
+        seed_leads(db)
+
+    # ------------------------------------------------------------------
     # 8. Revenue placeholder data (12 months)
     # ------------------------------------------------------------------
     _seed_revenue(db, suppliers)

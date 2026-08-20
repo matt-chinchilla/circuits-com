@@ -81,6 +81,10 @@ def test_the_shipped_demo_catalog_default_seeds_it():
     """Code default True: a laptop that configures nothing still gets the
     showcase sponsorships. Prod opts OUT via compose, not the other way round."""
     assert Settings.model_fields["SEED_DEMO_CATALOG"].default is True
+    # Leads CRM flags (owner decision L6: default TRUE everywhere — the CSVs
+    # are the source of truth; compose defaults must MIRROR the code default).
+    assert Settings.model_fields["SEED_MANUFACTURERS"].default is True
+    assert Settings.model_fields["SEED_LEADS"].default is True
 
 
 def test_both_compose_files_pass_the_seed_switch_through():
@@ -91,6 +95,12 @@ def test_both_compose_files_pass_the_seed_switch_through():
             "seed keeps re-creating the fictional demo companies (no env_file, no "
             "volume mount)."
         )
+        for flag in ("SEED_MANUFACTURERS", "SEED_LEADS"):
+            assert re.search(rf"^\s*{flag}:\s*\${{{flag}:-true}}", api, re.M), (
+                f"{path.name}: {flag} must pass through with a literal true default "
+                "mirroring the code default (the compose-allowlist gotcha, 5th occurrence)"
+            )
+
 
 
 def test_dev_default_mirrors_the_code_default():

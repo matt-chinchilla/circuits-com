@@ -89,6 +89,8 @@ services:
       # flag itself (seeding is get-or-create), and category boards with no
       # real sponsor render their designed Open-Placement state.
       SEED_DEMO_CATALOG: ${SEED_DEMO_CATALOG:-false}
+      SEED_MANUFACTURERS: ${SEED_MANUFACTURERS:-true}
+      SEED_LEADS: ${SEED_LEADS:-true}
       # Same ${API_WORKERS} the `command` above passes to uvicorn — see the
       # comment there and app/services/rate_limit.py.
       API_WORKERS: ${API_WORKERS:-1}
