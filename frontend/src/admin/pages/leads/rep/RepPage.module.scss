@@ -1,0 +1,276 @@
+@use '@shared/styles/variables' as *;
+@use '../../glass' as *;
+
+// Per-rep activity — a summary strip over the same table skin the rest of the
+// leads/manufacturers pages use.
+
+.page {
+  width: 100%;
+  max-width: 1400px;
+}
+
+.pageHead {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 12px 0 20px;
+  flex-wrap: wrap;
+}
+
+.pageHeadLeft {
+  min-width: 0;
+}
+
+.title {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--a-fg1);
+  letter-spacing: -0.02em;
+  margin: 0 0 4px;
+}
+
+.subtitle {
+  font-size: 14px;
+  color: var(--a-fg3);
+  margin: 0;
+}
+
+// ─── Outcome mix ────────────────────────────────────────────────────────────
+//
+// Three equal cards. The hue arrives inline from OUTCOME_META (one home for
+// the value) and lands on the TOP BORDER as well as the text, so the card is
+// still distinguishable when the numerals are small.
+
+.mixRow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.mixCard {
+  @include a-glass-pane;
+  border-radius: var(--a-radius);
+  border-top: 3px solid var(--a-border);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.mixCount {
+  font-family: $font-mono;
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.mixWord {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+// ─── Panel + table ──────────────────────────────────────────────────────────
+
+.panel {
+  @include a-glass-pane;
+  border-radius: var(--a-radius);
+  overflow: hidden;
+}
+
+.tableWrap {
+  min-width: 0;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table thead {
+  background: var(--a-bg);
+}
+
+.table th {
+  text-align: left;
+  padding: 10px 20px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--a-fg3);
+  border-bottom: 1px solid var(--a-border);
+  white-space: nowrap;
+}
+
+.table td {
+  padding: 10px 20px;
+  font-size: 14px;
+  color: var(--a-fg1);
+  border-bottom: 1px solid var(--a-border-soft);
+  vertical-align: middle;
+}
+
+.table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.table tbody tr:hover td {
+  background: var(--a-hover);
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.discHead,
+.discCell {
+  width: 1%;
+  padding-right: 0;
+  white-space: nowrap;
+  line-height: 0;
+}
+
+.leadLink {
+  color: var(--a-fg1);
+  font-weight: 600;
+  text-decoration: none;
+
+  &:hover {
+    color: var(--a-primary);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--a-primary);
+    outline-offset: 2px;
+    border-radius: 3px;
+  }
+}
+
+.outcomeText {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+// A LABEL the rep tagged the sale with, not a live sponsorship — so it stays a
+// quiet mono chip rather than borrowing the gold/silver tier-badge styling.
+.tierLabel {
+  display: inline-block;
+  font-family: $font-mono;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border-radius: 3px;
+  color: var(--a-fg2);
+  background: var(--a-bg);
+  border: 1px solid var(--a-border);
+  line-height: 1.6;
+}
+
+// Notes run long; the column takes the slack and wraps rather than forcing a
+// horizontal scrollbar onto every other column.
+.noteCell {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--a-fg2);
+  max-width: 380px;
+  word-break: break-word;
+}
+
+.whenCell {
+  font-family: $font-mono;
+  font-size: 12px;
+  color: var(--a-fg2);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.muted {
+  color: var(--a-fg4);
+}
+
+.emptyRow {
+  padding: 32px 20px !important;
+  text-align: center;
+  color: var(--a-fg3);
+  font-size: 13px;
+}
+
+// ─── States ─────────────────────────────────────────────────────────────────
+
+.loading {
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--a-fg3);
+  font-size: 14px;
+}
+
+.errorPanel {
+  @include a-glass-pane;
+  border-radius: var(--a-radius);
+  padding: 32px 20px;
+  text-align: center;
+  color: var(--a-fg3);
+  font-size: 14px;
+}
+
+.blockedPanel {
+  padding: 40px 24px;
+  text-align: center;
+}
+
+.blockedTitle {
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--a-fg2);
+}
+
+.blockedBody {
+  margin: 0 auto;
+  max-width: 460px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--a-fg3);
+}
+
+// ─── Mobile (<=820px) ───────────────────────────────────────────────────────
+
+@media (max-width: $bp-admin-mobile) {
+  .table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+
+    thead,
+    tbody {
+      display: table;
+      width: 100%;
+      min-width: 820px;
+    }
+  }
+}

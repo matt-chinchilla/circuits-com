@@ -1,0 +1,218 @@
+@use '@shared/styles/variables' as *;
+@use '../glass' as *;
+
+// Styles for the manufacturers-local ColumnHeader. Ported 1:1 from
+// SponsorsPage.module.scss's column-header block (the var(--a-*) variant), so
+// the two admin tables read as one control even though the components are
+// separate files. The multi-checkbox block is intentionally absent — this
+// header only ships sort-only + single-choice.
+
+.columnHeader {
+  position: relative;
+  padding: 0 !important; // the panel positions to TH edges; padding is on the inner button
+  user-select: none;
+  background: var(--a-bg);
+}
+
+.columnHeaderActive {
+  background: rgba(10, 74, 46, 0.06);
+}
+
+.columnTrigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  width: 100%;
+  padding: 10px 20px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--a-fg3);
+  transition: background-color 150ms ease, color 150ms ease;
+
+  &:hover {
+    background: var(--a-border-soft);
+    color: var(--a-primary);
+  }
+
+  .columnHeaderActive & {
+    color: var(--a-primary);
+  }
+}
+
+.columnLabel {
+  flex: 1;
+  text-align: left;
+}
+
+.columnIndicators {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 9px;
+  line-height: 1;
+}
+
+.filterDot {
+  color: var(--a-accent);
+  font-size: 8px;
+  line-height: 1;
+}
+
+.sortIndicator {
+  font-size: 9px;
+  line-height: 1;
+  min-width: 8px;
+  color: var(--a-fg4);
+}
+
+.sortIndicatorActive {
+  color: var(--a-primary);
+  font-weight: 700;
+}
+
+// Floating glass — this panel genuinely passes over live table rows, so it
+// carries the real backdrop-filter. Text inside is fg1/fg2 ONLY.
+.columnPanel {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 30;
+  min-width: 220px;
+  max-width: 300px;
+  @include a-glass-float;
+  border-radius: 8px;
+  box-shadow: var(--a-glass-hi), var(--a-glass-shadow-hover);
+  margin-top: 4px;
+  overflow: hidden;
+  // Restore body-text styling inside (the TH is uppercase + small + tracked).
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--a-fg1);
+  animation: columnPanelIn 160ms cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+@keyframes columnPanelIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.panelSection {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 0;
+}
+
+.sectionLabel {
+  padding: 4px 12px 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--a-fg2);
+}
+
+.sectionDivider {
+  height: 1px;
+  background: var(--a-border-soft);
+}
+
+.panelBtn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--a-fg1);
+  text-align: left;
+  transition: background-color 120ms ease;
+
+  &:hover {
+    background: var(--a-border-soft);
+  }
+}
+
+.panelBtnActive {
+  background: rgba(10, 74, 46, 0.06);
+  color: var(--a-primary);
+  font-weight: 600;
+}
+
+.panelBtnClear {
+  color: var(--a-fg2);
+
+  &:hover {
+    color: var(--a-danger);
+  }
+}
+
+.panelBtnGlyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  font-size: 14px;
+  font-weight: 600;
+  color: inherit;
+}
+
+.choiceList {
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.choiceOption {
+  display: block;
+  width: 100%;
+  padding: 6px 12px;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--a-fg1);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+
+  &:hover {
+    background: var(--a-border-soft);
+  }
+}
+
+.choiceOptionActive {
+  color: var(--a-primary);
+  font-weight: 600;
+  background: rgba(10, 74, 46, 0.06);
+}
+
+@media (max-width: $bp-admin-mobile) {
+  .columnPanel {
+    min-width: 200px;
+    max-width: 90vw;
+  }
+
+  .columnTrigger {
+    padding: 10px 12px;
+  }
+}

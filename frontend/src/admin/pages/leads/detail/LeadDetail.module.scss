@@ -1,0 +1,554 @@
+@use '@shared/styles/variables' as *;
+@use '../../glass' as *;
+
+// Lead profile — the two-column admin detail layout (suppliers/detail is the
+// donor: main column + fixed sidebar, glass panels, kv lists), with one new
+// element: the contact-history timeline in the sidebar.
+
+.page {
+  width: 100%;
+  max-width: 1400px;
+}
+
+// ─── Page head ──────────────────────────────────────────────────────────────
+
+.pageHead {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 12px 0 24px;
+  flex-wrap: wrap;
+}
+
+.identity {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.identityText {
+  min-width: 0;
+}
+
+.title {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--a-fg1);
+  letter-spacing: -0.02em;
+  margin: 0 0 2px;
+}
+
+.subtitle {
+  font-size: 14px;
+  color: var(--a-fg3);
+  margin: 0 0 4px;
+}
+
+.statusLine {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+  font-size: 13px;
+  flex-wrap: wrap;
+}
+
+.outcomeText {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  font-weight: 600;
+}
+
+.dot {
+  color: var(--a-fg4);
+}
+
+.muted {
+  color: var(--a-fg4);
+}
+
+.strong {
+  font-weight: 600;
+}
+
+.pageHeadActions {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+// ─── Buttons ────────────────────────────────────────────────────────────────
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background-color 150ms ease;
+}
+
+.btnPrimary {
+  background: var(--a-primary);
+  color: #ffffff;
+
+  &:hover:not(:disabled) {
+    background: var(--a-primary-hover);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
+}
+
+.btnGhost {
+  @include a-glass-ctl($states: false);
+  color: var(--a-fg2);
+
+  &:hover {
+    color: var(--a-fg1);
+  }
+}
+
+// The converted CTA. Two lines because the second line is the honest half:
+// recording an outcome does NOT open a sponsorship, it only points at the desk
+// that does. A one-word button would imply the write happens here.
+.quoteBtn {
+  display: inline-flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  padding: 7px 14px;
+  border-radius: 6px;
+  text-decoration: none;
+  border: 1px solid rgba(21, 63, 128, 0.35);
+  background: rgba(21, 63, 128, 0.08);
+  transition: background-color 150ms ease;
+
+  &:hover {
+    background: rgba(21, 63, 128, 0.14);
+  }
+
+  &:focus-visible {
+    outline: 2px solid #153f80;
+    outline-offset: 2px;
+  }
+}
+
+.quoteMain {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: #153f80;
+}
+
+.quoteSub {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1.2;
+  color: var(--a-fg3);
+}
+
+// ─── Grid ───────────────────────────────────────────────────────────────────
+
+.detailGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 20px;
+  align-items: start;
+
+  @media (max-width: 1100px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.mainCol {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+
+.sideCol {
+  min-width: 0;
+}
+
+// ─── Panels ─────────────────────────────────────────────────────────────────
+
+.panel {
+  @include a-glass-pane;
+  border-radius: var(--a-radius);
+  overflow: hidden;
+}
+
+.panelHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--a-border-soft);
+}
+
+.panelTitle {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--a-fg1);
+  margin: 0;
+  letter-spacing: -0.005em;
+}
+
+.panelLink {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--a-primary);
+  text-decoration: none;
+  white-space: nowrap;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.panelBody {
+  padding: 16px 20px 20px;
+}
+
+.countBadge {
+  font-family: $font-mono;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--a-bg);
+  color: var(--a-fg3);
+  line-height: 1.5;
+}
+
+.enrichChip {
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1.5;
+  border-radius: 3px;
+  color: #92773a;
+  background: rgba(168, 141, 46, 0.15);
+  border: 1px solid rgba(168, 141, 46, 0.3);
+}
+
+// ─── Key/value list ─────────────────────────────────────────────────────────
+
+.kvList {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+
+  > div {
+    display: grid;
+    grid-template-columns: 120px minmax(0, 1fr);
+    gap: 12px;
+    padding: 10px 20px;
+    border-bottom: 1px solid var(--a-border-soft);
+    align-items: baseline;
+
+    &:last-child {
+      border-bottom: none;
+    }
+  }
+
+  dt {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--a-fg3);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin: 0;
+  }
+
+  dd {
+    margin: 0;
+    font-size: 14px;
+    color: var(--a-fg1);
+    word-break: break-word;
+  }
+}
+
+.link {
+  color: var(--a-primary);
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--a-primary);
+    outline-offset: 2px;
+    border-radius: 3px;
+  }
+}
+
+.chip,
+.branchChip {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 1px 7px;
+  font-family: $font-mono;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.6;
+  white-space: nowrap;
+  border-radius: 3px;
+  color: var(--a-fg2);
+  background: var(--a-bg);
+  border: 1px solid var(--a-border);
+}
+
+.branchChip {
+  margin-left: 8px;
+  margin-right: 0;
+}
+
+.notesText {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--a-fg2);
+  white-space: pre-wrap;
+}
+
+// ─── Enrichment form ────────────────────────────────────────────────────────
+
+.form {
+  padding: 16px 20px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.fieldLabel {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--a-fg3);
+}
+
+.input,
+.textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 9px 11px;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--a-fg1);
+  border-radius: 6px;
+  @include a-glass-well;
+
+  &:focus {
+    outline: none;
+    @include a-well-focus;
+  }
+
+  &::placeholder {
+    color: var(--a-fg4);
+  }
+}
+
+.textarea {
+  resize: vertical;
+  min-height: 76px;
+}
+
+.formError {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--a-danger);
+}
+
+.formActions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+// ─── Contact-history timeline ───────────────────────────────────────────────
+//
+// Newest first (the API orders it that way). Append-only server-side, so there
+// are no row actions here on purpose — nothing on this list can be edited or
+// removed, and offering a control that 405s would be worse than offering none.
+
+.timeline {
+  list-style: none;
+  margin: 0;
+  padding: 6px 0;
+}
+
+.entry {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 12px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--a-border-soft);
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.entryDisc {
+  padding-top: 1px;
+  line-height: 0;
+}
+
+.entryBody {
+  min-width: 0;
+}
+
+.entryHead {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0 0 3px;
+  flex-wrap: wrap;
+}
+
+.entryWord {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+// The tier a rep tagged the sale with. A LABEL — no sponsor row exists because
+// of it — so it stays a quiet mono chip rather than borrowing the gold/silver
+// tier-badge styling used where a real sponsorship is being shown.
+.tierLabel {
+  font-family: $font-mono;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border-radius: 3px;
+  color: var(--a-fg2);
+  background: var(--a-bg);
+  border: 1px solid var(--a-border);
+  line-height: 1.6;
+}
+
+.entryNote {
+  margin: 0 0 4px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--a-fg2);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.entryMeta {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 0;
+  font-size: 11px;
+  color: var(--a-fg3);
+  flex-wrap: wrap;
+}
+
+.repLink {
+  color: var(--a-fg2);
+  font-weight: 600;
+  text-decoration: none;
+
+  &:hover {
+    color: var(--a-primary);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--a-primary);
+    outline-offset: 2px;
+    border-radius: 3px;
+  }
+}
+
+.emptyHistory {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--a-fg3);
+}
+
+// ─── States ─────────────────────────────────────────────────────────────────
+
+.loading {
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--a-fg3);
+  font-size: 14px;
+}
+
+.errorPanel {
+  @include a-glass-pane;
+  border-radius: var(--a-radius);
+  padding: 32px 20px;
+  text-align: center;
+  color: var(--a-fg3);
+  font-size: 14px;
+}
+
+.blockedPanel {
+  padding: 40px 24px;
+  text-align: center;
+}
+
+.blockedTitle {
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--a-fg2);
+}
+
+.blockedBody {
+  margin: 0 auto;
+  max-width: 460px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--a-fg3);
+}

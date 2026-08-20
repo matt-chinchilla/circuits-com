@@ -1,0 +1,607 @@
+@use '@shared/styles/variables' as *;
+@use '../../glass' as *;
+
+// Leads checklist — the Manufacturers/Sponsors table skin, read through the
+// var(--a-*) admin tokens so it follows the admin light/dark theme. The two
+// halves of CatalogSwitch are one catalog, so the chrome is deliberately
+// identical to pages/manufacturers/list; only the disc column and the outcome
+// cells are new.
+
+.page {
+  max-width: 1400px;
+}
+
+// ─── Page head ──────────────────────────────────────────────────────────────
+//
+// `position: relative` + a floor height is load-bearing: CatalogSwitch centres
+// itself absolutely against this box (a third flex child between two unequal
+// side tracks is NOT centred — the navbar pinned-edge lesson).
+
+.pageHead {
+  position: relative;
+  min-height: 46px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.pageHeadLeft {
+  min-width: 0;
+}
+
+.title {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--a-fg1);
+  letter-spacing: -0.02em;
+  margin: 0 0 4px;
+}
+
+.subtitle {
+  font-size: 14px;
+  color: var(--a-fg3);
+  margin: 0;
+}
+
+.pageHeadActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+// A COUNT, not an action: this page has no "New Lead" button (the roster is
+// seeded from seed_data/leads.csv), so the slot the sibling page gives to its
+// primary CTA carries the total instead of nothing.
+.countPill {
+  @include a-glass-well;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-family: $font-mono;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--a-fg2);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+// ─── Panel + toolbar ────────────────────────────────────────────────────────
+//
+// `overflow: visible` (NOT hidden): the ColumnHeader dropdown is absolutely
+// positioned below its TH and hidden would clip it. The pagination bar takes
+// the bottom radii since the table no longer clips flush.
+
+.panel {
+  @include a-glass-pane;
+  border-radius: var(--a-radius);
+  overflow: visible;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--a-border-soft);
+  flex-wrap: wrap;
+}
+
+.chipGroup {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.toolbarSpacer {
+  flex: 1;
+  min-width: 0;
+}
+
+.filterChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.2; // buttons inherit body's 1.6 and overflow this pill
+  color: var(--a-fg2);
+  background: transparent;
+  border: 1px solid var(--a-border);
+  border-radius: 20px;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+
+  &:hover:not(.filterChipActive) {
+    border-color: var(--a-primary);
+    color: var(--a-primary);
+  }
+}
+
+.filterChipActive {
+  @include a-glass-ctl($states: false);
+  border-color: var(--a-primary);
+  font-weight: 600;
+}
+
+// ─── Inline search ──────────────────────────────────────────────────────────
+
+.inlineSearch {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  @include a-glass-well;
+  border-radius: 6px;
+  min-width: 260px;
+
+  &:focus-within {
+    @include a-well-focus;
+  }
+
+  svg {
+    color: var(--a-fg4);
+    flex-shrink: 0;
+  }
+
+  input {
+    flex: 1;
+    border: none;
+    outline: none;
+    background: transparent;
+    font-family: inherit;
+    font-size: 13px;
+    color: var(--a-fg1);
+    min-width: 0;
+
+    &::placeholder {
+      color: var(--a-fg4);
+    }
+  }
+}
+
+.searchClear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: none;
+  background: var(--a-border-soft);
+  border-radius: 50%;
+  color: var(--a-fg2);
+  cursor: pointer;
+  flex-shrink: 0;
+
+  &:hover {
+    color: var(--a-fg1);
+    background: var(--a-border);
+  }
+}
+
+// ─── Table ──────────────────────────────────────────────────────────────────
+//
+// No `overflow-x: auto` on the wrapper — it computes overflow-y to `auto` too,
+// which clips the ColumnHeader dropdown. Horizontal scroll lives on `.table`
+// itself at mobile widths.
+
+.tableWrap {
+  min-width: 0;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table thead {
+  background: var(--a-bg);
+}
+
+.table th {
+  text-align: left;
+  padding: 10px 20px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--a-fg3);
+  border-bottom: 1px solid var(--a-border);
+  white-space: nowrap;
+}
+
+.table td {
+  padding: 10px 20px;
+  font-size: 14px;
+  color: var(--a-fg1);
+  border-bottom: 1px solid var(--a-border-soft);
+  vertical-align: middle;
+}
+
+.table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.table tbody tr:hover td {
+  background: var(--a-hover);
+}
+
+.row {
+  cursor: pointer;
+}
+
+// Visually-hidden but announced — the disc column's header carries no visible
+// text (the discs speak for themselves) but screen readers still need a name.
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+// ─── The disc column ────────────────────────────────────────────────────────
+
+.discHead,
+.discCell {
+  width: 1%;
+  padding-right: 0;
+  white-space: nowrap;
+}
+
+// The button is a bare hit-target wrapped around the disc: the disc supplies
+// its own geometry, so anything here beyond padding + focus would double the
+// ring it already paints.
+.discBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  background: transparent;
+  border: none;
+  border-radius: 50%;
+  line-height: 1;
+  cursor: pointer;
+
+  &:hover {
+    // Widens the disc's own surface halo rather than adding a new ring —
+    // the PresenceBubbles hover grammar.
+    background: var(--a-border-soft);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--a-primary);
+    outline-offset: 1px;
+  }
+}
+
+// ─── Contact + company cells ────────────────────────────────────────────────
+
+.contactLink {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 1px;
+  text-decoration: none;
+  color: inherit;
+  min-width: 0;
+
+  &:hover .contactName,
+  &:hover .contactCompany {
+    color: var(--a-primary);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--a-primary);
+    outline-offset: 2px;
+    border-radius: 3px;
+  }
+}
+
+.contactName {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--a-fg1);
+  line-height: 1.3;
+}
+
+.contactTitle {
+  font-size: 12px;
+  color: var(--a-fg3);
+  line-height: 1.3;
+}
+
+// A company-only row: nobody is on file yet, so the COMPANY carries the slot
+// where a person's name would be. Bold, like a name — it is the row's subject.
+.contactCompany {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--a-fg1);
+  line-height: 1.3;
+}
+
+.enrichChip {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 7px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1.6;
+  white-space: nowrap;
+  border-radius: 3px;
+  color: #92773a;
+  background: rgba(168, 141, 46, 0.15);
+  border: 1px solid rgba(168, 141, 46, 0.3);
+}
+
+.companyName {
+  font-size: 14px;
+  color: var(--a-fg1);
+}
+
+// A branch of a company already in the roster (the CSV carries several
+// same-name rows at different addresses); the label is what tells them apart.
+.branchChip {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 7px;
+  font-family: $font-mono;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.6;
+  white-space: nowrap;
+  border-radius: 3px;
+  color: var(--a-fg2);
+  background: var(--a-bg);
+  border: 1px solid var(--a-border);
+}
+
+.tierChip {
+  display: inline-block;
+  min-width: 22px;
+  padding: 2px 7px;
+  font-family: $font-mono;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.5;
+  text-align: center;
+  border-radius: 3px;
+  color: var(--a-fg2);
+  background: var(--a-bg);
+  border: 1px solid var(--a-border);
+}
+
+.numCell {
+  font-family: $font-mono;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--a-fg2);
+  white-space: nowrap;
+}
+
+.numHead {
+  text-align: left;
+}
+
+// 'UNVERIFIED' is a real ring value in the CSV, not a missing one — it says
+// "we haven't confirmed the distance", so it reads as a word, not a number.
+.ringUnverified {
+  font-family: inherit;
+  font-size: 11px;
+  font-style: italic;
+  color: var(--a-fg4);
+}
+
+// ─── Outcome cell ───────────────────────────────────────────────────────────
+//
+// Colour + GLYPH + WORD. The colour never carries the meaning on its own (the
+// CVD constraint recorded at the top of outcome.ts); the hex arrives inline
+// from OUTCOME_META so there is exactly one home for it.
+
+.outcomeText {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.whenCell {
+  font-size: 13px;
+  color: var(--a-fg2);
+  white-space: nowrap;
+}
+
+.muted {
+  color: var(--a-fg4);
+}
+
+.emptyRow {
+  padding: 32px 20px !important;
+  text-align: center;
+  color: var(--a-fg3);
+  font-size: 13px;
+}
+
+// ─── Demo refusal ───────────────────────────────────────────────────────────
+//
+// Quiet, not an error: the API is working exactly as designed. No red, no
+// code, no retry button — there is nothing to retry.
+
+.blockedPanel {
+  padding: 40px 24px;
+  text-align: center;
+}
+
+.blockedTitle {
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--a-fg2);
+}
+
+.blockedBody {
+  margin: 0 auto;
+  max-width: 460px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--a-fg3);
+}
+
+// ─── Skeletons ──────────────────────────────────────────────────────────────
+//
+// REAL heights: the toolbar and the table head paint instantly above these, so
+// a short skeleton would let the pagination bar jump upward on first paint.
+
+.skelRow td {
+  height: 46px;
+}
+
+.skel {
+  display: block;
+  height: 14px;
+  margin: 3px 0;
+  border-radius: 4px;
+  max-width: 100%;
+  background: linear-gradient(
+    90deg,
+    var(--a-border-soft) 25%,
+    var(--a-border) 50%,
+    var(--a-border-soft) 75%
+  );
+  background-size: 200% 100%;
+  animation: leadSkelShimmer 1.4s ease-in-out infinite;
+}
+
+.skelWide {
+  width: 150px;
+}
+
+.skelSub {
+  width: 96px;
+  height: 10px;
+}
+
+.skelMed {
+  width: 120px;
+}
+
+.skelNum {
+  width: 48px;
+}
+
+.skelChip {
+  width: 28px;
+  height: 18px;
+  border-radius: 3px;
+}
+
+.skelDisc {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  margin: 0;
+}
+
+@keyframes leadSkelShimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skel {
+    animation: none;
+  }
+}
+
+// ─── Pagination ─────────────────────────────────────────────────────────────
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 20px;
+  border-top: 1px solid var(--a-border-soft);
+  border-bottom-left-radius: var(--a-radius);
+  border-bottom-right-radius: var(--a-radius);
+  flex-wrap: wrap;
+}
+
+.pageInfo {
+  font-size: 12px;
+  color: var(--a-fg3);
+  font-variant-numeric: tabular-nums;
+}
+
+.pageControls {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.pageOf {
+  font-size: 12px;
+  color: var(--a-fg2);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.pageBtn {
+  @include a-glass-ctl;
+  padding: 6px 12px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 6px;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+}
+
+// ─── Mobile (<=820px) ───────────────────────────────────────────────────────
+
+@media (max-width: $bp-admin-mobile) {
+  .table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+
+    thead,
+    tbody {
+      display: table;
+      width: 100%;
+      min-width: 940px;
+    }
+  }
+
+  .toolbar {
+    padding: 10px 12px;
+    gap: 8px;
+  }
+
+  .inlineSearch {
+    min-width: 0;
+    flex: 1 1 100%;
+  }
+}

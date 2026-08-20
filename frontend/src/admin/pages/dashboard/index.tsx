@@ -42,6 +42,7 @@ import EngagementPanel from './components/EngagementPanel';
 import ExpenseBreakdownPanel from './components/ExpenseBreakdownPanel';
 import ExpensesPanel from './components/ExpensesPanel';
 import ImportQueuePanel from './components/ImportQueuePanel';
+import LeadsPanel from './components/LeadsPanel';
 import QuickActions from './components/QuickActions';
 import RevenuePanel, { type CompareRange } from './components/RevenuePanel';
 import SalesRepsPanel from './components/SalesRepsPanel';
@@ -319,6 +320,12 @@ export default function DashboardPage() {
 
       <div className={styles.aOne}>
         <EngagementPanel series={engagement} loading={loading} />
+      </div>
+
+      {/* Fetches for itself — the leads feed is the one payload the server
+          refuses for the demo account, and the panel owns that refusal. */}
+      <div className={styles.aOne}>
+        <LeadsPanel demoMode={demoMode} />
       </div>
 
       <div className={styles.aTwo}>

@@ -1,0 +1,235 @@
+@use '@shared/styles/variables' as *;
+@use '@admin/styles/variables' as *;
+@use '../../glass' as *;
+
+// Manufacturer create/edit — the supplier-form skin (single panel + trailing
+// action row), read through the var(--a-*) admin tokens.
+
+.page {
+  max-width: 760px;
+}
+
+.pageHead {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 20px;
+}
+
+.backLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  font-size: 13px;
+  color: var(--a-fg3);
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-family: inherit;
+  margin-bottom: 6px;
+  transition: color 150ms ease;
+
+  &:hover {
+    color: var(--a-primary);
+  }
+}
+
+.title {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--a-fg1);
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+.subtitle {
+  font-size: 14px;
+  color: var(--a-fg3);
+  margin: 0;
+}
+
+.formGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.panel {
+  @include a-glass-pane;
+  border-radius: 8px;
+}
+
+.panelHead {
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--a-border-soft);
+}
+
+.panelTitle {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--a-fg1);
+  margin: 0;
+  letter-spacing: -0.005em;
+}
+
+.panelBody {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+// ─── Field primitive ────────────────────────────────────────────────────────
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.fieldLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--a-fg2);
+}
+
+.fieldReq {
+  color: var(--a-danger);
+}
+
+.fieldHint {
+  font-size: 12px;
+  color: var(--a-fg3);
+}
+
+.fieldError {
+  font-size: 12px;
+  color: var(--a-danger);
+}
+
+.formError {
+  padding: 10px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--a-danger);
+  background: rgba(192, 57, 43, 0.08);
+  border: 1px solid rgba(192, 57, 43, 0.28);
+}
+
+.input {
+  width: 100%;
+  height: 38px;
+  padding: 0 12px;
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--a-fg1);
+  @include a-glass-well;
+  border-radius: 6px;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+
+  &:focus {
+    @include a-well-focus;
+  }
+
+  &::placeholder {
+    color: var(--a-fg4);
+  }
+}
+
+.inputMono {
+  font-family: $admin-font-mono;
+  font-size: 13px;
+}
+
+.inputError {
+  border-color: var(--a-danger);
+
+  &:focus {
+    border-color: var(--a-danger);
+    box-shadow: 0 0 0 3px rgba(192, 57, 43, 0.1);
+  }
+}
+
+.textarea {
+  width: 100%;
+  padding: 10px 12px;
+  font-size: 14px;
+  font-family: inherit;
+  line-height: 1.5;
+  color: var(--a-fg1);
+  @include a-glass-well;
+  border-radius: 6px;
+  outline: none;
+  box-sizing: border-box;
+  resize: vertical;
+
+  &:focus {
+    @include a-well-focus;
+  }
+
+  &::placeholder {
+    color: var(--a-fg4);
+  }
+}
+
+// ─── Actions ────────────────────────────────────────────────────────────────
+
+.formActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 4px;
+  flex-wrap: wrap;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background-color 150ms ease, color 150ms ease;
+
+  &:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+}
+
+.btnPrimary {
+  background: var(--a-primary);
+  color: #ffffff;
+
+  &:hover:not(:disabled) {
+    background: var(--a-primary-hover);
+  }
+}
+
+.btnGhost {
+  @include a-glass-ctl;
+}
+
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 300px;
+  font-size: 14px;
+  color: var(--a-fg3);
+}

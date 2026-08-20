@@ -1124,3 +1124,163 @@
     padding: 10px 14px;
   }
 }
+
+// ─── Leads panel (dashboard window onto the outreach checklist) ─────────────
+//
+// The outcome colours arrive as DATA (OUTCOME_META) via inline `style`, as a
+// SOLID fill with white type — never as coloured text. The three hexes are
+// tuned for a light surface and would read ~1.5:1 as a foreground on the dark
+// admin theme, whereas white on them clears AA either way (10.4 / 10.6 / 6.4).
+// Nothing below sets an outcome colour: if a rule here ever needs one, it has
+// to come from the same inline value or the two will drift.
+
+.leadsChip {
+  padding: 3px 9px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border-radius: 4px;
+  color: var(--a-fg3);
+  background: var(--a-track);
+  border: 1px solid var(--a-border-soft);
+  white-space: nowrap;
+}
+
+.leadsList {
+  padding: 8px 0;
+}
+
+// "See More" expands IN PLACE rather than opening a modal — the panel keeps
+// its grid slot and the extra rows scroll inside it.
+.leadsScroll {
+  max-height: 46vh;
+  overflow-y: auto;
+}
+
+.leadsRow {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) auto auto;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--a-border-soft);
+  text-decoration: none;
+  color: inherit;
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  &:hover {
+    background: var(--a-track);
+  }
+}
+
+.leadsDisc {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  // White on all three OUTCOME_META fills; the disc never renders on the page
+  // background, so this is the only foreground it needs.
+  color: #fff;
+  line-height: 1;
+}
+
+.leadsMain {
+  display: flex;
+  flex-direction: column;
+  // Keeps the grid's minmax(0, 1fr) honest — without it a long company name
+  // pushes the timestamp off the panel.
+  min-width: 0;
+}
+
+.leadsWho {
+  font-size: 14px;
+  line-height: 1.35;
+  color: var(--a-fg1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.leadsRep {
+  font-weight: 600;
+}
+
+.leadsCompany {
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--a-fg3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.leadsTags {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.leadsOutcome {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #fff;
+  white-space: nowrap;
+}
+
+.leadsTier {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--a-fg2);
+  background: var(--a-track);
+  border: 1px solid var(--a-border-soft);
+  white-space: nowrap;
+}
+
+.leadsTime {
+  font-size: 12px;
+  color: var(--a-fg4);
+  font-family: $font-mono;
+  white-space: nowrap;
+}
+
+.leadsMore {
+  display: flex;
+  justify-content: center;
+  padding: 10px 20px 14px;
+  border-top: 1px solid var(--a-border-soft);
+}
+
+@media (max-width: $bp-admin-mobile) {
+  .leadsRow {
+    grid-template-columns: 20px minmax(0, 1fr);
+    gap: 8px 10px;
+    padding: 10px 14px;
+  }
+
+  // Tags and age drop under the copy rather than squeezing it; the 30px
+  // indent lines them up with the text column, past the disc.
+  .leadsTags,
+  .leadsTime {
+    grid-column: 2 / -1;
+  }
+
+  .leadsTags {
+    flex-wrap: wrap;
+  }
+}
