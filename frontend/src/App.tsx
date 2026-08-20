@@ -30,6 +30,12 @@ const ChangePasswordPage = lazy(
 );
 const DashboardPage = lazy(() => import("@admin/pages/dashboard"));
 const SuppliersPage = lazy(() => import("@admin/pages/suppliers/list"));
+const ManufacturersPage = lazy(() => import('@admin/pages/manufacturers/list'));
+const ManufacturerDetailPage = lazy(() => import('@admin/pages/manufacturers/detail'));
+const ManufacturerFormPage = lazy(() => import('@admin/pages/manufacturers/form'));
+const LeadsPage = lazy(() => import('@admin/pages/leads/list'));
+const LeadDetailPage = lazy(() => import('@admin/pages/leads/detail'));
+const LeadRepPage = lazy(() => import('@admin/pages/leads/rep'));
 const SupplierDetailPage = lazy(
   () => import("@admin/pages/suppliers/detail"),
 );
@@ -157,6 +163,13 @@ function App() {
                     <Routes>
                       <Route index element={<DashboardPage />} />
                       <Route path="suppliers" element={<SuppliersPage />} />
+                      <Route path="manufacturers" element={<ManufacturersPage />} />
+                      <Route path="manufacturers/new" element={<ManufacturerFormPage />} />
+                      <Route path="manufacturers/:id" element={<ManufacturerDetailPage />} />
+                      <Route path="manufacturers/:id/edit" element={<ManufacturerFormPage />} />
+                      <Route path="leads" element={<LeadsPage />} />
+                      <Route path="leads/reps/:username" element={<LeadRepPage />} />
+                      <Route path="leads/:id" element={<LeadDetailPage />} />
                       <Route
                         path="suppliers/new"
                         element={<SupplierFormPage />}

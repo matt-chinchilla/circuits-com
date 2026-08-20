@@ -68,6 +68,7 @@ export interface UserInfo {
 export interface DashboardStats {
   parts_count: number;
   suppliers_count: number;
+  manufacturers_count?: number;
   revenue_total: number;
   sponsors_count: number;
   // Sum of Revenue.amount whose period covers the CURRENT calendar month in

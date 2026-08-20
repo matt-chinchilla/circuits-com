@@ -32,7 +32,7 @@ interface AdminLayoutProps {
 // Sidebar links use Phosphor Light names (v5 design handoff 2026-05-23).
 // `badgeKey` opts the link into the dynamic-count badge — see useEffect
 // below for the parts/suppliers/imports wiring.
-type BadgeKey = 'parts' | 'suppliers' | 'imports';
+type BadgeKey = 'parts' | 'suppliers' | 'imports' | 'manufacturers';
 
 interface SidebarLink {
   to: string;
@@ -49,6 +49,7 @@ const CATALOG_LINKS: SidebarLink[] = [
   { to: '/admin', label: 'Dashboard', icon: 'gauge', tour: 'side-dashboard' },
   { to: '/admin/parts', label: 'Parts', icon: 'package', badgeKey: 'parts', tour: 'side-parts' },
   { to: '/admin/suppliers', label: 'Suppliers', icon: 'buildings', badgeKey: 'suppliers', tour: 'side-suppliers' },
+  { to: '/admin/manufacturers', label: 'Manufacturers', icon: 'factory', badgeKey: 'manufacturers', adminOnly: true },
   { to: '/admin/categories', label: 'Categories', icon: 'squares-four', adminOnly: true, tour: 'side-categories' },
   { to: '/admin/sponsors', label: 'Sponsors', icon: 'star', adminOnly: true, tour: 'side-sponsors' },
   // Operating costs — the other half of the dashboard P&L. Admin-only: it is
@@ -68,7 +69,7 @@ const SYSTEM_LINKS: SidebarLink[] = [
 
 // Demo magnitudes per v5 design data.jsx (hand-tuned to feel believable
 // against a real distributor catalog). Live mode reads stats from the API.
-const DEMO_BADGES = { parts: 2_487_302, suppliers: 8, imports: 3 } as const;
+const DEMO_BADGES = { parts: 2_487_302, suppliers: 8, imports: 3, manufacturers: 0 } as const;
 
 function formatBadgeCount(n: number): string {
   if (n >= 1e6) return `${(n / 1e6).toFixed(1)}M`;
@@ -84,6 +85,9 @@ const TITLE_MAP: Record<string, string> = {
   '/admin/parts': 'Parts',
   '/admin/parts/new': 'New Part',
   '/admin/suppliers': 'Suppliers',
+  '/admin/manufacturers': 'Manufacturers',
+  '/admin/manufacturers/new': 'New Manufacturer',
+  '/admin/leads': 'Leads',
   '/admin/suppliers/new': 'New Supplier',
   '/admin/categories': 'Categories',
   '/admin/sponsors': 'Sponsors',
@@ -162,6 +166,7 @@ export default function AdminLayout({ children, role = 'admin' }: AdminLayoutPro
   const [menuOpen, setMenuOpen] = useState(false);
   const [partsCount, setPartsCount] = useState(0);
   const [suppliersCount, setSuppliersCount] = useState(0);
+  const [manufacturersCount, setManufacturersCount] = useState(0);
   const prevUnread = useRef(unread);
 
   // Sidebar badge counts. Demo mode = seeded magnitudes; live mode hits
@@ -173,6 +178,7 @@ export default function AdminLayout({ children, role = 'admin' }: AdminLayoutPro
     if (demoMode) {
       setPartsCount(DEMO_BADGES.parts);
       setSuppliersCount(DEMO_BADGES.suppliers);
+      setManufacturersCount(DEMO_BADGES.manufacturers);
       return undefined;
     }
     let cancelled = false;
@@ -182,12 +188,14 @@ export default function AdminLayout({ children, role = 'admin' }: AdminLayoutPro
         if (cancelled) return;
         setPartsCount(s.parts_count ?? 0);
         setSuppliersCount(s.suppliers_count ?? 0);
+        setManufacturersCount(s.manufacturers_count ?? 0);
       })
       .catch((err) => {
         if (cancelled) return;
         console.warn('[AdminLayout] dashboard stats fetch failed', err);
         setPartsCount(0);
         setSuppliersCount(0);
+        setManufacturersCount(0);
       });
     return () => {
       cancelled = true;
@@ -265,6 +273,7 @@ export default function AdminLayout({ children, role = 'admin' }: AdminLayoutPro
     if (!key) return null;
     if (key === 'parts') return partsCount > 0 ? formatBadgeCount(partsCount) : null;
     if (key === 'suppliers') return suppliersCount > 0 ? String(suppliersCount) : null;
+    if (key === 'manufacturers') return manufacturersCount > 0 ? formatBadgeCount(manufacturersCount) : null;
     if (key === 'imports') {
       // No live import-queue API yet; show only in demo mode, hide otherwise.
       return demoMode ? String(DEMO_BADGES.imports) : null;

@@ -547,6 +547,75 @@ export const adminApi = {
       })
       .then((r) => r.data),
 
+
+  // ── Manufacturers + Leads CRM (2026-08-20). Leads reads 403 for the demo
+  // account server-side (demo_account_no_leads); callers surface the block.
+  getManufacturers: (params: Record<string, string | number | boolean>) =>
+    adminClient
+      .get<import('../types/manufacturers').ManufacturerListResponse>('/admin/manufacturers/', { params })
+      .then((r) => r.data),
+
+  getManufacturer: (id: string) =>
+    adminClient
+      .get<import('../types/manufacturers').AdminManufacturerDetail>(`/admin/manufacturers/${encodeURIComponent(id)}`)
+      .then((r) => r.data),
+
+  createManufacturer: (data: { name: string; website?: string | null; description?: string | null }) =>
+    adminClient.post('/admin/manufacturers/', data).then((r) => r.data),
+
+  updateManufacturer: (id: string, data: Record<string, unknown>) =>
+    adminClient.patch(`/admin/manufacturers/${encodeURIComponent(id)}`, data).then((r) => r.data),
+
+  deleteManufacturer: (id: string) =>
+    adminClient.delete(`/admin/manufacturers/${encodeURIComponent(id)}`).then((r) => r.data),
+
+  // The sponsor bridge: creating/linking a supplier changes what the public
+  // boards can sell, so these two bust the SW caches.
+  promoteManufacturerToSupplier: (id: string) =>
+    bustingAfter(
+      adminClient.post<{ supplier_id: string; supplier_name: string }>(
+        `/admin/manufacturers/${encodeURIComponent(id)}/promote`,
+      ).then((r) => r.data),
+    ),
+
+  linkManufacturerSupplier: (id: string, supplierId: string) =>
+    bustingAfter(
+      adminClient.post(`/admin/manufacturers/${encodeURIComponent(id)}/link`, { supplier_id: supplierId })
+        .then((r) => r.data),
+    ),
+
+  resolveMergeCandidate: (candidateId: string, action: 'approve' | 'reject') =>
+    adminClient.post(`/admin/manufacturers/candidates/${encodeURIComponent(candidateId)}/${action}`)
+      .then((r) => r.data),
+
+  getLeads: (params: Record<string, string | number | boolean>) =>
+    adminClient
+      .get<import('../types/leads').LeadListResponse>('/admin/leads/', { params })
+      .then((r) => r.data),
+
+  getLead: (id: string) =>
+    adminClient
+      .get<import('../types/leads').AdminLeadDetail>(`/admin/leads/${encodeURIComponent(id)}`)
+      .then((r) => r.data),
+
+  updateLead: (id: string, data: Record<string, unknown>) =>
+    adminClient.patch(`/admin/leads/${encodeURIComponent(id)}`, data).then((r) => r.data),
+
+  recordLeadOutcome: (id: string, data: { outcome: string; sale_tier?: string | null; note?: string | null }) =>
+    adminClient
+      .post<import('../types/leads').AdminLeadDetail>(`/admin/leads/${encodeURIComponent(id)}/contacts`, data)
+      .then((r) => r.data),
+
+  getRepActivity: (username: string) =>
+    adminClient
+      .get<import('../types/leads').RepActivity>(`/admin/leads/reps/${encodeURIComponent(username)}`)
+      .then((r) => r.data),
+
+  getRecentLeadContacts: (limit = 100) =>
+    adminClient
+      .get<{ contacts: import('../types/leads').RecentLeadContact[] }>('/dashboard/leads/recent', { params: { limit } })
+      .then((r) => r.data),
+
   // "Feature" a supplier on a category = a Featured sponsorship on that
   // (top-level) category — the single source of truth as of 2026-06-03
   // (the standalone category-suppliers feature flag was removed). Used by the
