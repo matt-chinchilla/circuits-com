@@ -2,6 +2,8 @@ from .activity_event import ActivityEvent
 from .calendar_event import CalendarEvent, CalendarReminderSend
 from .category import Category
 from .expense import Expense
+from .lead import Lead, LeadContact
+from .manufacturer import Manufacturer, ManufacturerAlias, ManufacturerMergeCandidate
 from .message import Message
 from .page_view import PageView
 from .part import Part

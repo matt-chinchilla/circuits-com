@@ -1,7 +1,7 @@
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import Column, DateTime, ForeignKey, String, Text
+from sqlalchemy import Column, DateTime, ForeignKey, Index, String, Text, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
@@ -10,9 +10,28 @@ from app.db.session import Base
 
 class Supplier(Base):
     __tablename__ = "suppliers"
+    __table_args__ = (
+        Index(
+            "uq_suppliers_manufacturer",
+            "manufacturer_id",
+            unique=True,
+            postgresql_where=text("manufacturer_id IS NOT NULL"),
+            sqlite_where=text("manufacturer_id IS NOT NULL"),
+        ),
+    )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name = Column(String(200), nullable=False)
+    # Bridge to the manufacturers universe (2026-08-20 Leads CRM). The FK
+    # points INTO manufacturers so --reseed's TRUNCATE suppliers CASCADE can
+    # never touch a manufacturer row. Partial-unique: one company cannot fork
+    # into two supplier links. MUST stay out of supplier_to_dict AND
+    # SupplierResponse (test_admin_manufacturers guards it).
+    manufacturer_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("manufacturers.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     phone = Column(String(20))
     website = Column(String(200))
     email = Column(String(200))

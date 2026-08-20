@@ -16,6 +16,15 @@ class Part(Base):
     slug = Column(String(200), nullable=True, index=True)
     description = Column(Text, nullable=True)
     manufacturer_name = Column(String(200), nullable=False)
+    # Resolved manufacturer (2026-08-20). manufacturer_name stays the raw
+    # as-imported string; this FK is the canonical join, backfilled by the
+    # seed and stamped by the feed importer via manufacturer_canon.
+    manufacturer_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("manufacturers.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     category_id = Column(
         UUID(as_uuid=True), ForeignKey("categories.id"), nullable=True, index=True
     )
