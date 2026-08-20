@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 
-from sqlalchemy import CheckConstraint, Column, DateTime, SmallInteger
+from sqlalchemy import CheckConstraint, Column, DateTime, SmallInteger, Text
 
 from app.db.session import Base
 
@@ -25,6 +25,9 @@ class PresenceFake(Base):
 
     id = Column(SmallInteger, primary_key=True, default=1)
     count = Column(SmallInteger, nullable=False, default=0)
+    # CSV of roster usernames shown IN ADDITION to the count-prefix
+    # (`--name <name>`); empty string = none. Union'd + deduped in the route.
+    names = Column(Text, nullable=False, default="")
     updated_at = Column(
         DateTime(timezone=True),
         default=lambda: datetime.now(UTC),

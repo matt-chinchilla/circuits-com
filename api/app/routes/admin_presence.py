@@ -109,10 +109,19 @@ def presence_ping(
     # CHECK holds on both engines; the clamp below only guards a roster
     # shorter than the ceiling.
     fake_row = db.get(PresenceFake, 1)
-    fake_count = 0 if fake_row is None else int(fake_row.count or 0)
-    fake_count = max(0, min(fake_count, len(FAKE_PRESENCE_ROSTER)))
-    roster.extend(
-        PresenceUser(user_id=f"fake-{i}", username=username, name=display, role="admin")
-        for i, (username, display) in enumerate(FAKE_PRESENCE_ROSTER[:fake_count], start=1)
-    )
+    if fake_row is not None:
+        fake_count = max(0, min(int(fake_row.count or 0), len(FAKE_PRESENCE_ROSTER)))
+        named = {
+            n.strip().lower()
+            for n in (getattr(fake_row, "names", "") or "").split(",")
+            if n.strip()
+        }
+        # Active = count-prefix UNION named individuals, deduped by slot; ids
+        # are stable by roster INDEX (Bandit is always fake-10) so the
+        # frontend's per-user identity never reshuffles as selection changes.
+        roster.extend(
+            PresenceUser(user_id=f"fake-{i}", username=username, name=display, role="admin")
+            for i, (username, display) in enumerate(FAKE_PRESENCE_ROSTER, start=1)
+            if i <= fake_count or username.lower() in named
+        )
     return roster

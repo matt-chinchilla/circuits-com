@@ -16,13 +16,24 @@
 }
 
 .bubble {
+  // Gradient stops, re-pointed per palette below. The default is the QUIET
+  // slate family — a bubble that somehow rendered without a [data-palette]
+  // degrades to the de-emphasis colour rather than to something broken.
+  --bub-lit: #5c6b80;
+  --bub-mid: #4a5464;
+  --bub-deep: #39414f;
+
   position: relative; // so :hover can lift one out of the overlap
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  border: 1.25px solid var(--a-border); // overridden per-user with the hashed accent
-  background: var(--a-hover);
-  color: var(--a-fg2);
+  // The DISC itself is the gradient — the same species as the topbar's own
+  // .chipAvatar (a gradient-filled circle carrying white initials), so a
+  // colleague reads as a sibling of "you" rather than a different kind of
+  // object. 135deg puts the lightest stop at top-left: light from above, the
+  // universal avatar convention. Static by design — never animated.
+  background: linear-gradient(135deg, var(--bub-lit), var(--bub-mid) 52%, var(--bub-deep));
+  color: #ffffff;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -31,7 +42,12 @@
   letter-spacing: 0.02em;
   user-select: none;
   cursor: default;
-  transition: border-color 150ms, background-color 150ms;
+
+  // Surface-coloured halo — STRUCTURAL, not decoration. Filled discs
+  // overlapping at -8px would merge into one blob, so each punches a clean gap
+  // out of its left neighbour. Painted, not laid out, so the 28px footprint and
+  // the pill's height math are untouched.
+  box-shadow: 0 0 0 1.5px var(--a-card);
 
   // Google-Drive stack: each bubble tucks under its left neighbour.
   margin-left: -8px;
@@ -40,25 +56,81 @@
     margin-left: 0;
   }
 
+  // Hover reuses the separator AS the affordance: the disc lifts clear of the
+  // stack and its gap widens. No filter and no layer promotion (repo perf
+  // rules), and no transition — a 3-stop gradient cannot interpolate, so
+  // declaring one would promise motion that never happens.
   &:hover {
     z-index: 1;
-    background: var(--a-card);
+    box-shadow: 0 0 0 2.5px var(--a-card);
   }
 }
 
-// "+N" overflow chip — quiet, never accented; it is a count, not a person.
+// ─── Board finishes ─────────────────────────────────────────────────────────
+//
+// Each colleague wears a different one. A real PCB is specified by its
+// solder-mask colour plus its surface finish, and the token file already
+// speaks this language (--a-grad-gold is commented "public board ENIG") — so
+// the stops run mask-deep -> mask body -> mask sheen and the diagonal reads as
+// a glossy mask catching light, which is what a coated board actually does.
+//
+// THE CONTRACT: the initials are #ffffff, so EVERY stop must stay at or below
+// 0.18333 relative luminance or white drops under 4.5:1. Verified worst stop
+// per palette (computed, not eyeballed): green 5.39, blue 5.17, purple 5.70,
+// copper 6.18, teal 5.47, slate 5.43. That ceiling is why the palettes are
+// deep and why there is no bright "glint" stop: --a-grad-gold is 1.71:1
+// against white and cannot appear in a fill.
+//
+// Only the three grad tokens that dark mode leaves ALONE are referenced.
+// --a-teal is deliberately NOT used: it reads 5.47:1 in light but the dark
+// theme lifts it to #0d9488, which is 3.74:1 — a token that silently breaks
+// the contract on one theme. The teal palette hard-codes its stops instead.
+
+// 0 — ENIG: solder-mask green, the classic board.
+.bubble[data-palette='0'] {
+  --bub-lit: var(--a-grad-green); // 5.39:1
+  --bub-mid: #0a5533;
+  --bub-deep: #05301d;
+}
+
+// 1 — Blue solder mask.
+.bubble[data-palette='1'] {
+  --bub-lit: var(--a-grad-blue); // 5.17:1
+  --bub-mid: #153f80;
+  --bub-deep: #0a1e3f;
+}
+
+// 2 — Purple solder mask (the OSH Park board).
+.bubble[data-palette='2'] {
+  --bub-lit: var(--a-grad-purple); // 5.70:1
+  --bub-mid: #4d189e;
+  --bub-deep: #260a4e;
+}
+
+// 3 — Bare copper, unmasked. Deepened well past the raw #b87333 copper, which
+// is 3.79:1 against white and fails the contract outright.
+.bubble[data-palette='3'] {
+  --bub-lit: #8f5220; // 6.18:1
+  --bub-mid: #6d3c17;
+  --bub-deep: #4a2810;
+}
+
+// 4 — Teal solder mask. Literal stops — see the --a-teal note above.
+.bubble[data-palette='4'] {
+  --bub-lit: #0f766e; // 5.47:1
+  --bub-mid: #0a4f49;
+  --bub-deep: #052926;
+}
+
+// "+N" overflow chip — a count, not a person, so it never wears a finish. It
+// keeps the identical disc, gradient and halo (anything else would read as a
+// foreign element beside four gradient bubbles) and goes quiet on the channels
+// that carry no structural meaning: it inherits .bubble's default SLATE stops
+// — the family the token file reserves for de-emphasis, explicitly "NOT a
+// categorical slot" — and drops to mono at a smaller size. Desaturation is the
+// quiet channel; the text stays pure white because the slate band leaves no
+// room to dim it (5.43:1 as it stands).
 .overflow {
-  border-color: var(--a-border);
-  background: var(--a-card);
-  color: var(--a-fg3);
   font-family: $font-mono;
   font-size: 10px;
-}
-
-// Mobile: the pill sits on the hamburger row (<=820px), so drop presence and
-// keep only toggle / bell / avatar.
-@media (max-width: $bp-admin-mobile) {
-  .stack {
-    display: none;
-  }
 }

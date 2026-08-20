@@ -21,23 +21,27 @@ import styles from './PresenceBubbles.module.scss';
 const PING_MS = 15_000;
 const MAX_VISIBLE = 4;
 
-// Stable per-user accent, hashed from the username so a given person keeps the
-// same colour across sessions, browsers, and roster order.
-const ACCENTS = [
-  'var(--a-primary)',
-  'var(--a-blue)',
-  'var(--a-purple)',
-  'var(--a-grad-gold)',
-] as const;
+// Stable per-user ring palette, hashed from the username so a given person
+// keeps the same board finish across sessions, browsers, and roster order —
+// presence identity must never reshuffle between two polls.
+//
+// This picks a SLOT, not a colour: the five palettes live in the stylesheet
+// under [data-palette], so the colour system stays in one place and stays
+// themeable. Keep this count in step with the palettes defined there.
+//
+// Synthetic roster entries (ids `fake-N`) hash off their username like anyone
+// else — nothing here branches on the id, so they style identically by
+// construction rather than by remembering to.
+const PALETTE_COUNT = 5;
 
-function accentFor(username: string): string {
+function paletteFor(username: string): number {
   // djb2-ish; `>>> 0` keeps it an unsigned 32-bit int so the modulo can't go
   // negative on long names.
   let hash = 0;
   for (let i = 0; i < username.length; i += 1) {
     hash = (hash * 33 + username.charCodeAt(i)) >>> 0;
   }
-  return ACCENTS[hash % ACCENTS.length];
+  return hash % PALETTE_COUNT;
 }
 
 function labelOf(person: PresenceUser): string {
@@ -131,7 +135,7 @@ export default function PresenceBubbles({ selfUsername }: PresenceBubblesProps) 
         <span
           key={person.user_id}
           className={styles.bubble}
-          style={{ borderColor: accentFor(person.username) }}
+          data-palette={paletteFor(person.username)}
           title={`${labelOf(person)} — online`}
         >
           {initialsOf(person)}

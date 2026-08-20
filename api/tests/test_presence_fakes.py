@@ -10,13 +10,14 @@ from app.models.presence_fake import PresenceFake
 from app.routes.admin_presence import FAKE_PRESENCE_ROSTER
 
 
-def _set_count(db, count):
+def _set_count(db, count, names=""):
     row = db.get(PresenceFake, 1)
     if row is None:
-        row = PresenceFake(id=1, count=count)
+        row = PresenceFake(id=1, count=count, names=names)
         db.add(row)
     else:
         row.count = count
+        row.names = names
     db.commit()
 
 
@@ -69,3 +70,37 @@ def test_roster_is_ten_unique_fictional_slots():
     assert len(set(usernames)) == 10
     # Never a real seeded staff account — fakes must not shadow real presence.
     assert not set(usernames) & {"matthew", "anthony", "daniel", "ronald", "demo", "admin"}
+
+
+def test_named_individual_only(client, db, seeded_db, auth_header):
+    """--name brings ONE person online; id is stable by roster INDEX."""
+    last_username, last_display = FAKE_PRESENCE_ROSTER[-1]
+    _set_count(db, 0, names=last_username)
+    body = client.post("/api/admin/presence/ping", headers=auth_header()).json()
+    fakes = [u for u in body if u["user_id"].startswith("fake-")]
+    assert [(u["username"], u["user_id"]) for u in fakes] == [
+        (last_username, f"fake-{len(FAKE_PRESENCE_ROSTER)}")
+    ]
+    assert fakes[0]["name"] == last_display
+
+
+def test_named_matches_case_insensitively(client, db, seeded_db, auth_header):
+    _set_count(db, 0, names=FAKE_PRESENCE_ROSTER[-1][0].upper())
+    body = client.post("/api/admin/presence/ping", headers=auth_header()).json()
+    assert sum(u["user_id"].startswith("fake-") for u in body) == 1
+
+
+def test_named_unions_and_dedupes_with_count(client, db, seeded_db, auth_header):
+    """A name already inside the count-prefix appears exactly once."""
+    first = FAKE_PRESENCE_ROSTER[0][0]
+    last = FAKE_PRESENCE_ROSTER[-1][0]
+    _set_count(db, 2, names=f"{first},{last}")
+    body = client.post("/api/admin/presence/ping", headers=auth_header()).json()
+    fakes = [u["user_id"] for u in body if u["user_id"].startswith("fake-")]
+    assert fakes == ["fake-1", "fake-2", f"fake-{len(FAKE_PRESENCE_ROSTER)}"]
+
+
+def test_unknown_name_is_ignored(client, db, seeded_db, auth_header):
+    _set_count(db, 0, names="nobody-by-this-name")
+    body = client.post("/api/admin/presence/ping", headers=auth_header()).json()
+    assert not any(u["user_id"].startswith("fake-") for u in body)
