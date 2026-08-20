@@ -64,9 +64,9 @@ drop file → papaparse/SheetJS (lazy)
 
 ## 4. Data model & migrations
 
-Head is 035 at spec time; BOM takes the next two slots (renumber if something lands first).
+Head is 036 (leads CRM) at build time; BOM takes 037/038 (renumbered per this clause, 2026-08-20).
 
-**Migration 036 — parts columns**
+**Migration 037 — parts columns**
 - `parts.package VARCHAR(60) NULL` — normalized package token ("0805", "SOIC-8").
   Populated by the live-resolve path and nightly feed; backfill is opportunistic, absence
   degrades to "no warning", never a false all-clear.
@@ -76,7 +76,7 @@ Head is 035 at spec time; BOM takes the next two slots (renumber if something la
   response field name for lifecycle — UNVERIFIED in research; if absent from search
   responses, resolve stamps package only and lifecycle stays honest-unverified.)
 
-**Migration 037 — bom_shares**
+**Migration 038 — bom_shares**
 - `slug VARCHAR(32) PK` (22-char base64url of 16 random bytes), `payload JSONB` (≤1MB,
   422 above), `user_id UUID NULL FK users` (future-accounts seam; nothing writes it yet),
   `created_at`, `expires_at` (default now()+180d). Expired rows pruned opportunistically
@@ -247,7 +247,7 @@ sitemap: `/bom` only (not `/bom/s/*`).
 ## 11. File plan
 
 As approved in-conversation (≈20 new files, 9 edits): routes/bom.py,
-services/bom_match.py, schemas/bom.py, models/bom_share.py, migrations 036+037,
+services/bom_match.py, schemas/bom.py, models/bom_share.py, migrations 037+038,
 3 pytest files; pages/bom/{index,BomPage.module.scss,lib/*,components/*} with
 colocated vitest fixtures; edits to App.tsx, seoRoutes.ts, _variables/_themes,
 vite.config.ts (manualChunks), main.py, part_feed/importer.py (stamping), both
@@ -265,7 +265,7 @@ compose files + passthrough guard test.
 
 ## 13. Build order (for the implementation plan)
 
-1. Migrations 036/037 + models + matcher service + `recommend()` — pure-backend, TDD.
+1. Migrations 037/038 + models + matcher service + `recommend()` — pure-backend, TDD.
 2. `/api/bom/match` + schemas + tests.
 3. Resolve pipeline + budget + streaming + tests.
 4. parseBom + headerAliases + fixtures (pure TS, TDD — no UI yet).
