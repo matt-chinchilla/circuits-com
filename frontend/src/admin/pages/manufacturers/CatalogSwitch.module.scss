@@ -1,8 +1,15 @@
 @use '../../../shared/styles/variables' as *;
 
 // Liquid-glass reading per house law (one filled primary per screen; danger
-// never shouts): the selected half is a glass VEIL with a hue tint, a 1px hue
-// rim and a 2px hue bar — never a solid fill. Static; no animated filters.
+// never shouts): the selected half is a hue VEIL over the theme's own card
+// token + a hue rim + a 2px hue bar — never a solid fill.
+//
+// EVERYTHING here rides the --a-* tokens (they flip under
+// html[data-admin-theme='dark']): the first version hard-coded light-surface
+// values and rendered grey-on-grey in dark mode — the R10 ruling said it
+// plainly ("label ink stays --a-fg1 in both states/themes") and this file is
+// its enforcement. Hue alphas composite over var(--a-card), so the same veil
+// reads as a pale tint on white and a deep tint on #171e2b.
 
 .switch {
   position: absolute;
@@ -26,15 +33,15 @@
   align-items: center;
   justify-content: center;
   min-width: 132px;
+  min-height: 36px;
   padding: 9px 18px;
   font-size: 0.84rem;
   font-weight: 600;
   line-height: 1;
-  color: #6b7076;
+  color: var(--a-fg3);
   text-decoration: none;
-  background: linear-gradient(rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.28));
-  border: 1px solid rgba(26, 31, 35, 0.12);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  background: var(--a-hover);
+  border: 1px solid var(--a-border);
   transition: color 140ms ease, background-color 140ms ease;
 
   &:first-child {
@@ -47,38 +54,30 @@
   }
 
   &:hover {
-    color: #1a1f23;
+    color: var(--a-fg1);
     text-decoration: none;
   }
 
   &:focus-visible {
-    outline: 2px solid #1a5fc8;
+    outline: 2px solid var(--a-primary);
     outline-offset: 1px;
     z-index: 1;
   }
 }
 
 .active {
-  color: #1a1f23;
+  color: var(--a-fg1);
 }
 
 .halfGreen {
-  background:
-    linear-gradient(rgba(68, 189, 19, 0.09), rgba(68, 189, 19, 0.05)),
-    linear-gradient(rgba(255, 255, 255, 0.62), rgba(255, 255, 255, 0.35));
-  border-color: rgba(55, 162, 13, 0.45);
+  background: linear-gradient(rgba(68, 189, 19, 0.14), rgba(68, 189, 19, 0.07)), var(--a-card);
+  border-color: rgba(55, 162, 13, 0.5);
   border-right-width: 1px;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.85),
-    inset 0 -2px 0 #37a20d;
+  box-shadow: inset 0 -2px 0 var(--a-primary);
 }
 
 .halfRed {
-  background:
-    linear-gradient(rgba(185, 28, 28, 0.08), rgba(185, 28, 28, 0.04)),
-    linear-gradient(rgba(255, 255, 255, 0.62), rgba(255, 255, 255, 0.35));
-  border-color: rgba(185, 28, 28, 0.45);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.85),
-    inset 0 -2px 0 #b91c1c;
+  background: linear-gradient(rgba(185, 28, 28, 0.12), rgba(185, 28, 28, 0.06)), var(--a-card);
+  border-color: rgba(185, 28, 28, 0.5);
+  box-shadow: inset 0 -2px 0 #b91c1c;
 }

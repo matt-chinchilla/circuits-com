@@ -31,7 +31,7 @@ import { createPortal } from 'react-dom';
 import { adminApi } from '@admin/services/adminApi';
 import { apiErrorDetail } from '@admin/services/apiError';
 import type { AdminLeadDetail, LeadOutcome } from '@admin/types/leads';
-import { OUTCOME_META, OUTCOME_ORDER } from './outcome';
+import { OUTCOME_META, OUTCOME_ORDER, outcomeInkVars } from './outcome';
 import styles from './OutcomeMenu.module.scss';
 
 // Tier here is a LABEL on the call record, never a sponsor row (owner decision
@@ -220,12 +220,19 @@ export default function OutcomeMenu({
                 optionRefs.current[i] = el;
               }}
               className={active ? `${styles.option} ${styles.optionActive}` : styles.option}
-              style={{ color: meta.hex, borderColor: active ? meta.hex : undefined }}
+              // Fill-tuned hex goes to the GLYPH DISC (white type on a solid
+              // disc reads on both themes); the word takes the ink pair so
+              // dark mode lifts it (--oc-dark) instead of sinking to ~2:1.
+              style={{ ...outcomeInkVars(meta), borderColor: active ? meta.hex : undefined }}
               aria-pressed={active}
               onClick={() => setSelected(key)}
               onKeyDown={(e) => onOptionKeyDown(e, i)}
             >
-              <span className={styles.optionGlyph} aria-hidden="true">
+              <span
+                className={styles.optionGlyph}
+                style={{ background: meta.hex }}
+                aria-hidden="true"
+              >
                 {meta.glyph}
               </span>
               <span className={styles.optionWord}>{meta.word}</span>

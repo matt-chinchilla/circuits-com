@@ -28,6 +28,28 @@
   --m-hi: inset 0 1px 0 rgba(255, 255, 255, 0.75);
   --m-cast: 0 2px 4px rgba(0, 0, 0, 0.07), 0 16px 32px -10px rgba(0, 0, 0, 0.28);
 
+  // Dark theme. The menu portals to <body> — OUTSIDE the .admin token scope —
+  // so var(--a-*) is undefined here; the local --m-* set exists for exactly
+  // that reason, and this block is its dark half. Keyed on the html attribute
+  // (visible from anywhere in the DOM), values mirroring the .admin dark
+  // tokens + the smoked-glass doctrine (near-opaque in the theme's own ink
+  // direction; a translucent veil composites to an unpredictable mid-tone).
+  :global(html[data-admin-theme='dark']) & {
+    --m-surface: linear-gradient(rgba(23, 30, 43, 0.97), rgba(19, 25, 37, 0.96));
+    --m-rim: rgba(241, 244, 249, 0.14);
+    --m-fg: #f1f4f9; // --a-fg1 (dark)
+    --m-fg-dim: #93a0b4; // --a-fg3 (dark)
+    --m-hover: rgba(241, 244, 249, 0.07);
+    --m-sel: rgba(241, 244, 249, 0.09);
+    --m-well: rgba(0, 0, 0, 0.25);
+    --m-hairline: rgba(241, 244, 249, 0.1);
+    --m-primary: #1f9d63; // --a-primary (dark, lifted)
+    --m-primary-hover: #26b374;
+    --m-primary-ring: rgba(31, 157, 99, 0.35);
+    --m-hi: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    --m-cast: 0 2px 4px rgba(0, 0, 0, 0.5), 0 16px 36px -8px rgba(0, 0, 0, 0.7);
+  }
+
   position: fixed;
   z-index: 1200; // clears the sticky admin topbar and the mobile drawer scrim
   box-sizing: border-box;
@@ -94,6 +116,8 @@
 }
 
 .option {
+  color: var(--oc);
+
   display: flex;
   align-items: center;
   gap: 9px;
@@ -129,6 +153,8 @@
 }
 
 .optionGlyph {
+  color: #ffffff;
+
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -240,4 +266,10 @@
     outline: none;
     box-shadow: 0 0 0 3px var(--m-primary-ring), 0 0 0 1.5px var(--m-primary);
   }
+}
+
+
+// Dark: colored words lift to the inkDark half of the pair (outcome.ts).
+:global(html[data-admin-theme='dark']) .option {
+  color: var(--oc-dark);
 }

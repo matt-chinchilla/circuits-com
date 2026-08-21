@@ -61,6 +61,7 @@
 }
 
 .mixCount {
+  color: var(--oc);
   font-family: $font-mono;
   font-size: 26px;
   font-weight: 700;
@@ -69,6 +70,7 @@
 }
 
 .mixWord {
+  color: var(--oc);
   display: inline-flex;
   align-items: baseline;
   gap: 6px;
@@ -166,6 +168,7 @@
 }
 
 .outcomeText {
+  color: var(--oc);
   display: inline-flex;
   align-items: baseline;
   gap: 6px;
@@ -272,5 +275,19 @@
       width: 100%;
       min-width: 820px;
     }
+  }
+}
+
+// Outcome-word ink pair (outcome.ts outcomeInkVars): light uses --oc,
+// dark lifts to --oc-dark so deep fill hexes never sink as text.
+:global(html[data-admin-theme='dark']) {
+  .mixCount {
+    color: var(--oc-dark);
+  }
+  .mixWord {
+    color: var(--oc-dark);
+  }
+  .outcomeText {
+    color: var(--oc-dark);
   }
 }

@@ -29,7 +29,7 @@ import type { AdminLead, AdminLeadDetail, LeadListResponse, LeadOutcome } from '
 
 import CatalogSwitch from '../../manufacturers/CatalogSwitch';
 import ColumnHeader, { type SortDir } from '../../manufacturers/ColumnHeader';
-import { OUTCOME_META, OUTCOME_ORDER } from '../outcome';
+import { OUTCOME_META, OUTCOME_ORDER, outcomeInkVars } from '../outcome';
 import OutcomeDisc from '../OutcomeDisc';
 import OutcomeMenu from '../OutcomeMenu';
 import styles from './LeadsPage.module.scss';
@@ -296,11 +296,11 @@ export default function LeadsPage() {
                   key={key}
                   type="button"
                   className={`${styles.filterChip} ${active ? styles.filterChipActive : ''}`}
-                  style={active ? { borderColor: meta.hex, color: meta.hex } : undefined}
+                  style={active ? outcomeInkVars(meta) : undefined}
                   aria-pressed={active}
                   onClick={() => setOutcomeFilter(key)}
                 >
-                  <span aria-hidden="true" style={{ color: meta.hex }}>
+                  <span aria-hidden="true">
                     {meta.glyph}
                   </span>
                   {meta.word}
@@ -562,7 +562,7 @@ export default function LeadsPage() {
                         {meta ? (
                           // Word AND glyph, never colour alone (the CVD rule
                           // recorded in outcome.ts).
-                          <span className={styles.outcomeText} style={{ color: meta.hex }}>
+                          <span className={styles.outcomeText} style={outcomeInkVars(meta)}>
                             <span aria-hidden="true">{meta.glyph}</span>
                             {meta.word}
                           </span>

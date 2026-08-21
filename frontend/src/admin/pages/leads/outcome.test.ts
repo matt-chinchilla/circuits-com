@@ -8,6 +8,7 @@ describe('OUTCOME_META', () => {
       const meta = OUTCOME_META[key];
       expect(meta.word.length).toBeGreaterThan(0);
       expect(meta.hex).toMatch(/^#[0-9a-f]{6}$/);
+      expect(meta.inkDark).toMatch(/^#[0-9a-f]{6}$/);
       expect(meta.glyph.length).toBe(1);
     }
   });

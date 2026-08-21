@@ -415,6 +415,7 @@
 // from OUTCOME_META so there is exactly one home for it.
 
 .outcomeText {
+  color: var(--oc);
   display: inline-flex;
   align-items: baseline;
   gap: 6px;
@@ -607,5 +608,34 @@
   .inlineSearch {
     min-width: 0;
     flex: 1 1 100%;
+  }
+}
+
+// Outcome-word ink pair (outcome.ts outcomeInkVars): light uses --oc,
+// dark lifts to --oc-dark so deep fill hexes never sink as text.
+:global(html[data-admin-theme='dark']) {
+  .outcomeText {
+    color: var(--oc-dark);
+  }
+}
+
+// Outcome filter chips, active state: word + border take the ink pair when
+// the inline vars are present (uncolored chips fall through to their base).
+.filterChipActive {
+  color: var(--oc, var(--a-fg1));
+  border-color: var(--oc, var(--a-border));
+}
+
+:global(html[data-admin-theme='dark']) .filterChipActive {
+  color: var(--oc-dark, var(--a-fg1));
+  border-color: var(--oc-dark, var(--a-border));
+}
+
+// The centered CatalogSwitch is position:absolute in this header — the text
+// block must yield the middle third or a long subtitle runs beneath the
+// control (caught at 1380px on the Manufacturers page).
+@media (min-width: #{$bp-desktop + 1px}) {
+  .subtitle {
+    max-width: 30ch;
   }
 }

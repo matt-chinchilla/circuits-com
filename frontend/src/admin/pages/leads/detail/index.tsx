@@ -23,7 +23,7 @@ import { apiErrorDetail } from '@admin/services/apiError';
 import type { AdminLeadDetail } from '@admin/types/leads';
 import { safeHttpUrl } from '@shared/utils/url';
 
-import { OUTCOME_META } from '../outcome';
+import { OUTCOME_META, outcomeInkVars } from '../outcome';
 import OutcomeDisc from '../OutcomeDisc';
 import OutcomeMenu from '../OutcomeMenu';
 import styles from './LeadDetail.module.scss';
@@ -233,7 +233,7 @@ export default function LeadDetailPage() {
             </p>
             <p className={styles.statusLine}>
               {lastMeta ? (
-                <span className={styles.outcomeText} style={{ color: lastMeta.hex }}>
+                <span className={styles.outcomeText} style={outcomeInkVars(lastMeta)}>
                   <span aria-hidden="true">{lastMeta.glyph}</span>
                   {lastMeta.word}
                 </span>
@@ -582,7 +582,7 @@ export default function LeadDetailPage() {
                       </div>
                       <div className={styles.entryBody}>
                         <p className={styles.entryHead}>
-                          <span className={styles.entryWord} style={{ color: meta.hex }}>
+                          <span className={styles.entryWord} style={outcomeInkVars(meta)}>
                             <span aria-hidden="true">{meta.glyph}</span>
                             {meta.word}
                           </span>

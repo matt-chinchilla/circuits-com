@@ -484,3 +484,12 @@
     flex: 1;
   }
 }
+
+// The centered CatalogSwitch is position:absolute in this header — the text
+// block must yield the middle third or a long subtitle runs beneath the
+// control (caught at 1380px on the Manufacturers page).
+@media (min-width: #{$bp-desktop + 1px}) {
+  .subtitle {
+    max-width: 30ch;
+  }
+}

@@ -14,7 +14,7 @@ import { adminApi } from '@admin/services/adminApi';
 import { apiErrorDetail } from '@admin/services/apiError';
 import type { RepActivity } from '@admin/types/leads';
 
-import { OUTCOME_META, OUTCOME_ORDER } from '../outcome';
+import { OUTCOME_META, OUTCOME_ORDER, outcomeInkVars } from '../outcome';
 import OutcomeDisc from '../OutcomeDisc';
 import styles from './RepPage.module.scss';
 
@@ -131,10 +131,10 @@ export default function RepPage() {
           const count = activity.outcome_mix[key] ?? 0;
           return (
             <div key={key} className={styles.mixCard} style={{ borderTopColor: meta.hex }}>
-              <span className={styles.mixCount} style={{ color: meta.hex }}>
+              <span className={styles.mixCount} style={outcomeInkVars(meta)}>
                 {count.toLocaleString('en-US')}
               </span>
-              <span className={styles.mixWord} style={{ color: meta.hex }}>
+              <span className={styles.mixWord} style={outcomeInkVars(meta)}>
                 <span aria-hidden="true">{meta.glyph}</span>
                 {meta.word}
               </span>
@@ -180,7 +180,7 @@ export default function RepPage() {
                       {c.contact_name ?? <span className={styles.muted}>&mdash;</span>}
                     </td>
                     <td>
-                      <span className={styles.outcomeText} style={{ color: meta.hex }}>
+                      <span className={styles.outcomeText} style={outcomeInkVars(meta)}>
                         <span aria-hidden="true">{meta.glyph}</span>
                         {meta.word}
                       </span>
