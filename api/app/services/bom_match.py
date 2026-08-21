@@ -12,12 +12,13 @@ test case names are shared between test_bom_recommend.py and
 priceBreaks.test.ts; change the rule in one home and the other's table fails.
 """
 
+import uuid
 from dataclasses import dataclass
 
-from sqlalchemy import func, literal
+from sqlalchemy import case, func, literal, or_
 from sqlalchemy.orm import Session
 
-from app.models import Part
+from app.models import Part, Sponsor
 
 MIN_APPROX_LEN = 5
 
@@ -112,3 +113,94 @@ def match_line(db: Session, mpn: str | None, value: str | None, footprint: str |
             return LineMatch("approx", best, reason, None)
 
     return LineMatch("resolve", None, None, wanted)
+
+
+# THE sponsor-preference number (D4, owner-approved). Mirrored — see module
+# docstring. 1.20 == "within +20% of the best in-stock price".
+SPONSOR_BAND = 1.20
+
+
+@dataclass(frozen=True)
+class Offer:
+    supplier_id: str
+    stock_quantity: int
+    unit_price: float
+    breaks: tuple[tuple[int, float], ...]  # (min_quantity, unit_price) ASC
+    price_stale: bool
+
+
+def price_at(offer: Offer, qty: int) -> float:
+    price = offer.unit_price
+    for min_qty, unit in sorted(offer.breaks):
+        if min_qty <= qty:
+            price = unit
+        else:
+            break
+    return price
+
+
+def recommend(
+    offers: list[Offer], line_qty: int, tier_rank: dict[str, tuple[int, str]]
+) -> str | None:
+    in_stock = [o for o in offers if o.stock_quantity > 0]
+    if not in_stock:
+        return None
+    best = min(price_at(o, line_qty) for o in in_stock)
+    sponsored = sorted(
+        (o for o in in_stock if o.supplier_id in tier_rank),
+        key=lambda o: (*tier_rank[o.supplier_id], price_at(o, line_qty)),
+    )
+    if sponsored and price_at(sponsored[0], line_qty) <= SPONSOR_BAND * best:
+        return sponsored[0].supplier_id
+    in_stock.sort(
+        key=lambda o: (
+            price_at(o, line_qty),
+            0 if o.supplier_id in tier_rank else 1,
+            -o.stock_quantity,
+        )
+    )
+    return in_stock[0].supplier_id
+
+
+def load_tier_rank(db: Session, supplier_ids: set) -> dict[str, tuple[int, str]]:
+    """Active sponsorship rank per supplier — Active OR NULL status (legacy
+    seed), tier lowered (the tier-casing gotcha), platinum<gold<silver, oldest
+    created_at as the tiebreaker. A supplier with several placements keeps its
+    best (lowest) rank."""
+    if not supplier_ids:
+        return {}
+    # SQLAlchemy's UUID bind processor rejects plain strings, and callers hold
+    # supplier ids as strings (Offer.supplier_id). Coerce, dropping anything
+    # that is not a uuid rather than raising on a hostile/legacy value.
+    wanted: list[uuid.UUID] = []
+    for raw in supplier_ids:
+        if isinstance(raw, uuid.UUID):
+            wanted.append(raw)
+            continue
+        try:
+            wanted.append(uuid.UUID(str(raw)))
+        except (ValueError, AttributeError, TypeError):
+            continue
+    if not wanted:
+        return {}
+    tier_order = case(
+        (func.lower(Sponsor.tier) == "platinum", 0),
+        (func.lower(Sponsor.tier) == "gold", 1),
+        (func.lower(Sponsor.tier) == "silver", 2),
+        else_=9,
+    )
+    rows = (
+        db.query(Sponsor.supplier_id, tier_order, Sponsor.created_at)
+        .filter(Sponsor.supplier_id.in_(wanted))
+        .filter(or_(Sponsor.status == "Active", Sponsor.status.is_(None)))
+        .all()
+    )
+    rank: dict[str, tuple[int, str]] = {}
+    for supplier_id, order, created in rows:
+        if order == 9:
+            continue
+        key = str(supplier_id)
+        entry = (int(order), created.isoformat() if created else "9999")
+        if key not in rank or entry < rank[key]:
+            rank[key] = entry
+    return rank
