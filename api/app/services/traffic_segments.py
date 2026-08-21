@@ -19,8 +19,12 @@ import re
 
 BOT_UA_RE = re.compile(
     r"(?:"
-    r"(?<!cu)bot(?:[\s/;)\]]|$)"  # Googlebot/…, GPTBot), DuckAssistBot; not CUBOT_X19
+    # Googlebot/…, GPTBot), DuckAssistBot, Googlebot-Image, AdsBot-Google —
+    # '-' is a terminator too; the (?<!cu) guard still keeps Cubot phones out.
+    r"(?<!cu)bot(?:[\s/;)\]-]|$)"
     r"|crawler|spider|crawl(?:er)?/"
+    # Google/Bing crawlers whose names carry no standalone 'bot' token:
+    r"|google-inspectiontool|googleother|bingpreview"
     r"|externalagent|externalhit"  # meta-externalagent, facebookexternalhit
     r"|slurp|petalbot|bytespider"
     r"|gptbot|oai-searchbot|chatgpt-user"

@@ -28,11 +28,11 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models import (
     ActivityEvent,
+    Category,
+    Expense,
     Lead,
     LeadContact,
     Manufacturer,
-    Category,
-    Expense,
     PageView,
     Part,
     PartListing,
@@ -45,6 +45,7 @@ from app.models.expense import expense_category_label
 from app.models.roles import ADMIN_ROLES
 from app.routes.admin_leads import require_leads_access
 from app.services.auth_service import get_current_user
+from app.services.traffic_segments import split_user_agents
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
@@ -208,15 +209,32 @@ def _cumulative_series(db: Session, model, day_list: list[date]) -> list[dict]:
     return series
 
 
-def _daily_count_series(db: Session, model, day_list: list[date]) -> list[dict]:
+def _daily_count_series(db: Session, model, day_list: list[date], extra_filters=()) -> list[dict]:
     """Per-day row count, zero-filled across the whole window."""
     cutoff = _day_start_utc(day_list[0])
     per_day: dict[date, int] = defaultdict(int)
-    for (created,) in db.query(model.created_at).filter(model.created_at >= cutoff).all():
+    query = db.query(model.created_at).filter(model.created_at >= cutoff, *extra_filters)
+    for (created,) in query.all():
         day = _est_day(created)
         if day is not None and day <= day_list[-1]:
             per_day[day] += 1
     return [{"day": day.isoformat(), "value": per_day.get(day, 0)} for day in day_list]
+
+
+def _human_traffic_filters(db: Session, day_list: list[date]) -> tuple:
+    """SQL filters keeping only human page views (Reports' default segment)."""
+    cutoff = _day_start_utc(day_list[0])
+    distinct_uas = [
+        row[0]
+        for row in db.query(PageView.user_agent)
+        .filter(PageView.created_at >= cutoff)
+        .distinct()
+    ]
+    bot_uas, _ = split_user_agents(distinct_uas)
+    if not bot_uas:
+        return ()
+    # NOT IN drops NULL rows under three-valued logic — keep them (human).
+    return (or_(PageView.user_agent.is_(None), PageView.user_agent.notin_(bot_uas)),)
 
 
 def _daily_amount_series(db: Session, model, day_list: list[date]) -> list[dict]:
@@ -375,7 +393,12 @@ def get_trends(
             "suppliers": _cumulative_series(db, Supplier, day_list),
             "sponsors": _cumulative_series(db, Sponsor, day_list),
             "revenue": _daily_amount_series(db, Revenue, day_list),
-            "traffic": _daily_count_series(db, PageView, day_list),
+            # Humans only, matching the Reports default — a crawler flood must
+            # not paint the dashboard sparkline while Reports says quiet
+            # (same read-time classification; NULL UA counts human).
+            "traffic": _daily_count_series(
+                db, PageView, day_list, _human_traffic_filters(db, day_list)
+            ),
         },
     }
 

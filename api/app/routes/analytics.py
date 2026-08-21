@@ -14,6 +14,7 @@ from app.models import User
 from app.models.page_view import PageView
 from app.services.auth_service import get_current_user
 from app.services.geoip import country_for_ip
+from app.services.rate_limit import client_ip
 from app.services.traffic_segments import crawler_family, split_user_agents
 
 router = APIRouter(prefix="/api", tags=["analytics"])
@@ -88,7 +89,10 @@ def track_page_view(
             device_type=_parse_device(ua),
             browser=_parse_browser(ua),
             # Fail-open by contract: any geo problem stores NULL, never raises.
-            country=country_for_ip(ip),
+            # client_ip(), not request.client.host: the middleware puts the
+            # ATTACKER-TYPED leftmost X-Forwarded-For hop in client.host — a
+            # forged header must not place a visitor on the map.
+            country=country_for_ip(client_ip(request)),
         )
     )
     db.commit()
@@ -277,9 +281,11 @@ def get_analytics(
     geo_unknown = (
         db.query(view_count).filter(recent, *seg, PageView.country.is_(None)).scalar() or 0
     )
-    geo_since = db.query(func.min(PageView.created_at)).filter(
-        PageView.country.isnot(None)
-    ).scalar()
+    geo_since = (
+        db.query(func.min(PageView.created_at))
+        .filter(recent, PageView.country.isnot(None))
+        .scalar()
+    )
 
     return {
         "period_days": days,

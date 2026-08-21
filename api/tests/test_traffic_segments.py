@@ -60,6 +60,19 @@ class TestIsBot:
         assert is_bot(None) is False
         assert is_bot("") is False
 
+    def test_hyphenated_and_tokenless_crawlers_are_bots(self):
+        # These previously classified HUMAN: 'bot-' had no terminator match,
+        # and the InspectionTool/Other/Preview names carry no 'bot' at all —
+        # leaving their family entries as unreachable dead config.
+        for ua in (
+            "Googlebot-Image/1.0",
+            "AdsBot-Google (+http://www.google.com/adsbot.html)",
+            "Mozilla/5.0 (compatible; Google-InspectionTool/1.0;)",
+            "GoogleOther",
+            "Mozilla/5.0 (compatible; bingbot/2.0) BingPreview/1.0b",
+        ):
+            assert is_bot(ua) is True, ua
+
 
 class TestCrawlerFamily:
     def test_meta(self):
@@ -77,6 +90,13 @@ class TestCrawlerFamily:
     def test_human_has_no_family(self):
         assert crawler_family(CHROME_UA) is None
         assert crawler_family(None) is None
+
+    def test_google_and_bing_variants_resolve(self):
+        assert crawler_family("Googlebot-Image/1.0") == "Google"
+        assert crawler_family("AdsBot-Google (+http://www.google.com/adsbot.html)") == "Google"
+        assert crawler_family("Mozilla/5.0 (compatible; Google-InspectionTool/1.0;)") == "Google"
+        assert crawler_family("GoogleOther") == "Google"
+        assert crawler_family("BingPreview/1.0b") == "Bing"
 
 
 class TestSplitUserAgents:

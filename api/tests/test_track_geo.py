@@ -72,6 +72,27 @@ class TestTrackStoresCountry:
         row = db.query(PageView).filter(PageView.session_id == "geo-s2").one()
         assert row.country == "US"
 
+    def test_forged_xff_cannot_place_the_pin(self, client, db, monkeypatch):
+        """Geo reads the edge-observed hop (rightmost XFF / X-Real-IP), never
+        the attacker-typed leftmost value that lands in request.client."""
+        from app.routes import analytics as analytics_route
+
+        seen: list[str | None] = []
+
+        def fake_lookup(ip):
+            seen.append(ip)
+            return {"10.0.0.7": "DE", "9.9.9.9": "XX"}.get(ip or "")
+
+        monkeypatch.setattr(analytics_route, "country_for_ip", fake_lookup)
+        client.post(
+            "/api/track",
+            json={"path": "/", "session_id": "geo-s3"},
+            headers={"X-Forwarded-For": "9.9.9.9, 10.0.0.7"},
+        )
+        row = db.query(PageView).filter(PageView.session_id == "geo-s3").one()
+        assert row.country == "DE"
+        assert seen == ["10.0.0.7"]  # the forged 9.9.9.9 never reached geo
+
 
 class TestSchema:
     def test_country_column_metadata(self):
