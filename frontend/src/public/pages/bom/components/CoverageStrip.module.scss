@@ -18,7 +18,10 @@
   // reading room than the controls are worth. Same width the glass furls at.
   @media (min-width: #{$bp-mobile + 1}) {
     position: sticky;
-    top: 8px;
+    // The navbar is ALSO sticky (top: 0, z 100) — a bare 8px offset slid this
+    // bar underneath it (review finding #2; the PartPage sticky uses the same
+    // nav-height arithmetic).
+    top: calc(#{$nav-height} + 8px);
     z-index: 5;
   }
   @include glass-sheet;

@@ -47,7 +47,9 @@
 }
 
 .popover {
-  z-index: 60;
+  // 1000 like every portaled popover on the site (Alternates, ColumnHeader,
+  // RequestModal) — anything lower can slide under the navbar's z 100.
+  z-index: 1000;
   width: min(340px, calc(100vw - 16px));
   // Opaque fallback first, then the same floating glass as the Alternates
   // popover — the two pickers are siblings and must feel like one material.

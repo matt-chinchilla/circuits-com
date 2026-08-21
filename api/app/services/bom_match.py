@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from sqlalchemy import case, func, literal, or_
 from sqlalchemy.orm import Session
 
-from app.models import Part, Sponsor
+from app.models import Part, PartListing, Sponsor
 
 MIN_APPROX_LEN = 5
 
@@ -49,6 +49,24 @@ def package_warning(line_package: str | None, part_package: str | None) -> str |
 
 
 @dataclass(frozen=True)
+class CandidateStub:
+    """A ranking/stub row for the approx ladder. Scalar columns ONLY — the
+    candidate queries must never hydrate Part ORM objects, whose lazy=selectin
+    listings→price_breaks cascade fires on load and would drag hundreds of
+    discarded rows per approx line (the seed-speedup lesson, 2026-08-21
+    review finding #1). Attribute names mirror Part so _similar_stub reads
+    either."""
+
+    id: object
+    sku: str
+    manufacturer_name: str | None
+    description: str | None
+    package: str | None
+    lifecycle_status: str | None
+    lifecycle_verified_at: object | None
+
+
+@dataclass(frozen=True)
 class LineMatch:
     status: str  # "exact" | "approx" | "resolve" | "none"
     part: Part | None
@@ -57,11 +75,7 @@ class LineMatch:
     # The APPROX ladder's ranked runner-ups (best excluded) — the "Similar"
     # column's comparable options. Always empty for exact/resolve/none: a
     # perfect match needs no menu (owner spec 2026-08-21).
-    candidates: tuple[Part, ...] = ()
-
-
-def _total_stock(part: Part) -> int:
-    return sum(li.stock_quantity or 0 for li in part.listings)
+    candidates: tuple[CandidateStub, ...] = ()
 
 
 def match_line(db: Session, mpn: str | None, value: str | None, footprint: str | None) -> LineMatch:
@@ -82,39 +96,61 @@ def match_line(db: Session, mpn: str | None, value: str | None, footprint: str |
 
     if len(wanted) >= MIN_APPROX_LEN:
         like_escaped = up.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        # Scalar columns only — Part rows loaded here would fire the
+        # lazy=selectin listings→price_breaks cascade for up to 50 candidates
+        # that are then discarded (review finding, 2026-08-21). Only the
+        # single winner is re-fetched as a full ORM Part below.
+        cols = (
+            Part.id,
+            Part.sku,
+            Part.manufacturer_name,
+            Part.description,
+            Part.package,
+            Part.lifecycle_status,
+            Part.lifecycle_verified_at,
+        )
         forward = (
-            db.query(Part)
+            db.query(*cols)
             .filter(func.upper(Part.sku).like(f"{like_escaped}%", escape="\\"))
             .limit(25)
             .all()
         )
         reverse = (
-            db.query(Part)
+            db.query(*cols)
             .filter(func.length(Part.sku) >= MIN_APPROX_LEN)
             .filter(literal(up).like(func.upper(Part.sku).concat("%")))
             .limit(25)
             .all()
         )
         seen: dict = {}
-        for p in [*forward, *reverse]:
-            seen.setdefault(p.id, p)
+        for row in [*forward, *reverse]:
+            seen.setdefault(row[0], CandidateStub(*row))
         candidates = list(seen.values())
         if candidates:
+            stock = {
+                row[0]: int(row[1] or 0)
+                for row in db.query(PartListing.part_id, func.sum(PartListing.stock_quantity))
+                .filter(PartListing.part_id.in_(list(seen.keys())))
+                .group_by(PartListing.part_id)
+                .all()
+            }
             candidates.sort(
-                key=lambda p: (
-                    abs(len(p.sku) - len(wanted)),
-                    0 if p.lifecycle_verified_at is not None else 1,
-                    -_total_stock(p),
-                    p.sku,
+                key=lambda c: (
+                    abs(len(c.sku) - len(wanted)),
+                    0 if c.lifecycle_verified_at is not None else 1,
+                    -stock.get(c.id, 0),
+                    c.sku,
                 )
             )
-            best = candidates[0]
-            reason = (
-                "ordering-code suffix differs"
-                if best.sku.upper().startswith(up)
-                else "base part of the pasted ordering code"
-            )
-            return LineMatch("approx", best, reason, None, tuple(candidates[1:9]))
+            best_stub = candidates[0]
+            best = db.get(Part, best_stub.id)
+            if best is not None:
+                reason = (
+                    "ordering-code suffix differs"
+                    if best.sku.upper().startswith(up)
+                    else "base part of the pasted ordering code"
+                )
+                return LineMatch("approx", best, reason, None, tuple(candidates[1:9]))
 
     return LineMatch("resolve", None, None, wanted)
 
@@ -257,7 +293,7 @@ def _offers_for_part(db: Session, part: Part) -> tuple[list[dict], dict[str, Off
 _TIER_NAME = {0: "platinum", 1: "gold", 2: "silver"}
 
 
-def _similar_stub(part: Part) -> dict:
+def _similar_stub(part: "Part | CandidateStub") -> dict:
     """A light row for the Similar picker — identity only. Picking one
     re-matches the line by this SKU, which brings the full offer set."""
     return {

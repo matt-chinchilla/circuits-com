@@ -135,6 +135,7 @@ export default function BomPage() {
   includeDnpRef.current = includeDnp;
   // Phase-2 notes, kept apart from `matchError` because neither is fatal: the
   // table is priced and readable with both of them on screen.
+  const pickSeqRef = useRef(new Map<number, number>());
   const [resolveNote, setResolveNote] = useState<string | null>(null);
   const [resolveError, setResolveError] = useState<string | null>(null);
 
@@ -144,6 +145,10 @@ export default function BomPage() {
    *  displaced match back into the menu so the choice stays reversible. */
   const pickSimilar = (rowIndex: number, sku: string) => {
     const line = rows.find((r) => r.index === rowIndex);
+    // Last click wins, PER ROW: overlapping picks settle in network order,
+    // so a superseded response must be dropped, not applied (review #4).
+    const seq = (pickSeqRef.current.get(rowIndex) ?? 0) + 1;
+    pickSeqRef.current.set(rowIndex, seq);
     bomApi
       .match([
         {
@@ -156,6 +161,7 @@ export default function BomPage() {
         },
       ])
       .then(([fresh]) => {
+        if (pickSeqRef.current.get(rowIndex) !== seq) return; // superseded
         if (fresh == null || fresh.part == null) return;
         setRows((prev) =>
           prev.map((r) => {
@@ -189,8 +195,12 @@ export default function BomPage() {
           }),
         );
       })
-      .catch(() => {
-        setResolveError('Could not switch to that part — try again in a moment.');
+      .catch((err) => {
+        if (pickSeqRef.current.get(rowIndex) !== seq) return; // superseded
+        const throttled = axios.isAxiosError(err) && err.response?.status === 429;
+        setResolveError(
+          throttled ? MATCH_THROTTLED : 'Could not switch to that part — try again in a moment.',
+        );
       });
   };
   const sourceText = useRef('');
