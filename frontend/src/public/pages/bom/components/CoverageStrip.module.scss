@@ -32,11 +32,22 @@
 }
 
 .countBig {
+  // The one deliberate twinge of color on the page: the join page's platinum
+  // stop palette as STATIC gradient text (owner preference, plan T20). No
+  // animation — nothing here to freeze for reduced motion.
+  --g3: #b9a8e0;
+  --g4: #d9a1b8;
+  --g5: #9fb7e8;
+
   font-family: $font-heading;
   font-size: 1.35rem;
   font-weight: 700;
   letter-spacing: -0.015em;
   color: var(--executive-blue, $executive-blue);
+  background: linear-gradient(120deg, #5b4e85, var(--g3), var(--g4), var(--g5), #5b4e85);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
 .qty {
