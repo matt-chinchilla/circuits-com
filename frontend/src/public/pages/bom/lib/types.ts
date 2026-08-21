@@ -40,6 +40,19 @@ export interface BomPartInfo {
  *  all". `exact_live` is only ever produced by the resolve stream. */
 export type BomRowStatus = 'exact' | 'approx' | 'resolve' | 'none' | 'exact_live';
 
+/** A comparable-option stub for the Matches column's "Similar" picker —
+ *  identity only; picking one re-matches the line by this SKU, which brings
+ *  the full offer set (owner spec 2026-08-21). */
+export interface SimilarPart {
+  id: string;
+  sku: string;
+  manufacturer_name: string | null;
+  description: string | null;
+  package: string | null;
+  lifecycle_status: string | null;
+  lifecycle_verified: boolean;
+}
+
 export interface BomRow {
   index: number;
   status: BomRowStatus;
@@ -49,6 +62,8 @@ export interface BomRow {
   part: BomPartInfo | null;
   recommended_supplier_id: string | null;
   offers: BomOffer[];
+  /** Ranked runner-ups for approx rows; always [] for exact/live/none. */
+  similar: SimilarPart[];
 }
 
 /** Identity fields only — D7: quantities, designators and the file itself

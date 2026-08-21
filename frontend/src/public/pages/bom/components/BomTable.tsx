@@ -6,6 +6,7 @@ import type { BomOffer, TableRow } from '../lib/types';
 import AlternatesDropdown from './AlternatesDropdown';
 import CoverageStrip, { type CoverageCounts } from './CoverageStrip';
 import MatchBadge from './MatchBadge';
+import SimilarDropdown from './SimilarDropdown';
 import styles from './BomTable.module.scss';
 
 /**
@@ -32,10 +33,22 @@ const MAX_REF_CHIPS = 6;
  *  into a URL — so it is clamped rather than trusted to be short. */
 const QUOTE_IDENTITY_MAX = 180;
 
+/** "Resistor_SMD:R_0805_2012Metric" → "R_0805_2012Metric" — the readable
+ *  half of a KiCad LIB:FOOTPRINT value, for no-MPN submitted lines. */
+function footprintHint(footprint: string): string {
+  const idx = footprint.indexOf(':');
+  return idx >= 0 ? footprint.slice(idx + 1) : footprint;
+}
+
 interface BomTableProps {
   rows: TableRow[];
   buildQty: number;
   onBuildQtyChange: (qty: number) => void;
+  /** The Matches column's "Similar" pick — the page re-matches the line by
+   *  the chosen SKU (identity only travels, per D7). Null in the read-only
+   *  share view: that table asks nothing of anyone, so the menu renders as a
+   *  plain badge there. */
+  onPickSimilar: ((index: number, sku: string) => void) | null;
   /** DNP lines counted, priced and totalled like any other line. Default off:
    *  the whole point of the flag is that nobody is buying those parts. */
   includeDnp: boolean;
@@ -163,6 +176,7 @@ export default function BomTable({
   rows,
   buildQty,
   onBuildQtyChange,
+  onPickSimilar,
   includeDnp,
   onIncludeDnpChange,
 }: BomTableProps) {
@@ -259,8 +273,14 @@ export default function BomTable({
               <th className={`${styles.th} ${styles.thNum}`} scope="col">
                 #
               </th>
+              <th className={`${styles.th} ${styles.thSub}`} scope="col">
+                Submitted part
+              </th>
               <th className={styles.th} scope="col">
-                Part
+                Matched part
+              </th>
+              <th className={`${styles.th} ${styles.thMatch}`} scope="col">
+                Matches
               </th>
               <th className={`${styles.th} ${styles.thDesc}`} scope="col">
                 Description
@@ -291,6 +311,7 @@ export default function BomTable({
               const rail = lifecycleRail(row);
               const avail = availabilityRail(view);
               const identity = part?.sku ?? row.mpn ?? row.value ?? '—';
+              const submitted = row.mpn ?? row.value ?? '—';
               const maker = part?.manufacturer_name ?? row.manufacturer;
               const description = part?.description ?? row.description;
               const overflow = row.refs.length - MAX_REF_CHIPS;
@@ -315,6 +336,17 @@ export default function BomTable({
                 >
                   <td className={`${styles.td} ${styles.tdNum}`}>{row.index}</td>
 
+                  <td className={`${styles.td} ${styles.tdSub}`}>
+                    <span className={styles.subSku}>{submitted}</span>
+                    {row.mpn == null && row.footprint != null && (
+                      <span className={styles.subHint}>{footprintHint(row.footprint)}</span>
+                    )}
+                    {/* The chip marks the line as DNP whether or not it is
+                        being counted — the fact belongs to the SUBMITTED BOM,
+                        the greying belongs to the toggle. */}
+                    {row.dnp && <span className={styles.dnpChip}>DNP</span>}
+                  </td>
+
                   <td className={`${styles.td} ${styles.tdPart}`}>
                     <div className={styles.partCell}>
                       <span
@@ -324,26 +356,37 @@ export default function BomTable({
                         title={rail.label}
                       />
                       <div className={styles.partBody}>
-                        <span className={styles.sku}>{identity}</span>
+                        <span className={part != null ? styles.sku : styles.muted}>
+                          {part?.sku ?? '—'}
+                        </span>
                         {maker != null && <span className={styles.maker}>{maker}</span>}
-                        <div className={styles.badgeRow}>
-                          <MatchBadge
-                            status={row.server?.status ?? null}
-                            state={row.state}
-                            approxReason={row.server?.approx_reason ?? null}
-                            detail={
-                              row.state === 'unavailable'
-                                ? 'Live lookups are exhausted for today'
-                                : null
-                            }
-                          />
-                          {/* The chip marks the line as DNP whether or not it
-                              is being counted — the fact belongs to the BOM,
-                              the greying belongs to the toggle. */}
-                          {row.dnp && <span className={styles.dnpChip}>DNP</span>}
-                        </div>
                       </div>
                     </div>
+                  </td>
+
+                  <td className={`${styles.td} ${styles.tdMatch}`}>
+                    {row.server?.status === 'approx' &&
+                    row.server.similar.length > 0 &&
+                    onPickSimilar != null ? (
+                      <SimilarDropdown
+                        options={row.server.similar}
+                        matchedSku={part?.sku ?? null}
+                        reason={row.server.approx_reason}
+                        partLabel={submitted}
+                        onPick={(sku) => onPickSimilar(row.index, sku)}
+                      />
+                    ) : (
+                      <MatchBadge
+                        status={row.server?.status ?? null}
+                        state={row.state}
+                        approxReason={row.server?.approx_reason ?? null}
+                        detail={
+                          row.state === 'unavailable'
+                            ? 'Live lookups are exhausted for today'
+                            : null
+                        }
+                      />
+                    )}
                   </td>
 
                   <td className={`${styles.td} ${styles.tdDesc}`}>

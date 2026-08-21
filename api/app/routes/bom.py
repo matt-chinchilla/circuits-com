@@ -73,6 +73,7 @@ def match_bom(body: BomMatchRequest, request: Request, db: Session = Depends(get
                 m.approx_reason,
                 m.resolve_query,
                 footprint_token(line.footprint),
+                similar_parts=list(m.candidates),
             )
         )
     return {"rows": rows}

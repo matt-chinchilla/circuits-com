@@ -177,3 +177,46 @@ class TestMatchRoute:
         assert (
             self._post(client, [{"index": 0, "mpn": "X1234"}], ip="198.51.100.5").status_code == 429
         )
+
+
+class TestSimilarOptions:
+    """The Matches column's picker: approx rows carry ranked comparable
+    options; a perfect match carries none (owner spec 2026-08-21)."""
+
+    def test_approx_row_lists_the_runner_ups_without_the_chosen(self, client, db):
+        for suffix in ("", "WS", "WS-HG3", "WS-HG3_A-08", "TR"):
+            _part(db, f"1N4148{suffix}")
+        res = client.post("/api/bom/match", json={"lines": [{"index": 0, "mpn": "1N4148W"}]})
+        row = res.json()["rows"][0]
+        assert row["status"] == "approx"
+        skus = [s["sku"] for s in row["similar"]]
+        assert row["part"]["sku"] not in skus
+        assert skus, "runner-ups must be offered as comparable options"
+        assert all(s["sku"].upper().startswith("1N4148") or "1N4148W".startswith(s["sku"].upper()) for s in row["similar"])
+
+    def test_similar_stub_shape_is_identity_only(self, client, db):
+        _part(db, "GRM188R71C104KA01")
+        _part(db, "GRM188R71C104KA88", package="0603")
+        res = client.post("/api/bom/match", json={"lines": [{"index": 0, "mpn": "GRM188R71C"}]})
+        row = res.json()["rows"][0]
+        assert row["similar"], "second family member should be a comparable option"
+        stub = row["similar"][0]
+        assert set(stub) == {
+            "id", "sku", "manufacturer_name", "description",
+            "package", "lifecycle_status", "lifecycle_verified",
+        }
+
+    def test_exact_match_offers_no_menu(self, client, db):
+        _part(db, "LM317T")
+        _part(db, "LM317TG")
+        res = client.post("/api/bom/match", json={"lines": [{"index": 0, "mpn": "LM317T"}]})
+        row = res.json()["rows"][0]
+        assert row["status"] == "exact"
+        assert row["similar"] == []
+
+    def test_similar_capped_at_eight(self, client, db):
+        for i in range(12):
+            _part(db, f"CAPTEST{i:02d}")
+        res = client.post("/api/bom/match", json={"lines": [{"index": 0, "mpn": "CAPTEST"}]})
+        row = res.json()["rows"][0]
+        assert len(row["similar"]) <= 8

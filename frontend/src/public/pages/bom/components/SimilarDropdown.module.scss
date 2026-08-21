@@ -1,0 +1,136 @@
+@use '@shared/styles/variables' as *;
+@use '@shared/styles/mixins' as *;
+
+// The "Similar" picker in the Matches column. The trigger IS the match badge
+// (hatched amber = approximate confidence, per the texture-carries-confidence
+// rule), with a caret announcing the menu. Popover positioning is entirely
+// inline fixed coords from the component — portaled to <body>, no positioned
+// ancestor may be assumed.
+
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 44px; // tap floor (2026-08-21 mobile audit)
+  padding: 8px 12px;
+  font-family: $font-body;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  line-height: 1;
+  color: var(--bom-rail-nrnd, #b45309);
+  background:
+    repeating-linear-gradient(
+      45deg,
+      transparent 0 3px,
+      rgba(180, 83, 9, 0.12) 3px 4px
+    ),
+    rgba(180, 83, 9, 0.06);
+  border: 1px solid rgba(180, 83, 9, 0.35);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 120ms, border-color 120ms;
+
+  &:hover {
+    border-color: rgba(180, 83, 9, 0.6);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--theme-accent, $nav-blue);
+    outline-offset: 1px;
+  }
+}
+
+.caret {
+  font-size: 0.66rem;
+}
+
+.popover {
+  z-index: 60;
+  width: min(340px, calc(100vw - 16px));
+  background: var(--theme-card-bg, #ffffff);
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 10px;
+  box-shadow: $shadow-lg;
+  overflow: hidden;
+}
+
+.head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 14px;
+  background: var(--bom-card-tint, #f2f4f7);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.headLabel {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--bom-ink-secondary, #676c71);
+  @include truncate;
+}
+
+.reason {
+  font-size: 0.75rem;
+  color: var(--bom-ink-secondary, #676c71);
+}
+
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 320px;
+  overflow-y: auto;
+
+  @include scrollbar-thin(6px);
+}
+
+.option {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  min-height: 44px;
+  padding: 9px 14px;
+  text-align: left;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  cursor: pointer;
+
+  &:hover,
+  &:focus-visible {
+    background: rgba($nav-blue, 0.07);
+    outline: none;
+  }
+}
+
+.optSku {
+  font-family: $font-mono;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--executive-blue, $executive-blue);
+}
+
+.optMeta {
+  font-size: 0.75rem;
+  color: var(--bom-ink-secondary, #676c71);
+}
+
+.optDesc {
+  font-size: 0.75rem;
+  color: var(--bom-ink-secondary, #676c71);
+  @include truncate;
+}
+
+.foot {
+  padding: 8px 14px;
+  font-size: 0.72rem;
+  color: var(--bom-ink-secondary, #676c71);
+  background: var(--bom-card-tint, #f2f4f7);
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+}

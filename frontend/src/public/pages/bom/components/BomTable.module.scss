@@ -36,8 +36,8 @@
   font-family: $font-body;
 
   // Mid band only — card mode below owns its own width.
-  @media (min-width: #{$bp-mobile + 1}) and (max-width: $bp-tablet) {
-    min-width: 700px;
+  @media (min-width: #{$bp-mobile + 1}) and (max-width: #{$bp-desktop}) {
+    min-width: 760px;
   }
 }
 
@@ -470,10 +470,34 @@
   }
 }
 
+.tdSub {
+  min-width: 110px;
+}
+
+.subSku {
+  display: block;
+  font-family: $font-mono;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--theme-text-primary, #2a2a2a);
+  overflow-wrap: anywhere;
+}
+
+.subHint {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--bom-ink-secondary, #676c71);
+  overflow-wrap: anywhere;
+}
+
+.tdMatch {
+  white-space: nowrap;
+}
+
 // ── 769-1024px: hide Description (PartsTable precedent) and give Part real
 // room so MPNs stop wrapping mid-token. Also removes the 3px residual scroll
 // the audit measured at exactly 1024.
-@media (min-width: #{$bp-mobile + 1}) and (max-width: $bp-tablet) {
+@media (min-width: #{$bp-mobile + 1}) and (max-width: #{$bp-desktop}) {
   .thDesc,
   .tdDesc {
     display: none;
@@ -506,8 +530,9 @@
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     grid-template-areas:
+      'sub   sub'
       'part  price'
-      'part  qty'
+      'match qty'
       'desc  desc'
       'refs  refs'
       'rec   alt';
@@ -528,8 +553,31 @@
     display: none;
   }
 
+  .row .tdSub {
+    grid-area: sub;
+    min-width: 0;
+
+    &::before {
+      content: 'Submitted ';
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--bom-ink-secondary, #676c71);
+    }
+  }
+
+  .row .tdSub .subSku {
+    display: inline;
+  }
+
   .row .tdPart {
     grid-area: part;
+  }
+
+  .row .tdMatch {
+    grid-area: match;
+    white-space: normal;
   }
 
   .row .tdPrice {

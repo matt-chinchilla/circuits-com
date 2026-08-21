@@ -137,6 +137,9 @@ function parseRow(value: unknown): BomRow | null {
   return {
     index,
     status: status as BomRowStatus,
+    // Defensive like everything else here: an old share (pre-similar) simply
+    // has no picker options, which renders as a plain badge.
+    similar: Array.isArray(raw.similar) ? (raw.similar as BomRow['similar']) : [],
     approx_reason: asText(raw.approx_reason),
     package_warning: asText(raw.package_warning),
     resolve_query: asText(raw.resolve_query),

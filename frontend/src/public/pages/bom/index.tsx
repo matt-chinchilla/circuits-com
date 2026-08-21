@@ -137,6 +137,62 @@ export default function BomPage() {
   // table is priced and readable with both of them on screen.
   const [resolveNote, setResolveNote] = useState<string | null>(null);
   const [resolveError, setResolveError] = useState<string | null>(null);
+
+  /** The Matches column's "Similar" pick: re-match this ONE line by the
+   *  chosen SKU (identity only travels — D7), keep the row's approx framing
+   *  (relative to what was SUBMITTED it is still a substitute), and fold the
+   *  displaced match back into the menu so the choice stays reversible. */
+  const pickSimilar = (rowIndex: number, sku: string) => {
+    const line = rows.find((r) => r.index === rowIndex);
+    bomApi
+      .match([
+        {
+          index: rowIndex,
+          mpn: sku,
+          value: null,
+          footprint: line?.footprint ?? null,
+          description: null,
+          manufacturer: null,
+        },
+      ])
+      .then(([fresh]) => {
+        if (fresh == null || fresh.part == null) return;
+        setRows((prev) =>
+          prev.map((r) => {
+            if (r.index !== rowIndex || r.server == null) return r;
+            const displaced = r.server.part;
+            const keptSimilar = [
+              ...(displaced != null
+                ? [
+                    {
+                      id: displaced.id,
+                      sku: displaced.sku,
+                      manufacturer_name: displaced.manufacturer_name,
+                      description: displaced.description,
+                      package: displaced.package,
+                      lifecycle_status: displaced.lifecycle_status,
+                      lifecycle_verified: displaced.lifecycle_verified,
+                    },
+                  ]
+                : []),
+              ...r.server.similar,
+            ].filter((s) => s.sku !== sku);
+            return {
+              ...r,
+              server: {
+                ...fresh,
+                status: 'approx' as const,
+                approx_reason: 'your pick — similar part',
+                similar: keptSimilar,
+              },
+            };
+          }),
+        );
+      })
+      .catch(() => {
+        setResolveError('Could not switch to that part — try again in a moment.');
+      });
+  };
   const sourceText = useRef('');
 
   // The share view is its own small machine: one GET, then either a read-only
@@ -444,6 +500,7 @@ export default function BomPage() {
                 rows={rows}
                 buildQty={buildQty}
                 onBuildQtyChange={setBuildQty}
+                onPickSimilar={null}
                 includeDnp={includeDnp}
                 onIncludeDnpChange={setIncludeDnp}
               />
@@ -520,6 +577,7 @@ export default function BomPage() {
                     rows={rows}
                     buildQty={buildQty}
                     onBuildQtyChange={setBuildQty}
+                    onPickSimilar={pickSimilar}
                     includeDnp={includeDnp}
                     onIncludeDnpChange={setIncludeDnp}
                   />

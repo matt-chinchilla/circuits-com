@@ -54,6 +54,10 @@ class LineMatch:
     part: Part | None
     approx_reason: str | None
     resolve_query: str | None
+    # The APPROX ladder's ranked runner-ups (best excluded) — the "Similar"
+    # column's comparable options. Always empty for exact/resolve/none: a
+    # perfect match needs no menu (owner spec 2026-08-21).
+    candidates: tuple[Part, ...] = ()
 
 
 def _total_stock(part: Part) -> int:
@@ -110,7 +114,7 @@ def match_line(db: Session, mpn: str | None, value: str | None, footprint: str |
                 if best.sku.upper().startswith(up)
                 else "base part of the pasted ordering code"
             )
-            return LineMatch("approx", best, reason, None)
+            return LineMatch("approx", best, reason, None, tuple(candidates[1:9]))
 
     return LineMatch("resolve", None, None, wanted)
 
@@ -253,6 +257,20 @@ def _offers_for_part(db: Session, part: Part) -> tuple[list[dict], dict[str, Off
 _TIER_NAME = {0: "platinum", 1: "gold", 2: "silver"}
 
 
+def _similar_stub(part: Part) -> dict:
+    """A light row for the Similar picker — identity only. Picking one
+    re-matches the line by this SKU, which brings the full offer set."""
+    return {
+        "id": str(part.id),
+        "sku": part.sku,
+        "manufacturer_name": part.manufacturer_name,
+        "description": part.description,
+        "package": part.package,
+        "lifecycle_status": part.lifecycle_status,
+        "lifecycle_verified": part.lifecycle_verified_at is not None,
+    }
+
+
 def build_row(
     db: Session,
     index: int,
@@ -261,6 +279,7 @@ def build_row(
     approx_reason: str | None,
     resolve_query: str | None,
     line_package: str | None,
+    similar_parts: list[Part] | None = None,
 ) -> dict:
     row: dict = {
         "index": index,
@@ -271,6 +290,7 @@ def build_row(
         "part": None,
         "recommended_supplier_id": None,
         "offers": [],
+        "similar": [_similar_stub(p) for p in similar_parts or []],
     }
     if part is None:
         return row
