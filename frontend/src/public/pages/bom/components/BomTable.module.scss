@@ -14,8 +14,11 @@
   gap: 16px;
 }
 
-// Always scrollable: eight columns cannot fit a phone, and the alternative is
-// hiding the price column, which spec §7.7 forbids at any width.
+// >1024px: the full eight-column table. 769-1024: Description hides (the
+// PartsTable precedent) so part + price stay co-visible without a long swipe.
+// <=768px: rows reflow into CARDS (below) — spec §7.7's "prices are never
+// hidden" is a measured rule, and the 2026-08-21 mobile audit showed a
+// scroll-table puts the price 1.9 screen-widths away at 320px.
 .tableWrap {
   @include card-base;
 
@@ -32,15 +35,16 @@
   border-spacing: 0;
   font-family: $font-body;
 
-  @media (max-width: $bp-tablet) {
-    min-width: 880px;
+  // Mid band only — card mode below owns its own width.
+  @media (min-width: #{$bp-mobile + 1}) and (max-width: $bp-tablet) {
+    min-width: 700px;
   }
 }
 
 .th {
   padding: 11px 14px;
   font-family: $font-body;
-  font-size: 0.72rem;
+  font-size: 0.8rem; // audit floor: these headers measured 11.5px
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -228,7 +232,7 @@
 .dnpChip {
   padding: 2px 7px;
   font-family: $font-mono;
-  font-size: 0.64rem;
+  font-size: 0.7rem; // audit floor (badge-class chip)
   font-weight: 700;
   letter-spacing: 0.05em;
   color: var(--bom-ink-secondary, #676c71);
@@ -324,14 +328,14 @@
 }
 
 .supplierMeta {
-  font-size: 0.74rem;
+  font-size: 0.75rem; // audit floor: stock/staleness is decision data
   color: var(--bom-ink-secondary, #676c71);
 }
 
 .tierBadge {
   align-self: flex-start;
   padding: 2px 7px;
-  font-size: 0.64rem;
+  font-size: 0.7rem; // audit floor
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -463,5 +467,106 @@
 
   .desc {
     max-width: 260px;
+  }
+}
+
+// ── 769-1024px: hide Description (PartsTable precedent) and give Part real
+// room so MPNs stop wrapping mid-token. Also removes the 3px residual scroll
+// the audit measured at exactly 1024.
+@media (min-width: #{$bp-mobile + 1}) and (max-width: $bp-tablet) {
+  .thDesc,
+  .tdDesc {
+    display: none;
+  }
+
+  .tdPart {
+    min-width: 150px;
+  }
+}
+
+// ── <=768px: the card reflow. Columns are abandoned entirely — each row is a
+// grid card whose TOP LINE pairs the part identity with its price, which is
+// the whole point (§7.7). The thead has no role in a card list.
+@include responsive($bp-mobile) {
+  .table {
+    display: block;
+    min-width: 0;
+    width: 100%;
+  }
+
+  .table thead {
+    display: none;
+  }
+
+  .table tbody {
+    display: block;
+  }
+
+  .row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'part  price'
+      'part  qty'
+      'desc  desc'
+      'refs  refs'
+      'rec   alt';
+    gap: 4px 12px;
+    padding: 12px 14px;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  }
+
+  .row .td {
+    display: block;
+    padding: 0;
+    border: 0;
+    min-width: 0;
+  }
+
+  // The index adds nothing to a card the reader scrolls one at a time.
+  .row .tdNum {
+    display: none;
+  }
+
+  .row .tdPart {
+    grid-area: part;
+  }
+
+  .row .tdPrice {
+    grid-area: price;
+    text-align: right;
+  }
+
+  .row .tdQty {
+    grid-area: qty;
+    text-align: right;
+
+    &::before {
+      content: 'Qty ';
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--bom-ink-secondary, #676c71);
+    }
+  }
+
+  .row .tdDesc {
+    grid-area: desc;
+  }
+
+  .row .tdRefs {
+    grid-area: refs;
+  }
+
+  .row .tdRec {
+    grid-area: rec;
+    align-self: center;
+  }
+
+  .row .tdAlt {
+    grid-area: alt;
+    align-self: center;
+    justify-self: end;
   }
 }

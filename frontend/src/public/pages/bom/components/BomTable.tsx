@@ -315,7 +315,7 @@ export default function BomTable({
                 >
                   <td className={`${styles.td} ${styles.tdNum}`}>{row.index}</td>
 
-                  <td className={styles.td}>
+                  <td className={`${styles.td} ${styles.tdPart}`}>
                     <div className={styles.partCell}>
                       <span
                         className={`${styles.rail} ${rail.className}`}
@@ -353,7 +353,7 @@ export default function BomTable({
                     )}
                   </td>
 
-                  <td className={`${styles.td} ${styles.tdRight}`}>
+                  <td className={`${styles.td} ${styles.tdRight} ${styles.tdQty}`}>
                     <span className={styles.qtyBig}>{lineQty.toLocaleString('en-US')}</span>
                     {buildQty > 1 && (
                       <span className={styles.qtyMath}>
@@ -390,7 +390,7 @@ export default function BomTable({
                     )}
                   </td>
 
-                  <td className={styles.td}>
+                  <td className={`${styles.td} ${styles.tdRec}`}>
                     {chosen == null ? (
                       <>
                         <span className={styles.stateNote}>{emptyRecommendation(view)}</span>
@@ -430,7 +430,7 @@ export default function BomTable({
                     )}
                   </td>
 
-                  <td className={`${styles.td} ${styles.tdRight}`}>
+                  <td className={`${styles.td} ${styles.tdRight} ${styles.tdPrice}`}>
                     {unitPrice == null || extPrice == null ? (
                       <span className={styles.muted}>—</span>
                     ) : (
@@ -441,7 +441,7 @@ export default function BomTable({
                     )}
                   </td>
 
-                  <td className={`${styles.td} ${styles.tdRight}`}>
+                  <td className={`${styles.td} ${styles.tdRight} ${styles.tdAlt}`}>
                     {offers.length > 0 ? (
                       <AlternatesDropdown
                         offers={offers}
