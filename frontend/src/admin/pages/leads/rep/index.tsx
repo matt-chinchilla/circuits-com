@@ -10,15 +10,14 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
 import Breadcrumbs from '@admin/components/Breadcrumbs';
+import { useAuth } from '@admin/contexts/AuthContext';
 import { adminApi } from '@admin/services/adminApi';
-import { apiErrorDetail } from '@admin/services/apiError';
 import type { RepActivity } from '@admin/types/leads';
 
+import { classifyLeadsError, SESSION_EXPIRED_MESSAGE } from '../loadError';
 import { OUTCOME_META, OUTCOME_ORDER, outcomeInkVars } from '../outcome';
 import OutcomeDisc from '../OutcomeDisc';
 import styles from './RepPage.module.scss';
-
-const DEMO_NO_LEADS_DETAIL = 'demo_account_no_leads';
 
 function formatStamp(iso: string): string {
   // Offset-less (naive) values are UTC by intent — see the same guard on the
@@ -41,6 +40,9 @@ export default function RepPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [demoBlocked, setDemoBlocked] = useState(false);
+  // A 401 — see ../loadError.ts.
+  const [sessionExpired, setSessionExpired] = useState(false);
+  const { logout } = useAuth();
 
   useEffect(() => {
     if (!username) return undefined;
@@ -55,12 +57,11 @@ export default function RepPage() {
       })
       .catch((err) => {
         if (cancelled) return;
-        if (apiErrorDetail(err) === DEMO_NO_LEADS_DETAIL) {
-          setDemoBlocked(true);
-          return;
-        }
-        console.error('[RepPage] load failed', err);
-        setError(apiErrorDetail(err) ?? 'Failed to load this rep\u2019s activity.');
+        const failure = classifyLeadsError(err, 'Could not load this rep\u2019s activity.');
+        setDemoBlocked(failure.kind === 'demo');
+        setSessionExpired(failure.kind === 'session');
+        setError(failure.kind === 'failed' ? failure.message : '');
+        if (failure.kind === 'failed') console.error('[RepPage] load failed', err);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -70,11 +71,32 @@ export default function RepPage() {
     };
   }, [username]);
 
+  // Same recovery as the list and the profile: clear the session the 401 proved
+  // dead so ProtectedRoute can bounce to the sign-in screen.
+  useEffect(() => {
+    if (!sessionExpired) return;
+    if (localStorage.getItem('admin_token') === null) logout();
+  }, [sessionExpired, logout]);
+
   const crumbs = (
     <Breadcrumbs
       items={[{ label: 'Leads', href: '/admin/leads' }, { label: username ?? 'Sales rep' }]}
     />
   );
+
+  if (sessionExpired) {
+    return (
+      <div className={styles.page}>
+        {crumbs}
+        <div className={styles.panel}>
+          <div className={styles.blockedPanel}>
+            <p className={styles.blockedTitle}>Signed out</p>
+            <p className={styles.blockedBody}>{SESSION_EXPIRED_MESSAGE}</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (demoBlocked) {
     return (

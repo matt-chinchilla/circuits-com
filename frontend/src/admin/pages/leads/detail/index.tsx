@@ -18,17 +18,16 @@ import { Link, useParams } from 'react-router-dom';
 import { Pencil, X } from 'lucide-react';
 
 import Breadcrumbs from '@admin/components/Breadcrumbs';
+import { useAuth } from '@admin/contexts/AuthContext';
 import { adminApi } from '@admin/services/adminApi';
-import { apiErrorDetail } from '@admin/services/apiError';
 import type { AdminLeadDetail } from '@admin/types/leads';
 import { safeHttpUrl } from '@shared/utils/url';
 
+import { classifyLeadsError, SESSION_EXPIRED_MESSAGE } from '../loadError';
 import { OUTCOME_META, outcomeInkVars } from '../outcome';
 import OutcomeDisc from '../OutcomeDisc';
 import OutcomeMenu from '../OutcomeMenu';
 import styles from './LeadDetail.module.scss';
-
-const DEMO_NO_LEADS_DETAIL = 'demo_account_no_leads';
 
 // The writable subset — `LeadUpdate` in routes/admin_leads.py. Anything outside
 // it is ignored server-side, so the form must not pretend to own it.
@@ -108,6 +107,9 @@ export default function LeadDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [demoBlocked, setDemoBlocked] = useState(false);
+  // A 401 — see ../loadError.ts. Recovery, not a message.
+  const [sessionExpired, setSessionExpired] = useState(false);
+  const { logout } = useAuth();
 
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<EnrichForm | null>(null);
@@ -133,12 +135,11 @@ export default function LeadDetailPage() {
       })
       .catch((err) => {
         if (cancelled) return;
-        if (apiErrorDetail(err) === DEMO_NO_LEADS_DETAIL) {
-          setDemoBlocked(true);
-          return;
-        }
-        console.error('[LeadDetailPage] load failed', err);
-        setError(apiErrorDetail(err) ?? 'Failed to load this lead.');
+        const failure = classifyLeadsError(err, 'Could not load this lead.');
+        setDemoBlocked(failure.kind === 'demo');
+        setSessionExpired(failure.kind === 'session');
+        setError(failure.kind === 'failed' ? failure.message : '');
+        if (failure.kind === 'failed') console.error('[LeadDetailPage] load failed', err);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -147,6 +148,14 @@ export default function LeadDetailPage() {
       cancelled = true;
     };
   }, [id]);
+
+  // The interceptor already dropped the dead token; clearing AuthContext is
+  // what actually bounces the console to the sign-in screen (logout(), never a
+  // navigate() — LoginPage sends an authenticated visitor straight back).
+  useEffect(() => {
+    if (!sessionExpired) return;
+    if (localStorage.getItem('admin_token') === null) logout();
+  }, [sessionExpired, logout]);
 
   const applyDetail = (detail: AdminLeadDetail) => {
     setLead(detail);
@@ -170,11 +179,34 @@ export default function LeadDetailPage() {
       applyDetail(updated);
       setEditing(false);
     } catch (err) {
-      setSaveError(apiErrorDetail(err) ?? 'Could not save those details.');
+      const failure = classifyLeadsError(err, 'Could not save those details.');
+      if (failure.kind === 'session') setSessionExpired(true);
+      setSaveError(failure.message);
     } finally {
       setSaving(false);
     }
   };
+
+  if (sessionExpired) {
+    return (
+      <div className={styles.page}>
+        <Breadcrumbs items={[{ label: 'Leads', href: '/admin/leads' }, { label: 'Lead' }]} />
+        <div className={styles.panel}>
+          <div className={styles.blockedPanel}>
+            <p className={styles.blockedTitle}>Signed out</p>
+            <p className={styles.blockedBody}>{SESSION_EXPIRED_MESSAGE}</p>
+            <button
+              type="button"
+              className={`${styles.btn} ${styles.btnPrimary}`}
+              onClick={logout}
+            >
+              Sign in again
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (demoBlocked) {
     return (

@@ -29,8 +29,8 @@ import {
 import { createPortal } from 'react-dom';
 
 import { adminApi } from '@admin/services/adminApi';
-import { apiErrorDetail } from '@admin/services/apiError';
 import type { AdminLeadDetail, LeadOutcome } from '@admin/types/leads';
+import { classifyLeadsError } from './loadError';
 import { OUTCOME_META, OUTCOME_ORDER, outcomeInkVars } from './outcome';
 import styles from './OutcomeMenu.module.scss';
 
@@ -180,7 +180,8 @@ export default function OutcomeMenu({
       onRecorded(detail);
       close();
     } catch (err) {
-      setError(apiErrorDetail(err) ?? 'Could not record that outcome. Try again.');
+      // Never the backend's own auth prose — see ./loadError.ts.
+      setError(classifyLeadsError(err, 'Could not record that outcome. Try again.').message);
       setBusy(false);
     }
   };

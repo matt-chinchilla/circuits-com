@@ -58,6 +58,29 @@ class TestGate:
         assert client.get(f"/api/admin/leads/{lead.id}", headers=h).status_code == 403
         assert client.get("/api/admin/leads/reps/admin", headers=h).status_code == 403
 
+    def test_forced_password_change_blocks_reads_and_writes(self, client, leads_db, auth_header):
+        """The leads router was the ONE admin surface that skipped the forced-reset
+        gate: it depended on `get_authenticated_user`, where the flag is only
+        enforced by `get_current_user`. A flagged staffer could read the roster
+        and PATCH a lead while every other admin page 403'd them."""
+        from app.models import User
+
+        h = auth_header()
+        user = leads_db.query(User).filter_by(username="admin").first()
+        user.must_change_password = True
+        leads_db.commit()
+        lead = leads_db.query(Lead).first()
+
+        read = client.get("/api/admin/leads/", headers=h)
+        assert read.status_code == 403
+        assert read.json()["detail"] == "password_change_required"
+
+        write = client.patch(
+            f"/api/admin/leads/{lead.id}", json={"notes": "nope"}, headers=h
+        )
+        assert write.status_code == 403
+        assert write.json()["detail"] == "password_change_required"
+
     def test_admin_sees_data(self, client, leads_db, auth_header):
         resp = client.get("/api/admin/leads/", headers=auth_header())
         assert resp.status_code == 200

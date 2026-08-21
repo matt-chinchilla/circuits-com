@@ -466,6 +466,62 @@
   color: var(--a-fg3);
 }
 
+// ─── Load failure / dead session ────────────────────────────────────────────
+//
+// A failed load must not be mistaken for an empty roster, so it gets a bar of
+// its own above the table rather than a sentence in the empty-row cell. The
+// message here is ALWAYS the page's own copy or deliberate server copy — the
+// backend's internal auth prose is filtered out in `../loadError.ts`.
+
+.loadErrorBar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--a-border-soft);
+  // Same tint the sync console uses for a failed run.
+  background: rgba(220, 38, 38, 0.1);
+}
+
+.loadErrorText {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--a-fg2);
+}
+
+// Shared by the load-failure Retry and the dead-session "Sign in again".
+.recoverBtn {
+  flex: 0 0 auto;
+  margin-top: 16px;
+  padding: 7px 14px;
+  border: 1px solid var(--a-border);
+  border-radius: 8px;
+  background: var(--a-card);
+  color: var(--a-fg2);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+
+  &:hover:not(:disabled) {
+    background: var(--a-hover);
+    border-color: var(--a-fg4);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+}
+
+.loadErrorBar .recoverBtn {
+  margin-top: 0;
+}
+
 // ─── Skeletons ──────────────────────────────────────────────────────────────
 //
 // REAL heights: the toolbar and the table head paint instantly above these, so

@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models import Lead, LeadContact
 from app.models.user import User
-from app.services.auth_service import get_authenticated_user, is_demo_user
+from app.services.auth_service import get_current_user, is_demo_user
 from app.services.leads import VALID_OUTCOMES, record_outcome
 
 router = APIRouter(prefix="/api/admin/leads", tags=["admin-leads"])
@@ -28,8 +28,17 @@ router = APIRouter(prefix="/api/admin/leads", tags=["admin-leads"])
 DEMO_LEADS_FORBIDDEN_DETAIL = "demo_account_no_leads"
 
 
-def require_leads_access(user: User = Depends(get_authenticated_user)) -> User:
-    """Bearer-authed AND not demo — for READS as well as writes."""
+def require_leads_access(user: User = Depends(get_current_user)) -> User:
+    """Bearer-authed AND not demo — for READS as well as writes.
+
+    Depends on ``get_current_user``, NOT ``get_authenticated_user``: the forced
+    password-change gate (`must_change_password` → 403
+    ``password_change_required``) lives there, and depending on the ungated
+    variant made this the ONE admin router a flagged staffer could still read
+    and write while every other page refused them. The demo refusal below is
+    still needed on top — ``get_current_user`` only blocks demo WRITES, and
+    this roster must stay closed to demo on reads too.
+    """
     if is_demo_user(user):
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail=DEMO_LEADS_FORBIDDEN_DETAIL)
     return user

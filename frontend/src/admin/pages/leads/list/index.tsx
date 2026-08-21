@@ -23,12 +23,13 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Search, X } from 'lucide-react';
 
+import { useAuth } from '@admin/contexts/AuthContext';
 import { adminApi } from '@admin/services/adminApi';
-import { apiErrorDetail } from '@admin/services/apiError';
 import type { AdminLead, AdminLeadDetail, LeadListResponse, LeadOutcome } from '@admin/types/leads';
 
 import CatalogSwitch from '../../manufacturers/CatalogSwitch';
 import ColumnHeader, { type SortDir } from '../../manufacturers/ColumnHeader';
+import { classifyLeadsError, SESSION_EXPIRED_MESSAGE } from '../loadError';
 import { OUTCOME_META, OUTCOME_ORDER, outcomeInkVars } from '../outcome';
 import OutcomeDisc from '../OutcomeDisc';
 import OutcomeMenu from '../OutcomeMenu';
@@ -37,9 +38,6 @@ import styles from './LeadsPage.module.scss';
 const PER_PAGE = 50;
 const SEARCH_DEBOUNCE_MS = 300;
 const SKELETON_ROWS = 8;
-
-/** The exact 403 detail `require_leads_access` sends for the demo account. */
-const DEMO_NO_LEADS_DETAIL = 'demo_account_no_leads';
 
 // Server sort keys — `_SORTS` in routes/admin_leads.py. Anything else silently
 // falls back to company_name server-side, so this union IS the contract.
@@ -107,6 +105,13 @@ export default function LeadsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [demoBlocked, setDemoBlocked] = useState(false);
+  // A 401 — the token the console is still rendering behind has been retired.
+  // Held separately from `error` because it is not a message to read past, it
+  // is a state to recover from.
+  const [sessionExpired, setSessionExpired] = useState(false);
+  // Bumped by the Retry button; only a fetch dependency.
+  const [reloadNonce, setReloadNonce] = useState(0);
+  const { logout } = useAuth();
 
   // What the admin types vs. what reaches the server. One request per keystroke
   // over a 359-row roster is a self-inflicted DoS.
@@ -152,18 +157,16 @@ export default function LeadsPage() {
         setData(res);
         setError('');
         setDemoBlocked(false);
+        setSessionExpired(false);
       })
       .catch((err) => {
         if (cancelled) return;
-        if (apiErrorDetail(err) === DEMO_NO_LEADS_DETAIL) {
-          setDemoBlocked(true);
-          setData(null);
-          setError('');
-          return;
-        }
-        console.error('[LeadsPage] load failed', err);
-        setError(apiErrorDetail(err) ?? 'Failed to load leads.');
+        const failure = classifyLeadsError(err, 'Could not load the call list.');
         setData(null);
+        setDemoBlocked(failure.kind === 'demo');
+        setSessionExpired(failure.kind === 'session');
+        setError(failure.kind === 'failed' ? failure.message : '');
+        if (failure.kind === 'failed') console.error('[LeadsPage] load failed', err);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -171,7 +174,19 @@ export default function LeadsPage() {
     return () => {
       cancelled = true;
     };
-  }, [page, q, outcomeFilter, tierFilter, enrichOnly, sortKey, sortDir]);
+  }, [page, q, outcomeFilter, tierFilter, enrichOnly, sortKey, sortDir, reloadNonce]);
+
+  // RECOVERY, not just a message. The adminApi interceptor already dropped the
+  // dead token, but `AuthContext.user` is React state no 401 ever cleared — so
+  // `isAuthenticated` stayed true and ProtectedRoute kept rendering a console
+  // for a session that no longer exists. `logout()` clears that state and the
+  // route bounces to the sign-in screen. It must go through logout() and not a
+  // navigate(): LoginPage sends an authenticated visitor back to /admin, so a
+  // route push while `user` is still set would ping-pong.
+  useEffect(() => {
+    if (!sessionExpired) return;
+    if (localStorage.getItem('admin_token') === null) logout();
+  }, [sessionExpired, logout]);
 
   // Changing what the list CONTAINS invalidates the page number. Deliberately
   // NOT depending on `setSearchParams` — its identity changes on every URL
@@ -254,6 +269,27 @@ export default function LeadsPage() {
       </div>
     </header>
   );
+
+  // The dead-session screen. The effect above is already signing the retired
+  // token out, so in practice this paints for a frame before ProtectedRoute
+  // redirects — the button is the manual door for the case where the token is
+  // somehow still in storage.
+  if (sessionExpired) {
+    return (
+      <div className={styles.page}>
+        {head}
+        <div className={styles.panel}>
+          <div className={styles.blockedPanel}>
+            <p className={styles.blockedTitle}>Signed out</p>
+            <p className={styles.blockedBody}>{SESSION_EXPIRED_MESSAGE}</p>
+            <button type="button" className={styles.recoverBtn} onClick={logout}>
+              Sign in again
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (demoBlocked) {
     return (
@@ -363,6 +399,23 @@ export default function LeadsPage() {
             )}
           </div>
         </div>
+
+        {error && (
+          // A load failure used to render as "No rows / 0 leads", which is what
+          // let a populated roster read as an empty one. It gets its own panel,
+          // above the table, with the way out.
+          <div className={styles.loadErrorBar} role="alert">
+            <span className={styles.loadErrorText}>{error}</span>
+            <button
+              type="button"
+              className={styles.recoverBtn}
+              onClick={() => setReloadNonce((n) => n + 1)}
+              disabled={loading}
+            >
+              Retry
+            </button>
+          </div>
+        )}
 
         <div className={styles.tableWrap}>
           <table className={styles.table}>
@@ -590,7 +643,7 @@ export default function LeadsPage() {
                 <tr>
                   <td colSpan={9} className={styles.emptyRow}>
                     {error
-                      ? error
+                      ? 'The list could not be loaded.'
                       : filtersActive
                         ? 'No leads match the current filters.'
                         : 'No leads yet.'}
