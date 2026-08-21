@@ -13,11 +13,10 @@ import PageHead from '@public/components/PageHead';
 import { STATIC_PAGE_SEO } from '@public/services/seoRoutes';
 import SkeletonLoader from '@public/components/widgets/SkeletonLoader';
 import GlowButton from '@public/components/widgets/GlowButton';
-import AnimatedLink from '@public/components/widgets/AnimatedLink';
-import Icon from '@shared/components/Icon';
+import CategoryCard from '@public/components/widgets/CategoryCard';
 import { categoryPath } from '@shared/utils/categoryPath';
 import { api } from '@public/services/api';
-import type { SearchCategoryHit, SearchResultsV2 } from '@public/types/search';
+import type { SearchResultsV2 } from '@public/types/search';
 import type { Supplier } from '@public/types/supplier';
 import SrPartsTable from './components/SrPartsTable';
 import { SrSupCard, SrSupTile } from './components/SrSupCards';
@@ -41,57 +40,6 @@ function EmptyMark() {
         <line x1="42" y1="42" x2="56" y2="56" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
         <line x1="20" y1="28" x2="36" y2="28" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
       </svg>
-    </div>
-  );
-}
-
-// Category result card — the homepage cat-card look driven by the v2
-// CategoryHit (children arrive matched-first from the server). Kit caps the
-// chips at 5 with a "More…" overflow chip when 7+ exist.
-function SrCatCard({ hit }: { hit: SearchCategoryHit }) {
-  const navigate = useNavigate();
-  const to = categoryPath(hit.slug, hit.parent_slug);
-  const maxSubs = 5;
-  const overflow = hit.children.length > maxSubs + 1;
-  const shown = overflow ? hit.children.slice(0, maxSubs) : hit.children.slice(0, maxSubs + 1);
-
-  return (
-    <div
-      className={styles.catCard}
-      role="link"
-      tabIndex={0}
-      onClick={(e) => {
-        if ((e.target as HTMLElement).closest('a')) return;
-        navigate(to);
-      }}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter') navigate(to);
-      }}
-    >
-      <div className={styles.catHead}>
-        <span className={styles.catIcon} aria-hidden="true">
-          <Icon name={hit.icon} />
-        </span>
-        <h3 className={styles.catName}>{hit.name}</h3>
-      </div>
-      {hit.children.length > 0 && (
-        <div className={styles.catSubs}>
-          {shown.map((sub) => (
-            <AnimatedLink
-              key={sub.slug}
-              to={categoryPath(sub.slug, hit.slug)}
-              className={styles.catSub}
-            >
-              {sub.name}
-            </AnimatedLink>
-          ))}
-          {overflow && (
-            <AnimatedLink to={to} className={`${styles.catSub} ${styles.catSubMore}`}>
-              More&hellip;
-            </AnimatedLink>
-          )}
-        </div>
-      )}
     </div>
   );
 }
@@ -348,9 +296,22 @@ export default function SearchPage() {
                         <b className={styles.srN}>{results.categories.length}</b>
                       </span>
                     </div>
+                    {/* The homepage cat-card verbatim (shared component) —
+                        children arrive matched-first from the server. */}
                     <div className={styles.catGrid}>
                       {results.categories.map((c) => (
-                        <SrCatCard key={c.id} hit={c} />
+                        <CategoryCard
+                          key={c.id}
+                          to={categoryPath(c.slug, c.parent_slug)}
+                          icon={c.icon}
+                          name={c.name}
+                          subs={c.children.map((sub) => ({
+                            key: sub.slug,
+                            name: sub.name,
+                            to: categoryPath(sub.slug, c.slug),
+                          }))}
+                          prefetchSlug={c.slug}
+                        />
                       ))}
                     </div>
                   </section>

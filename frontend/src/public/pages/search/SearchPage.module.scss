@@ -240,8 +240,9 @@
 }
 
 // ─── Category result cards ──────────────────────────────────────────────────
-// The homepage cat-card look (card-base + header + AnimatedLink pills) in the
-// kit's tightened .sr-cat-grid (250px floor vs the homepage's 300px).
+// The cards themselves are the shared @public/components/widgets/CategoryCard
+// (the homepage cat-card verbatim); only the kit's tightened .sr-cat-grid
+// (250px floor vs the homepage's 300px) lives here.
 
 .catGrid {
   display: grid;
@@ -253,60 +254,6 @@
     grid-template-columns: 1fr;
     grid-auto-rows: auto;
   }
-}
-
-.catCard {
-  @include card-base;
-  padding: 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  cursor: pointer;
-  transition: transform $transition-normal, box-shadow $transition-normal;
-
-  @media (hover: hover) {
-    &:hover {
-      transform: translateY(-4px);
-      box-shadow: $shadow-lg;
-    }
-  }
-}
-
-.catHead {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.catIcon {
-  font-size: 1.6rem;
-  line-height: 1;
-  flex-shrink: 0;
-}
-
-.catName {
-  font-family: $font-heading;
-  font-size: 1.08rem;
-  font-weight: 600;
-  color: var(--fg1);
-  margin: 0;
-}
-
-.catSubs {
-  display: flex;
-  flex-wrap: wrap;
-  align-content: flex-start;
-  gap: 8px;
-  flex: 1;
-}
-
-.catSub {
-  font-size: 0.8rem;
-  padding: 4px 12px;
-}
-
-.catSubMore {
-  font-style: italic;
 }
 
 // ─── Empty / error / prompt card ────────────────────────────────────────────
