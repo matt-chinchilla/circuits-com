@@ -540,18 +540,14 @@ export default function BomPage() {
 
           {!isShare && phase === 'table' && parsed != null && (
             <section className={styles.tablePhase}>
-              <div className={styles.tableHead}>
-                <div>
-                  <h2 className={styles.phaseTitle}>Your BOM</h2>
-                  <p className={styles.phaseText}>
-                    Read {parsed.lines.length.toLocaleString('en-US')}{' '}
-                    {parsed.lines.length === 1 ? 'line' : 'lines'}
-                    {sourceName != null ? ` from ${sourceName}` : ''}.
-                  </p>
-                </div>
-                <button type="button" className={styles.linkBtn} onClick={startOver}>
-                  Start over
-                </button>
+              <div className={styles.bomHead}>
+                <h2 className={styles.bomTitle}>Bill of Materials</h2>
+                {sourceName != null && <span className={styles.bomFile}>{sourceName}</span>}
+                <p className={styles.bomSub}>
+                  {parsed.lines.length.toLocaleString('en-US')}{' '}
+                  {parsed.lines.length === 1 ? 'line' : 'lines'} priced across 57 distributors.
+                  Your file stays in your browser.
+                </p>
               </div>
 
               {parsed.warnings.map((warning) => (
@@ -591,7 +587,12 @@ export default function BomPage() {
                     includeDnp={includeDnp}
                     onIncludeDnpChange={setIncludeDnp}
                   />
-                  <ShareBar rows={rows} buildQty={buildQty} includeDnp={includeDnp} />
+                  <ShareBar
+                    rows={rows}
+                    buildQty={buildQty}
+                    includeDnp={includeDnp}
+                    onChangeFile={startOver}
+                  />
                 </>
               )}
             </section>

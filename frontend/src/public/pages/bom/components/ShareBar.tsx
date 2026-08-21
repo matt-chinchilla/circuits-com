@@ -161,9 +161,12 @@ interface ShareBarProps {
   rows: TableRow[];
   buildQty: number;
   includeDnp: boolean;
+  /** "Change file" — hands the page back to the intake (the canvas toolbar's
+   *  third control; it replaced the old Start-over text link). */
+  onChangeFile: () => void;
 }
 
-export default function ShareBar({ rows, buildQty, includeDnp }: ShareBarProps) {
+export default function ShareBar({ rows, buildQty, includeDnp, onChangeFile }: ShareBarProps) {
   const [state, setState] = useState<ShareState>('idle');
   const [link, setLink] = useState<string | null>(null);
   const [expiresAt, setExpiresAt] = useState<string | null>(null);
@@ -204,8 +207,24 @@ export default function ShareBar({ rows, buildQty, includeDnp }: ShareBarProps) 
           type="button"
           className={styles.exportBtn}
           onClick={() => downloadCsv(toCsv(csvRows(rows, buildQty, includeDnp)))}
+          title="The CSV is written here in your browser — the file never leaves it."
         >
-          Export CSV
+          <svg
+            width="15"
+            height="15"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <path d="m7 10 5 5 5-5" />
+            <path d="M12 15V3" />
+          </svg>
+          Export priced BOM
         </button>
 
         {state !== 'done' && (
@@ -215,11 +234,27 @@ export default function ShareBar({ rows, buildQty, includeDnp }: ShareBarProps) 
             disabled={state === 'creating'}
             onClick={() => (state === 'arming' ? createShare() : setState('arming'))}
           >
+            <svg
+              width="15"
+              height="15"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.9"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <circle cx="18" cy="5" r="3" />
+              <circle cx="6" cy="12" r="3" />
+              <circle cx="18" cy="19" r="3" />
+              <path d="m8.6 13.5 6.8 4M15.4 6.5 8.6 10.5" />
+            </svg>
             {state === 'creating'
               ? CREATING_LABEL
               : state === 'arming'
                 ? 'Create the link'
-                : 'Share this BOM'}
+                : 'Share a link'}
           </button>
         )}
 
@@ -228,11 +263,25 @@ export default function ShareBar({ rows, buildQty, includeDnp }: ShareBarProps) 
             Cancel
           </button>
         )}
-      </div>
 
-      <p className={styles.note}>
-        The CSV is written here in your browser — the file never leaves it.
-      </p>
+        <button type="button" className={styles.changeBtn} onClick={onChangeFile}>
+          <svg
+            width="15"
+            height="15"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.9"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M3 12a9 9 0 0 1 9-9 9 9 0 0 1 6.7 3L21 8" />
+            <path d="M21 3v5h-5" />
+          </svg>
+          Change file
+        </button>
+      </div>
 
       {/* The disclosure is on screen BEFORE the request, and the request is the
           NEXT click. Nobody publishes their parts list by tapping once. */}

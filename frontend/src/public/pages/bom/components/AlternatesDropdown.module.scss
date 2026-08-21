@@ -1,5 +1,6 @@
 @use '@shared/styles/variables' as *;
 @use '@shared/styles/mixins' as *;
+@use '../bomMaterial' as *;
 
 // The alternates picker. Positioned entirely from inline `position: fixed;
 // top; left` set by the component (portaled to <body>, so the scrolling table
@@ -15,17 +16,8 @@
   font-family: $font-body;
   font-size: 0.8rem;
   line-height: 1;
-  color: var(--executive-blue, $executive-blue);
-  background: rgba($executive-blue, 0.05);
-  border: 1px solid rgba($executive-blue, 0.16);
-  border-radius: 8px;
-  cursor: pointer;
-  transition: background-color 120ms, border-color 120ms;
-
-  &:hover {
-    background: rgba($executive-blue, 0.1);
-    border-color: rgba($executive-blue, 0.3);
-  }
+  // The pf-glass control — the same material as the toolbar's secondaries.
+  @include bom-glass-control;
 
   &:focus-visible {
     outline: 2px solid var(--theme-accent, $nav-blue);
