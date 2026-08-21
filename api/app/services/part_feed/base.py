@@ -26,6 +26,12 @@ class FeedPart:
     # keeps the UI honest-unverified rather than guessing (spec D6).
     lifecycle: str | None = None
     package: str | None = None
+    # Spec-sheet facts (search v2 §1.2): "SMT"/"THT", and tri-state RoHS where
+    # None means the feed said nothing — importers must test `is not None`
+    # (False is a value). `lead_time_days` above doubles as the part-level
+    # value; the listing write keeps consuming the same field.
+    mount: str | None = None
+    rohs: bool | None = None
 
 
 class PartFeedProvider(Protocol):

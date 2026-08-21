@@ -243,6 +243,9 @@ def part_to_dict(part: Part, db: Session | None = None) -> dict:
         "datasheet_url": part.datasheet_url,
         "image_url": part.image_url,
         "lifecycle_status": part.lifecycle_status,
+        "mount": part.mount,
+        "rohs": part.rohs,
+        "lead_time_days": part.lead_time_days,
         "created_at": part.created_at.isoformat() if part.created_at else None,
         "updated_at": part.updated_at.isoformat() if part.updated_at else None,
     }

@@ -482,6 +482,10 @@ class TestSyncSupplierListings:
         supplier, part1 = seeded_db["supplier1"], seeded_db["part1"]
         part1.image_url = "https://cdn.example/original.jpg"
         part1.datasheet_url = "https://cdn.example/original.pdf"
+        # The fake feed row carries lead_time_days=7 — a stampable part-level
+        # fact since migration 039. Pre-store it so this run truly has nothing
+        # new to write (that is what no_data means).
+        part1.lead_time_days = 7
         db.commit()
         listing = seeded_db["listing1"]
         before = (
@@ -932,6 +936,10 @@ class TestGrowCatalog:
         supplier, part1 = seeded_db["supplier1"], seeded_db["part1"]
         part1.image_url = "https://cdn.example/original.jpg"
         part1.datasheet_url = "https://cdn.example/original.pdf"
+        # The fake feed row carries lead_time_days=7 — a stampable part-level
+        # fact since migration 039. Pre-store it so this run truly has nothing
+        # new to write (that is what no_data means).
+        part1.lead_time_days = 7
         db.commit()
         provider = _FakeProvider(
             results_by_keyword={"Clock and Timing": [_feed_part(part1.sku, breaks=False)]}

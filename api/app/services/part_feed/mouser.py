@@ -19,6 +19,7 @@ import httpx
 
 from app.config import settings
 from app.services.part_feed.base import FeedPart, FeedPriceBreak
+from app.services.part_feed.specmap import map_mount, map_rohs
 
 _BASE = "https://api.mouser.com/api/v1"
 _CALL_GAP_SECONDS = 2.1  # ~28/min, under the 30/min ceiling
@@ -38,11 +39,20 @@ def _parse_availability(text: str | None) -> int:
 
 
 def _parse_lead_time(text: str | None) -> int | None:
-    """'14 Days' -> 14; absent/odd -> None."""
+    """'14 Days' -> 14; '6 Weeks' -> 42; bare number -> days; absent/odd -> None.
+
+    Weeks-aware since search v2 (§1.2), deliberately IN PLACE — this is the
+    single home, so PartListing.lead_time_days changes for week-denominated
+    feed values too (6 was wrong; 42 is right)."""
     if not text:
         return None
     m = re.search(r"(\d+)", text)
-    return int(m.group(1)) if m else None
+    if not m:
+        return None
+    days = int(m.group(1))
+    if re.search(r"week", text, re.IGNORECASE):
+        days *= 7
+    return days
 
 
 def _parse_price(text: str | None) -> float | None:
@@ -109,6 +119,8 @@ def part_from_mouser(raw: dict) -> FeedPart | None:
         price_breaks=breaks,
         lifecycle=lifecycle,
         package=package,
+        mount=map_mount(raw.get("ProductAttributes"), package),
+        rohs=map_rohs(raw.get("ROHSStatus")),
     )
 
 

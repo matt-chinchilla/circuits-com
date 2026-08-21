@@ -1,7 +1,7 @@
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import Column, DateTime, Enum, ForeignKey, Index, String, Text, func
+from sqlalchemy import Boolean, Column, DateTime, Enum, ForeignKey, Index, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
@@ -48,6 +48,12 @@ class Part(Base):
     package = Column(String(60), nullable=True)
     # NULL == lifecycle never confirmed by a feed → UI renders hatched (D6).
     lifecycle_verified_at = Column(DateTime(timezone=True), nullable=True)
+    # Spec-sheet facts (migration 039), feed-owned like `package`: "SMT"/"THT"
+    # or NULL (the mapper never guesses), tri-state RoHS where NULL means
+    # unknown — distinct from False — and the manufacturer lead time in days.
+    mount = Column(String(8), nullable=True)
+    rohs = Column(Boolean, nullable=True)
+    lead_time_days = Column(Integer, nullable=True)
     created_at = Column(
         DateTime(timezone=True),
         default=lambda: datetime.now(UTC),

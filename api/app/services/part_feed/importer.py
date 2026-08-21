@@ -143,6 +143,17 @@ def _stamp_feed_facts(part: Part, fp: FeedPart) -> bool:
             part.lifecycle_status = mapped
         part.lifecycle_verified_at = datetime.now(UTC)
         changed = True
+    # Spec fields (migration 039) — `is not None`, NEVER truthiness: rohs=False
+    # is a value and must be stored; feed absence (None) leaves values alone.
+    if fp.mount is not None and part.mount != fp.mount:
+        part.mount = fp.mount
+        changed = True
+    if fp.rohs is not None and part.rohs != fp.rohs:
+        part.rohs = fp.rohs
+        changed = True
+    if fp.lead_time_days is not None and part.lead_time_days != fp.lead_time_days:
+        part.lead_time_days = fp.lead_time_days
+        changed = True
     return changed
 
 
