@@ -1,19 +1,23 @@
-"""Public BOM tool endpoints — match and live resolve; share added by a later task.
+"""Public BOM tool endpoints — match, live resolve and share links.
 
 Identity fields only reach /match (D7). Rate limits are per-IP sliding
 windows on the SHARED client_ip helper (the checkout.py pattern — never fork
 client_ip)."""
 
+import base64
 import json
+import secrets
 import time
 from collections import defaultdict
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.schemas.bom import BomMatchRequest, BomResolveRequest
+from app.models import BomShare
+from app.schemas.bom import BomMatchRequest, BomResolveRequest, BomShareCreate
 from app.services import bom_resolve
 from app.services.bom_match import build_row, footprint_token, match_line
 from app.services.bom_resolve import bom_event, pick_feed_source
@@ -131,3 +135,42 @@ def resolve_bom(body: BomResolveRequest, request: Request, db: Session = Depends
         media_type="application/x-ndjson",
         headers={"X-Accel-Buffering": "no", "Cache-Control": "no-cache"},
     )
+
+
+_share_limiter = _SlidingWindow(5)
+_SHARE_TTL_DAYS = 180
+_SHARE_MAX_BYTES = 1_000_000
+
+
+@router.post("/share")
+def create_share(body: BomShareCreate, request: Request, db: Session = Depends(get_db)):
+    if _share_limiter.limited(client_ip(request)):
+        raise HTTPException(
+            status_code=429,
+            detail="Too many share links — try again in a minute.",
+        )
+    encoded = json.dumps(body.payload)
+    if len(encoded.encode("utf-8")) > _SHARE_MAX_BYTES:
+        raise HTTPException(status_code=422, detail="Shared BOM is larger than the 1 MB limit.")
+    now = datetime.now(UTC)
+    # Opportunistic prune — no cron (spec §4).
+    db.query(BomShare).filter(BomShare.expires_at < now).delete()
+    slug = base64.urlsafe_b64encode(secrets.token_bytes(16)).decode().rstrip("=")
+    share = BomShare(
+        slug=slug, payload=body.payload, expires_at=now + timedelta(days=_SHARE_TTL_DAYS)
+    )
+    db.add(share)
+    db.commit()
+    return {"slug": slug, "expires_at": share.expires_at.isoformat()}
+
+
+@router.get("/share/{slug}")
+def read_share(slug: str, db: Session = Depends(get_db)):
+    share = db.query(BomShare).filter(BomShare.slug == slug).first()
+    if share is None or share.expires_at.replace(tzinfo=UTC) < datetime.now(UTC):
+        raise HTTPException(status_code=404, detail="Share link not found or expired.")
+    return {
+        "payload": share.payload,
+        "created_at": share.created_at.isoformat() if share.created_at else None,
+        "expires_at": share.expires_at.isoformat(),
+    }
