@@ -806,10 +806,22 @@ class FeedRun:
         self.events: list[dict] = []
         self._subscribers: list[queue.Queue] = []
         self._lock = threading.Lock()
+        # The pause door (2026-08-21): clicking the button again while a run
+        # is going requests a wind-down. The worker checks this BETWEEN parts
+        # — the part in hand always finishes and commits, so nothing is lost
+        # and (for imports) the cursor lets the next click resume.
+        self._stop = threading.Event()
 
     @property
     def running(self) -> bool:
         return self.finished_at is None
+
+    @property
+    def stop_requested(self) -> bool:
+        return self._stop.is_set()
+
+    def request_stop(self) -> None:
+        self._stop.set()
 
     # -- producer side (the worker thread) --
 
@@ -947,10 +959,27 @@ def _feed_run_worker(
             if supplier is None:
                 # Deleted between the click and the thread starting.
                 raise RuntimeError("supplier no longer exists")
+            paused = False
             for event in work(db, provider, supplier):
                 _tally(counts, event)
                 record_stream_event(db, run.supplier_pk, event, stored_kinds)
                 run._publish(event)
+                if run.stop_requested and event.get("kind") != "sync_finished":
+                    # Abandoning the generator here runs its finallys
+                    # (GeneratorExit); the ending event is OURS to emit —
+                    # the work's own sync_finished never yields.
+                    paused = True
+                    break
+            if paused:
+                stopped = sync_event(
+                    "sync_finished",
+                    run.supplier_id,
+                    run.supplier_name,
+                    ("import" if is_import else "sync") + " paused — click again to resume",
+                )
+                stopped["counts"] = dict(counts)
+                record_stream_event(db, run.supplier_pk, stopped, stored_kinds)
+                run._publish(stopped)
         except Exception as exc:  # noqa: BLE001
             # FeedFatalError (auth/quota) is already handled inside the
             # generators; this is for everything else. Report it as events
@@ -1035,6 +1064,18 @@ def start_feed_run(
         daemon=True,
     ).start()
     return run
+
+
+def request_feed_stop(supplier_pk) -> str | None:
+    """Ask the ACTIVE run for this supplier to wind down. Returns its run_id,
+    or None when nothing is running (finished runs cannot be paused)."""
+    key = str(supplier_pk)
+    with _RUNS_LOCK:
+        run = _RUNS.get(key)
+        if run is None or not run.running:
+            return None
+        run.request_stop()
+        return run.run_id
 
 
 def get_feed_run(supplier_id: uuid.UUID | str) -> FeedRun | None:

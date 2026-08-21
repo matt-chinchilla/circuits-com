@@ -45,6 +45,13 @@ interface Props {
   onImport?: () => void;
   /** True while an IMPORT run is in flight — same rule as `syncing`. */
   importing?: boolean;
+  /** Which run is in flight, from X-Feed-Run-Mode — decides which card
+   *  becomes the Pause control (owner requirement 2026-08-21). */
+  serverRunMode?: 'sync' | 'import' | null;
+  /** Ask the active run to wind down at the next safe part. */
+  onPause?: () => void;
+  /** True between the pause click and the run's paused ending. */
+  pausing?: boolean;
   /**
    * True while a run is going SERVER-SIDE, from the server's own answer (the
    * page's active-run probe / an open observer), not from whether this tab
@@ -60,6 +67,9 @@ export default function QuickActionsPanel({
   syncing,
   onImport,
   importing,
+  serverRunMode,
+  onPause,
+  pausing,
   serverRunning,
 }: Props) {
   const navigate = useNavigate();
@@ -69,6 +79,12 @@ export default function QuickActionsPanel({
   // spinners) is what keeps the card honest after a dropped socket — the run
   // is still going, so the button must still be out of service.
   const feedBusy = Boolean(syncing || importing || serverRunning);
+  // The card matching the ACTIVE run flips into a Pause control (a second
+  // click winds the run down at the next safe part — for imports, the cursor
+  // makes the next click a resume). The OTHER card stays out of service:
+  // one run per supplier is a server-enforced 409.
+  const syncIsPausable = feedBusy && serverRunMode === 'sync' && Boolean(onPause);
+  const importIsPausable = feedBusy && serverRunMode === 'import' && Boolean(onPause);
 
   // Smart-default category — whichever category this supplier already has
   // the most listings in. Falls back to empty for brand-new suppliers.
@@ -185,8 +201,8 @@ export default function QuickActionsPanel({
       <button
         type="button"
         className={`${styles.qaCard} ${styles.qaCardPurple}`}
-        onClick={onSync}
-        disabled={feedBusy || !onSync}
+        onClick={syncIsPausable ? onPause : onSync}
+        disabled={syncIsPausable ? pausing : feedBusy || !onSync}
       >
         <span className={styles.qaCardIcon}>
           <Icon
@@ -196,7 +212,13 @@ export default function QuickActionsPanel({
         </span>
         <span className={styles.qaCardBody}>
           <span className={styles.qaCardTitle}>
-            {syncing ? 'Syncing…' : 'Sync inventory'}
+            {syncIsPausable
+              ? pausing
+                ? 'Pausing…'
+                : 'Pause sync'
+              : syncing
+                ? 'Syncing…'
+                : 'Sync inventory'}
           </span>
           <span className={styles.qaCardHint}>
             Pull stock + price from <strong>{cardHostHint}</strong>
@@ -207,15 +229,21 @@ export default function QuickActionsPanel({
       <button
         type="button"
         className={`${styles.qaCard} ${styles.qaCardRed}`}
-        onClick={onImport}
-        disabled={feedBusy || !onImport}
+        onClick={importIsPausable ? onPause : onImport}
+        disabled={importIsPausable ? pausing : feedBusy || !onImport}
       >
         <span className={styles.qaCardIcon}>
           <Icon name="download-simple" className={importing ? styles.qaPulse : undefined} />
         </span>
         <span className={styles.qaCardBody}>
           <span className={styles.qaCardTitle}>
-            {importing ? 'Importing…' : 'Import new parts'}
+            {importIsPausable
+              ? pausing
+                ? 'Pausing…'
+                : 'Pause import'
+              : importing
+                ? 'Importing…'
+                : 'Import new parts'}
           </span>
           <span className={styles.qaCardHint}>
             Discover new inventory from <strong>{cardHostHint}</strong>

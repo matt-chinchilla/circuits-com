@@ -834,3 +834,108 @@ class TestRegistryBounds:
             self._retained(finished_ago=importer_module._RUN_RETENTION_SECONDS + 1)
 
         assert get_feed_run(live.supplier_id) is live
+
+
+class TestPauseIsAClick:
+    """Owner requirement (2026-08-21): clicking Import/Sync while a run is
+    active PAUSES it. Pause = wind down at the next safe part — the part in
+    hand finishes and commits, the run ends with its real tally and a detail
+    that says so, and (for imports) the cursor makes the next click resume.
+    Never a freeze-in-place: a paused run holds no thread, session or provider.
+    """
+
+    def test_pause_winds_down_at_the_next_safe_part(self, db, mouser_supplier, three_part_provider):
+        from app.services.part_feed.importer import request_feed_stop
+
+        provider = three_part_provider(cls=_GatedProvider, block_on=2)
+        run = start_feed_run(
+            supplier=mouser_supplier,
+            mode="sync",
+            provider=provider,
+            work=_sync_work(),
+            session_factory=TestingSessionLocal,
+        )
+        assert provider.blocked.wait(WAIT_SECONDS), "the run never reached the gate"
+
+        assert request_feed_stop(mouser_supplier.id) == run.run_id
+
+        provider.release.set()
+        _await_finished(run)
+
+        # Part 2 was in hand when the stop landed: it completes and commits;
+        # part 3 is never attempted.
+        assert _kinds(run.events) == [
+            "sync_started",
+            "part_synced",
+            "part_synced",
+            "sync_finished",
+        ]
+        assert run.events[-1]["counts"]["synced"] == 2
+        assert "paused" in run.events[-1]["detail"]
+        assert provider.closed == 1
+        assert provider.lookups == 2
+
+    def test_a_paused_run_frees_the_slot(self, db, mouser_supplier, three_part_provider):
+        from app.services.part_feed.importer import request_feed_stop
+
+        provider = three_part_provider(cls=_GatedProvider, block_on=1)
+        run = start_feed_run(
+            supplier=mouser_supplier,
+            mode="sync",
+            provider=provider,
+            work=_sync_work(),
+            session_factory=TestingSessionLocal,
+        )
+        assert provider.blocked.wait(WAIT_SECONDS)
+        request_feed_stop(mouser_supplier.id)
+        provider.release.set()
+        _await_finished(run)
+
+        # The next click starts a FRESH run — no 409 from a paused one.
+        second = start_feed_run(
+            supplier=mouser_supplier,
+            mode="sync",
+            provider=three_part_provider(cls=_CountingProvider),
+            work=_sync_work(),
+            session_factory=TestingSessionLocal,
+        )
+        _await_finished(second)
+        assert second.run_id != run.run_id
+        assert second.events[-1]["kind"] == "sync_finished"
+
+    def test_pause_route_contract(self, client, db, auth_header, feed_key, mouser_supplier, three_part_provider):
+        provider = three_part_provider(cls=_GatedProvider, block_on=1)
+        run = start_feed_run(
+            supplier=mouser_supplier,
+            mode="sync",
+            provider=provider,
+            work=_sync_work(),
+            session_factory=TestingSessionLocal,
+        )
+        assert provider.blocked.wait(WAIT_SECONDS)
+
+        resp = client.post(
+            f"/api/suppliers/{mouser_supplier.id}/feed-run/pause", headers=auth_header()
+        )
+        assert resp.status_code == 200
+        assert resp.json() == {"pausing": True, "run_id": run.run_id}
+
+        provider.release.set()
+        _await_finished(run)
+        assert "paused" in run.events[-1]["detail"]
+
+        # After the run ends there is nothing active to pause.
+        resp2 = client.post(
+            f"/api/suppliers/{mouser_supplier.id}/feed-run/pause", headers=auth_header()
+        )
+        assert resp2.status_code == 404
+        assert resp2.json()["detail"] == "no_feed_run"
+
+    def test_pause_requires_auth_and_a_real_supplier(self, client, seeded_db, auth_header, feed_key):
+        assert client.post(f"/api/suppliers/{uuid.uuid4()}/feed-run/pause").status_code == 401
+        assert (
+            client.post(
+                f"/api/suppliers/{uuid.uuid4()}/feed-run/pause", headers=auth_header()
+            ).status_code
+            == 404
+        )

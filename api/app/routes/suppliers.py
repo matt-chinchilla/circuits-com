@@ -40,6 +40,7 @@ from app.services.part_feed import (
 # consumes them, so widening `part_feed.__all__` would advertise run management
 # to callers who should only be starting runs.
 from app.services.part_feed.importer import (
+    request_feed_stop,
     CONTINUOUS_CALL_CEILING,
     FeedRun,
     FeedRunActive,
@@ -656,3 +657,26 @@ def get_supplier_parts(
         "page": page,
         "pages": pages,
     }
+
+
+@router.post("/{supplier_id}/feed-run/pause")
+def pause_feed_run(
+    supplier_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Wind down this supplier's ACTIVE run (the owner's second click).
+
+    Pause, not freeze: the worker finishes the part in hand, commits, and ends
+    the run with its real tally + a "paused" detail — for imports the cursor
+    makes the next click a RESUME. A paused run holds no thread, session or
+    provider, and frees the 409 slot. Demo cannot reach this: POST is covered
+    by the write-gate. 404 = nothing running (finished runs cannot be paused).
+    """
+    supplier = db.get(Supplier, _to_uuid(supplier_id))
+    if supplier is None:
+        raise HTTPException(status_code=404, detail="Supplier not found")
+    run_id = request_feed_stop(supplier.id)
+    if run_id is None:
+        raise HTTPException(status_code=404, detail="no_feed_run")
+    return {"pausing": True, "run_id": run_id}

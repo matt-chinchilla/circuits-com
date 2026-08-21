@@ -97,6 +97,9 @@ export default function SupplierDetailPage() {
     events: [],
     error: null,
   });
+  // True between a pause click and the run's paused ending arriving on the
+  // stream (the ending flips serverRunning off; nothing else needs to).
+  const [pausingRun, setPausingRun] = useState(false);
   // True while a reconnect attempt is in flight — the console's button.
   const [reconnecting, setReconnecting] = useState(false);
   // Bumped when a run ends so the load effect refetches — the supplier's real
@@ -255,6 +258,7 @@ export default function SupplierDetailPage() {
         // The server closes the stream only when the WORK ends, so a clean
         // finish here means the run is genuinely over.
         setRunState((prev) => ({ ...prev, running: false, serverRunning: false }));
+        setPausingRun(false);
         if (receivedAny) {
           quietRefetchRef.current = true;
           setRefreshNonce((n) => n + 1);
@@ -294,6 +298,16 @@ export default function SupplierDetailPage() {
 
   // Both runs, one function. An import moves MORE than a sync does (new parts,
   // new counts), so the refetch matters at least as much there.
+  const pauseRun = () => {
+    if (!id || pausingRun) return;
+    setPausingRun(true);
+    adminApi.pauseFeedRun(id).catch(() => {
+      // 404 = the run ended between the render and the click — the stream's
+      // own ending event resets the button either way.
+      setPausingRun(false);
+    });
+  };
+
   const startRun = (mode: 'sync' | 'import') => {
     if (!id || runState.running || runState.serverRunning) return;
     const openStream = mode === 'import' ? importSupplier : syncSupplier;
@@ -460,6 +474,11 @@ export default function SupplierDetailPage() {
         onImport={() => startRun('import')}
         importing={(runState.running || runState.serverRunning) && runState.mode === 'import'}
         serverRunning={runState.serverRunning}
+        serverRunMode={
+          runState.running || runState.serverRunning ? runState.mode : null
+        }
+        onPause={pauseRun}
+        pausing={pausingRun}
       />
 
       {/* The standing-order version of the Import card above: same job, every

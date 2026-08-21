@@ -540,6 +540,16 @@ export const adminApi = {
       .get<FeedSettings>(`/suppliers/${encodeURIComponent(id)}/feed-settings`)
       .then((r) => r.data),
 
+  // Second-click pause: asks the ACTIVE run to wind down at the next safe
+  // part (404 = nothing running). The observer stream then receives the
+  // paused sync_finished naturally — no client state to reconcile.
+  pauseFeedRun: (id: string) =>
+    adminClient
+      .post<{ pausing: boolean; run_id: string }>(
+        `/suppliers/${encodeURIComponent(id)}/feed-run/pause`,
+      )
+      .then((r) => r.data),
+
   patchFeedSettings: (id: string, enabled: boolean) =>
     adminClient
       .patch<FeedSettings>(`/suppliers/${encodeURIComponent(id)}/feed-settings`, {
