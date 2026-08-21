@@ -1,7 +1,9 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { priceAt, recommend, tierRankFromOffers } from '../lib/priceBreaks';
-import type { BomOffer, RowState, TableRow } from '../lib/types';
+import { formatMoney, formatUnit } from '../lib/format';
+import type { BomOffer, TableRow } from '../lib/types';
+import AlternatesDropdown from './AlternatesDropdown';
 import CoverageStrip, { type CoverageCounts } from './CoverageStrip';
 import MatchBadge from './MatchBadge';
 import styles from './BomTable.module.scss';
@@ -26,10 +28,18 @@ import styles from './BomTable.module.scss';
  *  (JLCPCB's own cap) and would otherwise own the whole row. */
 const MAX_REF_CHIPS = 6;
 
+/** A quote request carries the LINE, not the BOM (D7 in spirit), and it goes
+ *  into a URL — so it is clamped rather than trusted to be short. */
+const QUOTE_IDENTITY_MAX = 180;
+
 interface BomTableProps {
   rows: TableRow[];
   buildQty: number;
   onBuildQtyChange: (qty: number) => void;
+  /** DNP lines counted, priced and totalled like any other line. Default off:
+   *  the whole point of the flag is that nobody is buying those parts. */
+  includeDnp: boolean;
+  onIncludeDnpChange: (include: boolean) => void;
 }
 
 interface RowView {
@@ -37,6 +47,9 @@ interface RowView {
   /** bom_qty × build_qty — the number every price on this row is read at. */
   lineQty: number;
   offers: BomOffer[];
+  /** What `recommend()` picked, before any reader override. */
+  recommendedId: string | null;
+  /** What the row is actually priced at: the pin if there is one, else above. */
   chosen: BomOffer | null;
   unitPrice: number | null;
   extPrice: number | null;
@@ -50,28 +63,57 @@ interface RowView {
  * Phase 2's outcomes are stated in WORDS here, not only as a badge tooltip: a
  * row that is mid-lookup, a row a distributor had never heard of, and a row we
  * ran out of daily lookups for are three different facts, and only the first
- * of them is going to change while the reader watches. Task 18 turns the last
- * two into "Request a quote" links; the sentence is already the right one.
+ * of them is going to change while the reader watches. Everything except the
+ * first also earns a "Request a quote" link, because a line with no price and
+ * nothing else coming needs a next step, not an em dash.
  */
-function emptyRecommendation(state: RowState): string {
-  switch (state) {
+function emptyRecommendation(view: RowView): string {
+  switch (view.row.state) {
     case 'resolving':
-      return 'Looking this part up live\u2026';
-    case 'not_found':
-      return 'No distributor result \u2014 request a quote.';
+      return 'Looking this part up live…';
     case 'unavailable':
-      return 'Live lookups are exhausted for today \u2014 request a quote instead.';
+      return 'Live lookups are exhausted for today — request a quote instead.';
+    case 'not_found':
+      return 'No distributor result — request a quote.';
     default:
-      return '\u2014';
+      // A catalog hit whose listings are all empty is a different fact from no
+      // catalog hit at all, and the buyer's next move differs too.
+      return view.offers.length > 0
+        ? 'No distributor has it in stock — request a quote.'
+        : 'No catalog match — request a quote.';
   }
 }
 
-function formatUnit(price: number): string {
-  return price < 1 ? `$${price.toFixed(4)}` : `$${price.toFixed(2)}`;
+/**
+ * The identity of ONE line, for the partner desk.
+ *
+ * Quantities and designators are deliberately absent: a quote request is a
+ * question about a part, and the rest of the BOM is nobody's business but the
+ * reader's (D7). What the desk needs is enough to look the part up.
+ */
+function quoteIdentity(row: TableRow): string {
+  const part = row.server?.part ?? null;
+  const candidates = [
+    part?.sku ?? row.mpn,
+    part?.manufacturer_name ?? row.manufacturer,
+    row.value,
+    row.footprint,
+    part?.description ?? row.description,
+  ];
+  const seen: string[] = [];
+  for (const candidate of candidates) {
+    if (candidate == null) continue;
+    const trimmed = candidate.trim();
+    if (trimmed === '' || seen.includes(trimmed)) continue;
+    seen.push(trimmed);
+  }
+  return seen.join(' · ').slice(0, QUOTE_IDENTITY_MAX);
 }
 
-function formatMoney(value: number): string {
-  return `$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+/** The partner desk, pre-aimed at this one line. `#partner-desk` is the id the
+ *  contact form carries; the page scrolls itself there on arrival. */
+function quoteHref(row: TableRow): string {
+  return `/contact?part=${encodeURIComponent(quoteIdentity(row))}#partner-desk`;
 }
 
 /** What the left rail claims about the part's life. `lifecycle_verified` is
@@ -99,7 +141,10 @@ function lifecycleRail(row: TableRow): { className: string; label: string } {
  *  warning than "enough in stock" (spec §5). */
 function availabilityRail(view: RowView): { className: string; label: string } {
   const { chosen, lineQty } = view;
-  if (chosen == null) {
+  // A pinned offer can be one with nothing on the shelf — the reader is
+  // allowed to price against their own distributor either way, but the rail
+  // has to say red, not "only 0 of 40 in stock" in the partial violet.
+  if (chosen == null || chosen.stock_quantity <= 0) {
     return { className: styles.availNone, label: 'Availability: nothing in stock' };
   }
   if (chosen.price_stale) {
@@ -114,31 +159,50 @@ function availabilityRail(view: RowView): { className: string; label: string } {
   };
 }
 
-export default function BomTable({ rows, buildQty, onBuildQtyChange }: BomTableProps) {
+export default function BomTable({
+  rows,
+  buildQty,
+  onBuildQtyChange,
+  includeDnp,
+  onIncludeDnpChange,
+}: BomTableProps) {
+  // Reader overrides of `recommend()`, keyed by line index. Client-only and
+  // deliberately un-persisted — it is a what-if, not a decision. A pin whose
+  // supplier is absent from a later BOM's offers simply fails to resolve and
+  // the row falls back to the recommendation, so nothing has to clear it.
+  const [pins, setPins] = useState<Record<number, string>>({});
+
   const views: RowView[] = useMemo(
     () =>
       rows.map((row) => {
         const lineQty = Math.max(1, row.qty) * Math.max(1, buildQty);
         const offers = row.server?.offers ?? [];
-        let chosen: BomOffer | null = null;
+        let recommendedId: string | null = null;
         if (offers.length > 0) {
           // The mirrored home doing its job: same rule the server ran, re-run
           // at the real line quantity.
-          const pick = recommend(offers, lineQty, tierRankFromOffers(offers));
-          chosen = pick == null ? null : offers.find((o) => o.supplier_id === pick) ?? null;
+          recommendedId = recommend(offers, lineQty, tierRankFromOffers(offers));
         }
+        const recommendedOffer =
+          recommendedId == null
+            ? null
+            : offers.find((o) => o.supplier_id === recommendedId) ?? null;
+        const pin = pins[row.index];
+        const pinnedOffer = pin == null ? null : offers.find((o) => o.supplier_id === pin) ?? null;
+        const chosen = pinnedOffer ?? recommendedOffer;
         const unitPrice = chosen == null ? null : priceAt(chosen, lineQty);
         return {
           row,
           lineQty,
           offers,
+          recommendedId,
           chosen,
           unitPrice,
           extPrice: unitPrice == null ? null : unitPrice * lineQty,
-          excluded: row.dnp,
+          excluded: row.dnp && !includeDnp,
         };
       }),
-    [rows, buildQty],
+    [rows, buildQty, includeDnp, pins],
   );
 
   const counted = useMemo(() => views.filter((v) => !v.excluded), [views]);
@@ -174,11 +238,19 @@ export default function BomTable({ rows, buildQty, onBuildQtyChange }: BomTableP
     [counted],
   );
 
-  const dnpCount = views.length - counted.length;
+  const dnpCount = useMemo(() => views.filter((v) => v.row.dnp).length, [views]);
+  const excludedCount = views.length - counted.length;
 
   return (
     <div className={styles.wrap}>
-      <CoverageStrip counts={counts} buildQty={buildQty} onBuildQtyChange={onBuildQtyChange} />
+      <CoverageStrip
+        counts={counts}
+        buildQty={buildQty}
+        onBuildQtyChange={onBuildQtyChange}
+        dnpCount={dnpCount}
+        includeDnp={includeDnp}
+        onIncludeDnpChange={onIncludeDnpChange}
+      />
 
       <div className={styles.tableWrap}>
         <table className={styles.table}>
@@ -213,7 +285,8 @@ export default function BomTable({ rows, buildQty, onBuildQtyChange }: BomTableP
 
           <tbody>
             {views.map((view) => {
-              const { row, lineQty, offers, chosen, unitPrice, extPrice, excluded } = view;
+              const { row, lineQty, offers, recommendedId, chosen, unitPrice, extPrice, excluded } =
+                view;
               const part = row.server?.part ?? null;
               const rail = lifecycleRail(row);
               const avail = availabilityRail(view);
@@ -221,6 +294,9 @@ export default function BomTable({ rows, buildQty, onBuildQtyChange }: BomTableP
               const maker = part?.manufacturer_name ?? row.manufacturer;
               const description = part?.description ?? row.description;
               const overflow = row.refs.length - MAX_REF_CHIPS;
+              // Nothing to price and nothing still in flight: the row's next
+              // step is a human, so offer one.
+              const wantsQuote = chosen == null && row.state !== 'resolving';
 
               return (
                 <tr
@@ -261,7 +337,10 @@ export default function BomTable({ rows, buildQty, onBuildQtyChange }: BomTableP
                                 : null
                             }
                           />
-                          {excluded && <span className={styles.dnpChip}>DNP</span>}
+                          {/* The chip marks the line as DNP whether or not it
+                              is being counted — the fact belongs to the BOM,
+                              the greying belongs to the toggle. */}
+                          {row.dnp && <span className={styles.dnpChip}>DNP</span>}
                         </div>
                       </div>
                     </div>
@@ -313,7 +392,14 @@ export default function BomTable({ rows, buildQty, onBuildQtyChange }: BomTableP
 
                   <td className={styles.td}>
                     {chosen == null ? (
-                      <span className={styles.stateNote}>{emptyRecommendation(row.state)}</span>
+                      <>
+                        <span className={styles.stateNote}>{emptyRecommendation(view)}</span>
+                        {wantsQuote && (
+                          <Link className={styles.quoteLink} to={quoteHref(row)}>
+                            Request a quote &#8594;
+                          </Link>
+                        )}
+                      </>
                     ) : (
                       <div className={styles.supplierCell}>
                         <div className={styles.supplierBody}>
@@ -322,6 +408,12 @@ export default function BomTable({ rows, buildQty, onBuildQtyChange }: BomTableP
                             {chosen.stock_quantity.toLocaleString('en-US')} in stock
                             {chosen.price_stale ? ' · price is stale' : ''}
                           </span>
+                          {/* Say it out loud when the total is no longer our
+                              recommendation — a silently overridden row is a
+                              number the reader cannot account for later. */}
+                          {chosen.supplier_id !== recommendedId && (
+                            <span className={styles.pinnedNote}>your pick</span>
+                          )}
                         </div>
                         {chosen.tier != null && (
                           <span className={styles.tierBadge} data-tier={chosen.tier}>
@@ -350,10 +442,22 @@ export default function BomTable({ rows, buildQty, onBuildQtyChange }: BomTableP
                   </td>
 
                   <td className={`${styles.td} ${styles.tdRight}`}>
-                    {offers.length > 1 ? (
-                      <span className={styles.muted}>
-                        {offers.length.toLocaleString('en-US')} offers
-                      </span>
+                    {offers.length > 0 ? (
+                      <AlternatesDropdown
+                        offers={offers}
+                        lineQty={lineQty}
+                        chosenSupplierId={chosen?.supplier_id ?? null}
+                        recommendedSupplierId={recommendedId}
+                        partLabel={identity}
+                        onPick={(supplierId) =>
+                          setPins((prev) => {
+                            const next = { ...prev };
+                            if (supplierId == null) delete next[row.index];
+                            else next[row.index] = supplierId;
+                            return next;
+                          })
+                        }
+                      />
                     ) : (
                       <span className={styles.muted}>—</span>
                     )}
@@ -372,8 +476,8 @@ export default function BomTable({ rows, buildQty, onBuildQtyChange }: BomTableP
           {counts.priced < counts.total
             ? ` — ${(counts.total - counts.priced).toLocaleString('en-US')} still unpriced`
             : ''}
-          {dnpCount > 0
-            ? `, and ${dnpCount.toLocaleString('en-US')} DNP ${dnpCount === 1 ? 'line is' : 'lines are'} excluded`
+          {excludedCount > 0
+            ? `, and ${excludedCount.toLocaleString('en-US')} DNP ${excludedCount === 1 ? 'line is' : 'lines are'} excluded`
             : ''}
           .
         </p>

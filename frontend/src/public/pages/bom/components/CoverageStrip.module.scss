@@ -119,6 +119,39 @@
   color: var(--bom-avail-none, #b91c1c);
 }
 
+// The DNP switch. A row of words, not a bare checkbox: what the flag DOES to
+// the numbers above it is the part the reader needs, and it changes with the
+// state of the box.
+.dnp {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  // >=44px of vertical target on a phone.
+  padding: 10px 2px;
+  cursor: pointer;
+}
+
+.dnpBox {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  accent-color: var(--theme-accent, $nav-blue);
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.dnpLabel {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--executive-blue, $executive-blue);
+}
+
+.dnpHint {
+  font-size: 0.8rem;
+  color: var(--bom-ink-secondary, #676c71);
+}
+
 @include responsive($bp-mobile) {
   .strip {
     padding: 16px 14px;

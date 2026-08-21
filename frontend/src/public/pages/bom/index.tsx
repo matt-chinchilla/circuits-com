@@ -83,16 +83,21 @@ function cappedNote(dropped: number): string {
  * guess, so when the cap bites it is the guesses that get dropped, never the
  * certainties.
  *
- * DNP lines are never asked about at all (spec §5) — nobody is buying them,
- * and a live lookup costs real distributor quota. Task 18's toggle makes that
- * conditional; today the default (excluded) is the only behaviour.
+ * DNP lines are not asked about unless the reader has said to include them
+ * (spec §5) — nobody is buying them, and a live lookup costs real distributor
+ * quota. The toggle is read at the moment the stream STARTS: flipping it
+ * afterwards re-counts and re-prices the table from data already in hand, but
+ * it never goes and spends more quota behind the reader's back.
  */
-function pickMisses(rows: TableRow[]): { misses: MissIn[]; dropped: number } {
+function pickMisses(
+  rows: TableRow[],
+  includeDnp: boolean,
+): { misses: MissIn[]; dropped: number } {
   const withMpn: MissIn[] = [];
   const withoutMpn: MissIn[] = [];
   for (const row of rows) {
     const server = row.server;
-    if (row.dnp || server == null || server.status !== 'resolve') continue;
+    if ((row.dnp && !includeDnp) || server == null || server.status !== 'resolve') continue;
     const query = server.resolve_query;
     if (query == null || query.trim() === '') continue;
     const mpn = row.mpn != null && row.mpn.trim() !== '' ? row.mpn : null;
@@ -117,6 +122,12 @@ export default function BomPage() {
   const [matching, setMatching] = useState(false);
   const [matchError, setMatchError] = useState<string | null>(null);
   const [buildQty, setBuildQty] = useState(1);
+  // Per-BOM, default OFF (spec §5). A ref shadows it because `startResolve`
+  // runs from the phase-1 effect and must read the CURRENT answer without
+  // re-running the whole match when the reader toggles it.
+  const [includeDnp, setIncludeDnp] = useState(false);
+  const includeDnpRef = useRef(includeDnp);
+  includeDnpRef.current = includeDnp;
   // Phase-2 notes, kept apart from `matchError` because neither is fatal: the
   // table is priced and readable with both of them on screen.
   const [resolveNote, setResolveNote] = useState<string | null>(null);
@@ -177,7 +188,7 @@ export default function BomPage() {
    * flashes NO MATCH on its way to being looked up).
    */
   const startResolve = (built: TableRow[]) => {
-    const { misses, dropped } = pickMisses(built);
+    const { misses, dropped } = pickMisses(built, includeDnpRef.current);
     setResolveNote(dropped > 0 ? cappedNote(dropped) : null);
     setResolveError(null);
     if (misses.length === 0) {
@@ -331,6 +342,7 @@ export default function BomPage() {
     setResolveNote(null);
     setResolveError(null);
     setBuildQty(1);
+    setIncludeDnp(false);
     setPhase('intake');
   };
 
@@ -420,7 +432,13 @@ export default function BomPage() {
               )}
 
               {!matching && rows.length > 0 && (
-                <BomTable rows={rows} buildQty={buildQty} onBuildQtyChange={setBuildQty} />
+                <BomTable
+                  rows={rows}
+                  buildQty={buildQty}
+                  onBuildQtyChange={setBuildQty}
+                  includeDnp={includeDnp}
+                  onIncludeDnpChange={setIncludeDnp}
+                />
               )}
             </section>
           )}

@@ -34,9 +34,21 @@ interface CoverageStripProps {
   counts: CoverageCounts;
   buildQty: number;
   onBuildQtyChange: (qty: number) => void;
+  /** How many lines the file marked DNP, included or not. Zero hides the
+   *  toggle entirely — a control for something that is not there is noise. */
+  dnpCount: number;
+  includeDnp: boolean;
+  onIncludeDnpChange: (include: boolean) => void;
 }
 
-export default function CoverageStrip({ counts, buildQty, onBuildQtyChange }: CoverageStripProps) {
+export default function CoverageStrip({
+  counts,
+  buildQty,
+  onBuildQtyChange,
+  dnpCount,
+  includeDnp,
+  onIncludeDnpChange,
+}: CoverageStripProps) {
   // The input keeps its own draft so the field can be emptied mid-edit; the
   // committed quantity only ever moves to a real number.
   const [draft, setDraft] = useState(String(buildQty));
@@ -113,6 +125,31 @@ export default function CoverageStrip({ counts, buildQty, onBuildQtyChange }: Co
           <span className={styles.chipWord}>not found</span>
         </li>
       </ul>
+
+      {/* DNP lines default OUT: a "do not populate" line is a line nobody is
+          buying, so counting it would inflate every figure above and the
+          build total below. The toggle is here rather than in the table
+          because it changes what the coverage numbers MEAN, and the reader
+          should see both move together. */}
+      {dnpCount > 0 && (
+        <label className={styles.dnp}>
+          <input
+            type="checkbox"
+            className={styles.dnpBox}
+            checked={includeDnp}
+            onChange={(e) => onIncludeDnpChange(e.target.checked)}
+          />
+          <span className={styles.dnpLabel}>
+            Include the {dnpCount.toLocaleString('en-US')} DNP{' '}
+            {dnpCount === 1 ? 'line' : 'lines'}
+          </span>
+          <span className={styles.dnpHint}>
+            {includeDnp
+              ? 'Counted and priced with the rest of the build.'
+              : 'Shown greyed, out of the totals, and never looked up live.'}
+          </span>
+        </label>
+      )}
     </section>
   );
 }

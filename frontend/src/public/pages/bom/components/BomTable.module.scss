@@ -388,6 +388,33 @@
   color: var(--bom-ink-secondary, #676c71);
 }
 
+// The next step for a line nothing could price. It is a link, not a button:
+// the partner desk is a page, and a middle-click on it should open a tab.
+.quoteLink {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 4px 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--executive-blue, #0a4a2e);
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+// A row the reader repriced by hand. The total has to be accountable, so the
+// override is stated on the row, not only on the picker that made it.
+.pinnedNote {
+  font-family: $font-mono;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--executive-blue, $executive-blue);
+}
+
 // ─── Totals ─────────────────────────────────────────────────────────────────
 
 .totals {

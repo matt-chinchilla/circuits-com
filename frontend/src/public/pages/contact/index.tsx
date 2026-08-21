@@ -1,8 +1,8 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { motion } from "framer-motion";
 import PageHead from "@public/components/PageHead";
 import { STATIC_PAGE_SEO } from "@public/services/seoRoutes";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useSearchParams } from "react-router-dom";
 import PageHeaderBand from "@public/components/layout/PageHeaderBand";
 import { api } from "@public/services/api";
 import styles from "./ContactPage.module.scss";
@@ -30,21 +30,58 @@ const REASONS = [
 
 const MAX_MSG = 1200;
 
+/** The anchor the BOM tool's per-line "Request a quote" links land on. */
+const DESK_ID = "partner-desk";
+
+/** A `?part=` value is somebody's part identity, not a whole BOM — the BOM
+ *  tool builds it from one line's identity fields and clamps it there too.
+ *  Clamped again here because a URL is editable and the field is not
+ *  unbounded. */
+const MAX_PART_PREFILL = 200;
+
+/** Turn `/contact?part=STM32F103C8T6 · STMicroelectronics` into the opening of
+ *  a message the reader can send as-is or edit. Returns "" for an absent or
+ *  blank param, which leaves the field exactly as it was. */
+function partPrefillMessage(part: string | null): string {
+  const identity = (part ?? "").trim().slice(0, MAX_PART_PREFILL);
+  if (identity === "") return "";
+  return `Please quote this line from my BOM:\n\n${identity}\n\nQuantity needed:\n`;
+}
+
 export default function ContactPage() {
   // Open-Placement sponsor CTAs (CategorySponsor "Become a sponsor") navigate
   // here with a prefilled message in location.state. Read it ONCE in the lazy
   // useState initializer so a later re-render (or back-nav) doesn't re-apply it.
   const location = useLocation();
-  const prefillMessage =
+  const sponsorPrefill =
     (location.state as { prefillMessage?: string } | null)?.prefillMessage ?? "";
 
-  // A sponsorship inquiry is a "Listing my company" reason; default to it when a
-  // prefill is present so the folded-subject line reads correctly.
-  const [reason, setReason] = useState(() => (prefillMessage ? "list" : "general"));
+  // The BOM tool routes an unpriceable line here as `?part=<identity>` — a
+  // query param rather than router state so the link survives a copy-paste,
+  // a new tab and a middle-click. Read once, in the same lazy initializer, and
+  // never allowed to overwrite the sponsor prefill.
+  const [searchParams] = useSearchParams();
+  const prefillMessage = sponsorPrefill || partPrefillMessage(searchParams.get("part"));
+
+  // A sponsorship inquiry is a "Listing my company" reason; default to it when
+  // that prefill is present so the folded-subject line reads correctly. A part
+  // quote is an ordinary question and keeps the general default.
+  const [reason, setReason] = useState(() => (sponsorPrefill ? "list" : "general"));
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState(() => prefillMessage);
+
+  // `#partner-desk` arrivals land on the form, not the top of the page.
+  // App.tsx's scroll-to-top deliberately skips a hash, so the landing spot is
+  // ours to set; scroll-margin-top (ContactPage.module.scss) owns the offset.
+  const hash = location.hash;
+  useEffect(() => {
+    if (hash !== `#${DESK_ID}`) return;
+    document
+      .getElementById(DESK_ID)
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [hash]);
 
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -245,6 +282,7 @@ export default function ContactPage() {
 
           {/* Message form */}
           <motion.form
+            id={DESK_ID}
             className={styles.contactForm}
             onSubmit={handleSubmit}
             noValidate

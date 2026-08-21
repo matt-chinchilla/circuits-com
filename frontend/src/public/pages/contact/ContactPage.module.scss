@@ -328,6 +328,9 @@
   padding: 28px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
   border: 1px solid rgba(0, 0, 0, 0.06);
+  // The form carries id="partner-desk" — the landing spot for the BOM tool's
+  // per-line quote links. The sticky navbar would otherwise eat its heading.
+  scroll-margin-top: 100px;
 }
 
 .contactFormTitle {
