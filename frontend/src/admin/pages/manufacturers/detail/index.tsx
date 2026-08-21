@@ -27,7 +27,7 @@ import type { AdminSupplier } from '@admin/types/admin';
 import type { AdminManufacturerDetail, MergeCandidate } from '@admin/types/manufacturers';
 import { safeHttpUrl } from '@shared/utils/url';
 
-import { coverageLabel, promoteBlockedReason, promoteFailure } from '../supplierLink';
+import { coverageLabel, promoteBlockedReason, promoteFailure, stripScheme } from '../supplierLink';
 import styles from './ManufacturerDetail.module.scss';
 
 type Armed = { id: string; action: 'approve' | 'reject' } | null;
@@ -43,10 +43,6 @@ const CONFIDENCE_CLASS: Record<string, string> = {
   high: styles.confHigh,
   low: styles.confLow,
 };
-
-function stripScheme(url: string): string {
-  return url.replace(/^https?:\/\//i, '').replace(/\/$/, '');
-}
 
 function armCopy(action: 'approve' | 'reject', alias: string): string {
   return action === 'approve'

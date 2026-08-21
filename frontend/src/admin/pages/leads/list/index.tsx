@@ -19,15 +19,15 @@
 // row re-renders from the detail the server sends back. Re-contact is allowed
 // (history is append-only), so a filled disc re-opens the same menu.
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { Search, X } from 'lucide-react';
 
 import { useAuth } from '@admin/contexts/AuthContext';
 import { adminApi } from '@admin/services/adminApi';
 import type { AdminLead, AdminLeadDetail, LeadListResponse, LeadOutcome } from '@admin/types/leads';
 
 import CatalogSwitch from '../../manufacturers/CatalogSwitch';
+import TableSearch from '../../manufacturers/TableSearch';
 import ColumnHeader, { type SortDir } from '../../manufacturers/ColumnHeader';
 import { classifyLeadsError, SESSION_EXPIRED_MESSAGE } from '../loadError';
 import { OUTCOME_META, OUTCOME_ORDER, outcomeInkVars } from '../outcome';
@@ -37,8 +37,8 @@ import OutcomeMenu from '../OutcomeMenu';
 import styles from './LeadsPage.module.scss';
 
 const PER_PAGE = 50;
-const SEARCH_DEBOUNCE_MS = 300;
 const SKELETON_ROWS = 8;
+const SKELETON_INDEXES = Array.from({ length: SKELETON_ROWS }, (_, i) => i);
 
 // Server sort keys — `_SORTS` in routes/admin_leads.py. Anything else silently
 // falls back to company_name server-side, so this union IS the contract.
@@ -94,12 +94,7 @@ export default function LeadsPage() {
 
   // What the admin types vs. what reaches the server. One request per keystroke
   // over a 359-row roster is a self-inflicted DoS.
-  const [searchInput, setSearchInput] = useState('');
   const [q, setQ] = useState('');
-  useEffect(() => {
-    const t = setTimeout(() => setQ(searchInput.trim()), SEARCH_DEBOUNCE_MS);
-    return () => clearTimeout(t);
-  }, [searchInput]);
 
   const [outcomeFilter, setOutcomeFilter] = useState<OutcomeFilter>('all');
   const [tierFilter, setTierFilter] = useState<TierFilter>('all');
@@ -253,7 +248,6 @@ export default function LeadsPage() {
     );
   };
 
-  const skeletonRows = useMemo(() => Array.from({ length: SKELETON_ROWS }, (_, i) => i), []);
 
   const filtersActive = !!q || outcomeFilter !== 'all' || tierFilter !== 'all' || enrichOnly;
 
@@ -384,26 +378,13 @@ export default function LeadsPage() {
 
           <div className={styles.toolbarSpacer} />
 
-          <div className={styles.inlineSearch}>
-            <Search size={14} strokeWidth={2} />
-            <input
-              type="text"
-              placeholder="Search company, contact, city, notes..."
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              aria-label="Search leads"
-            />
-            {searchInput && (
-              <button
-                type="button"
-                className={styles.searchClear}
-                onClick={() => setSearchInput('')}
-                aria-label="Clear search"
-              >
-                <X size={12} strokeWidth={2.5} />
-              </button>
-            )}
-          </div>
+          <TableSearch
+            placeholder="Search company, contact, city, notes..."
+            ariaLabel="Search leads"
+            onQuery={setQ}
+            className={styles.inlineSearch}
+            clearClassName={styles.searchClear}
+          />
         </div>
 
         {error && (
@@ -490,7 +471,7 @@ export default function LeadsPage() {
             </thead>
             <tbody>
               {loading &&
-                skeletonRows.map((i) => (
+                SKELETON_INDEXES.map((i) => (
                   <tr key={`skel-${i}`} className={styles.skelRow} aria-hidden="true">
                     <td>
                       <span className={`${styles.skel} ${styles.skelDisc}`} />

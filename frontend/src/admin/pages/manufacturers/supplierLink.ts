@@ -87,3 +87,9 @@ export function promoteFailure(detail: string | undefined): PromoteFailure {
       };
   }
 }
+
+// Display helper shared by the list column and the detail subtitle —
+// single home so a rendering fix can never land in one and not the other.
+export function stripScheme(url: string): string {
+  return url.replace(/^https?:\/\//i, '').replace(/\/$/, '');
+}

@@ -18,14 +18,7 @@
 // menu would close and the anchor would immediately re-open it — the classic
 // toggle race. Holding the element lets the guard exclude its subtree.
 
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type KeyboardEvent as ReactKeyboardEvent,
-} from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 
 import { adminApi } from '@admin/services/adminApi';
@@ -109,10 +102,6 @@ export default function OutcomeMenu({
     optionRefs.current[0]?.focus();
   }, []);
 
-  const close = useCallback(() => {
-    onClose();
-  }, [onClose]);
-
   // Outside click. mousedown (not click) so a text-selection drag that starts
   // inside the note and releases outside does not destroy the form.
   useEffect(() => {
@@ -121,23 +110,23 @@ export default function OutcomeMenu({
       if (!(t instanceof Node)) return;
       if (menuRef.current?.contains(t)) return;
       if (anchor.contains(t)) return; // the anchor's own onClick owns the toggle
-      close();
+      onClose();
     };
     document.addEventListener('mousedown', onDown);
     return () => document.removeEventListener('mousedown', onDown);
-  }, [anchor, close]);
+  }, [anchor, onClose]);
 
   // Esc anywhere.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.stopPropagation();
-        close();
+        onClose();
       }
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [close]);
+  }, [onClose]);
 
   // Scroll (capture, so nested scrollers count) + resize. A scroll that
   // originated INSIDE the menu is the user reading the note field, not the
@@ -146,7 +135,7 @@ export default function OutcomeMenu({
     const onScroll = (e: Event) => {
       const t = e.target;
       if (t instanceof Node && menuRef.current?.contains(t)) return;
-      close();
+      onClose();
     };
     window.addEventListener('scroll', onScroll, true);
     window.addEventListener('resize', close);
@@ -154,7 +143,7 @@ export default function OutcomeMenu({
       window.removeEventListener('scroll', onScroll, true);
       window.removeEventListener('resize', close);
     };
-  }, [close]);
+  }, [onClose]);
 
   // Roving focus across the three options.
   const onOptionKeyDown = (e: ReactKeyboardEvent, index: number) => {
@@ -178,7 +167,7 @@ export default function OutcomeMenu({
         note: note.trim() ? note.trim() : null,
       });
       onRecorded(detail);
-      close();
+      onClose();
     } catch (err) {
       // Never the backend's own auth prose — see ./loadError.ts.
       setError(classifyLeadsError(err, 'Could not record that outcome. Try again.').message);

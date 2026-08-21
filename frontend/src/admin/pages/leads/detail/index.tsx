@@ -13,7 +13,7 @@
 //      the timeline has no row actions.
 //   3. It never renders a contact field it doesn't have. Absent is absent.
 
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Pencil, X } from 'lucide-react';
 
@@ -160,6 +160,14 @@ export default function LeadDetailPage() {
     if (localStorage.getItem('admin_token') === null) logout();
   }, [sessionExpired, logout]);
 
+  // ONE exit path for edit mode — the header toggle and the form's Cancel
+  // used to carry the same three calls in different order (drift bait).
+  const stopEditing = (nextEditing = false) => {
+    setEditing(nextEditing);
+    setSaveError('');
+    if (lead) setForm(toForm(lead));
+  };
+
   const applyDetail = (detail: AdminLeadDetail) => {
     setLead(detail);
     // Review finding: recording an outcome mid-call used to wipe the OPEN
@@ -254,6 +262,61 @@ export default function LeadDetailPage() {
   const setField = (key: keyof EnrichForm, value: string) =>
     setForm((prev) => (prev ? { ...prev, [key]: value } : prev));
 
+  // The enrichment form re-renders the page per keystroke; the append-only
+  // timeline (unbounded history, Intl-formatted stamps, disc styles) is the
+  // expensive part — memoized against everything except the history itself.
+  const timeline = useMemo(
+    () =>
+      lead ? (
+        <ol className={styles.timeline}>
+                {lead.contacts.map((c) => {
+                  const meta = OUTCOME_META[c.outcome];
+                  return (
+                    <li key={c.id} className={styles.entry}>
+                      <div className={styles.entryDisc}>
+                        <OutcomeDisc
+                          outcome={c.outcome}
+                          contactName={c.recorded_by}
+                          size={22}
+                        />
+                      </div>
+                      <div className={styles.entryBody}>
+                        <p className={styles.entryHead}>
+                          <span className={styles.entryWord} style={outcomeInkVars(meta)}>
+                            <span aria-hidden="true">{meta.glyph}</span>
+                            {meta.word}
+                          </span>
+                          {c.sale_tier && (
+                            <span className={styles.tierLabel}>{c.sale_tier}</span>
+                          )}
+                        </p>
+                        {c.note && <p className={styles.entryNote}>{c.note}</p>}
+                        <p className={styles.entryMeta}>
+                          {c.recorded_by ? (
+                            <Link
+                              to={`/admin/leads/reps/${encodeURIComponent(c.recorded_by)}`}
+                              className={styles.repLink}
+                            >
+                              {c.recorded_by}
+                            </Link>
+                          ) : (
+                            <span className={styles.muted}>unknown rep</span>
+                          )}
+                          <span className={styles.dot} aria-hidden="true">
+                            &middot;
+                          </span>
+                          {formatStamp(c.created_at)}
+                        </p>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ol>
+      ) : null,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [lead?.contacts],
+  );
+
   return (
     <div className={styles.page}>
       <Breadcrumbs
@@ -313,11 +376,7 @@ export default function LeadDetailPage() {
           <button
             type="button"
             className={`${styles.btn} ${styles.btnGhost}`}
-            onClick={() => {
-              setEditing((v) => !v);
-              setSaveError('');
-              setForm(toForm(lead));
-            }}
+            onClick={() => stopEditing(!editing)}
           >
             {editing ? (
               <>
@@ -450,11 +509,7 @@ export default function LeadDetailPage() {
                   <button
                     type="button"
                     className={`${styles.btn} ${styles.btnGhost}`}
-                    onClick={() => {
-                      setEditing(false);
-                      setForm(toForm(lead));
-                      setSaveError('');
-                    }}
+                    onClick={() => stopEditing()}
                   >
                     Cancel
                   </button>
@@ -606,51 +661,9 @@ export default function LeadDetailPage() {
                 </p>
               </div>
             ) : (
-              // Newest first — the API orders `contacts` desc, so no client sort.
-              <ol className={styles.timeline}>
-                {lead.contacts.map((c) => {
-                  const meta = OUTCOME_META[c.outcome];
-                  return (
-                    <li key={c.id} className={styles.entry}>
-                      <div className={styles.entryDisc}>
-                        <OutcomeDisc
-                          outcome={c.outcome}
-                          contactName={c.recorded_by}
-                          size={22}
-                        />
-                      </div>
-                      <div className={styles.entryBody}>
-                        <p className={styles.entryHead}>
-                          <span className={styles.entryWord} style={outcomeInkVars(meta)}>
-                            <span aria-hidden="true">{meta.glyph}</span>
-                            {meta.word}
-                          </span>
-                          {c.sale_tier && (
-                            <span className={styles.tierLabel}>{c.sale_tier}</span>
-                          )}
-                        </p>
-                        {c.note && <p className={styles.entryNote}>{c.note}</p>}
-                        <p className={styles.entryMeta}>
-                          {c.recorded_by ? (
-                            <Link
-                              to={`/admin/leads/reps/${encodeURIComponent(c.recorded_by)}`}
-                              className={styles.repLink}
-                            >
-                              {c.recorded_by}
-                            </Link>
-                          ) : (
-                            <span className={styles.muted}>unknown rep</span>
-                          )}
-                          <span className={styles.dot} aria-hidden="true">
-                            &middot;
-                          </span>
-                          {formatStamp(c.created_at)}
-                        </p>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ol>
+              // Newest first — the API orders `contacts` desc, so no client
+              // sort. Memoized above against form keystrokes.
+              timeline
             )}
           </section>
         </aside>

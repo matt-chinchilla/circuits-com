@@ -13,9 +13,9 @@
 // The page number lives in the URL (`?p=N`) so a row opened from page 7 comes
 // back to page 7 — the same contract the public category page uses.
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Plus, Search, X } from 'lucide-react';
+import { Plus } from 'lucide-react';
 
 import { adminApi } from '@admin/services/adminApi';
 import { apiErrorDetail } from '@admin/services/apiError';
@@ -23,13 +23,14 @@ import type { AdminManufacturer, ManufacturerListResponse } from '@admin/types/m
 import { safeHttpUrl } from '@shared/utils/url';
 
 import CatalogSwitch from '../CatalogSwitch';
+import TableSearch from '../TableSearch';
 import ColumnHeader, { type SortDir } from '../ColumnHeader';
-import { coverageLabel } from '../supplierLink';
+import { coverageLabel, stripScheme } from '../supplierLink';
 import styles from './ManufacturersPage.module.scss';
 
 const PER_PAGE = 50;
-const SEARCH_DEBOUNCE_MS = 300;
 const SKELETON_ROWS = 8;
+const SKELETON_INDEXES = Array.from({ length: SKELETON_ROWS }, (_, i) => i);
 
 // Server sort keys — `_SORTS` in routes/admin_manufacturers.py. Anything else
 // silently falls back to name on the server, so the union is the contract.
@@ -39,14 +40,14 @@ type SourceFilter = 'any' | 'csv' | 'catalog' | 'manual';
 type LinkedFilter = 'any' | 'linked' | 'unlinked';
 
 const SOURCE_CHOICES: ReadonlyArray<{ key: SourceFilter; label: string }> = [
-  { key: 'any', label: 'Any source' },
+  { key: 'any', label: 'All sources' },
   { key: 'csv', label: 'CSV roster' },
   { key: 'catalog', label: 'Catalog' },
   { key: 'manual', label: 'Manual' },
 ];
 
 const LINKED_CHOICES: ReadonlyArray<{ key: LinkedFilter; label: string }> = [
-  { key: 'any', label: 'All' },
+  { key: 'any', label: 'Any link' },
   { key: 'linked', label: 'Linked' },
   { key: 'unlinked', label: 'Unlinked' },
 ];
@@ -56,10 +57,6 @@ const SOURCE_CLASS: Record<string, string> = {
   catalog: styles.sourceCatalog,
   manual: styles.sourceManual,
 };
-
-function stripScheme(url: string): string {
-  return url.replace(/^https?:\/\//i, '').replace(/\/$/, '');
-}
 
 export default function ManufacturersPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -72,12 +69,7 @@ export default function ManufacturersPage() {
 
   // The input the admin types into vs. the value that reaches the server. One
   // request per keystroke over an 1,800-row table is a self-inflicted DoS.
-  const [searchInput, setSearchInput] = useState('');
   const [q, setQ] = useState('');
-  useEffect(() => {
-    const t = setTimeout(() => setQ(searchInput.trim()), SEARCH_DEBOUNCE_MS);
-    return () => clearTimeout(t);
-  }, [searchInput]);
 
   const [source, setSource] = useState<SourceFilter>('any');
   const [linked, setLinked] = useState<LinkedFilter>('any');
@@ -191,10 +183,6 @@ export default function ManufacturersPage() {
     setSortDir(dir);
   };
 
-  const skeletonRows = useMemo(
-    () => Array.from({ length: SKELETON_ROWS }, (_, i) => i),
-    [],
-  );
 
   return (
     <div className={styles.page}>
@@ -229,7 +217,7 @@ export default function ManufacturersPage() {
                 aria-pressed={source === c.key}
                 onClick={() => setSource(c.key)}
               >
-                {c.key === 'any' ? 'All sources' : c.label}
+                {c.label}
               </button>
             ))}
           </div>
@@ -242,31 +230,18 @@ export default function ManufacturersPage() {
                 aria-pressed={linked === c.key}
                 onClick={() => setLinked(c.key)}
               >
-                {c.key === 'any' ? 'Any link' : c.label}
+                {c.label}
               </button>
             ))}
           </div>
           <div className={styles.toolbarSpacer} />
-          <div className={styles.inlineSearch}>
-            <Search size={14} strokeWidth={2} />
-            <input
-              type="text"
-              placeholder="Search name or website..."
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              aria-label="Search manufacturers"
-            />
-            {searchInput && (
-              <button
-                type="button"
-                className={styles.searchClear}
-                onClick={() => setSearchInput('')}
-                aria-label="Clear search"
-              >
-                <X size={12} strokeWidth={2.5} />
-              </button>
-            )}
-          </div>
+          <TableSearch
+            placeholder="Search name or website..."
+            ariaLabel="Search manufacturers"
+            onQuery={setQ}
+            className={styles.inlineSearch}
+            clearClassName={styles.searchClear}
+          />
         </div>
 
         <div className={styles.tableWrap}>
@@ -319,7 +294,7 @@ export default function ManufacturersPage() {
             </thead>
             <tbody>
               {loading &&
-                skeletonRows.map((i) => (
+                SKELETON_INDEXES.map((i) => (
                   <tr key={`skel-${i}`} className={styles.skelRow} aria-hidden="true">
                     <td>
                       <span className={`${styles.skel} ${styles.skelWide}`} />

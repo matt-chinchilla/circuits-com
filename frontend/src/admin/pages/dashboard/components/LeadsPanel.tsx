@@ -42,6 +42,11 @@ const FETCH_LIMIT = 100;
 /** Rows shown before "See More" expands the panel in place. */
 const PREVIEW_ROWS = 10;
 
+/** Initial fetch: one row beyond the preview — enough to know whether See
+ *  More exists at a tenth of the payload; the 100-row fetch happens lazily on
+ *  first expand (the rare path pays, not every dashboard visit). */
+const INITIAL_LIMIT = PREVIEW_ROWS + 1;
+
 const DEMO_NOTICE = 'Not available in demo.';
 const BLOCKED_NOTICE = "Recent contacts aren't available right now.";
 
@@ -68,7 +73,7 @@ export default function LeadsPanel({ demoMode }: LeadsPanelProps) {
     setLoading(true);
     setNotice(null);
     adminApi
-      .getRecentLeadContacts(FETCH_LIMIT)
+      .getRecentLeadContacts(INITIAL_LIMIT)
       .then((res) => {
         if (cancelled) return;
         setContacts(res.contacts ?? []);
@@ -96,8 +101,23 @@ export default function LeadsPanel({ demoMode }: LeadsPanelProps) {
   // says `100+` at the ceiling rather than claiming exactly a hundred.
   const visible = expanded ? contacts : contacts.slice(0, PREVIEW_ROWS);
   const canExpand = contacts.length > PREVIEW_ROWS;
+
+  const expandFull = () => {
+    setExpanded((v) => !v);
+    // First expand upgrades to the full window; later toggles reuse it.
+    if (!expanded && contacts.length <= INITIAL_LIMIT) {
+      adminApi
+        .getRecentLeadContacts(FETCH_LIMIT)
+        .then((res) => setContacts(res.contacts ?? []))
+        .catch(() => {});
+    }
+  };
   const chipCount =
-    contacts.length >= FETCH_LIMIT ? `${count(FETCH_LIMIT)}+` : count(contacts.length);
+    contacts.length >= FETCH_LIMIT
+      ? `${count(FETCH_LIMIT)}+`
+      : !expanded && contacts.length > PREVIEW_ROWS
+        ? `${count(PREVIEW_ROWS)}+`
+        : count(contacts.length);
 
   return (
     <div className={styles.panel}>
@@ -170,7 +190,7 @@ export default function LeadsPanel({ demoMode }: LeadsPanelProps) {
               <button
                 type="button"
                 className={`${styles.btn} ${styles.btnGhost}`}
-                onClick={() => setExpanded((v) => !v)}
+                onClick={expandFull}
                 aria-expanded={expanded}
               >
                 {expanded ? 'Show fewer' : 'See More'}

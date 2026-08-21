@@ -25,9 +25,21 @@ export const OUTCOME_META: Record<
 };
 
 /** Inline style pair for colored-WORD renderers: `style={outcomeInkVars(meta)}`
- *  + a stylesheet rule `color: var(--oc)` with a dark override to var(--oc-dark). */
-export function outcomeInkVars(meta: { hex: string; inkDark: string }) {
-  return { '--oc': meta.hex, '--oc-dark': meta.inkDark } as React.CSSProperties;
+ *  + a stylesheet rule `color: var(--oc)` with a dark override to var(--oc-dark).
+ *  Precomputed + frozen per outcome (3 values): the leads list calls this up
+ *  to ~53×/render — stable identities let React skip the style write. */
+const INK_VARS = Object.fromEntries(
+  (Object.keys(OUTCOME_META) as LeadOutcome[]).map((k) => [
+    k,
+    Object.freeze({ '--oc': OUTCOME_META[k].hex, '--oc-dark': OUTCOME_META[k].inkDark }) as React.CSSProperties,
+  ]),
+) as Record<LeadOutcome, React.CSSProperties>;
+
+export function outcomeInkVars(meta: { hex: string; inkDark: string }): React.CSSProperties {
+  const hit = (Object.keys(OUTCOME_META) as LeadOutcome[]).find(
+    (k) => OUTCOME_META[k].hex === meta.hex,
+  );
+  return hit ? INK_VARS[hit] : ({ '--oc': meta.hex, '--oc-dark': meta.inkDark } as React.CSSProperties);
 }
 
 export const OUTCOME_ORDER: LeadOutcome[] = ['converted', 'maybe', 'rejected'];
