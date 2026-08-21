@@ -64,6 +64,9 @@
 
 .qtyInput {
   width: 96px;
+  // Retyping this re-prices every line, so it is the strip's one real
+  // control — 96x34 measured, under the 44px tap floor.
+  min-height: 44px;
   padding: 8px 10px;
   font-family: $font-mono;
   font-size: 0.9rem;

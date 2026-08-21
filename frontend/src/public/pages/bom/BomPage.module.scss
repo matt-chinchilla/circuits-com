@@ -64,6 +64,10 @@
 .dropBtn {
   margin-top: 8px;
   padding: 10px 22px;
+  // Buttons inherit body line-height 1.6 and overflow their box (house rule),
+  // so the height is pinned instead: 10px padding on a 1-line box measured
+  // 34.7px, under the 44px tap floor on every phone width.
+  min-height: 44px;
   line-height: 1;
   font-family: $font-body;
   font-size: 0.92rem;
@@ -117,6 +121,8 @@
 .pasteBtn {
   align-self: flex-start;
   padding: 9px 20px;
+  // The primary action of the intake screen — it measured 34.4px tall.
+  min-height: 44px;
   line-height: 1;
   font-family: $font-body;
   font-size: 0.9rem;
@@ -206,8 +212,13 @@
 }
 
 .deadCta {
+  // The only action on the dead-share-link screen: an <a>, so it needs the
+  // flex box as well as the height (36.7px measured at 320px).
+  display: inline-flex;
+  align-items: center;
   margin-top: 4px;
   padding: 11px 20px;
+  min-height: 44px;
   line-height: 1;
   font-size: 0.92rem;
   font-weight: 600;
@@ -220,6 +231,9 @@
 .linkBtn {
   align-self: flex-start;
   padding: 0;
+  // "Start over" discards the whole priced BOM, so it is a real action even
+  // though it reads as a link: 68.4x17.3 measured, well under the tap floor.
+  min-height: 44px;
   line-height: 1.2;
   font-family: $font-body;
   font-size: 0.9rem;
