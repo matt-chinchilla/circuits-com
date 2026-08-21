@@ -88,6 +88,31 @@
   opacity: 0.55;
 }
 
+// Waiting on a live distributor lookup. Background-colour only — no
+// transform, no filter, nothing that promotes a compositor layer per row, and
+// frozen outright for a reader who asked for less motion.
+.rowResolving {
+  animation: bomRowPulse 1.6s ease-in-out infinite;
+}
+
+@keyframes bomRowPulse {
+  0%,
+  100% {
+    background-color: rgba($nav-blue, 0.05);
+  }
+
+  50% {
+    background-color: rgba($nav-blue, 0.13);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rowResolving {
+    animation: none;
+    background-color: rgba($nav-blue, 0.08);
+  }
+}
+
 .td {
   padding: 12px 14px;
   font-size: 0.87rem;
@@ -350,6 +375,16 @@
 
 .muted {
   font-size: 0.85rem;
+  color: var(--bom-ink-secondary, #676c71);
+}
+
+// The phase-2 sentence in the Recommended column. Wraps rather than truncates
+// — it is the row's next action, not a decoration.
+.stateNote {
+  display: block;
+  max-width: 220px;
+  font-size: 0.8rem;
+  line-height: 1.35;
   color: var(--bom-ink-secondary, #676c71);
 }
 

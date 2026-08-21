@@ -13,7 +13,7 @@ import { bomApi } from './lib/bomApi';
 import { applyRoleMap, type ParseResult } from './lib/parseBom';
 import { loadRoleMap, saveRoleMap } from './lib/mapMemory';
 import type { BomRole } from './lib/headerAliases';
-import type { TableRow } from './lib/types';
+import type { MissIn, ResolveEvent, TableRow } from './lib/types';
 import styles from './BomPage.module.scss';
 
 /**
@@ -56,6 +56,55 @@ const MATCH_FAILED =
 const MATCH_THROTTLED =
   'That is a lot of BOMs in one minute. Wait about a minute and price this one again.';
 
+/** Mirrors `BomResolveRequest.misses` max_length in api/app/schemas/bom.py:
+ *  one over and the server 422s the whole stream, so the cap is enforced here
+ *  and ANNOUNCED — a silently dropped line is a line the reader believes was
+ *  priced. */
+const RESOLVE_CAP = 50;
+
+const RESOLVE_STOPPED =
+  'Live lookups stopped early. The lines still marked NO MATCH were never looked up — try again in a moment.';
+
+function cappedNote(dropped: number): string {
+  const lines = dropped === 1 ? 'line was' : 'lines were';
+  return (
+    `Live lookups are capped at ${RESOLVE_CAP} lines per BOM — ` +
+    `${dropped.toLocaleString('en-US')} further unmatched ${lines} left unresolved. ` +
+    'Request a quote for those lines.'
+  );
+}
+
+/**
+ * Which lines phase 2 asks a distributor about, in the order it asks.
+ *
+ * MPN'd misses go FIRST: they resolve by an exact part lookup, which is the
+ * one call that either finds the part or proves it does not exist. A
+ * value+footprint query ("10k 0805") is a keyword search whose first hit is a
+ * guess, so when the cap bites it is the guesses that get dropped, never the
+ * certainties.
+ *
+ * DNP lines are never asked about at all (spec §5) — nobody is buying them,
+ * and a live lookup costs real distributor quota. Task 18's toggle makes that
+ * conditional; today the default (excluded) is the only behaviour.
+ */
+function pickMisses(rows: TableRow[]): { misses: MissIn[]; dropped: number } {
+  const withMpn: MissIn[] = [];
+  const withoutMpn: MissIn[] = [];
+  for (const row of rows) {
+    const server = row.server;
+    if (row.dnp || server == null || server.status !== 'resolve') continue;
+    const query = server.resolve_query;
+    if (query == null || query.trim() === '') continue;
+    const mpn = row.mpn != null && row.mpn.trim() !== '' ? row.mpn : null;
+    (mpn != null ? withMpn : withoutMpn).push({ index: row.index, query, mpn });
+  }
+  const ordered = [...withMpn, ...withoutMpn];
+  return {
+    misses: ordered.slice(0, RESOLVE_CAP),
+    dropped: Math.max(0, ordered.length - RESOLVE_CAP),
+  };
+}
+
 export default function BomPage() {
   const { slug } = useParams<{ slug?: string }>();
   const isShare = slug != null;
@@ -68,7 +117,97 @@ export default function BomPage() {
   const [matching, setMatching] = useState(false);
   const [matchError, setMatchError] = useState<string | null>(null);
   const [buildQty, setBuildQty] = useState(1);
+  // Phase-2 notes, kept apart from `matchError` because neither is fatal: the
+  // table is priced and readable with both of them on screen.
+  const [resolveNote, setResolveNote] = useState<string | null>(null);
+  const [resolveError, setResolveError] = useState<string | null>(null);
   const sourceText = useRef('');
+
+  // The resolve stream is a socket THIS tab holds open. Leaving the page — or
+  // landing on a different share slug — drops it; each miss is one bounded
+  // server-side call that finishes on its own either way, so aborting costs
+  // nothing but the reader. One controller is enough: one stream at a time.
+  const resolveAbort = useRef<AbortController | null>(null);
+  useEffect(
+    () => () => {
+      resolveAbort.current?.abort();
+    },
+    [slug],
+  );
+
+  // Fold one streamed event into the row it names. Functional updater on
+  // purpose: events arrive over tens of seconds and the closure that started
+  // the stream has long since gone stale.
+  const applyResolveEvent = (event: ResolveEvent) => {
+    setRows((prev) =>
+      prev.map((row) => {
+        if (row.index !== event.index) return row;
+        switch (event.kind) {
+          case 'resolved':
+            // A `resolved` with no row is a malformed event; falling back to
+            // the phase-1 answer is honest, a permanent spinner is not.
+            return event.row == null
+              ? { ...row, state: 'matched' as const }
+              : { ...row, server: event.row, state: 'resolved_live' as const };
+          case 'not_found':
+            return { ...row, state: 'not_found' as const };
+          case 'resolve_unavailable':
+            return { ...row, state: 'unavailable' as const };
+          default:
+            return row;
+        }
+      }),
+    );
+  };
+
+  /** The server emits exactly one event per miss, so nothing should still be
+   *  spinning once the stream ends. If something is, the stream died early —
+   *  put the row back on its phase-1 answer rather than spin forever. */
+  const settleStragglers = () => {
+    setRows((prev) =>
+      prev.map((row) => (row.state === 'resolving' ? { ...row, state: 'matched' as const } : row)),
+    );
+  };
+
+  /**
+   * Phase 2 — the misses go and heal themselves.
+   *
+   * Owns the `setRows` for the rows it is about to ask about (flipping them to
+   * `resolving` in the SAME commit the table first renders in, so no row ever
+   * flashes NO MATCH on its way to being looked up).
+   */
+  const startResolve = (built: TableRow[]) => {
+    const { misses, dropped } = pickMisses(built);
+    setResolveNote(dropped > 0 ? cappedNote(dropped) : null);
+    setResolveError(null);
+    if (misses.length === 0) {
+      setRows(built);
+      return;
+    }
+
+    const asking = new Set(misses.map((m) => m.index));
+    setRows(
+      built.map((row) => (asking.has(row.index) ? { ...row, state: 'resolving' as const } : row)),
+    );
+
+    // Never two readers on one table: a fresh parse drops the older socket.
+    resolveAbort.current?.abort();
+    const controller = new AbortController();
+    resolveAbort.current = controller;
+
+    bomApi
+      .streamResolve(misses, applyResolveEvent, controller.signal)
+      .then(() => {
+        if (controller.signal.aborted) return;
+        settleStragglers();
+      })
+      .catch(() => {
+        // An abort resolves down this path too; there is nobody left to tell.
+        if (controller.signal.aborted) return;
+        settleStragglers();
+        setResolveError(RESOLVE_STOPPED);
+      });
+  };
 
   // Phase 1: ask the catalog about the identity fields, once, per parse.
   //
@@ -101,20 +240,22 @@ export default function BomPage() {
       .then((serverRows) => {
         if (cancelled) return;
         const byIndex = new Map(serverRows.map((row) => [row.index, row]));
-        setRows(
-          lines.map((line) => {
-            const server = byIndex.get(line.index) ?? null;
-            return {
-              ...line,
-              server,
-              // Phase 2 (Task 17) moves rows off `matched`; until then the
-              // badge reads the server status directly.
-              state: server == null ? ('not_found' as const) : ('matched' as const),
-              viewerHref: null,
-            };
-          }),
-        );
+        const built: TableRow[] = lines.map((line) => {
+          const server = byIndex.get(line.index) ?? null;
+          return {
+            ...line,
+            server,
+            // `matched` means "phase 1 answered": the badge then reads the
+            // server status, so a `resolve`/`none` row reads NO MATCH until
+            // phase 2 moves it.
+            state: server == null ? ('not_found' as const) : ('matched' as const),
+            viewerHref: null,
+          };
+        });
         setMatching(false);
+        // Hand the rows straight to phase 2 — it owns the setRows, so the
+        // lines it is about to look up land already flipped to `resolving`.
+        startResolve(built);
       })
       .catch((err: unknown) => {
         if (cancelled) return;
@@ -125,6 +266,10 @@ export default function BomPage() {
 
     return () => {
       cancelled = true;
+      // A new parse invalidates the previous BOM's stream as surely as
+      // leaving does — its events name row indices from a table that no
+      // longer exists.
+      resolveAbort.current?.abort();
     };
   }, [phase, parsed]);
 
@@ -175,6 +320,7 @@ export default function BomPage() {
   }, [parsed, mapRoles]);
 
   const startOver = () => {
+    resolveAbort.current?.abort();
     setParsed(null);
     sourceText.current = '';
     setSourceName(null);
@@ -182,6 +328,8 @@ export default function BomPage() {
     setRows([]);
     setMatchError(null);
     setMatching(false);
+    setResolveNote(null);
+    setResolveError(null);
     setBuildQty(1);
     setPhase('intake');
   };
@@ -250,9 +398,17 @@ export default function BomPage() {
                 </p>
               ))}
 
+              {resolveNote != null && <p className={styles.phaseWarn}>{resolveNote}</p>}
+
               {matchError != null && (
                 <p className={styles.pageError} role="alert">
                   {matchError}
+                </p>
+              )}
+
+              {resolveError != null && (
+                <p className={styles.phaseWarn} role="status">
+                  {resolveError}
                 </p>
               )}
 

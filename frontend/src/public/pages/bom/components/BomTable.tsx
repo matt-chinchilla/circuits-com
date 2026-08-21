@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { priceAt, recommend, tierRankFromOffers } from '../lib/priceBreaks';
-import type { BomOffer, TableRow } from '../lib/types';
+import type { BomOffer, RowState, TableRow } from '../lib/types';
 import CoverageStrip, { type CoverageCounts } from './CoverageStrip';
 import MatchBadge from './MatchBadge';
 import styles from './BomTable.module.scss';
@@ -42,6 +42,28 @@ interface RowView {
   extPrice: number | null;
   /** DNP lines are shown, greyed, and kept out of every total (spec §5). */
   excluded: boolean;
+}
+
+/**
+ * What the Recommended column says when there is no offer to put there.
+ *
+ * Phase 2's outcomes are stated in WORDS here, not only as a badge tooltip: a
+ * row that is mid-lookup, a row a distributor had never heard of, and a row we
+ * ran out of daily lookups for are three different facts, and only the first
+ * of them is going to change while the reader watches. Task 18 turns the last
+ * two into "Request a quote" links; the sentence is already the right one.
+ */
+function emptyRecommendation(state: RowState): string {
+  switch (state) {
+    case 'resolving':
+      return 'Looking this part up live\u2026';
+    case 'not_found':
+      return 'No distributor result \u2014 request a quote.';
+    case 'unavailable':
+      return 'Live lookups are exhausted for today \u2014 request a quote instead.';
+    default:
+      return '\u2014';
+  }
 }
 
 function formatUnit(price: number): string {
@@ -203,7 +225,17 @@ export default function BomTable({ rows, buildQty, onBuildQtyChange }: BomTableP
               return (
                 <tr
                   key={row.index}
-                  className={excluded ? `${styles.row} ${styles.rowDnp}` : styles.row}
+                  className={[
+                    styles.row,
+                    excluded ? styles.rowDnp : '',
+                    // A live lookup takes hundreds of milliseconds per line
+                    // and they land one at a time; the row says so while it
+                    // waits rather than sitting on a stale NO MATCH.
+                    row.state === 'resolving' ? styles.rowResolving : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                  aria-busy={row.state === 'resolving' || undefined}
                 >
                   <td className={`${styles.td} ${styles.tdNum}`}>{row.index}</td>
 
@@ -281,7 +313,7 @@ export default function BomTable({ rows, buildQty, onBuildQtyChange }: BomTableP
 
                   <td className={styles.td}>
                     {chosen == null ? (
-                      <span className={styles.muted}>—</span>
+                      <span className={styles.stateNote}>{emptyRecommendation(row.state)}</span>
                     ) : (
                       <div className={styles.supplierCell}>
                         <div className={styles.supplierBody}>
