@@ -15,6 +15,7 @@ from app.routes import (
     admin_sponsors,
     analytics,
     auth,
+    bom,
     calendar,
     categories,
     checkout,
@@ -62,6 +63,7 @@ app.include_router(stripe_webhooks.router)
 app.include_router(admin_quotes.router)
 app.include_router(feed_credentials.router)
 app.include_router(checkout.router)
+app.include_router(bom.router)
 app.include_router(admin_manufacturers.router)
 app.include_router(admin_leads.router)
 

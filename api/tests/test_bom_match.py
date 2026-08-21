@@ -128,3 +128,52 @@ class TestPackageWarning:
         assert package_warning("0805", None) is None
         assert package_warning("0805", "0805") is None
         assert package_warning("r_0805_2012metric", "R_0805_2012Metric") is None
+
+
+class TestMatchRoute:
+    def _post(self, client, lines, ip="198.51.100.7"):
+        # A dedicated X-Real-IP per test keeps the per-IP limiter's module
+        # state from leaking between cases (client_ip prefers that header).
+        return client.post("/api/bom/match", json={"lines": lines}, headers={"X-Real-IP": ip})
+
+    def test_identity_only_contract_and_row_shape(self, client, db):
+        _part(db, "LM317T")
+        res = self._post(client, [{"index": 0, "mpn": "lm317t"}], ip="198.51.100.1")
+        assert res.status_code == 200
+        row = res.json()["rows"][0]
+        assert row["status"] == "exact"
+        assert row["part"]["sku"] == "LM317T"
+        assert row["part"]["lifecycle_verified"] is False
+        assert "offers" in row
+
+    def test_qty_and_refs_are_rejected_by_the_schema(self, client):
+        # D7 is structural: the schema has NO qty/refs fields, and extras 422.
+        res = self._post(client, [{"index": 0, "mpn": "X", "qty": 4}], ip="198.51.100.2")
+        assert res.status_code == 422
+
+    def test_line_cap_2000(self, client):
+        lines = [{"index": i, "mpn": f"P{i}"} for i in range(2001)]
+        assert self._post(client, lines, ip="198.51.100.3").status_code == 422
+
+    def test_recommended_supplier_honors_the_band(self, client, db, seeded_db):
+        # Smoke over seeded data: every recommended_supplier_id must appear in
+        # that row's offers, and offers arrive price-ascending. (seeded_db is a
+        # dict of fixture rows, so the session comes from `db`.)
+        sku = db.query(Part).filter(Part.listings.any()).first().sku
+        res = self._post(client, [{"index": 0, "mpn": sku}], ip="198.51.100.4")
+        row = res.json()["rows"][0]
+        ids = [o["supplier_id"] for o in row["offers"]]
+        if row["recommended_supplier_id"] is not None:
+            assert row["recommended_supplier_id"] in ids
+        prices = [o["unit_price"] for o in row["offers"]]
+        assert prices == sorted(prices)
+
+    def test_rate_limited_per_ip(self, client):
+        for _ in range(20):
+            assert (
+                self._post(client, [{"index": 0, "mpn": "X1234"}], ip="198.51.100.5").status_code
+                == 200
+            )
+        assert (
+            self._post(client, [{"index": 0, "mpn": "X1234"}], ip="198.51.100.5").status_code == 429
+        )

@@ -204,3 +204,96 @@ def load_tier_rank(db: Session, supplier_ids: set) -> dict[str, tuple[int, str]]
         if key not in rank or entry < rank[key]:
             rank[key] = entry
     return rank
+
+
+def _offers_for_part(db: Session, part: Part) -> tuple[list[dict], dict[str, Offer]]:
+    """All listings as wire offers (price-ascending) + pure Offer inputs for
+    recommend(). price_stale = listing not updated in 30 days (spec §5)."""
+    from datetime import UTC, datetime, timedelta
+
+    stale_before = datetime.now(UTC) - timedelta(days=30)
+    wire: list[dict] = []
+    pure: dict[str, Offer] = {}
+    for li in part.listings:
+        supplier = li.supplier
+        breaks = sorted((pb.min_quantity, float(pb.unit_price)) for pb in li.price_breaks)
+        last = li.last_updated
+        if last is not None and last.tzinfo is None:
+            last = last.replace(tzinfo=UTC)
+        stale = last is not None and last < stale_before
+        sid = str(li.supplier_id)
+        wire.append(
+            {
+                "supplier_id": sid,
+                "supplier_name": supplier.name if supplier else "",
+                "supplier_website": supplier.website if supplier else None,
+                "tier": None,  # stamped by build_row from tier_rank
+                "stock_quantity": li.stock_quantity or 0,
+                "unit_price": float(li.unit_price),
+                "currency": li.currency or "USD",
+                "price_stale": stale,
+                "breaks": [{"min_quantity": q, "unit_price": p} for q, p in breaks],
+            }
+        )
+        # One pure Offer per supplier: keep the cheapest listing if a supplier
+        # somehow has two rows for the same part.
+        candidate = Offer(
+            supplier_id=sid,
+            stock_quantity=li.stock_quantity or 0,
+            unit_price=float(li.unit_price),
+            breaks=tuple(breaks),
+            price_stale=stale,
+        )
+        if sid not in pure or candidate.unit_price < pure[sid].unit_price:
+            pure[sid] = candidate
+    wire.sort(key=lambda o: o["unit_price"])
+    return wire, pure
+
+
+_TIER_NAME = {0: "platinum", 1: "gold", 2: "silver"}
+
+
+def build_row(
+    db: Session,
+    index: int,
+    status: str,
+    part: Part | None,
+    approx_reason: str | None,
+    resolve_query: str | None,
+    line_package: str | None,
+) -> dict:
+    row: dict = {
+        "index": index,
+        "status": status,
+        "approx_reason": approx_reason,
+        "package_warning": None,
+        "resolve_query": resolve_query,
+        "part": None,
+        "recommended_supplier_id": None,
+        "offers": [],
+    }
+    if part is None:
+        return row
+    wire, pure = _offers_for_part(db, part)
+    tier_rank = load_tier_rank(db, set(pure.keys()))
+    for o in wire:
+        entry = tier_rank.get(o["supplier_id"])
+        o["tier"] = _TIER_NAME.get(entry[0]) if entry else None
+    row["part"] = {
+        "id": str(part.id),
+        "sku": part.sku,
+        "slug": part.slug,
+        "manufacturer_name": part.manufacturer_name,
+        "description": part.description,
+        "package": part.package,
+        "lifecycle_status": part.lifecycle_status,
+        "lifecycle_verified": part.lifecycle_verified_at is not None,
+        "image_url": part.image_url,
+        "datasheet_url": part.datasheet_url,
+    }
+    row["package_warning"] = package_warning(line_package, part.package)
+    # Server default pick at the break ladder's base qty (=1); the client
+    # re-runs the IDENTICAL rule at the real line qty (the mirrored home).
+    row["recommended_supplier_id"] = recommend(list(pure.values()), 1, tier_rank)
+    row["offers"] = wire
+    return row
