@@ -57,6 +57,7 @@ export default function CategoryCard({
         navigate(to);
       }}
       onKeyDown={(e) => {
+        if ((e.target as HTMLElement).closest('a')) return;
         if (e.key === 'Enter') navigate(to);
       }}
       onMouseEnter={

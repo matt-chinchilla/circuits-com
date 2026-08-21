@@ -24,11 +24,6 @@ import SrSuggestions from './components/SrSuggestions';
 import { displayWebsite, tierRank } from './lib/srFormat';
 import styles from './SearchPage.module.scss';
 
-// The public suppliers listing gains `tier` server-side (spec §1.4a) while
-// this page is built; the Supplier contract predates it. Local widening only —
-// drop once types/supplier.ts carries the field.
-type SupplierWithTier = Supplier & { tier?: string | null };
-
 const EMPTY_STATE_TILE_CAP = 12;
 
 // Magnifier mark, kit-verbatim (Search.jsx .search-empty-mark svg).
@@ -97,7 +92,7 @@ export default function SearchPage() {
 
   // Empty-state BROWSE DISTRIBUTORS grid — fetched only once zero results are
   // on screen. A failed fetch hides the section quietly (null stays null).
-  const [browseSuppliers, setBrowseSuppliers] = useState<SupplierWithTier[] | null>(null);
+  const [browseSuppliers, setBrowseSuppliers] = useState<Supplier[] | null>(null);
   useEffect(() => {
     if (!isEmpty || browseSuppliers != null) return;
 
@@ -129,10 +124,21 @@ export default function SearchPage() {
     navigate(term ? `/search?q=${encodeURIComponent(term)}` : '/search');
   };
 
+  // Server `total` sums CAPPED sections (parts 20, others 12) \u2014 when any
+  // section hits its cap the count is a truncation floor, not exhaustive,
+  // so the copy must say "top N matches" (review finding, 2026-08-21).
+  const atCap =
+    results != null &&
+    (results.parts.length >= 20 ||
+      results.categories.length >= 12 ||
+      results.suppliers.length >= 12 ||
+      results.manufacturers.length >= 12);
   const metaText = loading
     ? 'searching\u2026'
     : results != null
-      ? `${results.total} result${results.total === 1 ? '' : 's'} \u00b7 ${(results.took_ms / 1000).toFixed(3)} s`
+      ? `${atCap ? 'top ' : ''}${results.total} ${
+          atCap ? 'matches' : `result${results.total === 1 ? '' : 's'}`
+        } \u00b7 ${(results.took_ms / 1000).toFixed(3)} s`
       : '\u2014';
 
   return (

@@ -2,7 +2,7 @@ import axios from 'axios';
 import type { Category, CategoryDetail, CategoryPartners } from '@public/types/category';
 import type { Supplier } from '@public/types/supplier';
 import type { Sponsor } from '@public/types/sponsor';
-import type { PublicPart, PartDetail, RelatedParts } from '@public/types/part';
+import type { PartDetail, RelatedParts } from '@public/types/part';
 import type { SearchResultsV2, PublicManufacturers } from '@public/types/search';
 
 import { API_BASE_URL } from '@shared/services/constants';
@@ -16,12 +16,6 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 // Slugs already warmed via hover-prefetch this session — guards against
 // redundant network calls when a user hovers the same card repeatedly.
 const _prefetchedCategories = new Set<string>();
-
-export interface SearchResults {
-  categories: Category[];
-  suppliers: Supplier[];
-  parts: PublicPart[];
-}
 
 export const api = {
   getCategories: () =>
@@ -68,10 +62,6 @@ export const api = {
   // exactly; the endpoint resolves a child slug to its parent.
   getCategoryPartners: (slug: string) =>
     client.get<CategoryPartners>(`/categories/${slug}/partners`).then(r => r.data),
-
-  // Legacy v1 shape — being replaced by searchV2; delete once no consumer remains.
-  search: (q: string) =>
-    client.get<SearchResults>('/search/', { params: { q } }).then(r => r.data),
 
   // Search v2 (same route, richer contract — see @public/types/search).
   // Dropdown/typeahead callers MUST pass { suggest: 0 } so zero-result

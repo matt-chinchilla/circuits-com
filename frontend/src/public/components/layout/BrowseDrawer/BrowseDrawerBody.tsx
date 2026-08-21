@@ -15,7 +15,6 @@ import styles from "./BrowseDrawer.module.scss";
 // search-v2 backend (spec §1.4a). Optional here so the drawer renders
 // (badge-less) against a server that predates the field; fold into
 // @public/types/supplier once the backend lands and delete this alias.
-type DrawerSupplier = Supplier & { tier?: string | null };
 
 type Pane = "cats" | "mfrs" | "dists";
 
@@ -39,7 +38,7 @@ function once<T>(fetcher: () => Promise<T>): () => Promise<T> {
 
 const fetchCats = once<Category[]>(() => api.getCategories());
 const fetchMfrs = once<PublicManufacturers>(() => api.getManufacturers(60));
-const fetchSups = once<DrawerSupplier[]>(() => api.getSuppliers());
+const fetchSups = once<Supplier[]>(() => api.getSuppliers());
 
 // Rail — the pinned five (spec §4): two pane-less links (/search, /bom)
 // between three pane switchers, then the Site group mirroring the navbar.
@@ -90,7 +89,7 @@ export default function BrowseDrawerBody({ open, onClose }: BrowseDrawerBodyProp
   const [pane, setPane] = useState<Pane>("cats");
   const [cats, setCats] = useState<Category[] | null>(null);
   const [mfrs, setMfrs] = useState<PublicManufacturers | null>(null);
-  const [sups, setSups] = useState<DrawerSupplier[] | null>(null);
+  const [sups, setSups] = useState<Supplier[] | null>(null);
   const [catsErr, setCatsErr] = useState(false);
   const [mfrsErr, setMfrsErr] = useState(false);
   const [supsErr, setSupsErr] = useState(false);
