@@ -1,0 +1,199 @@
+@use '@shared/styles/variables' as *;
+@use '@shared/styles/mixins' as *;
+
+// BOM pricing tool — page shell + intake surface.
+//
+// Shell only: the canvas's material system (rail gradients, badge textures,
+// tinted-card tokens) lands with the table in the later tasks. Everything
+// here is the existing theme vocabulary so the page is themed correctly from
+// its first commit rather than being restyled twice.
+
+.page {
+  background: var(--theme-surface-bg, #{$surface});
+  padding: 36px 20px 64px;
+}
+
+.stack {
+  max-width: 1080px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+// ─── Intake ─────────────────────────────────────────────────────────────────
+
+.intake {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.drop {
+  @include card-base;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 44px 24px;
+  text-align: center;
+  border: 2px dashed var(--theme-accent, $nav-blue);
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.dropActive {
+  background: var(--theme-accent-soft, rgba($nav-blue, 0.08));
+  border-color: var(--theme-cta-bg, $executive-blue);
+}
+
+.dropLead {
+  margin: 0;
+  font-family: $font-heading;
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: var(--executive-blue, $executive-blue);
+}
+
+.dropHint {
+  margin: 0;
+  font-size: 0.86rem;
+  color: $text-secondary;
+}
+
+.dropBtn {
+  margin-top: 8px;
+  padding: 10px 22px;
+  line-height: 1;
+  font-family: $font-body;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--theme-cta-text, #fff);
+  background: var(--theme-cta-bg, $executive-blue);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: progress;
+  }
+}
+
+// ─── Paste box ──────────────────────────────────────────────────────────────
+
+.paste {
+  @include card-base;
+
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 22px 24px 24px;
+}
+
+.pasteLabel {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--executive-blue, $executive-blue);
+}
+
+.pasteBox {
+  width: 100%;
+  padding: 12px 14px;
+  font-family: $font-mono;
+  font-size: 0.88rem;
+  color: $text-primary;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.14);
+  border-radius: 8px;
+  resize: vertical;
+
+  &:focus-visible {
+    outline: 2px solid var(--theme-accent, $nav-blue);
+    outline-offset: 1px;
+  }
+}
+
+.pasteBtn {
+  align-self: flex-start;
+  padding: 9px 20px;
+  line-height: 1;
+  font-family: $font-body;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--executive-blue, $executive-blue);
+  background: transparent;
+  border: 1px solid var(--theme-accent, $nav-blue);
+  border-radius: 8px;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+}
+
+// ─── Errors + phase placeholder ─────────────────────────────────────────────
+
+.intakeError,
+.pageError {
+  margin: 0;
+  padding: 12px 14px;
+  font-size: 0.9rem;
+  color: $error-red;
+  background: rgba($error-red, 0.07);
+  border-left: 3px solid $error-red;
+  border-radius: 6px;
+}
+
+.phaseStub {
+  @include card-base;
+
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 24px;
+}
+
+.phaseTitle {
+  margin: 0;
+  font-family: $font-heading;
+  font-size: 1.25rem;
+  color: var(--executive-blue, $executive-blue);
+}
+
+.phaseText {
+  margin: 0;
+  font-size: 0.95rem;
+  color: $text-secondary;
+}
+
+.phaseWarn {
+  margin: 0;
+  font-size: 0.86rem;
+  color: $sponsor-gold;
+}
+
+.linkBtn {
+  align-self: flex-start;
+  padding: 0;
+  line-height: 1.2;
+  font-family: $font-body;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--executive-blue, $executive-blue);
+  background: none;
+  border: none;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+@include responsive($bp-mobile) {
+  .page {
+    padding: 24px 14px 48px;
+  }
+
+  .drop {
+    padding: 32px 16px;
+  }
+}

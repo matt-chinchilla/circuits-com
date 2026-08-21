@@ -10,6 +10,7 @@ import HomePage from "@public/pages/home";
 const CategoryPage = lazy(() => import("@public/pages/category"));
 const SearchPage = lazy(() => import("@public/pages/search"));
 const JoinPage = lazy(() => import("@public/pages/join"));
+const BomPage = lazy(() => import("@public/pages/bom"));
 const ContactPage = lazy(() => import("@public/pages/contact"));
 const AboutPage = lazy(() => import("@public/pages/about"));
 const KeywordSponsorPage = lazy(() => import("@public/pages/keyword"));
@@ -250,6 +251,10 @@ function App() {
           <Route path="/category/:parentSlug/:childSlug" element={<CategoryPage />} />
           <Route path="/search" element={<SearchPage />} />
           <Route path="/join" element={<JoinPage />} />
+          {/* One page, two doors: /bom is the tool, /bom/s/:slug is a
+              read-only share of somebody's priced table. */}
+          <Route path="/bom" element={<BomPage />} />
+          <Route path="/bom/s/:slug" element={<BomPage />} />
           <Route path="/contact" element={<ContactPage />} />
           <Route path="/about" element={<AboutPage />} />
           <Route path="/keyword" element={<KeywordLandingPage />} />

@@ -19,7 +19,8 @@
     "react-dom": "^19.0.0",
     "react-dropzone": "^15.0.0",
     "react-helmet-async": "^3.0.0",
-    "react-router-dom": "^7.1.0"
+    "react-router-dom": "^7.1.0",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
     "@types/node": "^25.5.0",

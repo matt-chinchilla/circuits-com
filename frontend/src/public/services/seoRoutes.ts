@@ -19,6 +19,7 @@ import {
 export type StaticPageKey =
   | 'about'
   | 'acceptableUse'
+  | 'bom'
   | 'contact'
   | 'join'
   | 'keyword'
@@ -50,6 +51,15 @@ export const STATIC_PAGE_SEO: Record<StaticPageKey, PageSeo> = {
     canonical: `${SITE_ORIGIN}/acceptable-use`,
     jsonLd: [],
     heading: 'Acceptable Use Policy',
+    links: SITE_LINKS,
+  },
+  bom: {
+    title: 'BOM Pricing Tool — Price Your Build | Circuit Center',
+    description:
+      'Upload or paste your bill of materials and price every line across 57 distributors — exact and approximate matches, live lookups for unknowns, quantity price breaks.',
+    canonical: `${SITE_ORIGIN}/bom`,
+    jsonLd: [],
+    heading: 'BOM Pricing Tool',
     links: SITE_LINKS,
   },
   contact: {
