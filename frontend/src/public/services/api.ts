@@ -3,6 +3,7 @@ import type { Category, CategoryDetail, CategoryPartners } from '@public/types/c
 import type { Supplier } from '@public/types/supplier';
 import type { Sponsor } from '@public/types/sponsor';
 import type { PublicPart, PartDetail, RelatedParts } from '@public/types/part';
+import type { SearchResultsV2, PublicManufacturers } from '@public/types/search';
 
 import { API_BASE_URL } from '@shared/services/constants';
 export { API_BASE_URL };
@@ -68,8 +69,23 @@ export const api = {
   getCategoryPartners: (slug: string) =>
     client.get<CategoryPartners>(`/categories/${slug}/partners`).then(r => r.data),
 
+  // Legacy v1 shape — being replaced by searchV2; delete once no consumer remains.
   search: (q: string) =>
     client.get<SearchResults>('/search/', { params: { q } }).then(r => r.data),
+
+  // Search v2 (same route, richer contract — see @public/types/search).
+  // Dropdown/typeahead callers MUST pass { suggest: 0 } so zero-result
+  // keystrokes never pay the server's fuzzy-recovery pipeline; the results
+  // page omits it (server default suggest=1).
+  searchV2: (q: string, opts?: { suggest?: 0 | 1 }) =>
+    client
+      .get<SearchResultsV2>('/search/', { params: { q, ...(opts?.suggest !== undefined ? { suggest: opts.suggest } : {}) } })
+      .then(r => r.data),
+
+  // Public derived manufacturers (names + part counts only — no CRM data
+  // exists behind this route). `total` is the full derived-list length.
+  getManufacturers: (limit = 60) =>
+    client.get<PublicManufacturers>('/manufacturers/', { params: { limit } }).then(r => r.data),
 
   getSuppliers: () =>
     client.get<Supplier[]>('/suppliers/').then(r => r.data),
