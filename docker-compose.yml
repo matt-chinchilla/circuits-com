@@ -95,6 +95,11 @@ services:
       # 401 from Mouser is a FeedFatalError — the sync would fail while
       # looking configured. MOUSER_SEARCH_API_KEY is the working key's home.
       MOUSER_API_KEY: ${MOUSER_SEARCH_API_KEY:-}
+      # ── BOM tool ─────────────────────────────────────────────────────
+      # Daily ceiling on Mouser calls spent resolving public BOM uploads.
+      # Default MIRRORS app/config.py (100) — an empty `${VAR:-}` would
+      # OVERWRITE the code default, not inherit it.
+      BOM_RESOLVE_DAILY_BUDGET: ${BOM_RESOLVE_DAILY_BUDGET:-100}
       # NOTE deliberately ABSENT here: ANTHROPIC_ADMIN_KEY. It is an
       # ORGANIZATION-level admin credential and only the cost-sync service
       # reads it — the internet-facing api container must not carry a secret

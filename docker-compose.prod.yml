@@ -145,6 +145,11 @@ services:
       # MOUSER_SEARCH_API_KEY on purpose: an invalid legacy MOUSER_API_KEY
       # exists in host environments and must never be the one passed through.
       MOUSER_API_KEY: ${MOUSER_SEARCH_API_KEY:-}
+      # ── BOM tool ─────────────────────────────────────────────────────
+      # Daily ceiling on Mouser calls spent resolving public BOM uploads.
+      # Default MIRRORS app/config.py (100) — an empty `${VAR:-}` would
+      # OVERWRITE the code default, not inherit it.
+      BOM_RESOLVE_DAILY_BUDGET: ${BOM_RESOLVE_DAILY_BUDGET:-100}
       # Anthropic ORGANIZATION admin key (sk-ant-admin…). Unset today — the
       # ANTHROPIC_ADMIN_KEY deliberately absent: an org-level admin credential
       # only the cost-sync service reads — see the dev compose note.

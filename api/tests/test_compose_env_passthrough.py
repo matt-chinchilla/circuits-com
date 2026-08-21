@@ -552,3 +552,18 @@ def test_deploy_names_the_feed_import_service_in_every_build_list():
             "deploy.sh builds api without feed-import: the nightly import container "
             "would keep whatever code it was first built with, forever."
         )
+
+
+def test_both_compose_files_pass_the_bom_budget_through():
+    for path in (DEV_COMPOSE, PROD_COMPOSE):
+        api = _service_block(path, "api")
+        assert re.search(
+            r"^\s*BOM_RESOLVE_DAILY_BUDGET:\s*\$\{BOM_RESOLVE_DAILY_BUDGET:-100\}", api, re.M
+        ), (
+            f"{path.name}: the api service must pass BOM_RESOLVE_DAILY_BUDGET through with a "
+            "default MIRRORING the code default (100) — the allowlist gotcha."
+        )
+
+
+def test_bom_budget_compose_default_mirrors_code_default():
+    assert Settings.model_fields["BOM_RESOLVE_DAILY_BUDGET"].default == 100
