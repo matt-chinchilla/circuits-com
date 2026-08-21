@@ -16,7 +16,10 @@ from decimal import Decimal
 from app.db.session import SessionLocal
 from app.models import Category, Part, PartListing, PriceBreak, Supplier
 
-PART_SKIP = {"category_slug", "t"}
+# manufacturer_id: a per-environment surrogate (036) — never applied even if
+# an old export file carries it; seed_manufacturers step 5 re-links by name.
+PART_SKIP = {"category_slug", "t", "manufacturer_id"}
+SUPPLIER_SKIP = {"manufacturer_id"}
 LISTING_NATURAL = {"part_sku", "part_manufacturer", "supplier_name", "price_breaks", "t"}
 
 db = SessionLocal()
@@ -59,12 +62,12 @@ for line_no, line in enumerate(open(sys.argv[1], encoding="utf-8"), 1):
         row = sups.get(rec["name"])
         if row is None:
             row = Supplier(id=uuid.uuid4(), name=rec["name"])
-            set_fields(row, rec, skip=())  # BEFORE flush: NOT NULL columns
+            set_fields(row, rec, skip=SUPPLIER_SKIP)  # BEFORE flush: NOT NULL columns
             db.add(row)
             db.flush()
             sups[row.name] = row
             counts["suppliers_new"] += 1
-        elif set_fields(row, rec, skip=()):
+        elif set_fields(row, rec, skip=SUPPLIER_SKIP):
             counts["suppliers_updated"] += 1
 
     elif kind == "part":

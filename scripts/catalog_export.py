@@ -34,12 +34,14 @@ sup_name = {s.id: s.name for s in db.query(Supplier).all()}
 
 n = 0
 for s in db.query(Supplier).all():
-    print(json.dumps({"t": "supplier", **row_dict(s)}))
+    print(json.dumps({"t": "supplier", **row_dict(s, skip=("id", "manufacturer_id"))}))
     n += 1
 
 part_key = {}  # part_id -> (sku, manufacturer)
 for p in db.query(Part).yield_per(500):
-    d = row_dict(p, skip=("id", "category_id"))
+    # manufacturer_id is a surrogate into a PER-ENVIRONMENT table (036) —
+    # the importing side's seed re-links by name (seed_manufacturers step 5).
+    d = row_dict(p, skip=("id", "category_id", "manufacturer_id"))
     d["category_slug"] = cat_slug.get(p.category_id)
     part_key[p.id] = (p.sku, p.manufacturer_name)
     print(json.dumps({"t": "part", **d}))
@@ -56,7 +58,7 @@ for li in db.query(PartListing).yield_per(500):
     sn = sup_name.get(li.supplier_id)
     if not pk or not sn:
         continue
-    d = row_dict(li, skip=("id", "part_id", "supplier_id"))
+    d = row_dict(li, skip=("id", "part_id", "supplier_id", "manufacturer_id"))
     d.update(
         part_sku=pk[0],
         part_manufacturer=pk[1],
