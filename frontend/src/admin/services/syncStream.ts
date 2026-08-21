@@ -139,14 +139,74 @@ function isZeroCounts(counts: SyncCounts): boolean {
 }
 
 /**
- * The counters for the console header.
+ * A run's counters, kept as the events ARRIVE rather than derived from the
+ * rows still on screen.
+ *
+ * The distinction is the whole reason this type exists. The console keeps a
+ * bounded WINDOW of rows (a continuous import emits tens of thousands, and an
+ * unbounded list is an O(n²) copy and a DOM full of thumbnails), so anything
+ * counted by walking that window counts only what survived the eviction:
+ * mid-run the totals stall at the cap and go DOWN as older `created` rows are
+ * pushed out by newer ones (owner-reported 2026-08-21, "stalls around 500 and
+ * the number goes down at times"). A tally folded at arrival time is immune —
+ * it never looks at the window at all.
+ *
+ * `local` is this reader's own arithmetic, which mirrors the server's exactly,
+ * including the part that reads oddly: a `media_filled` part counts in BOTH
+ * `synced` and `media_filled`, because filling an image IS a write.
+ * `finished` is the server's own tally off the last `sync_finished`.
+ */
+export interface RunTally {
+  local: SyncCounts;
+  finished: SyncCounts | null;
+}
+
+export const EMPTY_RUN_TALLY: RunTally = { local: ZERO_COUNTS, finished: null };
+
+/**
+ * Fold ONE event into a running tally. Pure — same input, same output — so it
+ * is safe inside a React state updater, which may run it more than once for
+ * the same update.
+ */
+export function tallyEvent(tally: RunTally, event: SyncEvent): RunTally {
+  if (event.kind === 'sync_finished') {
+    // A later finish replaces an earlier one; a finish with no counts (a shape
+    // the server does not send, but the type allows) leaves the last one.
+    return event.counts ? { ...tally, finished: event.counts } : tally;
+  }
+  if (event.kind !== 'part_synced') return tally;
+  const local = { ...tally.local };
+  switch (event.action) {
+    // A NEW part, not a refreshed one — the server keeps these apart and so
+    // does this, or an import would read as if it had re-priced the catalog.
+    case 'created':
+      local.created += 1;
+      break;
+    case 'media_filled':
+      local.synced += 1;
+      local.media_filled += 1;
+      break;
+    case 'updated':
+      local.synced += 1;
+      break;
+    case 'not_found':
+      local.not_found += 1;
+      break;
+    case 'no_data':
+      local.no_data += 1;
+      break;
+    default:
+      return tally;
+  }
+  return { ...tally, local };
+}
+
+/**
+ * The numbers the console header prints.
  *
  * Once `sync_finished` has landed its `counts` ARE the answer — the server did
- * the counting and the footer prints its sentence verbatim, so re-deriving a
- * second number here could only produce a disagreement. Before that, the tally
- * mirrors the server's arithmetic exactly, including the part that reads oddly:
- * a `media_filled` part counts in BOTH `synced` and `media_filled`, because
- * filling an image IS a write.
+ * the counting and the footer prints its sentence verbatim, so preferring a
+ * second number here could only produce a disagreement.
  *
  * ONE exception, and it is not the server being wrong. The route's catch-all
  * abort ends the stream with all-zero counts and the detail "sync aborted",
@@ -157,39 +217,53 @@ function isZeroCounts(counts: SyncCounts): boolean {
  * still sitting there, directly under a line promising progress was saved. So
  * an all-zero finish loses to a non-empty local tally.
  */
+export function tallyTotals(tally: RunTally): SyncCounts {
+  const { local, finished } = tally;
+  if (!finished) return local;
+  return isZeroCounts(finished) && !isZeroCounts(local) ? local : finished;
+}
+
+/**
+ * The same counters for a COMPLETE event list — the whole run, not a window.
+ *
+ * Only safe where nothing has been evicted; a capped display array must fold
+ * `tallyEvent` at arrival instead. Kept because a full list is the natural
+ * shape in a test and in any future caller that holds one.
+ */
 export function tallyCounts(events: SyncEvent[]): SyncCounts {
-  const totals: SyncCounts = { ...ZERO_COUNTS };
-  for (const event of events) {
-    if (event.kind !== 'part_synced') continue;
-    switch (event.action) {
-      // A NEW part, not a refreshed one — the server keeps these apart and so
-      // does this, or an import would read as if it had re-priced the catalog.
-      case 'created':
-        totals.created += 1;
-        break;
-      case 'media_filled':
-        totals.synced += 1;
-        totals.media_filled += 1;
-        break;
-      case 'updated':
-        totals.synced += 1;
-        break;
-      case 'not_found':
-        totals.not_found += 1;
-        break;
-      case 'no_data':
-        totals.no_data += 1;
-        break;
-      default:
-        break;
-    }
-  }
-  for (let i = events.length - 1; i >= 0; i -= 1) {
-    const counts = events[i].counts;
-    if (events[i].kind !== 'sync_finished' || !counts) continue;
-    return isZeroCounts(counts) && !isZeroCounts(totals) ? totals : counts;
-  }
-  return totals;
+  return tallyTotals(events.reduce(tallyEvent, EMPTY_RUN_TALLY));
+}
+
+/**
+ * How many rows the console keeps on screen.
+ *
+ * A continuous auto-import emits tens of thousands of events; an unbounded
+ * array is an O(n²) copy and a DOM full of thumbnails nobody will scroll back
+ * through.
+ */
+export const EVENT_ROW_CAP = 500;
+
+/**
+ * Add one event to the DISPLAY WINDOW, evicting the oldest part rows past the
+ * cap. System rows (started / error / finished) are always kept — they are the
+ * run's structure, and losing the finish would lose the footer.
+ *
+ * It lives next to `tallyEvent` deliberately: the two together are the whole
+ * bug of 2026-08-21. Anything counted by walking THIS array counts only what
+ * survived eviction, so the totals stall at the cap and then go DOWN as older
+ * `created` rows are pushed out. The window is for reading; the tally is for
+ * counting; nothing may do both.
+ */
+export function appendCapped(events: SyncEvent[], event: SyncEvent): SyncEvent[] {
+  const next = [...events, event];
+  if (next.length <= EVENT_ROW_CAP) return next;
+  // Everything not on the system list is evictable — including a kind the
+  // backend grows later, which must not be able to fill the window forever.
+  const isSystem = (e: SyncEvent) =>
+    e.kind === 'sync_started' || e.kind === 'sync_error' || e.kind === 'sync_finished';
+  const system = next.filter(isSystem);
+  const rows = next.filter((e) => !isSystem(e));
+  return [...system, ...rows.slice(rows.length - (EVENT_ROW_CAP - system.length))];
 }
 
 /** How a finished run ended. `aborted` = a `sync_error` cut it short. */
@@ -261,9 +335,15 @@ function isAbortError(err: unknown): boolean {
  * a sentence that named the wrong one would be the only inaccurate thing on
  * screen.
  */
-export function syncErrorMessage(err: unknown): string {
+export function syncErrorMessage(err: unknown, opts: { runActive?: boolean } = {}): string {
   if (!(err instanceof SyncStreamError)) return GENERIC_ERROR;
   if (err.status === 0 && err.detail === STREAM_INTERRUPTED) {
+    // A socket that died while REPLAYING a run that had already ended is a
+    // lost download, not a lost view of live work — promising it is "still
+    // going" would be the same lie in the other direction.
+    if (opts.runActive === false) {
+      return 'Connection lost while loading this run — reconnect to load the rest of it.';
+    }
     // Not a maybe: the run is owned by the server and is still going. The
     // only thing this client lost is the view of it.
     return 'Connection lost — the run is still going on the server. Reconnect to keep watching.';
@@ -340,6 +420,39 @@ export interface SyncSupplierOptions {
 export interface FeedRunInfo {
   runId: string | null;
   mode: 'sync' | 'import';
+  /**
+   * Is the run still GOING, as of the moment this socket opened?
+   *
+   * False for a run that has already ended: the server keeps a finished run
+   * readable for ~15 minutes so an operator who lost the socket can still come
+   * back and read it, so attaching is NOT evidence of a live run. Without this
+   * the console spent the whole replay of a paused run claiming it was
+   * running, offering a Pause that could only 404 (owner-reported 2026-08-21,
+   * "keeps showing that it is running once I come back to it after pausing").
+   *
+   * Defaults TRUE when the header is absent, which is what an API older than
+   * this field sends — the old, optimistic behaviour, never a false "finished"
+   * over a run that is genuinely spending quota.
+   */
+  active: boolean;
+}
+
+/**
+ * Did the RUN outlive this reader?
+ *
+ * Asked on the failure path only, where the socket died without an ending. A
+ * dropped socket is not a dropped run — the work is server-owned — so the
+ * console keeps claiming the run and keeps the second click blocked. But that
+ * only holds for a run that was going in the first place: the same drop while
+ * REPLAYING a finished run would otherwise resurrect it on screen forever,
+ * because no ending can ever arrive to clear it.
+ */
+export function runOutlivesReader(state: {
+  activeAtOpen: boolean;
+  receivedAny: boolean;
+  sawFinish: boolean;
+}): boolean {
+  return state.activeAtOpen && state.receivedAny && !state.sawFinish;
 }
 
 /** `importSupplier` also spends a provider CALL budget, not a row count. */
@@ -408,6 +521,10 @@ async function streamSupplierRun(
   options.onOpen?.({
     runId: res.headers.get('X-Feed-Run-Id'),
     mode: res.headers.get('X-Feed-Run-Mode') === 'import' ? 'import' : 'sync',
+    // Only an explicit "false" means finished. An absent header is an API that
+    // predates the field, and assuming finished there would idle a card over a
+    // run that is still spending the day's quota.
+    active: res.headers.get('X-Feed-Run-Active') !== 'false',
   });
 
   const reader = res.body.getReader();

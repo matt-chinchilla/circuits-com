@@ -34,8 +34,11 @@ interface Props {
    */
   onSync?: () => void;
   /**
-   * True while a SYNC run is in flight — the run, not the socket, so it stays
-   * true across a dropped connection. Drives the spinner and the label.
+   * True while this card's job is OCCUPIED: a sync run going server-side, or
+   * this tab holding a socket on one — it stays true across a dropped
+   * connection, because the run does. Locks the card. The SPINNER and the
+   * "Syncing…" label need the stronger fact and read `serverRunning` too, so
+   * that neither claims work during a probe or a replay.
    */
   syncing?: boolean;
   /**
@@ -43,7 +46,7 @@ interface Props {
    * and the same console renders it.
    */
   onImport?: () => void;
-  /** True while an IMPORT run is in flight — same rule as `syncing`. */
+  /** Same, for the IMPORT card — same rule as `syncing`. */
   importing?: boolean;
   /** Which run is in flight, from X-Feed-Run-Mode — decides which card
    *  becomes the Pause control (owner requirement 2026-08-21). */
@@ -121,6 +124,15 @@ export default function QuickActionsPanel({
   // one run per supplier is a server-enforced 409.
   const syncIsPausable = feedBusy && serverRunMode === 'sync' && Boolean(onPause);
   const importIsPausable = feedBusy && serverRunMode === 'import' && Boolean(onPause);
+  // "Syncing…" / "Importing…" — and the moving glyphs — claim WORK, so they
+  // belong to a run the server says is going, not merely to an open socket.
+  // The page holds a socket open while it probes for a run on load and while
+  // it replays one that has already ended; both leave the cards out of
+  // service (a click has nothing useful to do mid-replay), but neither is an
+  // import in progress, and animating one there is the same false "it's still
+  // running" the console used to show.
+  const syncLive = Boolean(syncing && serverRunning);
+  const importLive = Boolean(importing && serverRunning);
 
   // Smart-default category — whichever category this supplier already has
   // the most listings in. Falls back to empty for brand-new suppliers.
@@ -243,7 +255,7 @@ export default function QuickActionsPanel({
         <span className={styles.qaCardIcon}>
           <Icon
             name="arrows-clockwise"
-            className={syncing ? styles.qaSpin : undefined}
+            className={syncLive ? styles.qaSpin : undefined}
           />
         </span>
         <span className={styles.qaCardBody}>
@@ -252,7 +264,7 @@ export default function QuickActionsPanel({
               ? pausing
                 ? 'Pausing…'
                 : 'Pause sync'
-              : syncing
+              : syncLive
                 ? 'Syncing…'
                 : 'Sync inventory'}
           </span>
@@ -269,7 +281,7 @@ export default function QuickActionsPanel({
         disabled={importIsPausable ? pausing : feedBusy || !onImport}
       >
         <span className={styles.qaCardIcon}>
-          {importing ? <ImportFallIcon /> : <Icon name="download-simple" />}
+          {importLive ? <ImportFallIcon /> : <Icon name="download-simple" />}
         </span>
         <span className={styles.qaCardBody}>
           <span className={styles.qaCardTitle}>
@@ -277,7 +289,7 @@ export default function QuickActionsPanel({
               ? pausing
                 ? 'Pausing…'
                 : 'Pause import'
-              : importing
+              : importLive
                 ? 'Importing…'
                 : 'Import new parts'}
           </span>

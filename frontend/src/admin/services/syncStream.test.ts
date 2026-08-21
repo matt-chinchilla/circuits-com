@@ -2,11 +2,19 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   parseNdjson,
   tallyCounts,
+  tallyEvent,
+  tallyTotals,
+  appendCapped,
+  runOutlivesReader,
   terminalState,
   syncErrorMessage,
   syncSupplier,
   importSupplier,
+  observeSupplierRun,
+  EMPTY_RUN_TALLY,
+  EVENT_ROW_CAP,
   SyncStreamError,
+  type FeedRunInfo,
   type SyncEvent,
 } from '@admin/services/syncStream';
 import { bustSponsorCaches } from '@admin/services/swCache';
@@ -229,6 +237,184 @@ describe('tallyCounts', () => {
   });
 });
 
+// The DISPLAY WINDOW and the RUN TALLY are two different things, and the
+// 2026-08-21 bug was one function doing both jobs: the console tallied the
+// capped `events` array, so on a long import the header stalled near the cap
+// and `created` went DOWN whenever an older created row was evicted by a
+// newer one ("the number-counter for created keeps on stalling around 500…
+// it even has the number go down at times"). These cases pin the split.
+describe('counting a run longer than the display window', () => {
+  /** Exactly what the page does per event: trim the window, fold the tally. */
+  function feed(events: SyncEvent[]) {
+    let window: SyncEvent[] = [];
+    let tally = EMPTY_RUN_TALLY;
+    for (const event of events) {
+      window = appendCapped(window, event);
+      tally = tallyEvent(tally, event);
+    }
+    return { window, counts: tallyTotals(tally) };
+  }
+
+  /** A run of `n` parts, every third one CREATED — an import's headline. */
+  function longRun(n: number): SyncEvent[] {
+    const events: SyncEvent[] = [
+      { kind: 'sync_started', supplier_id: 's1', title: 'Mouser', detail: 'growing catalog' },
+    ];
+    for (let i = 0; i < n; i += 1) events.push(part(i % 3 === 0 ? 'created' : 'updated'));
+    return events;
+  }
+
+  it('keeps counting past the row cap instead of stalling at it', () => {
+    const { window, counts } = feed(longRun(2000));
+
+    expect(window.length).toBe(EVENT_ROW_CAP);
+    expect(counts.created).toBe(667); // 0, 3, 6, … 1998
+    expect(counts.synced).toBe(1333);
+    expect(counts.created + counts.synced).toBe(2000);
+  });
+
+  // The exact shape of the report: the number went DOWN. Once the window is
+  // full, every arriving `updated` row evicts an older one — sometimes a
+  // `created` — so a total walked over the window falls while the run is
+  // still creating parts.
+  it('never goes backwards, where a walk over the window does', () => {
+    const events = longRun(2000);
+    let window: SyncEvent[] = [];
+    let tally = EMPTY_RUN_TALLY;
+    const arrival: number[] = [];
+    const fromWindow: number[] = [];
+    for (const event of events) {
+      window = appendCapped(window, event);
+      tally = tallyEvent(tally, event);
+      arrival.push(tallyTotals(tally).created);
+      fromWindow.push(tallyCounts(window).created);
+    }
+
+    const dropped = (series: number[]) => series.some((n, i) => i > 0 && n < series[i - 1]);
+    expect(dropped(arrival)).toBe(false);
+    expect(dropped(fromWindow)).toBe(true); // the old behaviour, still reproducible
+    // …and it plateaus far below the truth rather than reaching it.
+    expect(fromWindow[fromWindow.length - 1]).toBeLessThan(arrival[arrival.length - 1]);
+  });
+
+  // The server's own numbers still win at the end — the footer prints its
+  // sentence verbatim and a second, disagreeing number is the thing to avoid.
+  it('snaps to the server counts when the run finishes', () => {
+    const { counts } = feed([
+      ...longRun(1200),
+      {
+        kind: 'sync_finished',
+        supplier_id: 's1',
+        title: 'Mouser',
+        detail: '401 created · 799 updated',
+        counts: { synced: 799, media_filled: 0, not_found: 0, no_data: 0, created: 401 },
+      },
+    ]);
+
+    expect(counts).toEqual({
+      synced: 799,
+      media_filled: 0,
+      not_found: 0,
+      no_data: 0,
+      created: 401,
+    });
+  });
+
+  // The abort carve-out has to survive the move to an arrival-time fold: a
+  // run the route aborts reports all-zero counts it never actually knew.
+  it('still keeps the local tally when an aborted run reports all zeros', () => {
+    const { counts } = feed([
+      ...longRun(900),
+      { kind: 'sync_error', supplier_id: 's1', title: 'Import failed', detail: 'boom' },
+      {
+        kind: 'sync_finished',
+        supplier_id: 's1',
+        title: 'Mouser',
+        detail: 'import aborted',
+        counts: { synced: 0, media_filled: 0, not_found: 0, no_data: 0, created: 0 },
+      },
+    ]);
+
+    expect(counts.created).toBe(300);
+    expect(counts.synced).toBe(600);
+  });
+
+  // A re-attach REPLAYS the whole run through the same onEvent path, and the
+  // page resets the tally on the first replayed event. The replay must land on
+  // the same numbers the original reader had — not on double them.
+  it('replays to the same totals, from a tally reset at the first event', () => {
+    const events = longRun(1500);
+    const live = feed(events).counts;
+
+    // Reset-on-first-event, exactly as the page's `replace` branch does.
+    let tally = EMPTY_RUN_TALLY;
+    let first = true;
+    for (const event of events) {
+      tally = tallyEvent(first ? EMPTY_RUN_TALLY : tally, event);
+      first = false;
+    }
+
+    expect(tallyTotals(tally)).toEqual(live);
+  });
+
+  it('is pure, so a React updater re-running it cannot double-count', () => {
+    const before = tallyEvent(EMPTY_RUN_TALLY, part('created'));
+    const twice = tallyEvent(EMPTY_RUN_TALLY, part('created'));
+
+    expect(twice).toEqual(before);
+    expect(EMPTY_RUN_TALLY.local.created).toBe(0); // never mutated in place
+  });
+
+  it('keeps every system row in the window, however long the run', () => {
+    const { window } = feed([
+      { kind: 'sync_started', supplier_id: 's1', title: 'Mouser' },
+      ...Array.from({ length: 900 }, () => part('updated')),
+      { kind: 'sync_error', supplier_id: 's1', title: 'Feed unavailable' },
+      { kind: 'sync_finished', supplier_id: 's1', title: 'Mouser', detail: 'done' },
+    ]);
+
+    expect(window.filter((e) => e.kind !== 'part_synced').map((e) => e.kind)).toEqual([
+      'sync_started',
+      'sync_error',
+      'sync_finished',
+    ]);
+    expect(window.length).toBe(EVENT_ROW_CAP);
+  });
+});
+
+// Whether the RUN outlived the reader — asked only when a socket died without
+// an ending. A dropped socket is not a dropped run, but a socket dropped while
+// REPLAYING a finished one is not a live run either, and treating it as one
+// strands the console claiming work nothing can ever end.
+describe('runOutlivesReader', () => {
+  it('claims the run when a live stream drops mid-flow', () => {
+    expect(
+      runOutlivesReader({ activeAtOpen: true, receivedAny: true, sawFinish: false })
+    ).toBe(true);
+  });
+
+  it('does not claim a run that already sent its ending', () => {
+    expect(runOutlivesReader({ activeAtOpen: true, receivedAny: true, sawFinish: true })).toBe(
+      false
+    );
+  });
+
+  it('does not claim a run that never delivered anything', () => {
+    expect(runOutlivesReader({ activeAtOpen: true, receivedAny: false, sawFinish: false })).toBe(
+      false
+    );
+  });
+
+  // The reattach case: the server handed back the REPLAY of a run that had
+  // already finished (it keeps them readable for ~15 minutes), and the socket
+  // died part-way through. Nothing is running; nothing can arrive to say so.
+  it('never resurrects a run that had already finished before this socket opened', () => {
+    expect(
+      runOutlivesReader({ activeAtOpen: false, receivedAny: true, sawFinish: false })
+    ).toBe(false);
+  });
+});
+
 describe('terminalState', () => {
   const finished = (detail: string): SyncEvent => ({
     kind: 'sync_finished',
@@ -373,8 +559,23 @@ describe('stream transport', () => {
     });
   }
 
-  function respondWith(chunks: string[], ending: 'close' | 'drop' | 'abort') {
-    fetchMock.mockResolvedValue({ ok: true, status: 200, body: bodyOf(chunks, ending) });
+  /** A case-insensitive stand-in for `Headers`, which is all the reader uses. */
+  function headersOf(pairs: Record<string, string>) {
+    const lower = Object.fromEntries(Object.entries(pairs).map(([k, v]) => [k.toLowerCase(), v]));
+    return { get: (name: string) => lower[name.toLowerCase()] ?? null };
+  }
+
+  function respondWith(
+    chunks: string[],
+    ending: 'close' | 'drop' | 'abort',
+    headers: Record<string, string> = {}
+  ) {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: headersOf(headers),
+      body: bodyOf(chunks, ending),
+    });
   }
 
   beforeEach(() => {
@@ -519,5 +720,102 @@ describe('stream transport', () => {
     await importSupplier('s1', () => {});
 
     expect(bustSponsorCaches).toHaveBeenCalledTimes(1);
+  });
+
+  // `onOpen` carries the two things the BODY cannot say, because both streams
+  // emit an identical envelope: which job this is, and whether the run is
+  // still going. The second one is the 2026-08-21 fix — the server keeps a
+  // finished run readable for ~15 minutes so an operator can come back and
+  // read it, so a successful attach is NOT evidence of live work.
+  describe('the run headers', () => {
+    async function openInfo(headers: Record<string, string>): Promise<FeedRunInfo> {
+      respondWith([`${partA}\n`], 'close', headers);
+      let info: FeedRunInfo | null = null;
+      await observeSupplierRun('s1', () => {}, { onOpen: (i) => (info = i) });
+      if (info === null) throw new Error('onOpen never fired');
+      return info;
+    }
+
+    it('names the run and the job it is', async () => {
+      const info = await openInfo({
+        'X-Feed-Run-Id': 'run-42',
+        'X-Feed-Run-Mode': 'import',
+        'X-Feed-Run-Active': 'true',
+      });
+
+      expect(info.runId).toBe('run-42');
+      expect(info.mode).toBe('import');
+      expect(info.active).toBe(true);
+    });
+
+    it('reports a replay of a FINISHED run as not active', async () => {
+      const info = await openInfo({ 'X-Feed-Run-Mode': 'import', 'X-Feed-Run-Active': 'false' });
+
+      expect(info.active).toBe(false);
+    });
+
+    // An API deployed before the header exists sends nothing. Assuming
+    // "finished" there would idle the Sync/Import cards over a run that is
+    // genuinely spending the day's provider quota — the worse half of the
+    // trade, and the state this whole split exists to prevent.
+    it('assumes the run is live when the header is absent', async () => {
+      const info = await openInfo({ 'X-Feed-Run-Mode': 'sync' });
+
+      expect(info.active).toBe(true);
+    });
+
+    it('defaults an unknown mode to sync rather than mislabelling an import', async () => {
+      const info = await openInfo({});
+
+      expect(info.mode).toBe('sync');
+      expect(info.runId).toBeNull();
+    });
+  });
+
+  // The attach door. A 404 is the NORMAL answer to "is anything going?" and
+  // must not reach the caller as an error — the page probes this on every load.
+  describe('observeSupplierRun', () => {
+    it('opens the feed-run route with GET', async () => {
+      respondWith([], 'close');
+
+      await observeSupplierRun('s1', () => {});
+
+      expect(fetchMock.mock.calls[0][0]).toContain('/suppliers/s1/feed-run');
+      expect(fetchMock.mock.calls[0][1].method).toBe('GET');
+    });
+
+    it('answers false when there is nothing to attach to', async () => {
+      fetchMock.mockResolvedValue({
+        ok: false,
+        status: 404,
+        headers: headersOf({}),
+        json: async () => ({ detail: 'no_feed_run' }),
+      });
+
+      await expect(observeSupplierRun('s1', () => {})).resolves.toBe(false);
+    });
+
+    it('still throws for a 404 that is a missing SUPPLIER, not a missing run', async () => {
+      fetchMock.mockResolvedValue({
+        ok: false,
+        status: 404,
+        headers: headersOf({}),
+        json: async () => ({ detail: 'Supplier not found' }),
+      });
+
+      await expect(observeSupplierRun('s1', () => {})).rejects.toBeInstanceOf(SyncStreamError);
+    });
+  });
+
+  // The sentence for a socket that died mid-stream depends on what it was
+  // reading: live work carrying on without this tab, or the replay of a run
+  // that had already ended. Promising the second one is "still going" is what
+  // left the console claiming a paused run forever.
+  it('does not promise a finished run is still going when its replay drops', () => {
+    const err = new SyncStreamError(0, 'stream_interrupted');
+
+    expect(syncErrorMessage(err, { runActive: false })).not.toContain('still going');
+    expect(syncErrorMessage(err, { runActive: false })).toContain('reconnect');
+    expect(syncErrorMessage(err, { runActive: true })).toContain('still going on the server');
   });
 });

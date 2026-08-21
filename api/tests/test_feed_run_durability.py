@@ -446,6 +446,67 @@ class TestReattach:
         events = [json.loads(line) for line in resp.text.splitlines() if line.strip()]
         assert _kinds(events)[-1] == "sync_finished"
 
+    def test_the_replay_of_a_finished_run_says_so_in_its_headers(
+        self, client, db, auth_header, feed_key, mouser_supplier, three_part_provider
+    ):
+        """`X-Feed-Run-Active` is what separates "watch this" from "read this".
+
+        A finished run stays readable for the retention window, so a 200 on
+        this route is NOT evidence of live work — and the console, which shows
+        a live dot and offers Pause off exactly that, spent the whole replay of
+        a PAUSED run claiming the run was still going (owner-reported
+        2026-08-21). The body cannot say it: a replay looks identical to a live
+        stream until the moment it ends.
+        """
+        run = start_feed_run(
+            supplier=mouser_supplier,
+            mode="import",
+            provider=three_part_provider(),
+            work=_sync_work(),
+            session_factory=TestingSessionLocal,
+        )
+        _await_finished(run)
+
+        resp = client.get(f"/api/suppliers/{mouser_supplier.id}/feed-run", headers=auth_header())
+
+        assert resp.status_code == 200
+        assert resp.headers["x-feed-run-active"] == "false"
+        # Still the whole run — the flag changes how it reads, not what it says.
+        events = [json.loads(line) for line in resp.text.splitlines() if line.strip()]
+        assert _kinds(events)[-1] == "sync_finished"
+
+    def test_a_run_still_going_is_reported_active(
+        self, client, db, auth_header, feed_key, mouser_supplier, three_part_provider
+    ):
+        provider = three_part_provider(cls=_GatedProvider, block_on=3)
+        start_feed_run(
+            supplier=mouser_supplier,
+            mode="import",
+            provider=provider,
+            work=_sync_work(),
+            session_factory=TestingSessionLocal,
+        )
+        assert provider.blocked.wait(WAIT_SECONDS)
+        threading.Timer(0.2, provider.release.set).start()
+
+        resp = client.get(f"/api/suppliers/{mouser_supplier.id}/feed-run", headers=auth_header())
+
+        # Read at the moment the headers were built, which is the moment the
+        # console needs it: the stream's own ending settles it afterwards.
+        assert resp.headers["x-feed-run-active"] == "true"
+
+    def test_starting_a_run_reports_it_active(
+        self, client, db, auth_header, feed_key, mouser_supplier, three_part_provider, monkeypatch
+    ):
+        """Both POST doors share this response builder — a click that STARTS
+        a run must never label it finished."""
+        _use_fake_provider(monkeypatch, three_part_provider())
+
+        resp = client.post(f"/api/suppliers/{mouser_supplier.id}/sync", headers=auth_header())
+
+        assert resp.status_code == 200
+        assert resp.headers["x-feed-run-active"] == "true"
+
     def test_no_run_is_a_404_not_an_empty_stream(
         self, client, auth_header, feed_key, mouser_supplier
     ):
