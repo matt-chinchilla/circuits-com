@@ -15,7 +15,7 @@ import Icon from "@shared/components/Icon";
 import { formatPhone } from "@shared/utils/phone";
 import { useCategories } from "@public/hooks/useCategories";
 import { api } from "@public/services/api";
-import TierBannerRibbon, { type SponsorTierId } from "./TierBannerRibbon";
+import TierBannerRibbon, { type SponsorTierId } from "@public/components/widgets/TierBannerRibbon";
 import styles from "./JoinPage.module.scss";
 
 // Staged Join + Advertise surface (design kit "Join v3", 2026-08-14). One

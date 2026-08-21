@@ -150,6 +150,23 @@
 .ribbon.checked .ringGlow {
   opacity: 0.95;
 }
+// Idle ribbons keep their dash animations PAUSED, not merely invisible —
+// at opacity 0 the stroke-dashoffset was still animating every frame, and a
+// BOM table renders up to 25 ribbons at once (2026-08-21).
+.ringSnake,
+.ringGlow {
+  animation-play-state: paused;
+}
+
+.ribbon:hover .ringSnake,
+.ribbon.active .ringSnake,
+.ribbon.checked .ringSnake,
+.ribbon:hover .ringGlow,
+.ribbon.active .ringGlow,
+.ribbon.checked .ringGlow {
+  animation-play-state: running;
+}
+
 @keyframes dash {
   to {
     stroke-dashoffset: -100;

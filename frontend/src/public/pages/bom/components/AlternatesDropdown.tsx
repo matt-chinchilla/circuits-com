@@ -1,6 +1,10 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { safeHttpUrl } from '@shared/utils/url';
+import TierBannerRibbon, {
+  SPONSOR_TIER_ELEMENT,
+  type SponsorTierId,
+} from '@public/components/widgets/TierBannerRibbon';
 import { priceAt } from '../lib/priceBreaks';
 import { formatUnit } from '../lib/format';
 import type { BomOffer } from '../lib/types';
@@ -196,10 +200,14 @@ export default function AlternatesDropdown({
                     >
                       <span className={styles.optionTop}>
                         <span className={styles.name}>{offer.supplier_name}</span>
-                        {offer.tier != null && (
-                          <span className={styles.tier} data-tier={offer.tier}>
-                            {offer.tier}
-                          </span>
+                        {(offer.tier === 'platinum' ||
+                          offer.tier === 'gold' ||
+                          offer.tier === 'silver') && (
+                          <TierBannerRibbon
+                            tier={offer.tier as SponsorTierId}
+                            el={SPONSOR_TIER_ELEMENT[offer.tier as SponsorTierId]}
+                            label={offer.tier}
+                          />
                         )}
                         {isRecommended && <span className={styles.rec}>recommended</span>}
                       </span>

@@ -5,6 +5,10 @@ import { formatMoney, formatUnit } from '../lib/format';
 import type { BomOffer, TableRow } from '../lib/types';
 import AlternatesDropdown from './AlternatesDropdown';
 import CoverageStrip, { type CoverageCounts } from './CoverageStrip';
+import TierBannerRibbon, {
+  SPONSOR_TIER_ELEMENT,
+  type SponsorTierId,
+} from '@public/components/widgets/TierBannerRibbon';
 import MatchBadge from './MatchBadge';
 import SimilarDropdown from './SimilarDropdown';
 import styles from './BomTable.module.scss';
@@ -35,6 +39,12 @@ const QUOTE_IDENTITY_MAX = 180;
 
 /** "Resistor_SMD:R_0805_2012Metric" → "R_0805_2012Metric" — the readable
  *  half of a KiCad LIB:FOOTPRINT value, for no-MPN submitted lines. */
+/** Narrow a server tier string to the ribbon's three metals; anything else
+ *  (unknown tiers) renders no banner rather than a wrong one. */
+function tierId(tier: string | null): SponsorTierId | null {
+  return tier === 'platinum' || tier === 'gold' || tier === 'silver' ? tier : null;
+}
+
 function footprintHint(footprint: string): string {
   const idx = footprint.indexOf(':');
   return idx >= 0 ? footprint.slice(idx + 1) : footprint;
@@ -368,6 +378,9 @@ export default function BomTable({
 
                   <td className={`${styles.td} ${styles.tdSub}`}>
                     <span className={styles.subSku}>{submitted}</span>
+                    {row.manufacturer != null && (
+                      <span className={styles.subMaker}>{row.manufacturer}</span>
+                    )}
                     {row.mpn == null && row.footprint != null && (
                       <span className={styles.subHint}>{footprintHint(row.footprint)}</span>
                     )}
@@ -491,10 +504,12 @@ export default function BomTable({
                             <span className={styles.pinnedNote}>your pick</span>
                           )}
                         </div>
-                        {chosen.tier != null && (
-                          <span className={styles.tierBadge} data-tier={chosen.tier}>
-                            {chosen.tier}
-                          </span>
+                        {tierId(chosen.tier) != null && (
+                          <TierBannerRibbon
+                            tier={tierId(chosen.tier) as SponsorTierId}
+                            el={SPONSOR_TIER_ELEMENT[tierId(chosen.tier) as SponsorTierId]}
+                            label={chosen.tier as string}
+                          />
                         )}
                         <span
                           className={`${styles.rail} ${avail.className}`}

@@ -13,6 +13,14 @@ import styles from './TierBannerRibbon.module.scss';
 
 export type SponsorTierId = 'silver' | 'gold' | 'platinum';
 
+/** The metal for each tier's element square — Ag/Au/Pt, the ribbon's opening
+ *  glyph. Exported for consumers (the BOM table) that label by tier name. */
+export const SPONSOR_TIER_ELEMENT: Record<SponsorTierId, string> = {
+  silver: 'Ag',
+  gold: 'Au',
+  platinum: 'Pt',
+};
+
 interface TierBannerRibbonProps {
   tier: SponsorTierId;   // picks the metal palette (data-tier attr)
   el: string;            // element tile label: "Ag" | "Au" | "Pt"

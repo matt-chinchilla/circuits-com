@@ -32,6 +32,11 @@
 
 .table {
   width: 100%;
+  // FIXED layout (the canvas's own choice): auto layout re-negotiated
+  // column widths as rows streamed in, so Recommended visibly changed
+  // length between states (owner report 2026-08-21). Widths live on the
+  // header cells below; Description (5th) is the one flexible column.
+  table-layout: fixed;
   border-collapse: separate;
   border-spacing: 0;
   font-family: $font-body;
@@ -346,9 +351,16 @@
 
 .supplierCell {
   display: flex;
-  align-items: stretch;
+  // Center, not stretch: the tier ribbon is an inline pill and a stretch
+  // default ballooned it into a card-sized slab (2026-08-21). The
+  // availability rail opts back into stretch itself.
+  align-items: center;
   gap: 8px;
   min-width: 0;
+
+  > [class*='rail'] {
+    align-self: stretch;
+  }
 }
 
 .supplierBody {
@@ -501,8 +513,26 @@
   }
 }
 
+// Column widths for the fixed layout — Description flexes, all else pinned.
+.table th:nth-child(1) { width: 40px; }
+.table th:nth-child(2) { width: 128px; }
+.table th:nth-child(3) { width: 148px; }
+.table th:nth-child(4) { width: 112px; }
+.table th:nth-child(6) { width: 60px; }
+.table th:nth-child(7) { width: 148px; }
+.table th:nth-child(8) { width: 248px; }
+.table th:nth-child(9) { width: 104px; }
+.table th:nth-child(10) { width: 112px; }
+
 .tdSub {
   min-width: 110px;
+}
+
+.subMaker {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--bom-ink-secondary, #676c71);
+  margin-top: 1px;
 }
 
 .subSku {
