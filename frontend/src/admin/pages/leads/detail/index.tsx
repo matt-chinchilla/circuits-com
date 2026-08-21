@@ -313,7 +313,6 @@ export default function LeadDetailPage() {
                 })}
               </ol>
       ) : null,
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [lead?.contacts],
   );
 

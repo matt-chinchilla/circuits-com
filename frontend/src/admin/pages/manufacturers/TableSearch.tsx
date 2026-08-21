@@ -32,7 +32,6 @@ export default function TableSearch({
   useEffect(() => {
     const t = setTimeout(() => onQuery(value.trim()), SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
 
   return (
