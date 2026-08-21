@@ -257,8 +257,12 @@ export const adminApi = {
   getPopular: () =>
     adminClient.get<PopularData>('/dashboard/popular').then((r) => r.data),
 
-  getAnalytics: (days = 30) =>
-    adminClient.get<AnalyticsData>('/dashboard/analytics', { params: { days } }).then((r) => r.data),
+  // Server defaults segment=humans — crawler floods must not read as
+  // visitors. Pass 'bots' | 'all' only when the UI explicitly asks.
+  getAnalytics: (days = 30, segment: 'humans' | 'bots' | 'all' = 'humans') =>
+    adminClient
+      .get<AnalyticsData>('/dashboard/analytics', { params: { days, segment } })
+      .then((r) => r.data),
 
   // ── Dashboard overhaul (2026-07-30) ──────────────────────────────────────
   // All of these bucket by America/New_York server-side and float()-cast their

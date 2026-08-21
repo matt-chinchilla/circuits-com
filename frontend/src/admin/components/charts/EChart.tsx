@@ -23,13 +23,14 @@ import { useEffect, useRef } from 'react';
 import type { CSSProperties } from 'react';
 import * as echarts from 'echarts/core';
 import type { EChartsCoreOption, EChartsType } from 'echarts/core';
-import { CustomChart, GraphChart, LineChart, PieChart } from 'echarts/charts';
+import { CustomChart, GraphChart, LineChart, MapChart, PieChart } from 'echarts/charts';
 import {
   GraphicComponent,
   GridComponent,
   LegendComponent,
   MarkLineComponent,
   TooltipComponent,
+  VisualMapComponent,
 } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
 import { ADMIN_CHART_THEME_NAME, buildAdminTheme, prefersReducedMotion } from './chartTheme';
@@ -42,13 +43,24 @@ echarts.use([
   PieChart,
   CustomChart,
   GraphChart,
+  MapChart,
   GridComponent,
   TooltipComponent,
   LegendComponent,
   GraphicComponent,
   MarkLineComponent,
+  VisualMapComponent,
   CanvasRenderer,
 ]);
+
+/** Register a GeoJSON map once per name (WorldMapPanel lazy-loads the
+ *  committed world-110m asset and hands it here before first render). */
+const registeredMaps = new Set<string>();
+export function registerMapOnce(name: string, geoJson: object): void {
+  if (registeredMaps.has(name)) return;
+  echarts.registerMap(name, geoJson as Parameters<typeof echarts.registerMap>[1]);
+  registeredMaps.add(name);
+}
 
 // The theme is (re)registered per-init from buildAdminTheme() so a dark/light
 // toggle (which remounts the charts) picks up the swapped chrome.

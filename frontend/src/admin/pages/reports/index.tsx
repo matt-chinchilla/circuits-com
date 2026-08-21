@@ -2,8 +2,17 @@ import { useEffect, useMemo, useState } from 'react'
 import { Download } from 'lucide-react'
 import { useDemo } from '@admin/contexts/DemoContext'
 import { adminApi } from '@admin/services/adminApi'
-import type { AnalyticsData, DashboardStats, RevenueDataPoint, PopularData } from '@admin/types/admin'
+import type {
+  AnalyticsData,
+  AnalyticsSegment,
+  DashboardStats,
+  RevenueDataPoint,
+  PopularData,
+} from '@admin/types/admin'
 import styles from './ReportsPage.module.scss'
+import WorldMapPanel from './WorldMapPanel'
+import { monotoneAreaPath, monotonePath, refHost, tooltipAnchor } from './chartKit'
+import { usePinnedIndex } from './usePinnedIndex'
 
 // ReportsPage — Phase A7 port of the 2026-04-25 Claude Design bundle.
 // Hand-rolled native SVG charts (replaces Recharts ~400KB).
@@ -110,6 +119,7 @@ interface ReportsRevenueChartProps {
 
 function ReportsRevenueChart({ series }: ReportsRevenueChartProps) {
   const [hover, setHover] = useState<number | null>(null)
+  const { pinned, togglePin, clearPin } = usePinnedIndex(series)
 
   if (series.length < 2) {
     return <div className={styles.empty}>No revenue data yet.</div>
@@ -133,29 +143,24 @@ function ReportsRevenueChart({ series }: ReportsRevenueChartProps) {
 
   const sponsorTop = series.map((d) => d.listing + d.sponsor)
 
-  // Listing-fees area (bottom band)
-  let listingPath = `M ${xs[0]},${yScale(0)}`
-  for (let i = 0; i < N; i++) listingPath += ` L ${xs[i]},${yScale(series[i].listing)}`
-  listingPath += ` L ${xs[N - 1]},${yScale(0)} Z`
-
-  // Sponsorship area (stacked above listings)
-  let sponsorPath = `M ${xs[0]},${yScale(series[0].listing)}`
-  for (let i = 0; i < N; i++) sponsorPath += ` L ${xs[i]},${yScale(sponsorTop[i])}`
-  for (let i = N - 1; i >= 0; i--) sponsorPath += ` L ${xs[i]},${yScale(series[i].listing)}`
-  sponsorPath += ' Z'
-
-  // Total trendline (sponsor-top)
-  let totalLine = ''
-  for (let i = 0; i < N; i++) {
-    totalLine += (i === 0 ? 'M ' : ' L ') + xs[i] + ',' + yScale(sponsorTop[i])
-  }
+  // Monotone-smoothed bands. The sponsor band's bottom edge retraces the
+  // listing curve in reverse (Steffen tangents are direction-symmetric, so
+  // the two edges coincide with no sliver gap).
+  const listingPts = series.map((d, i) => ({ x: xs[i], y: yScale(d.listing) }))
+  const topPts = sponsorTop.map((v, i) => ({ x: xs[i], y: yScale(v) }))
+  const listingPath = monotoneAreaPath(listingPts, yScale(0))
+  const listingBack = monotonePath([...listingPts].reverse()).replace(/^M/, 'L')
+  const sponsorPath = `${monotonePath(topPts)} ${listingBack} Z`
+  const totalLine = monotonePath(topPts)
 
   const tickStep = maxV / 4
   const yTicks = [0, tickStep, tickStep * 2, tickStep * 3, maxV]
 
-  const tipData = hover !== null ? series[hover] : null
-  const tipX = hover !== null ? Math.min(W - 170, Math.max(PAD_L, xs[hover] + 14)) : 0
-  const tipY = 20
+  const activeIdx = pinned ?? hover
+  const tipData = activeIdx !== null ? series[activeIdx] : null
+  const anchor = activeIdx !== null
+    ? tooltipAnchor(xs[activeIdx], yScale(sponsorTop[activeIdx]), W, H)
+    : null
 
   return (
     <div className={styles.chartWrap}>
@@ -163,6 +168,7 @@ function ReportsRevenueChart({ series }: ReportsRevenueChartProps) {
         viewBox={`0 0 ${W} ${H}`}
         className={styles.chart}
         onMouseLeave={() => setHover(null)}
+        onClick={clearPin}
         preserveAspectRatio="xMidYMid meet"
       >
         {yTicks.map((t) => (
@@ -211,10 +217,10 @@ function ReportsRevenueChart({ series }: ReportsRevenueChartProps) {
           strokeWidth="2"
           className={styles.revLine}
         />
-        {hover !== null && (
+        {activeIdx !== null && (
           <line
-            x1={xs[hover]}
-            x2={xs[hover]}
+            x1={xs[activeIdx]}
+            x2={xs[activeIdx]}
             y1={PAD_T}
             y2={H - PAD_B}
             style={{ stroke: 'var(--a-axis)' }}
@@ -230,25 +236,39 @@ function ReportsRevenueChart({ series }: ReportsRevenueChartProps) {
               width={innerW / N}
               height={innerH}
               fill="transparent"
+              style={{ cursor: 'pointer' }}
               onMouseEnter={() => setHover(i)}
+              onClick={(e) => { e.stopPropagation(); togglePin(i) }}
             />
+            {pinned === i && (
+              <circle
+                cx={xs[i]}
+                cy={yScale(sponsorTop[i])}
+                r={8}
+                fill="none"
+                style={{ stroke: 'var(--a-primary)' }}
+                strokeWidth="1.5"
+                opacity="0.5"
+              />
+            )}
             <circle
               cx={xs[i]}
               cy={yScale(sponsorTop[i])}
-              r={hover === i ? 5 : 3}
+              r={activeIdx === i ? 5 : 3}
               style={{ fill: 'var(--a-primary)', stroke: 'var(--a-card)' }}
               strokeWidth="2"
             />
           </g>
         ))}
       </svg>
-      {tipData && (
+      {tipData && anchor && (
         <div
           className={styles.revTip}
           style={{
             position: 'absolute',
-            left: `${(tipX / W) * 100}%`,
-            top: `${(tipY / H) * 100}%`,
+            left: anchor.left,
+            top: anchor.top,
+            transform: anchor.transform,
             width: 160,
           }}
         >
@@ -402,6 +422,7 @@ interface TrafficChartProps {
 
 function TrafficChart({ data }: TrafficChartProps) {
   const [hover, setHover] = useState<number | null>(null)
+  const { pinned, togglePin, clearPin } = usePinnedIndex(data)
 
   if (data.length === 0) {
     return <div className={styles.empty}>No traffic data yet.</div>
@@ -423,19 +444,19 @@ function TrafficChart({ data }: TrafficChartProps) {
   const yTicks = [0, tickStep, tickStep * 2, tickStep * 3, Math.min(tickStep * 4, maxV)]
   const labelEvery = Math.max(1, Math.floor(N / 7))
 
-  const hovered = hover !== null ? data[hover] : null
-  const tipLeft = hover !== null
-    ? `${(Math.min(W - 140, Math.max(PAD.l, xs[hover] + 14)) / W) * 100}%`
-    : '0%'
+  // Pinned beats hover; both drive one tooltip anchored ABOVE the dot.
+  const active = pinned ?? hover
+  const shown = active !== null ? data[active] : null
+  const anchor = active !== null
+    ? tooltipAnchor(xs[active], yScale(data[active].views), W, H)
+    : null
 
-  let viewsLine = ''
-  let visitorsLine = ''
-  let viewsArea = ''
-  if (N >= 2) {
-    viewsLine = data.map((d, i) => `${i === 0 ? 'M' : 'L'} ${xs[i]},${yScale(d.views)}`).join(' ')
-    visitorsLine = data.map((d, i) => `${i === 0 ? 'M' : 'L'} ${xs[i]},${yScale(d.visitors)}`).join(' ')
-    viewsArea = viewsLine + ` L ${xs[N - 1]},${yScale(0)} L ${xs[0]},${yScale(0)} Z`
-  }
+  // Monotone (Steffen) smoothing — never overshoots a data point.
+  const viewsPts = data.map((d, i) => ({ x: xs[i], y: yScale(d.views) }))
+  const visitorsPts = data.map((d, i) => ({ x: xs[i], y: yScale(d.visitors) }))
+  const viewsLine = N >= 2 ? monotonePath(viewsPts) : ''
+  const visitorsLine = N >= 2 ? monotonePath(visitorsPts) : ''
+  const viewsArea = N >= 2 ? monotoneAreaPath(viewsPts, yScale(0)) : ''
 
   return (
     <div className={styles.chartWrap}>
@@ -443,6 +464,7 @@ function TrafficChart({ data }: TrafficChartProps) {
         viewBox={`0 0 ${W} ${H}`}
         className={styles.chart}
         onMouseLeave={() => setHover(null)}
+        onClick={clearPin}
         preserveAspectRatio="xMidYMid meet"
       >
         {yTicks.map(t => (
@@ -467,8 +489,11 @@ function TrafficChart({ data }: TrafficChartProps) {
         )}
         {data.map((d, i) => (
           <g key={d.day}>
-            <circle cx={xs[i]} cy={yScale(d.views)} r={hover === i || N === 1 ? 5 : 3} style={{ fill: 'var(--a-primary)', stroke: 'var(--a-card)' }} strokeWidth="2" />
-            <circle cx={xs[i]} cy={yScale(d.visitors)} r={hover === i || N === 1 ? 4 : 2.5} fill="#2563eb" style={{ stroke: 'var(--a-card)' }} strokeWidth="1.5" />
+            {pinned === i && (
+              <circle cx={xs[i]} cy={yScale(d.views)} r={8} fill="none" style={{ stroke: 'var(--a-primary)' }} strokeWidth="1.5" opacity="0.5" />
+            )}
+            <circle cx={xs[i]} cy={yScale(d.views)} r={active === i || N === 1 ? 5 : 3} style={{ fill: 'var(--a-primary)', stroke: 'var(--a-card)' }} strokeWidth="2" />
+            <circle cx={xs[i]} cy={yScale(d.visitors)} r={active === i || N === 1 ? 4 : 2.5} fill="#2563eb" style={{ stroke: 'var(--a-card)' }} strokeWidth="1.5" />
             {N === 1 && (
               <>
                 <text x={xs[i] + 10} y={yScale(d.views) - 8} fontSize="11" style={{ fill: 'var(--a-primary)' }} fontWeight="600">{d.views} views</text>
@@ -477,21 +502,34 @@ function TrafficChart({ data }: TrafficChartProps) {
             )}
           </g>
         ))}
-        {hover !== null && N >= 2 && (
-          <line x1={xs[hover]} x2={xs[hover]} y1={PAD.t} y2={H - PAD.b} style={{ stroke: 'var(--a-axis)' }} strokeDasharray="2 3" opacity="0.5" />
+        {active !== null && N >= 2 && (
+          <line x1={xs[active]} x2={xs[active]} y1={PAD.t} y2={H - PAD.b} style={{ stroke: 'var(--a-axis)' }} strokeDasharray="2 3" opacity="0.5" />
         )}
         {N >= 2 && data.map((_, i) => (
-          <rect key={i} x={xs[i] - innerW / (N * 2)} y={PAD.t} width={innerW / N} height={innerH} fill="transparent" onMouseEnter={() => setHover(i)} />
+          <rect
+            key={i}
+            x={xs[i] - innerW / (N * 2)}
+            y={PAD.t}
+            width={innerW / N}
+            height={innerH}
+            fill="transparent"
+            style={{ cursor: 'pointer' }}
+            onMouseEnter={() => setHover(i)}
+            onClick={(e) => { e.stopPropagation(); togglePin(i) }}
+          />
         ))}
       </svg>
-      {hovered && (
-        <div className={styles.revTip} style={{ position: 'absolute', left: tipLeft, top: `${(20 / H) * 100}%`, width: 140 }}>
-          <div className={styles.revTipTitle}>{hovered.day}</div>
+      {shown && anchor && (
+        <div
+          className={styles.revTip}
+          style={{ position: 'absolute', left: anchor.left, top: anchor.top, transform: anchor.transform, width: 140 }}
+        >
+          <div className={styles.revTipTitle}>{shown.day}</div>
           <div className={styles.revTipRow}>
-            <span className="dot" style={{ background: 'var(--a-primary)' }} />Views<b>{hovered.views}</b>
+            <span className="dot" style={{ background: 'var(--a-primary)' }} />Views<b>{shown.views}</b>
           </div>
           <div className={styles.revTipRow}>
-            <span className="dot" style={{ background: '#2563eb' }} />Visitors<b>{hovered.visitors}</b>
+            <span className="dot" style={{ background: '#2563eb' }} />Visitors<b>{shown.visitors}</b>
           </div>
         </div>
       )}
@@ -573,6 +611,7 @@ const DEVICE_LINES: Array<{ key: 'desktop' | 'mobile' | 'tablet'; color: string;
 
 function DeviceTrendChart({ data }: { data: Array<{ day: string; desktop: number; mobile: number; tablet: number }> }) {
   const [hover, setHover] = useState<number | null>(null)
+  const { pinned, togglePin, clearPin } = usePinnedIndex(data)
 
   if (data.length === 0) {
     return <div className={styles.empty}>No device trend data yet.</div>
@@ -593,11 +632,21 @@ function DeviceTrendChart({ data }: { data: Array<{ day: string; desktop: number
   const yTicks = [0, tickStep, tickStep * 2, Math.min(tickStep * 3, maxV)]
   const labelEvery = Math.max(1, Math.floor(N / 7))
 
-  const hovered = hover !== null ? data[hover] : null
+  const active = pinned ?? hover
+  const shown = active !== null ? data[active] : null
+  // Anchor above the TOPMOST series dot so the tip never covers a line.
+  const anchor = active !== null
+    ? tooltipAnchor(
+        xs[active],
+        Math.min(...DEVICE_LINES.map(({ key }) => yScale(data[active][key]))),
+        W,
+        H,
+      )
+    : null
 
   return (
     <div className={styles.chartWrap}>
-      <svg viewBox={`0 0 ${W} ${H}`} className={styles.chart} onMouseLeave={() => setHover(null)} preserveAspectRatio="xMidYMid meet" style={{ height: 200 }}>
+      <svg viewBox={`0 0 ${W} ${H}`} className={styles.chart} onMouseLeave={() => setHover(null)} onClick={clearPin} preserveAspectRatio="xMidYMid meet" style={{ height: 200 }}>
         {yTicks.map(t => (
           <g key={t}>
             <line x1={PAD.l} x2={W - PAD.r} y1={yScale(t)} y2={yScale(t)} style={{ stroke: 'var(--a-grid)' }} strokeDasharray="3 4" />
@@ -611,24 +660,39 @@ function DeviceTrendChart({ data }: { data: Array<{ day: string; desktop: number
         )}
         {DEVICE_LINES.map(({ key, color }) => {
           if (N < 2) return null
-          const line = data.map((d, i) => `${i === 0 ? 'M' : 'L'} ${xs[i]},${yScale(d[key])}`).join(' ')
+          const line = monotonePath(data.map((d, i) => ({ x: xs[i], y: yScale(d[key]) })))
           return <path key={key} d={line} fill="none" style={{ stroke: color }} strokeWidth="1.8" opacity="0.85" />
         })}
         {N === 1 && DEVICE_LINES.map(({ key, color }) => (
           <circle key={key} cx={xs[0]} cy={yScale(data[0][key])} r={4} style={{ fill: color, stroke: 'var(--a-card)' }} strokeWidth="1.5" />
         ))}
-        {N >= 2 && data.map((_, i) => (
-          <rect key={i} x={xs[i] - innerW / (N * 2)} y={PAD.t} width={innerW / N} height={innerH} fill="transparent" onMouseEnter={() => setHover(i)} />
-        ))}
-        {hover !== null && N >= 2 && (
-          <line x1={xs[hover]} x2={xs[hover]} y1={PAD.t} y2={H - PAD.b} style={{ stroke: 'var(--a-axis)' }} strokeDasharray="2 3" opacity="0.5" />
+        {active !== null && N >= 2 && (
+          <g>
+            <line x1={xs[active]} x2={xs[active]} y1={PAD.t} y2={H - PAD.b} style={{ stroke: 'var(--a-axis)' }} strokeDasharray="2 3" opacity="0.5" />
+            {DEVICE_LINES.map(({ key, color }) => (
+              <circle key={key} cx={xs[active]} cy={yScale(data[active][key])} r={pinned === active ? 4.5 : 3.5} style={{ fill: color, stroke: 'var(--a-card)' }} strokeWidth="1.5" />
+            ))}
+          </g>
         )}
+        {N >= 2 && data.map((_, i) => (
+          <rect
+            key={i}
+            x={xs[i] - innerW / (N * 2)}
+            y={PAD.t}
+            width={innerW / N}
+            height={innerH}
+            fill="transparent"
+            style={{ cursor: 'pointer' }}
+            onMouseEnter={() => setHover(i)}
+            onClick={(e) => { e.stopPropagation(); togglePin(i) }}
+          />
+        ))}
       </svg>
-      {hovered && (
-        <div className={styles.revTip} style={{ position: 'absolute', left: `${(Math.min(W - 150, Math.max(PAD.l, xs[hover!] + 14)) / W) * 100}%`, top: '8%', width: 130 }}>
-          <div className={styles.revTipTitle}>{hovered.day}</div>
+      {shown && anchor && (
+        <div className={styles.revTip} style={{ position: 'absolute', left: anchor.left, top: anchor.top, transform: anchor.transform, width: 130 }}>
+          <div className={styles.revTipTitle}>{shown.day}</div>
           {DEVICE_LINES.map(({ key, color, label }) => (
-            <div key={key} className={styles.revTipRow}><span className="dot" style={{ background: color }} />{label}<b>{hovered[key]}</b></div>
+            <div key={key} className={styles.revTipRow}><span className="dot" style={{ background: color }} />{label}<b>{shown[key]}</b></div>
           ))}
         </div>
       )}
@@ -654,6 +718,7 @@ export default function ReportsPage() {
   const [revenue, setRevenue] = useState<RevenueDataPoint[]>([])
   const [popular, setPopular] = useState<PopularData | null>(null)
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null)
+  const [segment, setSegment] = useState<AnalyticsSegment>('humans')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -677,11 +742,13 @@ export default function ReportsPage() {
 
   useEffect(() => {
     let cancelled = false
-    adminApi.getAnalytics(RANGE_DAYS[range])
+    adminApi.getAnalytics(RANGE_DAYS[range], segment)
       .then(a => { if (!cancelled) setAnalytics(a) })
       .catch(() => {})
     return () => { cancelled = true }
-  }, [demoMode, range])
+    // segment is part of the query — the charts' pinned tooltips clear
+    // automatically because the data identity changes.
+  }, [demoMode, range, segment])
 
   // Build the chart series — bundle's hand-tuned data in demo mode, otherwise
   // map the API's RevenueDataPoint[] to the {m, listing, sponsor} shape.
@@ -725,6 +792,17 @@ export default function ReportsPage() {
 
   const partsByCatMax = Math.max(16, ...partsByCat.map(([, v]) => v))
   const topSuppliersMax = Math.max(32, ...topSuppliers.map(([, v]) => v))
+
+  // Referrer URLs fold to hostnames (google.com/ and google.com/search are
+  // one source) — aggregate before charting or the labels collide.
+  const refRows: Array<[string, number]> = useMemo(() => {
+    const agg = new Map<string, number>()
+    for (const r of analytics?.referrers ?? []) {
+      const host = refHost(r.source)
+      agg.set(host, (agg.get(host) ?? 0) + r.views)
+    }
+    return [...agg.entries()].sort((a, b) => b[1] - a[1])
+  }, [analytics])
 
   if (loading) {
     return <div className={styles.loading}>Loading reports…</div>
@@ -898,7 +976,40 @@ export default function ReportsPage() {
 
       {tab === 'site' && (
         <>
-          {!analytics || analytics.total_views === 0 ? (
+          <div className={styles.segmentBar}>
+            <div className={styles.seg} role="group" aria-label="Traffic segment">
+              {(['humans', 'bots', 'all'] as const).map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  className={`${styles.segBtn} ${segment === s ? styles.on : ''}`}
+                  aria-pressed={segment === s}
+                  onClick={() => setSegment(s)}
+                >
+                  {s === 'humans' ? 'Humans' : s === 'bots' ? 'Bots' : 'All'}
+                  {analytics && (
+                    <span className={styles.segCount}>
+                      {(s === 'humans'
+                        ? analytics.human_views
+                        : s === 'bots'
+                          ? analytics.bot_views
+                          : analytics.human_views + analytics.bot_views
+                      ).toLocaleString()}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+            <span className={styles.segmentNote}>
+              {segment === 'humans'
+                ? 'Crawlers are filtered out — these numbers are people.'
+                : segment === 'bots'
+                  ? 'Crawler and bot traffic only.'
+                  : 'Everything the tracker recorded, crawlers included.'}
+            </span>
+          </div>
+
+          {!analytics || (analytics.total_views === 0 && analytics.bot_views === 0) ? (
             <div className={styles.analyticsEmpty}>
               <strong>No analytics data yet</strong>
               <p>Page views are tracked automatically. Visit the public site to start collecting data.</p>
@@ -933,6 +1044,12 @@ export default function ReportsPage() {
               </div>
 
               <div className={styles.chartsGrid}>
+                <WorldMapPanel
+                  countries={analytics.countries}
+                  geoTrackedSince={analytics.geo_tracked_since}
+                  segment={analytics.segment}
+                />
+
                 <div className={`${styles.chartCard} ${styles.chartFull}`}>
                   <div className={styles.chartHead}>
                     <h3 className={styles.chartTitle}>Traffic Over Time</h3>
@@ -981,15 +1098,50 @@ export default function ReportsPage() {
                   )}
                 </div>
 
+                {analytics.crawlers.length > 0 && (
+                  <div className={styles.chartCard}>
+                    <div className={styles.chartHead}>
+                      <h3 className={styles.chartTitle}>AI &amp; Search Crawlers</h3>
+                      <span className={styles.chartSub}>
+                        Who is indexing the catalog · last {analytics.period_days}d
+                      </span>
+                    </div>
+                    <div className={styles.crawlerList}>
+                      {analytics.crawlers.map(c => (
+                        <div key={c.family} className={styles.crawlerRow}>
+                          <span className={styles.crawlerName}>{c.family}</span>
+                          <span className={styles.crawlerTrack}>
+                            <span
+                              className={styles.crawlerFill}
+                              style={{
+                                width: `${Math.max(3, (c.views / Math.max(1, analytics.crawlers[0].views)) * 100)}%`,
+                              }}
+                            />
+                          </span>
+                          <span className={styles.crawlerViews}>{c.views.toLocaleString()}</span>
+                          <span className={styles.crawlerSeen}>
+                            {c.last_seen ? c.last_seen.slice(0, 10) : '—'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                    <p className={styles.crawlerNote}>
+                      Being crawled by AI and search engines makes the catalog findable —
+                      it just isn&rsquo;t visitors. These rows are excluded from the
+                      Humans segment.
+                    </p>
+                  </div>
+                )}
+
                 {analytics.referrers.length > 0 && (
                   <div className={`${styles.chartCard} ${styles.chartFull}`}>
                     <div className={styles.chartHead}>
                       <h3 className={styles.chartTitle}>Traffic Sources</h3>
-                      <span className={styles.chartSub}>Top referrers</span>
+                      <span className={styles.chartSub}>Top referrers · shown as sites</span>
                     </div>
                     <HBarChart
-                      data={analytics.referrers.map(r => [r.source, r.views])}
-                      max={Math.max(1, ...analytics.referrers.map(r => r.views))}
+                      data={refRows}
+                      max={Math.max(1, ...refRows.map(([, v]) => v))}
                     />
                   </div>
                 )}

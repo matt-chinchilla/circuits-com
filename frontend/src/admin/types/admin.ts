@@ -344,7 +344,23 @@ export interface AnalyticsData {
   top_parts: Array<{ path: string; views: number }>;
   top_categories: Array<{ path: string; views: number }>;
   daily_devices: Array<{ day: string; desktop: number; mobile: number; tablet: number }>;
+  // ── Segment + geo additions (migration 040, 2026-08-21) ──────────────────
+  /** The segment this response was aggregated for. Server default: humans. */
+  segment: 'humans' | 'bots' | 'all';
+  /** Window totals INDEPENDENT of the chosen segment (toggle badges). */
+  human_views: number;
+  bot_views: number;
+  /** Named crawler families in the window — always the bots, whatever the
+   *  segment toggle shows elsewhere. */
+  crawlers: Array<{ family: string; views: number; sessions: number; last_seen: string | null }>;
+  /** Segment-filtered visitors by ISO alpha-2 country. Forward-only data:
+   *  rows older than migration 040 have no country. */
+  countries: Array<{ code: string; views: number; visitors: number }>;
+  geo_unknown_views: number;
+  geo_tracked_since: string | null;
 }
+
+export type AnalyticsSegment = AnalyticsData['segment'];
 
 // Pagination
 export interface PaginatedResponse<T> {

@@ -774,3 +774,224 @@
   color: var(--a-fg3);
   font-size: 13px;
 }
+
+// ── Site-analytics segment toggle (Humans / Bots / All) ─────────────────────
+// Humans is the default: the whole point is that a crawler flood must never
+// read as visitors again.
+
+.segmentBar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.segCount {
+  margin-left: 7px;
+  font-family: ui-monospace, 'SF Mono', monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  opacity: 0.75;
+}
+
+.segmentNote {
+  font-size: 12px;
+  color: var(--a-fg3);
+}
+
+// ── AI & Search Crawlers panel ───────────────────────────────────────────────
+// Bots wear NEUTRAL ink, deliberately outside the series palette: they are
+// context, not a brand entity competing with the traffic series.
+
+.crawlerList {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.crawlerRow {
+  display: grid;
+  grid-template-columns: 96px 1fr 56px 78px;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.crawlerName {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--a-fg1);
+  @include truncate;
+}
+
+.crawlerTrack {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--a-track);
+  overflow: hidden;
+}
+
+.crawlerFill {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  background: repeating-linear-gradient(
+    45deg,
+    var(--a-fg4) 0 3px,
+    transparent 3px 6px
+  );
+}
+
+.crawlerViews {
+  font-family: ui-monospace, 'SF Mono', monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  text-align: right;
+  color: var(--a-fg1);
+}
+
+.crawlerSeen {
+  font-family: ui-monospace, 'SF Mono', monospace;
+  font-size: 10.5px;
+  text-align: right;
+  color: var(--a-fg3);
+}
+
+.crawlerNote {
+  margin: 12px 0 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--a-fg3);
+}
+
+// ── Visitors by Country — the dark signature panel ──────────────────────────
+// PCB-dark ground (#0d1512) on the light admin surface; single-hue green
+// choropleth ramp validated against this surface (chartKit provenance).
+
+.wmCard {
+  background: #0d1512;
+  border-color: #22352b;
+}
+
+.wmTitle {
+  color: #e6f2ea;
+}
+
+.wmSub {
+  color: #8fa89a;
+}
+
+.wmBody {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(220px, 1fr);
+  gap: 18px;
+  align-items: center;
+
+  @include responsive(tablet) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.wmMap {
+  position: relative;
+  min-width: 0;
+}
+
+.wmLoading {
+  height: 300px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #8fa89a;
+  font-size: 13px;
+}
+
+.wmCollect {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 6px;
+  padding: 0 12%;
+  background: rgba(13, 21, 18, 0.55);
+
+  strong {
+    color: #e6f2ea;
+    font-size: 14px;
+  }
+
+  p {
+    margin: 0;
+    color: #a9c2b4;
+    font-size: 12px;
+    line-height: 1.55;
+    max-width: 420px;
+  }
+}
+
+.wmRank {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.wmRow {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) 72px 52px;
+  align-items: center;
+  gap: 8px;
+}
+
+.wmFlag {
+  font-size: 15px;
+  line-height: 1;
+}
+
+.wmName {
+  font-size: 12.5px;
+  color: #d3e4da;
+  @include truncate;
+}
+
+.wmTrack {
+  height: 7px;
+  border-radius: 4px;
+  background: #1b2a22;
+  overflow: hidden;
+}
+
+.wmFill {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #2f7d5b, #57c78c);
+}
+
+.wmVal {
+  font-family: ui-monospace, 'SF Mono', monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  text-align: right;
+  color: #e6f2ea;
+}
+
+.wmFoot {
+  margin-top: 12px;
+  text-align: right;
+
+  a {
+    font-size: 10.5px;
+    color: #6f8a7c;
+    text-decoration: none;
+
+    &:hover {
+      color: #a9c2b4;
+      text-decoration: underline;
+    }
+  }
+}
