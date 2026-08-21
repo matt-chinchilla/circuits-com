@@ -60,6 +60,42 @@ interface Props {
   serverRunning?: boolean;
 }
 
+/**
+ * The looping "downloading" glyph for an active import: a stream of arrows
+ * falling into the tray and vanishing as they land. The Phosphor glyph is a
+ * single font character, so its arrow cannot move independently of its tray
+ * — this inline SVG redraws the same anatomy in two parts and animates only
+ * the arrows. `currentColor` keeps it white on the filled red card exactly
+ * like the font icon it stands in for.
+ */
+function ImportFallIcon() {
+  return (
+    <svg
+      className={styles.qaFall}
+      viewBox="0 0 24 24"
+      width="22"
+      height="22"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M4.75 15v3.75a1.5 1.5 0 0 0 1.5 1.5h11.5a1.5 1.5 0 0 0 1.5-1.5V15" />
+      <g className={styles.qaFallArrow}>
+        <path d="m8.7 6.5 3.3 3.4 3.3-3.4" />
+      </g>
+      <g className={`${styles.qaFallArrow} ${styles.qaFallArrowMid}`}>
+        <path d="m8.7 6.5 3.3 3.4 3.3-3.4" />
+      </g>
+      <g className={`${styles.qaFallArrow} ${styles.qaFallArrowLate}`}>
+        <path d="m8.7 6.5 3.3 3.4 3.3-3.4" />
+      </g>
+    </svg>
+  );
+}
+
 export default function QuickActionsPanel({
   supplier,
   partRows,
@@ -233,7 +269,7 @@ export default function QuickActionsPanel({
         disabled={importIsPausable ? pausing : feedBusy || !onImport}
       >
         <span className={styles.qaCardIcon}>
-          <Icon name="download-simple" className={importing ? styles.qaPulse : undefined} />
+          {importing ? <ImportFallIcon /> : <Icon name="download-simple" />}
         </span>
         <span className={styles.qaCardBody}>
           <span className={styles.qaCardTitle}>

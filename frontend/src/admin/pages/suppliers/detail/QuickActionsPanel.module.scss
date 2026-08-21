@@ -211,25 +211,62 @@
   }
 }
 
-// The import icon breathes rather than spins: an arrow that spins reads as
-// "retrying", and opacity is the cheapest thing this strip can animate.
-.qaPulse {
-  animation: qaPulse 1.4s ease-in-out infinite;
+// The import icon "downloads" rather than spins: while a run is active the
+// card swaps the Phosphor font glyph for an inline SVG (same tray anatomy)
+// whose arrows fall into the tray and vanish as they land — a looping
+// stream, transform + opacity only (compositor-cheap per the standing
+// animation gotchas). Negative delays start the stream mid-flow on the
+// first painted frame instead of letting it begin empty.
+.qaFall {
+  display: block;
 }
 
-@keyframes qaPulse {
-  0%,
-  100% {
+.qaFallArrow {
+  // Resting opacity 0: each arrow exists only inside its animation cycle,
+  // fading in above the tray and out again as it crosses the rim.
+  opacity: 0;
+  animation: qaFallDrop 1.35s linear infinite;
+}
+
+.qaFallArrowMid {
+  animation-delay: -0.45s;
+}
+
+.qaFallArrowLate {
+  animation-delay: -0.9s;
+}
+
+@keyframes qaFallDrop {
+  0% {
+    transform: translateY(-6px);
+    opacity: 0;
+  }
+  18% {
     opacity: 1;
   }
-  50% {
-    opacity: 0.45;
+  72% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(8.5px);
+    opacity: 0;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .qaSpin,
-  .qaPulse {
+  .qaSpin {
     animation: none;
+  }
+
+  // Frozen arrows would all stack at resting opacity 0 — show ONE static
+  // arrow mid-fall so the card still reads as "downloading", just without
+  // the motion. Later-in-file wins the opacity tie against the base rule.
+  .qaFallArrow {
+    animation: none;
+  }
+
+  .qaFallArrowMid {
+    opacity: 1;
+    transform: translateY(2px);
   }
 }
