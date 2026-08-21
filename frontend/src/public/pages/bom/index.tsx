@@ -6,7 +6,10 @@ import PageHeaderBand from '@public/components/layout/PageHeaderBand';
 import { STATIC_PAGE_SEO } from '@public/services/seoRoutes';
 import type { PageSeo } from '@public/services/seo';
 import BomIntake from './components/BomIntake';
-import type { ParseResult } from './lib/parseBom';
+import ColumnMapper, { canPrice } from './components/ColumnMapper';
+import { applyRoleMap, type ParseResult } from './lib/parseBom';
+import { loadRoleMap, saveRoleMap } from './lib/mapMemory';
+import type { BomRole } from './lib/headerAliases';
 import styles from './BomPage.module.scss';
 
 /**
@@ -39,9 +42,9 @@ const SHARE_SEO: PageSeo = {
 /** The mapper exists for ONE question: which column identifies the part? A
  *  BOM with neither an MPN nor a value column cannot be priced, so that — not
  *  the presence of unmapped extras like `Price` or `LCSC#` — is the trigger.
- *  Task 15 refines the ambiguous cases; this is the floor. */
+ *  `canPrice` is that floor, shared with the mapper's Continue button. */
 function needsMapping(result: ParseResult): boolean {
-  return !result.roleByColumn.some((role) => role === 'mpn' || role === 'value');
+  return !canPrice(result.roleByColumn);
 }
 
 export default function BomPage() {
@@ -51,22 +54,60 @@ export default function BomPage() {
   const [phase, setPhase] = useState<Phase>('intake');
   const [parsed, setParsed] = useState<ParseResult | null>(null);
   const [sourceName, setSourceName] = useState<string | null>(null);
+  const [mapRoles, setMapRoles] = useState<(BomRole | null)[]>([]);
   const sourceText = useRef('');
 
   const handleParsed = useCallback((result: ParseResult, name: string, text: string) => {
-    setParsed(result);
     sourceText.current = text;
     setSourceName(name);
+
     // A hard error keeps the intake on screen with the reason attached; the
     // parser only sets it for the two unrecoverable cases (over the cap, or
     // nothing to read).
-    setPhase(result.error != null ? 'intake' : needsMapping(result) ? 'mapping' : 'table');
+    if (result.error != null) {
+      setParsed(result);
+      setPhase('intake');
+      return;
+    }
+
+    if (needsMapping(result)) {
+      // A layout this browser has already been asked about is answered from
+      // memory — the mapper is a question, and asking it twice about the same
+      // weekly export is the thing the memory exists to prevent.
+      const remembered = loadRoleMap(result.headerSignature);
+      if (remembered != null && canPrice(remembered)) {
+        const mapped = applyRoleMap(text, remembered);
+        setParsed(mapped);
+        setMapRoles(remembered);
+        setPhase(mapped.error != null ? 'intake' : 'table');
+        return;
+      }
+      setParsed(result);
+      setMapRoles(result.roleByColumn);
+      setPhase('mapping');
+      return;
+    }
+
+    setParsed(result);
+    setMapRoles(result.roleByColumn);
+    setPhase('table');
   }, []);
+
+  // Continue from the mapper: remember the answer against this header
+  // signature, then re-materialize the SAME text with the chosen roles.
+  const handleMapContinue = useCallback(() => {
+    if (parsed == null) return;
+    saveRoleMap(parsed.headerSignature, mapRoles);
+    const mapped = applyRoleMap(sourceText.current, mapRoles);
+    setParsed(mapped);
+    setPhase(mapped.error != null ? 'intake' : 'table');
+  }, [parsed, mapRoles]);
 
   const startOver = () => {
     setParsed(null);
     sourceText.current = '';
     setSourceName(null);
+    setMapRoles([]);
     setPhase('intake');
   };
 
@@ -102,14 +143,22 @@ export default function BomPage() {
             </>
           )}
 
-          {/* Phase bodies land in Tasks 15 (mapper) and 16 (table). The shell
-              carries the state they read so those tasks add a component and
-              delete a placeholder, never rewire the page. */}
-          {phase !== 'intake' && parsed != null && (
+          {phase === 'mapping' && parsed != null && (
+            <ColumnMapper
+              headers={parsed.headers}
+              roles={mapRoles}
+              text={sourceText.current}
+              onChange={setMapRoles}
+              onContinue={handleMapContinue}
+            />
+          )}
+
+          {/* The table lands in Task 16. The shell carries the state it reads
+              so that task adds a component and deletes a placeholder, never
+              rewires the page. */}
+          {phase === 'table' && parsed != null && (
             <section className={styles.phaseStub}>
-              <h2 className={styles.phaseTitle}>
-                {phase === 'mapping' ? 'Match your columns' : 'Your BOM'}
-              </h2>
+              <h2 className={styles.phaseTitle}>Your BOM</h2>
               <p className={styles.phaseText}>
                 Read {parsed.lines.length.toLocaleString('en-US')}{' '}
                 {parsed.lines.length === 1 ? 'line' : 'lines'}

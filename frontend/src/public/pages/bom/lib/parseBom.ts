@@ -306,6 +306,20 @@ export function applyRoleMap(text: string, roles: (BomRole | null)[]): ParseResu
   return materialize(rows, headerRowIdx, headers, headers.map((_, i) => roles[i] ?? null));
 }
 
+/**
+ * The mapper's preview: the first data rows exactly as the parser split them,
+ * so the cells a person sees under a header are the cells that column will
+ * contribute. Lives here rather than in the component because the header-row
+ * scan and the delimiter guess must be the SAME ones the map will be applied
+ * with — a second, simpler split in the UI could show a different column.
+ */
+export function previewRows(text: string, limit = 3): string[][] {
+  const rows = parseRows(text);
+  if (rows.length === 0) return [];
+  const scanned = scanHeader(rows);
+  return rows.slice((scanned < 0 ? 0 : scanned) + 1, (scanned < 0 ? 0 : scanned) + 1 + limit);
+}
+
 /** `PART[ ,|]QTY`, one per line — the Mouser paste grammar. */
 const PASTE_LINE = /^(.*?)[\s,|]+(.*)$/;
 
