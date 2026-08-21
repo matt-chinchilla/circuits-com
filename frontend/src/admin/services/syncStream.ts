@@ -36,6 +36,7 @@ import { API_BASE_URL } from '@shared/services/constants';
 import { authHeaders, onUnauthorized } from '@admin/services/adminApi';
 import { bustSponsorCaches } from '@admin/services/swCache';
 import { DEMO_READ_ONLY_MESSAGE, isDemoReadOnly } from '@admin/services/demoReadOnly';
+import { parseNdjson } from '@shared/utils/ndjson';
 
 /** Every event kind the stream can carry. Mirrors the backend's `_sync_event`. */
 export type SyncEventKind = 'sync_started' | 'part_synced' | 'sync_error' | 'sync_finished';
@@ -90,40 +91,6 @@ export class SyncStreamError extends Error {
     this.status = status;
     this.detail = detail;
   }
-}
-
-/**
- * Split an NDJSON buffer into whole events plus the leftover partial line.
- *
- * Pure on purpose — the reader loop is untestable in a node vitest run, but
- * chunk-boundary handling is exactly where a stream client goes wrong, so the
- * boundary logic lives here where a unit test can reach it. Never throws: a
- * half-written or malformed line is skipped, because the alternative is one
- * bad byte killing a run whose per-part writes already committed.
- */
-export function parseNdjson(buffer: string): { events: SyncEvent[]; rest: string } {
-  const lines = buffer.split('\n');
-  // The tail after the last '\n' is by definition incomplete — it may be the
-  // front half of an event still in flight. It goes back to the caller.
-  const rest = lines.pop() ?? '';
-  const events: SyncEvent[] = [];
-  for (const line of lines) {
-    // trim() also absorbs the '\r' of a CRLF-normalizing proxy.
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(trimmed);
-    } catch {
-      continue;
-    }
-    // `null` is typeof 'object', and an array would sail through a bare
-    // typeof check into the renderer as an event with no kind.
-    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-      events.push(parsed as SyncEvent);
-    }
-  }
-  return { events, rest };
 }
 
 const ZERO_COUNTS: SyncCounts = {
@@ -552,12 +519,12 @@ async function streamSupplierRun(
       buffer += decoder.decode(value, { stream: true });
       const { events, rest } = parseNdjson(buffer);
       buffer = rest;
-      emit(events);
+      emit(events as SyncEvent[]);
     }
     buffer += decoder.decode();
     // A stream that ends without a trailing newline leaves its last event in
     // the remainder; the added '\n' completes it.
-    if (buffer.trim()) emit(parseNdjson(`${buffer}\n`).events);
+    if (buffer.trim()) emit(parseNdjson(`${buffer}\n`).events as SyncEvent[]);
   } catch (err) {
     if (isAbortError(err)) return;
     // The socket died mid-run. Re-badge it so the console can say so: the

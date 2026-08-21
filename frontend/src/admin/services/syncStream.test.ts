@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
-  parseNdjson,
   tallyCounts,
   tallyEvent,
   tallyTotals,
@@ -42,72 +41,6 @@ const partB = '{"kind":"part_synced","supplier_id":"s1","title":"LM358","detail"
 // An IMPORT's own action — a part the catalog did not have before. Same
 // envelope, different route (`grow_catalog`).
 const partNew = '{"kind":"part_synced","supplier_id":"s1","title":"NE555P — TI","detail":"Timers","image_url":null,"action":"created"}';
-
-describe('parseNdjson', () => {
-  it('returns every complete line and an empty remainder', () => {
-    const { events, rest } = parseNdjson(`${started}\n${partA}\n`);
-    expect(events).toHaveLength(2);
-    expect(events[0].kind).toBe('sync_started');
-    expect(events[0].detail).toBe('3 parts queued');
-    expect(events[1].action).toBe('updated');
-    expect(rest).toBe('');
-  });
-
-  it('holds back a trailing partial line as the remainder', () => {
-    const partial = partA.slice(0, 30);
-    const { events, rest } = parseNdjson(`${started}\n${partial}`);
-    expect(events).toHaveLength(1);
-    expect(rest).toBe(partial);
-  });
-
-  it('reassembles a line split across two chunks', () => {
-    const head = partA.slice(0, 24);
-    const tail = partA.slice(24);
-    const first = parseNdjson(head);
-    expect(first.events).toHaveLength(0);
-    // Exactly what the reader loop does: prepend the leftover to the next chunk.
-    const second = parseNdjson(first.rest + tail + '\n');
-    expect(second.events).toHaveLength(1);
-    expect(second.events[0].title).toBe('STM32F103 — ST');
-    expect(second.rest).toBe('');
-  });
-
-  it('skips a malformed line without throwing or losing its neighbours', () => {
-    const { events, rest } = parseNdjson(`${started}\n{"kind":"part_syn\n${partB}\n`);
-    expect(events.map((e) => e.kind)).toEqual(['sync_started', 'part_synced']);
-    expect(rest).toBe('');
-  });
-
-  it('skips JSON that parses to a non-object', () => {
-    const { events } = parseNdjson(`12\n"hello"\nnull\n[1,2]\n${partB}\n`);
-    expect(events).toHaveLength(1);
-    expect(events[0].action).toBe('not_found');
-  });
-
-  it('returns nothing for an empty buffer', () => {
-    expect(parseNdjson('')).toEqual({ events: [], rest: '' });
-  });
-
-  it('tolerates CRLF line endings and blank lines', () => {
-    const { events, rest } = parseNdjson(`${started}\r\n\r\n${partA}\r\n`);
-    expect(events).toHaveLength(2);
-    expect(rest).toBe('');
-  });
-
-  it('keeps the counts object that rides on sync_finished', () => {
-    const finished =
-      '{"kind":"sync_finished","supplier_id":"s1","title":"Mouser","detail":"2 synced · 1 images filled · 1 not found","image_url":null,"action":null,"counts":{"synced":2,"media_filled":1,"not_found":1,"no_data":0,"created":0}}';
-    const { events } = parseNdjson(`${finished}\n`);
-    expect(events[0].counts).toEqual({
-      synced: 2,
-      media_filled: 1,
-      not_found: 1,
-      no_data: 0,
-      created: 0,
-    });
-    expect(events[0].detail).toBe('2 synced · 1 images filled · 1 not found');
-  });
-});
 
 // tallyCounts mirrors the server's own arithmetic so the live header counters
 // can never disagree with the summary line the run ends on.
