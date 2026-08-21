@@ -17,7 +17,7 @@ from collections.abc import Iterable
 from uuid import UUID
 
 from sqlalchemy import func, or_
-from sqlalchemy.orm import Session, aliased
+from sqlalchemy.orm import Session, aliased, raiseload
 
 from app.models import Category, Part, PartListing, PriceBreak, Sponsor, Supplier
 from app.services.search_suggest import closest_score, did_you_mean
@@ -297,7 +297,13 @@ def _closest_parts(db: Session, query: str) -> list[dict]:
         filters.append(Part.manufacturer_name.ilike(token_pattern))
 
     candidates = (
-        db.query(Part).filter(or_(*filters)).limit(CLOSEST_POOL_CAP).all() if filters else []
+        db.query(Part)
+        .options(raiseload(Part.listings))
+        .filter(or_(*filters))
+        .limit(CLOSEST_POOL_CAP)
+        .all()
+        if filters
+        else []
     )
     scored = []
     for p in candidates:
@@ -312,6 +318,7 @@ def _closest_parts(db: Session, query: str) -> list[dict]:
         picked_ids = {p.id for p in picked}
         backfill = (
             db.query(Part)
+            .options(raiseload(Part.listings))
             .outerjoin(PartListing, PartListing.part_id == Part.id)
             .group_by(Part.id)
             .order_by(
@@ -341,6 +348,13 @@ def search(db: Session, query: str, suggest: bool = True) -> dict:
 
     parts_raw = (
         db.query(Part)
+        # Suppress the listings→price_breaks selectin cascade (the seed-probe
+        # lesson: bare Part loads hydrate the whole chain, tens of thousands of
+        # discarded ORM rows against the full catalog). raiseload rather than
+        # lazyload so an accidental .listings read here fails LOUD —
+        # _build_search_parts computes every aggregate in SQL and must stay
+        # the only consumer. Same options() on both _closest_parts queries.
+        .options(raiseload(Part.listings))
         .filter(
             or_(
                 Part.sku.ilike(pattern),

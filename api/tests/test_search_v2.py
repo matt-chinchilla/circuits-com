@@ -425,3 +425,66 @@ class TestSuggestParam:
         data = _search(client, "zzzznothing")
         assert data["suggestions"] is not None
         assert data["closest_parts"] is not None
+
+
+# ── Selectin-cascade guard (review-caught) ──────────────────────────────────
+# Part.listings and PartListing.price_breaks are lazy="selectin", so a bare
+# db.query(Part) hydrates the whole listings→breaks chain for every loaded
+# row — the seed-probe lesson, replayed per keystroke. The search queries
+# carry raiseload(Part.listings); these tests are the tripwire that keeps it.
+
+
+class TestNoSelectinCascade:
+    @pytest.fixture
+    def captured_sql(self):
+        """Every statement the engine executes while the test body runs."""
+        from sqlalchemy import event
+
+        from tests.conftest import engine
+
+        statements: list[str] = []
+
+        def _capture(conn, cursor, statement, parameters, context, executemany):
+            statements.append(statement)
+
+        event.listen(engine, "before_cursor_execute", _capture)
+        yield statements
+        event.remove(engine, "before_cursor_execute", _capture)
+
+    def test_search_never_selectin_loads_listings(self, client, db, seeded_db, captured_sql):
+        db.expire_all()
+        captured_sql.clear()
+        _search(client, "LM7805")
+        # The selectin signatures: listings keyed by part_id with no grouping,
+        # breaks keyed by listing_id. The legit batched aggregates GROUP BY.
+        for stmt in captured_sql:
+            if "FROM part_listings" in stmt and "GROUP BY" not in stmt:
+                raise AssertionError(f"listings selectin cascade fired:\n{stmt}")
+            assert "price_breaks.listing_id IN" not in stmt, (
+                f"price_breaks selectin cascade fired:\n{stmt}"
+            )
+
+    def test_zero_result_recovery_never_selectin_loads(self, client, db, seeded_db, captured_sql):
+        """The expensive shape: a zero-result suggest=1 search pools up to 400
+        candidate parts — none of them may drag their listings along."""
+        db.expire_all()
+        captured_sql.clear()
+        _search(client, "LM780599")  # near-miss → recovery path incl. backfill
+        for stmt in captured_sql:
+            if "FROM part_listings" in stmt and "GROUP BY" not in stmt:
+                raise AssertionError(f"listings selectin cascade fired:\n{stmt}")
+            assert "price_breaks.listing_id IN" not in stmt
+
+    def test_loaded_parts_have_listings_unloaded(self, db, seeded_db):
+        """State-level proof: after a service call, no Part instance the
+        search loaded has its listings relationship populated."""
+        from sqlalchemy import inspect as sa_inspect
+
+        from app.services.search_service import search as service_search
+
+        db.expire_all()
+        service_search(db, "LM7805")
+        loaded = [obj for obj in db.identity_map.values() if isinstance(obj, Part)]
+        assert loaded, "search should have loaded Part rows"
+        for part in loaded:
+            assert "listings" in sa_inspect(part).unloaded
