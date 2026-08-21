@@ -146,13 +146,21 @@
   border-radius: 6px;
 }
 
-.phaseStub {
-  @include card-base;
-
+// The priced-BOM phase is NOT a card: the coverage strip and the table each
+// carry their own surface, and wrapping them in a third would stack three
+// shadows on one screen.
+.tablePhase {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 24px;
+  gap: 14px;
+}
+
+.tableHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .phaseTitle {

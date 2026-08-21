@@ -1,0 +1,63 @@
+@use '@shared/styles/variables' as *;
+
+// Match-confidence badge. Hue = status, texture = confidence (spec §5), so
+// the hatch below is the ONLY thing separating APPROX from EXACT for a reader
+// who cannot tell the two hues apart — never collapse them onto one channel.
+//
+// The --bom-* tokens land in _themes.scss with the visual pass; the fallbacks
+// here are the measured values from that same set, so this component is
+// correct on its own commit and inherits the tokens for free afterwards.
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  font-family: $font-mono;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  line-height: 1.6;
+  white-space: nowrap;
+  border-radius: 999px;
+  cursor: help;
+}
+
+.badgeExact {
+  color: #fff;
+  background: var(--bom-rail-active, #2e7d32);
+}
+
+.badgeLive {
+  color: #fff;
+  background: var(--bom-avail-full, #153f80);
+}
+
+.liveTick {
+  font-size: 0.6rem;
+  line-height: 1;
+}
+
+// Hatched, not a second solid fill: APPROX is the same warning ink as the
+// NRND rail, textured to say "confident about the family, not the suffix".
+.badgeApprox {
+  color: #7a4a06;
+  background-color: rgba(180, 83, 9, 0.14);
+  background-image: repeating-linear-gradient(
+    45deg,
+    transparent 0 3px,
+    rgba(180, 83, 9, 0.3) 3px 4px
+  );
+}
+
+.badgeNone {
+  color: var(--bom-ink-secondary, #676c71);
+  background: transparent;
+  border: 1px solid currentColor;
+}
+
+.badgeResolving {
+  color: var(--bom-ink-secondary, #676c71);
+  background: rgba(0, 0, 0, 0.05);
+  border: 1px dashed currentColor;
+}

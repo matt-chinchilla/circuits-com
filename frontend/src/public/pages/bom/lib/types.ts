@@ -5,6 +5,7 @@
 // Every optional number is `number | null`, never `field?: number`: Python
 // None serializes to null, and `?:` only catches undefined (house gotcha).
 
+import type { ParsedBomLine } from './parseBom';
 import type { Offer, OfferBreak } from './priceBreaks';
 
 export type { OfferBreak };
@@ -33,8 +34,11 @@ export interface BomPartInfo {
   datasheet_url: string | null;
 }
 
-/** Server-side match outcomes. `exact_live` is a resolve-stream result. */
-export type BomRowStatus = 'exact' | 'approx' | 'no_match' | 'exact_live';
+/** Server-side match outcomes, spelled exactly as `LineMatch.status` emits
+ *  them (api/app/services/bom_match.py): `resolve` is "no catalog hit but we
+ *  built a query for it", `none` is "nothing identifiable on this line at
+ *  all". `exact_live` is only ever produced by the resolve stream. */
+export type BomRowStatus = 'exact' | 'approx' | 'resolve' | 'none' | 'exact_live';
 
 export interface BomRow {
   index: number;
@@ -83,3 +87,32 @@ export interface SharePayloadEnvelope {
   created_at: string | null;
   expires_at: string;
 }
+
+// ─── Client row model ───────────────────────────────────────────────────────
+// Not wire shapes: these are what the table renders. They exist here rather
+// than in the table component so the page, the table and the coverage strip
+// all read ONE definition.
+
+/**
+ * Where a row sits in the two-phase pipeline.
+ *
+ * `matched` means "phase 1 answered for this row" — the BADGE then reads the
+ * server status, so a `resolve`/`none` row is still `matched` in this sense
+ * and simply renders NO MATCH. The other four are phase-2 outcomes (Task 17).
+ */
+export type RowState = 'matched' | 'resolving' | 'resolved_live' | 'not_found' | 'unavailable';
+
+/**
+ * One table row: the parsed line (qty, designators and DNP — all of which
+ * stay in the browser, D7) plus whatever the server was able to say about its
+ * identity fields.
+ *
+ * `viewerHref` is the §7.6 seam for the schematic/PCB viewer projects. It is
+ * ALWAYS null today and designator chips render as plain text; when a viewer
+ * ships it becomes a route and the chips become links with no other change.
+ */
+export type TableRow = ParsedBomLine & {
+  server: BomRow | null;
+  state: RowState;
+  viewerHref: string | null;
+};

@@ -1,0 +1,405 @@
+@use '@shared/styles/variables' as *;
+@use '@shared/styles/mixins' as *;
+
+// The priced BOM table.
+//
+// Two channel rails per row (lifecycle left, availability right). Hatching is
+// a repeating-linear-gradient over currentColor — texture, never an SVG
+// filter and never animated (the standing perf gotchas). The --bom-* tokens
+// arrive with the visual pass; the fallbacks are the measured values.
+
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+// Always scrollable: eight columns cannot fit a phone, and the alternative is
+// hiding the price column, which spec §7.7 forbids at any width.
+.tableWrap {
+  @include card-base;
+
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: 12px;
+
+  @include scrollbar-thin(6px);
+}
+
+.table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-family: $font-body;
+
+  @media (max-width: $bp-tablet) {
+    min-width: 880px;
+  }
+}
+
+.th {
+  padding: 11px 14px;
+  font-family: $font-body;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-align: left;
+  white-space: nowrap;
+  color: var(--bom-ink-secondary, #676c71);
+  background: var(--bom-card-tint, #f2f4f7);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+
+  &:first-child {
+    border-top-left-radius: 12px;
+  }
+
+  &:last-child {
+    border-top-right-radius: 12px;
+  }
+}
+
+.thNum {
+  width: 46px;
+}
+
+.thRight {
+  text-align: right;
+}
+
+.thDesc {
+  min-width: 200px;
+}
+
+.thRefs {
+  min-width: 160px;
+}
+
+.row {
+  transition: background-color 120ms;
+
+  &:hover {
+    background: rgba(0, 0, 0, 0.015);
+  }
+}
+
+// DNP is shown, not hidden: the line is real, it is simply not being bought.
+.rowDnp {
+  opacity: 0.55;
+}
+
+.td {
+  padding: 12px 14px;
+  font-size: 0.87rem;
+  color: $text-primary;
+  vertical-align: top;
+  border-bottom: 1px solid #eee;
+
+  .row:last-child & {
+    border-bottom: none;
+  }
+}
+
+.tdNum {
+  font-family: $font-mono;
+  font-size: 0.8rem;
+  color: var(--bom-ink-secondary, #676c71);
+}
+
+.tdRight {
+  text-align: right;
+}
+
+.tdDesc,
+.tdRefs {
+  min-width: 0;
+}
+
+// ─── Rails ──────────────────────────────────────────────────────────────────
+
+.rail {
+  flex: 0 0 auto;
+  align-self: stretch;
+  width: 4px;
+  min-height: 34px;
+  border-radius: 2px;
+}
+
+.railActive {
+  background: var(--bom-rail-active, #2e7d32);
+}
+
+.railNrnd {
+  background: var(--bom-rail-nrnd, #b45309);
+}
+
+.railEol {
+  background: var(--bom-rail-eol, #b91c1c);
+}
+
+// Hatched = "no feed ever confirmed this" (D6). 99.7% of the catalog is here,
+// and the honest texture is the whole point of the column.
+.railUnverified {
+  color: var(--bom-ink-secondary, #676c71);
+  background-color: rgba(103, 108, 113, 0.16);
+  background-image: repeating-linear-gradient(45deg, transparent 0 3px, currentColor 3px 4px);
+}
+
+.availFull {
+  background: var(--bom-avail-full, #153f80);
+}
+
+.availPartial {
+  background: var(--bom-avail-partial, #4d189e);
+}
+
+.availNone {
+  background: var(--bom-avail-none, #b91c1c);
+}
+
+.availStale {
+  color: var(--bom-ink-secondary, #676c71);
+  background-color: rgba(103, 108, 113, 0.16);
+  background-image: repeating-linear-gradient(45deg, transparent 0 3px, currentColor 3px 4px);
+}
+
+// ─── Part cell ──────────────────────────────────────────────────────────────
+
+.partCell {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  min-width: 0;
+}
+
+.partBody {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.sku {
+  font-family: $font-mono;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--executive-blue, $executive-blue);
+  word-break: break-word;
+}
+
+.maker {
+  font-size: 0.78rem;
+  color: var(--bom-ink-secondary, #676c71);
+}
+
+.badgeRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.dnpChip {
+  padding: 2px 7px;
+  font-family: $font-mono;
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--bom-ink-secondary, #676c71);
+  border: 1px dashed currentColor;
+  border-radius: 999px;
+}
+
+// ─── Description ────────────────────────────────────────────────────────────
+
+.desc {
+  display: block;
+  max-width: 340px;
+  color: $text-primary;
+
+  @include line-clamp(2);
+}
+
+// The substitution warning is warn-only (D5) and belongs where it is read
+// without hovering — under the description, not inside a tooltip.
+.packageWarn {
+  display: block;
+  margin-top: 4px;
+  font-family: $font-mono;
+  font-size: 0.72rem;
+  color: var(--bom-rail-nrnd, #b45309);
+}
+
+// ─── Quantity ───────────────────────────────────────────────────────────────
+
+.qtyBig {
+  display: block;
+  font-family: $font-mono;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.qtyMath {
+  display: block;
+  margin-top: 2px;
+  font-family: $font-mono;
+  font-size: 0.72rem;
+  color: var(--bom-ink-secondary, #676c71);
+}
+
+// ─── Designators ────────────────────────────────────────────────────────────
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.refChip {
+  padding: 2px 6px;
+  font-family: $font-mono;
+  font-size: 0.72rem;
+  color: var(--executive-blue, $executive-blue);
+  background: rgba($executive-blue, 0.06);
+  border-radius: 4px;
+  text-decoration: none;
+}
+
+.refMore {
+  padding: 2px 6px;
+  font-family: $font-mono;
+  font-size: 0.72rem;
+  color: var(--bom-ink-secondary, #676c71);
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  cursor: help;
+}
+
+// ─── Recommended supplier ───────────────────────────────────────────────────
+
+.supplierCell {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  min-width: 0;
+}
+
+.supplierBody {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.supplierName {
+  font-size: 0.87rem;
+  font-weight: 600;
+  color: $text-primary;
+}
+
+.supplierMeta {
+  font-size: 0.74rem;
+  color: var(--bom-ink-secondary, #676c71);
+}
+
+.tierBadge {
+  align-self: flex-start;
+  padding: 2px 7px;
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #fff;
+  background: var(--bom-ink-secondary, #676c71);
+  border-radius: 999px;
+
+  &[data-tier='platinum'] {
+    color: #2a2338;
+    background: #c5bfd6;
+  }
+
+  &[data-tier='gold'] {
+    color: #2c2308;
+    background: $sponsor-gold;
+  }
+
+  &[data-tier='silver'] {
+    color: #23282c;
+    background: #cbd2d8;
+  }
+}
+
+// ─── Prices ─────────────────────────────────────────────────────────────────
+
+.unit {
+  display: block;
+  font-family: $font-mono;
+  font-size: 0.82rem;
+  color: var(--bom-ink-secondary, #676c71);
+}
+
+.ext {
+  display: block;
+  margin-top: 2px;
+  font-family: $font-mono;
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--executive-blue, $executive-blue);
+}
+
+.muted {
+  font-size: 0.85rem;
+  color: var(--bom-ink-secondary, #676c71);
+}
+
+// ─── Totals ─────────────────────────────────────────────────────────────────
+
+.totals {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 2px 0;
+}
+
+.totalsNote {
+  margin: 0;
+  max-width: 620px;
+  font-size: 0.84rem;
+  color: var(--bom-ink-secondary, #676c71);
+}
+
+.totalsValue {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0;
+}
+
+.totalsLabel {
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--bom-ink-secondary, #676c71);
+}
+
+.totalsAmount {
+  font-family: $font-mono;
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--executive-blue, $executive-blue);
+}
+
+@include responsive($bp-mobile) {
+  .totals {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .desc {
+    max-width: 260px;
+  }
+}

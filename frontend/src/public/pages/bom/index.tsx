@@ -1,4 +1,5 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import axios from 'axios';
 import { motion } from 'framer-motion';
 import { useParams } from 'react-router-dom';
 import PageHead from '@public/components/PageHead';
@@ -6,10 +7,13 @@ import PageHeaderBand from '@public/components/layout/PageHeaderBand';
 import { STATIC_PAGE_SEO } from '@public/services/seoRoutes';
 import type { PageSeo } from '@public/services/seo';
 import BomIntake from './components/BomIntake';
+import BomTable from './components/BomTable';
 import ColumnMapper, { canPrice } from './components/ColumnMapper';
+import { bomApi } from './lib/bomApi';
 import { applyRoleMap, type ParseResult } from './lib/parseBom';
 import { loadRoleMap, saveRoleMap } from './lib/mapMemory';
 import type { BomRole } from './lib/headerAliases';
+import type { TableRow } from './lib/types';
 import styles from './BomPage.module.scss';
 
 /**
@@ -47,6 +51,11 @@ function needsMapping(result: ParseResult): boolean {
   return !canPrice(result.roleByColumn);
 }
 
+const MATCH_FAILED =
+  'We could not reach the pricing service. Your file is still loaded — try again in a moment.';
+const MATCH_THROTTLED =
+  'That is a lot of BOMs in one minute. Wait about a minute and price this one again.';
+
 export default function BomPage() {
   const { slug } = useParams<{ slug?: string }>();
   const isShare = slug != null;
@@ -55,7 +64,69 @@ export default function BomPage() {
   const [parsed, setParsed] = useState<ParseResult | null>(null);
   const [sourceName, setSourceName] = useState<string | null>(null);
   const [mapRoles, setMapRoles] = useState<(BomRole | null)[]>([]);
+  const [rows, setRows] = useState<TableRow[]>([]);
+  const [matching, setMatching] = useState(false);
+  const [matchError, setMatchError] = useState<string | null>(null);
+  const [buildQty, setBuildQty] = useState(1);
   const sourceText = useRef('');
+
+  // Phase 1: ask the catalog about the identity fields, once, per parse.
+  //
+  // The table is deliberately NOT rendered while this is in flight: rows with
+  // no server answer yet would all read NO MATCH, which is a lie for the
+  // second and a half it takes to come back.
+  useEffect(() => {
+    if (phase !== 'table' || parsed == null) return;
+    const lines = parsed.lines;
+    setRows([]);
+    setMatchError(null);
+    setMatching(true);
+    let cancelled = false;
+
+    // D7: IDENTITY FIELDS ONLY. Quantities, designators, the DNP flag and the
+    // file itself never leave the browser — the privacy claim is structural,
+    // not a promise, and the /bom/match schema rejects anything else. Pricing
+    // math runs client-side off the break tables the response carries back.
+    bomApi
+      .match(
+        lines.map((line) => ({
+          index: line.index,
+          mpn: line.mpn,
+          value: line.value,
+          footprint: line.footprint,
+          description: line.description,
+          manufacturer: line.manufacturer,
+        })),
+      )
+      .then((serverRows) => {
+        if (cancelled) return;
+        const byIndex = new Map(serverRows.map((row) => [row.index, row]));
+        setRows(
+          lines.map((line) => {
+            const server = byIndex.get(line.index) ?? null;
+            return {
+              ...line,
+              server,
+              // Phase 2 (Task 17) moves rows off `matched`; until then the
+              // badge reads the server status directly.
+              state: server == null ? ('not_found' as const) : ('matched' as const),
+              viewerHref: null,
+            };
+          }),
+        );
+        setMatching(false);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        const throttled = axios.isAxiosError(err) && err.response?.status === 429;
+        setMatchError(throttled ? MATCH_THROTTLED : MATCH_FAILED);
+        setMatching(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [phase, parsed]);
 
   const handleParsed = useCallback((result: ParseResult, name: string, text: string) => {
     sourceText.current = text;
@@ -108,6 +179,10 @@ export default function BomPage() {
     sourceText.current = '';
     setSourceName(null);
     setMapRoles([]);
+    setRows([]);
+    setMatchError(null);
+    setMatching(false);
+    setBuildQty(1);
     setPhase('intake');
   };
 
@@ -153,25 +228,44 @@ export default function BomPage() {
             />
           )}
 
-          {/* The table lands in Task 16. The shell carries the state it reads
-              so that task adds a component and deletes a placeholder, never
-              rewires the page. */}
           {phase === 'table' && parsed != null && (
-            <section className={styles.phaseStub}>
-              <h2 className={styles.phaseTitle}>Your BOM</h2>
-              <p className={styles.phaseText}>
-                Read {parsed.lines.length.toLocaleString('en-US')}{' '}
-                {parsed.lines.length === 1 ? 'line' : 'lines'}
-                {sourceName != null ? ` from ${sourceName}` : ''}.
-              </p>
+            <section className={styles.tablePhase}>
+              <div className={styles.tableHead}>
+                <div>
+                  <h2 className={styles.phaseTitle}>Your BOM</h2>
+                  <p className={styles.phaseText}>
+                    Read {parsed.lines.length.toLocaleString('en-US')}{' '}
+                    {parsed.lines.length === 1 ? 'line' : 'lines'}
+                    {sourceName != null ? ` from ${sourceName}` : ''}.
+                  </p>
+                </div>
+                <button type="button" className={styles.linkBtn} onClick={startOver}>
+                  Start over
+                </button>
+              </div>
+
               {parsed.warnings.map((warning) => (
                 <p key={warning} className={styles.phaseWarn}>
                   {warning}
                 </p>
               ))}
-              <button type="button" className={styles.linkBtn} onClick={startOver}>
-                Start over
-              </button>
+
+              {matchError != null && (
+                <p className={styles.pageError} role="alert">
+                  {matchError}
+                </p>
+              )}
+
+              {matching && (
+                <p className={styles.phaseText} role="status">
+                  Pricing {parsed.lines.length.toLocaleString('en-US')}{' '}
+                  {parsed.lines.length === 1 ? 'line' : 'lines'} against the catalog&#8230;
+                </p>
+              )}
+
+              {!matching && rows.length > 0 && (
+                <BomTable rows={rows} buildQty={buildQty} onBuildQtyChange={setBuildQty} />
+              )}
             </section>
           )}
         </div>
