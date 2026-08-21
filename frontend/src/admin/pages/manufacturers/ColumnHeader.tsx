@@ -12,11 +12,16 @@
 //   sort-only      — sort asc/desc/clear, no filter section
 //   single-choice  — sort + a radio-ish list, one value at a time
 //
-// The TH itself is the trigger AND the positioning container; the panel is
-// absolutely positioned below it, which is why the page's `.panel` /
-// `.tableWrap` must not clip (see ManufacturersPage.module.scss).
+// The panel PORTALS to document.body with fixed positioning (review findings
+// R3/R4 follow-through): the in-flow absolute panel forced the whole overflow
+// strategy — the wrapper couldn't scroll without clipping it, which left the
+// 821–1100px band with NO scroll container and made ≤820px clip the panel
+// inside the scrolling table. Portaled, `.tableWrap { overflow-x: auto }` is
+// safe at EVERY width. Mechanics ported from the public category ColumnHeader
+// (porting is allowed; importing across the eslint boundary is not).
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 import styles from './ColumnHeader.module.scss';
 
@@ -47,19 +52,40 @@ export type ColumnHeaderProps<K extends string> =
       onChange: (next: string) => void;
     });
 
+const PANEL_WIDTH = 240;
+const PANEL_MARGIN = 8;
+
 export default function ColumnHeader<K extends string>(props: ColumnHeaderProps<K>) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLTableCellElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number; up: boolean } | null>(null);
+
+  // Fixed-position the portal from the trigger rect: clamp to the viewport,
+  // flip above when there's no room below.
+  useLayoutEffect(() => {
+    if (!open || !containerRef.current) return;
+    const r = containerRef.current.getBoundingClientRect();
+    const left = Math.max(
+      PANEL_MARGIN,
+      Math.min(r.left, window.innerWidth - PANEL_WIDTH - PANEL_MARGIN),
+    );
+    const panelH = panelRef.current?.offsetHeight ?? 280;
+    const up = r.bottom + panelH + PANEL_MARGIN > window.innerHeight && r.top > panelH;
+    setPos({ top: up ? r.top - 4 : r.bottom + 4, left, up });
+  }, [open]);
 
   useEffect(() => {
     if (!open) return undefined;
     const onDown = (e: MouseEvent) => {
       // `e.target instanceof Node` BEFORE .contains(): Node.contains(window)
       // throws, and a click landing on a non-Node target is not impossible.
+      // The portaled panel counts as inside.
       if (
         e.target instanceof Node &&
         containerRef.current &&
-        !containerRef.current.contains(e.target)
+        !containerRef.current.contains(e.target) &&
+        !(panelRef.current && panelRef.current.contains(e.target))
       ) {
         setOpen(false);
       }
@@ -67,11 +93,21 @@ export default function ColumnHeader<K extends string>(props: ColumnHeaderProps<
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setOpen(false);
     };
+    // Close on any scroll/resize EXCEPT scrolls inside the panel itself —
+    // a fixed panel would detach from its column, so it goes away instead.
+    const onScroll = (e: Event) => {
+      if (e.target instanceof Node && panelRef.current?.contains(e.target)) return;
+      setOpen(false);
+    };
     document.addEventListener('mousedown', onDown);
     document.addEventListener('keydown', onKey);
+    window.addEventListener('scroll', onScroll, true);
+    window.addEventListener('resize', onScroll);
     return () => {
       document.removeEventListener('mousedown', onDown);
       document.removeEventListener('keydown', onKey);
+      window.removeEventListener('scroll', onScroll, true);
+      window.removeEventListener('resize', onScroll);
     };
   }, [open]);
 
@@ -108,8 +144,19 @@ export default function ColumnHeader<K extends string>(props: ColumnHeaderProps<
         </span>
       </button>
 
-      {open && (
-        <div className={styles.columnPanel} role="dialog" aria-label={`${props.label} options`}>
+      {open &&
+        createPortal(
+          <div
+            ref={panelRef}
+            className={styles.columnPanel}
+            role="dialog"
+            aria-label={`${props.label} options`}
+            style={{
+              top: pos && !pos.up ? pos.top : undefined,
+              bottom: pos?.up ? window.innerHeight - pos.top : undefined,
+              left: pos?.left ?? -9999,
+            }}
+          >
           <div className={styles.panelSection}>
             <div className={styles.sectionLabel}>Sort</div>
             <button
@@ -173,8 +220,9 @@ export default function ColumnHeader<K extends string>(props: ColumnHeaderProps<
               </div>
             </>
           )}
-        </div>
-      )}
+          </div>,
+          document.body,
+        )}
     </th>
   );
 }

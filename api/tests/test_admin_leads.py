@@ -168,3 +168,28 @@ class TestEnrichmentEdit:
         )
         assert resp.status_code == 200
         assert resp.json()["needs_enrichment"] is False
+
+
+class TestSortNulls:
+    def test_desc_sort_keeps_nulls_last(self, client, leads_db, auth_header):
+        """Review finding: Postgres floats NULLs FIRST on DESC — 'Newest first'
+        must never rank never-contacted rows above contacted ones."""
+        from app.models import Lead
+        from app.services.leads import record_outcome
+
+        lead = leads_db.query(Lead).filter(Lead.contact_name == "Kim Ray").one()
+        record_outcome(leads_db, lead, "maybe", None, None, "admin")
+        body = client.get(
+            "/api/admin/leads/?sort=contacted&desc=true", headers=auth_header()
+        ).json()
+        assert body["leads"][0]["contact_name"] == "Kim Ray"
+        assert body["leads"][0]["last_contacted_at"] is not None
+
+    def test_rep_contacts_carry_recorded_by(self, client, leads_db, auth_header):
+        from app.models import Lead
+        from app.services.leads import record_outcome
+
+        lead = leads_db.query(Lead).filter(Lead.contact_name == "Kim Ray").one()
+        record_outcome(leads_db, lead, "converted", None, None, "admin")
+        body = client.get("/api/admin/leads/reps/admin", headers=auth_header()).json()
+        assert body["contacts"][0]["recorded_by"] == "admin"

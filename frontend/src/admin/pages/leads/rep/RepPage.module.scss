@@ -94,6 +94,7 @@
 
 .table {
   width: 100%;
+  min-width: 760px;
   border-collapse: collapse;
 }
 
@@ -261,22 +262,6 @@
   color: var(--a-fg3);
 }
 
-// ─── Mobile (<=820px) ───────────────────────────────────────────────────────
-
-@media (max-width: $bp-admin-mobile) {
-  .table {
-    display: block;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-
-    thead,
-    tbody {
-      display: table;
-      width: 100%;
-      min-width: 820px;
-    }
-  }
-}
 
 // Outcome-word ink pair (outcome.ts outcomeInkVars): light uses --oc,
 // dark lifts to --oc-dark so deep fill hexes never sink as text.

@@ -16,14 +16,12 @@ import type { RepActivity } from '@admin/types/leads';
 
 import { classifyLeadsError, SESSION_EXPIRED_MESSAGE } from '../loadError';
 import { OUTCOME_META, OUTCOME_ORDER, outcomeInkVars } from '../outcome';
+import { parseServerTime } from '../time';
 import OutcomeDisc from '../OutcomeDisc';
 import styles from './RepPage.module.scss';
 
 function formatStamp(iso: string): string {
-  // Offset-less (naive) values are UTC by intent — see the same guard on the
-  // list and profile pages.
-  const hasZone = /(?:Z|[+-]\d{2}:?\d{2})$/.test(iso);
-  const d = new Date(hasZone ? iso : `${iso}Z`);
+  const d = new Date(parseServerTime(iso));
   if (Number.isNaN(d.getTime())) return iso;
   return d.toLocaleString('en-US', {
     month: 'short',
@@ -139,7 +137,10 @@ export default function RepPage() {
           <h1 className={styles.title}>Calls by {activity.username}</h1>
           <p className={styles.subtitle}>
             {total.toLocaleString('en-US')} {total === 1 ? 'outcome' : 'outcomes'} recorded
-            &mdash; newest first.
+            &mdash;{' '}
+            {activity.contacts.length < total
+              ? `showing the newest ${activity.contacts.length.toLocaleString('en-US')}.`
+              : 'newest first.'}
           </p>
         </div>
       </header>

@@ -195,16 +195,21 @@
 
 // ─── Table ──────────────────────────────────────────────────────────────────
 //
-// No `overflow-x: auto` on the wrapper — it computes overflow-y to `auto` too,
-// which clips the ColumnHeader dropdown. Horizontal scroll lives on `.table`
-// itself at mobile widths.
+// The wrapper scrolls at EVERY width: the ColumnHeader panel is PORTALED to
+// <body> now (review findings — the old in-flow panel forced a no-scroll
+// wrapper, which left 821–1100px with no scroll container at all while the
+// global overflow-x:clip hid the loss). thead/tbody stay ONE table context,
+// so header and body columns can never size apart.
 
 .tableWrap {
   min-width: 0;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .table {
   width: 100%;
+  min-width: 900px;
   border-collapse: collapse;
 }
 
@@ -461,18 +466,9 @@
 // ─── Mobile (<=820px) ───────────────────────────────────────────────────────
 
 @media (max-width: $bp-admin-mobile) {
-  .table {
-    display: block;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-
-    thead,
-    tbody {
-      display: table;
-      width: 100%;
-      min-width: 780px;
-    }
-  }
+  // (The old .table display:block / thead+tbody split lived here — removed:
+  // two independent table contexts sized header and body columns apart. The
+  // wrapper scrolls at every width now.)
 
   .toolbar {
     padding: 10px 12px;

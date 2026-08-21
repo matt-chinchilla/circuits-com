@@ -25,6 +25,7 @@ import { safeHttpUrl } from '@shared/utils/url';
 
 import { classifyLeadsError, SESSION_EXPIRED_MESSAGE } from '../loadError';
 import { OUTCOME_META, outcomeInkVars } from '../outcome';
+import { parseServerTime } from '../time';
 import OutcomeDisc from '../OutcomeDisc';
 import OutcomeMenu from '../OutcomeMenu';
 import styles from './LeadDetail.module.scss';
@@ -72,10 +73,7 @@ function orNull(value: string): string | null {
 }
 
 function formatStamp(iso: string): string {
-  // `DateTime(timezone=True)` round-trips an offset on Postgres; an offset-less
-  // value (SQLite) would otherwise be read as local time and shift the record.
-  const hasZone = /(?:Z|[+-]\d{2}:?\d{2})$/.test(iso);
-  const d = new Date(hasZone ? iso : `${iso}Z`);
+  const d = new Date(parseServerTime(iso));
   if (Number.isNaN(d.getTime())) return iso;
   return d.toLocaleString('en-US', {
     year: 'numeric',
@@ -122,6 +120,11 @@ export default function LeadDetailPage() {
     if (!id) return undefined;
     let cancelled = false;
     setLoading(true);
+    // Review finding: browser Back between two lead details kept a stale
+    // anchor to a DETACHED button — the menu re-rendered pinned at the
+    // viewport corner for the new lead. New id, clean slate.
+    setMenuAnchor(null);
+    setSaveError('');
     adminApi
       .getLead(id)
       .then((res) => {
@@ -159,7 +162,11 @@ export default function LeadDetailPage() {
 
   const applyDetail = (detail: AdminLeadDetail) => {
     setLead(detail);
-    setForm(toForm(detail));
+    // Review finding: recording an outcome mid-call used to wipe the OPEN
+    // enrichment form (half-typed name/phone gone, no warning). The server
+    // response only changes outcome denorms, never the fields being typed —
+    // keep the admin's draft while editing.
+    if (!editing) setForm(toForm(detail));
   };
 
   const save = async () => {

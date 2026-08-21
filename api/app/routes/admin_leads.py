@@ -125,7 +125,12 @@ def list_leads(
         query = query.filter(Lead.needs_enrichment == needs_enrichment)
     total = query.count()
     col = _SORTS.get(sort, Lead.company_name)
-    order = col.desc() if desc else col.asc()
+    # NULLS LAST in BOTH directions: most sortable columns here are nullable
+    # ("no data"), and Postgres floats NULLs FIRST on DESC by default — which
+    # turned "Newest first" into 189 never-contacted rows on top. SQLite
+    # defaults the other way, so only an explicit nullslast() behaves the same
+    # in tests and prod.
+    order = col.desc().nullslast() if desc else col.asc().nullslast()
     rows = query.order_by(order, Lead.company_name.asc()).offset((page - 1) * per_page).limit(per_page).all()
     return {"leads": [_lead_row(x) for x in rows], "total": total, "page": page, "per_page": per_page}
 
@@ -162,6 +167,7 @@ def rep_activity(
                 "company_name": leads[c.lead_id].company_name if c.lead_id in leads else None,
                 "contact_name": leads[c.lead_id].contact_name if c.lead_id in leads else None,
                 "outcome": c.outcome, "sale_tier": c.sale_tier, "note": c.note,
+                "recorded_by": c.recorded_by,
                 "created_at": c.created_at.isoformat(),
             }
             for c in contacts

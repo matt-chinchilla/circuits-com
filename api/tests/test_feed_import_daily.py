@@ -299,10 +299,14 @@ class _Recorder:
 
     def __init__(self, spend_per_supplier: int = 0):
         self.budgets: list[int] = []
+        # Whether each call asked for a CONTINUOUS run. Recorded because the
+        # nightly must never ask for one — see `TestNightlyIsNeverContinuous`.
+        self.continuous: list[bool] = []
         self.spend = spend_per_supplier
 
-    def __call__(self, db, provider, supplier, call_budget, per_category=50):
+    def __call__(self, db, provider, supplier, call_budget, per_category=50, continuous=False):
         self.budgets.append(call_budget)
+        self.continuous.append(continuous)
         provider.calls_made += self.spend
         return iter(())
 
@@ -579,3 +583,56 @@ class TestFailure:
 
         with pytest.raises(ProgrammingError):
             job.run_once(db, NOW)
+
+
+class TestNightlyIsNeverContinuous:
+    """The interactive Import click on an auto-import supplier runs CONTINUOUS
+    — sweep after sweep until the feed is exhausted or its quota walls it. The
+    nightly job must not, and this is the drift guard for that decision.
+
+    `auto_import_enabled` means "run until the well is dry", and the nightly's
+    even slice of `FEED_IMPORT_CALL_BUDGET` is that meaning's unattended
+    FAIRNESS cap: the budget is one shared account-wide daily quota split
+    across every enabled supplier, and letting the alphabetically-first one run
+    until the well is dry would starve every supplier after it — and the
+    operator's own clicks the next day.
+    """
+
+    def test_the_night_asks_for_a_bounded_slice_and_never_continuous(
+        self,
+        db,
+        seeded_db,
+        env_key,
+        budget,
+        providers,
+        mouser_supplier,
+        second_mouser_supplier,
+        monkeypatch,
+    ):
+        budget(850)
+        providers(mouser_supplier, FakeProvider())
+        providers(second_mouser_supplier, FakeProvider())
+        recorder = _Recorder()
+        monkeypatch.setattr(job, "grow_catalog", recorder)
+
+        job.run_once(db, NOW)
+
+        assert recorder.budgets == [425, 425]
+        assert recorder.continuous == [False, False]
+
+    def test_the_switch_being_on_is_what_SELECTS_a_supplier_here_nothing_more(
+        self, db, seeded_db, env_key, budget, providers, mouser_supplier, monkeypatch
+    ):
+        """Every supplier the night runs has the switch ON by definition (it is
+        the selection query). That must still not turn into a continuous run —
+        otherwise one enabled supplier could spend the whole night's quota."""
+        budget(850)
+        providers(mouser_supplier, FakeProvider())
+        recorder = _Recorder()
+        monkeypatch.setattr(job, "grow_catalog", recorder)
+
+        job.run_once(db, NOW)
+
+        assert recorder.continuous == [False]
+        assert recorder.budgets == [850]
+        assert all(b <= 850 for b in recorder.budgets)

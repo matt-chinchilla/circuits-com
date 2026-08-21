@@ -26,17 +26,16 @@
 
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { classifyLeadsError } from '@admin/pages/leads/loadError';
 import { OUTCOME_META, firstInitial } from '@admin/pages/leads/outcome';
+import { relativeTime } from '@admin/pages/leads/time';
 import { adminApi } from '@admin/services/adminApi';
-import { apiErrorDetail } from '@admin/services/apiError';
 import type { RecentLeadContact } from '@admin/types/leads';
 import { count } from './format';
 import styles from '../DashboardPage.module.scss';
 
 /** `admin_leads.DEMO_LEADS_FORBIDDEN_DETAIL`, matched verbatim so an ordinary
  *  permissions 403 can never be mistaken for the demo read-refusal. */
-const DEMO_LEADS_DETAIL = 'demo_account_no_leads';
-
 /** One request. 100 is the endpoint's own ceiling (`min(limit, 100)`). */
 const FETCH_LIMIT = 100;
 
@@ -46,38 +45,6 @@ const PREVIEW_ROWS = 10;
 const DEMO_NOTICE = 'Not available in demo.';
 const BLOCKED_NOTICE = "Recent contacts aren't available right now.";
 
-const HAS_ZONE = /(?:Z|[+-]\d{2}:?\d{2})$/i;
-
-/**
- * `2026-08-20T14:02:11+00:00` -> `3h ago`.
- *
- * Local to this panel on purpose: `./format.ts` carries no relative-time
- * helper today and is outside this change's file set — hoist this there the
- * moment a second widget needs it.
- *
- * The zone guard is load-bearing. `LeadContact.created_at` is
- * `DateTime(timezone=True)`, which Postgres serializes with an offset, but a
- * naive stamp (SQLite, or any row written without one) is parsed by
- * `Date.parse` as LOCAL time — which would print hours of drift for a call
- * logged seconds ago. Absent a zone the value is UTC by contract, so say so.
- */
-export function relativeTime(iso: string, now: number = Date.now()): string {
-  const parsed = Date.parse(HAS_ZONE.test(iso) ? iso : `${iso}Z`);
-  if (!Number.isFinite(parsed)) return '';
-  // Clamps a future stamp (clock skew between the box and the browser) to
-  // "just now" rather than printing a negative age.
-  const secs = Math.round((now - parsed) / 1000);
-  if (secs < 45) return 'just now';
-  const mins = Math.round(secs / 60);
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.round(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.round(hours / 24);
-  if (days < 7) return `${days}d ago`;
-  if (days < 30) return `${Math.round(days / 7)}w ago`;
-  if (days < 365) return `${Math.round(days / 30)}mo ago`;
-  return `${Math.round(days / 365)}y ago`;
-}
 
 interface LeadsPanelProps {
   demoMode: boolean;
@@ -111,7 +78,10 @@ export default function LeadsPanel({ demoMode }: LeadsPanelProps) {
         setContacts([]);
         // The demo refusal is an expected state, not a failure — it gets the
         // same quiet body as demo mode, never an error surface.
-        setNotice(apiErrorDetail(err) === DEMO_LEADS_DETAIL ? DEMO_NOTICE : BLOCKED_NOTICE);
+        // Review finding: string-comparing the TRANSLATED channel breaks the
+        // day the code lands in CODE_MESSAGES — classify on the raw detail.
+        const failure = classifyLeadsError(err, BLOCKED_NOTICE);
+        setNotice(failure.kind === 'demo' ? DEMO_NOTICE : BLOCKED_NOTICE);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);

@@ -31,6 +31,7 @@ import CatalogSwitch from '../../manufacturers/CatalogSwitch';
 import ColumnHeader, { type SortDir } from '../../manufacturers/ColumnHeader';
 import { classifyLeadsError, SESSION_EXPIRED_MESSAGE } from '../loadError';
 import { OUTCOME_META, OUTCOME_ORDER, outcomeInkVars } from '../outcome';
+import { relativeTime } from '../time';
 import OutcomeDisc from '../OutcomeDisc';
 import OutcomeMenu from '../OutcomeMenu';
 import styles from './LeadsPage.module.scss';
@@ -72,28 +73,6 @@ function locationLabel(lead: AdminLead): string | null {
  * LOCAL time — silently shifting every "3h ago" by the viewer's offset. Treat
  * an offset-less string as UTC, which is what the writer meant.
  */
-function parseServerTime(iso: string): number {
-  const hasZone = /(?:Z|[+-]\d{2}:?\d{2})$/.test(iso);
-  return new Date(hasZone ? iso : `${iso}Z`).getTime();
-}
-
-/** Coarse relative age — a call list cares about "this week" vs "in March". */
-function relativeTime(iso: string | null): string | null {
-  if (!iso) return null;
-  const then = parseServerTime(iso);
-  if (!Number.isFinite(then)) return null;
-  const diffMs = Date.now() - then;
-  if (diffMs < 60_000) return 'just now';
-  const mins = Math.floor(diffMs / 60_000);
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  if (days < 7) return `${days}d ago`;
-  if (days < 35) return `${Math.floor(days / 7)}w ago`;
-  if (days < 365) return `${Math.floor(days / 30)}mo ago`;
-  return `${Math.floor(days / 365)}y ago`;
-}
 
 export default function LeadsPage() {
   const navigate = useNavigate();
@@ -136,7 +115,17 @@ export default function LeadsPage() {
 
   // Fetch. Cancel-flagged so a slow page-2 response can't overwrite the page-3
   // rows the admin has already moved on to.
+  const fetchedFiltersRef = useRef<string | null>(null);
   useEffect(() => {
+    // Review finding: a filter change while on page > 1 used to fire a wasted
+    // fetch with the STALE ?p before the reset effect deleted it. When the
+    // filters differ from the last fetched set and a page param is still
+    // riding, skip — the reset effect drops ?p this same tick and the effect
+    // re-runs with page 1.
+    if (fetchedFiltersRef.current !== null && fetchedFiltersRef.current !== filtersKey && page > 1) {
+      return;
+    }
+    fetchedFiltersRef.current = filtersKey;
     let cancelled = false;
     setLoading(true);
     const params: Record<string, string | number | boolean> = {
@@ -154,6 +143,21 @@ export default function LeadsPage() {
       .getLeads(params)
       .then((res) => {
         if (cancelled) return;
+        // Review finding: ?p=99 on an 8-page roster rendered "No leads yet."
+        // — an out-of-range page clamps to the last real page instead.
+        const lastPage = Math.max(1, Math.ceil(res.total / PER_PAGE));
+        if (res.leads.length === 0 && res.total > 0 && page > lastPage) {
+          setSearchParams(
+            (prev) => {
+              const params = new URLSearchParams(prev);
+              if (lastPage <= 1) params.delete('p');
+              else params.set('p', String(lastPage));
+              return params;
+            },
+            { replace: true },
+          );
+          return;
+        }
         setData(res);
         setError('');
         setDemoBlocked(false);
@@ -263,9 +267,11 @@ export default function LeadsPage() {
       </div>
       <CatalogSwitch />
       <div className={styles.pageHeadActions}>
-        <span className={styles.countPill}>
-          {total.toLocaleString('en-US')} {total === 1 ? 'lead' : 'leads'}
-        </span>
+        {data !== null && !demoBlocked && (
+          <span className={styles.countPill}>
+            {total.toLocaleString('en-US')} {total === 1 ? 'lead' : 'leads'}
+          </span>
+        )}
       </div>
     </header>
   );

@@ -15,7 +15,7 @@
 //                 only correct move is to LINK the existing row, never to mint
 //                 a duplicate company. That fork lives in ../supplierLink.ts.
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, ExternalLink, Pencil } from 'lucide-react';
 
@@ -103,20 +103,30 @@ export default function ManufacturerDetailPage() {
 
   // Picker options, loaded only when the name-collision 409 actually opens it.
   // Best-effort: a failure costs the picker, never the page.
+  // Review finding: this was the one fetch in the feature without the
+  // canonical cancel guard — a stale resolve could stomp the supplier the
+  // admin had already picked (and set state after unmount). A generation
+  // counter serves as the cancel flag for a useCallback-held fetch.
+  const suppliersReqGen = useRef(0);
   const loadSuppliers = useCallback((preferName: string) => {
+    const gen = ++suppliersReqGen.current;
     adminApi
       .getSuppliers()
       .then((rows) => {
+        if (gen !== suppliersReqGen.current) return;
         const sorted = [...rows].sort((a, b) => a.name.localeCompare(b.name));
         setSuppliers(sorted);
         // The 409 means a supplier already owns this exact name — preselect it
         // so the obvious link is one click, not a scroll through 57 options.
+        // Only when nothing is picked yet: a late resolve must never overwrite
+        // a selection the admin already made.
         const exact = sorted.find(
           (s) => s.name.trim().toLowerCase() === preferName.trim().toLowerCase(),
         );
-        setPickedSupplier(exact?.id ?? sorted[0]?.id ?? '');
+        setPickedSupplier((prev) => prev || (exact?.id ?? sorted[0]?.id ?? ''));
       })
       .catch((err) => {
+        if (gen !== suppliersReqGen.current) return;
         console.warn('[ManufacturerDetail] getSuppliers failed', err);
         setSuppliers([]);
       });

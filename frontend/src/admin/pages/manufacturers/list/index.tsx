@@ -87,7 +87,15 @@ export default function ManufacturersPage() {
   // Fetch. Cancel-flagged so a slow response for page 2 can't overwrite the
   // page-3 rows the admin has already moved on to (the canonical admin
   // state-dep-effect pattern).
+  const filtersKey = `${q}|${source}|${linked}|${sortKey}|${sortDir}`;
+  const fetchedFiltersRef = useRef<string | null>(null);
   useEffect(() => {
+    // Skip the doomed stale-page fetch on filter change (review finding — see
+    // the leads list twin of this guard for the mechanism).
+    if (fetchedFiltersRef.current !== null && fetchedFiltersRef.current !== filtersKey && page > 1) {
+      return;
+    }
+    fetchedFiltersRef.current = filtersKey;
     let cancelled = false;
     setLoading(true);
     const params: Record<string, string | number | boolean> = {
@@ -104,6 +112,20 @@ export default function ManufacturersPage() {
       .getManufacturers(params)
       .then((res) => {
         if (cancelled) return;
+        const lastPage = Math.max(1, Math.ceil(res.total / PER_PAGE));
+        if (res.manufacturers.length === 0 && res.total > 0 && page > lastPage) {
+          // Out-of-range deep link clamps to the last real page (review finding).
+          setSearchParams(
+            (prev) => {
+              const params = new URLSearchParams(prev);
+              if (lastPage <= 1) params.delete('p');
+              else params.set('p', String(lastPage));
+              return params;
+            },
+            { replace: true },
+          );
+          return;
+        }
         setData(res);
         setError('');
       })
@@ -127,7 +149,6 @@ export default function ManufacturersPage() {
   // that "resets ?p on filter change" would also fire on page change and pin
   // the list to page 1 forever); the functional form needs no setter dep.
   // The first run is skipped so a deep link like `?p=4` survives mount.
-  const filtersKey = `${q}|${source}|${linked}|${sortKey}|${sortDir}`;
   const firstFiltersRun = useRef(true);
   useEffect(() => {
     if (firstFiltersRun.current) {

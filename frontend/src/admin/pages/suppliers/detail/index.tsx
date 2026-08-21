@@ -41,6 +41,25 @@ function externalHref(url: string): string {
   return /^https?:\/\//i.test(url) ? url : `https://${url}`;
 }
 
+// A continuous auto-import can emit thousands of part rows; unbounded
+// [...prev, event] is O(n^2) copying and thousands of thumbnailed rows. Keep
+// the newest rows up to the cap — SYSTEM rows (started/error/finished) are
+// always retained, and the footer totals come from the server's own counts,
+// so trimming display rows can never corrupt what the run reports.
+const EVENT_ROW_CAP = 500;
+
+function appendCapped<T extends { kind: string }>(events: T[], event: T): T[] {
+  const next = [...events, event];
+  if (next.length <= EVENT_ROW_CAP) return next;
+  const system = next.filter(
+    (e) => e.kind === 'sync_started' || e.kind === 'sync_error' || e.kind === 'sync_finished',
+  );
+  const rows = next.filter(
+    (e) => e.kind !== 'sync_started' && e.kind !== 'sync_error' && e.kind !== 'sync_finished',
+  );
+  return [...system, ...rows.slice(rows.length - (EVENT_ROW_CAP - system.length))];
+}
+
 export default function SupplierDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -217,7 +236,7 @@ export default function SupplierDetailPage() {
         swapped = true;
         setRunState((prev) => ({
           ...prev,
-          events: replace ? [event] : [...prev.events, event],
+          events: replace ? [event] : appendCapped(prev.events, event),
         }));
       },
       {

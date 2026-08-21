@@ -80,16 +80,15 @@
 // Floating glass — this panel genuinely passes over live table rows, so it
 // carries the real backdrop-filter. Text inside is fg1/fg2 ONLY.
 .columnPanel {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  z-index: 30;
+  // Portaled to <body>: fixed, coordinates set inline from the trigger rect.
+  position: fixed;
+  z-index: 90;
+  width: 240px;
   min-width: 220px;
   max-width: 300px;
   @include a-glass-float;
   border-radius: 8px;
   box-shadow: var(--a-glass-hi), var(--a-glass-shadow-hover);
-  margin-top: 4px;
   overflow: hidden;
   // Restore body-text styling inside (the TH is uppercase + small + tracked).
   text-transform: none;

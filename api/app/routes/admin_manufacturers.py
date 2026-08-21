@@ -59,17 +59,28 @@ def list_manufacturers(
         query = query.filter(or_(Manufacturer.name.ilike(like), Manufacturer.website.ilike(like)))
     if source:
         query = query.filter(Manufacturer.source == source)
-    linked_ids = {
-        s.manufacturer_id for s in db.query(Supplier).filter(Supplier.manufacturer_id.isnot(None)).all()
-    }
-    if linked is True:
-        query = query.filter(Manufacturer.id.in_(linked_ids or {uuid_mod.uuid4()}))
-    elif linked is False and linked_ids:
-        query = query.filter(~Manufacturer.id.in_(linked_ids))
+    if linked is not None:
+        # Only pay for the link set when the filter actually consults it —
+        # and select the one column, not full ORM rows.
+        linked_ids = {
+            row[0]
+            for row in db.query(Supplier.manufacturer_id)
+            .filter(Supplier.manufacturer_id.isnot(None))
+            .all()
+        }
+        if linked is True:
+            query = query.filter(Manufacturer.id.in_(linked_ids or {uuid_mod.uuid4()}))
+        elif linked_ids:
+            query = query.filter(~Manufacturer.id.in_(linked_ids))
     total = query.count()
     col = _SORTS.get(sort, Manufacturer.name)
     rows = (
-        query.order_by(col.desc() if desc else col.asc(), Manufacturer.name.asc())
+        # nullslast both ways — external_part_count is NULL for catalog-sourced
+        # rows and Postgres would float them on DESC (see admin_leads note).
+        query.order_by(
+            col.desc().nullslast() if desc else col.asc().nullslast(),
+            Manufacturer.name.asc(),
+        )
         .offset((page - 1) * per_page).limit(per_page).all()
     )
     suppliers_by_mid = {

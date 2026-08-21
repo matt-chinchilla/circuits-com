@@ -64,9 +64,16 @@ export interface LeadsLoadError {
  */
 export function classifyLeadsError(err: unknown, fallback: string): LeadsLoadError {
   const status = axios.isAxiosError(err) ? err.response?.status : undefined;
+  // CODE comparison reads the RAW wire detail, never apiErrorDetail: the
+  // translated channel changes the day someone maps this code to prose in
+  // CODE_MESSAGES (exactly what happened to demo_account_read_only), and a
+  // silent '===' miss would turn the quiet demo panel into an error surface.
+  const rawDetail = axios.isAxiosError(err)
+    ? (err.response?.data as { detail?: unknown } | undefined)?.detail
+    : undefined;
   const detail = apiErrorDetail(err);
 
-  if (status === 403 && detail === DEMO_NO_LEADS_DETAIL) {
+  if (status === 403 && rawDetail === DEMO_NO_LEADS_DETAIL) {
     return { kind: 'demo', message: '' };
   }
   if (status === 401) {
