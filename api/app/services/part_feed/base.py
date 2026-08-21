@@ -22,6 +22,10 @@ class FeedPart:
     lead_time_days: int | None = None
     currency: str = "USD"
     price_breaks: list[FeedPriceBreak] = field(default_factory=list)
+    # BOM tool facts — None whenever the provider response omits them, which
+    # keeps the UI honest-unverified rather than guessing (spec D6).
+    lifecycle: str | None = None
+    package: str | None = None
 
 
 class PartFeedProvider(Protocol):

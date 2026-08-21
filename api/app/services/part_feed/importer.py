@@ -18,6 +18,7 @@ import threading
 import time
 import uuid
 from collections.abc import Callable, Iterator
+from datetime import UTC, datetime
 from decimal import Decimal
 
 from sqlalchemy import func
@@ -98,6 +99,49 @@ def _fill_part_media(part: Part, fp: FeedPart) -> bool:
     # datasheet must not be refetched forever.
     if not part.datasheet_url and fp.datasheet_url and len(fp.datasheet_url) <= 500:
         part.datasheet_url = fp.datasheet_url
+        changed = True
+    return changed
+
+
+# Raw feed lifecycle words → our enum. Anything unlisted returns None and the
+# part keeps its default: an unmapped word must never stamp the truth-bit.
+_LIFECYCLE_WORDS = (
+    ("obsolete", "obsolete"),
+    ("end of life", "obsolete"),
+    ("eol", "obsolete"),
+    ("not recommended", "nrnd"),
+    ("nrnd", "nrnd"),
+    ("new product", "active"),
+    ("in production", "active"),
+    ("production", "active"),
+    ("active", "active"),
+)
+
+
+def map_lifecycle(raw: str | None) -> str | None:
+    text = (raw or "").strip().lower()
+    if not text:
+        return None
+    for needle, value in _LIFECYCLE_WORDS:
+        if needle in text:
+            return value
+    return None
+
+
+def _stamp_feed_facts(part: Part, fp: FeedPart) -> bool:
+    """Copy feed-confirmed facts onto the row. lifecycle_verified_at is stamped
+    ONLY when the feed actually said something we could map (spec D6)."""
+    changed = False
+    if fp.package:
+        token = fp.package.strip()[:60]
+        if token and part.package != token:
+            part.package = token
+            changed = True
+    mapped = map_lifecycle(fp.lifecycle)
+    if mapped is not None:
+        if part.lifecycle_status != mapped:
+            part.lifecycle_status = mapped
+        part.lifecycle_verified_at = datetime.now(UTC)
         changed = True
     return changed
 
@@ -258,6 +302,9 @@ def sync_supplier_listings(
                 continue
             wrote_listing = _upsert_listing(db, part, supplier, fp)
             media = _fill_part_media(part, fp)
+            # Facts are a real write, but not a MEDIA one — fold them into the
+            # "updated" bucket so the counts keep meaning what they say.
+            wrote_listing = _stamp_feed_facts(part, fp) or wrote_listing
             image_url = part.image_url
             db.commit()
             if media:
@@ -508,6 +555,9 @@ def grow_catalog(
                     db.flush()
                 wrote_listing = _upsert_listing(db, part, supplier, fp)
                 media = _fill_part_media(part, fp)
+                # Facts are a real write, but not a MEDIA one — fold them into
+                # the "updated" bucket (see the same wiring in the sync path).
+                wrote_listing = _stamp_feed_facts(part, fp) or wrote_listing
                 image_url = part.image_url
                 db.commit()
                 if is_new:

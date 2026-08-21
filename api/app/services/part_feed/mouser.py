@@ -86,6 +86,16 @@ def part_from_mouser(raw: dict) -> FeedPart | None:
         qty = pb.get("Quantity")
         if price is not None and isinstance(qty, int) and qty > 0:
             breaks.append(FeedPriceBreak(min_quantity=qty, unit_price=price))
+    # DEFENSIVE: the Mouser field names for these two were never verified
+    # against a live response, so an absent key must degrade to None (the
+    # part then renders unverified) rather than fabricate a claim.
+    lifecycle = (raw.get("LifecycleStatus") or "").strip() or None
+    package = None
+    for attr in raw.get("ProductAttributes") or []:
+        name = (attr.get("AttributeName") or "").strip().lower()
+        if name in ("package / case", "package/case", "package"):
+            package = (attr.get("AttributeValue") or "").strip() or None
+            break
     return FeedPart(
         mpn=mpn,
         manufacturer=manufacturer,
@@ -97,6 +107,8 @@ def part_from_mouser(raw: dict) -> FeedPart | None:
         lead_time_days=_parse_lead_time(raw.get("LeadTime")),
         currency=(raw.get("PriceBreaks") or [{}])[0].get("Currency") or "USD",
         price_breaks=breaks,
+        lifecycle=lifecycle,
+        package=package,
     )
 
 
