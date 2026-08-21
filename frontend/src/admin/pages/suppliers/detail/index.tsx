@@ -9,8 +9,14 @@ import {
   importSupplier,
   observeSupplierRun,
   syncErrorMessage,
+  runOutlivesReader,
+  appendCapped,
+  tallyEvent,
+  tallyTotals,
+  EMPTY_RUN_TALLY,
   SyncStreamError,
   type FeedRunInfo,
+  type RunTally,
   type SyncEvent,
 } from '@admin/services/syncStream';
 import type { AdminSupplier, Part, PaginatedResponse } from '@admin/types/admin';
@@ -41,25 +47,6 @@ function externalHref(url: string): string {
   return /^https?:\/\//i.test(url) ? url : `https://${url}`;
 }
 
-// A continuous auto-import can emit thousands of part rows; unbounded
-// [...prev, event] is O(n^2) copying and thousands of thumbnailed rows. Keep
-// the newest rows up to the cap — SYSTEM rows (started/error/finished) are
-// always retained, and the footer totals come from the server's own counts,
-// so trimming display rows can never corrupt what the run reports.
-const EVENT_ROW_CAP = 500;
-
-function appendCapped<T extends { kind: string }>(events: T[], event: T): T[] {
-  const next = [...events, event];
-  if (next.length <= EVENT_ROW_CAP) return next;
-  const system = next.filter(
-    (e) => e.kind === 'sync_started' || e.kind === 'sync_error' || e.kind === 'sync_finished',
-  );
-  const rows = next.filter(
-    (e) => e.kind !== 'sync_started' && e.kind !== 'sync_error' && e.kind !== 'sync_finished',
-  );
-  return [...system, ...rows.slice(rows.length - (EVENT_ROW_CAP - system.length))];
-}
-
 export default function SupplierDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -82,12 +69,18 @@ export default function SupplierDetailPage() {
   // reading"; `serverRunning` is "the run is going". Only the second may gate
   // a second click, and only the second decides whether the console still
   // looks alive.
+  //
+  // `events` is the display window (capped); `tally` is the run's real
+  // arithmetic, folded as each event ARRIVES. They are separate fields
+  // because they answer different questions and only one of them may be
+  // trimmed — see EVENT_ROW_CAP.
   const [runState, setRunState] = useState<{
     mode: 'sync' | 'import';
     running: boolean;
     serverRunning: boolean;
     reattached: boolean;
     events: SyncEvent[];
+    tally: RunTally;
     error: string | null;
   }>({
     mode: 'sync',
@@ -95,6 +88,7 @@ export default function SupplierDetailPage() {
     serverRunning: false,
     reattached: false,
     events: [],
+    tally: EMPTY_RUN_TALLY,
     error: null,
   });
   // True between a pause click and the run's paused ending arriving on the
@@ -219,10 +213,18 @@ export default function SupplierDetailPage() {
       ...prev,
       mode: seed.mode ?? prev.mode,
       running: true,
-      serverRunning: true,
+      // A POST *starts* a run, so the run is going the moment the click lands.
+      // An ATTACH does not know yet — the server may only be handing back the
+      // replay of one that already ended, and it says which in the headers
+      // (`onOpen`, one round-trip away). The cards stay locked either way,
+      // because `running` already covers the window in between.
+      serverRunning: seed.replaceOnFirstEvent ? prev.serverRunning : true,
       reattached: seed.reattached,
       error: null,
+      // Both reset together or the counters carry the last run's numbers into
+      // this one's first frame.
       events: seed.replaceOnFirstEvent ? prev.events : [],
+      tally: seed.replaceOnFirstEvent ? prev.tally : EMPTY_RUN_TALLY,
     }));
     // Tracked out here rather than read off state: a reader that dies mid-run
     // has still seen work that was committed before it was reported (the
@@ -230,6 +232,10 @@ export default function SupplierDetailPage() {
     // arrived. A run that never started owes nothing.
     let receivedAny = false;
     let sawFinish = false;
+    // Assume live until the headers say otherwise — an API that predates the
+    // header sends nothing, and idling a card over a live run is the worse
+    // half of that trade.
+    let activeAtOpen = true;
     let swapped = !seed.replaceOnFirstEvent;
     return open(
       (event) => {
@@ -239,15 +245,25 @@ export default function SupplierDetailPage() {
         swapped = true;
         setRunState((prev) => ({
           ...prev,
+          // The window is trimmed; the tally never is. Folding here — once per
+          // event, as it arrives — is what makes the counters immune to the
+          // eviction. The updater stays PURE (it derives from `prev`), so
+          // React re-invoking it cannot double-count.
           events: replace ? [event] : appendCapped(prev.events, event),
+          tally: tallyEvent(replace ? EMPTY_RUN_TALLY : prev.tally, event),
         }));
       },
       {
         signal: controller.signal,
         // The two routes emit an identical envelope, so the MODE only ever
         // arrives in the headers — without this an attach would label an
-        // import as a sync.
-        onOpen: (info) => setRunState((prev) => ({ ...prev, mode: info.mode })),
+        // import as a sync. `active` is the other thing the body cannot say:
+        // a replay of a finished run looks exactly like a live one until it
+        // ends.
+        onOpen: (info) => {
+          activeAtOpen = info.active;
+          setRunState((prev) => ({ ...prev, mode: info.mode, serverRunning: info.active }));
+        },
       }
     )
       // An abort resolves like a clean finish, so both settle paths check the
@@ -269,13 +285,16 @@ export default function SupplierDetailPage() {
         if (controller.signal.aborted) return false;
         // A dropped socket is NOT a finished run. If events were flowing and
         // no ending arrived, the work is still going server-side — say so and
-        // keep the second click blocked.
-        const stillGoing = receivedAny && !sawFinish;
+        // keep the second click blocked. But only for a run that WAS going:
+        // the same drop part-way through the replay of a finished one would
+        // otherwise strand the console claiming a run nothing can ever end.
+        const stillGoing = runOutlivesReader({ activeAtOpen, receivedAny, sawFinish });
+        if (!stillGoing) setPausingRun(false);
         setRunState((prev) => ({
           ...prev,
           running: false,
           serverRunning: stillGoing,
-          error: syncErrorMessage(err),
+          error: syncErrorMessage(err, { runActive: activeAtOpen }),
         }));
         if (receivedAny) {
           quietRefetchRef.current = true;
@@ -300,16 +319,31 @@ export default function SupplierDetailPage() {
   // new counts), so the refetch matters at least as much there.
   const pauseRun = () => {
     if (!id || pausingRun) return;
+    const watching = runState.running;
     setPausingRun(true);
-    adminApi.pauseFeedRun(id).catch(() => {
-      // 404 = the run ended between the render and the click — the stream's
-      // own ending event resets the button either way.
-      setPausingRun(false);
-    });
+    adminApi
+      .pauseFeedRun(id)
+      .then(() => {
+        // The wind-down is announced by the run's own `sync_finished`, which
+        // only lands on an OPEN stream. Pausing from the detached state (the
+        // card offers it there — the run is still spending quota) would
+        // otherwise leave this tab claiming a run that had already stopped,
+        // with a "Pausing…" button that never resolves. Attach, so the ending
+        // has somewhere to arrive.
+        if (!watching) void attachToRun(id).catch(() => {});
+      })
+      .catch(() => {
+        // 404 = the run ended between the render and the click — the stream's
+        // own ending event resets the button either way.
+        setPausingRun(false);
+      });
   };
 
   const startRun = (mode: 'sync' | 'import') => {
     if (!id || runState.running || runState.serverRunning) return;
+    // A stale "Pausing…" must not greet a brand-new run: whatever the last
+    // pause was waiting for is over, or this click could not have landed.
+    setPausingRun(false);
     const openStream = mode === 'import' ? importSupplier : syncSupplier;
     readRun((onEvent, options) => openStream(id, onEvent, options), {
       mode,
@@ -338,6 +372,7 @@ export default function SupplierDetailPage() {
         // Nothing left to watch: the run ended while this tab was away (and
         // fell out of the server's retention window). Stop claiming it is
         // going, and leave the events already on screen alone.
+        setPausingRun(false);
         setRunState((prev) => ({
           ...prev,
           serverRunning: false,
@@ -474,9 +509,12 @@ export default function SupplierDetailPage() {
         onImport={() => startRun('import')}
         importing={(runState.running || runState.serverRunning) && runState.mode === 'import'}
         serverRunning={runState.serverRunning}
-        serverRunMode={
-          runState.running || runState.serverRunning ? runState.mode : null
-        }
+        // Pause is offered ONLY once the server has said a run is going —
+        // never merely because this tab has a socket open. The page probes
+        // for a run on every load, and a card that flipped to "Pause" during
+        // that probe (or during the replay of a run that had already ended)
+        // offers a button whose only possible answer is 404.
+        serverRunMode={runState.serverRunning ? runState.mode : null}
         onPause={pauseRun}
         pausing={pausingRun}
       />
@@ -505,6 +543,10 @@ export default function SupplierDetailPage() {
           }
           reconnecting={reconnecting}
           events={runState.events}
+          // Counted at arrival, NOT from `events` — that array is a capped
+          // window and a total walked over it stalls at the cap and then
+          // falls as rows are evicted.
+          counts={tallyTotals(runState.tally)}
           error={runState.error}
         />
       )}

@@ -9,10 +9,14 @@
 // Purely presentational: the parent owns the stream, this renders whatever has
 // arrived.
 //
-// Three honesty rules, all load-bearing:
+// Four honesty rules, all load-bearing:
 //   1. The FOOTER prints the server's own `sync_finished` detail verbatim. The
 //      run's totals are the server's arithmetic; recomputing them client-side
 //      could only ever produce a second, disagreeing number.
+//   1b. The header counters arrive as a PROP and are never derived from
+//      `events`. That array is a bounded window the parent trims, so anything
+//      counted from it undercounts the run — which is what the counters used
+//      to do, stalling near the cap and then falling as rows were evicted.
 //   2. A `sync_error` row says progress is saved, because it is — the importer
 //      commits per part, so a quota wall mid-run keeps everything it already
 //      reported.
@@ -26,7 +30,12 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import Icon from '@shared/components/Icon';
 import PartThumb from '@admin/components/PartThumb';
-import { tallyCounts, terminalState, type SyncAction, type SyncEvent } from '@admin/services/syncStream';
+import {
+  terminalState,
+  type SyncAction,
+  type SyncCounts,
+  type SyncEvent,
+} from '@admin/services/syncStream';
 import styles from './SyncConsole.module.scss';
 
 interface Props {
@@ -59,8 +68,22 @@ interface Props {
   onReconnect?: () => void;
   /** True while that attempt is in flight. */
   reconnecting?: boolean;
-  /** Every event received so far, in arrival order. Append-only. */
+  /**
+   * The rows to show, newest last — a bounded WINDOW of the run, not all of
+   * it. The parent evicts the oldest part rows past its cap, so this list
+   * must never be counted; see `counts`.
+   */
   events: SyncEvent[];
+  /**
+   * The run's five totals, counted by the parent as events ARRIVED (and
+   * replaced by the server's own numbers once the run ends).
+   *
+   * A prop rather than something derived here, and that is the fix: this
+   * panel used to tally `events`, which is capped, so on a long import the
+   * header stalled near the cap and the `created` count went DOWN whenever an
+   * older created row was evicted by a newer one.
+   */
+  counts: SyncCounts;
   /** A transport-level failure (the run never started, or died). */
   error: string | null;
 }
@@ -91,6 +114,7 @@ export default function SyncConsole({
   onReconnect,
   reconnecting = false,
   events,
+  counts,
   error,
 }: Props) {
   const runLabel = mode === 'import' ? 'Inventory import' : 'Inventory sync';
@@ -166,7 +190,6 @@ export default function SyncConsole({
     // from the deps, or the scroll would re-run on every pill update.
   }, [events.length]);
 
-  const counts = tallyCounts(events);
   const terminal = terminalState(events);
 
   return (
@@ -274,14 +297,31 @@ export default function SyncConsole({
       <div aria-live="polite">
         {running && events.length === 0 && !error && (
           <p className={styles.waiting}>
-            {reattached ? 'Re-attaching to the run already in progress…' : 'Contacting the feed…'}
+            {/* "Checking", not "re-attaching": at this point the headers may
+                not have landed, and the page probes on every load — most of
+                the time there is no run to attach to at all. */}
+            {reattached ? 'Checking for a run already in progress…' : 'Contacting the feed…'}
+          </p>
+        )}
+
+        {/* Attached to a run this tab did not start. Leaving is FREE — the run
+            is server-owned — and that is exactly what confuses an operator who
+            came back expecting their pause to have stopped it. Name the one
+            control that does. */}
+        {running && serverRunning && reattached && events.length > 0 && !error && (
+          <p className={styles.waiting}>
+            This run was already going and keeps going if you leave the page &mdash; use{' '}
+            <b>{mode === 'import' ? 'Pause import' : 'Pause sync'}</b> above to end it.
           </p>
         )}
 
         {/* Detached, but the work is still going. Says so plainly rather than
             leaving a stalled feed to imply the run died with the socket. */}
         {!running && serverRunning && !error && (
-          <p className={styles.waiting}>Still running on the server&hellip;</p>
+          <p className={styles.waiting}>
+            Still running on the server &mdash; this tab stopped watching, the run did not. Use{' '}
+            <b>{mode === 'import' ? 'Pause import' : 'Pause sync'}</b> above to end it.
+          </p>
         )}
 
         {error && <p className={styles.hint}>{error}</p>}

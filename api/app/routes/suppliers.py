@@ -373,6 +373,15 @@ def _feed_run_response(run: FeedRun) -> StreamingResponse:
             # stream whose events are identical on both routes.
             "X-Feed-Run-Id": run.run_id,
             "X-Feed-Run-Mode": run.mode,
+            # Is the run still GOING, or is this only its replay? A finished
+            # run stays readable for the retention window precisely so an
+            # operator who lost the socket can come back and read it — which
+            # means "the attach succeeded" is NOT evidence of live work, and a
+            # client that assumed it was spent the whole replay of a paused run
+            # claiming the run was still going and offering a Pause that could
+            # only 404. The stream ending settles it either way; this is what
+            # the console needs BEFORE the last line lands.
+            "X-Feed-Run-Active": "true" if run.running else "false",
         },
     )
 
