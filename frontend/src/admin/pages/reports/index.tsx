@@ -177,7 +177,9 @@ function ReportsRevenueChart({ series }: ReportsRevenueChartProps) {
   const tickStep = maxV / 4
   const yTicks = [0, tickStep, tickStep * 2, tickStep * 3, maxV]
 
-  const activeIdx = pinned ?? hover
+  const rawActiveIdx = pinned ?? hover
+  // Bounds guard — see TrafficChart.
+  const activeIdx = rawActiveIdx !== null && rawActiveIdx < series.length ? rawActiveIdx : null
   const tipData = activeIdx !== null ? series[activeIdx] : null
   const anchor = activeIdx !== null
     ? tooltipAnchor(xs[activeIdx], yScale(sponsorTop[activeIdx]), W, H)
@@ -490,7 +492,11 @@ function TrafficChart({ data }: TrafficChartProps) {
   const labelEvery = Math.max(1, Math.floor(N / 7))
 
   // Pinned beats hover; both drive one tooltip anchored ABOVE the dot.
-  const active = pinned ?? hover
+  // Bounds guard: a range/segment switch shrinks `data` one render before
+  // usePinnedIndex's effect clears the stale index — never dereference past
+  // the new series (reproduced crash: pin idx 107 on 365d, switch to 30d).
+  const rawActive = pinned ?? hover
+  const active = rawActive !== null && rawActive < data.length ? rawActive : null
   const shown = active !== null ? data[active] : null
   const anchor = active !== null
     ? tooltipAnchor(xs[active], yScale(data[active].views), W, H)
@@ -702,7 +708,10 @@ function DeviceTrendChart({ data }: { data: Array<{ day: string; desktop: number
   const yTicks = [0, tickStep, tickStep * 2, Math.min(tickStep * 3, maxV)]
   const labelEvery = Math.max(1, Math.floor(N / 7))
 
-  const active = pinned ?? hover
+  const rawActive = pinned ?? hover
+  // Bounds guard — see TrafficChart: stale pin survives one render after a
+  // dataset shrink.
+  const active = rawActive !== null && rawActive < data.length ? rawActive : null
   const shown = active !== null ? data[active] : null
   // Anchor above the TOPMOST series dot so the tip never covers a line.
   const anchor = active !== null
@@ -777,7 +786,9 @@ function DeviceTrendChart({ data }: { data: Array<{ day: string; desktop: number
 
 // ─── Page ───────────────────────────────────────────────────────────────────
 
-type RangeKey = '30d' | '90d' | '12m' | 'All'
+// 'All' removed 2026-08-21: the server caps days at 365, so it silently
+// duplicated 12m — a range button must not promise more than it fetches.
+type RangeKey = '30d' | '90d' | '12m'
 type TabKey = 'analytics' | 'exports' | 'site'
 
 export default function ReportsPage() {
@@ -789,6 +800,7 @@ export default function ReportsPage() {
   const [popular, setPopular] = useState<PopularData | null>(null)
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null)
   const [segment, setSegment] = useState<AnalyticsSegment>('humans')
+  const [segmentError, setSegmentError] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -808,17 +820,30 @@ export default function ReportsPage() {
     return () => { cancelled = true }
   }, [demoMode])
 
-  const RANGE_DAYS: Record<RangeKey, number> = { '30d': 30, '90d': 90, '12m': 365, 'All': 365 }
+  const RANGE_DAYS: Record<RangeKey, number> = { '30d': 30, '90d': 90, '12m': 365 }
 
   useEffect(() => {
     let cancelled = false
     adminApi.getAnalytics(RANGE_DAYS[range], segment)
-      .then(a => { if (!cancelled) setAnalytics(a) })
-      .catch(() => {})
+      .then(a => {
+        if (cancelled) return
+        setAnalytics(a)
+        setSegmentError(false)
+      })
+      .catch(() => {
+        // The toggle already flipped but the data did not — captions must
+        // keep describing the DATA (analytics.segment), and the failure is
+        // said out loud instead of silently mislabeling human numbers.
+        if (!cancelled) setSegmentError(true)
+      })
     return () => { cancelled = true }
     // segment is part of the query — the charts' pinned tooltips clear
     // automatically because the data identity changes.
   }, [demoMode, range, segment])
+
+  // The segment the RENDERED data actually represents (response-carried);
+  // falls back to the requested one before first load.
+  const shownSegment: AnalyticsSegment = analytics?.segment ?? segment
 
   // Build the chart series — bundle's hand-tuned data in demo mode, otherwise
   // map the API's RevenueDataPoint[] to the {m, listing, sponsor} shape.
@@ -887,7 +912,7 @@ export default function ReportsPage() {
         </div>
         <div className={styles.pageHeadActions}>
           <div className={styles.seg}>
-            {(['30d', '90d', '12m', 'All'] as const).map((r) => (
+            {(['30d', '90d', '12m'] as const).map((r) => (
               <button
                 key={r}
                 type="button"
@@ -1071,15 +1096,17 @@ export default function ReportsPage() {
               ))}
             </div>
             <span className={styles.segmentNote}>
-              {segment === 'humans'
-                ? 'Crawlers are filtered out — these numbers are people.'
-                : segment === 'bots'
-                  ? 'Crawler and bot traffic only.'
-                  : 'Everything the tracker recorded, crawlers included.'}
+              {segmentError
+                ? `Couldn’t load that view — still showing ${shownSegment === 'humans' ? 'human' : shownSegment === 'bots' ? 'crawler' : 'all'} traffic.`
+                : shownSegment === 'humans'
+                  ? 'Crawlers are filtered out — these numbers are people.'
+                  : shownSegment === 'bots'
+                    ? 'Crawler and bot traffic only.'
+                    : 'Everything the tracker recorded, crawlers included.'}
             </span>
           </div>
 
-          {!analytics || (analytics.total_views === 0 && analytics.bot_views === 0) ? (
+          {!analytics || analytics.human_views + analytics.bot_views === 0 ? (
             <div className={styles.analyticsEmpty}>
               <strong>No analytics data yet</strong>
               <p>Page views are tracked automatically. Visit the public site to start collecting data.</p>

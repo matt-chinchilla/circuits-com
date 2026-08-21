@@ -67,7 +67,10 @@ export default function WorldMapPanel({
     };
   }, []);
 
-  const maxViews = Math.max(1, ...countries.map((c) => c.views));
+  // Floor 2: prod's day-one state is exactly one country with one view, and
+  // a continuous visualMap with min === max degenerates (NaN gradient
+  // position). min stays 1; the scale just spans at least 1..2.
+  const maxViews = Math.max(2, ...countries.map((c) => c.views));
   const collecting = countries.length === 0;
 
   const option: EChartsCoreOption = useMemo(
