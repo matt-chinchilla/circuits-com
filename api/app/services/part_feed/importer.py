@@ -49,7 +49,7 @@ def _search_keyword(cat: Category) -> str:
     return cat.name
 
 
-def _new_part(fp: FeedPart, category_id: uuid.UUID, sub_slug: str) -> Part:
+def _new_part(fp: FeedPart, category_id: uuid.UUID | None, sub_slug: str | None) -> Part:
     """The Part row a new feed hit becomes — constructed, NOT added: the
     caller owns the transaction.
 
@@ -201,6 +201,36 @@ def _upsert_listing(db: Session, part: Part, supplier: Supplier, fp: FeedPart) -
             )
         )
     return True
+
+
+def resolve_single(
+    db: Session,
+    provider: PartFeedProvider,
+    supplier: Supplier,
+    query: str,
+    mpn: str | None,
+) -> Part | None:
+    """One BOM miss → at most one persisted Part. Persistence is IDENTICAL to
+    a daytime import click (part + listing + breaks + media + fact stamping,
+    per-row commit); category_id stays None — a live-resolved part is findable
+    by search and part page, and category curation is a separate act."""
+    if mpn:
+        fp = provider.lookup_mpn(mpn)
+    else:
+        results = provider.search(query, limit=1)
+        fp = results[0] if results else None
+    if fp is None:
+        return None
+    part = db.query(Part).filter(Part.sku == fp.mpn).first()
+    if part is None:
+        part = _new_part(fp, None, None)
+        db.add(part)
+        db.flush()
+    _upsert_listing(db, part, supplier, fp)
+    _fill_part_media(part, fp)
+    _stamp_feed_facts(part, fp)
+    db.commit()
+    return part
 
 
 def sync_event(

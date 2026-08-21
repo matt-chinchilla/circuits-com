@@ -264,6 +264,10 @@ class Settings(BaseSettings):
     FEED_IMPORT_HOUR_UTC: int = 6
     FEED_IMPORT_CALL_BUDGET: int = 850
 
+    # BOM live-resolve daily provider-call budget (spec §6). Per-worker,
+    # in-process — the documented single-worker posture.
+    BOM_RESOLVE_DAILY_BUDGET: int = 100
+
     # ── Automated cost sync (app/jobs/sync_costs.py) ────────────────────────
     # ANTHROPIC_ADMIN_KEY — an ORGANIZATION admin key (`sk-ant-admin…`), not a
     # regular API key: the Admin API's cost report is the only way to get real
