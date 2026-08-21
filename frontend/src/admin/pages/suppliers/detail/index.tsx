@@ -7,7 +7,10 @@ import { useDemo } from '@admin/contexts/DemoContext';
 import {
   syncSupplier,
   importSupplier,
+  observeSupplierRun,
   syncErrorMessage,
+  SyncStreamError,
+  type FeedRunInfo,
   type SyncEvent,
 } from '@admin/services/syncStream';
 import type { AdminSupplier, Part, PaginatedResponse } from '@admin/types/admin';
@@ -49,15 +52,34 @@ export default function SupplierDetailPage() {
   const [error, setError] = useState('');
   // The live feed run — a SYNC (refresh what this supplier lists) or an IMPORT
   // (go find what it doesn't). ONE piece of state for both, because one console
-  // renders them and only one may be open at a time; `mode` is what the header
+  // renders them and only one may be going at a time; `mode` is what the header
   // names. Owned HERE, not in QuickActionsPanel, so the console's feed survives
   // every re-render of the strip that starts it.
+  //
+  // `running` and `serverRunning` are DIFFERENT facts and the split is the
+  // point: the run belongs to the server, so this page's socket can die (a
+  // frozen tab, a proxy read-timeout, navigating away and back) while the work
+  // carries on spending the day's provider quota. `running` is "this tab is
+  // reading"; `serverRunning` is "the run is going". Only the second may gate
+  // a second click, and only the second decides whether the console still
+  // looks alive.
   const [runState, setRunState] = useState<{
     mode: 'sync' | 'import';
     running: boolean;
+    serverRunning: boolean;
+    reattached: boolean;
     events: SyncEvent[];
     error: string | null;
-  }>({ mode: 'sync', running: false, events: [], error: null });
+  }>({
+    mode: 'sync',
+    running: false,
+    serverRunning: false,
+    reattached: false,
+    events: [],
+    error: null,
+  });
+  // True while a reconnect attempt is in flight — the console's button.
+  const [reconnecting, setReconnecting] = useState(false);
   // Bumped when a run ends so the load effect refetches — the supplier's real
   // counts and the parts table both move underneath us during a sync.
   const [refreshNonce, setRefreshNonce] = useState(0);
@@ -68,13 +90,13 @@ export default function SupplierDetailPage() {
   // whole supplier view with the "supplier not found" fallback.
   const [deleteError, setDeleteError] = useState('');
 
-  // A run outlives the click that started it, so leaving the page has to END
-  // it rather than let it run on invisibly: an orphaned stream keeps spending
-  // the feed's rate-limited quota and holds a server-side generator open for a
-  // console nobody is watching. ONE controller is enough — one run at a time.
-  // Admin routes remount per `:id` (App.tsx keys the ErrorBoundary on
-  // pathname), so this cleanup covers both unmount and navigating to another
-  // supplier.
+  // Leaving the page DETACHES this reader. It does not cancel the run — the
+  // run is owned by a server-side worker and finishes on its own, which is
+  // exactly why the operator can come back to it. Aborting here just stops
+  // this tab holding a socket open for a console nobody is looking at. ONE
+  // controller is enough: one reader at a time. Admin routes remount per `:id`
+  // (App.tsx keys the ErrorBoundary on pathname), so this covers both unmount
+  // and navigating to another supplier.
   const runAbortRef = useRef<AbortController | null>(null);
   useEffect(
     () => () => {
@@ -82,6 +104,21 @@ export default function SupplierDetailPage() {
     },
     [id]
   );
+
+  // A run is server-owned, so one may already be going when this page loads:
+  // started before a reload, in another tab, or left behind when the operator
+  // navigated away. Probe for it and re-fill the console, rather than showing
+  // an idle strip whose Sync button can only ever answer 409.
+  //
+  // Deliberately silent about failure — a probe that shouts would put a red
+  // line on a page where nothing is wrong. `attachToRun` is defined below;
+  // the callback runs after render, so the binding is live by then.
+  useEffect(() => {
+    if (!id) return;
+    void attachToRun(id).catch(() => {});
+    // Keyed on the supplier alone. The cleanup that matters — detaching the
+    // reader — belongs to the effect above, which keys on the same id.
+  }, [id]);
 
   // Raised by a finishing run so the refetch it triggers stays SILENT. The
   // loading curtain replaces the whole page, console included, so a noisy
@@ -134,47 +171,150 @@ export default function SupplierDetailPage() {
     };
   }, [id]);
 
-  // Both runs, one function: the two transports are the same reader behind two
-  // paths, and everything the page does with them — abort on leave, quiet
-  // refetch afterwards, one error sentence — is identical. An import moves MORE
-  // than a sync does (new parts, new counts), so the refetch matters at least
-  // as much there.
-  const startRun = (mode: 'sync' | 'import') => {
-    if (!id || runState.running) return;
+  // ONE reader for every way into a run — starting a sync, starting an import,
+  // or attaching to one already going. All three speak the same NDJSON stream
+  // and everything this page does with it (detach on leave, quiet refetch
+  // afterwards, one error sentence) is identical; a second copy of this is how
+  // one of them ends up missing the refetch or mis-labelling the run.
+  //
+  // `replaceOnFirstEvent` is the difference between the doors: a POST starts a
+  // run with no history, while an attach REPLAYS the whole run from the top —
+  // appending that to what is already on screen would show every event twice.
+  // The swap waits for the first event so a 404 (nothing to attach to) leaves
+  // the console exactly as it was rather than blanking it.
+  const readRun = (
+    open: (
+      onEvent: (event: SyncEvent) => void,
+      options: { signal: AbortSignal; onOpen: (info: FeedRunInfo) => void }
+    ) => Promise<boolean | void>,
+    seed: { mode?: 'sync' | 'import'; reattached: boolean; replaceOnFirstEvent: boolean }
+  ): Promise<boolean> => {
     const controller = new AbortController();
+    // Never two readers on one run: the older socket is dropped, not the work.
+    runAbortRef.current?.abort();
     runAbortRef.current = controller;
-    setRunState({ mode, running: true, events: [], error: null });
-    // Tracked out here rather than read off state: a run that dies mid-stream
-    // still committed everything it reported (the importer commits per part),
-    // so a refetch is owed whenever ANY event arrived — success or not. A run
-    // that never started (no feed key, wrong supplier) owes nothing.
+    setRunState((prev) => ({
+      ...prev,
+      mode: seed.mode ?? prev.mode,
+      running: true,
+      serverRunning: true,
+      reattached: seed.reattached,
+      error: null,
+      events: seed.replaceOnFirstEvent ? prev.events : [],
+    }));
+    // Tracked out here rather than read off state: a reader that dies mid-run
+    // has still seen work that was committed before it was reported (the
+    // importer commits per part), so a refetch is owed whenever ANY event
+    // arrived. A run that never started owes nothing.
     let receivedAny = false;
-    const openStream = mode === 'import' ? importSupplier : syncSupplier;
-    openStream(
-      id,
+    let sawFinish = false;
+    let swapped = !seed.replaceOnFirstEvent;
+    return open(
       (event) => {
         receivedAny = true;
-        setRunState((prev) => ({ ...prev, events: [...prev.events, event] }));
+        if (event.kind === 'sync_finished') sawFinish = true;
+        const replace = !swapped;
+        swapped = true;
+        setRunState((prev) => ({
+          ...prev,
+          events: replace ? [event] : [...prev.events, event],
+        }));
       },
-      { signal: controller.signal }
+      {
+        signal: controller.signal,
+        // The two routes emit an identical envelope, so the MODE only ever
+        // arrives in the headers — without this an attach would label an
+        // import as a sync.
+        onOpen: (info) => setRunState((prev) => ({ ...prev, mode: info.mode })),
+      }
     )
       // An abort resolves like a clean finish, so both settle paths check the
       // signal first: there is nobody left to show a refetch or an error to,
       // and bumping the nonce would fire a request for a page being torn down.
-      .then(() => {
-        if (controller.signal.aborted) return;
-        setRunState((prev) => ({ ...prev, running: false }));
-        quietRefetchRef.current = true;
-        setRefreshNonce((n) => n + 1);
-      })
-      .catch((err) => {
-        if (controller.signal.aborted) return;
-        setRunState((prev) => ({ ...prev, running: false, error: syncErrorMessage(err) }));
+      .then((attached) => {
+        if (controller.signal.aborted) return false;
+        // The server closes the stream only when the WORK ends, so a clean
+        // finish here means the run is genuinely over.
+        setRunState((prev) => ({ ...prev, running: false, serverRunning: false }));
         if (receivedAny) {
           quietRefetchRef.current = true;
           setRefreshNonce((n) => n + 1);
         }
+        return attached !== false;
+      })
+      .catch((err) => {
+        if (controller.signal.aborted) return false;
+        // A dropped socket is NOT a finished run. If events were flowing and
+        // no ending arrived, the work is still going server-side — say so and
+        // keep the second click blocked.
+        const stillGoing = receivedAny && !sawFinish;
+        setRunState((prev) => ({
+          ...prev,
+          running: false,
+          serverRunning: stillGoing,
+          error: syncErrorMessage(err),
+        }));
+        if (receivedAny) {
+          quietRefetchRef.current = true;
+          setRefreshNonce((n) => n + 1);
+        }
+        if (err instanceof SyncStreamError) throw err;
+        return false;
       });
+  };
+
+  // Attach to whatever this supplier already has going. Used three ways: the
+  // page's own probe on load, the console's Reconnect button, and the recovery
+  // from a 409 (someone — maybe this operator in another tab — got there
+  // first). Resolves false when there is nothing to watch.
+  const attachToRun = (supplierId: string, reattached = true): Promise<boolean> =>
+    readRun(
+      (onEvent, options) => observeSupplierRun(supplierId, onEvent, options),
+      { reattached, replaceOnFirstEvent: true }
+    );
+
+  // Both runs, one function. An import moves MORE than a sync does (new parts,
+  // new counts), so the refetch matters at least as much there.
+  const startRun = (mode: 'sync' | 'import') => {
+    if (!id || runState.running || runState.serverRunning) return;
+    const openStream = mode === 'import' ? importSupplier : syncSupplier;
+    readRun((onEvent, options) => openStream(id, onEvent, options), {
+      mode,
+      reattached: false,
+      replaceOnFirstEvent: false,
+    }).catch((err) => {
+      // A run was already going when the click landed. That is not a failure
+      // to report — it is the run the operator wanted to see, so attach to it
+      // instead of leaving them with a red line about a conflict.
+      if (
+        err instanceof SyncStreamError &&
+        err.status === 409 &&
+        err.detail === 'feed_run_already_active'
+      ) {
+        void attachToRun(id);
+      }
+    });
+  };
+
+  const handleReconnect = () => {
+    if (!id || reconnecting) return;
+    setReconnecting(true);
+    attachToRun(id)
+      .then((attached) => {
+        if (attached) return;
+        // Nothing left to watch: the run ended while this tab was away (and
+        // fell out of the server's retention window). Stop claiming it is
+        // going, and leave the events already on screen alone.
+        setRunState((prev) => ({
+          ...prev,
+          serverRunning: false,
+          error: 'That run has finished — its results are in the activity feed.',
+        }));
+      })
+      .catch(() => {
+        /* readRun already put the sentence on screen */
+      })
+      .finally(() => setReconnecting(false));
   };
 
   const handleDelete = async () => {
@@ -290,13 +430,17 @@ export default function SupplierDetailPage() {
           Sits where supplier-detail spends its most-clicked time. The
           first card (Add part) replaces the prior header "Add Part"
           button so the page CTA is the strip itself. */}
+      {/* `syncing`/`importing` track the RUN, not the socket: the cards must
+          stay out of service across a dropped connection, because the work —
+          and the provider quota it spends — carries on without this tab. */}
       <QuickActionsPanel
         supplier={supplier}
         partRows={partRows}
         onSync={() => startRun('sync')}
-        syncing={runState.running && runState.mode === 'sync'}
+        syncing={(runState.running || runState.serverRunning) && runState.mode === 'sync'}
         onImport={() => startRun('import')}
-        importing={runState.running && runState.mode === 'import'}
+        importing={(runState.running || runState.serverRunning) && runState.mode === 'import'}
+        serverRunning={runState.serverRunning}
       />
 
       {/* The standing-order version of the Import card above: same job, every
@@ -306,11 +450,22 @@ export default function SupplierDetailPage() {
 
       {/* The run itself, live. Mounts on the first click and stays up
           afterwards so the summary is still readable. */}
-      {(runState.running || runState.events.length > 0 || runState.error) && (
+      {(runState.running ||
+        runState.serverRunning ||
+        runState.events.length > 0 ||
+        runState.error) && (
         <SyncConsole
           supplierName={supplier.name}
           mode={runState.mode}
           running={runState.running}
+          serverRunning={runState.serverRunning}
+          reattached={runState.reattached}
+          // Offered only when there is something to attach TO: a run still
+          // going that this tab is not reading.
+          onReconnect={
+            runState.serverRunning && !runState.running ? handleReconnect : undefined
+          }
+          reconnecting={reconnecting}
           events={runState.events}
           error={runState.error}
         />

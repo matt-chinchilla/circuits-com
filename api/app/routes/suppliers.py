@@ -1,6 +1,6 @@
 import json
 import uuid
-from collections.abc import Callable, Iterator
+from collections.abc import Iterator
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
@@ -22,19 +22,30 @@ from app.models import (
     SupplierFeed,
     User,
 )
-from app.services.activity import IMPORT_EVENT_KINDS, record_stream_event
-from app.services.auth_service import get_current_user
-
-# `sync_event` is the ONE definition of the wire shape (importer.py owns it).
-# The abort path below has to emit the same key set, and re-typing the dict
-# here is how a stream ends up with an event the client's parser drops.
+from app.services.auth_service import (
+    DEMO_READ_ONLY_DETAIL,
+    get_current_user,
+    is_demo_user,
+)
 from app.services.part_feed import (
     PartFeedProvider,
     get_feed_key,
     grow_catalog,
     match_provider,
-    sync_event,
     sync_supplier_listings,
+)
+
+# The run registry, imported from the SUBMODULE rather than through the
+# package: these names are the route's half of one seam and nothing else
+# consumes them, so widening `part_feed.__all__` would advertise run management
+# to callers who should only be starting runs.
+from app.services.part_feed.importer import (
+    CONTINUOUS_CALL_CEILING,
+    FeedRun,
+    FeedRunActive,
+    FeedWork,
+    get_feed_run,
+    start_feed_run,
 )
 from app.utils.color import validate_optional_hex_color
 from app.utils.image_url import validate_optional_image_url
@@ -319,21 +330,65 @@ def _resolve_feed_provider(db: Session, supplier_id: str) -> tuple[Supplier, Par
     return supplier, provider_cls(api_key=key)
 
 
-def _stream_feed_run(
-    db: Session,
+# How long an observer may hear nothing before the stream sends a blank line.
+# nginx cuts an idle proxied response at 60 s by default (neither nginx config
+# sets `proxy_read_timeout`), and an import sweeping already-known MPNs yields
+# NO event for minutes while still spending 2.1 s per provider call — so a
+# perfectly healthy run used to be exposed to a proxy-side cut. A bare "\n" is
+# contract-safe: NDJSON readers skip blank lines (the client's `parseNdjson`
+# does, and so does every test helper here), so it is traffic without being an
+# event.
+FEED_RUN_HEARTBEAT_SECONDS = 20.0
+
+
+def _feed_run_response(run: FeedRun) -> StreamingResponse:
+    """The NDJSON body — one JSON object per line, as the run produces them.
+
+    An OBSERVER, not the engine. The run is driven by its own worker thread
+    (`part_feed.importer.start_feed_run`); this generator replays what has
+    happened so far and then follows along, and closing it detaches a reader
+    without touching the work. That split is the whole fix: the response body
+    USED to BE the import, so a dead transport — a frozen tab, a proxy
+    timeout, a sleeping laptop — silently ended the run mid-sweep with a
+    `200 OK` in the log and no way to finish or resume it.
+    """
+
+    def observe() -> Iterator[str]:
+        for event in run.observe(heartbeat_seconds=FEED_RUN_HEARTBEAT_SECONDS):
+            yield "\n" if event is None else json.dumps(event) + "\n"
+
+    return StreamingResponse(
+        observe(),
+        media_type="application/x-ndjson",
+        # nginx buffers a proxied response by default (and its gzip_types cover
+        # application/json but not x-ndjson), which would hold the whole run
+        # back and deliver it in one lump — the opposite of the point.
+        headers={
+            "X-Accel-Buffering": "no",
+            "Cache-Control": "no-cache",
+            # Which run this socket is watching, and which job it is. A client
+            # that re-attaches after a dropped socket needs the MODE to label
+            # the console it is re-filling, and it cannot infer it from a
+            # stream whose events are identical on both routes.
+            "X-Feed-Run-Id": run.run_id,
+            "X-Feed-Run-Mode": run.mode,
+        },
+    )
+
+
+def _start_feed_run(
     provider: PartFeedProvider,
     supplier: Supplier,
-    run: Callable[[], Iterator[dict]],
+    work: FeedWork,
     mode: str = "sync",
 ) -> StreamingResponse:
-    """Wrap a feed generator as the NDJSON response — one JSON object per line,
-    flushed as each part is done.
+    """Start the run, then hand back a stream that watches it.
 
     Shared by sync and import because everything outside the generator is the
-    same job: record each event, serialize it, survive a mid-run raise, and
-    release the provider. `run` is a THUNK rather than an iterator so the
-    generator is created inside the try — a callable that raises on the way in
-    still ends the stream properly instead of 500ing after the headers.
+    same job. `work` is a CALLABLE taking `(session, provider, supplier)` — the
+    worker owns its own session (the request's is closed at request teardown by
+    `get_db`), so a thunk closing over the request session is exactly the
+    coupling this replaces.
 
     `mode` is the ONE thing the two routes disagree about, and it changes
     nothing on the wire: it picks the activity LABELS an import files its run
@@ -341,93 +396,19 @@ def _stream_feed_run(
     import reads "Import failed" rather than announcing a sync the operator
     never started. The stream itself stays one shape for one parser.
     """
-    # Read off the row BEFORE the body runs: the abort path rolls back, and
-    # these three values must survive that without re-querying.
-    supplier_uuid = supplier.id
-    supplier_key = str(supplier.id)
-    supplier_name = supplier.name
-    is_import = mode == "import"
-    stored_kinds = IMPORT_EVENT_KINDS if is_import else None
-    abort_title = "Import failed" if is_import else "Sync failed"
-
-    def stream() -> Iterator[str]:
-        # Running totals, tallied as the events go past. The generator owns the
-        # authoritative arithmetic (`importer._finished`) and this MIRRORS it,
-        # for one reason: when the generator raises, its own totals die with
-        # it, and the abort path still has to report what the run did. The
-        # importer commits per part BEFORE yielding its event, so everything
-        # counted here is work that survived the rollback below.
-        # Five keys, always — the same set `importer._finished` reports, so a
-        # console never has to tell a missing counter from a zero one. A sync
-        # leaves `created` at 0 and an import is mostly `created`; the
-        # arithmetic is shared, so every counter is counted on both paths.
-        counts = {
-            "synced": 0,
-            "media_filled": 0,
-            "not_found": 0,
-            "no_data": 0,
-            "created": 0,
-        }
-
-        def tally(event: dict) -> None:
-            if event.get("kind") != "part_synced":
-                return
-            action = event.get("action")
-            # media_filled counts in BOTH — filling an image IS a write.
-            if action == "media_filled":
-                counts["synced"] += 1
-                counts["media_filled"] += 1
-            elif action == "updated":
-                counts["synced"] += 1
-            elif action == "created":
-                # a NEW part, not a refreshed one — counted apart from
-                # `synced` exactly as the generator counts it
-                counts["created"] += 1
-            elif action == "not_found":
-                counts["not_found"] += 1
-            elif action == "no_data":
-                counts["no_data"] += 1
-
-        try:
-            for event in run():
-                tally(event)
-                record_stream_event(db, supplier_uuid, event, stored_kinds)
-                yield json.dumps(event) + "\n"
-        except Exception as exc:  # noqa: BLE001
-            # A raise inside a response body cuts the NDJSON off mid-line: the
-            # client sees a half-written run with no ending and no reason.
-            # FeedFatalError (auth/quota) is already handled inside the
-            # generators; this is for everything else.
-            db.rollback()
-            failed = sync_event("sync_error", supplier_key, abort_title, str(exc))
-            record_stream_event(db, supplier_uuid, failed, stored_kinds)
-            yield json.dumps(failed) + "\n"
-            # Real totals, not zeros: the parts already on screen were each
-            # committed before they were reported, so blanking the counters
-            # would understate the run directly above a line promising the
-            # progress was saved. The detail still says it did not finish —
-            # named for the run the operator actually started (review-caught:
-            # an aborted IMPORT read "Inventory import — sync aborted").
-            abort_detail = "import aborted" if is_import else "sync aborted"
-            aborted = sync_event("sync_finished", supplier_key, supplier_name, abort_detail)
-            aborted["counts"] = dict(counts)
-            record_stream_event(db, supplier_uuid, aborted, stored_kinds)
-            yield json.dumps(aborted) + "\n"
-        finally:
-            # One provider (and its HTTP connection pool) per run — release it
-            # whether the run finished, aborted, or the client disconnected.
-            close = getattr(provider, "close", None)
-            if callable(close):
-                close()
-
-    return StreamingResponse(
-        stream(),
-        media_type="application/x-ndjson",
-        # nginx buffers a proxied response by default (and its gzip_types cover
-        # application/json but not x-ndjson), which would hold the whole run
-        # back and deliver it in one lump — the opposite of the point.
-        headers={"X-Accel-Buffering": "no", "Cache-Control": "no-cache"},
-    )
+    try:
+        run = start_feed_run(supplier=supplier, mode=mode, provider=provider, work=work)
+    except FeedRunActive:
+        # The provider was built for a run that will not happen — release its
+        # connection pool rather than leaving it to the garbage collector.
+        close = getattr(provider, "close", None)
+        if callable(close):
+            close()
+        # Not a queue: two runs would spend the same rate-limited daily quota
+        # twice and interleave writes to the same rows. The caller can watch
+        # the run already going via GET /{id}/feed-run.
+        raise HTTPException(409, "feed_run_already_active") from None
+    return _feed_run_response(run)
 
 
 @router.post("/{supplier_id}/sync")
@@ -455,11 +436,12 @@ def sync_supplier(
     # against a rate-limited API; both clamp rather than 422 — the number is a
     # batch size, not a request the caller can get wrong.
     limit = max(1, min(50, limit))
-    return _stream_feed_run(
-        db,
+    return _start_feed_run(
         provider,
         supplier,
-        lambda: sync_supplier_listings(db, provider, supplier, limit=limit),
+        lambda run_db, run_provider, run_supplier: sync_supplier_listings(
+            run_db, run_provider, run_supplier, limit=limit
+        ),
     )
 
 
@@ -485,16 +467,74 @@ def import_supplier_parts(
     run that can never do anything. Both ends clamp rather than 422 — same call
     as `sync`'s `limit`: this is a batch size, not a request a caller can get
     wrong.
+
+    ONE BATCH, OR UNTIL THE WELL IS DRY — decided by this supplier's stored
+    `auto_import_enabled`, read HERE and never taken from the request. One
+    pass reads at most one page per subcategory, so a plain click advances
+    every shelf by one page and stops with budget to spare; with Auto-import ON
+    the same click sweeps again and again until the feed is exhausted or its
+    quota walls the run. `calls` is simply ignored in that mode.
+
+    There is deliberately NO `continuous` query parameter. A URL is durable —
+    bookmarked, retried, shared — and an unbounded spend against a
+    rate-limited daily quota must not be something a link can ask for. The
+    switch is the one place that intent is expressed, and flipping it is
+    already gated (`update_feed_settings` 409s an enable with no provider or
+    no key), which is exactly the check a continuous run needs.
+
+    The nightly job is untouched by this: `jobs/feed_import_daily` keeps
+    passing its own even slice of `FEED_IMPORT_CALL_BUDGET` with
+    `continuous` false, because that budget is a FAIRNESS constraint across
+    every enabled supplier on one shared account-wide quota.
     """
     supplier, provider = _resolve_feed_provider(db, supplier_id)
-    calls = max(1, min(900, calls))
-    return _stream_feed_run(
-        db,
+    feed_row = db.query(SupplierFeed).filter(SupplierFeed.supplier_id == supplier.id).first()
+    continuous = bool(feed_row and feed_row.auto_import_enabled)
+    call_budget = CONTINUOUS_CALL_CEILING if continuous else max(1, min(900, calls))
+    return _start_feed_run(
         provider,
         supplier,
-        lambda: grow_catalog(db, provider, supplier, call_budget=calls),
+        lambda run_db, run_provider, run_supplier: grow_catalog(
+            run_db,
+            run_provider,
+            run_supplier,
+            call_budget=call_budget,
+            continuous=continuous,
+        ),
         mode="import",
     )
+
+
+@router.get("/{supplier_id}/feed-run")
+def observe_supplier_feed_run(
+    supplier_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Watch the run this supplier already has going — the RE-ATTACH door.
+
+    A run is server-owned now, so a lost socket is a lost VIEW rather than a
+    lost run: the operator's tab froze, a proxy timed out, they navigated away
+    and came back. This hands them the same stream again, replayed from the
+    top and then live, so the console refills instead of the run vanishing.
+
+    404 `no_feed_run` when there is nothing to watch — a run that finished
+    outside the retention window is the same answer as one that never
+    happened, because both leave the client with nothing to attach to (the
+    dashboard's `activity_events` rows are the durable record either way).
+
+    Refuses the demo account, which cannot START a run: `get_current_user`
+    gates the demo on WRITES only, so a GET needs its own line or the one
+    account handed to any anonymous visitor could read a run it is not allowed
+    to cause.
+    """
+    if is_demo_user(current_user):
+        raise HTTPException(403, DEMO_READ_ONLY_DETAIL)
+    supplier = _supplier_or_404(db, supplier_id)
+    run = get_feed_run(supplier.id)
+    if run is None:
+        raise HTTPException(404, "no_feed_run")
+    return _feed_run_response(run)
 
 
 # ── Per-supplier feed settings: does the nightly import run for this row? ───

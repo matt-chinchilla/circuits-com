@@ -9,13 +9,19 @@
 // Purely presentational: the parent owns the stream, this renders whatever has
 // arrived.
 //
-// Two honesty rules, both load-bearing:
+// Three honesty rules, all load-bearing:
 //   1. The FOOTER prints the server's own `sync_finished` detail verbatim. The
 //      run's totals are the server's arithmetic; recomputing them client-side
 //      could only ever produce a second, disagreeing number.
 //   2. A `sync_error` row says progress is saved, because it is — the importer
 //      commits per part, so a quota wall mid-run keeps everything it already
 //      reported.
+//   3. A DEAD SOCKET IS NOT A DEAD RUN. The run is owned by the server, so
+//      losing the connection costs this view and nothing else: the live dot
+//      keeps beating while `serverRunning`, the message says the run is still
+//      going, and the offer is to re-attach — never "the sync stopped".
+//      Reporting a lost reader as a lost run is the lie this panel exists to
+//      not tell (and the one the old design made true).
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import Icon from '@shared/components/Icon';
@@ -33,6 +39,26 @@ interface Props {
   mode?: 'sync' | 'import';
   /** True while the stream is open — drives the live dot and the placeholder. */
   running: boolean;
+  /**
+   * True while the RUN is going server-side, whether or not this view is
+   * reading it. It outlives `running`: the socket can die (a frozen tab, a
+   * proxy timeout) while the work carries on, and the panel must keep looking
+   * alive rather than reading as finished.
+   */
+  serverRunning?: boolean;
+  /**
+   * True when this console attached to a run it did not start — a reload, a
+   * return to the page, or a reconnect. Only changes what the waiting line
+   * says; the events are the same events.
+   */
+  reattached?: boolean;
+  /**
+   * Re-open the observer stream. Absent = no offer (nothing to attach to), so
+   * the button never appears promising something that cannot happen.
+   */
+  onReconnect?: () => void;
+  /** True while that attempt is in flight. */
+  reconnecting?: boolean;
   /** Every event received so far, in arrival order. Append-only. */
   events: SyncEvent[];
   /** A transport-level failure (the run never started, or died). */
@@ -60,6 +86,10 @@ export default function SyncConsole({
   supplierName,
   mode = 'sync',
   running,
+  serverRunning = false,
+  reattached = false,
+  onReconnect,
+  reconnecting = false,
   events,
   error,
 }: Props) {
@@ -143,8 +173,10 @@ export default function SyncConsole({
     <section className={styles.console} aria-label={`${runLabel} — ${supplierName}`}>
       <div className={styles.head}>
         <div className={styles.headLeft}>
+          {/* Beats for the RUN, not for the socket: a reader that dropped
+              has not stopped anything. */}
           <span
-            className={`${styles.dot} ${running ? styles.dotLive : styles.dotIdle}`}
+            className={`${styles.dot} ${running || serverRunning ? styles.dotLive : styles.dotIdle}`}
             aria-hidden="true"
           />
           <h3 className={styles.title}>
@@ -241,10 +273,30 @@ export default function SyncConsole({
           announcing every SKU of a 25-part run would be unusable. */}
       <div aria-live="polite">
         {running && events.length === 0 && !error && (
-          <p className={styles.waiting}>Contacting the feed&hellip;</p>
+          <p className={styles.waiting}>
+            {reattached ? 'Re-attaching to the run already in progress…' : 'Contacting the feed…'}
+          </p>
+        )}
+
+        {/* Detached, but the work is still going. Says so plainly rather than
+            leaving a stalled feed to imply the run died with the socket. */}
+        {!running && serverRunning && !error && (
+          <p className={styles.waiting}>Still running on the server&hellip;</p>
         )}
 
         {error && <p className={styles.hint}>{error}</p>}
+
+        {/* Offered only when the parent has somewhere to reconnect TO. */}
+        {onReconnect && !running && (
+          <button
+            type="button"
+            className={styles.followPill}
+            onClick={onReconnect}
+            disabled={reconnecting}
+          >
+            {reconnecting ? 'Reconnecting…' : 'Reconnect to this run'}
+          </button>
+        )}
 
         {terminal &&
           (terminal.outcome === 'done' ? (

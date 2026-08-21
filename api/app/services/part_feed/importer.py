@@ -4,20 +4,33 @@ Idempotent by construction: parts keyed by MPN, listings keyed by
 (part, supplier), price breaks replaced wholesale per sync. Never overwrites
 a value a human/API already set with something emptier — image/datasheet fill
 only when missing, stock/lead/prices refresh on every run.
+
+The bottom of the file owns the RUN REGISTRY — the small piece of machinery
+that makes a run outlive the socket that asked for it. It lives here rather
+than in the route because the generators above are the work: the route only
+decides whether a run may start and who gets to watch.
 """
 
+import logging
+import queue
 import re
+import threading
+import time
 import uuid
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from decimal import Decimal
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.db.session import SessionLocal
 from app.models import Category, Part, PartListing, PriceBreak, Supplier, SupplierFeed
+from app.services.activity import IMPORT_EVENT_KINDS, record_stream_event
 from app.services.part_feed.base import FeedPart, PartFeedProvider
 from app.services.part_feed.mouser import FeedFatalError
 from app.utils.image_url import validate_optional_image_url
+
+logger = logging.getLogger(__name__)
 
 
 def _slugify_sku(sku: str) -> str:
@@ -332,21 +345,32 @@ def _thinnest_subcategories(db: Session) -> list[Category]:
     )
 
 
+CONTINUOUS_CALL_CEILING = 5000
+"""Runaway guard for a continuous import — NOT a budget.
+
+The real ceiling is the provider's own quota: Mouser's ~1,000-calls/day tier
+walls first and `grow_catalog` ends the run cleanly on that wall (the owner's
+decision — "run until the well is dry"). This number exists only so a
+pathological provider that never runs short and never refuses cannot sweep
+forever: at the provider's ~2.1 s throttle it bounds such a run at ~3 hours
+instead of at nothing.
+"""
+
+
 def grow_catalog(
     db: Session,
     provider: PartFeedProvider,
     supplier: Supplier,
     call_budget: int,
     per_category: int = 50,
+    continuous: bool = False,
 ) -> Iterator[dict]:
     """Import NEW inventory, thinnest subcategory first, for at most
     `call_budget` provider calls.
 
     The mirror image of `sync_supplier_listings` economics: a sync spends one
     call per part it already has, an import spends one call per PAGE of parts
-    it does not. The budget — not the category list — is the loop bound, so a
-    nightly run with a fixed daily quota simply walks as far down the
-    thin-first order as it can pay for and stops.
+    it does not.
 
     Shares the sync's rails: listings attach to the PASSED supplier row (a
     name-matched twin would split the catalog), work COMMITS PER PART before
@@ -368,6 +392,34 @@ def grow_catalog(
     distributor has listed since. The cursor is persisted PER CATEGORY, on its
     own commit, so a quota wall mid-run keeps the depth the finished categories
     already paid for.
+
+    ONE PASS OR MANY — that is what `continuous` decides, and it is the whole
+    difference between the two callers:
+
+    * `continuous=False` (the default, and what `jobs/feed_import_daily`
+      always uses) makes ONE pass down the pending categories and returns even
+      with budget left over. The bound is then the CATEGORY LIST, which is
+      correct for an unattended nightly run: the night's
+      `FEED_IMPORT_CALL_BUDGET` is split evenly across every enabled supplier,
+      and letting the first supplier run until the well is dry would starve
+      the rest of them and the operator's next-day clicks.
+    * `continuous=True` (the interactive Import click on a supplier whose
+      Auto-import switch is ON) re-derives the pending list and sweeps AGAIN,
+      batch after batch. One pass only ever reads ONE page per category, so
+      depth used to advance one page per click; continuous keeps going until
+      the feed is exhausted or its quota is reached.
+
+    A continuous run ends on exactly three things: a FeedFatalError (the quota
+    wall — caught below, so the run ends cleanly with `sync_error` plus the
+    counts so far), an empty pending list (every category answered short, i.e.
+    the catalog is exhausted), or `CONTINUOUS_CALL_CEILING`. It deliberately
+    does NOT wrap and restart mid-run: `wrapped` is evaluated ONCE at run
+    start, so a fully-swept catalog restarts on the NEXT click or night. A
+    mid-run wrap against a healthy provider is an infinite re-read.
+
+    The run reports ONE `sync_started` and ONE `sync_finished` however many
+    passes it makes — the wire shape and the five-key `counts` set are the same
+    for both modes, so nothing downstream has to know which one ran.
     """
     supplier_id = str(supplier.id)
     supplier_name = supplier.name
@@ -378,12 +430,15 @@ def grow_catalog(
     # An import never looks a known MPN up, so nothing can be "not found" —
     # the key stays because every run reports the same five counters.
     not_found = 0
+    sweeps = 0
 
     def _finished() -> dict:
         detail = (
             f"{created} created · {synced} updated · "
             f"{skipped_elsewhere} already elsewhere · {provider.calls_made} calls used"
         )
+        if continuous:
+            detail += f" · {sweeps} sweeps"
         event = sync_event("sync_finished", supplier_id, supplier_name, detail)
         event["counts"] = {
             "synced": synced,
@@ -404,18 +459,20 @@ def grow_catalog(
         # useful thing to do — it re-verifies what is listed and catches parts
         # the distributor added since — so clear the map rather than idling
         # forever. The cleared state persists with the first category's write,
-        # which stores the whole map.
+        # which stores the whole map. Evaluated HERE and nowhere else: a
+        # continuous run that re-wrapped between passes would never stop.
         cursor = {}
     pending = [cat for cat in categories if cursor.get(cat.slug) != IMPORT_CURSOR_EXHAUSTED]
-    started_detail = (
-        f"growing catalog · budget {call_budget} calls · {len(pending)} categories to sweep"
-    )
-    if wrapped:
-        started_detail += " · catalog fully swept — restarting from the top"
 
-    yield sync_event("sync_started", supplier_id, supplier_name, started_detail)
-    try:
-        for cat in pending:
+    def _sweep(batch: list[Category]) -> Iterator[dict]:
+        """ONE pass down `batch`, thinnest first. The unit `continuous` repeats.
+
+        Closes over the run's counters and `cursor` rather than returning them:
+        the totals belong to the RUN, not to a pass, and the cursor a pass
+        advances is what the next pass reads to ask for the next page.
+        """
+        nonlocal created, synced, media_filled, no_data, skipped_elsewhere
+        for cat in batch:
             remaining_calls = call_budget - provider.calls_made
             if remaining_calls <= 0:
                 break
@@ -486,8 +543,48 @@ def grow_catalog(
             raw_rows = provider.last_raw_count
             cursor[cat_slug] = IMPORT_CURSOR_EXHAUSTED if raw_rows < want else start_at + raw_rows
             _save_import_cursor(db, supplier_pk, cursor)
+
+    if continuous:
+        started_detail = (
+            "growing catalog · continuous — sweeping until the feed is "
+            "exhausted or its quota is reached"
+        )
+    else:
+        started_detail = (
+            f"growing catalog · budget {call_budget} calls · {len(pending)} categories to sweep"
+        )
+    if wrapped:
+        started_detail += " · catalog fully swept — restarting from the top"
+
+    yield sync_event("sync_started", supplier_id, supplier_name, started_detail)
+    try:
+        while pending:
+            sweeps += 1
+            spent_before = provider.calls_made
+            yield from _sweep(pending)
+            if not continuous:
+                break
+            if provider.calls_made >= call_budget:
+                # The runaway ceiling (or, for a caller that passes its own
+                # number, that number). The provider's quota normally walls
+                # first, as a FeedFatalError.
+                break
+            if provider.calls_made <= spent_before:
+                # A pass that spent nothing cannot have advanced a cursor
+                # either — every cursor write happens after a search. Sweeping
+                # the same list again would loop forever.
+                break
+            # Re-derived every pass ON PURPOSE: the thin-first ranking moves as
+            # parts land, and a category that just answered short must drop
+            # out. One GROUP BY against a provider that charges ~2.1 s a call.
+            pending = [
+                cat
+                for cat in _thinnest_subcategories(db)
+                if cursor.get(cat.slug) != IMPORT_CURSOR_EXHAUSTED
+            ]
     except FeedFatalError as exc:
         # str(exc) carries no API key — mouser.py never puts one in a message.
+        # On a continuous run this IS the expected ending: the quota wall.
         db.rollback()
         yield sync_event("sync_error", supplier_id, "Feed unavailable", str(exc))
         yield _finished()
@@ -631,3 +728,325 @@ def fill_category(
         "updated": updated,
         "skipped": skipped,
     }
+
+
+# ── Server-owned feed runs: the work must outlive the socket ────────────────
+#
+# The generators above USED to be driven by the HTTP response body itself: the
+# route returned `StreamingResponse(stream())` and `stream()` iterated
+# `grow_catalog`, so Starlette advanced the import one `__next__()` per chunk
+# the client read. That made the socket the engine. When the transport died —
+# the operator switching tabs on a phone that then froze the page, a proxy
+# read-timeout, a laptop sleeping — Starlette stopped pulling, the generator
+# was closed, and the import ENDED SILENTLY mid-run (uvicorn logged a plain
+# `200 OK`). Nothing recorded that a run had been intended, so nothing could
+# finish it and nothing could resume it; the run existed only as that socket.
+#
+# So the click now starts a RUN and the response only OBSERVES it. The work
+# lives on a daemon thread with its OWN session (the request's session is
+# closed at request teardown by `get_db`, exactly as `jobs/feed_import_daily`
+# already had to solve) and its own provider, which it closes when the WORK
+# ends rather than when a reader leaves. `app.jobs.feed_import_daily` is the
+# proof this was always transport-independent: it runs the same `grow_catalog`
+# generator to completion with no socket at all.
+#
+# Scope, stated plainly: the registry is IN-PROCESS. That is sound on today's
+# single uvicorn worker; with more than one, a reattach can land on a worker
+# that never held the run and must fall back to `activity_events`. A container
+# restart still truncates a run — but every part is committed before its event
+# is yielded and the per-category `import_cursor` is persisted as it goes, so
+# the progress is durable and the next run resumes rather than repeats.
+
+# How long a FINISHED run stays readable, so an operator who lost the socket
+# can still come back and read the summary. Small and time-bounded: these are
+# event lists held in memory.
+_RUN_RETENTION_SECONDS = 900.0
+# Hard cap on retained (finished) runs, independent of the TTL — a burst of
+# short runs across many suppliers must not grow the map without bound.
+_MAX_RETAINED_RUNS = 32
+
+# Pushed to every subscriber when the work ends. An object() rather than None,
+# because None is the heartbeat tick a reader may legitimately see.
+_END = object()
+
+_RUNS: dict[str, "FeedRun"] = {}
+_RUNS_LOCK = threading.Lock()
+
+
+class FeedRunActive(RuntimeError):
+    """A run is already going for this supplier.
+
+    Two concurrent runs would spend the same rate-limited daily quota twice
+    and interleave writes to the same rows, so the second click is refused
+    rather than queued — the caller can attach to the run already going.
+    """
+
+
+class FeedRun:
+    """One server-owned feed run: the work, and everyone watching it.
+
+    `events` is append-only and complete, which is what makes re-attaching
+    possible: a reader that arrives late (or comes back after its socket died)
+    replays everything so far and then follows live, and the two halves are
+    handed over under one lock so no event is duplicated or dropped in the
+    switch.
+    """
+
+    def __init__(self, supplier_pk: uuid.UUID, supplier_name: str, mode: str):
+        self.run_id = str(uuid.uuid4())
+        self.supplier_pk = supplier_pk
+        # The string form the wire events carry, read once off the ORM row in
+        # the REQUEST thread — the row itself belongs to a session the worker
+        # must never touch.
+        self.supplier_id = str(supplier_pk)
+        self.supplier_name = supplier_name
+        self.mode = mode
+        self.started_at = time.time()
+        self.finished_at: float | None = None
+        self.events: list[dict] = []
+        self._subscribers: list[queue.Queue] = []
+        self._lock = threading.Lock()
+
+    @property
+    def running(self) -> bool:
+        return self.finished_at is None
+
+    # -- producer side (the worker thread) --
+
+    def _publish(self, event: dict) -> None:
+        with self._lock:
+            self.events.append(event)
+            subscribers = list(self._subscribers)
+        for q in subscribers:
+            q.put(event)
+
+    def _finish(self) -> None:
+        with self._lock:
+            self.finished_at = time.time()
+            subscribers = list(self._subscribers)
+            self._subscribers.clear()
+        for q in subscribers:
+            q.put(_END)
+
+    # -- consumer side (any number of HTTP observers) --
+
+    def _attach(self) -> tuple[list[dict], queue.Queue | None]:
+        """Snapshot the backlog and register for the live tail, atomically.
+
+        The atomicity is the whole point: taking the backlog and subscribing as
+        two steps would either miss the events published between them or
+        deliver them twice. A finished run gets no queue — its backlog IS the
+        whole run.
+        """
+        with self._lock:
+            backlog = list(self.events)
+            if self.finished_at is not None:
+                return backlog, None
+            q: queue.Queue = queue.Queue()
+            self._subscribers.append(q)
+            return backlog, q
+
+    def _detach(self, q: queue.Queue | None) -> None:
+        if q is None:
+            return
+        with self._lock:
+            if q in self._subscribers:
+                self._subscribers.remove(q)
+
+    def observe(self, heartbeat_seconds: float | None = None) -> Iterator[dict | None]:
+        """Replay this run so far, then follow it live until it ends.
+
+        Yields `None` as a HEARTBEAT tick whenever `heartbeat_seconds` passes
+        with nothing published — an import sweeping already-known MPNs yields
+        no event for minutes while still spending 2.1 s per provider call, and
+        nginx cuts an idle proxied response at 60 s by default. The caller
+        decides what a tick looks like on the wire.
+
+        Leaving this generator only detaches the reader. It never stops the
+        run — that is the entire point of the split.
+        """
+        backlog, q = self._attach()
+        try:
+            yield from backlog
+            if q is None:
+                return
+            while True:
+                if heartbeat_seconds is None:
+                    item = q.get()
+                else:
+                    try:
+                        item = q.get(timeout=heartbeat_seconds)
+                    except queue.Empty:
+                        yield None
+                        continue
+                if item is _END:
+                    return
+                yield item
+        finally:
+            self._detach(q)
+
+
+# The work a run drives: given a session, a provider and the supplier row read
+# through THAT session, yield wire events. A callable rather than a bound
+# generator because the worker owns the session — a thunk closing over the
+# request's session is exactly the coupling this replaces.
+FeedWork = Callable[[Session, PartFeedProvider, Supplier], Iterator[dict]]
+
+
+def _tally(counts: dict[str, int], event: dict) -> None:
+    """Mirror `_finished`'s arithmetic as the events go past.
+
+    The generator owns the authoritative totals, and this MIRRORS them for one
+    reason: when the generator raises, its totals die with it and the abort
+    path still has to report what the run did. Every part is committed before
+    its event is yielded, so everything counted here survived the rollback.
+    """
+    if event.get("kind") != "part_synced":
+        return
+    action = event.get("action")
+    # media_filled counts in BOTH — filling an image IS a write.
+    if action == "media_filled":
+        counts["synced"] += 1
+        counts["media_filled"] += 1
+    elif action == "updated":
+        counts["synced"] += 1
+    elif action == "created":
+        # a NEW part, not a refreshed one — counted apart from `synced`
+        # exactly as the generator counts it
+        counts["created"] += 1
+    elif action == "not_found":
+        counts["not_found"] += 1
+    elif action == "no_data":
+        counts["no_data"] += 1
+
+
+def _feed_run_worker(
+    run: FeedRun,
+    provider: PartFeedProvider,
+    work: FeedWork,
+    session_factory: Callable[[], Session],
+) -> None:
+    """Drive one run to completion. Never raises — it IS the top of a thread.
+
+    The terminal events are produced by the WORK, not by a socket: a run that
+    blows up ends with `sync_error` + `sync_finished` carrying its real tally
+    whether or not anybody is reading, so the summary is in `activity_events`
+    and in the replay buffer either way.
+    """
+    is_import = run.mode == "import"
+    stored_kinds = IMPORT_EVENT_KINDS if is_import else None
+    abort_title = "Import failed" if is_import else "Sync failed"
+    abort_detail = "import aborted" if is_import else "sync aborted"
+    # Five keys, always — the same set `_finished` reports, so a console never
+    # has to tell a missing counter from a zero one.
+    counts = {"synced": 0, "media_filled": 0, "not_found": 0, "no_data": 0, "created": 0}
+    db = session_factory()
+    try:
+        try:
+            supplier = db.query(Supplier).filter(Supplier.id == run.supplier_pk).first()
+            if supplier is None:
+                # Deleted between the click and the thread starting.
+                raise RuntimeError("supplier no longer exists")
+            for event in work(db, provider, supplier):
+                _tally(counts, event)
+                record_stream_event(db, run.supplier_pk, event, stored_kinds)
+                run._publish(event)
+        except Exception as exc:  # noqa: BLE001
+            # FeedFatalError (auth/quota) is already handled inside the
+            # generators; this is for everything else. Report it as events
+            # rather than a traceback into the void: a half-written run with
+            # no ending is what the operator used to be left with.
+            try:
+                db.rollback()
+            except Exception:  # noqa: BLE001
+                logger.warning("[feed-run] rollback failed after %s", exc, exc_info=True)
+            failed = sync_event("sync_error", run.supplier_id, abort_title, str(exc))
+            record_stream_event(db, run.supplier_pk, failed, stored_kinds)
+            run._publish(failed)
+            # Real totals, not zeros: the parts already reported were each
+            # committed before they were reported. The detail still says it
+            # did not finish, named for the run the operator actually started.
+            aborted = sync_event("sync_finished", run.supplier_id, run.supplier_name, abort_detail)
+            aborted["counts"] = dict(counts)
+            record_stream_event(db, run.supplier_pk, aborted, stored_kinds)
+            run._publish(aborted)
+    finally:
+        # One provider (and its HTTP connection pool) per run, released when
+        # the WORK ends — never when a reader leaves.
+        close = getattr(provider, "close", None)
+        if callable(close):
+            try:
+                close()
+            except Exception:  # noqa: BLE001
+                logger.warning("[feed-run] provider close failed", exc_info=True)
+        try:
+            db.close()
+        finally:
+            # Last, always: observers block until this lands, so anything that
+            # must be finished before they return has already happened.
+            run._finish()
+
+
+def _purge_locked(now: float) -> None:
+    """Drop finished runs the retention window is done with. Caller holds the lock."""
+    stale = [
+        key
+        for key, run in _RUNS.items()
+        if run.finished_at is not None and now - run.finished_at > _RUN_RETENTION_SECONDS
+    ]
+    for key in stale:
+        del _RUNS[key]
+    finished = [(run.finished_at or 0.0, key) for key, run in _RUNS.items() if not run.running]
+    overflow = len(finished) - _MAX_RETAINED_RUNS
+    if overflow > 0:
+        for _, key in sorted(finished)[:overflow]:
+            del _RUNS[key]
+
+
+def start_feed_run(
+    *,
+    supplier: Supplier,
+    mode: str,
+    provider: PartFeedProvider,
+    work: FeedWork,
+    session_factory: Callable[[], Session] | None = None,
+) -> FeedRun:
+    """Start a server-owned run for `supplier` and return it, already going.
+
+    `supplier` is read HERE, in the caller's thread — the worker re-queries the
+    row through its own session, because an ORM instance may not cross into
+    another session's thread.
+
+    Raises :class:`FeedRunActive` if this supplier already has a run going.
+    """
+    factory = session_factory or SessionLocal
+    key = str(supplier.id)
+    run = FeedRun(supplier.id, supplier.name, mode)
+    with _RUNS_LOCK:
+        _purge_locked(time.time())
+        existing = _RUNS.get(key)
+        if existing is not None and existing.running:
+            raise FeedRunActive(key)
+        _RUNS[key] = run
+    threading.Thread(
+        target=_feed_run_worker,
+        args=(run, provider, work, factory),
+        name=f"feed-run-{mode}-{key[:8]}",
+        daemon=True,
+    ).start()
+    return run
+
+
+def get_feed_run(supplier_id: uuid.UUID | str) -> FeedRun | None:
+    """The run for this supplier — going, or finished inside the retention
+    window. `None` once there is nothing left to show."""
+    with _RUNS_LOCK:
+        _purge_locked(time.time())
+        return _RUNS.get(str(supplier_id))
+
+
+def reset_feed_runs() -> None:
+    """Forget every run. For tests — the registry is module state, and a run
+    left behind by one test would refuse the next test's click."""
+    with _RUNS_LOCK:
+        _RUNS.clear()

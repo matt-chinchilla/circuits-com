@@ -9,6 +9,8 @@ from sqlalchemy import event as sa_event
 from app.models import Category, Part, PartListing, PriceBreak, Supplier, SupplierFeed
 from app.services.part_feed.base import FeedPriceBreak
 from app.services.part_feed.importer import (
+    CONTINUOUS_CALL_CEILING,
+    IMPORT_CURSOR_EXHAUSTED,
     _fill_part_media,
     backfill_images,
     fill_all_empty,
@@ -1248,3 +1250,191 @@ class TestImportCursor:
 
         assert [e["kind"] for e in events][-2:] == ["sync_error", "sync_finished"]
         assert _cursor(db, supplier) == {"amplifiers": -1}
+
+
+class TestContinuousImport:
+    """`continuous=True` — one click sweeps until the well is dry.
+
+    A single pass reads at most ONE page per subcategory and returns even with
+    budget to spare, because the bound is the CATEGORY LIST: depth advanced one
+    page per category per click, so filling a shelf took as many clicks as it
+    had pages. Continuous re-derives the pending list and sweeps again.
+
+    Three endings, and nothing else: the catalog runs out (every category
+    answers short), the provider walls the run (FeedFatalError — the quota),
+    or the runaway ceiling stops it. It must NEVER wrap and restart mid-run.
+    """
+
+    def test_it_sweeps_the_same_category_deeper_pass_after_pass(self, db, seeded_db):
+        supplier, parent = seeded_db["supplier1"], seeded_db["parent"]
+        _subcategory(db, "Voltage References", "voltage-references", parent)
+        provider = _FakeProvider(
+            results_by_keyword={"Voltage References": [_feed_part(f"NEW-{i}") for i in range(6)]}
+        )
+
+        events = list(
+            grow_catalog(db, provider, supplier, call_budget=100, per_category=2, continuous=True)
+        )
+
+        # 0 → 2 → 4 → 6, where the sixth page comes back short and ends it.
+        # A single-pass run would have asked once, at 0, and stopped.
+        assert [c for c in provider.search_calls if c[0] == "Voltage References"] == [
+            ("Voltage References", 2, 0),
+            ("Voltage References", 2, 2),
+            ("Voltage References", 2, 4),
+            ("Voltage References", 2, 6),
+        ]
+        assert {p.sku for p in db.query(Part).filter(Part.sku.like("NEW-%")).all()} == {
+            f"NEW-{i}" for i in range(6)
+        }
+        assert _cursor(db, supplier)["voltage-references"] == IMPORT_CURSOR_EXHAUSTED
+        assert events[-1]["counts"]["created"] == 6
+
+    def test_one_started_and_one_finished_however_many_passes(self, db, seeded_db):
+        """The wire shape does not change with the mode — a console parses one
+        run, not one run per sweep. Only the detail strings say `continuous`."""
+        supplier, parent = seeded_db["supplier1"], seeded_db["parent"]
+        _subcategory(db, "Voltage References", "voltage-references", parent)
+        provider = _FakeProvider(
+            results_by_keyword={"Voltage References": [_feed_part(f"NEW-{i}") for i in range(4)]}
+        )
+
+        events = list(
+            grow_catalog(db, provider, supplier, call_budget=100, per_category=2, continuous=True)
+        )
+
+        assert [e["kind"] for e in events].count("sync_started") == 1
+        assert [e["kind"] for e in events].count("sync_finished") == 1
+        assert events[0]["detail"] == (
+            "growing catalog · continuous — sweeping until the feed is "
+            "exhausted or its quota is reached"
+        )
+        # 3 sweeps: pages at 0 and 2, then the short page at 4 that ends it
+        assert events[-1]["detail"].endswith("· 3 sweeps")
+        assert set(events[-1]["counts"]) == {
+            "synced",
+            "media_filled",
+            "not_found",
+            "no_data",
+            "created",
+        }
+
+    def test_it_does_not_wrap_and_restart_mid_run(self, db, seeded_db):
+        """A healthy provider plus a mid-run wrap is an infinite re-read: every
+        category would be cleared the moment it exhausted and read from page
+        one again, forever. The wrap belongs to the NEXT click."""
+        supplier, parent = seeded_db["supplier1"], seeded_db["parent"]
+        _subcategory(db, "Voltage References", "voltage-references", parent)
+        provider = _FakeProvider(
+            results_by_keyword={"Voltage References": [_feed_part(f"NEW-{i}") for i in range(2)]}
+        )
+
+        events = list(
+            grow_catalog(db, provider, supplier, call_budget=100, per_category=2, continuous=True)
+        )
+
+        # page 0 (full), page 2 (short → exhausted), stop. Never page 0 again.
+        assert [c[2] for c in provider.search_calls if c[0] == "Voltage References"] == [0, 2]
+        assert "restarting from the top" not in events[0]["detail"]
+        assert all(v == IMPORT_CURSOR_EXHAUSTED for v in _cursor(db, supplier).values())
+
+    def test_a_fully_swept_catalog_still_wraps_at_the_START_of_a_run(self, db, seeded_db):
+        """The wrap is not removed by continuous, only pinned to run start —
+        otherwise the click after an exhausting run would do nothing."""
+        supplier, parent = seeded_db["supplier1"], seeded_db["parent"]
+        _subcategory(db, "Amplifiers", "amplifiers", parent)
+        db.add(
+            SupplierFeed(
+                supplier_id=supplier.id,
+                import_cursor={"amplifiers": -1, "clock-and-timing": -1},
+            )
+        )
+        db.commit()
+        provider = _FakeProvider()
+
+        events = list(grow_catalog(db, provider, supplier, call_budget=10, continuous=True))
+
+        assert events[0]["detail"].endswith("· catalog fully swept — restarting from the top")
+        assert [c[2] for c in provider.search_calls] == [0, 0]
+
+    def test_the_quota_wall_ends_a_continuous_run_and_keeps_pass_one(self, db, seeded_db):
+        """The wall is the EXPECTED ending of a continuous run, not a crash:
+        the counts and the cursors pass one paid for all survive it."""
+        from app.services.part_feed.mouser import FeedFatalError
+
+        supplier, parent = seeded_db["supplier1"], seeded_db["parent"]
+        _subcategory(db, "Voltage References", "voltage-references", parent)
+
+        class _FatalOnTheSecondPass(_FakeProvider):
+            def search(self, keyword, limit=50, start_at=0):
+                if start_at > 0:
+                    self.calls_made += 1
+                    raise FeedFatalError("Mouser API HTTP 429 on /search/keyword")
+                return super().search(keyword, limit, start_at)
+
+        provider = _FatalOnTheSecondPass(
+            results_by_keyword={"Voltage References": [_feed_part(f"NEW-{i}") for i in range(4)]}
+        )
+
+        events = list(
+            grow_catalog(db, provider, supplier, call_budget=100, per_category=2, continuous=True)
+        )
+
+        assert [e["kind"] for e in events][-2:] == ["sync_error", "sync_finished"]
+        assert "429" in events[-2]["detail"]
+        # pass one's two parts were each committed before they were reported
+        assert events[-1]["counts"]["created"] == 2
+        assert {p.sku for p in db.query(Part).filter(Part.sku.like("NEW-%")).all()} == {
+            "NEW-0",
+            "NEW-1",
+        }
+        # and the depth they bought is still on the row, so the next run
+        # resumes at page 2 rather than re-buying page 0
+        assert _cursor(db, supplier)["voltage-references"] == 2
+
+    def test_the_runaway_ceiling_stops_a_feed_that_never_runs_short(self, db, seeded_db):
+        """A provider that answers a full page forever exhausts nothing and
+        refuses nothing. The ceiling is the only thing left to stop it."""
+        supplier, parent = seeded_db["supplier1"], seeded_db["parent"]
+        _subcategory(db, "Voltage References", "voltage-references", parent)
+
+        class _Bottomless(_FakeProvider):
+            def search(self, keyword, limit=50, start_at=0):
+                self.calls_made += 1
+                self.search_calls.append((keyword, limit, start_at))
+                self.last_raw_count = limit
+                return [_feed_part(f"{keyword[:2]}-{start_at + i}") for i in range(limit)]
+
+        provider = _Bottomless()
+
+        events = list(
+            grow_catalog(db, provider, supplier, call_budget=5, per_category=2, continuous=True)
+        )
+
+        assert provider.calls_made == 5
+        assert events[-1]["kind"] == "sync_finished"
+        assert events[-1]["detail"].endswith("· 5 calls used · 3 sweeps")
+
+    def test_the_ceiling_constant_is_the_documented_runaway_guard(self):
+        """Named so the route can hand it to a continuous run without inventing
+        a second number, and large enough that the provider's own quota is what
+        normally ends the run."""
+        assert CONTINUOUS_CALL_CEILING >= 1000
+
+    def test_continuous_false_is_still_exactly_one_pass(self, db, seeded_db):
+        """The default is unchanged, and the nightly job depends on it: one
+        pass down the pending list, then return, budget left over or not."""
+        supplier, parent = seeded_db["supplier1"], seeded_db["parent"]
+        _subcategory(db, "Voltage References", "voltage-references", parent)
+        provider = _FakeProvider(
+            results_by_keyword={"Voltage References": [_feed_part(f"NEW-{i}") for i in range(6)]}
+        )
+
+        events = list(grow_catalog(db, provider, supplier, call_budget=100, per_category=2))
+
+        assert [c for c in provider.search_calls if c[0] == "Voltage References"] == [
+            ("Voltage References", 2, 0)
+        ]
+        assert provider.calls_made < 100  # budget left on the table, as designed
+        assert "continuous" not in events[0]["detail"]
+        assert "sweeps" not in events[-1]["detail"]

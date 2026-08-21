@@ -10,8 +10,11 @@
 //
 // The last two cards start LIVE FEED RUNS rather than navigating: sync
 // refreshes the listings this supplier already has, import goes looking for
-// parts it does not. Only one stream may be open per page (the console below
-// renders one run), so each disables while EITHER is going.
+// parts it does not. Only one run may be going per supplier — the SERVER
+// enforces that (a second POST is a 409), and these cards mirror it, which is
+// why `serverRunning` matters as much as the local spinners: a run this page
+// is no longer streaming is still spending the day's provider quota, and a
+// card that looked idle would invite a second click that can only be refused.
 
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -30,15 +33,24 @@ interface Props {
    * feed survives anything that re-renders the strip.
    */
   onSync?: () => void;
-  /** True while that stream is open; drives the card's spinner + disabled state. */
+  /**
+   * True while a SYNC run is in flight — the run, not the socket, so it stays
+   * true across a dropped connection. Drives the spinner and the label.
+   */
   syncing?: boolean;
   /**
    * Opens the live catalog-import stream — same ownership rule as `onSync`,
    * and the same console renders it.
    */
   onImport?: () => void;
-  /** True while the IMPORT stream is open. */
+  /** True while an IMPORT run is in flight — same rule as `syncing`. */
   importing?: boolean;
+  /**
+   * True while a run is going SERVER-SIDE, from the server's own answer (the
+   * page's active-run probe / an open observer), not from whether this tab
+   * happens to be reading it. Both cards stay out of service on it.
+   */
+  serverRunning?: boolean;
 }
 
 export default function QuickActionsPanel({
@@ -48,12 +60,15 @@ export default function QuickActionsPanel({
   syncing,
   onImport,
   importing,
+  serverRunning,
 }: Props) {
   const navigate = useNavigate();
-  // One stream per page: the console shows ONE run, and two concurrent runs
-  // would also race the same provider quota. Whichever started, both cards go
-  // out of service until it ends.
-  const feedBusy = Boolean(syncing || importing);
+  // One run per supplier, and the SERVER is the authority on that: two runs
+  // would race the same rate-limited daily quota against the same rows, so
+  // the second click is a 409. Reading `serverRunning` (not just the local
+  // spinners) is what keeps the card honest after a dropped socket — the run
+  // is still going, so the button must still be out of service.
+  const feedBusy = Boolean(syncing || importing || serverRunning);
 
   // Smart-default category — whichever category this supplier already has
   // the most listings in. Falls back to empty for brand-new suppliers.

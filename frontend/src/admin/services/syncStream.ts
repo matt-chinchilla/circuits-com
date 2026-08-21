@@ -14,6 +14,15 @@
  * two exports differ only in the path they open. A second copy of the loop is
  * how one of them ends up missing a cache bust or a re-badged interruption.
  *
+ * The run is SERVER-OWNED, and that changes what this client is. A click
+ * STARTS a run on the server; the response only OBSERVES it. So a dropped
+ * socket costs the operator the VIEW, never the run — `observeSupplierRun`
+ * (GET .../feed-run) attaches to whatever is still going, replaying it from
+ * the top and then following live, and an `AbortSignal` here DETACHES a
+ * reader rather than cancelling any work. (Until 2026-08-20 the opposite was
+ * true and this file said so: the response body WAS the import, so hanging up
+ * silently ended it mid-sweep.)
+ *
  * The cost of leaving axios is that NONE of `adminApi`'s interceptors run here,
  * so this module handles its own statuses:
  *   - 401 → drop the stale token, exactly as the response interceptor does, so
@@ -226,7 +235,8 @@ const GENERIC_ERROR = 'The run failed to start. Check the connection and try aga
  * opened. Status 0 because no response carried it — the socket dropped after
  * the 200. It matters because the two failures need opposite sentences: the
  * generic line says "failed to start", which is a lie once parts have scrolled
- * past, and it hides the fact that the server-side run is probably continuing.
+ * past, and it hides the fact that the server-side run is still going and can
+ * be re-attached to.
  */
 const STREAM_INTERRUPTED = 'stream_interrupted';
 
@@ -254,7 +264,9 @@ function isAbortError(err: unknown): boolean {
 export function syncErrorMessage(err: unknown): string {
   if (!(err instanceof SyncStreamError)) return GENERIC_ERROR;
   if (err.status === 0 && err.detail === STREAM_INTERRUPTED) {
-    return 'Connection interrupted — the run may still finish server-side. Progress shown here is saved.';
+    // Not a maybe: the run is owned by the server and is still going. The
+    // only thing this client lost is the view of it.
+    return 'Connection lost — the run is still going on the server. Reconnect to keep watching.';
   }
   if (err.status === 404) {
     // The route 404s when MOUSER_API_KEY is unset — the same feature-off
@@ -264,7 +276,14 @@ export function syncErrorMessage(err: unknown): string {
       ? 'No live feed connected — set the Mouser key on the API container to enable.'
       : 'That supplier no longer exists — reload the page.';
   }
-  if (err.status === 409) return 'No feed integration for this supplier yet.';
+  if (err.status === 409) {
+    // TWO conflicts share this status, and they ask for opposite things: a
+    // supplier with no feed behind it is a dead end, a run already going is
+    // an invitation to watch it.
+    return err.detail === 'feed_run_already_active'
+      ? 'A run is already going for this supplier — reconnect to watch it.'
+      : 'No feed integration for this supplier yet.';
+  }
   if (err.status === 401) return 'Your session expired — sign in again to start a run.';
   if (isDemoReadOnly(err.status, err.detail)) return DEMO_READ_ONLY_MESSAGE;
   if (err.status === 403) return 'This account is not allowed to run the feed.';
@@ -298,12 +317,29 @@ function isMutation(event: SyncEvent): boolean {
 /** Extra knobs shared by both runs. */
 export interface SyncSupplierOptions {
   /**
-   * Ends the run early. An abort is a SILENT termination — the promise
-   * resolves like a clean finish and no error reaches the caller — because
-   * the only thing that aborts a run is the operator leaving the page, and
-   * they are not waiting to be told about it.
+   * DETACHES this reader. It does NOT cancel the run — the work is owned by
+   * the server and keeps going, and `observeSupplierRun` can attach to it
+   * again later. Silent: the promise resolves like a clean finish and no
+   * error reaches the caller, because the only thing that aborts a reader is
+   * the operator leaving the page, and they are not waiting to be told.
    */
   signal?: AbortSignal;
+
+  /**
+   * Called once the run's headers land, BEFORE any event.
+   *
+   * Carries the only thing a reader cannot infer from the stream: which of
+   * the two jobs it is watching. The sync and import routes emit an identical
+   * envelope, so a console re-attaching to a run it did not start would label
+   * an import as a sync without this.
+   */
+  onOpen?: (info: FeedRunInfo) => void;
+}
+
+/** Which run a socket is watching. From the response headers, not the body. */
+export interface FeedRunInfo {
+  runId: string | null;
+  mode: 'sync' | 'import';
 }
 
 /** `importSupplier` also spends a provider CALL budget, not a row count. */
@@ -326,7 +362,9 @@ export interface ImportSupplierOptions extends SyncSupplierOptions {
  *
  * Resolves when the server closes the stream, or when `options.signal` aborts;
  * rejects with a `SyncStreamError` for a non-OK status, and for a mid-stream
- * death after events flowed (callers branch via `syncErrorMessage`).
+ * death after events flowed (callers branch via `syncErrorMessage`). Neither
+ * ending stops the run: `method` picks between STARTING one (POST) and
+ * attaching to one already going (GET), and both only read.
  *
  * The cache bust sits in a `finally` and is gated on a real write, because the
  * importer commits PER PART: a run that dies halfway — quota wall, dropped
@@ -337,12 +375,13 @@ export interface ImportSupplierOptions extends SyncSupplierOptions {
 async function streamSupplierRun(
   path: string,
   onEvent: (event: SyncEvent) => void,
-  options: SyncSupplierOptions = {}
+  options: SyncSupplierOptions = {},
+  method: 'POST' | 'GET' = 'POST'
 ): Promise<void> {
   let res: Response;
   try {
     res = await fetch(`${API_BASE_URL}${path}`, {
-      method: 'POST',
+      method,
       headers: authHeaders(),
       signal: options.signal,
     });
@@ -365,6 +404,11 @@ async function streamSupplierRun(
     // streaming fetch). Treated as a failure rather than a silent empty run.
     throw new SyncStreamError(res.status, null);
   }
+
+  options.onOpen?.({
+    runId: res.headers.get('X-Feed-Run-Id'),
+    mode: res.headers.get('X-Feed-Run-Mode') === 'import' ? 'import' : 'sync',
+  });
 
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
@@ -399,10 +443,12 @@ async function streamSupplierRun(
     if (buffer.trim()) emit(parseNdjson(`${buffer}\n`).events);
   } catch (err) {
     if (isAbortError(err)) return;
-    // The socket died mid-run. Re-badge it so the console can say so:
-    // the generic "failed to start" line is plainly false with rows on
-    // screen, and the run itself is very likely STILL GOING server-side —
-    // the importer is driven by its own generator, not by this reader.
+    // The socket died mid-run. Re-badge it so the console can say so: the
+    // generic "failed to start" line is plainly false with rows on screen,
+    // and the run IS still going — it is owned by a server-side worker, not
+    // by this reader, so the honest offer is to re-attach (this comment used
+    // to assert the same thing about a design where it was false, which is
+    // why the silent-death bug went unchased for so long).
     if (delivered && !(err instanceof SyncStreamError)) {
       throw new SyncStreamError(0, STREAM_INTERRUPTED);
     }
@@ -449,4 +495,40 @@ export function importSupplier(
     onEvent,
     rest
   );
+}
+
+/**
+ * Attach to the run this supplier ALREADY has going — the door back in.
+ *
+ * Starts nothing. The run is server-owned, so a lost socket (a frozen tab, a
+ * proxy timeout, navigating away) costs the view and not the work: this
+ * replays everything the run has said so far and then follows it live to the
+ * same ending, which is what lets the console refill instead of the run
+ * appearing to vanish.
+ *
+ * Resolves `true` when there WAS a run to watch (and it has now ended or this
+ * reader detached), `false` when the server has nothing — a 404 here is the
+ * normal answer to "is anything going?", not a failure, so it must not reach
+ * the caller as an error and light up the console's red hint. Every other
+ * status still throws.
+ */
+export async function observeSupplierRun(
+  supplierId: string,
+  onEvent: (event: SyncEvent) => void,
+  options: SyncSupplierOptions = {}
+): Promise<boolean> {
+  try {
+    await streamSupplierRun(
+      `/suppliers/${encodeURIComponent(supplierId)}/feed-run`,
+      onEvent,
+      options,
+      'GET'
+    );
+    return true;
+  } catch (err) {
+    if (err instanceof SyncStreamError && err.status === 404 && err.detail === 'no_feed_run') {
+      return false;
+    }
+    throw err;
+  }
 }

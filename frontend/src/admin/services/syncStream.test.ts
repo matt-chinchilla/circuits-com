@@ -286,6 +286,16 @@ describe('syncErrorMessage', () => {
     );
   });
 
+  // TWO conflicts share 409 and they ask for opposite things: a supplier with
+  // no feed is a dead end, a run already going is an invitation to watch it.
+  // Reading only the status would tell an operator whose run IS going that
+  // their supplier has no feed integration.
+  it('separates a run already going from a supplier with no feed', () => {
+    const msg = syncErrorMessage(new SyncStreamError(409, 'feed_run_already_active'));
+    expect(msg).toContain('already going');
+    expect(msg).not.toContain('No feed integration');
+  });
+
   it('names an expired session', () => {
     expect(syncErrorMessage(new SyncStreamError(401, 'Not authenticated'))).toContain('sign in');
   });
@@ -307,13 +317,15 @@ describe('syncErrorMessage', () => {
   // A socket that drops AFTER the 200 is a different event from one that never
   // opened, and `syncSupplier` re-badges it as status 0 / 'stream_interrupted'
   // so this branch can say so. The generic line ("failed to start") would be
-  // flatly false with parts already on screen, and it hides the two things the
-  // operator most needs: the server-side run is probably still going, and
-  // everything already listed was committed.
+  // flatly false with parts already on screen, and it hides what the operator
+  // most needs: the run is SERVER-OWNED, so it is still going and can be
+  // re-attached to. (The sentence used to hedge — "may still finish" — which
+  // was the honest reading of a design where the response body WAS the import
+  // and a dead socket really did end it.)
   it('distinguishes a stream that died mid-run from one that never started', () => {
     const msg = syncErrorMessage(new SyncStreamError(0, 'stream_interrupted'));
     expect(msg).toBe(
-      'Connection interrupted — the run may still finish server-side. Progress shown here is saved.'
+      'Connection lost — the run is still going on the server. Reconnect to keep watching.'
     );
     expect(msg).not.toContain('failed to start');
   });
@@ -391,7 +403,7 @@ describe('stream transport', () => {
     const err = await syncSupplier('s1', (e) => seen.push(e)).catch((e) => e);
 
     expect(err).toBeInstanceOf(SyncStreamError);
-    expect(syncErrorMessage(err)).toContain('may still finish server-side');
+    expect(syncErrorMessage(err)).toContain('still going on the server');
     expect(seen).toHaveLength(2); // the rows are on screen and stay there
   });
 

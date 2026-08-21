@@ -1,6 +1,23 @@
-// The per-supplier nightly auto-import switch, parked beside the Quick Actions
-// strip because it is the standing-order version of the Import card directly
-// above it: one click imports now, this one imports every night.
+// The per-supplier AUTO-IMPORT switch. The filename is historical: it shipped
+// as the nightly-only toggle, and the control is named "Auto-import" now that
+// the same stored flag drives a second effect. Renaming the file would edit
+// the detail page's import for nothing.
+//
+// ONE FLAG, ONE MEANING: "keep importing from this supplier's feed until the
+// well is dry." It reaches two places, and the copy has to be honest about
+// both or the switch is a half-truth:
+//   * the nightly `feed-import` job runs this supplier — on its own even slice
+//     of the shared daily quota, which is that meaning's unattended fairness
+//     cap; and
+//   * an Import click runs CONTINUOUS: sweep after sweep, re-deriving the
+//     thinnest categories each pass, until the feed is exhausted or its quota
+//     is reached. OFF, one click is one batch — at most one page per
+//     subcategory, which is why a shelf used to need a click per page.
+//
+// The interactive half is decided SERVER-SIDE from this stored flag. There is
+// no query parameter for it, so this switch is the only thing that can ask for
+// an unbounded spend — which is also why enabling it is gated on a real
+// provider and a real key (the 409 below).
 //
 // Self-contained on purpose — it owns its own GET, its own PATCH and its own
 // error line, so the detail page does not grow a fourth piece of async state
@@ -13,7 +30,7 @@
 //     say.
 //  2. DISABLING is always sent, even from a greyed-looking state: a key can be
 //     removed while the toggle is on, and an off switch that refuses to work
-//     would trap the operator in a nightly run they cannot stop.
+//     would trap the operator in standing orders they cannot cancel.
 //  3. The flip is optimistic and reverts on failure. A switch that waits for
 //     the round trip reads as broken; a switch that keeps a position the
 //     server rejected is a lie.
@@ -30,6 +47,14 @@ interface Props {
 }
 
 const NO_FEED_HINT = 'Add this supplier’s API key in Settings to enable';
+// Both effects, in the order the operator meets them: the click they are
+// about to make, and the run they will not be watching. Naming only the
+// overnight half would leave the continuous Import — the bigger spend of the
+// two — undisclosed on the control that switches it on.
+const ON_HINT =
+  'Runs overnight — and an Import click keeps going, batch after batch, until this ' +
+  'supplier’s feed is exhausted or its daily quota is reached.';
+const OFF_HINT = 'Off — Import new parts runs one batch, and nothing imports overnight.';
 const SAVE_FAILED = 'Could not change that just now — try again.';
 
 export default function NightlyImportToggle({ supplierId }: Props) {
@@ -72,8 +97,8 @@ export default function NightlyImportToggle({ supplierId }: Props) {
     : !runnable
       ? NO_FEED_HINT
       : enabled
-        ? 'Runs overnight and adds new parts from this supplier’s feed.'
-        : 'Off — new parts arrive only when you press Import new parts.';
+        ? ON_HINT
+        : OFF_HINT;
 
   const handleToggle = () => {
     if (saving || locked) return;
@@ -101,14 +126,14 @@ export default function NightlyImportToggle({ supplierId }: Props) {
   return (
     <section className={styles.row}>
       <div className={styles.copy}>
-        <div className={styles.title}>Nightly auto-import</div>
+        <div className={styles.title}>Auto-import</div>
         <div className={`${styles.hint} ${error ? styles.hintError : ''}`}>{hint}</div>
       </div>
       <button
         type="button"
         role="switch"
         aria-checked={enabled}
-        aria-label="Nightly auto-import"
+        aria-label="Auto-import"
         disabled={locked || saving}
         className={`${styles.pill} ${enabled ? styles.pillOn : ''} ${
           locked ? styles.pillLocked : ''

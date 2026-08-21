@@ -46,9 +46,11 @@ from app.models import (
     PartListing,
     ProviderCredential,
     Supplier,
+    SupplierFeed,
     User,
 )
 from app.services.activity import IMPORT_EVENT_KINDS, record_stream_event
+from app.services.part_feed import importer
 from app.services.part_feed.importer import sync_event
 from app.services.part_feed.registry import feed_configured, get_feed_key, match_provider
 from tests.feed_helpers import FakeProvider as _FakeProvider
@@ -83,6 +85,29 @@ class _ExplodingProvider(_FakeProvider):
 def _events(resp):
     """The NDJSON body as event dicts — every line must be valid JSON."""
     return [json.loads(line) for line in resp.text.splitlines() if line.strip()]
+
+
+@pytest.fixture(autouse=True)
+def feed_run_uses_the_test_session(db, monkeypatch):
+    """Point the run's worker thread at the test database, and start clean.
+
+    A run is server-owned now: the click starts a worker thread that opens its
+    OWN session, because `get_db` closes the request's session at request
+    teardown and the work outlives the request. Under test there is exactly
+    ONE in-memory SQLite database and it lives on the `db` fixture's
+    connection, so the worker is pointed at that same session — with `close()`
+    neutered, since the fixture owns its lifetime. Without this the worker
+    would open `sqlite:///./test.db` and write every row somewhere no
+    assertion can see.
+
+    Also clears the module-level run registry around every test: a run left
+    behind by one test would make the next test's click a 409.
+    """
+    monkeypatch.setattr(db, "close", lambda: None)
+    monkeypatch.setattr("app.services.part_feed.importer.SessionLocal", lambda: db)
+    importer.reset_feed_runs()
+    yield
+    importer.reset_feed_runs()
 
 
 @pytest.fixture
@@ -772,7 +797,9 @@ class TestImportStream:
         supplier = seeded_db["supplier1"]
         use_fake_provider(_FakeProvider())
 
-        def _created_then_boom(db_, provider, supplier_, call_budget=200, per_category=50):
+        def _created_then_boom(
+            db_, provider, supplier_, call_budget=200, per_category=50, continuous=False
+        ):
             yield sync_event(
                 "part_synced",
                 str(supplier_.id),
@@ -814,7 +841,7 @@ class TestImportStream:
         use_fake_provider(_FakeProvider())
         seen = []
 
-        def _record(db_, provider, supplier_, call_budget=200, per_category=50):
+        def _record(db_, provider, supplier_, call_budget=200, per_category=50, continuous=False):
             seen.append(call_budget)
             return iter(())
 
@@ -828,6 +855,132 @@ class TestImportStream:
         _import(client, supplier, auth_header, calls=10)
 
         assert seen == [200, 1, 1, 900, 10]
+
+
+class TestImportContinuity:
+    """Whether one Import click is ONE batch or a run that keeps going.
+
+    The bound used to be the category list: one pass reads at most one page per
+    subcategory, so the click stopped with most of its budget unspent and every
+    shelf one page deeper. The supplier's own Auto-import switch now decides —
+    read SERVER-SIDE, from `supplier_feeds.auto_import_enabled`.
+
+    The switch and not a query parameter, deliberately: a URL is durable, and
+    an unbounded spend against a rate-limited daily quota must not be something
+    a bookmarked link can ask for. Flipping the switch is already gated on a
+    provider plus a key, which is exactly the check a continuous run needs.
+    """
+
+    @pytest.fixture
+    def recorder(self, monkeypatch):
+        """Captures what the route asks `grow_catalog` for, and runs nothing."""
+        seen: list[dict] = []
+
+        def _record(db_, provider, supplier_, call_budget=200, per_category=50, continuous=False):
+            seen.append({"call_budget": call_budget, "continuous": continuous})
+            return iter(())
+
+        monkeypatch.setattr("app.routes.suppliers.grow_catalog", _record)
+        return seen
+
+    def _switch_on(self, db, supplier):
+        db.add(SupplierFeed(supplier_id=supplier.id, auto_import_enabled=True))
+        db.commit()
+
+    def test_auto_import_off_runs_one_bounded_batch(
+        self, client, db, seeded_db, auth_header, feed_key, use_fake_provider, recorder
+    ):
+        use_fake_provider(_FakeProvider())
+
+        _import(client, seeded_db["supplier1"], auth_header)
+
+        assert recorder == [{"call_budget": 200, "continuous": False}]
+
+    def test_no_feed_row_at_all_is_off(
+        self, client, db, seeded_db, auth_header, feed_key, use_fake_provider, recorder
+    ):
+        """Most suppliers have never had a `supplier_feeds` row written. Absent
+        must read as OFF, not as missing configuration to be guessed at."""
+        supplier = seeded_db["supplier1"]
+        assert db.query(SupplierFeed).filter_by(supplier_id=supplier.id).first() is None
+        use_fake_provider(_FakeProvider())
+
+        _import(client, supplier, auth_header)
+
+        assert recorder == [{"call_budget": 200, "continuous": False}]
+
+    def test_auto_import_on_runs_continuous_under_the_ceiling(
+        self, client, db, seeded_db, auth_header, feed_key, use_fake_provider, recorder
+    ):
+        supplier = seeded_db["supplier1"]
+        self._switch_on(db, supplier)
+        use_fake_provider(_FakeProvider())
+
+        _import(client, supplier, auth_header)
+
+        assert recorder == [{"call_budget": importer.CONTINUOUS_CALL_CEILING, "continuous": True}]
+
+    def test_calls_cannot_buy_a_continuous_run(
+        self, client, db, seeded_db, auth_header, feed_key, use_fake_provider, recorder
+    ):
+        """The query string is not a lever on this. A huge `calls` still clamps
+        to 900 and still runs ONE batch while the switch is off."""
+        use_fake_provider(_FakeProvider())
+
+        _import(client, seeded_db["supplier1"], auth_header, calls=99999)
+
+        assert recorder == [{"call_budget": 900, "continuous": False}]
+
+    def test_calls_is_ignored_when_the_switch_is_on(
+        self, client, db, seeded_db, auth_header, feed_key, use_fake_provider, recorder
+    ):
+        """The client keeps sending `calls=200` (no transport change was needed
+        for this feature) — it must not shrink a continuous run to 200."""
+        supplier = seeded_db["supplier1"]
+        self._switch_on(db, supplier)
+        use_fake_provider(_FakeProvider())
+
+        _import(client, supplier, auth_header, calls=1)
+
+        assert recorder == [{"call_budget": importer.CONTINUOUS_CALL_CEILING, "continuous": True}]
+
+    def test_an_unknown_continuous_parameter_changes_nothing(
+        self, client, db, seeded_db, auth_header, feed_key, use_fake_provider, recorder
+    ):
+        """There is no such query parameter, and FastAPI ignores extras — so a
+        caller asking for one gets the switch's answer, which is OFF here."""
+        use_fake_provider(_FakeProvider())
+
+        _import(client, seeded_db["supplier1"], auth_header, continuous="true")
+
+        assert recorder == [{"call_budget": 200, "continuous": False}]
+
+    def test_a_continuous_run_really_sweeps_the_shelf_deeper(
+        self, client, db, seeded_db, auth_header, feed_key, use_fake_provider, empty_subcategory
+    ):
+        """End to end, no stub: one click, TWO pages off one shelf (the route
+        asks for the default 50 a page, so 60 rows is two), and the wire
+        contract unchanged. A single-pass run stops after the first page with
+        4,950 of its calls unspent — that is the bug this closes."""
+        supplier = seeded_db["supplier1"]
+        self._switch_on(db, supplier)
+        provider = use_fake_provider(
+            _FakeProvider(
+                results_by_keyword={"Sensors": [_feed_part(f"NEW-{i}") for i in range(60)]}
+            )
+        )
+
+        resp = _import(client, supplier, auth_header)
+
+        assert resp.status_code == 200
+        events = _events(resp)
+        assert [c[2] for c in provider.search_calls if c[0] == "Sensors"] == [0, 50]
+        assert [e["kind"] for e in events].count("sync_started") == 1
+        assert [e["kind"] for e in events].count("sync_finished") == 1
+        assert sum(1 for e in events if e.get("action") == "created") == 60
+        assert events[-1]["counts"]["created"] == 60
+        assert events[-1]["detail"].endswith("· 2 sweeps")
+        assert db.query(Part).filter(Part.sku.like("NEW-%")).count() == 60
 
 
 class TestRecorderLabels:
