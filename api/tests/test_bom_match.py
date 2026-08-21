@@ -3,6 +3,12 @@
 from sqlalchemy import text
 
 from app.models import Part
+from app.services.bom_match import (
+    build_resolve_query,
+    footprint_token,
+    match_line,
+    package_warning,
+)
 
 
 class TestPartFactColumns:
@@ -25,3 +31,100 @@ class TestPartFactColumns:
             text("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'parts'")
         ).scalars()
         assert "ix_parts_sku_upper" in set(rows)
+
+
+def _part(db, sku, package=None, stock=0, verified=False, **kw):
+    from datetime import UTC, datetime
+
+    p = Part(
+        sku=sku,
+        manufacturer_name=kw.pop("manufacturer_name", "Acme"),
+        package=package,
+        lifecycle_verified_at=datetime.now(UTC) if verified else None,
+        **kw,
+    )
+    db.add(p)
+    db.commit()
+    return p
+
+
+class TestFootprintToken:
+    def test_lib_footprint_takes_the_tail(self):
+        assert footprint_token("Resistor_SMD:R_0805_2012Metric") == "R_0805_2012Metric"
+
+    def test_bare_footprint_passes_through(self):
+        assert footprint_token("0805") == "0805"
+        assert footprint_token("  ") is None
+        assert footprint_token(None) is None
+
+
+class TestResolveQuery:
+    def test_value_plus_footprint_token(self):
+        assert build_resolve_query("10k", "Resistor_SMD:R_0805_2012Metric") == (
+            "10k R_0805_2012Metric"
+        )
+
+    def test_value_alone(self):
+        assert build_resolve_query("LM317T", None) == "LM317T"
+
+    def test_no_value_no_query(self):
+        assert build_resolve_query(None, "0805") is None
+        assert build_resolve_query("  ", "0805") is None
+
+
+class TestLadder:
+    def test_exact_is_case_insensitive(self, db):
+        p = _part(db, "1N4148WS-HG3_A-08")
+        m = match_line(db, "1n4148ws-hg3_a-08", None, None)
+        assert (m.status, m.part.id) == ("exact", p.id)
+
+    def test_approx_forward_prefix(self, db):
+        p = _part(db, "1N4148WS-HG3_A-08")
+        m = match_line(db, "1N4148WS", None, None)
+        assert (m.status, m.part.id) == ("approx", p.id)
+        assert m.approx_reason == "ordering-code suffix differs"
+
+    def test_approx_reverse_prefix(self, db):
+        # User pasted the LONG ordering code; catalog holds the base part.
+        p = _part(db, "GRM188R71C104KA01")
+        m = match_line(db, "GRM188R71C104KA01D", None, None)
+        assert (m.status, m.part.id) == ("approx", p.id)
+        assert m.approx_reason == "base part of the pasted ordering code"
+
+    def test_min_five_chars_gates_approx(self, db):
+        _part(db, "1N4148WS")
+        m = match_line(db, "1N41", None, None)
+        assert m.status == "resolve"  # too short to trust a prefix family
+
+    def test_rank_prefers_shortest_delta_then_verified_then_stock(self, db):
+        far = _part(db, "LM317TTTTTTT")
+        near = _part(db, "LM317TG")
+        m = match_line(db, "LM317T", None, None)
+        assert m.part.id == near.id
+        assert far.id != near.id
+
+    def test_no_mpn_never_guesses(self, db):
+        _part(db, "10K-0805")
+        m = match_line(db, None, "10k", "Resistor_SMD:R_0805_2012Metric")
+        assert m.status == "resolve"
+        assert m.part is None
+        assert m.resolve_query == "10k R_0805_2012Metric"
+
+    def test_nothing_at_all_is_none(self, db):
+        m = match_line(db, None, None, None)
+        assert (m.status, m.resolve_query) == ("none", None)
+
+    def test_miss_with_mpn_resolves_by_mpn(self, db):
+        m = match_line(db, "TOTALLY-ABSENT-99", None, None)
+        assert (m.status, m.resolve_query) == ("resolve", "TOTALLY-ABSENT-99")
+
+
+class TestPackageWarning:
+    def test_differs_when_both_known(self):
+        assert package_warning("0603", "0805") == "package differs: 0603 → 0805"
+
+    def test_silent_when_either_unknown_or_equal(self):
+        assert package_warning(None, "0805") is None
+        assert package_warning("0805", None) is None
+        assert package_warning("0805", "0805") is None
+        assert package_warning("r_0805_2012metric", "R_0805_2012Metric") is None
