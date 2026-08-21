@@ -1,7 +1,11 @@
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { NavLink, Link, useLocation } from "react-router-dom";
 import SearchBar from "./SearchBar";
 import Logo from "@shared/components/Logo";
+import BrowseDrawer, {
+  loadBrowseDrawerBody,
+  prefetchBrowseDrawerBody,
+} from "./BrowseDrawer";
 import styles from "./Navbar.module.scss";
 
 // No "Home" entry on purpose: the brand mark to its left is already the
@@ -22,49 +26,60 @@ const NAV_LINKS = [
 const linkClassName = ({ isActive }: { isActive: boolean }) =>
   isActive ? `${styles.navLink} ${styles.active}` : styles.navLink;
 
-const drawerLinkClassName = ({ isActive }: { isActive: boolean }) =>
-  isActive ? `${styles.navMobileLink} ${styles.active}` : styles.navMobileLink;
-
 export default function Navbar() {
   const location = useLocation();
   const isHome = location.pathname === "/";
-  const [menuOpen, setMenuOpen] = useState(false);
 
+  // BrowseDrawer state lives here because the burger (below) toggles it; the
+  // drawer itself owns the scroll-lock/Esc/route-close machine and calls back
+  // through onClose. It replaced the old mobile-only navMobileDrawer — the
+  // browse drawer is the site's ONLY drawer, at every viewport.
+  const [browseOpen, setBrowseOpen] = useState(false);
+  const burgerRef = useRef<HTMLButtonElement>(null);
+  const closeBrowse = useCallback(() => setBrowseOpen(false), []);
+
+  // Dialog focus contract: whichever path closed the drawer (X, scrim, Esc,
+  // route change), focus returns to the burger that opened it.
+  const wasOpenRef = useRef(false);
   useEffect(() => {
-    setMenuOpen(false);
-  }, [location.pathname]);
+    if (wasOpenRef.current && !browseOpen) burgerRef.current?.focus();
+    wasOpenRef.current = browseOpen;
+  }, [browseOpen]);
 
-  useEffect(() => {
-    if (!menuOpen) return undefined;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, [menuOpen]);
+  const onBurgerClick = () => {
+    if (browseOpen) {
+      setBrowseOpen(false);
+      return;
+    }
+    // Open only once the body chunk is in hand: a failed import leaves the
+    // page untouched (no empty drawer over a scrim), the loader resets
+    // itself, and the next click retries the network — never a dead control.
+    loadBrowseDrawerBody()
+      .then(() => setBrowseOpen(true))
+      .catch(() => {});
+  };
 
-  useEffect(() => {
-    if (!menuOpen) return undefined;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setMenuOpen(false);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [menuOpen]);
-
-  const burgerClass = menuOpen
-    ? `${styles.navBurger} ${styles.isOpen}`
-    : styles.navBurger;
-  const scrimClass = menuOpen
-    ? `${styles.navMobileScrim} ${styles.isOpen}`
-    : styles.navMobileScrim;
-  const drawerClass = menuOpen
-    ? `${styles.navMobileDrawer} ${styles.isOpen}`
-    : styles.navMobileDrawer;
+  const burgerClass = browseOpen
+    ? `${styles.browseBurger} ${styles.isOpen}`
+    : styles.browseBurger;
 
   return (
     <header className={styles.header}>
       <div className={styles.topStrip}>
+        <button
+          type="button"
+          ref={burgerRef}
+          className={burgerClass}
+          onClick={onBurgerClick}
+          onMouseEnter={prefetchBrowseDrawerBody}
+          aria-label={browseOpen ? "Close browse menu" : "Open browse menu"}
+          aria-expanded={browseOpen}
+          aria-controls="browse-drawer"
+        >
+          <span className={styles.browseBurgerLine} aria-hidden="true" />
+          <span className={styles.browseBurgerLine} aria-hidden="true" />
+          <span className={styles.browseBurgerLine} aria-hidden="true" />
+        </button>
         <Link to="/" className={styles.brand}>
           {/* Badge, not bare mark: the rounded square is part of the logo and
               now shows on every theme. Its hairline rim is what makes the plate
@@ -98,55 +113,10 @@ export default function Navbar() {
           <Link to="/admin/login" className={styles.loginBtn}>
             LOGIN
           </Link>
-          <button
-            type="button"
-            className={burgerClass}
-            onClick={() => setMenuOpen((v) => !v)}
-            aria-label={menuOpen ? "Close menu" : "Open menu"}
-            aria-expanded={menuOpen}
-            aria-controls="nav-mobile-drawer"
-          >
-            <span className={styles.navBurgerLine} aria-hidden="true" />
-            <span className={styles.navBurgerLine} aria-hidden="true" />
-            <span className={styles.navBurgerLine} aria-hidden="true" />
-          </button>
         </div>
       </div>
 
-      <div
-        className={scrimClass}
-        onClick={() => setMenuOpen(false)}
-        aria-hidden="true"
-      />
-      <nav
-        id="nav-mobile-drawer"
-        className={drawerClass}
-        aria-label="Mobile navigation"
-        aria-hidden={!menuOpen}
-      >
-        <ul className={styles.navMobileList}>
-          {NAV_LINKS.map(({ to, label }) => (
-            <li key={to}>
-              <NavLink
-                to={to}
-                end={to === "/"}
-                className={drawerLinkClassName}
-                onClick={() => setMenuOpen(false)}
-                tabIndex={menuOpen ? 0 : -1}
-              >
-                <span>{label}</span>
-                <span className={styles.navMobileArrow} aria-hidden="true">
-                  ›
-                </span>
-              </NavLink>
-            </li>
-          ))}
-        </ul>
-        <div className={styles.navMobileFoot}>
-          <span className={styles.navMobileFootBrand}>Circuit Center</span>
-          <span className={styles.navMobileFootRev}>REV-A</span>
-        </div>
-      </nav>
+      <BrowseDrawer open={browseOpen} onClose={closeBrowse} />
     </header>
   );
 }

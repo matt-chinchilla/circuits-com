@@ -1,0 +1,605 @@
+@use "@shared/styles/variables" as *;
+
+// BrowseDrawer — the site's only drawer at every viewport (replaces the old
+// navMobileDrawer). Pixel port of the design-kit `.bd-*` rules
+// (design-handoff-v6/design_handoff_search_and_browse_refinements/styles.css);
+// kebab kit classnames become camelCase module classes 1:1.
+//
+// Deliberate divergence from the old below-strip drawer: this is a full-height
+// overlay from the viewport TOP — the scrim covers the nav strip so the
+// collapse X can sit at the burger's exact position. z-index 110 sits above
+// the header's own 100 (both inside the header's stacking context).
+//
+// Kit's `will-change: transform` on the drawer is deliberately NOT ported: a
+// permanently pinned near-viewport GPU layer on every page is the exact
+// "permanent will-change" mobile-OOM trap CLAUDE.md documents; the transform
+// transition promotes a layer for the slide anyway.
+
+// ─── Scrim ────────────────────────────────────────────────────────────────
+
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 105; // above the nav strip content, below the drawer (110)
+  background: rgba(13, 17, 23, 0.45);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease;
+}
+
+.scrim.isOpen {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+// Blur ONLY while open AND >=769px AND off the homepage (.scrimBlur is
+// withheld on `/`): re-filtering the continuously animating hero backdrop
+// every frame is the standing backdrop-filter perf trap.
+@media (min-width: 769px) {
+  .scrim.isOpen.scrimBlur {
+    backdrop-filter: blur(2px);
+  }
+}
+
+// ─── Drawer shell ─────────────────────────────────────────────────────────
+
+.drawer {
+  position: fixed;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 110;
+  max-width: 100vw;
+  display: flex;
+  transform: translateX(-100%);
+  transition: transform 0.22s ease;
+}
+
+.drawer.isOpen {
+  transform: none;
+}
+
+// ─── Collapse X — sits exactly where the nav burger renders, pre-morphed ──
+
+.close {
+  position: absolute;
+  left: 14px;
+  top: 5px; // (36px strip − 26px button) / 2 — matches the burger's centre
+  width: 26px;
+  height: 26px;
+  z-index: 2;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  cursor: pointer;
+  padding: 0;
+
+  span {
+    display: block;
+    width: 16px;
+    height: 2px;
+    border-radius: 1px;
+    background: #1a222c;
+    transition: background 0.18s ease;
+  }
+
+  span:nth-child(1) {
+    transform: translateY(5px) rotate(45deg);
+  }
+
+  span:nth-child(2) {
+    opacity: 0;
+  }
+
+  span:nth-child(3) {
+    transform: translateY(-5px) rotate(-45deg);
+  }
+
+  &:hover {
+    background: var(--theme-accent-soft);
+
+    span {
+      background: $executive-blue;
+    }
+  }
+}
+
+// ─── Rail ─────────────────────────────────────────────────────────────────
+
+.rail {
+  width: 264px;
+  background: #fff;
+  box-shadow: 8px 0 30px rgba(0, 0, 0, 0.18);
+  padding: 4px 0 12px;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+// Two flex halves so the dashed divider sits at the exact vertical midpoint;
+// site links + footer fill the lower half.
+.railTop {
+  display: flex;
+  flex-direction: column;
+  flex: 1 0 auto;
+  min-height: calc(50% - 11px);
+  padding-top: 32px;
+}
+
+.railBottom {
+  display: flex;
+  flex-direction: column;
+  flex: 1 0 auto;
+}
+
+.sep {
+  height: 0;
+  border-top: 1px dashed #d3dae2;
+  margin: 10px 20px;
+}
+
+// Section labels ("BROWSE"/"SITE") — neon quantity-indicator pill style.
+.head {
+  display: inline-flex;
+  align-self: flex-start;
+  margin: 14px 20px 8px;
+  font-family: $font-mono;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #1a1f23;
+  padding: 3px 9px;
+  background: var(--theme-accent);
+  border-radius: 10px;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 46px;
+  padding: 9px 20px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: #1a222c;
+  text-align: left;
+  transition: background 150ms, box-shadow 150ms;
+
+  &:hover {
+    background: var(--theme-accent-soft);
+    box-shadow: inset 3px 0 0 color-mix(in srgb, var(--theme-accent) 45%, transparent);
+  }
+}
+
+// After .item:hover on purpose — an active item stays active-styled on hover.
+.item.itemActive {
+  background: var(--theme-accent-soft);
+  box-shadow: inset 3px 0 0 var(--theme-accent);
+  color: $executive-blue;
+}
+
+.itemLite {
+  font-weight: 500;
+  font-size: 13px;
+  color: #3c4652;
+  min-height: 40px;
+}
+
+// White Phosphor glyph on a near-black pad (#1a1f23, hairline rim) — matches
+// the brand logo plate. 30px in the Browse group, 26px for Site links.
+.itemIcon {
+  width: 30px;
+  height: 30px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  color: #fff;
+  border-radius: 7px;
+  background: #1a1f23;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 1px 2px rgba(16, 24, 32, 0.18);
+}
+
+.itemIconLite {
+  width: 26px;
+  height: 26px;
+  font-size: 13px;
+  border-radius: 6px;
+}
+
+// Count pill — same neon treatment as .head.
+.meta {
+  margin-left: auto;
+  white-space: nowrap;
+  font-family: $font-mono;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #1a1f23;
+  background: var(--theme-accent);
+  border-radius: 10px;
+  padding: 3px 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+// Utility footer — catalog counts + keyboard hint.
+.foot {
+  margin-top: auto;
+  padding: 12px 20px 4px;
+  border-top: 1px dashed #d3dae2;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-family: $font-mono;
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #6b7280;
+}
+
+.kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: #fff;
+  border: 1px solid #d3dae2;
+  box-shadow: 0 1px 0 #d3dae2;
+  color: $executive-blue;
+  font-size: 8.5px;
+  letter-spacing: 0.08em;
+  font-family: inherit;
+}
+
+// ─── Pane ─────────────────────────────────────────────────────────────────
+
+.pane {
+  width: min(340px, calc(100vw - 264px));
+  background-color: #f7f9fb;
+  background-image:
+    linear-gradient(rgba(10, 74, 46, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(10, 74, 46, 0.035) 1px, transparent 1px);
+  background-size: 24px 24px;
+  border-left: 1px solid #dde3ea;
+  box-shadow: 8px 0 30px rgba(0, 0, 0, 0.14);
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 14px 14px 18px;
+}
+
+.paneHead {
+  font-family: $font-mono;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #6b7280;
+  margin-bottom: 10px;
+}
+
+.paneSub {
+  font-size: 11.5px;
+  font-weight: 400;
+  color: #6b7280;
+  margin-left: 8px;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+@media (max-width: 900px) {
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+// Acrylic tile — the homepage sub-chip material: white veil over the neon
+// ramp at rest; full ramp + glow + spring lift on hover.
+.tile {
+  position: relative;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid rgba(12, 26, 5, 0.1);
+  border-radius: 8px;
+  padding: 8px 9px;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  min-height: 46px;
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.86), rgba(255, 255, 255, 0.66)),
+    linear-gradient(
+      112deg,
+      rgba(0, 188, 177, 0.22) 0%,
+      rgba(128, 199, 39, 0.26) 48%,
+      rgba(224, 227, 66, 0.3) 100%
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    inset 0 -1px 1px rgba(12, 26, 5, 0.05),
+    0 1px 2px rgba(12, 26, 5, 0.08);
+  transition:
+    transform 180ms cubic-bezier(0.34, 1.56, 0.64, 1),
+    box-shadow 180ms,
+    background 180ms,
+    border-color 180ms;
+
+  &:hover {
+    background:
+      linear-gradient(rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0)),
+      linear-gradient(112deg, rgb(0, 188, 177) 0%, rgb(65, 255, 72) 58%, rgb(224, 227, 66) 100%);
+    border-color: rgba(12, 26, 5, 0.16);
+    transform: translateY(-1px) scale(1.02);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.55),
+      0 4px 14px rgba(30, 233, 50, 0.32),
+      0 1px 3px rgba(12, 26, 5, 0.22);
+  }
+
+  &:active {
+    transform: scale(0.97);
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.12);
+  }
+}
+
+.tileIcon {
+  width: 26px;
+  height: 26px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  color: #fff;
+  border-radius: 6px;
+  background: #1a1f23;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 1px 2px rgba(16, 24, 32, 0.18);
+}
+
+// Dashed lettermark pad (manufacturer tiles).
+.tileLogo {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  height: 26px;
+  padding: 0 6px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: $executive-blue;
+  font-family: $font-heading;
+  background: color-mix(in srgb, var(--theme-accent) 10%, transparent);
+  border: 1px dashed color-mix(in srgb, var(--theme-accent) 45%, transparent);
+  border-radius: 6px;
+}
+
+.tileName {
+  min-width: 0;
+  overflow-wrap: break-word;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: #14300a;
+}
+
+.tile:hover .tileName {
+  color: #0c1a05;
+}
+
+.tileCount {
+  font-size: 9px;
+  font-weight: 600;
+  color: $executive-blue;
+  margin-left: auto;
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: inset 0 0 0 1px rgba(12, 26, 5, 0.08);
+  border-radius: 8px;
+  padding: 2px 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.tile:hover .tileCount {
+  background: rgba(255, 255, 255, 0.6);
+}
+
+// Distributor rows.
+.row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  border: 1px solid #dde3ea;
+  border-radius: 8px;
+  background: #fff;
+  padding: 11px 12px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  box-shadow: 0 1px 2px rgba(16, 24, 32, 0.05);
+  transition: transform 160ms, border-color 160ms, box-shadow 160ms;
+
+  &:hover {
+    transform: translateY(-1px);
+    border-color: var(--theme-accent);
+    box-shadow: 0 4px 12px rgba(10, 74, 46, 0.12);
+  }
+}
+
+// Bevelled swatch. The kit fed it per-distributor brand colors from mock
+// data; production shows the supplier's real logo when one passes
+// safeImageUrl, else a lettermark on an accent-tinted pad.
+.sw {
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  font-family: $font-heading;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: $executive-blue;
+  background: color-mix(in srgb, var(--theme-accent) 10%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -1px 1px rgba(0, 0, 0, 0.18),
+    0 1px 2px rgba(16, 24, 32, 0.12);
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+}
+
+.rowName {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1a222c;
+}
+
+.star {
+  margin-left: auto;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: #7a651e;
+  background: color-mix(in srgb, #a88d2e 16%, transparent);
+  border: 1px solid #d9c987;
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+
+// Quiet per-source failure row — retry re-fires just that fetch.
+.retry {
+  display: block;
+  width: 100%;
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  border: 1px dashed #d3dae2;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+  font-family: $font-mono;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #6b7280;
+  text-align: center;
+
+  &:hover {
+    border-color: var(--theme-accent);
+    color: $executive-blue;
+  }
+}
+
+// ─── Keyboard focus (dialog is fully keyboard-driven — trap + Esc) ────────
+
+.item:focus-visible,
+.tile:focus-visible,
+.row:focus-visible,
+.close:focus-visible,
+.retry:focus-visible {
+  outline: 2px solid var(--theme-accent);
+  outline-offset: -2px;
+}
+
+// ─── Reduced motion ───────────────────────────────────────────────────────
+
+@media (prefers-reduced-motion: reduce) {
+  .tile,
+  .tile:hover,
+  .row,
+  .row:hover {
+    transition: none;
+    transform: none;
+  }
+
+  .drawer,
+  .scrim,
+  .close span {
+    transition: none;
+  }
+}
+
+// ─── Responsive — no horizontal scrollbars at any viewport ────────────────
+
+@media (max-width: $bp-mobile) {
+  // The mobile nav strip is 48px (vs 36px desktop) — keep the X centred on
+  // the burger: (48 − 26) / 2.
+  .close {
+    top: 11px;
+  }
+}
+
+@media (max-width: 760px) {
+  .rail {
+    width: 224px;
+  }
+
+  .item {
+    padding: 9px 16px;
+  }
+
+  .head,
+  .foot {
+    margin-left: 16px;
+    margin-right: 16px;
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  .sep {
+    margin: 10px 16px;
+  }
+
+  .pane {
+    width: calc(100vw - 224px);
+  }
+}
+
+@media (max-width: 480px) {
+  .rail {
+    width: 185px;
+  }
+
+  .item {
+    padding: 8px 14px;
+    font-size: 13px;
+  }
+
+  .pane {
+    width: calc(100vw - 185px);
+    padding: 12px 10px;
+  }
+}
