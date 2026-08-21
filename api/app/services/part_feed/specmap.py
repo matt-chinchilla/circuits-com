@@ -13,9 +13,24 @@ _NON_COMPLIANT = ("non-compliant", "non compliant", "not compliant")
 # match by token prefix ("SOIC-8", "TO-220-3", "DO-214AC").
 _SMT_CHIP_SIZES = frozenset({"0201", "0402", "0603", "0805", "1206", "1210", "2010", "2512"})
 _SMT_PREFIXES = (
-    "SOT", "SOIC", "SSOP", "TSSOP", "MSOP", "QSOP",
-    "QFN", "DFN", "QFP", "LQFP", "TQFP",
-    "BGA", "CSP", "LGA", "SOD", "DPAK", "D2PAK", "DO-214",
+    "SOT",
+    "SOIC",
+    "SSOP",
+    "TSSOP",
+    "MSOP",
+    "QSOP",
+    "QFN",
+    "DFN",
+    "QFP",
+    "LQFP",
+    "TQFP",
+    "BGA",
+    "CSP",
+    "LGA",
+    "SOD",
+    "DPAK",
+    "D2PAK",
+    "DO-214",
 )
 _THT_PREFIXES = ("DIP", "PDIP", "TO-92", "TO-220", "TO-247", "DO-35", "DO-41", "RADIAL", "AXIAL")
 

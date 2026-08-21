@@ -48,6 +48,7 @@ from app.services.part_feed.importer import (
     get_feed_run,
     start_feed_run,
 )
+from app.services.search_service import get_active_supplier_tiers
 from app.utils.color import validate_optional_hex_color
 from app.utils.image_url import validate_optional_image_url
 
@@ -161,11 +162,17 @@ def list_suppliers(db: Session = Depends(get_db)):
     ):
         categories_by_supplier.setdefault(sup_id, []).append(cat_name)
 
+    # Highest ACTIVE sponsorship tier, normalized lowercase (or None) — the
+    # same shared helper the search supplier hits use, so the browse drawer's
+    # FEATURED badge and the search results can never disagree.
+    tiers = get_active_supplier_tiers(db)
+
     return [
         {
             **supplier_to_dict(s),
             "parts_count": int(parts_counts.get(s.id, 0)),
             "categories": categories_by_supplier.get(s.id, []),
+            "tier": tiers.get(s.id),
         }
         for s in suppliers
     ]

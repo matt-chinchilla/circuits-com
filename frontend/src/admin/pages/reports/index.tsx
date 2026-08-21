@@ -487,21 +487,29 @@ function TrafficChart({ data }: TrafficChartProps) {
             <path d={visitorsLine} fill="none" stroke="#2563eb" strokeWidth="1.5" strokeDasharray="4 3" opacity="0.7" />
           </>
         )}
-        {data.map((d, i) => (
-          <g key={d.day}>
-            {pinned === i && (
-              <circle cx={xs[i]} cy={yScale(d.views)} r={8} fill="none" style={{ stroke: 'var(--a-primary)' }} strokeWidth="1.5" opacity="0.5" />
-            )}
-            <circle cx={xs[i]} cy={yScale(d.views)} r={active === i || N === 1 ? 5 : 3} style={{ fill: 'var(--a-primary)', stroke: 'var(--a-card)' }} strokeWidth="2" />
-            <circle cx={xs[i]} cy={yScale(d.visitors)} r={active === i || N === 1 ? 4 : 2.5} fill="#2563eb" style={{ stroke: 'var(--a-card)' }} strokeWidth="1.5" />
-            {N === 1 && (
-              <>
-                <text x={xs[i] + 10} y={yScale(d.views) - 8} fontSize="11" style={{ fill: 'var(--a-primary)' }} fontWeight="600">{d.views} views</text>
-                <text x={xs[i] + 10} y={yScale(d.visitors) + 16} fontSize="11" fill="#2563eb" fontWeight="600">{d.visitors} visitors</text>
-              </>
-            )}
-          </g>
-        ))}
+        {data.map((d, i) => {
+          // Dot density: on long ranges a dot per day reads as noise, not
+          // data (the smoothed line carries the shape). Resting dots render
+          // only when the series is sparse; the active/pinned index always
+          // gets its markers via the crosshair block below.
+          const showRestingDot = N <= 45 || active === i
+          if (!showRestingDot && N !== 1) return null
+          return (
+            <g key={d.day}>
+              {pinned === i && (
+                <circle cx={xs[i]} cy={yScale(d.views)} r={8} fill="none" style={{ stroke: 'var(--a-primary)' }} strokeWidth="1.5" opacity="0.5" />
+              )}
+              <circle cx={xs[i]} cy={yScale(d.views)} r={active === i || N === 1 ? 5 : 3} style={{ fill: 'var(--a-primary)', stroke: 'var(--a-card)' }} strokeWidth="2" />
+              <circle cx={xs[i]} cy={yScale(d.visitors)} r={active === i || N === 1 ? 4 : 2.5} fill="#2563eb" style={{ stroke: 'var(--a-card)' }} strokeWidth="1.5" />
+              {N === 1 && (
+                <>
+                  <text x={xs[i] + 10} y={yScale(d.views) - 8} fontSize="11" style={{ fill: 'var(--a-primary)' }} fontWeight="600">{d.views} views</text>
+                  <text x={xs[i] + 10} y={yScale(d.visitors) + 16} fontSize="11" fill="#2563eb" fontWeight="600">{d.visitors} visitors</text>
+                </>
+              )}
+            </g>
+          )
+        })}
         {active !== null && N >= 2 && (
           <line x1={xs[active]} x2={xs[active]} y1={PAD.t} y2={H - PAD.b} style={{ stroke: 'var(--a-axis)' }} strokeDasharray="2 3" opacity="0.5" />
         )}

@@ -22,6 +22,7 @@ from app.routes import (
     dashboard,
     feed_credentials,
     forms,
+    manufacturers,
     parts,
     search,
     sitemap,
@@ -44,6 +45,9 @@ app.add_middleware(
 app.include_router(categories.router)
 app.include_router(suppliers.router)
 app.include_router(search.router)
+# Public derived manufacturers (/api/manufacturers) — no collision with the
+# admin CRM router, which mounts at /api/admin/manufacturers.
+app.include_router(manufacturers.router)
 app.include_router(forms.router)
 app.include_router(sponsors.router)
 app.include_router(auth.router)

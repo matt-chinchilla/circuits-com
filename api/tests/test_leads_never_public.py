@@ -7,7 +7,7 @@ from pathlib import Path
 ROUTES = Path(__file__).parent.parent / "app" / "routes"
 PUBLIC_ROUTERS = [
     "categories.py", "suppliers.py", "search.py", "forms.py", "sponsors.py",
-    "sitemap.py", "checkout.py", "parts.py", "analytics.py",
+    "sitemap.py", "checkout.py", "parts.py", "analytics.py", "manufacturers.py",
 ]
 
 

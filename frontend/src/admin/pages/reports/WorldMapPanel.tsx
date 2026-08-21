@@ -87,20 +87,28 @@ export default function WorldMapPanel({
           return `${flagEmoji(code)} ${countryName(code)}<br/>${v} view${v === 1 ? '' : 's'}${visitors}`;
         },
       },
-      visualMap: {
-        show: !collecting,
-        type: 'continuous',
-        min: 1,
-        max: maxViews,
-        orient: 'horizontal',
-        left: 14,
-        bottom: 10,
-        itemWidth: 10,
-        itemHeight: 90,
-        text: [`${maxViews}`, '1'],
-        textStyle: { color: '#8fa89a', fontSize: 10 },
-        inRange: { color: RAMP },
-      },
+      // In the collecting state the component is OMITTED outright: a mounted
+      // visualMap paints every no-data region with its default outOfRange
+      // color (theme green), turning an honest empty map into a lie.
+      ...(collecting
+        ? {}
+        : {
+            visualMap: {
+              show: true,
+              type: 'continuous',
+              min: 1,
+              max: maxViews,
+              orient: 'horizontal',
+              left: 14,
+              bottom: 10,
+              itemWidth: 10,
+              itemHeight: 90,
+              text: [`${maxViews}`, '1'],
+              textStyle: { color: '#8fa89a', fontSize: 10 },
+              inRange: { color: RAMP },
+              outOfRange: { color: LAND_NO_DATA },
+            },
+          }),
       series: [
         {
           type: 'map',

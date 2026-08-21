@@ -17,7 +17,6 @@ from app.services.part_feed.importer import _stamp_feed_facts
 from app.services.part_feed.mouser import _parse_lead_time, part_from_mouser
 from app.services.part_feed.specmap import map_mount, map_rohs
 
-
 # ── Migration 039 metadata guard ────────────────────────────────────────────
 # SQLite ignores VARCHAR lengths, so the length contract is asserted on the
 # column METADATA (the CLAUDE.md pattern), not on stored data.

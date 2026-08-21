@@ -96,6 +96,21 @@ from app.models import (  # noqa: E402
     User,
 )
 from app.services import rate_limit  # noqa: E402
+from app.services.search_service import clear_public_manufacturers_cache  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def reset_public_manufacturers_cache():
+    """Wipe the derived-manufacturers TTL cache between tests.
+
+    The cache (app.services.search_service) is PROCESS memory with a 600s
+    TTL, so without this every test after the first would search against the
+    FIRST test's catalog — one suite's manufacturers leaking into the next
+    suite's vocabulary. Same shape as the rate-limiter reset above.
+    """
+    clear_public_manufacturers_cache()
+    yield
+    clear_public_manufacturers_cache()
 
 
 @pytest.fixture(autouse=True)

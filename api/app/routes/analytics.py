@@ -225,7 +225,9 @@ def get_analytics(
     # group; crawlers mint a session per fetch, so views ≈ sessions here.
     crawlers: list[dict] = []
     if bot_uas:
-        fam: dict[str, dict] = {}
+        fam_views: dict[str, int] = {}
+        fam_sessions: dict[str, int] = {}
+        fam_seen: dict[str, str] = {}
         rows = (
             db.query(
                 PageView.user_agent,
@@ -239,15 +241,24 @@ def get_analytics(
         )
         for row in rows:
             family = crawler_family(row.user_agent) or "Other bots"
-            entry = fam.setdefault(
-                family, {"family": family, "views": 0, "sessions": 0, "last_seen": None}
-            )
-            entry["views"] += row.views
-            entry["sessions"] += row.sessions
+            fam_views[family] = fam_views.get(family, 0) + row.views
+            fam_sessions[family] = fam_sessions.get(family, 0) + row.sessions
             last = str(row.last_seen)
-            if entry["last_seen"] is None or last > entry["last_seen"]:
-                entry["last_seen"] = last
-        crawlers = sorted(fam.values(), key=lambda e: e["views"], reverse=True)
+            if last > fam_seen.get(family, ""):
+                fam_seen[family] = last
+        crawlers = sorted(
+            (
+                {
+                    "family": family,
+                    "views": views,
+                    "sessions": fam_sessions[family],
+                    "last_seen": fam_seen.get(family),
+                }
+                for family, views in fam_views.items()
+            ),
+            key=lambda e: e["views"],
+            reverse=True,
+        )
 
     # Visitors by country — segment-filtered like the rest of the page.
     # NULL country = pre-geo history or a failed lookup; reported separately
