@@ -1,18 +1,57 @@
-import { useRef, useState, useEffect, useCallback } from 'react';
+import { useRef, useState, useEffect, useLayoutEffect, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { useSearch } from '@public/hooks/useSearch';
 import { api } from '@public/services/api';
+import type { SearchResultsV2, SearchSupplierHit } from '@public/types/search';
+import { categoryPath } from '@shared/utils/categoryPath';
 import Icon from '@shared/components/Icon';
 import styles from './SearchBar.module.scss';
 
 interface SearchBarProps {
   variant?: 'hero' | 'compact' | 'nav';
   initialQuery?: string;
+  /** Fires when the dropdown's mounted-visibility changes (before paint, only
+   *  on actual transitions), with a guaranteed final `false` on unmount. The
+   *  hero wires this to stack itself above subsequent content while open. */
+  onDropdownOpenChange?: (open: boolean) => void;
 }
 
-export default function SearchBar({ variant = 'hero', initialQuery = '' }: SearchBarProps) {
+// Kit-parity section caps: Parts (5) → Distributors (3) → Categories (3).
+const PARTS_CAP = 5;
+const DISTRIBUTORS_CAP = 3;
+const CATEGORIES_CAP = 3;
+
+/** First glyph of the name, uppercased — the lettermark pad letter. */
+function lettermark(name: string): string {
+  return name.trim().charAt(0).toUpperCase();
+}
+
+/** Bare host for display ("https://www.mouser.com/" → "mouser.com"). */
+function displayHost(website: string | null): string | null {
+  if (!website) return null;
+  const host = website
+    .replace(/^[a-z][a-z0-9+.-]*:\/\//i, '')
+    .replace(/^www\./i, '')
+    .replace(/\/.*$/, '');
+  return host || null;
+}
+
+// Tier and website are both nullable — join only what exists, never a
+// dangling separator, never the string "null".
+function distributorSubLine(sup: SearchSupplierHit): string {
+  const tier = sup.tier ? `${sup.tier.charAt(0).toUpperCase()}${sup.tier.slice(1)} ` : '';
+  const host = displayHost(sup.website);
+  return host ? `${tier}distributor · ${host}` : `${tier}distributor`;
+}
+
+export default function SearchBar({
+  variant = 'hero',
+  initialQuery = '',
+  onDropdownOpenChange,
+}: SearchBarProps) {
   const navigate = useNavigate();
-  const { query, setQuery, results, loading } = useSearch(300);
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<SearchResultsV2 | null>(null);
+  const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
@@ -21,21 +60,78 @@ export default function SearchBar({ variant = 'hero', initialQuery = '' }: Searc
     if (initialQuery) {
       setQuery(initialQuery);
     }
-  }, [initialQuery, setQuery]);
+  }, [initialQuery]);
 
-  // Open dropdown when results arrive (hero variant only)
+  // Debounced typeahead. suggest=0 always: zero-result keystrokes must never
+  // pay the server's fuzzy-recovery pipeline (spec §1.3/§3).
   useEffect(() => {
-    if (variant === 'hero' && results && (results.categories.length > 0 || results.suppliers.length > 0)) {
-      setOpen(true);
-    } else if (!results) {
-      setOpen(false);
+    if (query.length < 2) {
+      setResults(null);
+      setLoading(false);
+      return;
     }
-  }, [results, variant]);
+    setLoading(true);
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      api
+        .searchV2(query, { suggest: 0 })
+        .then((data) => {
+          if (!cancelled) setResults(data);
+        })
+        .catch(() => {
+          if (!cancelled) setResults(null);
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
+    }, 300);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [query]);
+
+  const parts = results?.parts.slice(0, PARTS_CAP) ?? [];
+  const distributors = results?.suppliers.slice(0, DISTRIBUTORS_CAP) ?? [];
+  const categories = results?.categories.slice(0, CATEGORIES_CAP) ?? [];
+  const hasResults = parts.length > 0 || distributors.length > 0 || categories.length > 0;
+  const showDropdown = open && hasResults;
+
+  // Notify the host of mounted-visibility transitions. Layout effect on the
+  // DERIVED boolean: it commits before paint (never an after-paint class
+  // flash on the hero) and catches every open/close source — handler
+  // setOpen, results arriving, results clearing.
+  const notifyRef = useRef(onDropdownOpenChange);
+  const lastSentRef = useRef(false);
+  useLayoutEffect(() => {
+    notifyRef.current = onDropdownOpenChange;
+  });
+  useLayoutEffect(() => {
+    if (showDropdown !== lastSentRef.current) {
+      lastSentRef.current = showDropdown;
+      notifyRef.current?.(showDropdown);
+    }
+  }, [showDropdown]);
+  useLayoutEffect(
+    () => () => {
+      // Guaranteed final false so an unmounting open dropdown can't strand
+      // the host's ddOpen state.
+      if (lastSentRef.current) {
+        lastSentRef.current = false;
+        notifyRef.current?.(false);
+      }
+    },
+    []
+  );
 
   // Close on outside click
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
-      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+      if (
+        e.target instanceof Node &&
+        wrapperRef.current &&
+        !wrapperRef.current.contains(e.target)
+      ) {
         setOpen(false);
       }
     }
@@ -55,14 +151,12 @@ export default function SearchBar({ variant = 'hero', initialQuery = '' }: Searc
     [query, navigate]
   );
 
+  // Kit semantics: the dropdown arms on user interaction (typing/focus), so a
+  // programmatic initialQuery seed on the search page never auto-pops it.
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setQuery(e.target.value);
+    setOpen(true);
   };
-
-  const hasResults =
-    results && (results.categories.length > 0 || results.suppliers.length > 0);
-
-  const showDropdown = variant === 'hero' && open && hasResults;
 
   return (
     <div
@@ -80,9 +174,9 @@ export default function SearchBar({ variant = 'hero', initialQuery = '' }: Searc
           value={query}
           onChange={handleChange}
           onFocus={() => {
-            if (variant === 'hero' && hasResults) setOpen(true);
+            if (hasResults) setOpen(true);
           }}
-          placeholder={variant === 'nav' ? 'Search Circuits...' : 'Search Circuits...'}
+          placeholder="Search Circuits..."
           className={styles.searchInput}
           aria-label="Search query"
           aria-autocomplete="list"
@@ -102,15 +196,69 @@ export default function SearchBar({ variant = 'hero', initialQuery = '' }: Searc
         </button>
       </form>
 
-      {showDropdown && results && (
+      {showDropdown && (
         <div className={styles.dropdown} role="listbox" aria-label="Search suggestions">
-          {results.categories.length > 0 && (
+          {parts.length > 0 && (
+            <div className={styles.dropdownSection}>
+              <p className={styles.sectionHeader}>Parts</p>
+              {parts.map((part) => {
+                const subLine = [part.description, part.manufacturer_name]
+                  .filter(Boolean)
+                  .join(' · ');
+                return (
+                  <Link
+                    key={part.id}
+                    to={`/part/${part.slug}`}
+                    className={styles.dropdownItem}
+                    role="option"
+                    onMouseEnter={() => {
+                      import("@public/pages/part").catch(() => {});
+                    }}
+                    onClick={() => setOpen(false)}
+                  >
+                    <span className={styles.partPad} aria-hidden="true">
+                      <Icon name={part.category_icon} />
+                    </span>
+                    <span className={styles.itemText}>
+                      <span className={styles.partSku}>{part.sku}</span>
+                      {subLine && <span className={styles.partDesc}>{subLine}</span>}
+                    </span>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+
+          {distributors.length > 0 && (
+            <div className={styles.dropdownSection}>
+              <p className={styles.sectionHeader}>Distributors</p>
+              {distributors.map((sup) => (
+                <Link
+                  key={sup.id}
+                  to="/join"
+                  className={styles.dropdownItem}
+                  role="option"
+                  onClick={() => setOpen(false)}
+                >
+                  <span className={styles.ddMark} aria-hidden="true">
+                    {lettermark(sup.name)}
+                  </span>
+                  <span className={styles.itemText}>
+                    <span className={styles.supName}>{sup.name}</span>
+                    <span className={styles.supSub}>{distributorSubLine(sup)}</span>
+                  </span>
+                </Link>
+              ))}
+            </div>
+          )}
+
+          {categories.length > 0 && (
             <div className={styles.dropdownSection}>
               <p className={styles.sectionHeader}>Categories</p>
-              {results.categories.slice(0, 5).map((cat) => (
+              {categories.map((cat) => (
                 <Link
                   key={cat.id}
-                  to={`/category/${cat.slug}`}
+                  to={categoryPath(cat.slug, cat.parent_slug)}
                   className={styles.dropdownItem}
                   role="option"
                   onMouseEnter={() => {
@@ -128,34 +276,13 @@ export default function SearchBar({ variant = 'hero', initialQuery = '' }: Searc
             </div>
           )}
 
-          {results.suppliers.length > 0 && (
-            <div className={styles.dropdownSection}>
-              <p className={styles.sectionHeader}>Suppliers</p>
-              {results.suppliers.slice(0, 5).map((sup) => (
-                <Link
-                  key={sup.id}
-                  to={`/search?q=${encodeURIComponent(sup.name)}`}
-                  className={styles.dropdownItem}
-                  role="option"
-                  onClick={() => setOpen(false)}
-                >
-                  <span className={styles.itemIcon} aria-hidden="true">🏭</span>
-                  <span className={styles.itemLabel}>{sup.name}</span>
-                  {sup.is_featured && (
-                    <span className={styles.featuredBadge}>Featured</span>
-                  )}
-                </Link>
-              ))}
-            </div>
-          )}
-
           <div className={styles.dropdownFooter}>
             <button
               type="button"
               className={styles.seeAllBtn}
               onClick={handleSubmit as unknown as React.MouseEventHandler}
             >
-              See all results for &ldquo;{query}&rdquo; →
+              See all results for &ldquo;{query}&rdquo; &rarr;
             </button>
           </div>
         </div>

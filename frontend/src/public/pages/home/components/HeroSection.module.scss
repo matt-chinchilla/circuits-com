@@ -17,6 +17,16 @@
   min-height: 420px;
 }
 
+// Applied while the search dropdown is open: stacks the hero (and popover)
+// above subsequent page content. Deliberately position+z-index ONLY (spec §3)
+// — no contain/overflow rules here: the animated backdrop is a SIBLING
+// (BackdropLayer), and containment would newly risk clipping the subtitle-glow
+// pseudos for nothing.
+.ddOpen {
+  position: relative;
+  z-index: 60;
+}
+
 // ─── Content ──────────────────────────────────────────────────────────────────
 
 .content {

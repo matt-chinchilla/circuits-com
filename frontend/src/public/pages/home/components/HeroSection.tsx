@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import SearchBar from '@public/components/layout/SearchBar';
 import AnimatedLink from '@public/components/widgets/AnimatedLink';
 import styles from './HeroSection.module.scss';
@@ -9,8 +10,14 @@ import styles from './HeroSection.module.scss';
 // space matching the backdrop's height so the page wrapper's bottom doesn't
 // pull above the backdrop on short content.
 export default function HeroSection() {
+  // While the search dropdown is open, the hero stacks above subsequent page
+  // content (.ddOpen = position+z-index ONLY — spec §3: no contain/overflow;
+  // the animated backdrop is a sibling, not a descendant). SearchBar reports
+  // transitions pre-paint and guarantees a final false on unmount.
+  const [ddOpen, setDdOpen] = useState(false);
+
   return (
-    <section className={styles.hero}>
+    <section className={[styles.hero, ddOpen ? styles.ddOpen : ''].filter(Boolean).join(' ')}>
       <div className={styles.content}>
         <h1 className={styles.heading}>
           The Integrated Circuits Directory
@@ -24,10 +31,11 @@ export default function HeroSection() {
         <p className={styles.subtitle}>
           Compare prices and stock for PCB&nbsp;components
         </p>
-        <SearchBar />
+        <SearchBar onDropdownOpenChange={setDdOpen} />
         <div className={styles.quickLinks}>
           <AnimatedLink to="/search">Find Parts</AnimatedLink>
           <AnimatedLink to="/join">Top Distributors</AnimatedLink>
+          <AnimatedLink to="/bom">BOM Tool</AnimatedLink>
         </div>
       </div>
     </section>
