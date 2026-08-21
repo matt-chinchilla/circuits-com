@@ -7,7 +7,7 @@
 // button until it is armed, at which point the disclosure carries the weight.
 
 .bar {
-  @include card-base;
+  @include glass-sheet;
 
   display: flex;
   flex-direction: column;

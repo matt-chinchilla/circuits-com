@@ -20,7 +20,7 @@
 // hidden" is a measured rule, and the 2026-08-21 mobile audit showed a
 // scroll-table puts the price 1.9 screen-widths away at 320px.
 .tableWrap {
-  @include card-base;
+  @include glass-sheet;
 
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;

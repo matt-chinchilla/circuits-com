@@ -8,7 +8,21 @@
 // a word; the colour is the fourth cue, never the only one.
 
 .strip {
-  @include card-base;
+  // The instrument bar — the page's ONE true floating surface. It sticks
+  // while the table scrolls beneath it, which is exactly the situation
+  // backdrop-filter exists for: the rows genuinely frost under the controls.
+  // Opaque sheet declared FIRST per the glass-pane contract (the fallback for
+  // no-filter browsers and <=768px, where the mixin drops the veil).
+  // Sticky above the mobile breakpoint ONLY: at 390px this bar stacks
+  // ~225px tall, and pinning a quarter of a phone screen would cost more
+  // reading room than the controls are worth. Same width the glass furls at.
+  @media (min-width: #{$bp-mobile + 1}) {
+    position: sticky;
+    top: 8px;
+    z-index: 5;
+  }
+  @include glass-sheet;
+  @include glass-pane;
 
   display: flex;
   flex-direction: column;

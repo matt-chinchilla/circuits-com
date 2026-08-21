@@ -49,11 +49,12 @@
 .popover {
   z-index: 60;
   width: min(340px, calc(100vw - 16px));
+  // Opaque fallback first, then the same floating glass as the Alternates
+  // popover — the two pickers are siblings and must feel like one material.
   background: var(--theme-card-bg, #ffffff);
-  border: 1px solid rgba(0, 0, 0, 0.12);
   border-radius: 10px;
-  box-shadow: $shadow-lg;
   overflow: hidden;
+  @include glass-pane;
 }
 
 .head {
