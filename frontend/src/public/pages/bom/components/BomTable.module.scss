@@ -1,5 +1,6 @@
 @use '@shared/styles/variables' as *;
 @use '@shared/styles/mixins' as *;
+@use '../bomMaterial' as *;
 
 // The priced BOM table.
 //
@@ -20,7 +21,7 @@
 // hidden" is a measured rule, and the 2026-08-21 mobile audit showed a
 // scroll-table puts the price 1.9 screen-widths away at 320px.
 .tableWrap {
-  @include glass-sheet;
+  @include bom-card;
 
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
@@ -50,9 +51,9 @@
   text-transform: uppercase;
   text-align: left;
   white-space: nowrap;
-  color: var(--bom-ink-secondary, #676c71);
-  background: var(--bom-card-tint, #f2f4f7);
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  color: #616a7a;
+  @include bom-band;
+  border-bottom: 1px solid rgba(143, 134, 172, 0.24);
 
   &:first-child {
     border-top-left-radius: 12px;
@@ -146,50 +147,71 @@
 
 // ─── Rails ──────────────────────────────────────────────────────────────────
 
+// Inlaid, not painted (Anatomy artboard): both rails share one scale —
+// blue = good, violet = caution, red = stop, hatch = no claim.
 .rail {
   flex: 0 0 auto;
-  align-self: stretch;
-  width: 4px;
-  min-height: 34px;
-  border-radius: 2px;
+  @include bom-rail;
 }
 
 .railActive {
-  background: var(--bom-rail-active, #2e7d32);
+  @include bom-rail-act;
 }
 
 .railNrnd {
-  background: var(--bom-rail-nrnd, #b45309);
+  @include bom-rail-nrnd;
 }
 
 .railEol {
-  background: var(--bom-rail-eol, #b91c1c);
+  @include bom-rail-eol;
 }
 
 // Hatched = "no feed ever confirmed this" (D6). 99.7% of the catalog is here,
 // and the honest texture is the whole point of the column.
 .railUnverified {
-  color: var(--bom-ink-secondary, #676c71);
-  background-color: rgba(103, 108, 113, 0.16);
-  background-image: repeating-linear-gradient(45deg, transparent 0 3px, currentColor 3px 4px);
+  @include bom-rail-unk;
+}
+
+// The lifecycle claim as a WORD beside the rail — the canvas token row.
+.lifeTok {
+  display: block;
+  margin-top: 3px;
+  font-family: $font-mono;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+}
+
+.tokAct {
+  color: #1550b4;
+}
+
+.tokNrnd {
+  color: #6a3cae;
+}
+
+.tokEol {
+  color: #ad3122;
+}
+
+.tokUnk {
+  color: #676c71;
 }
 
 .availFull {
-  background: var(--bom-avail-full, #153f80);
+  @include bom-rail-act;
 }
 
 .availPartial {
-  background: var(--bom-avail-partial, #4d189e);
+  @include bom-rail-nrnd;
 }
 
 .availNone {
-  background: var(--bom-avail-none, #b91c1c);
+  @include bom-rail-eol;
 }
 
 .availStale {
-  color: var(--bom-ink-secondary, #676c71);
-  background-color: rgba(103, 108, 113, 0.16);
-  background-image: repeating-linear-gradient(45deg, transparent 0 3px, currentColor 3px 4px);
+  @include bom-rail-unk;
 }
 
 // ─── Part cell ──────────────────────────────────────────────────────────────
@@ -253,14 +275,30 @@
 // The substitution warning is warn-only (D5) and belongs where it is read
 // without hovering — under the description, not inside a tooltip.
 .packageWarn {
-  display: block;
-  margin-top: 4px;
+  display: inline-block;
+  margin-top: 5px;
+  padding: 4px 8px;
+  border-radius: 6px;
   font-family: $font-mono;
   font-size: 0.72rem;
-  color: var(--bom-rail-nrnd, #b45309);
+  color: #7a6520;
+  @include bom-warn-panel;
+
+  &::before {
+    content: '\26A0  ';
+  }
 }
 
 // ─── Quantity ───────────────────────────────────────────────────────────────
+
+// Platinum-tinted row hover (Main artboard).
+.row {
+  transition: background-color 0.14s ease;
+}
+
+.row:hover {
+  background: linear-gradient(90deg, rgba(185, 168, 224, 0.1), rgba(159, 183, 232, 0.07));
+}
 
 .qtyBig {
   display: block;
@@ -286,13 +324,12 @@
 }
 
 .refChip {
-  padding: 2px 6px;
+  padding: 3px 7px;
   font-family: $font-mono;
   font-size: 0.72rem;
-  color: var(--executive-blue, $executive-blue);
-  background: rgba($executive-blue, 0.06);
-  border-radius: 4px;
+  border-radius: 5px;
   text-decoration: none;
+  @include bom-desig-chip;
 }
 
 .refMore {
@@ -328,35 +365,27 @@
 }
 
 .supplierMeta {
+  font-family: $font-mono;
   font-size: 0.75rem; // audit floor: stock/staleness is decision data
   color: var(--bom-ink-secondary, #676c71);
+
+  strong {
+    color: #1a1f23;
+    font-weight: 700;
+  }
 }
 
 .tierBadge {
   align-self: flex-start;
-  padding: 2px 7px;
+  padding: 3px 8px;
   font-size: 0.7rem; // audit floor
   font-weight: 700;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.07em;
   text-transform: uppercase;
-  color: #fff;
-  background: var(--bom-ink-secondary, #676c71);
-  border-radius: 999px;
-
-  &[data-tier='platinum'] {
-    color: #2a2338;
-    background: #c5bfd6;
-  }
-
-  &[data-tier='gold'] {
-    color: #2c2308;
-    background: $sponsor-gold;
-  }
-
-  &[data-tier='silver'] {
-    color: #23282c;
-    background: #cbd2d8;
-  }
+  border-radius: 5px;
+  // The canvas gives every tier the GOLD chip treatment (m-tier) — the tier
+  // WORD carries which tier it is; the material says "paid placement".
+  @include bom-tier-chip;
 }
 
 // ─── Prices ─────────────────────────────────────────────────────────────────
@@ -427,7 +456,9 @@
   align-items: baseline;
   justify-content: space-between;
   gap: 12px;
-  padding: 4px 2px 0;
+  padding: 15px 18px;
+  border-top: 1px solid rgba(143, 134, 172, 0.24);
+  @include bom-band;
 }
 
 .totalsNote {

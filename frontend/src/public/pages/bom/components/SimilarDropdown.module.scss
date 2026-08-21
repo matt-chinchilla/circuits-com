@@ -1,5 +1,6 @@
 @use '@shared/styles/variables' as *;
 @use '@shared/styles/mixins' as *;
+@use '../bomMaterial' as *;
 
 // The "Similar" picker in the Matches column. The trigger IS the match badge
 // (hatched amber = approximate confidence, per the texture-carries-confidence
@@ -13,27 +14,20 @@
   gap: 5px;
   min-height: 44px; // tap floor (2026-08-21 mobile audit)
   padding: 8px 12px;
-  font-family: $font-body;
-  font-size: 0.72rem;
+  font-family: $font-mono;
+  font-size: 0.7rem; // audit floor
   font-weight: 700;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.07em;
   text-transform: uppercase;
   line-height: 1;
-  color: var(--bom-rail-nrnd, #b45309);
-  background:
-    repeating-linear-gradient(
-      45deg,
-      transparent 0 3px,
-      rgba(180, 83, 9, 0.12) 3px 4px
-    ),
-    rgba(180, 83, 9, 0.06);
-  border: 1px solid rgba(180, 83, 9, 0.35);
-  border-radius: 8px;
+  border-radius: 5px;
   cursor: pointer;
-  transition: background-color 120ms, border-color 120ms;
+  // The APPROX badge IS the trigger — same ink hatch, same rim (canvas:
+  // texture carries confidence; the caret is what says "menu").
+  @include bom-badge-approx;
 
   &:hover {
-    border-color: rgba(180, 83, 9, 0.6);
+    box-shadow: inset 0 0 0 1px rgba(26, 31, 35, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.7);
   }
 
   &:focus-visible {

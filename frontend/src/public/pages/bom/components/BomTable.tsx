@@ -132,20 +132,50 @@ function quoteHref(row: TableRow): string {
 /** What the left rail claims about the part's life. `lifecycle_verified` is
  *  the truth-bit: false means a feed never confirmed anything, whatever the
  *  enum column happens to hold, so it outranks the enum entirely. */
-function lifecycleRail(row: TableRow): { className: string; label: string } {
+function lifecycleRail(row: TableRow): {
+  className: string;
+  label: string;
+  tok: string;
+  tokClass: string;
+} {
   const part = row.server?.part ?? null;
   if (part == null || !part.lifecycle_verified) {
-    return { className: styles.railUnverified, label: 'Lifecycle: unverified' };
+    return {
+      className: styles.railUnverified,
+      label: 'Lifecycle: unverified',
+      tok: 'UNVERIFIED',
+      tokClass: styles.tokUnk,
+    };
   }
   switch (part.lifecycle_status) {
     case 'active':
-      return { className: styles.railActive, label: 'Lifecycle: active' };
+      return {
+        className: styles.railActive,
+        label: 'Lifecycle: active',
+        tok: 'ACT',
+        tokClass: styles.tokAct,
+      };
     case 'nrnd':
-      return { className: styles.railNrnd, label: 'Lifecycle: not recommended for new designs' };
+      return {
+        className: styles.railNrnd,
+        label: 'Lifecycle: not recommended for new designs',
+        tok: 'NRND',
+        tokClass: styles.tokNrnd,
+      };
     case 'obsolete':
-      return { className: styles.railEol, label: 'Lifecycle: obsolete' };
+      return {
+        className: styles.railEol,
+        label: 'Lifecycle: obsolete',
+        tok: 'EOL',
+        tokClass: styles.tokEol,
+      };
     default:
-      return { className: styles.railUnverified, label: 'Lifecycle: unknown' };
+      return {
+        className: styles.railUnverified,
+        label: 'Lifecycle: unknown',
+        tok: 'UNVERIFIED',
+        tokClass: styles.tokUnk,
+      };
   }
 }
 
@@ -360,6 +390,9 @@ export default function BomTable({
                           {part?.sku ?? '—'}
                         </span>
                         {maker != null && <span className={styles.maker}>{maker}</span>}
+                        {part != null && (
+                          <span className={`${styles.lifeTok} ${rail.tokClass}`}>{rail.tok}</span>
+                        )}
                       </div>
                     </div>
                   </td>
@@ -448,7 +481,7 @@ export default function BomTable({
                         <div className={styles.supplierBody}>
                           <span className={styles.supplierName}>{chosen.supplier_name}</span>
                           <span className={styles.supplierMeta}>
-                            {chosen.stock_quantity.toLocaleString('en-US')} in stock
+                            Stock <strong>{chosen.stock_quantity.toLocaleString('en-US')}</strong>
                             {chosen.price_stale ? ' · price is stale' : ''}
                           </span>
                           {/* Say it out loud when the total is no longer our
@@ -510,9 +543,8 @@ export default function BomTable({
             })}
           </tbody>
         </table>
-      </div>
 
-      <div className={styles.totals}>
+        <div className={styles.totals}>
         <p className={styles.totalsNote}>
           Totals cover the {counts.priced.toLocaleString('en-US')} priced{' '}
           {counts.priced === 1 ? 'line' : 'lines'}
@@ -528,6 +560,7 @@ export default function BomTable({
           <span className={styles.totalsLabel}>Build total</span>
           <span className={styles.totalsAmount}>{formatMoney(totalExt)}</span>
         </p>
+        </div>
       </div>
     </div>
   );

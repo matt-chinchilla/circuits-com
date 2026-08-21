@@ -1,0 +1,190 @@
+@use '@shared/styles/variables' as *;
+
+// ── The BOM tool's material system, ported 1:1 from the approved canvas
+// ("BOM Tool Design", 4 artboards; itself ported from Perrys pf-glass +
+// solidPrimary). Three recipes:
+//
+//   bom-card     — TINTED glass on the Platinum ramp. The canvas's own note:
+//                  a NEUTRAL veil reads grey (the navbar revert), a veil with
+//                  its own chroma does not. Saturated stops sit RIGHT and
+//                  BOTTOM because the left edge holds the status rails and
+//                  violet NRND would vanish into #b9a8e0. No backdrop-filter:
+//                  these are in-flow sheets (nothing behind them to blur) —
+//                  the chroma ramp carries the glass reading statically.
+//   bom-glass    — the pf-glass CONTROL recipe (true veil + blur, spring
+//                  hover). Controls are small and float over content, so the
+//                  filter is cheap and earned. Falls back to the veil colors
+//                  without blur where backdrop-filter is unsupported.
+//   bom-primary  — the lit solidPrimary: brand-green gradient with a
+//                  hue-matched ambient shadow beneath.
+
+$bom-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+@mixin bom-card {
+  background:
+    radial-gradient(115% 78% at 0% 0%, rgba(246, 242, 251, 0.8), transparent 56%),
+    radial-gradient(105% 72% at 100% 0%, rgba(159, 183, 232, 0.26), transparent 54%),
+    radial-gradient(95% 88% at 100% 100%, rgba(217, 161, 184, 0.2), transparent 56%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.93), rgba(255, 255, 255, 0.85));
+  border: 1px solid rgba(143, 134, 172, 0.2);
+  border-radius: 14px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.34),
+    0 1px 2px rgba(38, 32, 58, 0.06),
+    0 16px 34px -16px rgba(117, 105, 154, 0.36); // cast shadow tinted --tsel
+}
+
+@mixin bom-glass-control {
+  background: linear-gradient(rgba(255, 255, 255, 0.62), rgba(255, 255, 255, 0.3));
+  border: 1px solid rgba(26, 31, 35, 0.1);
+  border-radius: 11px;
+  color: #1a1f23;
+  font-weight: 520;
+  cursor: pointer;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.38),
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    inset 0 -1px 1px rgba(0, 0, 0, 0.04),
+    0 2px 4px rgba(0, 0, 0, 0.1),
+    0 6px 16px -6px rgba(0, 0, 0, 0.18);
+  transition: transform 0.18s $bom-spring, box-shadow 0.18s, filter 0.18s;
+
+  @supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+    @media (min-width: #{$bp-mobile + 1}) {
+      -webkit-backdrop-filter: blur(14px) saturate(170%);
+      backdrop-filter: blur(14px) saturate(170%);
+    }
+  }
+
+  &:hover:not(:disabled) {
+    transform: translateY(-1px) scale(1.02);
+    box-shadow:
+      inset 0 0 0 1px rgba(255, 255, 255, 0.42),
+      inset 0 1px 0 rgba(255, 255, 255, 0.9),
+      inset 0 -1px 1px rgba(0, 0, 0, 0.05),
+      0 4px 8px rgba(0, 0, 0, 0.12),
+      0 14px 28px -8px rgba(0, 0, 0, 0.26);
+  }
+
+  &:active:not(:disabled) {
+    transform: scale(0.97);
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.12);
+  }
+}
+
+@mixin bom-primary-control {
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  color: #0c1a05;
+  background: linear-gradient(180deg, #62d92b 0%, #44bd13 52%, #37a20d 100%);
+  text-shadow: 0 1px 1px rgba(255, 255, 255, 0.22);
+  box-shadow:
+    0 4px 9px rgba(68, 189, 19, 0.34),
+    0 1px 2px rgba(16, 24, 32, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.18);
+  transition: transform 0.1s ease, box-shadow 0.1s ease, filter 0.1s ease;
+
+  &:hover:not(:disabled) {
+    filter: brightness(1.06);
+  }
+
+  &:active:not(:disabled) {
+    transform: translateY(1px) scale(0.995);
+    box-shadow: 0 1px 3px rgba(68, 189, 19, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  }
+}
+
+// The recessed well the coverage gauge sits IN (not on).
+@mixin bom-well {
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: inset 0 1px 3px rgba(60, 50, 90, 0.18), inset 0 0 0 1px rgba(117, 105, 154, 0.14);
+}
+
+// ── Row anatomy, from the Anatomy artboard. Hue carries part status,
+// texture carries match confidence — never both on one channel.
+
+// Inlaid status rail: vertical gradient + bright inset rim ("inlaid, not
+// painted"). Lifecycle and availability share ONE scale: blue = good,
+// violet = caution, red = stop, hatch = no claim.
+@mixin bom-rail {
+  width: 3px;
+  border-radius: 2px;
+  align-self: stretch;
+  min-height: 34px;
+  box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.3);
+}
+
+@mixin bom-rail-act {
+  background: linear-gradient(180deg, #2f78dc, #1550b4);
+}
+
+@mixin bom-rail-nrnd {
+  background: linear-gradient(180deg, #8b5bd0, #6a3cae);
+}
+
+@mixin bom-rail-eol {
+  background: linear-gradient(180deg, #d0503f, #ad3122);
+}
+
+@mixin bom-rail-unk {
+  background: repeating-linear-gradient(45deg, rgba(26, 31, 35, 0.16) 0 2px, transparent 2px 4px);
+  box-shadow: inset 0 0 0 1px rgba(26, 31, 35, 0.14);
+}
+
+// Match badges — texture, not hue. EXACT is solid ink, APPROX is the same
+// ink hatched, NO MATCH is an outline with no fill.
+@mixin bom-badge-exact {
+  color: #ffffff;
+  background: linear-gradient(180deg, #333b43, #191f25);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 1px 2px rgba(16, 24, 32, 0.22);
+}
+
+@mixin bom-badge-approx {
+  color: #1a1f23;
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.35)),
+    repeating-linear-gradient(45deg, rgba(26, 31, 35, 0.2) 0 3px, transparent 3px 6px);
+  box-shadow: inset 0 0 0 1px rgba(26, 31, 35, 0.34), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+@mixin bom-badge-none {
+  color: #676c71;
+  background: linear-gradient(rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0.25));
+  box-shadow: inset 0 0 0 1px rgba(26, 31, 35, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+// The gold tier chip (PLATINUM et al) on recommended selections.
+@mixin bom-tier-chip {
+  color: #6d5a1b;
+  background: linear-gradient(180deg, rgba(200, 170, 72, 0.22), rgba(168, 141, 46, 0.16));
+  box-shadow: inset 0 0 0 1px rgba(168, 141, 46, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.55);
+}
+
+// Designator chips — silkscreen legend, quieted: board tint, not a pill.
+@mixin bom-desig-chip {
+  color: #2c5f45;
+  background: linear-gradient(rgba(255, 255, 255, 0.78), rgba(236, 246, 238, 0.5));
+  box-shadow:
+    inset 0 0 0 1px rgba(10, 74, 46, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    0 1px 1.5px rgba(16, 24, 32, 0.06);
+}
+
+// The amber substitution-warning panel: warns, never blocks.
+@mixin bom-warn-panel {
+  background: linear-gradient(180deg, rgba(203, 173, 80, 0.13), rgba(168, 141, 46, 0.09));
+  box-shadow: inset 0 0 0 1px rgba(168, 141, 46, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+// Tinted header/footer band inside a bom-card (thead cells, totals bar).
+@mixin bom-band {
+  background: linear-gradient(180deg, rgba(246, 242, 251, 0.92) 0%, rgba(232, 231, 244, 0.88) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}

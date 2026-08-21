@@ -64,18 +64,19 @@
   --glass-shadow-float: 0 2px 6px rgba(0, 0, 0, 0.08), 0 24px 60px -18px rgba(0, 0, 0, 0.3);
   --glass-ink-muted: #565d66;
 
-  /* BOM tool material system (plan T20; canvas §7.7). Defined in the base
-     mixin so all four themes resolve them; override per-theme only where a
-     theme must differ. The avail trio reuses the Leads outcome hexes —
-     already CVD-cleared against chartTheme; never #2563eb + #7c3aed. */
+  /* BOM tool material system (canvas parity 2026-08-21). One scale for BOTH
+     rails per the Anatomy artboard: blue ACT / violet NRND / red EOL — deep
+     stops of the canvas gradients (the light stops live in the rail mixins,
+     _bomMaterial.scss). Blue+violet stay off the forbidden chartTheme pair
+     (#2563eb + #7c3aed). */
   --bom-card-tint: #f2f4f7;
   --bom-ink-secondary: #676c71; /* measured 4.5+ on the tint — #6b7076 FAILS at 4.24 */
-  --bom-rail-active: #2e7d32;
-  --bom-rail-nrnd: #b45309;
-  --bom-rail-eol: #b91c1c;
-  --bom-avail-full: #153f80;
-  --bom-avail-partial: #4d189e;
-  --bom-avail-none: #b91c1c;
+  --bom-rail-active: #1550b4;
+  --bom-rail-nrnd: #6a3cae;
+  --bom-rail-eol: #ad3122;
+  --bom-avail-full: #1550b4;
+  --bom-avail-partial: #6a3cae;
+  --bom-avail-none: #ad3122;
 }
 
 :root,

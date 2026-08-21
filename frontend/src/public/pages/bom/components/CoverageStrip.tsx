@@ -30,6 +30,20 @@ export interface CoverageCounts {
  *  being readable long before it. Cap rather than let the math run away. */
 export const MAX_BUILD_QTY = 100000;
 
+/** Segment width for the coverage gauge. Zero total renders zero-width
+ *  segments — the empty well, never NaN%. */
+function pct(count: number, total: number): string {
+  return total > 0 ? `${(count / total) * 100}%` : '0%';
+}
+
+/** The gauge said out loud, for readers who cannot see the textures. */
+function gaugeLabel(counts: CoverageCounts): string {
+  return (
+    `Coverage: ${counts.exact} exact, ${counts.approx} approximate, ` +
+    `${counts.live} sourced live, ${counts.notFound} not found, of ${counts.total} lines`
+  );
+}
+
 interface CoverageStripProps {
   counts: CoverageCounts;
   buildQty: number;
@@ -92,37 +106,41 @@ export default function CoverageStrip({
             onChange={(e) => handleChange(e.target.value)}
             onBlur={handleBlur}
           />
+          <span className={styles.qtyUnit}>{buildQty === 1 ? 'board' : 'boards'}</span>
         </label>
       </div>
 
-      <ul className={styles.chips}>
-        <li className={`${styles.chip} ${styles.chipExact}`}>
-          <span className={styles.glyph} aria-hidden="true">
-            &#10003;
-          </span>
-          <span className={styles.chipNum}>{counts.exact.toLocaleString('en-US')}</span>
-          <span className={styles.chipWord}>exact</span>
+      {/* The recessed gauge: the coverage mix as widths, in the same textures
+          the badges use (solid = exact, hatch = approx, gold = sourced live,
+          white = not found). A remainder mid-resolve stays as the empty well —
+          the bar only ever claims settled lines. */}
+      <div className={styles.well} role="img" aria-label={gaugeLabel(counts)}>
+        <span className={styles.segExact} style={{ width: pct(counts.exact, counts.total) }} />
+        <span className={styles.segApprox} style={{ width: pct(counts.approx, counts.total) }} />
+        <span className={styles.segLive} style={{ width: pct(counts.live, counts.total) }} />
+        <span className={styles.segNone} style={{ width: pct(counts.notFound, counts.total) }} />
+      </div>
+
+      <ul className={styles.legend}>
+        <li className={styles.legendItem}>
+          <span className={`${styles.sw} ${styles.swExact}`} aria-hidden="true" />
+          <span className={styles.legendNum}>{counts.exact.toLocaleString('en-US')}</span>
+          <span className={styles.legendWord}>exact</span>
         </li>
-        <li className={`${styles.chip} ${styles.chipApprox}`}>
-          <span className={styles.glyph} aria-hidden="true">
-            &#8776;
-          </span>
-          <span className={styles.chipNum}>{counts.approx.toLocaleString('en-US')}</span>
-          <span className={styles.chipWord}>approximate</span>
+        <li className={styles.legendItem}>
+          <span className={`${styles.sw} ${styles.swApprox}`} aria-hidden="true" />
+          <span className={styles.legendNum}>{counts.approx.toLocaleString('en-US')}</span>
+          <span className={styles.legendWord}>approximate</span>
         </li>
-        <li className={`${styles.chip} ${styles.chipLive}`}>
-          <span className={styles.glyph} aria-hidden="true">
-            &#9679;
-          </span>
-          <span className={styles.chipNum}>{counts.live.toLocaleString('en-US')}</span>
-          <span className={styles.chipWord}>live</span>
+        <li className={styles.legendItem}>
+          <span className={`${styles.sw} ${styles.swLive}`} aria-hidden="true" />
+          <span className={styles.legendNum}>{counts.live.toLocaleString('en-US')}</span>
+          <span className={styles.legendWord}>sourced live</span>
         </li>
-        <li className={`${styles.chip} ${styles.chipNone}`}>
-          <span className={styles.glyph} aria-hidden="true">
-            &#215;
-          </span>
-          <span className={styles.chipNum}>{counts.notFound.toLocaleString('en-US')}</span>
-          <span className={styles.chipWord}>not found</span>
+        <li className={styles.legendItem}>
+          <span className={`${styles.sw} ${styles.swNone}`} aria-hidden="true" />
+          <span className={styles.legendNum}>{counts.notFound.toLocaleString('en-US')}</span>
+          <span className={styles.legendWord}>not found</span>
         </li>
       </ul>
 

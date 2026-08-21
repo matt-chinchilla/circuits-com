@@ -1,5 +1,6 @@
 @use '@shared/styles/variables' as *;
 @use '@shared/styles/mixins' as *;
+@use '../bomMaterial' as *;
 
 // Coverage strip — the first thing above the table.
 //
@@ -24,14 +25,21 @@
     top: calc(#{$nav-height} + 8px);
     z-index: 5;
   }
-  @include glass-sheet;
-  @include glass-pane;
+  @include bom-card;
+
+  // The one in-flow surface whose blur is EARNED: it sticks while rows
+  // scroll beneath it. The tinted ramp above is the opaque-enough fallback.
+  @supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+    @media (min-width: #{$bp-mobile + 1}) {
+      -webkit-backdrop-filter: blur(18px) saturate(155%);
+      backdrop-filter: blur(18px) saturate(155%);
+    }
+  }
 
   display: flex;
   flex-direction: column;
   gap: 14px;
   padding: 18px 20px;
-  border-radius: 12px;
 }
 
 .headline {
@@ -79,6 +87,11 @@
   color: var(--executive-blue, $executive-blue);
 }
 
+.qtyUnit {
+  font-size: 0.82rem;
+  color: var(--bom-ink-secondary, #676c71);
+}
+
 .qtyInput {
   width: 96px;
   // Retyping this re-prices every line, so it is the strip's one real
@@ -99,55 +112,84 @@
   }
 }
 
-.chips {
+// The recessed coverage gauge (canvas .well): it sits IN the card, and its
+// four textures are the badge textures — solid ink, ink hatch, gold, white.
+.well {
+  display: flex;
+  height: 11px;
+  @include bom-well;
+}
+
+.segExact {
+  background: #1a1f23;
+}
+
+.segApprox {
+  background: repeating-linear-gradient(45deg, #1a1f23 0 3px, #ffffff 3px 6px);
+}
+
+.segLive {
+  background: #a88d2e;
+}
+
+.segNone {
+  background: #ffffff;
+}
+
+.legend {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 8px 22px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.chip {
+.legendItem {
   display: inline-flex;
-  align-items: baseline;
-  gap: 7px;
-  padding: 6px 12px;
-  font-size: 0.82rem;
-  border-radius: 999px;
-  border: 1px solid currentColor;
-  background: rgba(0, 0, 0, 0.02);
-}
-
-.glyph {
-  font-size: 0.9rem;
-  line-height: 1;
-}
-
-.chipNum {
-  font-family: $font-mono;
-  font-size: 0.95rem;
-  font-weight: 700;
-}
-
-.chipWord {
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
   color: var(--bom-ink-secondary, #676c71);
 }
 
-.chipExact {
-  color: var(--bom-rail-active, #2e7d32);
+.legendNum {
+  font-family: $font-mono;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #1a1f23;
 }
 
-.chipApprox {
-  color: var(--bom-rail-nrnd, #b45309);
+.legendWord {
+  color: var(--bom-ink-secondary, #676c71);
 }
 
-.chipLive {
-  color: var(--bom-avail-full, #153f80);
+.sw {
+  width: 11px;
+  height: 11px;
+  border-radius: 3px;
+  flex-shrink: 0;
 }
 
-.chipNone {
-  color: var(--bom-avail-none, #b91c1c);
+.swExact {
+  background: linear-gradient(180deg, #333b43, #191f25);
+  box-shadow: 0 1px 2px rgba(16, 24, 32, 0.2);
+}
+
+.swApprox {
+  border-radius: 2px;
+  background: repeating-linear-gradient(45deg, #1a1f23 0 3px, #ffffff 3px 6px);
+  box-shadow: inset 0 0 0 1px #1a1f23;
+}
+
+.swLive {
+  background: linear-gradient(180deg, #c3a648, #a88d2e);
+  box-shadow: 0 1px 2px rgba(16, 24, 32, 0.18);
+}
+
+.swNone {
+  background: #ffffff;
+  box-shadow: inset 0 0 0 1px rgba(26, 31, 35, 0.18);
 }
 
 // The DNP switch. A row of words, not a bare checkbox: what the flag DOES to
