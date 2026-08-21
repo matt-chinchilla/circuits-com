@@ -1,4 +1,5 @@
 from .activity_event import ActivityEvent
+from .bom_share import BomShare
 from .calendar_event import CalendarEvent, CalendarReminderSend
 from .category import Category
 from .expense import Expense
@@ -17,6 +18,7 @@ from .supplier_feed import SupplierFeed
 from .user import User
 
 __all__ = [
+    "BomShare",
     "Category",
     "Supplier",
     "CategorySupplier",
