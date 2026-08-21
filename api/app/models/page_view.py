@@ -18,6 +18,10 @@ class PageView(Base):
     ip_hash = Column(String(64), nullable=True)
     device_type = Column(String(20), nullable=True)
     browser = Column(String(50), nullable=True)
+    # ISO-3166 alpha-2, resolved at track-time from the client IP (migration
+    # 040). NULL = unknown: rows written before the column existed (ip_hash
+    # is one-way, so history can never be backfilled) or a failed lookup.
+    country = Column(String(2), nullable=True)
     created_at = Column(
         DateTime(timezone=True),
         default=lambda: datetime.now(UTC),

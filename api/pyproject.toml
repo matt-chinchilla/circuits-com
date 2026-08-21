@@ -16,6 +16,9 @@ dependencies = [
     "bcrypt>=4.0.0",
     "pyjwt>=2.8.0",
     "aiosmtplib>=3.0.0",
+    # IP→country at track-time (app/services/geoip.py). Reads the committed
+    # DB-IP Lite database at app/data/dbip-country-lite.mmdb (CC-BY 4.0).
+    "maxminddb>=2.0.0",
     # AWS Cost Explorer, for app/services/cost_sources/aws.py. Imported LAZILY
     # inside `_ce_client()` so the API process never pays for it and the test
     # suite never needs it installed.
