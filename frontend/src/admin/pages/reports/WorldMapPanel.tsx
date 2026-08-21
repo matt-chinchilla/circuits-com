@@ -1,11 +1,11 @@
 // Visitors by Country — the site-analytics signature panel.
 //
-// A deliberately DARK card on the light admin surface (the one bold element
-// of the analytics re-tool, echoing the owner's Dashboard-1 reference): the
-// brand's PCB-dark ground with a single-hue green choropleth. Ramp
-// #245c44→#82f2b2 validated with the dataviz palette script against surface
-// #0d1512 (ordinal mode, all checks pass — see chartTheme.ts for the
-// validator invocation pattern).
+// The signature panel of the analytics instrument zone (design pass
+// 2026-08-21): the referenced kit's night-indigo ground carrying Circuit
+// Center's single-hue GREEN choropleth — the one place the brand color
+// burns bright inside the fig's atmosphere. Ramp #245c44→#82f2b2
+// re-validated with the dataviz palette script against the zone surface
+// #0f1526 (ordinal mode, all checks pass).
 //
 // Data honesty: country capture is FORWARD-ONLY (ip_hash is one-way, so
 // history can never be geolocated). Until data exists the panel says so
@@ -20,10 +20,10 @@ import { flagEmoji } from './chartKit';
 import styles from './ReportsPage.module.scss';
 
 const MAP_NAME = 'world110';
-// Ramp validated on the card surface #0d1512 (.wmCard) — ordinal, all pass.
+// Ramp validated on the zone surface #0f1526 (.wmCard) — ordinal, all pass.
 const RAMP = ['#245c44', '#2f7d5b', '#3fa172', '#57c78c', '#82f2b2'];
-const LAND_NO_DATA = '#1b2a22';
-const BORDER = '#31453a';
+const LAND_NO_DATA = '#1a2440';
+const BORDER = '#2b3a5e';
 
 const regionNames =
   typeof Intl !== 'undefined' && 'DisplayNames' in Intl
@@ -75,9 +75,9 @@ export default function WorldMapPanel({
       backgroundColor: 'transparent',
       tooltip: {
         trigger: 'item',
-        backgroundColor: '#101b14',
-        borderColor: BORDER,
-        textStyle: { color: '#e6f2ea', fontSize: 12 },
+        backgroundColor: '#141d36',
+        borderColor: '#2b3a63',
+        textStyle: { color: '#e8eef9', fontSize: 12 },
         formatter: (p: { name?: string; value?: number }) => {
           const code = p.name ?? '';
           if (!code) return '';
@@ -104,7 +104,7 @@ export default function WorldMapPanel({
               itemWidth: 10,
               itemHeight: 90,
               text: [`${maxViews}`, '1'],
-              textStyle: { color: '#8fa89a', fontSize: 10 },
+              textStyle: { color: '#93a2c4', fontSize: 10 },
               inRange: { color: RAMP },
               outOfRange: { color: LAND_NO_DATA },
             },
@@ -149,7 +149,7 @@ export default function WorldMapPanel({
         </span>
       </div>
 
-      <div className={styles.wmBody}>
+      <div className={styles.wmBody} data-collecting={collecting || undefined}>
         <div className={styles.wmMap}>
           {mapReady ? (
             <EChart option={option} style={{ height: 300 }} />

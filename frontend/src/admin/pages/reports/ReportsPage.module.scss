@@ -177,8 +177,10 @@
 }
 
 .repKpi {
-  @include a-glass-pane;
-  border-radius: 8px;
+  background: linear-gradient(180deg, #131c33 0%, #0f1526 100%);
+  border: 1px solid #26325a;
+  border-radius: 12px;
+  box-shadow: inset 0 1px 0 rgba(184, 200, 236, 0.07);
   padding: 16px 18px;
   animation: kpiIn 400ms cubic-bezier(0.4, 0, 0.2, 1) backwards;
 
@@ -208,16 +210,16 @@
 }
 
 .repKpiLabel {
-  font-size: 12px;
-  color: var(--a-fg3);
+  font-size: 10.5px;
+  color: #61719b;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.09em;
 }
 
 .repKpiVal {
-  font-size: 26px;
+  font-size: 27px;
   font-weight: 700;
-  color: var(--a-fg1);
+  color: #e8eef9;
   margin-top: 4px;
   font-family: $font-mono;
   font-variant-numeric: tabular-nums;
@@ -258,10 +260,23 @@
   }
 }
 
+
+// ── Instrument zone (2026-08-21 design pass) ────────────────────────────────
+// The analytics panels sit on a night-indigo surface — the owner's referenced
+// dashboard kit's atmosphere — inside the steel chrome. Series trio validated
+// with the dataviz palette script on surface #0f1526 (adjacent + all-pairs):
+//   cyan #2299bf · violet #8467e0 · gold #a8842e
+// Map ramp re-validated ordinal on the same surface. Chrome tokens (--a-*)
+// deliberately do NOT reach inside the zone: zone inks are fixed values so a
+// future chrome retheme cannot silently break the validated contrast.
 .chartCard {
-  @include a-glass-pane;
-  border-radius: 8px;
-  padding: 20px;
+  background: linear-gradient(180deg, #131c33 0%, #0f1526 100%);
+  border: 1px solid #26325a;
+  border-radius: 12px;
+  padding: 22px;
+  box-shadow:
+    inset 0 1px 0 rgba(184, 200, 236, 0.07),
+    0 10px 26px -14px rgba(4, 8, 20, 0.7);
   animation: kpiIn 500ms 200ms cubic-bezier(0.4, 0, 0.2, 1) backwards;
 
   @media (max-width: $bp-admin-compact) {
@@ -277,20 +292,22 @@
   display: flex;
   align-items: baseline;
   justify-content: space-between;
+  flex-wrap: wrap;
   margin-bottom: 12px;
-  gap: 12px;
+  gap: 4px 12px;
 }
 
 .chartTitle {
   font-size: 14px;
   font-weight: 600;
-  color: var(--a-fg1);
+  color: #e8eef9;
   margin: 0;
+  letter-spacing: 0.01em;
 }
 
 .chartSub {
   font-size: 11px;
-  color: var(--a-fg3);
+  color: #61719b;
 }
 
 .chartWrap {
@@ -314,7 +331,7 @@
   justify-content: center;
   padding-top: 8px;
   font-size: 12px;
-  color: var(--a-fg2);
+  color: #93a2c4;
 
   .dot {
     display: inline-block;
@@ -363,18 +380,18 @@
 
 // Hover tooltip
 .revTip {
-  background: var(--a-card);
-  border: 1px solid var(--a-border);
-  border-radius: 6px;
+  background: rgba(20, 29, 54, 0.96);
+  border: 1px solid #2b3a63;
+  border-radius: 8px;
   padding: 8px 10px;
   font-size: 11px;
-  box-shadow: var(--a-shadow-md);
+  box-shadow: 0 8px 22px -8px rgba(4, 8, 20, 0.85);
   pointer-events: none;
 }
 
 .revTipTitle {
   font-weight: 600;
-  color: var(--a-fg1);
+  color: #e8eef9;
   font-family: $font-mono;
   margin-bottom: 4px;
 }
@@ -383,7 +400,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  color: var(--a-fg2);
+  color: #93a2c4;
 
   .dot {
     width: 8px;
@@ -429,8 +446,7 @@
 }
 
 .donutArc {
-  stroke-dasharray: 0 999;
-  animation: donutGrow 900ms 100ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  animation: donutGrow 900ms 100ms cubic-bezier(0.4, 0, 0.2, 1) backwards;
 }
 
 .sArc {
@@ -443,7 +459,7 @@
 
 @keyframes donutGrow {
   from {
-    stroke-dashoffset: 380;
+    opacity: 0;
   }
 }
 
@@ -460,10 +476,10 @@
   align-items: center;
   gap: 8px;
   padding: 6px 10px;
-  background: var(--a-border-soft);
-  border-radius: 4px;
+  background: #16203a;
+  border-radius: 6px;
   font-size: 12px;
-  color: var(--a-fg2);
+  color: #93a2c4;
 
   .dot {
     width: 10px;
@@ -490,33 +506,33 @@
 
 .hbarRow {
   display: grid;
-  grid-template-columns: 220px 1fr 50px;
+  grid-template-columns: minmax(80px, 40%) minmax(0, 1fr) 50px;
   align-items: center;
   gap: 12px;
 
   @media (max-width: 700px) {
-    grid-template-columns: 140px 1fr 40px;
+    grid-template-columns: minmax(70px, 38%) minmax(0, 1fr) 40px;
   }
 }
 
 .hbarLabel {
   font-size: 12px;
-  color: var(--a-fg2);
+  color: #93a2c4;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .hbarTrack {
-  height: 18px;
-  background: var(--a-border-soft);
-  border-radius: 4px;
+  height: 10px;
+  background: #1c2742;
+  border-radius: 5px;
   overflow: hidden;
 }
 
 .hbarFill {
   height: 100%;
-  border-radius: 4px;
+  border-radius: 5px;
   width: 0;
   animation: hbarGrow 800ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
@@ -529,7 +545,7 @@
 
 .hbarVal {
   font-size: 11px;
-  color: var(--a-fg1);
+  color: #e8eef9;
   font-weight: 600;
   text-align: right;
   font-family: $font-mono;
@@ -652,27 +668,27 @@
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    color: var(--a-fg3);
+    color: #61719b;
     padding: 8px 10px;
-    border-bottom: 1px solid var(--a-border-soft);
+    border-bottom: 1px solid #26325a;
   }
 
   td {
     padding: 8px 10px;
-    color: var(--a-fg1);
-    border-bottom: 1px solid var(--a-hover);
+    color: #dbe4f5;
+    border-bottom: 1px solid #1a2440;
     vertical-align: middle;
   }
 
   tbody tr:hover {
-    background: var(--a-hover);
+    background: #16203a;
   }
 }
 
 .pathCell {
   font-family: $font-mono;
   font-size: 12px;
-  color: var(--a-primary);
+  color: #7cc4e0;
   max-width: 320px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -710,7 +726,7 @@
   align-items: center;
   gap: 8px;
   font-size: 13px;
-  color: var(--a-fg2);
+  color: #93a2c4;
 }
 
 .deviceSwatch {
@@ -724,7 +740,7 @@
   margin-left: auto;
   font-family: $font-mono;
   font-weight: 600;
-  color: var(--a-fg1);
+  color: #e8eef9;
   font-variant-numeric: tabular-nums;
   min-width: 32px;
   text-align: right;
@@ -821,14 +837,14 @@
 .crawlerName {
   font-size: 12.5px;
   font-weight: 600;
-  color: var(--a-fg1);
+  color: #dbe4f5;
   @include truncate;
 }
 
 .crawlerTrack {
   height: 8px;
   border-radius: 4px;
-  background: var(--a-track);
+  background: #1c2742;
   overflow: hidden;
 }
 
@@ -838,7 +854,7 @@
   border-radius: 4px;
   background: repeating-linear-gradient(
     45deg,
-    var(--a-fg4) 0 3px,
+    rgba(147, 162, 196, 0.55) 0 3px,
     transparent 3px 6px
   );
 }
@@ -848,21 +864,21 @@
   font-variant-numeric: tabular-nums;
   font-size: 12px;
   text-align: right;
-  color: var(--a-fg1);
+  color: #e8eef9;
 }
 
 .crawlerSeen {
   font-family: ui-monospace, 'SF Mono', monospace;
   font-size: 10.5px;
   text-align: right;
-  color: var(--a-fg3);
+  color: #61719b;
 }
 
 .crawlerNote {
   margin: 12px 0 0;
   font-size: 11.5px;
   line-height: 1.5;
-  color: var(--a-fg3);
+  color: #61719b;
 }
 
 // ── Visitors by Country — the dark signature panel ──────────────────────────
@@ -870,16 +886,16 @@
 // choropleth ramp validated against this surface (chartKit provenance).
 
 .wmCard {
-  background: #0d1512;
-  border-color: #22352b;
+  background: linear-gradient(180deg, #121a30 0%, #0f1526 100%);
+  border-color: #26325a;
 }
 
 .wmTitle {
-  color: #e6f2ea;
+  color: #e8eef9;
 }
 
 .wmSub {
-  color: #8fa89a;
+  color: #61719b;
 }
 
 .wmBody {
@@ -887,6 +903,11 @@
   grid-template-columns: minmax(0, 1.7fr) minmax(220px, 1fr);
   gap: 18px;
   align-items: center;
+
+  // Collecting state renders no rank column — the map takes the full row.
+  &[data-collecting] {
+    grid-template-columns: minmax(0, 1fr);
+  }
 
   @include responsive(tablet) {
     grid-template-columns: minmax(0, 1fr);
@@ -903,7 +924,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #8fa89a;
+  color: #93a2c4;
   font-size: 13px;
 }
 
@@ -917,16 +938,16 @@
   text-align: center;
   gap: 6px;
   padding: 0 12%;
-  background: rgba(13, 21, 18, 0.55);
+  background: rgba(15, 21, 38, 0.55);
 
   strong {
-    color: #e6f2ea;
+    color: #e8eef9;
     font-size: 14px;
   }
 
   p {
     margin: 0;
-    color: #a9c2b4;
+    color: #93a2c4;
     font-size: 12px;
     line-height: 1.55;
     max-width: 420px;
@@ -954,14 +975,14 @@
 
 .wmName {
   font-size: 12.5px;
-  color: #d3e4da;
+  color: #dbe4f5;
   @include truncate;
 }
 
 .wmTrack {
   height: 7px;
   border-radius: 4px;
-  background: #1b2a22;
+  background: #1c2742;
   overflow: hidden;
 }
 
@@ -977,7 +998,7 @@
   font-variant-numeric: tabular-nums;
   font-size: 12px;
   text-align: right;
-  color: #e6f2ea;
+  color: #e8eef9;
 }
 
 .wmFoot {
@@ -986,11 +1007,11 @@
 
   a {
     font-size: 10.5px;
-    color: #6f8a7c;
+    color: #4d5c80;
     text-decoration: none;
 
     &:hover {
-      color: #a9c2b4;
+      color: #93a2c4;
       text-decoration: underline;
     }
   }
