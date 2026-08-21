@@ -1,17 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import { motion } from 'framer-motion';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import PageHead from '@public/components/PageHead';
 import PageHeaderBand from '@public/components/layout/PageHeaderBand';
 import { STATIC_PAGE_SEO } from '@public/services/seoRoutes';
 import type { PageSeo } from '@public/services/seo';
 import BomIntake from './components/BomIntake';
+import ShareBar, { formatShareDate } from './components/ShareBar';
 import BomTable from './components/BomTable';
 import ColumnMapper, { canPrice } from './components/ColumnMapper';
 import { bomApi } from './lib/bomApi';
 import { applyRoleMap, type ParseResult } from './lib/parseBom';
 import { loadRoleMap, saveRoleMap } from './lib/mapMemory';
+import { parseSharePayload } from './lib/share';
 import type { BomRole } from './lib/headerAliases';
 import type { MissIn, ResolveEvent, TableRow } from './lib/types';
 import styles from './BomPage.module.scss';
@@ -34,6 +36,9 @@ import styles from './BomPage.module.scss';
  */
 
 type Phase = 'intake' | 'mapping' | 'table';
+
+/** `/bom/s/:slug` only: fetching, readable, or gone. */
+type ShareState = 'loading' | 'ready' | 'missing';
 
 /** The share view must never be indexed: it is somebody's parts list, and a
  *  self-canonical would put it in the index next to the tool itself. */
@@ -134,6 +139,13 @@ export default function BomPage() {
   const [resolveError, setResolveError] = useState<string | null>(null);
   const sourceText = useRef('');
 
+  // The share view is its own small machine: one GET, then either a read-only
+  // table or the dead-link state. `unreadable` is folded into `missing` on
+  // purpose — a link whose payload this build cannot parse is, to the reader,
+  // exactly as useful as one that expired.
+  const [shareState, setShareState] = useState<ShareState>(isShare ? 'loading' : 'ready');
+  const [shareExpiry, setShareExpiry] = useState<string | null>(null);
+
   // The resolve stream is a socket THIS tab holds open. Leaving the page — or
   // landing on a different share slug — drops it; each miss is one bounded
   // server-side call that finishes on its own either way, so aborting costs
@@ -145,6 +157,38 @@ export default function BomPage() {
     },
     [slug],
   );
+
+  // Hydrate a shared BOM. No intake, no mapper, and deliberately NO resolve:
+  // the reader of a share did not upload this file, and spending distributor
+  // quota on somebody else's BOM every time a link is opened is not theirs to
+  // spend. The table renders the answers the BOM was shared with.
+  useEffect(() => {
+    if (slug == null) return;
+    let cancelled = false;
+    setShareState('loading');
+    bomApi
+      .getShare(slug)
+      .then((envelope) => {
+        if (cancelled) return;
+        const hydrated = parseSharePayload(envelope.payload);
+        if (hydrated == null) {
+          setShareState('missing');
+          return;
+        }
+        setRows(hydrated.rows);
+        setBuildQty(hydrated.buildQty);
+        setIncludeDnp(hydrated.includeDnp);
+        setShareExpiry(envelope.expires_at);
+        setShareState('ready');
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setShareState('missing');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [slug]);
 
   // Fold one streamed event into the row it names. Functional updater on
   // purpose: events arrive over tens of seconds and the closure that started
@@ -364,11 +408,50 @@ export default function BomPage() {
           onto the persistent BackdropLayer, so the wash starts here. */}
       <div className={styles.page}>
         <div className={styles.stack}>
-          {phase === 'intake' && (
+          {isShare && shareState === 'loading' && (
+            <p className={styles.phaseText} role="status">
+              Loading this shared BOM&#8230;
+            </p>
+          )}
+
+          {/* A dead link is NAMED, not silently redirected to the tool: the
+              reader followed a URL somebody sent them and needs to know it is
+              the link that expired, not their file that failed. */}
+          {isShare && shareState === 'missing' && (
+            <section className={styles.deadLink}>
+              <h2 className={styles.phaseTitle}>This shared BOM is no longer available</h2>
+              <p className={styles.phaseText}>
+                Share links expire on their own, and the person who created this one may have let
+                it lapse. Ask them for a fresh link, or price your own build in a minute.
+              </p>
+              <Link className={styles.deadCta} to="/bom">
+                Start your own BOM &#8594;
+              </Link>
+            </section>
+          )}
+
+          {isShare && shareState === 'ready' && rows.length > 0 && (
+            <section className={styles.tablePhase}>
+              <p className={styles.shareBanner} role="status">
+                Shared BOM
+                {shareExpiry != null ? ` — expires ${formatShareDate(shareExpiry)}` : ''}
+              </p>
+              {/* Read-only: no intake above it, no share button below it, and
+                  no live resolve behind it. Build quantity and the DNP toggle
+                  stay live because both are arithmetic on data already on the
+                  page — they ask nothing of anyone. */}
+              <BomTable
+                rows={rows}
+                buildQty={buildQty}
+                onBuildQtyChange={setBuildQty}
+                includeDnp={includeDnp}
+                onIncludeDnpChange={setIncludeDnp}
+              />
+            </section>
+          )}
+
+          {!isShare && phase === 'intake' && (
             <>
-              {/* Task 19 turns a share slug into the read-only table. Until
-                  then the shared URL is an ordinary intake — an empty "shared
-                  BOM" frame would promise content that is not loaded yet. */}
               <BomIntake onParsed={handleParsed} />
               {parsed?.error != null && (
                 <p className={styles.pageError} role="alert">
@@ -378,7 +461,7 @@ export default function BomPage() {
             </>
           )}
 
-          {phase === 'mapping' && parsed != null && (
+          {!isShare && phase === 'mapping' && parsed != null && (
             <ColumnMapper
               headers={parsed.headers}
               roles={mapRoles}
@@ -388,7 +471,7 @@ export default function BomPage() {
             />
           )}
 
-          {phase === 'table' && parsed != null && (
+          {!isShare && phase === 'table' && parsed != null && (
             <section className={styles.tablePhase}>
               <div className={styles.tableHead}>
                 <div>
@@ -432,13 +515,16 @@ export default function BomPage() {
               )}
 
               {!matching && rows.length > 0 && (
-                <BomTable
-                  rows={rows}
-                  buildQty={buildQty}
-                  onBuildQtyChange={setBuildQty}
-                  includeDnp={includeDnp}
-                  onIncludeDnpChange={setIncludeDnp}
-                />
+                <>
+                  <BomTable
+                    rows={rows}
+                    buildQty={buildQty}
+                    onBuildQtyChange={setBuildQty}
+                    includeDnp={includeDnp}
+                    onIncludeDnpChange={setIncludeDnp}
+                  />
+                  <ShareBar rows={rows} buildQty={buildQty} includeDnp={includeDnp} />
+                </>
               )}
             </section>
           )}

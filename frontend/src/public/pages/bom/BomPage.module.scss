@@ -182,6 +182,41 @@
   color: $sponsor-gold;
 }
 
+// ─── Shared BOM (/bom/s/:slug) ──────────────────────────────────────────────
+
+.shareBanner {
+  margin: 0;
+  padding: 10px 14px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--executive-blue, $executive-blue);
+  background: var(--theme-accent-soft, rgba($nav-blue, 0.08));
+  border-left: 3px solid var(--theme-accent, $nav-blue);
+  border-radius: 6px;
+}
+
+.deadLink {
+  @include card-base;
+
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 32px 24px;
+}
+
+.deadCta {
+  margin-top: 4px;
+  padding: 11px 20px;
+  line-height: 1;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--theme-cta-text, #fff);
+  background: var(--theme-cta-bg, $executive-blue);
+  border-radius: 8px;
+  text-decoration: none;
+}
+
 .linkBtn {
   align-self: flex-start;
   padding: 0;

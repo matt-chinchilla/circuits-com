@@ -1,0 +1,108 @@
+@use '@shared/styles/variables' as *;
+@use '@shared/styles/mixins' as *;
+
+// Export + share, the last card on the page.
+//
+// Export leads because it is the cheap, private action; share is a secondary
+// button until it is armed, at which point the disclosure carries the weight.
+
+.bar {
+  @include card-base;
+
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px 20px;
+  border-radius: 12px;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.exportBtn,
+.shareBtn,
+.cancelBtn {
+  padding: 10px 18px;
+  // Buttons inherit body line-height 1.6 and overflow their box (house rule).
+  line-height: 1;
+  font-family: $font-body;
+  font-size: 0.9rem;
+  font-weight: 600;
+  border-radius: 8px;
+  cursor: pointer;
+  // Tap target: 10px padding + 1rem line box clears 44px with the border.
+  min-height: 44px;
+}
+
+.exportBtn {
+  color: var(--theme-cta-text, #fff);
+  background: var(--theme-cta-bg, $executive-blue);
+  border: none;
+}
+
+.shareBtn {
+  color: var(--executive-blue, $executive-blue);
+  background: transparent;
+  border: 1px solid var(--theme-accent, $nav-blue);
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: progress;
+  }
+}
+
+.cancelBtn {
+  color: var(--bom-ink-secondary, #676c71);
+  background: transparent;
+  border: 1px solid rgba(0, 0, 0, 0.14);
+}
+
+.note {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--bom-ink-secondary, #676c71);
+}
+
+.disclosure {
+  margin: 0;
+  padding: 10px 12px;
+  font-size: 0.86rem;
+  color: var(--executive-blue, $executive-blue);
+  background: var(--theme-accent-soft, rgba($nav-blue, 0.08));
+  border-left: 3px solid var(--theme-accent, $nav-blue);
+  border-radius: 6px;
+}
+
+.error {
+  margin: 0;
+  font-size: 0.86rem;
+  color: $error-red;
+}
+
+.result {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.link {
+  padding: 8px 10px;
+  font-family: $font-mono;
+  font-size: 0.84rem;
+  color: $text-primary;
+  background: var(--bom-card-tint, #f2f4f7);
+  border-radius: 6px;
+  // A slug URL must never widen the page (house overflow rule).
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.resultMeta {
+  font-size: 0.82rem;
+  color: var(--bom-ink-secondary, #676c71);
+}
