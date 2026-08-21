@@ -1,7 +1,7 @@
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import Column, DateTime, Enum, ForeignKey, String, Text
+from sqlalchemy import Column, DateTime, Enum, ForeignKey, Index, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
@@ -43,6 +43,11 @@ class Part(Base):
         nullable=False,
         default="active",
     )
+    # BOM tool (migration 037): normalized package token ("0805", "SOIC-8") —
+    # stamped by the feed paths, absence degrades to "no warning" (D5).
+    package = Column(String(60), nullable=True)
+    # NULL == lifecycle never confirmed by a feed → UI renders hatched (D6).
+    lifecycle_verified_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(
         DateTime(timezone=True),
         default=lambda: datetime.now(UTC),
@@ -53,6 +58,12 @@ class Part(Base):
         default=lambda: datetime.now(UTC),
         onupdate=lambda: datetime.now(UTC),
         nullable=False,
+    )
+
+    __table_args__ = (
+        # EXACT-match rung of the BOM ladder: upper(sku) = upper(:mpn).
+        # Non-unique on purpose — duplicate SKUs across manufacturers exist.
+        Index("ix_parts_sku_upper", func.upper(sku)),
     )
 
     category = relationship("Category")
