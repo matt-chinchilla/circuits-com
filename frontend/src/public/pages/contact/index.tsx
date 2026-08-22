@@ -7,9 +7,19 @@ import PageHeaderBand from "@public/components/layout/PageHeaderBand";
 import { api } from "@public/services/api";
 import styles from "./ContactPage.module.scss";
 
-// Founder roster — surfaced as schematic component designators (U1).
-// The U1 monospace label is a load-bearing brand element (datasheet motif —
+// Founder + sales desk, surfaced as schematic component designators (U1-U4).
+// The Uxx monospace label is a load-bearing brand element (datasheet motif —
 // see CLAUDE.md "Contact Page — Datasheet Card Motif"). Do not strip.
+//
+// EMAIL ONLY, deliberately. A phone number on a public surface has to come from
+// the company itself (CLAUDE.md "Seed data carries NO phone numbers"), and this
+// page is public — the card below renders whatever rows the roster provides, so
+// adding a `phone` here would publish it. Don't.
+//
+// The three sales titles stay plain "Sales" because that is the whole of what
+// the codebase attests: seed.py's _SALES_REP_USERNAMES calls these three "the
+// current sales team", while mail/signature-roster.php still records each
+// individual title as "unknown — ask <name>". Invent no seniority here.
 const CONTACTS = [
   {
     name: "Matthew Chirichella",
@@ -17,6 +27,27 @@ const CONTACTS = [
     email: "matthew@circuitcenter.ai",
     initials: "MC",
     des: "U1",
+  },
+  {
+    name: "Daniel Turano",
+    title: "Sales",
+    email: "daniel@circuitcenter.ai",
+    initials: "DT",
+    des: "U2",
+  },
+  {
+    name: "Anthony Martinez",
+    title: "Sales",
+    email: "anthony@circuitcenter.ai",
+    initials: "AM",
+    des: "U3",
+  },
+  {
+    name: "Ronald Hausske",
+    title: "Sales",
+    email: "ronald@circuitcenter.ai",
+    initials: "RH",
+    des: "U4",
   },
 ];
 
@@ -192,7 +223,7 @@ export default function ContactPage() {
 
       <div className={styles.contactPage}>
         <div className={styles.contactGrid}>
-          {/* Datasheet info panel — founders */}
+          {/* Datasheet info panel — founder + sales desk */}
           <motion.aside
             className={styles.contactInfo}
             initial={{ opacity: 0, x: -20 }}
@@ -201,12 +232,12 @@ export default function ContactPage() {
           >
             <header className={styles.contactInfoHead}>
               <span className={styles.contactInfoTag}>
-                CIRCUIT CENTER · CONTACTS · U1
+                CIRCUIT CENTER · CONTACTS · U1&ndash;U4
               </span>
               <h2 className={styles.contactInfoTitle}>Get in Touch</h2>
               <p className={styles.contactInfoDek}>
-                A direct line to the founder. No gatekeepers, no ticket queue,
-                no chatbot.
+                A direct line to the founder and the sales desk. No
+                gatekeepers, no ticket queue, no chatbot.
               </p>
             </header>
 

@@ -10,8 +10,11 @@
 //                       collapses to single column at 920px.
 // (3) .contactInfo   — "Get in Touch" datasheet panel:
 //        ::before    — PCB silkscreen grid backdrop (24px cells, accent @ 4%).
-//        .contactCard — founder card (U1 / U2) with crop-mark corners,
-//                       avatar circle, mono designator, email + phone rows.
+//        .contactCard — roster card (U1-U4: founder + sales desk) with
+//                       crop-mark corners, avatar circle, mono designator and
+//                       an email row. EMAIL ONLY — no phone on a public
+//                       surface (CLAUDE.md "Seed data carries NO phone
+//                       numbers").
 //        .contactInfoFoot — pulsing green status dot + "1 business day" copy.
 // (4) .contactForm   — message form panel:
 //        .contactReasons — selectable pill row (Sales / Support / Press / Other).
