@@ -91,3 +91,15 @@ class TestTtlCache:
         clear_public_manufacturers_cache()
         names = [m["name"] for m in get_public_manufacturers(db)]
         assert "Brand New Corp" in names
+
+    def test_clear_resets_sibling_caches(self, db, seeded_db):
+        """The zero-result vocab + popular-backfill pool share the reset seam
+        (same autouse fixture) — a stale sibling would leak one test's catalog
+        into the next suite's suggestions."""
+        search_service._suggestion_vocab(db)
+        search_service._popular_backfill_ids(db)
+        assert search_service._vocab_cache is not None
+        assert search_service._backfill_ids_cache is not None
+        clear_public_manufacturers_cache()
+        assert search_service._vocab_cache is None
+        assert search_service._backfill_ids_cache is None

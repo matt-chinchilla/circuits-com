@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel, Field
-from sqlalchemy import func, or_
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
@@ -15,7 +15,7 @@ from app.models.page_view import PageView
 from app.services.auth_service import get_current_user
 from app.services.geoip import country_for_ip
 from app.services.rate_limit import client_ip
-from app.services.traffic_segments import crawler_family, split_user_agents
+from app.services.traffic_segments import crawler_family, human_ua_filter, window_bot_uas
 
 router = APIRouter(prefix="/api", tags=["analytics"])
 
@@ -116,29 +116,28 @@ def get_analytics(
     # history), then filter rows with plain IN/NOT IN so every aggregation
     # below stays in SQL. Defaults to "humans" — crawler floods must not
     # read as visitors (2026-08-20: one Meta crawler = "712 visitors").
-    distinct_uas = [row[0] for row in db.query(PageView.user_agent).filter(recent).distinct()]
-    bot_uas, _ = split_user_agents(distinct_uas)
+    bot_uas = window_bot_uas(db, cutoff)
 
     if segment == "humans" and bot_uas:
-        # NULL user_agent carries no bot evidence → counts as human. A bare
-        # NOT IN would silently drop NULL rows (three-valued logic).
-        seg = [or_(PageView.user_agent.is_(None), PageView.user_agent.notin_(bot_uas))]
+        seg = [human_ua_filter(PageView.user_agent, bot_uas)]
     elif segment == "bots":
         seg = [PageView.user_agent.in_(bot_uas)] if bot_uas else [PageView.id.is_(None)]
     else:
         seg = []
 
-    total_views = db.query(PageView).filter(recent, *seg).count()
     unique_visitors = db.query(unique_sessions).filter(recent, *seg).scalar() or 0
 
-    # Segment-independent totals for the toggle badges.
-    all_views = db.query(PageView).filter(recent).count()
+    # Segment-independent totals for the toggle badges; the window's bot UAs
+    # partition its rows exactly, so the active segment's headline count is
+    # derived rather than re-counted.
+    all_views = db.query(view_count).filter(recent).scalar() or 0
     bot_views = (
         db.query(view_count).filter(recent, PageView.user_agent.in_(bot_uas)).scalar() or 0
         if bot_uas
         else 0
     )
     human_views = all_views - bot_views
+    total_views = {"humans": human_views, "bots": bot_views, "all": all_views}[segment]
 
     avg_pages = round(total_views / max(unique_visitors, 1), 1)
 

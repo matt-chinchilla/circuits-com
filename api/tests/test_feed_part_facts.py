@@ -8,8 +8,9 @@ Active claim.
 
 from app.models import Part
 from app.services.part_feed.base import FeedPart
-from app.services.part_feed.importer import _stamp_feed_facts, map_lifecycle
+from app.services.part_feed.importer import _stamp_feed_facts
 from app.services.part_feed.mouser import part_from_mouser
+from app.services.part_feed.specmap import map_lifecycle
 
 
 def _fp(**kw) -> FeedPart:

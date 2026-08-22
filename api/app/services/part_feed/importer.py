@@ -29,6 +29,7 @@ from app.models import Category, Part, PartListing, PriceBreak, Supplier, Suppli
 from app.services.activity import IMPORT_EVENT_KINDS, record_stream_event
 from app.services.part_feed.base import FeedPart, PartFeedProvider
 from app.services.part_feed.mouser import FeedFatalError
+from app.services.part_feed.specmap import map_lifecycle
 from app.utils.image_url import validate_optional_image_url
 
 logger = logging.getLogger(__name__)
@@ -101,31 +102,6 @@ def _fill_part_media(part: Part, fp: FeedPart) -> bool:
         part.datasheet_url = fp.datasheet_url
         changed = True
     return changed
-
-
-# Raw feed lifecycle words → our enum. Anything unlisted returns None and the
-# part keeps its default: an unmapped word must never stamp the truth-bit.
-_LIFECYCLE_WORDS = (
-    ("obsolete", "obsolete"),
-    ("end of life", "obsolete"),
-    ("eol", "obsolete"),
-    ("not recommended", "nrnd"),
-    ("nrnd", "nrnd"),
-    ("new product", "active"),
-    ("in production", "active"),
-    ("production", "active"),
-    ("active", "active"),
-)
-
-
-def map_lifecycle(raw: str | None) -> str | None:
-    text = (raw or "").strip().lower()
-    if not text:
-        return None
-    for needle, value in _LIFECYCLE_WORDS:
-        if needle in text:
-            return value
-    return None
 
 
 def _stamp_feed_facts(part: Part, fp: FeedPart) -> bool:

@@ -17,19 +17,24 @@ from collections.abc import Iterable
 from uuid import UUID
 
 from sqlalchemy import func, or_
-from sqlalchemy.orm import Session, aliased, raiseload
+from sqlalchemy.orm import Session, aliased, defaultload, raiseload
 
 from app.models import Category, Part, PartListing, PriceBreak, Sponsor, Supplier
+from app.services.category_service import (
+    TIER_ORDER,
+    active_sponsor_filter,
+    part_counts_by_category,
+)
 from app.services.search_suggest import closest_score, did_you_mean
 
 PARTS_LIMIT = 20
 SECTION_LIMIT = 12
+# compact=1 (the dropdown) trims each section server-side — the client renders
+# at most this many rows anyway, so the full payload was waste.
+COMPACT_PARTS_LIMIT = 5
+COMPACT_SECTION_LIMIT = 3
 CLOSEST_LIMIT = 15
 CLOSEST_POOL_CAP = 400
-
-# Ranking only — an unknown tier string still surfaces (normalized), it just
-# sorts below the known ladder.
-_TIER_RANK = {"platinum": 0, "gold": 1, "silver": 2}
 
 
 # ── Supplier tier (shared by the search hits AND the suppliers listing) ─────
@@ -46,9 +51,7 @@ def get_active_supplier_tiers(
     rows are lowercase). One home so the search supplier hits and the public
     suppliers listing can never disagree on what "platinum" means.
     """
-    query = db.query(Sponsor.supplier_id, Sponsor.tier).filter(
-        or_(Sponsor.status == "Active", Sponsor.status.is_(None))
-    )
+    query = db.query(Sponsor.supplier_id, Sponsor.tier).filter(active_sponsor_filter())
     if supplier_ids is not None:
         ids = list(supplier_ids)
         if not ids:
@@ -59,48 +62,69 @@ def get_active_supplier_tiers(
         normalized = (tier or "").strip().lower()
         if not normalized:
             continue
-        rank = _TIER_RANK.get(normalized, 9)
+        rank = TIER_ORDER.get(normalized, 9)
         current = best.get(supplier_id)
         if current is None or rank < current[0]:
             best[supplier_id] = (rank, normalized)
     return {supplier_id: pair[1] for supplier_id, pair in best.items()}
 
 
-# ── Derived public manufacturers (§1.4) ─────────────────────────────────────
+# ── Derived public manufacturers (§1.4) + zero-result caches ────────────────
+#
+# Three sibling in-process TTL caches on one clock seam: the derived
+# manufacturers list, the did-you-mean vocabulary assembled from it, and the
+# popular-backfill part-id pool. One reset clears all three.
 
-_MANUFACTURERS_TTL_SECONDS = 600.0
-_manufacturers_cache: tuple[float, list[dict]] | None = None
+_CACHE_TTL_SECONDS = 600.0
+_manufacturers_cache: tuple[float, list[dict], list[str]] | None = None
+_vocab_cache: tuple[float, list[tuple[str, str, str | None]]] | None = None
+_backfill_ids_cache: tuple[float, list] | None = None
 
 
 def _now() -> float:
-    """Clock seam — tests monkeypatch this to expire the cache."""
+    """Clock seam — tests monkeypatch this to expire the caches."""
     return time.monotonic()
+
+
+def _expired(cached: tuple | None) -> bool:
+    """True when a (timestamp, …) cache tuple is absent or past the TTL."""
+    return cached is None or _now() - cached[0] >= _CACHE_TTL_SECONDS
+
+
+def _manufacturers_data(db: Session) -> tuple[list[dict], list[str]]:
+    """(rows, lowered_names) — names lowered ONCE per refresh so the
+    per-keystroke `_manufacturer_hits` substring scan never re-lowers the
+    whole list."""
+    global _manufacturers_cache
+    cached = _manufacturers_cache
+    if cached is None or _expired(cached):
+        rows = (
+            db.query(Part.manufacturer_name, func.count(Part.id))
+            .filter(Part.manufacturer_name.isnot(None), Part.manufacturer_name != "")
+            .group_by(Part.manufacturer_name)
+            .order_by(func.count(Part.id).desc(), Part.manufacturer_name.asc())
+            .all()
+        )
+        data = [{"name": name, "parts_count": int(count)} for name, count in rows]
+        cached = (_now(), data, [name.lower() for name, _ in rows])
+        _manufacturers_cache = cached
+    return cached[1], cached[2]
 
 
 def get_public_manufacturers(db: Session) -> list[dict]:
     """[{name, parts_count}, …] grouped from parts.manufacturer_name,
     count-desc (name-asc tiebreak), cached in-process for 600s."""
-    global _manufacturers_cache
-    cached = _manufacturers_cache
-    if cached is not None and _now() - cached[0] < _MANUFACTURERS_TTL_SECONDS:
-        return cached[1]
-    rows = (
-        db.query(Part.manufacturer_name, func.count(Part.id))
-        .filter(Part.manufacturer_name.isnot(None), Part.manufacturer_name != "")
-        .group_by(Part.manufacturer_name)
-        .order_by(func.count(Part.id).desc(), Part.manufacturer_name.asc())
-        .all()
-    )
-    data = [{"name": name, "parts_count": int(count)} for name, count in rows]
-    _manufacturers_cache = (_now(), data)
-    return data
+    return _manufacturers_data(db)[0]
 
 
 def clear_public_manufacturers_cache() -> None:
-    """Reset seam — wired into an autouse conftest fixture so one test's
-    catalog can never leak into the next suite's vocabulary."""
-    global _manufacturers_cache
+    """Reset seam for ALL the module's TTL caches — wired into an autouse
+    conftest fixture so one test's catalog can never leak into the next
+    suite's manufacturer list, vocabulary, or backfill pool."""
+    global _manufacturers_cache, _vocab_cache, _backfill_ids_cache
     _manufacturers_cache = None
+    _vocab_cache = None
+    _backfill_ids_cache = None
 
 
 # ── Batched SearchPart enrichment ───────────────────────────────────────────
@@ -183,11 +207,18 @@ def _build_search_parts(db: Session, parts: list[Part]) -> list[dict]:
 # ── Section builders ────────────────────────────────────────────────────────
 
 
-def _category_hits(db: Session, pattern: str) -> list[dict]:
+def _category_hits(db: Session, pattern: str, limit: int = SECTION_LIMIT) -> list[dict]:
     """CategoryHit cards. A subcategory-name match surfaces the PARENT card
     with the child flagged; matched children order first. parts_count is
     own + sum(children), matching get_all_categories."""
-    matched = db.query(Category).filter(Category.name.ilike(pattern)).all()
+    # children IS consumed below; only the supplier_associations selectin
+    # cascade (the card's own AND each child's) is suppressed — the Category
+    # mirror of the Part.listings raiseload in search().
+    load_opts = (
+        raiseload(Category.supplier_associations),
+        defaultload(Category.children).raiseload(Category.supplier_associations),
+    )
+    matched = db.query(Category).options(*load_opts).filter(Category.name.ilike(pattern)).all()
     if not matched:
         return []
     matched_ids = {c.id for c in matched}
@@ -204,14 +235,21 @@ def _category_hits(db: Session, pattern: str) -> list[dict]:
         if c.parent_id not in seen:
             seen.add(c.parent_id)
             card_ids.append(c.parent_id)
-    card_ids = card_ids[:SECTION_LIMIT]
+    card_ids = card_ids[:limit]
 
-    cards = {c.id: c for c in db.query(Category).filter(Category.id.in_(card_ids)).all()}
+    # Directly-matched cards are already in hand — fetch only the parents a
+    # child match surfaced.
+    card_id_set = set(card_ids)
+    cards = {c.id: c for c in matched if c.id in card_id_set}
+    missing = [cid for cid in card_ids if cid not in cards]
+    if missing:
+        for c in db.query(Category).options(*load_opts).filter(Category.id.in_(missing)).all():
+            cards[c.id] = c
 
-    counts = {
-        row[0]: int(row[1])
-        for row in db.query(Part.category_id, func.count(Part.id)).group_by(Part.category_id).all()
-    }
+    relevant_ids = set(cards)
+    for cat in cards.values():
+        relevant_ids.update(ch.id for ch in cat.children or [])
+    counts = part_counts_by_category(db, relevant_ids)
 
     hits = []
     for card_id in card_ids:
@@ -238,12 +276,12 @@ def _category_hits(db: Session, pattern: str) -> list[dict]:
     return hits
 
 
-def _supplier_hits(db: Session, pattern: str) -> list[dict]:
+def _supplier_hits(db: Session, pattern: str, limit: int = SECTION_LIMIT) -> list[dict]:
     suppliers = (
         db.query(Supplier)
         .filter(Supplier.name.ilike(pattern))
         .order_by(Supplier.name)
-        .limit(SECTION_LIMIT)
+        .limit(limit)
         .all()
     )
     tiers = get_active_supplier_tiers(db, [s.id for s in suppliers])
@@ -262,7 +300,8 @@ def _supplier_hits(db: Session, pattern: str) -> list[dict]:
 
 def _manufacturer_hits(db: Session, query: str) -> list[dict]:
     needle = query.lower()
-    return [m for m in get_public_manufacturers(db) if needle in m["name"].lower()][:SECTION_LIMIT]
+    data, lowered = _manufacturers_data(db)
+    return [m for m, low in zip(data, lowered, strict=True) if needle in low][:SECTION_LIMIT]
 
 
 # ── Zero-result fuzzy recovery (§1.5) ───────────────────────────────────────
@@ -271,15 +310,48 @@ def _manufacturer_hits(db: Session, query: str) -> list[dict]:
 def _suggestion_vocab(db: Session) -> list[tuple[str, str, str | None]]:
     """Category names (both levels) + supplier names + derived manufacturer
     names — deliberately NO part SKUs. Kit-parity dedup order: suppliers
-    overwrite a colliding category name, manufacturers never overwrite."""
-    vocab: dict[str, tuple[str, str | None]] = {}
-    for name, icon in db.query(Category.name, Category.icon).all():
-        vocab[name] = ("category", icon)
-    for (name,) in db.query(Supplier.name).all():
-        vocab[name] = ("distributor", None)
-    for m in get_public_manufacturers(db):
-        vocab.setdefault(m["name"], ("manufacturer", None))
-    return [(term, kind, icon) for term, (kind, icon) in vocab.items()]
+    overwrite a colliding category name, manufacturers never overwrite.
+    Cached on the shared TTL seam — assembly walks every name in the
+    catalog and only serves the zero-result path."""
+    global _vocab_cache
+    cached = _vocab_cache
+    if cached is None or _expired(cached):
+        vocab: dict[str, tuple[str, str | None]] = {}
+        for name, icon in db.query(Category.name, Category.icon).all():
+            vocab[name] = ("category", icon)
+        for (name,) in db.query(Supplier.name).all():
+            vocab[name] = ("distributor", None)
+        for m in get_public_manufacturers(db):
+            vocab.setdefault(m["name"], ("manufacturer", None))
+        cached = (_now(), [(term, kind, icon) for term, (kind, icon) in vocab.items()])
+        _vocab_cache = cached
+    return cached[1]
+
+
+_BACKFILL_POOL_SIZE = CLOSEST_LIMIT * 2  # ≥ the old per-query LIMIT's max
+
+
+def _popular_backfill_ids(db: Session) -> list:
+    """Top part ids by aggregate stock (sku tiebreak) — the zero-result
+    backfill pool, cached on the shared TTL seam so the aggregate join over
+    the full catalog doesn't rerun per zero-result query."""
+    global _backfill_ids_cache
+    cached = _backfill_ids_cache
+    if cached is None or _expired(cached):
+        rows = (
+            db.query(Part.id)
+            .outerjoin(PartListing, PartListing.part_id == Part.id)
+            .group_by(Part.id)
+            .order_by(
+                func.coalesce(func.sum(PartListing.stock_quantity), 0).desc(),
+                Part.sku.asc(),
+            )
+            .limit(_BACKFILL_POOL_SIZE)
+            .all()
+        )
+        cached = (_now(), [row[0] for row in rows])
+        _backfill_ids_cache = cached
+    return cached[1]
 
 
 def _closest_parts(db: Session, query: str) -> list[dict]:
@@ -316,33 +388,31 @@ def _closest_parts(db: Session, query: str) -> list[dict]:
 
     if len(picked) < CLOSEST_LIMIT:
         picked_ids = {p.id for p in picked}
-        backfill = (
-            db.query(Part)
-            .options(raiseload(Part.listings))
-            .outerjoin(PartListing, PartListing.part_id == Part.id)
-            .group_by(Part.id)
-            .order_by(
-                func.coalesce(func.sum(PartListing.stock_quantity), 0).desc(),
-                Part.sku.asc(),
-            )
-            .limit(CLOSEST_LIMIT + len(picked))
-            .all()
-        )
-        for p in backfill:
-            if len(picked) >= CLOSEST_LIMIT:
-                break
-            if p.id in picked_ids:
-                continue
-            picked.append(p)
-            picked_ids.add(p.id)
+        # The pool always holds enough non-picked ids: picked < CLOSEST_LIMIT,
+        # pool = 2 × CLOSEST_LIMIT.
+        needed = [pid for pid in _popular_backfill_ids(db) if pid not in picked_ids]
+        needed = needed[: CLOSEST_LIMIT - len(picked)]
+        if needed:
+            by_id = {
+                p.id: p
+                for p in db.query(Part)
+                .options(raiseload(Part.listings))
+                .filter(Part.id.in_(needed))
+                .all()
+            }
+            picked.extend(by_id[pid] for pid in needed if pid in by_id)
     return _build_search_parts(db, picked)
 
 
 # ── The endpoint's whole answer ─────────────────────────────────────────────
 
 
-def search(db: Session, query: str, suggest: bool = True) -> dict:
-    """The full §1.3 response contract, serialized and JSON-ready."""
+def search(db: Session, query: str, suggest: bool = True, compact: bool = False) -> dict:
+    """The full §1.3 response contract, serialized and JSON-ready.
+
+    compact=True is the dropdown trim: parts capped at 5, categories and
+    suppliers at 3, manufacturers omitted — same response shape, `total`
+    still the sum of the returned section lengths."""
     t0 = time.perf_counter()
     pattern = f"%{query}%"
 
@@ -363,13 +433,14 @@ def search(db: Session, query: str, suggest: bool = True) -> dict:
             )
         )
         .order_by(Part.sku)
-        .limit(PARTS_LIMIT)
+        .limit(COMPACT_PARTS_LIMIT if compact else PARTS_LIMIT)
         .all()
     )
+    section_limit = COMPACT_SECTION_LIMIT if compact else SECTION_LIMIT
     parts = _build_search_parts(db, parts_raw)
-    categories = _category_hits(db, pattern)
-    suppliers = _supplier_hits(db, pattern)
-    manufacturers = _manufacturer_hits(db, query)
+    categories = _category_hits(db, pattern, limit=section_limit)
+    suppliers = _supplier_hits(db, pattern, limit=section_limit)
+    manufacturers = [] if compact else _manufacturer_hits(db, query)
 
     total = len(parts) + len(categories) + len(suppliers) + len(manufacturers)
 

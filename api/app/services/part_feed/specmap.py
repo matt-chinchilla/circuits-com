@@ -77,3 +77,28 @@ def map_mount(attrs: list[dict] | None, package: str | None) -> str | None:
         if "through hole" in value or "tht" in value:
             return "THT"
     return _mount_from_package(package)
+
+
+# Raw feed lifecycle words → our enum. Anything unlisted returns None and the
+# part keeps its default: an unmapped word must never stamp the truth-bit.
+_LIFECYCLE_WORDS = (
+    ("obsolete", "obsolete"),
+    ("end of life", "obsolete"),
+    ("eol", "obsolete"),
+    ("not recommended", "nrnd"),
+    ("nrnd", "nrnd"),
+    ("new product", "active"),
+    ("in production", "active"),
+    ("production", "active"),
+    ("active", "active"),
+)
+
+
+def map_lifecycle(raw: str | None) -> str | None:
+    text = (raw or "").strip().lower()
+    if not text:
+        return None
+    for needle, value in _LIFECYCLE_WORDS:
+        if needle in text:
+            return value
+    return None

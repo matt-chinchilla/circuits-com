@@ -4,42 +4,53 @@ from sqlalchemy.orm import Session
 from app.models import Category, Part, PartListing, PriceBreak, Sponsor, Supplier
 
 
-def _active_sponsor():
+def active_sponsor_filter():
     """Visible-sponsor predicate: Active OR legacy NULL status (Paused/Expired
     are hidden). Must match the admin write-path block
     (`admin_sponsors._reject_if_slot_taken`) + migration 016's index predicate."""
     return or_(Sponsor.status == "Active", Sponsor.status.is_(None))
 
 
+# Tier priority ladder (Platinum > Gold > Silver), the single home shared with
+# search_service's supplier-tier ranking. Ranking only — an unknown tier string
+# still surfaces (normalized), it just sorts below the ladder (rank 9 at every
+# consumer). 'featured' was dropped 2026-06-11 — the tier-boards matrix maps
+# the old top-level Featured onto Platinum.
+TIER_ORDER = {"platinum": 0, "gold": 1, "silver": 2}
+
+
 def _tier_order():
-    """Order sponsorships by tier priority (Platinum > Gold > Silver) for the
-    ranked per-category sponsor list. 'featured' was dropped 2026-06-11 — the
-    tier-boards matrix maps the old top-level Featured onto Platinum."""
+    """Order sponsorships by TIER_ORDER for the ranked per-category list."""
     t = func.lower(Sponsor.tier)
-    return case(
-        (t == "platinum", 0),
-        (t == "gold", 1),
-        (t == "silver", 2),
-        else_=9,
-    )
+    return case(*[(t == tier, rank) for tier, rank in TIER_ORDER.items()], else_=9)
+
+
+def part_counts_by_category(db: Session, category_ids=None) -> dict:
+    """category_id → part count, optionally restricted to `category_ids`.
+
+    Test seed attaches parts to the subcategory, prod seed to the top-level —
+    keeping the count keyed by `category_id` works for both; callers roll up
+    own + children themselves.
+    """
+    query = db.query(Part.category_id, func.count(Part.id))
+    if category_ids is not None:
+        ids = list(category_ids)
+        if not ids:
+            return {}
+        query = query.filter(Part.category_id.in_(ids))
+    return {row[0]: int(row[1]) for row in query.group_by(Part.category_id).all()}
 
 
 def get_all_categories(db: Session) -> list[Category]:
     """Top-level categories with children eager-loaded; stamps `parts_count`
     and `featured_supplier_name` on each (own + child rows aggregated
     client-side from batched queries — two queries total, no N+1).
-
-    Test seed attaches parts to the subcategory, prod seed to the top-level —
-    keeping the count keyed by `category_id` works for both.
     """
     cats = (
         db.query(Category).filter(Category.parent_id.is_(None)).order_by(Category.sort_order).all()
     )
 
-    counts: dict = {
-        row[0]: row[1]
-        for row in db.query(Part.category_id, func.count(Part.id)).group_by(Part.category_id).all()
-    }
+    counts = part_counts_by_category(db)
 
     # A category's preferred partners = its active SPONSORSHIPS (the `sponsors`
     # table is the single source of truth as of 2026-06-03 — Featured on a
@@ -53,7 +64,7 @@ def get_all_categories(db: Session) -> list[Category]:
         db.query(Sponsor.category_id, Supplier.id, Supplier.name)
         .join(Supplier, Supplier.id == Sponsor.supplier_id)
         .filter(Sponsor.category_id.isnot(None))
-        .filter(_active_sponsor())
+        .filter(active_sponsor_filter())
         .order_by(Sponsor.category_id, _tier_order(), Sponsor.created_at)
         .all()
     )
@@ -67,11 +78,11 @@ def get_all_categories(db: Session) -> list[Category]:
     }
 
     for cat in cats:
-        cat.parts_count = int(counts.get(cat.id, 0))
+        cat.parts_count = counts.get(cat.id, 0)
         cat.featured_supplier_name = featured_by_cat.get(cat.id)
         cat.featured_suppliers = featured_list_by_cat.get(cat.id, [])
         for child in cat.children or []:
-            child.parts_count = int(counts.get(child.id, 0))
+            child.parts_count = counts.get(child.id, 0)
             child.featured_supplier_name = featured_by_cat.get(child.id)
             child.featured_suppliers = featured_list_by_cat.get(child.id, [])
 
@@ -136,7 +147,7 @@ def get_category_partners(db: Session, slug: str) -> dict | None:
         .filter(
             Sponsor.category_id == top.id,
             func.lower(Sponsor.tier) == "platinum",
-            _active_sponsor(),
+            active_sponsor_filter(),
         )
         .order_by(Sponsor.created_at.asc())
         .first()
@@ -379,7 +390,7 @@ def get_category_by_slug(
         .filter(
             Sponsor.category_id == category.id,
             func.lower(Sponsor.tier) == "gold",
-            _active_sponsor(),
+            active_sponsor_filter(),
         )
         .order_by(Sponsor.created_at.asc())
         .first()
@@ -394,7 +405,7 @@ def get_category_by_slug(
         .filter(
             Sponsor.category_id == category.id,
             func.lower(Sponsor.tier) == "silver",
-            _active_sponsor(),
+            active_sponsor_filter(),
         )
         .order_by(Sponsor.created_at)
         .all()

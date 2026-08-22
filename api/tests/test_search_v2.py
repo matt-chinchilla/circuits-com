@@ -427,6 +427,69 @@ class TestSuggestParam:
         assert data["closest_parts"] is not None
 
 
+# ── compact=1 dropdown trim ─────────────────────────────────────────────────
+
+
+def _seed_trim_catalog(db, seeded_db):
+    """More matches than the compact caps in every section for query 'Trim'."""
+    for i in range(8):
+        db.add(
+            Part(
+                id=uuid.uuid4(),
+                sku=f"TRIM-{i:03d}",
+                manufacturer_name="Trim Corp",
+                category_id=seeded_db["child"].id,
+            )
+        )
+    for i in range(5):
+        db.add(Supplier(id=uuid.uuid4(), name=f"Trim Supply {i}"))
+    for i, letter in enumerate("ABCD"):
+        db.add(
+            Category(
+                id=uuid.uuid4(),
+                name=f"Trim Boards {letter}",
+                slug=f"trim-boards-{letter.lower()}",
+                sort_order=90 + i,
+            )
+        )
+    db.commit()
+
+
+class TestCompactParam:
+    def test_accepts_zero_and_one(self, client, seeded_db):
+        assert client.get("/api/search/", params={"q": "x", "compact": "0"}).status_code == 200
+        assert client.get("/api/search/", params={"q": "x", "compact": "1"}).status_code == 200
+        assert client.get("/api/search/", params={"q": "x", "compact": "2"}).status_code == 422
+
+    def test_caps_each_section(self, client, db, seeded_db):
+        _seed_trim_catalog(db, seeded_db)
+        data = _search(client, "Trim", compact=1)
+        assert len(data["parts"]) == 5
+        assert len(data["categories"]) == 3
+        assert len(data["suppliers"]) == 3
+        assert data["manufacturers"] == []
+
+    def test_shape_identical_and_total_sums_returned(self, client, db, seeded_db):
+        _seed_trim_catalog(db, seeded_db)
+        data = _search(client, "Trim", compact=1)
+        assert set(data.keys()) == RESPONSE_KEYS
+        assert set(data["parts"][0].keys()) == SEARCH_PART_KEYS
+        assert data["total"] == (
+            len(data["parts"])
+            + len(data["categories"])
+            + len(data["suppliers"])
+            + len(data["manufacturers"])
+        )
+
+    def test_default_stays_full(self, client, db, seeded_db):
+        _seed_trim_catalog(db, seeded_db)
+        data = _search(client, "Trim")
+        assert len(data["parts"]) == 8
+        assert len(data["categories"]) == 4
+        assert len(data["suppliers"]) == 5
+        assert {"name": "Trim Corp", "parts_count": 8} in data["manufacturers"]
+
+
 # ── Selectin-cascade guard (review-caught) ──────────────────────────────────
 # Part.listings and PartListing.price_breaks are lazy="selectin", so a bare
 # db.query(Part) hydrates the whole listings→breaks chain for every loaded

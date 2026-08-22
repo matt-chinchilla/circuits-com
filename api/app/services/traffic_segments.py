@@ -17,6 +17,11 @@ GPTBot, DuckAssistBot still match.
 
 import re
 
+from sqlalchemy import or_
+from sqlalchemy.orm import Session
+
+from app.models.page_view import PageView
+
 BOT_UA_RE = re.compile(
     r"(?:"
     # Googlebot/…, GPTBot), DuckAssistBot, Googlebot-Image, AdsBot-Google —
@@ -86,3 +91,23 @@ def split_user_agents(user_agents: list[str | None]) -> tuple[set[str], set[str]
             continue
         (bots if is_bot(ua) else humans).add(ua)
     return bots, humans
+
+
+def window_bot_uas(db: Session, cutoff) -> set[str]:
+    """The BOT user agents seen in page_views since `cutoff` — the window's
+    distinct UAs (a small set) classified here, ready for plain IN/NOT IN
+    filters. Callers skip filtering entirely when the set is empty."""
+    distinct_uas = [
+        row[0]
+        for row in db.query(PageView.user_agent).filter(PageView.created_at >= cutoff).distinct()
+    ]
+    return split_user_agents(distinct_uas)[0]
+
+
+def human_ua_filter(column, bot_uas: set[str]):
+    """SQL predicate keeping the human rows for a user-agent `column`.
+
+    NULL user_agent carries no bot evidence → counts as human, and a bare
+    NOT IN would silently drop NULL rows (SQL three-valued logic) — the
+    IS NULL arm is load-bearing."""
+    return or_(column.is_(None), column.notin_(bot_uas))

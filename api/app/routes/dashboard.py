@@ -45,7 +45,7 @@ from app.models.expense import expense_category_label
 from app.models.roles import ADMIN_ROLES
 from app.routes.admin_leads import require_leads_access
 from app.services.auth_service import get_current_user
-from app.services.traffic_segments import split_user_agents
+from app.services.traffic_segments import human_ua_filter, window_bot_uas
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
@@ -223,18 +223,10 @@ def _daily_count_series(db: Session, model, day_list: list[date], extra_filters=
 
 def _human_traffic_filters(db: Session, day_list: list[date]) -> tuple:
     """SQL filters keeping only human page views (Reports' default segment)."""
-    cutoff = _day_start_utc(day_list[0])
-    distinct_uas = [
-        row[0]
-        for row in db.query(PageView.user_agent)
-        .filter(PageView.created_at >= cutoff)
-        .distinct()
-    ]
-    bot_uas, _ = split_user_agents(distinct_uas)
+    bot_uas = window_bot_uas(db, _day_start_utc(day_list[0]))
     if not bot_uas:
         return ()
-    # NOT IN drops NULL rows under three-valued logic — keep them (human).
-    return (or_(PageView.user_agent.is_(None), PageView.user_agent.notin_(bot_uas)),)
+    return (human_ua_filter(PageView.user_agent, bot_uas),)
 
 
 def _daily_amount_series(db: Session, model, day_list: list[date]) -> list[dict]:
@@ -817,12 +809,7 @@ def recent_lead_contacts(
     either). Hand-built dicts, no response_model.
     """
     limit = max(1, min(limit, 100))
-    contacts = (
-        db.query(LeadContact)
-        .order_by(LeadContact.created_at.desc())
-        .limit(limit)
-        .all()
-    )
+    contacts = db.query(LeadContact).order_by(LeadContact.created_at.desc()).limit(limit).all()
     lead_ids = {c.lead_id for c in contacts}
     leads = (
         {lead.id: lead for lead in db.query(Lead).filter(Lead.id.in_(lead_ids)).all()}
