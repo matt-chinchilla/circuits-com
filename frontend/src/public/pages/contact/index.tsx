@@ -20,13 +20,37 @@ import styles from "./ContactPage.module.scss";
 // the codebase attests: seed.py's _SALES_REP_USERNAMES calls these three "the
 // current sales team", while mail/signature-roster.php still records each
 // individual title as "unknown — ask <name>". Invent no seniority here.
-const CONTACTS = [
+// `photo` is the SAME file the email signature uses. mail/signature-roster.php
+// points each person's `headshot` at https://circuitcenter.ai/images/team/<x>.jpg,
+// so frontend/public/images/team/ is the one place a headshot lives and the two
+// surfaces cannot drift. Adding somebody's photo is: drop a square image (≥144px;
+// 288 is what the signature wants for retina) in that directory, add `photo`
+// here, set `headshot` there, then ./deploy.sh --frontend and re-run
+// ./seed-signatures.sh.
+//
+// Only set `photo` for a file that EXISTS. nginx's SPA fallback answers a
+// missing /images/team/*.jpg with the HTML shell and a 200, not a 404, so a
+// hopeful reference does not fail loudly — it decodes as a broken image. The
+// avatar falls back to initials both when `photo` is absent and when the load
+// errors, so a deleted file degrades instead of breaking.
+interface ContactPerson {
+  name: string;
+  title: string;
+  email: string;
+  initials: string;
+  des: string;
+  /** Absent until that person's headshot is actually in images/team/. */
+  photo?: string;
+}
+
+const CONTACTS: ContactPerson[] = [
   {
     name: "Matthew Chirichella",
     title: "Founder",
     email: "matthew@circuitcenter.ai",
     initials: "MC",
     des: "U1",
+    photo: "/images/team/matthew.jpg",
   },
   {
     name: "Daniel Turano",
@@ -50,6 +74,36 @@ const CONTACTS = [
     des: "U4",
   },
 ];
+
+/** The person's headshot, falling back to their initials.
+ *
+ *  aria-hidden either way: the name is the very next element, so a screen
+ *  reader announcing the face or the letters "MC" first is noise. */
+function ContactAvatar({ person }: { person: ContactPerson }) {
+  const [failed, setFailed] = useState(false);
+
+  if (person.photo == null || failed) {
+    return (
+      <span className={styles.contactAvatar} aria-hidden="true">
+        {person.initials}
+      </span>
+    );
+  }
+
+  return (
+    <img
+      className={`${styles.contactAvatar} ${styles.contactAvatarImg}`}
+      src={person.photo}
+      alt=""
+      width={40}
+      height={40}
+      loading="lazy"
+      decoding="async"
+      aria-hidden="true"
+      onError={() => setFailed(true)}
+    />
+  );
+}
 
 const REASONS = [
   { id: "general", label: "General question" },
@@ -260,9 +314,7 @@ export default function ContactPage() {
                   </span>
 
                   <div className={styles.contactCardHead}>
-                    <span className={styles.contactAvatar} aria-hidden="true">
-                      {c.initials}
-                    </span>
+                    <ContactAvatar person={c} />
                     <div>
                       <h3
                         id={`contact-name-${i}`}

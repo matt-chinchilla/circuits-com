@@ -202,6 +202,18 @@
   flex-shrink: 0;
 }
 
+// Headshot variant of the same 40px disc — the initials rule already owns the
+// size, circle and flex-shrink, so this only has to make the photo fill it.
+// cover, not contain: a square source is the contract (see the roster note),
+// and cover is what keeps a slightly-off crop from letterboxing inside the
+// circle.
+.contactAvatarImg {
+  object-fit: cover;
+  // The blue disc is the initials' background; behind a photo it would only
+  // show as a rim if the image ever failed to paint.
+  background: var(--surface);
+}
+
 .contactName {
   font-family: $font-heading;
   font-size: 1.05rem;
