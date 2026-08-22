@@ -67,9 +67,18 @@ export const api = {
   // Dropdown/typeahead callers MUST pass { suggest: 0 } so zero-result
   // keystrokes never pay the server's fuzzy-recovery pipeline; the results
   // page omits it (server default suggest=1).
-  searchV2: (q: string, opts?: { suggest?: 0 | 1 }) =>
+  // `compact: 1` is the dropdown's payload trim (parts ≤5, categories/suppliers
+  // ≤3, no manufacturers) — the typeahead renders exactly that and the full
+  // 20/12-cap enrichment was wasted work per keystroke.
+  searchV2: (q: string, opts?: { suggest?: 0 | 1; compact?: 0 | 1 }) =>
     client
-      .get<SearchResultsV2>('/search/', { params: { q, ...(opts?.suggest !== undefined ? { suggest: opts.suggest } : {}) } })
+      .get<SearchResultsV2>('/search/', {
+        params: {
+          q,
+          ...(opts?.suggest !== undefined ? { suggest: opts.suggest } : {}),
+          ...(opts?.compact ? { compact: 1 } : {}),
+        },
+      })
       .then(r => r.data),
 
   // Public derived manufacturers (names + part counts only — no CRM data
