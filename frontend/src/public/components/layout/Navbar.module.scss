@@ -390,6 +390,15 @@
   padding: 0;
   transition: background-color 150ms;
 
+  // 26×26 is the drawn mark; the tap target is expanded to 44×44 with an
+  // invisible inset pseudo. Growing width/height instead would push the
+  // lines off the 14px left pin and off the drawer X that replaces them.
+  &::before {
+    content: '';
+    position: absolute;
+    inset: -9px;
+  }
+
   &:hover {
     background: rgba(255, 255, 255, 0.1);
   }

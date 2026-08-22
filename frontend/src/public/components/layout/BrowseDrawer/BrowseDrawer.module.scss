@@ -64,7 +64,13 @@
 .close {
   position: absolute;
   left: 14px;
-  top: 5px; // (36px strip − 26px button) / 2 — matches the burger's centre
+  // The burger centres itself inside .topStrip's CONTENT box (top/bottom +
+  // margin auto). That box is 1px shorter than the strip because the strip
+  // carries a 1px bottom border (--theme-nav-bottom-border), so a hardcoded
+  // (36 − 26) / 2 landed the X half a pixel high. .close is positioned
+  // against the full-height drawer instead, so it reproduces the same centre
+  // arithmetically from the strip height.
+  top: calc((#{$nav-height} - 1px - 26px) / 2);
   width: 26px;
   height: 26px;
   z-index: 2;
@@ -78,6 +84,15 @@
   background: none;
   cursor: pointer;
   padding: 0;
+
+  // 26×26 is the drawn mark; the tap target is expanded to 44×44 with an
+  // invisible inset pseudo so the X keeps its size AND its position on the
+  // burger. Expanding width/height instead would move the lines off centre.
+  &::before {
+    content: '';
+    position: absolute;
+    inset: -9px;
+  }
 
   span {
     display: block;
@@ -555,10 +570,10 @@
 // ─── Responsive — no horizontal scrollbars at any viewport ────────────────
 
 @media (max-width: $bp-mobile) {
-  // The mobile nav strip is 48px (vs 36px desktop) — keep the X centred on
-  // the burger: (48 − 26) / 2.
+  // Same arithmetic against the mobile strip. 48px mirrors .topStrip's
+  // min-height in Navbar.module.scss; the 1px is its bottom border.
   .close {
-    top: 11px;
+    top: calc((48px - 1px - 26px) / 2);
   }
 }
 
@@ -601,5 +616,67 @@
   .pane {
     width: calc(100vw - 185px);
     padding: 12px 10px;
+  }
+
+  // The rail's content box is 157px here, but the widest row needs
+  // 30 (icon) + 12 + ~92 ("Manufacturers") + 12 + 45.5 (pill) = 191.5. The
+  // pill lost the race and was clipped mid-number by .rail's overflow-x:
+  // hidden — unreachable, since the rail does not scroll sideways. Trimming
+  // padding and gaps recovers ~28 of the 35px, so the pill stands down; the
+  // same counts still render in .paneHead and .foot.
+  .meta {
+    display: none;
+  }
+
+  // A distributor row's content box is 90px at 320: the swatch (30) plus the
+  // FEATURED badge (69.6) alone overrun it, so the name and the badge were
+  // clipped by .pane's overflow-x: hidden. Wrapping lets each land on a line
+  // that fits — the name keeps whole words, the badge keeps its label.
+  .row {
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+
+  .rowName {
+    flex: 1 1 auto;
+    min-width: 0;
+    // min-width: 0 lets the BOX shrink; it does not let a word break. A
+    // spaceless name ("Onlinecomponents.com", 150px) then overran an 88px
+    // box by 62px and spilled 39px past the pane. Breaking a distributor
+    // name mid-token is worse than a space-wrap and better than invisible.
+    overflow-wrap: break-word;
+  }
+
+  .star {
+    margin-left: 0;
+    flex: 0 0 auto;
+  }
+}
+
+// The pane is calc(100vw − 185px), so below 400px it is under 215px wide and
+// a tile's content box is under 175px. Sharing one line between the logo pad,
+// the name and the count pill then starves the name: at 320 it measured 2.5px
+// wide and 220px TALL — one character per line — inside a 46px tile.
+@media (max-width: 400px) {
+  .tile {
+    flex-wrap: wrap;
+    row-gap: 4px;
+  }
+
+  // Full width on its own line, below the logo/count row.
+  .tileName {
+    flex: 1 0 100%;
+    order: 3;
+  }
+
+  // "MANUFACTURERS" at 0.18em tracking plus the count overran the pane by
+  // ~20px and clipped the number.
+  .paneHead {
+    letter-spacing: 0.08em;
+  }
+
+  .paneSub {
+    display: block;
+    margin-left: 0;
   }
 }

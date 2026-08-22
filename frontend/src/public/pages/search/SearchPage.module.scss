@@ -165,9 +165,25 @@
 }
 
 .clearLink {
+  position: relative;
   white-space: nowrap;
   flex-shrink: 0;
   color: rgba(255, 255, 255, 0.78);
+
+  // A 58×18.9 text link is the only way to clear the query — well under the
+  // 44px tap floor. The target is expanded with an invisible pseudo rather
+  // than padding so the underlined label keeps its size and baseline. The
+  // expansion is asymmetric on purpose: .meta sits 8px below the form row,
+  // so growing 6px up and 20px down (into the band's own padding) reaches
+  // 44.9px without covering the SEARCH button's lower edge.
+  &::before {
+    content: '';
+    position: absolute;
+    top: -6px;
+    right: -10px;
+    bottom: -20px;
+    left: -10px;
+  }
   text-decoration: none;
   border-bottom: 1px solid rgba(255, 255, 255, 0.32);
   transition: color $transition-fast, border-color $transition-fast;
@@ -237,6 +253,14 @@
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   gap: 16px;
+
+  // The 240px floor is wider than the card's content box at 320 (222px), so
+  // the track overhung its container by 18px with overflow-x: visible — not
+  // scrollable, just spilling past the card's gutter. The sibling grids
+  // (.supGrid, .catGrid) already drop to a single column; this one did not.
+  @media (max-width: 560px) {
+    grid-template-columns: 1fr;
+  }
 }
 
 // ─── Category result cards ──────────────────────────────────────────────────
