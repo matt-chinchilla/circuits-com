@@ -77,7 +77,7 @@ export const STATIC_PAGE_SEO: Record<StaticPageKey, PageSeo> = {
   join: {
     title: 'Join Circuit Center — Get Listed & Advertise | Sponsorship Tiers',
     description:
-      'List your components on Circuit Center and sponsor the boards buyers browse: Silver $100/mo self-serve, Gold $600 and Platinum $2,400 through the partners desk.',
+      'List your components on Circuit Center and sponsor the boards buyers browse: Silver $250/mo self-serve, Gold $2,500 and Platinum $10,000 through the partners desk.',
     canonical: `${SITE_ORIGIN}/join`,
     jsonLd: [],
     heading: 'Join Circuit Center',
