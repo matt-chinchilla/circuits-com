@@ -235,9 +235,28 @@
 
 // ─── Stage 01 — tier cards ──────────────────────────────────────────────────
 
+// Equal-height tiles, structurally — never a magic min-height. The perk counts
+// differ per tier (5 / 5 / 4), so the three cards must be sized by the GRID,
+// not by their own content:
+//
+//   * `align-items: stretch` is the grid default, but it is spelled out here
+//     because it is load-bearing: an `align-items: start` added later for any
+//     reason would silently ragged the bottoms.
+//   * `grid-auto-rows: 1fr` carries the same guarantee into the WRAPPED
+//     layouts — at 1024px (2 cols → 2 rows) and 768px (1 col → 3 rows) each
+//     card owns its own row, so without this the rows would size to their own
+//     content and the stack would step.
+//
+// Deliberately NOT `margin-top: auto` on a trailing child: the perk list is the
+// last element in the card, and pushing it down would open a gap under the lead
+// line and start the three lists at different heights. Content stays
+// top-packed; the stretch puts the slack at the bottom of the shorter card,
+// which is where it belongs.
 .tierRow {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
+  grid-auto-rows: 1fr;
+  align-items: stretch;
   gap: 14px;
 
   @include responsive(1024px) {

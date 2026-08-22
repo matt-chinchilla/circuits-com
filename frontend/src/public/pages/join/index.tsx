@@ -57,21 +57,25 @@ const JOIN_TIERS: JoinTier[] = [
     lead: "What's included",
     perks: [
       "Your logo + buy-link on your board",
-      "Publish part listings",
+      "Publish up to 5,000 part listings per subcategory",
       "Base reporting",
+      "Access to admin console",
+      "Direct line-of-contact with a sales rep",
     ],
   },
   {
     id: "gold",
     name: "Gold",
-    price: "$600",
+    price: "$2,500",
     ribbon: "Pro",
     el: "Au",
     lead: "Everything in Silver, plus…",
     perks: [
-      "Sole sponsor of your subcategory",
+      "Sole slot reserved of your choice of subcategory",
       "Pinned above the directory",
+      "Preferred placement in BOM Tool results",
       "Audience insights",
+      "API access for live stock + price sync",
     ],
     arrange:
       "Gold is one sponsor per subcategory — two buyers can't both have it. The desk checks your slot is open, then sends a quote you can pay online.",
@@ -79,13 +83,15 @@ const JOIN_TIERS: JoinTier[] = [
   {
     id: "platinum",
     name: "Platinum",
-    price: "$2,400",
+    price: "$10,000",
     ribbon: "Enterprise",
     el: "Pt",
     lead: "Everything in Gold, plus…",
     perks: [
       "Top-of-page block in your brand colors, on every subpage",
-      "API access for live stock + price sync",
+      "Early access to beta features",
+      "Priority line of contact",
+      "Access to proprietary AI",
     ],
     arrange:
       "Platinum is one sponsor per top-level category — the banner every subpage carries. The desk checks it's open, then sends a quote you can pay online.",

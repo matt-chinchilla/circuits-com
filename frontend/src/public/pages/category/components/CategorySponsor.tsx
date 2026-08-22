@@ -76,12 +76,15 @@ const csEntranceSeen = new Set<string>();
 // Platinum value props shown on the UNSOLD (open-placement) banner so a prospect
 // sees the same pitch the /join pricing page makes. Mirrors JOIN_TIERS →
 // platinum.perks in join/index.tsx (the canonical wording), trimmed to fit the
-// banner's width — keep the two in loose sync.
+// banner's width — keep the two in loose sync. EXACTLY four: the checklist
+// renders as two columns and a fifth item unbalances it. Live stock + price API
+// sync is absent on purpose — that perk now sits at GOLD, and Platinum's pitch
+// inherits it the same way /join's "Everything in Gold, plus…" lead does.
 const PLATINUM_BENEFITS = [
   'Top-of-page sponsor block in your brand colors',
   'Placement across every subcategory',
-  'Unlimited report generation',
-  'Live stock + price API sync',
+  'Early access to beta features',
+  'Access to proprietary AI',
 ] as const;
 
 /* Run `cb` after TWO animation frames — the earliest point at which brand CSS
