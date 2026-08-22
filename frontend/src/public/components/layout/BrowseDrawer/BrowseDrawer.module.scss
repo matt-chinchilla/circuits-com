@@ -1,4 +1,5 @@
 @use "@shared/styles/variables" as *;
+@use "@shared/styles/mixins" as *;
 
 // BrowseDrawer — the site's only drawer at every viewport (replaces the old
 // navMobileDrawer). Pixel port of the design-kit `.bd-*` rules
@@ -85,14 +86,10 @@
   cursor: pointer;
   padding: 0;
 
-  // 26×26 is the drawn mark; the tap target is expanded to 44×44 with an
-  // invisible inset pseudo so the X keeps its size AND its position on the
-  // burger. Expanding width/height instead would move the lines off centre.
-  &::before {
-    content: '';
-    position: absolute;
-    inset: -9px;
-  }
+  // 26×26 is the drawn mark; the tap target is expanded to 44×44 so the X
+  // keeps its size AND its position on the burger. Expanding width/height
+  // instead would move the lines off centre.
+  @include tap-target;
 
   span {
     display: block;
@@ -498,6 +495,12 @@
 }
 
 .rowName {
+  min-width: 0;
+  // min-width: 0 lets the BOX shrink; it does not let a word break. A
+  // spaceless name ("Onlinecomponents.com") would otherwise overrun the box
+  // and spill past the pane. Breaking a distributor name mid-token is worse
+  // than a space-wrap and better than invisible.
+  overflow-wrap: break-word;
   font-size: 13px;
   font-weight: 600;
   color: #1a222c;
@@ -570,10 +573,10 @@
 // ─── Responsive — no horizontal scrollbars at any viewport ────────────────
 
 @media (max-width: $bp-mobile) {
-  // Same arithmetic against the mobile strip. 48px mirrors .topStrip's
-  // min-height in Navbar.module.scss; the 1px is its bottom border.
+  // Same arithmetic against the mobile strip ($nav-height-mobile ==
+  // .topStrip's mobile min-height); the 1px is its bottom border.
   .close {
-    top: calc((48px - 1px - 26px) / 2);
+    top: calc((#{$nav-height-mobile} - 1px - 26px) / 2);
   }
 }
 
@@ -639,12 +642,6 @@
 
   .rowName {
     flex: 1 1 auto;
-    min-width: 0;
-    // min-width: 0 lets the BOX shrink; it does not let a word break. A
-    // spaceless name ("Onlinecomponents.com", 150px) then overran an 88px
-    // box by 62px and spilled 39px past the pane. Breaking a distributor
-    // name mid-token is worse than a space-wrap and better than invisible.
-    overflow-wrap: break-word;
   }
 
   .star {

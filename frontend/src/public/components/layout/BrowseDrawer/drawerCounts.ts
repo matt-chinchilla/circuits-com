@@ -1,19 +1,21 @@
 import type { Category } from "@public/types/category";
 
 /**
- * Total parts across the catalog from the categories payload. A top-level
- * category's `parts_count` is OWN-count only (parts attach to subcategories),
- * so the real total is own + sum(children) — the same client-side rollup the
- * homepage CategoryCard does per card.
+ * Own + children parts total for ONE category. A top-level category's
+ * `parts_count` is OWN-count only (parts attach to subcategories), so every
+ * rendered count is own + sum(children) — the homepage CategoryGrid card and
+ * the drawer both consume this.
  */
-export function catalogPartsRollup(categories: Category[]): number {
-  return categories.reduce(
-    (total, cat) =>
-      total +
-      (cat.parts_count ?? 0) +
-      cat.children.reduce((sum, sub) => sum + (sub.parts_count ?? 0), 0),
-    0,
+export function categoryPartsRollup(cat: Category): number {
+  return (
+    (cat.parts_count ?? 0) +
+    cat.children.reduce((sum, sub) => sum + (sub.parts_count ?? 0), 0)
   );
+}
+
+/** Total parts across the catalog from the categories payload. */
+export function catalogPartsRollup(categories: Category[]): number {
+  return categories.reduce((total, cat) => total + categoryPartsRollup(cat), 0);
 }
 
 /**

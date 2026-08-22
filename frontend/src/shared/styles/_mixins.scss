@@ -119,3 +119,17 @@
   box-shadow: var(--glass-hi, inset 0 1px 0 rgba(255, 255, 255, 0.75)),
     0 1px 2px rgba(12, 24, 18, 0.05), 0 16px 40px -28px rgba(10, 40, 26, 0.35);
 }
+
+// ── Expanded tap target ────────────────────────────────────────────────────
+// Grows a small control's hit area to the 44px floor with an invisible inset
+// pseudo instead of padding, so the drawn mark keeps its size, position and
+// baseline. The host must already be positioned (all current callers are).
+// $inset takes the CSS inset shorthand, so per-side values work when the
+// expansion must dodge a neighbor (see SearchPage .clearLink).
+@mixin tap-target($inset: -9px) {
+  &::before {
+    content: '';
+    position: absolute;
+    inset: $inset;
+  }
+}

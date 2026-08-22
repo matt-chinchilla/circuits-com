@@ -171,19 +171,10 @@
   color: rgba(255, 255, 255, 0.78);
 
   // A 58×18.9 text link is the only way to clear the query — well under the
-  // 44px tap floor. The target is expanded with an invisible pseudo rather
-  // than padding so the underlined label keeps its size and baseline. The
-  // expansion is asymmetric on purpose: .meta sits 8px below the form row,
-  // so growing 6px up and 20px down (into the band's own padding) reaches
-  // 44.9px without covering the SEARCH button's lower edge.
-  &::before {
-    content: '';
-    position: absolute;
-    top: -6px;
-    right: -10px;
-    bottom: -20px;
-    left: -10px;
-  }
+  // 44px tap floor. The expansion is asymmetric on purpose: .meta sits 8px
+  // below the form row, so growing 6px up and 20px down (into the band's own
+  // padding) reaches 44.9px without covering the SEARCH button's lower edge.
+  @include tap-target(-6px -10px -20px -10px);
   text-decoration: none;
   border-bottom: 1px solid rgba(255, 255, 255, 0.32);
   transition: color $transition-fast, border-color $transition-fast;

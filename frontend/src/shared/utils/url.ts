@@ -53,6 +53,23 @@ export function safeHttpUrl(input: string | null | undefined): string | null {
   }
 }
 
+/**
+ * Display-only host trim: scheme, `www.`, and everything from the first
+ * `/`/`?`/`#` dropped ("https://www.mouser.com/x" → "mouser.com"); null for
+ * empty input. Never an href — pair with safeHttpUrl for links. Deliberately
+ * different from search's srFormat.displayWebsite, which PRESERVES the path;
+ * do not "deduplicate" them.
+ */
+export function displayHost(url: string | null | undefined): string | null {
+  if (url == null) return null;
+  const host = url
+    .trim()
+    .replace(/^[a-z][a-z0-9+.-]*:\/\//i, '')
+    .replace(/^www\./i, '')
+    .replace(/[/?#].*$/, '');
+  return host === '' ? null : host;
+}
+
 // Raster image data-URLs we trust to render in <img src>. SVG is excluded —
 // it can carry inline script. http(s) URLs are validated by URL parsing.
 const RASTER_DATA_IMAGE = /^data:image\/(png|jpe?g|webp|gif|avif);base64,/i;

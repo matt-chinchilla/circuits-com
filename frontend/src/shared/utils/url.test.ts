@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isDataImage, prependScheme, safeHttpUrl, safeImageUrl } from './url';
+import { displayHost, isDataImage, prependScheme, safeHttpUrl, safeImageUrl } from './url';
 
 describe('prependScheme', () => {
   it('prepends https:// to a bare hostname', () => {
@@ -93,5 +93,24 @@ describe('isDataImage', () => {
     expect(isDataImage(null)).toBe(false);
     expect(isDataImage(undefined)).toBe(false);
     expect(isDataImage('data:text/html,x')).toBe(false);
+  });
+});
+
+describe('displayHost', () => {
+  it('strips scheme, www. and everything past the host', () => {
+    expect(displayHost('https://www.mouser.com/')).toBe('mouser.com');
+    expect(displayHost('https://checkout.stripe.com/c/pay/x')).toBe('checkout.stripe.com');
+    expect(displayHost('https://google.com?q=x')).toBe('google.com');
+    expect(displayHost('digikey.com')).toBe('digikey.com');
+  });
+
+  it('passes scheme-less non-URLs through (the refHost "(direct)" contract)', () => {
+    expect(displayHost('(direct)')).toBe('(direct)');
+  });
+
+  it('null/empty stays null', () => {
+    expect(displayHost(null)).toBeNull();
+    expect(displayHost(undefined)).toBeNull();
+    expect(displayHost('   ')).toBeNull();
   });
 });

@@ -3,12 +3,12 @@ import { useNavigate, Link } from 'react-router-dom';
 import { api } from '@public/services/api';
 import type { SearchResultsV2, SearchSupplierHit } from '@public/types/search';
 import { categoryPath } from '@shared/utils/categoryPath';
+import { displayHost } from '@shared/utils/url';
 import Icon from '@shared/components/Icon';
 import styles from './SearchBar.module.scss';
 
 interface SearchBarProps {
   variant?: 'hero' | 'compact' | 'nav';
-  initialQuery?: string;
   /** Fires when the dropdown's mounted-visibility changes (before paint, only
    *  on actual transitions), with a guaranteed final `false` on unmount. The
    *  hero wires this to stack itself above subsequent content while open. */
@@ -20,19 +20,10 @@ const PARTS_CAP = 5;
 const DISTRIBUTORS_CAP = 3;
 const CATEGORIES_CAP = 3;
 
-/** First glyph of the name, uppercased — the lettermark pad letter. */
-function lettermark(name: string): string {
+/** dd-mark pad letter — kit-pinned to 1 char, deliberately NOT
+ *  @shared/utils/lettermark (1–2 chars) or srFormat.srInitials. */
+function padLetter(name: string): string {
   return name.trim().charAt(0).toUpperCase();
-}
-
-/** Bare host for display ("https://www.mouser.com/" → "mouser.com"). */
-function displayHost(website: string | null): string | null {
-  if (!website) return null;
-  const host = website
-    .replace(/^[a-z][a-z0-9+.-]*:\/\//i, '')
-    .replace(/^www\./i, '')
-    .replace(/\/.*$/, '');
-  return host || null;
 }
 
 // Tier and website are both nullable — join only what exists, never a
@@ -45,7 +36,6 @@ function distributorSubLine(sup: SearchSupplierHit): string {
 
 export default function SearchBar({
   variant = 'hero',
-  initialQuery = '',
   onDropdownOpenChange,
 }: SearchBarProps) {
   const navigate = useNavigate();
@@ -55,15 +45,10 @@ export default function SearchBar({
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
-  // Seed with initialQuery on mount
-  useEffect(() => {
-    if (initialQuery) {
-      setQuery(initialQuery);
-    }
-  }, [initialQuery]);
-
   // Debounced typeahead. suggest=0 always: zero-result keystrokes must never
-  // pay the server's fuzzy-recovery pipeline (spec §1.3/§3).
+  // pay the server's fuzzy-recovery pipeline (spec §1.3/§3). compact=1 trims
+  // the payload to the dropdown's own caps — the full 20/12-cap enrichment
+  // was wasted work per keystroke.
   useEffect(() => {
     if (query.length < 2) {
       setResults(null);
@@ -74,7 +59,7 @@ export default function SearchBar({
     let cancelled = false;
     const timer = setTimeout(() => {
       api
-        .searchV2(query, { suggest: 0 })
+        .searchV2(query, { suggest: 0, compact: 1 })
         .then((data) => {
           if (!cancelled) setResults(data);
         })
@@ -139,20 +124,19 @@ export default function SearchBar({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const handleSubmit = useCallback(
-    (e: React.FormEvent) => {
-      e.preventDefault();
-      const trimmed = query.trim();
-      if (trimmed) {
-        setOpen(false);
-        navigate(`/search?q=${encodeURIComponent(trimmed)}`);
-      }
-    },
-    [query, navigate]
-  );
+  const submitSearch = useCallback(() => {
+    const trimmed = query.trim();
+    if (trimmed) {
+      setOpen(false);
+      navigate(`/search?q=${encodeURIComponent(trimmed)}`);
+    }
+  }, [query, navigate]);
 
-  // Kit semantics: the dropdown arms on user interaction (typing/focus), so a
-  // programmatic initialQuery seed on the search page never auto-pops it.
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    submitSearch();
+  };
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setQuery(e.target.value);
     setOpen(true);
@@ -241,7 +225,7 @@ export default function SearchBar({
                   onClick={() => setOpen(false)}
                 >
                   <span className={styles.ddMark} aria-hidden="true">
-                    {lettermark(sup.name)}
+                    {padLetter(sup.name)}
                   </span>
                   <span className={styles.itemText}>
                     <span className={styles.supName}>{sup.name}</span>
@@ -280,7 +264,7 @@ export default function SearchBar({
             <button
               type="button"
               className={styles.seeAllBtn}
-              onClick={handleSubmit as unknown as React.MouseEventHandler}
+              onClick={submitSearch}
             >
               See all results for &ldquo;{query}&rdquo; &rarr;
             </button>

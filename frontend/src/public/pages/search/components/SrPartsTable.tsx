@@ -8,7 +8,7 @@
 import { useNavigate } from 'react-router-dom';
 import Icon from '@shared/components/Icon';
 import type { SearchPart } from '@public/types/search';
-import { formatCount, formatLeadTime, formatPrice } from '../lib/srFormat';
+import { formatCount, formatLeadTime, formatPrice, formatRohs } from '../lib/srFormat';
 import styles from './SrPartsTable.module.scss';
 
 function statusClass(status: string): string {
@@ -64,7 +64,7 @@ export default function SrPartsTable({ rows }: { rows: SearchPart[] }) {
               <td>{p.manufacturer_name ?? '\u2014'}</td>
               <td className={styles.mono}>{p.package ?? '\u2014'}</td>
               <td className={styles.mono}>{p.mount ?? '\u2014'}</td>
-              <td>{p.rohs == null ? '\u2014' : p.rohs ? '\u2713' : 'No'}</td>
+              <td>{formatRohs(p.rohs)}</td>
               <td className={styles.mono}>{formatLeadTime(p.lead_time_days)}</td>
               <td className={styles.mono}>{p.moq != null ? formatCount(p.moq) : '\u2014'}</td>
               <td className={styles.mono}>{p.dist_count}</td>

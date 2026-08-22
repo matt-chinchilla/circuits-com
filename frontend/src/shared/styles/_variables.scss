@@ -13,6 +13,9 @@ $footer-dark: #1a1a2e;
 // Spacing
 $header-height: 70px;
 $nav-height: 36px;
+// Mobile (≤$bp-mobile) nav strip height — .topStrip's min-height in
+// Navbar.module.scss; BrowseDrawer's collapse-X centring mirrors it.
+$nav-height-mobile: 48px;
 $container-max: 1200px;
 $grid-gap: 20px;
 

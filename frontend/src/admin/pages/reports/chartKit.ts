@@ -8,6 +8,8 @@
 // the old placement covered the data area), flipping below only when the dot
 // is too close to the chart's top edge to fit a tip above it.
 
+import { displayHost } from '@shared/utils/url';
+
 export interface Pt {
   x: number;
   y: number;
@@ -114,11 +116,7 @@ export function tooltipAnchor(
 /** Referrer URLs render as bare hostnames (dataviz: labels carry identity,
  *  not protocol noise). Non-URLs pass through untouched. */
 export function refHost(source: string): string {
-  try {
-    return new URL(source).hostname.replace(/^www\./, '');
-  } catch {
-    return source;
-  }
+  return displayHost(source) ?? source;
 }
 
 /** ISO-3166 alpha-2 → regional-indicator flag emoji ("US" → 🇺🇸). */

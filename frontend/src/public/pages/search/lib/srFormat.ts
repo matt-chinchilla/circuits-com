@@ -1,18 +1,16 @@
 // Pure formatting/ranking helpers for the search results page. No React, no
 // DOM — unit-tested in srFormat.test.ts.
 
+import { SPONSOR_TIER_ORDER, normalizeTier } from '@shared/utils/sponsorTier';
+
+// Price + RoHS cells format identically to the category PartsTable — single
+// home @public/services/format, re-exported for the table and the tests here.
+export { formatPrice, formatRohs } from '@public/services/format';
+
 /** `lead_time_days` → "Nw" (spec §2: ceil(days / 7) weeks). Unknown → em dash. */
 export function formatLeadTime(days: number | null | undefined): string {
-  if (days == null) return '\u2014';
+  if (days == null) return '—';
   return `${Math.ceil(days / 7)}w`;
-}
-
-/** Tiered price precision, matching the category PartsTable. Unknown → em dash. */
-export function formatPrice(price: number | null | undefined): string {
-  if (price == null) return '\u2014';
-  if (price >= 100) return `$${price.toFixed(0)}`;
-  if (price >= 1) return `$${price.toFixed(2)}`;
-  return `$${price.toFixed(3)}`;
 }
 
 /** Thousands-separated integer for stock/MOQ cells. */
@@ -33,7 +31,9 @@ export function srInitials(name: string): string {
 
 /**
  * Display-only website trim for the suptile meta line (scheme + www. + trailing
- * slashes dropped). Never becomes an href — distributor surfaces link to /join.
+ * slashes dropped, PATH KEPT — deliberately different from @shared/utils/url
+ * displayHost, which is host-only; do not "deduplicate" them). Never becomes
+ * an href — distributor surfaces link to /join.
  */
 export function displayWebsite(website: string | null | undefined): string | null {
   if (website == null) return null;
@@ -46,9 +46,6 @@ export function displayWebsite(website: string | null | undefined): string | nul
 }
 
 /** Empty-state distributor ordering: platinum > gold > silver > untiered. */
-const TIER_ORDER: Record<string, number> = { platinum: 0, gold: 1, silver: 2 };
-
 export function tierRank(tier: string | null | undefined): number {
-  if (tier == null) return 3;
-  return TIER_ORDER[tier.trim().toLowerCase()] ?? 3;
+  return SPONSOR_TIER_ORDER[normalizeTier(tier)] ?? 3;
 }

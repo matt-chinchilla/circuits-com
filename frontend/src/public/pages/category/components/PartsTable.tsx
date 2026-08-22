@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import type { PublicPart } from '@public/types/part';
+import { formatPrice } from '@public/services/format';
 import Icon from '@shared/components/Icon';
 import ColumnHeader from './ColumnHeader';
 import type { SortState } from './ColumnHeader';
@@ -30,13 +31,6 @@ const rowVariants = {
     transition: { delay: i * 0.03, duration: 0.35, ease: 'easeOut' as const },
   }),
 };
-
-function formatPrice(price: number | null | undefined): string {
-  if (price == null) return '—';
-  if (price >= 100) return `$${price.toFixed(0)}`;
-  if (price >= 1) return `$${price.toFixed(2)}`;
-  return `$${price.toFixed(3)}`;
-}
 
 export default function PartsTable({
   parts, sort, setSort,

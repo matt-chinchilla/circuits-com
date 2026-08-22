@@ -7,38 +7,49 @@ import type { PublicManufacturers } from "@public/types/search";
 import { categoryPath } from "@shared/utils/categoryPath";
 import { lettermark } from "@shared/utils/lettermark";
 import { safeImageUrl } from "@shared/utils/url";
+import { SPONSOR_TIER_ORDER, normalizeTier } from "@shared/utils/sponsorTier";
 import Icon from "@shared/components/Icon";
 import { catalogPartsRollup, partsPillLabel } from "./drawerCounts";
+import { once } from "./once";
 import styles from "./BrowseDrawer.module.scss";
-
-// The public suppliers listing gains a server-normalized `tier` with the
-// search-v2 backend (spec §1.4a). Optional here so the drawer renders
-// (badge-less) against a server that predates the field; fold into
-// @public/types/supplier once the backend lands and delete this alias.
 
 type Pane = "cats" | "mfrs" | "dists";
 
 const EM_DASH = "—";
 
-// Session caches as memoized promises: dedupes in-flight fetches, caches
-// success for the session, and RESETS on failure so a pane's retry button
-// re-fires just that source.
-function once<T>(fetcher: () => Promise<T>): () => Promise<T> {
-  let promise: Promise<T> | null = null;
-  return () => {
-    if (!promise) {
-      promise = fetcher().catch((err: unknown) => {
-        promise = null;
-        throw err;
-      });
-    }
-    return promise;
-  };
-}
-
+// Session caches — see once(): dedupes in-flight fetches, caches success for
+// the session, and RESETS on failure so a pane's retry button re-fires just
+// that source.
 const fetchCats = once<Category[]>(() => api.getCategories());
 const fetchMfrs = once<PublicManufacturers>(() => api.getManufacturers(60));
 const fetchSups = once<Supplier[]>(() => api.getSuppliers());
+
+// One pane's data/error state over a session-cached fetcher. Unmount guard
+// only — a close mid-flight should still fill the session cache, so fetches
+// are never cancelled on close.
+function useOnceSource<T>(fetchOnce: () => Promise<T>) {
+  const [data, setData] = useState<T | null>(null);
+  const [error, setError] = useState(false);
+  const aliveRef = useRef(true);
+  useEffect(
+    () => () => {
+      aliveRef.current = false;
+    },
+    [],
+  );
+  const load = useCallback(() => {
+    setError(false);
+    fetchOnce().then(
+      (d) => {
+        if (aliveRef.current) setData(d);
+      },
+      () => {
+        if (aliveRef.current) setError(true);
+      },
+    );
+  }, [fetchOnce]);
+  return { data, error, load };
+}
 
 // Rail — the pinned five (spec §4): two pane-less links (/search, /bom)
 // between three pane switchers, then the Site group mirroring the navbar.
@@ -87,58 +98,9 @@ export default function BrowseDrawerBody({ open, onClose }: BrowseDrawerBodyProp
   const closeRef = useRef<HTMLButtonElement>(null);
 
   const [pane, setPane] = useState<Pane>("cats");
-  const [cats, setCats] = useState<Category[] | null>(null);
-  const [mfrs, setMfrs] = useState<PublicManufacturers | null>(null);
-  const [sups, setSups] = useState<Supplier[] | null>(null);
-  const [catsErr, setCatsErr] = useState(false);
-  const [mfrsErr, setMfrsErr] = useState(false);
-  const [supsErr, setSupsErr] = useState(false);
-
-  // Unmount guard only — a close mid-flight should still fill the session
-  // cache, so fetches are never cancelled on close.
-  const aliveRef = useRef(true);
-  useEffect(
-    () => () => {
-      aliveRef.current = false;
-    },
-    [],
-  );
-
-  const loadCats = useCallback(() => {
-    setCatsErr(false);
-    fetchCats().then(
-      (d) => {
-        if (aliveRef.current) setCats(d);
-      },
-      () => {
-        if (aliveRef.current) setCatsErr(true);
-      },
-    );
-  }, []);
-
-  const loadMfrs = useCallback(() => {
-    setMfrsErr(false);
-    fetchMfrs().then(
-      (d) => {
-        if (aliveRef.current) setMfrs(d);
-      },
-      () => {
-        if (aliveRef.current) setMfrsErr(true);
-      },
-    );
-  }, []);
-
-  const loadSups = useCallback(() => {
-    setSupsErr(false);
-    fetchSups().then(
-      (d) => {
-        if (aliveRef.current) setSups(d);
-      },
-      () => {
-        if (aliveRef.current) setSupsErr(true);
-      },
-    );
-  }, []);
+  const { data: cats, error: catsErr, load: loadCats } = useOnceSource(fetchCats);
+  const { data: mfrs, error: mfrsErr, load: loadMfrs } = useOnceSource(fetchMfrs);
+  const { data: sups, error: supsErr, load: loadSups } = useOnceSource(fetchSups);
 
   // Every open: pane resets to the category grid.
   useEffect(() => {
@@ -309,9 +271,7 @@ export default function BrowseDrawerBody({ open, onClose }: BrowseDrawerBodyProp
           <>
             <div className={styles.paneHead}>
               Manufacturers
-              {mfrs ? (
-                <span className={styles.paneSub}>{mfrs.total.toLocaleString("en-US")}</span>
-              ) : null}
+              {mfrs ? <span className={styles.paneSub}>{mfrsPill}</span> : null}
             </div>
             {mfrsErr && <RetryRow onRetry={loadMfrs} />}
             <div className={styles.grid}>
@@ -344,7 +304,7 @@ export default function BrowseDrawerBody({ open, onClose }: BrowseDrawerBodyProp
             </div>
             {supsErr && <RetryRow onRetry={loadSups} />}
             {(sups ?? []).map((s) => {
-              const tier = s.tier?.toLowerCase();
+              const rank = SPONSOR_TIER_ORDER[normalizeTier(s.tier)];
               return (
                 <button
                   key={s.id}
@@ -354,7 +314,7 @@ export default function BrowseDrawerBody({ open, onClose }: BrowseDrawerBodyProp
                 >
                   <DistSwatch name={s.name} logo={safeImageUrl(s.logo_url)} />
                   <span className={styles.rowName}>{s.name}</span>
-                  {(tier === "gold" || tier === "platinum") && (
+                  {rank != null && rank <= SPONSOR_TIER_ORDER.gold && (
                     <span className={styles.star}>FEATURED</span>
                   )}
                 </button>

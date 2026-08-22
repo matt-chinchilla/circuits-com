@@ -9,6 +9,8 @@
 // The server picks at the break ladder's base qty (1); the client re-runs the
 // IDENTICAL rule at the real line qty as the user edits it.
 
+import { SPONSOR_TIER_ORDER, normalizeTier } from '@shared/utils/sponsorTier';
+
 /** MIRROR of api/app/services/bom_match.py SPONSOR_BAND. 1.20 == "within
  *  +20% of the best in-stock price". */
 export const SPONSOR_BAND = 1.2;
@@ -28,8 +30,6 @@ export interface Offer {
 
 /** supplier_id -> [tier order (platinum 0 / gold 1 / silver 2), tiebreak]. */
 export type TierRank = Record<string, [number, string]>;
-
-const TIER_ORDER: Record<string, number> = { platinum: 0, gold: 1, silver: 2 };
 
 /** Unit price at `qty`: the largest break whose min_quantity is at or below
  *  qty, else the base price. */
@@ -93,7 +93,7 @@ export function tierRankFromOffers(
 ): TierRank {
   const rank: TierRank = {};
   for (const offer of offers) {
-    const order = TIER_ORDER[(offer.tier ?? '').trim().toLowerCase()];
+    const order = SPONSOR_TIER_ORDER[normalizeTier(offer.tier)];
     if (order == null) continue;
     const current = rank[offer.supplier_id];
     if (current == null || order < current[0]) {

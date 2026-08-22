@@ -4,6 +4,7 @@ import {
   formatCount,
   formatLeadTime,
   formatPrice,
+  formatRohs,
   srInitials,
   tierRank,
 } from './srFormat';
@@ -40,6 +41,15 @@ describe('formatPrice', () => {
 
   it('null → em dash', () => {
     expect(formatPrice(null)).toBe('\u2014');
+  });
+});
+
+describe('formatRohs', () => {
+  it('check for compliant, "No" for non-compliant, em dash for unknown', () => {
+    expect(formatRohs(true)).toBe('✓');
+    expect(formatRohs(false)).toBe('No');
+    expect(formatRohs(null)).toBe('—');
+    expect(formatRohs(undefined)).toBe('—');
   });
 });
 

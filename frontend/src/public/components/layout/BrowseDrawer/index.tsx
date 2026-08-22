@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ComponentType } from "react";
 import { useLocation } from "react-router-dom";
+import { once } from "./once";
 import styles from "./BrowseDrawer.module.scss";
 
 // BrowseDrawer shell — always mounted in the Navbar so the burger's
@@ -12,28 +13,12 @@ import styles from "./BrowseDrawer.module.scss";
 type BodyProps = { open: boolean; onClose: () => void };
 type BodyComponent = ComponentType<BodyProps>;
 
-let bodyModule: BodyComponent | null = null;
-let bodyPromise: Promise<BodyComponent> | null = null;
-
 // NOT React.lazy on purpose: lazy caches a REJECTED import forever, which
 // would leave the burger permanently dead after one failed chunk fetch.
-// A self-resetting promise makes the next click a genuine retry.
-export function loadBrowseDrawerBody(): Promise<BodyComponent> {
-  if (bodyModule) return Promise.resolve(bodyModule);
-  if (!bodyPromise) {
-    bodyPromise = import("./BrowseDrawerBody").then(
-      (m) => {
-        bodyModule = m.default;
-        return m.default;
-      },
-      (err: unknown) => {
-        bodyPromise = null;
-        throw err;
-      },
-    );
-  }
-  return bodyPromise;
-}
+// once() resets on rejection, so the next click is a genuine retry.
+export const loadBrowseDrawerBody = once<BodyComponent>(() =>
+  import("./BrowseDrawerBody").then((m) => m.default),
+);
 
 /** Hover/idle warm-up — failures here may be swallowed (the click path retries). */
 export function prefetchBrowseDrawerBody(): void {
@@ -48,7 +33,7 @@ interface BrowseDrawerProps {
 export default function BrowseDrawer({ open, onClose }: BrowseDrawerProps) {
   const location = useLocation();
   const wrapRef = useRef<HTMLDivElement>(null);
-  const [Body, setBody] = useState<BodyComponent | null>(() => bodyModule);
+  const [Body, setBody] = useState<BodyComponent | null>(() => loadBrowseDrawerBody.peek());
 
   // Sync the loaded chunk into state. Navbar only opens after the load
   // resolved, so this settles from cache immediately; the catch is a guard
