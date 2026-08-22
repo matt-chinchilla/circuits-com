@@ -48,7 +48,7 @@ from app.services.part_feed.importer import (
     get_feed_run,
     start_feed_run,
 )
-from app.services.search_service import get_active_supplier_tiers
+from app.services.search_service import get_active_supplier_tiers, invalidate_catalog_caches
 from app.utils.color import validate_optional_hex_color
 from app.utils.image_url import validate_optional_image_url
 
@@ -200,6 +200,7 @@ def create_supplier(
     )
     db.add(supplier)
     db.commit()
+    invalidate_catalog_caches()
     db.refresh(supplier)
     return supplier_to_dict(supplier)
 
@@ -243,6 +244,7 @@ def update_supplier(
         setattr(supplier, key, value)
 
     db.commit()
+    invalidate_catalog_caches()
     db.refresh(supplier)
     return supplier_to_dict(supplier)
 
@@ -300,6 +302,7 @@ def delete_supplier(
     db.expire(supplier)
     db.delete(supplier)
     db.commit()
+    invalidate_catalog_caches()
     return {"status": "ok"}
 
 

@@ -323,13 +323,16 @@ limiter = RateLimiter(
 
 
 # ── Keys ────────────────────────────────────────────────────────────────────
-def _normalize_ip(raw: str | None) -> str | None:
-    """Parse one hop into a canonical bucket key, or None if it isn't an IP.
+_IPAddress = ipaddress.IPv4Address | ipaddress.IPv6Address
+
+
+def _parse_hop(raw: str | None) -> _IPAddress | None:
+    """One hop string → an address object, or None if it isn't an IP.
 
     Canonicalizing matters as much as parsing: ``1.2.3.4``, ``::ffff:1.2.3.4``
-    and ``::FFFF:1.2.3.4`` are the same host, and if each minted its own bucket
-    an attacker would get a fresh allowance per spelling. IPv6 collapses to its
-    /64 network (see :data:`IPV6_KEY_PREFIXLEN`).
+    and ``::FFFF:1.2.3.4`` are the same host, so a v4-mapped address unwraps to
+    its v4 form here — otherwise each spelling would mint its own rate-limit
+    bucket (a fresh allowance per spelling) AND its own geo lookup.
     """
     if not raw:
         return None
@@ -342,16 +345,58 @@ def _normalize_ip(raw: str | None) -> str | None:
         address = ipaddress.ip_address(host)
     except ValueError:
         return None
+    if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped is not None:
+        return address.ipv4_mapped
+    return address
+
+
+def _normalize_ip(raw: str | None) -> str | None:
+    """Parse one hop into a canonical BUCKET KEY, or None if it isn't an IP.
+
+    IPv6 collapses to its /64 network (see :data:`IPV6_KEY_PREFIXLEN`) — a
+    single subscriber is handed the whole /64, so per-address buckets would be
+    free to rotate. That bucketing is what makes this a rate-limit key and NOT
+    an address: use :func:`trusted_client_addr` for anything that needs the
+    real host.
+    """
+    address = _parse_hop(raw)
+    if address is None:
+        return None
     if isinstance(address, ipaddress.IPv6Address):
-        mapped = address.ipv4_mapped
-        if mapped is not None:
-            return str(mapped)
         return str(ipaddress.ip_network(f"{address}/{IPV6_KEY_PREFIXLEN}", strict=False))
     return str(address)
 
 
+def _trusted_address(request: Request) -> _IPAddress | None:
+    """The one hop we trust, parsed — shared by every caller that needs to
+    know who is talking to us.
+
+    Order (see :func:`client_ip` for why each header, in this order, is the
+    only defensible reading of this deployment):
+
+    1. ``X-Real-IP`` — nginx REPLACES any client-sent copy with ``$remote_addr``.
+    2. The RIGHTMOST ``X-Forwarded-For`` hop — the one our own proxy appended.
+       Everything to its left is caller-supplied.
+    3. ``request.client.host`` — direct, unproxied connections (local dev, tests).
+
+    A header that is present but not an IP falls through to the next source
+    rather than ending the search: garbage in ``X-Real-IP`` must not blind us
+    to the hop nginx appended.
+    """
+    for header in ("x-real-ip", "x-forwarded-for"):
+        raw = request.headers.get(header)
+        if not raw:
+            continue
+        address = _parse_hop(raw.rsplit(",", 1)[-1])
+        if address is not None:
+            return address
+    client = request.client
+    return _parse_hop(client.host if client is not None else None)
+
+
 def client_ip(request: Request) -> str:
-    """The address the EDGE observed — never one the caller chose.
+    """The RATE-LIMIT KEY for the address the EDGE observed — never one the
+    caller chose. Not an address: see :func:`trusted_client_addr` for that.
 
     ``request.client.host`` is NOT safe to key on here. ProxyHeadersMiddleware
     is mounted with ``trusted_hosts="*"`` (app.main), so uvicorn overwrites
@@ -379,16 +424,31 @@ def client_ip(request: Request) -> str:
     ``ports: !reset []`` on the api service in docker-compose.prod.yml; publish
     8000 to the internet again and both headers become forgeable.
     """
-    for header in ("x-real-ip", "x-forwarded-for"):
-        raw = request.headers.get(header)
-        if not raw:
-            continue
-        candidate = _normalize_ip(raw.rsplit(",", 1)[-1])
-        if candidate:
-            return candidate
+    address = _trusted_address(request)
+    if address is not None:
+        if isinstance(address, ipaddress.IPv6Address):
+            return str(ipaddress.ip_network(f"{address}/{IPV6_KEY_PREFIXLEN}", strict=False))
+        return str(address)
     client = request.client
-    host = client.host if client is not None else None
-    return _normalize_ip(host) or host or "unknown"
+    return (client.host if client is not None else None) or "unknown"
+
+
+def trusted_client_addr(request: Request) -> str | None:
+    """The REAL address the edge observed — the same trust chain as
+    :func:`client_ip`, WITHOUT the rate-limit bucketing.
+
+    :func:`client_ip` collapses IPv6 to its /64 and hands back a NETWORK
+    (``2001:db8::/64``). That is right for a bucket key and wrong for anything
+    that needs a host: a GeoIP reader rejects a CIDR outright, so keying the
+    country lookup off ``client_ip`` put EVERY IPv6 visitor on the map as
+    "unknown". Ditto a per-visitor hash, where the /64 silently merges
+    everyone behind one subscriber line.
+
+    Returns None when no hop parses as an IP — every caller here is fail-open
+    (no country, no hash), so a None is a fact, not an error.
+    """
+    address = _trusted_address(request)
+    return str(address) if address is not None else None
 
 
 def login_ip_key(request: Request) -> str:

@@ -8,6 +8,24 @@ import re
 
 _NON_COMPLIANT = ("non-compliant", "non compliant", "not compliant")
 
+# "RoHS Compliant", "RoHS Compliant By Exemption", and the VERSIONED spellings
+# every distributor now ships — "RoHS3 Compliant", "RoHS-3 Compliant",
+# "RoHS 3 Compliant". The directive version rides BETWEEN the word and
+# "compliant", so a plain `"rohs compliant" in text` containment matched none
+# of them and quietly returned "unknown" for compliant parts.
+_COMPLIANT_PHRASE = re.compile(r"rohs\s*-?\s*\d*\s*compliant")
+# Some feeds send the versioned token ALONE as the whole status ("RoHS3"): the
+# version names the directive the part meets, so that is a claim. Anchored, and
+# a version is required — a bare "RoHS" is a label, not a claim, and stays
+# unknown.
+_COMPLIANT_TOKEN = re.compile(r"^rohs\s*-?\s*\d+$")
+
+# The stored contract for Part.mount. Every reader (the part-page badge, the
+# search spec filters) branches on exactly these two tokens, and the column is
+# String(8) — so an unrecognized value is worse than none: it renders as a
+# mystery badge and, on Postgres, a long one fails the INSERT outright.
+MOUNT_VALUES = frozenset({"SMT", "THT"})
+
 # Package tokens → mounting style. Chip sizes match a token EXACTLY (the
 # metric suffix "0805 (2012 Metric)" rides in a separate token); families
 # match by token prefix ("SOIC-8", "TO-220-3", "DO-214AC").
@@ -44,9 +62,24 @@ def map_rohs(raw: str | None) -> bool | None:
         return None
     if any(needle in text for needle in _NON_COMPLIANT):
         return False
-    if "rohs compliant" in text:
+    if _COMPLIANT_PHRASE.search(text) or _COMPLIANT_TOKEN.match(text):
         return True
     return None
+
+
+def normalize_mount(value: str | None) -> str | None:
+    """Clamp any mounting string to the stored contract: "SMT", "THT" or None.
+
+    The one gate every mount value passes through — :func:`map_mount`'s exit
+    AND the importer's stamp — so a provider that fills ``FeedPart.mount``
+    itself (the field is a bare ``str | None``; Mouser is not the only feed
+    this registry will ever carry) cannot put "Surface Mount" into a String(8)
+    column. Unrecognized clamps to None, which the importer reads as "the feed
+    said nothing" and leaves the stored value alone — the module's no-guess
+    rule, applied to junk as well as to silence.
+    """
+    token = (value or "").strip().upper()
+    return token if token in MOUNT_VALUES else None
 
 
 def _mount_from_package(package: str | None) -> str | None:
@@ -76,7 +109,7 @@ def map_mount(attrs: list[dict] | None, package: str | None) -> str | None:
             return "SMT"
         if "through hole" in value or "tht" in value:
             return "THT"
-    return _mount_from_package(package)
+    return normalize_mount(_mount_from_package(package))
 
 
 # Raw feed lifecycle words → our enum. Anything unlisted returns None and the

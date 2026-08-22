@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models import Category, Part, PartListing, PriceBreak, Supplier, User
 from app.services.auth_service import get_current_user
+from app.services.search_service import invalidate_catalog_caches
 from app.utils.image_url import validate_optional_image_url
 
 router = APIRouter(prefix="/api/parts", tags=["parts"])
@@ -365,6 +366,7 @@ def create_part(
         db.add(listing)
 
     db.commit()
+    invalidate_catalog_caches()
     db.refresh(part)
     return part_to_dict(part, db)
 
@@ -620,6 +622,7 @@ def update_part(
         setattr(part, key, value)
 
     db.commit()
+    invalidate_catalog_caches()
     db.refresh(part)
     return part_to_dict(part, db)
 
@@ -640,6 +643,7 @@ def delete_part(
     db.query(PartListing).filter(PartListing.part_id == part.id).delete()
     db.delete(part)
     db.commit()
+    invalidate_catalog_caches()
     return {"status": "ok"}
 
 
@@ -705,5 +709,6 @@ def batch_import(
 
     if created > 0:
         db.commit()
+        invalidate_catalog_caches()
 
     return {"created": created, "errors": errors}

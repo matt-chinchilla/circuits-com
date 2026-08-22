@@ -14,7 +14,7 @@ from app.models import User
 from app.models.page_view import PageView
 from app.services.auth_service import get_current_user
 from app.services.geoip import country_for_ip
-from app.services.rate_limit import client_ip
+from app.services.rate_limit import client_ip, trusted_client_addr
 from app.services.traffic_segments import crawler_family, human_ua_filter, window_bot_uas
 
 router = APIRouter(prefix="/api", tags=["analytics"])
@@ -60,7 +60,42 @@ class TrackPayload(BaseModel):
 
 _RATE_WINDOW = 60
 _RATE_MAX = 30
+# Bounds the memory a flood can make us allocate. Each bucket is a short list
+# of floats; keying on the edge-observed address (below) already caps distinct
+# keys at "real hosts", and this is the backstop for a botnet.
+_RATE_MAX_KEYS = 8192
 _rate_buckets: dict[str, list[float]] = defaultdict(list)
+
+
+def _throttled(key: str, now: float) -> bool:
+    """True when `key` has already spent its window allowance.
+
+    Keyed on the EDGE-observed address, never on anything in the body: the
+    key used to be `payload.session_id`, which the caller types, so any
+    flooder got a virgin 30-view allowance per invented id — an unlimited
+    write channel into `page_views` AND an unbounded key table. `client_ip`
+    (not `trusted_client_addr`) is deliberate for a THROTTLE key: it collapses
+    IPv6 to the /64, and a host that owns 2**64 addresses would otherwise
+    rotate its way out of the bucket exactly the way forged session ids did.
+
+    Trade-off, recorded rather than accidental: a large NAT now shares one
+    30/min allowance, so a very busy office can have views dropped. That has
+    always been this endpoint's failure mode (it returns 204 and stores
+    nothing), and analytics under-count beats an open write channel.
+    """
+    bucket = _rate_buckets[key]
+    bucket[:] = [t for t in bucket if now - t < _RATE_WINDOW]
+    if len(bucket) >= _RATE_MAX:
+        return True
+    if len(_rate_buckets) > _RATE_MAX_KEYS:
+        # Sweep only when the table is actually big: drop every key whose
+        # window has fully drained (including this one if it is still empty,
+        # hence the re-read of `bucket` afterwards).
+        for stale in [k for k, v in _rate_buckets.items() if not v or now - v[-1] >= _RATE_WINDOW]:
+            del _rate_buckets[stale]
+        bucket = _rate_buckets[key]
+    bucket.append(now)
+    return False
 
 
 @router.post("/track", status_code=204)
@@ -69,15 +104,17 @@ def track_page_view(
     request: Request,
     db: Session = Depends(get_db),
 ):
-    now = time.monotonic()
-    bucket = _rate_buckets[payload.session_id]
-    bucket[:] = [t for t in bucket if now - t < _RATE_WINDOW]
-    if len(bucket) >= _RATE_MAX:
+    if _throttled(client_ip(request), time.monotonic()):
         return
-    bucket.append(now)
 
     ua = request.headers.get("user-agent", "")
-    ip = request.client.host if request.client else None
+    # The one address we trust, un-bucketed. NOT request.client.host: with
+    # ProxyHeadersMiddleware on trusted_hosts="*" that holds the ATTACKER-TYPED
+    # leftmost X-Forwarded-For hop, so both the visitor hash and the map were
+    # whatever a caller typed. NOT client_ip() either — that returns a /64
+    # NETWORK for IPv6, which the GeoIP reader rejects outright, so every IPv6
+    # visitor was landing as "unknown" and every IPv6 subscriber shared one hash.
+    addr = trusted_client_addr(request)
 
     db.add(
         PageView(
@@ -85,17 +122,52 @@ def track_page_view(
             referrer=payload.referrer or None,
             user_agent=ua[:500] if ua else None,
             session_id=payload.session_id,
-            ip_hash=_hash_ip(ip),
+            ip_hash=_hash_ip(addr),
             device_type=_parse_device(ua),
             browser=_parse_browser(ua),
             # Fail-open by contract: any geo problem stores NULL, never raises.
-            # client_ip(), not request.client.host: the middleware puts the
-            # ATTACKER-TYPED leftmost X-Forwarded-For hop in client.host — a
-            # forged header must not place a visitor on the map.
-            country=country_for_ip(client_ip(request)),
+            country=country_for_ip(addr),
         )
     )
     db.commit()
+
+
+_geo_since_cache: datetime | None = None
+
+
+def _geo_tracked_since(db: Session) -> datetime | None:
+    """The FIRST page view that ever carried a country — unwindowed, unsegmented.
+
+    The map panel prints this as "country data since X". That is a claim about
+    when geo tracking started (migration 040), so computing it under the
+    request's `recent` window made it slide forward to the window start: pick
+    "last 7 days" and the panel announced that country data began a week ago.
+
+    Cached in-process and never re-queried once known, because it can only move
+    BACKWARD — a new row is always later than the first one, and only an
+    explicit backfill of older rows could change it (a restart re-reads).
+    A NULL is deliberately NOT cached: on a database with no country rows yet
+    the answer is "not yet", and the first real row has to be able to land.
+    """
+    global _geo_since_cache
+    if _geo_since_cache is None:
+        _geo_since_cache = (
+            db.query(func.min(PageView.created_at)).filter(PageView.country.isnot(None)).scalar()
+        )
+    return _geo_since_cache
+
+
+def reset_analytics_state() -> None:
+    """Test seam for BOTH pieces of process memory this module keeps — the
+    "country data since" stamp and the /api/track throttle buckets.
+
+    An autouse conftest fixture calls it, and both halves matter: the stamp is
+    deliberately sticky, and the throttle is keyed per ADDRESS, so every test
+    that posts to /api/track shares one bucket (TestClient is always the same
+    host) and the 31st post in a suite would silently vanish."""
+    global _geo_since_cache
+    _geo_since_cache = None
+    _rate_buckets.clear()
 
 
 @router.get("/dashboard/analytics")
@@ -280,11 +352,7 @@ def get_analytics(
     geo_unknown = (
         db.query(view_count).filter(recent, *seg, PageView.country.is_(None)).scalar() or 0
     )
-    geo_since = (
-        db.query(func.min(PageView.created_at))
-        .filter(recent, PageView.country.isnot(None))
-        .scalar()
-    )
+    geo_since = _geo_tracked_since(db)
 
     return {
         "period_days": days,

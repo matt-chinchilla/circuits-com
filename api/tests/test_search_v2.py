@@ -551,3 +551,196 @@ class TestNoSelectinCascade:
         assert loaded, "search should have loaded Part rows"
         for part in loaded:
             assert "listings" in sa_inspect(part).unloaded
+
+
+# ── Query-length bound (DoS) ────────────────────────────────────────────────
+
+
+class TestQueryLengthBound:
+    """`q` is unauthenticated and the fuzzy recovery is superlinear in its
+    length (measured on the 6.3k-part dev catalog: 100 chars 1.7s, 400 chars
+    5.4s, 1600 chars 20.9s), so an unbounded query is a CPU DoS. The route
+    rejects; the service truncates so no other caller can bypass the route."""
+
+    def test_max_length_is_a_real_bound(self):
+        from app.services.search_service import MAX_QUERY_LENGTH
+
+        # Sane: long enough for any SKU or part name, short enough that the
+        # fuzzy pipeline stays cheap.
+        assert 32 <= MAX_QUERY_LENGTH <= 256
+
+    def test_at_the_bound_is_accepted(self, client, seeded_db):
+        from app.services.search_service import MAX_QUERY_LENGTH
+
+        resp = client.get("/api/search/", params={"q": "z" * MAX_QUERY_LENGTH})
+        assert resp.status_code == 200
+
+    def test_over_the_bound_is_422_not_work(self, client, seeded_db):
+        from app.services.search_service import MAX_QUERY_LENGTH
+
+        resp = client.get("/api/search/", params={"q": "z" * (MAX_QUERY_LENGTH + 1)})
+        assert resp.status_code == 422
+
+    def test_pathological_query_is_rejected_fast(self, client, seeded_db):
+        """The reported shape: a long junk query that reaches the zero-result
+        fuzzy path. Rejection must cost validation, not the pipeline."""
+        import time as _time
+
+        t0 = _time.perf_counter()
+        resp = client.get("/api/search/", params={"q": "zx" * 800})
+        elapsed = _time.perf_counter() - t0
+        assert resp.status_code == 422
+        assert elapsed < 1.0, f"422 took {elapsed:.3f}s — the query was still processed"
+
+    def test_service_truncates_for_non_route_callers(self, db, seeded_db, monkeypatch):
+        """search() is importable; the bound cannot live only at the route."""
+        from app.services import search_service
+        from app.services.search_service import MAX_QUERY_LENGTH
+
+        seen: list[str] = []
+        real = search_service.did_you_mean
+
+        def spy(query, vocab):
+            seen.append(query)
+            return real(query, vocab)
+
+        monkeypatch.setattr(search_service, "did_you_mean", spy)
+        search_service.search(db, "q" * (MAX_QUERY_LENGTH * 4))
+        assert seen, "the zero-result recovery should have run"
+        assert all(len(q) <= MAX_QUERY_LENGTH for q in seen)
+
+    def test_truncation_does_not_change_ordinary_queries(self, db, seeded_db):
+        from app.services.search_service import search as service_search
+
+        short = service_search(db, "LM7805")
+        assert short["total"] > 0
+
+
+# ── Catalog-mutation cache invalidation ─────────────────────────────────────
+
+
+class TestCatalogCacheInvalidation:
+    """The three TTL caches (manufacturers / did-you-mean vocab / backfill
+    pool) carry a 600s TTL, so without an explicit bust an admin's edit took
+    up to ten minutes to show up in search."""
+
+    def _mfr_names(self, db):
+        from app.services.search_service import get_public_manufacturers
+
+        return {m["name"] for m in get_public_manufacturers(db)}
+
+    def test_invalidate_clears_all_three(self, db, seeded_db):
+        from app.services import search_service
+
+        # Warm all three.
+        search_service.search(db, "zzzznothing")
+        assert search_service._manufacturers_cache is not None
+        assert search_service._vocab_cache is not None
+        assert search_service._backfill_ids_cache is not None
+
+        search_service.invalidate_catalog_caches()
+        assert search_service._manufacturers_cache is None
+        assert search_service._vocab_cache is None
+        assert search_service._backfill_ids_cache is None
+
+    def test_create_part_busts_the_manufacturers_cache(self, client, db, seeded_db, auth_header):
+        assert "Cache Bust Devices" not in self._mfr_names(db)  # warms the cache
+        resp = client.post(
+            "/api/parts/",
+            json={"sku": "CACHEBUST-1", "manufacturer_name": "Cache Bust Devices"},
+            headers=auth_header(),
+        )
+        assert resp.status_code in (200, 201), resp.text
+        # No TTL wait, no clock monkeypatch: the mutation itself busts.
+        assert "Cache Bust Devices" in self._mfr_names(db)
+
+    def test_delete_part_busts_the_manufacturers_cache(self, client, db, seeded_db, auth_header):
+        auth = auth_header()
+        created = client.post(
+            "/api/parts/",
+            json={"sku": "CACHEBUST-2", "manufacturer_name": "Doomed Devices"},
+            headers=auth,
+        ).json()
+        assert "Doomed Devices" in self._mfr_names(db)
+        assert client.delete(f"/api/parts/{created['id']}", headers=auth).status_code == 200
+        assert "Doomed Devices" not in self._mfr_names(db)
+
+    def test_batch_import_busts_the_manufacturers_cache(self, client, db, seeded_db, auth_header):
+        supplier_id = str(seeded_db["supplier1"].id)
+        assert "Batch Bust Corp" not in self._mfr_names(db)
+        resp = client.post(
+            "/api/parts/batch",
+            json={
+                "supplier_id": supplier_id,
+                "parts": [{"sku": "BATCHBUST-1", "manufacturer_name": "Batch Bust Corp"}],
+            },
+            headers=auth_header(),
+        )
+        assert resp.json()["created"] == 1, resp.text
+        assert "Batch Bust Corp" in self._mfr_names(db)
+
+    def test_create_supplier_busts_the_suggestion_vocab(self, client, db, seeded_db, auth_header):
+        from app.services.search_service import _suggestion_vocab
+
+        def vocab_terms():
+            return {term for term, _kind, _icon in _suggestion_vocab(db)}
+
+        assert "Vocab Bust Distribution" not in vocab_terms()  # warms the cache
+        resp = client.post(
+            "/api/suppliers/",
+            json={"name": "Vocab Bust Distribution"},
+            headers=auth_header(),
+        )
+        assert resp.status_code in (200, 201), resp.text
+        assert "Vocab Bust Distribution" in vocab_terms()
+
+    def test_backfill_pool_tolerates_deleted_ids(self, db, seeded_db):
+        """The pool is a cached SNAPSHOT of ids. A part deleted after the
+        refresh must cost a BACKFILL SLOT, not a result row — and must never
+        surface as a phantom (an id with no row behind it)."""
+        from app.models import Part
+        from app.services import search_service
+        from app.services.search_service import CLOSEST_LIMIT
+
+        # A catalog comfortably larger than the pool so refill has somewhere
+        # to go (pool = 2 x CLOSEST_LIMIT).
+        for i in range(CLOSEST_LIMIT * 3):
+            db.add(
+                Part(
+                    id=uuid.uuid4(),
+                    sku=f"POOL-{i:03d}",
+                    manufacturer_name="Pool Corp",
+                    category_id=seeded_db["child"].id,
+                )
+            )
+        db.commit()
+
+        # Warm the pool, then delete its head WITHOUT busting (the exact
+        # window a stale snapshot lives in) — cascading exactly as
+        # DELETE /api/parts/{id} does.
+        from app.models import PartListing, PriceBreak
+
+        pool = list(search_service._popular_backfill_ids(db))
+        assert len(pool) >= CLOSEST_LIMIT
+        doomed = set(pool[:3])
+        listing_ids = [
+            row[0] for row in db.query(PartListing.id).filter(PartListing.part_id.in_(doomed)).all()
+        ]
+        if listing_ids:
+            db.query(PriceBreak).filter(PriceBreak.listing_id.in_(listing_ids)).delete(
+                synchronize_session=False
+            )
+        db.query(PartListing).filter(PartListing.part_id.in_(doomed)).delete(
+            synchronize_session=False
+        )
+        db.query(Part).filter(Part.id.in_(doomed)).delete(synchronize_session=False)
+        db.commit()
+        assert search_service._backfill_ids_cache is not None, "pool must still be the stale one"
+
+        data = search_service.search(db, "zzzznothingmatches")
+        closest = data["closest_parts"]
+        assert len(closest) == CLOSEST_LIMIT, "deleted ids must be refilled, not dropped"
+        returned = {row["id"] for row in closest}
+        assert not (returned & {str(pid) for pid in doomed}), "deleted id surfaced as a phantom"
+        # Every row is a real, fully-built part, not a hole.
+        assert all(row["sku"] for row in closest)

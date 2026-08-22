@@ -29,6 +29,15 @@ from app.services.search_suggest import closest_score, did_you_mean
 
 PARTS_LIMIT = 20
 SECTION_LIMIT = 12
+# Longest query the search pipeline will look at. The fuzzy recovery is
+# SUPERLINEAR in query length — did_you_mean runs a python Levenshtein of
+# O(len(query) x len(term)) against EVERY vocabulary term, plus each word
+# inside it — so an unbounded `q` on an unauthenticated GET is a CPU DoS
+# (measured on the 6.3k-part dev catalog: 100 chars 1.7s, 400 chars 5.4s,
+# 1600 chars 20.9s; prod carries 132k+ parts). The route rejects anything
+# longer with 422; `search` truncates so no other caller can bypass it.
+# Real queries are SKUs and part names — 120 chars is far past any of them.
+MAX_QUERY_LENGTH = 120
 # compact=1 (the dropdown) trims each section server-side — the client renders
 # at most this many rows anyway, so the full payload was waste.
 COMPACT_PARTS_LIMIT = 5
@@ -117,10 +126,22 @@ def get_public_manufacturers(db: Session) -> list[dict]:
     return _manufacturers_data(db)[0]
 
 
-def clear_public_manufacturers_cache() -> None:
-    """Reset seam for ALL the module's TTL caches — wired into an autouse
-    conftest fixture so one test's catalog can never leak into the next
-    suite's manufacturer list, vocabulary, or backfill pool."""
+def invalidate_catalog_caches() -> None:
+    """Drop ALL three catalog-derived TTL caches at once.
+
+    Two callers, one seam. (1) Every catalog MUTATION — part create/update/
+    delete, batch import, supplier create/update/delete, and the end of a feed
+    run — because a 600s TTL alone meant an admin's edit took up to ten minutes
+    to reach the manufacturers list, the did-you-mean vocabulary and the
+    zero-result backfill pool, which reads as "the site is broken" long before
+    it reads as "the cache is warm". (2) An autouse conftest fixture, so one
+    test's catalog can never leak into the next suite's.
+
+    Cheap by construction: this only clears: the next reader re-derives. It is
+    also PER-PROCESS — the nightly feed-import container has its own memory,
+    and its writes reach the api through this same call only when the run is
+    driven from the api process (an admin click), which is the case that
+    matters."""
     global _manufacturers_cache, _vocab_cache, _backfill_ids_cache
     _manufacturers_cache = None
     _vocab_cache = None
@@ -388,19 +409,24 @@ def _closest_parts(db: Session, query: str) -> list[dict]:
 
     if len(picked) < CLOSEST_LIMIT:
         picked_ids = {p.id for p in picked}
-        # The pool always holds enough non-picked ids: picked < CLOSEST_LIMIT,
-        # pool = 2 × CLOSEST_LIMIT.
-        needed = [pid for pid in _popular_backfill_ids(db) if pid not in picked_ids]
-        needed = needed[: CLOSEST_LIMIT - len(picked)]
-        if needed:
+        # The pool is a cached SNAPSHOT of ids, so a part deleted since the
+        # last refresh resolves to NOTHING. Resolve the whole remaining pool
+        # (bounded: 2 × CLOSEST_LIMIT, still one query) and take the first N
+        # rows that are still LIVE — slicing to N ids first made every stale
+        # id cost a result row, so a zero-result page silently returned 13
+        # suggestions instead of 15. Pool order is the ranking, so it is
+        # preserved across both the filter and the refill.
+        candidate_ids = [pid for pid in _popular_backfill_ids(db) if pid not in picked_ids]
+        if candidate_ids:
             by_id = {
                 p.id: p
                 for p in db.query(Part)
                 .options(raiseload(Part.listings))
-                .filter(Part.id.in_(needed))
+                .filter(Part.id.in_(candidate_ids))
                 .all()
             }
-            picked.extend(by_id[pid] for pid in needed if pid in by_id)
+            live = [by_id[pid] for pid in candidate_ids if pid in by_id]
+            picked.extend(live[: CLOSEST_LIMIT - len(picked)])
     return _build_search_parts(db, picked)
 
 
@@ -414,6 +440,11 @@ def search(db: Session, query: str, suggest: bool = True, compact: bool = False)
     suppliers at 3, manufacturers omitted — same response shape, `total`
     still the sum of the returned section lengths."""
     t0 = time.perf_counter()
+    # The route already 422s an over-long `q`; this is the belt to that
+    # braces, because the fuzzy recovery below is superlinear in query length
+    # and `search` is importable by anything (jobs, tests, a future route).
+    # Truncating rather than raising keeps this a pure function of the text.
+    query = query[:MAX_QUERY_LENGTH]
     pattern = f"%{query}%"
 
     parts_raw = (

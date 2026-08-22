@@ -12,8 +12,8 @@ from pathlib import Path
 from app.models import Part
 from app.services import search_service
 from app.services.search_service import (
-    clear_public_manufacturers_cache,
     get_public_manufacturers,
+    invalidate_catalog_caches,
 )
 
 ROUTE_SOURCE = Path(__file__).parent.parent / "app" / "routes" / "manufacturers.py"
@@ -88,7 +88,7 @@ class TestTtlCache:
     def test_clear_resets_immediately(self, db, seeded_db):
         get_public_manufacturers(db)
         _add_part(db, "NEW-1", "Brand New Corp")
-        clear_public_manufacturers_cache()
+        invalidate_catalog_caches()
         names = [m["name"] for m in get_public_manufacturers(db)]
         assert "Brand New Corp" in names
 
@@ -100,6 +100,6 @@ class TestTtlCache:
         search_service._popular_backfill_ids(db)
         assert search_service._vocab_cache is not None
         assert search_service._backfill_ids_cache is not None
-        clear_public_manufacturers_cache()
+        invalidate_catalog_caches()
         assert search_service._vocab_cache is None
         assert search_service._backfill_ids_cache is None

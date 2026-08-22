@@ -1000,3 +1000,85 @@ class TestPauseIsAClick:
             ).status_code
             == 404
         )
+
+
+class TestARunBustsTheSearchCaches:
+    """A feed run rewrites the catalog, so the search TTL caches (derived
+    manufacturers, did-you-mean vocabulary, popular-backfill pool) are stale
+    the moment it ends. Without the bust an operator watched a run report
+    "created: 40" and then searched for none of them for up to ten minutes."""
+
+    def _count_busts(self, monkeypatch):
+        from app.services.part_feed import importer as importer_module
+
+        calls: list[int] = []
+        monkeypatch.setattr(
+            importer_module, "invalidate_catalog_caches", lambda: calls.append(1)
+        )
+        return calls
+
+    def test_exactly_once_per_run_not_once_per_part(
+        self, db, mouser_supplier, three_part_provider, monkeypatch
+    ):
+        calls = self._count_busts(monkeypatch)
+        run = start_feed_run(
+            supplier=mouser_supplier,
+            mode="sync",
+            provider=three_part_provider(),
+            work=_sync_work(),
+            session_factory=TestingSessionLocal,
+        )
+        _await_finished(run)
+        # Three parts synced, ONE bust — per-part would clear the cache on
+        # every row and make every intervening search re-derive from scratch.
+        assert run.events[-1]["counts"]["synced"] == 3
+        assert len(calls) == 1
+
+    def test_a_run_that_blows_up_still_busts(
+        self, db, mouser_supplier, three_part_provider, monkeypatch
+    ):
+        """A failed run still committed the parts it got through, so its
+        partial writes have to reach search too — the bust lives in the
+        worker's `finally`, not on the happy path."""
+
+        def _boom(db_, provider, supplier):
+            raise RuntimeError("Mouser API HTTP 500")
+            yield  # pragma: no cover - makes this a generator
+
+        calls = self._count_busts(monkeypatch)
+        run = start_feed_run(
+            supplier=mouser_supplier,
+            mode="sync",
+            provider=three_part_provider(),
+            work=_boom,
+            session_factory=TestingSessionLocal,
+        )
+        _await_finished(run)
+        assert "sync_error" in _kinds(run.events)
+        assert len(calls) == 1
+
+    def test_a_real_run_leaves_the_caches_cold(
+        self, db, mouser_supplier, three_part_provider
+    ):
+        """No monkeypatching and no clock travel: warm all three caches, run
+        the feed for real, and every one of them is gone — so the next search
+        re-derives from the catalog the run just wrote."""
+        from app.services import search_service
+
+        search_service.search(db, "zzzznothingmatches")  # warms all three
+        assert search_service._manufacturers_cache is not None
+        assert search_service._vocab_cache is not None
+        assert search_service._backfill_ids_cache is not None
+
+        run = start_feed_run(
+            supplier=mouser_supplier,
+            mode="sync",
+            provider=three_part_provider(),
+            work=_sync_work(),
+            session_factory=TestingSessionLocal,
+        )
+        _await_finished(run)
+
+        assert search_service._manufacturers_cache is None
+        assert search_service._vocab_cache is None
+        assert search_service._backfill_ids_cache is None

@@ -95,22 +95,39 @@ from app.models import (  # noqa: E402
     Supplier,
     User,
 )
+from app.routes.analytics import reset_analytics_state  # noqa: E402
 from app.services import rate_limit  # noqa: E402
-from app.services.search_service import clear_public_manufacturers_cache  # noqa: E402
+from app.services.search_service import invalidate_catalog_caches  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
 def reset_public_manufacturers_cache():
-    """Wipe the derived-manufacturers TTL cache between tests.
+    """Wipe the catalog-derived TTL caches between tests.
 
-    The cache (app.services.search_service) is PROCESS memory with a 600s
+    The caches (app.services.search_service) are PROCESS memory with a 600s
     TTL, so without this every test after the first would search against the
     FIRST test's catalog — one suite's manufacturers leaking into the next
     suite's vocabulary. Same shape as the rate-limiter reset above.
     """
-    clear_public_manufacturers_cache()
+    invalidate_catalog_caches()
     yield
-    clear_public_manufacturers_cache()
+    invalidate_catalog_caches()
+
+
+@pytest.fixture(autouse=True)
+def reset_analytics_process_state():
+    """Wipe app.routes.analytics' process memory between tests.
+
+    Two things live there. The "country data since" stamp is deliberately
+    sticky (the first country row's date can only move backward), so one
+    test's page views would otherwise fix it for every test after. The
+    /api/track throttle is keyed per ADDRESS, and TestClient is always the
+    same host — without this the whole suite shares one 30-per-minute
+    allowance and the 31st tracked view anywhere would silently vanish.
+    """
+    reset_analytics_state()
+    yield
+    reset_analytics_state()
 
 
 @pytest.fixture(autouse=True)

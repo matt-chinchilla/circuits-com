@@ -29,7 +29,8 @@ from app.models import Category, Part, PartListing, PriceBreak, Supplier, Suppli
 from app.services.activity import IMPORT_EVENT_KINDS, record_stream_event
 from app.services.part_feed.base import FeedPart, PartFeedProvider
 from app.services.part_feed.mouser import FeedFatalError
-from app.services.part_feed.specmap import map_lifecycle
+from app.services.part_feed.specmap import map_lifecycle, normalize_mount
+from app.services.search_service import invalidate_catalog_caches
 from app.utils.image_url import validate_optional_image_url
 
 logger = logging.getLogger(__name__)
@@ -121,8 +122,14 @@ def _stamp_feed_facts(part: Part, fp: FeedPart) -> bool:
         changed = True
     # Spec fields (migration 039) — `is not None`, NEVER truthiness: rohs=False
     # is a value and must be stored; feed absence (None) leaves values alone.
-    if fp.mount is not None and part.mount != fp.mount:
-        part.mount = fp.mount
+    # normalize_mount, not fp.mount raw: `FeedPart.mount` is a bare str, so
+    # the clamp belongs at the WRITE boundary as well as at map_mount's exit —
+    # a provider that fills the field itself must not reach a String(8) column
+    # with "Surface Mount". Unrecognized clamps to None = "the feed said
+    # nothing", which leaves the stored value alone.
+    mount = normalize_mount(fp.mount)
+    if mount is not None and part.mount != mount:
+        part.mount = mount
         changed = True
     if fp.rohs is not None and part.rohs != fp.rohs:
         part.rohs = fp.rohs
@@ -1075,6 +1082,12 @@ def _feed_run_worker(
                 close()
             except Exception:  # noqa: BLE001
                 logger.warning("[feed-run] provider close failed", exc_info=True)
+        # A run just rewrote the catalog: drop the search TTL caches so the
+        # manufacturers list, the did-you-mean vocabulary and the backfill
+        # pool reflect what it imported. ONCE PER RUN, here at the end —
+        # never per part, which would clear the cache thousands of times and
+        # make every intervening search re-derive from scratch.
+        invalidate_catalog_caches()
         try:
             db.close()
         finally:

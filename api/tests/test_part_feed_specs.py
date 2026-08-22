@@ -15,7 +15,7 @@ from app.models import Part
 from app.services.part_feed.base import FeedPart
 from app.services.part_feed.importer import _stamp_feed_facts
 from app.services.part_feed.mouser import _parse_lead_time, part_from_mouser
-from app.services.part_feed.specmap import map_mount, map_rohs
+from app.services.part_feed.specmap import map_mount, map_rohs, normalize_mount
 
 # ── Migration 039 metadata guard ────────────────────────────────────────────
 # SQLite ignores VARCHAR lengths, so the length contract is asserted on the
@@ -48,7 +48,24 @@ def test_migration_039_imports_cleanly():
         ("RoHS Compliant", True),
         ("ROHS COMPLIANT", True),
         ("RoHS Compliant By Exemption", True),
-        ("RoHS Non-Compliant", False),
+        # Versioned spellings — the directive number rides BETWEEN the word
+        # and "compliant", so a plain containment matched none of these and
+        # reported compliant parts as unknown.
+        ("RoHS3 Compliant", True),
+        ("ROHS3 COMPLIANT", True),
+        ("RoHS-3 Compliant", True),
+        ("RoHS 3 Compliant", True),
+        ("RoHS3 Compliant By Exemption", True),
+        # The versioned token alone IS the status in some feeds.
+        ("RoHS3", True),
+        ("RoHS-3", True),
+        ("rohs 3", True),
+        # Non-compliant still wins, versioned or not.
+        ("RoHS3 Non-Compliant", False),
+        ("RoHS-3 Not Compliant", False),
+        # A bare label is not a claim — no guessing.
+        ("RoHS", None),
+        ("RoHS Status", None),
         ("Non-Compliant", False),
         ("non compliant", False),
         ("Not Compliant", False),
@@ -210,3 +227,79 @@ def test_stamp_same_values_report_unchanged():
     part = Part(sku="X1", manufacturer_name="Acme", rohs=True, mount="SMT", lead_time_days=14)
     changed = _stamp_feed_facts(part, _feed_part(rohs=True, mount="SMT", lead_time_days=14))
     assert not changed
+
+
+# ── normalize_mount: the {SMT, THT, None} contract, enforced at every exit ──
+
+
+class TestNormalizeMount:
+    """`Part.mount` is String(8) and every reader branches on exactly two
+    tokens, so an unrecognized value is worse than none — it renders as a
+    mystery badge and a long one fails the Postgres INSERT outright."""
+
+    @pytest.mark.parametrize(
+        ("raw", "expected"),
+        [
+            ("SMT", "SMT"),
+            ("THT", "THT"),
+            ("smt", "SMT"),  # casing is normalized, not rejected
+            (" tht ", "THT"),
+            # Anything else clamps to None = "the feed said nothing".
+            ("Surface Mount", None),
+            ("Through Hole", None),
+            ("SMD", None),
+            ("Chassis Mount", None),
+            ("", None),
+            (None, None),
+        ],
+    )
+    def test_clamps_to_the_contract(self, raw, expected):
+        assert normalize_mount(raw) == expected
+
+    def test_map_mount_output_is_always_in_contract(self):
+        """Whatever the table does, the exit is clamped."""
+        packages = [
+            "0805 (2012 Metric)",
+            "SOIC-8",
+            "DIP-8",
+            "TO-220-3",
+            "XYZ-99",
+            "",
+            None,
+            "Surface Mount Device",
+            "DO-214AC (SMA)",
+            "Radial",
+        ]
+        attrs = [
+            None,
+            _attrs("Mounting Style", "Surface Mount"),
+            _attrs("Mounting Style", "Chassis Mount"),
+            _attrs("Package / Case", "SOIC-8"),
+        ]
+        for a in attrs:
+            for pkg in packages:
+                assert map_mount(a, pkg) in (None, "SMT", "THT")
+
+    def test_stamp_clamps_a_provider_supplied_value(self):
+        """FeedPart.mount is a bare `str`, so the clamp has to hold at the
+        WRITE boundary too — Mouser is not the only feed this registry can
+        carry, and a raw "Surface Mount" would not fit the column."""
+        part = Part(sku="X1", manufacturer_name="Acme")
+        changed = _stamp_feed_facts(part, _feed_part(mount="Surface Mount"))
+        assert part.mount is None
+        assert not changed
+
+    def test_stamp_does_not_erase_a_good_value_with_junk(self):
+        part = Part(sku="X1", manufacturer_name="Acme", mount="SMT")
+        _stamp_feed_facts(part, _feed_part(mount="Chassis Mount"))
+        assert part.mount == "SMT"
+
+    def test_stamp_normalizes_casing(self):
+        part = Part(sku="X1", manufacturer_name="Acme")
+        assert _stamp_feed_facts(part, _feed_part(mount="tht"))
+        assert part.mount == "THT"
+
+
+def test_rohs3_survives_the_mouser_boundary():
+    fp = part_from_mouser(_raw_mouser(ROHSStatus="RoHS3 Compliant"))
+    assert fp.rohs is True
