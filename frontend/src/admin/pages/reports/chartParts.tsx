@@ -31,6 +31,36 @@ export const AXIS_FONT = 'ui-monospace, SFMono-Regular, Menlo, monospace'
 
 // ── HitRects — transparent per-point hover/pin bands ────────────────────────
 
+interface HitRectProps {
+  x: number
+  top: number
+  height: number
+  bandW: number
+  index: number
+  setHover: (i: number | null) => void
+  togglePin: (i: number) => void
+}
+
+/** ONE point's hover/pin band. Exported on its own because paint order is
+ *  document order in SVG: the revenue chart interleaves each band with that
+ *  point's ring+dot inside a per-point <g> (the shipped order), while the
+ *  traffic/device charts paint their bands as one block after the markers.
+ *  Both spellings share this single geometry home. */
+export function HitRect({ x, top, height, bandW, index, setHover, togglePin }: HitRectProps) {
+  return (
+    <rect
+      x={x - bandW / 2}
+      y={top}
+      width={bandW}
+      height={height}
+      fill="transparent"
+      style={{ cursor: 'pointer' }}
+      onMouseEnter={() => setHover(index)}
+      onClick={(e) => { e.stopPropagation(); togglePin(index) }}
+    />
+  )
+}
+
 interface HitRectsProps {
   xs: number[]
   top: number
@@ -44,16 +74,15 @@ export function HitRects({ xs, top, height, bandW, setHover, togglePin }: HitRec
   return (
     <>
       {xs.map((x, i) => (
-        <rect
+        <HitRect
           key={i}
-          x={x - bandW / 2}
-          y={top}
-          width={bandW}
+          x={x}
+          top={top}
           height={height}
-          fill="transparent"
-          style={{ cursor: 'pointer' }}
-          onMouseEnter={() => setHover(i)}
-          onClick={(e) => { e.stopPropagation(); togglePin(i) }}
+          bandW={bandW}
+          index={i}
+          setHover={setHover}
+          togglePin={togglePin}
         />
       ))}
     </>
@@ -114,9 +143,16 @@ interface YTicksProps {
 }
 
 export function YTicks({ ticks, yScale, x1, x2, labelX, fontSize = 11, format }: YTicksProps) {
+  // A tick domain can repeat a value: both integer domains clamp their last
+  // tick to maxV, which collides with the previous step whenever the rounded
+  // step already reached it (traffic maxV 6 -> [0,2,4,6,6]; device-trend
+  // maxV 4 -> [0,2,4,4], and 4 is that chart's hard floor). A repeat renders
+  // one gridline and label on top of another AND duplicates the React key, so
+  // drop it here — one guard for every chart. First occurrence wins.
+  const unique = ticks.filter((t, i) => ticks.indexOf(t) === i)
   return (
     <>
-      {ticks.map((t) => (
+      {unique.map((t) => (
         <g key={t}>
           <line
             x1={x1}

@@ -11,7 +11,7 @@
 import { useId, useMemo } from 'react'
 import styles from './ReportsPage.module.scss'
 import { monotoneAreaPath, monotonePath, tooltipAnchor } from './chartKit'
-import { AXIS_FONT, ChartTip, Crosshair, HitRects, IZ, XLabels, YTicks } from './chartParts'
+import { AXIS_FONT, ChartTip, Crosshair, HitRect, HitRects, IZ, XLabels, YTicks } from './chartParts'
 import { useChartActive } from './useChartActive'
 
 const GRAD_CHIP = 'linear-gradient(90deg, #2299bf, #3fa172)'
@@ -147,18 +147,23 @@ export function ReportsRevenueChart({ series }: ReportsRevenueChartProps) {
           </>
         )}
         {active !== null && <Crosshair x={xs[active]} top={PAD_T} bottom={H - PAD_B} />}
-        {N >= 2 && (
-          <HitRects
-            xs={xs}
-            top={PAD_T}
-            height={innerH}
-            bandW={innerW / N}
-            setHover={setHover}
-            togglePin={togglePin}
-          />
-        )}
+        {/* Paint order is document order in SVG. Shipped order (207dc39) puts
+            each point's hit band, pin ring and dot together in one <g>, so the
+            active marker paints over every band that precedes it rather than
+            under a hoisted block of them. Keep the interleave. */}
         {series.map((d, i) => (
           <g key={d.m}>
+            {N >= 2 && (
+              <HitRect
+                x={xs[i]}
+                top={PAD_T}
+                height={innerH}
+                bandW={innerW / N}
+                index={i}
+                setHover={setHover}
+                togglePin={togglePin}
+              />
+            )}
             {pinned === i && (
               <circle
                 cx={xs[i]}

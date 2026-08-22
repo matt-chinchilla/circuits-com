@@ -468,7 +468,7 @@
   border: 1px solid var(--theme-border, rgba($executive-blue, 0.12));
   border-radius: 8px;
 
-  @include responsive(mobile) {
+  @include responsive($bp-mobile) {
     grid-template-columns: 1fr;
     gap: 8px;
   }

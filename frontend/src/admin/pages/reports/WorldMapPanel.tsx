@@ -14,7 +14,11 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import type { EChartsCoreOption } from 'echarts/core';
-import EChart, { registerMapOnce } from '@admin/components/charts/EChart';
+import EChart from '@admin/components/charts/EChart';
+// Importing this module is what pulls MapChart + VisualMapComponent (and the
+// geo coordinate system) into the bundle — it is scoped to this panel on
+// purpose, so no other admin chart page pays for the map renderer.
+import { registerMapOnce } from '@admin/components/charts/echartsMap';
 import type { AnalyticsData } from '@admin/types/admin';
 import { flagEmoji } from './chartKit';
 import styles from './ReportsPage.module.scss';
