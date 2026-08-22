@@ -119,7 +119,7 @@ export function homeSeo(categories: SeoLink[] = []): PageSeo {
     title:
       'The Integrated Circuits Directory — Compare Prices & Distributors | Circuit Center',
     description:
-      'Compare prices and stock for 3,600+ electronic components from 57 distributors. ICs, MCUs, sensors, and more.',
+      'Compare prices and stock for 170,000+ electronic components from dozens of distributors. ICs, MCUs, sensors, and more.',
     canonical: `${SITE_ORIGIN}/`,
     jsonLd: [ORGANIZATION_JSONLD, WEBSITE_JSONLD],
     heading: 'Circuit Center — The Integrated Circuits Directory',
