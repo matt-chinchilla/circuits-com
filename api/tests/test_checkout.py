@@ -57,7 +57,7 @@ def _session_meta(category_id=None, keyword=None, company="Acme Components", web
 
 def _completed_event(
     meta, email="ap@acme.example", subscription="sub_selfserve", payment_status="paid",
-    amount_total=10000, session_id="cs_test_1",
+    amount_total=25000, session_id="cs_test_1",
 ):
     return {
         "type": "checkout.session.completed",
@@ -85,7 +85,7 @@ def test_routes_404_without_a_key(client):
 
 def test_info_serves_the_ladder_price(client, stripe_key):
     body = client.get(URL).json()
-    assert body == {"monthly_total": 100, "tax_included": True}
+    assert body == {"monthly_total": 250, "tax_included": True}
 
 
 def test_placement_xor_is_enforced(client, stripe_key, seeded_db):
@@ -296,7 +296,7 @@ class TestCheckoutCompleted:
         sponsor = db.query(Sponsor).filter(Sponsor.supplier_id == supplier.id).one()
         assert (sponsor.tier, sponsor.status) == ("Silver", "Active")
         assert str(sponsor.category_id) == str(child.id)
-        assert Decimal(str(sponsor.amount)) == Decimal("100")
+        assert Decimal(str(sponsor.amount)) == Decimal("250")
         assert sponsor.sold_by == settings.SELF_SERVE_ONBOARDING_REP
         assert sponsor.stripe_subscription_id == "sub_selfserve"
 
@@ -495,7 +495,7 @@ class TestSilverBoards:
 
     def test_lists_subcategories_with_open_slots(self, client, stripe_key, seeded_db):
         body = client.get("/api/checkout/silver/boards").json()
-        assert body["monthly_total"] == 100
+        assert body["monthly_total"] == 250
         child = seeded_db["child"]
         board = next(b for b in body["boards"] if b["category_id"] == str(child.id))
         assert board["name"] == child.name

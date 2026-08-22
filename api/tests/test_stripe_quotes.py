@@ -127,7 +127,7 @@ def _run(fake: FakeStripe, coro_factory):
     return asyncio.run(go())
 
 
-def _quote(fake: FakeStripe, *, tier="Gold", total=300):
+def _quote(fake: FakeStripe, *, tier="Gold", total=1250):
     fake.right_total = total * 100
     return _run(
         fake,
@@ -156,26 +156,26 @@ def _sent(fake: FakeStripe, method: str, path: str) -> dict:
 
 def test_discounted_quote_builds_the_exact_all_in_total():
     fake = FakeStripe()
-    result = _quote(fake, tier="Gold", total=300)
-    assert result["amount_total"] == 30000
+    result = _quote(fake, tier="Gold", total=1250)
+    assert result["amount_total"] == 125000
     assert result["quote_id"] == "qt_testquote0001"
 
     quote = _sent(fake, "POST", "/v1/quotes")
     assert quote["subscription_data[metadata][sponsor_id]"] == "sponsor-1"
     assert quote["automatic_tax[enabled]"] == "true"
     assert quote["collection_method"] == "send_invoice"
-    assert quote["discounts[0][coupon]"] == "GOLD-AT-300"
+    assert quote["discounts[0][coupon]"] == "GOLD-AT-1250"
     assert quote["line_items[0][price]"] == "price_gold_advertising_monthly"
     assert quote["line_items[1][price]"] == "price_gold_platform_monthly"
 
     coupon = _sent(fake, "POST", "/v1/coupons")
-    assert coupon["amount_off"] == "30000"  # (600 − 300) × 100
+    assert coupon["amount_off"] == "125000"  # (2500 − 1250) × 100
     assert coupon["duration"] == "forever"
 
 
 def test_list_price_quote_sends_no_discount():
     fake = FakeStripe()
-    _quote(fake, tier="Gold", total=600)
+    _quote(fake, tier="Gold", total=2500)
     quote = _sent(fake, "POST", "/v1/quotes")
     assert not any(k.startswith("discounts") for k in quote)
     assert not any(p == "/v1/coupons" for _, p, _ in fake.tape)
@@ -214,7 +214,7 @@ def test_plus_addressed_email_is_percent_encoded_in_the_lookup():
     fake.customers = [
         {"id": "cus_plus", "email": "billing+ap@kennedy.com", "metadata": {"supplier_id": "supplier-1"}}
     ]
-    fake.right_total = 30000
+    fake.right_total = 125000
     result = _run(
         fake,
         lambda client: create_sponsor_quote(
@@ -225,7 +225,7 @@ def test_plus_addressed_email_is_percent_encoded_in_the_lookup():
             supplier_name="Kennedy Electronics",
             email="billing+ap@kennedy.com",
             address=ADDRESS,
-            monthly_total_usd=300,
+            monthly_total_usd=1250,
         ),
     )
     # The fake filters on the DECODED email — a reused (not duplicate)
@@ -242,7 +242,7 @@ def test_total_mismatch_cancels_the_quote_and_raises():
     fake = FakeStripe()
     fake.finalized_total = 132854  # the $1,328.54 the requirement forbids
     with pytest.raises(StripeApiError) as err:
-        _quote(fake, tier="Platinum", total=1250)
+        _quote(fake, tier="Platinum", total=5000)
     assert "canceled" in str(err.value)
     assert any(p.endswith("/cancel") for _, p, _ in fake.tape)
 
@@ -255,7 +255,7 @@ def test_failed_cancel_still_reports_the_mismatch_with_the_quote_id():
     fake.finalized_total = 132854
     fake.cancel_fails = True
     with pytest.raises(StripeApiError) as err:
-        _quote(fake, tier="Platinum", total=1250)
+        _quote(fake, tier="Platinum", total=5000)
     message = str(err.value)
     assert "qt_testquote0001" in message
     assert "still OPEN" in message
@@ -279,9 +279,9 @@ def test_unknown_tier_is_refused():
 def test_coupon_conflict_with_matching_amount_is_reused():
     fake = FakeStripe()
     fake.coupon_exists = True
-    fake.existing_coupon_amount = 30000
-    _quote(fake, tier="Gold", total=300)
-    assert _sent(fake, "POST", "/v1/quotes")["discounts[0][coupon]"] == "GOLD-AT-300"
+    fake.existing_coupon_amount = 125000
+    _quote(fake, tier="Gold", total=1250)
+    assert _sent(fake, "POST", "/v1/quotes")["discounts[0][coupon]"] == "GOLD-AT-1250"
 
 
 def test_coupon_conflict_with_wrong_amount_is_an_error_not_a_discount():
@@ -291,7 +291,7 @@ def test_coupon_conflict_with_wrong_amount_is_an_error_not_a_discount():
     fake.coupon_exists = True
     fake.existing_coupon_amount = 5000
     with pytest.raises(StripeApiError) as err:
-        _quote(fake, tier="Gold", total=300)
+        _quote(fake, tier="Gold", total=1250)
     assert err.value.status == 409
     assert not any(p == "/v1/quotes" for _, p, _ in fake.tape)
 
@@ -302,10 +302,10 @@ def test_coupon_conflict_with_once_duration_is_refused():
     every renewal to list price. Amount alone is not enough to reuse."""
     fake = FakeStripe()
     fake.coupon_exists = True
-    fake.existing_coupon_amount = 30000
+    fake.existing_coupon_amount = 125000
     fake.existing_coupon_duration = "once"
     with pytest.raises(StripeApiError) as err:
-        _quote(fake, tier="Gold", total=300)
+        _quote(fake, tier="Gold", total=1250)
     assert err.value.status == 409
     assert "duration" in str(err.value)
 
@@ -366,9 +366,9 @@ def test_sponsor_quote_list_is_empty_when_no_customer_matches_the_supplier():
 def test_ladder_first_entry_is_the_list_price():
     """The service derives coupon amounts from steps[0]; a reordered ladder
     would silently misprice every discount."""
-    assert QUOTE_LADDER["silver"][0] == 100
-    assert QUOTE_LADDER["gold"][0] == 600
-    assert QUOTE_LADDER["platinum"][0] == 2400
+    assert QUOTE_LADDER["silver"][0] == 250
+    assert QUOTE_LADDER["gold"][0] == 2500
+    assert QUOTE_LADDER["platinum"][0] == 10000
     for tier, steps in QUOTE_LADDER.items():
         assert steps[0] == max(steps), tier
         assert lookup_keys_for(tier) == [f"{tier}_advertising_monthly", f"{tier}_platform_monthly"]
@@ -399,7 +399,7 @@ def test_quote_ladder_requires_auth(client, stripe_key):
 
 def test_quote_ladder_renders_the_single_home(client, seeded_db, auth_header, stripe_key):
     body = client.get("/api/admin/quote-ladder", headers=auth_header()).json()
-    assert body["tiers"]["gold"]["list"] == 600
+    assert body["tiers"]["gold"]["list"] == 2500
     assert body["tiers"]["platinum"]["steps"] == QUOTE_LADDER["platinum"]
 
 

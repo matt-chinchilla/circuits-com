@@ -44,10 +44,15 @@ STRIPE_FILES = "https://files.stripe.com"
 # with no coupon); the floors are the sanctioned standard discounts. ONE home —
 # the route validates against this and the UI renders it; add a step here and
 # both sides learn it.
+# Repriced 2026-08-22 (owner): 100/600/2400 -> 250/2500/10000. The Stripe
+# prices behind the lookup keys were REPLACED to match (unit_amount is
+# immutable, so new price objects took the keys and the old ones were
+# archived) — this table and Stripe must move together or the webhook's
+# amount gate rejects every real payment.
 QUOTE_LADDER: dict[str, list[int]] = {
-    "silver": [100, 90, 75, 50],
-    "gold": [600, 550, 500, 450, 400, 350, 300],
-    "platinum": [2400, 2200, 2000, 1800, 1600, 1400, 1250, 1200],
+    "silver": [250, 225, 200, 175, 150, 125],
+    "gold": [2500, 2250, 2000, 1750, 1500, 1250],
+    "platinum": [10000, 9000, 8000, 7000, 6000, 5000],
 }
 
 _TIER_PRODUCTS = {
