@@ -69,8 +69,47 @@
   }
 }
 
-.thNum {
-  width: 46px;
+
+// The image column's header carries no visible label — the pictures name
+// themselves — but the column still needs one in the a11y tree.
+.thHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.thumbImg,
+.thumbFallback {
+  display: block;
+  width: 36px;
+  height: 36px;
+  border-radius: 7px;
+}
+
+.thumbImg {
+  // contain, not cover: a distributor photo is a product ON a background, and
+  // cropping to fill lops the leads off a through-hole part.
+  object-fit: contain;
+  background: #ffffff;
+  box-shadow:
+    inset 0 0 0 1px rgba(26, 31, 35, 0.1),
+    0 1px 2px rgba(16, 24, 32, 0.06);
+}
+
+.thumbFallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 19px;
+  color: var(--bom-ink-secondary, #676c71);
+  background: linear-gradient(rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0.45));
+  box-shadow: inset 0 0 0 1px rgba(26, 31, 35, 0.1);
 }
 
 .thRight {
@@ -173,8 +212,8 @@
 
 // Hatched = "no feed ever confirmed this" (D6). 99.7% of the catalog is here,
 // and the honest texture is the whole point of the column.
-.railUnverified {
-  @include bom-rail-unk;
+.railUnknown {
+  @include bom-rail-unknown;
 }
 
 // The lifecycle claim as a WORD beside the rail — the canvas token row.
@@ -216,7 +255,7 @@
 }
 
 .availStale {
-  @include bom-rail-unk;
+  @include bom-rail-stale;
 }
 
 // ─── Part cell ──────────────────────────────────────────────────────────────
@@ -241,6 +280,15 @@
   font-weight: 600;
   color: var(--executive-blue, $executive-blue);
   word-break: break-word;
+  text-decoration: none;
+
+  // The SKU is a link to the part page. Underline on interaction only —
+  // twenty permanently underlined mono SKUs turn the column into a ladder.
+  &:hover,
+  &:focus-visible {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
 }
 
 .maker {
@@ -350,16 +398,30 @@
 // ─── Recommended supplier ───────────────────────────────────────────────────
 
 .supplierCell {
-  display: flex;
+  // Grid, not a flex row (2026-08-22): as a row the tier ribbon sat BESIDE the
+  // supplier block and competed for the column's width — measured a 92px
+  // ribbon inside a 104px cell, which collapsed the text to zero, overflowed
+  // into Unit/Ext, and pushed the availability rail 34px right on exactly the
+  // sponsored rows, so the rails no longer formed a line. The ribbon now takes
+  // its own row under the text and the rail spans both at a fixed right edge.
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   // Center, not stretch: the tier ribbon is an inline pill and a stretch
   // default ballooned it into a card-sized slab (2026-08-21). The
   // availability rail opts back into stretch itself.
   align-items: center;
-  gap: 8px;
+  gap: 5px 8px;
   min-width: 0;
 
   > [class*='rail'] {
+    grid-column: 2;
+    grid-row: 1 / -1;
     align-self: stretch;
+  }
+
+  > [class*='ribbon'] {
+    grid-column: 1;
+    justify-self: start;
   }
 }
 
@@ -374,6 +436,14 @@
   font-size: 0.87rem;
   font-weight: 600;
   color: $text-primary;
+  // A two-line name pushed the Stock reading one line down, so the column read
+  // ragged (measured: 37px on short names, 60px on "Mouser Electronics" and
+  // "Arrow Electronics"). nowrap WITHOUT overflow:hidden on purpose — hiding
+  // the overflow drops the cell's min-content width to zero, which is how auto
+  // table layout justified squeezing this column to 104px in the first place.
+  // The name now sets the column's floor. A long Stock reading may still wrap,
+  // which is fine: it is the LAST line, so the tops stay level.
+  white-space: nowrap;
 }
 
 .supplierMeta {
@@ -514,15 +584,26 @@
 }
 
 // Column widths for the fixed layout — Description flexes, all else pinned.
-.table th:nth-child(1) { width: 40px; }
-.table th:nth-child(2) { width: 128px; }
-.table th:nth-child(3) { width: 148px; }
-.table th:nth-child(4) { width: 112px; }
-.table th:nth-child(6) { width: 60px; }
-.table th:nth-child(7) { width: 148px; }
-.table th:nth-child(8) { width: 248px; }
-.table th:nth-child(9) { width: 104px; }
-.table th:nth-child(10) { width: 112px; }
+//
+// Keyed by CLASS, not :nth-child (2026-08-22). These were positional, and
+// inserting the image column silently rotated every width down one seat:
+// Description inherited Qty's 60px and rendered "Wi-Fi…", Recommended
+// inherited Unit/Ext's 104px and its tier ribbon overflowed into the next
+// column. Nothing failed — the table just quietly redrew wrong. Class-keyed
+// widths travel with their column, so the next insert cannot repeat it.
+.table {
+  .thNum { width: 40px; }
+  .thThumb { width: 64px; } // 36px image + the .td's 14px side padding
+  .thSub { width: 128px; }
+  .thPart { width: 148px; }
+  .thMatch { width: 112px; }
+  // .thDesc intentionally unset — it absorbs whatever the bench has spare.
+  .thQty { width: 60px; }
+  .thRefs { width: 148px; }
+  .thRec { width: 248px; }
+  .thPrice { width: 104px; }
+  .thAlt { width: 112px; }
+}
 
 .tdSub {
   min-width: 110px;

@@ -11,7 +11,43 @@ import TierBannerRibbon, {
 } from '@public/components/widgets/TierBannerRibbon';
 import MatchBadge from './MatchBadge';
 import SimilarDropdown from './SimilarDropdown';
+import Icon from '@shared/components/Icon';
+import { safeImageUrl } from '@shared/utils/url';
 import styles from './BomTable.module.scss';
+
+/**
+ * Row thumbnail. Two tiers only — the stored product photo, else a neutral
+ * glyph; the part page's middle tier (a representative package render) is
+ * deliberately not reached for at 40px, where the archetypes are unreadable.
+ *
+ * `safeImageUrl`, never a raw src: `image_url` is stored content a feed or an
+ * admin supplied, so it carries the same `javascript:`/`data:text/html` risk
+ * as a sponsor logo. `alt` is empty on purpose — the SKU sits in the very next
+ * cell, and 20 rows of "<part> product photo" is screen-reader noise.
+ */
+function PartThumb({ src }: { src: string | null }) {
+  const [failed, setFailed] = useState(false);
+  const safe = safeImageUrl(src);
+
+  if (safe == null || failed) {
+    return (
+      <span className={styles.thumbFallback} aria-hidden="true">
+        <Icon name="cpu" />
+      </span>
+    );
+  }
+
+  return (
+    <img
+      className={styles.thumbImg}
+      src={safe}
+      alt=""
+      loading="lazy"
+      decoding="async"
+      onError={() => setFailed(true)}
+    />
+  );
+}
 
 /**
  * The priced BOM.
@@ -139,9 +175,17 @@ function quoteHref(row: TableRow): string {
   return `/contact?part=${encodeURIComponent(quoteIdentity(row))}#partner-desk`;
 }
 
-/** What the left rail claims about the part's life. `lifecycle_verified` is
- *  the truth-bit: false means a feed never confirmed anything, whatever the
- *  enum column happens to hold, so it outranks the enum entirely. */
+/** What the left rail claims about the part's life.
+ *
+ *  The rail reports OUR catalog's lifecycle (owner decision, 2026-08-22).
+ *  It used to gate on `lifecycle_verified` — the feed-attestation bit — and
+ *  render every un-attested row as a hatched UNVERIFIED bar, which in a
+ *  catalog whose lifecycle data is curated rather than fed meant nearly every
+ *  row showed the hatch and no row showed its actual status. `lifecycle_status`
+ *  is our own claim and is what we now display; the hatch is gone entirely.
+ *  Only a row with no lifecycle at all falls through to the neutral rail.
+ *  (`lifecycle_verified` still rides the wire — restoring the stricter
+ *  reading is a one-line change here, not a backend one.) */
 function lifecycleRail(row: TableRow): {
   className: string;
   label: string;
@@ -149,11 +193,11 @@ function lifecycleRail(row: TableRow): {
   tokClass: string;
 } {
   const part = row.server?.part ?? null;
-  if (part == null || !part.lifecycle_verified) {
+  if (part == null) {
     return {
-      className: styles.railUnverified,
-      label: 'Lifecycle: unverified',
-      tok: 'UNVERIFIED',
+      className: styles.railUnknown,
+      label: 'Lifecycle: no matched part',
+      tok: '—',
       tokClass: styles.tokUnk,
     };
   }
@@ -181,9 +225,9 @@ function lifecycleRail(row: TableRow): {
       };
     default:
       return {
-        className: styles.railUnverified,
+        className: styles.railUnknown,
         label: 'Lifecycle: unknown',
-        tok: 'UNVERIFIED',
+        tok: 'UNKNOWN',
         tokClass: styles.tokUnk,
       };
   }
@@ -313,10 +357,13 @@ export default function BomTable({
               <th className={`${styles.th} ${styles.thNum}`} scope="col">
                 #
               </th>
+              <th className={`${styles.th} ${styles.thThumb}`} scope="col">
+                <span className={styles.thHidden}>Image</span>
+              </th>
               <th className={`${styles.th} ${styles.thSub}`} scope="col">
                 Submitted part
               </th>
-              <th className={styles.th} scope="col">
+              <th className={`${styles.th} ${styles.thPart}`} scope="col">
                 Matched part
               </th>
               <th className={`${styles.th} ${styles.thMatch}`} scope="col">
@@ -325,19 +372,19 @@ export default function BomTable({
               <th className={`${styles.th} ${styles.thDesc}`} scope="col">
                 Description
               </th>
-              <th className={`${styles.th} ${styles.thRight}`} scope="col">
+              <th className={`${styles.th} ${styles.thRight} ${styles.thQty}`} scope="col">
                 Qty
               </th>
               <th className={`${styles.th} ${styles.thRefs}`} scope="col">
                 Designators
               </th>
-              <th className={styles.th} scope="col">
+              <th className={`${styles.th} ${styles.thRec}`} scope="col">
                 Recommended
               </th>
-              <th className={`${styles.th} ${styles.thRight}`} scope="col">
+              <th className={`${styles.th} ${styles.thRight} ${styles.thPrice}`} scope="col">
                 Unit / Ext
               </th>
-              <th className={`${styles.th} ${styles.thRight}`} scope="col">
+              <th className={`${styles.th} ${styles.thRight} ${styles.thAlt}`} scope="col">
                 Alternates
               </th>
             </tr>
@@ -376,6 +423,10 @@ export default function BomTable({
                 >
                   <td className={`${styles.td} ${styles.tdNum}`}>{row.index}</td>
 
+                  <td className={`${styles.td} ${styles.tdThumb}`}>
+                    <PartThumb src={part?.image_url ?? null} />
+                  </td>
+
                   <td className={`${styles.td} ${styles.tdSub}`}>
                     <span className={styles.subSku}>{submitted}</span>
                     {row.manufacturer != null && (
@@ -399,9 +450,17 @@ export default function BomTable({
                         title={rail.label}
                       />
                       <div className={styles.partBody}>
-                        <span className={part != null ? styles.sku : styles.muted}>
-                          {part?.sku ?? '—'}
-                        </span>
+                        {/* The matched SKU is a real catalog row, so it opens
+                            its part page. Slug first, id as the fallback —
+                            /part/:id resolves either, but the slug is the
+                            canonical URL. */}
+                        {part != null ? (
+                          <Link className={styles.sku} to={`/part/${part.slug ?? part.id}`}>
+                            {part.sku}
+                          </Link>
+                        ) : (
+                          <span className={styles.muted}>—</span>
+                        )}
                         {maker != null && <span className={styles.maker}>{maker}</span>}
                         {part != null && (
                           <span className={`${styles.lifeTok} ${rail.tokClass}`}>{rail.tok}</span>

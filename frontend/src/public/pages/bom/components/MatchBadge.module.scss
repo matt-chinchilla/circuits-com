@@ -2,11 +2,12 @@
 @use '../bomMaterial' as *;
 
 // Match-confidence badge, canvas Anatomy artboard: TEXTURE carries the
-// confidence, not hue. EXACT is solid ink (near-black gradient), APPROX is
-// the same ink hatched, NO MATCH is an outline with no fill — a colour-blind
-// reader and a greyscale print both get the answer from the texture and the
-// word. LIVE renders in the EXACT material (it IS exact — we just went and
-// got it) with the gold sourced-live tick from the coverage legend.
+// confidence. EXACT is a solid fill (blue since 2026-08-22), APPROX is the
+// same shape hatched, NO MATCH is an outline with no fill — a colour-blind
+// reader and a greyscale print still get the answer from the texture and the
+// word, which is why recolouring the fill is safe. LIVE renders in the EXACT
+// material (it IS exact — we just went and got it) with the gold sourced-live
+// tick from the coverage legend.
 
 .badge {
   display: inline-flex;

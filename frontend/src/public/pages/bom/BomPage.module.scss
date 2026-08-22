@@ -20,9 +20,13 @@
     radial-gradient(760px 420px at 58% 112%, rgba(217, 161, 184, 0.16), transparent 60%);
   padding: 36px 20px 64px;
 
-  @media (min-width: 1601px) {
+  // Start widening at 1500 rather than 1601 (2026-08-22): the image column
+  // made this an ELEVEN-column table, and at a flat 1376 the surplus came out
+  // of Description, which collapsed to "Wi-Fi…". 92vw first exceeds 1376 at
+  // 1496px, so the bench only ever grows across this breakpoint.
+  @media (min-width: 1500px) {
     .stack {
-      max-width: 90vw;
+      max-width: 92vw;
     }
   }
 }

@@ -133,17 +133,35 @@ $bom-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
   background: linear-gradient(180deg, #d0503f, #ad3122);
 }
 
-@mixin bom-rail-unk {
-  background: repeating-linear-gradient(45deg, rgba(26, 31, 35, 0.16) 0 2px, transparent 2px 4px);
-  box-shadow: inset 0 0 0 1px rgba(26, 31, 35, 0.14);
+// No claim to make: a quiet solid rail in the table's own ink. This replaced a
+// 45deg hatch (2026-08-22) — the hatch was designed as "no claim" texture, but
+// it read as damage next to the solid status rails, and once the lifecycle
+// rail reports our own catalog status it is a rare state rather than the
+// common one.
+@mixin bom-rail-unknown {
+  background: linear-gradient(180deg, rgba(26, 31, 35, 0.2), rgba(26, 31, 35, 0.12));
+  box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.3);
+}
+
+// Price freshness, not stock: amber warns without borrowing the lifecycle
+// scale's blue/violet/red, and stays solid like every other rail.
+@mixin bom-rail-stale {
+  background: linear-gradient(180deg, #d8a83c, #ac7f1c);
+  box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.3);
 }
 
 // Match badges — texture, not hue. EXACT is solid ink, APPROX is the same
 // ink hatched, NO MATCH is an outline with no fill.
+// A match reads blue (owner call, 2026-08-22) — the one outcome the reader is
+// hoping for should not be the same near-black as the rest of the table's ink.
+// The channel rule above still holds: TEXTURE alone answers the confidence
+// question (solid / hatched / outline), so hue here is a redundant cue, not
+// the carrier — greyscale and CVD readers lose nothing. Both stops clear 4.5:1
+// against white text (5.15:1 at the light end, 9.7:1 at the dark).
 @mixin bom-badge-exact {
   color: #ffffff;
-  background: linear-gradient(180deg, #333b43, #191f25);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 1px 2px rgba(16, 24, 32, 0.22);
+  background: linear-gradient(180deg, #2a6ad0, #12408f);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.24), 0 1px 2px rgba(16, 24, 32, 0.22);
 }
 
 @mixin bom-badge-approx {

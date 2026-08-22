@@ -147,10 +147,10 @@ export default function SimilarDropdown({
                     <span className={styles.optMeta}>
                       {opt.manufacturer_name ?? 'Unknown manufacturer'}
                       {opt.package != null ? ` · ${opt.package}` : ''}
-                      {/* Honesty rule: unverified never reads as Active. */}
-                      {opt.lifecycle_verified
-                        ? ` · ${opt.lifecycle_status ?? ''}`
-                        : ' · lifecycle unverified'}
+                      {/* Our catalog's lifecycle, matching the table's rail
+                          (owner decision 2026-08-22) — this used to gate on
+                          the feed-attestation bit and read "unverified". */}
+                      {opt.lifecycle_status != null ? ` · ${opt.lifecycle_status}` : ''}
                     </span>
                     {opt.description != null && (
                       <span className={styles.optDesc}>{opt.description}</span>
