@@ -335,6 +335,11 @@
   margin: 0;
   font-size: 0.9rem;
   color: var(--bom-ink-secondary, #676c71);
+
+  strong {
+    font-weight: 600;
+    color: #1a1f23;
+  }
 }
 
 .introTitle {
@@ -351,6 +356,13 @@
   max-width: 60ch;
   font-size: 0.95rem;
   color: var(--bom-ink-secondary, #676c71);
+
+  // Emphasis steps up to the primary ink — bolding secondary grey alone
+  // reads as a rendering artifact rather than a deliberate stress.
+  strong {
+    font-weight: 600;
+    color: #1a1f23;
+  }
 }
 
 .tablePhase {

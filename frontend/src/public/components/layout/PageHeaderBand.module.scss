@@ -66,6 +66,13 @@
   max-width: 64ch;
   line-height: 1.5;
 
+  // An emphasized phrase has to lift off the 78% body ink to read as
+  // emphasis at all on the dark band — weight alone is not enough.
+  strong {
+    font-weight: 600;
+    color: #ffffff;
+  }
+
   @include responsive($bp-mobile) {
     font-size: 0.95rem;
   }

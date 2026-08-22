@@ -1,11 +1,13 @@
 import { motion } from 'framer-motion'
+import type { ReactNode } from 'react'
 import styles from './PageHeaderBand.module.scss'
 
 interface PageHeaderBandProps {
   /** Slug-friendly identifier — drives the REV-A tag (e.g. "ABOUT"). */
   page: string
   title: string
-  subtitle: string
+  /** Plain string on most pages; nodes so a page can emphasize a phrase. */
+  subtitle: ReactNode
 }
 
 // Slim themed header band rendered above About / Join / Contact page bodies.

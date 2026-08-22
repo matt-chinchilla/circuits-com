@@ -127,8 +127,8 @@ export default function BomIntake({ onParsed }: BomIntakeProps) {
         <h2 className={styles.introTitle}>Price your bill of materials</h2>
         <p className={styles.introCopy}>
           Drop in a BOM and we will match every line against the catalog, apply your quantity
-          breaks, and total it across 57 distributors. Anything we do not carry, we look up live
-          while you watch.
+          breaks, and total it across <strong>dozens of distributors</strong>. Anything we do not
+          carry, we look up live while you watch.
         </p>
       </div>
 

@@ -467,7 +467,11 @@ export default function BomPage() {
       <PageHeaderBand
         page="bom"
         title="BOM Pricing Tool"
-        subtitle="Price every line of your build across 57 distributors."
+        subtitle={
+          <>
+            Price every line of your build across <strong>dozens of distributors</strong>.
+          </>
+        }
       />
 
       {/* Surface wrapper INSIDE the motion div: the band above is a window
@@ -545,8 +549,8 @@ export default function BomPage() {
                 {sourceName != null && <span className={styles.bomFile}>{sourceName}</span>}
                 <p className={styles.bomSub}>
                   {parsed.lines.length.toLocaleString('en-US')}{' '}
-                  {parsed.lines.length === 1 ? 'line' : 'lines'} priced across 57 distributors.
-                  Your file stays in your browser.
+                  {parsed.lines.length === 1 ? 'line' : 'lines'} priced across{' '}
+                  <strong>dozens of distributors</strong>. Your file stays in your browser.
                 </p>
               </div>
 
