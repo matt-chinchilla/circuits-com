@@ -84,11 +84,18 @@
   max-width: 32ch;
 }
 
+// The SKU is the row's real anchor (see SrPartsTable.tsx). Keep the spec-sheet
+// ink rather than the default link blue; the underline is the only hover tell.
 .sku {
   font-family: $font-mono;
   font-weight: 700;
   font-size: 0.92rem;
   color: var(--fg1);
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
 }
 
 // 36px in-table variant of the kit's .sr-thumb (.sr-thumb-sm merged in):

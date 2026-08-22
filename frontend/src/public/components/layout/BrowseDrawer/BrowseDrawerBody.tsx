@@ -24,31 +24,44 @@ const fetchCats = once<Category[]>(() => api.getCategories());
 const fetchMfrs = once<PublicManufacturers>(() => api.getManufacturers(60));
 const fetchSups = once<Supplier[]>(() => api.getSuppliers());
 
-// One pane's data/error state over a session-cached fetcher. Unmount guard
-// only — a close mid-flight should still fill the session cache, so fetches
-// are never cancelled on close.
-function useOnceSource<T>(fetchOnce: () => Promise<T>) {
+// One pane's data/error state over a session-cached fetcher, fetched while
+// `enabled` (the drawer is open) and re-fetched when `retry` bumps the attempt.
+//
+// Deduping is the JOB OF once() — it caches the RESULT, so re-running this
+// effect is free. This hook must therefore never try to dedupe by suppressing
+// itself: the previous mount-latch ref (set false by an unmount cleanup, never
+// back to true) was flipped permanently false by StrictMode's dev
+// mount→cleanup→mount, which silently swallowed every setData for the rest of
+// the session — fetches fired, panes stayed empty. The cancelled flag lives in
+// the effect closure so each run gets a fresh one.
+//
+// A close mid-flight only stops this component from painting a stale write;
+// the fetch itself still runs to completion and fills the session cache, so
+// the next open resolves from it.
+function useOnceSource<T>(fetchOnce: () => Promise<T>, enabled: boolean) {
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState(false);
-  const aliveRef = useRef(true);
-  useEffect(
-    () => () => {
-      aliveRef.current = false;
-    },
-    [],
-  );
-  const load = useCallback(() => {
+  const [attempt, setAttempt] = useState(0);
+
+  useEffect(() => {
+    if (!enabled) return undefined;
+    let cancelled = false;
     setError(false);
     fetchOnce().then(
       (d) => {
-        if (aliveRef.current) setData(d);
+        if (!cancelled) setData(d);
       },
       () => {
-        if (aliveRef.current) setError(true);
+        if (!cancelled) setError(true);
       },
     );
-  }, [fetchOnce]);
-  return { data, error, load };
+    return () => {
+      cancelled = true;
+    };
+  }, [enabled, attempt, fetchOnce]);
+
+  const retry = useCallback(() => setAttempt((n) => n + 1), []);
+  return { data, error, retry };
 }
 
 // Rail — the pinned five (spec §4): two pane-less links (/search, /bom)
@@ -98,23 +111,16 @@ export default function BrowseDrawerBody({ open, onClose }: BrowseDrawerBodyProp
   const closeRef = useRef<HTMLButtonElement>(null);
 
   const [pane, setPane] = useState<Pane>("cats");
-  const { data: cats, error: catsErr, load: loadCats } = useOnceSource(fetchCats);
-  const { data: mfrs, error: mfrsErr, load: loadMfrs } = useOnceSource(fetchMfrs);
-  const { data: sups, error: supsErr, load: loadSups } = useOnceSource(fetchSups);
+  // Every open: all three sources fetch in parallel (not per-pane) so the rail
+  // pills are truthful at open. Cached calls resolve from once() instantly.
+  const { data: cats, error: catsErr, retry: retryCats } = useOnceSource(fetchCats, open);
+  const { data: mfrs, error: mfrsErr, retry: retryMfrs } = useOnceSource(fetchMfrs, open);
+  const { data: sups, error: supsErr, retry: retrySups } = useOnceSource(fetchSups, open);
 
   // Every open: pane resets to the category grid.
   useEffect(() => {
     if (open) setPane("cats");
   }, [open]);
-
-  // Every open: all three sources fetch eagerly in parallel (not per-pane) so
-  // the rail pills are truthful at open. Cached calls resolve instantly.
-  useEffect(() => {
-    if (!open) return;
-    loadCats();
-    loadMfrs();
-    loadSups();
-  }, [open, loadCats, loadMfrs, loadSups]);
 
   // Initial focus lands on the collapse X (dialog pattern; the shell's trap
   // keeps Tab inside, Navbar returns focus to the burger on close).
@@ -246,7 +252,7 @@ export default function BrowseDrawerBody({ open, onClose }: BrowseDrawerBodyProp
               All Categories
               {cats ? <span className={styles.paneSub}>{cats.length}</span> : null}
             </div>
-            {catsErr && <RetryRow onRetry={loadCats} />}
+            {catsErr && <RetryRow onRetry={retryCats} />}
             <div className={styles.grid}>
               {(cats ?? []).map((c) => (
                 <button
@@ -273,7 +279,7 @@ export default function BrowseDrawerBody({ open, onClose }: BrowseDrawerBodyProp
               Manufacturers
               {mfrs ? <span className={styles.paneSub}>{mfrsPill}</span> : null}
             </div>
-            {mfrsErr && <RetryRow onRetry={loadMfrs} />}
+            {mfrsErr && <RetryRow onRetry={retryMfrs} />}
             <div className={styles.grid}>
               {(mfrs?.manufacturers ?? []).map((m) => (
                 <button
@@ -302,7 +308,7 @@ export default function BrowseDrawerBody({ open, onClose }: BrowseDrawerBodyProp
               Distributors
               {sups ? <span className={styles.paneSub}>{sups.length}</span> : null}
             </div>
-            {supsErr && <RetryRow onRetry={loadSups} />}
+            {supsErr && <RetryRow onRetry={retrySups} />}
             {(sups ?? []).map((s) => {
               const rank = SPONSOR_TIER_ORDER[normalizeTier(s.tier)];
               return (

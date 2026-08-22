@@ -2,10 +2,14 @@
 // (Search.jsx + sponsor.css .sr-table*). Shared by the results PARTS section
 // and the empty state's CLOSEST MATCHES & POPULAR PARTS block.
 //
+// The SKU is a real <Link> (keyboard, middle-click, cmd-click, crawlers);
+// the row onClick is a mouse-convenience layer on top and bails when the
+// event originated inside that anchor so navigation never double-fires.
+//
 // 11 columns: Part (thumb + SKU + description) · Manufacturer · Package ·
 // Mount · RoHS · Lead · MOQ · Dist. · Best Price · Stock · Status. Every
 // nullable spec field renders the em dash, never a blank cell.
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import Icon from '@shared/components/Icon';
 import type { SearchPart } from '@public/types/search';
 import { formatCount, formatLeadTime, formatPrice, formatRohs } from '../lib/srFormat';
@@ -54,7 +58,9 @@ export default function SrPartsTable({ rows }: { rows: SearchPart[] }) {
                     <Icon name={p.category_icon ?? 'lightning'} />
                   </span>
                   <span className={styles.tdId}>
-                    <span className={styles.sku}>{p.sku}</span>
+                    <Link to={`/part/${p.slug}`} className={styles.sku}>
+                      {p.sku}
+                    </Link>
                     {p.description != null && p.description !== '' && (
                       <span className={styles.tdTitle}>{p.description}</span>
                     )}

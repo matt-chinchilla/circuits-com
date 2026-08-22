@@ -65,6 +65,11 @@ export default function SearchPage() {
     if (!q.trim()) {
       setResults(null);
       setSearchError(false);
+      // Load state is owned by the RUN that set it. Clearing the box mid-flight
+      // cancels the predecessor, so its .finally() skips setLoading(false) —
+      // without this line the skeleton is stranded and the empty state (gated
+      // on !loading) can never paint.
+      setLoading(false);
       return;
     }
 
