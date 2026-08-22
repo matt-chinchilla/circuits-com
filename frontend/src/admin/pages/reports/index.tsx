@@ -1,4 +1,5 @@
 import { useEffect, useId, useMemo, useState } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import { Download } from 'lucide-react'
 import { useDemo } from '@admin/contexts/DemoContext'
 import { adminApi } from '@admin/services/adminApi'
@@ -12,24 +13,8 @@ import type {
 import styles from './ReportsPage.module.scss'
 import WorldMapPanel from './WorldMapPanel'
 import { monotoneAreaPath, monotonePath, refHost, tooltipAnchor } from './chartKit'
-import { usePinnedIndex } from './usePinnedIndex'
-
-// ── Instrument-zone constants (design pass 2026-08-21) ──────────────────────
-// Series trio validated (adjacent + all-pairs) on the zone surface #0f1526:
-// cyan #2299bf · violet #8467e0 · gold #a8842e. The primary line wears a
-// cyan→brand-green gradient stroke (one series, one identity — the legend
-// chip carries the same gradient). Grid/axis inks are fixed, not chrome
-// tokens, so the validated contrast can't drift with a chrome retheme.
-const IZ = {
-  cyan: '#2299bf',
-  violet: '#8467e0',
-  gold: '#a8842e',
-  green: '#3fa172',
-  grid: '#1b2440',
-  axis: '#61719b',
-  surface: '#0f1526',
-  track: '#1c2742',
-} as const
+import { AXIS_FONT, ChartTip, Crosshair, HitRects, IZ, XLabels, YTicks } from './chartParts'
+import { useChartActive } from './useChartActive'
 
 const GRAD_CHIP = 'linear-gradient(90deg, #2299bf, #3fa172)'
 
@@ -137,15 +122,9 @@ interface ReportsRevenueChartProps {
   series: RevSeriesPoint[]
 }
 
-function ReportsRevenueChart({ series }: ReportsRevenueChartProps) {
-  const [hover, setHover] = useState<number | null>(null)
-  const { pinned, togglePin, clearPin } = usePinnedIndex(series)
-  const gid = useId().replace(/:/g, '')
-
-  if (series.length < 2) {
-    return <div className={styles.empty}>No revenue data yet.</div>
-  }
-
+// Geometry is pure in `series` and memoized by the chart so hover/pin only
+// re-renders the crosshair/dots/tooltip, not the Steffen path computation.
+function revenueGeometry(series: RevSeriesPoint[]) {
   const W = 800
   const H = 280
   const PAD_L = 50
@@ -158,8 +137,9 @@ function ReportsRevenueChart({ series }: ReportsRevenueChartProps) {
   const peak = Math.max(...series.map((d) => d.listing + d.sponsor))
   const maxV = Math.max(2000, Math.ceil(peak / 2000) * 2000)
   const N = series.length
-  const xs: number[] = []
-  for (let i = 0; i < N; i++) xs.push(PAD_L + (i / (N - 1)) * innerW)
+  const xs = N === 1
+    ? [PAD_L + innerW / 2]
+    : series.map((_, i) => PAD_L + (i / (N - 1)) * innerW)
   const yScale = (v: number) => PAD_T + innerH - (v / maxV) * innerH
 
   const sponsorTop = series.map((d) => d.listing + d.sponsor)
@@ -177,12 +157,29 @@ function ReportsRevenueChart({ series }: ReportsRevenueChartProps) {
   const tickStep = maxV / 4
   const yTicks = [0, tickStep, tickStep * 2, tickStep * 3, maxV]
 
-  const rawActiveIdx = pinned ?? hover
-  // Bounds guard — see TrafficChart.
-  const activeIdx = rawActiveIdx !== null && rawActiveIdx < series.length ? rawActiveIdx : null
-  const tipData = activeIdx !== null ? series[activeIdx] : null
-  const anchor = activeIdx !== null
-    ? tooltipAnchor(xs[activeIdx], yScale(sponsorTop[activeIdx]), W, H)
+  return {
+    W, H, PAD_L, PAD_R, PAD_T, PAD_B, innerW, innerH, N,
+    xs, yScale, sponsorTop, listingPath, sponsorPath, totalLine, yTicks,
+  }
+}
+
+function ReportsRevenueChart({ series }: ReportsRevenueChartProps) {
+  const { active, pinned, setHover, togglePin, clearPin } = useChartActive(series)
+  const gid = useId().replace(/:/g, '')
+  const geo = useMemo(() => revenueGeometry(series), [series])
+
+  if (series.length === 0) {
+    return <div className={styles.empty}>No revenue data yet.</div>
+  }
+
+  const {
+    W, H, PAD_L, PAD_R, PAD_T, PAD_B, innerW, innerH, N,
+    xs, yScale, sponsorTop, listingPath, sponsorPath, totalLine, yTicks,
+  } = geo
+
+  const tipData = active !== null ? series[active] : null
+  const anchor = active !== null
+    ? tooltipAnchor(xs[active], yScale(sponsorTop[active]), W, H)
     : null
 
   return (
@@ -215,75 +212,47 @@ function ReportsRevenueChart({ series }: ReportsRevenueChartProps) {
             <stop offset="100%" stopColor={IZ.green} />
           </linearGradient>
         </defs>
-        {yTicks.map((t) => (
-          <g key={t}>
-            <line
-              x1={PAD_L}
-              x2={W - PAD_R}
-              y1={yScale(t)}
-              y2={yScale(t)}
-              style={{ stroke: IZ.grid }}
-              strokeDasharray="3 4"
-            />
-            <text
-              x={PAD_L - 8}
-              y={yScale(t) + 4}
-              textAnchor="end"
-              fontSize="11"
-              style={{ fill: IZ.axis }}
-              fontFamily="JetBrains Mono"
-            >
-              {t.toLocaleString()}
-            </text>
-          </g>
-        ))}
-        {series.map((d, i) =>
-          i % 2 === 0 ? (
-            <text
-              key={d.m}
-              x={xs[i]}
-              y={H - PAD_B + 18}
-              textAnchor="middle"
-              fontSize="11"
-              style={{ fill: IZ.axis }}
-              fontFamily="JetBrains Mono"
-            >
-              {d.m}
-            </text>
-          ) : null
-        )}
-        <path d={listingPath} fill={`url(#${gid}-listing)`} className={styles.revArea} />
-        <path d={sponsorPath} fill={`url(#${gid}-sponsor)`} className={styles.revArea} />
-        <path
-          d={totalLine}
-          fill="none"
-          stroke={`url(#${gid}-stroke)`}
-          strokeWidth="2"
-          className={styles.revLine}
+        <YTicks
+          ticks={yTicks}
+          yScale={yScale}
+          x1={PAD_L}
+          x2={W - PAD_R}
+          labelX={PAD_L - 8}
+          format={(t) => t.toLocaleString()}
         />
-        {activeIdx !== null && (
-          <line
-            x1={xs[activeIdx]}
-            x2={xs[activeIdx]}
-            y1={PAD_T}
-            y2={H - PAD_B}
-            style={{ stroke: IZ.axis }}
-            strokeDasharray="2 3"
-            opacity="0.5"
+        <XLabels
+          xs={xs}
+          labels={series.map((d) => d.m)}
+          y={H - PAD_B + 18}
+          fontSize={11}
+          show={(i) => i % 2 === 0}
+        />
+        {N >= 2 && (
+          <>
+            <path d={listingPath} fill={`url(#${gid}-listing)`} className={styles.revArea} />
+            <path d={sponsorPath} fill={`url(#${gid}-sponsor)`} className={styles.revArea} />
+            <path
+              d={totalLine}
+              fill="none"
+              stroke={`url(#${gid}-stroke)`}
+              strokeWidth="2"
+              className={styles.revLine}
+            />
+          </>
+        )}
+        {active !== null && <Crosshair x={xs[active]} top={PAD_T} bottom={H - PAD_B} />}
+        {N >= 2 && (
+          <HitRects
+            xs={xs}
+            top={PAD_T}
+            height={innerH}
+            bandW={innerW / N}
+            setHover={setHover}
+            togglePin={togglePin}
           />
         )}
         {series.map((d, i) => (
           <g key={d.m}>
-            <rect
-              x={xs[i] - innerW / (N * 2)}
-              y={PAD_T}
-              width={innerW / N}
-              height={innerH}
-              fill="transparent"
-              style={{ cursor: 'pointer' }}
-              onMouseEnter={() => setHover(i)}
-              onClick={(e) => { e.stopPropagation(); togglePin(i) }}
-            />
             {pinned === i && (
               <circle
                 cx={xs[i]}
@@ -298,24 +267,20 @@ function ReportsRevenueChart({ series }: ReportsRevenueChartProps) {
             <circle
               cx={xs[i]}
               cy={yScale(sponsorTop[i])}
-              r={activeIdx === i ? 5 : 3}
+              r={active === i || N === 1 ? 5 : 3}
               style={{ fill: IZ.cyan, stroke: IZ.surface }}
               strokeWidth="2"
             />
+            {N === 1 && (
+              <text x={xs[i] + 10} y={yScale(sponsorTop[i]) - 8} fontSize="11" style={{ fill: IZ.cyan }} fontWeight="600">
+                {`$${sponsorTop[i].toLocaleString()} total`}
+              </text>
+            )}
           </g>
         ))}
       </svg>
       {tipData && anchor && (
-        <div
-          className={styles.revTip}
-          style={{
-            position: 'absolute',
-            left: anchor.left,
-            top: anchor.top,
-            transform: anchor.transform,
-            width: 160,
-          }}
-        >
+        <ChartTip anchor={anchor} width={160}>
           <div className={styles.revTipTitle}>{tipData.m}</div>
           <div className={styles.revTipRow}>
             <span className="dot" style={{ background: IZ.gold }} />
@@ -328,7 +293,7 @@ function ReportsRevenueChart({ series }: ReportsRevenueChartProps) {
           <div className={styles.revTipTotal}>
             Total <b>${(tipData.listing + tipData.sponsor).toLocaleString()}</b>
           </div>
-        </div>
+        </ChartTip>
       )}
       <div className={styles.chartLegend}>
         <span>
@@ -402,7 +367,7 @@ function RevenueDonut({ sponsor, listing }: RevenueDonutProps) {
           fontSize="22"
           fontWeight="700"
           style={{ fill: '#e8eef9' }}
-          fontFamily="JetBrains Mono"
+          fontFamily={AXIS_FONT}
         >
           ${(total / 1000).toFixed(1)}k
         </text>
@@ -466,15 +431,9 @@ interface TrafficChartProps {
   data: Array<{ day: string; views: number; visitors: number }>
 }
 
-function TrafficChart({ data }: TrafficChartProps) {
-  const [hover, setHover] = useState<number | null>(null)
-  const { pinned, togglePin, clearPin } = usePinnedIndex(data)
-  const gid = useId().replace(/:/g, '')
-
-  if (data.length === 0) {
-    return <div className={styles.empty}>No traffic data yet.</div>
-  }
-
+// Memoized geometry — see revenueGeometry. At N=365 this is the chart where
+// hover-driven Steffen recomputation actually cost something.
+function trafficGeometry(data: TrafficChartProps['data']) {
   const W = 800
   const H = 240
   const PAD = { l: 50, r: 16, t: 16, b: 36 }
@@ -491,23 +450,32 @@ function TrafficChart({ data }: TrafficChartProps) {
   const yTicks = [0, tickStep, tickStep * 2, tickStep * 3, Math.min(tickStep * 4, maxV)]
   const labelEvery = Math.max(1, Math.floor(N / 7))
 
-  // Pinned beats hover; both drive one tooltip anchored ABOVE the dot.
-  // Bounds guard: a range/segment switch shrinks `data` one render before
-  // usePinnedIndex's effect clears the stale index — never dereference past
-  // the new series (reproduced crash: pin idx 107 on 365d, switch to 30d).
-  const rawActive = pinned ?? hover
-  const active = rawActive !== null && rawActive < data.length ? rawActive : null
-  const shown = active !== null ? data[active] : null
-  const anchor = active !== null
-    ? tooltipAnchor(xs[active], yScale(data[active].views), W, H)
-    : null
-
   // Monotone (Steffen) smoothing — never overshoots a data point.
   const viewsPts = data.map((d, i) => ({ x: xs[i], y: yScale(d.views) }))
   const visitorsPts = data.map((d, i) => ({ x: xs[i], y: yScale(d.visitors) }))
   const viewsLine = N >= 2 ? monotonePath(viewsPts) : ''
   const visitorsLine = N >= 2 ? monotonePath(visitorsPts) : ''
   const viewsArea = N >= 2 ? monotoneAreaPath(viewsPts, yScale(0)) : ''
+
+  return { W, H, PAD, innerW, innerH, N, xs, yScale, yTicks, labelEvery, viewsLine, visitorsLine, viewsArea }
+}
+
+function TrafficChart({ data }: TrafficChartProps) {
+  const { active, pinned, setHover, togglePin, clearPin } = useChartActive(data)
+  const gid = useId().replace(/:/g, '')
+  const geo = useMemo(() => trafficGeometry(data), [data])
+
+  if (data.length === 0) {
+    return <div className={styles.empty}>No traffic data yet.</div>
+  }
+
+  const { W, H, PAD, innerW, innerH, N, xs, yScale, yTicks, labelEvery, viewsLine, visitorsLine, viewsArea } = geo
+
+  // Pinned beats hover; both drive one tooltip anchored ABOVE the dot.
+  const shown = active !== null ? data[active] : null
+  const anchor = active !== null
+    ? tooltipAnchor(xs[active], yScale(data[active].views), W, H)
+    : null
 
   return (
     <div className={styles.chartWrap}>
@@ -535,19 +503,14 @@ function TrafficChart({ data }: TrafficChartProps) {
             <stop offset="100%" stopColor={IZ.green} />
           </linearGradient>
         </defs>
-        {yTicks.map(t => (
-          <g key={t}>
-            <line x1={PAD.l} x2={W - PAD.r} y1={yScale(t)} y2={yScale(t)} style={{ stroke: IZ.grid }} strokeDasharray="3 4" />
-            <text x={PAD.l - 8} y={yScale(t) + 4} textAnchor="end" fontSize="11" style={{ fill: IZ.axis }} fontFamily="ui-monospace">{t}</text>
-          </g>
-        ))}
-        {data.map((d, i) =>
-          i % labelEvery === 0 || N <= 3 ? (
-            <text key={d.day} x={xs[i]} y={H - PAD.b + 18} textAnchor="middle" fontSize="10" style={{ fill: IZ.axis }} fontFamily="ui-monospace">
-              {d.day.slice(5)}
-            </text>
-          ) : null
-        )}
+        <YTicks ticks={yTicks} yScale={yScale} x1={PAD.l} x2={W - PAD.r} labelX={PAD.l - 8} />
+        <XLabels
+          xs={xs}
+          labels={data.map(d => d.day.slice(5))}
+          y={H - PAD.b + 18}
+          fontSize={10}
+          show={i => i % labelEvery === 0 || N <= 3}
+        />
         {N >= 2 && (
           <>
             <path d={viewsArea} fill={`url(#${gid}-area)`} className={styles.revArea} />
@@ -578,28 +541,20 @@ function TrafficChart({ data }: TrafficChartProps) {
             </g>
           )
         })}
-        {active !== null && N >= 2 && (
-          <line x1={xs[active]} x2={xs[active]} y1={PAD.t} y2={H - PAD.b} style={{ stroke: IZ.axis }} strokeDasharray="2 3" opacity="0.5" />
-        )}
-        {N >= 2 && data.map((_, i) => (
-          <rect
-            key={i}
-            x={xs[i] - innerW / (N * 2)}
-            y={PAD.t}
-            width={innerW / N}
+        {active !== null && N >= 2 && <Crosshair x={xs[active]} top={PAD.t} bottom={H - PAD.b} />}
+        {N >= 2 && (
+          <HitRects
+            xs={xs}
+            top={PAD.t}
             height={innerH}
-            fill="transparent"
-            style={{ cursor: 'pointer' }}
-            onMouseEnter={() => setHover(i)}
-            onClick={(e) => { e.stopPropagation(); togglePin(i) }}
+            bandW={innerW / N}
+            setHover={setHover}
+            togglePin={togglePin}
           />
-        ))}
+        )}
       </svg>
       {shown && anchor && (
-        <div
-          className={styles.revTip}
-          style={{ position: 'absolute', left: anchor.left, top: anchor.top, transform: anchor.transform, width: 140 }}
-        >
+        <ChartTip anchor={anchor} width={140}>
           <div className={styles.revTipTitle}>{shown.day}</div>
           <div className={styles.revTipRow}>
             <span className="dot" style={{ background: IZ.cyan }} />Views<b>{shown.views}</b>
@@ -607,7 +562,7 @@ function TrafficChart({ data }: TrafficChartProps) {
           <div className={styles.revTipRow}>
             <span className="dot" style={{ background: IZ.violet }} />Visitors<b>{shown.visitors}</b>
           </div>
-        </div>
+        </ChartTip>
       )}
       <div className={styles.chartLegend}>
         <span><i className="dot" style={{ background: GRAD_CHIP }} />Page Views</span>
@@ -685,14 +640,15 @@ const DEVICE_LINES: Array<{ key: 'desktop' | 'mobile' | 'tablet'; color: string;
   { key: 'tablet', color: IZ.gold, label: 'Tablet' },
 ]
 
-function DeviceTrendChart({ data }: { data: Array<{ day: string; desktop: number; mobile: number; tablet: number }> }) {
-  const [hover, setHover] = useState<number | null>(null)
-  const { pinned, togglePin, clearPin } = usePinnedIndex(data)
+interface DeviceTrendPoint {
+  day: string
+  desktop: number
+  mobile: number
+  tablet: number
+}
 
-  if (data.length === 0) {
-    return <div className={styles.empty}>No device trend data yet.</div>
-  }
-
+// Memoized geometry — see revenueGeometry.
+function deviceTrendGeometry(data: DeviceTrendPoint[]) {
   const W = 800, H = 200
   const PAD = { l: 40, r: 16, t: 12, b: 32 }
   const innerW = W - PAD.l - PAD.r
@@ -708,10 +664,27 @@ function DeviceTrendChart({ data }: { data: Array<{ day: string; desktop: number
   const yTicks = [0, tickStep, tickStep * 2, Math.min(tickStep * 3, maxV)]
   const labelEvery = Math.max(1, Math.floor(N / 7))
 
-  const rawActive = pinned ?? hover
-  // Bounds guard — see TrafficChart: stale pin survives one render after a
-  // dataset shrink.
-  const active = rawActive !== null && rawActive < data.length ? rawActive : null
+  const lines = N >= 2
+    ? DEVICE_LINES.map(({ key, color }) => ({
+        key,
+        color,
+        d: monotonePath(data.map((p, i) => ({ x: xs[i], y: yScale(p[key]) }))),
+      }))
+    : []
+
+  return { W, H, PAD, innerW, innerH, N, xs, yScale, yTicks, labelEvery, lines }
+}
+
+function DeviceTrendChart({ data }: { data: DeviceTrendPoint[] }) {
+  const { active, pinned, setHover, togglePin, clearPin } = useChartActive(data)
+  const geo = useMemo(() => deviceTrendGeometry(data), [data])
+
+  if (data.length === 0) {
+    return <div className={styles.empty}>No device trend data yet.</div>
+  }
+
+  const { W, H, PAD, innerW, innerH, N, xs, yScale, yTicks, labelEvery, lines } = geo
+
   const shown = active !== null ? data[active] : null
   // Anchor above the TOPMOST series dot so the tip never covers a line.
   const anchor = active !== null
@@ -726,54 +699,46 @@ function DeviceTrendChart({ data }: { data: Array<{ day: string; desktop: number
   return (
     <div className={styles.chartWrap}>
       <svg viewBox={`0 0 ${W} ${H}`} className={styles.chart} onMouseLeave={() => setHover(null)} onClick={clearPin} preserveAspectRatio="xMidYMid meet" style={{ height: 200 }}>
-        {yTicks.map(t => (
-          <g key={t}>
-            <line x1={PAD.l} x2={W - PAD.r} y1={yScale(t)} y2={yScale(t)} style={{ stroke: IZ.grid }} strokeDasharray="3 4" />
-            <text x={PAD.l - 6} y={yScale(t) + 4} textAnchor="end" fontSize="10" style={{ fill: IZ.axis }} fontFamily="ui-monospace">{t}</text>
-          </g>
+        <YTicks ticks={yTicks} yScale={yScale} x1={PAD.l} x2={W - PAD.r} labelX={PAD.l - 6} fontSize={10} />
+        <XLabels
+          xs={xs}
+          labels={data.map(d => d.day.slice(5))}
+          y={H - PAD.b + 16}
+          fontSize={9}
+          show={i => i % labelEvery === 0 || N <= 3}
+        />
+        {lines.map(({ key, color, d }) => (
+          <path key={key} d={d} fill="none" style={{ stroke: color }} strokeWidth="1.8" opacity="0.85" />
         ))}
-        {data.map((d, i) =>
-          (i % labelEvery === 0 || N <= 3) ? (
-            <text key={d.day} x={xs[i]} y={H - PAD.b + 16} textAnchor="middle" fontSize="9" style={{ fill: IZ.axis }} fontFamily="ui-monospace">{d.day.slice(5)}</text>
-          ) : null
-        )}
-        {DEVICE_LINES.map(({ key, color }) => {
-          if (N < 2) return null
-          const line = monotonePath(data.map((d, i) => ({ x: xs[i], y: yScale(d[key]) })))
-          return <path key={key} d={line} fill="none" style={{ stroke: color }} strokeWidth="1.8" opacity="0.85" />
-        })}
         {N === 1 && DEVICE_LINES.map(({ key, color }) => (
           <circle key={key} cx={xs[0]} cy={yScale(data[0][key])} r={4} style={{ fill: color, stroke: IZ.surface }} strokeWidth="1.5" />
         ))}
         {active !== null && N >= 2 && (
           <g>
-            <line x1={xs[active]} x2={xs[active]} y1={PAD.t} y2={H - PAD.b} style={{ stroke: IZ.axis }} strokeDasharray="2 3" opacity="0.5" />
+            <Crosshair x={xs[active]} top={PAD.t} bottom={H - PAD.b} />
             {DEVICE_LINES.map(({ key, color }) => (
               <circle key={key} cx={xs[active]} cy={yScale(data[active][key])} r={pinned === active ? 4.5 : 3.5} style={{ fill: color, stroke: IZ.surface }} strokeWidth="1.5" />
             ))}
           </g>
         )}
-        {N >= 2 && data.map((_, i) => (
-          <rect
-            key={i}
-            x={xs[i] - innerW / (N * 2)}
-            y={PAD.t}
-            width={innerW / N}
+        {N >= 2 && (
+          <HitRects
+            xs={xs}
+            top={PAD.t}
             height={innerH}
-            fill="transparent"
-            style={{ cursor: 'pointer' }}
-            onMouseEnter={() => setHover(i)}
-            onClick={(e) => { e.stopPropagation(); togglePin(i) }}
+            bandW={innerW / N}
+            setHover={setHover}
+            togglePin={togglePin}
           />
-        ))}
+        )}
       </svg>
       {shown && anchor && (
-        <div className={styles.revTip} style={{ position: 'absolute', left: anchor.left, top: anchor.top, transform: anchor.transform, width: 130 }}>
+        <ChartTip anchor={anchor} width={130}>
           <div className={styles.revTipTitle}>{shown.day}</div>
           {DEVICE_LINES.map(({ key, color, label }) => (
             <div key={key} className={styles.revTipRow}><span className="dot" style={{ background: color }} />{label}<b>{shown[key]}</b></div>
           ))}
-        </div>
+        </ChartTip>
       )}
       <div className={styles.chartLegend}>
         {DEVICE_LINES.map(({ key, color, label }) => (
@@ -790,6 +755,26 @@ function DeviceTrendChart({ data }: { data: Array<{ day: string; desktop: number
 // duplicated 12m — a range button must not promise more than it fetches.
 type RangeKey = '30d' | '90d' | '12m'
 type TabKey = 'analytics' | 'exports' | 'site'
+
+const RANGE_DAYS: Record<RangeKey, number> = { '30d': 30, '90d': 90, '12m': 365 }
+
+interface KpiProps {
+  label: string
+  value: ReactNode
+  delta: ReactNode
+  tone?: 'up' | 'down' | 'neutral'
+  valueStyle?: CSSProperties
+}
+
+function Kpi({ label, value, delta, tone = 'neutral', valueStyle }: KpiProps) {
+  return (
+    <div className={styles.repKpi}>
+      <div className={styles.repKpiLabel}>{label}</div>
+      <div className={styles.repKpiVal} style={valueStyle}>{value}</div>
+      <div className={`${styles.repKpiDelta} ${styles[tone]}`}>{delta}</div>
+    </div>
+  )
+}
 
 export default function ReportsPage() {
   const { demoMode } = useDemo()
@@ -819,8 +804,6 @@ export default function ReportsPage() {
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
   }, [demoMode])
-
-  const RANGE_DAYS: Record<RangeKey, number> = { '30d': 30, '90d': 90, '12m': 365 }
 
   useEffect(() => {
     let cancelled = false
@@ -959,32 +942,25 @@ export default function ReportsPage() {
       {tab === 'analytics' && (
         <>
           <div className={styles.repKpiRow}>
-            <div className={styles.repKpi}>
-              <div className={styles.repKpiLabel}>YTD revenue</div>
-              <div className={styles.repKpiVal}>${ytd.toLocaleString()}</div>
-              <div
-                className={`${styles.repKpiDelta} ${mom >= 0 ? styles.up : styles.down}`}
-              >
-                {mom >= 0 ? '▲' : '▼'} {Math.abs(mom).toFixed(1)}% vs last month
-              </div>
-            </div>
-            <div className={styles.repKpi}>
-              <div className={styles.repKpiLabel}>Active sponsors</div>
-              <div className={styles.repKpiVal}>{sponsorsActive}</div>
-              <div className={`${styles.repKpiDelta} ${styles.up}`}>
-                ▲ 2 new this quarter
-              </div>
-            </div>
-            <div className={styles.repKpi}>
-              <div className={styles.repKpiLabel}>Parts indexed</div>
-              <div className={styles.repKpiVal}>{partsIndexed.toLocaleString()}</div>
-              <div className={`${styles.repKpiDelta} ${styles.up}`}>▲ 1.2% wk/wk</div>
-            </div>
-            <div className={styles.repKpi}>
-              <div className={styles.repKpiLabel}>Suppliers active</div>
-              <div className={styles.repKpiVal}>{suppliersActive}</div>
-              <div className={`${styles.repKpiDelta} ${styles.neutral}`}>→ steady</div>
-            </div>
+            <Kpi
+              label="YTD revenue"
+              value={`$${ytd.toLocaleString()}`}
+              tone={mom >= 0 ? 'up' : 'down'}
+              delta={`${mom >= 0 ? '▲' : '▼'} ${Math.abs(mom).toFixed(1)}% vs last month`}
+            />
+            <Kpi
+              label="Active sponsors"
+              value={sponsorsActive}
+              tone="up"
+              delta={'▲ 2 new this quarter'}
+            />
+            <Kpi
+              label="Parts indexed"
+              value={partsIndexed.toLocaleString()}
+              tone="up"
+              delta={'▲ 1.2% wk/wk'}
+            />
+            <Kpi label="Suppliers active" value={suppliersActive} delta={'→ steady'} />
           </div>
 
           <div className={styles.chartsGrid}>
@@ -1114,30 +1090,23 @@ export default function ReportsPage() {
           ) : (
             <>
               <div className={styles.repKpiRow}>
-                <div className={styles.repKpi}>
-                  <div className={styles.repKpiLabel}>Unique visitors</div>
-                  <div className={styles.repKpiVal}>{analytics.unique_visitors.toLocaleString()}</div>
-                  <div className={`${styles.repKpiDelta} ${styles.neutral}`}>last {analytics.period_days}d</div>
-                </div>
-                <div className={styles.repKpi}>
-                  <div className={styles.repKpiLabel}>Page views</div>
-                  <div className={styles.repKpiVal}>{analytics.total_views.toLocaleString()}</div>
-                  <div className={`${styles.repKpiDelta} ${styles.neutral}`}>last {analytics.period_days}d</div>
-                </div>
-                <div className={styles.repKpi}>
-                  <div className={styles.repKpiLabel}>Pages / visit</div>
-                  <div className={styles.repKpiVal}>{analytics.avg_pages_per_visit}</div>
-                  <div className={`${styles.repKpiDelta} ${styles.neutral}`}>average</div>
-                </div>
-                <div className={styles.repKpi}>
-                  <div className={styles.repKpiLabel}>Top page</div>
-                  <div className={styles.repKpiVal} style={{ fontSize: 16 }}>
-                    {analytics.top_pages[0]?.path ?? '—'}
-                  </div>
-                  <div className={`${styles.repKpiDelta} ${styles.neutral}`}>
-                    {analytics.top_pages[0]?.views ?? 0} views
-                  </div>
-                </div>
+                <Kpi
+                  label="Unique visitors"
+                  value={analytics.unique_visitors.toLocaleString()}
+                  delta={`last ${analytics.period_days}d`}
+                />
+                <Kpi
+                  label="Page views"
+                  value={analytics.total_views.toLocaleString()}
+                  delta={`last ${analytics.period_days}d`}
+                />
+                <Kpi label="Pages / visit" value={analytics.avg_pages_per_visit} delta="average" />
+                <Kpi
+                  label="Top page"
+                  value={analytics.top_pages[0]?.path ?? '—'}
+                  valueStyle={{ fontSize: 16 }}
+                  delta={`${analytics.top_pages[0]?.views ?? 0} views`}
+                />
               </div>
 
               <div className={styles.chartsGrid}>
