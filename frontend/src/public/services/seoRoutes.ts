@@ -38,7 +38,7 @@ export const STATIC_PAGE_SEO: Record<StaticPageKey, PageSeo> = {
   about: {
     title: 'About Circuit Center — The Integrated Circuits Directory',
     description:
-      'Learn about Circuit Center — the integrated circuits directory connecting buyers, suppliers, and engineers. Compare prices from 57 distributors.',
+      'Learn about Circuit Center — the integrated circuits directory connecting buyers, suppliers, and engineers. Compare prices from dozens of distributors.',
     canonical: `${SITE_ORIGIN}/about`,
     jsonLd: [],
     heading: 'About Circuit Center',
@@ -56,7 +56,7 @@ export const STATIC_PAGE_SEO: Record<StaticPageKey, PageSeo> = {
   bom: {
     title: 'BOM Pricing Tool — Price Your Build | Circuit Center',
     description:
-      'Upload or paste your bill of materials and price every line across 57 distributors — exact and approximate matches, live lookups for unknowns, quantity price breaks.',
+      'Upload or paste your bill of materials and price every line across dozens of distributors — exact and approximate matches, live lookups for unknowns, quantity price breaks.',
     canonical: `${SITE_ORIGIN}/bom`,
     jsonLd: [],
     heading: 'BOM Pricing Tool',
@@ -115,7 +115,7 @@ export const STATIC_PAGE_SEO: Record<StaticPageKey, PageSeo> = {
   search: {
     title: 'Search Electronic Components | Circuit Center',
     description:
-      'Search 3,600+ electronic components across 57 distributors by part number, manufacturer, or category.',
+      'Search 170,000+ electronic components across dozens of distributors by part number, manufacturer, or category.',
     canonical: null,
     robots: 'noindex, follow',
     jsonLd: [],
