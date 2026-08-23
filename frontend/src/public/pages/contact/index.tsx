@@ -65,6 +65,7 @@ const CONTACTS: ContactPerson[] = [
     email: "anthony@circuitcenter.ai",
     initials: "AM",
     des: "U3",
+    photo: "/images/team/anthony.jpg",
   },
   {
     name: "Ronald Hausske",
@@ -72,6 +73,7 @@ const CONTACTS: ContactPerson[] = [
     email: "ronald@circuitcenter.ai",
     initials: "RH",
     des: "U4",
+    photo: "/images/team/ronald.jpg",
   },
 ];
 

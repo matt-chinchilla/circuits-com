@@ -226,7 +226,7 @@ return [
             'email'        => '',   // falls back to anthony@circuitcenter.ai
             'phone_href'   => '',
             'website_href' => '',
-            'headshot'     => '',
+            'headshot'     => 'https://circuitcenter.ai/images/team/anthony.jpg',
             'socials'      => [],
         ],
 
@@ -238,7 +238,7 @@ return [
             'email'        => '',   // falls back to ronald@circuitcenter.ai
             'phone_href'   => '',
             'website_href' => '',
-            'headshot'     => '',
+            'headshot'     => 'https://circuitcenter.ai/images/team/ronald.jpg',
             'socials'      => [],
         ],
 
