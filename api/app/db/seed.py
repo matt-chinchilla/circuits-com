@@ -2100,8 +2100,15 @@ def _seed_real_catalog(
         for parts_list in data.values()
         for p in parts_list
     }
+    # CASE-FOLDED, matching the part-identity key (services/part_identity.py).
+    # The JSON lists the same chip under several categories with inconsistent
+    # capitalisation — nRF52840-QIAA-R7 in rf-wireless-ics.json and
+    # NRF52840-QIAA-R7 in microcontrollers-processors.json — so a
+    # case-SENSITIVE probe created BOTH. That is how production's six
+    # duplicate pairs were born, and with uq_parts_manufacturer_sku_upper in
+    # place it is now an IntegrityError rather than silent extra rows.
     existing_skus: set[str] = (
-        {row[0] for row in db.query(Part.sku).filter(Part.sku.in_(all_skus)).all()}
+        {row[0].upper() for row in db.query(Part.sku).filter(Part.sku.in_(all_skus)).all()}
         if all_skus
         else set()
     )
@@ -2123,12 +2130,13 @@ def _seed_real_catalog(
                 eligible = list(suppliers.values())[:10]
 
             for p in parts_list:
-                if p["sku"] in existing_skus:
+                if p["sku"].upper() in existing_skus:
                     continue
                 # Add on create: 77 excess rows in the JSON share a SKU with an
                 # earlier row (73 duplicate SKUs, some cross-file) — without
-                # this, a fresh DB inserts them all.
-                existing_skus.add(p["sku"])
+                # this, a fresh DB inserts them all. Case-folded for the same
+                # reason the probe above is.
+                existing_skus.add(p["sku"].upper())
 
                 part = Part(
                     sku=p["sku"],

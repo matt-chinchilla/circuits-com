@@ -81,6 +81,24 @@ class Part(Base):
         # EXACT-match rung of the BOM ladder: upper(sku) = upper(:mpn).
         # Non-unique on purpose — duplicate SKUs across manufacturers exist.
         Index("ix_parts_sku_upper", func.upper(sku)),
+        # PART IDENTITY. (canonical manufacturer, case-folded MPN) is what
+        # makes two distributors' offers land on ONE row instead of two — the
+        # entire premise of comparing prices. See services/part_identity.py
+        # for why it is case-folded and NOT punctuation-stripped: stripping
+        # punctuation merges a 6.8V TVS diode into a 68V one. Measured on
+        # production, this key collides on 6 groups, all 6 real duplicates.
+        #
+        # Declared here, not migration-only, so `Base.metadata.create_all`
+        # reproduces it and the SQLite test suite enforces the same rule the
+        # Postgres does (verified on both engines). NOTE SQLAlchemy cannot
+        # reflect expression indexes — assert via __table__.indexes and a
+        # behavioural insert, never via inspect().
+        Index(
+            "uq_parts_manufacturer_sku_upper",
+            "manufacturer_id",
+            func.upper(sku),
+            unique=True,
+        ),
     )
 
     category = relationship("Category")

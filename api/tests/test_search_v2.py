@@ -12,6 +12,7 @@ import uuid
 from decimal import Decimal
 
 import pytest
+from sqlalchemy.exc import IntegrityError
 
 from app.models import Category, Part, PartListing, Sponsor, Supplier
 from app.services.search_suggest import (
@@ -196,9 +197,16 @@ class TestParts:
         assert part["parent_category_slug"] == "integrated-circuits"
         assert part["category_icon"] == "⏰"
 
-    def test_dist_count_is_distinct_suppliers(self, client, db, seeded_db):
-        """A (part, supplier) pair CAN hold two listing rows — a raw listing
-        count would double-count the supplier."""
+    def test_a_supplier_cannot_be_listed_twice_for_one_part(self, db, seeded_db):
+        """This used to be possible, and dist_count used COUNT(DISTINCT) to
+        cope. The schema now prevents it outright.
+
+        The defence moved from the query to the constraint: a raw listing
+        count double-counted a supplier, so the aggregate defended itself.
+        uq_part_listings_part_supplier makes the bad row unstorable instead,
+        which is the stronger place for the rule to live. The COUNT(DISTINCT)
+        stays as belt-and-braces; it is simply no longer reachable.
+        """
         db.add(
             PartListing(
                 id=uuid.uuid4(),
@@ -209,9 +217,30 @@ class TestParts:
                 unit_price=Decimal("0.5100"),
             )
         )
+        with pytest.raises(IntegrityError):
+            db.commit()
+        db.rollback()
+
+    def test_dist_count_counts_each_distributor_once(self, client, db, seeded_db):
+        """Two DIFFERENT suppliers on one part read as two distributors."""
+        other = Supplier(id=uuid.uuid4(), name="Avnet Test", website="avnet.test",
+                         email="s@avnet.test")
+        db.add(other)
+        db.flush()
+        db.add(
+            PartListing(
+                id=uuid.uuid4(),
+                part_id=seeded_db["part1"].id,
+                supplier_id=other.id,
+                sku="AVN-LM7805CT-REEL",
+                stock_quantity=1000,
+                unit_price=Decimal("0.5100"),
+            )
+        )
         db.commit()
         part = _search(client, "LM7805")["parts"][0]
-        assert part["dist_count"] == 2
+        # seeded_db already gives part1 two distributors; this adds a third.
+        assert part["dist_count"] == 3
         assert part["stock"] == 24000
 
     def test_listingless_part_has_null_derived(self, client, seeded_db):

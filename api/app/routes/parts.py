@@ -9,6 +9,7 @@ from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
+from app.services.part_identity import get_or_create_part
 from app.models import Category, Part, PartListing, PriceBreak, Supplier, User
 from app.services.auth_service import get_current_user
 from app.services.search_service import invalidate_catalog_caches
@@ -330,19 +331,36 @@ def create_part(
         if cat is not None and cat.parent_id is not None:
             derived_sub_slug = cat.slug
 
-    part = Part(
-        id=uuid.uuid4(),
-        sku=body.sku,
-        slug=slugify_sku(body.sku),
-        description=body.description,
-        manufacturer_name=body.manufacturer_name,
-        category_id=_to_uuid(body.category_id) if body.category_id else None,
-        sub_slug=derived_sub_slug,
-        datasheet_url=body.datasheet_url,
-        image_url=body.image_url,
-        lifecycle_status=body.lifecycle_status,
-    )
-    db.add(part)
+    # Identity, not a blind insert. This route used to do no existence check
+    # whatsoever, so it minted duplicates with no concurrency involved at all.
+    try:
+        part, created = get_or_create_part(
+            db,
+            sku=body.sku,
+            manufacturer_name=body.manufacturer_name,
+            build=lambda mid: Part(
+                id=uuid.uuid4(),
+                sku=body.sku,
+                slug=slugify_sku(body.sku),
+                description=body.description,
+                manufacturer_name=body.manufacturer_name,
+                manufacturer_id=mid,
+                category_id=_to_uuid(body.category_id) if body.category_id else None,
+                sub_slug=derived_sub_slug,
+                datasheet_url=body.datasheet_url,
+                image_url=body.image_url,
+                lifecycle_status=body.lifecycle_status,
+            ),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if not created:
+        # 409 rather than a silent second row: the admin asked to CREATE, and
+        # this manufacturer already has this part number.
+        raise HTTPException(
+            status_code=409,
+            detail=f"{body.manufacturer_name} already lists part {body.sku}",
+        )
     db.flush()
 
     # When the Supplier-detail "Add part" flow hands off context, create the
@@ -675,15 +693,23 @@ def batch_import(
             # begin_nested() re-raises after releasing the savepoint, so the
             # except still sees the original error.
             with db.begin_nested():
-                part = Part(
-                    id=uuid.uuid4(),
+                # Same identity rule as every other writer — a CSV that
+                # repeats an MPN (or re-imports last week's file) must update
+                # the row, not fork it.
+                part, _created = get_or_create_part(
+                    db,
                     sku=item.sku,
-                    slug=slugify_sku(item.sku),
-                    description=item.description,
                     manufacturer_name=item.manufacturer_name,
-                    category_id=_to_uuid(item.category_id) if item.category_id else None,
+                    build=lambda mid: Part(
+                        id=uuid.uuid4(),
+                        sku=item.sku,
+                        slug=slugify_sku(item.sku),
+                        description=item.description,
+                        manufacturer_name=item.manufacturer_name,
+                        manufacturer_id=mid,
+                        category_id=_to_uuid(item.category_id) if item.category_id else None,
+                    ),
                 )
-                db.add(part)
                 db.flush()
 
                 # Create listing if pricing info provided

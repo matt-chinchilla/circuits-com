@@ -268,7 +268,6 @@ class TestPopularPartsRollupOnParent:
 
     def _make_part(self, db, *, sku, cat, stocks):
         """Create a Part on the given category with one listing per entry in `stocks`."""
-        sup = self._make_supplier(db)
         part = Part(
             id=uuid.uuid4(),
             sku=sku,
@@ -278,11 +277,15 @@ class TestPopularPartsRollupOnParent:
         )
         db.add(part)
         db.flush()
+        # One supplier PER listing: the rollup sums stock across DISTRIBUTORS,
+        # and uq_part_listings_part_supplier now makes two rows for the same
+        # (part, supplier) impossible — which is the point of the constraint,
+        # so the fixture models real shape instead of the old duplicate.
         for stock in stocks:
             db.add(PartListing(
                 id=uuid.uuid4(),
                 part_id=part.id,
-                supplier_id=sup.id,
+                supplier_id=self._make_supplier(db).id,
                 stock_quantity=stock,
                 unit_price=Decimal("1.00"),
             ))

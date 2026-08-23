@@ -144,7 +144,7 @@ class TestBackfillImages:
 
     def test_offset_skips_the_unfillable_head(self, db, seeded_db):
         part2 = seeded_db["part2"]
-        provider = _FakeProvider(by_mpn={part2.sku: _feed_part(mpn=part2.sku)})
+        provider = _FakeProvider(by_mpn={part2.sku: _feed_part(mpn=part2.sku, manufacturer=part2.manufacturer_name)})
         # offset=1 skips part1 (sku-ordered first, unresolvable) entirely
         result = backfill_images(db, provider, limit=10, offset=1)
         assert result["scanned"] == 1
@@ -216,7 +216,7 @@ class TestFillCategory:
         )
         db.add(other)
         db.commit()
-        provider = _FakeProvider(search_results=[_feed_part(mpn=part1.sku)])
+        provider = _FakeProvider(search_results=[_feed_part(mpn=part1.sku, manufacturer=part1.manufacturer_name)])
         result = fill_category(db, provider, other.slug)
         assert result["skipped"] == 1 and result["created"] == 0
         db.refresh(part1)
@@ -354,8 +354,8 @@ class TestSyncSupplierListings:
         _attach_listing(db, part2, supplier)
         provider = _FakeProvider(
             by_mpn={
-                part1.sku: _feed_part(mpn=part1.sku),
-                part2.sku: _feed_part(mpn=part2.sku),
+                part1.sku: _feed_part(mpn=part1.sku, manufacturer=part1.manufacturer_name),
+                part2.sku: _feed_part(mpn=part2.sku, manufacturer=part2.manufacturer_name),
             }
         )
         commits: list[int] = []
@@ -380,14 +380,14 @@ class TestSyncSupplierListings:
         assert first["kind"] == "part_synced"
         assert first["supplier_id"] == str(supplier.id)
         assert first["action"] == "media_filled"
-        assert first["title"] == f"{part1.sku} — Feed Mfr"
+        assert first["title"] == f"{part1.sku} — {part1.manufacturer_name}"
         assert first["detail"] == "Clock and Timing"
         assert first["image_url"] == "https://img.example/p.jpg"
         assert "counts" not in first
 
         second = next(gen)
         assert len(commits) == 2
-        assert second["title"] == f"{part2.sku} — Feed Mfr"
+        assert second["title"] == f"{part2.sku} — {part2.manufacturer_name}"
 
         finished = next(gen)
         assert finished["kind"] == "sync_finished"
@@ -410,7 +410,7 @@ class TestSyncSupplierListings:
         supplier.name = "Mouser"  # != provider.supplier_name
         db.commit()
         part1 = seeded_db["part1"]
-        provider = _FakeProvider(by_mpn={part1.sku: _feed_part(mpn=part1.sku)})
+        provider = _FakeProvider(by_mpn={part1.sku: _feed_part(mpn=part1.sku, manufacturer=part1.manufacturer_name)})
 
         events = list(sync_supplier_listings(db, provider, supplier, limit=10))
 
@@ -432,7 +432,7 @@ class TestSyncSupplierListings:
         db.commit()
         listing = seeded_db["listing1"]
         assert db.query(PriceBreak).filter(PriceBreak.listing_id == listing.id).count() == 3
-        provider = _FakeProvider(by_mpn={part1.sku: _feed_part(mpn=part1.sku)})
+        provider = _FakeProvider(by_mpn={part1.sku: _feed_part(mpn=part1.sku, manufacturer=part1.manufacturer_name)})
 
         events = list(sync_supplier_listings(db, provider, supplier, limit=10))
 
@@ -556,14 +556,20 @@ class TestSyncSupplierListings:
         supplier = seeded_db["supplier1"]
         provider = _FakeProvider(
             by_mpn={
-                seeded_db["part1"].sku: _feed_part(mpn=seeded_db["part1"].sku),
-                seeded_db["part2"].sku: _feed_part(mpn=seeded_db["part2"].sku),
+                seeded_db["part1"].sku: _feed_part(
+                    mpn=seeded_db["part1"].sku,
+                    manufacturer=seeded_db["part1"].manufacturer_name,
+                ),
+                seeded_db["part2"].sku: _feed_part(
+                    mpn=seeded_db["part2"].sku,
+                    manufacturer=seeded_db["part2"].manufacturer_name,
+                ),
             }
         )
         events = list(sync_supplier_listings(db, provider, supplier, limit=10))
         assert events[0]["detail"] == "1 parts queued"
         titles = [e["title"] for e in events if e["kind"] == "part_synced"]
-        assert titles == [f"{seeded_db['part1'].sku} — Feed Mfr"]
+        assert titles == [f"{seeded_db['part1'].sku} — {seeded_db['part1'].manufacturer_name}"]
 
     def test_limit_prefers_parts_missing_an_image(self, db, seeded_db):
         supplier = seeded_db["supplier1"]
@@ -573,14 +579,14 @@ class TestSyncSupplierListings:
         db.commit()
         provider = _FakeProvider(
             by_mpn={
-                part1.sku: _feed_part(mpn=part1.sku),
-                part2.sku: _feed_part(mpn=part2.sku),
+                part1.sku: _feed_part(mpn=part1.sku, manufacturer=part1.manufacturer_name),
+                part2.sku: _feed_part(mpn=part2.sku, manufacturer=part2.manufacturer_name),
             }
         )
         events = list(sync_supplier_listings(db, provider, supplier, limit=1))
         assert events[0]["detail"] == "1 parts queued"
         assert [e["title"] for e in events if e["kind"] == "part_synced"] == [
-            f"{part2.sku} — Feed Mfr"
+            f"{part2.sku} — {part2.manufacturer_name}"
         ]
 
     def test_fatal_error_ends_the_stream_without_raising(self, db, seeded_db):
@@ -589,7 +595,7 @@ class TestSyncSupplierListings:
         supplier = seeded_db["supplier1"]
         part1, part2 = seeded_db["part1"], seeded_db["part2"]
         _attach_listing(db, part2, supplier)
-        feed = {part1.sku: _feed_part(mpn=part1.sku)}
+        feed = {part1.sku: _feed_part(mpn=part1.sku, manufacturer=part1.manufacturer_name)}
 
         class _FatalOnSecond(_FakeProvider):
             def __init__(self):
@@ -915,7 +921,7 @@ class TestGrowCatalog:
     def test_existing_part_in_this_category_is_refreshed_not_duplicated(self, db, seeded_db):
         supplier, part1 = seeded_db["supplier1"], seeded_db["part1"]
         before = db.query(Part).count()
-        provider = _FakeProvider(results_by_keyword={"Clock and Timing": [_feed_part(part1.sku)]})
+        provider = _FakeProvider(results_by_keyword={"Clock and Timing": [_feed_part(part1.sku, manufacturer=part1.manufacturer_name)]})
 
         events = list(grow_catalog(db, provider, supplier, call_budget=1))
 
@@ -942,7 +948,7 @@ class TestGrowCatalog:
         part1.lead_time_days = 7
         db.commit()
         provider = _FakeProvider(
-            results_by_keyword={"Clock and Timing": [_feed_part(part1.sku, breaks=False)]}
+            results_by_keyword={"Clock and Timing": [_feed_part(part1.sku, manufacturer=part1.manufacturer_name, breaks=False)]}
         )
 
         events = list(grow_catalog(db, provider, supplier, call_budget=1))
@@ -960,7 +966,7 @@ class TestGrowCatalog:
             seeded_db["part1"],
         )
         _subcategory(db, "Voltage References", "voltage-references", parent)
-        provider = _FakeProvider(results_by_keyword={"Voltage References": [_feed_part(part1.sku)]})
+        provider = _FakeProvider(results_by_keyword={"Voltage References": [_feed_part(part1.sku, manufacturer=part1.manufacturer_name)]})
         before = db.query(Part).count()
 
         events = list(grow_catalog(db, provider, supplier, call_budget=1))

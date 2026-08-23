@@ -1,7 +1,15 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, Numeric, String
+from sqlalchemy import (
+    Column,
+    DateTime,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    UniqueConstraint,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
@@ -38,6 +46,16 @@ class PartListing(Base):
         default=lambda: datetime.now(timezone.utc),
         onupdate=lambda: datetime.now(timezone.utc),
         nullable=False,
+    )
+
+    __table_args__ = (
+        # ONE row per distributor per part. Without this the comparison table
+        # can list the same distributor twice for one part, `total_stock`
+        # double-counts, and "best price" becomes ambiguous — and nothing in
+        # the database prevented it: routes/parts.py said so out loud
+        # ("this guard is the ONLY duplicate protection"). Production has zero
+        # violations today, so this is free to add and only ever a backstop.
+        UniqueConstraint("part_id", "supplier_id", name="uq_part_listings_part_supplier"),
     )
 
     part = relationship("Part", back_populates="listings")

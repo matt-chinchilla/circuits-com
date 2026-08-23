@@ -29,6 +29,7 @@ from app.models import Category, Part, PartListing, PriceBreak, Supplier, Suppli
 from app.services.activity import IMPORT_EVENT_KINDS, record_stream_event
 from app.services.part_feed.base import FeedPart, PartFeedProvider
 from app.services.part_feed.mouser import FeedFatalError
+from app.services.part_identity import get_or_create_part
 from app.services.part_feed.specmap import map_lifecycle, normalize_mount
 from app.services.search_service import invalidate_catalog_caches
 from app.utils.image_url import validate_optional_image_url
@@ -51,7 +52,13 @@ def _search_keyword(cat: Category) -> str:
     return cat.name
 
 
-def _new_part(fp: FeedPart, category_id: uuid.UUID | None, sub_slug: str | None) -> Part:
+def _new_part(
+    fp: FeedPart,
+    category_id: uuid.UUID | None,
+    sub_slug: str | None,
+    *,
+    manufacturer_id: uuid.UUID,
+) -> Part:
     """The Part row a new feed hit becomes — constructed, NOT added: the
     caller owns the transaction.
 
@@ -67,6 +74,11 @@ def _new_part(fp: FeedPart, category_id: uuid.UUID | None, sub_slug: str | None)
         sku=fp.mpn,
         slug=_slugify_sku(fp.mpn),
         manufacturer_name=fp.manufacturer,
+        # Half of the identity key, resolved through canon by the caller. It
+        # used to be left NULL here and backfilled by the seed at the NEXT
+        # container start, which meant every feed-created part was unkeyable
+        # until a deploy happened to run — 3,229 of them on production.
+        manufacturer_id=manufacturer_id,
         description=fp.description,
         category_id=category_id,
         sub_slug=sub_slug,
@@ -215,11 +227,13 @@ def resolve_single(
         fp = results[0] if results else None
     if fp is None:
         return None
-    part = db.query(Part).filter(Part.sku == fp.mpn).first()
-    if part is None:
-        part = _new_part(fp, None, None)
-        db.add(part)
-        db.flush()
+    part, _created = get_or_create_part(
+        db,
+        sku=fp.mpn,
+        manufacturer_name=fp.manufacturer,
+        build=lambda mid: _new_part(fp, None, None, manufacturer_id=mid),
+    )
+    db.flush()
     _upsert_listing(db, part, supplier, fp)
     _fill_part_media(part, fp)
     _stamp_feed_facts(part, fp)
@@ -566,17 +580,18 @@ def grow_catalog(
                     # artifact, not something this run did to the catalog.
                     continue
                 seen.add(key)
-                part = db.query(Part).filter(Part.sku == fp.mpn).first()
-                if part is not None and part.category_id != cat_id:
+                part, is_new = get_or_create_part(
+                    db,
+                    sku=fp.mpn,
+                    manufacturer_name=fp.manufacturer,
+                    build=lambda mid: _new_part(fp, cat_id, cat_slug, manufacturer_id=mid),
+                )
+                if not is_new and part.category_id != cat_id:
                     skipped_elsewhere += 1
                     continue
-                is_new = part is None
-                if is_new:
-                    part = _new_part(fp, cat_id, cat_slug)
-                    db.add(part)
-                    # autoflush=False — the listing needs a real part.id, and
-                    # the next existence query has to see this row.
-                    db.flush()
+                # autoflush=False — the listing needs a real part.id, and the
+                # next existence query has to see this row.
+                db.flush()
                 wrote_listing = _upsert_listing(db, part, supplier, fp)
                 media = _fill_part_media(part, fp)
                 # Facts are a real write, but not a MEDIA one — fold them into
@@ -780,11 +795,14 @@ def fill_category(
             skipped += 1
             continue
         seen_mpns.add(key)
-        part = db.query(Part).filter(Part.sku == fp.mpn).first()
-        if part is None:
-            part = _new_part(fp, cat.id, cat.slug)
-            db.add(part)
-            db.flush()
+        part, was_created = get_or_create_part(
+            db,
+            sku=fp.mpn,
+            manufacturer_name=fp.manufacturer,
+            build=lambda mid: _new_part(fp, cat.id, cat.slug, manufacturer_id=mid),
+        )
+        db.flush()
+        if was_created:
             created += 1
         elif part.category_id == cat.id:
             updated += 1

@@ -388,7 +388,7 @@ class TestStream:
         part1.image_url = "https://img.example/p.jpg"
         part1.datasheet_url = "https://docs.example/d.pdf"
         db.commit()
-        use_fake_provider(_FakeProvider(by_mpn={part1.sku: _feed_part(part1.sku)}))
+        use_fake_provider(_FakeProvider(by_mpn={part1.sku: _feed_part(part1.sku, manufacturer=part1.manufacturer_name)}))
 
         resp = _sync(client, supplier, auth_header)
 
@@ -402,7 +402,7 @@ class TestStream:
         events = _events(resp)
         assert [e["kind"] for e in events] == ["sync_started", "part_synced", "sync_finished"]
         assert events[1]["action"] == "updated"
-        assert events[1]["title"] == f"{part1.sku} — Feed Mfr"
+        assert events[1]["title"] == f"{part1.sku} — {part1.manufacturer_name}"
         assert events[-1]["counts"] == {
             "synced": 1,
             "media_filled": 0,
@@ -414,7 +414,7 @@ class TestStream:
         rows = db.query(ActivityEvent).order_by(ActivityEvent.kind).all()
         assert [r.kind for r in rows] == ["part_synced", "sync_finished", "sync_started"]
         part_row = next(r for r in rows if r.kind == "part_synced")
-        assert part_row.title == f"{part1.sku} — Feed Mfr"
+        assert part_row.title == f"{part1.sku} — {part1.manufacturer_name}"
         assert part_row.detail == "Clock and Timing"
         assert part_row.image_url == "https://img.example/p.jpg"
         assert str(part_row.supplier_id) == str(supplier.id)
@@ -446,7 +446,7 @@ class TestStream:
         # new to write (that is what no_data means).
         part1.lead_time_days = 7
         db.commit()
-        use_fake_provider(_FakeProvider(by_mpn={part1.sku: _feed_part(part1.sku, breaks=False)}))
+        use_fake_provider(_FakeProvider(by_mpn={part1.sku: _feed_part(part1.sku, manufacturer=part1.manufacturer_name, breaks=False)}))
 
         resp = _sync(client, seeded_db["supplier1"], auth_header)
 
@@ -458,7 +458,7 @@ class TestStream:
         self, client, db, seeded_db, auth_header, feed_key, use_fake_provider
     ):
         part1 = seeded_db["part1"]
-        use_fake_provider(_FakeProvider(by_mpn={part1.sku: _feed_part(part1.sku, breaks=False)}))
+        use_fake_provider(_FakeProvider(by_mpn={part1.sku: _feed_part(part1.sku, manufacturer=part1.manufacturer_name, breaks=False)}))
 
         resp = _sync(client, seeded_db["supplier1"], auth_header)
 
@@ -545,7 +545,7 @@ class TestStream:
         )
         db.commit()
         use_fake_provider(
-            _ExplodingProvider(by_mpn={part1.sku: _feed_part(part1.sku)}, explode_after=1)
+            _ExplodingProvider(by_mpn={part1.sku: _feed_part(part1.sku, manufacturer=part1.manufacturer_name)}, explode_after=1)
         )
 
         resp = _sync(client, supplier, auth_header)
@@ -633,7 +633,7 @@ class TestStream:
         supplier, part1 = seeded_db["supplier1"], seeded_db["part1"]
         supplier.logo_url = "data:image/png;base64," + ("A" * 5000)
         db.commit()
-        use_fake_provider(_FakeProvider(by_mpn={part1.sku: _feed_part(part1.sku, image=None)}))
+        use_fake_provider(_FakeProvider(by_mpn={part1.sku: _feed_part(part1.sku, manufacturer=part1.manufacturer_name, image=None)}))
 
         _sync(client, supplier, auth_header)
 
@@ -703,7 +703,7 @@ class TestImportStream:
         supplier, part1 = seeded_db["supplier1"], seeded_db["part1"]
         use_fake_provider(
             _FakeProvider(
-                results_by_keyword={"Sensors": [_feed_part("NEW-1"), _feed_part(part1.sku)]}
+                results_by_keyword={"Sensors": [_feed_part("NEW-1"), _feed_part(part1.sku, manufacturer=part1.manufacturer_name)]}
             )
         )
 
@@ -758,7 +758,7 @@ class TestImportStream:
         part1.datasheet_url = "https://docs.example/d.pdf"
         db.commit()
         use_fake_provider(
-            _FakeProvider(results_by_keyword={"Clock and Timing": [_feed_part(part1.sku)]})
+            _FakeProvider(results_by_keyword={"Clock and Timing": [_feed_part(part1.sku, manufacturer=part1.manufacturer_name)]})
         )
 
         resp = _import(client, seeded_db["supplier1"], auth_header)
@@ -783,7 +783,7 @@ class TestImportStream:
         db.commit()
         use_fake_provider(
             _FakeProvider(
-                results_by_keyword={"Clock and Timing": [_feed_part(part1.sku, breaks=False)]}
+                results_by_keyword={"Clock and Timing": [_feed_part(part1.sku, manufacturer=part1.manufacturer_name, breaks=False)]}
             )
         )
 
