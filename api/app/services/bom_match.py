@@ -85,10 +85,26 @@ def match_line(db: Session, mpn: str | None, value: str | None, footprint: str |
         return LineMatch("resolve" if query else "none", None, None, query)
 
     up = wanted.upper()
+    # After migration 041 one manufacturer cannot hold this MPN twice, so the
+    # rows this can still pick between are DIFFERENT manufacturers' parts that
+    # share a part number — 49 such pairs exist on production, and they are
+    # unrelated products (a Desco taper tap and a Simpson panel meter). So the
+    # tie-break decides whose part a buyer's BOM line resolves to, and the only
+    # honest thing it can say is "prefer one a feed has actually confirmed".
+    #
+    # It orders on PRESENCE, not recency. `lifecycle_verified_at` means "when a
+    # feed established the lifecycle this row currently claims" (see
+    # _stamp_feed_facts), so ordering by it descending would have preferred the
+    # part whose lifecycle changed most RECENTLY — i.e. the least settled one,
+    # which is close to backwards. `sku` then breaks the remaining tie
+    # deterministically, as before.
     exact = (
         db.query(Part)
         .filter(func.upper(Part.sku) == up)
-        .order_by(Part.lifecycle_verified_at.desc().nullslast(), Part.sku)
+        .order_by(
+            (Part.lifecycle_verified_at.is_(None)).asc(),
+            Part.sku,
+        )
         .first()
     )
     if exact is not None:

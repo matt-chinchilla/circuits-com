@@ -16,6 +16,7 @@ from app.services.part_feed.importer import (
     fill_all_empty,
     fill_category,
     grow_catalog,
+    resolve_single,
     sync_supplier_listings,
 )
 from app.services.part_feed.mouser import (
@@ -144,7 +145,9 @@ class TestBackfillImages:
 
     def test_offset_skips_the_unfillable_head(self, db, seeded_db):
         part2 = seeded_db["part2"]
-        provider = _FakeProvider(by_mpn={part2.sku: _feed_part(mpn=part2.sku, manufacturer=part2.manufacturer_name)})
+        provider = _FakeProvider(
+            by_mpn={part2.sku: _feed_part(mpn=part2.sku, manufacturer=part2.manufacturer_name)}
+        )
         # offset=1 skips part1 (sku-ordered first, unresolvable) entirely
         result = backfill_images(db, provider, limit=10, offset=1)
         assert result["scanned"] == 1
@@ -216,7 +219,9 @@ class TestFillCategory:
         )
         db.add(other)
         db.commit()
-        provider = _FakeProvider(search_results=[_feed_part(mpn=part1.sku, manufacturer=part1.manufacturer_name)])
+        provider = _FakeProvider(
+            search_results=[_feed_part(mpn=part1.sku, manufacturer=part1.manufacturer_name)]
+        )
         result = fill_category(db, provider, other.slug)
         assert result["skipped"] == 1 and result["created"] == 0
         db.refresh(part1)
@@ -410,7 +415,9 @@ class TestSyncSupplierListings:
         supplier.name = "Mouser"  # != provider.supplier_name
         db.commit()
         part1 = seeded_db["part1"]
-        provider = _FakeProvider(by_mpn={part1.sku: _feed_part(mpn=part1.sku, manufacturer=part1.manufacturer_name)})
+        provider = _FakeProvider(
+            by_mpn={part1.sku: _feed_part(mpn=part1.sku, manufacturer=part1.manufacturer_name)}
+        )
 
         events = list(sync_supplier_listings(db, provider, supplier, limit=10))
 
@@ -432,7 +439,9 @@ class TestSyncSupplierListings:
         db.commit()
         listing = seeded_db["listing1"]
         assert db.query(PriceBreak).filter(PriceBreak.listing_id == listing.id).count() == 3
-        provider = _FakeProvider(by_mpn={part1.sku: _feed_part(mpn=part1.sku, manufacturer=part1.manufacturer_name)})
+        provider = _FakeProvider(
+            by_mpn={part1.sku: _feed_part(mpn=part1.sku, manufacturer=part1.manufacturer_name)}
+        )
 
         events = list(sync_supplier_listings(db, provider, supplier, limit=10))
 
@@ -843,6 +852,49 @@ def _subcategory(db, name, slug, parent, parts=0):
     return cat
 
 
+class TestAnUnidentifiableRowIsSkippedNotFatal:
+    """A feed row with no usable manufacturer is one bad row, not a bad run.
+
+    `get_or_create_part` raises ValueError when the maker string canonicalises
+    to nothing, because a part with no manufacturer cannot be keyed. Nothing
+    caught it: in a sweep the ValueError escaped the generator and the nightly
+    job's blanket handler abandoned every remaining category for that supplier,
+    and in `/api/bom/resolve` — which only catches FeedFatalError — it broke an
+    anonymous visitor's NDJSON stream mid-flight. Before the identity work such
+    a row simply became a part with an empty manufacturer_name.
+    """
+
+    def test_a_blank_manufacturer_does_not_abort_the_sweep(self, db, seeded_db):
+        supplier, parent = seeded_db["supplier1"], seeded_db["parent"]
+        _subcategory(db, "Voltage References", "voltage-references", parent)
+        provider = _FakeProvider(
+            results_by_keyword={
+                "Voltage References": [
+                    _feed_part("GOOD-1"),
+                    _feed_part("BAD-1", manufacturer="   "),
+                    _feed_part("GOOD-2"),
+                ]
+            }
+        )
+
+        events = list(grow_catalog(db, provider, supplier, call_budget=1))
+
+        kinds = [e["kind"] for e in events]
+        assert kinds[-1] == "sync_finished", "the sweep ended early on one bad row"
+        assert "sync_error" not in kinds
+        skus = {e.get("title") for e in events}
+        assert any("GOOD-2" in (s or "") for s in skus), (
+            "the row AFTER the unidentifiable one never ran — the sweep aborted"
+        )
+
+    def test_a_blank_manufacturer_resolves_to_nothing_rather_than_raising(self, db, seeded_db):
+        """The public BOM path: no part, no exception, stream intact."""
+        supplier = seeded_db["supplier1"]
+        provider = _FakeProvider(by_mpn={"BAD-2": _feed_part("BAD-2", manufacturer="")})
+
+        assert resolve_single(db, provider, supplier, "BAD-2", "BAD-2") is None
+
+
 class TestGrowCatalog:
     def test_new_mpns_become_parts_listings_and_breaks(self, db, seeded_db):
         supplier, parent = seeded_db["supplier1"], seeded_db["parent"]
@@ -921,7 +973,11 @@ class TestGrowCatalog:
     def test_existing_part_in_this_category_is_refreshed_not_duplicated(self, db, seeded_db):
         supplier, part1 = seeded_db["supplier1"], seeded_db["part1"]
         before = db.query(Part).count()
-        provider = _FakeProvider(results_by_keyword={"Clock and Timing": [_feed_part(part1.sku, manufacturer=part1.manufacturer_name)]})
+        provider = _FakeProvider(
+            results_by_keyword={
+                "Clock and Timing": [_feed_part(part1.sku, manufacturer=part1.manufacturer_name)]
+            }
+        )
 
         events = list(grow_catalog(db, provider, supplier, call_budget=1))
 
@@ -948,7 +1004,11 @@ class TestGrowCatalog:
         part1.lead_time_days = 7
         db.commit()
         provider = _FakeProvider(
-            results_by_keyword={"Clock and Timing": [_feed_part(part1.sku, manufacturer=part1.manufacturer_name, breaks=False)]}
+            results_by_keyword={
+                "Clock and Timing": [
+                    _feed_part(part1.sku, manufacturer=part1.manufacturer_name, breaks=False)
+                ]
+            }
         )
 
         events = list(grow_catalog(db, provider, supplier, call_budget=1))
@@ -966,7 +1026,11 @@ class TestGrowCatalog:
             seeded_db["part1"],
         )
         _subcategory(db, "Voltage References", "voltage-references", parent)
-        provider = _FakeProvider(results_by_keyword={"Voltage References": [_feed_part(part1.sku, manufacturer=part1.manufacturer_name)]})
+        provider = _FakeProvider(
+            results_by_keyword={
+                "Voltage References": [_feed_part(part1.sku, manufacturer=part1.manufacturer_name)]
+            }
+        )
         before = db.query(Part).count()
 
         events = list(grow_catalog(db, provider, supplier, call_budget=1))

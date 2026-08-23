@@ -23,36 +23,21 @@ opens a write transaction, and only the rollback keeps it harmless.
 from __future__ import annotations
 
 import importlib.util
-import os
 import uuid
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
-from sqlalchemy import create_engine, text
-from sqlalchemy.exc import IntegrityError, OperationalError
+from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
+
+from .pg_harness import postgres_engine
 
 MIGRATION_PATH = (
     Path(__file__).resolve().parents[1] / "alembic" / "versions" / "041_part_identity.py"
 )
 
-# The local dev stack (docker-compose maps 5432 with dev-default credentials).
-DEFAULT_URL = "postgresql://circuits:circuits@localhost:5432/circuits"
-LOCAL_HOSTS = ("localhost", "127.0.0.1", "::1", "db")
-
 EPOCH = datetime(2026, 1, 1, tzinfo=UTC)
-
-
-def _database_url() -> str:
-    url = os.environ.get("MIGRATION_TEST_DATABASE_URL", DEFAULT_URL)
-    host = url.split("@")[-1].split("/")[0].split(":")[0]
-    if host not in LOCAL_HOSTS:
-        pytest.fail(
-            f"refusing to run the migration harness against {host!r}. It opens a "
-            "write transaction and only the rollback makes that safe; point "
-            "MIGRATION_TEST_DATABASE_URL at a local database."
-        )
-    return url
 
 
 def _load_migration():
@@ -73,12 +58,8 @@ def _load_migration():
 
 @pytest.fixture(scope="module")
 def conn():
-    url = _database_url()
-    try:
-        engine = create_engine(url)
-        connection = engine.connect()
-    except OperationalError as exc:  # pragma: no cover - depends on local stack
-        pytest.skip(f"no local Postgres for the migration harness: {exc}")
+    engine = postgres_engine()
+    connection = engine.connect()
     transaction = connection.begin()
     try:
         yield connection
@@ -179,10 +160,7 @@ def pre_migration(conn):
     """
     conn.execute(text("DROP INDEX IF EXISTS uq_parts_manufacturer_sku_upper"))
     conn.execute(
-        text(
-            "ALTER TABLE part_listings "
-            "DROP CONSTRAINT IF EXISTS uq_part_listings_part_supplier"
-        )
+        text("ALTER TABLE part_listings DROP CONSTRAINT IF EXISTS uq_part_listings_part_supplier")
     )
 
 
@@ -286,9 +264,163 @@ def test_merge_collapses_a_case_only_duplicate_pair(conn, migrated):
 
 
 def test_merge_keeps_the_oldest_row_as_the_survivor(conn, migrated):
-    """The incumbent wins, matching how every other slot in this codebase resolves."""
+    """Default rule for a group nobody has an opinion about: the incumbent wins.
+
+    Matches how every other slot in this codebase resolves, and keeps the
+    migration deterministic for duplicates that appear after it was written.
+    """
     assert _exists(conn, migrated["old"])
     assert not _exists(conn, migrated["new"])
+
+
+class TestTheCategoryTheMergedPartKeeps:
+    """Which of the two categories survives is an editorial decision, not an
+    accident of insertion order.
+
+    Each duplicate pair exists because the catalog JSON files it under two
+    different categories, so merging necessarily removes it from one of them.
+    Oldest-wins would decide that by which seed file happened to run first —
+    which put five Bluetooth SoCs under "32-bit Microcontrollers" and left a
+    MEMS oscillator classified as a Passive Component. `CATEGORY_PREFERENCE`
+    names the intended home per part; anything not listed still falls back to
+    oldest-wins.
+    """
+
+    def test_a_preferred_category_beats_an_older_row(self, conn, migrated):
+        """The mechanism: preference outranks created_at.
+
+        Keyed on (MPN, sub_slug) rather than on row id, so the same list works
+        against any environment's UUIDs — local, staging, production.
+        """
+        savepoint = conn.begin_nested()
+        try:
+            # The index `migrated` just created is what the merge exists to
+            # make safe, so a fresh duplicate pair cannot be inserted while it
+            # stands. Dropping it inside the savepoint rewinds that one step;
+            # the rollback puts it back.
+            conn.execute(text("DROP INDEX uq_parts_manufacturer_sku_upper"))
+            mfr = _new_manufacturer(conn, "Preference Harness")
+            older = _part(conn, sku="NRF52840-QIAA-R7", mfr=mfr, minutes=0)
+            newer = _part(conn, sku="nRF52840-QIAA-R7", mfr=mfr, minutes=99)
+            conn.execute(
+                text("UPDATE parts SET sub_slug = :s WHERE id = :id"),
+                {"s": "32bit-mcus", "id": older},
+            )
+            conn.execute(
+                text("UPDATE parts SET sub_slug = :s WHERE id = :id"),
+                {"s": "bluetooth", "id": newer},
+            )
+
+            module = _load_migration()
+            conn.execute(text(module.MERGE_DUPLICATE_PARTS))
+
+            assert _exists(conn, newer), (
+                "the row in the preferred category did not survive — preference "
+                "must outrank created_at"
+            )
+            assert not _exists(conn, older)
+        finally:
+            savepoint.rollback()
+
+    def test_every_preference_names_a_real_category(self, conn, migrated):
+        """A typo'd slug is a silent no-op — the pair would fall back to
+        oldest-wins and nobody would ever see an error."""
+        module = _load_migration()
+        slugs = {slug for _, slug in module.CATEGORY_PREFERENCE}
+        known = {
+            row[0]
+            for row in conn.execute(
+                text("SELECT slug FROM categories WHERE slug = ANY(:s)"),
+                {"s": list(slugs)},
+            )
+        }
+        assert slugs - known == set(), f"preference names unknown categories: {slugs - known}"
+
+    def test_the_catalog_json_agrees_with_the_preference(self):
+        """The decision has TWO homes and they must not drift apart.
+
+        `CATEGORY_PREFERENCE` fixes the six rows that exist on production right
+        now — once. The catalog JSON is what every FRESH database gets, and
+        what production gets back after a `--reseed` (which TRUNCATEs parts
+        while 041 stays applied and never re-merges). So the JSON is the
+        durable home; the migration is the historical correction.
+
+        They disagreed when this was written: four of the five Nordic parts
+        were listed in BOTH `microcontrollers-processors.json` and
+        `rf-wireless-ics.json`, and `_seed_real_catalog` reads
+        `sorted(glob("*.json"))`, so `microcontrollers-…` won on every fresh
+        database — reinstating exactly the categorisation the preference list
+        exists to correct. Same failure class as the password policy's two
+        mirrored homes: edit one and the other quietly lies.
+        """
+        import json
+        from pathlib import Path
+
+        catalog = Path(__file__).resolve().parents[1] / "app" / "db" / "catalog_data"
+        # (upper MPN -> the sub_slug the seed would actually land it in, which
+        # is the FIRST file alphabetically that lists it — the seed's dedupe
+        # probe skips every later mention.)
+        seeded: dict[str, str] = {}
+        for path in sorted(catalog.glob("*.json")):
+            for sub_slug, entries in json.loads(path.read_text()).items():
+                for entry in entries:
+                    seeded.setdefault(entry["sku"].upper(), sub_slug)
+
+        # Every preference must name a part the catalog actually ships. This
+        # is also the only always-running guard against the other silent
+        # failure mode — the right slug against a misspelled MPN — because the
+        # equivalent database check is meaningless once the merge has run.
+        unknown = [mpn for mpn, _ in module_preferences() if mpn not in seeded]
+        assert unknown == [], (
+            f"these preference MPNs appear in no catalog file — misspelled? {unknown}"
+        )
+
+        disagreements = [
+            (mpn, slug, seeded[mpn]) for mpn, slug in module_preferences() if seeded[mpn] != slug
+        ]
+        assert disagreements == [], (
+            "the catalog JSON would seed these parts into a different category "
+            "than the merge chooses, so the decision dies at the next reseed "
+            f"(mpn, migration says, seed says): {disagreements}"
+        )
+
+    def test_preference_mpns_are_upper_case_and_unique(self):
+        """Two ways to write an entry that can never match, neither of which
+        errors: lower-case (the join is against `upper(sku)`) and a duplicate
+        MPN naming two categories (the join would pick both rows)."""
+        module = _load_migration()
+        mpns = [mpn for mpn, _ in module.CATEGORY_PREFERENCE]
+        assert [m for m in mpns if m != m.upper()] == []
+        assert len(mpns) == len(set(mpns)), f"an MPN is listed twice: {mpns}"
+
+    def test_the_merged_catalog_lands_each_part_in_its_preferred_category(self, conn, migrated):
+        """After the merge, each part IS in the category the list names.
+
+        Deliberately asserted post-merge rather than pre-merge: the obvious
+        version of this check ("a row exists in the preferred category") both
+        depended on the `migrated` fixture and skipped when the duplicates were
+        gone — which `migrated` guarantees — so it could never execute at all.
+        Rows whose MPN is absent from this database are not this test's
+        business; the catalog-JSON guard above covers misspellings.
+        """
+        wrong = []
+        for mpn, slug in module_preferences():
+            row = conn.execute(
+                text("SELECT sub_slug FROM parts WHERE upper(sku) = :m"), {"m": mpn}
+            ).first()
+            if row is not None and row[0] != slug:
+                wrong.append((mpn, slug, row[0]))
+        assert wrong == [], (
+            "this database has these parts in a different category than the "
+            "taxonomy says. If it was merged by an OLDER version of this "
+            "migration the rows cannot be revisited — realign them with an "
+            "UPDATE, or re-pull the catalog. (mpn, wanted, got): "
+            f"{wrong}"
+        )
+
+
+def module_preferences():
+    return _load_migration().CATEGORY_PREFERENCE
 
 
 def test_merge_backfills_a_photo_the_survivor_lacked(conn, migrated):

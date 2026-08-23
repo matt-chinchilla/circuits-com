@@ -28,6 +28,7 @@ from app.db.session import SessionLocal
 from app.models import Category, Part, PartListing, PriceBreak, Supplier, SupplierFeed
 from app.services.activity import IMPORT_EVENT_KINDS, record_stream_event
 from app.services.feed_lock import supplier_feed_lock
+from app.services.manufacturer_canon import canon
 from app.services.part_feed.base import FeedPart, PartFeedProvider
 from app.services.part_feed.mouser import FeedFatalError
 from app.services.part_feed.specmap import map_lifecycle, normalize_mount
@@ -133,10 +134,12 @@ def _stamp_feed_facts(part: Part, fp: FeedPart) -> bool:
         # on every pass made a re-sync rewrite each row it touched even when the
         # feed confirmed exactly what we already stored: 139,056 UPDATEs per
         # Mouser import, 2.8% of them HOT, so ~97% also rewrote all eight of the
-        # table's indexes (~3 GB of WAL for a no-op pass). Nothing reads the
-        # timestamp's value — bom_match only asks whether it is NULL, plus a
-        # nulls-last tie-break — so the column can mean "when a feed established
-        # the lifecycle this row currently claims" instead of "last seen".
+        # table's indexes (~3 GB of WAL for a no-op pass). Safe because nothing
+        # reads the timestamp's VALUE — every consumer asks only whether it is
+        # NULL — so the column now means "when a feed established the lifecycle
+        # this row currently claims" rather than "when we last looked". If you
+        # ever want a real freshness signal, it belongs on the run
+        # (`supplier_feeds.last_synced_at`), not here.
         if part.lifecycle_status != mapped or part.lifecycle_verified_at is None:
             part.lifecycle_status = mapped
             part.lifecycle_verified_at = datetime.now(UTC)
@@ -242,12 +245,21 @@ def resolve_single(
         fp = results[0] if results else None
     if fp is None:
         return None
-    part, _created = get_or_create_part(
-        db,
-        sku=fp.mpn,
-        manufacturer_name=fp.manufacturer,
-        build=lambda mid: _new_part(fp, None, None, manufacturer_id=mid),
-    )
+    try:
+        part, _created = get_or_create_part(
+            db,
+            sku=fp.mpn,
+            manufacturer_name=fp.manufacturer,
+            build=lambda mid: _new_part(fp, None, None, manufacturer_id=mid),
+        )
+    except ValueError:
+        # The feed returned a row with no usable manufacturer, so it cannot be
+        # keyed. That is a miss, not a failure — this runs behind the PUBLIC
+        # /api/bom/resolve stream, which catches only FeedFatalError, and an
+        # escaping ValueError would break an anonymous visitor's NDJSON
+        # mid-flight.
+        logger.info("feed row for %r has no identifiable manufacturer — skipped", fp.mpn)
+        return None
     db.flush()
     _upsert_listing(db, part, supplier, fp)
     _fill_part_media(part, fp)
@@ -307,9 +319,10 @@ def sync_supplier_listings(
     supplier_name = supplier.name
     parts = (
         db.query(Part)
-        # EXISTS, not a JOIN: nothing stops a (part, supplier) pair from
-        # holding two listing rows, and a join would then spend the `limit`
-        # budget twice on the same part.
+        # EXISTS, not a JOIN. Migration 041's UNIQUE(part_id, supplier_id)
+        # now makes a duplicate impossible, so this is no longer about
+        # correctness — but EXISTS still short-circuits on the first match
+        # while a join materialises the pairing, so it stays.
         .filter(
             db.query(PartListing.id)
             .filter(
@@ -586,27 +599,42 @@ def grow_catalog(
             cat_id, cat_slug = cat.id, cat.slug
             cat_name, keyword = cat.name, _search_keyword(cat)
             start_at = cursor.get(cat_slug, 0)
-            seen: set[str] = set()
+            seen: set[tuple[str, str]] = set()
             for fp in provider.search(keyword, want, start_at=start_at):
-                key = fp.mpn.upper()
+                # Keyed on the SAME pair as part identity. On MPN alone this
+                # dropped a legitimately distinct part: one page really does
+                # carry 1N4148 from Vishay and from onsemi, and 49 such
+                # cross-manufacturer MPN pairs exist on production. Skipping
+                # the second would have enforced here the very rule
+                # `part_identity` exists to repudiate.
+                key = (canon(fp.manufacturer or ""), fp.mpn.upper())
                 if key in seen:
-                    # One page can carry the same MPN twice (generic numbers
-                    # like 1N4148 ship from several manufacturers) — a feed
-                    # artifact, not something this run did to the catalog.
                     continue
                 seen.add(key)
-                part, is_new = get_or_create_part(
-                    db,
-                    sku=fp.mpn,
-                    manufacturer_name=fp.manufacturer,
-                    # Loop variables bound as defaults, not captured: the
-                    # closure is invoked inside this iteration today, but a
-                    # late-binding lambda over a loop variable is a bug waiting
-                    # for the day get_or_create_part defers the call.
-                    build=lambda mid, fp=fp, cat_id=cat_id, cat_slug=cat_slug: _new_part(
-                        fp, cat_id, cat_slug, manufacturer_id=mid
-                    ),
-                )
+                try:
+                    part, is_new = get_or_create_part(
+                        db,
+                        sku=fp.mpn,
+                        manufacturer_name=fp.manufacturer,
+                        # Loop variables bound as defaults, not captured: the
+                        # closure is invoked inside this iteration today, but a
+                        # late-binding lambda over a loop variable is a bug waiting
+                        # for the day get_or_create_part defers the call.
+                        build=lambda mid, fp=fp, cat_id=cat_id, cat_slug=cat_slug: _new_part(
+                            fp, cat_id, cat_slug, manufacturer_id=mid
+                        ),
+                    )
+                except ValueError:
+                    # No usable manufacturer, so the row cannot be keyed. One
+                    # bad row must not end the night: this generator's only
+                    # caller-side handler is the nightly job's blanket
+                    # `except Exception`, which abandons every remaining
+                    # category for this supplier.
+                    logger.info(
+                        "feed row for %r has no identifiable manufacturer — skipped", fp.mpn
+                    )
+                    skipped_elsewhere += 1
+                    continue
                 if not is_new and part.category_id != cat_id:
                     skipped_elsewhere += 1
                     continue
@@ -806,23 +834,28 @@ def fill_category(
         )
     supplier = _get_or_create_supplier(db, provider)
     created = updated = skipped = 0
-    seen_mpns: set[str] = set()
+    seen_mpns: set[tuple[str, str]] = set()
     for fp in provider.search(keyword or _search_keyword(cat), count):
-        # Search pages can repeat an MPN (generic numbers like 1N4148 exist
-        # from several manufacturers as separate distributor rows) — first
-        # (highest-ranked) row wins, repeats are skipped.
-        key = fp.mpn.upper()
+        # Keyed on (manufacturer, MPN) — the same pair part identity uses. On
+        # MPN alone, one page carrying 1N4148 from two makers silently dropped
+        # the second, which is a different product.
+        key = (canon(fp.manufacturer or ""), fp.mpn.upper())
         if key in seen_mpns:
             skipped += 1
             continue
         seen_mpns.add(key)
-        part, was_created = get_or_create_part(
-            db,
-            sku=fp.mpn,
-            manufacturer_name=fp.manufacturer,
-            # Bound as a default for the same reason as the sweep above.
-            build=lambda mid, fp=fp: _new_part(fp, cat.id, cat.slug, manufacturer_id=mid),
-        )
+        try:
+            part, was_created = get_or_create_part(
+                db,
+                sku=fp.mpn,
+                manufacturer_name=fp.manufacturer,
+                # Bound as a default for the same reason as the sweep above.
+                build=lambda mid, fp=fp: _new_part(fp, cat.id, cat.slug, manufacturer_id=mid),
+            )
+        except ValueError:
+            logger.info("feed row for %r has no identifiable manufacturer — skipped", fp.mpn)
+            skipped += 1
+            continue
         db.flush()
         if was_created:
             created += 1
@@ -1118,6 +1151,17 @@ def _feed_run_worker(
                 stopped["counts"] = dict(counts)
                 record_stream_event(db, run.supplier_pk, stopped, stored_kinds)
                 run._publish(stopped)
+        except FeedRunElsewhere as exc:
+            # NOT a failure, and it must not be filed as one. Falling through
+            # to the generic handler below stamped this as "Import failed" /
+            # "import aborted" with zero counts — a red run in the operator's
+            # console and in activity_events describing a system that is
+            # working exactly as designed (the nightly sweep has the supplier).
+            # No sync_error: nothing errored.
+            stood_down = sync_event("sync_finished", run.supplier_id, run.supplier_name, str(exc))
+            stood_down["counts"] = dict(counts)
+            record_stream_event(db, run.supplier_pk, stood_down, stored_kinds)
+            run._publish(stood_down)
         except Exception as exc:  # noqa: BLE001
             # FeedFatalError (auth/quota) is already handled inside the
             # generators; this is for everything else. Report it as events

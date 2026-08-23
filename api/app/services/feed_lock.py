@@ -17,14 +17,29 @@ supplier's feed until a human notices; an advisory lock is released by Postgres
 the moment the holding connection goes away. That is the whole argument — it
 picks the failure mode that self-heals over the one that needs an operator.
 
-**Why a dedicated connection.** Advisory locks belong to a CONNECTION, and a
-SQLAlchemy Session hands its connection back to the pool at every `commit()` —
-which the importer does once per part. Borrowing the worker's session would
-release the lock within milliseconds and then leave it set on a pooled
-connection handed to some unrelated request. So the lock opens and holds its
-own connection for the run's duration. Measured cost: a feed run occupies a
-pooled connection roughly 12-22% of its wall-clock today, so one more held
-connection per concurrent run is affordable against a pool of 15.
+**Why a dedicated connection, on its own engine.** Advisory locks belong to a
+CONNECTION, and a SQLAlchemy Session hands its connection back to the pool at
+every `commit()` — which the importer does once per part. Borrowing the
+worker's session would release the lock within milliseconds and then leave it
+set on a pooled connection handed to some unrelated request.
+
+That connection must NOT come from the pool that serves HTTP. A feed session
+occupies a pooled connection only 12-22% of a run's wall-clock (it commits per
+part, and `provider.search()` materialises before any connection is taken),
+which is why the default pool of 5+10 is comfortable. A lock is the opposite:
+held for the run's entire duration, which can be hours. Checked out of the
+request pool, fifteen concurrent runs would leave the public site unable to get
+a connection — reintroducing exactly the ceiling that measurement had ruled
+out. So locks get their own `NullPool` engine: one connection per run, opened
+and closed with it, never competing with request traffic. The extra handshake
+costs milliseconds amortised over hours.
+
+AUTOCOMMIT, too. SQLAlchemy 2.0 autobegins on first execute and nothing here
+commits, so the lock backend would otherwise sit `idle in transaction` for the
+whole run — harmless for vacuum under READ COMMITTED (it holds no xid), but a
+landmine for `idle_in_transaction_session_timeout` and for any pooler put in
+front later. Session-level advisory locks are not transaction-scoped, so
+autocommit costs nothing.
 
 Non-Postgres engines (the SQLite test suite) get a permissive no-op: there is
 one process and no concurrency to arbitrate. The real behaviour is covered by
@@ -39,10 +54,26 @@ import zlib
 from collections.abc import Iterator
 from contextlib import contextmanager
 
-from sqlalchemy import text
+from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
+from sqlalchemy.pool import NullPool
 
 logger = logging.getLogger(__name__)
+
+# One lock engine per database URL, built on first use. NullPool means every
+# `connect()` is a real connection opened and closed with the run, so a
+# long-held lock can never occupy a slot in the pool that answers HTTP.
+_LOCK_ENGINES: dict[str, Engine] = {}
+
+
+def _lock_engine(engine: Engine) -> Engine:
+    key = str(engine.url)
+    existing = _LOCK_ENGINES.get(key)
+    if existing is None:
+        existing = create_engine(engine.url, poolclass=NullPool, isolation_level="AUTOCOMMIT")
+        _LOCK_ENGINES[key] = existing
+    return existing
+
 
 # Advisory locks live in one global space per database, shared with anything
 # else that might use them. The namespace half of the two-int form is what
@@ -77,7 +108,7 @@ def supplier_feed_lock(engine: Engine, supplier_id: uuid.UUID | str) -> Iterator
         return
 
     key = advisory_key(supplier_id)
-    connection = engine.connect()
+    connection = _lock_engine(engine).connect()
     acquired = False
     try:
         acquired = bool(

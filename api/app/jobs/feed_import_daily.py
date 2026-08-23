@@ -260,6 +260,7 @@ def run_once(db: Session, now: datetime | None = None) -> dict:
         "synced": 0,
         "calls": 0,
         "errors": 0,
+        "skipped_locked": 0,
         "stopped_early": False,
     }
     try:
@@ -302,6 +303,14 @@ def run_once(db: Session, now: datetime | None = None) -> dict:
             stats["stopped_early"] = True
             break
         result = _import_one(db, target, min(per_supplier, remaining))
+        if result["skipped_locked"]:
+            # Nothing ran and nothing was spent, so this supplier is NOT one of
+            # tonight's. Crucially it must not be stamped either: `_stamp_run`
+            # records "when did we last spend calls here", and claiming a run
+            # that never happened is how a supplier silently stops being
+            # imported. It stays visible in the summary instead.
+            stats["skipped_locked"] += 1
+            continue
         stats["suppliers"] += 1
         stats["created"] += result["created"]
         stats["synced"] += result["synced"]

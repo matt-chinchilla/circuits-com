@@ -113,13 +113,17 @@ def resolve_manufacturer_id(db: Session, name: str | None) -> uuid.UUID | None:
     punctuation-only string — which the caller must treat as unidentifiable
     rather than as a new manufacturer.
     """
-    key = canon(name or "")
+    # Truncated ONCE, here, so every lookup below and the row eventually
+    # written all use the same string. They used to disagree: the stored
+    # canonical_key was `key[:220]` while both lookups queried the full-length
+    # key, so a maker whose canon exceeds 220 chars missed forever — each pass
+    # tried to create it again, conflicted on the unique index, failed the
+    # recovery re-read (also full-length), and raised RuntimeError.
+    key = canon(name or "")[:220]
     if not key:
         return None
 
-    alias = (
-        db.query(ManufacturerAlias).filter(ManufacturerAlias.alias_canon == key).first()
-    )
+    alias = db.query(ManufacturerAlias).filter(ManufacturerAlias.alias_canon == key).first()
     if alias is not None:
         return alias.manufacturer_id
 
@@ -141,8 +145,8 @@ def _create_provisional(db: Session, raw: str, key: str) -> uuid.UUID:
     maker = Manufacturer(
         id=mid,
         name=raw[:200] or key[:200],
-        slug=_unique_slug(db, key),
-        canonical_key=key[:220],
+        slug=_unique_slug(db, raw or key),
+        canonical_key=key,
         source="catalog",
     )
     if not _insert_if_absent(db, Manufacturer, maker):
@@ -155,7 +159,7 @@ def _create_provisional(db: Session, raw: str, key: str) -> uuid.UUID:
         ManufacturerAlias,
         ManufacturerAlias(
             manufacturer_id=mid,
-            alias_canon=key[:220],
+            alias_canon=key,
             alias=raw[:200] or key[:200],
             source="catalog",
             confidence="auto",
@@ -164,8 +168,19 @@ def _create_provisional(db: Session, raw: str, key: str) -> uuid.UUID:
     return mid
 
 
-def _unique_slug(db: Session, key: str) -> str:
-    base = (key.replace(" ", "-")[:200]) or "manufacturer"
+def _unique_slug(db: Session, name: str) -> str:
+    """A URL-safe manufacturer slug, derived the way the seed derives one.
+
+    `canon()` only strips `.,'®™` and turns `-_/()` into spaces — a colon, a
+    slash inside a longer token, or any non-ASCII survives it. Building a slug
+    by swapping spaces for hyphens therefore put those characters straight into
+    `manufacturers.slug`, so the same company seeded from CSV and created by a
+    feed got differently-shaped slugs, and a slug carrying `/` breaks any URL
+    built from it. `_slugify` is the single home for this column's shape.
+    """
+    from app.db.seed_manufacturers import _slugify
+
+    base = _slugify(name)[:200] or "manufacturer"
     slug = base
     n = 2
     while db.query(Manufacturer.id).filter(Manufacturer.slug == slug).first() is not None:

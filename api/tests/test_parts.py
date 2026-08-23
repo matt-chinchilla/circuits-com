@@ -55,10 +55,13 @@ def test_part_to_dict_includes_parent_category_icon(db, seeded_db):
 
 
 def _auth_header(client):
-    resp = client.post("/api/auth/login", json={
-        "email": "admin@test.example",
-        "password": "testpass123",
-    })
+    resp = client.post(
+        "/api/auth/login",
+        json={
+            "email": "admin@test.example",
+            "password": "testpass123",
+        },
+    )
     token = resp.json()["token"]
     return {"Authorization": f"Bearer {token}"}
 
@@ -117,11 +120,15 @@ class TestListParts:
 class TestCreatePart:
     def test_create_part(self, client, seeded_db):
         headers = _auth_header(client)
-        resp = client.post("/api/parts/", json={
-            "sku": "NE555P",
-            "description": "Timer IC",
-            "manufacturer_name": "Texas Instruments",
-        }, headers=headers)
+        resp = client.post(
+            "/api/parts/",
+            json={
+                "sku": "NE555P",
+                "description": "Timer IC",
+                "manufacturer_name": "Texas Instruments",
+            },
+            headers=headers,
+        )
         assert resp.status_code == 200
         data = resp.json()
         assert data["sku"] == "NE555P"
@@ -131,20 +138,27 @@ class TestCreatePart:
     def test_create_part_with_category(self, client, seeded_db):
         headers = _auth_header(client)
         cat_id = str(seeded_db["child"].id)
-        resp = client.post("/api/parts/", json={
-            "sku": "NE556P",
-            "manufacturer_name": "TI",
-            "category_id": cat_id,
-            "lifecycle_status": "active",
-        }, headers=headers)
+        resp = client.post(
+            "/api/parts/",
+            json={
+                "sku": "NE556P",
+                "manufacturer_name": "TI",
+                "category_id": cat_id,
+                "lifecycle_status": "active",
+            },
+            headers=headers,
+        )
         assert resp.status_code == 200
         assert resp.json()["category_id"] == cat_id
 
     def test_create_part_requires_auth(self, client, seeded_db):
-        resp = client.post("/api/parts/", json={
-            "sku": "NE555P",
-            "manufacturer_name": "TI",
-        })
+        resp = client.post(
+            "/api/parts/",
+            json={
+                "sku": "NE555P",
+                "manufacturer_name": "TI",
+            },
+        )
         assert resp.status_code == 401
 
     def test_create_part_with_initial_listing_creates_both(self, client, seeded_db):
@@ -246,9 +260,7 @@ class TestCreatePart:
         assert resp.status_code == 200, resp.text
         assert resp.json()["sub_slug"] == "clock-and-timing"
 
-    def test_create_part_does_not_derive_sub_slug_for_top_level_category(
-        self, client, seeded_db
-    ):
+    def test_create_part_does_not_derive_sub_slug_for_top_level_category(self, client, seeded_db):
         """Parts attached to a top-level (parent_id IS NULL) Category have
         no subcategory, so sub_slug stays NULL.
         """
@@ -302,6 +314,7 @@ class TestGetPartDetail:
 
     def test_get_part_not_found(self, client, seeded_db):
         import uuid
+
         fake_id = str(uuid.uuid4())
         resp = client.get(f"/api/parts/{fake_id}")
         assert resp.status_code == 404
@@ -311,9 +324,13 @@ class TestUpdatePart:
     def test_update_part(self, client, seeded_db):
         headers = _auth_header(client)
         part_id = str(seeded_db["part1"].id)
-        resp = client.put(f"/api/parts/{part_id}", json={
-            "description": "Updated description",
-        }, headers=headers)
+        resp = client.put(
+            f"/api/parts/{part_id}",
+            json={
+                "description": "Updated description",
+            },
+            headers=headers,
+        )
         assert resp.status_code == 200
         assert resp.json()["description"] == "Updated description"
         # sku unchanged
@@ -321,18 +338,26 @@ class TestUpdatePart:
 
     def test_update_part_requires_auth(self, client, seeded_db):
         part_id = str(seeded_db["part1"].id)
-        resp = client.put(f"/api/parts/{part_id}", json={
-            "description": "no auth",
-        })
+        resp = client.put(
+            f"/api/parts/{part_id}",
+            json={
+                "description": "no auth",
+            },
+        )
         assert resp.status_code == 401
 
     def test_update_part_not_found(self, client, seeded_db):
         import uuid
+
         headers = _auth_header(client)
         fake_id = str(uuid.uuid4())
-        resp = client.put(f"/api/parts/{fake_id}", json={
-            "description": "nope",
-        }, headers=headers)
+        resp = client.put(
+            f"/api/parts/{fake_id}",
+            json={
+                "description": "nope",
+            },
+            headers=headers,
+        )
         assert resp.status_code == 404
 
 
@@ -365,48 +390,110 @@ class TestBatchImport:
     def test_batch_import_happy_path(self, client, seeded_db):
         headers = _auth_header(client)
         supplier_id = str(seeded_db["supplier1"].id)
-        resp = client.post("/api/parts/batch", json={
-            "supplier_id": supplier_id,
-            "parts": [
-                {
-                    "sku": "BATCH001",
-                    "manufacturer_name": "Batch Corp",
-                    "description": "Batch part 1",
-                    "unit_price": 1.50,
-                    "listing_sku": "B001",
-                    "stock_quantity": 100,
-                },
-                {
-                    "sku": "BATCH002",
-                    "manufacturer_name": "Batch Corp",
-                    "description": "Batch part 2",
-                },
-            ],
-        }, headers=headers)
+        resp = client.post(
+            "/api/parts/batch",
+            json={
+                "supplier_id": supplier_id,
+                "parts": [
+                    {
+                        "sku": "BATCH001",
+                        "manufacturer_name": "Batch Corp",
+                        "description": "Batch part 1",
+                        "unit_price": 1.50,
+                        "listing_sku": "B001",
+                        "stock_quantity": 100,
+                    },
+                    {
+                        "sku": "BATCH002",
+                        "manufacturer_name": "Batch Corp",
+                        "description": "Batch part 2",
+                    },
+                ],
+            },
+            headers=headers,
+        )
         assert resp.status_code == 200
         data = resp.json()
         assert data["created"] == 2
         assert data["errors"] == []
 
+    def test_reimporting_the_same_file_refreshes_instead_of_erroring(self, client, seeded_db):
+        """Re-uploading last week's CSV is the ordinary case, not an error.
+
+        `get_or_create_part` correctly reuses the existing part on the second
+        pass — but the listing was then inserted unconditionally, and migration
+        041's UNIQUE(part_id, supplier_id) rejects it. Every priced row of a
+        re-imported file landed in `errors` with `created == 0`.
+        """
+        headers = _auth_header(client)
+        payload = {
+            "supplier_id": str(seeded_db["supplier1"].id),
+            "parts": [
+                {
+                    "sku": "REIMPORT-1",
+                    "manufacturer_name": "Batch Corp",
+                    "unit_price": 2.50,
+                    "stock_quantity": 10,
+                }
+            ],
+        }
+        first = client.post("/api/parts/batch", json=payload, headers=headers)
+        assert first.json()["created"] == 1
+
+        payload["parts"][0]["unit_price"] = 2.25
+        payload["parts"][0]["stock_quantity"] = 42
+        second = client.post("/api/parts/batch", json=payload, headers=headers)
+        body = second.json()
+        assert body["errors"] == [], "a re-imported row was rejected"
+        assert body["created"] == 1
+
+        listings = client.get("/api/parts/by-slug/reimport-1").json()["listings"]
+        assert len(listings) == 1, "the re-import forked a second listing"
+        assert float(listings[0]["unit_price"]) == 2.25, "the price was not refreshed"
+        assert listings[0]["stock_quantity"] == 42
+
+    def test_two_rows_in_one_file_sharing_an_mpn_do_not_collide(self, client, seeded_db):
+        """The same MPN twice in one upload is one part with one listing."""
+        headers = _auth_header(client)
+        resp = client.post(
+            "/api/parts/batch",
+            json={
+                "supplier_id": str(seeded_db["supplier1"].id),
+                "parts": [
+                    {"sku": "DUPROW-1", "manufacturer_name": "Batch Corp", "unit_price": 1.0},
+                    {"sku": "duprow-1", "manufacturer_name": "Batch Corp", "unit_price": 1.1},
+                ],
+            },
+            headers=headers,
+        )
+        assert resp.json()["errors"] == []
+
     def test_batch_import_with_errors(self, client, seeded_db):
         headers = _auth_header(client)
         supplier_id = str(seeded_db["supplier1"].id)
-        resp = client.post("/api/parts/batch", json={
-            "supplier_id": supplier_id,
-            "parts": [
-                {
-                    "sku": "",
-                    "manufacturer_name": "Corp",
-                },
-            ],
-        }, headers=headers)
+        resp = client.post(
+            "/api/parts/batch",
+            json={
+                "supplier_id": supplier_id,
+                "parts": [
+                    {
+                        "sku": "",
+                        "manufacturer_name": "Corp",
+                    },
+                ],
+            },
+            headers=headers,
+        )
         assert resp.status_code == 200
         data = resp.json()
         assert len(data["errors"]) > 0
 
     def test_batch_import_requires_auth(self, client, seeded_db):
-        resp = client.post("/api/parts/batch", json={
-            "supplier_id": str(seeded_db["supplier1"].id),
-            "parts": [],
-        })
+        resp = client.post(
+            "/api/parts/batch",
+            json={
+                "supplier_id": str(seeded_db["supplier1"].id),
+                "parts": [],
+            },
+        )
         assert resp.status_code == 401

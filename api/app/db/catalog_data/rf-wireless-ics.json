@@ -1331,6 +1331,14 @@
       "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/ADF4252.pdf",
       "lifecycle": "active",
       "price_cents": 950
+    },
+    {
+      "sku": "nRF52833-QDAA-R7",
+      "manufacturer": "Nordic Semiconductor",
+      "description": "ARM Cortex-M4F BLE 512KB Flash QFN-40",
+      "datasheet_url": "https://infocenter.nordicsemi.com/pdf/nRF52833_PS_v1.5.pdf",
+      "lifecycle": "active",
+      "price_cents": 285
     }
   ],
   "gps-gnss": [

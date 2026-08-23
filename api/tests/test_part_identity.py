@@ -67,10 +67,10 @@ def test_punctuation_variant_is_a_DIFFERENT_part(db):
 @pytest.mark.parametrize(
     "a,b",
     [
-        ("CHD15MF-2.5", "CHD15MF-25"),          # 2.5 ft vs 25 ft cable
-        ("MS116-1.0", "MS116-10"),              # 0.63-1.0A vs 6.3-10.0A starter
+        ("CHD15MF-2.5", "CHD15MF-25"),  # 2.5 ft vs 25 ft cable
+        ("MS116-1.0", "MS116-10"),  # 0.63-1.0A vs 6.3-10.0A starter
         ("ASFLMB-1.8432MHZ", "ASFLMB-18.432MHZ"),  # different frequencies
-        ("FLUKE-62MAX", "FLUKE-62MAX+"),        # '+' marks a product variant
+        ("FLUKE-62MAX", "FLUKE-62MAX+"),  # '+' marks a product variant
     ],
 )
 def test_real_punctuation_pairs_stay_distinct(db, a, b):
@@ -110,13 +110,23 @@ def test_database_rejects_a_case_duplicate_written_around_the_service(db):
     """
     mid = resolve_manufacturer_id(db, "SiTime")
     db.add(
-        Part(id=uuid.uuid4(), sku="SiT1533AI-H4-DCC-32.768D", slug="a",
-             manufacturer_name="SiTime", manufacturer_id=mid)
+        Part(
+            id=uuid.uuid4(),
+            sku="SiT1533AI-H4-DCC-32.768D",
+            slug="a",
+            manufacturer_name="SiTime",
+            manufacturer_id=mid,
+        )
     )
     db.flush()
     db.add(
-        Part(id=uuid.uuid4(), sku="SIT1533AI-H4-DCC-32.768D", slug="b",
-             manufacturer_name="SiTime", manufacturer_id=mid)
+        Part(
+            id=uuid.uuid4(),
+            sku="SIT1533AI-H4-DCC-32.768D",
+            slug="b",
+            manufacturer_name="SiTime",
+            manufacturer_id=mid,
+        )
     )
     with pytest.raises(IntegrityError):
         db.flush()
@@ -131,14 +141,19 @@ def test_concurrent_loser_gets_the_winners_row_instead_of_an_error(db):
     7 of 8 concurrent writers died with IntegrityError).
     """
     mid = resolve_manufacturer_id(db, "Nordic Semiconductor")
-    winner = Part(id=uuid.uuid4(), sku="nRF5340-QKAA-R7", slug="w",
-                  manufacturer_name="Nordic Semiconductor", manufacturer_id=mid)
+    winner = Part(
+        id=uuid.uuid4(),
+        sku="nRF5340-QKAA-R7",
+        slug="w",
+        manufacturer_name="Nordic Semiconductor",
+        manufacturer_id=mid,
+    )
     db.add(winner)
     db.flush()
 
     got, created = get_or_create_part(
         db,
-        sku="NRF5340-QKAA-R7",           # same identity, different case
+        sku="NRF5340-QKAA-R7",  # same identity, different case
         manufacturer_name="Nordic Semiconductor",
         build=_build("NRF5340-QKAA-R7"),
     )
@@ -152,9 +167,9 @@ def test_concurrent_loser_gets_the_winners_row_instead_of_an_error(db):
 @pytest.mark.parametrize(
     "a,b",
     [
-        ("Texas Instruments Inc.", "Texas Instruments"),   # legal suffix + full stop
-        ("Yageo Corporation", "YAGEO"),                    # legal suffix + case
-        ("Vishay / Dale", "Vishay Dale"),                  # separator
+        ("Texas Instruments Inc.", "Texas Instruments"),  # legal suffix + full stop
+        ("Yageo Corporation", "YAGEO"),  # legal suffix + case
+        ("Vishay / Dale", "Vishay Dale"),  # separator
     ],
 )
 def test_manufacturer_resolves_through_canon_not_raw_string(db, a, b):
@@ -218,9 +233,76 @@ def test_find_part_is_case_insensitive_and_agrees_with_bom_match(db):
     assert find_part(db, mid, "rc0603fr-0710kl") is not None
     assert find_part(db, mid, "RC0603FR-0710KL").id == part.id
     # and the index the matcher rides is the same one
-    assert (
-        db.query(Part)
-        .filter(func.upper(Part.sku) == "RC0603FR-0710KL")
-        .count()
-        == 1
-    )
+    assert db.query(Part).filter(func.upper(Part.sku) == "RC0603FR-0710KL").count() == 1
+
+
+class TestAdoptingRowsTheMakerWasNeverResolvedFor:
+    """`_adopt_unlinked` is what makes this code deployable BEFORE the backfill.
+
+    Production carries 3,229 parts with `manufacturer_id IS NULL`, created
+    before the importer resolved the maker at write time. They are invisible to
+    `find_part`, which keys on the manufacturer — so without adoption the first
+    feed hit on one would create a SECOND row beside it: exactly the
+    duplication the constraint exists to prevent, caused by the fix for it.
+
+    It had no test at all, on either path, while being the only thing guarding
+    those rows through the deploy window.
+    """
+
+    def _unlinked(self, db, sku: str, maker: str) -> Part:
+        part = Part(id=uuid.uuid4(), sku=sku, manufacturer_name=maker, manufacturer_id=None)
+        db.add(part)
+        db.commit()
+        return part
+
+    def test_a_feed_hit_claims_the_unlinked_row_instead_of_forking(self, db):
+        orphan = self._unlinked(db, "STM32F407VGT6", "STMicroelectronics")
+
+        part, created = get_or_create_part(
+            db,
+            sku="STM32F407VGT6",
+            manufacturer_name="STMicroelectronics",
+            build=_build("STM32F407VGT6"),
+        )
+
+        assert created is False, "a second row was created beside the unlinked one"
+        assert part.id == orphan.id
+        assert part.manufacturer_id is not None, "adoption must also link the row"
+        assert db.query(Part).filter(func.upper(Part.sku) == "STM32F407VGT6").count() == 1
+
+    def test_adoption_is_case_insensitive_on_the_mpn(self, db):
+        orphan = self._unlinked(db, "stm32f407vgt6", "STMicroelectronics")
+        part, created = get_or_create_part(
+            db,
+            sku="STM32F407VGT6",
+            manufacturer_name="STMicroelectronics",
+            build=_build("STM32F407VGT6"),
+        )
+        assert created is False and part.id == orphan.id
+
+    def test_adoption_tolerates_a_differently_spelled_maker(self, db):
+        """Canon equality, not string equality — that is the whole point."""
+        orphan = self._unlinked(db, "LM317T", "Texas Instruments Inc.")
+        part, created = get_or_create_part(
+            db, sku="LM317T", manufacturer_name="Texas Instruments", build=_build("LM317T")
+        )
+        assert created is False and part.id == orphan.id
+
+    def test_a_different_maker_is_NOT_adopted(self, db):
+        """The narrowing that stops a Desco taper tap becoming a Simpson meter.
+
+        Matching on sku alone would fold these together — 49 real MPN pairs on
+        production span different manufacturers and are unrelated products.
+        """
+        orphan = self._unlinked(db, "SHARED-MPN-1", "Desco Industries")
+
+        part, created = get_or_create_part(
+            db,
+            sku="SHARED-MPN-1",
+            manufacturer_name="Simpson Electric",
+            build=_build("SHARED-MPN-1"),
+        )
+
+        assert created is True, "an unrelated maker's part was swallowed by adoption"
+        assert part.id != orphan.id
+        assert db.query(Part).filter(Part.id == orphan.id).one().manufacturer_id is None

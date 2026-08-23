@@ -9,9 +9,9 @@ from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.services.part_identity import get_or_create_part
 from app.models import Category, Part, PartListing, PriceBreak, Supplier, User
 from app.services.auth_service import get_current_user
+from app.services.part_identity import get_or_create_part
 from app.services.search_service import invalidate_catalog_caches
 from app.utils.image_url import validate_optional_image_url
 
@@ -410,11 +410,12 @@ def add_part_listing(
     if not supplier:
         raise HTTPException(404, "Supplier not found")
 
-    # There is no UNIQUE(part_id, supplier_id) on part_listings, so this guard
-    # is the ONLY duplicate protection. Two listings for the same distributor
-    # would double-count total_stock and make best_price ambiguous on the
-    # public part page — reject instead, and let the admin edit or remove the
-    # listing that already holds the slot.
+    # Since migration 041 the DATABASE holds this rule
+    # (UNIQUE(part_id, supplier_id)); this guard survives to turn what would be
+    # a 500 into a 409 the admin UI can explain. Two listings for the same
+    # distributor would double-count total_stock and make best_price ambiguous
+    # on the public part page — reject instead, and let the admin edit or
+    # remove the listing that already holds the slot.
     existing = (
         db.query(PartListing)
         .filter(
@@ -587,12 +588,9 @@ def related_parts(part_id: str, db: Session = Depends(get_db)):
                     .filter(Part.category_id.in_(sib_ids))
                     .subquery()
                 )
-                first_ids = [
-                    row.pid for row in db.query(ranked.c.pid).filter(ranked.c.rn == 1)
-                ]
+                first_ids = [row.pid for row in db.query(ranked.c.pid).filter(ranked.c.rn == 1)]
                 picks_by_cat = {
-                    p.category_id: p
-                    for p in db.query(Part).filter(Part.id.in_(first_ids))
+                    p.category_id: p for p in db.query(Part).filter(Part.id.in_(first_ids))
                 }
             for sib in siblings:
                 pick = picks_by_cat.get(sib.id)
@@ -700,7 +698,12 @@ def batch_import(
                     db,
                     sku=item.sku,
                     manufacturer_name=item.manufacturer_name,
-                    build=lambda mid: Part(
+                    # `item` bound as a default, matching the importer's three
+                    # call sites: the closure runs inside this iteration today,
+                    # but a late-binding lambda over a loop variable would build
+                    # every part from the LAST CSV row the day the callback is
+                    # deferred or memoized.
+                    build=lambda mid, item=item: Part(
                         id=uuid.uuid4(),
                         sku=item.sku,
                         slug=slugify_sku(item.sku),
@@ -712,19 +715,33 @@ def batch_import(
                 )
                 db.flush()
 
-                # Create listing if pricing info provided
+                # Refresh this supplier's listing, or create it. Find-first for
+                # the same reason the part above is: re-importing last week's
+                # file, or a file naming one MPN twice, is ordinary. An
+                # unconditional insert violates UNIQUE(part_id, supplier_id)
+                # (migration 041) and put every priced row into `errors`.
                 if item.unit_price is not None:
-                    listing = PartListing(
-                        id=uuid.uuid4(),
-                        part_id=part.id,
-                        supplier_id=supplier.id,
-                        sku=item.listing_sku,
-                        stock_quantity=item.stock_quantity or 0,
-                        lead_time_days=item.lead_time_days,
-                        unit_price=Decimal(str(item.unit_price)),
-                        currency=item.currency or "USD",
+                    listing = (
+                        db.query(PartListing)
+                        .filter(
+                            PartListing.part_id == part.id,
+                            PartListing.supplier_id == supplier.id,
+                        )
+                        .first()
                     )
-                    db.add(listing)
+                    if listing is None:
+                        listing = PartListing(
+                            id=uuid.uuid4(), part_id=part.id, supplier_id=supplier.id
+                        )
+                        db.add(listing)
+                    listing.sku = item.listing_sku
+                    listing.stock_quantity = item.stock_quantity or 0
+                    listing.lead_time_days = item.lead_time_days
+                    listing.unit_price = Decimal(str(item.unit_price))
+                    listing.currency = item.currency or "USD"
+                    # autoflush=False, so the NEXT row's existence query cannot
+                    # see this one without it — the same reason the feed's
+                    # _upsert_listing flushes here.
                     db.flush()
 
             # Only counted once the savepoint released cleanly, i.e. the row
