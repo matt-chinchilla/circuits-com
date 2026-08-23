@@ -70,6 +70,7 @@ from app.config import settings
 from app.db.session import SessionLocal
 from app.models import Supplier, SupplierFeed
 from app.services.activity import IMPORT_EVENT_KINDS, record_stream_event
+from app.services.feed_lock import supplier_feed_lock
 from app.services.part_feed import (
     PartFeedProvider,
     get_feed_key,
@@ -183,23 +184,45 @@ def _import_one(db: Session, target: _Target, call_budget: int) -> dict:
     whether it hit the account-wide wall (which stops every remaining
     supplier — see the module docstring).
     """
-    stats = {"created": 0, "synced": 0, "calls": 0, "fatal": False, "error": False}
+    stats = {
+        "created": 0,
+        "synced": 0,
+        "calls": 0,
+        "fatal": False,
+        "error": False,
+        "skipped_locked": False,
+    }
     provider = None
     try:
-        provider = target.provider_cls(api_key=target.api_key)
-        for event in grow_catalog(db, provider, target.supplier, call_budget=call_budget):
-            record_stream_event(db, target.supplier.id, event, IMPORT_EVENT_KINDS)
-            action = event.get("action")
-            if action == "created":
-                stats["created"] += 1
-            elif action in ("updated", "media_filled"):
-                stats["synced"] += 1
-            elif event.get("kind") == "sync_error":
-                # `grow_catalog` only ever emits this for a FeedFatalError —
-                # it catches the exception, reports it, and returns normally.
-                # So the EVENT is the wall on this path; the except clause
-                # below covers the paths where the error can still escape.
-                stats["fatal"] = True
+        # This job runs in the `feed-import` CONTAINER, so the api process's
+        # in-memory run registry cannot see it and its 409 never fires here.
+        # Without this claim an admin Import click during the sweep runs a
+        # SECOND pass over the same supplier, and `_save_import_cursor` writes
+        # the whole cursor map from a run-start snapshot — so whichever
+        # finishes last silently throws away the other's paging depth.
+        with supplier_feed_lock(db.get_bind(), target.supplier.id) as claimed:
+            if not claimed:
+                stats["skipped_locked"] = True
+                logger.info(
+                    "[feed-import] %s: another process holds this supplier's feed "
+                    "lock — skipping tonight rather than double-sweeping",
+                    target.name,
+                )
+                return stats
+            provider = target.provider_cls(api_key=target.api_key)
+            for event in grow_catalog(db, provider, target.supplier, call_budget=call_budget):
+                record_stream_event(db, target.supplier.id, event, IMPORT_EVENT_KINDS)
+                action = event.get("action")
+                if action == "created":
+                    stats["created"] += 1
+                elif action in ("updated", "media_filled"):
+                    stats["synced"] += 1
+                elif event.get("kind") == "sync_error":
+                    # `grow_catalog` only ever emits this for a FeedFatalError —
+                    # it catches the exception, reports it, and returns normally.
+                    # So the EVENT is the wall on this path; the except clause
+                    # below covers the paths where the error can still escape.
+                    stats["fatal"] = True
     except FeedFatalError as exc:
         db.rollback()
         stats["fatal"] = True

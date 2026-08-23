@@ -22,15 +22,16 @@ from datetime import UTC, datetime
 from decimal import Decimal
 
 from sqlalchemy import func
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, noload
 
 from app.db.session import SessionLocal
 from app.models import Category, Part, PartListing, PriceBreak, Supplier, SupplierFeed
 from app.services.activity import IMPORT_EVENT_KINDS, record_stream_event
+from app.services.feed_lock import supplier_feed_lock
 from app.services.part_feed.base import FeedPart, PartFeedProvider
 from app.services.part_feed.mouser import FeedFatalError
-from app.services.part_identity import get_or_create_part
 from app.services.part_feed.specmap import map_lifecycle, normalize_mount
+from app.services.part_identity import get_or_create_part
 from app.services.search_service import invalidate_catalog_caches
 from app.utils.image_url import validate_optional_image_url
 
@@ -128,10 +129,18 @@ def _stamp_feed_facts(part: Part, fp: FeedPart) -> bool:
             changed = True
     mapped = map_lifecycle(fp.lifecycle)
     if mapped is not None:
-        if part.lifecycle_status != mapped:
+        # Inside the guard, like every other field here. Stamping the timestamp
+        # on every pass made a re-sync rewrite each row it touched even when the
+        # feed confirmed exactly what we already stored: 139,056 UPDATEs per
+        # Mouser import, 2.8% of them HOT, so ~97% also rewrote all eight of the
+        # table's indexes (~3 GB of WAL for a no-op pass). Nothing reads the
+        # timestamp's value — bom_match only asks whether it is NULL, plus a
+        # nulls-last tie-break — so the column can mean "when a feed established
+        # the lifecycle this row currently claims" instead of "last seen".
+        if part.lifecycle_status != mapped or part.lifecycle_verified_at is None:
             part.lifecycle_status = mapped
-        part.lifecycle_verified_at = datetime.now(UTC)
-        changed = True
+            part.lifecycle_verified_at = datetime.now(UTC)
+            changed = True
     # Spec fields (migration 039) — `is not None`, NEVER truthiness: rohs=False
     # is a value and must be stored; feed absence (None) leaves values alone.
     # normalize_mount, not fp.mount raw: `FeedPart.mount` is a bare str, so
@@ -175,6 +184,12 @@ def _upsert_listing(db: Session, part: Part, supplier: Supplier, fp: FeedPart) -
     lowest_qty_break = min(fp.price_breaks, key=lambda b: b.min_quantity)
     listing = (
         db.query(PartListing)
+        # PartListing.price_breaks is lazy="selectin", so loading the listing
+        # would fire a second SELECT and build ORM objects for breaks this
+        # function deletes wholesale nine lines down. noload, not raiseload:
+        # the collection is genuinely unused here, and a hard error would only
+        # move the cost to whoever next touches the attribute.
+        .options(noload(PartListing.price_breaks))
         .filter(PartListing.part_id == part.id, PartListing.supplier_id == supplier.id)
         .first()
     )
@@ -584,7 +599,13 @@ def grow_catalog(
                     db,
                     sku=fp.mpn,
                     manufacturer_name=fp.manufacturer,
-                    build=lambda mid: _new_part(fp, cat_id, cat_slug, manufacturer_id=mid),
+                    # Loop variables bound as defaults, not captured: the
+                    # closure is invoked inside this iteration today, but a
+                    # late-binding lambda over a loop variable is a bug waiting
+                    # for the day get_or_create_part defers the call.
+                    build=lambda mid, fp=fp, cat_id=cat_id, cat_slug=cat_slug: _new_part(
+                        fp, cat_id, cat_slug, manufacturer_id=mid
+                    ),
                 )
                 if not is_new and part.category_id != cat_id:
                     skipped_elsewhere += 1
@@ -799,7 +820,8 @@ def fill_category(
             db,
             sku=fp.mpn,
             manufacturer_name=fp.manufacturer,
-            build=lambda mid: _new_part(fp, cat.id, cat.slug, manufacturer_id=mid),
+            # Bound as a default for the same reason as the sweep above.
+            build=lambda mid, fp=fp: _new_part(fp, cat.id, cat.slug, manufacturer_id=mid),
         )
         db.flush()
         if was_created:
@@ -871,6 +893,17 @@ class FeedRunActive(RuntimeError):
     Two concurrent runs would spend the same rate-limited daily quota twice
     and interleave writes to the same rows, so the second click is refused
     rather than queued — the caller can attach to the run already going.
+    """
+
+
+class FeedRunElsewhere(RuntimeError):
+    """Another PROCESS holds this supplier's feed lock.
+
+    Distinct from :class:`FeedRunActive`, which is the in-process registry
+    refusing a second click synchronously. This one is only discoverable once
+    the worker thread tries to claim the cross-process lock — by which time the
+    route has answered — so it surfaces as a terminal event on the stream
+    rather than as a status code.
     """
 
 
@@ -1052,16 +1085,29 @@ def _feed_run_worker(
                 # Deleted between the click and the thread starting.
                 raise RuntimeError("supplier no longer exists")
             paused = False
-            for event in work(db, provider, supplier):
-                _tally(counts, event)
-                record_stream_event(db, run.supplier_pk, event, stored_kinds)
-                run._publish(event)
-                if run.stop_requested and event.get("kind") != "sync_finished":
-                    # Abandoning the generator here runs its finallys
-                    # (GeneratorExit); the ending event is OURS to emit —
-                    # the work's own sync_finished never yields.
-                    paused = True
-                    break
+            # `_RUNS` only arbitrates between callers inside THIS process. The
+            # nightly `feed-import` container calls grow_catalog directly and
+            # cannot see it, so the cross-process claim is made here — held for
+            # the run's life on its own connection, released if this container
+            # dies. Taken inside the thread on purpose: the route has already
+            # answered by now, and an honest terminal event beats a lock the
+            # caller's thread would have to hand across a boundary.
+            with supplier_feed_lock(db.get_bind(), run.supplier_pk) as claimed:
+                if not claimed:
+                    raise FeedRunElsewhere(
+                        "another process is already importing this supplier "
+                        "(most likely the nightly sweep) — try again later"
+                    )
+                for event in work(db, provider, supplier):
+                    _tally(counts, event)
+                    record_stream_event(db, run.supplier_pk, event, stored_kinds)
+                    run._publish(event)
+                    if run.stop_requested and event.get("kind") != "sync_finished":
+                        # Abandoning the generator here runs its finallys
+                        # (GeneratorExit); the ending event is OURS to emit —
+                        # the work's own sync_finished never yields.
+                        paused = True
+                        break
             if paused:
                 stopped = sync_event(
                     "sync_finished",

@@ -21,6 +21,14 @@ INDEXED_HOT_COLUMNS = [
     (PartListing, "part_id"),
     (PriceBreak, "listing_id"),
     (PriceBreak, "min_quantity"),
+    # Migration 042. part_id was indexed from the start and supplier_id never
+    # was, so every "how many listings does this distributor carry" query — the
+    # supplier detail page, the parts-by-supplier filter, and the eight-surface
+    # delete cascade — fell back to a scan. Measured on production before the
+    # fix: Parallel Seq Scan over 212,187 rows, 3,778 buffers, 30.7 ms to count
+    # ONE supplier. 041's UNIQUE(part_id, supplier_id) does not help; a
+    # composite index cannot serve a predicate on its second column alone.
+    (PartListing, "supplier_id"),
 ]
 
 

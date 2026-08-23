@@ -97,3 +97,71 @@ class TestStamping:
         db.commit()
         _stamp_feed_facts(part, _fp(mpn="X2", package="P" * 200))
         assert len(part.package) == 60
+
+
+class TestUnchangedRowsAreNotRewritten:
+    """A feed that confirms what we already knew must not dirty the row.
+
+    `lifecycle_verified_at` used to be stamped on EVERY pass that produced a
+    mappable lifecycle, outside the `!=` guard that protects every other field,
+    and `changed` was set unconditionally alongside it. Because Mouser returns
+    a lifecycle for essentially every part, that made a re-sync rewrite every
+    row it touched even when nothing about the part had changed: measured at
+    139,056 UPDATEs per import, only 2.8% of them HOT, so ~97% also rewrote all
+    eight of the table's indexes — roughly 3 GB of WAL for a no-op pass.
+
+    Safe to fix because no consumer reads the timestamp's VALUE: bom_match
+    reports `lifecycle_verified_at is not None` and uses it only as a
+    nulls-last tie-break. The column now means "when a feed established the
+    lifecycle this row currently claims", which is the more useful reading.
+    """
+
+    def test_a_second_identical_pass_reports_no_change(self, db):
+        part = Part(sku="RESYNC-1", manufacturer_name="TI")
+        db.add(part)
+        db.commit()
+        feed = _fp(mpn="RESYNC-1", lifecycle="Active", package="SOT-23")
+
+        assert _stamp_feed_facts(part, feed) is True, "first pass must stamp"
+        assert _stamp_feed_facts(part, feed) is False, (
+            "an identical second pass rewrote the row — this is the ~3 GB/import "
+            "WAL bug; lifecycle_verified_at must sit inside a guard"
+        )
+
+    def test_a_second_identical_pass_leaves_the_timestamp_alone(self, db):
+        part = Part(sku="RESYNC-2", manufacturer_name="TI")
+        db.add(part)
+        db.commit()
+        feed = _fp(mpn="RESYNC-2", lifecycle="Active")
+
+        _stamp_feed_facts(part, feed)
+        first = part.lifecycle_verified_at
+        _stamp_feed_facts(part, feed)
+        assert part.lifecycle_verified_at == first
+
+    def test_a_genuine_lifecycle_change_refreshes_the_timestamp(self, db):
+        """The column must track the value it vouches for, not first contact."""
+        part = Part(sku="RESYNC-3", manufacturer_name="TI")
+        db.add(part)
+        db.commit()
+
+        _stamp_feed_facts(part, _fp(mpn="RESYNC-3", lifecycle="Active"))
+        first = part.lifecycle_verified_at
+
+        changed = _stamp_feed_facts(part, _fp(mpn="RESYNC-3", lifecycle="Obsolete"))
+        assert changed is True
+        assert part.lifecycle_status == "obsolete"
+        assert part.lifecycle_verified_at > first
+
+    def test_an_already_verified_row_still_reports_other_field_changes(self, db):
+        """Guarding the timestamp must not swallow a real package change."""
+        part = Part(sku="RESYNC-4", manufacturer_name="TI")
+        db.add(part)
+        db.commit()
+
+        _stamp_feed_facts(part, _fp(mpn="RESYNC-4", lifecycle="Active", package="SOT-23"))
+        changed = _stamp_feed_facts(
+            part, _fp(mpn="RESYNC-4", lifecycle="Active", package="SOT-223")
+        )
+        assert changed is True
+        assert part.package == "SOT-223"
