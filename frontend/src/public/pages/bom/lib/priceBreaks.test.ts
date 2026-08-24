@@ -17,14 +17,17 @@ function offer(
   price: number,
   stock = 100,
   breaks: [number, number][] = [],
-  stale = false,
+  // Mirrors `source=` in the Python helper. Defaults to 'live' only because
+  // these cases are about the BAND and the field must not colour them —
+  // recommend() never reads it, which is what the static/live case pins.
+  source: Offer['price_source'] = 'live',
 ): Offer {
   return {
     supplier_id: supplierId,
     stock_quantity: stock,
     unit_price: price,
     breaks: breaks.map(([min_quantity, unit_price]) => ({ min_quantity, unit_price })),
-    price_stale: stale,
+    price_source: source,
   };
 }
 
@@ -115,11 +118,15 @@ describe('recommend', () => {
     expect(recommend(offers, 1, PLATINUM)).toBe('cheap');
   });
 
-  it('case_stale_price_still_recommendable', () => {
-    // price_stale is a DISPLAY flag (hatched right rail); it does not
-    // change the pick — honesty is rendered, not silently re-ranked.
-    const offers = [offer('stale', 1.0, 100, [], true), offer('fresh', 1.5)];
-    expect(recommend(offers, 1, {})).toBe('stale');
+  it('case_static_price_still_recommendable', () => {
+    // price_source is a DISPLAY label; it does not change the pick —
+    // provenance is rendered, not silently re-ranked. (Renamed from
+    // case_stale_price_still_recommendable when price_stale, which measured a
+    // row's AGE and called it freshness, became price_source, which names the
+    // SOURCE. Same rule, honest field. The mirrored case in
+    // api/tests/test_bom_recommend.py carries the same new name.)
+    const offers = [offer('static', 1.0, 100, [], 'static'), offer('live', 1.5)];
+    expect(recommend(offers, 1, {})).toBe('static');
   });
 
   it('band_constant_is_the_documented_twenty_percent', () => {

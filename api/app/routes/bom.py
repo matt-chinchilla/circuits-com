@@ -23,6 +23,7 @@ from app.services.bom_match import build_row, footprint_token, match_line
 from app.services.bom_resolve import bom_event, pick_feed_source
 from app.services.part_feed.importer import resolve_single
 from app.services.part_feed.mouser import FeedFatalError
+from app.services.part_feed.registry import live_feed_slugs
 from app.services.rate_limit import client_ip
 
 router = APIRouter(prefix="/api/bom", tags=["bom"])
@@ -61,6 +62,11 @@ def match_bom(body: BomMatchRequest, request: Request, db: Session = Depends(get
             status_code=429,
             detail="Too many match requests — try again in a minute.",
         )
+    # ONCE for the request, never once per line: this is two primary-key
+    # reads of `provider_credentials` (one query), and `body.lines` is capped at
+    # 2,000. `build_row` takes it as a required argument so the hoist cannot be
+    # lost silently — see registry.live_feed_slugs.
+    live_slugs = live_feed_slugs(db)
     rows = []
     for line in body.lines:
         m = match_line(db, line.mpn, line.value, line.footprint)
@@ -73,6 +79,7 @@ def match_bom(body: BomMatchRequest, request: Request, db: Session = Depends(get
                 m.approx_reason,
                 m.resolve_query,
                 footprint_token(line.footprint),
+                live_slugs,
                 similar_parts=list(m.candidates),
             )
         )
@@ -96,6 +103,9 @@ def resolve_bom(body: BomResolveRequest, request: Request, db: Session = Depends
             detail="Too many resolve requests — try again in a minute.",
         )
     source = pick_feed_source(db)
+    # Hoisted beside pick_feed_source for the same reason: one answer for
+    # the whole stream, not one per resolved miss.
+    live_slugs = live_feed_slugs(db)
 
     def stream():
         fatal = False
@@ -128,7 +138,7 @@ def resolve_bom(body: BomResolveRequest, request: Request, db: Session = Depends
                     + "\n"
                 )
                 continue
-            row = build_row(db, miss.index, "exact_live", part, None, None, None)
+            row = build_row(db, miss.index, "exact_live", part, None, None, None, live_slugs)
             yield json.dumps(bom_event("resolved", miss.index, row=row)) + "\n"
 
     return StreamingResponse(

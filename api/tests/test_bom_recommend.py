@@ -5,14 +5,18 @@ policy's two homes."""
 
 from app.services.bom_match import SPONSOR_BAND, Offer, price_at, recommend
 
+# `source=` mirrors the TS helper's `price_source`. It defaults to "live" only
+# because these cases are about the BAND and the field must not colour them —
+# recommend() never reads it, which is what the static/live case below pins.
 
-def offer(supplier_id, price, stock=100, breaks=(), stale=False):
+
+def offer(supplier_id, price, stock=100, breaks=(), source="live"):
     return Offer(
         supplier_id=supplier_id,
         stock_quantity=stock,
         unit_price=price,
         breaks=tuple(breaks),
-        price_stale=stale,
+        price_source=source,
     )
 
 
@@ -86,11 +90,15 @@ class TestRecommend:
         assert recommend(offers, 100, PLATINUM) == "sp-plat"
         assert recommend(offers, 1, PLATINUM) == "cheap"
 
-    def test_case_stale_price_still_recommendable(self):
-        # price_stale is a DISPLAY flag (hatched right rail); it does not
-        # change the pick — honesty is rendered, not silently re-ranked.
-        offers = [offer("stale", 1.00, stale=True), offer("fresh", 1.50)]
-        assert recommend(offers, 1, {}) == "stale"
+    def test_case_static_price_still_recommendable(self):
+        # price_source is a DISPLAY label; it does not change the pick —
+        # provenance is rendered, not silently re-ranked. (Renamed from
+        # test_case_stale_price_still_recommendable when price_stale, which
+        # measured a row's AGE and called it freshness, became price_source,
+        # which names the SOURCE. Same rule, honest field. The mirrored case
+        # in priceBreaks.test.ts carries the same new name.)
+        offers = [offer("static", 1.00, source="static"), offer("live", 1.50)]
+        assert recommend(offers, 1, {}) == "static"
 
     def test_band_constant_is_the_documented_twenty_percent(self):
         assert SPONSOR_BAND == 1.20

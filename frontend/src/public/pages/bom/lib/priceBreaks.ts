@@ -25,7 +25,23 @@ export interface Offer {
   stock_quantity: number;
   unit_price: number;
   breaks: OfferBreak[];
-  price_stale: boolean;
+  /**
+   * Where the price came from, NOT how fresh it is. `live` means a
+   * distributor API is registered for that supplier and we hold a key for it
+   * today; `static` means the number is real but nothing re-reads it. It
+   * replaced a staleness boolean that was really measuring row age — see
+   * `_offers_for_part` in api/app/services/bom_match.py for the measurements.
+   *
+   * OPTIONAL, and that is the one place this type deliberately does NOT
+   * mirror the Python `Offer` (which always knows, because it is built from a
+   * live row). Here the value can be genuinely absent: a share link created
+   * before this field existed replays its stored offers verbatim, and
+   * `share.ts` does not — and should not — reject them for lacking it. So
+   * every render site must branch THREE ways. Rendering absent as `static`
+   * would tell a reader that a live distributor's price is unmaintained,
+   * which is the exact libel this field was added to prevent.
+   */
+  price_source?: 'live' | 'static';
 }
 
 /** supplier_id -> [tier order (platinum 0 / gold 1 / silver 2), tiebreak]. */
@@ -51,7 +67,7 @@ export function priceAt(offer: Offer, qty: number): number {
 /** The pick for one line at `lineQty`: the top-ranked sponsor when it prices
  *  within SPONSOR_BAND of the best in-stock price, otherwise the cheapest
  *  (sponsor first on a price tie, then deepest stock). Null when nothing is
- *  in stock. `price_stale` is a display flag — it never re-ranks. */
+ *  in stock. `price_source` is a display field — it never re-ranks. */
 export function recommend(
   offers: Offer[],
   lineQty: number,

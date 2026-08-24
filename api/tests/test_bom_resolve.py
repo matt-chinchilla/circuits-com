@@ -164,3 +164,80 @@ class TestResolveRoute:
     def test_misses_cap_50(self, client):
         misses = [{"index": i, "query": f"Q{i}"} for i in range(51)]
         assert client.post("/api/bom/resolve", json={"misses": misses}).status_code == 422
+
+
+class TestPickFeedSourceCanActuallyBuildEveryProvider:
+    """`provider_cls(api_key=...)` cannot build a Digi-Key provider.
+
+    Reproduced against the running stack before this test existed:
+        TypeError: DigiKeyProvider.__init__() got an unexpected keyword argument 'api_key'
+
+    `from_credential` exists precisely to bridge that — Mouser's whole
+    credential is one key, Digi-Key needs an id AND a secret — and every other
+    construction site in `app/` already uses it. This one did not, and it is
+    reached from `resolve_bom`'s HANDLER BODY, outside `stream()` and outside
+    any try, so it escapes as an unhandled 500 on a PUBLIC unauthenticated
+    endpoint rather than as a stream event.
+
+    It only became reachable when Digi-Key was registered and keyed: the loop
+    takes the first matching supplier, so Mouser — which works — is never
+    reached once a Digi-Key row sorts ahead of it.
+    """
+
+    def test_a_digikey_supplier_yields_a_constructed_provider(self, db, monkeypatch):
+        import uuid
+
+        from app.models import ProviderCredential, Supplier
+        from app.services import bom_resolve
+        from app.services.part_feed.digikey import DigiKeyProvider
+
+        monkeypatch.setattr(
+            bom_resolve.registry.settings, "DIGIKEY_CLIENT_SECRET", "secret", raising=False
+        )
+        db.add(Supplier(id=uuid.uuid4(), name="Digi-Key Electronics", website="digikey.com"))
+        db.add(ProviderCredential(provider="digikey", api_key="client-id"))
+        db.commit()
+
+        picked = bom_resolve.pick_feed_source(db)
+        assert picked is not None, "no supplier was pickable at all"
+        _supplier, provider = picked
+        assert isinstance(provider, DigiKeyProvider)
+
+    def test_the_supplier_scan_is_deterministically_ordered(self, db):
+        """Which distributor prices a BOM miss must not be decided by Postgres
+        physical row order — an unordered `.all()` makes the answer change after
+        a VACUUM, with nothing in the code saying so."""
+        import inspect
+
+        from app.services import bom_resolve
+
+        source = inspect.getsource(bom_resolve.pick_feed_source)
+        assert "order_by" in source, (
+            "pick_feed_source scans suppliers unordered, so which distributor "
+            "answers a BOM miss is whatever the heap returns first"
+        )
+
+
+class TestABlankQueryIsRefusedAtTheEdge:
+    """`min_length=1` accepts "   ", and the stream guards only FeedFatalError.
+
+    `DigiKeyProvider._search` raises ValueError on a blank keyword, and
+    `resolve_bom`'s per-miss try catches FeedFatalError alone — so a
+    whitespace-only query would crash mid-stream, after a 200 and after some
+    rows had already been written to the client. Rejecting it at the schema is
+    the honest place: nothing downstream can do anything useful with it.
+    """
+
+    def test_a_whitespace_only_query_does_not_validate(self):
+        import pytest as _pytest
+        from pydantic import ValidationError
+
+        from app.schemas.bom import BomMissIn
+
+        with _pytest.raises(ValidationError):
+            BomMissIn(index=0, query="   ")
+
+    def test_a_real_query_is_untouched_apart_from_surrounding_space(self):
+        from app.schemas.bom import BomMissIn
+
+        assert BomMissIn(index=0, query="  LM317T  ").query == "LM317T"

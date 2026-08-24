@@ -78,7 +78,13 @@ _ACTIVITY_LIMIT = 10
 # apart from `sync_finished` by `services/activity.IMPORT_EVENT_KINDS` because
 # the two runs did different jobs and the row has no other place to say which.
 # `import_started` stays out for the same reason `sync_started` does.
-_ACTIVITY_EVENT_KINDS = ("part_synced", "part_imported", "sync_finished", "import_finished")
+_ACTIVITY_EVENT_KINDS = (
+    "part_synced",
+    "part_imported",
+    "part_listed",
+    "sync_finished",
+    "import_finished",
+)
 
 # `?month=` grammar. The regex is enforced by FastAPI (→ 422 before the handler
 # runs); `_parse_month` still catches the values it lets through that aren't
@@ -627,6 +633,12 @@ def _event_description(event: ActivityEvent) -> str:
         if event.detail:
             return f"Imported {event.title} into {event.detail}"
         return f"Imported {event.title}"
+    if event.kind == "part_listed":
+        # A part we already had, now carried by one more distributor. Says
+        # neither "synced" nor "imported" because neither is what happened.
+        if event.detail:
+            return f"New offer for {event.title} in {event.detail}"
+        return f"New offer for {event.title}"
     if event.kind == "sync_finished":
         return f"Inventory sync — {event.detail or event.title}"
     if event.kind == "import_finished":

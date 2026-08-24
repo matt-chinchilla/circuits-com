@@ -19,6 +19,7 @@ from sqlalchemy import case, func, literal, or_
 from sqlalchemy.orm import Session
 
 from app.models import Part, PartListing, Sponsor
+from app.services.part_feed.registry import match_provider
 
 MIN_APPROX_LEN = 5
 
@@ -176,13 +177,32 @@ def match_line(db: Session, mpn: str | None, value: str | None, footprint: str |
 SPONSOR_BAND = 1.20
 
 
+# Provenance, NOT recency. See _offers_for_part for why the distinction is the
+# whole point and why there is no third value for "confirmed recently".
+PRICE_SOURCE_LIVE = "live"
+PRICE_SOURCE_STATIC = "static"
+
+
 @dataclass(frozen=True)
 class Offer:
     supplier_id: str
     stock_quantity: int
     unit_price: float
     breaks: tuple[tuple[int, float], ...]  # (min_quantity, unit_price) ASC
-    price_stale: bool
+    # PRICE_SOURCE_LIVE | PRICE_SOURCE_STATIC. Carried on the pure Offer to
+    # mirror the TS `Offer` in priceBreaks.ts. recommend() does not read it and
+    # must not: provenance is rendered, never silently re-ranked — the same
+    # posture the old staleness flag had, and the one thing about it that was
+    # right.
+    #
+    # REQUIRED here, OPTIONAL there, and that asymmetry is deliberate rather
+    # than drift. This object is only ever built from a live database row in
+    # _offers_for_part, which always knows the answer. The TS one is built from
+    # a wire payload that may be a share link created before the field existed,
+    # so over there absent is a real state and every render site has to branch
+    # three ways. Making it required on the client would not add safety, it
+    # would just make `undefined` lie about its type.
+    price_source: str
 
 
 def price_at(offer: Offer, qty: int) -> float:
@@ -262,21 +282,78 @@ def load_tier_rank(db: Session, supplier_ids: set) -> dict[str, tuple[int, str]]
     return rank
 
 
-def _offers_for_part(db: Session, part: Part) -> tuple[list[dict], dict[str, Offer]]:
+def _offers_for_part(
+    db: Session, part: Part, live_slugs: frozenset[str]
+) -> tuple[list[dict], dict[str, Offer]]:
     """All listings as wire offers (price-ascending) + pure Offer inputs for
-    recommend(). price_stale = listing not updated in 30 days (spec §5)."""
-    from datetime import UTC, datetime, timedelta
+    recommend().
 
-    stale_before = datetime.now(UTC) - timedelta(days=30)
+    THE PROVENANCE PAIR — `price_source` + `price_as_of` — replaces the old
+    `price_stale` boolean, which was measuring the wrong thing and telling
+    buyers about it.
+
+    `price_stale` was `last_updated < now() - 30 days`. But
+    `part_listings.last_updated` has `default=` and NO `onupdate=`: it is
+    stamped once at INSERT and no writer has ever bumped it. It means
+    "created". So a Mouser row the nightly feed confirms every single night
+    still crossed the 30-day line on its own, and `availabilityRail` tested
+    that flag ABOVE both stock branches — meaning the BOM table would have
+    stopped reporting stock on EVERY row in the catalog on 2026-09-24
+    (measured: 38,442 listings read stale today, 97,580 on 2026-09-20,
+    167,823 of 167,823 on 2026-09-24).
+
+    What replaces it deliberately claims LESS:
+
+      live    a distributor API is registered for this supplier AND we hold a
+              key for it today, so this row is reachable and does get
+              rewritten when its numbers change.
+      static  no live source. The number is REAL — the ~37,095 listings behind
+              the 57 sourceless suppliers were collected, not invented — but
+              nothing re-reads it.
+
+    It does NOT say "confirmed recently", because nothing in the schema can
+    support that claim and every available proxy was checked and rejected:
+    `last_updated` has one reader and zero writers; `updated_at` moves only
+    when a VALUE changed, which is at most 6,477 of 130,728 Mouser listings
+    (5.0%) — so at least 95% of confirmed rows look untouched;
+    `supplier_feeds.last_synced_at` is stamped by a job that by construction
+    refreshes nothing; `lifecycle_verified_at` covers 1.8% of parts. The word
+    "confirmed" must never appear beside either label.
+
+    `price_as_of` is WHEN THIS OFFER ENTERED THE CATALOG, never "when the
+    price was read", and it is rendered unconditionally beside the label so
+    the pair is never split. It can under-claim: 1,352 Mouser listings still
+    carry the 2026-06-03 seed date and 137 of those have
+    `updated_at > last_updated + 1s`, i.e. a feed demonstrably rewrote them in
+    August while this field will print June. Under-claiming is safe. The
+    obvious "fix" — stamping `last_updated` on every confirming pass — is NOT:
+    that is ~130k UPDATEs on an 8-index table per sweep, exactly the per-pass
+    write churn that 9e4abd0 ("perf(feed): reconcile price ladders instead of
+    replacing them", 828,673 row-ops -> 0) removed, and the same mistake
+    `lifecycle_verified_at` made before its guard was tightened.
+
+    `live_slugs` is computed ONCE per request by the caller
+    (registry.live_feed_slugs) and passed down. `match_provider` costs nothing
+    here: this loop already dereferences `li.supplier` for the name and the
+    website, so the Supplier object is in hand and matching is a pure string
+    scan over it — zero added queries per listing.
+    """
     wire: list[dict] = []
     pure: dict[str, Offer] = {}
     for li in part.listings:
         supplier = li.supplier
         breaks = sorted((pb.min_quantity, float(pb.unit_price)) for pb in li.price_breaks)
-        last = li.last_updated
-        if last is not None and last.tzinfo is None:
-            last = last.replace(tzinfo=UTC)
-        stale = last is not None and last < stale_before
+        matched = match_provider(supplier) if supplier is not None else None
+        source = (
+            PRICE_SOURCE_LIVE
+            if matched is not None and matched[0] in live_slugs
+            else PRICE_SOURCE_STATIC
+        )
+        # Per LISTING, never hoisted onto the supplier: two of a supplier's
+        # rows can and do carry different dates, and printing one row's age
+        # against another's price is the kind of quiet lie this field exists
+        # to prevent.
+        as_of = li.last_updated.isoformat() if li.last_updated is not None else None
         sid = str(li.supplier_id)
         wire.append(
             {
@@ -287,7 +364,8 @@ def _offers_for_part(db: Session, part: Part) -> tuple[list[dict], dict[str, Off
                 "stock_quantity": li.stock_quantity or 0,
                 "unit_price": float(li.unit_price),
                 "currency": li.currency or "USD",
-                "price_stale": stale,
+                "price_source": source,
+                "price_as_of": as_of,
                 "breaks": [{"min_quantity": q, "unit_price": p} for q, p in breaks],
             }
         )
@@ -298,7 +376,7 @@ def _offers_for_part(db: Session, part: Part) -> tuple[list[dict], dict[str, Off
             stock_quantity=li.stock_quantity or 0,
             unit_price=float(li.unit_price),
             breaks=tuple(breaks),
-            price_stale=stale,
+            price_source=source,
         )
         if sid not in pure or candidate.unit_price < pure[sid].unit_price:
             pure[sid] = candidate
@@ -331,8 +409,19 @@ def build_row(
     approx_reason: str | None,
     resolve_query: str | None,
     line_package: str | None,
+    live_slugs: frozenset[str],
     similar_parts: list[Part] | None = None,
 ) -> dict:
+    """One wire row for one BOM line.
+
+    `live_slugs` is REQUIRED and has no default on purpose. Defaulting it to
+    the empty set would render perfectly — every offer would simply read
+    `static`, which libels a live distributor by omission and shows nothing
+    wrong in a screenshot. Defaulting it to "compute it myself" would move a
+    credential lookup inside the caller's per-line loop, and the
+    schema lets a BOM carry 2,000 lines. Callers hoist it once per request
+    (`registry.live_feed_slugs`); the two call sites are in `routes/bom.py`.
+    """
     row: dict = {
         "index": index,
         "status": status,
@@ -346,7 +435,7 @@ def build_row(
     }
     if part is None:
         return row
-    wire, pure = _offers_for_part(db, part)
+    wire, pure = _offers_for_part(db, part, live_slugs)
     tier_rank = load_tier_rank(db, set(pure.keys()))
     for o in wire:
         entry = tier_rank.get(o["supplier_id"])

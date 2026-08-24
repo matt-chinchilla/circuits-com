@@ -248,3 +248,97 @@ class TestMigration030:
 
     def test_downgrade_drops_the_table_if_it_exists(self):
         assert "DROP TABLE IF EXISTS activity_events" in MIGRATION
+
+
+class TestAFirstOfferFromANewDistributorIsRecorded:
+    """`listing_added` had no kind, so every one of them was silently dropped.
+
+    `record_stream_event` maps a `part_synced` wire event's ACTION to a stored
+    kind and returns early when the action is unknown. `_PART_ACTION_KINDS`
+    carried `updated`, `media_filled` and `created` — but not `listing_added`,
+    which `grow_catalog` has emitted since b380922 for the case where a part we
+    already hold gains its FIRST offer from a distributor.
+
+    That is the single event the whole multi-distributor pivot exists to
+    produce — a second price landing on a part, which is what makes the
+    comparison real — and it was invisible in `activity_events` and in the
+    dashboard strip. The failure is silent by construction: an unmapped action
+    is indistinguishable from a transient one that is dropped on purpose
+    (`not_found`, `no_data`), so nothing anywhere reported a problem.
+
+    It gets its OWN kind rather than borrowing one. `part_synced` renders
+    "Synced X into Y", which describes refreshing a listing that already
+    existed; `part_imported` renders "Imported X", which describes a part that
+    did not exist before. A first offer is neither: the part was already here,
+    and nothing about it was refreshed.
+    """
+
+    def test_the_action_maps_to_a_stored_kind(self):
+        from app.services.activity import _PART_ACTION_KINDS
+
+        assert "listing_added" in _PART_ACTION_KINDS, (
+            "a distributor's first offer on an existing part is dropped before it "
+            "reaches activity_events — record_stream_event returns early for an "
+            "action with no kind"
+        )
+
+    def test_it_does_not_borrow_a_kind_that_describes_something_else(self):
+        from app.services.activity import _PART_ACTION_KINDS
+
+        kind = _PART_ACTION_KINDS.get("listing_added")
+        assert kind not in ("part_synced", "part_imported"), (
+            f"listing_added reuses {kind!r}, whose sentence claims the part was "
+            "refreshed or created; neither happened"
+        )
+
+    def test_the_row_is_actually_written(self, db):
+        import uuid
+
+        from app.models import ActivityEvent, Supplier
+        from app.services.activity import record_stream_event
+        from app.services.part_feed.importer import sync_event
+
+        supplier = Supplier(id=uuid.uuid4(), name="Digi-Key Electronics", website="digikey.com")
+        db.add(supplier)
+        db.commit()
+
+        before = db.query(ActivityEvent).count()
+        record_stream_event(
+            db,
+            supplier.id,
+            sync_event(
+                "part_synced",
+                str(supplier.id),
+                "SN74LVC1G08DBVR — Texas Instruments",
+                "Logic Gates",
+                action="listing_added",
+            ),
+        )
+        assert db.query(ActivityEvent).count() == before + 1, (
+            "no activity row was written for a first offer"
+        )
+
+    def test_the_dashboard_has_a_sentence_for_it(self, db):
+        """`_event_description` matches every kind explicitly and has no
+        catch-all, deliberately — so a new kind with no branch silently renders
+        as the bare title, which for a part event is just an MPN."""
+        import uuid
+
+        from app.models import ActivityEvent
+        from app.routes.dashboard import _event_description
+        from app.services.activity import _PART_ACTION_KINDS
+
+        event = ActivityEvent(
+            id=uuid.uuid4(),
+            kind=_PART_ACTION_KINDS["listing_added"],
+            title="SN74LVC1G08DBVR — Texas Instruments",
+            detail="Logic Gates",
+        )
+        sentence = _event_description(event)
+        assert sentence != event.title, (
+            "the new kind fell through to the bare title — it needs its own "
+            "branch in _event_description"
+        )
+        assert "Synced" not in sentence and "Imported" not in sentence, (
+            f"the sentence claims a refresh or a creation: {sentence!r}"
+        )

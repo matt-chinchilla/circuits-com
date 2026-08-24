@@ -13,6 +13,7 @@ from app.services.part_feed.importer import (
     IMPORT_CURSOR_EXHAUSTED,
     _fill_part_media,
     backfill_images,
+    category_cursor_key,
     fill_all_empty,
     fill_category,
     grow_catalog,
@@ -1403,7 +1404,7 @@ class TestImportCursor:
         list(grow_catalog(db, provider, supplier, call_budget=1, per_category=3))
 
         row = db.query(SupplierFeed).filter_by(supplier_id=supplier.id).one()
-        assert row.import_cursor == {"voltage-references": 3}
+        assert row.import_cursor == {category_cursor_key("voltage-references"): 3}
         # the row this run had to create must never switch the nightly job on
         assert row.auto_import_enabled is False
 
@@ -1416,7 +1417,7 @@ class TestImportCursor:
 
         list(grow_catalog(db, provider, supplier, call_budget=1))
 
-        assert _cursor(db, supplier) == {"voltage-references": -1}
+        assert _cursor(db, supplier) == {category_cursor_key("voltage-references"): -1}
 
     def test_the_next_run_starts_where_the_last_one_stopped(self, db, seeded_db):
         supplier, parent = seeded_db["supplier1"], seeded_db["parent"]
@@ -1438,7 +1439,7 @@ class TestImportCursor:
             "NEW-2",
             "NEW-3",
         }
-        assert _cursor(db, supplier)["voltage-references"] == 4
+        assert _cursor(db, supplier)[category_cursor_key("voltage-references")] == 4
 
     def test_the_cursor_advances_by_RAW_rows_not_by_parts_kept(self, db, seeded_db):
         """A page whose rows partly fail to decode still consumed those rows.
@@ -1456,7 +1457,7 @@ class TestImportCursor:
         first = _HalfUndecodable(results_by_keyword={"Voltage References": [_feed_part("NEW-1")]})
         list(grow_catalog(db, first, supplier, call_budget=1, per_category=2))
 
-        assert _cursor(db, supplier) == {"voltage-references": 2}
+        assert _cursor(db, supplier) == {category_cursor_key("voltage-references"): 2}
         second = _HalfUndecodable(results_by_keyword={"Voltage References": []})
         list(grow_catalog(db, second, supplier, call_budget=1, per_category=2))
         assert second.search_calls == [("Voltage References", 2, 2)]
@@ -1475,7 +1476,14 @@ class TestImportCursor:
         # the next unexhausted shelf instead
         assert [kw for kw, _, _ in provider.search_calls] == ["Zener Diodes"]
         assert events[0]["detail"] == "growing catalog · budget 1 calls · 2 categories to sweep"
-        assert _cursor(db, supplier) == {"amplifiers": -1, "zener-diodes": -1}
+        # The seeded `amplifiers` was written before namespacing and is READ
+        # through the shim, so it is honoured where it sits; the key this run
+        # wrote is namespaced. A legacy key is only retired when the sweep
+        # writes THAT unit (see `_cursor_set`), never wholesale.
+        assert _cursor(db, supplier) == {
+            "amplifiers": -1,
+            category_cursor_key("zener-diodes"): -1,
+        }
 
     def test_all_exhausted_wraps_around_and_sweeps_fresh(self, db, seeded_db):
         """Otherwise a fully-swept catalog turns the nightly run into a no-op
@@ -1498,8 +1506,10 @@ class TestImportCursor:
             "catalog fully swept — restarting from the top"
         )
         assert provider.search_calls == [("Amplifiers", 50, 0)]
-        # the clear PERSISTED: the old -1s are gone, not carried forward
-        assert _cursor(db, supplier) == {"amplifiers": -1}
+        # the clear PERSISTED: the old -1s are gone, not carried forward —
+        # including the LEGACY spellings, which the wrap takes with it (a
+        # surviving bare key would resume the shelf the wrap just reset)
+        assert _cursor(db, supplier) == {category_cursor_key("amplifiers"): -1}
 
     def test_an_existing_feed_row_keeps_its_switch(self, db, seeded_db):
         """Same natural key as the PATCH upsert (supplier_id IS the pk) — the
@@ -1513,7 +1523,7 @@ class TestImportCursor:
 
         row = db.query(SupplierFeed).filter_by(supplier_id=supplier.id).one()
         assert row.auto_import_enabled is True
-        assert row.import_cursor == {"amplifiers": -1}
+        assert row.import_cursor == {category_cursor_key("amplifiers"): -1}
         assert db.query(SupplierFeed).count() == 1
 
     def test_a_run_that_sweeps_nothing_writes_no_row(self, db, seeded_db):
@@ -1544,7 +1554,7 @@ class TestImportCursor:
         events = list(grow_catalog(db, provider, supplier, call_budget=10))
 
         assert [e["kind"] for e in events][-2:] == ["sync_error", "sync_finished"]
-        assert _cursor(db, supplier) == {"amplifiers": -1}
+        assert _cursor(db, supplier) == {category_cursor_key("amplifiers"): -1}
 
 
 class TestContinuousImport:
@@ -1582,7 +1592,10 @@ class TestContinuousImport:
         assert {p.sku for p in db.query(Part).filter(Part.sku.like("NEW-%")).all()} == {
             f"NEW-{i}" for i in range(6)
         }
-        assert _cursor(db, supplier)["voltage-references"] == IMPORT_CURSOR_EXHAUSTED
+        assert (
+            _cursor(db, supplier)[category_cursor_key("voltage-references")]
+            == IMPORT_CURSOR_EXHAUSTED
+        )
         assert events[-1]["counts"]["created"] == 6
 
     def test_one_started_and_one_finished_however_many_passes(self, db, seeded_db):
@@ -1694,7 +1707,7 @@ class TestContinuousImport:
         }
         # and the depth they bought is still on the row, so the next run
         # resumes at page 2 rather than re-buying page 0
-        assert _cursor(db, supplier)["voltage-references"] == 2
+        assert _cursor(db, supplier)[category_cursor_key("voltage-references")] == 2
 
     def test_the_runaway_ceiling_stops_a_feed_that_never_runs_short(self, db, seeded_db):
         """A provider that answers a full page forever exhausts nothing and

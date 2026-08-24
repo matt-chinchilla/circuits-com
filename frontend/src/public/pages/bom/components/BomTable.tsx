@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { priceAt, recommend, tierRankFromOffers } from '../lib/priceBreaks';
+import { availability, type AvailabilityState } from '../lib/availability';
+import { priceSourceNote, priceSourceTone } from '../lib/priceSource';
 import { formatMoney, formatUnit } from '../lib/format';
 import type { BomOffer, TableRow } from '../lib/types';
 import AlternatesDropdown from './AlternatesDropdown';
@@ -233,27 +235,25 @@ function lifecycleRail(row: TableRow): {
   }
 }
 
-/** What the right rail claims about getting the part. Staleness beats the
- *  stock colours: a price nobody has refreshed in a month is the more useful
- *  warning than "enough in stock" (spec §5). */
+/** The component's half of the availability contract: the rule and the words
+ *  live in `lib/availability.ts` (pure, unit-tested), and only this map knows
+ *  what a state looks like. Staleness is NOT here any more — it used to be
+ *  tested above both stock branches, which meant a flagged row printed a
+ *  freshness warning INSTEAD of its stock figure, and the flag was really
+ *  reading row age (measured: it would have covered all 167,823 listings by
+ *  2026-09-24). Provenance is a separate, non-blocking label now. */
+const AVAIL_CLASS: Record<AvailabilityState, string> = {
+  none: styles.availNone,
+  partial: styles.availPartial,
+  full: styles.availFull,
+};
+
 function availabilityRail(view: RowView): { className: string; label: string } {
-  const { chosen, lineQty } = view;
   // A pinned offer can be one with nothing on the shelf — the reader is
   // allowed to price against their own distributor either way, but the rail
   // has to say red, not "only 0 of 40 in stock" in the partial violet.
-  if (chosen == null || chosen.stock_quantity <= 0) {
-    return { className: styles.availNone, label: 'Availability: nothing in stock' };
-  }
-  if (chosen.price_stale) {
-    return { className: styles.availStale, label: 'Availability: price not refreshed in 30 days' };
-  }
-  if (chosen.stock_quantity >= lineQty) {
-    return { className: styles.availFull, label: `Availability: ${chosen.stock_quantity} in stock` };
-  }
-  return {
-    className: styles.availPartial,
-    label: `Availability: only ${chosen.stock_quantity} of ${lineQty} in stock`,
-  };
+  const { state, label } = availability(view.chosen?.stock_quantity ?? null, view.lineQty);
+  return { className: AVAIL_CLASS[state], label };
 }
 
 export default function BomTable({
@@ -397,6 +397,8 @@ export default function BomTable({
               const part = row.server?.part ?? null;
               const rail = lifecycleRail(row);
               const avail = availabilityRail(view);
+              // Null when the wire carried no source (an old share).
+              const sourceNote = chosen == null ? null : priceSourceNote(chosen);
               const identity = part?.sku ?? row.mpn ?? row.value ?? '—';
               const submitted = row.mpn ?? row.value ?? '—';
               const maker = part?.manufacturer_name ?? row.manufacturer;
@@ -554,8 +556,16 @@ export default function BomTable({
                           <span className={styles.supplierName}>{chosen.supplier_name}</span>
                           <span className={styles.supplierMeta}>
                             Stock <strong>{chosen.stock_quantity.toLocaleString('en-US')}</strong>
-                            {chosen.price_stale ? ' · price is stale' : ''}
                           </span>
+                          {/* Three-way by construction: priceSourceNote
+                              returns null when the wire carried no source (an
+                              old share), and null renders nothing. There is
+                              deliberately no `else` here to get wrong. */}
+                          {sourceNote != null && (
+                            <span className={styles.priceSource} data-source={priceSourceTone(chosen)}>
+                              {sourceNote}
+                            </span>
+                          )}
                           {/* Say it out loud when the total is no longer our
                               recommendation — a silently overridden row is a
                               number the reader cannot account for later. */}

@@ -274,6 +274,13 @@ class Settings(BaseSettings):
     # for a given key. See docs/part-import-runbook.md.
     FEED_IMPORT_HOUR_UTC: int = 6
     FEED_IMPORT_CALL_BUDGET: int = 850
+    # Per-provider overrides, {slug: calls_per_day}. The scalar above stays the
+    # fallback so a newly registered distributor runs without an ops change.
+    # Separate because quotas are not pooled: each distributor sells its own
+    # ~1,000/day, and one shared counter lets whichever provider the nightly
+    # sweep reaches first spend the other's allowance — which surfaces as a
+    # quota wall that looks like the second provider being down.
+    FEED_IMPORT_CALL_BUDGETS: dict[str, int] = {}
 
     # BOM live-resolve daily provider-call budget (spec §6). Per-worker,
     # in-process — the documented single-worker posture.

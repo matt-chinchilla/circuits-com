@@ -1168,21 +1168,21 @@ class TestProviderRegistry:
         assert provider.api_key == DB_KEY
 
     def test_get_feed_key_prefers_the_stored_row_over_the_environment(self, db, feed_key):
-        assert get_feed_key(db) == FAKE_KEY
+        assert get_feed_key(db, "mouser") == FAKE_KEY
 
         db.add(ProviderCredential(provider="mouser", api_key=DB_KEY))
         db.commit()
 
-        assert get_feed_key(db) == DB_KEY
+        assert get_feed_key(db, "mouser") == DB_KEY
 
     def test_feed_configured_is_the_same_question_as_a_key_being_resolvable(self, db, monkeypatch):
         monkeypatch.setattr(settings, "MOUSER_API_KEY", None)
-        assert feed_configured(db) is False
+        assert feed_configured(db, "mouser") is False
 
         db.add(ProviderCredential(provider="mouser", api_key=DB_KEY))
         db.commit()
 
-        assert feed_configured(db) is True
+        assert feed_configured(db, "mouser") is True
 
     def test_a_provider_with_no_environment_variable_has_no_fallback(self, db, feed_key):
         """MOUSER_API_KEY is Mouser's. A second distributor gets a stored row or

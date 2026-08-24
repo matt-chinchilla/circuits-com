@@ -125,6 +125,11 @@ def part_from_mouser(raw: dict) -> FeedPart | None:
 
 
 class MouserProvider:
+    # The environment settings this provider needs, ALL of them required. The
+    # registry reads this instead of knowing Mouser by name — see
+    # registry.env_feed_key. One value here; Digi-Key declares two.
+    credential_env: tuple[str, ...] = ("MOUSER_API_KEY",)
+
     supplier_name = "Mouser Electronics"
     supplier_website = "mouser.com"
     records_per_call = 50  # Mouser's keyword-search page size
@@ -157,7 +162,7 @@ class MouserProvider:
         self.last_raw_count = 0
 
     @classmethod
-    def from_credential(cls, key: str) -> "MouserProvider":
+    def from_credential(cls, key: str, client: "httpx.Client | None" = None) -> "MouserProvider":
         """Build from the one string `get_feed_key` resolved.
 
         The seam that lets a provider decide what constructing it needs:
@@ -165,7 +170,7 @@ class MouserProvider:
         pair. Callers no longer assume `provider_cls(api_key=…)` fits every
         feed.
         """
-        return cls(api_key=key)
+        return cls(api_key=key, client=client)
 
     def close(self) -> None:
         """Release the HTTP connection pool. The sync route builds one

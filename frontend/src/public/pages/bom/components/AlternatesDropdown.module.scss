@@ -235,16 +235,20 @@
   color: var(--bom-ink-secondary, #676c71);
 }
 
-// Hatched like the availability rail it agrees with: texture says "we are not
-// sure this is current", and it never re-ranks the list.
-.stale {
+// Provenance, matching the table row's chip so one offer reads the same in
+// both places. Texture carries the difference, not hue: the static chip is
+// hatched ("nothing re-reads this number"), the live chip is flat. Neither
+// re-ranks the list — the popover is ordered by price, as it always was.
+.priceSource {
   padding: 1px 6px;
   font-size: 0.66rem;
   color: var(--bom-ink-secondary, #676c71);
   background-color: rgba(103, 108, 113, 0.12);
-  background-image: repeating-linear-gradient(45deg, transparent 0 3px, currentColor 3px 4px);
   border-radius: 4px;
-  cursor: help;
+
+  &[data-source='static'] {
+    background-image: repeating-linear-gradient(45deg, transparent 0 3px, currentColor 3px 4px);
+  }
 }
 
 .visit {

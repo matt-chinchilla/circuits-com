@@ -121,6 +121,37 @@ def seconds_until_hour(hour_utc: int, now: datetime) -> float:
     return (target - now).total_seconds()
 
 
+NIGHTLY_STRATEGIES: frozenset[str] = frozenset({"category"})
+"""Which import strategies may run UNATTENDED. One line to widen.
+
+Both reasons to hold the family sweep back are about things this job cannot
+currently do, not about the sweep being unfinished:
+
+**The budget has the wrong shape.** `run_once` splits ONE
+`FEED_IMPORT_CALL_BUDGET` evenly across every eligible supplier, and the two
+distributors are not comparable spenders. At DigiKey's `_MIN_GAP_SECONDS =
+0.55` its whole 1,000-call day burns in roughly eight minutes of wall clock;
+the same slice against Mouser takes hours. An even split either starves the
+category sweep or hands DigiKey a slice it empties before anyone is awake — and
+the daytime Import clicks share that same daily quota.
+
+**Nobody owns `lifecycle_status` yet.** `_stamp_feed_facts` writes it through
+`map_lifecycle` from DigiKey's `ProductStatus.Status` and Mouser's
+`LifecycleStatus` — two vocabularies over one column. Measured on production:
+all 175,728 parts carry a `lifecycle_status` but only 3,181 have a
+`lifecycle_verified_at`, so a first DigiKey touch legitimately writes each part
+once. It is the SECOND night that is the problem: wherever the two mappings
+disagree, each feed flips the column back to its own word and every flip
+rewrites all eight of the table's indexes — the same write-waste class commit
+9e4abd0 just removed. The disagreement rate is not measurable yet (it needs
+live data from both feeds over the same parts), and a provider-authority or
+no-downgrade rule belongs in front of the first unattended run, not after it.
+
+Until then DigiKey is admin-click-only: the operator is present, watching the
+console, and spending a budget they chose.
+"""
+
+
 def _eligible(db: Session) -> list[_Target]:
     """Suppliers whose nightly import is switched ON *and* could run right now.
 
@@ -147,6 +178,14 @@ def _eligible(db: Session) -> list[_Target]:
             )
             continue
         provider_slug, provider_cls = match
+        if getattr(provider_cls, "import_strategy", "category") not in NIGHTLY_STRATEGIES:
+            logger.warning(
+                "[feed-import] %s runs the %r import strategy, which is interactive-only "
+                "for now — skipping tonight and leaving its switch alone",
+                name,
+                getattr(provider_cls, "import_strategy", "category"),
+            )
+            continue
         key = get_feed_key(db, provider_slug)
         if not key:
             # NEVER log the key, and never log its absence as an error: an
@@ -187,6 +226,14 @@ def _import_one(db: Session, target: _Target, call_budget: int) -> dict:
     stats = {
         "created": 0,
         "synced": 0,
+        # A distributor's FIRST offer on a part we already hold. Counted apart
+        # from `created` (no new part) and from `synced` (no refresh) because
+        # it is neither, and on a comparison site it is the most valuable thing
+        # an import produces — a second price beside an existing one. It went
+        # uncounted here from the day `grow_catalog` started emitting it, so a
+        # night that added hundreds of comparison rows logged `created=0
+        # updated=0` and read as a night that did nothing.
+        "listing_added": 0,
         "calls": 0,
         "fatal": False,
         "error": False,
@@ -215,6 +262,8 @@ def _import_one(db: Session, target: _Target, call_budget: int) -> dict:
                 action = event.get("action")
                 if action == "created":
                     stats["created"] += 1
+                elif action == "listing_added":
+                    stats["listing_added"] += 1
                 elif action in ("updated", "media_filled"):
                     stats["synced"] += 1
                 elif event.get("kind") == "sync_error":
@@ -258,6 +307,7 @@ def run_once(db: Session, now: datetime | None = None) -> dict:
         "suppliers": 0,
         "created": 0,
         "synced": 0,
+        "listing_added": 0,
         "calls": 0,
         "errors": 0,
         "skipped_locked": 0,
@@ -314,6 +364,7 @@ def run_once(db: Session, now: datetime | None = None) -> dict:
         stats["suppliers"] += 1
         stats["created"] += result["created"]
         stats["synced"] += result["synced"]
+        stats["listing_added"] += result["listing_added"]
         stats["calls"] += result["calls"]
         if result["error"] or result["fatal"]:
             stats["errors"] += 1
@@ -321,9 +372,10 @@ def run_once(db: Session, now: datetime | None = None) -> dict:
         # Counts only — never a key, never a part title (an unbounded feed
         # string). The activity rows carry the detail.
         logger.info(
-            "[feed-import] %s: created=%d updated=%d calls=%d",
+            "[feed-import] %s: created=%d listings_added=%d updated=%d calls=%d",
             target.name,
             result["created"],
+            result["listing_added"],
             result["synced"],
             result["calls"],
         )
@@ -359,7 +411,8 @@ def _one_pass() -> None:
         db.close()
     logger.info(
         "[feed-import] pass: suppliers=%(suppliers)d created=%(created)d "
-        "updated=%(synced)d calls=%(calls)d errors=%(errors)d",
+        "listings_added=%(listing_added)d updated=%(synced)d calls=%(calls)d "
+        "errors=%(errors)d",
         stats,
     )
 

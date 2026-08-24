@@ -18,6 +18,22 @@ export interface BomOffer extends Offer {
   /** Normalized lowercase tier, or null for an unsponsored supplier. */
   tier: string | null;
   currency: string;
+  /**
+   * When this offer ENTERED THE CATALOG — never "when the price was read".
+   *
+   * The server sends `part_listings.last_updated`, which has a `default=` and
+   * no `onupdate=`: it is stamped at INSERT and no writer bumps it. So it can
+   * under-claim, and does — 1,352 Mouser listings still carry the 2026-06-03
+   * seed date and 137 of those were demonstrably rewritten by a feed in
+   * August. Under-claiming is the safe direction and we accept it; the fix
+   * that looks obvious (stamp it on every confirming pass) is ~130k UPDATEs
+   * on an 8-index table per sweep, which is the write churn commit 9e4abd0
+   * removed. Word it as "added", never "updated" or "confirmed".
+   *
+   * Optional for the same reason `price_source` is: an old share replays
+   * offers that never carried it.
+   */
+  price_as_of?: string | null;
 }
 
 export interface BomPartInfo {

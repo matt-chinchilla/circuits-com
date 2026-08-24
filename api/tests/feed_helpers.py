@@ -142,3 +142,69 @@ def _ladder_breaks(ladder, breaks) -> list[FeedPriceBreak]:
     if breaks:
         return [FeedPriceBreak(1, 0.10), FeedPriceBreak(100, 0.08)]
     return []
+
+
+class ScopedFakeProvider(FakeProvider):
+    """A FakeProvider that answers a SCOPED query and reports how wide it was.
+
+    ADDITIVE BY CONSTRUCTION, and that is the point. `FakeProvider` is shared
+    with `test_part_feed`, `test_supplier_sync_route`, `test_feed_query_budget`
+    and `test_price_break_writes_pg`; declaring `import_strategy = "family"` on
+    the base class would silently re-route every one of those category-sweep
+    tests through the overlap strategy and they would pass or fail for reasons
+    nobody wrote. So every family-sweep seam lives down here instead:
+
+      * `import_strategy` — which work unit `grow_catalog` dispatches to.
+      * `manufacturer_scope(canonical_key, keyword)` — the narrowing device.
+        Returning None means "this distributor has no id for that maker", which
+        the strategy must treat as "no work here", never as "unfiltered query".
+      * `search_scoped(scope, …)` — the scoped read.
+      * `last_total_count` — the provider's `ProductsCount`, which is the
+        signal that decides whether a query fits its 300-record window.
+
+    `totals_by_keyword` is what makes a narrowing test possible without a
+    network: it is the only way to say "this query matches 3,689 products" to
+    a fake that is only holding three.
+    """
+
+    import_strategy = "family"
+    # Mirrors DigiKey's measured `Offset + Limit <= 300`. The strategy reads it
+    # off the provider so a distributor with a different ceiling needs no
+    # importer change.
+    search_window = 300
+
+    def __init__(
+        self,
+        *,
+        manufacturer_ids=None,
+        totals_by_keyword=None,
+        default_total=None,
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
+        # canonical_key -> the distributor's own manufacturer id
+        self.manufacturer_ids = manufacturer_ids or {}
+        self.totals_by_keyword = totals_by_keyword or {}
+        self.default_total = default_total
+        self.last_total_count = None
+        # (keyword, manufacturer_id, limit, start_at) per scoped call — how a
+        # test proves the filter was actually SENT rather than merely computed.
+        self.scopes_asked: list[tuple[str, str | None, int, int]] = []
+
+    def manufacturer_scope(self, canonical_key: str, keyword: str):
+        from app.services.part_feed.importer import FeedScope
+
+        digikey_id = self.manufacturer_ids.get(canonical_key)
+        if digikey_id is None:
+            return None
+        return FeedScope(
+            keyword=keyword,
+            manufacturer_id=str(digikey_id),
+            label=f"{canonical_key} · {keyword}",
+        )
+
+    def search_scoped(self, scope, limit=50, start_at=0):
+        self.scopes_asked.append((scope.keyword, scope.manufacturer_id, limit, start_at))
+        page = self.search(scope.keyword, limit, start_at)
+        self.last_total_count = self.totals_by_keyword.get(scope.keyword, self.default_total)
+        return page

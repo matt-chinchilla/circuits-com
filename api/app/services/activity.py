@@ -53,10 +53,21 @@ IMPORT_EVENT_KINDS: Mapping[str, str] = {
 # survive into the table, and the `part_synced` template — "Synced X into Y" —
 # would describe a part that did not exist before this run as a refresh of one
 # that did. `routes/dashboard.py::_event_description` holds the other half.
+# `listing_added` gets its OWN kind, not a borrowed one. It fires when a part
+# we ALREADY hold gains its first offer from a distributor — the second price
+# that makes a comparison real, and the single outcome the multi-distributor
+# work exists to produce. `part_synced` would render "Synced X into Y", which
+# describes refreshing a listing that already existed; `part_imported` would
+# render "Imported X", which describes a part that did not exist before.
+# Neither happened. It was ABSENT here from b380922 until 2026-08-24, and
+# because an unmapped action is dropped by the same early return that discards
+# the deliberately-transient ones (`not_found`, `no_data`), every first offer
+# vanished with nothing anywhere reporting a problem.
 _PART_ACTION_KINDS: dict[str, str] = {
     "updated": "part_synced",
     "media_filled": "part_synced",
     "created": "part_imported",
+    "listing_added": "part_listed",
 }
 
 

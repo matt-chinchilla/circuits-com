@@ -6,6 +6,7 @@ import TierBannerRibbon, {
   type SponsorTierId,
 } from '@public/components/widgets/TierBannerRibbon';
 import { priceAt } from '../lib/priceBreaks';
+import { priceSourceNote, priceSourceTone } from '../lib/priceSource';
 import { formatUnit } from '../lib/format';
 import type { BomOffer } from '../lib/types';
 import styles from './AlternatesDropdown.module.scss';
@@ -190,6 +191,8 @@ export default function AlternatesDropdown({
                 const href = safeHttpUrl(offer.supplier_website);
                 const isChosen = offer.supplier_id === chosenSupplierId;
                 const isRecommended = offer.supplier_id === recommendedSupplierId;
+                // Null when the wire carried no source (an old share link).
+                const sourceNote = priceSourceNote(offer);
                 return (
                   <li key={offer.supplier_id} className={styles.row}>
                     <button
@@ -218,9 +221,18 @@ export default function AlternatesDropdown({
                             ? `${offer.stock_quantity.toLocaleString('en-US')} in stock`
                             : 'out of stock'}
                         </span>
-                        {offer.price_stale && (
-                          <span className={styles.stale} title="Not refreshed in 30 days">
-                            stale price
+                        {/* Same three-way as the table row, from the same
+                            single home. The tone comes from priceSourceTone,
+                            never from an inline `offer.price_source ===
+                            'static'`: that comparison is false for undefined,
+                            which is how the else-arm ends up printed against a
+                            live distributor on a replayed share. */}
+                        {sourceNote != null && (
+                          <span
+                            className={styles.priceSource}
+                            data-source={priceSourceTone(offer)}
+                          >
+                            {sourceNote}
                           </span>
                         )}
                       </span>

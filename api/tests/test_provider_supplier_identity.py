@@ -16,6 +16,21 @@ It happened for real, twice over, on 2026-08-24:
     re-created "Digi-Key Electronics" beside it, and both matched.
 
 Neither is a code bug in isolation; both are the same missing invariant.
+
+THE STAKES WENT UP ON 2026-08-24. The BOM tool's `price_source` label (see
+`bom_match._offers_for_part`) is built on this same fragment match: a supplier
+whose website matches a provider slug we hold a key for is published to buyers
+as `live`. So a fragment collision no longer just means "a feed run writes the
+wrong row" — it means we also TELL BUYERS that row's prices are refreshed by a
+distributor API that has never touched it. `DigiKey Marketplace` is exactly the
+shape of row that would inherit the claim.
+
+Measured on the local catalog the same day: only two suppliers match a fragment
+at all (`Mouser Electronics` -> mouser.com, 130,728 listings; `Digi-Key
+Electronics` -> digikey.com, 0 listings), the other 57 hold 37,095 listings and
+read `static`, and exactly one supplier has a NULL website (`Thunder
+Electronics`, 3 listings) — which is why `match_provider` must stay
+None-guarded rather than `.lower()`-ing straight through.
 """
 
 from app.db import seed as seed_module

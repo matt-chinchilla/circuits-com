@@ -115,6 +115,14 @@ function parseLine(value: unknown): ParsedBomLine | null {
  * The offers list is the load-bearing part — every price on the shared page is
  * recomputed from those break tables — so an offer missing its identity or its
  * ladder is dropped rather than rendered as a free part.
+ *
+ * `price_source` and `price_as_of` are deliberately NOT checked here. They are
+ * a label, not a price, and a share created before they existed must still
+ * render its numbers — dropping those offers would blank a live link to punish
+ * it for a field it could not have carried. Both are optional on `BomOffer`
+ * for exactly this reason, and `priceSourceNote` renders nothing when they are
+ * absent. What must never happen is treating absent as `static`, which would
+ * put an accusation on a live distributor in every old share.
  */
 function parseRow(value: unknown): BomRow | null {
   const raw = asRecord(value);

@@ -254,9 +254,6 @@
   @include bom-rail-eol;
 }
 
-.availStale {
-  @include bom-rail-stale;
-}
 
 // ─── Part cell ──────────────────────────────────────────────────────────────
 
@@ -455,6 +452,31 @@
     color: #1a1f23;
     font-weight: 700;
   }
+}
+
+// Provenance, not freshness — and deliberately NOT a rail. Availability owns
+// the rail and must never be pre-empted again: the staleness arm that used to
+// sit above both stock branches would have swallowed the stock figure on every
+// row in the catalog by 2026-09-24. This is a quiet inline note instead, so it
+// can never take a decision channel away from the number the reader came for.
+//
+// ONE chip, and it only ever says "live feed". There is no static variant to
+// style: badging the 57 sourceless distributors would have published our own
+// integration backlog as a hatched mark against them on a neutral-comparison
+// page (owner decision, 2026-08-24), so `priceSourceTone` returns null for
+// everything that is not live and this element never renders for those rows.
+// Secondary ink, flat — it is a quiet inline note, deliberately not a decision
+// channel, because the staleness arm it replaced used to sit above both stock
+// branches and would have swallowed the stock figure on every row in the
+// catalog by 2026-09-24.
+.priceSource {
+  align-self: flex-start;
+  padding: 1px 6px;
+  font-family: $font-mono;
+  font-size: 0.7rem; // audit floor
+  color: var(--bom-ink-secondary, #676c71);
+  background-color: rgba(103, 108, 113, 0.1);
+  border-radius: 4px;
 }
 
 .tierBadge {

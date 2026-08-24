@@ -18,6 +18,7 @@ import threading
 import time
 import uuid
 from collections.abc import Callable, Iterator
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import ROUND_HALF_UP, Decimal
 
@@ -25,18 +26,103 @@ from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session, noload
 
 from app.db.session import SessionLocal
-from app.models import Category, Part, PartListing, PriceBreak, Supplier, SupplierFeed
+from app.models import (
+    Category,
+    Manufacturer,
+    ManufacturerAlias,
+    Part,
+    PartListing,
+    PriceBreak,
+    Supplier,
+    SupplierFeed,
+)
 from app.services.activity import IMPORT_EVENT_KINDS, record_stream_event
 from app.services.feed_lock import supplier_feed_lock
 from app.services.manufacturer_canon import canon
 from app.services.part_feed.base import FeedPart, PartFeedProvider
 from app.services.part_feed.mouser import FeedFatalError
 from app.services.part_feed.specmap import map_lifecycle, normalize_mount
-from app.services.part_identity import get_or_create_part
+from app.services.part_identity import find_part, get_or_create_part
 from app.services.search_service import invalidate_catalog_caches
 from app.utils.image_url import validate_optional_image_url
 
 logger = logging.getLogger(__name__)
+
+
+# ── scoping a provider query ────────────────────────────────────────────────
+
+
+class FeedScopeUnsupported(RuntimeError):
+    """This provider cannot honour the narrowing this scope asks for.
+
+    Raised, never swallowed, and that is the entire point. The alternative —
+    dropping a filter the provider does not understand and issuing the bare
+    keyword search — is the worst failure available here: it spends a
+    rate-limited call, comes back with plausible-looking parts, and lands
+    prices belonging to manufacturers nobody asked about, with nothing
+    anywhere saying a filter went missing. A loud stop is recoverable; a quiet
+    wrong price on a comparison page is not.
+    """
+
+
+@dataclass(frozen=True)
+class FeedScope:
+    """ONE question to put to a distributor: a keyword, optionally narrowed.
+
+    `keyword` is never empty. Measured against the live DigiKey API: an empty
+    `Keywords` value is a 400 that STILL decrements `x-ratelimit-remaining`, so
+    an empty scope is a call thrown away, and at 1,000 a day shared between the
+    nightly sweep and the operator's clicks that is worth refusing at
+    construction rather than discovering per unit.
+
+    `manufacturer_id` is a PROVIDER-OPAQUE token. The importer only ever asks
+    whether one is present (to decide whether a provider can honour the scope);
+    it never parses it. DigiKey's token happens to be a comma-separated list of
+    its own manufacturer ids, because `ManufacturerFilter` takes an array and 16
+    of the 454 mapped makers have more than one. Keeping it opaque is what stops
+    the sweep from learning a second distributor's id grammar.
+
+    `label` is what the operator reads in the console — a category name for the
+    category sweep, "maker · prefix" for the family sweep.
+
+    NOTE ON ITS HOME: this belongs in `base.py` alongside `FeedPart`, as part of
+    the provider protocol. It lives here because `base.py` was outside the remit
+    of the change that introduced it; the move is a one-line import edit.
+    """
+
+    keyword: str
+    manufacturer_id: str | None = None
+    label: str | None = None
+
+    def __post_init__(self):
+        if not (self.keyword or "").strip():
+            raise ValueError("FeedScope needs a non-empty keyword — an empty one is a paid 400")
+
+
+def search_scoped(
+    provider: PartFeedProvider, scope: FeedScope, limit: int = 50, start_at: int = 0
+) -> list[FeedPart]:
+    """Run `scope` against `provider`, or refuse.
+
+    Three cases, and the third is the one that matters:
+
+    * the provider implements `search_scoped` — hand it the whole scope and let
+      it decide how to express the narrowing;
+    * it does not, and the scope asks for nothing but a keyword — this is
+      Mouser, whose search takes a keyword and nothing else, so a plain
+      `search()` IS the scope, faithfully honoured;
+    * it does not, and the scope DOES narrow — raise. See
+      :class:`FeedScopeUnsupported`.
+    """
+    scoped = getattr(provider, "search_scoped", None)
+    if callable(scoped):
+        return scoped(scope, limit, start_at)
+    if scope.manufacturer_id is None:
+        return provider.search(scope.keyword, limit, start_at)
+    raise FeedScopeUnsupported(
+        f"{type(provider).__name__} has no scoped search, so it cannot narrow "
+        f"{scope.keyword!r} to a manufacturer — refusing to issue the query unscoped"
+    )
 
 
 def _slugify_sku(sku: str) -> str:
@@ -162,6 +248,42 @@ def _stamp_feed_facts(part: Part, fp: FeedPart) -> bool:
         part.lead_time_days = fp.lead_time_days
         changed = True
     return changed
+
+
+def _existing_manufacturer_id(db: Session, name: str | None) -> uuid.UUID | None:
+    """The manufacturer this raw feed name already names, or None. NEVER creates.
+
+    `resolve_manufacturer_id` is the sibling of this and mints a PROVISIONAL
+    row on a miss, which is right where it is used — the category import is
+    creating a part, `parts.manufacturer_id` is half of the identity key and
+    cannot be NULL, so an unknown maker has to become a real row rather than a
+    hole. It is wrong for the overlap sweep, which creates no parts at all: an
+    unattended nightly pass that can invent manufacturers would fill the
+    review queue with one distributor's spelling variants, each attached to
+    nothing.
+
+    Making that structurally impossible beats forbidding it by policy, which is
+    why this is a separate function and not a keyword argument threaded through
+    the shared one — a caller cannot forget to pass what does not exist.
+
+    Resolution order mirrors `resolve_manufacturer_id` exactly (alias table
+    first, then the canonical key) and truncates the key the same way, so the
+    two agree about which row a name means. They must: this decides whether a
+    feed row is off-scope, and that one disagrees would silently drop every
+    part a maker sells.
+    """
+    key = canon(name or "")[:220]
+    if not key:
+        return None
+    alias = (
+        db.query(ManufacturerAlias.manufacturer_id)
+        .filter(ManufacturerAlias.alias_canon == key)
+        .first()
+    )
+    if alias is not None:
+        return alias[0]
+    row = db.query(Manufacturer.id).filter(Manufacturer.canonical_key == key).first()
+    return row[0] if row is not None else None
 
 
 def _get_or_create_supplier(db: Session, provider: PartFeedProvider) -> Supplier:
@@ -317,7 +439,7 @@ def _upsert_listing(db: Session, part: Part, supplier: Supplier, fp: FeedPart) -
     # assigning raw feed precision to a Numeric(10, 4) makes every confirming
     # pass look like a change and rewrite the row — four indexes here, plus an
     # `updated_at` bump. (Nothing reads `part_listings.updated_at`; the column
-    # the BOM tool's price_stale flag reads is `last_updated`, which has no
+    # the BOM tool's price provenance reads is `last_updated`, which has no
     # onupdate and is stamped once at INSERT. See the note in _sync_price_breaks
     # — a confirming pass now writes nothing, so feed freshness needs a home
     # that is not a per-row write.)
@@ -532,11 +654,120 @@ def sync_supplier_listings(
 
 
 IMPORT_CURSOR_EXHAUSTED = -1
-"""`import_cursor` value meaning "this category has no more rows to read"."""
+"""`import_cursor` value meaning "this work unit has no more rows to read"."""
+
+IMPORT_CURSOR_TOO_WIDE = -2
+"""`import_cursor` value meaning "this query matched more rows than the
+distributor will serve — narrow it before reading it".
+
+Deliberately distinct from EXHAUSTED, because the two lead somewhere different.
+Exhausted means the unit is finished and stays finished until its namespace
+wraps. Too-wide means the unit was never READABLE at this width, and its longer
+children are the real work — `_FamilySweep.units` expands it on the next
+enumeration instead of re-probing it. Measured live on 2026-08-24: `SN74LV`
+scoped to Texas Instruments matches 3,689 products against a 300-record window,
+so paging it reads 8% of it and the other 3,389 are unreachable at that keyword
+however many calls are spent. Lengthening the prefix opens a NEW window over a
+different slice, which is the only reason this strategy has anywhere to go.
+"""
+
+# ── cursor namespaces ───────────────────────────────────────────────────────
+#
+# `supplier_feeds.import_cursor` is ONE flat JSON map per supplier, and it now
+# has to hold two kinds of key. The collision is not hypothetical — verified
+# against the live database on 2026-08-24:
+#
+#     SELECT e.key, e.value FROM supplier_feeds f,
+#            json_each_text(f.import_cursor::json) e WHERE e.key = 'diodes';
+#     -> diodes | 300
+#
+#     SELECT canonical_key, name, catalog_part_count FROM manufacturers
+#      WHERE canonical_key = 'diodes';
+#     -> diodes | Diodes Inc. | 1312
+#
+# `diodes` is BOTH a category slug carrying a live cursor of 300 AND a
+# manufacturer holding 1,312 parts. In one key space the family sweep would
+# open at record 300 of a query it has never issued, and the category sweep
+# would be retired by a manufacturer it has never heard of.
+#
+# Keys are COMPOSED and never parsed back out. The reverse direction is where a
+# manufacturer whose canonical key contains a colon would quietly split wrong.
+CURSOR_NS_CATEGORY = "cat"
+CURSOR_NS_FAMILY = "fam"
+
+_LEGACY_CURSOR_KEY = re.compile(r"^[a-z0-9-]+$")
+"""A pre-namespace key: a bare category slug.
+
+Production holds 189 of them, 60 already marked exhausted. Dropping them would
+restart every one of those categories at page 1 — a full re-read of the catalog
+at one call per 50 parts, against a ~1,000/day quota. The shim is unambiguous
+because no slug can be mistaken for a namespaced key:
+`SELECT count(*) FROM categories WHERE slug !~ '^[a-z0-9-]+$'` returns 0 across
+all 189.
+"""
+
+
+def category_cursor_key(slug: str) -> str:
+    """The cursor key for one category shelf."""
+    return f"{CURSOR_NS_CATEGORY}:{slug}"
+
+
+def family_cursor_key(canonical_key: str, prefix: str) -> str:
+    """The cursor key for one (manufacturer, MPN-prefix) family."""
+    return f"{CURSOR_NS_FAMILY}:{canonical_key}:{prefix}"
+
+
+def _cursor_get(cursor: dict, key: str) -> int | None:
+    """This unit's stored depth, honouring the pre-namespace spelling.
+
+    None means "never swept", which is what a fresh unit and an unknown key
+    both are. The legacy fallback applies ONLY to the category namespace: a
+    bare `diodes` written before namespacing was a category slug, and reading
+    it as a family cursor is precisely the collision above.
+    """
+    if key in cursor:
+        return cursor[key]
+    namespace, _, rest = key.partition(":")
+    if namespace == CURSOR_NS_CATEGORY and _LEGACY_CURSOR_KEY.match(rest):
+        return cursor.get(rest)
+    return None
+
+
+def _cursor_set(cursor: dict, key: str, value: int) -> None:
+    """Write the namespaced key and RETIRE the legacy twin.
+
+    Leaving the bare key behind would be harmless for exactly one run and then
+    permanent dead weight: `_cursor_get` prefers the namespaced value, so the
+    old one is read never and written never, and it would sit in every
+    supplier's JSON forever looking like live state.
+    """
+    cursor[key] = value
+    namespace, _, rest = key.partition(":")
+    if namespace == CURSOR_NS_CATEGORY and _LEGACY_CURSOR_KEY.match(rest):
+        cursor.pop(rest, None)
+
+
+def _cursor_clear_namespace(cursor: dict, namespace: str) -> dict:
+    """A NEW map with `namespace`'s keys dropped — the wrap, per strategy.
+
+    Per strategy because a wrap means "this sweep has read everything it can
+    reach, start again"; clearing the whole map would throw away the OTHER
+    distributor's paging depth for nothing. The category namespace also takes
+    its legacy twins with it, or a wrapped category would immediately be
+    resumed from the bare key the wrap was meant to forget.
+    """
+    prefix = f"{namespace}:"
+    drop_legacy = namespace == CURSOR_NS_CATEGORY
+    return {
+        key: value
+        for key, value in cursor.items()
+        if not key.startswith(prefix)
+        and not (drop_legacy and ":" not in key and _LEGACY_CURSOR_KEY.match(key))
+    }
 
 
 def _load_import_cursor(db: Session, supplier_id) -> dict[str, int]:
-    """This supplier's sweep depth per category: {category_slug: next start_at}.
+    """This supplier's sweep depth per work unit: {cursor_key: next start_at}.
 
     No row, or no stored value, is a FRESH catalog — which is exactly what the
     first import of every supplier sees, so run 1 behaves as it always did.
@@ -598,6 +829,742 @@ instead of at nothing.
 """
 
 
+# ── work units and their counters ───────────────────────────────────────────
+
+
+@dataclass(frozen=True)
+class WorkUnit:
+    """One thing a sweep asks about, once per page, under one cursor key.
+
+    `payload` is the strategy's own business — a category's two scalars, or a
+    family's (manufacturer, prefix). It holds SCALARS and never an ORM row: the
+    sweep commits per part, which expires every instance, so a row read here
+    would re-SELECT itself on the next attribute touch.
+    """
+
+    cursor_key: str
+    scope: FeedScope
+    label: str
+    payload: object = None
+    can_narrow: bool = False
+
+
+@dataclass
+class _SweepCounts:
+    """Everything a run tallies, in one place.
+
+    The first six are the WIRE contract (`counts` on `sync_finished`) and the
+    console reads them by name — six keys always, so a reader never has to tell
+    a missing counter from a zero one. The rest are detail-line only: a
+    fully-covered page would emit 50 identical `already listed` events, which
+    is noise a human cannot act on.
+    """
+
+    created: int = 0
+    synced: int = 0
+    media_filled: int = 0
+    not_found: int = 0
+    no_data: int = 0
+    listing_added: int = 0
+    # detail-only
+    skipped_elsewhere: int = 0
+    already_listed: int = 0
+    off_scope: int = 0
+    absent: int = 0
+
+    def wire(self) -> dict[str, int]:
+        return {
+            "synced": self.synced,
+            "media_filled": self.media_filled,
+            "not_found": self.not_found,
+            "no_data": self.no_data,
+            "created": self.created,
+            "listing_added": self.listing_added,
+        }
+
+
+def _absorb_feed_part(
+    db: Session, supplier: Supplier, part: Part, fp: FeedPart, *, is_new: bool, counts: _SweepCounts
+) -> tuple[str, str | None]:
+    """Write one feed row onto one part and classify what happened.
+
+    THE ONE COPY of the write block, shared by every strategy — the reason the
+    sweep skeleton was extracted at all. Two near-identical copies of this
+    ordering (flush, listing, media, facts, commit, THEN classify) is how the
+    counters drift apart until `created` means one thing on one path and
+    something else on the other.
+
+    NOTHING here increments `synced`, and that is a load-bearing absence: an
+    import that declines every part it already lists cannot have refreshed
+    anything, so `synced == 0` on an import run is an invariant the operator
+    can rely on and a test asserts. If it ever moves, a sweep is doing Sync
+    Inventory's job again.
+
+    The commit is per part and lands BEFORE the caller yields its event, so a
+    client disconnect or a quota wall never discards work already reported as
+    done.
+    """
+    # autoflush=False — the listing needs a real part.id, and the next
+    # existence query has to see this row.
+    db.flush()
+    wrote_listing = _upsert_listing(db, part, supplier, fp)
+    media = _fill_part_media(part, fp)
+    # Facts are a real write, but not a MEDIA one — fold them into the
+    # listing bucket so the counts keep meaning what they say.
+    wrote_listing = _stamp_feed_facts(part, fp) or wrote_listing
+    image_url = part.image_url
+    db.commit()
+    if is_new:
+        # A new catalog row IS the win, priced or not: the part page exists now
+        # and the next run can price it.
+        counts.created += 1
+        return "created", image_url
+    if wrote_listing:
+        # This supplier's FIRST offer on a part we already had — new inventory,
+        # not a refresh. It used to report `updated` and tick `synced`, which
+        # is what made an import look like a sync: 45,000 parts have no Mouser
+        # listing, so this is the common path, not an edge case.
+        counts.listing_added += 1
+        if media:
+            counts.media_filled += 1
+        return "listing_added", image_url
+    if media:
+        # An image on a part this supplier has no price for. Still a fill,
+        # still not a refresh.
+        counts.media_filled += 1
+        return "media_filled", image_url
+    # found, but nothing changed — counting it as updated would overstate
+    # what the run did
+    counts.no_data += 1
+    return "no_data", image_url
+
+
+# ── the two strategies ──────────────────────────────────────────────────────
+
+
+class SweepStrategy:
+    """What differs between two imports; everything else is `_sweep_run`.
+
+    Four things, and only four: which WORK UNITS exist and in what order, what
+    to do with one returned FeedPart, where the cursor lands after a page, and
+    what the operator is told. The counters, the wrap detection, the `want`
+    arithmetic, the continuous loop's three exit conditions, the per-part
+    commit ordering and the FeedFatalError handler are shared, because a fourth
+    hand-copied version of the continuous-loop exit conditions in a file that
+    already carries five sweep-shaped functions is how two of them silently
+    stop agreeing.
+    """
+
+    namespace: str = CURSOR_NS_CATEGORY
+    unit_noun: str = "units"
+
+    def units(self, db, provider, supplier_pk, cursor, call_budget) -> list[WorkUnit]:
+        raise NotImplementedError
+
+    def is_wrapped(self, cursor, units) -> bool:
+        """Has this strategy finished a full pass over its own universe?
+
+        A hook rather than a rule `_sweep_run` applies for everyone, because
+        the two strategies disagree about what `units()` returns.
+        `_CategorySweep` returns EVERY category, so "all of them exhausted" is
+        readable off the returned list. `_FamilySweep` returns candidates —
+        it must not hand back 56,689 exhausted groups, and it filters them so
+        they cannot occupy the `keep` budget ahead of live work — so the same
+        expression reads False in BOTH of its terminal states and the namespace
+        never cleared. The strategy that owns the filter is the one that can
+        answer the question.
+        """
+        return bool(units) and all(
+            _cursor_get(cursor, unit.cursor_key) == IMPORT_CURSOR_EXHAUSTED for unit in units
+        )
+
+    def absorb(self, db, supplier, unit, fp, counts) -> dict | None:
+        raise NotImplementedError
+
+    def next_cursor(self, provider, unit, start_at, raw_rows, want) -> int:
+        raise NotImplementedError
+
+    def started_detail(self, pending, call_budget, continuous) -> str:
+        raise NotImplementedError
+
+    def finished_detail(self, counts, provider) -> str:
+        raise NotImplementedError
+
+
+class _CategorySweep(SweepStrategy):
+    """Fill the thinnest shelves — the original `grow_catalog`, unchanged.
+
+    Byte-for-byte unchanged is the point: this is what Mouser's nightly run
+    does, and the extraction is only defensible if it did not move.
+    """
+
+    namespace = CURSOR_NS_CATEGORY
+    unit_noun = "categories"
+
+    def units(self, db, provider, supplier_pk, cursor, call_budget) -> list[WorkUnit]:
+        return [
+            WorkUnit(
+                cursor_key=category_cursor_key(cat.slug),
+                scope=FeedScope(keyword=_search_keyword(cat), label=cat.name),
+                label=cat.name,
+                # Scalars, read ONCE: every per-part commit expires `cat`, and
+                # touching it inside the page loop would re-SELECT it per row.
+                payload=(cat.id, cat.slug),
+            )
+            for cat in _thinnest_subcategories(db)
+        ]
+
+    def absorb(self, db, supplier, unit, fp, counts) -> dict | None:
+        cat_id, cat_slug = unit.payload
+        try:
+            part, is_new = get_or_create_part(
+                db,
+                sku=fp.mpn,
+                manufacturer_name=fp.manufacturer,
+                # Loop variables bound as defaults, not captured: the closure is
+                # invoked inside this call today, but a late-binding lambda over a
+                # loop variable is a bug waiting for the day get_or_create_part
+                # defers it.
+                build=lambda mid, fp=fp, cat_id=cat_id, cat_slug=cat_slug: _new_part(
+                    fp, cat_id, cat_slug, manufacturer_id=mid
+                ),
+            )
+        except ValueError:
+            # No usable manufacturer, so the row cannot be keyed. One bad row
+            # must not end the night: this generator's only caller-side handler
+            # is the nightly job's blanket `except Exception`, which abandons
+            # every remaining category for this supplier.
+            logger.info("feed row for %r has no identifiable manufacturer — skipped", fp.mpn)
+            counts.skipped_elsewhere += 1
+            return None
+        if not is_new and part.category_id != cat_id:
+            # An MPN that already lives in ANOTHER category is never hijacked
+            # into this one, and yields NO event — a stream of skips a human
+            # cannot act on is noise; the finish line carries the tally.
+            counts.skipped_elsewhere += 1
+            return None
+        # IMPORT IS NOT SYNC. A keyword page returns whatever the distributor
+        # ranks highest for this shelf, which is more and more of what we
+        # already hold as a category fills up — and refreshing those is
+        # precisely what the Sync Inventory button does
+        # (`sync_supplier_listings` selects exactly the parts this supplier
+        # already lists). Import takes the complement, so the two buttons
+        # partition every (part, supplier) pair between them with no overlap
+        # and no gap.
+        #
+        # Note this is NOT "skip every part we already have": a part we hold
+        # from a DIFFERENT distributor falls through to the write below and
+        # gains this supplier's offer. Sync can never reach that part (its
+        # EXISTS filter excludes it), and one part with two prices is the
+        # entire point of the catalog.
+        if not is_new and _supplier_already_lists(db, part.id, supplier.id):
+            counts.already_listed += 1
+            return None
+        action, image_url = _absorb_feed_part(db, supplier, part, fp, is_new=is_new, counts=counts)
+        return sync_event(
+            "part_synced",
+            str(supplier.id),
+            f"{fp.mpn} — {fp.manufacturer}",
+            unit.label,
+            image_url,
+            action,
+        )
+
+    def next_cursor(self, provider, unit, start_at, raw_rows, want) -> int:
+        # Advance by the RAW rows the provider consumed, not by the parts kept:
+        # rows that failed to decode still took their place in the result set,
+        # and advancing by the survivors would re-fetch the junk every run.
+        # Short of what was asked for = the shelf ran out.
+        return IMPORT_CURSOR_EXHAUSTED if raw_rows < want else start_at + raw_rows
+
+    def started_detail(self, pending, call_budget, continuous) -> str:
+        if continuous:
+            return (
+                "growing catalog · continuous — sweeping until the feed is "
+                "exhausted or its quota is reached"
+            )
+        return f"growing catalog · budget {call_budget} calls · {len(pending)} categories to sweep"
+
+    def finished_detail(self, counts, provider) -> str:
+        return (
+            f"{counts.created} created · {counts.listing_added} listings added · "
+            f"{counts.already_listed} already listed · "
+            f"{counts.skipped_elsewhere} already elsewhere · {provider.calls_made} calls used"
+        )
+
+
+FAMILY_PREFIX_MIN = 6
+"""How many leading MPN characters the first family query asks about.
+
+Measured over the live catalog (175,728 parts, every one of them covered at
+every length): 3 characters yields 23,047 (maker, prefix) groups, 4 yields
+36,310, 6 yields 71,170. Shorter means fewer units but a taller narrowing tree,
+and every level of that tree costs one call per lineage; longer means more
+units, each already narrow. Six is a starting point, NOT a law — the right
+value is whatever night one's ProductsCount histogram says, and it is a
+one-line change because nothing else depends on it.
+"""
+
+FAMILY_PREFIX_MAX = 12
+"""Where narrowing gives up and pages the window it can reach.
+
+A prefix cannot grow forever: past this the query is nearly the MPN itself and
+each unit is one call for a handful of records. A family still too wide here
+gets its 300 reachable records read and is then retired — an honest partial
+answer rather than an unbounded recursion.
+"""
+
+FAMILY_SEARCH_WINDOW = 300
+"""Fallback for a provider that does not declare its own `search_window`.
+
+DigiKey's measured `Offset + Limit <= 300`. Read off the provider so a
+distributor with a different ceiling needs no change here.
+"""
+
+_FAMILY_UNIT_SLACK = 4
+"""How many candidate units to build per call of budget, before stopping.
+
+A unit costs at least one call, so `call_budget` units is the true bound; the
+slack covers the ones that turn out too wide (they spend their call and are
+replaced by children on the next pass).
+
+The enumeration is ordered thickest-first IN SQL, so capping construction keeps
+the units that matter. What it saves is objects, not rows: the query returns
+every group either way. Measured against the live catalog on 2026-08-24 —
+71,170 level-6 groups over 175,728 parts, of which 56,689 groups / 145,120
+parts are scopeable by the committed DigiKey map — one `units()` call costs
+~1.0 s end to end (~0.8 s of it the aggregate itself). That is nothing beside
+850 calls at 0.55 s apiece, but building a WorkUnit and a FeedScope for all
+seventy thousand on every pass of a continuous run, for the sake of the first
+few hundred, is worth not doing.
+
+The cap is on CONSTRUCTION ONLY and never on the scan, and never on the
+children of a too-wide parent — see the comment at the `continue`. Breaking out
+of the scan instead left narrowing permanently starved: `kept` fills within the
+first few hundred of those 56,689 base units, so no prefix would ever have
+grown.
+"""
+
+
+def _unit_rank(row: tuple[int, str, "WorkUnit"]) -> tuple[int, str]:
+    """Order candidate work units: most unlisted parts first, then by key.
+
+    Key-second is for DETERMINISM, not taste — two runs over the same data must
+    probe in the same order or the cursor map means something different each
+    night.
+    """
+    return row[0], row[1]
+
+
+@dataclass(frozen=True)
+class _Family:
+    """One (manufacturer, MPN-prefix) group, all scalars."""
+
+    canonical_key: str
+    manufacturer_id: uuid.UUID
+    manufacturer_name: str
+    prefix: str
+    unlisted: int
+
+
+class _FamilySweep(SweepStrategy):
+    """The overlap sweep: find a SECOND price for parts we already hold.
+
+    The question is the inverse of the category sweep's. A category asks "what
+    does this distributor sell on this shelf" and is answered mostly with parts
+    we do not have; this asks "of the parts we HAVE, which does this
+    distributor also sell", and the answer is a comparison row — the thing the
+    site's whole premise rests on and currently cannot show.
+
+    Work units come from OUR OWN SKUs, at zero API cost, ordered by how many
+    parts this supplier does not yet list under them. Each is narrowed by the
+    distributor's manufacturer id, which is what makes a six-character prefix a
+    precise question instead of a catalog-wide one.
+
+    It CREATES NOTHING. A DigiKey-only part would land with `category_id` NULL,
+    and 0 of 175,728 parts are in that state today — such a part is reachable
+    from no page on the site. Creating them needs a category map and is
+    deliberately Phase 4.
+    """
+
+    namespace = CURSOR_NS_FAMILY
+    unit_noun = "part families"
+
+    # Set by `units()` on every scan: True when the scan saw families but every
+    # one of them was already exhausted. `units()` filters those out (they must
+    # not occupy the `keep` budget ahead of live work), so the returned list
+    # cannot carry the terminal state and `_sweep_run` cannot read it off one.
+    _exhausted_everything: bool = False
+
+    def is_wrapped(self, cursor, units) -> bool:
+        """Wrapped when the last scan found families and none of them had work.
+
+        Deliberately NOT `not units`: an empty catalog, an unmapped-manufacturer
+        map, or a scope the provider refuses all produce zero units too, and
+        clearing the namespace for those would spin a pointless restart every
+        run forever. Only "we looked, they were all finished" is a wrap.
+        """
+        return bool(self._exhausted_everything)
+
+    def units(self, db, provider, supplier_pk, cursor, call_budget) -> list[WorkUnit]:
+        scope_for = getattr(provider, "manufacturer_scope", None)
+        if not callable(scope_for):
+            raise FeedScopeUnsupported(
+                f"{type(provider).__name__} declares the family import strategy but has "
+                "no manufacturer_scope() — without a manufacturer id every family query "
+                "is a catalog-wide question"
+            )
+        keep = max(1, call_budget) * _FAMILY_UNIT_SLACK
+        # Split, because the cap applies to only ONE of them. `base` is the
+        # level-6 floor — tens of thousands of groups, of which a pass can
+        # afford a few hundred. `narrowed` holds the children of families the
+        # API refused to page, and those are NEVER capped: they are the only
+        # query that can reach the parts underneath such a parent.
+        base: list[tuple[int, str, WorkUnit]] = []
+        narrowed: list[tuple[int, str, WorkUnit]] = []
+        # (canonical_key, prefix) pairs whose cursor says "too wide" — their
+        # LONGER children are the NEXT level's work.
+        parents: set[tuple[str, str]] | None = None
+        level = FAMILY_PREFIX_MIN
+        while True:
+            groups = self._groups(db, supplier_pk, level, parents)
+            if parents is not None:
+                # A too-wide parent that produced NO child at this level has
+                # nowhere narrower to go — every part under it IS the prefix.
+                # Re-emit it so the 300 records it CAN reach get read instead
+                # of being silently abandoned. Checked here, one level down,
+                # and never in the same iteration that discovered the parent:
+                # doing it there re-emits every too-wide unit alongside its own
+                # children, spending a call to re-ask the exact question that
+                # was already answered "too wide".
+                produced = {parent for _, parent in groups if parent is not None}
+                for orphan in parents - produced:
+                    self._reemit(db, supplier_pk, orphan, scope_for, narrowed)
+            expand: set[tuple[str, str]] = set()
+            saw_family = False
+            saw_unfinished = False
+            for family, _parent in groups:
+                saw_family = True
+                key = family_cursor_key(family.canonical_key, family.prefix)
+                state = _cursor_get(cursor, key)
+                if state == IMPORT_CURSOR_EXHAUSTED:
+                    continue
+                saw_unfinished = True
+                if state == IMPORT_CURSOR_TOO_WIDE:
+                    expand.add((family.canonical_key, family.prefix))
+                    continue
+                if parents is None and len(base) >= keep:
+                    # Enough BASE units to spend the budget several times over,
+                    # and `groups` is ordered thickest-first, so everything
+                    # below this point is worth strictly less than what is
+                    # already held.
+                    #
+                    # `continue`, NOT `break`, and this is the whole point:
+                    # the scan has to keep going to collect `expand`, because
+                    # the too-wide entries it finds below here are the ONLY
+                    # route to the parts underneath them. Breaking out instead
+                    # left narrowing permanently starved — measured on the live
+                    # catalog, `base` fills inside the first few hundred of
+                    # 56,689 scopeable groups, so no prefix would ever grow.
+                    continue
+                scope = scope_for(family.canonical_key, family.prefix)
+                if scope is None:
+                    # This distributor has no id for that maker, so the query
+                    # cannot be narrowed. Running it unfiltered would spend
+                    # calls reading somebody else's catalog.
+                    continue
+                (base if parents is None else narrowed).append(
+                    (
+                        -family.unlisted,
+                        key,
+                        WorkUnit(
+                            cursor_key=key,
+                            scope=scope,
+                            label=f"{family.manufacturer_name} · {family.prefix}",
+                            payload=family,
+                            can_narrow=level < FAMILY_PREFIX_MAX,
+                        ),
+                    )
+                )
+            if not expand:
+                break
+            if level >= FAMILY_PREFIX_MAX:
+                # Out of room to narrow. These can only ever be read as far as
+                # the window reaches, so read them.
+                for orphan in expand:
+                    self._reemit(db, supplier_pk, orphan, scope_for, narrowed)
+                break
+            parents = expand
+            level += 1
+        # The cap lands on `base` alone and BEFORE the merge. A final slice
+        # over the union would cut the children straight back out: with one
+        # unlisted part each, a narrowed `SN74LVC` ties with a base `AAAAAA`
+        # and loses on the alphabet.
+        #
+        # Sorted on the SCALARS only. WorkUnit is a frozen dataclass without
+        # `order=True`, so a comparison reaching the third element would raise
+        # TypeError — unreachable today because the cursor key is unique per
+        # (maker, prefix), which is the kind of "unreachable" that stops being
+        # true the moment someone adds a second emit path.
+        base.sort(key=_unit_rank)
+        selected = narrowed + base[:keep]
+        selected.sort(key=_unit_rank)
+        # Recorded HERE because it is the only place that saw the unfiltered
+        # scan. `selected` has had the exhausted families removed, so nothing
+        # downstream can tell "every family is finished, restart the pass" from
+        # "there was nothing to sweep" — and treating the second as a wrap would
+        # clear the namespace on every run of an empty catalog, forever.
+        self._exhausted_everything = saw_family and not saw_unfinished and not selected
+        return [unit for _, _, unit in selected]
+
+    def _reemit(self, db, supplier_pk, orphan, scope_for, kept) -> None:
+        """A too-wide family with no longer children: page what we can reach."""
+        canonical_key, prefix = orphan
+        family = self._one_group(db, supplier_pk, canonical_key, prefix)
+        if family is None:
+            return
+        scope = scope_for(canonical_key, prefix)
+        if scope is None:
+            return
+        kept.append(
+            (
+                -family.unlisted,
+                family_cursor_key(canonical_key, prefix),
+                WorkUnit(
+                    cursor_key=family_cursor_key(canonical_key, prefix),
+                    scope=scope,
+                    label=f"{family.manufacturer_name} · {prefix}",
+                    payload=family,
+                    can_narrow=False,
+                ),
+            )
+        )
+
+    def _base_query(self, db: Session, supplier_pk):
+        """Parts we hold that THIS supplier does not list, by manufacturer.
+
+        The NOT EXISTS is the sweep's whole subject: a part this supplier
+        already carries is Sync Inventory's, and asking about it here would
+        spend a rate-limited call to re-derive a row we already have.
+        """
+        return (
+            db.query(Manufacturer, Part.sku)
+            .join(Part, Part.manufacturer_id == Manufacturer.id)
+            .filter(
+                ~db.query(PartListing.id)
+                .filter(
+                    PartListing.part_id == Part.id,
+                    PartListing.supplier_id == supplier_pk,
+                )
+                .exists()
+            )
+        )
+
+    def _groups(
+        self, db: Session, supplier_pk, level: int, parents: set[tuple[str, str]] | None
+    ) -> list[tuple[_Family, tuple[str, str] | None]]:
+        """(family, parent) rows at `level`, thickest first.
+
+        `substr`, never Postgres' `left`: the suite runs on SQLite and this is
+        the one query in the sweep whose dialect could diverge silently — a
+        SQLite-only failure here would look like "the family sweep finds
+        nothing", which is also what a correctly-empty catalog looks like.
+        """
+        prefix_col = func.upper(func.substr(Part.sku, 1, level)).label("prefix")
+        columns = [
+            Manufacturer.canonical_key,
+            Manufacturer.id,
+            Manufacturer.name,
+            prefix_col,
+            func.count(Part.id).label("unlisted"),
+        ]
+        group_by = [Manufacturer.canonical_key, Manufacturer.id, Manufacturer.name, prefix_col]
+        parent_col = None
+        query = self._base_query(db, supplier_pk)
+        if parents is not None:
+            parent_col = func.upper(func.substr(Part.sku, 1, level - 1)).label("parent")
+            columns.insert(3, parent_col)
+            group_by.insert(3, parent_col)
+            # Filtered by MAKER, not by (maker, prefix) pair: one small IN list
+            # instead of a thousand-term OR, with the pair check done in Python
+            # below. The maker set is bounded by what actually went too wide.
+            query = query.filter(Manufacturer.canonical_key.in_({key for key, _ in parents}))
+        rows = (
+            query.with_entities(*columns)
+            .group_by(*group_by)
+            .order_by(func.count(Part.id).desc(), Manufacturer.canonical_key.asc(), prefix_col)
+            .all()
+        )
+        out: list[tuple[_Family, tuple[str, str] | None]] = []
+        for row in rows:
+            if parents is None:
+                key, mid, name, prefix, unlisted = row
+                parent = None
+            else:
+                key, mid, name, parent_prefix, prefix, unlisted = row
+                parent = (key, parent_prefix)
+                if parent not in parents or prefix == parent_prefix:
+                    # `prefix == parent_prefix` means the SKU is not long
+                    # enough to narrow — keeping it would re-enqueue the parent
+                    # as its own child, forever.
+                    continue
+            out.append((_Family(key, mid, name, prefix, unlisted), parent))
+        return out
+
+    def _one_group(self, db: Session, supplier_pk, canonical_key: str, prefix: str):
+        level = len(prefix)
+        prefix_col = func.upper(func.substr(Part.sku, 1, level))
+        row = (
+            self._base_query(db, supplier_pk)
+            .with_entities(Manufacturer.id, Manufacturer.name, func.count(Part.id))
+            .filter(Manufacturer.canonical_key == canonical_key, prefix_col == prefix)
+            .group_by(Manufacturer.id, Manufacturer.name)
+            .first()
+        )
+        if row is None:
+            return None
+        return _Family(canonical_key, row[0], row[1], prefix, row[2])
+
+    def absorb(self, db, supplier, unit, fp, counts) -> dict | None:
+        family: _Family = unit.payload
+        manufacturer_id = self._resolve_maker(db, fp.manufacturer, family)
+        if manufacturer_id is None:
+            # Only reachable on an UNSCOPED page — a scoped one is vouched for
+            # by the distributor's own filter (see _resolve_maker). The earlier
+            # "measured live this never happens, 0 off-scope across 150 records"
+            # was measured over two makers whose spellings happen to match ours
+            # exactly, and read as "working as designed" while every pinned and
+            # every accented maker was being discarded.
+            counts.off_scope += 1
+            return None
+        part = find_part(db, manufacturer_id, fp.mpn)
+        if part is None:
+            # We do not hold this part. Creating it is Phase 4 and gated on a
+            # category map — an uncategorised part is a page nothing links to.
+            counts.absent += 1
+            return None
+        if _supplier_already_lists(db, part.id, supplier.id):
+            # Sync Inventory's territory. Refreshing it here would spend a
+            # rate-limited call to do the other button's job.
+            counts.already_listed += 1
+            return None
+        action, image_url = _absorb_feed_part(db, supplier, part, fp, is_new=False, counts=counts)
+        return sync_event(
+            "part_synced",
+            str(supplier.id),
+            f"{fp.mpn} — {fp.manufacturer}",
+            unit.label,
+            image_url,
+            action,
+        )
+
+    @staticmethod
+    def _resolve_maker(db: Session, raw_name: str | None, family: _Family):
+        """The scoped manufacturer's id, or None if this row is someone else's.
+
+        WHEN THE QUERY WAS SERVER-SCOPED, TRUST IT. Digi-Key applied
+        `ManufacturerFilter`, so every row on that page is this maker by
+        construction, and re-deriving the fact from the NAME it happens to
+        print was wrong 9 times out of 10. Measured against the real
+        manufacturer table with the spellings named in digikey.py's own pin
+        comments: "Analog Devices Inc." canons to `analog devices`, not
+        `analog devices maxim integrated`; "Eaton Tripp Lite" not `tripp lite`;
+        "Hirose Electric Co Ltd" not `hirose connector`; "Sensata-Airpax" not
+        `airpax`. Those 22 pins exist PRECISELY because the spellings differ,
+        and this check discarded exactly them — 18,725 parts whose calls were
+        spent, whose rows came back, and which were then counted `off_scope`
+        beside a comment promising the operator that counter never fires.
+
+        Dropping the check costs nothing, because it was never the real gate.
+        `absorb` uses the id it returns only to call
+        `find_part(manufacturer_id, mpn)` against OUR catalog: a row for some
+        other company cannot match a part we hold under this maker, so it lands
+        in `absent` and writes nothing. The gate that protects the catalog is
+        part identity, and it still holds.
+
+        UNSCOPED is a different question and keeps the old rule. Nothing
+        vouches for a bare keyword page, so the name is all there is.
+
+        `canon()` equality settles almost every such row without a query. The
+        alias fallback is not decoration: `canon()` is not the only way two
+        names are one company — a feed writing "TI" resolves through
+        `manufacturer_aliases` to Texas Instruments, and declining that as
+        off-scope would silently drop every part that maker sells.
+
+        It NEVER creates. `resolve_manufacturer_id` mints a provisional row on
+        a miss, which is right for a category import (the part is being created
+        and needs a key) and wrong here: an unattended overlap sweep that can
+        invent manufacturers will fill the review queue with a distributor's
+        spelling variants, and this path never creates a part for them to
+        belong to anyway.
+        """
+        if canon(raw_name or "") == family.canonical_key:
+            return family.manufacturer_id
+        resolved = _existing_manufacturer_id(db, raw_name)
+        return family.manufacturer_id if resolved == family.manufacturer_id else None
+
+    def next_cursor(self, provider, unit, start_at, raw_rows, want) -> int:
+        window = getattr(provider, "search_window", FAMILY_SEARCH_WINDOW)
+        total = getattr(provider, "last_total_count", None)
+        if total is not None and total > window and unit.can_narrow:
+            # Too wide to read out. Its longer children are the real work, and
+            # they open windows this keyword never could — that is the whole
+            # difference between a sweep with somewhere to go and one that is
+            # lifetime-capped at 300 records per maker.
+            return IMPORT_CURSOR_TOO_WIDE
+        # `min(ProductsCount, window)` is what is REACHABLE. An unknown total
+        # (the feed did not say) falls back to the window, which pages rather
+        # than retiring a family nobody looked at.
+        reachable = min(total, window) if total is not None else window
+        nxt = start_at + raw_rows
+        if raw_rows < want or nxt >= reachable:
+            return IMPORT_CURSOR_EXHAUSTED
+        return nxt
+
+    def started_detail(self, pending, call_budget, continuous) -> str:
+        if continuous:
+            return (
+                "sweeping for overlap · continuous — until the feed is "
+                "exhausted or its quota is reached"
+            )
+        return (
+            f"sweeping for overlap · budget {call_budget} calls · "
+            f"{len(pending)} part families to probe"
+        )
+
+    def finished_detail(self, counts, provider) -> str:
+        return (
+            f"{counts.listing_added} listings added · "
+            f"{counts.already_listed} already listed · "
+            f"{counts.absent} not in our catalog · "
+            f"{counts.off_scope} off scope · {provider.calls_made} calls used"
+        )
+
+
+IMPORT_STRATEGIES: dict[str, type[SweepStrategy]] = {
+    "category": _CategorySweep,
+    "family": _FamilySweep,
+}
+"""Strategy name -> class. A provider names its own with `import_strategy`.
+
+Read off the PROVIDER rather than off the registry on purpose: which question
+is worth asking a distributor is a fact about that distributor's API (Mouser
+has no manufacturer filter; DigiKey does and enforces a 300-record window), not
+about which supplier row happens to point at it.
+"""
+
+
+def _strategy_for(provider: PartFeedProvider) -> SweepStrategy:
+    name = getattr(provider, "import_strategy", "category")
+    try:
+        return IMPORT_STRATEGIES[name]()
+    except KeyError:
+        raise ValueError(
+            f"{type(provider).__name__} asks for import strategy {name!r}, which does "
+            f"not exist (known: {sorted(IMPORT_STRATEGIES)})"
+        ) from None
+
+
 def grow_catalog(
     db: Session,
     provider: PartFeedProvider,
@@ -606,60 +1573,81 @@ def grow_catalog(
     per_category: int = 50,
     continuous: bool = False,
 ) -> Iterator[dict]:
-    """Import NEW inventory, thinnest subcategory first, for at most
-    `call_budget` provider calls.
+    """Import NEW inventory for at most `call_budget` provider calls.
 
     The mirror image of `sync_supplier_listings` economics: a sync spends one
     call per part it already has, an import spends one call per PAGE of parts
     it does not.
+
+    WHICH import depends on the provider. Mouser fills the thinnest CATEGORY
+    shelves; DigiKey sweeps (manufacturer, MPN-prefix) FAMILIES looking for a
+    second price on parts we already hold. Both run through one generator with
+    one set of counters — see `SweepStrategy` for exactly what differs.
+
+    `per_category` keeps its name because every caller passes it positionally
+    or not at all; it is the per-UNIT record ceiling for both strategies.
+    """
+    return _sweep_run(
+        db,
+        provider,
+        supplier,
+        _strategy_for(provider),
+        call_budget=call_budget,
+        per_unit=per_category,
+        continuous=continuous,
+    )
+
+
+def _sweep_run(
+    db: Session,
+    provider: PartFeedProvider,
+    supplier: Supplier,
+    strategy: SweepStrategy,
+    *,
+    call_budget: int,
+    per_unit: int,
+    continuous: bool,
+) -> Iterator[dict]:
+    """One import run, whatever the work unit is.
 
     Shares the sync's rails: listings attach to the PASSED supplier row (a
     name-matched twin would split the catalog), work COMMITS PER PART before
     its event is yielded, and a FeedFatalError ends the stream with an error
     plus the counts so far instead of raising out of the generator.
 
-    An MPN that already lives in ANOTHER category is never hijacked into this
-    one, and yields NO event — a stream of skips a human cannot act on is
-    noise; the finish line carries the tally.
-
     DEPTH is what keeps repeat runs useful. `supplier_feeds.import_cursor`
-    remembers how far into each category's search results this supplier has
-    already read, so every run asks the provider for the NEXT page rather than
-    re-reading page one (the owner-reported plateau: after the first sweep,
-    Import found nothing new). A category that answers with fewer raw rows than
-    it asked for is EXHAUSTED and stops consuming budget; when every category
-    is exhausted the map is cleared and the sweep starts from the top again —
-    a nightly run then re-verifies the catalog and picks up whatever the
-    distributor has listed since. The cursor is persisted PER CATEGORY, on its
-    own commit, so a quota wall mid-run keeps the depth the finished categories
-    already paid for.
+    remembers how far into each unit's results this supplier has already read,
+    so every run asks for the NEXT page rather than re-reading page one (the
+    owner-reported plateau: after the first sweep, Import found nothing new). A
+    unit that answers with fewer raw rows than it asked for is EXHAUSTED and
+    stops consuming budget; when every unit is exhausted the namespace is
+    cleared and the sweep starts from the top again. The cursor is persisted
+    PER UNIT, on its own commit, so a quota wall mid-run keeps the depth the
+    finished units already paid for.
 
     ONE PASS OR MANY — that is what `continuous` decides, and it is the whole
     difference between the two callers:
 
     * `continuous=False` (the default, and what `jobs/feed_import_daily`
-      always uses) makes ONE pass down the pending categories and returns even
-      with budget left over. The bound is then the CATEGORY LIST, which is
-      correct for an unattended nightly run: the night's
-      `FEED_IMPORT_CALL_BUDGET` is split evenly across every enabled supplier,
-      and letting the first supplier run until the well is dry would starve
-      the rest of them and the operator's next-day clicks.
+      always uses) makes ONE pass down the pending units and returns even with
+      budget left over. The bound is then the UNIT LIST, which is correct for
+      an unattended nightly run: the night's `FEED_IMPORT_CALL_BUDGET` is split
+      evenly across every enabled supplier, and letting the first supplier run
+      until the well is dry would starve the rest of them and the operator's
+      next-day clicks.
     * `continuous=True` (the interactive Import click on a supplier whose
       Auto-import switch is ON) re-derives the pending list and sweeps AGAIN,
-      batch after batch. One pass only ever reads ONE page per category, so
-      depth used to advance one page per click; continuous keeps going until
-      the feed is exhausted or its quota is reached.
+      batch after batch.
 
     A continuous run ends on exactly three things: a FeedFatalError (the quota
     wall — caught below, so the run ends cleanly with `sync_error` plus the
-    counts so far), an empty pending list (every category answered short, i.e.
-    the catalog is exhausted), or `CONTINUOUS_CALL_CEILING`. It deliberately
-    does NOT wrap and restart mid-run: `wrapped` is evaluated ONCE at run
-    start, so a fully-swept catalog restarts on the NEXT click or night. A
-    mid-run wrap against a healthy provider is an infinite re-read.
+    counts so far), an empty pending list, or `CONTINUOUS_CALL_CEILING`. It
+    deliberately does NOT wrap and restart mid-run: `wrapped` is evaluated ONCE
+    at run start, so a fully-swept catalog restarts on the NEXT click or night.
+    A mid-run wrap against a healthy provider is an infinite re-read.
 
     The run reports ONE `sync_started` and ONE `sync_finished` however many
-    passes it makes — the wire shape and the five-key `counts` set are the same
+    passes it makes — the wire shape and the six-key `counts` set are the same
     for both modes, so nothing downstream has to know which one ran.
     """
     supplier_id = str(supplier.id)
@@ -667,77 +1655,55 @@ def grow_catalog(
     # The PK itself, read once: every per-part commit expires `supplier`, and
     # the cursor writes need the UUID rather than the event string.
     supplier_pk = supplier.id
-    created = synced = media_filled = no_data = skipped_elsewhere = 0
-    # Parts this supplier already lists — declined, not refreshed. Reported
-    # in the finished detail like `skipped_elsewhere`, and deliberately NOT
-    # a wire event or a `counts` key: a fully-covered page would emit 50
-    # identical lines, and the five-key counts contract stays byte-stable.
-    already_listed = 0
-    listing_added = 0
-    # An import never looks a known MPN up, so nothing can be "not found" —
-    # the key stays because every run reports the same five counters.
-    not_found = 0
+    counts = _SweepCounts()
     sweeps = 0
 
     def _finished() -> dict:
-        detail = (
-            f"{created} created · {listing_added} listings added · "
-            f"{already_listed} already listed · "
-            f"{skipped_elsewhere} already elsewhere · {provider.calls_made} calls used"
-        )
+        detail = strategy.finished_detail(counts, provider)
         if continuous:
             detail += f" · {sweeps} sweeps"
         event = sync_event("sync_finished", supplier_id, supplier_name, detail)
-        event["counts"] = {
-            "synced": synced,
-            "media_filled": media_filled,
-            "not_found": not_found,
-            "no_data": no_data,
-            "created": created,
-            "listing_added": listing_added,
-        }
+        event["counts"] = counts.wire()
         return event
 
-    categories = _thinnest_subcategories(db)
     cursor = _load_import_cursor(db, supplier_pk)
-    wrapped = bool(categories) and all(
-        cursor.get(cat.slug) == IMPORT_CURSOR_EXHAUSTED for cat in categories
-    )
+    units = strategy.units(db, provider, supplier_pk, cursor, call_budget)
+    wrapped = strategy.is_wrapped(cursor, units)
     if wrapped:
-        # Every shelf has answered "no more rows". Sweeping them again is the
-        # useful thing to do — it re-verifies what is listed and catches parts
-        # the distributor added since — so clear the map rather than idling
-        # forever. The cleared state persists with the first category's write,
-        # which stores the whole map. Evaluated HERE and nowhere else: a
-        # continuous run that re-wrapped between passes would never stop.
-        cursor = {}
-    pending = [cat for cat in categories if cursor.get(cat.slug) != IMPORT_CURSOR_EXHAUSTED]
+        # Every unit has answered "no more rows". Sweeping them again is the
+        # useful thing to do — it re-verifies what is listed and catches what
+        # the distributor added since — so clear THIS namespace rather than
+        # idling forever. Evaluated HERE and nowhere else: a continuous run
+        # that re-wrapped between passes would never stop.
+        cursor = _cursor_clear_namespace(cursor, strategy.namespace)
+        units = strategy.units(db, provider, supplier_pk, cursor, call_budget)
+    pending = [
+        unit for unit in units if _cursor_get(cursor, unit.cursor_key) != IMPORT_CURSOR_EXHAUSTED
+    ]
 
-    def _sweep(batch: list[Category]) -> Iterator[dict]:
-        """ONE pass down `batch`, thinnest first. The unit `continuous` repeats.
+    def _sweep(batch: list[WorkUnit]) -> Iterator[dict]:
+        """ONE pass down `batch`. The unit `continuous` repeats.
 
         Closes over the run's counters and `cursor` rather than returning them:
         the totals belong to the RUN, not to a pass, and the cursor a pass
         advances is what the next pass reads to ask for the next page.
         """
-        nonlocal created, synced, media_filled, no_data, skipped_elsewhere
-        nonlocal already_listed, listing_added
-        for cat in batch:
+        for unit in batch:
             remaining_calls = call_budget - provider.calls_made
             if remaining_calls <= 0:
                 break
             # `search` paginates INSIDE the provider, so the size asked for is
             # the only place the budget can bound pages: N records cost
             # ceil(N / records_per_call) calls.
-            want = min(per_category, remaining_calls * provider.records_per_call)
-            # Read the category's own fields ONCE: every per-part commit
-            # expires the instance, so touching `cat` inside the page loop
-            # would re-SELECT it for each row.
-            cat_id, cat_slug = cat.id, cat.slug
-            cat_name, keyword = cat.name, _search_keyword(cat)
-            start_at = cursor.get(cat_slug, 0)
+            want = min(per_unit, remaining_calls * provider.records_per_call)
+            start_at = _cursor_get(cursor, unit.cursor_key) or 0
+            if start_at < 0:
+                # A sentinel, not a depth. TOO_WIDE units re-enter here after
+                # being narrowed away and back; reading one as an offset would
+                # ask the distributor for record -2.
+                start_at = 0
             seen: set[tuple[str, str]] = set()
-            for fp in provider.search(keyword, want, start_at=start_at):
+            for fp in search_scoped(provider, unit.scope, want, start_at):
                 # Keyed on the SAME pair as part identity. On MPN alone this
                 # dropped a legitimately distinct part: one page really does
                 # carry 1N4148 from Vishay and from onsemi, and 49 such
@@ -748,115 +1714,18 @@ def grow_catalog(
                 if key in seen:
                     continue
                 seen.add(key)
-                try:
-                    part, is_new = get_or_create_part(
-                        db,
-                        sku=fp.mpn,
-                        manufacturer_name=fp.manufacturer,
-                        # Loop variables bound as defaults, not captured: the
-                        # closure is invoked inside this iteration today, but a
-                        # late-binding lambda over a loop variable is a bug waiting
-                        # for the day get_or_create_part defers the call.
-                        build=lambda mid, fp=fp, cat_id=cat_id, cat_slug=cat_slug: _new_part(
-                            fp, cat_id, cat_slug, manufacturer_id=mid
-                        ),
-                    )
-                except ValueError:
-                    # No usable manufacturer, so the row cannot be keyed. One
-                    # bad row must not end the night: this generator's only
-                    # caller-side handler is the nightly job's blanket
-                    # `except Exception`, which abandons every remaining
-                    # category for this supplier.
-                    logger.info(
-                        "feed row for %r has no identifiable manufacturer — skipped", fp.mpn
-                    )
-                    skipped_elsewhere += 1
-                    continue
-                if not is_new and part.category_id != cat_id:
-                    skipped_elsewhere += 1
-                    continue
-                # IMPORT IS NOT SYNC. A keyword page returns whatever the
-                # distributor ranks highest for this shelf, which is more and
-                # more of what we already hold as a category fills up — and
-                # refreshing those is precisely what the Sync Inventory button
-                # does (`sync_supplier_listings` selects exactly the parts this
-                # supplier already lists). Import takes the complement, so the
-                # two buttons partition every (part, supplier) pair between
-                # them with no overlap and no gap.
-                #
-                # Note this is NOT "skip every part we already have": a part we
-                # hold from a DIFFERENT distributor falls through to the write
-                # below and gains this supplier's offer. Sync can never reach
-                # that part (its EXISTS filter excludes it), and one part with
-                # two prices is the entire point of the catalog.
-                if not is_new and _supplier_already_lists(db, part.id, supplier.id):
-                    already_listed += 1
-                    continue
-                # autoflush=False — the listing needs a real part.id, and the
-                # next existence query has to see this row.
-                db.flush()
-                wrote_listing = _upsert_listing(db, part, supplier, fp)
-                media = _fill_part_media(part, fp)
-                # Facts are a real write, but not a MEDIA one — fold them into
-                # the "updated" bucket (see the same wiring in the sync path).
-                wrote_listing = _stamp_feed_facts(part, fp) or wrote_listing
-                image_url = part.image_url
-                db.commit()
-                # NOTHING here increments `synced`, and that is the point: an
-                # import that has declined every already-listed part cannot
-                # have refreshed anything, so `synced == 0` on an import run is
-                # an invariant the operator can rely on. If it ever moves, this
-                # function is doing sync's job again.
-                if is_new:
-                    # A new catalog row IS the win, priced or not: the part
-                    # page exists now and the next run can price it.
-                    created += 1
-                    action = "created"
-                elif wrote_listing:
-                    # This supplier's FIRST offer on a part we already had —
-                    # new inventory, not a refresh. It used to report `updated`
-                    # and tick `synced`, which is what made an import look like
-                    # a sync: 45,000 parts have no Mouser listing, so this is
-                    # the common path, not an edge case.
-                    listing_added += 1
-                    action = "listing_added"
-                    if media:
-                        media_filled += 1
-                elif media:
-                    # An image on a part this supplier has no price for. Still
-                    # a fill, still not a refresh.
-                    media_filled += 1
-                    action = "media_filled"
-                else:
-                    # found, but nothing changed — counting it as updated
-                    # would overstate what the run did
-                    no_data += 1
-                    action = "no_data"
-                yield sync_event(
-                    "part_synced",
-                    supplier_id,
-                    f"{fp.mpn} — {fp.manufacturer}",
-                    cat_name,
-                    image_url,
-                    action,
-                )
-            # Advance by the RAW rows the provider consumed, not by the parts
-            # kept: rows that failed to decode still took their place in the
-            # result set, and advancing by the survivors would re-fetch the
-            # junk every run. Short of what was asked for = the shelf ran out.
+                event = strategy.absorb(db, supplier, unit, fp, counts)
+                if event is not None:
+                    yield event
             raw_rows = provider.last_raw_count
-            cursor[cat_slug] = IMPORT_CURSOR_EXHAUSTED if raw_rows < want else start_at + raw_rows
+            _cursor_set(
+                cursor,
+                unit.cursor_key,
+                strategy.next_cursor(provider, unit, start_at, raw_rows, want),
+            )
             _save_import_cursor(db, supplier_pk, cursor)
 
-    if continuous:
-        started_detail = (
-            "growing catalog · continuous — sweeping until the feed is "
-            "exhausted or its quota is reached"
-        )
-    else:
-        started_detail = (
-            f"growing catalog · budget {call_budget} calls · {len(pending)} categories to sweep"
-        )
+    started_detail = strategy.started_detail(pending, call_budget, continuous)
     if wrapped:
         started_detail += " · catalog fully swept — restarting from the top"
 
@@ -878,13 +1747,15 @@ def grow_catalog(
                 # either — every cursor write happens after a search. Sweeping
                 # the same list again would loop forever.
                 break
-            # Re-derived every pass ON PURPOSE: the thin-first ranking moves as
-            # parts land, and a category that just answered short must drop
-            # out. One GROUP BY against a provider that charges ~2.1 s a call.
+            # Re-derived every pass ON PURPOSE: the ranking moves as parts land
+            # and offers appear, a unit that just answered short must drop out,
+            # and a unit that answered TOO WIDE must be replaced by its
+            # children. One aggregate query against a provider that charges
+            # ~0.55-2.1 s a call.
             pending = [
-                cat
-                for cat in _thinnest_subcategories(db)
-                if cursor.get(cat.slug) != IMPORT_CURSOR_EXHAUSTED
+                unit
+                for unit in strategy.units(db, provider, supplier_pk, cursor, call_budget)
+                if _cursor_get(cursor, unit.cursor_key) != IMPORT_CURSOR_EXHAUSTED
             ]
     except FeedFatalError as exc:
         # str(exc) carries no API key — mouser.py never puts one in a message.

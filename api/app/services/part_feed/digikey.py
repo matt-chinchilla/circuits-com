@@ -22,18 +22,185 @@ numbers they cannot get. `StandardPricing` only, deliberately.
 
 from __future__ import annotations
 
+import functools
+import json
+import logging
+import pathlib
 import threading
 import time
+import unicodedata
 
 import httpx
 
 from app.config import settings
+from app.services.manufacturer_canon import canon
 from app.services.part_feed.base import FeedPart, FeedPriceBreak
+
+# FeedScope lives in `importer` because that is the module that CONSUMES scopes
+# and owns the sweep strategies; a provider only ever constructs one. The
+# direction is safe — `importer` imports `mouser`, `base` and `specmap` and
+# never a provider, so there is no cycle — but its natural home is `base.py`
+# beside FeedPart, which was outside this change's remit. Moving it is a
+# one-line import change and is recorded as a follow-up.
+from app.services.part_feed.importer import FeedScope
 from app.services.part_feed.mouser import FeedFatalError
 from app.services.part_feed.specmap import map_mount, map_rohs
 
+logger = logging.getLogger(__name__)
+
 PROD_HOST = "https://api.digikey.com"
 SANDBOX_HOST = "https://sandbox-api.digikey.com"
+
+SEARCH_WINDOW = 300
+"""The hard ceiling on ``Offset + Limit`` for the v4 keyword search.
+
+Measured live on 2026-08-24, not read in documentation (quota moved 987 -> 982,
+``x-ratelimit-limit: 1000``)::
+
+    Offset 280 + Limit 50  ->  HTTP 400
+      {"title":"Bad Request","status":400,
+       "detail":"Offset + Limit must be less than or equal to 300", ...}
+    Offset 250 + Limit 50  ->  HTTP 200, 50 products
+
+So every query — however many products it matches — has a 300-record window and
+no more. ``ProductsCount`` for ``SN74LV`` scoped to Texas Instruments is 3,689;
+348 of those 3,689 records are simply unreachable per 50 that are. That is the
+single fact the whole overlap sweep is shaped around: a query has to be NARROW
+before it is worth paging, and the narrowing has to come from our own catalog
+because asking the API to narrow it costs a call.
+"""
+
+# DigiKey's own wording for the window refusal, lowercased for matching. Match
+# on the DETAIL rather than on the bare 400, because a 400 is also what a
+# malformed request gets and that one is a bug we must not swallow.
+_OFFSET_WINDOW_DETAIL = "offset + limit must be less than or equal to"
+
+
+class FeedWindowExhausted(Exception):
+    """This query has no more readable records — NOT that the feed is down.
+
+    Deliberately **not** a :class:`FeedFatalError`. Everything upstream treats
+    a FeedFatalError as the account-wide quota wall: ``grow_catalog`` ends the
+    run with "Feed unavailable" and ``jobs/feed_import_daily`` stops the whole
+    night for every remaining supplier. Paging past record 300 is none of those
+    things — it is one query reaching the end of what the API will serve, which
+    the sweep already knows how to read (a short page means "this unit is
+    finished"). Inheriting from FeedFatalError to save a line would hand the
+    first family to reach the wall the power to cancel the night.
+    """
+
+
+# ── manufacturer scoping: our canonical key -> DigiKey's own ids ────────────
+#
+# `ManufacturerFilter` is what makes a family query precise enough to be worth
+# a call, and it needs DigiKey's id, which nothing in our schema knows. The
+# translation is GENERATED and COMMITTED — see
+# `scripts/gen_digikey_manufacturers.py` for how, and for why a hand-typed map
+# is a wrong price waiting to happen (a mistyped id does not fail, it narrows
+# to the wrong company and writes that company's prices onto our parts).
+#
+# Measured 2026-08-24 against the live catalog and DigiKey's 3,718-name list:
+# 454 of our 1,068 part-bearing makers match, covering 126,395 of 175,728 parts
+# (71.9%) and 93,459 of 130,728 Mouser-priced ones (71.5%).
+
+_MANUFACTURER_MAP_PATH = pathlib.Path(__file__).with_name("digikey_manufacturers.json")
+
+# Hand-approved aliases the canon rules legitimately REFUSE to merge, because
+# the rules are deliberately conservative — `canon` does not fold "USA" or a
+# slash-joined division, since "Microchip USA" is a different company from
+# "Microchip Technology" and that carve-out is load-bearing elsewhere. Each
+# entry below was checked against DigiKey's own name, which is quoted; the
+# starter set recovers ~16,700 parts the generated map cannot reach.
+#
+# PINS WIN over the generated map. They are code rather than data on purpose:
+# the reason a pin is safe lives in the comment beside it, and a regeneration
+# must never silently drop a human's decision.
+#
+# DELIBERATELY NOT PINNED, with the reason, because the next person will look:
+#   amphenol fci / amphenol commercial products  — DigiKey lists 40+ Amphenol
+#     divisions and none by these names; guessing one would scope to the wrong
+#     product line.
+#   te connectivity cgs                          — the only "CGS" DigiKey has
+#     is "CGS Tape", an unrelated company.
+#   apc by schneider electric (768 parts)        — DigiKey has "Schneider
+#     Electric" but no APC; the parent is not the brand.
+#   keysight (720) / pem (699)                   — DigiKey lists neither.
+#   3m electronic specialty (561)                — a 3M division; "3m" is
+#     already mapped, and adding it would scope the same id twice.
+EXTRA_MANUFACTURER_IDS: dict[str, tuple[int, ...]] = {
+    # "Analog Devices Inc." + "Analog Devices Inc./Maxim Integrated" — ADI
+    # bought Maxim; DigiKey kept both rows and our catalog holds the merged
+    # name. Our single largest unmatched maker at 2,975 parts.
+    "analog devices maxim integrated": (505, 175),
+    "vishay semiconductors": (751,),  # "Vishay Semiconductor Opto Division"
+    "te connectivity amp": (17,),  # "TE Connectivity AMP Connectors"
+    "same sky": (2223,),  # "Same Sky (Formerly CUI Devices)"
+    "welwyn components tt electronics": (985,),  # "TT Electronics/Welwyn"
+    "tripp lite": (95,),  # "Eaton Tripp Lite"
+    "broadcom avago": (516,),  # "Broadcom Limited" — Avago renamed itself
+    "hirose connector": (26,),  # "Hirose Electric Co Ltd"
+    "airpax": (723,),  # "Sensata-Airpax"
+    "vishay bc components": (56,),  # "Vishay Beyschlag/Draloric/BC Components"
+    "vishay beyschlag": (56,),  # the same DigiKey row, both our spellings
+    "essentra": (145,),  # "Essentra Components"
+    "startech": (5214,),  # "StarTech.com"
+    "nexperia": (1727,),  # "Nexperia USA Inc."
+    "mill max": (54,),  # "Mill-Max Manufacturing Corp."
+    "nisshinbo": (2129,),  # "Nisshinbo Micro Devices Inc."
+    "telemecanique": (5452,),  # "Telemecanique Sensors"
+    "radiall": (2201,),  # "Radiall USA, Inc."
+    "melexis": (413,),  # "Melexis Technologies NV"
+    "adafruit": (1528,),  # "Adafruit Industries LLC"
+    "eaton electronics": (283,),  # "Eaton - Electronics Division"
+    "molex airborn": (4134,),  # "AirBorn, a Molex company"
+}
+
+
+def _fold_key(name: str) -> str:
+    """`canon()` plus a diacritic fold — the SAME matcher the generator used.
+
+    `canon` NFKC-normalises but does not decompose accents, so `Würth
+    Elektronik` and `Wurth Elektronik` canonicalise to different keys and would
+    never meet. Our catalog stores the unaccented spelling and DigiKey stores
+    the accented one, so without this fold Würth (and Schaffner, and every
+    other accented maker) is simply unreachable.
+
+    Mirrored in `scripts/gen_digikey_manufacturers.py::fold`. If you change one,
+    change both — `TestTheManufacturerMap` pins that they agree.
+    """
+    key = canon(name or "")
+    return "".join(c for c in unicodedata.normalize("NFD", key) if not unicodedata.combining(c))
+
+
+@functools.lru_cache(maxsize=1)
+def manufacturer_ids_by_key() -> dict[str, tuple[int, ...]]:
+    """canonical_key -> DigiKey manufacturer ids, generated data plus pins.
+
+    Read lazily and cached: a missing or corrupt file must not make
+    `import app.main` fail — every other feature in this process is unrelated
+    to DigiKey, and a provider that can only sweep its pinned makers is a
+    degraded feed, not a down site. It IS logged, once.
+
+    Values are TUPLES because 59 fold-keys inside DigiKey's own 3,718-name list
+    collide with each other — `abracon` is ids 535 and 6290 — and picking one
+    would silently sweep half a manufacturer's catalog.
+    """
+    loaded: dict[str, tuple[int, ...]] = {}
+    try:
+        raw = json.loads(_MANUFACTURER_MAP_PATH.read_text())
+        for key, ids in raw.items():
+            values = tuple(sorted({int(i) for i in ids}))
+            if key and values:
+                loaded[key] = values
+    except (OSError, ValueError, TypeError) as exc:
+        logger.warning(
+            "[digikey] manufacturer map unreadable (%s) — falling back to the %d "
+            "hand-pinned makers; regenerate with scripts/gen_digikey_manufacturers.py",
+            exc,
+            len(EXTRA_MANUFACTURER_IDS),
+        )
+    loaded.update(EXTRA_MANUFACTURER_IDS)  # pins win
+    return loaded
 
 
 def _text(raw) -> str | None:
@@ -197,9 +364,35 @@ class DigiKeyProvider:
     # admin rename to "Digi-Key" left two rows, and BOTH matched the registry's
     # `digikey` domain fragment, so a feed run could have written real prices
     # onto either one.
+    # BOTH values, and the registry requires every declared name to be
+    # present. That generalises the rule this provider used to hardcode:
+    # returning the id while the secret is missing lets an operator enable a
+    # nightly run that can only ever 401. The id is what TRAVELS as the single
+    # resolved key; the secret is read straight from settings by the provider.
+    credential_env: tuple[str, ...] = ("DIGIKEY_CLIENT_ID", "DIGIKEY_CLIENT_SECRET")
+
     supplier_name = "Digi-Key Electronics"
     supplier_website = "digikey.com"
     records_per_call = 50  # v4 keyword-search page size
+
+    # WHICH SWEEP THIS PROVIDER'S IMPORT RUNS.
+    #
+    # "category" (Mouser's, and the default for any provider that says nothing)
+    # asks "what does this distributor sell on this shelf" and CREATES the parts
+    # it does not already hold. That is how the catalog was built, and it is the
+    # wrong question for a second distributor: 175,728 parts already exist and
+    # only Mouser can price them, so what the site needs from DigiKey is a
+    # SECOND price on parts we hold — the overlap.
+    #
+    # "family" asks that question by enumerating (manufacturer, MPN-prefix)
+    # groups from OUR OWN catalog and scoping each one with
+    # `ManufacturerFilter`. It creates nothing. See `importer.FamilyStrategy`.
+    import_strategy = "family"
+
+    # The paging ceiling the sweep must respect, exposed as a CLASS attribute so
+    # the strategy can read it off any provider instead of importing a
+    # provider-specific constant (which would point the importer at DigiKey).
+    search_window = SEARCH_WINDOW
 
     # The token belongs to the CLIENT, not to a provider instance, and a BOM
     # resolve builds one provider per request. Instance-level caching would
@@ -234,9 +427,12 @@ class DigiKeyProvider:
         self._client = client or httpx.Client(timeout=60)
         self.calls_made = 0
         self.last_raw_count = 0
+        # `ProductsCount` off the LAST response. None = the feed did not say,
+        # which is NOT zero (see `_parse`). Required by the family strategy.
+        self.last_total_count: int | None = None
 
     @classmethod
-    def from_credential(cls, key: str) -> DigiKeyProvider:
+    def from_credential(cls, key: str, client: httpx.Client | None = None) -> DigiKeyProvider:
         """Build from the CLIENT ID; the secret comes from settings.
 
         `get_feed_key` deals in one string per provider, and for DigiKey that
@@ -246,10 +442,41 @@ class DigiKeyProvider:
         column, a log line or a route variable that was designed for a
         single-key feed.
         """
-        return cls(client_id=key)
+        return cls(client_id=key, client=client)
 
     def close(self) -> None:
         self._client.close()
+
+    # ── manufacturer scoping (the family sweep's narrowing device) ──────────
+
+    @classmethod
+    def manufacturer_scope(
+        cls, canonical_key: str, keyword: str, label: str | None = None
+    ) -> FeedScope | None:
+        """A keyword query narrowed to one manufacturer, or None if unmappable.
+
+        None means "this distributor has no id for that maker", and the sweep
+        must read it as "no work here" — NEVER as "run the query unfiltered".
+        An unscoped family query is 350x-652x too wide for the 300-record
+        window (Texas Instruments' DigiKey catalog is 104,993 products,
+        Molex's is 195,588), so it would spend a rate-limited call reading
+        somebody else's inventory.
+
+        `FeedScope.manufacturer_id` is a PROVIDER-OPAQUE token — the importer
+        never parses it, it only asks whether one is present. DigiKey's token
+        is a comma-separated id list because `ManufacturerFilter` takes an
+        ARRAY and 16 of the 454 mapped makers legitimately have several ids
+        (Abracon is 535 and 6290). Emitting one scope per id instead would
+        double those makers' call cost for no extra reach.
+        """
+        ids = manufacturer_ids_by_key().get(canonical_key)
+        if not ids:
+            return None
+        return FeedScope(
+            keyword=keyword,
+            manufacturer_id=",".join(str(i) for i in ids),
+            label=label or f"{canonical_key} · {keyword}",
+        )
 
     # ── auth ────────────────────────────────────────────────────────────────
 
@@ -319,9 +546,33 @@ class DigiKeyProvider:
         response = self._client.post(f"{self.host}{path}", headers=self._headers(), json=payload)
         self.calls_made += 1
         self._raise_for_quota(response)
+        if response.status_code == 400 and self._is_window_refusal(response):
+            # Translated HERE rather than in a caller, because every caller
+            # would have to know the wording and the first one to forget turns
+            # a paging wall back into a night-ending outage.
+            raise FeedWindowExhausted(
+                f"DigiKey refused Offset {payload.get('Offset')} + Limit "
+                f"{payload.get('Limit')} — the search window is {SEARCH_WINDOW} records"
+            )
         if response.status_code != 200:
             raise FeedFatalError(f"DigiKey {path} returned HTTP {response.status_code}")
         return response.json()
+
+    @staticmethod
+    def _is_window_refusal(response: httpx.Response) -> bool:
+        """Is this 400 the ``Offset + Limit`` wall, or a real bad request?
+
+        Reads the RFC-7807 ``detail`` field, falling back to the raw text. A
+        body that is not JSON at all (an HTML error page from a proxy in front
+        of the API) is NOT a paging wall — it is an outage wearing a 400, and
+        swallowing it would make the sweep grind silently through every unit
+        reporting nothing wrong.
+        """
+        try:
+            detail = str((response.json() or {}).get("detail") or "")
+        except (ValueError, AttributeError):
+            return False
+        return _OFFSET_WINDOW_DETAIL in detail.lower()
 
     def _raise_for_quota(self, response: httpx.Response) -> None:
         """The account-wide wall, read from the response rather than inferred.
@@ -360,22 +611,98 @@ class DigiKeyProvider:
         # this, and advancing by survivors would re-fetch undecodable rows
         # forever.
         self.last_raw_count = len(products)
+        # `ProductsCount` rides free on every response and is the overlap
+        # sweep's CONTROL SIGNAL — the number that decides whether a query can
+        # be read out inside the 300-record window or has to be narrowed from
+        # our own SKUs first. Absent means UNKNOWN, never zero: zero would read
+        # as "this family is empty, mark it done" and permanently retire a
+        # family we never looked at.
+        raw_total = body.get("ProductsCount")
+        self.last_total_count = int(raw_total) if isinstance(raw_total, int | float) else None
         return [fp for fp in (part_from_digikey(p) for p in products) if fp is not None]
+
+    def _window_page(self, limit: int, start_at: int) -> tuple[int, int] | None:
+        """`(offset, limit)` that fits inside :data:`SEARCH_WINDOW`, or None.
+
+        None means "do not send this request": the live API answers Offset 280
+        + Limit 50 with a 400 AND still decrements `x-ratelimit-remaining`, so
+        a call we already know will be refused is a call worth not making — at
+        1,000 a day and 0.55 s apiece, that arithmetic is the difference
+        between a sweep and a stall.
+
+        A page that merely STRADDLES the edge is trimmed rather than dropped:
+        Offset 280 + Limit 20 is a legal request for the last 20 records, and
+        throwing them away would leave reachable inventory unread forever.
+        """
+        offset = max(0, int(start_at))
+        if offset >= SEARCH_WINDOW:
+            return None
+        return offset, max(1, min(int(limit), self.records_per_call, SEARCH_WINDOW - offset))
+
+    def _empty_page(self) -> list[FeedPart]:
+        """What a caller sees when a query has no more readable records.
+
+        A ZERO-row page, which every sweep already reads as "this unit is
+        finished" — no new branch upstream, and `last_total_count` is left
+        alone so a narrowing decision made from the previous page survives.
+        """
+        self.last_raw_count = 0
+        return []
 
     # ── the Protocol ────────────────────────────────────────────────────────
 
     def search(self, keyword: str, limit: int = 50, start_at: int = 0) -> list[FeedPart]:
-        body = self._post(
-            "/products/v4/search/keyword",
-            {
-                "Keywords": keyword,
-                "Limit": min(limit, self.records_per_call),
-                "Offset": start_at,
-                # Third-party sellers priced as DigiKey stock would be a
-                # misrepresentation on a comparison page.
-                "FilterOptionsRequest": {"MarketPlaceFilter": "ExcludeMarketPlace"},
-            },
-        )
+        return self._search(keyword, limit, start_at, manufacturer_id=None)
+
+    def search_scoped(self, scope, limit: int = 50, start_at: int = 0) -> list[FeedPart]:
+        """A keyword search NARROWED to one manufacturer.
+
+        The narrowing is the whole point of the family sweep: `SN74LV` on its
+        own is a catalog-wide question, `SN74LV` scoped to Texas Instruments is
+        a question about parts we actually hold. Verified live across 150
+        records over two makers — every `Manufacturer.Name` came back uniformly
+        scoped, 0 off-scope rows — which is why the importer's `off_scope`
+        counter is a cheap rot gate rather than a filter it depends on.
+        """
+        return self._search(scope.keyword, limit, start_at, manufacturer_id=scope.manufacturer_id)
+
+    def _search(
+        self, keyword: str, limit: int, start_at: int, *, manufacturer_id: str | None
+    ) -> list[FeedPart]:
+        # An EMPTY Keywords value is a 400 that still spends quota — measured.
+        # Refuse it here rather than paying to learn it once per unit.
+        if not (keyword or "").strip():
+            raise ValueError("DigiKey keyword search needs a non-empty keyword")
+        page = self._window_page(limit, start_at)
+        if page is None:
+            return self._empty_page()
+        offset, page_limit = page
+        filters: dict = {
+            # Third-party sellers priced as DigiKey stock would be a
+            # misrepresentation on a comparison page.
+            "MarketPlaceFilter": "ExcludeMarketPlace"
+        }
+        if manufacturer_id is not None:
+            # The token may name SEVERAL ids (see `manufacturer_scope`) —
+            # `ManufacturerFilter` is an array, so one call covers them all.
+            filters["ManufacturerFilter"] = [
+                {"Id": part.strip()} for part in str(manufacturer_id).split(",") if part.strip()
+            ]
+        try:
+            body = self._post(
+                "/products/v4/search/keyword",
+                {
+                    "Keywords": keyword,
+                    "Limit": page_limit,
+                    "Offset": offset,
+                    "FilterOptionsRequest": filters,
+                },
+            )
+        except FeedWindowExhausted:
+            # Belt to the `_window_page` braces. The clamp covers every request
+            # this class sends today; the translation covers the day DigiKey
+            # moves the ceiling, or a caller reaches the API another way.
+            return self._empty_page()
         self._check_locale(body)
         return self._parse(body)
 
