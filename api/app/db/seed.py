@@ -15,6 +15,7 @@ import json
 import os
 import random
 import re
+from collections.abc import Collection
 from datetime import date, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -2059,6 +2060,36 @@ def _eligible_suppliers(
     return eligible
 
 
+def catalog_existing_skus(db: Session, json_skus: Collection[str]) -> set[str]:
+    """Which of these catalog SKUs the `parts` table already holds, upper-keyed.
+
+    CASE-FOLDED ON BOTH SIDES, and both halves are load-bearing. The returned
+    set is upper-cased because callers test `p["sku"].upper() in existing`;
+    the QUERY is expressed on `upper(Part.sku)` because Postgres `IN` is
+    case-sensitive, so probing with the JSON's spelling silently missed a row
+    stored under a different one.
+
+    That asymmetry is what broke the API boot on 2026-08-24: the result was
+    folded and the predicate was not, so `nRF52832-QFAA-R7` in the catalog did
+    not match `NRF52832-QFAA-R7` in the table, the seed created a duplicate,
+    and `seed_manufacturers` step 5 then violated
+    `uq_parts_manufacturer_sku_upper` — inside the container entrypoint, which
+    means the API never starts rather than merely misbehaving. It had been
+    latent since the case-folding fix: the JSON also carried the stored
+    spelling in another category file, so the probe matched by accident.
+    Deleting that other entry, an ordinary catalog edit, was enough.
+
+    Rides `ix_parts_sku_upper` (declared in `Part.__table_args__`), so folding
+    the predicate costs nothing.
+    """
+    if not json_skus:
+        return set()
+    wanted = [sku.upper() for sku in json_skus]
+    return {
+        row[0].upper() for row in db.query(Part.sku).filter(func.upper(Part.sku).in_(wanted)).all()
+    }
+
+
 def _seed_real_catalog(
     db: Session,
     cats: dict[str, Category],
@@ -2094,12 +2125,7 @@ def _seed_real_catalog(
     # its pending rows, and 17 demo SKUs collide with the catalog — hoisting
     # this above step 6 recreates them as duplicates.
     parsed = [json.loads(jf.read_text()) for jf in json_files]
-    all_skus = {
-        p["sku"]
-        for data in parsed
-        for parts_list in data.values()
-        for p in parts_list
-    }
+    all_skus = {p["sku"] for data in parsed for parts_list in data.values() for p in parts_list}
     # CASE-FOLDED, matching the part-identity key (services/part_identity.py).
     # The JSON lists the same chip under several categories with inconsistent
     # capitalisation — nRF52840-QIAA-R7 in rf-wireless-ics.json and
@@ -2107,11 +2133,7 @@ def _seed_real_catalog(
     # case-SENSITIVE probe created BOTH. That is how production's six
     # duplicate pairs were born, and with uq_parts_manufacturer_sku_upper in
     # place it is now an IntegrityError rather than silent extra rows.
-    existing_skus: set[str] = (
-        {row[0].upper() for row in db.query(Part.sku).filter(Part.sku.in_(all_skus)).all()}
-        if all_skus
-        else set()
-    )
+    existing_skus: set[str] = catalog_existing_skus(db, all_skus)
 
     for data in parsed:
         for sub_slug, parts_list in data.items():
