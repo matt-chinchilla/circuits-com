@@ -1,7 +1,7 @@
 """Turns FeedParts into catalog rows: Part + PartListing + PriceBreaks.
 
 Idempotent by construction: parts keyed by MPN, listings keyed by
-(part, supplier), price breaks replaced wholesale per sync. Never overwrites
+(part, supplier), price breaks reconciled rung-by-rung per sync. Never overwrites
 a value a human/API already set with something emptier — image/datasheet fill
 only when missing, stock/lead/prices refresh on every run.
 
@@ -19,9 +19,9 @@ import time
 import uuid
 from collections.abc import Callable, Iterator
 from datetime import UTC, datetime
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 
-from sqlalchemy import func
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session, noload
 
 from app.db.session import SessionLocal
@@ -193,31 +193,150 @@ def _supplier_already_lists(db: Session, part_id: uuid.UUID, supplier_id: uuid.U
     )
 
 
+# A feed can quote finer than the column can hold — the captured DigiKey
+# payload prices a reel at 0.03909 against a Numeric(10, 4) column, which
+# stores 0.0391. The incoming value is therefore rounded to the column's OWN
+# scale before anything compares it: comparing raw feed precision against an
+# already-rounded stored value differs on every pass and rewrites the row
+# forever.
+#
+# Read from the schema rather than hardcoded, but note this ONE constant is
+# applied to `price_breaks.unit_price` AND `part_listings.unit_price`. They are
+# both Numeric(10, 4) and a test asserts they stay that way
+# (`TestTheTwoPriceColumnsAgree`), which is the right place for it: a
+# divergence should fail the suite, not refuse to boot the container. The same
+# reasoning covers a column declared as bare `Numeric` — scale None falls back
+# rather than raising a TypeError at import time.
+_declared_scale = PriceBreak.__table__.c.unit_price.type.scale
+_PRICE_QUANTUM = Decimal(1).scaleb(-(4 if _declared_scale is None else _declared_scale))
+
+
+def _storable_price(value) -> Decimal:
+    """The feed's price as the database will actually hold it."""
+    return Decimal(str(value)).quantize(_PRICE_QUANTUM, rounding=ROUND_HALF_UP)
+
+
+def _sync_price_breaks(db: Session, listing_id: uuid.UUID, feed_breaks) -> None:
+    """Reconcile one listing's price ladder against the feed, writing only the
+    rungs that actually differ.
+
+    This used to be `DELETE WHERE listing_id = ?` plus an INSERT per rung, on
+    every pass, whether or not a price had moved. `pg_stat_user_tables` showed
+    what that cost: 846,167 live rows carrying 2,760,938 inserts and 2,080,759
+    deletes, with `n_tup_upd = 0` — no row had ever been updated, because
+    nothing ever tried.
+
+    The natural key inside a listing is `min_quantity`, so the diff keys on it.
+    Repricing in place is worth more than the saved row count suggests:
+    `unit_price` is the table's only unindexed column, so an UPDATE touching
+    just that one can be HOT and skip all three indexes, where the old
+    delete-and-reinsert wrote every one of them twice.
+    """
+    wanted = {pb.min_quantity: _storable_price(pb.unit_price) for pb in feed_breaks}
+    # Sessions run autoflush=False, so breaks a previous pass over this same
+    # listing merely staged would be invisible to the SELECT below and the
+    # whole ladder would be inserted a second time. No caller does that today
+    # (grow_catalog dedupes per page, the others commit per part) and the
+    # wholesale-delete code this replaced duplicated identically — but a
+    # function that documents itself as reconciling duplicate quantities should
+    # not depend on its callers to avoid creating them.
+    db.flush()
+    stored = db.execute(
+        select(PriceBreak.id, PriceBreak.min_quantity, PriceBreak.unit_price).where(
+            PriceBreak.listing_id == listing_id
+        )
+    ).all()
+
+    seen: set[int] = set()
+    stale: list[uuid.UUID] = []
+    # Collected rather than executed in the loop: a supplier-wide reprice moves
+    # every rung, and a real Mouser listing carries up to ten of them, so
+    # per-rung statements would trade the old single DELETE for ten round trips
+    # on exactly the path this is supposed to make cheaper.
+    repriced: list[dict] = []
+    for pk, qty, price in stored:
+        # `qty in seen` is the duplicate case. Nothing in the schema forbids two
+        # rows at one quantity — only separate indexes on the two columns — so a
+        # diff that updated one copy would strand the other, leaving the listing
+        # quoting two prices for the same break permanently.
+        if qty not in wanted or qty in seen:
+            stale.append(pk)
+            continue
+        seen.add(qty)
+        if price != wanted[qty]:
+            repriced.append({"id": pk, "unit_price": wanted[qty]})
+    if repriced:
+        # ORM bulk UPDATE by primary key: no explicit WHERE, so SQLAlchemy
+        # derives the criteria from `id` and still synchronizes the session.
+        # Spelling it as `update(...).where(id == bindparam(...))` instead
+        # raises InvalidRequestError on the executemany path.
+        db.execute(update(PriceBreak), repriced)
+    if stale:
+        db.execute(delete(PriceBreak).where(PriceBreak.id.in_(stale)))
+    for qty in wanted.keys() - seen:
+        db.add(
+            PriceBreak(
+                id=uuid.uuid4(),
+                listing_id=listing_id,
+                min_quantity=qty,
+                unit_price=wanted[qty],
+            )
+        )
+
+
 def _upsert_listing(db: Session, part: Part, supplier: Supplier, fp: FeedPart) -> bool:
-    """Create/refresh this supplier's listing for `part`. Returns True if it
-    wrote anything — False means the feed row carried no price, so there was
-    nothing worth storing (callers report that honestly instead of claiming an
-    update)."""
+    """Create/refresh this supplier's listing for `part`.
+
+    Returns whether the feed row was USABLE — True means it carried a price and
+    this listing now reflects it; False means it did not, so there was nothing
+    worth storing and callers report that honestly instead of claiming an
+    update. It deliberately does NOT mean "rows were written": since the ladder
+    became a reconciliation, a pass that confirms an unchanged listing writes
+    nothing and still returns True. Narrowing it to "changed" would silently
+    reshape the operator-facing `synced`/`updated` counters and the
+    activity_events they persist, which is a product decision rather than a
+    consequence of how the writes are batched.
+    """
     if not fp.price_breaks:
         return False  # a listing without a price is not a comparison row
     lowest_qty_break = min(fp.price_breaks, key=lambda b: b.min_quantity)
     listing = (
         db.query(PartListing)
         # PartListing.price_breaks is lazy="selectin", so loading the listing
-        # would fire a second SELECT and build ORM objects for breaks this
-        # function deletes wholesale nine lines down. noload, not raiseload:
-        # the collection is genuinely unused here, and a hard error would only
-        # move the cost to whoever next touches the attribute.
+        # would fire a second SELECT and hydrate full ORM objects for every
+        # break on it. _sync_price_breaks reads the ladder itself, as three
+        # columns for this ONE listing; without noload that targeted read is
+        # additive to a fan-out this function never uses. noload, not
+        # raiseload: the collection is genuinely unused here, and a hard error
+        # would only move the cost to whoever next touches the attribute.
         .options(noload(PartListing.price_breaks))
         .filter(PartListing.part_id == part.id, PartListing.supplier_id == supplier.id)
         .first()
     )
+    # Rounded to the column's scale for the same reason the price breaks are:
+    # assigning raw feed precision to a Numeric(10, 4) makes every confirming
+    # pass look like a change and rewrite the row — four indexes here, plus an
+    # `updated_at` bump. (Nothing reads `part_listings.updated_at`; the column
+    # the BOM tool's price_stale flag reads is `last_updated`, which has no
+    # onupdate and is stamped once at INSERT. See the note in _sync_price_breaks
+    # — a confirming pass now writes nothing, so feed freshness needs a home
+    # that is not a per-row write.)
+    unit_price = _storable_price(lowest_qty_break.unit_price)
     if listing is None:
+        # EVERY field on the constructor. Setting only the identity columns and
+        # assigning the rest afterwards cost an INSERT plus an immediate UPDATE
+        # of the row just inserted — two row versions and two sets of index
+        # writes to create one listing, thousands of times per grow_catalog
+        # sweep.
         listing = PartListing(
             id=uuid.uuid4(),
             part_id=part.id,
             supplier_id=supplier.id,
-            unit_price=Decimal(str(lowest_qty_break.unit_price)),
+            sku=fp.supplier_sku,
+            stock_quantity=fp.stock_quantity,
+            lead_time_days=fp.lead_time_days,
+            unit_price=unit_price,
+            currency=fp.currency,
         )
         db.add(listing)
         # Sessions run autoflush=False — without this flush the NEXT
@@ -225,21 +344,13 @@ def _upsert_listing(db: Session, part: Part, supplier: Supplier, fp: FeedPart) -
         # repeated MPN mints a duplicate (part, supplier) listing
         # (review-caught, reproduced).
         db.flush()
-    listing.sku = fp.supplier_sku or listing.sku
-    listing.stock_quantity = fp.stock_quantity
-    listing.lead_time_days = fp.lead_time_days
-    listing.unit_price = Decimal(str(lowest_qty_break.unit_price))
-    listing.currency = fp.currency
-    db.query(PriceBreak).filter(PriceBreak.listing_id == listing.id).delete()
-    for pb in fp.price_breaks:
-        db.add(
-            PriceBreak(
-                id=uuid.uuid4(),
-                listing_id=listing.id,
-                min_quantity=pb.min_quantity,
-                unit_price=Decimal(str(pb.unit_price)),
-            )
-        )
+    else:
+        listing.sku = fp.supplier_sku or listing.sku
+        listing.stock_quantity = fp.stock_quantity
+        listing.lead_time_days = fp.lead_time_days
+        listing.unit_price = unit_price
+        listing.currency = fp.currency
+    _sync_price_breaks(db, listing.id, fp.price_breaks)
     return True
 
 

@@ -1,11 +1,13 @@
 """Shared plumbing for the suite's few genuinely Postgres-backed tests.
 
 Almost everything here runs on SQLite via `Base.metadata.create_all`, which is
-fast and dialect-agnostic enough for application logic. Two things it cannot
+fast and dialect-agnostic enough for application logic. Three things it cannot
 express, and which therefore need a real engine:
 
 * a data migration (Postgres SQL, run through alembic)
 * a cross-process advisory lock (SQLite has no such concept)
+* what a write PHYSICALLY does — `ctid` row identity and HOT-update accounting,
+  which is how the feed's price-ladder reconciler proves it wrote nothing
 
 Both skip cleanly when the local stack is down, so `pytest tests/` on a bare
 checkout stays green, and both refuse to run against a non-local host.
