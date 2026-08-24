@@ -201,6 +201,16 @@ class TestTheNightlyJobHonoursTheLock:
         from app.models import Supplier
 
         class RecordingProvider:
+            @classmethod
+            def from_credential(cls, key):
+                # The sweep builds providers through the Protocol's
+                # `from_credential`, not `cls(api_key=…)` — DigiKey needs two
+                # values, so the call sites stopped hardcoding one. A double
+                # without it makes construction raise AttributeError, which the
+                # job's blanket handler swallows into "import failed", and the
+                # test then reads as "the sweep never ran".
+                return cls(api_key=key)
+
             def __init__(self, api_key=None):
                 built.append("built")
                 raise RuntimeError("far enough — construction is the signal")

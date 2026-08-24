@@ -22,7 +22,7 @@ class FakeProvider:
     supplier_website = "mouser.com"
     records_per_call = 50
 
-    def __init__(self, by_mpn=None, search_results=None, results_by_keyword=None):
+    def __init__(self, by_mpn=None, search_results=None, results_by_keyword=None, api_key=None):
         self.by_mpn = by_mpn or {}
         self.search_results = search_results or []
         # keyword -> results, for sweeps that must answer per category
@@ -32,6 +32,17 @@ class FakeProvider:
         # cursor test can prove the second run asked a DIFFERENT page.
         self.search_calls: list[tuple[str, int, int]] = []
         self.last_raw_count = 0
+
+    @classmethod
+    def from_credential(cls, key):
+        """Mirrors the Protocol, and PASSES THE KEY ON.
+
+        The fake needs no credential itself, but subclasses record what they
+        were handed — that is how `test_each_provider_is_called_with_ITS_OWN_key`
+        proves a second distributor is never reachable on Mouser's key.
+        Swallowing it here would make that test pass while asserting nothing.
+        """
+        return cls(api_key=key)
 
     def search(self, keyword, limit=50, start_at=0):
         # PAGE-aware, like MouserProvider: a search for more than one page

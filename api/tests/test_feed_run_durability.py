@@ -202,6 +202,10 @@ def _use_fake_provider(monkeypatch, provider, slug="mouser"):
     """Make the ROUTE build `provider` — `match_provider` returns a CLASS."""
 
     class _Scripted:
+        @classmethod
+        def from_credential(cls, key):
+            return cls(api_key=key)
+
         def __new__(cls, api_key=None):
             return provider
 

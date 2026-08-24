@@ -236,6 +236,17 @@ class Settings(BaseSettings):
     # `registry.get_feed_key()` is the one place that asks.
     MOUSER_API_KEY: str | None = None
 
+    # DigiKey Product Information v4 — TWO values, unlike every other feed.
+    # DigiKey authenticates with two-legged OAuth (client_credentials), so it
+    # needs an id AND a secret to mint a short-lived bearer token; there is no
+    # single "api key" to store. That is why `provider_credentials`, which
+    # holds exactly one key per provider, cannot yet carry DigiKey and the
+    # environment is the only source today (a nullable `api_secret` column is
+    # the planned seam). Absent either value, the feed is simply off — the same
+    # posture as Mouser and Stripe.
+    DIGIKEY_CLIENT_ID: str | None = None
+    DIGIKEY_CLIENT_SECRET: str | None = None
+
     # ── Nightly feed import (app/jobs/feed_import_daily.py) ─────────────────
     # The hour (UTC) the nightly catalog import runs, and the provider-call
     # budget it may spend across every supplier whose "Nightly auto-import"

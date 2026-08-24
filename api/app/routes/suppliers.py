@@ -338,7 +338,7 @@ def _resolve_feed_provider(db: Session, supplier_id: str) -> tuple[Supplier, Par
     key = get_feed_key(db, provider_slug)
     if not key:
         raise HTTPException(404, "sync_unavailable")
-    return supplier, provider_cls(api_key=key)
+    return supplier, provider_cls.from_credential(key)
 
 
 # How long an observer may hear nothing before the stream sends a blank line.

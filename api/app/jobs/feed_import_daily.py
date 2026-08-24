@@ -209,7 +209,7 @@ def _import_one(db: Session, target: _Target, call_budget: int) -> dict:
                     target.name,
                 )
                 return stats
-            provider = target.provider_cls(api_key=target.api_key)
+            provider = target.provider_cls.from_credential(target.api_key)
             for event in grow_catalog(db, provider, target.supplier, call_budget=call_budget):
                 record_stream_event(db, target.supplier.id, event, IMPORT_EVENT_KINDS)
                 action = event.get("action")

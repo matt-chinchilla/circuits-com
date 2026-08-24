@@ -95,6 +95,11 @@ services:
       # 401 from Mouser is a FeedFatalError — the sync would fail while
       # looking configured. MOUSER_SEARCH_API_KEY is the working key's home.
       MOUSER_API_KEY: ${MOUSER_SEARCH_API_KEY:-}
+      # DigiKey needs BOTH halves of a client_credentials pair. This block
+      # is an ALLOWLIST: a value absent here never reaches the app however
+      # carefully it is written into the host .env.
+      DIGIKEY_CLIENT_ID: ${DIGIKEY_CLIENT_ID:-}
+      DIGIKEY_CLIENT_SECRET: ${DIGIKEY_CLIENT_SECRET:-}
       # ── BOM tool ─────────────────────────────────────────────────────
       # Daily ceiling on Mouser calls spent resolving public BOM uploads.
       # Default MIRRORS app/config.py (100) — an empty `${VAR:-}` would
@@ -265,6 +270,11 @@ services:
       # supplier is skipped with a log line, which is the correct "not
       # configured" state.
       MOUSER_API_KEY: ${MOUSER_SEARCH_API_KEY:-}
+      # DigiKey needs BOTH halves of a client_credentials pair. This block
+      # is an ALLOWLIST: a value absent here never reaches the app however
+      # carefully it is written into the host .env.
+      DIGIKEY_CLIENT_ID: ${DIGIKEY_CLIENT_ID:-}
+      DIGIKEY_CLIENT_SECRET: ${DIGIKEY_CLIENT_SECRET:-}
 
   frontend:
     build: ./frontend

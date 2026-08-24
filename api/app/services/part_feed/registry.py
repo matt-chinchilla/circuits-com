@@ -24,12 +24,16 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.models import ProviderCredential, Supplier
 from app.services.part_feed.base import PartFeedProvider
+from app.services.part_feed.digikey import DigiKeyProvider
 from app.services.part_feed.mouser import MouserProvider
 
 # (domain fragment, provider class). Adding Digi-Key/Farnell is one row here
 # plus the provider itself — nothing else in the sync path knows a brand name.
 # The fragment doubles as the provider SLUG (the credential row's primary key).
-_PROVIDERS: tuple[tuple[str, type], ...] = (("mouser", MouserProvider),)
+_PROVIDERS: tuple[tuple[str, type], ...] = (
+    ("mouser", MouserProvider),
+    ("digikey", DigiKeyProvider),
+)
 
 # (slug, label) for every provider the system knows about — the ONE list the
 # admin Settings card renders and `routes/feed_credentials.py` validates against,
@@ -49,6 +53,16 @@ def env_feed_key(provider: str = "mouser") -> str | None:
     """
     if provider == "mouser":
         return (settings.MOUSER_API_KEY or "").strip() or None
+    if provider == "digikey":
+        # DigiKey is the first provider needing TWO values, and the gate has to
+        # reflect that: returning the id while the secret is missing would let
+        # an operator enable a nightly run that can only ever 401. Both halves
+        # or nothing. The id is what travels (it is also an outgoing header);
+        # the SECRET is read straight from settings by the provider and never
+        # passes through this single-string path.
+        client_id = (settings.DIGIKEY_CLIENT_ID or "").strip()
+        client_secret = (settings.DIGIKEY_CLIENT_SECRET or "").strip()
+        return client_id if (client_id and client_secret) else None
     return None
 
 

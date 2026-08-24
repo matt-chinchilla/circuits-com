@@ -132,6 +132,10 @@ def use_fake_provider(monkeypatch):
 
     def _install(provider, slug="mouser"):
         class _Scripted:
+            @classmethod
+            def from_credential(cls, key):
+                return cls(api_key=key)
+
             def __new__(cls, api_key=None):
                 seen_keys.append(api_key)
                 return provider

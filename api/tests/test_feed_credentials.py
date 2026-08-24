@@ -299,10 +299,17 @@ class TestValidation:
             assert resp.status_code == 200, len(key)
 
     def test_an_unknown_provider_is_404(self, client, db, seeded_db, auth_header):
-        """The slug set comes from the provider registry, so adding Digi-Key is
-        one row there and no edit here."""
-        put = client.put(f"{BASE}/digikey", headers=auth_header(), json={"api_key": STORED_KEY})
-        delete = client.delete(f"{BASE}/digikey", headers=auth_header())
+        """The slug set comes from the provider registry.
+
+        The unknown slug used to be `digikey`, and this docstring used to claim
+        adding Digi-Key would need "one row there and no edit here" — which was
+        exactly wrong: the moment DigiKey became a real provider this test
+        started asserting 404 against a slug that now legitimately answers 200.
+        `farnell` is unknown today; if it is ever added, this test moves again,
+        which is the honest cost of testing a registry by naming what is not in
+        it."""
+        put = client.put(f"{BASE}/farnell", headers=auth_header(), json={"api_key": STORED_KEY})
+        delete = client.delete(f"{BASE}/farnell", headers=auth_header())
 
         assert put.status_code == 404
         assert delete.status_code == 404

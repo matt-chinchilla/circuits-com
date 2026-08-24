@@ -158,6 +158,10 @@ class _Providers:
         recorder = self.seen_keys
 
         class _Scripted:
+            @classmethod
+            def from_credential(cls, key):
+                return cls(api_key=key)
+
             def __new__(cls, api_key=None):
                 recorder.append(api_key)
                 return target

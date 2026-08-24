@@ -156,6 +156,17 @@ class MouserProvider:
         # returned, not the ones that decoded.
         self.last_raw_count = 0
 
+    @classmethod
+    def from_credential(cls, key: str) -> "MouserProvider":
+        """Build from the one string `get_feed_key` resolved.
+
+        The seam that lets a provider decide what constructing it needs:
+        Mouser's whole credential IS this key, while DigiKey's is half of a
+        pair. Callers no longer assume `provider_cls(api_key=…)` fits every
+        feed.
+        """
+        return cls(api_key=key)
+
     def close(self) -> None:
         """Release the HTTP connection pool. The sync route builds one
         provider per run and closes it when the stream ends; without this the

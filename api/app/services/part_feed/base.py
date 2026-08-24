@@ -54,6 +54,20 @@ class PartFeedProvider(Protocol):
     # what parsed would park the next run back on top of the junk forever.
     last_raw_count: int
 
+    @classmethod
+    def from_credential(cls, key: str) -> "PartFeedProvider":
+        """Build a provider from the ONE string `get_feed_key` resolved.
+
+        Part of the contract because not every distributor authenticates the
+        same way, and the callers must not need to know which does what.
+        Mouser's whole credential is a single API key. DigiKey uses two-legged
+        OAuth and needs an id AND a secret, so `provider_cls(api_key=…)` — what
+        both call sites used to hardcode — simply cannot build one. Each
+        provider decides here what its `key` means and where the rest, if any,
+        comes from.
+        """
+        ...
+
     def search(self, keyword: str, limit: int = 50, start_at: int = 0) -> list[FeedPart]:
         """Keyword search — used to fill a category with parts.
 

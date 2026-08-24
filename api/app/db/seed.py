@@ -1070,12 +1070,6 @@ def seed(db: Session) -> None:
             description="Asia-Pacific electronics distributor, a Premier Farnell / Avnet company",
         ),
         dict(
-            name="DigiKey Marketplace",
-            website="digikey.com/marketplace",
-            email="marketplace@digikey.com",
-            description="Third-party seller platform on Digi-Key for specialty and surplus components",
-        ),
-        dict(
             name="TME",
             website="tme.eu",
             email="sales@tme.eu",
@@ -1988,7 +1982,6 @@ _DISTRIBUTOR_TIERS: dict[str, list[str] | str] = {
     "TTI Europe": "broad",
     "Master Electronics": "broad",
     "Verical": "broad",
-    "DigiKey Marketplace": "broad",
     "Onlinecomponents.com": "broad",
     "Omnical": "broad",
     "RFMW": ["rf-wireless-ics"],
