@@ -177,6 +177,22 @@ def _get_or_create_supplier(db: Session, provider: PartFeedProvider) -> Supplier
     return supplier
 
 
+def _supplier_already_lists(db: Session, part_id: uuid.UUID, supplier_id: uuid.UUID) -> bool:
+    """Does this supplier already carry an offer for this part?
+
+    The one question that separates Import from Sync — see `grow_catalog`.
+    Scalar existence only: never load the PartListing, whose `price_breaks` is
+    `lazy="selectin"` and would fire a second SELECT for rows this is about to
+    decline to touch.
+    """
+    return (
+        db.query(PartListing.id)
+        .filter(PartListing.part_id == part_id, PartListing.supplier_id == supplier_id)
+        .first()
+        is not None
+    )
+
+
 def _upsert_listing(db: Session, part: Part, supplier: Supplier, fp: FeedPart) -> bool:
     """Create/refresh this supplier's listing for `part`. Returns True if it
     wrote anything — False means the feed row carried no price, so there was
@@ -353,6 +369,7 @@ def sync_supplier_listings(
             # here anyway so every run reports the same five counters and the
             # console never has to guess whether a number is missing or zero.
             "created": 0,
+            "listing_added": 0,
         }
         return event
 
@@ -540,6 +557,12 @@ def grow_catalog(
     # the cursor writes need the UUID rather than the event string.
     supplier_pk = supplier.id
     created = synced = media_filled = no_data = skipped_elsewhere = 0
+    # Parts this supplier already lists — declined, not refreshed. Reported
+    # in the finished detail like `skipped_elsewhere`, and deliberately NOT
+    # a wire event or a `counts` key: a fully-covered page would emit 50
+    # identical lines, and the five-key counts contract stays byte-stable.
+    already_listed = 0
+    listing_added = 0
     # An import never looks a known MPN up, so nothing can be "not found" —
     # the key stays because every run reports the same five counters.
     not_found = 0
@@ -547,7 +570,8 @@ def grow_catalog(
 
     def _finished() -> dict:
         detail = (
-            f"{created} created · {synced} updated · "
+            f"{created} created · {listing_added} listings added · "
+            f"{already_listed} already listed · "
             f"{skipped_elsewhere} already elsewhere · {provider.calls_made} calls used"
         )
         if continuous:
@@ -559,6 +583,7 @@ def grow_catalog(
             "not_found": not_found,
             "no_data": no_data,
             "created": created,
+            "listing_added": listing_added,
         }
         return event
 
@@ -585,6 +610,7 @@ def grow_catalog(
         advances is what the next pass reads to ask for the next page.
         """
         nonlocal created, synced, media_filled, no_data, skipped_elsewhere
+        nonlocal already_listed, listing_added
         for cat in batch:
             remaining_calls = call_budget - provider.calls_made
             if remaining_calls <= 0:
@@ -638,6 +664,23 @@ def grow_catalog(
                 if not is_new and part.category_id != cat_id:
                     skipped_elsewhere += 1
                     continue
+                # IMPORT IS NOT SYNC. A keyword page returns whatever the
+                # distributor ranks highest for this shelf, which is more and
+                # more of what we already hold as a category fills up — and
+                # refreshing those is precisely what the Sync Inventory button
+                # does (`sync_supplier_listings` selects exactly the parts this
+                # supplier already lists). Import takes the complement, so the
+                # two buttons partition every (part, supplier) pair between
+                # them with no overlap and no gap.
+                #
+                # Note this is NOT "skip every part we already have": a part we
+                # hold from a DIFFERENT distributor falls through to the write
+                # below and gains this supplier's offer. Sync can never reach
+                # that part (its EXISTS filter excludes it), and one part with
+                # two prices is the entire point of the catalog.
+                if not is_new and _supplier_already_lists(db, part.id, supplier.id):
+                    already_listed += 1
+                    continue
                 # autoflush=False — the listing needs a real part.id, and the
                 # next existence query has to see this row.
                 db.flush()
@@ -648,19 +691,31 @@ def grow_catalog(
                 wrote_listing = _stamp_feed_facts(part, fp) or wrote_listing
                 image_url = part.image_url
                 db.commit()
+                # NOTHING here increments `synced`, and that is the point: an
+                # import that has declined every already-listed part cannot
+                # have refreshed anything, so `synced == 0` on an import run is
+                # an invariant the operator can rely on. If it ever moves, this
+                # function is doing sync's job again.
                 if is_new:
                     # A new catalog row IS the win, priced or not: the part
                     # page exists now and the next run can price it.
                     created += 1
                     action = "created"
+                elif wrote_listing:
+                    # This supplier's FIRST offer on a part we already had —
+                    # new inventory, not a refresh. It used to report `updated`
+                    # and tick `synced`, which is what made an import look like
+                    # a sync: 45,000 parts have no Mouser listing, so this is
+                    # the common path, not an edge case.
+                    listing_added += 1
+                    action = "listing_added"
+                    if media:
+                        media_filled += 1
                 elif media:
-                    # media IS a real write, priced feed row or not
-                    synced += 1
+                    # An image on a part this supplier has no price for. Still
+                    # a fill, still not a refresh.
                     media_filled += 1
                     action = "media_filled"
-                elif wrote_listing:
-                    synced += 1
-                    action = "updated"
                 else:
                     # found, but nothing changed — counting it as updated
                     # would overstate what the run did
@@ -1080,6 +1135,9 @@ def _tally(counts: dict[str, int], event: dict) -> None:
         counts["media_filled"] += 1
     elif action == "updated":
         counts["synced"] += 1
+    elif action == "listing_added":
+        # NOT `synced`: import never refreshes, so this is a new offer.
+        counts["listing_added"] += 1
     elif action == "created":
         # a NEW part, not a refreshed one — counted apart from `synced`
         # exactly as the generator counts it
@@ -1109,7 +1167,14 @@ def _feed_run_worker(
     abort_detail = "import aborted" if is_import else "sync aborted"
     # Five keys, always — the same set `_finished` reports, so a console never
     # has to tell a missing counter from a zero one.
-    counts = {"synced": 0, "media_filled": 0, "not_found": 0, "no_data": 0, "created": 0}
+    counts = {
+        "synced": 0,
+        "media_filled": 0,
+        "not_found": 0,
+        "no_data": 0,
+        "created": 0,
+        "listing_added": 0,
+    }
     db = session_factory()
     try:
         try:

@@ -438,7 +438,7 @@ class TestRecordedRun:
         job.run_once(db, NOW)
 
         finished = db.query(ActivityEvent).filter(ActivityEvent.kind == "import_finished").one()
-        assert finished.detail.startswith("1 created · 0 updated")
+        assert finished.detail.startswith("1 created · 0 listings added")
         assert str(finished.supplier_id) == str(mouser_supplier.id)
 
     def test_last_synced_at_is_stamped_with_the_passed_clock(

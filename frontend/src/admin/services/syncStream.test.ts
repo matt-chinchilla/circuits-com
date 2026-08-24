@@ -56,6 +56,7 @@ describe('tallyCounts', () => {
       not_found: 0,
       no_data: 0,
       created: 0,
+      listing_added: 0,
     });
   });
 
@@ -69,13 +70,43 @@ describe('tallyCounts', () => {
       not_found: 0,
       no_data: 0,
       created: 2,
+      listing_added: 0,
     });
   });
 
   it('tallies a mixed import run the way the server does', () => {
     expect(
       tallyCounts([part('created'), part('updated'), part('media_filled'), part('no_data')])
-    ).toEqual({ synced: 2, media_filled: 1, not_found: 0, no_data: 1, created: 1 });
+    ).toEqual({ synced: 2, media_filled: 1, not_found: 0, no_data: 1, created: 1, listing_added: 0 });
+  });
+
+  it('keeps listing_added OUT of synced', () => {
+    // The whole point of the action. A distributor's first offer on a part we
+    // already had is new inventory; counting it as `synced` is what made
+    // "Import new parts" look like it was running a sync.
+    expect(tallyCounts([part('listing_added'), part('listing_added')])).toEqual({
+      synced: 0,
+      media_filled: 0,
+      not_found: 0,
+      no_data: 0,
+      created: 0,
+      listing_added: 2,
+    });
+  });
+
+  it('leaves synced at zero across a whole import run', () => {
+    // The invariant an operator can watch: import declines every part the
+    // supplier already lists, so `synced` moving during an import means the
+    // backend is doing sync's job again.
+    const run = tallyCounts([
+      part('created'),
+      part('listing_added'),
+      part('no_data'),
+      part('created'),
+    ]);
+    expect(run.synced).toBe(0);
+    expect(run.created).toBe(2);
+    expect(run.listing_added).toBe(1);
   });
 
   it('counts a media_filled part as BOTH synced and media filled', () => {
@@ -85,13 +116,14 @@ describe('tallyCounts', () => {
       not_found: 0,
       no_data: 0,
       created: 0,
+      listing_added: 0,
     });
   });
 
   it('counts updated as synced, and keeps not_found / no_data out of synced', () => {
     expect(
       tallyCounts([part('updated'), part('updated'), part('not_found'), part('no_data')])
-    ).toEqual({ synced: 2, media_filled: 0, not_found: 1, no_data: 1, created: 0 });
+    ).toEqual({ synced: 2, media_filled: 0, not_found: 1, no_data: 1, created: 0, listing_added: 0 });
   });
 
   it('ignores non-part events', () => {
@@ -110,7 +142,7 @@ describe('tallyCounts', () => {
         kind: 'sync_finished',
         supplier_id: 's1',
         title: 'Mouser',
-        counts: { synced: 9, media_filled: 4, not_found: 2, no_data: 1, created: 3 },
+        counts: { synced: 9, media_filled: 4, not_found: 2, no_data: 1, created: 3, listing_added: 0 },
       },
     ];
     expect(tallyCounts(events)).toEqual({
@@ -119,6 +151,7 @@ describe('tallyCounts', () => {
       not_found: 2,
       no_data: 1,
       created: 3,
+      listing_added: 0,
     });
   });
 
@@ -138,7 +171,7 @@ describe('tallyCounts', () => {
         supplier_id: 's1',
         title: 'Mouser',
         detail: 'sync aborted',
-        counts: { synced: 0, media_filled: 0, not_found: 0, no_data: 0, created: 0 },
+        counts: { synced: 0, media_filled: 0, not_found: 0, no_data: 0, created: 0, listing_added: 0 },
       },
     ];
     expect(tallyCounts(events)).toEqual({
@@ -147,6 +180,7 @@ describe('tallyCounts', () => {
       not_found: 0,
       no_data: 0,
       created: 1,
+      listing_added: 0,
     });
   });
 
@@ -157,7 +191,7 @@ describe('tallyCounts', () => {
         kind: 'sync_finished',
         supplier_id: 's1',
         title: 'Mouser',
-        counts: { synced: 0, media_filled: 0, not_found: 0, no_data: 0, created: 0 },
+        counts: { synced: 0, media_filled: 0, not_found: 0, no_data: 0, created: 0, listing_added: 0 },
       },
     ];
     expect(tallyCounts(events)).toEqual({
@@ -166,6 +200,7 @@ describe('tallyCounts', () => {
       not_found: 0,
       no_data: 0,
       created: 0,
+      listing_added: 0,
     });
   });
 });
@@ -240,7 +275,7 @@ describe('counting a run longer than the display window', () => {
         supplier_id: 's1',
         title: 'Mouser',
         detail: '401 created · 799 updated',
-        counts: { synced: 799, media_filled: 0, not_found: 0, no_data: 0, created: 401 },
+        counts: { synced: 799, media_filled: 0, not_found: 0, no_data: 0, created: 401, listing_added: 0 },
       },
     ]);
 
@@ -250,6 +285,7 @@ describe('counting a run longer than the display window', () => {
       not_found: 0,
       no_data: 0,
       created: 401,
+      listing_added: 0,
     });
   });
 
@@ -264,7 +300,7 @@ describe('counting a run longer than the display window', () => {
         supplier_id: 's1',
         title: 'Mouser',
         detail: 'import aborted',
-        counts: { synced: 0, media_filled: 0, not_found: 0, no_data: 0, created: 0 },
+        counts: { synced: 0, media_filled: 0, not_found: 0, no_data: 0, created: 0, listing_added: 0 },
       },
     ]);
 

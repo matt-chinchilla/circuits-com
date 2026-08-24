@@ -246,6 +246,7 @@ class TestTheWorkDoesNotNeedAReader:
             "not_found": 0,
             "no_data": 0,
             "created": 0,
+            "listing_added": 0,
         }
         rows = sorted(r.kind for r in db.query(ActivityEvent).all())
         assert rows == ["part_synced"] * 3 + ["sync_finished", "sync_started"]
@@ -964,7 +965,9 @@ class TestPauseIsAClick:
         assert second.run_id != run.run_id
         assert second.events[-1]["kind"] == "sync_finished"
 
-    def test_pause_route_contract(self, client, db, auth_header, feed_key, mouser_supplier, three_part_provider):
+    def test_pause_route_contract(
+        self, client, db, auth_header, feed_key, mouser_supplier, three_part_provider
+    ):
         provider = three_part_provider(cls=_GatedProvider, block_on=1)
         run = start_feed_run(
             supplier=mouser_supplier,
@@ -992,7 +995,9 @@ class TestPauseIsAClick:
         assert resp2.status_code == 404
         assert resp2.json()["detail"] == "no_feed_run"
 
-    def test_pause_requires_auth_and_a_real_supplier(self, client, seeded_db, auth_header, feed_key):
+    def test_pause_requires_auth_and_a_real_supplier(
+        self, client, seeded_db, auth_header, feed_key
+    ):
         assert client.post(f"/api/suppliers/{uuid.uuid4()}/feed-run/pause").status_code == 401
         assert (
             client.post(
@@ -1012,9 +1017,7 @@ class TestARunBustsTheSearchCaches:
         from app.services.part_feed import importer as importer_module
 
         calls: list[int] = []
-        monkeypatch.setattr(
-            importer_module, "invalidate_catalog_caches", lambda: calls.append(1)
-        )
+        monkeypatch.setattr(importer_module, "invalidate_catalog_caches", lambda: calls.append(1))
         return calls
 
     def test_exactly_once_per_run_not_once_per_part(
@@ -1057,9 +1060,7 @@ class TestARunBustsTheSearchCaches:
         assert "sync_error" in _kinds(run.events)
         assert len(calls) == 1
 
-    def test_a_real_run_leaves_the_caches_cold(
-        self, db, mouser_supplier, three_part_provider
-    ):
+    def test_a_real_run_leaves_the_caches_cold(self, db, mouser_supplier, three_part_provider):
         """No monkeypatching and no clock travel: warm all three caches, run
         the feed for real, and every one of them is gone — so the next search
         re-derives from the catalog the run just wrote."""

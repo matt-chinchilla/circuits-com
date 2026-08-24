@@ -402,6 +402,7 @@ class TestSyncSupplierListings:
             "not_found": 0,
             "no_data": 0,
             "created": 0,
+            "listing_added": 0,
         }
         assert finished["title"] == "Avnet"
         with pytest.raises(StopIteration):
@@ -462,6 +463,7 @@ class TestSyncSupplierListings:
             "not_found": 0,
             "no_data": 0,
             "created": 0,
+            "listing_added": 0,
         }
 
     def test_unresolvable_part_reports_not_found(self, db, seeded_db):
@@ -482,6 +484,7 @@ class TestSyncSupplierListings:
             "not_found": 1,
             "no_data": 0,
             "created": 0,
+            "listing_added": 0,
         }
 
     def test_priceless_feed_part_reports_no_data(self, db, seeded_db):
@@ -515,6 +518,7 @@ class TestSyncSupplierListings:
             "not_found": 0,
             "no_data": 1,
             "created": 0,
+            "listing_added": 0,
         }
         assert events[-1]["detail"].endswith("· 1 no data")
         db.refresh(listing)
@@ -539,6 +543,7 @@ class TestSyncSupplierListings:
             "not_found": 0,
             "no_data": 0,
             "created": 0,
+            "listing_added": 0,
         }
         assert "no data" not in events[-1]["detail"]
 
@@ -557,6 +562,7 @@ class TestSyncSupplierListings:
             "not_found": 0,
             "no_data": 0,
             "created": 0,
+            "listing_added": 0,
         }
         assert events[-1]["detail"] == "0 synced · 0 images filled · 0 not found"
 
@@ -635,6 +641,7 @@ class TestSyncSupplierListings:
             "not_found": 0,
             "no_data": 0,
             "created": 0,
+            "listing_added": 0,
         }
         # the first part's work survived the abort's rollback
         listing = (
@@ -895,6 +902,192 @@ class TestAnUnidentifiableRowIsSkippedNotFatal:
         assert resolve_single(db, provider, supplier, "BAD-2", "BAD-2") is None
 
 
+class TestImportDoesNotDoSyncsJob:
+    """ "Import New Parts" must not refresh listings this supplier already has.
+
+    Owner-reported: "pressing Import New Parts will often times sync old items
+    instead of creating new ones. If I wanted to have parts get synced also, I
+    would have clicked Sync Inventory."
+
+    They were right. A keyword page returns whatever the distributor ranks
+    highest for the shelf, which is increasingly parts we already hold as a
+    category fills up — and for every one of those `grow_catalog` ran
+    `_upsert_listing`, `_fill_part_media` and `_stamp_feed_facts`, which IS
+    what sync does. So an import spent its rate-limited calls redoing sync's
+    work and reported it as `updated`.
+
+    The two buttons partition cleanly on ONE question: does this supplier
+    already list this part? `sync_supplier_listings` selects exactly the parts
+    where it does (an EXISTS on part_listings), so import takes exactly the
+    complement. Nothing falls between them, and nothing is done twice.
+    """
+
+    def _held_part(self, db, seeded_db, supplier, sku="HELD-1", price="4.00"):
+        """A part this supplier already lists — sync's territory."""
+        part = Part(
+            id=uuid.uuid4(),
+            sku=sku,
+            slug=sku.lower(),
+            manufacturer_name="Feed Mfr",
+        )
+        db.add(part)
+        db.flush()
+        db.add(
+            PartListing(
+                id=uuid.uuid4(),
+                part_id=part.id,
+                supplier_id=supplier.id,
+                unit_price=Decimal(price),
+                stock_quantity=7,
+            )
+        )
+        db.commit()
+        return part
+
+    def _shelf(self, db, parent):
+        return _subcategory(db, "Voltage References", "voltage-references", parent)
+
+    def test_a_part_this_supplier_already_lists_is_left_untouched(self, db, seeded_db):
+        supplier, parent = seeded_db["supplier1"], seeded_db["parent"]
+        shelf = self._shelf(db, parent)
+        part = self._held_part(db, seeded_db, supplier)
+        part.category_id = shelf.id
+        db.commit()
+        listing = db.query(PartListing).filter_by(part_id=part.id).one()
+        before_price, before_stock = listing.unit_price, listing.stock_quantity
+
+        provider = _FakeProvider(results_by_keyword={"Voltage References": [_feed_part("HELD-1")]})
+        events = list(grow_catalog(db, provider, supplier, call_budget=1))
+
+        db.expire_all()
+        refreshed = db.query(PartListing).filter_by(part_id=part.id).one()
+        assert refreshed.unit_price == before_price, (
+            "import rewrote the price of a listing this supplier already had — "
+            "that is Sync Inventory's job, not Import New Parts'"
+        )
+        assert refreshed.stock_quantity == before_stock
+        assert [e["action"] for e in events if e["kind"] == "part_synced"] == []
+
+    def test_the_skip_is_reported_so_the_operator_can_see_why(self, db, seeded_db):
+        supplier, parent = seeded_db["supplier1"], seeded_db["parent"]
+        shelf = self._shelf(db, parent)
+        part = self._held_part(db, seeded_db, supplier)
+        part.category_id = shelf.id
+        db.commit()
+
+        provider = _FakeProvider(results_by_keyword={"Voltage References": [_feed_part("HELD-1")]})
+        finished = list(grow_catalog(db, provider, supplier, call_budget=1))[-1]
+
+        assert "already listed" in finished["detail"], (
+            f"a silently-skipped page looks like a dead import: {finished['detail']!r}"
+        )
+
+    def test_a_genuinely_new_part_is_still_created(self, db, seeded_db):
+        """The fix must not turn Import into a no-op."""
+        supplier, parent = seeded_db["supplier1"], seeded_db["parent"]
+        self._shelf(db, parent)
+        provider = _FakeProvider(
+            results_by_keyword={"Voltage References": [_feed_part("BRAND-NEW-1")]}
+        )
+
+        events = list(grow_catalog(db, provider, supplier, call_budget=1))
+
+        assert [e["action"] for e in events if e["kind"] == "part_synced"] == ["created"]
+        assert db.query(Part).filter(Part.sku == "BRAND-NEW-1").count() == 1
+
+    def test_a_part_we_hold_that_this_supplier_does_not_list_gains_a_listing(self, db, seeded_db):
+        """The case that must NOT be skipped — and that sync can never reach.
+
+        `sync_supplier_listings` filters on an EXISTS over this supplier's
+        listings, so a part we hold from a DIFFERENT distributor is invisible
+        to it. Adding this supplier's offer is new inventory, and it is the
+        entire point of a second distributor: one part, two prices.
+        """
+        supplier, other, parent = (
+            seeded_db["supplier1"],
+            seeded_db["supplier2"],
+            seeded_db["parent"],
+        )
+        shelf = self._shelf(db, parent)
+        part = self._held_part(db, seeded_db, other, sku="RIVAL-1")
+        part.category_id = shelf.id
+        db.commit()
+
+        provider = _FakeProvider(results_by_keyword={"Voltage References": [_feed_part("RIVAL-1")]})
+        list(grow_catalog(db, provider, supplier, call_budget=1))
+
+        db.expire_all()
+        listings = db.query(PartListing).filter_by(part_id=part.id).all()
+        assert {row.supplier_id for row in listings} == {other.id, supplier.id}, (
+            "import refused to add a second distributor's offer to a part we "
+            "already hold — that is the one thing this whole project is for"
+        )
+
+    def test_a_first_listing_reads_as_added_not_updated(self, db, seeded_db):
+        """A distributor's FIRST offer on a part is new inventory, not a refresh.
+
+        45,000 parts have no Mouser listing, so this is the common case, not an
+        edge one. It used to report `updated` and tick `synced` — which reads
+        as "Import is syncing again" even though nothing was refreshed. Since
+        import no longer touches an existing listing at all, every listing it
+        writes is by definition a new one, and can say so.
+        """
+        supplier, other, parent = (
+            seeded_db["supplier1"],
+            seeded_db["supplier2"],
+            seeded_db["parent"],
+        )
+        shelf = self._shelf(db, parent)
+        part = self._held_part(db, seeded_db, other, sku="FIRST-1")
+        part.category_id = shelf.id
+        db.commit()
+
+        provider = _FakeProvider(results_by_keyword={"Voltage References": [_feed_part("FIRST-1")]})
+        events = list(grow_catalog(db, provider, supplier, call_budget=1))
+
+        assert [e["action"] for e in events if e["kind"] == "part_synced"] == ["listing_added"]
+        assert events[-1]["counts"]["listing_added"] == 1
+
+    def test_an_import_never_increments_synced(self, db, seeded_db):
+        """The signal the owner actually asked for.
+
+        "If I wanted to have parts get synced also, I would have clicked Sync
+        Inventory." So `synced` moving during an import now means something is
+        wrong, and that is worth being able to assert in one line.
+        """
+        supplier, other, parent = (
+            seeded_db["supplier1"],
+            seeded_db["supplier2"],
+            seeded_db["parent"],
+        )
+        shelf = self._shelf(db, parent)
+        held = self._held_part(db, seeded_db, supplier, sku="MINE-1")
+        rival = self._held_part(db, seeded_db, other, sku="THEIRS-1")
+        held.category_id = rival.category_id = shelf.id
+        db.commit()
+
+        provider = _FakeProvider(
+            results_by_keyword={
+                "Voltage References": [
+                    _feed_part("MINE-1"),
+                    _feed_part("THEIRS-1"),
+                    _feed_part("FRESH-1"),
+                ]
+            }
+        )
+        # Budget for several categories: seeding two parts into this shelf makes
+        # it less thin, and `_thinnest_subcategories` would otherwise spend the
+        # single call somewhere emptier.
+        events = list(grow_catalog(db, provider, supplier, call_budget=10))
+
+        counts = events[-1]["counts"]
+        assert counts["synced"] == 0, (
+            f"an import reported {counts['synced']} synced — import must never do sync's work"
+        )
+        assert counts["created"] == 1
+        assert counts["listing_added"] == 1
+
+
 class TestGrowCatalog:
     def test_new_mpns_become_parts_listings_and_breaks(self, db, seeded_db):
         supplier, parent = seeded_db["supplier1"], seeded_db["parent"]
@@ -948,9 +1141,10 @@ class TestGrowCatalog:
             "not_found": 0,
             "no_data": 0,
             "created": 2,
+            "listing_added": 0,
         }
         assert events[-1]["detail"] == (
-            "2 created · 0 updated · 0 already elsewhere · 1 calls used"
+            "2 created · 0 listings added · 0 already listed · 0 already elsewhere · 1 calls used"
         )
 
     def test_each_part_commits_before_its_event(self, db, seeded_db):
@@ -970,7 +1164,15 @@ class TestGrowCatalog:
         next(gen)
         assert len(commits) == 2
 
-    def test_existing_part_in_this_category_is_refreshed_not_duplicated(self, db, seeded_db):
+    def test_an_already_listed_part_is_left_alone_not_duplicated(self, db, seeded_db):
+        """Two guarantees, and only one of them used to hold.
+
+        NOT DUPLICATED is the original point of this test and still matters —
+        the sweep must recognise a part it already has rather than forking the
+        catalog. NOT REFRESHED is new: this used to report `media_filled` and
+        write the listing, which is Sync Inventory's job. `part1` carries a
+        `supplier1` listing in the fixture, so it is squarely sync's territory.
+        """
         supplier, part1 = seeded_db["supplier1"], seeded_db["part1"]
         before = db.query(Part).count()
         provider = _FakeProvider(
@@ -981,32 +1183,46 @@ class TestGrowCatalog:
 
         events = list(grow_catalog(db, provider, supplier, call_budget=1))
 
-        assert [e["action"] for e in events if e["kind"] == "part_synced"] == ["media_filled"]
+        assert [e["action"] for e in events if e["kind"] == "part_synced"] == []
         assert db.query(Part).count() == before
         assert events[-1]["counts"] == {
-            "synced": 1,
-            "media_filled": 1,
+            "synced": 0,
+            "media_filled": 0,
             "not_found": 0,
             "no_data": 0,
             "created": 0,
+            "listing_added": 0,
         }
-        assert events[-1]["detail"].startswith("0 created · 1 updated")
+        assert events[-1]["detail"].startswith("0 created · 0 listings added · 1 already listed")
 
     def test_a_hit_that_writes_nothing_reports_no_data(self, db, seeded_db):
         """Same honesty rail as the sync: found, but nothing changed — calling
         that `updated` would overstate what the run did."""
         supplier, part1 = seeded_db["supplier1"], seeded_db["part1"]
-        part1.image_url = "https://cdn.example/original.jpg"
-        part1.datasheet_url = "https://cdn.example/original.pdf"
-        # The fake feed row carries lead_time_days=7 — a stampable part-level
-        # fact since migration 039. Pre-store it so this run truly has nothing
-        # new to write (that is what no_data means).
-        part1.lead_time_days = 7
+        # NOT part1 itself: `supplier1` already lists it, so import now declines
+        # it as sync's territory and never reaches the no_data rail. `no_data`
+        # is still reachable — and still worth pinning — for a part this
+        # supplier does not list, where the feed row carries no price.
+        unlisted = Part(
+            id=uuid.uuid4(),
+            sku="NODATA-1",
+            slug="nodata-1",
+            manufacturer_name=part1.manufacturer_name,
+            category_id=part1.category_id,
+            sub_slug=part1.sub_slug,
+            image_url="https://cdn.example/original.jpg",
+            datasheet_url="https://cdn.example/original.pdf",
+            # The fake feed row carries lead_time_days=7 — a stampable
+            # part-level fact since migration 039. Pre-store it so this run
+            # truly has nothing new to write (that is what no_data means).
+            lead_time_days=7,
+        )
+        db.add(unlisted)
         db.commit()
         provider = _FakeProvider(
             results_by_keyword={
                 "Clock and Timing": [
-                    _feed_part(part1.sku, manufacturer=part1.manufacturer_name, breaks=False)
+                    _feed_part("NODATA-1", manufacturer=part1.manufacturer_name, breaks=False)
                 ]
             }
         )
@@ -1045,9 +1261,10 @@ class TestGrowCatalog:
             "not_found": 0,
             "no_data": 0,
             "created": 0,
+            "listing_added": 0,
         }
         assert events[-1]["detail"] == (
-            "0 created · 0 updated · 1 already elsewhere · 1 calls used"
+            "0 created · 0 listings added · 0 already listed · 1 already elsewhere · 1 calls used"
         )
 
     def test_thinnest_subcategories_are_swept_first(self, db, seeded_db):
@@ -1389,12 +1606,21 @@ class TestContinuousImport:
         )
         # 3 sweeps: pages at 0 and 2, then the short page at 4 that ends it
         assert events[-1]["detail"].endswith("· 3 sweeps")
+        # SIX keys now, and always all six on both routes — a sync reports
+        # `created: 0` and `listing_added: 0`, an import reports
+        # `not_found: 0`, so the console never has to tell a missing counter
+        # from a zero one. `listing_added` joined the set when import stopped
+        # refreshing already-listed parts: every listing an import writes is a
+        # distributor's FIRST offer, which is new inventory rather than a
+        # refresh, and reporting it as `updated` is what made the button look
+        # like it was running a sync.
         assert set(events[-1]["counts"]) == {
             "synced",
             "media_filled",
             "not_found",
             "no_data",
             "created",
+            "listing_added",
         }
 
     def test_it_does_not_wrap_and_restart_mid_run(self, db, seeded_db):

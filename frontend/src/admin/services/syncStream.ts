@@ -43,13 +43,23 @@ export type SyncEventKind = 'sync_started' | 'part_synced' | 'sync_error' | 'syn
 
 /**
  * What the feed did with ONE part.
- *  - `created`      — a part the catalog did not have before (import only)
- *  - `updated`      — a listing was written (price/stock refreshed)
+ *  - `created`        — a part the catalog did not have before (import only)
+ *  - `listing_added`  — this supplier's FIRST offer on a part we already had
+ *                       (import only). New inventory, NOT a refresh: it used to
+ *                       report `updated` and tick `synced`, which is what made
+ *                       an import look like it was syncing.
+ *  - `updated`        — a listing was written (price/stock refreshed; SYNC only)
  *  - `media_filled` — an image and/or datasheet was filled in (also counts as synced)
  *  - `not_found`    — the provider does not carry this MPN
  *  - `no_data`      — found, but the feed carried no price and no new media
  */
-export type SyncAction = 'created' | 'updated' | 'media_filled' | 'not_found' | 'no_data';
+export type SyncAction =
+  | 'created'
+  | 'listing_added'
+  | 'updated'
+  | 'media_filled'
+  | 'not_found'
+  | 'no_data';
 
 /**
  * The five running totals. All keys are always present on `sync_finished`, on
@@ -57,9 +67,15 @@ export type SyncAction = 'created' | 'updated' | 'media_filled' | 'not_found' | 
  * `not_found: 0` rather than omitting the key, so the console never has to
  * tell a missing counter from a zero one (`importer._finished`).
  *
- * `created` is counted APART from `synced`, exactly as the server counts it: a
- * brand-new catalog row is not a refreshed listing, and folding the two would
- * make an import's headline number unreadable.
+ * `created` and `listing_added` are counted APART from `synced`, exactly as the
+ * server counts them: neither a brand-new catalog row nor a distributor's first
+ * offer is a refreshed listing, and folding them in would make an import's
+ * headline number unreadable.
+ *
+ * `synced` is 0 on EVERY import run, and that is load-bearing rather than
+ * incidental: import declines any part the supplier already lists (that is Sync
+ * Inventory's job), so if this number moves during an import, the backend has
+ * started doing sync's work again.
  */
 export interface SyncCounts {
   synced: number;
@@ -67,6 +83,7 @@ export interface SyncCounts {
   not_found: number;
   no_data: number;
   created: number;
+  listing_added: number;
 }
 
 /** One wire event. `counts` rides on `sync_finished` alone. */
@@ -99,6 +116,7 @@ const ZERO_COUNTS: SyncCounts = {
   not_found: 0,
   no_data: 0,
   created: 0,
+  listing_added: 0,
 };
 
 function isZeroCounts(counts: SyncCounts): boolean {
@@ -148,6 +166,13 @@ export function tallyEvent(tally: RunTally, event: SyncEvent): RunTally {
     // does this, or an import would read as if it had re-priced the catalog.
     case 'created':
       local.created += 1;
+      break;
+    // Deliberately NOT `synced`. Import declines every part this supplier
+    // already lists, so a listing it writes is always a first offer, never a
+    // refresh — mirroring `importer._sweep`, which keeps `synced` at 0 for the
+    // whole import run.
+    case 'listing_added':
+      local.listing_added += 1;
       break;
     case 'media_filled':
       local.synced += 1;
@@ -357,7 +382,13 @@ async function readDetail(res: Response): Promise<string | null> {
 function isMutation(event: SyncEvent): boolean {
   return (
     event.kind === 'part_synced' &&
-    (event.action === 'updated' || event.action === 'media_filled' || event.action === 'created')
+    (event.action === 'updated' ||
+      event.action === 'media_filled' ||
+      event.action === 'created' ||
+      // A first offer changes the part page's price table and the category's
+      // cheapest-price column, so the SW cache is just as stale as after a
+      // created row.
+      event.action === 'listing_added')
   );
 }
 

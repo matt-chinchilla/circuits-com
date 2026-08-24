@@ -388,7 +388,11 @@ class TestStream:
         part1.image_url = "https://img.example/p.jpg"
         part1.datasheet_url = "https://docs.example/d.pdf"
         db.commit()
-        use_fake_provider(_FakeProvider(by_mpn={part1.sku: _feed_part(part1.sku, manufacturer=part1.manufacturer_name)}))
+        use_fake_provider(
+            _FakeProvider(
+                by_mpn={part1.sku: _feed_part(part1.sku, manufacturer=part1.manufacturer_name)}
+            )
+        )
 
         resp = _sync(client, supplier, auth_header)
 
@@ -409,6 +413,7 @@ class TestStream:
             "not_found": 0,
             "no_data": 0,
             "created": 0,
+            "listing_added": 0,
         }
 
         rows = db.query(ActivityEvent).order_by(ActivityEvent.kind).all()
@@ -446,7 +451,15 @@ class TestStream:
         # new to write (that is what no_data means).
         part1.lead_time_days = 7
         db.commit()
-        use_fake_provider(_FakeProvider(by_mpn={part1.sku: _feed_part(part1.sku, manufacturer=part1.manufacturer_name, breaks=False)}))
+        use_fake_provider(
+            _FakeProvider(
+                by_mpn={
+                    part1.sku: _feed_part(
+                        part1.sku, manufacturer=part1.manufacturer_name, breaks=False
+                    )
+                }
+            )
+        )
 
         resp = _sync(client, seeded_db["supplier1"], auth_header)
 
@@ -458,7 +471,15 @@ class TestStream:
         self, client, db, seeded_db, auth_header, feed_key, use_fake_provider
     ):
         part1 = seeded_db["part1"]
-        use_fake_provider(_FakeProvider(by_mpn={part1.sku: _feed_part(part1.sku, manufacturer=part1.manufacturer_name, breaks=False)}))
+        use_fake_provider(
+            _FakeProvider(
+                by_mpn={
+                    part1.sku: _feed_part(
+                        part1.sku, manufacturer=part1.manufacturer_name, breaks=False
+                    )
+                }
+            )
+        )
 
         resp = _sync(client, seeded_db["supplier1"], auth_header)
 
@@ -545,7 +566,10 @@ class TestStream:
         )
         db.commit()
         use_fake_provider(
-            _ExplodingProvider(by_mpn={part1.sku: _feed_part(part1.sku, manufacturer=part1.manufacturer_name)}, explode_after=1)
+            _ExplodingProvider(
+                by_mpn={part1.sku: _feed_part(part1.sku, manufacturer=part1.manufacturer_name)},
+                explode_after=1,
+            )
         )
 
         resp = _sync(client, supplier, auth_header)
@@ -568,6 +592,7 @@ class TestStream:
             "not_found": 0,
             "no_data": 0,
             "created": 0,
+            "listing_added": 0,
         }
         kinds = [r.kind for r in db.query(ActivityEvent).all()]
         assert kinds == ["sync_started", "part_synced", "sync_error", "sync_finished"]
@@ -589,6 +614,7 @@ class TestStream:
             "not_found": 0,
             "no_data": 0,
             "created": 0,
+            "listing_added": 0,
         }
 
     def test_the_abort_tally_counts_created_parts_too(
@@ -622,6 +648,7 @@ class TestStream:
             "not_found": 0,
             "no_data": 0,
             "created": 1,
+            "listing_added": 0,
         }
 
     def test_the_suppliers_logo_never_becomes_an_event_image(
@@ -633,7 +660,15 @@ class TestStream:
         supplier, part1 = seeded_db["supplier1"], seeded_db["part1"]
         supplier.logo_url = "data:image/png;base64," + ("A" * 5000)
         db.commit()
-        use_fake_provider(_FakeProvider(by_mpn={part1.sku: _feed_part(part1.sku, manufacturer=part1.manufacturer_name, image=None)}))
+        use_fake_provider(
+            _FakeProvider(
+                by_mpn={
+                    part1.sku: _feed_part(
+                        part1.sku, manufacturer=part1.manufacturer_name, image=None
+                    )
+                }
+            )
+        )
 
         _sync(client, supplier, auth_header)
 
@@ -703,7 +738,12 @@ class TestImportStream:
         supplier, part1 = seeded_db["supplier1"], seeded_db["part1"]
         use_fake_provider(
             _FakeProvider(
-                results_by_keyword={"Sensors": [_feed_part("NEW-1"), _feed_part(part1.sku, manufacturer=part1.manufacturer_name)]}
+                results_by_keyword={
+                    "Sensors": [
+                        _feed_part("NEW-1"),
+                        _feed_part(part1.sku, manufacturer=part1.manufacturer_name),
+                    ]
+                }
             )
         )
 
@@ -719,13 +759,17 @@ class TestImportStream:
         assert events[1]["action"] == "created"
         assert events[1]["title"] == "NEW-1 — Feed Mfr"
         assert events[1]["detail"] == "Sensors"
-        assert events[-1]["detail"] == "1 created · 0 updated · 1 already elsewhere · 2 calls used"
+        assert (
+            events[-1]["detail"]
+            == "1 created · 0 listings added · 0 already listed · 1 already elsewhere · 2 calls used"
+        )
         assert events[-1]["counts"] == {
             "synced": 0,
             "media_filled": 0,
             "not_found": 0,
             "no_data": 0,
             "created": 1,
+            "listing_added": 0,
         }
 
         # The WIRE said sync_started/sync_finished (one shape, one parser); the
@@ -748,25 +792,35 @@ class TestImportStream:
             db.query(Part).filter(Part.sku == part1.sku).one().category_id == seeded_db["child"].id
         )
 
-    def test_a_part_already_on_the_swept_shelf_is_recorded_as_part_synced(
+    def test_a_part_this_supplier_already_lists_produces_no_event_at_all(
         self, client, db, seeded_db, auth_header, feed_key, use_fake_provider
     ):
-        """Only `created` changes kind. An import that refreshes a part the
-        category already holds did exactly what a sync does, and says so."""
+        """Import declines sync's work, and records nothing for it.
+
+        This test used to assert the opposite, and its docstring said why:
+        "an import that refreshes a part the category already holds did exactly
+        what a sync does, and says so". That WAS the behaviour, and it was the
+        bug — the owner reported Import New Parts syncing old items instead of
+        creating new ones. A part `supplier1` already lists is sync's, so the
+        import writes nothing, streams nothing and records nothing."""
         part1 = seeded_db["part1"]
         part1.image_url = "https://img.example/p.jpg"
         part1.datasheet_url = "https://docs.example/d.pdf"
         db.commit()
         use_fake_provider(
-            _FakeProvider(results_by_keyword={"Clock and Timing": [_feed_part(part1.sku, manufacturer=part1.manufacturer_name)]})
+            _FakeProvider(
+                results_by_keyword={
+                    "Clock and Timing": [
+                        _feed_part(part1.sku, manufacturer=part1.manufacturer_name)
+                    ]
+                }
+            )
         )
 
         resp = _import(client, seeded_db["supplier1"], auth_header)
 
-        assert [e["action"] for e in _events(resp) if e["kind"] == "part_synced"] == ["updated"]
-        assert [r.kind for r in db.query(ActivityEvent).all() if r.kind.startswith("part_")] == [
-            "part_synced"
-        ]
+        assert [e["action"] for e in _events(resp) if e["kind"] == "part_synced"] == []
+        assert [r.kind for r in db.query(ActivityEvent).all() if r.kind.startswith("part_")] == []
 
     def test_no_data_import_events_stream_but_are_never_recorded(
         self, client, db, seeded_db, auth_header, feed_key, use_fake_provider
@@ -774,16 +828,32 @@ class TestImportStream:
         """Found on the shelf, priced nothing, media already there — honest on
         the wire, and nothing worth claiming in the dashboard."""
         part1 = seeded_db["part1"]
-        part1.image_url = "https://cdn.example/original.jpg"
-        part1.datasheet_url = "https://cdn.example/original.pdf"
-        # The fake feed row carries lead_time_days=7 — a stampable part-level
-        # fact since migration 039. Pre-store it so this run truly has nothing
-        # new to write (that is what no_data means).
-        part1.lead_time_days = 7
+        # NOT part1: `supplier1` already lists it, so import now declines it as
+        # sync's territory before the no_data rail is reached. A part this
+        # supplier does NOT list still gets there, and still must not be
+        # recorded.
+        unlisted = Part(
+            id=uuid.uuid4(),
+            sku="NODATA-ROUTE-1",
+            slug="nodata-route-1",
+            manufacturer_name=part1.manufacturer_name,
+            category_id=part1.category_id,
+            sub_slug=part1.sub_slug,
+            image_url="https://cdn.example/original.jpg",
+            datasheet_url="https://cdn.example/original.pdf",
+            lead_time_days=7,
+        )
+        db.add(unlisted)
         db.commit()
         use_fake_provider(
             _FakeProvider(
-                results_by_keyword={"Clock and Timing": [_feed_part(part1.sku, manufacturer=part1.manufacturer_name, breaks=False)]}
+                results_by_keyword={
+                    "Clock and Timing": [
+                        _feed_part(
+                            "NODATA-ROUTE-1", manufacturer=part1.manufacturer_name, breaks=False
+                        )
+                    ]
+                }
             )
         )
 
@@ -833,6 +903,7 @@ class TestImportStream:
             "not_found": 0,
             "no_data": 0,
             "created": 1,
+            "listing_added": 0,
         }
         assert [r.kind for r in db.query(ActivityEvent).all()] == [
             "part_imported",

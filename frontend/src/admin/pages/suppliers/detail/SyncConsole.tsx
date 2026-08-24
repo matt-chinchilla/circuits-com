@@ -95,6 +95,10 @@ interface Props {
 // point.
 const ACTION_CHIP: Record<SyncAction, { label: string; cls: string }> = {
   created: { label: 'created', cls: styles.chipCreated },
+  // Same hue as `created`: both mean an import added something that was not
+  // there before. It is emphatically not an update — reading a distributor's
+  // first offer as "updated" is what made Import look like it was syncing.
+  listing_added: { label: 'listing added', cls: styles.chipCreated },
   updated: { label: 'updated', cls: styles.chipUpdated },
   media_filled: { label: 'image filled', cls: styles.chipMedia },
   not_found: { label: 'not found', cls: styles.chipMuted },
@@ -207,12 +211,18 @@ export default function SyncConsole({
             <span className={styles.titleName}>{supplierName}</span>
           </h3>
         </div>
-        {/* All five counters, on both runs. The server reports the same five
+        {/* All six counters, on both runs. The server reports the same six
             keys either way, so a zero here is a zero — never a counter this
-            panel decided not to show. */}
+            panel decided not to show. On an IMPORT, `synced` is always 0 by
+            construction (import declines anything this supplier already
+            lists), so a non-zero there means the backend has started doing
+            sync's job again. */}
         <div className={styles.counters}>
           <span className={styles.counter}>
             <b>{counts.created}</b> created
+          </span>
+          <span className={styles.counter}>
+            <b>{counts.listing_added}</b> listings added
           </span>
           <span className={styles.counter}>
             <b>{counts.synced}</b> synced
