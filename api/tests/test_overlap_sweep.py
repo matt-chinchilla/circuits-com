@@ -51,6 +51,7 @@ from app.models import (
     ManufacturerAlias,
     Part,
     PartListing,
+    ProviderCredential,
     Supplier,
     SupplierFeed,
 )
@@ -932,64 +933,79 @@ class TestTheNightlyJobCountsAListingAdded:
 
 
 class TestTheFamilySweepStaysGatedOnTheOperatorSwitch:
-    """Unattended, but still only for suppliers the operator switched on.
+    """Unattended, but only for suppliers the operator switched on.
 
     This class used to be `TestAFamilySweepIsNotRunUnattendedYet` and asserted
-    the opposite. Both of its reasons were addressed rather than waived:
+    the opposite. Both of its reasons were addressed rather than waived: the
+    night now budgets per provider, and the `lifecycle_status` worry was
+    measured away (Mouser reported no lifecycle on 12 of 12 sampled parts while
+    Digi-Key reported one on 10, so one feed authors the column in practice;
+    only 1.8% of parts have ever been feed-stamped and `_stamp_feed_facts`
+    writes only on a real change).
 
-      1. It held because `run_once` split ONE `FEED_IMPORT_CALL_BUDGET` across
-         every supplier, and the two distributors are not comparable spenders —
-         at Digi-Key's `_MIN_GAP_SECONDS = 0.55` its whole 1,000-call day burns
-         in about eight minutes where the same budget against Mouser takes
-         hours. The night now budgets PER PROVIDER, so that asymmetry costs one
-         distributor its own allowance and nobody else's.
-
-      2. It also held on `lifecycle_status`: two vocabularies over one column,
-         each disagreement rewriting all eight indexes, and the rate unmeasured
-         because no Digi-Key run had touched parts Mouser also reports. It has
-         been measured since, against both live feeds — Mouser reported NO
-         lifecycle on 12 of 12 sampled parts while Digi-Key reported one on 10,
-         so a single feed authors the column in practice. Catalog-wide, 3,181
-         of 175,728 parts (1.8%) have ever been feed-stamped, and
-         `_stamp_feed_facts` writes only on a real change, so a genuine
-         disagreement costs one UPDATE per part per alternating run.
-
-    What has NOT changed, and must not: the switch is the operator's. Being a
-    family-strategy supplier is no longer a reason to skip, but
-    `auto_import_enabled` being off still is, and the night is still never
-    continuous.
+    THE FIRST VERSION OF THIS CLASS COULD NOT FAIL. Both tests iterated
+    `_eligible(db)` and asserted inside the loop — but the fixture creates no
+    `SupplierFeed` rows, so `_eligible` returned [] and the bodies never ran.
+    A mutation deleting the entire `auto_import_enabled` gate left them green,
+    and so did deleting `provider_slug=` from `_Target` (it defaults to
+    "mouser", which would bill Digi-Key against Mouser's budget). The tell was
+    an `_enable` helper the class defined and never called. Everything here now
+    builds a real eligible supplier first.
     """
 
-    def _enable(self, db, supplier):
-        row = SupplierFeed(supplier_id=supplier.id, auto_import_enabled=True)
-        db.add(row)
+    def _feedable(self, db, name: str, website: str, slug: str, *, enabled: bool):
+        """A supplier the nightly job could actually pick up: matched by the
+        registry, holding a credential, with the switch in a known state."""
+        supplier = Supplier(id=uuid.uuid4(), name=name, website=website)
+        db.add(supplier)
+        db.add(ProviderCredential(provider=slug, api_key=f"key-for-{slug}"))
+        db.flush()
+        db.add(SupplierFeed(supplier_id=supplier.id, auto_import_enabled=enabled))
         db.commit()
-        return row
+        return supplier
 
-    def test_a_supplier_with_the_switch_off_is_not_selected(self, db, seeded_db):
-        """Being family-strategy is no longer a reason to skip; the switch is."""
+    def test_the_switch_being_off_is_what_keeps_a_supplier_out(self, db):
         from app.jobs.feed_import_daily import _eligible
 
-        for target in _eligible(db):
-            enabled = (
-                db.query(SupplierFeed)
-                .filter(
-                    SupplierFeed.supplier_id == target.supplier.id,
-                    SupplierFeed.auto_import_enabled.is_(True),
-                )
-                .count()
-            )
-            assert enabled, (
-                f"{target.name} was selected for the nightly run with its auto-import switch off"
-            )
+        off = self._feedable(
+            db, "Switched Off Dist", "https://www.mouser.com", "mouser", enabled=False
+        )
+        assert off.id not in {t.supplier.id for t in _eligible(db)}, (
+            "a supplier whose auto-import is OFF was selected for the nightly run"
+        )
 
-    def test_every_selected_target_carries_its_provider_slug(self, db, seeded_db):
-        """The night budgets by provider, so a target with no slug would be
-        billed against whichever bucket happened to be first."""
+    def test_the_switch_being_on_is_what_lets_one_in(self, db):
+        """The other half — without it, 'nothing is eligible' passes trivially."""
         from app.jobs.feed_import_daily import _eligible
 
-        for target in _eligible(db):
-            assert target.provider_slug, f"{target.name} has no provider slug"
+        on = self._feedable(
+            db, "Switched On Dist", "https://www.mouser.com", "mouser", enabled=True
+        )
+        picked = [t for t in _eligible(db) if t.supplier.id == on.id]
+        assert picked, "a switched-ON supplier with a provider and a key was not selected"
+
+    def test_a_selected_target_carries_the_slug_it_actually_matched(self, db, monkeypatch):
+        """`_Target.provider_slug` defaults to "mouser", and the night budgets by
+        it — so a Digi-Key target that forgot to set it would silently spend
+        Mouser's allowance. Assert the MATCHED slug, not merely a truthy one."""
+        from app.jobs.feed_import_daily import _eligible
+        from app.services.part_feed import registry
+
+        # Digi-Key declares TWO credential_env values and `_usable_credential`
+        # requires every one beyond the travelling id from settings — a stored
+        # row alone must not make a half-configured provider usable. Supplying
+        # the secret here is what makes this a slug test rather than an
+        # accidental re-test of that guard.
+        monkeypatch.setattr(registry.settings, "DIGIKEY_CLIENT_SECRET", "s", raising=False)
+        dk = self._feedable(
+            db, "Digi-Key Electronics", "https://www.digikey.com", "digikey", enabled=True
+        )
+        picked = [t for t in _eligible(db) if t.supplier.id == dk.id]
+        assert picked, "the Digi-Key supplier was not eligible at all"
+        assert picked[0].provider_slug == "digikey", (
+            f"target carries provider_slug={picked[0].provider_slug!r}; it would be "
+            "billed against the wrong provider's budget"
+        )
 
 
 class TestTheManufacturerMap:
@@ -1774,3 +1790,66 @@ class TestTheFamilySweepRunsUnattended:
 
         src = inspect.getsource(feed_import_daily._import_one)
         assert "continuous=True" not in src
+
+
+class TestTheSweepDoesNotReAskAboutPartsItAlreadyLists:
+    """`_base_query`'s NOT EXISTS is the sweep's whole subject, and had NO test.
+
+    The family sweep exists to find a SECOND price for parts we already hold,
+    so `_base_query` excludes every part this supplier already lists. A
+    mutation deleting that NOT EXISTS left all 79 tests in this file green —
+    the exclusion that saves the rate-limited calls was completely uncovered.
+
+    The consequence is not subtle: a supplier whose coverage is already good
+    would spend its entire daily budget re-asking about parts it lists, write
+    nothing, and report a healthy-looking run. Verified against the real
+    catalog — Mouser lists 130,728 of 175,728 parts, so the filter is the
+    difference between sweeping 45,000 candidates and sweeping all of them.
+
+    The neighbouring `..._ALREADY_lists_is_left_untouched` test does not cover
+    this: its only part is already listed, so the family is filtered out before
+    `absorb` ever runs and its assertions pass vacuously. Both halves are
+    pinned here — a fully-covered family must produce NO unit and spend NO
+    call, and a family with one unlisted part must still be swept.
+    """
+
+    def test_a_fully_covered_family_produces_no_unit_and_spends_no_call(self, db, seeded_db):
+        supplier = seeded_db["supplier1"]
+        maker = _maker(db, "Fully Covered Inc", "fully covered inc")
+        for n in range(4):
+            part = _held(db, maker, f"FCOV{n:03d}AAA")
+            _listing(db, part, supplier)
+        db.commit()
+
+        provider = ScopedFakeProvider(
+            manufacturer_ids={"fully covered inc": 4242},
+            results_by_keyword={},
+        )
+        events = list(grow_catalog(db, provider, supplier, call_budget=5))
+
+        assert provider.calls_made == 0, (
+            f"{provider.calls_made} rate-limited call(s) spent re-asking about parts "
+            "this supplier already lists — the NOT EXISTS in _base_query is gone"
+        )
+        assert _actions(events) == []
+
+    def test_a_family_with_one_unlisted_part_is_still_swept(self, db, seeded_db):
+        """The other direction. Without it, 'never sweeps anything' passes."""
+        supplier = seeded_db["supplier1"]
+        maker = _maker(db, "Mostly Covered Inc", "mostly covered inc")
+        for n in range(3):
+            part = _held(db, maker, f"MCOV{n:03d}AAA")
+            _listing(db, part, supplier)
+        _held(db, maker, "MCOV999AAA")  # the one gap
+        db.commit()
+
+        provider = ScopedFakeProvider(
+            manufacturer_ids={"mostly covered inc": 4243},
+            results_by_keyword={},
+        )
+        list(grow_catalog(db, provider, supplier, call_budget=5))
+
+        assert provider.calls_made > 0, (
+            "a family holding an unlisted part was skipped — the sweep can no "
+            "longer find a second price for anything"
+        )
