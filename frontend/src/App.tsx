@@ -29,32 +29,10 @@ const ResetPasswordPage = lazy(() => import("@admin/pages/reset-password"));
 const ChangePasswordPage = lazy(
   () => import("@admin/pages/change-password"),
 );
-const DashboardPage = lazy(() => import("@admin/pages/dashboard"));
-const SuppliersPage = lazy(() => import("@admin/pages/suppliers/list"));
-const ManufacturersPage = lazy(() => import('@admin/pages/manufacturers/list'));
-const ManufacturerDetailPage = lazy(() => import('@admin/pages/manufacturers/detail'));
-const ManufacturerFormPage = lazy(() => import('@admin/pages/manufacturers/form'));
-const LeadsPage = lazy(() => import('@admin/pages/leads/list'));
-const LeadDetailPage = lazy(() => import('@admin/pages/leads/detail'));
-const LeadRepPage = lazy(() => import('@admin/pages/leads/rep'));
-const SupplierDetailPage = lazy(
-  () => import("@admin/pages/suppliers/detail"),
-);
-const SupplierFormPage = lazy(() => import("@admin/pages/suppliers/form"));
-const PartsPage = lazy(() => import("@admin/pages/parts/list"));
-const PartDetailPage = lazy(() => import("@admin/pages/parts/detail"));
-const PartFormPage = lazy(() => import("@admin/pages/parts/form"));
-const AttachListingPage = lazy(() => import("@admin/pages/parts/attach"));
-const ImportPage = lazy(() => import("@admin/pages/import"));
-const ReportsPage = lazy(() => import("@admin/pages/reports"));
-const CategoriesPage = lazy(() => import("@admin/pages/categories"));
-const SponsorsPage = lazy(() => import("@admin/pages/sponsors/list"));
-const SponsorFormPage = lazy(() => import("@admin/pages/sponsors/form"));
-const ExpensesPage = lazy(() => import("@admin/pages/expenses/list"));
-const ExpenseFormPage = lazy(() => import("@admin/pages/expenses/form"));
-const SettingsPage = lazy(() => import("@admin/pages/settings"));
-const MessagesListPage = lazy(() => import("@admin/pages/messages/list"));
-const MessageDetailPage = lazy(() => import("@admin/pages/messages/detail"));
+const VerifyPage = lazy(() => import("@admin/pages/verify"));
+// The console's own route table, extracted so /admin and /account can mount the
+// SAME pages behind different guards. Its per-page lazy() imports moved with it.
+const ConsoleRoutes = lazy(() => import("@admin/routes/ConsoleRoutes"));
 
 // AdminLayout is LAZY on purpose (perf review 2026-07-31, measured): statically
 // imported it dragged the whole admin chrome — adminApi/axios, presence, bell,
@@ -141,7 +119,13 @@ function App() {
   // (e.g. the 2026-05-16 null spam_score → .toFixed() bug) surface a
   // recoverable fallback instead of a blank screen; key change on nav auto-
   // clears the error state when the user routes away.
-  if (location.pathname.startsWith("/admin")) {
+  // /account is the SAME console behind a customer-shaped guard (D16), so it
+  // takes the admin branch: public chrome (Navbar, BackdropLayer) must not
+  // render over it.
+  if (
+    location.pathname.startsWith("/admin") ||
+    location.pathname.startsWith("/account")
+  ) {
     return (
       <DemoProvider>
         <AdminThemeProvider>
@@ -155,67 +139,34 @@ function App() {
               path="/admin/change-password"
               element={<ChangePasswordPage />}
             />
+            {/* Sign-up and verification are UNAUTHENTICATED — siblings of
+                /admin/login, never behind ProtectedRoute. /admin/signup is the
+                login shell opened on its sign-up screen; /admin/verify is where
+                the emailed link lands and spends its token with a POST. */}
+            <Route path="/admin/signup" element={<LoginPage />} />
+            <Route path="/admin/verify" element={<VerifyPage />} />
             <Route
               path="/admin/*"
               element={
                 <ProtectedRoute>
                   <AdminLayout>
                     <ErrorBoundary key={location.pathname} scope="admin page">
-                    <Routes>
-                      <Route index element={<DashboardPage />} />
-                      <Route path="suppliers" element={<SuppliersPage />} />
-                      <Route path="manufacturers" element={<ManufacturersPage />} />
-                      <Route path="manufacturers/new" element={<ManufacturerFormPage />} />
-                      <Route path="manufacturers/:id" element={<ManufacturerDetailPage />} />
-                      <Route path="manufacturers/:id/edit" element={<ManufacturerFormPage />} />
-                      <Route path="leads" element={<LeadsPage />} />
-                      <Route path="leads/reps/:username" element={<LeadRepPage />} />
-                      <Route path="leads/:id" element={<LeadDetailPage />} />
-                      <Route
-                        path="suppliers/new"
-                        element={<SupplierFormPage />}
-                      />
-                      <Route
-                        path="suppliers/:id"
-                        element={<SupplierDetailPage />}
-                      />
-                      <Route
-                        path="suppliers/:id/edit"
-                        element={<SupplierFormPage />}
-                      />
-                      <Route path="parts" element={<PartsPage />} />
-                      <Route path="parts/new" element={<PartFormPage />} />
-                      <Route path="parts/:id" element={<PartDetailPage />} />
-                      <Route path="parts/:id/edit" element={<PartFormPage />} />
-                      <Route
-                        path="parts/:id/listings/new"
-                        element={<AttachListingPage />}
-                      />
-                      <Route path="import" element={<ImportPage />} />
-                      <Route path="reports" element={<ReportsPage />} />
-                      <Route path="categories" element={<CategoriesPage />} />
-                      <Route path="sponsors" element={<SponsorsPage />} />
-                      <Route
-                        path="sponsors/new"
-                        element={<SponsorFormPage />}
-                      />
-                      <Route
-                        path="sponsors/:id/edit"
-                        element={<SponsorFormPage />}
-                      />
-                      <Route path="expenses" element={<ExpensesPage />} />
-                      <Route path="expenses/new" element={<ExpenseFormPage />} />
-                      <Route
-                        path="expenses/:id/edit"
-                        element={<ExpenseFormPage />}
-                      />
-                      <Route path="messages" element={<MessagesListPage />} />
-                      <Route
-                        path="messages/:id"
-                        element={<MessageDetailPage />}
-                      />
-                      <Route path="settings" element={<SettingsPage />} />
-                    </Routes>
+                      <ConsoleRoutes />
+                    </ErrorBoundary>
+                  </AdminLayout>
+                </ProtectedRoute>
+              }
+            />
+            {/* The customer mount. Same chrome, same route table, different
+                guard — ProtectedRoute sends a customer who reaches /admin here
+                and a staff account who reaches here back to /admin. */}
+            <Route
+              path="/account/*"
+              element={
+                <ProtectedRoute area="account">
+                  <AdminLayout>
+                    <ErrorBoundary key={location.pathname} scope="admin page">
+                      <ConsoleRoutes />
                     </ErrorBoundary>
                   </AdminLayout>
                 </ProtectedRoute>

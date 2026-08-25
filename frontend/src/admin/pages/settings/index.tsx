@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import ConfirmDialog from '@admin/components/ConfirmDialog';
 import { useAuth } from '@admin/contexts/AuthContext';
+import DangerZone from './DangerZone';
 import FeedCredentialsCard from './FeedCredentialsCard';
 import styles from './SettingsPage.module.scss';
 
@@ -195,6 +196,11 @@ export default function SettingsPage() {
   // login key and the sign-in stamp is a security record, so neither may be a
   // local preference the browser can be talked into changing.
   const { user } = useAuth();
+
+  // Settings is ONE screen mounted under both /admin and /account (see
+  // ConsoleRoutes), so the two audiences are told apart here rather than by the
+  // URL: `user` is the customer role (renamed from `company` by alembic 043).
+  const isCustomer = user?.role === 'user';
 
   // The sign-in BEFORE this session (alembic 024). null until a second one
   // exists, which the panel states plainly rather than printing a zero date.
@@ -766,74 +772,89 @@ export default function SettingsPage() {
 
           {/* Danger zone */}
           {tab === 'danger' && (
-            <div className={`${styles.panel} ${styles.dangerPanel}`}>
-              <div className={styles.panelHead}>
-                <h3 className={`${styles.panelTitle} ${styles.dangerTitle}`}>
-                  <AlertTriangle size={16} strokeWidth={2} /> Danger zone
-                </h3>
-                <p className={styles.panelHint}>
-                  Destructive actions. Some can&rsquo;t be undone — proceed with care.
-                </p>
-              </div>
-              <div className={styles.dangerBody}>
-                <div className={styles.dangerRow}>
-                  <div>
-                    <div className={styles.dangerRowTitle}>Reset demo data</div>
-                    <div className={styles.dangerRowSub}>
-                      Wipes locally-edited suppliers, sponsors, settings, and reloads with the
-                      seed dataset. The live API database is untouched.
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    className={`${styles.btn} ${styles.btnGhost}`}
-                    onClick={() => setConfirmReset(true)}
-                  >
-                    <Database size={15} strokeWidth={2} />
-                    Reset demo data
-                  </button>
+            <>
+              <div className={`${styles.panel} ${styles.dangerPanel}`}>
+                <div className={styles.panelHead}>
+                  <h3 className={`${styles.panelTitle} ${styles.dangerTitle}`}>
+                    <AlertTriangle size={16} strokeWidth={2} /> Danger zone
+                  </h3>
+                  <p className={styles.panelHint}>
+                    Destructive actions. Some can&rsquo;t be undone — proceed with care.
+                  </p>
                 </div>
+                <div className={styles.dangerBody}>
+                  <div className={styles.dangerRow}>
+                    <div>
+                      <div className={styles.dangerRowTitle}>Reset demo data</div>
+                      <div className={styles.dangerRowSub}>
+                        Wipes locally-edited suppliers, sponsors, settings, and reloads with the
+                        seed dataset. The live API database is untouched.
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      className={`${styles.btn} ${styles.btnGhost}`}
+                      onClick={() => setConfirmReset(true)}
+                    >
+                      <Database size={15} strokeWidth={2} />
+                      Reset demo data
+                    </button>
+                  </div>
 
-                <div className={styles.dangerRow}>
-                  <div>
-                    <div className={styles.dangerRowTitle}>Export full database</div>
-                    <div className={styles.dangerRowSub}>
-                      Download a JSON snapshot of all settings &amp; demo state. Useful before a
-                      reset or as a portable backup.
+                  <div className={styles.dangerRow}>
+                    <div>
+                      <div className={styles.dangerRowTitle}>Export full database</div>
+                      <div className={styles.dangerRowSub}>
+                        Download a JSON snapshot of all settings &amp; demo state. Useful before a
+                        reset or as a portable backup.
+                      </div>
                     </div>
+                    <button
+                      type="button"
+                      className={`${styles.btn} ${styles.btnGhost}`}
+                      onClick={handleExportDatabase}
+                    >
+                      <Download size={15} strokeWidth={2} />
+                      Export database
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    className={`${styles.btn} ${styles.btnGhost}`}
-                    onClick={handleExportDatabase}
-                  >
-                    <Download size={15} strokeWidth={2} />
-                    Export database
-                  </button>
-                </div>
 
-                <div className={`${styles.dangerRow} ${styles.dangerRowSevere}`}>
-                  <div>
-                    <div className={styles.dangerRowTitle}>Delete account</div>
-                    <div className={styles.dangerRowSub}>
-                      Permanently removes your admin account, all sessions, and all locally-stored
-                      preferences. This action <strong>cannot be undone</strong>.
+                  {/* The demo-mode delete: it clears localStorage and the token
+                      and toasts "Account deleted (demo)" — nothing server-side.
+                      Harmless beside the other two mock rows for staff, but a
+                      customer now has a REAL delete below, and two buttons with
+                      the same label where one is a pretence is worse than one.
+                      Project 2 replaces the mock for staff too. */}
+                  {!isCustomer && (
+                    <div className={`${styles.dangerRow} ${styles.dangerRowSevere}`}>
+                      <div>
+                        <div className={styles.dangerRowTitle}>Delete account</div>
+                        <div className={styles.dangerRowSub}>
+                          Permanently removes your admin account, all sessions, and all
+                          locally-stored preferences. This action <strong>cannot be undone</strong>.
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        className={`${styles.btn} ${styles.btnDanger}`}
+                        onClick={() => {
+                          setDeleteStep(1);
+                          setConfirmDelete(true);
+                        }}
+                      >
+                        <Trash2 size={15} strokeWidth={2} />
+                        Delete account
+                      </button>
                     </div>
-                  </div>
-                  <button
-                    type="button"
-                    className={`${styles.btn} ${styles.btnDanger}`}
-                    onClick={() => {
-                      setDeleteStep(1);
-                      setConfirmDelete(true);
-                    }}
-                  >
-                    <Trash2 size={15} strokeWidth={2} />
-                    Delete account
-                  </button>
+                  )}
                 </div>
               </div>
-            </div>
+
+              {/* The real one. Renders for a customer only — it self-gates on the
+                  role too, so the panel cannot follow this screen to the staff
+                  mount by accident. */}
+              {isCustomer && <DangerZone />}
+            </>
           )}
         </div>
       </div>

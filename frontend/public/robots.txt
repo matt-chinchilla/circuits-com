@@ -2,5 +2,9 @@ User-agent: *
 Allow: /
 Disallow: /admin
 Disallow: /admin/
+# The customer console. Same reasoning as /admin: authenticated, per-person,
+# and nothing behind it is a search result.
+Disallow: /account
+Disallow: /account/
 
 Sitemap: https://circuitcenter.ai/sitemap.xml

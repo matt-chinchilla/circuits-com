@@ -20,7 +20,7 @@ import EChart from '@admin/components/charts/EChart';
 // purpose, so no other admin chart page pays for the map renderer.
 import { registerMapOnce } from '@admin/components/charts/echartsMap';
 import type { AnalyticsData } from '@admin/types/admin';
-import { flagEmoji } from './chartKit';
+import { countryName, flagEmoji } from '@admin/services/country';
 import styles from './ReportsPage.module.scss';
 
 const MAP_NAME = 'world110';
@@ -28,19 +28,6 @@ const MAP_NAME = 'world110';
 const RAMP = ['#245c44', '#2f7d5b', '#3fa172', '#57c78c', '#82f2b2'];
 const LAND_NO_DATA = '#1a2440';
 const BORDER = '#2b3a5e';
-
-const regionNames =
-  typeof Intl !== 'undefined' && 'DisplayNames' in Intl
-    ? new Intl.DisplayNames(['en'], { type: 'region' })
-    : null;
-
-function countryName(code: string): string {
-  try {
-    return regionNames?.of(code) ?? code;
-  } catch {
-    return code;
-  }
-}
 
 interface WorldMapPanelProps {
   countries: AnalyticsData['countries'];

@@ -1,7 +1,7 @@
 // Auth
-// The one login-shaped payload: /auth/login, /auth/demo and
-// /auth/change-password all answer with this, so the client stores a token
-// exactly one way.
+// The one login-shaped payload: /auth/login and /auth/change-password both
+// answer with this, so the client stores a token exactly one way. (/auth/demo
+// was the third; the demo account is retired.)
 export interface AuthResponse {
   token: string;
   user: UserInfo;
@@ -16,11 +16,14 @@ export interface AuthResponse {
 export interface UserInfo {
   id: string;
   username: string;
-  // 'owner' arrived with alembic 022 (matthew). The console DOES branch on it
-  // now: `@admin/services/permissions.canDeleteMessages` gates the message
-  // inbox's delete affordances on `owner` (the server's `owner_only` 403 is the
-  // real enforcement), so the union must not lie about what can arrive.
-  role: 'admin' | 'company' | 'owner';
+  // Exactly the `user_role` enum in api/app/models/user.py. 'owner' arrived
+  // with alembic 022 (matthew); 'company' became 'user' in alembic 043, when
+  // customers got a front door. The console DOES branch on this:
+  // `@admin/services/permissions.canDeleteMessages` gates the message inbox's
+  // delete affordances on `owner`, and ProtectedRoute routes 'user' to the
+  // /account mount (the server's 403s are the real enforcement in both cases),
+  // so the union must not lie about what can arrive.
+  role: 'admin' | 'user' | 'owner';
   supplier_id?: string;
   /**
    * Present on GET /auth/me only; the nested `user` of a login response omits

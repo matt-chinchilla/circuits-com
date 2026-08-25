@@ -34,8 +34,10 @@ import type {
   BulkDeleteResult,
 } from '@admin/types/messages';
 import type { PlatformEngagementSeries } from '@admin/types/engagement';
+import type { AdminUser } from '@admin/types/users';
 import { bustSponsorCaches } from '@admin/services/swCache';
 import { isPasswordChangeRequired, passwordGate } from '@admin/services/passwordGate';
+import { isReauthChallenge } from '@admin/services/reauthChallenge';
 
 // PATCH /api/admin/messages/{id} body — subset of MessageBase the admin UI can
 // mutate. Mirrors the contract Agent A is building in the backend.
@@ -137,7 +139,14 @@ adminClient.interceptors.response.use(
   (response) => response,
   (error) => {
     const status = error.response?.status;
-    if (status === 401) {
+    // Every 401 retires the session EXCEPT the Danger Zone's re-auth, whose
+    // 401 says "that is not your password", not "your session is over".
+    // Dropping the token there would sign a customer out of a still-valid
+    // session for a typo, and strand the SPA (AuthContext keeps its `user`, so
+    // nothing routes back to sign-in). See @admin/services/reauthChallenge.
+    const sessionExpired =
+      status === 401 && !isReauthChallenge(error.config?.method, error.config?.url);
+    if (sessionExpired) {
       // Unchanged behavior: an expired/retired token is dropped so the next
       // render bounces to the sign-in screen.
       onUnauthorized();
@@ -218,17 +227,6 @@ export const adminApi = {
     adminClient
       .post<{ status: string }>('/auth/resend-verification', { email })
       .then((r) => r.data),
-
-  /**
-   * POST /auth/demo — one-click demo access for prospective customers.
-   *
-   * Takes NO body: the account is resolved server-side from DEMO_LOGIN_EMAIL,
-   * so no credential ever ships in the public JS bundle. Answers 404 when the
-   * demo is disabled (the caller hides its button rather than showing an
-   * error), and otherwise returns the same login-shaped payload as /auth/login
-   * so the token is stored exactly one way.
-   */
-  demoLogin: () => adminClient.post<AuthResponse>('/auth/demo').then((r) => r.data),
 
   /**
    * POST /auth/change-password — self-service change, and the ONLY way out of
@@ -667,6 +665,44 @@ export const adminApi = {
   getRecentLeadContacts: (limit = 100) =>
     adminClient
       .get<{ contacts: import('../types/leads').RecentLeadContact[] }>('/dashboard/leads/recent', { params: { limit } })
+      .then((r) => r.data),
+
+  // ── Registered customer accounts (2026-08-25). Staff-only server-side
+  // (require_staff): a customer who reaches the shared console sees the page
+  // chrome and an error, never a roster.
+  //
+  // The server returns UNACTIVATED FIRST, then newest — the page's job is to
+  // show who is waiting. Callers must not re-sort into created-desc and undo it.
+  getUsers: () =>
+    adminClient.get<AdminUser[]>('/admin/users/').then((r) => r.data),
+
+  updateUser: (
+    id: string,
+    patch: { activated?: boolean; supplier_id?: string | null; manufacturer_id?: string | null },
+  ) => adminClient.patch<AdminUser>(`/admin/users/${id}`, patch).then((r) => r.data),
+
+  // ── The customer's own account (2026-08-25) ──────────────────────────────
+
+  /**
+   * DELETE /api/account/me — the Danger Zone's self-deletion.
+   *
+   * `request` rather than `adminClient.delete`: axios drops the body of a
+   * `delete`, and the server needs the password. Sent without it the request
+   * fails Pydantic validation (422) instead of reaching the re-auth, which
+   * reads as a bug rather than a wrong password.
+   *
+   * Removes the SIGN-IN and that user's messages, and deliberately nothing
+   * else — the linked Supplier, its listings and any active sponsorship keep
+   * running and keep billing. The panel says so in as many words.
+   *
+   * Errors worth handling at the call site: 401 `Invalid credentials` (the
+   * wrong password, or the per-account lockout after five of them, which
+   * carries a `Retry-After`) and 403 `account_not_activated`. That 401 does
+   * NOT retire the session — see @admin/services/reauthChallenge.
+   */
+  deleteMyAccount: (password: string) =>
+    adminClient
+      .request<{ status: string }>({ method: 'delete', url: '/account/me', data: { password } })
       .then((r) => r.data),
 
   // "Feature" a supplier on a category = a Featured sponsorship on that

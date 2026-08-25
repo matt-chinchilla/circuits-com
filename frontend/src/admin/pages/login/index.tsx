@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@admin/contexts/AuthContext';
 import AuthShell from './components/AuthShell';
 import SignIn from './screens/SignIn';
@@ -9,7 +9,14 @@ import type { Screen } from './screens/types';
 
 export default function LoginPage() {
   const { isAuthenticated, loading, mustChangePassword } = useAuth();
-  const [screen, setScreen] = useState<Screen>('signin');
+  const { pathname } = useLocation();
+  // /admin/signup is this same shell opened on its sign-up screen — the route
+  // is what the "Sign Up" links in email and marketing point at, so it must
+  // land on the form rather than on sign-in. Initial state only: `go` swaps
+  // screens in place afterwards and the URL deliberately does not follow.
+  const [screen, setScreen] = useState<Screen>(
+    pathname === '/admin/signup' ? 'signup' : 'signin',
+  );
 
   if (loading) {
     // Keep the branded shell up while the token check runs — no flash of an

@@ -10,6 +10,10 @@
 
 import { displayHost } from '@shared/utils/url';
 
+// flagEmoji moved to @admin/services/country (the Users roster renders
+// country codes too). Re-exported so the Reports imports stay put.
+export { flagEmoji } from '@admin/services/country';
+
 export interface Pt {
   x: number;
   y: number;
@@ -117,14 +121,4 @@ export function tooltipAnchor(
  *  not protocol noise). Non-URLs pass through untouched. */
 export function refHost(source: string): string {
   return displayHost(source) ?? source;
-}
-
-/** ISO-3166 alpha-2 → regional-indicator flag emoji ("US" → 🇺🇸). */
-export function flagEmoji(iso: string): string {
-  if (!/^[A-Za-z]{2}$/.test(iso)) return '';
-  const up = iso.toUpperCase();
-  return String.fromCodePoint(
-    0x1f1e6 + (up.charCodeAt(0) - 65),
-    0x1f1e6 + (up.charCodeAt(1) - 65),
-  );
 }

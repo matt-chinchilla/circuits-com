@@ -23,7 +23,6 @@ interface AuthContextValue {
   mustChangePassword: boolean;
   /** Sign in with the EMAIL address — there is no username login. */
   login: (email: string, password: string, remember?: boolean) => Promise<void>;
-  /** One-click demo access (POST /auth/demo) — no credentials in the bundle. */
   /** Change the password and adopt the fresh token the server hands back. */
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   logout: () => void;

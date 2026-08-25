@@ -1,0 +1,435 @@
+@use '@shared/styles/variables' as *;
+@use '@admin/styles/variables' as *;
+@use '@shared/styles/mixins' as *;
+@use '../../glass' as *;
+
+// Users list — the Manufacturers table skin, read through the var(--a-*)
+// admin tokens so it follows the admin light/dark theme. No toolbar: this
+// roster has no server-side filters to drive, and a search box over rows that
+// already fit on one screen is furniture.
+
+.page {
+  max-width: 1400px;
+}
+
+// ─── Page head ──────────────────────────────────────────────────────────────
+
+.pageHead {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.pageHeadLeft {
+  min-width: 0;
+}
+
+.title {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--a-fg1);
+  letter-spacing: -0.02em;
+  margin: 0 0 4px;
+}
+
+.subtitle {
+  font-size: 14px;
+  color: var(--a-fg3);
+  margin: 0;
+  max-width: 62ch;
+}
+
+// The queue depth, stated once. Amber only while somebody is actually waiting
+// — a permanent warning colour stops being a signal.
+.counts {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-shrink: 0;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.countWaiting {
+  font-weight: 600;
+  color: var(--a-warn);
+}
+
+.countClear {
+  color: var(--a-fg3);
+}
+
+.countTotal {
+  color: var(--a-fg3);
+}
+
+// A refused save, not an alarm: the switch is already back where it was.
+.saveError {
+  margin: 0 0 14px;
+  padding: 10px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--a-danger);
+  background: rgba(192, 57, 43, 0.08);
+  color: var(--a-danger);
+  font-size: 13px;
+}
+
+// ─── Panel + table ──────────────────────────────────────────────────────────
+
+.panel {
+  @include a-glass-pane;
+  border-radius: var(--a-radius);
+  overflow: hidden;
+}
+
+.tableWrap {
+  min-width: 0;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+// Nine columns do not fit a narrow console. The wrapper scrolls at every
+// width rather than splitting thead/tbody into two table contexts, which
+// sizes header and body columns apart.
+.table {
+  width: 100%;
+  min-width: 1140px;
+  border-collapse: collapse;
+}
+
+.table thead {
+  background: var(--a-bg);
+}
+
+.table th {
+  text-align: left;
+  padding: 10px 20px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--a-fg3);
+  border-bottom: 1px solid var(--a-border);
+  white-space: nowrap;
+}
+
+.table td {
+  padding: 12px 20px;
+  font-size: 14px;
+  color: var(--a-fg1);
+  border-bottom: 1px solid var(--a-border-soft);
+  vertical-align: middle;
+}
+
+.table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.table tbody tr:hover td {
+  background: var(--a-hover);
+}
+
+// Unactivated rows carry an amber edge. An inset shadow rather than a border
+// because border-collapse:collapse discards per-cell borders on hover.
+.rowWaiting td:first-child {
+  box-shadow: inset 3px 0 0 var(--a-warn);
+}
+
+.nameCell {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.emailCell {
+  max-width: 260px;
+}
+
+.emailLink {
+  display: inline-block;
+  max-width: 100%;
+  @include truncate;
+  color: var(--a-fg2);
+  font-family: $admin-font-mono;
+  font-size: 12px;
+  text-decoration: none;
+
+  &:hover {
+    color: var(--a-primary);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+}
+
+.dateCell {
+  font-size: 13px;
+  color: var(--a-fg2);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.locationCell {
+  font-size: 13px;
+  color: var(--a-fg2);
+  white-space: nowrap;
+}
+
+.siteCell {
+  max-width: 200px;
+}
+
+.siteLink {
+  display: inline-block;
+  max-width: 100%;
+  @include truncate;
+  color: var(--a-fg2);
+  font-family: $admin-font-mono;
+  font-size: 12px;
+  text-decoration: none;
+
+  &:hover {
+    color: var(--a-primary);
+    text-decoration: underline;
+  }
+}
+
+.companyCell {
+  max-width: 220px;
+}
+
+.supplierLink {
+  display: inline-block;
+  max-width: 100%;
+  @include truncate;
+  color: var(--a-primary);
+  text-decoration: none;
+  font-weight: 500;
+
+  &:hover {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+}
+
+.muted {
+  color: var(--a-fg3);
+}
+
+.emptyRow {
+  padding: 32px 20px !important;
+  text-align: center;
+  color: var(--a-fg3);
+  font-size: 13px;
+}
+
+// ─── Chips ──────────────────────────────────────────────────────────────────
+
+.tierChip,
+.stateChip {
+  display: inline-block;
+  padding: 3px 10px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border-radius: 3px;
+  line-height: 1.4;
+  white-space: nowrap;
+  background: rgba(148, 163, 184, 0.18);
+  color: var(--a-fg2);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+}
+
+// free is the resting state for every account that has no active sponsorship,
+// which is nearly all of them — it stays neutral so the paid tiers read.
+.tierFree {
+  background: transparent;
+  color: var(--a-fg3);
+  border-style: dashed;
+}
+
+.tierSilver {
+  background: rgba(100, 116, 139, 0.16);
+  color: #475569;
+  border-color: rgba(100, 116, 139, 0.32);
+}
+
+.tierGold {
+  background: rgba(168, 141, 46, 0.15);
+  color: #92773a;
+  border-color: rgba(168, 141, 46, 0.3);
+}
+
+.tierPlatinum {
+  background: rgba(124, 58, 237, 0.12);
+  color: #6d28d9;
+  border-color: rgba(124, 58, 237, 0.28);
+}
+
+.stateOk {
+  background: rgba(10, 74, 46, 0.12);
+  color: var(--a-primary);
+  border-color: rgba(10, 74, 46, 0.28);
+}
+
+// Not an error: an account can sit unverified for as long as the person takes
+// to open the email. Muted, not red.
+.statePending {
+  background: transparent;
+  color: var(--a-fg3);
+  border-style: dashed;
+}
+
+// ─── Activate switch ────────────────────────────────────────────────────────
+//
+// Same pill/knob geometry as the Settings toggles and the supplier feed's
+// auto-import switch — this is the house switch, not a second one.
+
+.actionHead,
+.actionCell {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.pill {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  border-radius: 10px;
+  background: var(--a-border);
+  border: none;
+  cursor: pointer;
+  flex-shrink: 0;
+  padding: 0;
+  transition: background-color 200ms ease;
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: var(--a-focus-ring);
+  }
+
+  // In flight. Not "unavailable" — the position it is showing is the one being
+  // saved, and it comes back a moment later if the server refuses.
+  &:disabled {
+    cursor: default;
+  }
+}
+
+.pillOn {
+  background: var(--a-teal);
+
+  .knob {
+    transform: translateX(16px);
+  }
+}
+
+.knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  transition: transform 200ms cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+// ─── Attribution ────────────────────────────────────────────────────────────
+//
+// CC-BY on the DB-IP Lite database behind the Location column. A licence
+// term, not a footer nicety — it does not get trimmed for tidiness.
+
+.attribution {
+  margin: 12px 2px 0;
+  font-size: 11px;
+  color: var(--a-fg4);
+
+  a {
+    color: inherit;
+    text-decoration: none;
+
+    &:hover {
+      color: var(--a-fg2);
+      text-decoration: underline;
+    }
+  }
+}
+
+// ─── Busy skeleton ──────────────────────────────────────────────────────────
+//
+// Reserves the REAL row height (12px pad + 14px bar + 3px margins ~ a live
+// 44px row) so the table doesn't jump when the rows land under it.
+
+.skelRow td {
+  height: 44px;
+}
+
+.skel {
+  display: block;
+  height: 14px;
+  margin: 3px 0;
+  border-radius: 4px;
+  max-width: 100%;
+  background: linear-gradient(
+    90deg,
+    var(--a-border-soft) 25%,
+    var(--a-border) 50%,
+    var(--a-border-soft) 75%
+  );
+  background-size: 200% 100%;
+  animation: usersSkelShimmer 1.4s ease-in-out infinite;
+}
+
+.skelWide {
+  width: 180px;
+}
+
+.skelMed {
+  width: 110px;
+}
+
+.skelChip {
+  width: 56px;
+  height: 18px;
+  border-radius: 3px;
+}
+
+.skelSwitch {
+  width: 36px;
+  height: 20px;
+  border-radius: 10px;
+  margin-left: auto;
+}
+
+@keyframes usersSkelShimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skel,
+  .pill,
+  .knob {
+    animation: none;
+    transition: none;
+  }
+}
+
+// ─── Mobile (<=820px) ───────────────────────────────────────────────────────
+
+@media (max-width: $bp-admin-mobile) {
+  .pageHead {
+    align-items: flex-start;
+  }
+
+  .counts {
+    gap: 10px;
+  }
+}

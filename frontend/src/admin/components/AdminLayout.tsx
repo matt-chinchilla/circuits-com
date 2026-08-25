@@ -49,6 +49,9 @@ const CATALOG_LINKS: SidebarLink[] = [
   { to: '/admin/parts', label: 'Parts', icon: 'package', badgeKey: 'parts', tour: 'side-parts' },
   { to: '/admin/suppliers', label: 'Suppliers', icon: 'buildings', badgeKey: 'suppliers', tour: 'side-suppliers' },
   { to: '/admin/manufacturers', label: 'Manufacturers', icon: 'factory', badgeKey: 'manufacturers', adminOnly: true },
+  // The registered-account roster. Staff-only data (require_staff), so it
+  // carries adminOnly like every other internal entity above and below it.
+  { to: '/admin/users', label: 'Users', icon: 'users-three', adminOnly: true },
   { to: '/admin/categories', label: 'Categories', icon: 'squares-four', adminOnly: true, tour: 'side-categories' },
   { to: '/admin/sponsors', label: 'Sponsors', icon: 'star', adminOnly: true, tour: 'side-sponsors' },
   // Operating costs — the other half of the dashboard P&L. Admin-only: it is
@@ -85,6 +88,7 @@ const TITLE_MAP: Record<string, string> = {
   '/admin/parts/new': 'New Part',
   '/admin/suppliers': 'Suppliers',
   '/admin/manufacturers': 'Manufacturers',
+  '/admin/users': 'Users',
   '/admin/manufacturers/new': 'New Manufacturer',
   '/admin/leads': 'Leads',
   '/admin/suppliers/new': 'New Supplier',
@@ -99,7 +103,37 @@ const TITLE_MAP: Record<string, string> = {
   '/admin/settings': 'Settings',
 };
 
-function pageTitle(pathname: string): string {
+/**
+ * The console is mounted TWICE — at /admin for staff and /account for
+ * customers (D16) — from one component tree. The routes come out right on
+ * their own, because React Router resolves them relative to the mount; the
+ * CHROME does not. Every sidebar link and title below is written in its
+ * /admin form, so these two translate between that canonical form and
+ * whichever mount is actually being rendered.
+ *
+ * Without this a customer at /account gets a sidebar of /admin links, and
+ * every click bounces them straight back to /account via ProtectedRoute —
+ * a console that looks complete and cannot be navigated.
+ */
+export function consoleBase(pathname: string): '/admin' | '/account' {
+  return pathname === '/account' || pathname.startsWith('/account/') ? '/account' : '/admin';
+}
+
+/** An /admin-form path, rewritten onto the mount currently being rendered. */
+export function mountPath(adminPath: string, base: '/admin' | '/account'): string {
+  if (base === '/admin') return adminPath;
+  return adminPath === '/admin' ? '/account' : `/account${adminPath.slice('/admin'.length)}`;
+}
+
+/** The inverse: any mount's path, in the canonical /admin form for lookups. */
+function canonicalPath(pathname: string): string {
+  if (!pathname.startsWith('/account')) return pathname;
+  const rest = pathname.slice('/account'.length);
+  return rest ? `/admin${rest}` : '/admin';
+}
+
+function pageTitle(rawPathname: string): string {
+  const pathname = canonicalPath(rawPathname);
   if (TITLE_MAP[pathname]) return TITLE_MAP[pathname];
   // /admin/<entity>/<id>/edit
   if (/^\/admin\/(\w+)\/[\w-]+\/edit$/.test(pathname)) {
@@ -157,6 +191,8 @@ export default function AdminLayout({ children, role = 'admin' }: AdminLayoutPro
   const { theme, toggleTheme } = useAdminTheme();
   const location = useLocation();
   const navigate = useNavigate();
+  // Which mount is rendering — /admin for staff, /account for customers.
+  const base = consoleBase(location.pathname);
   const [signOutOpen, setSignOutOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [bellOpen, setBellOpen] = useState(false);
@@ -283,10 +319,11 @@ export default function AdminLayout({ children, role = 'admin' }: AdminLayoutPro
   function renderLink(link: SidebarLink) {
     const showUnreadBadge = link.to === '/admin/messages' && unread > 0;
     const dynamicBadge = badgeValue(link.badgeKey);
+    const href = mountPath(link.to, base);
     return (
       <NavLink
         key={link.to}
-        to={link.to}
+        to={href}
         end={link.to === '/admin'}
         data-tour={link.tour}
         className={({ isActive }) => `${styles.sideItem} ${isActive ? styles.active : ''}`}
@@ -324,7 +361,7 @@ export default function AdminLayout({ children, role = 'admin' }: AdminLayoutPro
         >
           <X size={16} strokeWidth={2} />
         </button>
-        <Link to="/admin" className={styles.sideBrand}>
+        <Link to={base} className={styles.sideBrand}>
           {/* Was a letter "C" on a green tile, standing in for a logo that did
               not exist. No `title` — "Circuit Center" is spelled out beside it. */}
           <Logo variant="badge" size={30} className={styles.sideBrandMark} />
@@ -468,11 +505,11 @@ export default function AdminLayout({ children, role = 'admin' }: AdminLayoutPro
                     onClose={() => setBellOpen(false)}
                     onOpenAll={() => {
                       setBellOpen(false);
-                      navigate('/admin/messages');
+                      navigate(mountPath('/admin/messages', base));
                     }}
                     onOpen={(id) => {
                       setBellOpen(false);
-                      navigate(`/admin/messages/${id}`);
+                      navigate(mountPath(`/admin/messages/${id}`, base));
                     }}
                   />
                 )}
@@ -488,7 +525,7 @@ export default function AdminLayout({ children, role = 'admin' }: AdminLayoutPro
               </span>
             </div>
 
-            <Link to="/admin/parts/new" className={`${styles.btn} ${styles.btnPrimary}`}>
+            <Link to={mountPath('/admin/parts/new', base)} className={`${styles.btn} ${styles.btnPrimary}`}>
               <Plus size={15} strokeWidth={2} />
               <span className={styles.btnLabel}>New Part</span>
             </Link>
