@@ -67,11 +67,11 @@ class TestLoginByEmail:
         # Copy/paste from a mail client routinely drags a space along.
         assert _login(client, email="  admin@test.example  ").status_code == 200
 
-    def test_company_user_logs_in_by_email(self, client, seeded_db):
+    def test_customer_user_logs_in_by_email(self, client, seeded_db):
         resp = _login(client, email="kennedy_user@test.example")
         assert resp.status_code == 200
         data = resp.json()
-        assert data["user"]["role"] == "company"
+        assert data["user"]["role"] == "user"
         assert data["user"]["supplier_id"] is not None
 
     def test_username_no_longer_authenticates(self, client, seeded_db):

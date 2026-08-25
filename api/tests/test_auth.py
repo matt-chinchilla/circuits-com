@@ -14,14 +14,14 @@ class TestLogin:
         assert data["user"]["role"] == "admin"
         assert data["user"]["supplier_id"] is None
 
-    def test_login_company_user(self, client, seeded_db):
+    def test_login_customer_user(self, client, seeded_db):
         resp = client.post("/api/auth/login", json={
             "email": "kennedy_user@test.example",
             "password": "testpass123",
         })
         assert resp.status_code == 200
         data = resp.json()
-        assert data["user"]["role"] == "company"
+        assert data["user"]["role"] == "user"
         assert data["user"]["supplier_id"] is not None
 
     def test_login_wrong_password(self, client, seeded_db):
@@ -93,7 +93,7 @@ class TestMe:
         })
         assert resp.status_code == 401
 
-    def test_me_company_user(self, client, seeded_db):
+    def test_me_customer_user(self, client, seeded_db):
         token = self._get_token(client, "kennedy_user@test.example", "testpass123")
         resp = client.get("/api/auth/me", headers={
             "Authorization": f"Bearer {token}",
@@ -101,5 +101,5 @@ class TestMe:
         assert resp.status_code == 200
         data = resp.json()
         assert data["username"] == "kennedy_user"
-        assert data["role"] == "company"
+        assert data["role"] == "user"
         assert data["supplier_id"] is not None

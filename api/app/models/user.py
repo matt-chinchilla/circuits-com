@@ -12,19 +12,37 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    username = Column(String(100), unique=True, nullable=False)
+    # Customers sign up with a name, not a username (D7): username is
+    # lower(email) for them, so it must hold an address.
+    username = Column(String(255), unique=True, nullable=False)
     # Recovery address for forgot-password / forgot-username, and (alembic
     # 022) the case-insensitive login identifier — required + unique on
     # lower(email) via the `uq_users_email_lower` index below. (alembic 015)
     email = Column(String(255), nullable=False, index=True)
     password_hash = Column(String(200), nullable=False)
     role = Column(
-        Enum("admin", "company", "owner", name="user_role", create_constraint=True),
+        Enum("admin", "user", "owner", name="user_role", create_constraint=True),
         nullable=False,
-        default="company",
+        default="user",
     )
     supplier_id = Column(
         UUID(as_uuid=True), ForeignKey("suppliers.id"), nullable=True
+    )
+    first_name = Column(String(80), nullable=True)
+    last_name = Column(String(80), nullable=True)
+    # NULL = the mailbox has not been proved. Set by POST /api/auth/verify.
+    email_verified_at = Column(DateTime(timezone=True), nullable=True)
+    # NULL = awaiting staff approval (D17). NOT the same as verification:
+    # verified means "they own that mailbox", activated means "we said yes".
+    # Only consulted for CUSTOMER_ROLES — staff are never gated on it.
+    activated_at = Column(DateTime(timezone=True), nullable=True)
+    signup_ip = Column(String(45), nullable=True)  # longest IPv6 text form
+    signup_country = Column(String(2), nullable=True)  # ISO alpha-2, DB-IP
+    # D18: capability is the LINKS, not a type enum. Neither = free;
+    # supplier_id = distributor; manufacturer_id = maker; BOTH = a company
+    # that does both (Avnet). Staff-set only — no request body sets these.
+    manufacturer_id = Column(
+        UUID(as_uuid=True), ForeignKey("manufacturers.id"), nullable=True
     )
     # Admin presence heartbeat (alembic 021) — see routes/admin_presence.py.
     # Nullable: only stamped while an admin has the console open.

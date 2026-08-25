@@ -46,7 +46,7 @@ class TestUserModel:
 
     def test_create_company_user_with_supplier(self, seeded_db, db):
         user = seeded_db["company_user"]
-        assert user.role == "company"
+        assert user.role == "user"
         assert user.supplier_id == seeded_db["supplier2"].id
         assert user.supplier.name == "Kennedy Electronics"
 
@@ -68,7 +68,7 @@ class TestUserModel:
             User(
                 username="dupe",
                 password_hash=hashed,
-                role="company",
+                role="user",
                 email="dupe2@test.example",
             )
         )

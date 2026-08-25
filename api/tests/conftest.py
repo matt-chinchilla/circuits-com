@@ -290,7 +290,7 @@ def seeded_db(db):
         id=uuid.uuid4(),
         username="kennedy_user",
         password_hash=hashed,
-        role="company",
+        role="user",
         email="kennedy_user@test.example",
         supplier_id=supplier2.id,
     )

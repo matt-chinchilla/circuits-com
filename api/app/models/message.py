@@ -1,7 +1,8 @@
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import JSON, Column, DateTime, Float, Integer, String, Text
+from sqlalchemy import JSON, Column, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy.dialects.postgresql import UUID
 
 from app.db.session import Base
 
@@ -32,3 +33,8 @@ class Message(Base):
     assigned_to = Column(String(10), nullable=True)  # 'Daniel' | 'Anthony' | 'Ronald' | None
     spam_score = Column(Float, nullable=True)
     last_reply_body = Column(Text, nullable=True)
+    # NULL = the shared staff inbox, which is every pre-043 row and every
+    # public form submission. Populated = that one customer's inbox.
+    user_id = Column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=True
+    )
