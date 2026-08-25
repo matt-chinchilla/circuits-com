@@ -3048,7 +3048,7 @@ Create `frontend/src/admin/routes/ConsoleRoutes.tsx` holding the nested
 verbatim; change nothing about the route table itself. Add the users route:
 
 ```tsx
-        <Route path="users" element={<UsersListPage />} />
+(Route registration for /users moved to Task 15 — see ledger ruling R1.)
 ```
 
 The component takes no props — the two mounts differ only in their guard and
@@ -3176,7 +3176,28 @@ Requirements:
 - **Website** renders `—` when null. Most rows at launch, and correct.
 - The Activate control is a toggle calling `adminApi.updateUser(id, { activated })`, optimistic with rollback on failure.
 
-- [ ] **Step 3: Add the sidebar link**
+- [ ] **Step 3: Register the route and add the sidebar link**
+
+In `frontend/src/admin/routes/ConsoleRoutes.tsx` (created in Task 14), add the
+route alongside the others. It lands here rather than in Task 14 because Task
+14 would otherwise import a component that does not exist yet:
+
+```tsx
+        <Route path="users" element={<UsersListPage />} />
+```
+
+...with its lazy import beside the other page imports in that file:
+
+```tsx
+const UsersListPage = lazy(() => import('@admin/pages/users/list'));
+```
+
+Note this route is reachable at BOTH mounts, so `/account/users` resolves.
+That is acceptable under D16 (the console is shared) and the server refuses:
+`/api/admin/users` is `require_staff`, so a customer sees the page chrome and
+an error, not a roster. Trimming customer-side routes is Project 2 work.
+
+Then the sidebar link:
 
 In `AdminLayout.tsx`'s nav array, next to Manufacturers:
 
