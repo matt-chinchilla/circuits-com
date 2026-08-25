@@ -455,12 +455,6 @@ describe('syncErrorMessage', () => {
     expect(syncErrorMessage(new SyncStreamError(401, 'Not authenticated'))).toContain('sign in');
   });
 
-  it('names the read-only demo refusal', () => {
-    expect(syncErrorMessage(new SyncStreamError(403, 'demo_account_read_only'))).toBe(
-      'Editing is disabled in the demo.'
-    );
-  });
-
   // The sentence says "run", not "sync": the same mapper answers for the import
   // stream, and naming the wrong route would be the one inaccurate thing on a
   // console that otherwise prints the server verbatim.

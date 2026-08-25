@@ -23,40 +23,10 @@ def leads_db(db, seeded_db, tmp_path):
     return db
 
 
-def _demo_header(client, db):
-    """A live demo session — requires the demo user row (fixture pattern from
-    test_demo_read_only)."""
-    import bcrypt
-
-    from app.models import User
-
-    if db.query(User).filter_by(username="demo").first() is None:
-        db.add(User(
-            username="demo",
-            password_hash=bcrypt.hashpw(b"demo", bcrypt.gensalt()).decode(),
-            role="admin",
-            email="demo@circuitcenter.ai",
-        ))
-        db.commit()
-    body = client.post("/api/auth/demo").json()
-    return {"Authorization": f"Bearer {body['token']}"}
-
-
 class TestGate:
     def test_anonymous_401(self, client, leads_db):
         assert client.get("/api/admin/leads/").status_code in (401, 403)
 
-    def test_demo_refused_on_reads(self, client, leads_db):
-        h = _demo_header(client, leads_db)
-        resp = client.get("/api/admin/leads/", headers=h)
-        assert resp.status_code == 403
-        assert resp.json()["detail"] == "demo_account_no_leads"
-
-    def test_demo_refused_on_detail_and_reps(self, client, leads_db):
-        h = _demo_header(client, leads_db)
-        lead = leads_db.query(Lead).first()
-        assert client.get(f"/api/admin/leads/{lead.id}", headers=h).status_code == 403
-        assert client.get("/api/admin/leads/reps/admin", headers=h).status_code == 403
 
     def test_forced_password_change_blocks_reads_and_writes(self, client, leads_db, auth_header):
         """The leads router was the ONE admin surface that skipped the forced-reset

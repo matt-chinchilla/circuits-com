@@ -19,8 +19,7 @@ from app.schemas.messages import (
     MessageResponse,
     MessageUpdate,
 )
-from app.services.auth_service import get_current_user, is_demo_user, require_owner
-from app.services.demo_messages import demo_messages, find_demo_message
+from app.services.auth_service import get_current_user, require_owner
 
 router = APIRouter(prefix="/api/admin/messages", tags=["admin-messages"])
 
@@ -29,22 +28,11 @@ router = APIRouter(prefix="/api/admin/messages", tags=["admin-messages"])
 # stops a single crafted request turning into a table-wide DELETE.
 MAX_BULK_DELETE_IDS = 200
 
-# ── Why the demo gets a different inbox ──────────────────────────────────────
-# These rows are REAL public form submissions: the name, email, phone and
-# free-text message of members of the public. `POST /api/auth/demo` puts an
-# anonymous visitor one click from this table, so a demo session is served a
-# synthetic roster instead (app/services/demo_messages.py). The read-only gate
-# in get_current_user stops the demo WRITING; this stops it READING other
-# people's contact details.
-
-
 @router.get("/", response_model=list[MessageResponse])
 def list_messages(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if is_demo_user(current_user):
-        return demo_messages()
     return db.query(Message).order_by(Message.created_at.desc()).all()
 
 
@@ -59,8 +47,6 @@ def list_messages(
 # `owner_only` for every other admin. It composes with — never replaces —
 # get_current_user, which still runs first: an unauthenticated caller gets 401
 # and the demo account never reaches either body, because both are mutating
-# verbs and `get_current_user` 403s `demo_account_read_only` on every write from
-# that session (allowlist, not blocklist — no per-route opt-in to forget).
 
 
 @router.post("/bulk-delete", response_model=MessageBulkDeleteResponse)
@@ -114,13 +100,6 @@ def get_message(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if is_demo_user(current_user):
-        # Never falls through to the real table on a miss: a demo id that
-        # doesn't match is a 404, not a lookup of somebody's real message.
-        demo = find_demo_message(message_id)
-        if demo is None:
-            raise HTTPException(404, "Message not found")
-        return demo
     msg = db.query(Message).filter(Message.id == message_id).first()
     if not msg:
         raise HTTPException(404, "Message not found")

@@ -5,13 +5,6 @@ from decimal import Decimal
 
 # Set DATABASE_URL before any app imports so pydantic-settings doesn't fail
 os.environ.setdefault("DATABASE_URL", "sqlite:///./test.db")
-# POST /api/auth/demo ships DISABLED (app/config.py defaults it False — an
-# unauthenticated session-minting endpoint must be opted into per environment,
-# and both compose files pass the value through). The suite exercises the
-# endpoint's behaviour, so it opts IN here, once, before app import; the tests
-# that pin the DISABLED behaviour monkeypatch it back to False themselves.
-# The shipped default is asserted directly in test_compose_env_passthrough.py.
-os.environ.setdefault("DEMO_LOGIN_ENABLED", "true")
 
 import bcrypt
 import pytest

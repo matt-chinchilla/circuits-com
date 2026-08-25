@@ -35,7 +35,6 @@
 import { API_BASE_URL } from '@shared/services/constants';
 import { authHeaders, onUnauthorized } from '@admin/services/adminApi';
 import { bustSponsorCaches } from '@admin/services/swCache';
-import { DEMO_READ_ONLY_MESSAGE, isDemoReadOnly } from '@admin/services/demoReadOnly';
 import { parseNdjson } from '@shared/utils/ndjson';
 
 /** Every event kind the stream can carry. Mirrors the backend's `_sync_event`. */
@@ -357,7 +356,6 @@ export function syncErrorMessage(err: unknown, opts: { runActive?: boolean } = {
       : 'No feed integration for this supplier yet.';
   }
   if (err.status === 401) return 'Your session expired — sign in again to start a run.';
-  if (isDemoReadOnly(err.status, err.detail)) return DEMO_READ_ONLY_MESSAGE;
   if (err.status === 403) return 'This account is not allowed to run the feed.';
   return GENERIC_ERROR;
 }

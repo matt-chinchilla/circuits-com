@@ -531,36 +531,6 @@ class TestReattach:
             == 404
         )
 
-    def test_the_demo_account_cannot_watch_a_run_it_cannot_start(
-        self, client, db, seeded_db, feed_key, mouser_supplier
-    ):
-        """`get_current_user` gates the demo on WRITES, so a GET needs its own
-        line — otherwise the one account handed to any anonymous visitor can
-        read a run it is forbidden to cause."""
-        import bcrypt
-
-        from app.models import User
-
-        db.add(
-            User(
-                id=uuid.uuid4(),
-                username="demo",
-                password_hash=bcrypt.hashpw(b"demo", bcrypt.gensalt()).decode(),
-                role="admin",
-                email="demo@circuitcenter.ai",
-            )
-        )
-        db.commit()
-        token = client.post("/api/auth/demo").json()["token"]
-
-        resp = client.get(
-            f"/api/suppliers/{mouser_supplier.id}/feed-run",
-            headers={"Authorization": f"Bearer {token}"},
-        )
-
-        assert resp.status_code == 403
-        assert resp.json()["detail"] == "demo_account_read_only"
-
 
 class TestOneRunPerSupplier:
     """Contract 4 — a second click is refused, never double-spent."""

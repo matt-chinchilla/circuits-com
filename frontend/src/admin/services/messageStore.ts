@@ -1,6 +1,5 @@
 import type { Message, MessageStatus, AssignedTo } from '@admin/types/messages';
 import { adminApi } from '@admin/services/adminApi';
-import { demoSession } from '@admin/services/demoReadOnly';
 
 // API-backed store for the admin Messages UI. The pre-Phase-4 implementation
 // was localStorage-backed with a 15-row seed; Phase 4 moved persistence to the
@@ -57,7 +56,6 @@ function fireUpdate(id: string, update: Partial<{
   // whole truth there, and skipping the call is what stops merely OPENING a
   // message from popping "Editing is disabled in the demo" at a prospect.
   // Convenience only: the server refuses demo writes whether or not this fires.
-  if (demoSession.isDemo()) return;
   adminApi.updateMessage(id, update).catch((err) => {
     console.error('[messageStore] update failed', id, update, err);
   });

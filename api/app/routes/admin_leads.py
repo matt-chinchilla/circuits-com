@@ -2,7 +2,7 @@
 
 Own router by design (never the mixed suppliers router): every route here is
 double-gated. Writes are covered by the demo write-allowlist automatically;
-READS are the hole `POST /api/auth/demo` opens (it hands any anonymous
+READS were the hole the retired demo account opened (it handed any anonymous
 visitor a real session), so `require_leads_access` refuses demo on reads too
 — calendar-gate pattern, distinct detail string so a client can tell the
 refusals apart. Guard: test_leads_never_public.py.
@@ -20,12 +20,11 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models import Lead, LeadContact
 from app.models.user import User
-from app.services.auth_service import get_current_user, is_demo_user
+from app.services.auth_service import get_current_user
 from app.services.leads import VALID_OUTCOMES, record_outcome
 
 router = APIRouter(prefix="/api/admin/leads", tags=["admin-leads"])
 
-DEMO_LEADS_FORBIDDEN_DETAIL = "demo_account_no_leads"
 
 
 def require_leads_access(user: User = Depends(get_current_user)) -> User:
@@ -39,8 +38,6 @@ def require_leads_access(user: User = Depends(get_current_user)) -> User:
     still needed on top — ``get_current_user`` only blocks demo WRITES, and
     this roster must stay closed to demo on reads too.
     """
-    if is_demo_user(user):
-        raise HTTPException(status.HTTP_403_FORBIDDEN, detail=DEMO_LEADS_FORBIDDEN_DETAIL)
     return user
 
 

@@ -38,7 +38,6 @@
 import { useEffect, useState } from 'react';
 import { adminApi } from '@admin/services/adminApi';
 import { apiErrorDetail } from '@admin/services/apiError';
-import { DEMO_READ_ONLY_MESSAGE } from '@admin/services/demoReadOnly';
 import type { FeedSettings } from '@admin/types/admin';
 import styles from './NightlyImportToggle.module.scss';
 
@@ -115,10 +114,7 @@ export default function NightlyImportToggle({ supplierId }: Props) {
       .then((fresh) => setSettings(fresh))
       .catch((err) => {
         setSettings(previous);
-        const detail = apiErrorDetail(err);
-        // The demo's read-only 403 already raises the global notice from the
-        // axios interceptor — saying it again here would say it twice.
-        setError(detail === DEMO_READ_ONLY_MESSAGE ? null : (detail ?? SAVE_FAILED));
+        setError(apiErrorDetail(err) ?? SAVE_FAILED);
       })
       .finally(() => setSaving(false));
   };

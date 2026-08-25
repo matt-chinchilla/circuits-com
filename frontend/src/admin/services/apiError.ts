@@ -1,15 +1,13 @@
 import axios from 'axios';
-import { DEMO_READ_ONLY_DETAIL, DEMO_READ_ONLY_MESSAGE } from '@admin/services/demoReadOnly';
 
 /**
  * Backend `detail` values that are MACHINE CODES, not prose. A form that renders
- * `apiErrorDetail(err)` inline would otherwise print "demo_account_read_only" at
- * the user; map them to the sentence a person can read. Anything absent from
+ * `apiErrorDetail(err)` inline would otherwise print a bare code like
+ * "feed_not_configured" at the user; map them to the sentence a person can read. Anything absent from
  * this map is already human-written copy (e.g. the single-slot sponsor 409) and
  * passes through untouched.
  */
 const CODE_MESSAGES: Record<string, string> = {
-  [DEMO_READ_ONLY_DETAIL]: DEMO_READ_ONLY_MESSAGE,
   // routes/feed_credentials.py 422. The server deliberately does NOT quote the
   // rejected key back (a validation message is a classic place for a secret to
   // escape), so the sentence has to describe the rule instead of the value.

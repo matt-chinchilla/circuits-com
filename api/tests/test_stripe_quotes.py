@@ -403,29 +403,6 @@ def test_quote_ladder_renders_the_single_home(client, seeded_db, auth_header, st
     assert body["tiers"]["platinum"]["steps"] == QUOTE_LADDER["platinum"]
 
 
-def test_demo_session_is_refused_even_on_reads(client, db, seeded_db, stripe_key, monkeypatch):
-    """Quote lists and PDFs are customers' billing documents; the public
-    'See Demo' session must not read them (the calendar posture)."""
-    import bcrypt
-
-    from app.models import User
-
-    monkeypatch.setattr(settings, "DEMO_LOGIN_ENABLED", True, raising=False)
-    db.add(
-        User(
-            username="demo",
-            password_hash=bcrypt.hashpw(b"demo", bcrypt.gensalt()).decode(),
-            role="admin",
-            email="demo@circuitcenter.ai",
-        )
-    )
-    db.commit()
-    token = client.post("/api/auth/demo").json()["token"]
-    resp = client.get("/api/admin/quote-ladder", headers={"Authorization": f"Bearer {token}"})
-    assert resp.status_code == 403
-    assert resp.json()["detail"] == "demo_account_no_billing"
-
-
 def test_create_quote_uses_the_sponsor_row(client, seeded_db, auth_header, stripe_key, monkeypatch):
     seen = {}
 

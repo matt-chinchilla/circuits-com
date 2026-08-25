@@ -23,9 +23,7 @@ from app.models import (
     User,
 )
 from app.services.auth_service import (
-    DEMO_READ_ONLY_DETAIL,
     get_current_user,
-    is_demo_user,
 )
 from app.services.part_feed import (
     PartFeedProvider,
@@ -40,12 +38,12 @@ from app.services.part_feed import (
 # consumes them, so widening `part_feed.__all__` would advertise run management
 # to callers who should only be starting runs.
 from app.services.part_feed.importer import (
-    request_feed_stop,
     CONTINUOUS_CALL_CEILING,
     FeedRun,
     FeedRunActive,
     FeedWork,
     get_feed_run,
+    request_feed_stop,
     start_feed_run,
 )
 from app.services.search_service import get_active_supplier_tiers, invalidate_catalog_caches
@@ -548,8 +546,6 @@ def observe_supplier_feed_run(
     account handed to any anonymous visitor could read a run it is not allowed
     to cause.
     """
-    if is_demo_user(current_user):
-        raise HTTPException(403, DEMO_READ_ONLY_DETAIL)
     supplier = _supplier_or_404(db, supplier_id)
     run = get_feed_run(supplier.id)
     if run is None:

@@ -15,27 +15,6 @@ from app.models import Message, User
 DEMO_EMAIL = "demo@circuitcenter.ai"
 
 
-@pytest.fixture
-def demo_header(client, db, seeded_db):
-    """A live demo session — minted the only way a visitor can get one.
-
-    `POST /api/auth/demo` hands a real admin session to any anonymous visitor,
-    so the delete routes have to refuse it server-side.
-    """
-    db.add(
-        User(
-            username="demo",
-            password_hash=bcrypt.hashpw(b"demo", bcrypt.gensalt()).decode(),
-            role="admin",
-            email=DEMO_EMAIL,
-        )
-    )
-    db.commit()
-    resp = client.post("/api/auth/demo")
-    assert resp.status_code == 200, resp.text
-    return {"Authorization": f"Bearer {resp.json()['token']}"}
-
-
 def _auth_header(client):
     resp = client.post(
         "/api/auth/login",
@@ -55,8 +34,7 @@ def owner_header(client, db, seeded_db):
     Minted HERE rather than in `seeded_db` because other modules assert that
     fixture's user roster verbatim (dashboard's /admin/sales-reps returns
     exactly ["admin"]), and widening the shared roster to prove a messages rule
-    would silently rewrite what those tests mean. Same shape as `demo_header`
-    above: the module that needs a role creates it.
+    would silently rewrite what those tests mean.
     """
     db.add(
         User(
@@ -73,6 +51,7 @@ def owner_header(client, db, seeded_db):
     )
     assert resp.status_code == 200, resp.text
     return {"Authorization": f"Bearer {resp.json()['token']}"}
+
 
 
 def _insert_message(
@@ -366,15 +345,6 @@ class TestDeleteMessage:
         assert resp.status_code == 401
         assert db.query(Message).count() == 1
 
-    def test_demo_account_cannot_delete(self, client, seeded_db, db, demo_header):
-        msg = _insert_message(db, seq=1)
-
-        resp = client.delete(f"/api/admin/messages/{msg.id}", headers=demo_header)
-        assert resp.status_code == 403
-        assert resp.json()["detail"] == "demo_account_read_only"
-        # The REAL row is untouched — the demo never reaches the table.
-        assert db.query(Message).count() == 1
-
 
 class TestBulkDeleteMessages:
     """POST /api/admin/messages/bulk-delete — multi-select delete."""
@@ -464,13 +434,6 @@ class TestBulkDeleteMessages:
         assert resp.status_code == 401
         assert db.query(Message).count() == 1
 
-    def test_demo_account_cannot_bulk_delete(self, client, seeded_db, db, demo_header):
-        msgs = [_insert_message(db, seq=i) for i in (1, 2)]
-
-        resp = client.post(self.URL, json={"ids": [m.id for m in msgs]}, headers=demo_header)
-        assert resp.status_code == 403
-        assert resp.json()["detail"] == "demo_account_read_only"
-        assert db.query(Message).count() == 2
 
     def test_bulk_delete_commits_exactly_once(
         self, client, seeded_db, db, monkeypatch, owner_header
@@ -583,25 +546,6 @@ class TestDeleteIsOwnerOnly:
         assert resp.json() == {"deleted": 2, "missing": 0}
         assert db.query(Message).count() == 0
 
-    def test_demo_still_gets_the_demo_message_not_owner_only(
-        self, client, seeded_db, db, demo_header
-    ):
-        """Ordering is deliberate: `get_current_user` runs BEFORE require_owner.
-
-        The demo row is role `admin`, so it would fail the owner check too — but
-        "editing is disabled in the demo" is the useful sentence for a demo
-        session, and the client keys its read-only notice off that exact string.
-        """
-        msg = _insert_message(db, seq=1)
-
-        one = client.delete(f"/api/admin/messages/{msg.id}", headers=demo_header)
-        assert one.status_code == 403
-        assert one.json()["detail"] == "demo_account_read_only"
-
-        bulk = client.post(self.BULK_URL, json={"ids": [msg.id]}, headers=demo_header)
-        assert bulk.status_code == 403
-        assert bulk.json()["detail"] == "demo_account_read_only"
-        assert db.query(Message).count() == 1
 
     def test_unauthenticated_is_still_401_not_403(self, client, seeded_db, db):
         """The owner gate must not turn an anonymous caller into a 403 — that

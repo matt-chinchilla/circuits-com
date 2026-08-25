@@ -9,7 +9,6 @@ import {
 import type { ReactNode } from 'react';
 import { adminApi } from '@admin/services/adminApi';
 import { passwordGate } from '@admin/services/passwordGate';
-import { demoSession } from '@admin/services/demoReadOnly';
 import type { AuthResponse, UserInfo } from '@admin/types/admin';
 
 interface AuthContextValue {
@@ -25,7 +24,6 @@ interface AuthContextValue {
   /** Sign in with the EMAIL address — there is no username login. */
   login: (email: string, password: string, remember?: boolean) => Promise<void>;
   /** One-click demo access (POST /auth/demo) — no credentials in the bundle. */
-  loginAsDemo: () => Promise<void>;
   /** Change the password and adopt the fresh token the server hands back. */
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   logout: () => void;
@@ -54,17 +52,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // /auth/me is ungated on purpose — a flagged user must be able to ask
         // who they are, which is how a reloaded tab rediscovers the screen.
         passwordGate.set(Boolean(me.must_change_password));
-        // Server-signalled, mirrored into a module so non-component code (e.g.
-        // messageStore's fire-and-forget PATCH) can skip writes it knows the
-        // server will refuse. The 403 gate is the real enforcement.
-        demoSession.set(Boolean(me.is_demo));
         setUser(me);
       })
       .catch(() => {
         if (cancelled) return;
         localStorage.removeItem('admin_token');
         passwordGate.set(false);
-        demoSession.set(false);
         setUser(null);
       })
       .finally(() => {
@@ -76,13 +69,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  // One place where a login-shaped payload becomes a session — /auth/login,
-  // /auth/demo and /auth/change-password all funnel through here so a token is
-  // never stored two slightly different ways.
+  // One place where a login-shaped payload becomes a session — /auth/login and
+  // /auth/change-password both funnel through here so a token is never stored
+  // two slightly different ways.
   const adopt = useCallback((response: AuthResponse) => {
     localStorage.setItem('admin_token', response.token);
     passwordGate.set(Boolean(response.must_change_password));
-    demoSession.set(Boolean(response.user.is_demo));
     setUser(response.user);
   }, []);
 
@@ -93,9 +85,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [adopt],
   );
 
-  const loginAsDemo = useCallback(async () => {
-    adopt(await adminApi.demoLogin());
-  }, [adopt]);
 
   const changePassword = useCallback(
     async (currentPassword: string, newPassword: string) => {
@@ -109,7 +98,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(() => {
     localStorage.removeItem('admin_token');
     passwordGate.set(false);
-    demoSession.set(false);
     setUser(null);
   }, []);
 
@@ -121,7 +109,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loading,
         mustChangePassword,
         login,
-        loginAsDemo,
         changePassword,
         logout,
       }}

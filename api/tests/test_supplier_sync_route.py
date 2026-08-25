@@ -225,29 +225,6 @@ class TestGuards:
         assert resp.status_code == 409
         assert resp.json()["detail"] == "no_feed_for_supplier"
 
-    def test_demo_account_cannot_start_a_run(self, client, db, seeded_db, feed_key, path):
-        """The demo session is handed to any anonymous visitor; a run spends
-        real API quota and writes to the real catalog."""
-        db.add(
-            User(
-                id=uuid.uuid4(),
-                username="demo",
-                password_hash=bcrypt.hashpw(b"demo", bcrypt.gensalt()).decode(),
-                role="admin",
-                email=DEMO_EMAIL,
-            )
-        )
-        db.commit()
-        token = client.post("/api/auth/demo").json()["token"]
-
-        resp = client.post(
-            f"/api/suppliers/{seeded_db['supplier1'].id}/{path}",
-            headers={"Authorization": f"Bearer {token}"},
-        )
-
-        assert resp.status_code == 403
-        assert resp.json()["detail"] == "demo_account_read_only"
-
 
 class TestKeyPrecedence:
     """A key stored from Admin → Settings beats the environment, and the key the

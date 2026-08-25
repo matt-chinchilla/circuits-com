@@ -73,15 +73,6 @@ services:
       # default ("admin"/"admin") never ships as a live secret.
       ADMIN_USERNAME: ${SQLADMIN_USERNAME:?SQLADMIN_USERNAME must be set in /opt/circuits-com/.env}
       ADMIN_PASSWORD: ${SQLADMIN_PASSWORD:?SQLADMIN_PASSWORD must be set in /opt/circuits-com/.env}
-      # One-click demo access (POST /api/auth/demo) — an UNAUTHENTICATED
-      # endpoint that mints a real session, so prod defaults it OFF and the
-      # operator opts in from /opt/circuits-com/.env (`DEMO_LOGIN_ENABLED=true`)
-      # + `docker compose ... up -d --force-recreate api`. Without this
-      # passthrough the .env value never reaches the container at all (no volume
-      # mount; pydantic-settings reads process env only) — the switch was inert
-      # until 2026-07-31. Guarded by tests/test_compose_env_passthrough.py.
-      DEMO_LOGIN_ENABLED: ${DEMO_LOGIN_ENABLED:-false}
-      DEMO_LOGIN_EMAIL: ${DEMO_LOGIN_EMAIL:-demo@circuitcenter.ai}
       # Fictional demo catalog in the seed — OFF on prod. The seed re-runs on
       # every api container start, so with this on, deleting "Kennedy
       # Electronics" or "Mike's Electric" in /admin was undone by the next

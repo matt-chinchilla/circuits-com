@@ -4,9 +4,7 @@ Three contracts live here:
 
 1. **The login identifier is the email address**, matched case-insensitively on
    ``lower(email)`` — the same expression the ``uq_users_email_lower`` unique
-   index covers. Usernames no longer authenticate — for ANY account, the
-   public demo one included (task 4 retired the last carve-out; prospects use
-   ``POST /api/auth/demo`` instead).
+   index covers. Usernames no longer authenticate for ANY account.
 2. **Sessions die on password change.** ``create_token`` stamps ``iat``;
    ``get_current_user`` rejects a token minted before the user's
    ``password_changed_at`` with 401 "Session expired". NULL means "no
@@ -141,79 +139,6 @@ class TestLoginAntiEnumeration:
         )
         assert _login(client, password="nope").status_code == 401
         assert calls["n"] == 0
-
-
-class TestDemoAccount:
-    """The demo account has NO credential login path at all.
-
-    Two owner decisions landed here in sequence on 2026-07-31: task 4 retired
-    the `demo` username fallback (email became the only login key), and then
-    the demo account was removed from `/login` entirely. Prospects reach the
-    console solely through `POST /api/auth/demo`, which takes no credentials.
-
-    Why the second step: the demo password is deliberately public, so leaving
-    it usable at `/login` meant an attacker held a credential that genuinely
-    succeeds — and since a successful login clears the rate-limit buckets,
-    that is an unlimited lever for undoing a lockout they triggered themselves
-    (rolling-review-4-5 finding #4). Refusing it routes through the identical
-    unknown-account path, so it leaks nothing.
-    """
-
-    def _seed_demo(self, db, password="demo"):
-        user = User(
-            username="demo",
-            password_hash=bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode(),
-            role="admin",
-            email="demo@circuitcenter.ai",
-        )
-        db.add(user)
-        db.commit()
-        return user
-
-    def test_demo_username_no_longer_authenticates(self, client, db, seeded_db):
-        self._seed_demo(db)
-        resp = _login(client, email="demo", password="demo")
-        assert resp.status_code == 401
-        assert resp.json()["detail"] == "Invalid credentials"
-
-    def test_demo_email_does_not_authenticate(self, client, db, seeded_db):
-        """The correct password for a real account is still refused."""
-        self._seed_demo(db)
-        resp = _login(client, email="demo@circuitcenter.ai", password="demo")
-        assert resp.status_code == 401
-        assert resp.json()["detail"] == "Invalid credentials"
-
-    def test_demo_refusal_is_indistinguishable_from_an_unknown_account(self, client, db, seeded_db):
-        """Refusing a KNOWN account must not become an existence oracle."""
-        self._seed_demo(db)
-        demo = _login(client, email="demo@circuitcenter.ai", password="demo")
-        unknown = _login(client, email="nobody@circuitcenter.ai", password="demo")
-        assert demo.status_code == unknown.status_code
-        assert demo.json() == unknown.json()
-
-    def test_demo_email_case_variants_are_also_refused(self, client, db, seeded_db):
-        """The block normalizes case exactly like the lookup it replaces —
-        otherwise `Demo@…` would slip past it straight into a real login."""
-        self._seed_demo(db)
-        assert _login(client, email="Demo@CircuitCenter.ai", password="demo").status_code == 401
-        assert _login(client, email="  demo@circuitcenter.ai  ", password="demo").status_code == 401
-
-    def test_demo_wrong_password_still_rejected(self, client, db, seeded_db):
-        self._seed_demo(db)
-        assert _login(client, email="demo@circuitcenter.ai", password="nope").status_code == 401
-
-    def test_no_username_resolves_for_any_account(self, client, db, seeded_db):
-        # The carve-out is gone; there is no username login path at all.
-        self._seed_demo(db)
-        assert _login(client, email="kennedy_user", password=ADMIN_PASSWORD).status_code == 401
-
-    def test_demo_is_not_forced_to_change_its_password(self, client, db, seeded_db):
-        """The button path must not drop a prospect onto a password screen."""
-        user = self._seed_demo(db)
-        assert user.must_change_password is False
-        demo = client.post("/api/auth/demo")
-        assert demo.status_code == 200
-        assert demo.json()["must_change_password"] is False
 
 
 class TestMustChangePasswordFlag:
@@ -384,45 +309,3 @@ class TestTokenPredatesPasswordChange:
         assert svc.token_predates_password_change({}, None) is False
 
 
-def test_demo_account_cannot_log_in_with_credentials(client, seeded_db, db):
-    """The public demo account has exactly ONE door: POST /auth/demo.
-
-    Its password is public, so leaving it usable at /login would (a) hand an
-    attacker a credential that legitimately succeeds and (b) let them clear
-    their own rate-limit lockout at will (a success clears both buckets).
-    Owner decision 2026-07-31: no demo credentials anywhere on the sign-in
-    screen — only the button.
-    """
-    from app.config import settings
-    from app.models.user import User
-    from app.services.auth_service import hash_password
-
-    demo_email = settings.DEMO_LOGIN_EMAIL
-    db.add(
-        User(
-            username="demo",
-            email=demo_email,
-            password_hash=hash_password("demo"),
-            role="admin",
-            must_change_password=False,
-        )
-    )
-    db.commit()
-
-    # The RIGHT password for a real, existing account still fails...
-    resp = client.post("/api/auth/login", json={"email": demo_email, "password": "demo"})
-    assert resp.status_code == 401
-
-    # ...and fails identically to a nonexistent account, so refusing the demo
-    # account here does not become an account-existence oracle.
-    unknown = client.post(
-        "/api/auth/login",
-        json={"email": "nobody@circuitcenter.ai", "password": "demo"},
-    )
-    assert unknown.status_code == resp.status_code
-    assert unknown.json() == resp.json()
-
-    # The button path still works.
-    demo_resp = client.post("/api/auth/demo")
-    assert demo_resp.status_code == 200
-    assert demo_resp.json()["token"]

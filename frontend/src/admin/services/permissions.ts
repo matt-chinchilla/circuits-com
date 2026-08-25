@@ -23,14 +23,12 @@ export const OWNER_ONLY_DETAIL = 'owner_only';
 export const OWNER_ONLY_MESSAGE = 'Only the account owner can delete messages.';
 
 /**
- * True when this axios error is the backend's owner-only 403 — the mirror of
- * `isDemoReadOnly`.
+ * True when this axios error is the backend's owner-only 403.
  *
  * The affordance is hidden from staff, so this should be unreachable in normal
  * use. It is not unreachable in practice: a second tab open across a role
  * change, or a stale bundle after a demotion, still holds a Delete button, and
- * without this the operator would read the raw string "owner_only" (the demo
- * gate has had a human sentence all along — review-caught).
+ * without this the operator would read the raw string "owner_only".
  */
 export function isOwnerOnly(status: unknown, detail: unknown): boolean {
   return status === 403 && detail === OWNER_ONLY_DETAIL;

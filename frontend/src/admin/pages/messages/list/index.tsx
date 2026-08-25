@@ -37,7 +37,6 @@ import {
 } from '@admin/services/messageStore';
 import { adminApi } from '@admin/services/adminApi';
 import { apiErrorDetail } from '@admin/services/apiError';
-import { isDemoReadOnly } from '@admin/services/demoReadOnly';
 import {
   canDeleteMessages,
   isOwnerOnly,
@@ -305,7 +304,7 @@ export default function MessagesListPage() {
   // Hidden for the public demo account, which has no mailbox — a prospect
   // clicking through to a login screen they can't pass is a dead end.
   const mailboxAddress =
-    user && !user.is_demo ? `${user.username.toLowerCase()}@${MAIL_DOMAIN}` : null;
+    user ? `${user.username.toLowerCase()}@${MAIL_DOMAIN}` : null;
   // Owner-only (2026-08-19). The server's `owner_only` 403 is the enforcement;
   // this keeps staff from ever meeting a control that only 403s. It gates BOTH
   // ways into a delete — the multi-select column with its selection bar, and
@@ -552,7 +551,7 @@ export default function MessagesListPage() {
       const { status, detail } = httpFailure(failure);
       // The demo 403 already raised the console-wide read-only notice inside
       // the axios interceptor — a second sentence here would just repeat it.
-      if (!isDemoReadOnly(status, detail)) {
+      {
         // `tally` is passed, NOT dropped: a batch that landed before the throw
         // deleted real messages for good, and the operator has to be told.
         // The owner-only 403 gets a sentence rather than the raw `owner_only`

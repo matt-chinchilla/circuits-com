@@ -32,7 +32,7 @@ MAX_BODY_BYTES = 256 * 1024
 async def stripe_webhook(request: Request, db: Session = Depends(get_db)) -> dict:
     secret = (settings.STRIPE_WEBHOOK_SECRET or "").strip()
     if not secret:
-        # Same posture as POST /api/auth/demo: an unconfigured door does not
+        # An unconfigured door does not
         # exist. A 503 would advertise that billing plumbing is present.
         raise HTTPException(status_code=404, detail="Not found")
 

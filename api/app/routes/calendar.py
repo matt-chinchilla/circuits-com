@@ -9,13 +9,11 @@ Four routes, all behind ONE dependency (:func:`require_calendar_access`):
     PATCH  /api/calendar/events/{id}
     DELETE /api/calendar/events/{id}
 
-**The demo account is refused on READS as well as writes, fail-closed.**
-``get_current_user`` already makes the demo read-only for mutations, which is
-NOT enough here: ``POST /api/auth/demo`` hands a real session to any anonymous
-visitor, so leaving reads open would publish the company's meeting schedule —
-titles, times, join links — to anyone who clicks "See Demo". One dependency
-does the refusal and every route in this module takes it, so a route added
-later cannot forget.
+**Two doors only: the plugin's shared secret, or an admin bearer token.**
+This module publishes the company's meeting schedule — titles, times, join
+links — so every route takes one dependency that refuses anything else, and a
+route added later cannot forget. (Migration 043 retired the public demo
+account, which is why the demo carve-out that used to live here is gone.)
 
 Schemas live in this module rather than ``app/schemas/`` on the
 ``admin_presence.py`` precedent: they have exactly one consumer, and the
@@ -29,7 +27,7 @@ import logging
 import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from fastapi.security import HTTPAuthorizationCredentials
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import func
@@ -46,20 +44,12 @@ from app.models.calendar_event import (
 from app.services.auth_service import (
     get_authenticated_user,
     get_current_user,
-    is_demo_user,
     security,
 )
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/calendar", tags=["calendar"])
-
-# The 403 body a demo session gets from every calendar route, reads included. A
-# machine-readable code like the auth service's own DEMO_READ_ONLY_DETAIL, and
-# deliberately DISTINCT from it: "the demo cannot edit this" and "the demo
-# cannot see this at all" are different facts, and the client should be able to
-# render a different empty state for the second.
-DEMO_CALENDAR_FORBIDDEN_DETAIL = "demo_account_no_calendar"
 
 # The header the Roundcube plugin may present instead of a user bearer token.
 # Both this and `Authorization: Bearer <secret>` are accepted and compared
@@ -115,20 +105,17 @@ def _resolve_actor(db: Session, presented_email: str | None) -> User | None:
     header, yields None and the event is simply unattributed. Attribution is a
     nicety and must never be able to fail a calendar write.
 
-    The demo account is excluded here as well as at the front door, so a
-    plugin call cannot launder demo identity into an authorship record.
     """
     email = (presented_email or "").strip().lower()
     if not email:
         return None
     user = db.query(User).filter(func.lower(User.email) == email).first()
-    if user is None or is_demo_user(user):
+    if user is None:
         return None
     return user
 
 
 def require_calendar_access(
-    request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(security),
     x_calendar_secret: str | None = Header(default=None, alias=CALENDAR_SECRET_HEADER),
     x_calendar_actor: str | None = Header(default=None, alias=CALENDAR_ACTOR_HEADER),
@@ -144,9 +131,7 @@ def require_calendar_access(
        forced-password-change gate and the rest of the auth model unchanged,
        because this defers to ``get_current_user`` for it.
 
-    The demo account is refused here, for reads as well as writes, BEFORE the
-    password gate runs so the reason it gets back is the accurate one. Every
-    other failure (no credentials, bad token, expired session) is
+    Every failure (no credentials, bad token, expired session) is
     ``get_authenticated_user``'s 401 — this function never opens a path that
     one would have closed.
     """
@@ -164,14 +149,9 @@ def require_calendar_access(
         return _resolve_actor(db, x_calendar_actor)
 
     user = get_authenticated_user(credentials=credentials, db=db)
-    if is_demo_user(user):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=DEMO_CALENDAR_FORBIDDEN_DETAIL,
-        )
     # Everything else the platform already enforces — the must_change_password
     # 403 above all — comes from the shared dependency, not a copy of it.
-    return get_current_user(request, user)
+    return get_current_user(user)
 
 
 # ── Schemas ─────────────────────────────────────────────────────────────────

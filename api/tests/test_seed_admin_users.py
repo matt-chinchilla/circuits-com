@@ -1,12 +1,11 @@
-"""Tests for the seeded admin users: emails, roles, forced resets, demo account.
+"""Tests for the seeded admin users: emails, roles, forced resets.
 
-The recovery flows need an email on each admin row, and the seeded demo row is
-what ``POST /api/auth/demo`` (one-click prospect access) resolves — so its
-address has to match ``settings.DEMO_LOGIN_EMAIL``.
+The recovery flows need an email on each admin row, and email is the login key
+since alembic 022, so every seeded account must carry one.
 
 ``_seed_admin_user`` is also the durable home of the account contract alembic
 022 backfilled once (matthew is the ``owner``; the four named humans start
-flagged for a forced password rotation; demo never is). The migration only
+flagged for a forced password rotation). The migration only
 matched rows that already existed when it ran, so without the same rules here a
 fresh database or a ``./deploy.sh --reseed`` — which truncates ``users`` via the
 suppliers FK cascade — would silently demote the owner and cancel every forced
@@ -21,13 +20,19 @@ from app.routes.auth import INVALID_CREDENTIALS_DETAIL
 
 
 class TestSeedAdminUsers:
-    def test_demo_user_seeded_with_email(self, db):
+    def test_no_demo_account_is_seeded(self, db):
+        """Alembic 044 retired it; the seed must not resurrect it.
+
+        The seed re-runs on EVERY api container start, so a demo row put back
+        here would return on the next deploy — and since the login-time refusal
+        that used to block it is gone, it would return as a working admin
+        login with a published password.
+        """
         _seed_admin_user(db)
         db.commit()
-        demo = db.query(User).filter(User.username == "demo").first()
-        assert demo is not None
-        assert demo.role == "admin"
-        assert demo.email == "demo@circuitcenter.ai"
+        assert db.query(User).filter(User.username == "demo").count() == 0
+        assert db.query(User).filter(
+            User.email == "demo@circuitcenter.ai").count() == 0
 
     def test_named_admins_get_emails(self, db):
         _seed_admin_user(db)
@@ -72,54 +77,13 @@ class TestSeedAdminUsers:
             assert resp.status_code == 200, f"{username} login failed"
             assert resp.json()["user"]["username"] == username
 
-    def test_demo_username_does_not_authenticate(self, client, db):
-        # Task 4 retired the last username carve-out: email is the only login
-        # key, for every account. Prospects use POST /api/auth/demo instead.
-        _seed_admin_user(db)
-        db.commit()
-        resp = client.post("/api/auth/login", json={"email": "demo", "password": "demo"})
-        assert resp.status_code == 401
-
-    def test_seeded_demo_row_powers_the_one_click_demo_endpoint(self, client, db):
-        # The seeded email must match settings.DEMO_LOGIN_EMAIL or /auth/demo
-        # 404s in prod.
-        _seed_admin_user(db)
-        db.commit()
-        resp = client.post("/api/auth/demo")
-        assert resp.status_code == 200
-        assert resp.json()["user"]["username"] == "demo"
-
-    def test_the_seeded_demo_credential_does_not_authenticate(self, client, db):
-        # The demo password is published on the sign-in screen, so credential
-        # login is closed for that account entirely (_find_login_user returns
-        # None for it) — POST /api/auth/demo is its only door. Answer is the
-        # same generic 401 an unknown address gets, so nothing is leaked.
-        _seed_admin_user(db)
-        db.commit()
-        resp = client.post(
-            "/api/auth/login",
-            json={"email": "demo@circuitcenter.ai", "password": "demo"},
-        )
-        assert resp.status_code == 401
-        assert resp.json()["detail"] == INVALID_CREDENTIALS_DETAIL
-
-    def test_demo_is_exempt_from_forced_password_change(self, client, db):
-        # The seeder (and migration 022) flag the four named admins, never
-        # demo — and the one-click demo session must say so, or the UI would
-        # trap every "See Demo" prospect on the "set a new password" screen.
-        _seed_admin_user(db)
-        db.commit()
-        resp = client.post("/api/auth/demo")
-        assert resp.status_code == 200
-        assert resp.json()["must_change_password"] is False
-        assert db.query(User).filter(User.username == "demo").first().must_change_password is False
 
     def test_idempotent_no_duplicates(self, db):
         _seed_admin_user(db)
         db.commit()
         _seed_admin_user(db)
         db.commit()
-        assert db.query(User).filter(User.username == "demo").count() == 1
+        assert db.query(User).filter(User.username == "matthew").count() == 1
 
     def test_backfills_email_on_legacy_row(self, db):
         # Simulate a row seeded before migration 015 (no email). Migration
@@ -158,9 +122,6 @@ class TestSeededAccountContract:
         users = self._seeded(db)
         for username in ("matthew", "Daniel", "Anthony", "Ronald"):
             assert users[username].must_change_password is True, username
-
-    def test_demo_is_never_flagged(self, db):
-        assert self._seeded(db)["demo"].must_change_password is False
 
     def test_a_reseed_does_not_re_flag_an_admin_who_already_rotated(self, db):
         # The one thing the seeder must NOT re-assert: re-stamping the flag

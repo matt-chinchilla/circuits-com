@@ -11,11 +11,9 @@
 
 import { NavLink } from 'react-router-dom';
 
-import { demoSession } from '../../services/demoReadOnly';
 import styles from './CatalogSwitch.module.scss';
 
 export default function CatalogSwitch() {
-  if (demoSession.isDemo()) return null;
   return (
     <nav className={styles.switch} role="group" aria-label="Catalog view">
       <NavLink

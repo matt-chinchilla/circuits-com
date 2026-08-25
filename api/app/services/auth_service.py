@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta
 
 import bcrypt
 import jwt
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
@@ -181,70 +181,6 @@ def reset_token_matches_hash(payload: dict, password_hash: str) -> bool:
 # this exact string, so changing it silently breaks the forced-reset UX.
 PASSWORD_CHANGE_REQUIRED_DETAIL = "password_change_required"
 
-# ── Read-only demo account (task 8) ─────────────────────────────────────────
-# `POST /api/auth/demo` hands ANY anonymous visitor a real admin session, so the
-# account behind that button must not be able to write. Same machine-readable
-# shape as the flag above: the admin client matches this exact string to show
-# "Editing is disabled in the demo" instead of a raw error.
-DEMO_READ_ONLY_DETAIL = "demo_account_read_only"
-
-# Every HTTP verb that can change server state. GET (and HEAD/OPTIONS) stay
-# fully open so the demo console renders exactly like the real one.
-MUTATING_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
-
-# The ONLY writes the demo account may perform, matched on the exact request
-# path. This is an allowlist, not a blocklist: anything not named here — every
-# endpoint that exists today and every endpoint added later — is blocked
-# automatically, so a new route cannot forget to protect itself. Adding an entry
-# is a deliberate edit that `test_demo_read_only.py` makes a reviewer look at.
-#
-# /admin/presence/ping qualifies because it writes NO business data: it stamps
-# the caller's own `users.last_seen_at` heartbeat so the topbar "who else is
-# here" bubbles work. It is also polled every 15s, so blocking it would machine-
-# gun the client's read-only notice with 403s the prospect never asked for.
-DEMO_WRITE_EXEMPT_PATHS = frozenset({"/api/admin/presence/ping"})
-
-
-def demo_login_email() -> str:
-    """The configured demo address, normalized — "" when the demo is unset.
-
-    THE single definition of "which account is the demo", shared by the read-only
-    gate here and the login/`/auth/demo` routes, so the two can never disagree
-    about who the demo user is.
-    """
-    return (settings.DEMO_LOGIN_EMAIL or "").strip().lower()
-
-
-def is_demo_user(user: User | None) -> bool:
-    """True when this user IS the public demo account.
-
-    Identity is the configured address, NOT the role or the username: the demo
-    row keeps ``role="admin"`` on purpose (it must see the whole console — the
-    admin-only sidebar sections included — to be worth showing a prospect), and
-    a username is not the login key any more.
-
-    Deliberately independent of ``DEMO_LOGIN_ENABLED``: that switch closes the
-    door, it does not change who is standing behind it. A demo session minted
-    while the endpoint was enabled stays read-only for its full 24h after the
-    operator flips the switch off.
-    """
-    demo_email = demo_login_email()
-    if not demo_email or user is None:
-        return False
-    return (user.email or "").strip().lower() == demo_email
-
-
-def _is_demo_blocked_write(request: Request) -> bool:
-    """True when this request is a write the demo account may not perform."""
-    if request.method.upper() not in MUTATING_METHODS:
-        return False
-    # Normalize the trailing slash so `/api/x/` and `/api/x` can't disagree
-    # (FastAPI 307-redirects between the two, but an exemption that silently
-    # missed would be a 403 storm, not a security hole).
-    path = request.url.path.rstrip("/") or "/"
-    return path not in {p.rstrip("/") or "/" for p in DEMO_WRITE_EXEMPT_PATHS}
-
-
 def get_authenticated_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(security),
     db: Session = Depends(get_db),
@@ -306,32 +242,24 @@ def get_authenticated_user(
     return user
 
 
-def get_current_user(request: Request, user: User = Depends(get_authenticated_user)) -> User:
-    """The authenticated user, gated on a forced password change AND on the
-    read-only demo account.
+def get_current_user(user: User = Depends(get_authenticated_user)) -> User:
+    """The authenticated user, gated on a forced password change.
 
     THE enforcement point for ``must_change_password``: a flagged user gets 403
     ``password_change_required`` on every route that depends on this — the
     admin screen is only its front end, and deleting the screen would not open
     the console.
 
-    THE enforcement point for the demo account too (task 8). ``POST
-    /api/auth/demo`` hands a real session to any anonymous visitor, so that
-    account gets 403 ``demo_account_read_only`` on every POST/PUT/PATCH/DELETE:
-    a prospect can browse the whole console but cannot edit a sponsor, delete a
-    part, or touch expenses on the live site. GET is untouched.
+    Fail-CLOSED by construction: every admin route already depends on this, so
+    it covers them all — and covers any route added later — without a
+    per-router opt-in that a new endpoint could forget. The three exempt
+    endpoints opt OUT explicitly via :func:`get_authenticated_user` —
+    ``/auth/change-password`` (the way out of the password gate), ``/auth/me``
+    and logout.
 
-    Fail-CLOSED by construction, and that is why BOTH gates live here: every
-    admin route already depends on ``get_current_user``, so they cover them all
-    (and cover any route added later) without a per-router opt-in that a new
-    endpoint could forget. The three exempt endpoints opt OUT explicitly via
-    :func:`get_authenticated_user` — ``/auth/change-password`` (the way out of
-    the password gate), ``/auth/me`` and logout — which is also what keeps
-    ``/auth/demo`` itself, ``/auth/me`` and logout working for a demo session.
-
-    Deliberately role-agnostic — it never compares ``role`` to ``"admin"``, so
-    the ``owner`` role (matthew, alembic 022) is neither privileged nor locked
-    out by it. Any future role check must use a set like ``{"admin", "owner"}``.
+    Deliberately role-agnostic. The customer/staff wall is a separate concern —
+    see ``require_staff`` / ``require_account_user`` / ``require_console_user``,
+    which compose with this rather than replacing it.
     """
     # bool(): the column is NOT NULL, but a row read through a connection that
     # predates alembic 022 could still surface None — never let `if x` decide
@@ -340,11 +268,6 @@ def get_current_user(request: Request, user: User = Depends(get_authenticated_us
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=PASSWORD_CHANGE_REQUIRED_DETAIL,
-        )
-    if is_demo_user(user) and _is_demo_blocked_write(request):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=DEMO_READ_ONLY_DETAIL,
         )
     return user
 
@@ -378,9 +301,6 @@ def require_owner(user: User = Depends(get_current_user)) -> User:
     COMPOSES with :func:`get_current_user` rather than replacing it, and the
     ordering is deliberate: get_current_user runs FIRST, so an unauthenticated
     caller still gets 401, a flagged user still gets ``password_change_required``
-    and the demo account still gets ``demo_account_read_only`` on these writes —
-    the demo message is the useful one for a demo session, and the demo row is
-    role `admin` anyway, so it would fail this check second regardless.
     """
     if not is_owner(user):
         raise HTTPException(

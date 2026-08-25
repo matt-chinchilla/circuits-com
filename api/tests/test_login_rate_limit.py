@@ -22,7 +22,7 @@ whole story. Six contracts are asserted here:
 5. **The recovery-by-identifier cooldown never escalates.** That key is named by
    the CALLER, so a doubling backoff on it is a third-party denial of password
    recovery. It re-arms the same flat 60s every time.
-6. **The demo account still works.** ``POST /auth/demo`` honors an existing
+6. (Retired, alembic 044: ``POST /auth/demo`` used to honor an existing
    login lockout (no back door) but never escalates one, and clicking it all
    day never locks a prospect out.
 
@@ -593,48 +593,6 @@ class TestClientIpIsNotAttackerControlled:
                 forged=victim,
             )
         assert _login(client, ip=victim).status_code == 200
-
-
-class TestDemoEndpoint:
-    def test_demo_honors_a_login_lockout(self, client, db, seeded_db, clock):
-        _seed_demo(db)
-        _fail_login(client, ip="10.0.3.1")
-        resp = client.post("/api/auth/demo", headers={"X-Real-IP": "10.0.3.1"})
-        assert resp.status_code == 401
-        assert resp.json() == GENERIC_401
-
-    def test_demo_never_escalates_the_lockout(self, client, db, seeded_db, clock):
-        # The marketing button takes no credentials and so cannot "fail":
-        # hammering it must never lock a prospect out of the demo.
-        _seed_demo(db)
-        for _ in range(THRESHOLD * 3):
-            assert client.post("/api/auth/demo").status_code == 200
-        # ...and it did not poison the real sign-in path either.
-        assert _login(client).status_code == 200
-
-    def test_demo_works_from_an_ip_that_never_offended(self, client, db, seeded_db, clock):
-        _seed_demo(db)
-        _fail_login(client, ip="10.0.4.1")
-        assert client.post("/api/auth/demo", headers={"X-Real-IP": "10.0.4.2"}).status_code == 200
-
-    def test_a_lockout_is_scoped_to_the_host_that_earned_it(self, client, db, seeded_db, clock):
-        # The demo account has no /login path at all (owner decision
-        # 2026-07-31), so what matters here is blast radius. /demo deliberately
-        # HONORS a lockout on its own host — otherwise a brute-forcer would
-        # just pivot to it for a token — but that lock must not follow the
-        # button around: a prospect on any other host still gets in.
-        _seed_demo(db)
-        attacker = "10.0.9.1"
-        for _ in range(THRESHOLD * 2):
-            client.post(
-                "/api/auth/login",
-                json={"email": "stranger@circuitcenter.ai", "password": "wrong"},
-                headers={"X-Real-IP": attacker},
-            )
-        # Same host as the spraying: the button is closed too.
-        assert client.post("/api/auth/demo", headers={"X-Real-IP": attacker}).status_code != 200
-        # A different prospect is unaffected.
-        assert client.post("/api/auth/demo", headers={"X-Real-IP": "10.0.9.2"}).status_code == 200
 
 
 # ── Recovery endpoints ──────────────────────────────────────────────────────

@@ -2,7 +2,7 @@
 
 Auth is ONE dependency (:func:`require_billing_access`): a real admin session,
 with the demo account refused on READS as well as writes — ``POST
-/api/auth/demo`` hands a session to any anonymous visitor, and quote lists and
+Quote lists and
 PDFs are customers' billing documents (the calendar routes set this posture).
 
 ``STRIPE_SECRET_KEY`` unset → every route 404s, the demo-door/webhook posture:
@@ -16,7 +16,7 @@ from __future__ import annotations
 import re
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -24,12 +24,11 @@ from app.config import settings
 from app.db.session import get_db
 from app.models import Sponsor, User
 from app.services import stripe_quotes
-from app.services.auth_service import get_current_user, is_demo_user
+from app.services.auth_service import get_current_user
 from app.services.stripe_quotes import QUOTE_LADDER, StripeApiError
 
 router = APIRouter(prefix="/api/admin", tags=["admin-quotes"])
 
-DEMO_BILLING_FORBIDDEN_DETAIL = "demo_account_no_billing"
 
 # Stripe quote ids as Stripe mints them. Validated BEFORE interpolation into a
 # request path so an id can never smuggle path segments toward Stripe's API.
@@ -37,10 +36,6 @@ _QUOTE_ID = re.compile(r"^qt_[A-Za-z0-9]{8,64}$")
 
 
 def require_billing_access(user: User = Depends(get_current_user)) -> User:
-    if is_demo_user(user):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail=DEMO_BILLING_FORBIDDEN_DETAIL
-        )
     return user
 
 

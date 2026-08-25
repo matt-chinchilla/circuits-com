@@ -7,7 +7,6 @@ import { useAdminTheme } from '@admin/contexts/AdminThemeContext';
 import Icon from '@shared/components/Icon';
 import BellDropdown from '@admin/components/messages/BellDropdown';
 import PresenceBubbles from '@admin/components/PresenceBubbles';
-import DemoReadOnlyNotice from '@admin/components/DemoReadOnlyNotice';
 import { adminApi } from '@admin/services/adminApi';
 import {
   loadMessages,
@@ -154,7 +153,7 @@ function SignOutModal({ open, onConfirm, onCancel }: SignOutModalProps) {
 
 export default function AdminLayout({ children, role = 'admin' }: AdminLayoutProps) {
   const { user, logout } = useAuth();
-  const { demoMode, toggleDemo, demoLocked } = useDemo();
+  const { demoMode, toggleDemo } = useDemo();
   const { theme, toggleTheme } = useAdminTheme();
   const location = useLocation();
   const navigate = useNavigate();
@@ -412,27 +411,14 @@ export default function AdminLayout({ children, role = 'admin' }: AdminLayoutPro
           </div>
 
           <div className={styles.topbarRight}>
-            {/* Unobtrusive "you are looking at the demo" mark. Server-signalled
-                (user.is_demo), so it can't be spoofed off by a client that
-                simply doesn't set it. */}
-            {demoLocked && (
-              <span className={styles.demoBadge} title="Read-only demo account">
-                Demo
-              </span>
-            )}
 
             <button
               type="button"
               role="switch"
               aria-checked={demoMode}
-              disabled={demoLocked}
-              className={`${styles.demoToggle} ${demoLocked ? styles.demoToggleLocked : ''}`}
+              className={styles.demoToggle}
               onClick={toggleDemo}
-              title={
-                demoLocked
-                  ? 'The demo always shows hypothetical data'
-                  : 'Toggle between hypothetical (demo) data and live production data'
-              }
+              title="Toggle between hypothetical (demo) data and live production data"
             >
               <span className={styles.demoLabel}>Demo Data</span>
               <span className={`${styles.demoSwitch} ${demoMode ? styles.on : styles.off}`}>
@@ -517,10 +503,6 @@ export default function AdminLayout({ children, role = 'admin' }: AdminLayoutPro
           }
           className={styles.content}
         >
-          {/* Sits above the page, inside the scroll container: a refused edit
-              is answered where the user's eyes already are, not in a corner
-              toast. Renders nothing until the server refuses a write. */}
-          <DemoReadOnlyNotice />
           {children}
         </div>
       </div>
@@ -534,17 +516,7 @@ export default function AdminLayout({ children, role = 'admin' }: AdminLayoutPro
         onCancel={() => setSignOutOpen(false)}
       />
 
-      {/* Guided-tour wizard. Mounts as a sibling of {children} so it lives
-          inside the React Router context (useNavigate/useLocation work) but
-          outside the page's scroll container, so the FAB stays pinned.
-
-          Hidden for the read-only demo account: every flow CREATES rows
-          (supplier, part, listing, sponsor), so the server refuses each one
-          with 403 demo_account_read_only and the tour would dead-end at its
-          first step. Showing no FAB is more honest than a tour that cannot
-          finish. (A read-only tour mode would be the real fix — see the task 8
-          report.) */}
-      {!demoLocked && <Wizard />}
+      <Wizard />
     </div>
   );
 }

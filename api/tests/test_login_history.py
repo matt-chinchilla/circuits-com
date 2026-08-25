@@ -185,26 +185,6 @@ class TestRecordingNeverBreaksSignIn:
         assert resp.json()["token"]
 
 
-class TestDemoIsNotRecorded:
-    def test_demo_login_leaves_no_sign_in_trail(self, client, db, seeded_db):
-        resp = client.post("/api/auth/demo")
-        if resp.status_code == 404:
-            pytest.skip("demo login disabled in this environment")
-
-        demo = db.query(User).filter(User.email == resp.json()["user"]["username"]).first()
-        if demo is None:
-            demo = (
-                db.query(User)
-                .filter(User.username == resp.json()["user"]["username"])
-                .first()
-            )
-        db.refresh(demo)
-        # Shared public account: a "last sign-in" showing a stranger's address
-        # is noise at best and a small privacy leak at worst.
-        assert demo.last_login_at is None
-        assert demo.prev_login_at is None
-
-
 class TestModelDefaults:
     def test_a_fresh_user_has_no_history(self, db):
         user = User(

@@ -13,9 +13,7 @@ Four contracts live here:
    the password policy (422 listing the unmet rule keys), refuses a no-op
    rotation, stamps ``password_changed_at``, clears the flag, and hands back a
    FRESH token — without which the caller would log itself out by succeeding.
-4. **``POST /auth/demo``** is one-click prospect access: no body, no
-   credentials, resolved server-side from ``settings.DEMO_LOGIN_EMAIL`` and
-   switchable off via ``DEMO_LOGIN_ENABLED`` without a frontend redeploy. The
+4. **The demo account is retired** (alembic 044). The
    username fallback it replaced is GONE — email is the only login key, for
    every account including demo.
 """
@@ -302,72 +300,6 @@ class TestChangePassword:
         assert _change(client, reset).status_code == 401
 
 
-class TestDemoLoginEndpoint:
-    def test_returns_a_working_token(self, client, db, seeded_db):
-        _seed_demo(db)
-        resp = client.post("/api/auth/demo")
-        assert resp.status_code == 200
-        body = resp.json()
-        assert body["user"]["username"] == "demo"
-        assert body["must_change_password"] is False
-        assert _me(client, body["token"]).status_code == 200
-
-    def test_the_token_authenticates_a_normal_admin_request(self, client, db, seeded_db):
-        _seed_demo(db)
-        token = client.post("/api/auth/demo").json()["token"]
-        assert client.get(ADMIN_ROUTE, headers=_bearer(token)).status_code == 200
-
-    def test_it_takes_no_body_at_all(self, client, db, seeded_db):
-        _seed_demo(db)
-        assert client.post("/api/auth/demo").status_code == 200
-
-    def test_a_posted_credential_is_ignored(self, client, db, seeded_db):
-        # It accepts no credentials: handing it another account's real login
-        # still returns the demo user, so it can never mint someone else's token.
-        _seed_demo(db)
-        resp = client.post(
-            "/api/auth/demo", json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD}
-        )
-        assert resp.status_code == 200
-        assert resp.json()["user"]["username"] == "demo"
-
-    def test_disabled_flag_returns_404(self, client, db, seeded_db, monkeypatch):
-        _seed_demo(db)
-        monkeypatch.setattr(settings, "DEMO_LOGIN_ENABLED", False)
-        assert client.post("/api/auth/demo").status_code == 404
-
-    def test_missing_demo_account_returns_404(self, client, seeded_db):
-        # No demo row seeded in this test.
-        assert client.post("/api/auth/demo").status_code == 404
-
-    def test_blank_configured_email_returns_404(self, client, db, seeded_db, monkeypatch):
-        _seed_demo(db)
-        monkeypatch.setattr(settings, "DEMO_LOGIN_EMAIL", "")
-        assert client.post("/api/auth/demo").status_code == 404
-
-    def test_configured_email_is_matched_case_insensitively(
-        self, client, db, seeded_db, monkeypatch
-    ):
-        _seed_demo(db)
-        monkeypatch.setattr(settings, "DEMO_LOGIN_EMAIL", "Demo@CircuitCenter.AI")
-        assert client.post("/api/auth/demo").status_code == 200
-
-    def test_a_flagged_demo_row_is_reported_verbatim(self, client, db, seeded_db):
-        # The endpoint must not clear a security flag it has no authority over.
-        demo = _seed_demo(db)
-        demo.must_change_password = True
-        db.commit()
-        resp = client.post("/api/auth/demo")
-        assert resp.json()["must_change_password"] is True
-
-    def test_rate_limit_seam_exists_and_covers_both_endpoints(self):
-        # Task 5 wires its limiter into this ONE list; /demo must never be a
-        # throttling-exempt back door around /login.
-        from app.routes import auth as auth_routes
-
-        assert isinstance(auth_routes.LOGIN_RATE_LIMIT_DEPENDENCIES, list)
-
-
 class TestUsernameLoginIsFullyRetired:
     """Email is the ONLY login key — including for demo (owner decision)."""
 
@@ -377,19 +309,6 @@ class TestUsernameLoginIsFullyRetired:
         assert resp.status_code == 401
         assert resp.json()["detail"] == "Invalid credentials"
 
-    def test_demo_email_does_not_authenticate_either(self, client, db, seeded_db):
-        """Owner decision 2026-07-31: the demo account has NO credential login.
-
-        Its password is public, so a working /login for it is both a
-        legitimately-succeeding credential for an attacker and a free
-        rate-limit reset. The button (/auth/demo) is the only door.
-        """
-        _seed_demo(db)
-        resp = client.post(
-            "/api/auth/login", json={"email": "demo@circuitcenter.ai", "password": "demo"}
-        )
-        assert resp.status_code == 401
-        assert client.post("/api/auth/demo").status_code == 200
 
     def test_the_retired_fallback_leaks_nothing(self, client, db, seeded_db):
         _seed_demo(db)

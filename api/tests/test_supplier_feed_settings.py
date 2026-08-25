@@ -112,23 +112,6 @@ def plain_supplier(seeded_db):
     return seeded_db["supplier2"]
 
 
-@pytest.fixture
-def demo_header(client, db):
-    """A demo session, minted the way the public button does (no password)."""
-    db.add(
-        User(
-            id=uuid.uuid4(),
-            username="demo",
-            password_hash=bcrypt.hashpw(b"demo", bcrypt.gensalt()).decode(),
-            role="admin",
-            email=DEMO_EMAIL,
-        )
-    )
-    db.commit()
-    token = client.post("/api/auth/demo").json()["token"]
-    return {"Authorization": f"Bearer {token}"}
-
-
 class TestModelShape:
     def test_the_table_has_exactly_the_designed_columns(self):
         """032's CREATE plus everything a later migration ADDs. The two sets
@@ -476,28 +459,6 @@ class TestNoSecretsInAnyResponse:
         row = db.query(SupplierFeed).filter_by(supplier_id=planted_row.id).one()
         assert row.api_key == ROW_KEY
         assert row.feed_url == "https://feeds.example.invalid/parts.csv"
-
-
-class TestDemoAccount:
-    def test_demo_may_read_the_card(self, client, seeded_db, demo_header, feed_supplier, env_key):
-        """The demo console renders exactly like the real one; the payload
-        carries no secret, so there is nothing to withhold."""
-        resp = client.get(_path(feed_supplier.id), headers=demo_header)
-
-        assert resp.status_code == 200
-        assert set(resp.json()) == {"provider", "key_configured", "auto_import_enabled"}
-        assert ENV_KEY not in resp.text
-
-    def test_demo_cannot_flip_the_switch(
-        self, client, db, seeded_db, demo_header, feed_supplier, env_key
-    ):
-        resp = client.patch(
-            _path(feed_supplier.id), headers=demo_header, json={"auto_import_enabled": True}
-        )
-
-        assert resp.status_code == 403
-        assert resp.json()["detail"] == "demo_account_read_only"
-        assert db.query(SupplierFeed).filter_by(supplier_id=feed_supplier.id).first() is None
 
 
 class TestSupplierDeleteRemovesTheFeedRow:

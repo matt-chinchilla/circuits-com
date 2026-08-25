@@ -3,7 +3,7 @@
 The two contracts that are not merely "the CRUD works":
 
 * **The demo account is refused on READS as well as writes.** ``POST
-  /api/auth/demo`` hands a real session to any anonymous visitor, so an open
+  the calendar publishes the company's meeting schedule, so an open
   read here would publish the company's meeting schedule — titles, times, join
   links — to anyone who clicks "See Demo". ``get_current_user``'s existing
   read-only gate covers mutations only, which is why this module has its own.
@@ -24,7 +24,6 @@ from app.models import CalendarEvent, CalendarReminderSend, User
 from app.routes.calendar import (
     CALENDAR_ACTOR_HEADER,
     CALENDAR_SECRET_HEADER,
-    DEMO_CALENDAR_FORBIDDEN_DETAIL,
 )
 
 BASE = "/api/calendar/events"
@@ -51,24 +50,6 @@ def _payload(**overrides):
 @pytest.fixture
 def admin_headers(client, seeded_db, auth_header):
     return auth_header()
-
-
-@pytest.fixture
-def demo_headers(client, db, seeded_db):
-    from app.models import User
-
-    db.add(
-        User(
-            username="demo",
-            password_hash=bcrypt.hashpw(b"demo", bcrypt.gensalt()).decode(),
-            role="admin",
-            email=DEMO_EMAIL,
-        )
-    )
-    db.commit()
-    resp = client.post("/api/auth/demo")
-    assert resp.status_code == 200, resp.text
-    return _bearer(resp.json()["token"])
 
 
 def _make_event(db, **overrides):
@@ -432,28 +413,6 @@ class TestAuth:
         assert resp.json()["detail"] == "password_change_required"
 
 
-class TestDemoIsRefusedOnReadsToo:
-    @pytest.mark.parametrize("method,url,body", ROUTES)
-    def test_every_calendar_route_refuses_the_demo(
-        self, client, seeded_db, demo_headers, method, url, body
-    ):
-        resp = _send(client, method, url, body, demo_headers)
-        assert resp.status_code == 403, f"{method} {url}: {resp.status_code} {resp.text}"
-        assert resp.json()["detail"] == DEMO_CALENDAR_FORBIDDEN_DETAIL
-
-    def test_the_read_refusal_leaks_no_event_data(self, client, db, seeded_db, demo_headers):
-        _make_event(db, title="Board meeting with the investor")
-        resp = client.get(BASE, headers=demo_headers)
-        assert resp.status_code == 403
-        assert "investor" not in resp.text
-
-    def test_the_demo_token_is_otherwise_still_valid(self, client, seeded_db, demo_headers):
-        """Proves the 403 is the calendar gate refusing a WORKING session, not
-        a broken token that would have 401'd anywhere."""
-        assert client.get("/api/auth/me", headers=demo_headers).status_code == 200
-        assert client.get("/api/admin/sponsors/", headers=demo_headers).status_code == 200
-
-
 class TestPluginSecret:
     def test_the_secret_opens_the_door_without_a_user(self, client, seeded_db, monkeypatch):
         monkeypatch.setattr(settings, "CALENDAR_API_SECRET", SECRET)
@@ -480,13 +439,6 @@ class TestPluginSecret:
             assert client.get(BASE, headers={CALENDAR_SECRET_HEADER: ""}).status_code == 401
             assert client.get(BASE, headers={CALENDAR_SECRET_HEADER: "anything"}).status_code == 401
             assert client.get(BASE).status_code == 401
-
-    def test_the_demo_cannot_borrow_the_plugin_door(
-        self, client, seeded_db, demo_headers, monkeypatch
-    ):
-        monkeypatch.setattr(settings, "CALENDAR_API_SECRET", SECRET)
-        resp = client.get(BASE, headers=demo_headers)
-        assert resp.status_code == 403
 
 
 # ── The actor header (attribution over the plugin door) ─────────────────────
@@ -555,18 +507,6 @@ class TestPluginActorAttribution:
         assert resp.status_code == 201, resp.text
         assert resp.json()["created_by_id"] is None
 
-    def test_the_demo_identity_cannot_be_laundered_through_the_header(
-        self, client, seeded_db, demo_headers, monkeypatch
-    ):
-        """Demo is refused at the front door; it must not reappear as an author."""
-        monkeypatch.setattr(settings, "CALENDAR_API_SECRET", SECRET)
-        resp = client.post(
-            BASE,
-            json=_payload(),
-            headers={CALENDAR_SECRET_HEADER: SECRET, CALENDAR_ACTOR_HEADER: DEMO_EMAIL},
-        )
-        assert resp.status_code == 201, resp.text
-        assert resp.json()["created_by_id"] is None
 
     def test_a_garbage_header_does_not_500(self, client, seeded_db, monkeypatch):
         monkeypatch.setattr(settings, "CALENDAR_API_SECRET", SECRET)

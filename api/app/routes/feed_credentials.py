@@ -20,7 +20,7 @@ that moves money.
 Auth is `get_current_user` on all three verbs — the demo account keeps its READ
 (the Settings card must render for a prospect) and is refused both writes by the
 global demo read-only gate in auth_service. The demo READ is narrowed further:
-`POST /api/auth/demo` hands a session to any anonymous visitor, so `last4` and
+Keys are write-only: `last4` and
 `updated_at` are BLANKED for that caller. Four characters of the live key plus
 the date it was last rotated is reconnaissance for a stranger, and the card
 reads perfectly well without either ("Configured — stored").
@@ -32,7 +32,7 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.models import ProviderCredential, User
-from app.services.auth_service import get_current_user, is_demo_user
+from app.services.auth_service import get_current_user
 from app.services.part_feed import FEED_PROVIDERS, env_feed_key
 
 router = APIRouter(prefix="/api/admin/feed-credentials", tags=["admin-feed-credentials"])
@@ -124,7 +124,7 @@ def list_feed_credentials(
     The demo session reads a REDACTED row (no last4, no updated_at): that door
     opens for anyone.
     """
-    return _all_statuses(db, redact=is_demo_user(current_user))
+    return _all_statuses(db)
 
 
 @router.put("/{provider}")
@@ -146,7 +146,7 @@ def set_feed_credential(
     db.commit()
     # Redacted for the demo like GET is. Unreachable for that account (the
     # global read-only gate 403s first) — one rule everywhere beats three.
-    return _all_statuses(db, redact=is_demo_user(current_user))
+    return _all_statuses(db)
 
 
 @router.delete("/{provider}")
@@ -167,4 +167,4 @@ def clear_feed_credential(
         synchronize_session=False
     )
     db.commit()
-    return _all_statuses(db, redact=is_demo_user(current_user))
+    return _all_statuses(db)

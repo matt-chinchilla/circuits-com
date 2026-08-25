@@ -2,7 +2,7 @@
 
 from app.models import Lead
 from app.services.leads import record_outcome
-from tests.test_admin_leads import _demo_header, leads_db  # noqa: F401 (fixture reuse)
+from tests.test_admin_leads import leads_db  # noqa: F401 (fixture reuse)
 
 
 def test_stats_has_manufacturers_count(client, seeded_db, auth_header):
@@ -19,13 +19,6 @@ def test_recent_feed_order_and_shape(client, leads_db, auth_header):
     assert len(body["contacts"]) == 2
     assert body["contacts"][0]["outcome"] == "rejected"  # most recent first
     assert body["contacts"][0]["recorded_by"] == "admin"
-
-
-def test_recent_feed_refuses_demo(client, leads_db):
-    h = _demo_header(client, leads_db)
-    resp = client.get("/api/dashboard/leads/recent", headers=h)
-    assert resp.status_code == 403
-    assert resp.json()["detail"] == "demo_account_no_leads"
 
 
 def test_limit_capped(client, leads_db, auth_header):

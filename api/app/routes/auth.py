@@ -13,16 +13,13 @@ from app.models import User
 from app.services import email as email_service
 from app.services import mail_sync
 from app.services.auth_service import (
-    DEMO_READ_ONLY_DETAIL,
     REMEMBER_EXPIRY_HOURS,
     TOKEN_EXPIRY_HOURS,
     create_reset_token,
     create_token,
     decode_reset_token,
-    demo_login_email,
     get_authenticated_user,
     hash_password,
-    is_demo_user,
     reset_token_matches_hash,
     verify_dummy_password,
     verify_password,
@@ -75,25 +72,20 @@ def _login_rate_limit(request: Request) -> None:
 
 
 # ── Rate-limit seam (task 5) ────────────────────────────────────────────────
-# /login and /demo are the two unauthenticated credential-adjacent endpoints and
-# MUST carry the SAME limiter. Both declare this ONE list so wiring the limiter
-# is a single edit here (append the Depends(...)) instead of two call sites that
-# can drift — /demo silently exempt from throttling would be a free oracle for
-# hammering the API. FastAPI reads the list when the decorator runs, so task 5
-# must populate it above the route definitions (or assign a new list to this
-# name BEFORE import completes).
+# The unauthenticated credential-adjacent endpoints declare this ONE list, so
+# wiring the limiter is a single edit here (append the Depends(...)) rather than
+# several call sites that can drift — one endpoint silently exempt from
+# throttling would be a free oracle for hammering the API. FastAPI reads the
+# list when the decorator runs, so it must be populated above the route
+# definitions (or a new list assigned to this name BEFORE import completes).
 #
-# /demo HONORS a login lockout but never escalates one: it takes no credentials,
-# so it cannot "fail", and counting the marketing button's clicks would lock a
-# prospect out of the demo after five taps. Sharing the check is what stops a
-# brute-forcing IP from simply pivoting to /demo for a token.
+# Migration 043 retired /auth/demo, which used to share this list.
 LOGIN_RATE_LIMIT_DEPENDENCIES: list = [Depends(_login_rate_limit)]
 
 
 class LoginRequest(BaseModel):
     # The login identifier is the email address, matched case-insensitively on
-    # lower(email). There is NO username fallback for anyone — the public demo
-    # account included; one-click demo access lives at POST /api/auth/demo.
+    # lower(email). There is NO username fallback for anyone.
     email: str
     password: str
     # "Keep me signed in for 30 days" — extends the JWT TTL when checked.
@@ -105,14 +97,6 @@ class UserInfo(BaseModel):
     username: str
     role: str
     supplier_id: str | None = None
-    # Task 8 — the public demo account, signalled by the SERVER so the console
-    # never has to infer it from a username or a role it could be lied to about.
-    # One flag drives both demo behaviours: the console renders read-only (the
-    # 403 `demo_account_read_only` gate in get_current_user is the real
-    # enforcement — this is only the front end of it) and DEMO DATA mode is
-    # forced on and non-disableable, so a prospect never sees real revenue,
-    # customer names or sponsor contacts.
-    is_demo: bool = False
 
 
 class LoginResponse(BaseModel):
@@ -141,16 +125,6 @@ class ChangePasswordRequest(BaseModel):
     new_password: str
 
 
-def _is_demo_identifier(identifier: str) -> bool:
-    """True when this identifier addresses the public demo account.
-
-    Reads the ONE definition in auth_service so this and the read-only gate
-    cannot disagree about which address is the demo.
-    """
-    demo_email = demo_login_email()
-    return bool(demo_email) and identifier.strip().lower() == demo_email
-
-
 def _find_login_user(db: Session, identifier: str) -> User | None:
     """Resolve a login identifier to a user, or None.
 
@@ -158,18 +132,9 @@ def _find_login_user(db: Session, identifier: str) -> User | None:
     covers, so at most one row can ever match. Email is the ONLY login key:
     no username resolves here, for any account.
 
-    The public demo account is NOT reachable through this path at all
-    (2026-07-31 owner decision). Its one and only door is `POST /auth/demo`,
-    which takes no credentials. Two reasons this matters beyond tidiness:
-    the demo password is public, so leaving it usable here would hand an
-    attacker a credential that legitimately succeeds — and a success clears
-    the rate-limit buckets, i.e. an unlimited lever for resetting a lockout
-    they armed themselves. Returning None routes it through the identical
-    unknown-account path (dummy hash + generic 401 + counted failure), so
-    refusing the demo here leaks nothing about which accounts exist.
     """
     ident = identifier.strip().lower()
-    if not ident or _is_demo_identifier(ident):
+    if not ident:
         return None
     return db.query(User).filter(func.lower(User.email) == ident).first()
 
@@ -177,7 +142,7 @@ def _find_login_user(db: Session, identifier: str) -> User | None:
 def _session_response(user: User, *, expires_hours: int = TOKEN_EXPIRY_HOURS) -> LoginResponse:
     """Mint a session token and wrap it in the one login-shaped payload.
 
-    /login, /demo and /change-password all hand the client the same thing, so
+    /login and /change-password both hand the client the same thing, so
     the client stores a token exactly one way.
     """
     return LoginResponse(
@@ -187,7 +152,6 @@ def _session_response(user: User, *, expires_hours: int = TOKEN_EXPIRY_HOURS) ->
             username=user.username,
             role=user.role,
             supplier_id=str(user.supplier_id) if user.supplier_id else None,
-            is_demo=is_demo_user(user),
         ),
         # bool(): the column is NOT NULL, but a legacy row read through an
         # older connection could still surface None — `?:`-style optionality
@@ -213,9 +177,7 @@ def _record_login(db: Session, user: User, request: Request) -> None:
 
     Best-effort. A failure here must never cost a valid credential its session,
     so the write is rolled back and swallowed rather than 500-ing a sign-in that
-    has already succeeded. Not called for the demo account, which is shared and
-    public — a "last sign-in" showing a stranger's address would be noise at
-    best and a small privacy leak at worst.
+    has already succeeded.
     """
     try:
         user.prev_login_at = user.last_login_at
@@ -269,39 +231,6 @@ def login(body: LoginRequest, request: Request, db: Session = Depends(get_db)):
     return _session_response(user, expires_hours=expires)
 
 
-@router.post("/demo", response_model=LoginResponse, dependencies=LOGIN_RATE_LIMIT_DEPENDENCIES)
-def demo_login(db: Session = Depends(get_db)):
-    """One-click demo access — no body, no credentials, no auth.
-
-    Prospects open the console without a password. The account is resolved
-    SERVER-side from settings.DEMO_LOGIN_EMAIL, so the public JS bundle never
-    carries a credential and the endpoint can never be coaxed into minting a
-    token for some other account (it accepts no input at all).
-
-    404 — not 403 — when disabled or when the demo row is missing: a disabled
-    demo should look like a route that was never deployed, and the response
-    must not confirm which accounts exist (anti-enumeration).
-
-    The session it hands out is READ-ONLY: ``get_current_user`` answers 403
-    ``demo_account_read_only`` to every write from this account (task 8), and
-    the payload's ``user.is_demo`` tells the console to mark itself and force
-    DEMO DATA on. That is what makes it safe to put this behind a public button.
-    """
-    if not settings.DEMO_LOGIN_ENABLED:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
-    demo_email = (settings.DEMO_LOGIN_EMAIL or "").strip().lower()
-    user = (
-        db.query(User).filter(func.lower(User.email) == demo_email).first() if demo_email else None
-    )
-    if user is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
-    # The demo account carries must_change_password = False (seed never flags
-    # it; alembic 022 flagged only the named admins), so this token clears the
-    # forced-change gate. Reported verbatim rather than forced to False: this
-    # unauthenticated endpoint must not be able to clear a security flag.
-    return _session_response(user)
-
-
 @router.post("/change-password", response_model=LoginResponse)
 def change_password(
     body: ChangePasswordRequest,
@@ -316,19 +245,6 @@ def change_password(
     minted before now (auth_service.token_predates_password_change), so without
     a replacement the caller would log itself out by succeeding.
     """
-    # The demo account is read-only here too, even though this endpoint takes
-    # the UNgated dependency. It is not a security hole (the demo has no
-    # credential login to protect) — it is griefing: the demo password is
-    # public, so any visitor could rotate it and, by stamping
-    # password_changed_at, instantly sign out every OTHER prospect's live demo
-    # session. Nothing is lost by refusing: the account's only door is
-    # /auth/demo, which never asks for a password.
-    if is_demo_user(current_user):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=DEMO_READ_ONLY_DETAIL,
-        )
-
     if not verify_password(body.current_password, current_user.password_hash):
         # 400, not 401: the session is perfectly valid, one field was wrong.
         # A 401 here would trip the admin client's log-out-on-401 handling and
@@ -576,8 +492,4 @@ def me(current_user: User = Depends(get_authenticated_user)):
         # the failure mode the push-sync design set out to prevent — the person
         # whose mail is behind is the one who needs to know.
         "mail_sync_pending": bool(current_user.mail_sync_pending),
-        # Same server-signalled flag as the login payload — a reloaded tab
-        # rediscovers "this is the demo" here, so DEMO DATA stays forced on and
-        # the console stays marked without a fresh sign-in.
-        "is_demo": is_demo_user(current_user),
     }

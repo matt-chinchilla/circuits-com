@@ -1577,22 +1577,21 @@ def seed(db: Session) -> None:
 # `admin` and cancelled all four forced rotations, with no error anywhere.
 _OWNER_USERNAME = "matthew"
 # Flagged for a forced password rotation ON CREATE — their credentials were
-# rotated out from under them. NEVER demo: flagging the public demo account
-# would trap every "See Demo" prospect on the "set a new password" screen.
+# rotated out from under them. This is the whole staff roster since alembic 044
+# retired the demo account.
 _FORCED_RESET_USERNAMES = ("matthew", "Daniel", "Anthony", "Ronald")
 
 
 def _seed_admin_user(db: Session) -> None:
     # (username, password, email). Emails power the account-recovery flows
-    # (forgot-password / forgot-username); demo/demo is the public demo login
-    # advertised on the redesigned sign-in screen.
+    # (forgot-password) and are the login key.
     # Passwords come from env vars (real values live in /opt/circuits-com/.env
     # on prod, never committed) with non-secret dev fallbacks so local seeding
-    # still works out of the box. demo/demo stays a literal — it's the
-    # intentional public demo login, not a real credential.
+    # still works out of the box. The demo account was retired in alembic 044 —
+    # registration replaced it, and its public password would otherwise have
+    # become a live admin login once the login-time refusal was removed.
     admin_users = [
         ("matthew", os.getenv("SEED_PW_MATTHEW", "admin"), "matthew@circuitcenter.ai"),
-        ("demo", "demo", "demo@circuitcenter.ai"),
         # Current team (usernames are case-sensitive on login — matched verbatim).
         ("Daniel", os.getenv("SEED_PW_DANIEL", "changeme-dev"), "daniel@circuitcenter.ai"),
         ("Anthony", os.getenv("SEED_PW_ANTHONY", "changeme-dev"), "anthony@circuitcenter.ai"),

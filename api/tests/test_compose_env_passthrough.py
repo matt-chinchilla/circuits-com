@@ -42,39 +42,11 @@ def _service_block(path: Path, service: str) -> str:
 # ── The kill switch reaches the container ───────────────────────────────────
 
 
-def test_the_shipped_demo_default_is_off():
-    """Fail-CLOSED: an environment that never opts in gets no demo door.
-
-    Asserted on the class field, not on the live `settings` singleton — the
-    test suite opts the flag ON via conftest so it can exercise the endpoint.
-    """
-    assert Settings.model_fields["DEMO_LOGIN_ENABLED"].default is False
-
-
-def test_both_compose_files_pass_the_demo_switch_through():
-    for path in (DEV_COMPOSE, PROD_COMPOSE):
-        api = _service_block(path, "api")
-        assert re.search(r"^\s*DEMO_LOGIN_ENABLED:\s*\$\{DEMO_LOGIN_ENABLED", api, re.M), (
-            f"{path.name}: the api service must pass DEMO_LOGIN_ENABLED through, or the "
-            "documented kill switch is inert (no env_file, no volume mount)."
-        )
-        assert re.search(r"^\s*DEMO_LOGIN_EMAIL:\s*\$\{DEMO_LOGIN_EMAIL", api, re.M), (
-            f"{path.name}: DEMO_LOGIN_EMAIL must be host-overridable alongside the switch."
-        )
-
-
-def test_prod_defaults_the_demo_endpoint_off():
-    api = _service_block(PROD_COMPOSE, "api")
-    assert "DEMO_LOGIN_ENABLED: ${DEMO_LOGIN_ENABLED:-false}" in api, (
-        "prod must default the unauthenticated /api/auth/demo endpoint OFF; the "
-        "operator opts in from /opt/circuits-com/.env."
-    )
-
-
-# ── The fictional demo catalog stays out of prod (2026-08-18) ───────────────
-# The seed re-runs on EVERY api container start, so a demo company the owner
-# deleted in /admin came straight back on the next deploy. The switch is only
-# real if it reaches the container — same allowlist trap as everything above.
+# The DEMO_LOGIN_ENABLED / DEMO_LOGIN_EMAIL passthrough assertions lived here
+# until alembic 044 retired the demo account and deleted both settings. The
+# cautionary references to that switch below are kept deliberately: it is this
+# repo's canonical example of a documented lever that was inert in production,
+# and it is why every test in this file exists.
 
 
 def test_the_shipped_demo_catalog_default_seeds_it():

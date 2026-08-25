@@ -8,9 +8,8 @@ import { isEmail, PWD_DOTS } from '../lib/recovery';
 import type { Screen } from './types';
 
 export default function SignIn({ go }: { go: (s: Screen) => void }) {
-  const { login, loginAsDemo } = useAuth();
-  // EMAIL is the login identifier — there is no username sign-in for any
-  // account, the public demo included (which has its own no-credential button).
+  const { login } = useAuth();
+  // EMAIL is the login identifier — there is no username sign-in for any account.
   const [email, setEmail] = useState('');
   const [password, setP] = useState('');
   const [remember, setR] = useState(true); // design default: checked
@@ -18,12 +17,6 @@ export default function SignIn({ go }: { go: (s: Screen) => void }) {
   const [errs, setErrs] = useState<{ email?: string; password?: string }>({});
   const [banner, setBanner] = useState('');
   const [busy, setBusy] = useState(false);
-  const [demoBusy, setDemoBusy] = useState(false);
-  // The demo can be switched off server-side (DEMO_LOGIN_ENABLED=false), which
-  // answers 404. Hide the button rather than show an error for something the
-  // visitor can do nothing about.
-  const [demoHidden, setDemoHidden] = useState(false);
-
   // `type="text"` + inputMode="email", never type="email": an HTML5-invalid
   // value silently kills form submit (see the CLAUDE.md gotcha). Validation is
   // ours, in JS, on a noValidate form.
@@ -52,22 +45,6 @@ export default function SignIn({ go }: { go: (s: Screen) => void }) {
         // mirrors the backend's single 401 body (anti-enumeration).
         setBanner('Incorrect email or password. Please try again.');
       }
-    }
-  };
-
-  const seeDemo = async () => {
-    setBanner('');
-    setDemoBusy(true);
-    try {
-      await loginAsDemo();
-    } catch (err) {
-      setDemoBusy(false);
-      const status = axios.isAxiosError(err) ? err.response?.status : undefined;
-      if (status === 404 || status === 403) {
-        setDemoHidden(true);
-        return;
-      }
-      setBanner('Couldn’t open the demo just now. Please try again.');
     }
   };
 
@@ -138,24 +115,15 @@ export default function SignIn({ go }: { go: (s: Screen) => void }) {
           Can&rsquo;t sign in?{' '}
           <button onClick={() => go('forgot-password')}>Reset your password</button>
         </p>
-        {!demoHidden && (
-          // Deliberately secondary to Sign in — this is the prospective-customer
-          // door, not the staff one. No credentials ship in the bundle: the
-          // account is resolved server-side by POST /api/auth/demo.
-          <div className="demo-cta">
-            <button type="button" className="btn-demo" onClick={seeDemo} disabled={demoBusy}>
-              {demoBusy ? (
-                <>
-                  <span className="spinner" />
-                  Opening demo&hellip;
-                </>
-              ) : (
-                <>See Demo &rarr;</>
-              )}
-            </button>
-            <p className="demo-note">Explore the admin console with sample data.</p>
-          </div>
-        )}
+        {/* Deliberately secondary to Sign in — this is the prospective-customer
+            door, not the staff one. It replaced the retired "See Demo" button
+            (alembic 044): registration is how prospects get in now. */}
+        <div className="demo-cta">
+          <button type="button" className="btn-demo" onClick={() => go('signup')}>
+            Sign Up &rarr;
+          </button>
+          <p className="demo-note">Create an account to get started.</p>
+        </div>
       </div>
     </div>
   );
