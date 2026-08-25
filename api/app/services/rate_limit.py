@@ -32,11 +32,14 @@ do not simply raise the worker count and assume the numbers below still hold.
 
 Design notes:
 
-* **Two key namespaces, deliberately separate.** ``login:*`` counts failed
-  sign-ins; ``recovery:*`` counts password-recovery traffic. They must NOT
-  share a bucket: the most ordinary user flow on earth is "fumble the password
-  a few times, then click Forgot password", and folding the two together would
-  let the login lockout swallow the very email that resolves it.
+* **Three key namespaces, deliberately separate.** ``login:*`` counts failed
+  sign-ins; ``recovery:*`` counts password-recovery traffic; ``signup:*``
+  counts self-registration traffic. They must NOT share a bucket: the most
+  ordinary user flow on earth is "fumble the password a few times, then click
+  Forgot password", and folding the two together would let the login lockout
+  swallow the very email that resolves it. Signup is separate for the mirror
+  reason — a registration flood must never lock a real customer out of
+  signing in.
 
 * **Per-IP AND per-account.** An attacker spraying one address from a botnet is
   caught by the per-account key; one host walking a list of addresses is caught
@@ -312,9 +315,9 @@ class RateLimiter:
         return True
 
 
-# THE shared instance. One limiter, two key namespaces (below) — so a lockout
-# in one namespace is visible to every endpoint that consults it, and the two
-# namespaces stay independent. Its threshold is the per-PROCESS share of
+# THE shared instance. One limiter, three key namespaces (below) — so a lockout
+# in one namespace is visible to every endpoint that consults it, and the
+# namespaces stay independent of one another. Its threshold is the per-PROCESS share of
 # FAILURE_THRESHOLD (see per_worker_threshold + the module docstring).
 limiter = RateLimiter(
     threshold=per_worker_threshold(),
@@ -479,3 +482,70 @@ def recovery_identifier_key(identifier: str | None) -> str | None:
     """
     normalized = (identifier or "").strip().lower()
     return f"{RECOVERY_IDENTIFIER_PREFIX}{normalized}" if normalized else None
+
+
+# ── Signup (alembic 043) ────────────────────────────────────────────────────
+# A THIRD namespace, deliberately not shared with login:* or recovery:* for the
+# same reason those two are separate: a signup flood must never lock a real
+# customer out of signing in.
+SIGNUP_IP_PREFIX = "signup:ip:"
+SIGNUP_EMAIL_PREFIX = "signup:email:"
+SIGNUP_PROBE_PREFIX = "signup:probe:"
+
+# D5 relaxed anti-enumeration at signup so the form can say "that address is
+# taken". This is what pays for it. The limiter above counts FAILURES per key;
+# enumeration is better measured as DISTINCT VALUES per key — a person who
+# forgot they registered retries one address, an enumerator walks many.
+PROBE_DISTINCT_THRESHOLD = 8
+PROBE_WINDOW_SECONDS = 15 * 60
+PROBE_LOCK_SECONDS = 60 * 60
+# Bounded so a spray cannot grow this dict without limit; oldest key evicted.
+MAX_PROBE_KEYS = 2048
+
+_probes: dict[str, dict[str, float]] = {}
+# Same reasoning as RateLimiter's own lock: FastAPI runs `def` routes in a
+# threadpool, so two signups really can land in here at once. Without this,
+# concurrent callers can raise KeyError on the prune or "dictionary changed
+# size during iteration" in the eviction scan — a 500 on the PUBLIC signup
+# route, arrived at by ordinary traffic rather than by an attack.
+_probes_lock = threading.Lock()
+
+
+def signup_ip_key(request: Request) -> str:
+    return f"{SIGNUP_IP_PREFIX}{client_ip(request)}"
+
+
+def signup_email_key(email: str | None) -> str | None:
+    normalized = (email or "").strip().lower()
+    return f"{SIGNUP_EMAIL_PREFIX}{normalized}" if normalized else None
+
+
+def signup_probe_key(request: Request) -> str:
+    return f"{SIGNUP_PROBE_PREFIX}{client_ip(request)}"
+
+
+def record_probe(key: str, value: str) -> int:
+    """Record that `key` probed `value`; return the DISTINCT count in-window.
+
+    Values are normalized so casing and padding cannot inflate the count —
+    an enumerator would otherwise pay nothing to look like eight people.
+    """
+    now = _now()
+    normalized = (value or "").strip().lower()
+    with _probes_lock:
+        seen = _probes.setdefault(key, {})
+        for old, stamp in list(seen.items()):
+            if now - stamp > PROBE_WINDOW_SECONDS:
+                del seen[old]
+        seen[normalized] = now
+        if len(_probes) > MAX_PROBE_KEYS:
+            oldest = min(_probes, key=lambda k: max(_probes[k].values(), default=0.0))
+            if oldest != key:
+                del _probes[oldest]
+        return len(seen)
+
+
+def reset_probes() -> None:
+    """Test hook — the module keeps process-lifetime state."""
+    with _probes_lock:
+        _probes.clear()
