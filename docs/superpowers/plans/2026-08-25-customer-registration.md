@@ -1444,9 +1444,9 @@ def test_returns_202_and_no_token(client):
     assert "token" not in r.json()  # no session until verified
 
 
-def test_creates_an_unverified_unactivated_customer(client, db_session):
+def test_creates_an_unverified_unactivated_customer(client, db):
     client.post("/api/auth/signup", json=GOOD)
-    u = db_session.query(User).filter(User.email == "ada@test.example").first()
+    u = db.query(User).filter(User.email == "ada@test.example").first()
     assert u is not None
     assert u.role == "user"
     assert u.email_verified_at is None
@@ -1454,15 +1454,15 @@ def test_creates_an_unverified_unactivated_customer(client, db_session):
     assert u.must_change_password is False
 
 
-def test_username_is_the_lowercased_email(client, db_session):
+def test_username_is_the_lowercased_email(client, db):
     client.post("/api/auth/signup", json=GOOD)
-    u = db_session.query(User).filter(User.email == "ada@test.example").first()
+    u = db.query(User).filter(User.email == "ada@test.example").first()
     assert u.username == "ada@test.example"
 
 
-def test_capability_links_are_never_set_by_signup(client, db_session):
+def test_capability_links_are_never_set_by_signup(client, db):
     client.post("/api/auth/signup", json=GOOD)
-    u = db_session.query(User).filter(User.email == "ada@test.example").first()
+    u = db.query(User).filter(User.email == "ada@test.example").first()
     assert u.supplier_id is None
     assert u.manufacturer_id is None
 
@@ -1657,49 +1657,49 @@ def setup_function():
     reset_probes()
 
 
-def _signup(client, db_session):
+def _signup(client, db):
     client.post("/api/auth/signup", json=GOOD)
-    return db_session.query(User).filter(User.email == GOOD["email"]).first()
+    return db.query(User).filter(User.email == GOOD["email"]).first()
 
 
-def test_signup_alone_creates_no_messages(client, db_session):
+def test_signup_alone_creates_no_messages(client, db):
     # D6: side effects fire on VERIFY, never on submit. Otherwise anyone with
     # a script sprays the staff inbox and mails strangers a "welcome".
-    before = db_session.query(Message).count()
-    _signup(client, db_session)
-    assert db_session.query(Message).count() == before
+    before = db.query(Message).count()
+    _signup(client, db)
+    assert db.query(Message).count() == before
 
 
-def test_verify_stamps_and_creates_both_messages(client, db_session):
-    user = _signup(client, db_session)
+def test_verify_stamps_and_creates_both_messages(client, db):
+    user = _signup(client, db)
     token = create_verify_token(str(user.id), user.email)
     r = client.post("/api/auth/verify", json={"token": token})
     assert r.status_code == 200
 
-    db_session.expire_all()
-    user = db_session.query(User).filter(User.email == GOOD["email"]).first()
+    db.expire_all()
+    user = db.query(User).filter(User.email == GOOD["email"]).first()
     assert user.email_verified_at is not None
     assert user.activated_at is None  # verification is not activation
 
-    staff = db_session.query(Message).filter(Message.type == "signup").one()
+    staff = db.query(Message).filter(Message.type == "signup").one()
     assert staff.user_id is None  # the shared staff inbox
     assert staff.payload["first_name"] == "Ada"
 
-    welcome = db_session.query(Message).filter(Message.type == "welcome").one()
+    welcome = db.query(Message).filter(Message.type == "welcome").one()
     assert welcome.user_id == user.id
 
 
-def test_verify_is_single_use(client, db_session):
-    user = _signup(client, db_session)
+def test_verify_is_single_use(client, db):
+    user = _signup(client, db)
     token = create_verify_token(str(user.id), user.email)
     assert client.post("/api/auth/verify", json={"token": token}).status_code == 200
     r = client.post("/api/auth/verify", json={"token": token})
     assert r.status_code == 400
-    assert db_session.query(Message).filter(Message.type == "signup").count() == 1
+    assert db.query(Message).filter(Message.type == "signup").count() == 1
 
 
-def test_a_session_token_cannot_verify(client, db_session):
-    user = _signup(client, db_session)
+def test_a_session_token_cannot_verify(client, db):
+    user = _signup(client, db)
     r = client.post("/api/auth/verify", json={"token": create_token(str(user.id), "user")})
     assert r.status_code == 400
 
@@ -1715,8 +1715,8 @@ def test_resend_is_generic_for_an_unknown_address(client):
     assert r.json() == {"status": "ok"}
 
 
-def test_resend_is_generic_for_an_already_verified_address(client, db_session):
-    user = _signup(client, db_session)
+def test_resend_is_generic_for_an_already_verified_address(client, db):
+    user = _signup(client, db)
     client.post("/api/auth/verify",
                 json={"token": create_verify_token(str(user.id), user.email)})
     r = client.post("/api/auth/resend-verification", json={"email": user.email})
@@ -1878,7 +1878,7 @@ def setup_function():
     reset_probes()
 
 
-def test_no_reset_mail_for_an_unverified_account(client, db_session):
+def test_no_reset_mail_for_an_unverified_account(client, db):
     client.post("/api/auth/signup", json=GOOD)
     with patch("app.routes.auth.email_service.send_password_reset") as sender:
         r = client.post("/api/auth/forgot-password", json={"identifier": GOOD["email"]})
@@ -1887,11 +1887,11 @@ def test_no_reset_mail_for_an_unverified_account(client, db_session):
     sender.assert_not_called()
 
 
-def test_the_response_is_identical_to_the_verified_case(client, db_session):
+def test_the_response_is_identical_to_the_verified_case(client, db):
     client.post("/api/auth/signup", json=GOOD)
     unverified = client.post("/api/auth/forgot-password",
                              json={"identifier": GOOD["email"]})
-    user = db_session.query(User).filter(User.email == GOOD["email"]).first()
+    user = db.query(User).filter(User.email == GOOD["email"]).first()
     client.post("/api/auth/verify",
                 json={"token": create_verify_token(str(user.id), user.email)})
     verified = client.post("/api/auth/forgot-password",
@@ -1900,7 +1900,7 @@ def test_the_response_is_identical_to_the_verified_case(client, db_session):
     assert unverified.json() == verified.json()
 
 
-def test_login_refuses_an_unverified_customer_with_the_right_password(client, db_session):
+def test_login_refuses_an_unverified_customer_with_the_right_password(client, db):
     client.post("/api/auth/signup", json=GOOD)
     r = client.post("/api/auth/login",
                     json={"email": GOOD["email"], "password": GOOD["password"]})
@@ -1908,7 +1908,7 @@ def test_login_refuses_an_unverified_customer_with_the_right_password(client, db
     assert r.json()["detail"] == "email_not_verified"
 
 
-def test_a_wrong_password_still_gets_the_generic_401(client, db_session):
+def test_a_wrong_password_still_gets_the_generic_401(client, db):
     # Learning "unverified" must require ALREADY knowing the password, or
     # login becomes an account-existence oracle.
     client.post("/api/auth/signup", json=GOOD)
@@ -1918,9 +1918,9 @@ def test_a_wrong_password_still_gets_the_generic_401(client, db_session):
     assert r.json()["detail"] == "Invalid credentials"
 
 
-def test_a_verified_customer_can_sign_in(client, db_session):
+def test_a_verified_customer_can_sign_in(client, db):
     client.post("/api/auth/signup", json=GOOD)
-    user = db_session.query(User).filter(User.email == GOOD["email"]).first()
+    user = db.query(User).filter(User.email == GOOD["email"]).first()
     client.post("/api/auth/verify",
                 json={"token": create_verify_token(str(user.id), user.email)})
     r = client.post("/api/auth/login",
@@ -2001,56 +2001,56 @@ def _customer(db, supplier_id=None):
     return u
 
 
-def test_no_link_is_free(db_session):
-    assert account_tier(db_session, _customer(db_session)) == "free"
+def test_no_link_is_free(db):
+    assert account_tier(db, _customer(db)) == "free"
 
 
-def test_linked_with_no_sponsorship_is_free(db_session, seeded_db):
-    supplier = db_session.query(Sponsor).first().supplier_id
-    db_session.query(Sponsor).filter(Sponsor.supplier_id == supplier).delete()
-    db_session.flush()
-    assert account_tier(db_session, _customer(db_session, supplier)) == "free"
+def test_linked_with_no_sponsorship_is_free(db, seeded_db):
+    supplier = db.query(Sponsor).first().supplier_id
+    db.query(Sponsor).filter(Sponsor.supplier_id == supplier).delete()
+    db.flush()
+    assert account_tier(db, _customer(db, supplier)) == "free"
 
 
-def test_highest_active_tier_wins(db_session, seeded_db):
-    supplier = db_session.query(Sponsor).first().supplier_id
-    db_session.add(Sponsor(supplier_id=supplier, keyword="kw-a", tier="Silver",
+def test_highest_active_tier_wins(db, seeded_db):
+    supplier = db.query(Sponsor).first().supplier_id
+    db.add(Sponsor(supplier_id=supplier, keyword="kw-a", tier="Silver",
                            status="Active"))
-    db_session.add(Sponsor(supplier_id=supplier, keyword="kw-b", tier="Gold",
+    db.add(Sponsor(supplier_id=supplier, keyword="kw-b", tier="Gold",
                            status="Active"))
-    db_session.flush()
-    assert account_tier(db_session, _customer(db_session, supplier)) == "gold"
+    db.flush()
+    assert account_tier(db, _customer(db, supplier)) == "gold"
 
 
-def test_null_status_counts_as_active(db_session, seeded_db):
+def test_null_status_counts_as_active(db, seeded_db):
     # Legacy seed rows omit status; `status != 'Expired'` is UNKNOWN for NULL
     # and would silently skip them.
-    supplier = db_session.query(Sponsor).first().supplier_id
-    db_session.query(Sponsor).filter(Sponsor.supplier_id == supplier).delete()
-    db_session.add(Sponsor(supplier_id=supplier, keyword="kw-c", tier="platinum",
+    supplier = db.query(Sponsor).first().supplier_id
+    db.query(Sponsor).filter(Sponsor.supplier_id == supplier).delete()
+    db.add(Sponsor(supplier_id=supplier, keyword="kw-c", tier="platinum",
                            status=None))
-    db_session.flush()
-    assert account_tier(db_session, _customer(db_session, supplier)) == "platinum"
+    db.flush()
+    assert account_tier(db, _customer(db, supplier)) == "platinum"
 
 
-def test_expired_does_not_count(db_session, seeded_db):
-    supplier = db_session.query(Sponsor).first().supplier_id
-    db_session.query(Sponsor).filter(Sponsor.supplier_id == supplier).delete()
-    db_session.add(Sponsor(supplier_id=supplier, keyword="kw-d", tier="Gold",
+def test_expired_does_not_count(db, seeded_db):
+    supplier = db.query(Sponsor).first().supplier_id
+    db.query(Sponsor).filter(Sponsor.supplier_id == supplier).delete()
+    db.add(Sponsor(supplier_id=supplier, keyword="kw-d", tier="Gold",
                            status="Expired"))
-    db_session.flush()
-    assert account_tier(db_session, _customer(db_session, supplier)) == "free"
+    db.flush()
+    assert account_tier(db, _customer(db, supplier)) == "free"
 
 
-def test_casing_does_not_matter(db_session, seeded_db):
+def test_casing_does_not_matter(db, seeded_db):
     # The admin writes TitleCase, legacy seed rows are lowercase, and `tier`
     # is a free string with no enum behind it.
-    supplier = db_session.query(Sponsor).first().supplier_id
-    db_session.query(Sponsor).filter(Sponsor.supplier_id == supplier).delete()
-    db_session.add(Sponsor(supplier_id=supplier, keyword="kw-e", tier="  SILVER ",
+    supplier = db.query(Sponsor).first().supplier_id
+    db.query(Sponsor).filter(Sponsor.supplier_id == supplier).delete()
+    db.add(Sponsor(supplier_id=supplier, keyword="kw-e", tier="  SILVER ",
                            status="Active"))
-    db_session.flush()
-    assert account_tier(db_session, _customer(db_session, supplier)) == "silver"
+    db.flush()
+    assert account_tier(db, _customer(db, supplier)) == "silver"
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -2147,27 +2147,27 @@ def _customer(db, email="c@test.example", activated_at=None):
     return u
 
 
-def test_a_customer_cannot_read_the_roster(client, db_session, auth_header):
-    _customer(db_session)
-    db_session.commit()
+def test_a_customer_cannot_read_the_roster(client, db, auth_header):
+    _customer(db)
+    db.commit()
     r = client.get("/api/admin/users/",
                    headers=auth_header(email="kennedy_user@test.example"))
     assert r.status_code == 403
     assert r.json()["detail"] == "staff_only"
 
 
-def test_staff_can_read_the_roster(client, db_session, auth_header):
-    _customer(db_session)
-    db_session.commit()
+def test_staff_can_read_the_roster(client, db, auth_header):
+    _customer(db)
+    db.commit()
     r = client.get("/api/admin/users/", headers=auth_header())
     assert r.status_code == 200
     emails = [row["email"] for row in r.json()]
     assert "c@test.example" in emails
 
 
-def test_the_roster_carries_the_columns_the_page_renders(client, db_session, auth_header):
-    _customer(db_session)
-    db_session.commit()
+def test_the_roster_carries_the_columns_the_page_renders(client, db, auth_header):
+    _customer(db)
+    db.commit()
     row = [u for u in client.get("/api/admin/users/",
                                  headers=auth_header()).json()
            if u["email"] == "c@test.example"][0]
@@ -2177,9 +2177,9 @@ def test_the_roster_carries_the_columns_the_page_renders(client, db_session, aut
         assert key in row, f"missing {key}"
 
 
-def test_activation_stamps_and_is_idempotent(client, db_session, auth_header):
-    u = _customer(db_session)
-    db_session.commit()
+def test_activation_stamps_and_is_idempotent(client, db, auth_header):
+    u = _customer(db)
+    db.commit()
     r = client.patch(f"/api/admin/users/{u.id}", json={"activated": True},
                      headers=auth_header())
     assert r.status_code == 200
@@ -2190,27 +2190,27 @@ def test_activation_stamps_and_is_idempotent(client, db_session, auth_header):
     assert again.json()["activated_at"] == first, "re-activating must not re-stamp"
 
 
-def test_deactivation_clears_the_stamp(client, db_session, auth_header):
+def test_deactivation_clears_the_stamp(client, db, auth_header):
     from datetime import UTC, datetime
 
-    u = _customer(db_session, activated_at=datetime.now(UTC))
-    db_session.commit()
+    u = _customer(db, activated_at=datetime.now(UTC))
+    db.commit()
     r = client.patch(f"/api/admin/users/{u.id}", json={"activated": False},
                      headers=auth_header())
     assert r.json()["activated_at"] is None
 
 
-def test_a_customer_cannot_activate_themselves(client, db_session, auth_header):
-    u = _customer(db_session)
-    db_session.commit()
+def test_a_customer_cannot_activate_themselves(client, db, auth_header):
+    u = _customer(db)
+    db.commit()
     r = client.patch(f"/api/admin/users/{u.id}", json={"activated": True},
                      headers=auth_header(email="kennedy_user@test.example"))
     assert r.status_code == 403
 
 
-def test_delete_is_owner_only(client, db_session, auth_header):
-    u = _customer(db_session)
-    db_session.commit()
+def test_delete_is_owner_only(client, db, auth_header):
+    u = _customer(db)
+    db.commit()
     # `admin` is not `owner`.
     r = client.delete(f"/api/admin/users/{u.id}", headers=auth_header())
     assert r.status_code == 403
@@ -2413,52 +2413,52 @@ def _login(client, email="c@test.example", password=PW):
     return {"Authorization": f"Bearer {r.json()['token']}"}
 
 
-def test_self_delete_requires_the_current_password(client, db_session):
-    _activated(db_session)
-    db_session.commit()
+def test_self_delete_requires_the_current_password(client, db):
+    _activated(db)
+    db.commit()
     h = _login(client)
     r = client.request("DELETE", "/api/account/me",
                        json={"password": "Wrong1!aa"}, headers=h)
     assert r.status_code == 401
-    assert db_session.query(User).filter(User.email == "c@test.example").count() == 1
+    assert db.query(User).filter(User.email == "c@test.example").count() == 1
 
 
-def test_self_delete_removes_the_login_and_their_messages(client, db_session):
-    u = _activated(db_session)
-    db_session.add(Message(id="m1", type="welcome", status="new", seq=9001,
+def test_self_delete_removes_the_login_and_their_messages(client, db):
+    u = _activated(db)
+    db.add(Message(id="m1", type="welcome", status="new", seq=9001,
                            user_id=u.id, payload={}))
-    db_session.add(Message(id="m2", type="signup", status="new", seq=9002,
+    db.add(Message(id="m2", type="signup", status="new", seq=9002,
                            user_id=None, payload={}))
-    db_session.commit()
+    db.commit()
     h = _login(client)
     r = client.request("DELETE", "/api/account/me", json={"password": PW}, headers=h)
     assert r.status_code == 200
-    db_session.expire_all()
-    assert db_session.query(User).filter(User.email == "c@test.example").count() == 0
-    assert db_session.query(Message).filter(Message.id == "m1").count() == 0
+    db.expire_all()
+    assert db.query(User).filter(User.email == "c@test.example").count() == 0
+    assert db.query(Message).filter(Message.id == "m1").count() == 0
     # The staff-inbox row is NOT theirs and must survive.
-    assert db_session.query(Message).filter(Message.id == "m2").count() == 1
+    assert db.query(Message).filter(Message.id == "m2").count() == 1
 
 
-def test_self_delete_never_touches_the_company(client, db_session, seeded_db):
-    supplier = db_session.query(Supplier).first()
-    sponsors_before = db_session.query(Sponsor).filter(
+def test_self_delete_never_touches_the_company(client, db, seeded_db):
+    supplier = db.query(Supplier).first()
+    sponsors_before = db.query(Sponsor).filter(
         Sponsor.supplier_id == supplier.id).count()
-    _activated(db_session, supplier_id=supplier.id)
-    db_session.commit()
+    _activated(db, supplier_id=supplier.id)
+    db.commit()
     h = _login(client)
     client.request("DELETE", "/api/account/me", json={"password": PW}, headers=h)
-    db_session.expire_all()
+    db.expire_all()
     # An account is a key to the building, not the building. Deleting a login
     # must never pull a paid ad off a board.
-    assert db_session.query(Supplier).filter(Supplier.id == supplier.id).count() == 1
-    assert db_session.query(Sponsor).filter(
+    assert db.query(Supplier).filter(Supplier.id == supplier.id).count() == 1
+    assert db.query(Sponsor).filter(
         Sponsor.supplier_id == supplier.id).count() == sponsors_before
 
 
-def test_me_reports_tier_and_activation(client, db_session):
-    _activated(db_session)
-    db_session.commit()
+def test_me_reports_tier_and_activation(client, db):
+    _activated(db)
+    db.commit()
     r = client.get("/api/account/me", headers=_login(client))
     assert r.status_code == 200
     body = r.json()
@@ -2466,12 +2466,12 @@ def test_me_reports_tier_and_activation(client, db_session):
     assert body["activated"] is True
 
 
-def test_an_unactivated_customer_is_refused(client, db_session):
+def test_an_unactivated_customer_is_refused(client, db):
     u = User(username="u@test.example", email="u@test.example",
              password_hash=hash_password(PW), role="user",
              email_verified_at=datetime.now(UTC), activated_at=None)
-    db_session.add(u)
-    db_session.commit()
+    db.add(u)
+    db.commit()
     r = client.get("/api/account/me", headers=_login(client, "u@test.example"))
     assert r.status_code == 403
     assert r.json()["detail"] == "account_not_activated"
