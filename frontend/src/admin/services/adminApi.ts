@@ -175,6 +175,51 @@ export const adminApi = {
       .then((r) => r.data),
 
   /**
+   * POST /auth/signup — the customer front door.
+   *
+   * Answers 202 with `{ status: "ok" }` and NO token: there is no session
+   * until the address is verified, so the caller must show a "check your
+   * email" state rather than treating success as a sign-in.
+   *
+   * The body is `extra="forbid"` server-side — do NOT add confirm_password
+   * here, the match is a client-side check only and an extra key is a 422.
+   *
+   * Errors worth handling at the call site: 409 with the STRING detail
+   * `email_taken` (an explicit carve-out from the anti-enumeration rule, so
+   * `apiErrorDetail` surfaces it), 429 `too_many_requests`, and 422 with the
+   * same STRUCTURED policy detail as /change-password —
+   * `{ code, message, unmet: [...] }`, read it with `unmetKeysFromDetail`.
+   */
+  signup: (firstName: string, lastName: string, email: string, password: string) =>
+    adminClient
+      .post<{ status: string }>('/auth/signup', {
+        first_name: firstName,
+        last_name: lastName,
+        email,
+        password,
+      })
+      .then((r) => r.data),
+
+  /**
+   * POST /auth/verify — spend a verification token from the emailed link.
+   *
+   * Every unusable token (malformed, expired, wrong purpose, wrong address)
+   * answers one indistinguishable 400 `invalid_or_expired_token`.
+   */
+  verifyEmail: (token: string) =>
+    adminClient.post<{ status: string }>('/auth/verify', { token }).then((r) => r.data),
+
+  /**
+   * POST /auth/resend-verification — mint a fresh link for an unverified
+   * address. Anti-enumeration (unlike /signup): always a generic
+   * `{ status: "ok" }`, whether or not that address has an account.
+   */
+  resendVerification: (email: string) =>
+    adminClient
+      .post<{ status: string }>('/auth/resend-verification', { email })
+      .then((r) => r.data),
+
+  /**
    * POST /auth/demo — one-click demo access for prospective customers.
    *
    * Takes NO body: the account is resolved server-side from DEMO_LOGIN_EMAIL,

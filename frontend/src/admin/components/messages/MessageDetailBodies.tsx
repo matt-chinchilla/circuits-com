@@ -1,7 +1,7 @@
 import { ExternalLink, Hash } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import type { Message } from '@admin/types/messages';
-import { findSupplierMatch } from './messageHelpers';
+import { findSupplierMatch, initialsOf } from './messageHelpers';
 import styles from './MessageDetailBodies.module.scss';
 
 interface SupplierLite {
@@ -16,12 +16,7 @@ export function ContactBody({
 }: {
   m: Extract<Message, { type: 'contact' }>;
 }) {
-  const initials = m.payload.name
-    .split(' ')
-    .map((s) => s[0])
-    .slice(0, 2)
-    .join('')
-    .toUpperCase();
+  const initials = initialsOf(m.payload.name);
 
   return (
     <div className={styles.contactBody}>
@@ -166,6 +161,82 @@ export function KeywordBody({
               <dd>{m.payload.message}</dd>
             </div>
           )}
+        </dl>
+      </div>
+    </div>
+  );
+}
+
+// === SIGNUP — a new customer, verified ===================================
+//
+// Deliberately NO illustration (D10): the treatment for these two cards is a
+// design decision the owner is making separately, so both are assembled from
+// the primitives Contact/Join/Keyword already use — the initials avatar, the
+// KV grid and the datasheet frame the detail page wraps them in.
+
+export function SignupBody({ m }: { m: Extract<Message, { type: 'signup' }> }) {
+  return (
+    <div className={styles.contactBody}>
+      <aside className={styles.contactSender}>
+        <div className={styles.senderAvatar}>{initialsOf(m.payload.full_name)}</div>
+        <div className={styles.senderName}>{m.payload.full_name}</div>
+        <a className={styles.senderEmail} href={`mailto:${m.payload.email}`}>
+          {m.payload.email}
+        </a>
+        <div className={styles.senderReason}>EMAIL VERIFIED</div>
+      </aside>
+
+      <div className={styles.regMeta}>
+        <dl className={styles.kvList}>
+          <div>
+            <dt>First name</dt>
+            <dd>{m.payload.first_name}</dd>
+          </div>
+          <div>
+            <dt>Last name</dt>
+            <dd>{m.payload.last_name}</dd>
+          </div>
+          <div>
+            <dt>Email</dt>
+            <dd className={styles.mono}>{m.payload.email}</dd>
+          </div>
+          <div>
+            <dt>Location</dt>
+            {/* `?:` catches only undefined — the backend sends JSON null when
+                the signup IP resolved to no country, so guard with != null. */}
+            <dd className={styles.mono}>{m.payload.country != null ? m.payload.country : '—'}</dd>
+          </div>
+        </dl>
+        <p className={styles.regNote}>
+          The account is verified but <b>not activated</b> — approve it under Users before they
+          can sign in.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// === WELCOME — the customer's own copy ===================================
+
+export function WelcomeBody({ m }: { m: Extract<Message, { type: 'welcome' }> }) {
+  return (
+    <div className={styles.keywordBody}>
+      <div className={styles.welcomeHero}>
+        <div className={styles.senderAvatar}>{initialsOf(m.payload.full_name)}</div>
+        <div className={styles.welcomeGreeting}>
+          Welcome{m.payload.first_name ? `, ${m.payload.first_name}` : ''}.
+        </div>
+        <p className={styles.welcomeCopy}>
+          Your Circuit Center account is set up. A member of the team reviews new accounts before
+          the console opens — you will get a second email the moment yours is live.
+        </p>
+      </div>
+      <div className={styles.kwMeta}>
+        <dl className={styles.kvList}>
+          <div>
+            <dt>Account</dt>
+            <dd>{m.payload.full_name}</dd>
+          </div>
         </dl>
       </div>
     </div>

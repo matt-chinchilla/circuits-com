@@ -4,6 +4,7 @@ import { useAuth } from '@admin/contexts/AuthContext';
 import AuthShell from './components/AuthShell';
 import SignIn from './screens/SignIn';
 import ForgotPassword from './screens/ForgotPassword';
+import SignUp from './screens/SignUp';
 import type { Screen } from './screens/types';
 
 export default function LoginPage() {
@@ -30,6 +31,7 @@ export default function LoginPage() {
     <AuthShell>
       {screen === 'signin' && <SignIn go={setScreen} />}
       {screen === 'forgot-password' && <ForgotPassword go={setScreen} />}
+      {screen === 'signup' && <SignUp go={setScreen} />}
     </AuthShell>
   );
 }

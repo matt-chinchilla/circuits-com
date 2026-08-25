@@ -56,6 +56,10 @@ export function subjectFor(m: Message): string {
       return m.payload.keyword;
     case 'reply':
       return '(reply)';
+    case 'signup':
+      return `${m.payload.full_name} signed up`;
+    case 'welcome':
+      return 'Welcome to Circuit Center';
   }
 }
 
@@ -69,11 +73,38 @@ export function senderName(m: Message): string {
       return m.payload.company_name;
     case 'reply':
       return '—';
+    case 'signup':
+      return m.payload.full_name;
+    case 'welcome':
+      // Written TO the customer, so the company is the sender — not the
+      // person whose inbox it sits in.
+      return 'Circuit Center';
   }
 }
 
 export function senderEmail(m: Message): string {
-  return m.type === 'reply' ? m.payload.to : m.payload.email;
+  if (m.type === 'reply') return m.payload.to;
+  // A welcome row carries no address at all — it was sent to the customer,
+  // not received from one. Reaching for `payload.email` here would print the
+  // literal "undefined" into a mailto: link.
+  if (m.type === 'welcome') return '—';
+  return m.payload.email;
+}
+
+/**
+ * Avatar initials — first letter of the first two words, upper-cased.
+ * Single home so the contact and signup avatars can never disagree, and so an
+ * empty/whitespace name renders a placeholder rather than an empty circle.
+ */
+export function initialsOf(name: string): string {
+  const letters = name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join('')
+    .toUpperCase();
+  return letters || '?';
 }
 
 // Loose name-match for the "View company → Suppliers" deep-link on Join
@@ -101,4 +132,6 @@ export const TYPE_META = {
   join: { label: 'JOIN', color: '#a88d2e', tint: 'rgba(168,141,46,.10)' },
   keyword: { label: 'KEYWORD', color: '#44bd13', tint: 'rgba(68,189,19,.12)' },
   reply: { label: 'REPLY', color: '#6b7280', tint: 'rgba(107,114,128,.10)' },
+  signup: { label: 'SIGNUP', color: '#153f80', tint: 'rgba(21,63,128,.10)' },
+  welcome: { label: 'WELCOME', color: '#4d189e', tint: 'rgba(77,24,158,.10)' },
 } as const;

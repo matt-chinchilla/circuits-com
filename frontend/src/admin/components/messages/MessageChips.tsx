@@ -1,4 +1,16 @@
-import { AlertCircle, Archive, Briefcase, CheckCircle2, Eye, Hash, Inbox, Mail, Reply } from 'lucide-react';
+import {
+  AlertCircle,
+  Archive,
+  Briefcase,
+  CheckCircle2,
+  Eye,
+  Hash,
+  Inbox,
+  Mail,
+  Reply,
+  Sparkles,
+  UserPlus,
+} from 'lucide-react';
 import type { ComponentType } from 'react';
 import type { Message, MessageStatus, MessageType } from '@admin/types/messages';
 import { TYPE_META, designatorLabel } from './messageHelpers';
@@ -9,6 +21,8 @@ const TYPE_ICON: Record<MessageType, ComponentType<{ size?: number; strokeWidth?
   join: Briefcase,
   keyword: Hash,
   reply: Reply,
+  signup: UserPlus,
+  welcome: Sparkles,
 };
 
 // MSG-0042 designator — JetBrains Mono, mirrors the U1/U2 pattern from the

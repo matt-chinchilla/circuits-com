@@ -985,6 +985,30 @@
       color: var(--danger);
     }
 
+    /* Success sibling of .banner — same geometry, no shake. Nothing went
+       wrong, so nothing should shudder. Sits ABOVE the form (it explains why
+       you are looking at one), not inside it. */
+    .banner-ok {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      margin-bottom: 18px;
+      padding: 11px 13px;
+      border-radius: 9px;
+      background: rgba(68, 189, 19, 0.09);
+      border: 1px solid rgba(21, 128, 61, 0.28);
+      font-size: 13px;
+      line-height: 1.45;
+      color: var(--exec-green);
+    }
+    .banner-ok svg {
+      width: 16px;
+      height: 16px;
+      flex-shrink: 0;
+      margin-top: 1px;
+      color: var(--ok);
+    }
+
     /* submit */
     .btn {
       display: inline-flex;

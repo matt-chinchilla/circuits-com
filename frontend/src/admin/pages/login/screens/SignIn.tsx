@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '@admin/contexts/AuthContext';
 import Field from '../components/Field';
@@ -17,6 +18,11 @@ export default function SignIn({ go }: { go: (s: Screen) => void }) {
   const [errs, setErrs] = useState<{ email?: string; password?: string }>({});
   const [banner, setBanner] = useState('');
   const [busy, setBusy] = useState(false);
+  // The verify screen lands here with ?welcome=1 once an address is confirmed.
+  // A confirmed account is signed in the ordinary way — verification mints no
+  // session — so all this does is explain why they were sent back to a form.
+  const [params] = useSearchParams();
+  const welcome = params.get('welcome') === '1';
   // `type="text"` + inputMode="email", never type="email": an HTML5-invalid
   // value silently kills form submit (see the CLAUDE.md gotcha). Validation is
   // ours, in JS, on a noValidate form.
@@ -59,6 +65,12 @@ export default function SignIn({ go }: { go: (s: Screen) => void }) {
         Sign in to your Circuit Center account to search the catalog, track parts and manage
         your orders.
       </p>
+      {welcome && (
+        <div className="banner-ok" role="status">
+          <Svg d={I.check} w={16} />
+          <span>Email confirmed. Sign in below.</span>
+        </div>
+      )}
       <form onSubmit={submit} noValidate>
         {banner && (
           <div className="banner">
@@ -114,6 +126,14 @@ export default function SignIn({ go }: { go: (s: Screen) => void }) {
         <p className="recover-line">
           Can&rsquo;t sign in?{' '}
           <button onClick={() => go('forgot-password')}>Reset your password</button>
+        </p>
+        {/* Two doors to the same screen on purpose: the button below is what a
+            scanner's eye lands on, this line is what a reader finds. */}
+        <p className="recover-line">
+          New here?{' '}
+          <button type="button" onClick={() => go('signup')}>
+            Create an account
+          </button>
         </p>
         {/* Deliberately secondary to Sign in — this is the prospective-customer
             door, not the staff one. It replaced the retired "See Demo" button

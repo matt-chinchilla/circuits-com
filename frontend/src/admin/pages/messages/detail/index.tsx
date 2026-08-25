@@ -14,6 +14,8 @@ import {
   ContactBody,
   JoinBody,
   KeywordBody,
+  SignupBody,
+  WelcomeBody,
 } from '@admin/components/messages/MessageDetailBodies';
 import MessageReplyPanel from '@admin/components/messages/MessageReplyPanel';
 import ActivityLog from '@admin/components/messages/ActivityLog';
@@ -145,6 +147,8 @@ export default function MessageDetailPage() {
           {m.type === 'join' && `wants to list — ${m.payload.company_name}`}
           {m.type === 'keyword' && m.payload.keyword}
           {m.type === 'reply' && '(reply)'}
+          {m.type === 'signup' && `${m.payload.full_name} signed up`}
+          {m.type === 'welcome' && 'Welcome to Circuit Center'}
         </h1>
 
         <div className={styles.actions}>
@@ -175,6 +179,8 @@ export default function MessageDetailPage() {
             {m.type === 'contact' && <ContactBody m={m} />}
             {m.type === 'join' && <JoinBody m={m} />}
             {m.type === 'keyword' && <KeywordBody m={m} />}
+            {m.type === 'signup' && <SignupBody m={m} />}
+            {m.type === 'welcome' && <WelcomeBody m={m} />}
           </div>
           <div className={traceFire ? styles.replyTraceFire : ''}>
             <MessageReplyPanel m={m} onSend={onSend} />

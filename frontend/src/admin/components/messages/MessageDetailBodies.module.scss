@@ -362,3 +362,54 @@
 .mono {
   font-family: $admin-font-mono;
 }
+
+// === Registration bodies (signup / welcome) =============================
+//
+// No illustration by design — these reuse the contact/keyword primitives
+// above (avatar rail, KV grid) so the two cards need only their own spacing.
+
+.regMeta {
+  padding: 18px 8px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.regNote {
+  margin: 0 20px;
+  padding: 10px 14px;
+  background: var(--a-bg);
+  border-left: 2px solid var(--a-primary);
+  border-radius: 0 6px 6px 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--a-fg2);
+}
+
+.welcomeHero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 28px 24px;
+  text-align: center;
+  background: var(--a-card);
+  border: 1px solid var(--a-border-soft);
+  border-radius: 8px;
+}
+
+.welcomeGreeting {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--a-fg1);
+  letter-spacing: -0.01em;
+}
+
+.welcomeCopy {
+  margin: 0;
+  max-width: 46ch;
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--a-fg2);
+  text-wrap: pretty;
+}
