@@ -14,6 +14,7 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime, tzinfo
 from email.message import EmailMessage
+from html import escape
 from zoneinfo import ZoneInfo
 
 import aiosmtplib
@@ -376,3 +377,168 @@ async def send_password_reset(to_email: str, username: str, reset_url: str) -> N
 async def send_username_reminder(to_email: str, usernames: list[str]) -> None:
     """Email the account holder their username(s). Demo-mode aware."""
     await _smtp_send(_build_username_reminder(to_email, usernames))
+
+
+# ── Account lifecycle mail (alembic 043) ────────────────────────────────────
+# The only HTML mail in this codebase. Constraints, all learned the hard way by
+# everyone who has ever sent HTML mail:
+#   * inline styles only — no <style> block survives Gmail reliably
+#   * table layout, max-width 600px
+#   * NO remote images. They are blocked by default, and fetching one confirms
+#     to the sender that the address is live.
+# Every message carries a text/plain part saying the same thing, so a text-only
+# reader still gets the link.
+
+_MAIL_MAX_WIDTH = 600
+_INK = "#1a1f23"
+_GREEN = "#44bd13"
+
+
+def _html_shell(heading: str, body_html: str, cta_label: str = "", cta_url: str = "") -> str:
+    """Wrap already-escaped body markup in the shared table shell.
+
+    `body_html` is markup by contract — callers escape anything user-typed
+    before it gets here (see _greeting_html).
+    """
+    button = ""
+    if cta_label and cta_url:
+        href = escape(cta_url, quote=True)
+        button = (
+            f'<tr><td style="padding:24px 0 8px 0;">'
+            f'<a href="{href}" style="background:{_GREEN};color:#ffffff;'
+            f"text-decoration:none;padding:13px 26px;border-radius:6px;"
+            f'font-weight:600;display:inline-block;">{escape(cta_label)}</a></td></tr>'
+            f'<tr><td style="padding:8px 0;color:#6b7280;font-size:13px;">'
+            f"If the button does not work, paste this into your browser:<br>"
+            f'<span style="color:{_INK};word-break:break-all;">{href}</span>'
+            f"</td></tr>"
+        )
+    return (
+        f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
+        f'style="background:#eef1f5;padding:32px 0;">'
+        f'<tr><td align="center">'
+        f'<table role="presentation" width="{_MAIL_MAX_WIDTH}" cellpadding="0" '
+        f'cellspacing="0" style="max-width:{_MAIL_MAX_WIDTH}px;background:#ffffff;'
+        f"border-radius:10px;padding:32px;font-family:-apple-system,Segoe UI,"
+        f'Helvetica,Arial,sans-serif;color:{_INK};">'
+        f'<tr><td style="font-size:22px;font-weight:700;padding-bottom:12px;">'
+        f"{heading}</td></tr>"
+        f'<tr><td style="font-size:15px;line-height:1.6;">{body_html}</td></tr>'
+        f"{button}"
+        f'<tr><td style="padding-top:28px;color:#6b7280;font-size:12px;'
+        f'border-top:1px solid #eef1f5;">Circuit Center</td></tr>'
+        f"</table></td></tr></table>"
+    )
+
+
+def _build_html_email(*, to_email: str, subject: str, text: str, html: str) -> EmailMessage:
+    """One multipart/alternative message. set_content then add_alternative
+    puts text/plain first, which is the order the RFC wants."""
+    msg = EmailMessage()
+    msg["From"] = settings.SMTP_FROM
+    msg["To"] = to_email
+    msg["Subject"] = subject
+    msg.set_content(text)
+    msg.add_alternative(html, subtype="html")
+    return msg
+
+
+def _greeting(first_name: str | None) -> str:
+    return f"Hi {first_name}" if first_name else "Hi"
+
+
+def _greeting_html(first_name: str | None) -> str:
+    """The same greeting, safe to drop into markup.
+
+    first_name is whatever the registrant typed, so it is escaped on the way
+    into the HTML part. The text/plain part keeps it verbatim.
+    """
+    return _greeting(escape(first_name) if first_name else None)
+
+
+def _build_verification_email(
+    to_email: str, first_name: str | None, verify_url: str
+) -> EmailMessage:
+    text = (
+        f"{_greeting(first_name)},\n\n"
+        "Confirm your email address to finish setting up your Circuit Center\n"
+        "account:\n\n"
+        f"{verify_url}\n\n"
+        "This link expires in 24 hours. If you did not create an account, you\n"
+        "can ignore this email.\n\n"
+        "- Circuit Center\n"
+    )
+    html = _html_shell(
+        "Confirm your email",
+        f"{_greeting_html(first_name)} — confirm this address to finish setting up "
+        "your Circuit Center account. The link expires in 24 hours.",
+        "Confirm email",
+        verify_url,
+    )
+    return _build_html_email(
+        to_email=to_email,
+        subject="Confirm your email — Circuit Center",
+        text=text,
+        html=html,
+    )
+
+
+def _build_welcome_email(to_email: str, first_name: str | None) -> EmailMessage:
+    text = (
+        f"{_greeting(first_name)},\n\n"
+        "Your email is confirmed. A member of our team reviews new accounts\n"
+        "before switching them on — we will email you the moment yours is\n"
+        "ready.\n\n"
+        "- Circuit Center\n"
+    )
+    html = _html_shell(
+        "Email confirmed",
+        f"{_greeting_html(first_name)} — your email is confirmed. A member of our "
+        "team reviews new accounts before switching them on, and we will email "
+        "you the moment yours is ready.",
+    )
+    return _build_html_email(
+        to_email=to_email,
+        subject="Email confirmed — Circuit Center",
+        text=text,
+        html=html,
+    )
+
+
+def _build_activation_email(
+    to_email: str, first_name: str | None, account_url: str
+) -> EmailMessage:
+    text = (
+        f"{_greeting(first_name)},\n\n"
+        "Your Circuit Center account is live. Sign in to see it:\n\n"
+        f"{account_url}\n\n"
+        "- Circuit Center\n"
+    )
+    html = _html_shell(
+        "Your account is live",
+        f"{_greeting_html(first_name)} — your Circuit Center account is switched on. "
+        "Sign in whenever you are ready.",
+        "Open my account",
+        account_url,
+    )
+    return _build_html_email(
+        to_email=to_email,
+        subject="Your account is live — Circuit Center",
+        text=text,
+        html=html,
+    )
+
+
+async def send_verification_email(to_email: str, first_name: str | None, verify_url: str) -> bool:
+    """Email the registrant their one-time verification link. Demo-mode aware."""
+    return await _smtp_send(_build_verification_email(to_email, first_name, verify_url))
+
+
+async def send_welcome_email(to_email: str, first_name: str | None) -> bool:
+    """Confirm the address landed and say a human reviews the account next."""
+    return await _smtp_send(_build_welcome_email(to_email, first_name))
+
+
+async def send_activation_email(to_email: str, first_name: str | None, account_url: str) -> bool:
+    """Tell the customer an admin switched their account on."""
+    return await _smtp_send(_build_activation_email(to_email, first_name, account_url))
