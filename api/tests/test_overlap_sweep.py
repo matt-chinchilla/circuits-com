@@ -61,6 +61,7 @@ from app.services.part_feed.digikey import (
     FeedWindowExhausted,
     _fold_key,
     manufacturer_ids_by_key,
+    part_from_digikey,
 )
 from app.services.part_feed.importer import (
     CURSOR_NS_CATEGORY,
@@ -75,6 +76,7 @@ from app.services.part_feed.importer import (
     _cursor_clear_namespace,
     _cursor_get,
     _cursor_set,
+    _Family,
     _FamilySweep,
     category_cursor_key,
     family_cursor_key,
@@ -1323,3 +1325,279 @@ class TestTheFamilySweepCanActuallyWrap:
         assert strategy.is_wrapped({unit.cursor_key: IMPORT_CURSOR_EXHAUSTED}, [unit]) is True
         assert strategy.is_wrapped({unit.cursor_key: 300}, [unit]) is False
         assert strategy.is_wrapped({}, []) is False
+
+
+class TestTheWrapFlagCountsOutstandingWork:
+    """My own `is_wrapped` fix had two defects; this pins both.
+
+    `_FamilySweep.units()` records whether the scan found anything left to do,
+    because the returned list has exhausted families filtered out of it and
+    `_sweep_run` therefore cannot read the terminal state off it. Two mistakes
+    in that recording:
+
+    1. `saw_family` / `saw_unfinished` were initialised INSIDE the `while True:`
+       narrowing loop, so every iteration reset them and only the last one
+       survived to the assignment. A first pass that found plenty of work
+       followed by a final narrowing pass that found none would report wrapped.
+    2. Two `continue` arms that represent REAL outstanding work did not set
+       `saw_unfinished`: a TOO_WIDE family (which goes to `expand` and is very
+       much unfinished) and the keep-cap arm (which exists precisely because
+       there is more work than budget).
+
+    Either one makes `_exhausted_everything` true while work remains, which
+    clears the family cursor namespace — so the sweep restarts from the top
+    every run, re-reading pages it has already absorbed and never advancing.
+    That is worse than the silence the flag was added to fix.
+
+    A family whose scope cannot be built is deliberately NOT counted as
+    outstanding: it can never be swept, so waiting for it would mean never
+    wrapping. It is also not counted as *swept*, or an entirely unmappable
+    catalog would report a full pass on every run forever.
+    """
+
+    def test_the_flags_survive_the_narrowing_loop(self):
+        import ast
+        import inspect
+        import textwrap
+
+        src = textwrap.dedent(inspect.getsource(_FamilySweep.units))
+        tree = ast.parse(src).body[0]
+
+        def _assigns(node) -> list[int]:
+            return [
+                n.lineno
+                for n in ast.walk(node)
+                if isinstance(n, ast.Assign)
+                and any(
+                    isinstance(t, ast.Name) and t.id in ("saw_sweepable", "saw_unfinished")
+                    for t in n.targets
+                )
+                and isinstance(n.value, ast.Constant)
+                and n.value.value is False
+            ]
+
+        whiles = [n for n in ast.walk(tree) if isinstance(n, ast.While)]
+        assert whiles, "the narrowing loop is gone; this test needs rewriting"
+        inside = {ln for w in whiles for ln in _assigns(w)}
+        assert inside == set(), (
+            "the wrap flags are reset inside the narrowing loop, so only its last "
+            "iteration is remembered — hoist them above `while True:`"
+        )
+        assert _assigns(tree), "the wrap flags are never initialised at all"
+
+    def test_an_unfinished_scan_is_not_a_wrap(self):
+        strategy = _FamilySweep()
+        strategy._exhausted_everything = False
+        assert strategy.is_wrapped({}, []) is False
+
+    def test_outstanding_work_is_recorded_before_the_branch_arms(self):
+        """`saw_unfinished` is set ONCE, above the arms, so every one inherits it.
+
+        Checked as ordering rather than per-arm, because that is the property
+        that actually holds: TOO_WIDE (queued for narrowing) and the keep-cap
+        (more work than budget) are both outstanding, and setting the flag
+        before either branch is what makes adding a third arm safe by default.
+        The one arm that must NOT inherit it — a family with no scope, which
+        can never be swept — unwinds it explicitly.
+        """
+        import inspect
+
+        src = inspect.getsource(_FamilySweep.units)
+        set_at = src.index("saw_unfinished = True")
+        too_wide_at = src.index("if state == IMPORT_CURSOR_TOO_WIDE")
+        assert set_at < too_wide_at, (
+            "outstanding work is recorded per-arm rather than before them, so a "
+            "new arm defaults to 'nothing left to do' — which clears the cursor "
+            "namespace and restarts the sweep from page one"
+        )
+        assert "saw_unfinished = _unfinished_before" in src, (
+            "a family this distributor has no id for is being counted as "
+            "outstanding work; with 592 unmapped makers the sweep can then never "
+            "report a completed pass"
+        )
+
+
+class TestTheMakerGateComparesIdsNotSpellings:
+    """The scope is built from distributor IDs; the gate compared NAMES.
+
+    `units()` narrows every family query with `ManufacturerFilter=<ids>`, taken
+    from a map whose entries exist BECAUSE our name and Digi-Key's name are the
+    same company. `_resolve_maker` then asked whether the two sides SPELL the
+    company identically. For the makers whose spellings already match, that is
+    a tautology. For the rest it is exactly inverted — those entries are in the
+    map PRECISELY because the spellings differ.
+
+    Measured against the real catalog and the live Digi-Key list: 26 of 476
+    mapped makers were discarded, 20,752 parts, 14.3% of everything mapped —
+    including ALL 22 hand pins, whose entire justification is "canon correctly
+    refuses to merge these two names". Those 24 live makers own 8,384 six-char
+    families; each one, when scheduled, spends a call from a 1,000/day shared
+    quota and can never write a row. Roughly eight days of quota structurally
+    incapable of producing a listing.
+
+    The fix is a join that was thrown away twice. Digi-Key returns
+    `Manufacturer: {"Id": 296, "Name": "Texas Instruments"}` and
+    `_parse_product` kept only the Name; the generator held the Name beside the
+    Id and persisted only the Id. Carrying the ID through means the gate can
+    ask the only question that matters — is this row from one of the makers I
+    filtered on — in the distributor's own identifiers, with no spelling,
+    canon, fold or regenerated data file involved.
+
+    It also makes the rot gate STRONGER, which is why the earlier
+    "trust the scope entirely" attempt was correctly reverted: a genuinely
+    foreign row carries a different Id and is still refused, so
+    `test_an_unknown_maker_is_declined_WITHOUT_minting_a_manufacturer_row`
+    keeps passing on its own merits.
+    """
+
+    def test_a_scoped_row_is_accepted_on_its_id_however_it_is_spelled(self, db):
+        maker = _maker(db, "Analog Devices / Maxim Integrated", "analog devices maxim integrated")
+        db.commit()
+        family = _Family(
+            canonical_key="analog devices maxim integrated",
+            manufacturer_id=maker.id,
+            manufacturer_name=maker.name,
+            prefix="ADM325",
+            unlisted=5,
+        )
+        scope = FeedScope(keyword="ADM325", manufacturer_id="505,175", label="ADI")
+        assert (
+            _FamilySweep._resolve_maker(
+                db, "Analog Devices Inc.", family, scope, provider_maker_id="505"
+            )
+            == maker.id
+        ), "a row Digi-Key returned under our own id filter was refused on its spelling"
+
+    def test_a_foreign_id_is_still_refused(self, db):
+        """The rot gate, now in the distributor's own identifiers."""
+        maker = _maker(db, "Texas Instruments", "texas instruments")
+        db.commit()
+        family = _Family(
+            canonical_key="texas instruments",
+            manufacturer_id=maker.id,
+            manufacturer_name=maker.name,
+            prefix="SN74",
+            unlisted=5,
+        )
+        scope = FeedScope(keyword="SN74", manufacturer_id="296", label="TI")
+        assert (
+            _FamilySweep._resolve_maker(
+                db, "Texas Instruments", family, scope, provider_maker_id="9999"
+            )
+            is None
+        ), "a row from a maker we did not filter on was accepted on its name"
+
+    def test_a_row_with_no_provider_id_falls_back_to_the_name_rule(self, db):
+        """Mouser sends no manufacturer id, so the old rule stays reachable."""
+        maker = _maker(db, "Texas Instruments", "texas instruments")
+        db.commit()
+        family = _Family(
+            canonical_key="texas instruments",
+            manufacturer_id=maker.id,
+            manufacturer_name=maker.name,
+            prefix="SN74",
+            unlisted=5,
+        )
+        scope = FeedScope(keyword="SN74", manufacturer_id="296", label="TI")
+        assert (
+            _FamilySweep._resolve_maker(
+                db, "Texas Instruments", family, scope, provider_maker_id=None
+            )
+            == maker.id
+        )
+        assert (
+            _FamilySweep._resolve_maker(db, "Someone Else", family, scope, provider_maker_id=None)
+            is None
+        )
+
+    def test_the_parser_keeps_the_manufacturer_id(self):
+        """The join has to survive the parse or the gate has nothing to compare."""
+        import json
+        import pathlib
+
+        raw = json.loads(pathlib.Path("tests/fixtures/digikey_keyword_product.json").read_text())
+        fp = part_from_digikey(raw)
+        assert fp is not None
+        assert fp.provider_manufacturer_id == "296", (
+            "Digi-Key sends Manufacturer.Id beside Manufacturer.Name and the "
+            f"parser dropped it (got {fp.provider_manufacturer_id!r})"
+        )
+
+
+class TestCanNarrowAsksAboutChildrenNotArithmetic:
+    """`can_narrow` is asked one question and answers a different one.
+
+    `next_cursor` reads it as "does this family have somewhere narrower to
+    actually go?":
+
+        if total is not None and total > window and unit.can_narrow:
+            return IMPORT_CURSOR_TOO_WIDE
+
+    `units()` computes it as "is there room left in the level arithmetic?":
+    `can_narrow=level < FAMILY_PREFIX_MAX`. Those coincide only when a longer
+    prefix would in fact split the group.
+
+    `_reemit` is the one place that knows the truth — it is called precisely
+    for a too-wide family that produced no child, and hardcodes
+    `can_narrow=False`. But that knowledge dies the moment the cursor stops
+    being TOO_WIDE: `_reemit` fires only for families whose cursor IS the
+    sentinel, so once the re-emitted unit pages once and writes a positive
+    depth, the next scan rebuilds it through the ordinary path with
+    `can_narrow` back to the level arithmetic, it is marked too wide again, and
+    round it goes — re-reading the same first page and spending a call each
+    time.
+
+    The fact is already in the one aggregate the sweep runs: whether any SKU in
+    the group is longer than the prefix is the exact complement of the child
+    filter `_groups` already applies. It is a property of OUR catalog, which is
+    why the level counter can never stand in for it.
+    """
+
+    def test_a_family_knows_whether_it_has_narrower_children(self):
+        import dataclasses
+
+        fields = {f.name for f in dataclasses.fields(_Family)}
+        assert "has_longer" in fields, (
+            "_Family carries no answer to 'is there a narrower prefix that would "
+            "actually split this group', so can_narrow has to guess from the "
+            "level counter"
+        )
+
+    def test_can_narrow_comes_from_the_family_not_the_level(self):
+        """Structural, because the wrong answer is only visible across runs."""
+        import inspect
+
+        src = inspect.getsource(_FamilySweep.units)
+        assert "can_narrow=level < FAMILY_PREFIX_MAX" not in src, (
+            "can_narrow is still the level arithmetic; a family with no narrower "
+            "children is re-marked TOO_WIDE on every scan and re-reads its first "
+            "page forever"
+        )
+        assert "has_longer" in src, "units() does not consult the family's own answer"
+
+    def test_a_group_whose_skus_all_stop_at_the_prefix_cannot_narrow(self, db):
+        """The real catalog case: every part in the family has an SKU no longer
+        than the prefix, so no longer prefix can ever split it."""
+        maker = _maker(db, "Stubby Corp", "stubby corp")
+        for sku in ("ABC123", "ABC124", "ABC125"):
+            _held(db, maker, sku)
+        db.commit()
+
+        groups = _FamilySweep()._groups(db, None, 6, None)
+        ours = [g for g, _p in groups if g.canonical_key == "stubby corp"]
+        assert ours, "the fixture family was not enumerated at all"
+        assert ours[0].has_longer is False, (
+            "a family whose SKUs are exactly the prefix length reports narrower "
+            "children; narrowing it returns the same group and the cursor "
+            "oscillates"
+        )
+
+    def test_a_group_with_longer_skus_can_narrow(self, db):
+        maker = _maker(db, "Longer Corp", "longer corp")
+        for sku in ("XYZ123", "XYZ123456", "XYZ1237890"):
+            _held(db, maker, sku)
+        db.commit()
+
+        groups = _FamilySweep()._groups(db, None, 6, None)
+        ours = [g for g, _p in groups if g.canonical_key == "longer corp"]
+        assert ours and ours[0].has_longer is True

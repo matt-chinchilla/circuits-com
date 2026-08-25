@@ -21,6 +21,12 @@ class FeedPart:
     stock_quantity: int = 0
     lead_time_days: int | None = None
     currency: str = "USD"
+    # The DISTRIBUTOR's identifier for the manufacturer — NOT ours. Digi-Key
+    # sends `Manufacturer: {"Id": 296, "Name": "Texas Instruments"}` and the id
+    # is the only thing on the row that states company identity without
+    # spelling it. Optional because not every provider sends one (Mouser does
+    # not), and consumers must degrade to the name when it is absent.
+    provider_manufacturer_id: str | None = None
     price_breaks: list[FeedPriceBreak] = field(default_factory=list)
     # BOM tool facts — None whenever the provider response omits them, which
     # keeps the UI honest-unverified rather than guessing (spec D6).

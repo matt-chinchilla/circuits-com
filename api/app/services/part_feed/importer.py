@@ -1165,6 +1165,16 @@ class _Family:
     manufacturer_name: str
     prefix: str
     unlisted: int
+    has_longer: bool = False
+    """Does any part in this group have an SKU LONGER than the prefix?
+
+    i.e. would a narrower prefix actually split it. Read off the group's own
+    rows because this is a fact about OUR catalog, and the level counter
+    (`level < FAMILY_PREFIX_MAX`) cannot stand in for it: a family whose SKUs
+    all stop at the prefix has room left in the arithmetic and no children to
+    find, so narrowing returns the same group, it is marked too wide again, and
+    the cursor oscillates while re-reading the same first page for a call each
+    time."""
 
 
 class _FamilySweep(SweepStrategy):
@@ -1226,6 +1236,19 @@ class _FamilySweep(SweepStrategy):
         # LONGER children are the NEXT level's work.
         parents: set[tuple[str, str]] | None = None
         level = FAMILY_PREFIX_MIN
+        # ABOVE the narrowing loop, not inside it. Initialising them per
+        # iteration meant only the LAST pass was remembered: a first pass that
+        # found plenty of work followed by a final narrowing pass that found
+        # none reported a completed sweep, cleared the family cursor namespace,
+        # and sent the next run back to page one of everything.
+        #
+        # `saw_sweepable` is families this distributor CAN be asked about;
+        # `saw_unfinished` is those with work left. A family with no scope is
+        # neither — counting it as outstanding would mean never wrapping while
+        # any maker is unmapped (592 of them, 30,608 parts), and counting it as
+        # swept would report a full pass over a catalog we never touched.
+        saw_sweepable = False
+        saw_unfinished = False
         while True:
             groups = self._groups(db, supplier_pk, level, parents)
             if parents is not None:
@@ -1241,14 +1264,15 @@ class _FamilySweep(SweepStrategy):
                 for orphan in parents - produced:
                     self._reemit(db, supplier_pk, orphan, scope_for, narrowed)
             expand: set[tuple[str, str]] = set()
-            saw_family = False
-            saw_unfinished = False
             for family, _parent in groups:
-                saw_family = True
                 key = family_cursor_key(family.canonical_key, family.prefix)
                 state = _cursor_get(cursor, key)
                 if state == IMPORT_CURSOR_EXHAUSTED:
+                    # Swept to the end: ours, and finished.
+                    saw_sweepable = True
                     continue
+                _sweepable_before, _unfinished_before = saw_sweepable, saw_unfinished
+                saw_sweepable = True
                 saw_unfinished = True
                 if state == IMPORT_CURSOR_TOO_WIDE:
                     expand.add((family.canonical_key, family.prefix))
@@ -1272,6 +1296,13 @@ class _FamilySweep(SweepStrategy):
                     # This distributor has no id for that maker, so the query
                     # cannot be narrowed. Running it unfiltered would spend
                     # calls reading somebody else's catalog.
+                    #
+                    # Unwind the two flags set above: an unsweepable family is
+                    # neither outstanding work nor a family we swept. Leaving
+                    # `saw_unfinished` set here would block the wrap forever on
+                    # any catalog holding an unmapped maker.
+                    saw_sweepable = _sweepable_before
+                    saw_unfinished = _unfinished_before
                     continue
                 (base if parents is None else narrowed).append(
                     (
@@ -1282,7 +1313,10 @@ class _FamilySweep(SweepStrategy):
                             scope=scope,
                             label=f"{family.manufacturer_name} · {family.prefix}",
                             payload=family,
-                            can_narrow=level < FAMILY_PREFIX_MAX,
+                            # The family's OWN answer, not the level counter —
+                            # see `_Family.has_longer`. Still bounded by the
+                            # arithmetic: no children are reachable past the max.
+                            can_narrow=family.has_longer and level < FAMILY_PREFIX_MAX,
                         ),
                     )
                 )
@@ -1314,7 +1348,7 @@ class _FamilySweep(SweepStrategy):
         # downstream can tell "every family is finished, restart the pass" from
         # "there was nothing to sweep" — and treating the second as a wrap would
         # clear the namespace on every run of an empty catalog, forever.
-        self._exhausted_everything = saw_family and not saw_unfinished and not selected
+        self._exhausted_everything = saw_sweepable and not saw_unfinished and not selected
         return [unit for _, _, unit in selected]
 
     def _reemit(self, db, supplier_pk, orphan, scope_for, kept) -> None:
@@ -1377,6 +1411,10 @@ class _FamilySweep(SweepStrategy):
             Manufacturer.name,
             prefix_col,
             func.count(Part.id).label("unlisted"),
+            # `length`, never `octet_length`: `substr` above is character-based
+            # on both engines and the two must measure the same units, or a
+            # multi-byte SKU reports children it does not have.
+            func.max(func.length(Part.sku)).label("longest"),
         ]
         group_by = [Manufacturer.canonical_key, Manufacturer.id, Manufacturer.name, prefix_col]
         parent_col = None
@@ -1398,17 +1436,22 @@ class _FamilySweep(SweepStrategy):
         out: list[tuple[_Family, tuple[str, str] | None]] = []
         for row in rows:
             if parents is None:
-                key, mid, name, prefix, unlisted = row
+                key, mid, name, prefix, unlisted, longest = row
                 parent = None
             else:
-                key, mid, name, parent_prefix, prefix, unlisted = row
+                key, mid, name, parent_prefix, prefix, unlisted, longest = row
                 parent = (key, parent_prefix)
                 if parent not in parents or prefix == parent_prefix:
                     # `prefix == parent_prefix` means the SKU is not long
                     # enough to narrow — keeping it would re-enqueue the parent
                     # as its own child, forever.
                     continue
-            out.append((_Family(key, mid, name, prefix, unlisted), parent))
+            out.append(
+                (
+                    _Family(key, mid, name, prefix, unlisted, has_longer=(longest or 0) > level),
+                    parent,
+                )
+            )
         return out
 
     def _one_group(self, db: Session, supplier_pk, canonical_key: str, prefix: str):
@@ -1427,7 +1470,9 @@ class _FamilySweep(SweepStrategy):
 
     def absorb(self, db, supplier, unit, fp, counts) -> dict | None:
         family: _Family = unit.payload
-        manufacturer_id = self._resolve_maker(db, fp.manufacturer, family)
+        manufacturer_id = self._resolve_maker(
+            db, fp.manufacturer, family, unit.scope, fp.provider_manufacturer_id
+        )
         if manufacturer_id is None:
             # Only reachable on an UNSCOPED page — a scoped one is vouched for
             # by the distributor's own filter (see _resolve_maker). The earlier
@@ -1459,47 +1504,64 @@ class _FamilySweep(SweepStrategy):
         )
 
     @staticmethod
-    def _resolve_maker(db: Session, raw_name: str | None, family: _Family):
+    def _resolve_maker(
+        db: Session,
+        raw_name: str | None,
+        family: _Family,
+        scope: FeedScope,
+        provider_maker_id: str | None,
+    ):
         """The scoped manufacturer's id, or None if this row is someone else's.
 
-        WHEN THE QUERY WAS SERVER-SCOPED, TRUST IT. Digi-Key applied
-        `ManufacturerFilter`, so every row on that page is this maker by
-        construction, and re-deriving the fact from the NAME it happens to
-        print was wrong 9 times out of 10. Measured against the real
-        manufacturer table with the spellings named in digikey.py's own pin
-        comments: "Analog Devices Inc." canons to `analog devices`, not
-        `analog devices maxim integrated`; "Eaton Tripp Lite" not `tripp lite`;
-        "Hirose Electric Co Ltd" not `hirose connector`; "Sensata-Airpax" not
-        `airpax`. Those 22 pins exist PRECISELY because the spellings differ,
-        and this check discarded exactly them — 18,725 parts whose calls were
-        spent, whose rows came back, and which were then counted `off_scope`
-        beside a comment promising the operator that counter never fires.
+        ASK IN THE DISTRIBUTOR'S OWN IDENTIFIERS WHEN IT GIVES US THEM. The
+        query was narrowed with `ManufacturerFilter=<ids>`; a row carrying one
+        of those ids is from a maker we filtered on, by the distributor's own
+        statement, and no spelling is involved.
 
-        Dropping the check costs nothing, because it was never the real gate.
-        `absorb` uses the id it returns only to call
-        `find_part(manufacturer_id, mpn)` against OUR catalog: a row for some
-        other company cannot match a part we hold under this maker, so it lands
-        in `absent` and writes nothing. The gate that protects the catalog is
-        part identity, and it still holds.
+        This used to compare NAMES — `canon(row_name) == family.canonical_key`
+        — which asks whether the two sides SPELL the company identically. For
+        makers whose spellings already agree that is a tautology. For the rest
+        it is exactly inverted, because those entries are in the map PRECISELY
+        because the spellings differ. Measured against the real catalog and the
+        live Digi-Key list: 26 of 476 mapped makers discarded, 20,752 parts,
+        14.3% of everything mapped — including ALL 22 hand pins, whose entire
+        justification is that `canon()` correctly refuses to merge the two
+        names ("Analog Devices Inc." is not `analog devices maxim integrated`;
+        "Eaton Tripp Lite" is not `tripp lite`). Those makers own 8,384
+        six-character families, so roughly eight days of a shared 1,000/day
+        quota was going on queries structurally incapable of writing a row,
+        each one reported as `off_scope` beside a comment promising the
+        operator that counter never fires.
 
-        UNSCOPED is a different question and keeps the old rule. Nothing
-        vouches for a bare keyword page, so the name is all there is.
+        The id was thrown away twice before it got here: the generator held
+        Digi-Key's Name beside its Id and persisted only the Id, and the parser
+        read `Manufacturer.Name` straight past the `Manufacturer.Id` in the
+        same dict. Carrying it through is a join, not a new rule.
 
-        `canon()` equality settles almost every such row without a query. The
-        alias fallback is not decoration: `canon()` is not the only way two
-        names are one company — a feed writing "TI" resolves through
-        `manufacturer_aliases` to Texas Instruments, and declining that as
-        off-scope would silently drop every part that maker sells.
+        NAME FALLBACK, for providers that send no id. Mouser does not, and an
+        unscoped page has nothing vouching for it either, so `canon()` equality
+        with an alias fallback remains the only available question there.
 
-        It NEVER creates. `resolve_manufacturer_id` mints a provisional row on
-        a miss, which is right for a category import (the part is being created
-        and needs a key) and wrong here: an unattended overlap sweep that can
-        invent manufacturers will fill the review queue with a distributor's
-        spelling variants, and this path never creates a part for them to
-        belong to anyway.
+        THIS IS STILL A GATE, and deliberately so. An earlier attempt trusted
+        the scope outright and returned `family.manufacturer_id` for every row;
+        two existing tests caught it, correctly. `absorb` uses the id returned
+        here to call `find_part(manufacturer_id, mpn)` against OUR catalog, so
+        a foreign row whose MPN collides with a part we hold under this maker
+        would have had another company's price written onto it. Comparing ids
+        refuses that row on the same evidence, without refusing the 26.
         """
+        if provider_maker_id is not None:
+            scoped_ids = {
+                part.strip() for part in (scope.manufacturer_id or "").split(",") if part.strip()
+            }
+            if scoped_ids:
+                return family.manufacturer_id if provider_maker_id in scoped_ids else None
         if canon(raw_name or "") == family.canonical_key:
             return family.manufacturer_id
+        # `manufacturer_aliases` is 2,519 rows on production and every one is a
+        # 1:1 self-alias, so this resolves a DIFFERENT spelling to this maker
+        # exactly never today. Kept because the table is the designed home for
+        # that mapping and the sweep should use it the day it holds one.
         resolved = _existing_manufacturer_id(db, raw_name)
         return family.manufacturer_id if resolved == family.manufacturer_id else None
 

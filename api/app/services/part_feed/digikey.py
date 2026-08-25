@@ -296,6 +296,13 @@ def part_from_digikey(raw: dict) -> FeedPart | None:
     """
     mpn = _text(raw.get("ManufacturerProductNumber"))
     maker = _text((raw.get("Manufacturer") or {}).get("Name"))
+    # The Id sits beside the Name in the SAME dict and was being read past. It
+    # is what lets the family sweep confirm a row came from the maker it
+    # filtered on WITHOUT comparing spellings — the check that discarded 26 of
+    # 476 mapped makers, 20,752 parts, including every one of the 22 hand pins
+    # whose whole justification is that the two sides spell the company
+    # differently.
+    maker_id = (raw.get("Manufacturer") or {}).get("Id")
     if not mpn or not maker:
         return None
 
@@ -332,6 +339,7 @@ def part_from_digikey(raw: dict) -> FeedPart | None:
     return FeedPart(
         mpn=mpn,
         manufacturer=maker,
+        provider_manufacturer_id=None if maker_id is None else str(maker_id),
         description=_description(raw),
         image_url=_text(raw.get("PhotoUrl")),
         datasheet_url=_text(raw.get("DatasheetUrl")),
