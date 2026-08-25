@@ -6,6 +6,11 @@
 
 ## 1. What this is, and what problem it actually solves
 
+> **Companion:** `2026-08-25-account-console-surface-map.md` records what
+> `/account` is eventually for, per surface, with an honest column on whether
+> the data exists yet. Read it before extending this one — it already changed
+> this spec once (D18).
+
 The site takes money and it lets staff sign in. It has never had an account for
 the people who pay. A completed Silver checkout writes exactly two rows —
 `Supplier` + `Sponsor` (`stripe_webhook.py:253-267`) — and stops. There is no
@@ -61,6 +66,7 @@ Owner rulings, 2026-08-25. These are settled; do not relitigate them in review.
 | **D15** | `/account/*` renders **the same admin components**, remounted. No parallel frontend tree, and **no data scoping in Project 1**. | Owner: "the pages are a duplication." Building a second component tree to show the same thing is work with no product in it. |
 | **D16** | Every admin page is reachable at `/account`, **unscoped**. | Explicit owner decision, 2026-08-25, made against a written enumeration of what it exposes (see §10). |
 | **D17** | An account must be **activated by staff** before it can reach `/account`. Verification ≠ activation. | The consequence of D16. Verification proves mailbox control; activation is the owner saying yes. Makes "everyone who can see this" an approved list rather than the open internet, for one column. |
+| **D18** | Account capability is **two nullable links**, not a type enum: `users.supplier_id` and a new `users.manufacturer_id`. Both set = both. | Avnet is a distributor AND a manufacturer. An enum forces a wrong answer for the largest accounts on day one. The links are the capability, and staff set them (D4), so it stays unforgeable. |
 
 ---
 
@@ -77,6 +83,11 @@ users:
   + email_verified_at TIMESTAMPTZ  NULL   -- NULL = unverified. The gate.
   + signup_ip        VARCHAR(45)   NULL   -- 45 = longest IPv6 text form, matches last_login_ip
   + signup_country   VARCHAR(2)    NULL   -- ISO alpha-2, DB-IP, same as page_views.country
+  + manufacturer_id UUID  NULL REFERENCES manufacturers(id)  -- D18
+                                        -- Peer of the existing supplier_id.
+                                        -- Neither = free. One = that role.
+                                        -- BOTH = a company that distributes
+                                        -- and manufactures (Avnet). Staff-set.
   + activated_at    TIMESTAMPTZ  NULL   -- D17. NULL = awaiting staff approval.
                                         -- NOT the same as email_verified_at:
                                         -- verified = they own the mailbox,
@@ -336,8 +347,10 @@ Two row-level controls, both staff-only:
 - **Activate / deactivate** (D17) — stamps or clears `activated_at`. This is the
   entire authorization boundary in Project 1, so the list's default sort puts
   **unactivated accounts first**: the page's job is to show you who is waiting.
-- **Link company** (D3/D4) — the dropdown that sets `supplier_id`, and therefore
-  the only path to a non-free tier.
+- **Link company** (D3/D4/D18) — **two** independent dropdowns, `supplier_id`
+  and `manufacturer_id`. Either, both, or neither. Both is a real and important
+  case, not an edge case, so the UI must not present them as a choice between
+  two. Setting `supplier_id` is also the only path to a non-free tier.
 
 Deactivating is not deleting. It revokes access and keeps the row, which is what
 you want for a customer who lapses or a signup you are unsure about.
