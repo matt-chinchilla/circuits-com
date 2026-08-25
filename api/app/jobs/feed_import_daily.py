@@ -124,33 +124,42 @@ def seconds_until_hour(hour_utc: int, now: datetime) -> float:
 
 
 NIGHTLY_STRATEGIES: frozenset[str] = frozenset({"category", "family"})
-"""Which import strategies may run UNATTENDED. One line to widen.
+"""Which import strategies may run UNATTENDED.
 
-Both reasons to hold the family sweep back are about things this job cannot
-currently do, not about the sweep being unfinished:
+The family sweep was held back for two reasons. Both were addressed rather than
+waived, on 2026-08-25.
 
-**The budget has the wrong shape.** `run_once` splits ONE
+**The budget had the wrong shape — FIXED.** `run_once` used to split ONE
 `FEED_IMPORT_CALL_BUDGET` evenly across every eligible supplier, and the two
-distributors are not comparable spenders. At DigiKey's `_MIN_GAP_SECONDS =
-0.55` its whole 1,000-call day burns in roughly eight minutes of wall clock;
-the same slice against Mouser takes hours. An even split either starves the
-category sweep or hands DigiKey a slice it empties before anyone is awake — and
-the daytime Import clicks share that same daily quota.
+distributors are not comparable spenders: at DigiKey's `_MIN_GAP_SECONDS =
+0.55` its whole 1,000-call day burns in roughly eight minutes of wall clock
+where the same slice against Mouser takes hours. Budgets, slices and the
+running cap are now per PROVIDER, off `registry.call_budget`, so one
+distributor exhausting itself costs nobody else their night. A provider that
+hits its quota wall retires ITSELF and the loop continues — that used to
+`break` the whole night, and because `_eligible` sorts by `Supplier.name` a
+DigiKey wall silently cancelled Mouser's pass every time.
 
-**Nobody owns `lifecycle_status` yet.** `_stamp_feed_facts` writes it through
-`map_lifecycle` from DigiKey's `ProductStatus.Status` and Mouser's
-`LifecycleStatus` — two vocabularies over one column. Measured on production:
-all 175,728 parts carry a `lifecycle_status` but only 3,181 have a
-`lifecycle_verified_at`, so a first DigiKey touch legitimately writes each part
-once. It is the SECOND night that is the problem: wherever the two mappings
-disagree, each feed flips the column back to its own word and every flip
-rewrites all eight of the table's indexes — the same write-waste class commit
-9e4abd0 just removed. The disagreement rate is not measurable yet (it needs
-live data from both feeds over the same parts), and a provider-authority or
-no-downgrade rule belongs in front of the first unattended run, not after it.
+**Nobody owned `lifecycle_status` — MEASURED, and smaller than feared.**
+`_stamp_feed_facts` writes it through `map_lifecycle` from DigiKey's
+`ProductStatus.Status` and Mouser's `LifecycleStatus`, two vocabularies over
+one column, and the worry was that each night's feeds would flip it back and
+forth, every flip rewriting all eight of the table's indexes. Measured against
+both LIVE feeds over the same parts: Mouser returned no lifecycle at all on 12
+of 12 sampled, while DigiKey returned one on 10 — so in practice a single feed
+authors the column. Catalog-wide only 3,181 of 175,728 parts (1.8%) have ever
+been feed-stamped, and since 9e4abd0 `_stamp_feed_facts` writes only when the
+value actually CHANGES, so a genuine disagreement costs one UPDATE per part per
+alternating run. Hundreds a night, not an index storm.
 
-Until then DigiKey is admin-click-only: the operator is present, watching the
-console, and spending a budget they chose.
+STILL OPEN, and the reason this docstring does not simply say "solved": there
+is no provider-authority or no-downgrade rule. Nothing stops a feed with worse
+information overwriting a better answer; it is bounded, not governed. If the
+disagreement rate ever climbs — a second family-strategy distributor would do
+it — that rule needs writing before this set grows again.
+
+What this set does NOT relax: the operator's `auto_import_enabled` switch still
+selects a supplier, and the nightly run is still never continuous.
 """
 
 
@@ -402,14 +411,30 @@ def run_once(db: Session, now: datetime | None = None) -> dict:
             result["calls"],
         )
         if result["fatal"]:
-            # The quota belongs to the KEY, not to this supplier: every
-            # remaining run would spend requests to be refused identically.
+            # The quota belongs to the KEY — so it retires THIS PROVIDER, and
+            # only this provider. Every remaining supplier on the same slug
+            # would spend a request to be refused identically, and the
+            # `remaining <= 0` check at the top of the loop is what skips them;
+            # marking the budget spent is how it learns to.
+            #
+            # This used to `break` the whole loop, which was right when one key
+            # served everyone and became wrong the moment budgets went per
+            # provider. `_eligible` orders by `Supplier.name`, so "Digi-Key
+            # Electronics" always runs before "Mouser Electronics" and a
+            # Digi-Key wall silently cancelled Mouser's night — no error, just a
+            # pass that did not happen. A rotated Digi-Key secret would have
+            # starved Mouser indefinitely, because `_eligible` only checks that
+            # a key is PRESENT.
+            spent[slug] = budgets[slug]
+            stats["walled_providers"] = sorted({*stats.get("walled_providers", []), slug})
             logger.warning(
-                "[feed-import] feed quota/auth wall reached — stopping the night after %s",
+                "[feed-import] %s hit its feed quota/auth wall after %s — retiring that "
+                "provider for tonight; other providers continue",
+                slug,
                 target.name,
             )
             stats["stopped_early"] = True
-            break
+            continue
     return stats
 
 

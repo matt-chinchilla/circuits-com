@@ -1766,9 +1766,27 @@ def _sweep_run(
     cursor_dirty = [0]
 
     def _flush_cursor() -> None:
-        if cursor_dirty[0]:
-            _save_import_cursor(db, supplier_pk, cursor)
-            cursor_dirty[0] = 0
+        if not cursor_dirty[0]:
+            return
+        # ROLL BACK FIRST. This runs from a `finally`, so it is reached on paths
+        # nobody cleaned up: only the FeedFatalError branch rolls back, and any
+        # other exception — an IntegrityError from `absorb`'s commit, which the
+        # api and feed-import containers can genuinely produce against the same
+        # part rows — leaves the session poisoned. Without this the flush's own
+        # query raises PendingRollbackError from inside the `finally`,
+        # REPLACING the real exception, so the operator's sync_error blames
+        # "This Session's transaction has been rolled back" instead of the
+        # cause, and the cursor is lost as well.
+        #
+        # Safe by construction rather than by luck: `absorb` commits per part,
+        # so at any point this is reached a healthy session has nothing pending
+        # and the rollback is a no-op. It also protects the commit-per-part
+        # boundary — without it, a failure between `db.flush()` and `absorb`'s
+        # commit would have `_save_import_cursor`'s own commit persist a
+        # half-absorbed part alongside the cursor.
+        db.rollback()
+        _save_import_cursor(db, supplier_pk, cursor)
+        cursor_dirty[0] = 0
 
     def _sweep(batch: list[WorkUnit]) -> Iterator[dict]:
         """ONE pass down `batch`. The unit `continuous` repeats.

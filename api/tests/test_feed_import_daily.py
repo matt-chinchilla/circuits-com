@@ -145,16 +145,17 @@ class _Providers:
         self.closed: list[str] = []
         monkeypatch.setattr(job, "match_provider", self._match)
 
-    def __call__(self, supplier, provider):
+    def __call__(self, supplier, provider, slug: str = "mouser"):
         name = supplier.name
-        self.by_supplier[name] = provider
+        self.by_supplier[name] = (provider, slug)
         provider.close = lambda name=name: self.closed.append(name)
         return provider
 
     def _match(self, supplier):
-        target = self.by_supplier.get(supplier.name)
-        if target is None:
+        entry = self.by_supplier.get(supplier.name)
+        if entry is None:
             return None
+        target, slug = entry
         recorder = self.seen_keys
 
         class _Scripted:
@@ -166,7 +167,7 @@ class _Providers:
                 recorder.append(api_key)
                 return target
 
-        return "mouser", _Scripted
+        return slug, _Scripted
 
 
 @pytest.fixture
@@ -640,3 +641,94 @@ class TestNightlyIsNeverContinuous:
         assert recorder.continuous == [False]
         assert recorder.budgets == [850]
         assert all(b <= 850 for b in recorder.budgets)
+
+
+class TestOneProvidersWallDoesNotCancelAnothersNight:
+    """A quota wall retires ONE provider, not the whole night.
+
+    `if result["fatal"]: break` was correct when every supplier shared one key —
+    the comment still says "the quota belongs to the KEY". Per-provider budgets
+    made it wrong, and the ordering makes it bite every time: `_eligible` sorts
+    by `Supplier.name`, so "Digi-Key Electronics" always runs before "Mouser
+    Electronics", and Digi-Key's wall silently cancels Mouser's pass.
+
+    Digi-Key's 1,000/day is shared between the 850 nightly budget, the BOM
+    resolve path (which reaches it FIRST — `pick_feed_source` also orders by
+    name) and interactive admin clicks, so hitting the wall is ordinary rather
+    than exceptional. A rotated or expired secret makes it permanent: the token
+    mint 401s, every night, and Mouser is starved indefinitely while
+    `_eligible` sees a key PRESENT and reports nothing wrong.
+
+    The failure is silent by construction — no error, just a night that did not
+    happen. Which is the property that makes it worth a test rather than a
+    comment.
+    """
+
+    def test_the_second_providers_supplier_still_runs(
+        self, db, seeded_db, env_key, budget, providers, monkeypatch, enable
+    ):
+        from app.models import Supplier
+
+        budget(850)
+        monkeypatch.setattr(job.settings, "DIGIKEY_CLIENT_ID", "id", raising=False)
+        monkeypatch.setattr(job.settings, "DIGIKEY_CLIENT_SECRET", "secret", raising=False)
+
+        # Named so Digi-Key sorts FIRST, which is the real ordering.
+        dk = Supplier(id=uuid.uuid4(), name="Digi-Key Electronics", website="digikey.com")
+        mo = Supplier(id=uuid.uuid4(), name="Mouser Electronics 2", website="mouser.com")
+        db.add_all([dk, mo])
+        db.commit()
+        enable(dk)
+        enable(mo)
+        providers(dk, FakeProvider(), slug="digikey")
+        providers(mo, FakeProvider(), slug="mouser")
+
+        ran: list[str] = []
+
+        def _walls_for_digikey(db_, provider, supplier, call_budget, **kw):
+            ran.append(supplier.name)
+            if supplier.name.startswith("Digi-Key"):
+                raise FeedFatalError("quota exceeded")
+            return iter(())
+
+        monkeypatch.setattr(job, "grow_catalog", _walls_for_digikey)
+
+        stats = job.run_once(db, NOW)
+
+        assert "Mouser Electronics 2" in ran, (
+            "Digi-Key's quota wall cancelled Mouser's night — one provider's "
+            f"budget is not the other's. Suppliers reached: {ran}"
+        )
+        assert stats["suppliers"] >= 1
+
+    def test_the_walled_providers_own_other_suppliers_are_still_retired(
+        self, db, seeded_db, env_key, budget, providers, monkeypatch, enable
+    ):
+        """The half worth keeping from the old `break`: once a provider has
+        walled, its REMAINING suppliers must not each spend a call to be
+        refused identically."""
+        from app.models import Supplier
+
+        budget(850)
+        a = Supplier(id=uuid.uuid4(), name="Aaa Mouser Shop", website="mouser.com")
+        b = Supplier(id=uuid.uuid4(), name="Bbb Mouser Shop", website="mouser.com")
+        db.add_all([a, b])
+        db.commit()
+        enable(a)
+        enable(b)
+        providers(a, FakeProvider(), slug="mouser")
+        providers(b, FakeProvider(), slug="mouser")
+
+        ran: list[str] = []
+
+        def _always_walls(db_, provider, supplier, call_budget, **kw):
+            ran.append(supplier.name)
+            raise FeedFatalError("quota exceeded")
+
+        monkeypatch.setattr(job, "grow_catalog", _always_walls)
+        job.run_once(db, NOW)
+
+        assert ran == ["Aaa Mouser Shop"], (
+            "after one supplier hit the wall on this provider's key, another on "
+            f"the SAME provider still spent a call to be refused: {ran}"
+        )
