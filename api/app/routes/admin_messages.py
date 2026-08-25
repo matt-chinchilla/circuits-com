@@ -19,9 +19,16 @@ from app.schemas.messages import (
     MessageResponse,
     MessageUpdate,
 )
-from app.services.auth_service import get_current_user, require_owner
+from app.services.auth_service import get_current_user, require_console_user, require_owner
 
-router = APIRouter(prefix="/api/admin/messages", tags=["admin-messages"])
+router = APIRouter(
+    prefix="/api/admin/messages",
+    tags=["admin-messages"],
+    # D16: the console pages are shared with activated customers, so the
+    # customer/staff wall sits on the router. It COMPOSES with the per-route
+    # get_current_user gates — it does not replace them.
+    dependencies=[Depends(require_console_user)],
+)
 
 # One request may name at most this many ids. The inbox selects rows the
 # operator can actually see, so a legitimate batch is small; the cap is what

@@ -30,9 +30,16 @@ from app.schemas.sponsor import (
     AdminSponsorResponse,
     AdminSponsorUpdate,
 )
-from app.services.auth_service import get_current_user
+from app.services.auth_service import get_current_user, require_console_user
 
-router = APIRouter(prefix="/api/admin/sponsors", tags=["admin-sponsors"])
+router = APIRouter(
+    prefix="/api/admin/sponsors",
+    tags=["admin-sponsors"],
+    # D16: the console pages are shared with activated customers, so the
+    # customer/staff wall sits on the router. It COMPOSES with the per-route
+    # get_current_user gates — it does not replace them.
+    dependencies=[Depends(require_console_user)],
+)
 
 
 def _serialize(sponsor: Sponsor) -> AdminSponsorResponse:

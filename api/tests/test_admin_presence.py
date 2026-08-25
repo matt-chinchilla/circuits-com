@@ -7,9 +7,25 @@ sleep. Per-test DB isolation comes from the standard conftest fixtures, and the
 login helper is conftest's shared `auth_header` fixture.
 """
 
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
+
+import pytest
 
 from app.routes import admin_presence
+
+
+@pytest.fixture
+def company_header(client, db, seeded_db, auth_header):
+    """kennedy_user, ACTIVATED — the second console user these tests need.
+
+    Since the D16 customer/staff wall landed, a customer must be activated
+    (D17) to reach any console route; an unactivated one is 403
+    ``account_not_activated``. Without this the roster would hold one person
+    and every 'two users see each other' assertion would be vacuous.
+    """
+    seeded_db["company_user"].activated_at = datetime.now(UTC)
+    db.commit()
+    return auth_header(email="kennedy_user@test.example")
 
 
 def test_requires_auth(client, seeded_db):
@@ -35,9 +51,8 @@ def test_repeat_ping_upserts_not_duplicates(client, seeded_db, auth_header):
     assert [u["username"] for u in resp.json()] == ["admin"]
 
 
-def test_two_users_see_each_other(client, seeded_db, auth_header):
+def test_two_users_see_each_other(client, seeded_db, auth_header, company_header):
     admin_header = auth_header()
-    company_header = auth_header(email="kennedy_user@test.example")
 
     client.post("/api/admin/presence/ping", headers=admin_header)
     resp = client.post("/api/admin/presence/ping", headers=company_header)
@@ -51,10 +66,9 @@ def test_two_users_see_each_other(client, seeded_db, auth_header):
     assert [u["username"] for u in resp2.json()] == ["admin", "kennedy_user"]
 
 
-def test_stale_entry_drops_out(client, seeded_db, auth_header, monkeypatch):
+def test_stale_entry_drops_out(client, seeded_db, auth_header, company_header, monkeypatch):
     """A user who stopped heartbeating falls off once past the TTL."""
     admin_header = auth_header()
-    company_header = auth_header(email="kennedy_user@test.example")
 
     client.post("/api/admin/presence/ping", headers=admin_header)
 
@@ -66,10 +80,9 @@ def test_stale_entry_drops_out(client, seeded_db, auth_header, monkeypatch):
     assert [u["username"] for u in resp.json()] == ["kennedy_user"]
 
 
-def test_entry_inside_ttl_survives(client, seeded_db, auth_header, monkeypatch):
+def test_entry_inside_ttl_survives(client, seeded_db, auth_header, company_header, monkeypatch):
     """Boundary companion to the test above — just under the TTL still counts."""
     admin_header = auth_header()
-    company_header = auth_header(email="kennedy_user@test.example")
 
     client.post("/api/admin/presence/ping", headers=admin_header)
 

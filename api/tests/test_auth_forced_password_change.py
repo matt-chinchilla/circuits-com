@@ -124,12 +124,43 @@ class TestForcedChangeGate:
         token = _login(client).json()["token"]
         assert client.get(ADMIN_ROUTE, headers=_bearer(token)).status_code == 200
 
-    def test_the_gate_is_role_agnostic_for_company_users(self, client, db, seeded_db):
+    def test_a_customer_role_user_is_refused_by_the_wall(self, client, seeded_db):
+        """This asserted the OPPOSITE until the D16 wall landed.
+
+        It used to show a customer-role user REACHING an admin route, refused
+        only on account of their password — which was the whole hole. Every
+        console router now carries ``require_console_user``, so the refusal is
+        about the principal, and it happens whether or not a password is
+        flagged. kennedy_user is verified but not activated (D17).
+        """
+        token = _login(client, email="kennedy_user@test.example").json()["token"]
+        resp = client.get(ADMIN_ROUTE, headers=_bearer(token))
+        assert resp.status_code == 403
+        assert resp.json()["detail"] == "account_not_activated"
+
+    def test_the_password_gate_still_runs_before_the_wall(self, client, db, seeded_db):
+        """Composition order, pinned — the wall ADDS to this gate, never replaces it.
+
+        ``require_console_user`` depends on ``get_current_user``, so a flagged
+        account is told to change its password before it is told it may not be
+        here. If a future refactor made the wall a peer of the password gate
+        rather than its consumer, a flagged staffer could be answered
+        ``staff_only`` and the forced-reset UX would silently stop firing.
+        """
         user = db.query(User).filter(User.username == "kennedy_user").first()
         user.must_change_password = True
         db.commit()
         token = _login(client, email="kennedy_user@test.example").json()["token"]
         resp = client.get(ADMIN_ROUTE, headers=_bearer(token))
+        assert resp.status_code == 403
+        assert resp.json()["detail"] == "password_change_required"
+
+    def test_the_wall_does_not_weaken_the_gate_for_staff(self, client, db, seeded_db):
+        # The wall admits staff, so nothing about the password gate changed for
+        # them: an admin who is flagged is still refused, on the same detail.
+        seeded_db["admin_user"].must_change_password = True
+        db.commit()
+        resp = client.get(ADMIN_ROUTE, headers=_bearer(_login(client).json()["token"]))
         assert resp.status_code == 403
         assert resp.json()["detail"] == "password_change_required"
 
@@ -308,7 +339,6 @@ class TestUsernameLoginIsFullyRetired:
         resp = client.post("/api/auth/login", json={"email": "demo", "password": "demo"})
         assert resp.status_code == 401
         assert resp.json()["detail"] == "Invalid credentials"
-
 
     def test_the_retired_fallback_leaks_nothing(self, client, db, seeded_db):
         _seed_demo(db)

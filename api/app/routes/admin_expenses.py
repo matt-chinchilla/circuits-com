@@ -18,9 +18,16 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models import Expense, User
 from app.schemas.expense import ExpenseCreate, ExpenseResponse, ExpenseUpdate
-from app.services.auth_service import get_current_user
+from app.services.auth_service import get_current_user, require_console_user
 
-router = APIRouter(prefix="/api/admin/expenses", tags=["admin-expenses"])
+router = APIRouter(
+    prefix="/api/admin/expenses",
+    tags=["admin-expenses"],
+    # D16: the console pages are shared with activated customers, so the
+    # customer/staff wall sits on the router. It COMPOSES with the per-route
+    # get_current_user gates — it does not replace them.
+    dependencies=[Depends(require_console_user)],
+)
 
 
 def _parse_expense_id(expense_id: str) -> uuid.UUID:

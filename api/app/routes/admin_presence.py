@@ -28,9 +28,16 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models.presence_fake import PresenceFake
 from app.models.user import User
-from app.services.auth_service import get_current_user
+from app.services.auth_service import get_current_user, require_console_user
 
-router = APIRouter(prefix="/api/admin", tags=["admin-presence"])
+router = APIRouter(
+    prefix="/api/admin",
+    tags=["admin-presence"],
+    # D16: the console pages are shared with activated customers, so the
+    # customer/staff wall sits on the router. It COMPOSES with the per-route
+    # get_current_user gates — it does not replace them.
+    dependencies=[Depends(require_console_user)],
+)
 
 # ── Fake-presence roster (the `circuits --fakeuser` lever) ──────────────────
 # When presence_fakes.count > 0, the first `count` entries below are appended

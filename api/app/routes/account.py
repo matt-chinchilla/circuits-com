@@ -13,6 +13,7 @@ from app.db.session import get_db
 from app.models import User
 from app.services.account_tier import account_tier
 from app.services.auth_service import require_account_user, verify_password
+from app.services.rate_limit import account_delete_key, limiter
 
 router = APIRouter(prefix="/api/account", tags=["account"])
 
@@ -66,11 +67,32 @@ def delete_me(
     DELETE SET NULL, so the artifact survives, unowned.
     """
     # Re-authenticate: a stolen session must not be able to destroy an account.
-    if not verify_password(body.password, user.password_hash):
+    #
+    # Which makes this a password prompt, and an unthrottled password prompt is
+    # an oracle — /auth/login refuses to be brute-forced and this endpoint would
+    # happily answer the same guesses at network speed, for the account whose
+    # session was stolen. Same ladder, same shape (5 failures, 60s doubling to a
+    # 15-minute ceiling), in its OWN namespace: fumbling the Danger Zone
+    # confirmation must not lock you out of signing in.
+    key = account_delete_key(str(user.id))
+    retry_after = limiter.retry_after(key)
+    if retry_after:
+        # The locked reply is the UNLOCKED reply plus a Retry-After, exactly as
+        # login does it: a distinguishable lockout body would tell an attacker
+        # which of their guesses was worth repeating.
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=INVALID_CREDENTIALS_DETAIL,
+            headers={"Retry-After": str(retry_after)},
         )
+    if not verify_password(body.password, user.password_hash):
+        retry_after = limiter.record_failure(key)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=INVALID_CREDENTIALS_DETAIL,
+            headers={"Retry-After": str(retry_after)} if retry_after else None,
+        )
+    limiter.clear(key)  # a success clears the ladder, as everywhere else
     db.delete(user)  # messages cascade via the FK; nothing else is touched
     db.commit()
     return {"status": "ok"}

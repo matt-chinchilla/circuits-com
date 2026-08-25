@@ -24,10 +24,17 @@ from app.config import settings
 from app.db.session import get_db
 from app.models import Sponsor, User
 from app.services import stripe_quotes
-from app.services.auth_service import get_current_user
+from app.services.auth_service import get_current_user, require_console_user
 from app.services.stripe_quotes import QUOTE_LADDER, StripeApiError
 
-router = APIRouter(prefix="/api/admin", tags=["admin-quotes"])
+router = APIRouter(
+    prefix="/api/admin",
+    tags=["admin-quotes"],
+    # D16: the console pages are shared with activated customers, so the
+    # customer/staff wall sits on the router. It COMPOSES with the per-route
+    # get_current_user gates — it does not replace them.
+    dependencies=[Depends(require_console_user)],
+)
 
 
 # Stripe quote ids as Stripe mints them. Validated BEFORE interpolation into a

@@ -31,17 +31,33 @@ from app.services.auth_service import (
 from app.services.geoip import country_for_ip
 from app.services.password_policy import PASSWORD_HELP, validate_password
 from app.services.rate_limit import (
+    CREATE_LOCK_SECONDS,
+    CREATE_THRESHOLD,
+    CREATE_WINDOW_SECONDS,
     PROBE_DISTINCT_THRESHOLD,
     PROBE_LOCK_SECONDS,
+    PROBE_WIDE_DISTINCT_THRESHOLD,
+    PROBE_WIDE_LOCK_SECONDS,
+    PROBE_WIDE_WINDOW_SECONDS,
+    RESEND_EMAIL_THRESHOLD,
+    RESEND_IP_THRESHOLD,
+    RESEND_LOCK_SECONDS,
+    RESEND_WINDOW_SECONDS,
     client_ip,
     limiter,
     login_email_key,
     login_ip_key,
+    record_hit,
     record_probe,
     recovery_identifier_key,
     recovery_ip_key,
+    resend_email_hit_key,
+    resend_ip_hit_key,
+    signup_create_key,
+    signup_email_key,
     signup_ip_key,
     signup_probe_key,
+    signup_probe_wide_key,
     trusted_client_addr,
 )
 
@@ -277,6 +293,19 @@ def signup(
         # for by the probe counter below. Do NOT "restore" the generic reply
         # without reading §6 of the design spec first.
         probes = record_probe(signup_probe_key(request), email)
+        # The SLOW WALK, over an hour instead of fifteen minutes. Seven distinct
+        # addresses per sixteen minutes never trips the rule below and still
+        # walks ~26 an hour, so without this row the counter that "pays for" D5
+        # is avoidable by anyone willing to wait. A separate key because
+        # record_probe prunes each key to ONE window.
+        wide = record_probe(
+            signup_probe_wide_key(request), email, window_seconds=PROBE_WIDE_WINDOW_SECONDS
+        )
+        if wide >= PROBE_WIDE_DISTINCT_THRESHOLD:
+            # A day, not an hour: at this pace nothing but enumeration is
+            # happening. pause() never shortens a live lock, so this cannot be
+            # undone by the shorter pause below.
+            limiter.pause(ip_key, seconds=PROBE_WIDE_LOCK_SECONDS)
         if probes >= PROBE_DISTINCT_THRESHOLD:
             # pause(), NOT record_failure(): the design's threshold table says
             # "1 hour pause", and record_failure's delay is the login ladder's
@@ -308,6 +337,16 @@ def signup(
     db.add(user)
     db.commit()
     db.refresh(user)
+
+    # Meter the path that ACTUALLY sends the mail. Everything above this line
+    # counts refusals; a fresh address has always returned 202 and mailed a
+    # stranger, unbounded, which is the open-relay half of this endpoint. The
+    # tenth account still succeeds — it arms the hour that the eleventh meets at
+    # the 429 above. record_hit, not record_probe: creations are attempts, and
+    # this key is never asked "how many different people".
+    created = record_hit(signup_create_key(request), window_seconds=CREATE_WINDOW_SECONDS)
+    if created >= CREATE_THRESHOLD:
+        limiter.pause(ip_key, seconds=CREATE_LOCK_SECONDS)
 
     verify_url = (
         f"{settings.APP_BASE_URL.rstrip('/')}/admin/verify"
@@ -429,12 +468,35 @@ def resend_verification(
     for probing is exactly the pause that should stop the same host turning
     this route into a mailer. A throttled caller still gets the generic OK with
     no mail sent — the response is a constant by design.
+
+    It also ARMS that bucket, and a per-address one. Reading a lock somebody
+    else set is not rate limiting: until this counted its own traffic, a loop
+    on this route mail-bombed one registrant at whatever rate the network
+    allowed, because nothing here ever reaches the branch signup arms. Two
+    keys, because the victim of a bomb is the ADDRESS being looped while the
+    obvious way around a per-address rule is to rotate addresses from the same
+    HOST.
     """
-    retry_after = limiter.retry_after(signup_ip_key(request))
-    if retry_after:
+    ip_key = signup_ip_key(request)
+    email = (body.email or "").strip().lower()
+    email_key = signup_email_key(email)
+    if limiter.retry_after(ip_key, email_key):
         return GENERIC_OK
 
-    email = (body.email or "").strip().lower()
+    # Metered BEFORE the lookup, so an address that does not exist costs the
+    # caller exactly what a real one does — the count must not become the
+    # oracle the reply refuses to be.
+    if record_hit(resend_ip_hit_key(request), window_seconds=RESEND_WINDOW_SECONDS) >= (
+        RESEND_IP_THRESHOLD
+    ):
+        limiter.pause(ip_key, seconds=RESEND_LOCK_SECONDS)
+    hit_key = resend_email_hit_key(email)
+    if (
+        hit_key is not None
+        and record_hit(hit_key, window_seconds=RESEND_WINDOW_SECONDS) >= RESEND_EMAIL_THRESHOLD
+    ):
+        limiter.pause(email_key, seconds=RESEND_LOCK_SECONDS)
+
     user = db.query(User).filter(func.lower(User.email) == email).first()
     if user is not None and user.email_verified_at is None:
         # A FRESH token, not a stored one: the original may already have

@@ -44,6 +44,7 @@ from app.models.calendar_event import (
 from app.services.auth_service import (
     get_authenticated_user,
     get_current_user,
+    require_console_user,
     security,
 )
 
@@ -127,9 +128,10 @@ def require_calendar_access(
 
     1. **The Roundcube plugin**, server-side from PHP, with the shared secret.
        No user, no CORS, and no credential in a webmail user's browser.
-    2. **A signed-in admin**, with the ordinary bearer token — which keeps the
-       forced-password-change gate and the rest of the auth model unchanged,
-       because this defers to ``get_current_user`` for it.
+    2. **A signed-in console user**, with the ordinary bearer token — which
+       keeps the forced-password-change gate AND the D16 customer/staff wall
+       unchanged, because this defers to ``get_current_user`` and
+       ``require_console_user`` for them rather than reimplementing either.
 
     Every failure (no credentials, bad token, expired session) is
     ``get_authenticated_user``'s 401 — this function never opens a path that
@@ -150,8 +152,14 @@ def require_calendar_access(
 
     user = get_authenticated_user(credentials=credentials, db=db)
     # Everything else the platform already enforces — the must_change_password
-    # 403 above all — comes from the shared dependency, not a copy of it.
-    return get_current_user(user)
+    # 403 and the D16 customer/staff wall — comes from the shared dependencies,
+    # not a copy of them. They are CALLED rather than declared as Depends
+    # because the plugin branch above must reach here with no bearer at all,
+    # and a declared dependency would 401 it before this function ran. That is
+    # also why test_every_route_is_gated.py names require_calendar_access as a
+    # gate in its own right: the walk over route.dependant.dependencies cannot
+    # see through a plain call.
+    return require_console_user(get_current_user(user))
 
 
 # ── Schemas ─────────────────────────────────────────────────────────────────

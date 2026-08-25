@@ -23,7 +23,7 @@ from app.models import (
     User,
 )
 from app.services.auth_service import (
-    get_current_user,
+    require_console_user,
 )
 from app.services.part_feed import (
     PartFeedProvider,
@@ -51,6 +51,15 @@ from app.utils.color import validate_optional_hex_color
 from app.utils.image_url import validate_optional_image_url
 
 router = APIRouter(prefix="/api/suppliers", tags=["suppliers"])
+
+# ── The customer/staff wall on a MIXED router (D16) ─────────────────────────
+# This module serves BOTH the public site and the console, so the wall cannot
+# sit on the APIRouter the way it does on every /api/admin/* router — a router
+# dependency here would gate the public reads too. Each console route names
+# `require_console_user` in its signature instead; that dependency runs
+# get_current_user first, so the forced-password gate is unchanged. A console
+# route added here must name it too — test_every_route_is_gated.py is what
+# notices if it does not.
 
 
 def _to_uuid(val: str) -> uuid.UUID:
@@ -180,7 +189,7 @@ def list_suppliers(db: Session = Depends(get_db)):
 def create_supplier(
     body: SupplierCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_console_user),
 ):
     supplier = Supplier(
         id=uuid.uuid4(),
@@ -233,7 +242,7 @@ def update_supplier(
     supplier_id: str,
     body: SupplierUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_console_user),
 ):
     supplier = _supplier_or_404(db, supplier_id)
 
@@ -251,7 +260,7 @@ def update_supplier(
 def delete_supplier(
     supplier_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_console_user),
 ):
     """Cascade-delete a supplier and every dependent row.
 
@@ -434,7 +443,7 @@ def sync_supplier(
     supplier_id: str,
     limit: int = 25,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_console_user),
 ):
     """Refresh this supplier's listings from its distributor feed.
 
@@ -468,7 +477,7 @@ def import_supplier_parts(
     supplier_id: str,
     calls: int = 200,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_console_user),
 ):
     """Import NEW inventory for this supplier, thinnest subcategory first.
 
@@ -527,7 +536,7 @@ def import_supplier_parts(
 def observe_supplier_feed_run(
     supplier_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_console_user),
 ):
     """Watch the run this supplier already has going — the RE-ATTACH door.
 
@@ -590,7 +599,7 @@ def _feed_settings(db: Session, supplier: Supplier) -> dict:
 def get_feed_settings(
     supplier_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_console_user),
 ):
     """Whether this supplier has a feed, a key, and the nightly run switched on.
 
@@ -607,7 +616,7 @@ def update_feed_settings(
     supplier_id: str,
     body: FeedSettingsUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_console_user),
 ):
     """Flip the nightly auto-import for this supplier.
 
@@ -678,7 +687,7 @@ def get_supplier_parts(
 def pause_feed_run(
     supplier_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_console_user),
 ):
     """Wind down this supplier's ACTIVE run (the owner's second click).
 

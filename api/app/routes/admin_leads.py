@@ -20,10 +20,17 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models import Lead, LeadContact
 from app.models.user import User
-from app.services.auth_service import get_current_user
+from app.services.auth_service import get_current_user, require_console_user
 from app.services.leads import VALID_OUTCOMES, record_outcome
 
-router = APIRouter(prefix="/api/admin/leads", tags=["admin-leads"])
+router = APIRouter(
+    prefix="/api/admin/leads",
+    tags=["admin-leads"],
+    # D16: the console pages are shared with activated customers, so the
+    # customer/staff wall sits on the router. It COMPOSES with the per-route
+    # get_current_user gates — it does not replace them.
+    dependencies=[Depends(require_console_user)],
+)
 
 
 

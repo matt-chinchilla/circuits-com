@@ -18,10 +18,17 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models import Manufacturer, ManufacturerAlias, ManufacturerMergeCandidate, Part, Sponsor, Supplier
 from app.models.user import User
-from app.services.auth_service import get_current_user
+from app.services.auth_service import get_current_user, require_console_user
 from app.services.manufacturer_canon import canon
 
-router = APIRouter(prefix="/api/admin/manufacturers", tags=["admin-manufacturers"])
+router = APIRouter(
+    prefix="/api/admin/manufacturers",
+    tags=["admin-manufacturers"],
+    # D16: the console pages are shared with activated customers, so the
+    # customer/staff wall sits on the router. It COMPOSES with the per-route
+    # get_current_user gates — it does not replace them.
+    dependencies=[Depends(require_console_user)],
+)
 
 
 def _slugify(name: str) -> str:

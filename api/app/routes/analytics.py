@@ -12,12 +12,22 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models import User
 from app.models.page_view import PageView
-from app.services.auth_service import get_current_user
+from app.services.auth_service import require_console_user
 from app.services.geoip import country_for_ip
 from app.services.rate_limit import client_ip, trusted_client_addr
 from app.services.traffic_segments import crawler_family, human_ua_filter, window_bot_uas
 
 router = APIRouter(prefix="/api", tags=["analytics"])
+
+# ── The customer/staff wall on a MIXED router (D16) ─────────────────────────
+# This module serves BOTH the public site and the console, so the wall cannot
+# sit on the APIRouter the way it does on every /api/admin/* router — a router
+# dependency here would gate the public reads too. Each console route names
+# `require_console_user` in its signature instead; that dependency runs
+# get_current_user first, so the forced-password gate is unchanged. A console
+# route added here must name it too — test_every_route_is_gated.py is what
+# notices if it does not.
+
 
 _UA_MOBILE = re.compile(r"Mobi|Android|iPhone|iPad|iPod|webOS|BlackBerry", re.I)
 _UA_TABLET = re.compile(r"iPad|Tablet|PlayBook|Silk", re.I)
@@ -175,7 +185,7 @@ def get_analytics(
     days: int = 30,
     segment: str = Query("humans", pattern="^(humans|bots|all)$"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_console_user),
 ):
     days = min(days, 365)
     cutoff = datetime.now(UTC) - timedelta(days=days)

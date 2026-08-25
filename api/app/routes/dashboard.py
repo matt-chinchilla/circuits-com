@@ -44,14 +44,28 @@ from app.models import (
 from app.models.expense import expense_category_label
 from app.models.roles import ADMIN_ROLES
 from app.routes.admin_leads import require_leads_access
-from app.services.auth_service import get_current_user
+from app.services.auth_service import get_current_user, require_console_user
 from app.services.traffic_segments import human_ua_filter, window_bot_uas
 
-router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
+router = APIRouter(
+    prefix="/api/dashboard",
+    tags=["dashboard"],
+    # D16: the console pages are shared with activated customers, so the
+    # customer/staff wall sits on the router. It COMPOSES with the per-route
+    # get_current_user gates — it does not replace them.
+    dependencies=[Depends(require_console_user)],
+)
 
 # A second router for the /api/admin/* lookups the dashboard + sponsor form
 # need. Registered separately in main.py (`dashboard.admin_router`).
-admin_router = APIRouter(prefix="/api/admin", tags=["admin"])
+admin_router = APIRouter(
+    prefix="/api/admin",
+    tags=["admin"],
+    # D16: the console pages are shared with activated customers, so the
+    # customer/staff wall sits on the router. It COMPOSES with the per-route
+    # get_current_user gates — it does not replace them.
+    dependencies=[Depends(require_console_user)],
+)
 
 EASTERN = ZoneInfo("America/New_York")
 

@@ -10,12 +10,21 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.models import Category, Part, PartListing, PriceBreak, Supplier, User
-from app.services.auth_service import get_current_user
+from app.services.auth_service import require_console_user
 from app.services.part_identity import get_or_create_part
 from app.services.search_service import invalidate_catalog_caches
 from app.utils.image_url import validate_optional_image_url
 
 router = APIRouter(prefix="/api/parts", tags=["parts"])
+
+# ── The customer/staff wall on a MIXED router (D16) ─────────────────────────
+# This module serves BOTH the public site and the console, so the wall cannot
+# sit on the APIRouter the way it does on every /api/admin/* router — a router
+# dependency here would gate the public reads too. Each console route names
+# `require_console_user` in its signature instead; that dependency runs
+# get_current_user first, so the forced-password gate is unchanged. A console
+# route added here must name it too — test_every_route_is_gated.py is what
+# notices if it does not.
 
 
 def _to_uuid(val: str) -> uuid.UUID:
@@ -318,7 +327,7 @@ def list_parts(
 def create_part(
     body: PartCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_console_user),
 ):
     # Auto-derive sub_slug when category_id resolves to a child category and
     # the caller didn't provide one explicitly. Keeps the denormalization
@@ -394,7 +403,7 @@ def add_part_listing(
     part_id: str,
     body: ListingCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_console_user),
 ):
     """Add one distributor listing to an existing part.
 
@@ -465,7 +474,7 @@ def delete_part_listing(
     part_id: str,
     listing_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_console_user),
 ):
     """Remove one distributor listing, leaving the Part itself in place."""
     listing = (
@@ -625,7 +634,7 @@ def update_part(
     part_id: str,
     body: PartUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_console_user),
 ):
     part = db.query(Part).filter(Part.id == _to_uuid(part_id)).first()
     if not part:
@@ -647,7 +656,7 @@ def update_part(
 def delete_part(
     part_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_console_user),
 ):
     part = db.query(Part).filter(Part.id == _to_uuid(part_id)).first()
     if not part:
@@ -667,7 +676,7 @@ def delete_part(
 def batch_import(
     body: BatchImportRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_console_user),
 ):
     # Validate supplier exists
     supplier = db.query(Supplier).filter(Supplier.id == _to_uuid(body.supplier_id)).first()

@@ -32,10 +32,17 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.models import ProviderCredential, User
-from app.services.auth_service import get_current_user
+from app.services.auth_service import get_current_user, require_console_user
 from app.services.part_feed import FEED_PROVIDERS, env_feed_key
 
-router = APIRouter(prefix="/api/admin/feed-credentials", tags=["admin-feed-credentials"])
+router = APIRouter(
+    prefix="/api/admin/feed-credentials",
+    tags=["admin-feed-credentials"],
+    # D16: the console pages are shared with activated customers, so the
+    # customer/staff wall sits on the router. It COMPOSES with the per-route
+    # get_current_user gates — it does not replace them.
+    dependencies=[Depends(require_console_user)],
+)
 
 # slug → display label, straight off the provider registry: adding Digi-Key
 # there is the whole edit, and an unknown slug here is a 404 rather than a row
