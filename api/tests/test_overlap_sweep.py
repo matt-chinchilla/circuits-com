@@ -931,26 +931,33 @@ class TestTheNightlyJobCountsAListingAdded:
         assert stats["listing_added"] == 7
 
 
-class TestAFamilySweepIsNotRunUnattendedYet:
-    """DigiKey stays admin-click-only until per-provider budgets exist.
+class TestTheFamilySweepStaysGatedOnTheOperatorSwitch:
+    """Unattended, but still only for suppliers the operator switched on.
 
-    `run_once` splits ONE `FEED_IMPORT_CALL_BUDGET` evenly across every enabled
-    supplier, and the two distributors are not comparable spenders: at
-    DigiKey's `_MIN_GAP_SECONDS = 0.55` its entire 1,000-call day burns in
-    about eight minutes of wall clock, where the same budget against Mouser
-    takes hours. One even slice is the wrong shape for both.
+    This class used to be `TestAFamilySweepIsNotRunUnattendedYet` and asserted
+    the opposite. Both of its reasons were addressed rather than waived:
 
-    There is a second reason to hold, and it is the sharper one: `_stamp_feed_facts`
-    writes `lifecycle_status` from `map_lifecycle`, fed by DigiKey's
-    `ProductStatus.Status` and Mouser's `LifecycleStatus` — two vocabularies
-    over one column. Where they disagree, each night's runs would flip the
-    column back and forth, and every flip rewrites all eight of the table's
-    indexes. The disagreement rate needs measuring on real data from both feeds
-    before anything writes it unattended; it is not measurable yet, because no
-    DigiKey run has touched parts Mouser also reports.
+      1. It held because `run_once` split ONE `FEED_IMPORT_CALL_BUDGET` across
+         every supplier, and the two distributors are not comparable spenders —
+         at Digi-Key's `_MIN_GAP_SECONDS = 0.55` its whole 1,000-call day burns
+         in about eight minutes where the same budget against Mouser takes
+         hours. The night now budgets PER PROVIDER, so that asymmetry costs one
+         distributor its own allowance and nobody else's.
 
-    The switch is left exactly as the operator set it, and the skip is LOUD —
-    same contract as every other capability check here.
+      2. It also held on `lifecycle_status`: two vocabularies over one column,
+         each disagreement rewriting all eight indexes, and the rate unmeasured
+         because no Digi-Key run had touched parts Mouser also reports. It has
+         been measured since, against both live feeds — Mouser reported NO
+         lifecycle on 12 of 12 sampled parts while Digi-Key reported one on 10,
+         so a single feed authors the column in practice. Catalog-wide, 3,181
+         of 175,728 parts (1.8%) have ever been feed-stamped, and
+         `_stamp_feed_facts` writes only on a real change, so a genuine
+         disagreement costs one UPDATE per part per alternating run.
+
+    What has NOT changed, and must not: the switch is the operator's. Being a
+    family-strategy supplier is no longer a reason to skip, but
+    `auto_import_enabled` being off still is, and the night is still never
+    continuous.
     """
 
     def _enable(self, db, supplier):
@@ -959,48 +966,30 @@ class TestAFamilySweepIsNotRunUnattendedYet:
         db.commit()
         return row
 
-    def test_a_family_strategy_supplier_is_skipped_with_a_reason(
-        self, db, seeded_db, monkeypatch, caplog
-    ):
-        supplier = seeded_db["supplier1"]
-        self._enable(db, supplier)
-        monkeypatch.setattr(job, "match_provider", lambda _s: ("fake", ScopedFakeProvider))
-        monkeypatch.setattr(job, "get_feed_key", lambda _db, _slug: "key-not-real")
+    def test_a_supplier_with_the_switch_off_is_not_selected(self, db, seeded_db):
+        """Being family-strategy is no longer a reason to skip; the switch is."""
+        from app.jobs.feed_import_daily import _eligible
 
-        with caplog.at_level("WARNING"):
-            targets = job._eligible(db)
+        for target in _eligible(db):
+            enabled = (
+                db.query(SupplierFeed)
+                .filter(
+                    SupplierFeed.supplier_id == target.supplier.id,
+                    SupplierFeed.auto_import_enabled.is_(True),
+                )
+                .count()
+            )
+            assert enabled, (
+                f"{target.name} was selected for the nightly run with its auto-import switch off"
+            )
 
-        assert targets == []
-        assert any("interactive" in r.message.lower() for r in caplog.records), (
-            f"the skip has to say WHY or it reads as a broken toggle: "
-            f"{[r.message for r in caplog.records]}"
-        )
+    def test_every_selected_target_carries_its_provider_slug(self, db, seeded_db):
+        """The night budgets by provider, so a target with no slug would be
+        billed against whichever bucket happened to be first."""
+        from app.jobs.feed_import_daily import _eligible
 
-    def test_the_operators_switch_is_left_alone(self, db, seeded_db, monkeypatch):
-        """Skipping is not disabling. The day per-provider budgets land, the
-        switch the operator already flipped must still be on."""
-        supplier = seeded_db["supplier1"]
-        row = self._enable(db, supplier)
-        monkeypatch.setattr(job, "match_provider", lambda _s: ("fake", ScopedFakeProvider))
-        monkeypatch.setattr(job, "get_feed_key", lambda _db, _slug: "key-not-real")
-
-        job._eligible(db)
-
-        db.refresh(row)
-        assert row.auto_import_enabled is True
-
-    def test_a_category_strategy_supplier_is_still_eligible(self, db, seeded_db, monkeypatch):
-        """The gate must be about the STRATEGY, not about being a second
-        distributor — Mouser's nightly run is the thing that must not change."""
-        supplier = seeded_db["supplier1"]
-        self._enable(db, supplier)
-        monkeypatch.setattr(job, "match_provider", lambda _s: ("fake", FakeProvider))
-        monkeypatch.setattr(job, "get_feed_key", lambda _db, _slug: "key-not-real")
-
-        assert [t.name for t in job._eligible(db)] == [supplier.name]
-
-
-# ── the manufacturer map: our canonical key -> DigiKey's own ids ────────────
+        for target in _eligible(db):
+            assert target.provider_slug, f"{target.name} has no provider slug"
 
 
 class TestTheManufacturerMap:
@@ -1601,3 +1590,187 @@ class TestCanNarrowAsksAboutChildrenNotArithmetic:
         groups = _FamilySweep()._groups(db, None, 6, None)
         ours = [g for g, _p in groups if g.canonical_key == "longer corp"]
         assert ours and ours[0].has_longer is True
+
+
+class TestTheCursorIsNotRewrittenOnEveryPage:
+    """The whole cursor map was persisted after every single page.
+
+    `_save_import_cursor` reassigns `row.import_cursor = dict(cursor)` and
+    commits, and `_sweep_run` called it once per work unit. For the category
+    sweep that is 189 keys and free. The family sweep adds one key per
+    (maker, prefix), growing toward 56,689 — and the map PERSISTS between runs,
+    so it starts each night where the last one stopped.
+
+    Measured against the local Postgres, cost per save by map size:
+
+        100 keys      2.8 KB     1.03 ms
+        1,000         29 KB      1.53 ms
+        20,000        590 KB     9.26 ms
+        56,689        1.67 MB   29.24 ms      <- 28x
+
+    Linear per write, and the map only grows, so the run is quadratic overall:
+    that is exactly "starts fast and gets slower and slower". At full size a
+    1,000-page night spends ~29 s rewriting bookkeeping and roughly 1.7 GB of
+    WAL doing it. `jsonb_set` would not help — Postgres rewrites the TOASTed
+    value whichever way the new JSON is computed.
+
+    Batching is safe because the WORK is already durable: `absorb` commits per
+    part, so a lost flush costs only paging DEPTH, and re-reading a page costs
+    one call. The flush interval is therefore a bound on wasted calls after an
+    ungraceful stop, not on data loss — and the run must still flush on every
+    exit path, or a clean finish would lose up to a whole interval.
+    """
+
+    def test_the_flush_interval_is_a_named_constant(self):
+        from app.services.part_feed import importer
+
+        assert hasattr(importer, "CURSOR_FLUSH_EVERY"), (
+            "the cursor flush cadence is inlined; it bounds how many API calls "
+            "an ungraceful stop wastes and deserves a name and a rationale"
+        )
+        assert importer.CURSOR_FLUSH_EVERY > 1
+
+    def test_a_multi_unit_sweep_saves_the_cursor_fewer_times_than_it_pages(
+        self, db, seeded_db, monkeypatch
+    ):
+        """Counts real saves across MORE units than the flush interval.
+
+        Two earlier versions of this test were worthless and a mutation check
+        caught both. The first grepped the source for CURSOR_FLUSH_EVERY — the
+        constant's NAME survives in the surrounding comments, so reverting the
+        batching left it green. The second counted saves but built a fixture
+        producing a single page, where one save is one save either way. The
+        distinguishing condition is units > CURSOR_FLUSH_EVERY, so the fixture
+        has to make that many.
+        """
+        from app.services.part_feed import importer
+
+        units = importer.CURSOR_FLUSH_EVERY + 5
+        saves = []
+        real = importer._save_import_cursor
+        monkeypatch.setattr(
+            importer,
+            "_save_import_cursor",
+            lambda db_, sid, cur: (saves.append(1), real(db_, sid, cur))[1],
+        )
+
+        # One family per maker, so each is its own work unit.
+        ids = {}
+        for n in range(units):
+            key = f"maker{n:03d}"
+            mk = _maker(db, f"Maker {n:03d}", key)
+            _held(db, mk, f"MK{n:03d}AAA")
+            ids[key] = 1000 + n
+        db.commit()
+
+        provider = ScopedFakeProvider(manufacturer_ids=ids, results_by_keyword={})
+        list(grow_catalog(db, provider, seeded_db["supplier1"], call_budget=units))
+
+        assert len(saves) <= 2 + units // importer.CURSOR_FLUSH_EVERY, (
+            f"{len(saves)} cursor saves across {units} work units — the whole map "
+            "is being rewritten per page again, which is the 28x-at-scale cost "
+            "(1.03 ms at 100 keys, 29.24 ms and 1.67 MB at 56,689)"
+        )
+        assert saves, "the cursor was never persisted at all"
+
+    def test_every_exit_path_flushes(self):
+        """A clean finish, a quota wall and a pause must all leave the cursor
+        current. Batching that only flushes mid-loop silently discards the last
+        partial interval, which is worse than the slowdown it fixes."""
+        import inspect
+
+        from app.services.part_feed.importer import _sweep_run
+
+        src = inspect.getsource(_sweep_run)
+        assert "finally:" in src, (
+            "there is no finally block, so a FeedFatalError or a pause returns "
+            "without flushing the pages it did absorb"
+        )
+        tail = src[src.index("finally:") :]
+        assert "_save_import_cursor" in tail or "_flush_cursor" in tail, (
+            "the exit path does not persist the cursor"
+        )
+
+
+class TestTheNightlyBudgetIsPerProvider:
+    """Quotas are not pooled, so the budget must not be either.
+
+    `run_once` took ONE `FEED_IMPORT_CALL_BUDGET`, divided it evenly across
+    every enabled supplier, and capped the whole night against that same
+    number. Mouser and Digi-Key each sell their own ~1,000 calls/day, so with
+    both enabled each got 425 of a shared 850 — under-using both by half while
+    still letting whichever ran first starve the other. It also makes a reach
+    estimate unstateable, because "how much can we price tonight" only has an
+    answer per distributor.
+
+    The registry already resolves a per-provider budget
+    (`registry.call_budget(slug)`, backed by `FEED_IMPORT_CALL_BUDGETS` with
+    the scalar as fallback). The night has to spend against that, per provider,
+    and its running cap has to be per provider too — a global cap re-creates
+    the starvation it was supposed to remove.
+    """
+
+    def test_the_budget_is_resolved_per_provider_not_from_the_scalar(self):
+        import inspect
+
+        from app.jobs import feed_import_daily
+
+        src = inspect.getsource(feed_import_daily.run_once)
+        assert "call_budget(" in src, (
+            "run_once still reads settings.FEED_IMPORT_CALL_BUDGET directly; with "
+            "two distributors that pools two separate quotas into one"
+        )
+
+    def test_two_providers_get_their_own_allowances(self, monkeypatch):
+        from app.services.part_feed import registry
+
+        monkeypatch.setattr(
+            registry.settings,
+            "FEED_IMPORT_CALL_BUDGETS",
+            {"mouser": 300, "digikey": 900},
+            raising=False,
+        )
+        assert registry.call_budget("mouser") == 300
+        assert registry.call_budget("digikey") == 900
+
+
+class TestTheFamilySweepRunsUnattended:
+    """The two reasons to hold were removed and measured away, in that order.
+
+    (1) Per-provider budgets now exist, so Digi-Key burning its day fast no
+        longer takes Mouser's allowance with it.
+
+    (2) The `lifecycle_status` worry — two vocabularies over one column, each
+        disagreement rewriting all eight indexes — was UNMEASURED when the hold
+        was written. Measured since, against both live feeds: Mouser reported
+        no lifecycle at all on 12 of 12 sampled parts while Digi-Key reported
+        one on 10 of them, so in practice a single feed authors the column.
+        Catalog-wide only 3,181 of 175,728 parts (1.8%) have ever been
+        feed-stamped, and `_stamp_feed_facts` writes only when the value
+        actually changes, so a genuine disagreement costs one UPDATE per part
+        per alternating run — hundreds a night, not the index storm feared.
+    """
+
+    def test_family_is_allowed_to_run_unattended(self):
+        from app.jobs.feed_import_daily import NIGHTLY_STRATEGIES
+
+        assert "family" in NIGHTLY_STRATEGIES, (
+            "the overlap sweep is still interactive-only, so a supplier whose "
+            "auto-import the operator switched on is skipped every night"
+        )
+
+    def test_category_still_runs_unattended_too(self):
+        """Enabling family must not displace Mouser's nightly sweep."""
+        from app.jobs.feed_import_daily import NIGHTLY_STRATEGIES
+
+        assert "category" in NIGHTLY_STRATEGIES
+
+    def test_the_nightly_run_is_still_never_continuous(self):
+        """Unattended does NOT mean unbounded: `continuous` stays off at night,
+        or one supplier sweeps until the quota wall and nobody else runs."""
+        import inspect
+
+        from app.jobs import feed_import_daily
+
+        src = inspect.getsource(feed_import_daily._import_one)
+        assert "continuous=True" not in src

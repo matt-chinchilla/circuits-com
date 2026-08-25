@@ -778,6 +778,23 @@ def _load_import_cursor(db: Session, supplier_id) -> dict[str, int]:
     return dict(row.import_cursor)
 
 
+# How many work units may pass between cursor flushes.
+#
+# `_save_import_cursor` reassigns the WHOLE map and commits, so its cost is
+# linear in the number of keys — and the family sweep's map grows toward 56,689
+# and persists across runs. Measured on the local Postgres: 1.03 ms at 100 keys,
+# 9.26 ms at 20,000, 29.24 ms and 1.67 MB of row rewrite at 56,689. Saving per
+# page therefore made a run quadratic and slower every night, which is the
+# "starts fast, gets slower and slower" report.
+#
+# Batching is safe because the WORK is already durable — `absorb` commits per
+# part — so an ungraceful stop loses only paging DEPTH. Re-reading a page costs
+# ONE provider call, so this number is a bound on wasted calls after a crash,
+# not on lost data: 25 of a ~1,000/day budget, against a 25x cut in bookkeeping
+# cost. Every exit path flushes, so a clean finish loses nothing at all.
+CURSOR_FLUSH_EVERY = 25
+
+
 def _save_import_cursor(db: Session, supplier_id, cursor: dict[str, int]) -> None:
     """Persist the whole cursor map, creating the feed row if it is missing.
 
@@ -1743,6 +1760,16 @@ def _sweep_run(
         unit for unit in units if _cursor_get(cursor, unit.cursor_key) != IMPORT_CURSOR_EXHAUSTED
     ]
 
+    # A one-element list, not an int: `_sweep` closes over it and must be able
+    # to reset it, and the flush in the `finally` below has to see the same
+    # count across every pass of a continuous run.
+    cursor_dirty = [0]
+
+    def _flush_cursor() -> None:
+        if cursor_dirty[0]:
+            _save_import_cursor(db, supplier_pk, cursor)
+            cursor_dirty[0] = 0
+
     def _sweep(batch: list[WorkUnit]) -> Iterator[dict]:
         """ONE pass down `batch`. The unit `continuous` repeats.
 
@@ -1785,7 +1812,12 @@ def _sweep_run(
                 unit.cursor_key,
                 strategy.next_cursor(provider, unit, start_at, raw_rows, want),
             )
-            _save_import_cursor(db, supplier_pk, cursor)
+            # Batched — see CURSOR_FLUSH_EVERY. `cursor_dirty` is closed over
+            # so the count spans passes, not just this batch.
+            cursor_dirty[0] += 1
+            if cursor_dirty[0] >= CURSOR_FLUSH_EVERY:
+                _save_import_cursor(db, supplier_pk, cursor)
+                cursor_dirty[0] = 0
 
     started_detail = strategy.started_detail(pending, call_budget, continuous)
     if wrapped:
@@ -1826,6 +1858,14 @@ def _sweep_run(
         yield sync_event("sync_error", supplier_id, "Feed unavailable", str(exc))
         yield _finished()
         return
+    finally:
+        # EVERY exit flushes: clean finish, quota wall, pause, or the generator
+        # being closed when the client disconnects. Batching that only flushed
+        # mid-loop would silently discard up to CURSOR_FLUSH_EVERY pages of
+        # depth on a NORMAL ending, which is worse than the slowdown it fixes.
+        # After the rollback above the session is clean, and
+        # `_save_import_cursor` re-queries and commits on its own.
+        _flush_cursor()
     yield _finished()
 
 

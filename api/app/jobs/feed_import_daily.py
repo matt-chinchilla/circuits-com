@@ -76,6 +76,7 @@ from app.services.part_feed import (
     get_feed_key,
     grow_catalog,
     match_provider,
+    registry,
 )
 from app.services.part_feed.mouser import FeedFatalError
 
@@ -99,6 +100,7 @@ class _Target:
     name: str
     provider_cls: type[PartFeedProvider]
     api_key: str
+    provider_slug: str = "mouser"
 
 
 def seconds_until_hour(hour_utc: int, now: datetime) -> float:
@@ -121,7 +123,7 @@ def seconds_until_hour(hour_utc: int, now: datetime) -> float:
     return (target - now).total_seconds()
 
 
-NIGHTLY_STRATEGIES: frozenset[str] = frozenset({"category"})
+NIGHTLY_STRATEGIES: frozenset[str] = frozenset({"category", "family"})
 """Which import strategies may run UNATTENDED. One line to widen.
 
 Both reasons to hold the family sweep back are about things this job cannot
@@ -195,7 +197,13 @@ def _eligible(db: Session) -> list[_Target]:
             )
             continue
         targets.append(
-            _Target(supplier=supplier, name=name, provider_cls=provider_cls, api_key=key)
+            _Target(
+                supplier=supplier,
+                name=name,
+                provider_cls=provider_cls,
+                api_key=key,
+                provider_slug=provider_slug,
+            )
         )
     return targets
 
@@ -328,31 +336,45 @@ def run_once(db: Session, now: datetime | None = None) -> dict:
         logger.info("[feed-import] no supplier has the nightly import enabled — nothing to do")
         return stats
 
-    call_budget = max(0, int(settings.FEED_IMPORT_CALL_BUDGET))
-    # An even slice each, floor-divided, but never zero: a slice of 0 would
-    # start a run that can only report that it did nothing. The global cap
-    # below is what keeps `max(1, ...)` from overspending — with more suppliers
-    # than calls, the tail is simply not reached, and says so.
-    per_supplier = max(1, call_budget // len(targets))
+    # PER PROVIDER, not one pooled number. Each distributor sells its own daily
+    # allowance (~1,000 for both today), so a single shared budget both
+    # under-used them — 425 each of one 850 — and let whichever ran first spend
+    # the other's day. `registry.call_budget` reads FEED_IMPORT_CALL_BUDGETS
+    # with the scalar as fallback, so a newly registered distributor still runs
+    # without an ops change.
+    budgets = {t.provider_slug: registry.call_budget(t.provider_slug) for t in targets}
+    per_provider_count: dict[str, int] = {}
+    for t in targets:
+        per_provider_count[t.provider_slug] = per_provider_count.get(t.provider_slug, 0) + 1
+    # An even slice within a provider, floor-divided, never zero: a slice of 0
+    # starts a run that can only report it did nothing. The per-provider cap
+    # below is what stops `max(1, ...)` overspending.
+    per_supplier = {slug: max(1, budgets[slug] // n) for slug, n in per_provider_count.items()}
+    spent: dict[str, int] = dict.fromkeys(budgets, 0)
     logger.info(
-        "[feed-import] %d supplier(s) enabled · budget %d calls · %d each",
+        "[feed-import] %d supplier(s) enabled across %d provider(s) · %s",
         len(targets),
-        call_budget,
-        per_supplier,
+        len(budgets),
+        " · ".join(
+            f"{slug} {budgets[slug]} calls / {per_supplier[slug]} each" for slug in sorted(budgets)
+        ),
     )
 
     for target in targets:
-        remaining = call_budget - stats["calls"]
+        slug = target.provider_slug
+        remaining = budgets[slug] - spent[slug]
         if remaining <= 0:
             logger.warning(
-                "[feed-import] call budget (%d) spent — %s and any supplier after it "
-                "did not run tonight",
-                call_budget,
+                "[feed-import] %s's call budget (%d) is spent — %s did not run tonight. "
+                "Other providers are unaffected.",
+                slug,
+                budgets[slug],
                 target.name,
             )
             stats["stopped_early"] = True
-            break
-        result = _import_one(db, target, min(per_supplier, remaining))
+            continue
+        result = _import_one(db, target, min(per_supplier[slug], remaining))
+        spent[slug] += result.get("calls", 0)
         if result["skipped_locked"]:
             # Nothing ran and nothing was spent, so this supplier is NOT one of
             # tonight's. Crucially it must not be stamped either: `_stamp_run`
