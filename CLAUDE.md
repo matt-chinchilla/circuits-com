@@ -86,7 +86,7 @@ Aliases `@public/*` / `@admin/*` / `@shared/*` in `vite.config.ts` + `tsconfig.a
 
 **Category page**: column-header sort/filter (`ColumnHeader.tsx`, portaled popover) + sticky subcat pill-bar + client-side filter/sort/pagination (25/page). Parent pages fetch all parts (`per_page=500`); leaf pages same scoped to one sub. `?p=N` paginates. Subcats are NESTED pages — pill chips `<Link>` to `/category/:parent/:child` (no `activeSub`; column sub-filter stays).
 
-**Catalog data**: 15 JSON files in `api/app/db/catalog_data/`. `_seed_real_catalog()` → Part/PartListing/PriceBreak. `_DEMO_CATALOG` for wizard demos. Revenue scaled by listing count via `_REVENUE_TIERS`. ~3,600 parts, ~41K listings, ~164K price breaks, 57 suppliers. Regenerate via `--reseed`.
+**Catalog data**: 15 JSON files in `api/app/db/catalog_data/`. `_seed_real_catalog()` → Part/PartListing/PriceBreak. `_DEMO_CATALOG` for wizard demos. Revenue scaled by listing count via `_REVENUE_TIERS`. ~3,600 parts, ~41K listings, ~164K price breaks, 59 suppliers. Regenerate via `--reseed`.
 
 **Per-qty best prices**: `_build_public_parts` + `_build_popular_parts` return `best_price` + `best_price_10/100/1000` via batched PriceBreak queries. `PartsTable` renders 4 price columns.
 
