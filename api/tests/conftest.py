@@ -133,10 +133,18 @@ def reset_login_rate_limiter():
     deliberate wrong-password tests would otherwise accumulate into a lockout
     that fails whichever unrelated test happens to run next. Autouse so no test
     has to know the limiter exists.
+
+    The signup counters (distinct-probe and volume-hit, same module) are the
+    same class of process state and are wiped here for the same reason: the
+    suite signs up more than ten accounts from one host, which is a real
+    lockout, and one module's registrations would otherwise spend the next
+    module's hourly allowance.
     """
     rate_limit.limiter.reset()
+    rate_limit.reset_signup_counters()
     yield
     rate_limit.limiter.reset()
+    rate_limit.reset_signup_counters()
 
 
 @pytest.fixture(scope="function")

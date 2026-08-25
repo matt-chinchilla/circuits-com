@@ -571,18 +571,24 @@ def signup_probe_key(request: Request) -> str:
     return f"{SIGNUP_PROBE_PREFIX}{client_ip(request)}"
 
 
-def record_probe(key: str, value: str) -> int:
+def record_probe(key: str, value: str, *, window_seconds: float = PROBE_WINDOW_SECONDS) -> int:
     """Record that `key` probed `value`; return the DISTINCT count in-window.
 
     Values are normalized so casing and padding cannot inflate the count —
     an enumerator would otherwise pay nothing to look like eight people.
+
+    ``window_seconds`` is per CALL because the same signal is metered over two
+    windows at once (see :data:`PROBE_WIDE_DISTINCT_THRESHOLD`) — but a key is
+    pruned to whatever window the caller passes, so one key must always be
+    asked with one window. That is why the wide rule owns a separate key rather
+    than re-reading this one.
     """
     now = _now()
     normalized = (value or "").strip().lower()
     with _probes_lock:
         seen = _probes.setdefault(key, {})
         for old, stamp in list(seen.items()):
-            if now - stamp > PROBE_WINDOW_SECONDS:
+            if now - stamp > window_seconds:
                 del seen[old]
         seen[normalized] = now
         if len(_probes) > MAX_PROBE_KEYS:
@@ -596,3 +602,146 @@ def reset_probes() -> None:
     """Test hook — the module keeps process-lifetime state."""
     with _probes_lock:
         _probes.clear()
+
+
+# ── Signup VOLUME (abuse hardening) ─────────────────────────────────────────
+# The probe counter above meters the ALREADY-TAKEN branch of signup. Everything
+# else about this feature was unmetered, and every unmetered path here ends the
+# same way: our SES relay mails an address the CALLER typed. That is an open
+# mail relay pointed at strangers — an abuse vector, and the fastest way to get
+# an SES account suspended, which would take every transactional mail on the
+# site down with it.
+#
+# Two counters, one enforcer. `_probes` counts DISTINCT values per key (the
+# right shape for enumeration: a person who forgot they registered retries ONE
+# address, an enumerator walks many); `_hits` below counts ATTEMPTS per key (the
+# right shape for volume: five resends to one address is five mails, however
+# few addresses were involved). Neither one locks anything — enforcement stays
+# with `limiter`, so a lock armed here is visible to every endpoint that reads
+# the same key, and the namespaces stay independent.
+
+# Accounts CREATED per host. A real person signs up once; ten is already
+# generous for an office behind one NAT, and the tenth still succeeds — it is
+# the eleventh that meets the hour.
+SIGNUP_CREATE_PREFIX = "signup:create:"
+CREATE_THRESHOLD = 10
+CREATE_WINDOW_SECONDS = 60 * 60
+CREATE_LOCK_SECONDS = 60 * 60
+
+# The SLOW WALK. PROBE_DISTINCT_THRESHOLD (8 in 15 minutes) is a sprint
+# detector: pace at seven distinct addresses per sixteen minutes and it never
+# fires, while the caller still walks ~26 an hour. This is the second row of
+# the same rule, over a window four times as long, and its penalty is a day
+# rather than an hour because at this pace nothing but enumeration is happening.
+SIGNUP_PROBE_WIDE_PREFIX = "signup:probe1h:"
+PROBE_WIDE_DISTINCT_THRESHOLD = 25
+PROBE_WIDE_WINDOW_SECONDS = 60 * 60
+PROBE_WIDE_LOCK_SECONDS = 24 * 60 * 60
+
+# RESEND. Per address, because the victim of a mail-bomb is the one registrant
+# whose address is being looped; per host, because rotating addresses is the
+# obvious way around that. Both penalties are a flat hour on the buckets the
+# route already reads.
+SIGNUP_RESEND_PREFIX = "signup:resend:"
+RESEND_EMAIL_THRESHOLD = 5
+RESEND_IP_THRESHOLD = 20
+RESEND_WINDOW_SECONDS = 60 * 60
+RESEND_LOCK_SECONDS = 60 * 60
+
+# DELETE. Not a mail path — a password oracle. The endpoint re-authenticates
+# from the request BODY, so a stolen session could brute-force the password
+# there at network speed while /auth/login refuses to be brute-forced at all.
+# This one is a LADDER, not a pause: it is the same signal login meters (a wrong
+# password from someone who holds a session), so it gets login's shape via
+# limiter.record_failure. Its own namespace all the same, so a fumbled Danger
+# Zone confirmation cannot lock the account out of signing in.
+ACCOUNT_DELETE_PREFIX = "account:delete:"
+
+# Same ceiling and reasoning as MAX_PROBE_KEYS: bound what a key-rotating spray
+# can make us allocate.
+MAX_HIT_KEYS = 2048
+# Per key, the retained stamps are pruned to the window first; this caps the
+# tail so a pathological key cannot grow a list without bound. It is far above
+# every threshold above, so no live count is ever truncated by it.
+MAX_HITS_PER_KEY = 256
+
+_hits: dict[str, list[float]] = {}
+# Its own lock, same reason `_probes` has one: FastAPI runs `def` routes in a
+# threadpool, so two public signups really do land in here at once, and an
+# unguarded mutate-while-iterating is a 500 on a PUBLIC route reached by
+# ordinary traffic rather than by an attack.
+_hits_lock = threading.Lock()
+
+
+def signup_create_key(request: Request) -> str:
+    return f"{SIGNUP_CREATE_PREFIX}{client_ip(request)}"
+
+
+def signup_probe_wide_key(request: Request) -> str:
+    """The hour-long companion to :func:`signup_probe_key`.
+
+    A SEPARATE key rather than a second read of the same one: `record_probe`
+    prunes each key to one window, so the 15-minute counter structurally cannot
+    also answer "how many in the last hour".
+    """
+    return f"{SIGNUP_PROBE_WIDE_PREFIX}{client_ip(request)}"
+
+
+def resend_ip_hit_key(request: Request) -> str:
+    return f"{SIGNUP_RESEND_PREFIX}ip:{client_ip(request)}"
+
+
+def resend_email_hit_key(email: str | None) -> str | None:
+    """Counter key for resends AT one address, normalized like every other
+    address key here so casing cannot mint a fresh allowance."""
+    normalized = (email or "").strip().lower()
+    return f"{SIGNUP_RESEND_PREFIX}email:{normalized}" if normalized else None
+
+
+def account_delete_key(user_id: str | None) -> str | None:
+    """Per-ACCOUNT key for the Danger Zone password check.
+
+    Keyed on the user id, not the address and not the host: the caller already
+    proved they hold a session for exactly this account, so the id is the
+    precise thing being attacked and nothing a third party can name. That also
+    keeps a shared office IP from locking one another's Danger Zone.
+    """
+    return f"{ACCOUNT_DELETE_PREFIX}{user_id}" if user_id else None
+
+
+def record_hit(key: str, *, window_seconds: float) -> int:
+    """Count one ATTEMPT against ``key``; return the count inside the window.
+
+    The volume counterpart to :func:`record_probe`. Distinct-counting is the
+    wrong shape for a mailer: five resends to ONE address is five emails, and
+    `record_probe` would report that as 1.
+    """
+    now = _now()
+    with _hits_lock:
+        stamps = [t for t in _hits.get(key, ()) if now - t <= window_seconds]
+        stamps.append(now)
+        del stamps[:-MAX_HITS_PER_KEY]
+        _hits[key] = stamps
+        if len(_hits) > MAX_HIT_KEYS:
+            oldest = min(_hits, key=lambda k: max(_hits[k], default=0.0))
+            if oldest != key:
+                del _hits[oldest]
+        return len(stamps)
+
+
+def reset_hits() -> None:
+    """Test hook — the module keeps process-lifetime state."""
+    with _hits_lock:
+        _hits.clear()
+
+
+def reset_signup_counters() -> None:
+    """Clear EVERY process-lifetime signup counter — both of them.
+
+    THE hook for tests (an autouse conftest fixture calls it). Nobody has ever
+    wanted one of these two cleared without the other: they are the same class
+    of state, they are keyed on the same hosts, and forgetting the second is how
+    one module's signups silently spend the next module's allowance.
+    """
+    reset_probes()
+    reset_hits()
