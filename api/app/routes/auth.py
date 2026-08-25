@@ -3,13 +3,13 @@ from datetime import UTC, datetime
 
 import jwt
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.db.session import get_db
-from app.models import User
+from app.models import Message, User
 from app.services import email as email_service
 from app.services import mail_sync
 from app.services.auth_service import (
@@ -17,21 +17,32 @@ from app.services.auth_service import (
     TOKEN_EXPIRY_HOURS,
     create_reset_token,
     create_token,
+    create_verify_token,
     decode_reset_token,
+    decode_verify_token,
     get_authenticated_user,
     hash_password,
+    is_customer,
     reset_token_matches_hash,
     verify_dummy_password,
     verify_password,
+    verify_token_matches_email,
 )
+from app.services.geoip import country_for_ip
 from app.services.password_policy import PASSWORD_HELP, validate_password
 from app.services.rate_limit import (
+    PROBE_DISTINCT_THRESHOLD,
+    PROBE_LOCK_SECONDS,
     client_ip,
     limiter,
     login_email_key,
     login_ip_key,
+    record_probe,
     recovery_identifier_key,
     recovery_ip_key,
+    signup_ip_key,
+    signup_probe_key,
+    trusted_client_addr,
 )
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -125,6 +136,43 @@ class ChangePasswordRequest(BaseModel):
     new_password: str
 
 
+class SignupRequest(BaseModel):
+    # extra="forbid" is load-bearing, not tidiness: it is what stops a body
+    # carrying role/supplier_id/manufacturer_id, and what rejects a
+    # confirm_password someone helpfully added client-side (D11).
+    model_config = ConfigDict(extra="forbid")
+
+    first_name: str = Field(min_length=1, max_length=80)
+    last_name: str = Field(min_length=1, max_length=80)
+    email: EmailStr
+    # No Field(min_length=...): validate_password is the ONE gate, so a short
+    # password answers with the structured policy 422 like every other rule.
+    password: str
+
+
+class VerifyRequest(BaseModel):
+    token: str
+
+
+class ResendVerificationRequest(BaseModel):
+    email: str
+
+
+EMAIL_TAKEN_DETAIL = "email_taken"
+
+# The ONE body every UNUSABLE verification token answers with — malformed,
+# expired, wrong purpose (a session or reset token), no such user, or minted
+# for a different address. They are indistinguishable on purpose: none of them
+# should tell a caller holding a bad link whether some account exists.
+#
+# The already-verified reply below is deliberately NOT this string. It is not
+# an enumeration leak — reaching it requires presenting a validly-signed token
+# for that exact user and address, which is itself proof the account exists —
+# and "you already confirmed, just sign in" is the answer that reply exists to
+# give.
+INVALID_VERIFY_DETAIL = "invalid_or_expired_token"
+
+
 def _find_login_user(db: Session, identifier: str) -> User | None:
     """Resolve a login identifier to a user, or None.
 
@@ -189,6 +237,218 @@ def _record_login(db: Session, user: User, request: Request) -> None:
         db.rollback()
 
 
+@router.post("/signup", status_code=status.HTTP_202_ACCEPTED)
+def signup(
+    body: SignupRequest,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
+    """Create an unverified, unactivated customer account.
+
+    Returns 202 and NO token. There is no session until the address is
+    verified, which is what makes "notify staff on verify, never on submit"
+    (D6) enforceable rather than advisory.
+    """
+    ip_key = signup_ip_key(request)
+    retry_after = limiter.retry_after(ip_key)
+    if retry_after:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="too_many_requests",
+            headers={"Retry-After": str(retry_after)},
+        )
+
+    unmet = validate_password(body.password)
+    if unmet:
+        # Byte-identical shape to /change-password and /reset-password so one
+        # client helper reads all three. Bare 422 (repo convention): the
+        # starlette constant was renamed ..._ENTITY -> ..._CONTENT and emits a
+        # DeprecationWarning, so the literal is the version-stable spelling.
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "password_policy", "message": PASSWORD_HELP, "unmet": unmet},
+        )
+
+    email = body.email.strip().lower()
+    existing = db.query(User).filter(func.lower(User.email) == email).first()
+    if existing is not None:
+        # D5: an explicit owner carve-out from the anti-enumeration rule, paid
+        # for by the probe counter below. Do NOT "restore" the generic reply
+        # without reading §6 of the design spec first.
+        probes = record_probe(signup_probe_key(request), email)
+        if probes >= PROBE_DISTINCT_THRESHOLD:
+            # pause(), NOT record_failure(): the design's threshold table says
+            # "1 hour pause", and record_failure's delay is the login ladder's
+            # own escalation (60s, doubling) — it cannot deliver an hour, and
+            # calling it would leave PROBE_LOCK_SECONDS a constant that lies.
+            # The pause is scoped to signup:ip:* so it cannot lock this host
+            # out of signing IN, which is the whole reason the namespace is
+            # separate.
+            limiter.pause(ip_key, seconds=PROBE_LOCK_SECONDS)
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=EMAIL_TAKEN_DETAIL)
+
+    # trusted_client_addr, NOT client_ip: client_ip collapses IPv6 to its /64
+    # because that is the right shape for a BUCKET KEY and the wrong shape for
+    # a stored address — a CIDR is not where anybody signed up, and the geoip
+    # reader rejects it outright (which is how every IPv6 visitor once landed
+    # on the analytics map as "unknown"). None when no hop parses as an IP,
+    # which is a fact rather than an error: both columns are nullable.
+    ip = trusted_client_addr(request)
+    user = User(
+        username=email,  # D7 — customers never choose one
+        email=email,
+        password_hash=hash_password(body.password),
+        role="user",
+        first_name=body.first_name.strip(),
+        last_name=body.last_name.strip(),
+        signup_ip=ip,
+        signup_country=country_for_ip(ip),
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    verify_url = (
+        f"{settings.APP_BASE_URL.rstrip('/')}/admin/verify"
+        f"?token={create_verify_token(str(user.id), email)}"
+    )
+    background_tasks.add_task(
+        email_service.send_verification_email, email, user.first_name, verify_url
+    )
+    return {"status": "ok"}
+
+
+def _next_message_seq(db: Session) -> int:
+    """Same single sequence space the public forms use (routes/forms.py).
+
+    The MSG-#### designator is one counter across every message type, so a
+    customer signup takes the next number after the last contact form — not a
+    parallel series that collides with it (``seq`` is UNIQUE).
+    """
+    return (db.query(func.max(Message.seq)).scalar() or 0) + 1
+
+
+@router.post("/verify")
+def verify_email(
+    body: VerifyRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
+    """Spend a verification token — and fire the signup's side effects.
+
+    A POST, not a GET on the emailed link, because corporate mail scanners
+    prefetch every URL in a message: a GET would be consumed before the human
+    ever clicked. The SPA renders /admin/verify and POSTs from there.
+
+    This is where the two Message rows are born (D6), never at signup: the
+    staff row and the welcome mail are only owed to someone who has proved they
+    hold the mailbox. Firing them on submit would let anyone with a script
+    spray the staff inbox and mail strangers a "welcome" they never asked for.
+    """
+    try:
+        payload = decode_verify_token(body.token)
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=400, detail=INVALID_VERIFY_DETAIL) from None
+
+    try:
+        # TypeError too: a token carrying an explicit null `sub` reaches
+        # UUID(None), which raises TypeError, not ValueError — and an
+        # unhandled 500 on a public route is a worse answer than the 400.
+        user_uuid = uuid_mod.UUID(payload.get("sub", ""))
+    except (ValueError, TypeError, AttributeError):
+        raise HTTPException(status_code=400, detail=INVALID_VERIFY_DETAIL) from None
+
+    user = db.query(User).filter(User.id == user_uuid).first()
+    # The email fingerprint check is what stops a token surviving an address
+    # change: it was minted for one mailbox and is only good for that one.
+    if user is None or not verify_token_matches_email(payload, user.email or ""):
+        raise HTTPException(status_code=400, detail=INVALID_VERIFY_DETAIL)
+    if user.email_verified_at is not None:
+        # Single-use: the stamp IS the spend record, so a replayed link cannot
+        # fire the side effects twice (no second staff row, no second welcome).
+        # The token stays validly signed until it expires — the row is what
+        # says it has been used.
+        raise HTTPException(status_code=400, detail="already_verified")
+
+    user.email_verified_at = datetime.now(UTC)
+    full_name = " ".join(p for p in (user.first_name, user.last_name) if p).strip()
+    seq = _next_message_seq(db)
+    db.add(
+        Message(
+            id=str(uuid_mod.uuid4()),
+            type="signup",
+            status="new",
+            seq=seq,
+            user_id=None,  # the shared staff inbox — all four staff see it
+            payload={
+                "first_name": user.first_name or "",
+                "last_name": user.last_name or "",
+                "full_name": full_name,
+                "email": user.email,
+                "country": user.signup_country,
+            },
+        )
+    )
+    db.add(
+        Message(
+            id=str(uuid_mod.uuid4()),
+            type="welcome",
+            status="new",
+            seq=seq + 1,
+            user_id=user.id,  # their inbox only
+            payload={"first_name": user.first_name or "", "full_name": full_name},
+        )
+    )
+    # One transaction: the stamp and both rows land together or not at all. A
+    # commit between them could leave an account verified with no staff row —
+    # nobody would ever know the registration happened.
+    db.commit()
+
+    background_tasks.add_task(email_service.send_welcome_email, user.email, user.first_name)
+    return {"status": "ok"}
+
+
+@router.post("/resend-verification")
+def resend_verification(
+    body: ResendVerificationRequest,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
+    """Re-send the verification link. Always the generic OK.
+
+    Unlike /signup — which trades anti-enumeration away on purpose (D5) because
+    "that address is already registered" is the only honest answer to a person
+    who cannot get in — this endpoint has no such UX debt: the caller who owns
+    the address gets the mail either way. So it keeps the invariant, and an
+    unknown address, an already-verified one and a freshly-sent link are
+    byte-identical replies.
+
+    Shares the signup:ip:* bucket rather than owning one: the pause signup arms
+    for probing is exactly the pause that should stop the same host turning
+    this route into a mailer. A throttled caller still gets the generic OK with
+    no mail sent — the response is a constant by design.
+    """
+    retry_after = limiter.retry_after(signup_ip_key(request))
+    if retry_after:
+        return GENERIC_OK
+
+    email = (body.email or "").strip().lower()
+    user = db.query(User).filter(func.lower(User.email) == email).first()
+    if user is not None and user.email_verified_at is None:
+        # A FRESH token, not a stored one: the original may already have
+        # expired, which is the usual reason somebody is on this screen.
+        verify_url = (
+            f"{settings.APP_BASE_URL.rstrip('/')}/admin/verify"
+            f"?token={create_verify_token(str(user.id), email)}"
+        )
+        background_tasks.add_task(
+            email_service.send_verification_email, email, user.first_name, verify_url
+        )
+    return GENERIC_OK
+
+
 @router.post("/login", response_model=LoginResponse, dependencies=LOGIN_RATE_LIMIT_DEPENDENCIES)
 def login(body: LoginRequest, request: Request, db: Session = Depends(get_db)):
     # Two keys, scored independently: the host (one machine walking a list of
@@ -216,6 +476,23 @@ def login(body: LoginRequest, request: Request, db: Session = Depends(get_db)):
         raise _invalid_credentials(limiter.record_failure(ip_key, email_key))
     if not verify_password(body.password, user.password_hash):
         raise _invalid_credentials(limiter.record_failure(ip_key, email_key))
+    # Only reachable with the CORRECT password, which is what keeps it from
+    # being an existence oracle: a wrong guess against an unverified account
+    # took the generic 401 two lines up, so "this address exists but never
+    # verified" costs an attacker the password they'd need anyway.
+    #
+    # Deliberately BEFORE limiter.clear(): a correct password here still buys
+    # no session, so it must not buy a reset of the per-IP failure ledger
+    # either. Signing up is free and needs no mailbox, so an attacker could
+    # otherwise keep one unverified account of their own purely to wipe the
+    # lock their spraying arms.
+    #
+    # Activation is deliberately NOT checked here (D17) — a verified but
+    # unactivated customer signs in fine and meets "awaiting approval" at the
+    # console. Refusing at the door would be indistinguishable from a bad
+    # password, which is the wrong message for someone who did everything right.
+    if is_customer(user) and user.email_verified_at is None:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="email_not_verified")
     # Success clears both keys: a legitimate user who finally remembers their
     # password is not still one fumble from a lockout.
     limiter.clear(ip_key, email_key)
@@ -339,6 +616,13 @@ def forgot_password(
             )
             .first()
         )
+        # D14: no reset link for an unverified address. The door for someone
+        # who never verified is resend-verification — each door does one job,
+        # and a reset link would otherwise let an address that was never
+        # proved to belong to anyone become a working account. Falls through
+        # to the SAME generic OK, so this leaks nothing.
+        if is_customer(user) and user.email_verified_at is None:
+            user = None
         if user and user.email:
             token = create_reset_token(str(user.id), user.password_hash)
             # The link origin is the trusted, configured APP_BASE_URL — NEVER the

@@ -247,6 +247,49 @@ class RateLimiter:
                         bucket.locked_until = now + delay
         return self.retry_after(*keys)
 
+    def pause(self, *keys: str | None, seconds: int) -> int:
+        """Lock every key for a FIXED duration; return the new
+        :meth:`retry_after`.
+
+        For a signal whose penalty the design states as a DURATION rather than
+        as a position on the failure ladder — the signup probe counter's
+        one-hour pause (:data:`PROBE_LOCK_SECONDS`). :meth:`record_failure`
+        structurally cannot express that: its delay comes from the key's own
+        escalation level, so asking it for an hour silently delivers 60
+        seconds, and the constant naming the hour becomes a lie.
+
+        Two deliberate differences from :meth:`record_failure`:
+
+        * It never SHORTENS an existing lock (``max``), so a longer pause
+          already in force is not undone by a shorter one.
+        * It does not advance ``lock_level``. A caller-supplied duration is
+          not a rung on the ladder, and it must not silently double the NEXT
+          ordinary lockout on the same key.
+
+        The reverse — a later ``record_failure`` on this key overwriting a live
+        pause with a 60s ladder lock — is not reachable for the signup keys,
+        because the route's own pre-check returns 429 before it can score
+        anything. Any future caller that mixes the two on ONE key must check
+        that for itself.
+        """
+        now = _now()
+        until = now + seconds
+        with self._lock:
+            for key in keys:
+                if not key:
+                    continue
+                bucket = self._buckets.get(key)
+                if bucket is None:
+                    bucket = self._new_bucket(key, now)
+                    if bucket is None:
+                        # Table full of live locks — same call as
+                        # record_failure makes: never evict an active lockout.
+                        continue
+                # Stamped so the eviction scan reads this bucket as live.
+                bucket.last_failure_at = now
+                bucket.locked_until = max(bucket.locked_until, until)
+        return self.retry_after(*keys)
+
     def clear(self, *keys: str | None) -> None:
         """Forget every counter for these keys — what a SUCCESS calls."""
         with self._lock:
@@ -498,6 +541,10 @@ SIGNUP_PROBE_PREFIX = "signup:probe:"
 # forgot they registered retries one address, an enumerator walks many.
 PROBE_DISTINCT_THRESHOLD = 8
 PROBE_WINDOW_SECONDS = 15 * 60
+# Crossing the threshold pauses the signup namespace for this host for an hour
+# — the duration the design's threshold table names. Applied by auth.signup via
+# RateLimiter.pause (NOT record_failure, whose delay is the login ladder's 60s
+# first rung; see that method's docstring).
 PROBE_LOCK_SECONDS = 60 * 60
 # Bounded so a spray cannot grow this dict without limit; oldest key evicted.
 MAX_PROBE_KEYS = 2048

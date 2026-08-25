@@ -1,6 +1,6 @@
 import os
 import uuid
-from datetime import date
+from datetime import UTC, date, datetime
 from decimal import Decimal
 
 # Set DATABASE_URL before any app imports so pydantic-settings doesn't fail
@@ -278,13 +278,17 @@ def seeded_db(db):
     db.add(admin_user)
     db.flush()
 
-    # Create a company user linked to supplier
+    # Create a company user linked to supplier. Verified, like every row that
+    # predates the customer-registration flow: alembic 043 backfills
+    # email_verified_at = now() for exactly these accounts, and an unverified
+    # customer cannot sign in (routes/auth.login).
     company_user = User(
         id=uuid.uuid4(),
         username="kennedy_user",
         password_hash=hashed,
         role="user",
         email="kennedy_user@test.example",
+        email_verified_at=datetime.now(UTC),
         supplier_id=supplier2.id,
     )
     db.add(company_user)
