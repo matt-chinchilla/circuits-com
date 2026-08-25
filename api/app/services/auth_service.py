@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.db.session import get_db
 from app.models import User
+from app.models.roles import ADMIN_ROLES, CUSTOMER_ROLES
 
 security = HTTPBearer(auto_error=False)
 
@@ -176,6 +177,54 @@ def reset_token_matches_hash(payload: dict, password_hash: str) -> bool:
     return payload.get("pwfp") == _pw_fingerprint(password_hash)
 
 
+# ── Email-verification tokens (alembic 043) ────────────────────────────────
+# 24 hours, not the reset link's 30 minutes: a reset link hands over a live
+# credential, this only proves mailbox control, and people read email on their
+# own schedule.
+VERIFY_EXPIRY_HOURS = 24
+
+
+def _email_fingerprint(email: str) -> str:
+    """First 16 hex of sha256(lower(email)) — ties a token to one address.
+
+    Lowercased because the address is STORED lowercased (uq_users_email_lower)
+    but the token may be minted from whatever casing the person typed.
+    """
+    return hashlib.sha256((email or "").strip().lower().encode()).hexdigest()[:16]
+
+
+def create_verify_token(user_id: str, email: str) -> str:
+    now = datetime.now(UTC)
+    payload = {
+        "sub": user_id,
+        "purpose": "verify",
+        "emfp": _email_fingerprint(email),
+        "exp": now + timedelta(hours=VERIFY_EXPIRY_HOURS),
+        "iat": now,
+    }
+    return jwt.encode(payload, settings.ADMIN_SECRET_KEY, algorithm="HS256")
+
+
+def decode_verify_token(token: str) -> dict:
+    """Validate signature + expiry + purpose; return the payload.
+
+    Raises jwt.ExpiredSignatureError on expiry and jwt.InvalidTokenError for a
+    bad signature OR a token that isn't a verification token (a session token,
+    or a reset token). The purpose claim is what stops a verification link
+    being replayed as a session: get_authenticated_user rejects ANY token
+    carrying a purpose.
+    """
+    payload = jwt.decode(token, settings.ADMIN_SECRET_KEY, algorithms=["HS256"])
+    if payload.get("purpose") != "verify":
+        raise jwt.InvalidTokenError("not a verification token")
+    return payload
+
+
+def verify_token_matches_email(payload: dict, email: str) -> bool:
+    """True iff the token was minted for this address."""
+    return payload.get("emfp") == _email_fingerprint(email)
+
+
 # The 403 body a flagged user gets from every gated route. A machine-readable
 # code, not prose: the admin client keys the "set a new password" redirect off
 # this exact string, so changing it silently breaks the forced-reset UX.
@@ -308,3 +357,68 @@ def require_owner(user: User = Depends(get_current_user)) -> User:
             detail=OWNER_ONLY_DETAIL,
         )
     return user
+
+
+# ── The customer/staff wall (alembic 043) ───────────────────────────────────
+# get_current_user is deliberately role-agnostic, which was correct while every
+# account was staff. Public registration ends that, so these three are the
+# boundary. They COMPOSE with get_current_user — never replace it — so the
+# forced-password gate still runs first.
+STAFF_ONLY_DETAIL = "staff_only"
+NOT_ACTIVATED_DETAIL = "account_not_activated"
+
+
+def _role_of(user: User) -> str:
+    """Normalize the role the same way is_owner does.
+
+    SQLAlchemy's Enum(...) can hand back an enum member or a bare string
+    depending on how the row was loaded.
+    """
+    role = getattr(user.role, "value", user.role)
+    return role.strip().lower() if isinstance(role, str) else ""
+
+
+def is_staff(user: User | None) -> bool:
+    return user is not None and _role_of(user) in ADMIN_ROLES
+
+
+def is_customer(user: User | None) -> bool:
+    return user is not None and _role_of(user) in CUSTOMER_ROLES
+
+
+def require_staff(user: User = Depends(get_current_user)) -> User:
+    """Staff-only routes: /api/admin/users, message deletion, anything that
+    manages OTHER accounts."""
+    if not is_staff(user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=STAFF_ONLY_DETAIL,
+        )
+    return user
+
+
+def require_account_user(user: User = Depends(get_current_user)) -> User:
+    """An ACTIVATED customer. Activation (D17) is the whole authorization
+    boundary in this project, so it lives here and nowhere else."""
+    if not is_customer(user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=STAFF_ONLY_DETAIL,
+        )
+    if user.activated_at is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=NOT_ACTIVATED_DETAIL,
+        )
+    return user
+
+
+def require_console_user(user: User = Depends(get_current_user)) -> User:
+    """Either principal — the console pages are shared (D16).
+
+    Staff are NEVER gated on activated_at: it is NULL on every staff row and
+    must stay irrelevant to them.
+    """
+    if is_staff(user):
+        return user
+    return require_account_user(user)

@@ -11,3 +11,9 @@ rather than each hardcoding the pair.
 """
 
 ADMIN_ROLES = ("admin", "owner")
+
+# The customer principal (alembic 043). Deliberately disjoint from
+# ADMIN_ROLES: a membership test against one must never accidentally admit
+# the other, which is exactly how the pre-043 console let a customer-role
+# user reach /api/admin/sponsors/.
+CUSTOMER_ROLES = ("user",)
