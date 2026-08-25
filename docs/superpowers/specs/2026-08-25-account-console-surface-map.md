@@ -44,6 +44,19 @@ Resolved by splitting rather than renaming:
 Sidebar nav is built from the same two links, so an account never sees a route
 that cannot mean anything for it.
 
+**The two pairs are fronted by `CatalogSwitch`** (`pages/manufacturers/
+CatalogSwitch.tsx`), the shipped control that already fronts Manufacturers ↔
+Leads — `[Suppliers | My Supply]` and `[Manufacturers | My Manufacturing]`.
+Three properties make it the right fit rather than a nice idea:
+
+- it navigates between **two real routes**, so each URL keeps exactly one
+  meaning and the collision this section exists to prevent stays prevented;
+- it **already hides one half conditionally** (it hides Leads for demo
+  sessions), so hiding the half an account has no link for is the same
+  mechanism, not a new one;
+- an account with a single capability sees no switch at all, because there is
+  nowhere to switch to.
+
 ---
 
 ## 2. Surfaces, and whether the data exists

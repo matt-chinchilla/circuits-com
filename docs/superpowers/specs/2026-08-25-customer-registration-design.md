@@ -67,6 +67,8 @@ Owner rulings, 2026-08-25. These are settled; do not relitigate them in review.
 | **D16** | Every admin page is reachable at `/account`, **unscoped**. | Explicit owner decision, 2026-08-25, made against a written enumeration of what it exposes (see §10). |
 | **D17** | An account must be **activated by staff** before it can reach `/account`. Verification ≠ activation. | The consequence of D16. Verification proves mailbox control; activation is the owner saying yes. Makes "everyone who can see this" an approved list rather than the open internet, for one column. |
 | **D18** | Account capability is **two nullable links**, not a type enum: `users.supplier_id` and a new `users.manufacturer_id`. Both set = both. | Avnet is a distributor AND a manufacturer. An enum forces a wrong answer for the largest accounts on day one. The links are the capability, and staff set them (D4), so it stays unforgeable. |
+| **D19** | Two banners, two links. **Verification** link → the sign-in screen + "Email confirmed". **Activation** email → `/account` + "You're in". | Owner ruling. Each email marks a different milestone and lands where the person can act on it: after verifying you can sign in; after activation there is something to see. |
+| **D20** | Paired routes are fronted by the existing `CatalogSwitch`, not four sidebar entries. | Owner's suggestion, and it reuses a shipped pattern. It fronts two REAL routes and already hides a half conditionally — the same mechanism hides the half an account has no link for. |
 
 ---
 
@@ -175,7 +177,21 @@ On success, in one transaction, then side effects:
 - `BackgroundTasks` → `send_welcome_email(...)`
 
 Returns `{"status":"ok"}`. The SPA then redirects to `/admin/login?welcome=1`,
-which renders the congratulations banner.
+which renders the "Email confirmed" banner (D19).
+
+**Verification does NOT mint a session.** The link proves mailbox control; it is
+not a credential. Emailed links leak — forwarded threads, shared devices, and
+especially **corporate mail scanners that prefetch every URL in a message**.
+That prefetch risk is also why verification is a `POST` performed by the SPA
+rather than a `GET` on the link itself: a scanner fetching the URL renders a
+page and consumes nothing.
+
+### Activation email (D19)
+
+Sent when staff stamp `activated_at`. Links to `/account?activated=1`, which
+renders a "You're in" banner once they sign in. This is the milestone worth
+telling someone about — verification only proves they own an address, whereas
+activation is the moment there is something to look at.
 
 ### `POST /api/auth/resend-verification`
 
@@ -344,7 +360,8 @@ Columns: `Name` · `Email` · `Member Since` · `Location` · `Website` · `Tier
 
 Two row-level controls, both staff-only:
 
-- **Activate / deactivate** (D17) — stamps or clears `activated_at`. This is the
+- **Activate / deactivate** (D17) — stamps or clears `activated_at`, and
+  dispatches the activation email (D19) on the activating edge only. This is the
   entire authorization boundary in Project 1, so the list's default sort puts
   **unactivated accounts first**: the page's job is to show you who is waiting.
 - **Link company** (D3/D4/D18) — **two** independent dropdowns, `supplier_id`
