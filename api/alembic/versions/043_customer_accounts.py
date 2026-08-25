@@ -5,11 +5,16 @@ Revises: 042
 """
 import sqlalchemy as sa
 from alembic import op
+from sqlalchemy.dialects import postgresql
 
 revision = "043"
 down_revision = "042"
 branch_labels = None
 depends_on = None
+
+
+def postgresql_uuid():
+    return postgresql.UUID(as_uuid=True)
 
 
 def upgrade() -> None:
@@ -18,7 +23,14 @@ def upgrade() -> None:
     # transactional on PG 12+, so it rides alembic's own transaction.
     op.execute("ALTER TYPE user_role RENAME VALUE 'company' TO 'user'")
     op.alter_column(
-        "users", "role", server_default="user", existing_type=sa.String()
+        "users",
+        "role",
+        server_default="user",
+        # The real type. sa.String() happens to work because alembic emits a
+        # bare SET DEFAULT when server_default is the only change — but naming
+        # varchar on an ENUM column invites a future alembic to emit a full
+        # column redefinition and rewrite the type out from under production.
+        existing_type=postgresql.ENUM(name="user_role", create_type=False),
     )
     # username = lower(email) for customers, and email is VARCHAR(255).
     op.alter_column(
@@ -78,10 +90,9 @@ def downgrade() -> None:
         existing_nullable=False,
     )
     op.execute("ALTER TYPE user_role RENAME VALUE 'user' TO 'company'")
-    op.alter_column("users", "role", server_default="company", existing_type=sa.String())
-
-
-def postgresql_uuid():
-    from sqlalchemy.dialects import postgresql
-
-    return postgresql.UUID(as_uuid=True)
+    op.alter_column(
+        "users",
+        "role",
+        server_default="company",
+        existing_type=postgresql.ENUM(name="user_role", create_type=False),
+    )
