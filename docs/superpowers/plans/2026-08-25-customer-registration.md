@@ -3227,7 +3227,7 @@ git commit -m "feat(admin): the registered-users roster with the activation togg
 ## Task 16: The two message types
 
 **Files:**
-- Modify: `frontend/src/admin/types/messages.ts`, `frontend/src/admin/components/messages/messageHelpers.ts`, `MessageChips.tsx`, `MessageDetailBodies.tsx`, `frontend/src/admin/pages/messages/detail/index.tsx`, `api/app/services/demo_messages.py`
+- Modify: `frontend/src/admin/types/messages.ts`, `frontend/src/admin/components/messages/messageHelpers.ts`, `MessageChips.tsx`, `MessageDetailBodies.tsx`, `frontend/src/admin/pages/messages/detail/index.tsx`
 
 **Interfaces:**
 - Consumes: the `signup`/`welcome` rows from Task 8.
@@ -3322,7 +3322,7 @@ Expected: all exit 0.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add frontend/src/admin/ api/app/services/demo_messages.py
+git add frontend/src/admin/
 git commit -m "feat(messages): signup and welcome message types"
 ```
 
