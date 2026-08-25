@@ -1,0 +1,140 @@
+"""The registered-account roster. Staff-only.
+
+These rows are real people's addresses and IP-derived locations. The demo
+account that once made every authed page one click from anonymous is retired
+(Task 1a), so require_staff is the whole gate.
+"""
+
+import uuid as uuid_mod
+from datetime import UTC, datetime
+
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from pydantic import BaseModel, ConfigDict
+from sqlalchemy.orm import Session
+
+from app.config import settings
+from app.db.session import get_db
+from app.models import Supplier, User
+from app.services import email as email_service
+from app.services.account_tier import account_tier
+from app.services.auth_service import require_owner, require_staff
+
+router = APIRouter(
+    prefix="/api/admin/users",
+    tags=["admin-users"],
+    dependencies=[Depends(require_staff)],
+)
+
+
+class UserUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    activated: bool | None = None
+    supplier_id: str | None = None
+    manufacturer_id: str | None = None
+
+
+def _row(db: Session, u: User) -> dict:
+    supplier = (
+        db.query(Supplier).filter(Supplier.id == u.supplier_id).first()
+        if u.supplier_id
+        else None
+    )
+    full_name = " ".join(p for p in (u.first_name, u.last_name) if p).strip()
+    return {
+        "id": str(u.id),
+        "full_name": full_name or u.username,
+        "email": u.email,
+        "created_at": u.created_at,
+        "signup_country": u.signup_country,
+        # From the linked supplier, so "-" for an unlinked account, which is
+        # most rows at launch and is correct rather than broken.
+        "website": supplier.website if supplier else None,
+        "company": supplier.name if supplier else None,
+        "tier": account_tier(db, u),
+        "email_verified_at": u.email_verified_at,
+        "activated_at": u.activated_at,
+        "supplier_id": str(u.supplier_id) if u.supplier_id else None,
+        "manufacturer_id": str(u.manufacturer_id) if u.manufacturer_id else None,
+    }
+
+
+@router.get("/")
+def list_users(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_staff),
+):
+    # Unactivated first: the page's job is to show you who is waiting.
+    rows = (
+        db.query(User)
+        .filter(User.role == "user")
+        .order_by(User.activated_at.isnot(None), User.created_at.desc())
+        .all()
+    )
+    return [_row(db, u) for u in rows]
+
+
+def _as_uuid(raw: str | None):
+    if raw in (None, ""):
+        return None
+    try:
+        return uuid_mod.UUID(raw)
+    except (ValueError, AttributeError):
+        raise HTTPException(status_code=422, detail="invalid_id") from None
+
+
+@router.patch("/{user_id}")
+def update_user(
+    user_id: str,
+    body: UserUpdate,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_staff),
+):
+    user = db.query(User).filter(User.id == _as_uuid(user_id)).first()
+    if user is None or user.role != "user":
+        raise HTTPException(status_code=404, detail="not_found")
+
+    fields = body.model_dump(exclude_unset=True)
+    activating = False
+    if "activated" in fields:
+        if fields["activated"]:
+            # Idempotent: re-activating an active account must not re-stamp,
+            # or the activation email fires again on every save.
+            if user.activated_at is None:
+                user.activated_at = datetime.now(UTC)
+                activating = True
+        else:
+            user.activated_at = None
+    if "supplier_id" in fields:
+        user.supplier_id = _as_uuid(fields["supplier_id"])
+    if "manufacturer_id" in fields:
+        user.manufacturer_id = _as_uuid(fields["manufacturer_id"])
+    db.commit()
+    db.refresh(user)
+
+    if activating:
+        background_tasks.add_task(
+            email_service.send_activation_email,
+            user.email,
+            user.first_name,
+            f"{settings.APP_BASE_URL.rstrip('/')}/account?activated=1",
+        )
+    return _row(db, user)
+
+
+@router.delete("/{user_id}")
+def delete_user(
+    user_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_owner),
+):
+    """Owner-only, matching how message deletion is gated for being
+    irreversible. Deletes the LOGIN — never the linked Supplier or Sponsor,
+    and never anything in Stripe."""
+    user = db.query(User).filter(User.id == _as_uuid(user_id)).first()
+    if user is None or user.role != "user":
+        raise HTTPException(status_code=404, detail="not_found")
+    db.delete(user)  # messages cascade via the FK
+    db.commit()
+    return {"status": "ok"}
