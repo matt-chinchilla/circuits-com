@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useConsolePath } from '@admin/services/consolePath';
 import { ArrowLeft, Edit, ExternalLink, Upload, Trash2 } from 'lucide-react';
 import Breadcrumbs from '@admin/components/Breadcrumbs';
 import { adminApi } from '@admin/services/adminApi';
@@ -48,6 +49,8 @@ function externalHref(url: string): string {
 }
 
 export default function SupplierDetailPage() {
+  // Canonical /admin paths, rewritten onto whichever mount is rendering (D16).
+  const consolePath = useConsolePath();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { demoMode } = useDemo();
@@ -391,7 +394,7 @@ export default function SupplierDetailPage() {
     setDeleteError('');
     try {
       await adminApi.deleteSupplier(supplier.id);
-      navigate('/admin/suppliers');
+      navigate(consolePath('/admin/suppliers'));
     } catch (err) {
       // Surface in the modal — don't replace the whole detail view with
       // the load-error fallback. User stays on the page and can retry.
@@ -443,7 +446,7 @@ export default function SupplierDetailPage() {
 
       <div className={styles.pageHead}>
         <div className={styles.pageHeadLeft}>
-          <button type="button" className={styles.backLink} onClick={() => navigate('/admin/suppliers')}>
+          <button type="button" className={styles.backLink} onClick={() => navigate(consolePath('/admin/suppliers'))}>
             <ArrowLeft size={14} strokeWidth={2} />
             All suppliers
           </button>
@@ -487,7 +490,7 @@ export default function SupplierDetailPage() {
             <Trash2 size={14} strokeWidth={2} />
             Delete
           </button>
-          <Link to={`/admin/suppliers/${supplier.id}/edit`} className={`${styles.btn} ${styles.btnGhost}`}>
+          <Link to={consolePath(`/admin/suppliers/${supplier.id}/edit`)} className={`${styles.btn} ${styles.btnGhost}`}>
             <Edit size={14} strokeWidth={2} />
             Edit
           </Link>
@@ -626,7 +629,7 @@ export default function SupplierDetailPage() {
       <div className={`${styles.panel} ${styles.partsPanel}`}>
         <div className={styles.panelHead}>
           <h3 className={styles.panelTitle}>Listed Parts ({partsTotal})</h3>
-          <Link to="/admin/parts" className={styles.panelLink}>
+          <Link to={consolePath('/admin/parts')} className={styles.panelLink}>
             All parts &rarr;
           </Link>
         </div>
@@ -634,7 +637,7 @@ export default function SupplierDetailPage() {
           <div className={styles.partsEmpty}>
             No parts uploaded yet &mdash; supplier is live but their inventory is empty.
             <div>
-              <Link to="/admin/import" className={`${styles.btn} ${styles.btnGhost}`}>
+              <Link to={consolePath('/admin/import')} className={`${styles.btn} ${styles.btnGhost}`}>
                 <Upload size={14} strokeWidth={2} />
                 Upload parts CSV
               </Link>
@@ -653,7 +656,7 @@ export default function SupplierDetailPage() {
               </thead>
               <tbody>
                 {partRows.map((p) => (
-                  <tr key={p.id} onClick={() => navigate(`/admin/parts/${p.id}`)}>
+                  <tr key={p.id} onClick={() => navigate(consolePath(`/admin/parts/${p.id}`))}>
                     <td className={styles.mono}>{p.sku}</td>
                     <td>{p.manufacturer_name}</td>
                     <td>{p.description || '—'}</td>

@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.db.session import get_db
-from app.models import Supplier, User
+from app.models import Manufacturer, Supplier, User
 from app.services import email as email_service
 from app.services.account_tier import account_tier
 from app.services.auth_service import require_owner, require_staff
@@ -83,6 +83,23 @@ def _as_uuid(raw: str | None):
         raise HTTPException(status_code=422, detail="invalid_id") from None
 
 
+def _linked_id(db: Session, model, raw: str | None, detail: str):
+    """Resolve a capability link (D18) to a uuid that names a REAL row, or 4xx.
+
+    A well-formed uuid naming nothing used to sail past ``_as_uuid`` and come
+    back from ``db.commit()`` as an unhandled FK violation — a 500 on an admin
+    form, which reads as "the server is broken" rather than "that company is
+    gone". Checked here, before the write, so the answer can name WHICH link is
+    wrong; a bare 500 named neither.
+    """
+    linked = _as_uuid(raw)
+    if linked is None:
+        return None
+    if db.query(model.id).filter(model.id == linked).first() is None:
+        raise HTTPException(status_code=422, detail=detail)
+    return linked
+
+
 @router.patch("/{user_id}")
 def update_user(
     user_id: str,
@@ -96,6 +113,17 @@ def update_user(
         raise HTTPException(status_code=404, detail="not_found")
 
     fields = body.model_dump(exclude_unset=True)
+    # Resolved BEFORE anything is mutated: a body carrying both an activation
+    # and a dead supplier_id must not leave the activation pending on the
+    # session after the 422 — the request either happens or it does not.
+    links: dict[str, object] = {}
+    if "supplier_id" in fields:
+        links["supplier_id"] = _linked_id(db, Supplier, fields["supplier_id"], "unknown_supplier")
+    if "manufacturer_id" in fields:
+        links["manufacturer_id"] = _linked_id(
+            db, Manufacturer, fields["manufacturer_id"], "unknown_manufacturer"
+        )
+
     activating = False
     if "activated" in fields:
         if fields["activated"]:
@@ -106,10 +134,8 @@ def update_user(
                 activating = True
         else:
             user.activated_at = None
-    if "supplier_id" in fields:
-        user.supplier_id = _as_uuid(fields["supplier_id"])
-    if "manufacturer_id" in fields:
-        user.manufacturer_id = _as_uuid(fields["manufacturer_id"])
+    for attr, value in links.items():
+        setattr(user, attr, value)
     db.commit()
     db.refresh(user)
 

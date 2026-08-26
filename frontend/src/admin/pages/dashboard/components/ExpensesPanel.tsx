@@ -8,6 +8,7 @@
 
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
+import { useConsolePath } from '@admin/services/consolePath';
 import EChart from '@admin/components/charts/EChart';
 import { expensesOption } from '@admin/components/charts/options';
 import type { MonthlyCompareMonth } from '@admin/types/admin';
@@ -33,6 +34,8 @@ export default function ExpensesPanel({
   todayDayOfMonth,
   loading,
 }: ExpensesPanelProps) {
+  // Canonical /admin paths, rewritten onto whichever mount is rendering (D16).
+  const consolePath = useConsolePath();
   const series = useMemo(
     () => monthsToCumulativeSeries(months, todayDayOfMonth),
     [months, todayDayOfMonth],
@@ -71,7 +74,7 @@ export default function ExpensesPanel({
               </button>
             ))}
           </div>
-          <Link to="/admin/expenses" className={styles.panelLink}>
+          <Link to={consolePath('/admin/expenses')} className={styles.panelLink}>
             Manage &rarr;
           </Link>
         </div>

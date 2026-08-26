@@ -4,6 +4,7 @@
 // demo mode shows the four batches from the v5 design bundle.
 
 import { Link } from 'react-router-dom';
+import { useConsolePath } from '@admin/services/consolePath';
 import styles from '../DashboardPage.module.scss';
 
 interface QueueRow {
@@ -26,13 +27,15 @@ const STATUS_CLASS: Record<QueueRow['status'], string> = {
 };
 
 export default function ImportQueuePanel({ demoMode }: { demoMode: boolean }) {
+  // Canonical /admin paths, rewritten onto whichever mount is rendering (D16).
+  const consolePath = useConsolePath();
   const rows = demoMode ? DEMO_QUEUE : [];
 
   return (
     <div className={styles.panel}>
       <div className={styles.panelHead}>
         <h3 className={styles.panelTitle}>Import Queue</h3>
-        <Link to="/admin/import" className={styles.panelLink}>
+        <Link to={consolePath('/admin/import')} className={styles.panelLink}>
           Review all &rarr;
         </Link>
       </div>

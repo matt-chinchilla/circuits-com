@@ -138,3 +138,164 @@ def test_the_roster_manages_customers_only(client, db, seeded_db, auth_header):
         f"/api/admin/users/{uuid.uuid4()}", json={"role": "owner"}, headers=headers
     ).status_code == 422
     assert client.get("/api/admin/users/").status_code == 401
+
+
+# ── DELETE /api/admin/users/{id} ────────────────────────────────────────────
+# test_delete_is_owner_only above only proves the DOOR. Everything past it —
+# that the row actually goes, that the customer's own inbox goes with it, that
+# a staff account is not roster material — held on a handler that was a no-op
+# returning {"status": "ok"} for anything it was handed.
+
+
+def _owner(db, email="owner@test.example"):
+    """The one role that may destroy a row. `seeded_db`'s admin is `admin`,
+    which is deliberately NOT enough (auth_service.require_owner)."""
+    from app.services.auth_service import hash_password
+
+    u = User(username=email, email=email,
+             password_hash=hash_password("testpass123"), role="owner",
+             first_name="Mat", last_name="Owner")
+    db.add(u)
+    db.flush()
+    return u
+
+
+def test_the_owner_can_actually_delete_a_customer(client, db, seeded_db, auth_header):
+    u = _customer(db)
+    _owner(db)
+    db.commit()
+    r = client.delete(f"/api/admin/users/{u.id}",
+                      headers=auth_header(email="owner@test.example"))
+    assert r.status_code == 200
+    db.expire_all()
+    assert db.query(User).filter(User.email == "c@test.example").count() == 0
+
+
+def test_deleting_a_customer_takes_their_own_inbox_with_them(client, db, seeded_db, auth_header):
+    """messages.user_id is ON DELETE CASCADE, and the split matters: a
+    customer's welcome row is THEIRS, while a staff-inbox row (user_id NULL) is
+    the company's record of the registration and must survive."""
+    from app.models import Message
+
+    u = _customer(db)
+    _owner(db)
+    db.add(Message(id="am1", type="welcome", status="new", seq=9201,
+                   user_id=u.id, payload={}))
+    db.add(Message(id="am2", type="signup", status="new", seq=9202,
+                   user_id=None, payload={}))
+    db.commit()
+
+    r = client.delete(f"/api/admin/users/{u.id}",
+                      headers=auth_header(email="owner@test.example"))
+    assert r.status_code == 200
+    db.expire_all()
+    assert db.query(User).filter(User.email == "c@test.example").count() == 0
+    assert db.query(Message).filter(Message.id == "am1").count() == 0
+    assert db.query(Message).filter(Message.id == "am2").count() == 1
+
+
+def test_the_roster_will_not_delete_a_staff_account(client, db, seeded_db, auth_header):
+    """Same rule the PATCH follows: this endpoint manages CUSTOMERS. Deleting
+    an administrator — the owner's own login included — is not something the
+    customer roster gets to do, and 404 is the honest answer because as far as
+    this collection is concerned that id is not in it."""
+    owner = _owner(db)
+    db.commit()
+    headers = auth_header(email="owner@test.example")
+    admin_id = seeded_db["admin_user"].id
+    owner_id = owner.id
+
+    assert client.delete(f"/api/admin/users/{admin_id}", headers=headers).status_code == 404
+    assert client.delete(f"/api/admin/users/{owner_id}", headers=headers).status_code == 404
+    db.expire_all()
+    assert db.query(User).filter(User.id == admin_id).count() == 1
+    assert db.query(User).filter(User.id == owner_id).count() == 1
+
+
+def test_delete_answers_404_and_422_rather_than_500(client, db, seeded_db, auth_header):
+    import uuid
+
+    _owner(db)
+    db.commit()
+    headers = auth_header(email="owner@test.example")
+    assert client.delete(f"/api/admin/users/{uuid.uuid4()}",
+                         headers=headers).status_code == 404
+    assert client.delete("/api/admin/users/not-a-uuid",
+                         headers=headers).status_code == 422
+    assert client.delete(f"/api/admin/users/{uuid.uuid4()}").status_code == 401
+
+
+# ── The capability links (D18) ──────────────────────────────────────────────
+
+
+def test_a_capability_link_that_names_nothing_is_a_4xx(client, db, seeded_db, auth_header):
+    """A well-formed uuid naming no row used to reach db.commit() and come back
+    as an unhandled FK violation — a 500 on an admin form, which reads as "the
+    server is broken" rather than "that company is gone"."""
+    import uuid
+
+    u = _customer(db)
+    db.commit()
+    headers = auth_header()
+    ghost = str(uuid.uuid4())
+
+    r = client.patch(f"/api/admin/users/{u.id}", json={"supplier_id": ghost}, headers=headers)
+    assert r.status_code == 422
+    assert r.json()["detail"] == "unknown_supplier"
+
+    r = client.patch(f"/api/admin/users/{u.id}", json={"manufacturer_id": ghost}, headers=headers)
+    assert r.status_code == 422
+    assert r.json()["detail"] == "unknown_manufacturer"
+
+    db.expire_all()
+    row = db.query(User).filter(User.email == "c@test.example").one()
+    assert row.supplier_id is None
+    assert row.manufacturer_id is None
+
+
+def test_a_rejected_link_does_not_half_apply_the_rest_of_the_body(
+    client, db, seeded_db, auth_header
+):
+    """One body, one outcome. A save carrying an activation AND a dead
+    supplier_id must leave NOTHING pending on the session — deliberately
+    asserted WITHOUT expire_all(), which would discard an un-committed
+    in-memory stamp and hide exactly the bug."""
+    import uuid
+
+    u = _customer(db)
+    db.commit()
+    r = client.patch(
+        f"/api/admin/users/{u.id}",
+        json={"activated": True, "supplier_id": str(uuid.uuid4())},
+        headers=auth_header(),
+    )
+    assert r.status_code == 422
+    assert db.query(User).filter(User.email == "c@test.example").one().activated_at is None
+
+
+def test_a_real_link_is_still_accepted(client, db, seeded_db, auth_header):
+    """The other half: the check must not be "refuse everything". Both links
+    set, then cleared."""
+    from app.models import Manufacturer
+
+    u = _customer(db)
+    maker = Manufacturer(name="Nordic Semiconductor", slug="nordic-semiconductor",
+                         canonical_key="nordic semiconductor")
+    db.add(maker)
+    db.commit()
+    supplier = seeded_db["supplier2"]
+    headers = auth_header()
+
+    r = client.patch(f"/api/admin/users/{u.id}",
+                     json={"supplier_id": str(supplier.id),
+                           "manufacturer_id": str(maker.id)}, headers=headers)
+    assert r.status_code == 200
+    assert r.json()["supplier_id"] == str(supplier.id)
+    assert r.json()["manufacturer_id"] == str(maker.id)
+    assert r.json()["company"] == "Kennedy Electronics"
+
+    r = client.patch(f"/api/admin/users/{u.id}",
+                     json={"supplier_id": None, "manufacturer_id": None}, headers=headers)
+    assert r.status_code == 200
+    assert r.json()["supplier_id"] is None
+    assert r.json()["manufacturer_id"] is None

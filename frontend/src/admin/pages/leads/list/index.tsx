@@ -21,6 +21,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { useConsolePath } from '@admin/services/consolePath';
 
 import { useAuth } from '@admin/contexts/AuthContext';
 import { adminApi } from '@admin/services/adminApi';
@@ -75,6 +76,8 @@ function locationLabel(lead: AdminLead): string | null {
  */
 
 export default function LeadsPage() {
+  // Canonical /admin paths, rewritten onto whichever mount is rendering (D16).
+  const consolePath = useConsolePath();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const pageParam = Number(searchParams.get('p') ?? '1');
@@ -518,7 +521,7 @@ export default function LeadsPage() {
                         // The disc is a button and the contact name is a link;
                         // neither should also trigger the row navigation.
                         if (e.target instanceof Element && e.target.closest('a,button')) return;
-                        navigate(`/admin/leads/${lead.id}`);
+                        navigate(consolePath(`/admin/leads/${lead.id}`));
                       }}
                     >
                       <td className={styles.discCell}>
@@ -549,7 +552,7 @@ export default function LeadsPage() {
                       </td>
 
                       <td>
-                        <Link to={`/admin/leads/${lead.id}`} className={styles.contactLink}>
+                        <Link to={consolePath(`/admin/leads/${lead.id}`)} className={styles.contactLink}>
                           {lead.contact_name ? (
                             <>
                               <span className={styles.contactName}>{lead.contact_name}</span>

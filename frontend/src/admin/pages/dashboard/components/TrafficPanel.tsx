@@ -7,6 +7,7 @@
 
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
+import { useConsolePath } from '@admin/services/consolePath';
 import EChart from '@admin/components/charts/EChart';
 import { sparklineOption } from '@admin/components/charts/options';
 import type { TrendPoint } from '@admin/types/admin';
@@ -19,6 +20,8 @@ interface TrafficPanelProps {
 }
 
 export default function TrafficPanel({ series, loading }: TrafficPanelProps) {
+  // Canonical /admin paths, rewritten onto whichever mount is rendering (D16).
+  const consolePath = useConsolePath();
   const option = useMemo(
     () =>
       sparklineOption({
@@ -44,7 +47,7 @@ export default function TrafficPanel({ series, loading }: TrafficPanelProps) {
           <h3 className={styles.panelTitle}>Site traffic</h3>
           <p className={styles.panelSub}>Page views &middot; last {series.length || 30} days</p>
         </div>
-        <Link to="/admin/reports" className={styles.panelLink}>
+        <Link to={consolePath('/admin/reports')} className={styles.panelLink}>
           Reports &rarr;
         </Link>
       </div>

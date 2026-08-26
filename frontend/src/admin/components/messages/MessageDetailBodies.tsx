@@ -1,5 +1,6 @@
 import { ExternalLink, Hash } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { useConsolePath } from '@admin/services/consolePath';
 import type { Message } from '@admin/types/messages';
 import { findSupplierMatch, initialsOf } from './messageHelpers';
 import styles from './MessageDetailBodies.module.scss';
@@ -60,6 +61,8 @@ export function JoinBody({
   m: Extract<Message, { type: 'join' }>;
   suppliers?: SupplierLite[];
 }) {
+  // Canonical /admin paths, rewritten onto whichever mount is rendering (D16).
+  const consolePath = useConsolePath();
   const supplierMatch = findSupplierMatch(suppliers, m.payload.company_name);
   const tier = m.payload.tier ?? 'silver';
 
@@ -101,7 +104,7 @@ export function JoinBody({
           {supplierMatch && (
             <Link
               className={styles.jsLink}
-              to={`/admin/suppliers/${supplierMatch.id}`}
+              to={consolePath(`/admin/suppliers/${supplierMatch.id}`)}
             >
               View company → Suppliers
               <ExternalLink size={11} strokeWidth={2} />

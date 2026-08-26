@@ -18,6 +18,7 @@
 
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useConsolePath } from '@admin/services/consolePath';
 import Icon from '@shared/components/Icon';
 import { setPrefill } from '@admin/services/prefillBus';
 import type { AdminSupplier, Part } from '@admin/types/admin';
@@ -111,6 +112,8 @@ export default function QuickActionsPanel({
   pausing,
   serverRunning,
 }: Props) {
+  // Canonical /admin paths, rewritten onto whichever mount is rendering (D16).
+  const consolePath = useConsolePath();
   const navigate = useNavigate();
   // One run per supplier, and the SERVER is the authority on that: two runs
   // would race the same rate-limited daily quota against the same rows, so
@@ -165,7 +168,7 @@ export default function QuickActionsPanel({
       manufacturer_name: supplier.name,
       category_id: smartCategoryId,
     });
-    navigate('/admin/parts/new');
+    navigate(consolePath('/admin/parts/new'));
   };
 
   const handleAddSponsorship = () => {
@@ -177,12 +180,12 @@ export default function QuickActionsPanel({
       tier: tierLabel,
       category_id: smartCategoryId,
     });
-    navigate('/admin/sponsors/new');
+    navigate(consolePath('/admin/sponsors/new'));
   };
 
   const handleImportCSV = () => {
     setPrefill('import', { supplier_id: supplier.id, supplier_name: supplier.name });
-    navigate('/admin/import');
+    navigate(consolePath('/admin/import'));
   };
 
   const cardHostHint = supplier.website

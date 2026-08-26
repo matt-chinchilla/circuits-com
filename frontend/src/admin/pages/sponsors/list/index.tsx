@@ -7,6 +7,7 @@ import {
   type SetStateAction,
 } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { useConsolePath } from '@admin/services/consolePath';
 import { Plus, Search, Pencil, X } from 'lucide-react';
 import { loadSponsors } from '@admin/services/sponsorStore';
 import { adminApi } from '@admin/services/adminApi';
@@ -397,6 +398,8 @@ function ColumnHeader(props: ColumnHeaderProps) {
 }
 
 export default function SponsorsPage() {
+  // Canonical /admin paths, rewritten onto whichever mount is rendering (D16).
+  const consolePath = useConsolePath();
   const navigate = useNavigate();
   const [sponsors, setSponsors] = useState<AdminSponsor[]>([]);
   const [loading, setLoading] = useState(true);
@@ -601,7 +604,7 @@ export default function SponsorsPage() {
           </p>
         </div>
         <div className={styles.pageHeadActions}>
-          <Link to="/admin/sponsors/new" className={`${styles.btn} ${styles.btnPrimary}`}>
+          <Link to={consolePath('/admin/sponsors/new')} className={`${styles.btn} ${styles.btnPrimary}`}>
             <Plus size={15} strokeWidth={2} />
             New Sponsor
           </Link>
@@ -776,7 +779,7 @@ export default function SponsorsPage() {
                       <button
                         type="button"
                         className={styles.rowAction}
-                        onClick={() => navigate(`/admin/sponsors/${s.id}/edit`)}
+                        onClick={() => navigate(consolePath(`/admin/sponsors/${s.id}/edit`))}
                         aria-label={`Edit sponsor ${s.supplier_name}`}
                       >
                         <Pencil size={14} strokeWidth={2} />

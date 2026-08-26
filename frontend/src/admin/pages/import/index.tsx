@@ -3,6 +3,7 @@ import { useDropzone } from 'react-dropzone';
 import Papa from 'papaparse';
 import axios from 'axios';
 import { Link } from 'react-router-dom';
+import { useConsolePath } from '@admin/services/consolePath';
 import { Upload, FileText, Check, ChevronRight } from 'lucide-react';
 import Icon from '@shared/components/Icon';
 import { adminApi } from '@admin/services/adminApi';
@@ -93,6 +94,8 @@ function rowErrorsFrom422(err: unknown): BatchImportResult['errors'] | null {
 }
 
 export default function ImportPage() {
+  // Canonical /admin paths, rewritten onto whichever mount is rendering (D16).
+  const consolePath = useConsolePath();
   const [step, setStep] = useState<StepKey>('upload');
   const [file, setFile] = useState<File | null>(null);
   const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
@@ -487,7 +490,7 @@ LM7805CT,5V 1.5A LDO,Texas Instruments,pmic,240000,0.45`}
               >
                 Import another file
               </button>
-              <Link to="/admin/parts" className={`${styles.btn} ${styles.btnPrimary}`}>
+              <Link to={consolePath('/admin/parts')} className={`${styles.btn} ${styles.btnPrimary}`}>
                 View all parts
                 <ChevronRight size={15} strokeWidth={2} />
               </Link>

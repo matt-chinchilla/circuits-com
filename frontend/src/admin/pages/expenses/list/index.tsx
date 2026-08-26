@@ -11,6 +11,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useConsolePath } from '@admin/services/consolePath';
 import { Pencil, Plus, Search, X } from 'lucide-react';
 import { adminApi } from '@admin/services/adminApi';
 import {
@@ -54,6 +55,8 @@ function formatDate(ymd: string | null): string {
 }
 
 export default function ExpensesPage() {
+  // Canonical /admin paths, rewritten onto whichever mount is rendering (D16).
+  const consolePath = useConsolePath();
   const navigate = useNavigate();
   const [expenses, setExpenses] = useState<AdminExpense[]>([]);
   const [loading, setLoading] = useState(true);
@@ -115,7 +118,7 @@ export default function ExpensesPage() {
           </p>
         </div>
         <div className={styles.pageHeadActions}>
-          <Link to="/admin/expenses/new" className={`${styles.btn} ${styles.btnPrimary}`}>
+          <Link to={consolePath('/admin/expenses/new')} className={`${styles.btn} ${styles.btnPrimary}`}>
             <Plus size={15} strokeWidth={2} />
             New Expense
           </Link>
@@ -207,7 +210,7 @@ export default function ExpensesPage() {
                       <button
                         type="button"
                         className={styles.rowAction}
-                        onClick={() => navigate(`/admin/expenses/${e.id}/edit`)}
+                        onClick={() => navigate(consolePath(`/admin/expenses/${e.id}/edit`))}
                         aria-label={`Edit ${expenseCategoryLabel(e.category)} expense`}
                       >
                         <Pencil size={14} strokeWidth={2} />

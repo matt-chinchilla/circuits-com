@@ -12,6 +12,7 @@
 // values, so they do not need `safeHexColor`.
 
 import { Link } from 'react-router-dom';
+import { useConsolePath } from '@admin/services/consolePath';
 import Icon from '@shared/components/Icon';
 import { PLATFORM_META, SOCIAL_PLATFORMS } from '@admin/types/engagement';
 import type { PlatformEngagementSeries } from '@admin/types/engagement';
@@ -23,6 +24,8 @@ interface EngagementPanelProps {
 }
 
 export default function EngagementPanel({ series, loading }: EngagementPanelProps) {
+  // Canonical /admin paths, rewritten onto whichever mount is rendering (D16).
+  const consolePath = useConsolePath();
   const connected = new Set(series.map((s) => s.platform));
 
   return (
@@ -64,7 +67,7 @@ export default function EngagementPanel({ series, loading }: EngagementPanelProp
                 : 'Each platform authorizes once via OAuth, then daily metrics land here automatically. Nothing is pulled until an account is linked.'}
             </p>
           </div>
-          <Link to="/admin/settings" className={`${styles.btn} ${styles.btnGhost}`}>
+          <Link to={consolePath('/admin/settings')} className={`${styles.btn} ${styles.btnGhost}`}>
             Set up integrations
           </Link>
         </div>

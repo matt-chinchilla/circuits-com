@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useConsolePath } from '@admin/services/consolePath';
 import { ArrowLeft, Check, Trash2 } from 'lucide-react';
 import Breadcrumbs from '@admin/components/Breadcrumbs';
 import { adminApi } from '@admin/services/adminApi';
@@ -81,6 +82,8 @@ function formatPhoneInput(raw: string): string {
 }
 
 export default function SupplierFormPage() {
+  // Canonical /admin paths, rewritten onto whichever mount is rendering (D16).
+  const consolePath = useConsolePath();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const isEdit = Boolean(id);
@@ -260,7 +263,7 @@ export default function SupplierFormPage() {
               ? `Supplier updated — ${notUpdated} Platinum placement(s) not updated.`
               : 'Supplier updated.',
         });
-        setTimeout(() => navigate(`/admin/suppliers/${id}`), 900);
+        setTimeout(() => navigate(consolePath(`/admin/suppliers/${id}`)), 900);
       } else {
         const created = await adminApi.createSupplier(payload);
         // ─── Wizard id-from-response bridge ─────────────────────────────────
@@ -277,7 +280,7 @@ export default function SupplierFormPage() {
           window.__wizardCreatedEntity = { kind: 'supplier', id: created.id };
         }
         setToast({ type: 'success', msg: `Created ${created.name}.` });
-        setTimeout(() => navigate(`/admin/suppliers/${created.id}`), 900);
+        setTimeout(() => navigate(consolePath(`/admin/suppliers/${created.id}`)), 900);
       }
     } catch (err) {
       console.error('[admin/supplier save]', err);
@@ -288,8 +291,8 @@ export default function SupplierFormPage() {
   }
 
   function handleCancel() {
-    if (isEdit && id) navigate(`/admin/suppliers/${id}`);
-    else navigate('/admin/suppliers');
+    if (isEdit && id) navigate(consolePath(`/admin/suppliers/${id}`));
+    else navigate(consolePath('/admin/suppliers'));
   }
 
   async function handleDelete() {
@@ -299,7 +302,7 @@ export default function SupplierFormPage() {
       await adminApi.deleteSupplier(id);
       setToast({ type: 'success', msg: `Deleted ${existingName || 'supplier'}.` });
       setShowDeleteConfirm(false);
-      setTimeout(() => navigate('/admin/suppliers'), 800);
+      setTimeout(() => navigate(consolePath('/admin/suppliers')), 800);
     } catch (err) {
       // Surface the upstream axios failure for prod debugging — toast stays
       // generic to avoid leaking 500-body internals to the user.

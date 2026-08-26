@@ -34,13 +34,32 @@ if [[ "$MODE" == "--all" || "$MODE" == "--reporting" ]]; then
   "${SSH[@]}" "cd /opt/circuits-com && sudo docker compose exec -T db \
     pg_dump -U circuits -d circuits --data-only -t page_views -t messages" \
     > "$TMP/reporting.sql"
-  docker compose -f "$REPO_DIR/docker-compose.yml" exec -T db \
-    psql -U circuits -d circuits -c "TRUNCATE page_views, messages;" > /dev/null
-  docker compose -f "$REPO_DIR/docker-compose.yml" exec -T db \
-    psql -U circuits -d circuits < "$TMP/reporting.sql" > /dev/null
+  # messages.user_id -> users(id) (migration 043) makes this restore fail: the
+  # prod user rows it points at are not local rows, so the first message that
+  # carries one violates the FK, the whole COPY aborts, and psql — which exits
+  # 0 unless you ask for ON_ERROR_STOP — hands back success while the local
+  # table sits EMPTY from the TRUNCATE. So: one transaction; drop the FK for
+  # the load; NULL the ids that do not resolve locally (a NULL user_id means
+  # "the shared staff inbox", the honest fallback for a submission whose
+  # account is not here); re-add the constraint, which re-validates every
+  # restored row. Any failure now rolls the whole thing back — the local copy
+  # you had is still the local copy you have — and the pipeline's non-zero
+  # exit trips set -e instead of passing silently.
+  {
+    echo "BEGIN;"
+    echo "TRUNCATE page_views, messages;"
+    echo "ALTER TABLE public.messages DROP CONSTRAINT IF EXISTS fk_messages_user_id;"
+    cat "$TMP/reporting.sql"
+    # pg_dump sets search_path to '' — everything after it stays qualified.
+    echo "SET search_path = public;"
+    echo "UPDATE public.messages m SET user_id = NULL WHERE m.user_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM public.users u WHERE u.id = m.user_id);"
+    echo "ALTER TABLE public.messages ADD CONSTRAINT fk_messages_user_id FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;"
+    echo "COMMIT;"
+  } | docker compose -f "$REPO_DIR/docker-compose.yml" exec -T db \
+        psql -U circuits -d circuits -v ON_ERROR_STOP=1 > /dev/null
   docker compose -f "$REPO_DIR/docker-compose.yml" exec -T db \
     psql -U circuits -d circuits -c \
-    "SELECT count(*) AS page_views FROM page_views; SELECT count(*) AS messages FROM messages;"
+    "SELECT count(*) AS page_views FROM page_views; SELECT count(*) AS messages FROM messages; SELECT count(*) AS messages_unlinked_from_a_local_user FROM messages WHERE user_id IS NULL;"
 fi
 
 if [[ "$MODE" == "--all" || "$MODE" == "--catalog" ]]; then

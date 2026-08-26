@@ -5,6 +5,7 @@ import jwt
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from sqlalchemy import func, or_
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -335,7 +336,19 @@ def signup(
         signup_country=country_for_ip(ip),
     )
     db.add(user)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # The SELECT above is the fast path, not the arbiter: two signups for
+        # one address can both pass it and race to INSERT, and the loser meets
+        # uq_users_email_lower. 409 is what this endpoint already promises that
+        # person (D5) — a 500 would tell them their address is broken rather
+        # than taken, and would leave the session unusable for the next
+        # request on this connection. Rolled back first for exactly that.
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=EMAIL_TAKEN_DETAIL
+        ) from None
     db.refresh(user)
 
     # Meter the path that ACTUALLY sends the mail. Everything above this line
@@ -410,7 +423,25 @@ def verify_email(
         # says it has been used.
         raise HTTPException(status_code=400, detail="already_verified")
 
-    user.email_verified_at = datetime.now(UTC)
+    # The read above is the FAST PATH, not the arbiter. Between it and this
+    # write another request — a double-clicked link, a mail client that opens
+    # the page twice — can stamp the same row, and both callers would then fire
+    # the side effects: two staff rows and two welcome mails, or a 500 when the
+    # second pair of INSERTs collides on the unique Message.seq. So the STAMP
+    # itself claims the verification: a conditional UPDATE that matches only
+    # while the column is still NULL. Exactly one caller can see a rowcount of
+    # 1 — under Postgres READ COMMITTED the loser blocks on the row lock, then
+    # re-evaluates the predicate against the winner's committed row and matches
+    # nothing.
+    claimed = (
+        db.query(User)
+        .filter(User.id == user.id, User.email_verified_at.is_(None))
+        .update({User.email_verified_at: datetime.now(UTC)}, synchronize_session=False)
+    )
+    if not claimed:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="already_verified")
+
     full_name = " ".join(p for p in (user.first_name, user.last_name) if p).strip()
     seq = _next_message_seq(db)
     db.add(

@@ -15,6 +15,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { useConsolePath } from '@admin/services/consolePath';
 import { Plus } from 'lucide-react';
 
 import { adminApi } from '@admin/services/adminApi';
@@ -59,6 +60,8 @@ const SOURCE_CLASS: Record<string, string> = {
 };
 
 export default function ManufacturersPage() {
+  // Canonical /admin paths, rewritten onto whichever mount is rendering (D16).
+  const consolePath = useConsolePath();
   const [searchParams, setSearchParams] = useSearchParams();
   const pageParam = Number(searchParams.get('p') ?? '1');
   const page = Number.isFinite(pageParam) && pageParam >= 1 ? Math.floor(pageParam) : 1;
@@ -199,7 +202,7 @@ export default function ManufacturersPage() {
         </div>
         <CatalogSwitch />
         <div className={styles.pageHeadActions}>
-          <Link to="/admin/manufacturers/new" className={`${styles.btn} ${styles.btnPrimary}`}>
+          <Link to={consolePath('/admin/manufacturers/new')} className={`${styles.btn} ${styles.btnPrimary}`}>
             <Plus size={15} strokeWidth={2} />
             New Manufacturer
           </Link>
@@ -323,7 +326,7 @@ export default function ManufacturersPage() {
                   return (
                     <tr key={m.id}>
                       <td>
-                        <Link to={`/admin/manufacturers/${m.id}`} className={styles.nameLink}>
+                        <Link to={consolePath(`/admin/manufacturers/${m.id}`)} className={styles.nameLink}>
                           {m.name}
                         </Link>
                       </td>
@@ -341,7 +344,7 @@ export default function ManufacturersPage() {
                       <td>
                         {m.linked_supplier_id ? (
                           <Link
-                            to={`/admin/suppliers/${m.linked_supplier_id}`}
+                            to={consolePath(`/admin/suppliers/${m.linked_supplier_id}`)}
                             className={styles.supplierLink}
                           >
                             {m.linked_supplier_name ?? 'Linked supplier'}

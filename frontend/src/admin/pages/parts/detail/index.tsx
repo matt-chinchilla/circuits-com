@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useConsolePath } from '@admin/services/consolePath';
 import { ArrowLeft, Edit, Trash2, ExternalLink, Check, Plus } from 'lucide-react';
 import { adminApi } from '@admin/services/adminApi';
 import Icon from '@shared/components/Icon';
@@ -37,6 +38,8 @@ function stockClass(qty: number): string {
 }
 
 export default function PartDetailPage() {
+  // Canonical /admin paths, rewritten onto whichever mount is rendering (D16).
+  const consolePath = useConsolePath();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [part, setPart] = useState<PartDetail | null>(null);
@@ -105,7 +108,7 @@ export default function PartDetailPage() {
       if (!alive.current) return;
       setToast(`Deleted ${part?.sku ?? 'part'}`);
       setTimeout(() => {
-        if (alive.current) navigate('/admin/parts');
+        if (alive.current) navigate(consolePath('/admin/parts'));
       }, 800);
     } catch {
       if (!alive.current) return;
@@ -157,7 +160,7 @@ export default function PartDetailPage() {
       <div className={styles.page}>
         <div className={styles.pageHead}>
           <div className={styles.pageHeadLeft}>
-            <Link to="/admin/parts" className={styles.backLink}>
+            <Link to={consolePath('/admin/parts')} className={styles.backLink}>
               <ArrowLeft />
               Parts
             </Link>
@@ -178,7 +181,7 @@ export default function PartDetailPage() {
     <div className={styles.page}>
       <div className={styles.pageHead}>
         <div className={styles.pageHeadLeft}>
-          <Link to="/admin/parts" className={styles.backLink}>
+          <Link to={consolePath('/admin/parts')} className={styles.backLink}>
             <ArrowLeft />
             Parts
           </Link>
@@ -214,14 +217,14 @@ export default function PartDetailPage() {
             Delete
           </button>
           <Link
-            to={`/admin/parts/${id}/listings/new`}
+            to={consolePath(`/admin/parts/${id}/listings/new`)}
             data-tour="add-listing"
             className={`${styles.btn} ${styles.btnGhost}`}
           >
             <Plus />
             Add distributor
           </Link>
-          <Link to={`/admin/parts/${id}/edit`} className={`${styles.btn} ${styles.btnPrimary}`}>
+          <Link to={consolePath(`/admin/parts/${id}/edit`)} className={`${styles.btn} ${styles.btnPrimary}`}>
             <Edit />
             Edit
           </Link>

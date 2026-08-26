@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useConsolePath } from '@admin/services/consolePath';
 import { Check, ChevronLeft, Trash2 } from 'lucide-react';
 import { adminApi } from '@admin/services/adminApi';
 import { apiErrorDetail } from '@admin/services/apiError';
@@ -140,6 +141,8 @@ function emptyForm(): FormState {
 }
 
 export default function SponsorFormPage() {
+  // Canonical /admin paths, rewritten onto whichever mount is rendering (D16).
+  const consolePath = useConsolePath();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const isEdit = Boolean(id);
@@ -697,7 +700,7 @@ export default function SponsorFormPage() {
       await upsertSponsor(buildSponsor());
       setToast(isEdit ? 'Sponsorship updated' : 'Sponsorship created');
       // small delay so user sees toast confirmation
-      setTimeout(() => navigate('/admin/sponsors'), 600);
+      setTimeout(() => navigate(consolePath('/admin/sponsors')), 600);
     } catch (err) {
       console.error('[SponsorFormPage] save failed', err);
       // Surface the backend's specific message when present — e.g. the single-slot
@@ -719,7 +722,7 @@ export default function SponsorFormPage() {
       // directly, so the company simply disappears. No client-side pre-step.
       await deleteSponsor(id);
       setToast('Sponsorship deleted');
-      setTimeout(() => navigate('/admin/sponsors'), 500);
+      setTimeout(() => navigate(consolePath('/admin/sponsors')), 500);
     } catch (err) {
       console.error('[SponsorFormPage] delete failed', err);
       setToast('Delete failed — try again');
@@ -1203,7 +1206,7 @@ export default function SponsorFormPage() {
             </button>
           )}
           <div className={styles.formActionsSpacer} />
-          <Link to="/admin/sponsors" className={`${styles.btn} ${styles.btnGhost}`}>
+          <Link to={consolePath('/admin/sponsors')} className={`${styles.btn} ${styles.btnGhost}`}>
             Cancel
           </Link>
           <button

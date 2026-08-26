@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { useConsolePath } from '@admin/services/consolePath';
 import { Plus, Search, Upload } from 'lucide-react';
 import Breadcrumbs from '@admin/components/Breadcrumbs';
 import { adminApi } from '@admin/services/adminApi';
@@ -23,6 +24,8 @@ const SPONSORSHIP_CLASS: Record<SupplierSponsorship, string> = {
 };
 
 export default function SuppliersPage() {
+  // Canonical /admin paths, rewritten onto whichever mount is rendering (D16).
+  const consolePath = useConsolePath();
   const navigate = useNavigate();
   const [suppliers, setSuppliers] = useState<AdminSupplier[]>([]);
   const [sponsorMap, setSponsorMap] = useState<Map<string, SponsorTier>>(new Map());
@@ -94,12 +97,12 @@ export default function SuppliersPage() {
           </p>
         </div>
         <div className={styles.pageHeadActions}>
-          <Link to="/admin/import" className={`${styles.btn} ${styles.btnGhost}`}>
+          <Link to={consolePath('/admin/import')} className={`${styles.btn} ${styles.btnGhost}`}>
             <Upload size={16} strokeWidth={2} />
             Import CSV
           </Link>
           <Link
-            to="/admin/suppliers/new"
+            to={consolePath('/admin/suppliers/new')}
             data-tour="add-supplier"
             className={`${styles.btn} ${styles.btnPrimary}`}
           >
@@ -150,13 +153,13 @@ export default function SuppliersPage() {
                 key={supplier.id}
                 data-tour="supplier-card"
                 className={styles.supCard}
-                onClick={() => navigate(`/admin/suppliers/${supplier.id}`)}
+                onClick={() => navigate(consolePath(`/admin/suppliers/${supplier.id}`))}
                 role="button"
                 tabIndex={0}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
-                    navigate(`/admin/suppliers/${supplier.id}`);
+                    navigate(consolePath(`/admin/suppliers/${supplier.id}`));
                   }
                 }}
               >

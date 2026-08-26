@@ -67,3 +67,30 @@ def test_a_verified_customer_can_sign_in(client, db):
                     json={"email": GOOD["email"], "password": GOOD["password"]})
     assert r.status_code == 200
     assert r.json()["user"]["role"] == "user"
+
+
+def test_a_verified_customer_still_gets_the_reset_link(client, db):
+    """The POSITIVE half of D14, and the reason the negative half means
+    anything.
+
+    Every other test in this file passes if the skip is widened from "customers
+    who never verified" to "customers", or to "everyone" — the reply is a
+    constant, so a route that mails NOBODY looks identical from the outside.
+    This is the one that notices.
+    """
+    client.post("/api/auth/signup", json=GOOD)
+    user = db.query(User).filter(User.email == GOOD["email"]).first()
+    client.post("/api/auth/verify",
+                json={"token": create_verify_token(str(user.id), user.email)})
+
+    with patch("app.routes.auth.email_service.send_password_reset") as sender:
+        r = client.post("/api/auth/forgot-password", json={"identifier": GOOD["email"]})
+
+    assert r.status_code == 200
+    sender.assert_called_once()
+    to_email, _username, reset_url = sender.call_args.args
+    assert to_email == GOOD["email"]
+    # A real, freshly minted link — not an empty string the assertion above
+    # would have accepted.
+    assert "/admin/reset-password?token=" in reset_url
+    assert reset_url.rpartition("token=")[2]

@@ -1,0 +1,106 @@
+@use '@admin/styles/variables' as *;
+
+// Fixed, not in the flow: this notice is rendered by ProtectedRoute, which sits
+// ABOVE AdminLayout, so anything with height would push the console's fixed
+// sidebar and sticky topbar out of register. Floating clear of the layout costs
+// the chrome nothing and needs no cooperation from a component this file does
+// not own.
+//
+// It is also OUTSIDE `.admin`, which is where every `--a-*` token is defined —
+// so this file cannot use them and spells its own colours, with the same
+// `html[data-admin-theme='dark']` override the admin chrome uses. Referencing
+// --a-card here would have rendered an unresolved variable, silently.
+.banner {
+  --ab-card: #ffffff;
+  --ab-fg1: #{$admin-text-primary};
+  --ab-fg2: #{$admin-text-muted};
+  --ab-fg3: #{$admin-text-secondary};
+  --ab-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+
+  position: fixed;
+  // Below the sticky topbar (z-index 10) in the stack, and clear of its 64px
+  // strip in space.
+  top: calc(#{$admin-topbar-height} + 16px);
+  right: 24px;
+  z-index: 60;
+  max-width: 380px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: $admin-border-radius;
+  background: var(--ab-card);
+  border: 1px solid rgba(39, 174, 96, 0.4);
+  box-shadow: var(--ab-shadow);
+
+  :global(html[data-admin-theme='dark']) & {
+    --ab-card: #161b22;
+    --ab-fg1: #e6edf3;
+    --ab-fg2: #b6c2cf;
+    --ab-fg3: #97a3af;
+    --ab-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+  }
+}
+
+.mark {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(39, 174, 96, 0.14);
+  color: $admin-success;
+  font-size: 15px;
+  line-height: 1;
+}
+
+.body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.title {
+  margin: 0 0 2px;
+  font-size: $admin-font-base;
+  font-weight: 700;
+  color: var(--ab-fg1);
+}
+
+.text {
+  margin: 0;
+  font-size: $admin-font-small;
+  line-height: 1.5;
+  color: var(--ab-fg2);
+}
+
+.dismiss {
+  flex: 0 0 auto;
+  border: none;
+  background: none;
+  cursor: pointer;
+  padding: 2px 6px;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--ab-fg3);
+
+  &:hover {
+    color: var(--ab-fg1);
+  }
+
+  &:focus-visible {
+    outline: 2px solid $admin-success;
+    outline-offset: 2px;
+  }
+}
+
+// admin-mobile breakpoint (820px, per the admin chrome) — the sidebar collapses
+// here and a right-pinned card would sit over the burger's reach.
+@media (max-width: 820px) {
+  .banner {
+    right: 16px;
+    left: 16px;
+    max-width: none;
+  }
+}

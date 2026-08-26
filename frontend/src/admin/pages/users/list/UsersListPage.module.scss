@@ -217,6 +217,251 @@
   color: var(--a-fg3);
 }
 
+// ─── Company links ──────────────────────────────────────────────────────────
+//
+// Two links per account, stacked and labelled: an account may be a
+// distributor, a manufacturer, or BOTH (Avnet is both), so these never read as
+// a choice between two.
+
+.linkStack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  min-width: 0;
+}
+
+.linkLine {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.linkKind {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--a-fg4);
+}
+
+// A quiet text button — the row's own affordance, not a call to action.
+.linkBtn {
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 12px;
+  color: var(--a-primary);
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: var(--a-focus-ring);
+    border-radius: 3px;
+  }
+
+  &:disabled {
+    color: var(--a-fg4);
+    cursor: default;
+    text-decoration: none;
+  }
+}
+
+// ─── Link editor (one row at a time) ────────────────────────────────────────
+
+.editorRow td {
+  background: var(--a-bg);
+  padding: 0 !important;
+}
+
+.editor {
+  padding: 16px 20px 18px;
+  border-left: 3px solid var(--a-primary);
+}
+
+.editorHead {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-bottom: 14px;
+}
+
+.editorTitle {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--a-fg1);
+}
+
+.editorHint {
+  font-size: 12px;
+  color: var(--a-fg3);
+  max-width: 70ch;
+}
+
+.editorFields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+}
+
+.editorField {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 240px;
+  flex: 1 1 240px;
+  position: relative;
+}
+
+.editorLabel {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--a-fg3);
+}
+
+.select,
+.input {
+  width: 100%;
+  padding: 7px 10px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--a-fg1);
+  background: var(--a-card);
+  border: 1px solid var(--a-border);
+  border-radius: 6px;
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: var(--a-focus-ring);
+    border-color: var(--a-primary);
+  }
+
+  &:disabled {
+    color: var(--a-fg3);
+    cursor: default;
+  }
+}
+
+.pickedRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 33px;
+}
+
+.pickedName {
+  @include truncate;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--a-fg1);
+}
+
+// Results sit in the flow rather than floating: the editor is already its own
+// band, and a popover inside a scrolling table wrapper clips.
+.results {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 1px;
+  margin-top: 4px;
+  border: 1px solid var(--a-border);
+  border-radius: 6px;
+  overflow: hidden;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.resultBtn {
+  text-align: left;
+  padding: 7px 10px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--a-fg1);
+  background: var(--a-card);
+  border: none;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--a-hover);
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: var(--a-focus-ring);
+  }
+}
+
+.editorNote {
+  margin: 4px 0 0;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: var(--a-fg3);
+}
+
+.editorError {
+  margin: 12px 0 0;
+  font-size: 12px;
+  color: var(--a-danger);
+}
+
+.editorActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.btn {
+  padding: 7px 14px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  cursor: pointer;
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: var(--a-focus-ring);
+  }
+
+  &:disabled {
+    opacity: 0.55;
+    cursor: default;
+  }
+}
+
+.btnGhost {
+  background: transparent;
+  border-color: var(--a-border);
+  color: var(--a-fg2);
+
+  &:hover:not(:disabled) {
+    background: var(--a-hover);
+  }
+}
+
+.btnPrimary {
+  background: var(--a-primary);
+  color: #ffffff;
+
+  &:hover:not(:disabled) {
+    filter: brightness(1.06);
+  }
+}
+
 .emptyRow {
   padding: 32px 20px !important;
   text-align: center;

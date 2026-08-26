@@ -8,6 +8,7 @@
 
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { useConsolePath } from '@admin/services/consolePath';
 
 import Breadcrumbs from '@admin/components/Breadcrumbs';
 import { useAuth } from '@admin/contexts/AuthContext';
@@ -32,6 +33,8 @@ function formatStamp(iso: string): string {
 }
 
 export default function RepPage() {
+  // Canonical /admin paths, rewritten onto whichever mount is rendering (D16).
+  const consolePath = useConsolePath();
   const { username } = useParams<{ username: string }>();
 
   const [activity, setActivity] = useState<RepActivity | null>(null);
@@ -195,7 +198,7 @@ export default function RepPage() {
                       />
                     </td>
                     <td>
-                      <Link to={`/admin/leads/${c.lead_id}`} className={styles.leadLink}>
+                      <Link to={consolePath(`/admin/leads/${c.lead_id}`)} className={styles.leadLink}>
                         {c.company_name ?? 'Lead'}
                       </Link>
                     </td>

@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useConsolePath } from '@admin/services/consolePath';
 import { ArrowLeft, Check, AlertCircle } from 'lucide-react';
 import { adminApi } from '@admin/services/adminApi';
 import { apiErrorDetail } from '@admin/services/apiError';
@@ -60,6 +61,8 @@ function SelectCaret() {
 }
 
 export default function AttachListingPage() {
+  // Canonical /admin paths, rewritten onto whichever mount is rendering (D16).
+  const consolePath = useConsolePath();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
@@ -226,7 +229,7 @@ export default function AttachListingPage() {
       setDone(true);
       setToast(`Added ${selectedSupplier?.name ?? 'distributor'} to ${part?.sku ?? 'part'}`);
       navTimerRef.current = window.setTimeout(
-        () => navigate(`/admin/parts/${id}`),
+        () => navigate(consolePath(`/admin/parts/${id}`)),
         700,
       );
     } catch (err) {
@@ -256,7 +259,7 @@ export default function AttachListingPage() {
       <div className={styles.page}>
         <div className={styles.pageHead}>
           <div className={styles.pageHeadLeft}>
-            <Link to="/admin/parts" className={styles.backLink}>
+            <Link to={consolePath('/admin/parts')} className={styles.backLink}>
               <ArrowLeft />
               Parts
             </Link>

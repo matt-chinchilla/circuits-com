@@ -8,6 +8,7 @@ import Icon from '@shared/components/Icon';
 import BellDropdown from '@admin/components/messages/BellDropdown';
 import PresenceBubbles from '@admin/components/PresenceBubbles';
 import { adminApi } from '@admin/services/adminApi';
+import { consoleBase, canonicalPath, mountPath } from '@admin/services/consolePath';
 import {
   loadMessages,
   refreshMessages,
@@ -102,35 +103,6 @@ const TITLE_MAP: Record<string, string> = {
   '/admin/import': 'Import Queue',
   '/admin/settings': 'Settings',
 };
-
-/**
- * The console is mounted TWICE — at /admin for staff and /account for
- * customers (D16) — from one component tree. The routes come out right on
- * their own, because React Router resolves them relative to the mount; the
- * CHROME does not. Every sidebar link and title below is written in its
- * /admin form, so these two translate between that canonical form and
- * whichever mount is actually being rendered.
- *
- * Without this a customer at /account gets a sidebar of /admin links, and
- * every click bounces them straight back to /account via ProtectedRoute —
- * a console that looks complete and cannot be navigated.
- */
-export function consoleBase(pathname: string): '/admin' | '/account' {
-  return pathname === '/account' || pathname.startsWith('/account/') ? '/account' : '/admin';
-}
-
-/** An /admin-form path, rewritten onto the mount currently being rendered. */
-export function mountPath(adminPath: string, base: '/admin' | '/account'): string {
-  if (base === '/admin') return adminPath;
-  return adminPath === '/admin' ? '/account' : `/account${adminPath.slice('/admin'.length)}`;
-}
-
-/** The inverse: any mount's path, in the canonical /admin form for lookups. */
-function canonicalPath(pathname: string): string {
-  if (!pathname.startsWith('/account')) return pathname;
-  const rest = pathname.slice('/account'.length);
-  return rest ? `/admin${rest}` : '/admin';
-}
 
 function pageTitle(rawPathname: string): string {
   const pathname = canonicalPath(rawPathname);

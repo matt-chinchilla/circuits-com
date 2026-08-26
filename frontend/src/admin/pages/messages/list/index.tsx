@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ChangeEvent, KeyboardEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useConsolePath } from '@admin/services/consolePath';
 import { motion } from 'framer-motion';
 import {
   AlertCircle,
@@ -59,14 +60,9 @@ import {
   toggleSelected,
   visibleSelectedIds,
 } from './selection';
+import { WEBMAIL_URL, staffMailboxAddress } from './mailbox';
 import styles from './MessagesListPage.module.scss';
 
-/** Where the company's mail lives. The address is derived from the signed-in
- *  username because mailbox local-parts ARE the usernames (lower-cased —
- *  `Anthony` owns `anthony@`). Kept beside the URL so both move together if
- *  the mail host ever changes. */
-const WEBMAIL_URL = 'https://mail.circuitcenter.ai';
-const MAIL_DOMAIN = 'circuitcenter.ai';
 
 /**
  * Columns after the leading select checkbox: dot, designator, type, sender,
@@ -299,12 +295,14 @@ function SelectAllCheckbox({
 }
 
 export default function MessagesListPage() {
+  // Canonical /admin paths, rewritten onto whichever mount is rendering (D16).
+  const consolePath = useConsolePath();
   const navigate = useNavigate();
   const { user } = useAuth();
-  // Hidden for the public demo account, which has no mailbox — a prospect
-  // clicking through to a login screen they can't pass is a dead end.
-  const mailboxAddress =
-    user ? `${user.username.toLowerCase()}@${MAIL_DOMAIN}` : null;
+  // STAFF only. This screen renders at /account too (D16), where the account
+  // has no mailbox and its username IS an email address — deriving one there
+  // produced 'buyer@acme.com@circuitcenter.ai' pointing at staff webmail.
+  const mailboxAddress = staffMailboxAddress(user);
   // Owner-only (2026-08-19). The server's `owner_only` 403 is the enforcement;
   // this keeps staff from ever meeting a control that only 403s. It gates BOTH
   // ways into a delete — the multi-select column with its selection bar, and
@@ -753,7 +751,7 @@ export default function MessagesListPage() {
                   <MessageRow
                     key={g.m.id}
                     m={g.m}
-                    onOpen={(id) => navigate(`/admin/messages/${id}`)}
+                    onOpen={(id) => navigate(consolePath(`/admin/messages/${id}`))}
                     onAction={onAction}
                     onDelete={(m) => setPendingIds([m.id])}
                     isFresh={freshIds.has(g.m.id)}

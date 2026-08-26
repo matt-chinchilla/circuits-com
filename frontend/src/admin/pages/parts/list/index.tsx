@@ -8,6 +8,7 @@ import {
   type SetStateAction,
 } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { useConsolePath } from '@admin/services/consolePath';
 import { Plus, Upload, Download, Search } from 'lucide-react';
 import { useDemo } from '@admin/contexts/DemoContext';
 import { adminApi } from '@admin/services/adminApi';
@@ -341,6 +342,8 @@ function ColumnHeader(props: ColumnHeaderProps) {
 }
 
 export default function PartsPage() {
+  // Canonical /admin paths, rewritten onto whichever mount is rendering (D16).
+  const consolePath = useConsolePath();
   const navigate = useNavigate();
   const { demoMode } = useDemo();
   const [data, setData] = useState<PaginatedResponse<Part> | null>(null);
@@ -450,7 +453,7 @@ export default function PartsPage() {
           <p>{totalCount} SKU{totalCount === 1 ? '' : 's'} in catalog{demoMode ? ' (demo data)' : ''}</p>
         </div>
         <div className={styles.pageHeadActions}>
-          <Link to="/admin/import" className={`${styles.btn} ${styles.btnGhost}`}>
+          <Link to={consolePath('/admin/import')} className={`${styles.btn} ${styles.btnGhost}`}>
             <Upload />
             Import CSV
           </Link>
@@ -459,7 +462,7 @@ export default function PartsPage() {
             Export
           </button>
           <Link
-            to="/admin/parts/new"
+            to={consolePath('/admin/parts/new')}
             data-tour="add-part"
             className={`${styles.btn} ${styles.btnPrimary}`}
           >
@@ -600,7 +603,7 @@ export default function PartsPage() {
                 const best = bestPriceOf(row);
                 const stock = totalStockOf(row);
                 return (
-                  <tr key={row.id} onClick={() => navigate(`/admin/parts/${row.id}`)}>
+                  <tr key={row.id} onClick={() => navigate(consolePath(`/admin/parts/${row.id}`))}>
                     <td>
                       <span className={styles.mono}>{row.sku}</span>
                     </td>

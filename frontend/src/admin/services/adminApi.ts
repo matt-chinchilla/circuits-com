@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { API_BASE_URL } from '@shared/services/constants';
+import type { AccountMe } from '@admin/services/accountActivation';
 import type {
   AnalyticsData,
   AuthResponse,
@@ -682,6 +683,22 @@ export const adminApi = {
   ) => adminClient.patch<AdminUser>(`/admin/users/${id}`, patch).then((r) => r.data),
 
   // ── The customer's own account (2026-08-25) ──────────────────────────────
+
+  /**
+   * GET /api/account/me — and, in practice, the activation probe (D17).
+   *
+   * The route is gated on `require_account_user`, so its ANSWER is the whole
+   * signal: a 200 means this customer is activated, and
+   * `403 account_not_activated` means they are not. AuthContext runs it once
+   * per customer session and ProtectedRoute shows the awaiting-approval screen
+   * on the 403 — without it a verified-but-unactivated customer reaches the
+   * full console and every panel 403s at them one at a time.
+   *
+   * Staff must not call this: they are not customers, so they get
+   * `403 staff_only`.
+   */
+  getAccountMe: () =>
+    adminClient.get<AccountMe>('/account/me').then((r) => r.data),
 
   /**
    * DELETE /api/account/me — the Danger Zone's self-deletion.

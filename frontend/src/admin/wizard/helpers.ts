@@ -82,6 +82,12 @@ export function getStore(): WizardStoreSnapshot {
 // definitions express routes WITHOUT the /admin prefix (e.g. "suppliers/new"
 // instead of "/admin/suppliers/new"). This matches the original design's
 // expression style. Strip the /admin prefix so flow tests stay tight.
+//
+// /admin ABSOLUTELY, and that is correct rather than an oversight: the wizard
+// is staff-only (gated in wizard/index.tsx on isStaff), so the customer mount
+// at /account never renders it and there is no second base to translate to.
+// If that gate is ever lifted, these two need consolePath — the tours would
+// otherwise walk a customer into routes ProtectedRoute bounces them out of.
 export function getRoute(): string {
   const path = window.location.pathname;
   const m = path.match(/^\/admin\/?(.*)$/);

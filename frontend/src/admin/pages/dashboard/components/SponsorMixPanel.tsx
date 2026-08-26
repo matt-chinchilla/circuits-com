@@ -15,6 +15,7 @@
 
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
+import { useConsolePath } from '@admin/services/consolePath';
 import EChart from '@admin/components/charts/EChart';
 import { pieOption } from '@admin/components/charts/options';
 import { tierColor, tierFill, tierCssGradient } from '@admin/components/charts/chartTheme';
@@ -31,6 +32,8 @@ interface SponsorMixPanelProps {
 }
 
 export default function SponsorMixPanel({ counts, loading }: SponsorMixPanelProps) {
+  // Canonical /admin paths, rewritten onto whichever mount is rendering (D16).
+  const consolePath = useConsolePath();
   const total = TIERS.reduce((sum, t) => sum + (counts[t] || 0), 0);
 
   const option = useMemo(
@@ -58,7 +61,7 @@ export default function SponsorMixPanel({ counts, loading }: SponsorMixPanelProp
           <h3 className={styles.panelTitle}>Active Sponsors</h3>
           <p className={styles.panelSub}>By tier &middot; monetization mix</p>
         </div>
-        <Link to="/admin/sponsors" className={styles.panelLink}>
+        <Link to={consolePath('/admin/sponsors')} className={styles.panelLink}>
           Manage &rarr;
         </Link>
       </div>

@@ -12,6 +12,7 @@
 
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useConsolePath } from '@admin/services/consolePath';
 import { ArrowLeft } from 'lucide-react';
 
 import Breadcrumbs from '@admin/components/Breadcrumbs';
@@ -58,6 +59,8 @@ function websiteError(raw: string): string | undefined {
 }
 
 export default function ManufacturerFormPage() {
+  // Canonical /admin paths, rewritten onto whichever mount is rendering (D16).
+  const consolePath = useConsolePath();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const isEdit = Boolean(id);
@@ -131,14 +134,14 @@ export default function ManufacturerFormPage() {
     try {
       if (isEdit && id) {
         await adminApi.updateManufacturer(id, payload);
-        navigate(`/admin/manufacturers/${id}`);
+        navigate(consolePath(`/admin/manufacturers/${id}`));
       } else {
         const created = (await adminApi.createManufacturer(payload)) as AdminManufacturer;
         // Straight to the new row's detail page: promote/link and merge review
         // all live there, and they are the reason a manufacturer gets typed in
         // by hand at all.
-        if (created?.id) navigate(`/admin/manufacturers/${created.id}`);
-        else navigate('/admin/manufacturers');
+        if (created?.id) navigate(consolePath(`/admin/manufacturers/${created.id}`));
+        else navigate(consolePath('/admin/manufacturers'));
       }
     } catch (err) {
       console.error('[ManufacturerForm] save failed', err);
@@ -154,8 +157,8 @@ export default function ManufacturerFormPage() {
   }
 
   function handleCancel() {
-    if (isEdit && id) navigate(`/admin/manufacturers/${id}`);
-    else navigate('/admin/manufacturers');
+    if (isEdit && id) navigate(consolePath(`/admin/manufacturers/${id}`));
+    else navigate(consolePath('/admin/manufacturers'));
   }
 
   if (loadingExisting) {

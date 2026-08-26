@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { useConsolePath } from '@admin/services/consolePath';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Archive, Eye } from 'lucide-react';
 import {
@@ -40,6 +41,8 @@ const ASSIGNEE_DESIGNATOR: Record<Exclude<AssignedTo, null>, string> = {
 };
 
 export default function MessageDetailPage() {
+  // Canonical /admin paths, rewritten onto whichever mount is rendering (D16).
+  const consolePath = useConsolePath();
   const { id = '' } = useParams<{ id: string }>();
   const [tick, setTick] = useState(0); // forces re-read after store mutations
   const [traceFire, setTraceFire] = useState(false);
@@ -93,7 +96,7 @@ export default function MessageDetailPage() {
         <div className={styles.notFoundPanel}>
           <h2>Message not found</h2>
           <p>That message ID couldn&rsquo;t be found.</p>
-          <Link to="/admin/messages" className={styles.backLink}>
+          <Link to={consolePath('/admin/messages')} className={styles.backLink}>
             <ArrowLeft size={14} strokeWidth={2} />
             Back to Messages
           </Link>
@@ -130,7 +133,7 @@ export default function MessageDetailPage() {
       transition={{ duration: 0.15, ease: 'easeInOut' as const }}
     >
       <DatasheetFrame className={styles.detailHead}>
-        <Link to="/admin/messages" className={styles.backLink}>
+        <Link to={consolePath('/admin/messages')} className={styles.backLink}>
           <ArrowLeft size={14} strokeWidth={2} />
           Messages
         </Link>

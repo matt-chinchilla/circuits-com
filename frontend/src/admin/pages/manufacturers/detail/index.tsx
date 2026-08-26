@@ -17,6 +17,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useConsolePath } from '@admin/services/consolePath';
 import { ArrowLeft, ExternalLink, Pencil } from 'lucide-react';
 
 import Breadcrumbs from '@admin/components/Breadcrumbs';
@@ -51,6 +52,8 @@ function armCopy(action: 'approve' | 'reject', alias: string): string {
 }
 
 export default function ManufacturerDetailPage() {
+  // Canonical /admin paths, rewritten onto whichever mount is rendering (D16).
+  const consolePath = useConsolePath();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
@@ -188,7 +191,7 @@ export default function ManufacturerDetailPage() {
       supplier_id: detail.linked_supplier_id,
       supplier_name: detail.linked_supplier_name ?? detail.name,
     });
-    navigate('/admin/sponsors/new');
+    navigate(consolePath('/admin/sponsors/new'));
   }
 
   if (loading) {
@@ -229,7 +232,7 @@ export default function ManufacturerDetailPage() {
           <button
             type="button"
             className={styles.backLink}
-            onClick={() => navigate('/admin/manufacturers')}
+            onClick={() => navigate(consolePath('/admin/manufacturers'))}
           >
             <ArrowLeft size={14} strokeWidth={2} />
             All manufacturers
@@ -266,7 +269,7 @@ export default function ManufacturerDetailPage() {
         </div>
         <div className={styles.pageHeadActions}>
           <Link
-            to={`/admin/manufacturers/${detail.id}/edit`}
+            to={consolePath(`/admin/manufacturers/${detail.id}/edit`)}
             className={`${styles.btn} ${styles.btnGhost}`}
           >
             <Pencil size={14} strokeWidth={2} />
@@ -456,7 +459,7 @@ export default function ManufacturerDetailPage() {
             {detail.linked_supplier_id ? (
               <div className={styles.panelBody}>
                 <Link
-                  to={`/admin/suppliers/${detail.linked_supplier_id}`}
+                  to={consolePath(`/admin/suppliers/${detail.linked_supplier_id}`)}
                   className={styles.supplierLink}
                 >
                   {detail.linked_supplier_name ?? 'Linked supplier'}
@@ -472,7 +475,7 @@ export default function ManufacturerDetailPage() {
                   <ul className={styles.sponsorList}>
                     {detail.linked_supplier_sponsorships.map((sp) => (
                       <li key={sp.id}>
-                        <Link to={`/admin/sponsors/${sp.id}/edit`} className={styles.sponsorRow}>
+                        <Link to={consolePath(`/admin/sponsors/${sp.id}/edit`)} className={styles.sponsorRow}>
                           <span className={styles.sponsorTier}>{sp.tier}</span>
                           {/* A NULL status is Active — legacy seed rows omit it,
                               and every read site in this codebase treats the

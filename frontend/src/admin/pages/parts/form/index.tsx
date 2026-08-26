@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useConsolePath } from '@admin/services/consolePath';
 import { ArrowLeft, Check, Trash2 } from 'lucide-react';
 import axios from 'axios';
 import { adminApi } from '@admin/services/adminApi';
@@ -96,6 +97,8 @@ function SelectCaret() {
 }
 
 export default function PartFormPage() {
+  // Canonical /admin paths, rewritten onto whichever mount is rendering (D16).
+  const consolePath = useConsolePath();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const isEdit = Boolean(id);
@@ -217,7 +220,7 @@ export default function PartFormPage() {
       if (isEdit && id) {
         await adminApi.updatePart(id, payload);
         setToast({ type: 'success', msg: 'Part updated successfully.' });
-        setTimeout(() => navigate(`/admin/parts/${id}`), 900);
+        setTimeout(() => navigate(consolePath(`/admin/parts/${id}`)), 900);
       } else {
         const created = await adminApi.createPart(payload);
         // ─── Wizard id-from-response bridge ─────────────────────────────────
@@ -233,7 +236,7 @@ export default function PartFormPage() {
           window.__wizardCreatedEntity = { kind: 'part', id: created.id };
         }
         setToast({ type: 'success', msg: 'Part created successfully.' });
-        setTimeout(() => navigate(`/admin/parts/${created.id}`), 900);
+        setTimeout(() => navigate(consolePath(`/admin/parts/${created.id}`)), 900);
       }
     } catch (err) {
       const field = rejectedField(err);
@@ -256,7 +259,7 @@ export default function PartFormPage() {
     try {
       await adminApi.deletePart(id);
       setToast({ type: 'success', msg: `Deleted ${form.sku}` });
-      setTimeout(() => navigate('/admin/parts'), 700);
+      setTimeout(() => navigate(consolePath('/admin/parts')), 700);
     } catch {
       setToast({ type: 'error', msg: 'Failed to delete part.' });
     } finally {

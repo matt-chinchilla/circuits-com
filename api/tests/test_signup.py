@@ -250,3 +250,45 @@ def test_a_signup_pause_does_not_lock_a_real_customer_out_of_signing_in(client, 
         json={"email": "admin@test.example", "password": "testpass123"},
     )
     assert login.status_code == 200
+
+
+# ── The duplicate check is a fast path, not the arbiter ─────────────────────
+
+
+def test_a_racing_signup_for_the_same_address_answers_409_not_500(client, db, monkeypatch):
+    """Two signups for one address can both pass the SELECT and race to INSERT;
+    the loser meets uq_users_email_lower. 409 is what this endpoint promises
+    that person (D5) — a 500 tells them their address is broken rather than
+    taken, and every test above passes without the promise holding here.
+
+    The interleaving is reproduced at the one seam that sits BETWEEN the read
+    and the write: hashing the password. The row it inserts is the winner.
+    """
+    from app.routes import auth as auth_route
+
+    def _racing_hash(password: str) -> str:
+        if not getattr(_racing_hash, "fired", False):
+            _racing_hash.fired = True
+            db.add(
+                User(
+                    id=uuid_mod.uuid4(),
+                    username="ada@test.example",
+                    email="ada@test.example",
+                    password_hash="x",
+                    role="user",
+                )
+            )
+            db.flush()
+        return "x"
+
+    monkeypatch.setattr(auth_route, "hash_password", _racing_hash)
+
+    r = client.post("/api/auth/signup", json=GOOD)
+    assert r.status_code == 409
+    assert r.json()["detail"] == "email_taken"
+
+    # And the connection has to be USABLE afterwards: an IntegrityError that is
+    # never rolled back poisons every later request on this session with
+    # PendingRollbackError, so one collision would take the front door down.
+    later = client.post("/api/auth/signup", json={**GOOD, "email": "grace@test.example"})
+    assert later.status_code == 202

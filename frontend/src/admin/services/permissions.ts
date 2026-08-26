@@ -55,3 +55,22 @@ export function canDeleteMessages(
 ): boolean {
   return isOwner(user);
 }
+
+/**
+ * Is this account STAFF — someone the /admin mount belongs to?
+ *
+ * An ALLOWLIST, deliberately, rather than `!isCustomer`: the console is
+ * mounted twice from one component tree (D16), so a staff-only affordance is
+ * hidden by nothing except a check like this one, and a role added to the
+ * enum later must arrive with no staff powers until somebody grants them.
+ *
+ * Two affordances read it, both of which are staff tooling that a customer at
+ * /account could otherwise reach: the guided-tour wizard (its steps navigate to
+ * /admin routes a customer cannot open) and the Messages screen's webmail link
+ * (there is no mailbox for a customer to open).
+ *
+ * A null user — still loading, or signed out — is not staff.
+ */
+export function isStaff(user: Pick<UserInfo, 'role'> | null | undefined): boolean {
+  return user?.role === 'admin' || user?.role === 'owner';
+}

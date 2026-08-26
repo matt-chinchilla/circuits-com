@@ -114,29 +114,58 @@ deploy_frontend() {
 deploy_reseed() {
     echo "Deploying all services + clearing and reseeding database..."
     run_remote "cd $APP_DIR && sudo git pull && DOCKER_BUILDKIT=1 $COMPOSE_CMD build frontend && DOCKER_BUILDKIT=1 $COMPOSE_CMD build api calendar-reminders cost-sync feed-import && $COMPOSE_CMD up -d && $COMPOSE_CMD restart nginx && sudo docker image prune -f"
-    # The calendar has to be carried across the TRUNCATE by hand.
+    # The calendar AND the message inbox have to be carried across the TRUNCATE
+    # by hand.
     #
-    # TRUNCATE ... CASCADE is TRANSITIVE, and the chain now reaches further than
-    # it used to: suppliers -> users (users.supplier_id) -> calendar_events
-    # (calendar_events.created_by_id) -> calendar_reminder_sends. So a routine
-    # catalog reseed would silently delete every company meeting. `messages`
-    # survives this only because nothing links it into that graph; the calendar
-    # does not have that luxury, and the price of the created_by_id attribution
-    # is exactly this backup.
+    # TRUNCATE ... CASCADE is TABLE-level and TRANSITIVE — it follows every
+    # REFERENCING foreign key and ignores ON DELETE semantics entirely — and
+    # the chain reaches further than it used to:
+    #   suppliers -> users (users.supplier_id)
+    #             -> calendar_events (created_by_id) -> calendar_reminder_sends
+    #             -> messages        (messages.user_id, migration 043)
+    # So a routine catalog reseed would silently delete every company meeting
+    # AND every contact, join and keyword-request the public has ever sent,
+    # plus every signup/welcome row. `messages` used to survive because nothing
+    # linked it into that graph; migration 043 ended that, and the comment that
+    # used to sit here saying otherwise was how it nearly went unnoticed.
+    # (Verified on a live DB inside BEGIN/ROLLBACK: the TRUNCATE prints
+    # "NOTICE: truncate cascades to table messages" and messages goes 7 -> 0.)
     #
-    # Same shape as the page_views/messages practice: dump to a file on the box
-    # before, restore after seeding. Restored AFTER the seed so the users rows
-    # the FK points at exist again; ON DELETE SET NULL means a creator who is no
-    # longer seeded simply loses attribution rather than blocking the restore.
-    echo "Backing up the calendar (TRUNCATE CASCADE reaches it via users)..."
+    # Same shape for both: dump to a file on the box before, restore AFTER the
+    # seed, so the users rows the FKs point at exist again.
+    #   - calendar_events.created_by_id is ON DELETE SET NULL, so a creator who
+    #     is no longer seeded simply loses attribution and the restore is a
+    #     straight psql load.
+    #   - messages.user_id is not that forgiving. The seed mints brand-new user
+    #     uuids, and CUSTOMER accounts are not seeded at all, so essentially no
+    #     restored user_id still resolves — a straight load dies on the FK at
+    #     the first such row and puts back NOTHING. The load therefore runs
+    #     with the constraint dropped, NULLs the ids that no longer resolve
+    #     (a NULL user_id means "the shared staff inbox", the honest fallback
+    #     for a submission whose account is gone — dropping the row would not
+    #     be), then re-adds the constraint, which re-validates every restored
+    #     row. All one transaction under ON_ERROR_STOP, so a failure leaves the
+    #     DB as it was instead of half-restored.
+    #
+    # Adding a table that FKs into suppliers/users/categories joins it to this
+    # cascade. api/tests/test_leads_schema.py fails until it is either reseeded
+    # from source or backed up here. (Known and NOT backed up: bom_shares,
+    # in the cascade since migration 038 — shared BOM links die on a reseed.)
+    local msg_pre msg_post
+    msg_pre="BEGIN; ALTER TABLE public.messages DROP CONSTRAINT IF EXISTS fk_messages_user_id;"
+    msg_post="SET search_path = public; UPDATE public.messages m SET user_id = NULL WHERE m.user_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM public.users u WHERE u.id = m.user_id); ALTER TABLE public.messages ADD CONSTRAINT fk_messages_user_id FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE; COMMIT;"
+    echo "Backing up the calendar and the message inbox (TRUNCATE CASCADE reaches both via users)..."
     run_remote "sudo docker exec circuits-com-db-1 pg_dump -U circuits -d circuits --data-only --table=calendar_events --table=calendar_reminder_sends > /tmp/calendar-backup.sql && wc -l < /tmp/calendar-backup.sql"
+    run_remote "sudo docker exec circuits-com-db-1 pg_dump -U circuits -d circuits --data-only --table=messages > /tmp/messages-backup.sql && wc -l < /tmp/messages-backup.sql"
     echo "Clearing database..."
     run_remote "sudo docker exec circuits-com-db-1 psql -U circuits -d circuits -c 'TRUNCATE sponsors, category_suppliers, categories, suppliers CASCADE;'"
     echo "Reseeding..."
     run_remote "sudo docker exec circuits-com-api-1 python -m app.db.seed"
     echo "Restoring the calendar..."
     run_remote "sudo docker exec -i circuits-com-db-1 psql -U circuits -d circuits -v ON_ERROR_STOP=1 < /tmp/calendar-backup.sql && sudo docker exec circuits-com-db-1 psql -U circuits -d circuits -tAc 'SELECT count(*) FROM calendar_events;'"
-    green "All services rebuilt, nginx restarted. Database cleared and reseeded; calendar restored."
+    echo "Restoring the message inbox..."
+    run_remote "{ echo \"$msg_pre\"; cat /tmp/messages-backup.sql; echo \"$msg_post\"; } | sudo docker exec -i circuits-com-db-1 psql -U circuits -d circuits -v ON_ERROR_STOP=1 && sudo docker exec circuits-com-db-1 psql -U circuits -d circuits -tAc 'SELECT count(*) FROM messages;'"
+    green "All services rebuilt, nginx restarted. Database cleared and reseeded; calendar and message inbox restored."
 }
 
 show_status() {

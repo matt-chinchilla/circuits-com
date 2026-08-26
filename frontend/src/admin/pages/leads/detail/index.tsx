@@ -15,6 +15,7 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { useConsolePath } from '@admin/services/consolePath';
 import { Pencil, X } from 'lucide-react';
 
 import Breadcrumbs from '@admin/components/Breadcrumbs';
@@ -99,6 +100,8 @@ function KvRow({ label, children }: RowProps) {
 }
 
 export default function LeadDetailPage() {
+  // Canonical /admin paths, rewritten onto whichever mount is rendering (D16).
+  const consolePath = useConsolePath();
   const { id } = useParams<{ id: string }>();
 
   const [lead, setLead] = useState<AdminLeadDetail | null>(null);
@@ -294,7 +297,7 @@ export default function LeadDetailPage() {
                         <p className={styles.entryMeta}>
                           {c.recorded_by ? (
                             <Link
-                              to={`/admin/leads/reps/${encodeURIComponent(c.recorded_by)}`}
+                              to={consolePath(`/admin/leads/reps/${encodeURIComponent(c.recorded_by)}`)}
                               className={styles.repLink}
                             >
                               {c.recorded_by}
@@ -313,7 +316,10 @@ export default function LeadDetailPage() {
                 })}
               </ol>
       ) : null,
-    [lead?.contacts],
+    // consolePath belongs here even though it is stable per mount: the memo
+    // renders links with it, and a dep list that omits a captured value is
+    // one refactor away from a stale one.
+    [lead?.contacts, consolePath],
   );
 
   return (
@@ -355,7 +361,7 @@ export default function LeadDetailPage() {
           {converted && (
             // Navigation only. An outcome NEVER writes a sponsor row, so the
             // label names the desk that actually does.
-            <Link to="/admin/sponsors" className={styles.quoteBtn}>
+            <Link to={consolePath('/admin/sponsors')} className={styles.quoteBtn}>
               <span className={styles.quoteMain}>Start a quote &rarr;</span>
               <span className={styles.quoteSub}>via the sponsors desk</span>
             </Link>
@@ -571,7 +577,7 @@ export default function LeadDetailPage() {
               <h2 className={styles.panelTitle}>Company</h2>
               {lead.manufacturer_id && (
                 <Link
-                  to={`/admin/manufacturers/${lead.manufacturer_id}`}
+                  to={consolePath(`/admin/manufacturers/${lead.manufacturer_id}`)}
                   className={styles.panelLink}
                 >
                   Open in Manufacturers &rarr;

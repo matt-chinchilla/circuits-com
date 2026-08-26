@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { consoleBase, mountPath } from './AdminLayout';
+import { consoleBase, mountPath } from '@admin/services/consolePath';
 
 /**
  * The console renders from ONE component tree at two mounts (D16). Routes
  * resolve relative to the mount on their own; the chrome does not, because
  * every sidebar link is written in its /admin form. These translate.
+ *
+ * They moved out of this component and into @admin/services/consolePath
+ * (dozens of pages import them); the chrome contract they pin lives here.
  *
  * Without them a customer at /account gets a sidebar of /admin links and
  * every click bounces back to /account via ProtectedRoute — a console that

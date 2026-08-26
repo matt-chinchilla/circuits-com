@@ -26,6 +26,7 @@
 
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useConsolePath } from '@admin/services/consolePath';
 import { classifyLeadsError } from '@admin/pages/leads/loadError';
 import { OUTCOME_META, firstInitial } from '@admin/pages/leads/outcome';
 import { relativeTime } from '@admin/pages/leads/time';
@@ -56,6 +57,8 @@ interface LeadsPanelProps {
 }
 
 export default function LeadsPanel({ demoMode }: LeadsPanelProps) {
+  // Canonical /admin paths, rewritten onto whichever mount is rendering (D16).
+  const consolePath = useConsolePath();
   const [contacts, setContacts] = useState<RecentLeadContact[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(!demoMode);
@@ -136,7 +139,7 @@ export default function LeadsPanel({ demoMode }: LeadsPanelProps) {
       ) : contacts.length === 0 ? (
         <div className={styles.empty}>
           No calls logged yet &mdash; the checklist is waiting.{' '}
-          <Link to="/admin/leads" className={styles.panelLink}>
+          <Link to={consolePath('/admin/leads')} className={styles.panelLink}>
             Open Leads
           </Link>
         </div>
@@ -153,7 +156,7 @@ export default function LeadsPanel({ demoMode }: LeadsPanelProps) {
               return (
                 <Link
                   key={c.id}
-                  to={`/admin/leads/${encodeURIComponent(c.lead_id)}`}
+                  to={consolePath(`/admin/leads/${encodeURIComponent(c.lead_id)}`)}
                   className={styles.leadsRow}
                 >
                   <span

@@ -11,6 +11,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useConsolePath } from '@admin/services/consolePath';
 import type { EChartsType } from 'echarts/core';
 import EChart from '@admin/components/charts/EChart';
 import { buildSalesForce, type SalesForceGroup } from '@admin/components/charts/options';
@@ -68,6 +69,8 @@ function buildGroups(reps: readonly SalesRep[]): BuiltGroup[] {
 }
 
 export default function SalesRepsPanel({ reps, loading }: SalesRepsPanelProps) {
+  // Canonical /admin paths, rewritten onto whichever mount is rendering (D16).
+  const consolePath = useConsolePath();
   const groups = useMemo(() => buildGroups(reps), [reps]);
   // EVERY cluster collapses to a summary sphere on a plain click (bubble or
   // legend row) — `toggled` XORs against the default state, which is
@@ -145,7 +148,7 @@ export default function SalesRepsPanel({ reps, loading }: SalesRepsPanelProps) {
             collapse/expand
           </p>
         </div>
-        <Link to="/admin/sponsors" className={styles.panelLink}>
+        <Link to={consolePath('/admin/sponsors')} className={styles.panelLink}>
           Sponsors &rarr;
         </Link>
       </div>

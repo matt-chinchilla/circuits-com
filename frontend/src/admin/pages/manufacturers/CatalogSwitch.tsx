@@ -10,14 +10,18 @@
 // so offering the tab would only render a wall.
 
 import { NavLink } from 'react-router-dom';
+import { useConsolePath } from '@admin/services/consolePath';
 
 import styles from './CatalogSwitch.module.scss';
 
 export default function CatalogSwitch() {
+  // Canonical /admin paths, rewritten onto whichever mount is rendering (D16).
+  const consolePath = useConsolePath();
+
   return (
     <nav className={styles.switch} role="group" aria-label="Catalog view">
       <NavLink
-        to="/admin/manufacturers"
+        to={consolePath('/admin/manufacturers')}
         end
         className={({ isActive }) =>
           isActive ? `${styles.half} ${styles.halfGreen} ${styles.active}` : styles.half
@@ -26,7 +30,7 @@ export default function CatalogSwitch() {
         Manufacturers
       </NavLink>
       <NavLink
-        to="/admin/leads"
+        to={consolePath('/admin/leads')}
         end
         className={({ isActive }) =>
           isActive ? `${styles.half} ${styles.halfRed} ${styles.active}` : styles.half

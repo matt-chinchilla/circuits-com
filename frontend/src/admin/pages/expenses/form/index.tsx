@@ -11,6 +11,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useConsolePath } from '@admin/services/consolePath';
 import { Check, ChevronLeft, Trash2 } from 'lucide-react';
 import { adminApi } from '@admin/services/adminApi';
 import { apiErrorDetail } from '@admin/services/apiError';
@@ -70,6 +71,8 @@ function emptyForm(): FormState {
 }
 
 export default function ExpenseFormPage() {
+  // Canonical /admin paths, rewritten onto whichever mount is rendering (D16).
+  const consolePath = useConsolePath();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const isEdit = Boolean(id);
@@ -164,7 +167,7 @@ export default function ExpenseFormPage() {
       if (isEdit && id) await adminApi.updateExpense(id, buildBody());
       else await adminApi.createExpense(buildBody());
       setToast(isEdit ? 'Expense updated' : 'Expense created');
-      setTimeout(() => navigate('/admin/expenses'), 600);
+      setTimeout(() => navigate(consolePath('/admin/expenses')), 600);
     } catch (err) {
       console.error('[ExpenseFormPage] save failed', err);
       // Surfaces the router's own message (e.g. the period-order 422) when it
@@ -181,7 +184,7 @@ export default function ExpenseFormPage() {
     try {
       await adminApi.deleteExpense(id);
       setToast('Expense deleted');
-      setTimeout(() => navigate('/admin/expenses'), 500);
+      setTimeout(() => navigate(consolePath('/admin/expenses')), 500);
     } catch (err) {
       console.error('[ExpenseFormPage] delete failed', err);
       // The 409 for machine-synced rows explains itself ("…would be
@@ -203,7 +206,7 @@ export default function ExpenseFormPage() {
       <div className={styles.page}>
         <div className={styles.loading}>
           That expense no longer exists.{' '}
-          <Link to="/admin/expenses" className={styles.backLink}>
+          <Link to={consolePath('/admin/expenses')} className={styles.backLink}>
             Back to Expenses
           </Link>
         </div>
@@ -217,7 +220,7 @@ export default function ExpenseFormPage() {
     <div className={styles.page}>
       <header className={styles.pageHead}>
         <div>
-          <Link to="/admin/expenses" className={styles.backLink}>
+          <Link to={consolePath('/admin/expenses')} className={styles.backLink}>
             <ChevronLeft size={14} strokeWidth={2} />
             Expenses
           </Link>
@@ -366,7 +369,7 @@ export default function ExpenseFormPage() {
             </button>
           )}
           <div className={styles.formActionsSpacer} />
-          <Link to="/admin/expenses" className={`${styles.btn} ${styles.btnGhost}`}>
+          <Link to={consolePath('/admin/expenses')} className={`${styles.btn} ${styles.btnGhost}`}>
             Cancel
           </Link>
           <button type="submit" className={`${styles.btn} ${styles.btnPrimary}`} disabled={saving}>
