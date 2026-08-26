@@ -111,7 +111,87 @@ deploy_frontend() {
     green "Frontend rebuilt, nginx restarted."
 }
 
+# Refuse to destroy a catalog nobody can rebuild without the operator saying so
+# in as many words. This function exists because the hazard below was once
+# documented in a comment ("~171k on prod — think hard before running this
+# there") and nothing enforced it: a single flag, no questions asked, and
+# 198,577 feed-imported parts were gone. A comment the operator reads afterwards
+# is not a guard.
+#
+# The count is measured on the LIVE database, not guessed, and the operator has
+# to type it back. That is deliberate: a y/N prompt is muscle memory, whereas
+# typing the number requires reading the number.
+confirm_reseed() {
+    local live_parts seeded_parts doomed
+    echo ""
+    yellow "──────────────────────────────────────────────────────────────"
+    yellow "  ./deploy.sh --reseed TRUNCATEs the catalog on PRODUCTION."
+    yellow "──────────────────────────────────────────────────────────────"
+    echo "Measuring what this would destroy..."
+
+    live_parts=$(run_remote "sudo docker exec circuits-com-db-1 psql -U circuits -d circuits -tAc 'SELECT count(*) FROM parts;'" 2>/dev/null | tr -d '[:space:]')
+    if ! [[ "$live_parts" =~ ^[0-9]+$ ]]; then
+        red "Could not count parts on prod — refusing to reseed blind."
+        exit 1
+    fi
+    # What the seed can put back: the committed catalog JSON, nothing else.
+    # The catalog files are {subcategory-slug: [part, ...]} — count the leaves,
+    # deduped on sku, because the same chip is listed under several categories
+    # and _seed_real_catalog creates it once (its probe is upper()-keyed).
+    seeded_parts=$(python3 - <<'PYCOUNT'
+import json, pathlib
+skus = set()
+for f in sorted(pathlib.Path("api/app/db/catalog_data").glob("*.json")):
+    try:
+        data = json.loads(f.read_text())
+    except Exception:
+        continue
+    buckets = data.values() if isinstance(data, dict) else [data]
+    for rows in buckets:
+        if not isinstance(rows, list):
+            continue
+        for row in rows:
+            if isinstance(row, dict) and row.get("sku"):
+                skus.add(str(row["sku"]).upper())
+print(len(skus))
+PYCOUNT
+)
+    doomed=$(( live_parts - seeded_parts ))
+    (( doomed < 0 )) && doomed=0
+
+    echo ""
+    echo "  parts on prod now .................. $live_parts"
+    echo "  parts the seed can recreate ........ $seeded_parts  (catalog JSON)"
+    red   "  parts that would be DESTROYED ...... $doomed"
+    echo ""
+    echo "  Also destroyed: activity_events, and any admin-UI row seed.py does"
+    echo "  not create. Carried across by hand: users, calendar, messages,"
+    echo "  BOM shares, feed config. A full -Fc dump is written first as the"
+    echo "  undo, but restoring it is a manual job."
+    echo ""
+
+    if (( doomed == 0 )); then
+        echo "Nothing unrecoverable at risk. Continuing."
+        return 0
+    fi
+
+    yellow "To proceed, type the number of parts you are destroying ($doomed):"
+    printf "> "
+    local typed
+    read -r typed
+    if [[ "$typed" != "$doomed" ]]; then
+        echo ""
+        green "Reseed cancelled. Nothing was touched."
+        exit 0
+    fi
+    echo ""
+    yellow "Proceeding. The undo is /tmp/pre-reseed-safety.dump on the box —"
+    yellow "copy it somewhere off the instance before the next reseed overwrites it."
+    echo ""
+}
+
 deploy_reseed() {
+    confirm_reseed
     echo "Deploying all services + clearing and reseeding database..."
     run_remote "cd $APP_DIR && sudo git pull && DOCKER_BUILDKIT=1 $COMPOSE_CMD build frontend && DOCKER_BUILDKIT=1 $COMPOSE_CMD build api calendar-reminders cost-sync feed-import && $COMPOSE_CMD up -d && $COMPOSE_CMD restart nginx && sudo docker image prune -f"
     # Five things are carried across the TRUNCATE by hand: users, the calendar,

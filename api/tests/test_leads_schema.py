@@ -451,3 +451,64 @@ def test_the_reporting_pull_survives_the_same_foreign_key():
     assert re.search(r"BEGIN;.*COMMIT;", reporting, re.S), (
         "truncate + reload must be one transaction, or a failure leaves the local inbox empty"
     )
+
+
+# ── The destructive-operation gate ──────────────────────────────────────────
+# `--reseed` destroys every feed-imported part: nothing in any seed source can
+# recreate them. That hazard was once recorded ONLY as a comment in deploy.sh
+# ("~171k on prod — think hard before running this there") and nothing enforced
+# it — one flag, no questions, 198,577 parts gone. These pin the gate that
+# replaced the comment.
+
+
+def test_reseed_asks_before_it_destroys():
+    """deploy_reseed must call the confirmation gate BEFORE the TRUNCATE.
+
+    Ordering IS the assertion: a confirmation that runs after the truncate is
+    not a confirmation, it is an apology.
+    """
+    body = _deploy_reseed_body()
+    assert "confirm_reseed" in body, (
+        "deploy_reseed no longer calls confirm_reseed — --reseed would destroy "
+        "the feed-imported catalog with no prompt, which is how 198,577 parts "
+        "were lost once already."
+    )
+    # Anchor on the STATEMENT, not the word: deploy_reseed's own comment
+    # explains TRUNCATE semantics dozens of lines before it runs one.
+    assert body.index("confirm_reseed") < body.index("TRUNCATE sponsors"), (
+        "confirm_reseed must run BEFORE the TRUNCATE, not after it."
+    )
+
+
+def test_the_gate_requires_typing_the_measured_count():
+    """A y/N prompt is muscle memory; typing the number requires reading it.
+
+    The number must be MEASURED against the live database and against what the
+    seed can actually put back — a literal baked into the script would go stale
+    and understate the loss.
+    """
+    deploy = REPO_ROOT / "deploy.sh"
+    if not deploy.exists():
+        pytest.skip("deploy.sh not present (running outside a repo checkout)")
+    body = deploy.read_text()
+    start = body.index("confirm_reseed()")
+    gate = body[start : body.index("\ndeploy_reseed()", start)]
+
+    assert "SELECT count(*) FROM parts" in gate, (
+        "the gate must COUNT the live catalog, not print a hardcoded figure"
+    )
+    assert "catalog_data" in gate, (
+        "the gate must count what the seed can put back, or the number it "
+        "quotes is the wrong number"
+    )
+    assert "read -r" in gate, "the gate must actually wait for input"
+    assert "exit 0" in gate, "a mismatched answer must cancel, not continue"
+
+
+def test_the_gate_writes_the_undo_before_destroying_anything():
+    body = _deploy_reseed_body()
+    assert "pre-reseed-safety.dump" in body
+    assert body.index("pre-reseed-safety.dump") < body.index("TRUNCATE sponsors"), (
+        "the safety dump must be written BEFORE the TRUNCATE — it is the only "
+        "route back for the parts that nothing else carries"
+    )
