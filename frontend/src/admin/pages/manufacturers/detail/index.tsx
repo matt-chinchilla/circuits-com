@@ -203,8 +203,8 @@ export default function ManufacturerDetailPage() {
       <div className={styles.page}>
         <Breadcrumbs
           items={[
-            { label: 'Dashboard', href: '/admin' },
-            { label: 'Manufacturers', href: '/admin/manufacturers' },
+            { label: 'Dashboard', href: consolePath('/admin') },
+            { label: 'Manufacturers', href: consolePath('/admin/manufacturers') },
             { label: 'Error' },
           ]}
         />
@@ -221,8 +221,8 @@ export default function ManufacturerDetailPage() {
     <div className={styles.page}>
       <Breadcrumbs
         items={[
-          { label: 'Dashboard', href: '/admin' },
-          { label: 'Manufacturers', href: '/admin/manufacturers' },
+          { label: 'Dashboard', href: consolePath('/admin') },
+          { label: 'Manufacturers', href: consolePath('/admin/manufacturers') },
           { label: detail.name },
         ]}
       />

@@ -167,14 +167,14 @@ export default function ManufacturerFormPage() {
 
   const breadcrumbs = isEdit
     ? [
-        { label: 'Dashboard', href: '/admin' },
-        { label: 'Manufacturers', href: '/admin/manufacturers' },
-        { label: existingName || 'Manufacturer', href: `/admin/manufacturers/${id}` },
+        { label: 'Dashboard', href: consolePath('/admin') },
+        { label: 'Manufacturers', href: consolePath('/admin/manufacturers') },
+        { label: existingName || 'Manufacturer', href: consolePath(`/admin/manufacturers/${id}`) },
         { label: 'Edit' },
       ]
     : [
-        { label: 'Dashboard', href: '/admin' },
-        { label: 'Manufacturers', href: '/admin/manufacturers' },
+        { label: 'Dashboard', href: consolePath('/admin') },
+        { label: 'Manufacturers', href: consolePath('/admin/manufacturers') },
         { label: 'New Manufacturer' },
       ];
 

@@ -271,7 +271,7 @@ export default function AttachListingPage() {
     );
   }
 
-  const backHref = `/admin/parts/${id}`;
+  const backHref = consolePath(`/admin/parts/${id}`);
 
   return (
     <div className={styles.page}>

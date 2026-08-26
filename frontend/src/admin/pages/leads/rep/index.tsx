@@ -81,7 +81,7 @@ export default function RepPage() {
 
   const crumbs = (
     <Breadcrumbs
-      items={[{ label: 'Leads', href: '/admin/leads' }, { label: username ?? 'Sales rep' }]}
+      items={[{ label: 'Leads', href: consolePath('/admin/leads') }, { label: username ?? 'Sales rep' }]}
     />
   );
 

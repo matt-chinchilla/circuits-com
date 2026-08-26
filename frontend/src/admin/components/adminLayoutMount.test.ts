@@ -1,5 +1,7 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { consoleBase, mountPath } from '@admin/services/consolePath';
+import { canonicalPath, consoleBase, mountPath } from '@admin/services/consolePath';
 
 /**
  * The console renders from ONE component tree at two mounts (D16). Routes
@@ -55,5 +57,34 @@ describe('mountPath', () => {
                      '/admin/reports', '/admin/settings']) {
       expect(mountPath(mountPath(p, '/account').replace('/account', '/admin'), '/admin')).toBe(p);
     }
+  });
+});
+
+describe('the dashboard theme key follows the mount', () => {
+  // The chrome remounts the dashboard's content when the theme flips so the
+  // ECharts panels re-init. That key derivation compared RAW location.pathname
+  // to '/admin' — false for a customer at /account, whose landing page IS the
+  // dashboard, so their charts kept the old theme until a hard nav. Same
+  // mistake shape as a hardcoded link, in comparison form: the sweep guard
+  // cannot see comparisons, so this pin is separate. No renderer in this
+  // harness — the contract is pinned half on the source, half on the function.
+  const layoutSrc = readFileSync(
+    fileURLToPath(new URL('./AdminLayout.tsx', import.meta.url)),
+    'utf8',
+  );
+
+  it('derives the key from the canonical path, not the raw pathname', () => {
+    expect(layoutSrc).toContain("canonicalPath(location.pathname) === '/admin'");
+    // The raw comparisons the fix replaced must not come back.
+    expect(layoutSrc).not.toContain("location.pathname === '/admin'");
+    expect(layoutSrc).not.toContain("location.pathname.startsWith('/admin");
+  });
+
+  it('canonicalPath makes that comparison true on the customer dashboard', () => {
+    // The half the source pin cannot carry: /account really does fold to the
+    // path the key compares against.
+    expect(canonicalPath('/account') === '/admin').toBe(true);
+    expect(canonicalPath('/admin') === '/admin').toBe(true);
+    expect(canonicalPath('/account/parts') === '/admin').toBe(false);
   });
 });

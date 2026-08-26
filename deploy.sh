@@ -114,59 +114,98 @@ deploy_frontend() {
 deploy_reseed() {
     echo "Deploying all services + clearing and reseeding database..."
     run_remote "cd $APP_DIR && sudo git pull && DOCKER_BUILDKIT=1 $COMPOSE_CMD build frontend && DOCKER_BUILDKIT=1 $COMPOSE_CMD build api calendar-reminders cost-sync feed-import && $COMPOSE_CMD up -d && $COMPOSE_CMD restart nginx && sudo docker image prune -f"
-    # The calendar AND the message inbox have to be carried across the TRUNCATE
-    # by hand.
+    # Five things are carried across the TRUNCATE by hand: users, the calendar,
+    # the message inbox, shared BOM links, and the per-supplier feed config.
     #
     # TRUNCATE ... CASCADE is TABLE-level and TRANSITIVE — it follows every
-    # REFERENCING foreign key and ignores ON DELETE semantics entirely — and
-    # the chain reaches further than it used to:
+    # REFERENCING foreign key and ignores ON DELETE semantics entirely. (ON
+    # DELETE governs what happens when the referenced ROW is later deleted; it
+    # neither exempts a table from TRUNCATE nor rescues an INSERT that names a
+    # row which no longer exists. A comment here once claimed created_by_id's
+    # ON DELETE SET NULL made the calendar restore "a straight load" — measured
+    # on the real schema, that load died on calendar_events_created_by_id_fkey
+    # with psql exit 3 and restored ZERO events, because the seed re-mints
+    # every user uuid.) The chain:
     #   suppliers -> users (users.supplier_id)
     #             -> calendar_events (created_by_id) -> calendar_reminder_sends
-    #             -> messages        (messages.user_id, migration 043)
-    # So a routine catalog reseed would silently delete every company meeting
-    # AND every contact, join and keyword-request the public has ever sent,
-    # plus every signup/welcome row. `messages` used to survive because nothing
-    # linked it into that graph; migration 043 ended that, and the comment that
-    # used to sit here saying otherwise was how it nearly went unnoticed.
-    # (Verified on a live DB inside BEGIN/ROLLBACK: the TRUNCATE prints
-    # "NOTICE: truncate cascades to table messages" and messages goes 7 -> 0.)
+    #             -> messages   (messages.user_id, migration 043)
+    #             -> bom_shares (bom_shares.user_id)
+    #   suppliers -> supplier_feeds (supplier_id IS its primary key)
     #
-    # Same shape for both: dump to a file on the box before, restore AFTER the
-    # seed, so the users rows the FKs point at exist again.
-    #   - calendar_events.created_by_id is ON DELETE SET NULL, so a creator who
-    #     is no longer seeded simply loses attribution and the restore is a
-    #     straight psql load.
-    #   - messages.user_id is not that forgiving. The seed mints brand-new user
-    #     uuids, and CUSTOMER accounts are not seeded at all, so essentially no
-    #     restored user_id still resolves — a straight load dies on the FK at
-    #     the first such row and puts back NOTHING. The load therefore runs
-    #     with the constraint dropped, NULLs the ids that no longer resolve
-    #     (a NULL user_id means "the shared staff inbox", the honest fallback
-    #     for a submission whose account is gone — dropping the row would not
-    #     be), then re-adds the constraint, which re-validates every restored
-    #     row. All one transaction under ON_ERROR_STOP, so a failure leaves the
-    #     DB as it was instead of half-restored.
+    # ORDER is the design, and users is the keystone:
+    #   1. dump everything BEFORE the TRUNCATE — plus one full -Fc dump of the
+    #      whole DB, the one-deploy-cycle undo for everything else;
+    #   2. restore users BETWEEN the TRUNCATE and the seed. seed.py's
+    #      _seed_admin_user keys on username, so it ADOPTS the restored staff
+    #      rows (uuids, bcrypt hashes, roles intact) instead of colliding with
+    #      them — and CUSTOMER accounts, which the seed NEVER recreates, come
+    #      back whole. users.supplier_id is NULLed under the dropped FK
+    #      (suppliers is empty at that instant) and relinked BY NAME after the
+    #      seed; users.manufacturer_id needs nothing (manufacturers is outside
+    #      the truncate graph).
+    #   3. seed;
+    #   4. the rest AFTER the seed. Users kept their uuids, so calendar
+    #      attribution and message/BOM ownership genuinely survive; the
+    #      NULL-where-unresolvable guards below are a safety net for rows
+    #      minted in the seconds between the dumps, not the mechanism.
+    #   5. supplier_feeds cannot ride pg_dump at all (its PK is the supplier
+    #      uuid, and every supplier uuid changes), so it travels as a
+    #      (supplier NAME, config) TSV re-keyed onto the reseeded suppliers.
+    #      Without this every "Nightly auto-import" toggle silently turned OFF
+    #      and every import cursor died on a reseed. Rows whose supplier the
+    #      seed no longer creates are dropped — the supplier itself is gone.
+    #
+    # STILL DESTROYED, deliberately (test_leads_schema.py's census is the
+    # ledger): activity_events (operational history whose supplier subjects are
+    # re-minted anyway), every feed-imported part the catalog JSON never
+    # carried (~171k on prod — think hard before running this there), and
+    # admin-UI rows outside seed.py. All of it recoverable from the -Fc dump
+    # until the next reseed overwrites it.
     #
     # Adding a table that FKs into suppliers/users/categories joins it to this
-    # cascade. api/tests/test_leads_schema.py fails until it is either reseeded
-    # from source or backed up here. (Known and NOT backed up: bom_shares,
-    # in the cascade since migration 038 — shared BOM links die on a reseed.)
-    local msg_pre msg_post
+    # cascade. api/tests/test_leads_schema.py fails until it is declared:
+    # reseeded from source, carried here, or a named accepted loss.
+    local usr_pre usr_post lnk_pre lnk_post cal_pre cal_post msg_pre msg_post bom_pre bom_post feeds_pre feeds_post
+    usr_pre="BEGIN; ALTER TABLE public.users DROP CONSTRAINT IF EXISTS users_supplier_id_fkey;"
+    usr_post="SET search_path = public; UPDATE public.users u SET supplier_id = NULL WHERE u.supplier_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM public.suppliers s WHERE s.id = u.supplier_id); ALTER TABLE public.users ADD CONSTRAINT users_supplier_id_fkey FOREIGN KEY (supplier_id) REFERENCES public.suppliers(id); COMMIT;"
+    lnk_pre="BEGIN; CREATE TEMP TABLE user_supplier_links (user_id uuid, supplier_name text); COPY user_supplier_links (user_id, supplier_name) FROM STDIN;"
+    lnk_post="UPDATE public.users u SET supplier_id = s.id FROM user_supplier_links l JOIN public.suppliers s ON s.name = l.supplier_name WHERE u.id = l.user_id; COMMIT;"
+    cal_pre="BEGIN; ALTER TABLE public.calendar_events DROP CONSTRAINT IF EXISTS calendar_events_created_by_id_fkey;"
+    cal_post="SET search_path = public; UPDATE public.calendar_events e SET created_by_id = NULL WHERE e.created_by_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM public.users u WHERE u.id = e.created_by_id); ALTER TABLE public.calendar_events ADD CONSTRAINT calendar_events_created_by_id_fkey FOREIGN KEY (created_by_id) REFERENCES public.users(id) ON DELETE SET NULL; COMMIT;"
     msg_pre="BEGIN; ALTER TABLE public.messages DROP CONSTRAINT IF EXISTS fk_messages_user_id;"
     msg_post="SET search_path = public; UPDATE public.messages m SET user_id = NULL WHERE m.user_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM public.users u WHERE u.id = m.user_id); ALTER TABLE public.messages ADD CONSTRAINT fk_messages_user_id FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE; COMMIT;"
-    echo "Backing up the calendar and the message inbox (TRUNCATE CASCADE reaches both via users)..."
+    bom_pre="BEGIN; ALTER TABLE public.bom_shares DROP CONSTRAINT IF EXISTS bom_shares_user_id_fkey;"
+    bom_post="SET search_path = public; UPDATE public.bom_shares b SET user_id = NULL WHERE b.user_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM public.users u WHERE u.id = b.user_id); ALTER TABLE public.bom_shares ADD CONSTRAINT bom_shares_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE SET NULL; COMMIT;"
+    feeds_pre="BEGIN; CREATE TEMP TABLE feeds_restore (supplier_name text, feed_url text, api_key text, auto_import_enabled boolean, last_synced_at timestamptz, import_cursor text); COPY feeds_restore (supplier_name, feed_url, api_key, auto_import_enabled, last_synced_at, import_cursor) FROM STDIN;"
+    feeds_post="INSERT INTO public.supplier_feeds (supplier_id, feed_url, api_key, auto_import_enabled, last_synced_at, import_cursor) SELECT s.id, r.feed_url, r.api_key, r.auto_import_enabled, r.last_synced_at, r.import_cursor::json FROM feeds_restore r JOIN public.suppliers s ON s.name = r.supplier_name ON CONFLICT (supplier_id) DO NOTHING; COMMIT;"
+    echo "Safety dump of the whole database (undo for everything, until the next reseed overwrites it)..."
+    run_remote "sudo docker exec circuits-com-db-1 pg_dump -U circuits -d circuits -Fc > /tmp/pre-reseed-safety.dump && ls -la /tmp/pre-reseed-safety.dump"
+    echo "Backing up what the TRUNCATE reaches (users, calendar, messages, BOM shares, feed config)..."
+    run_remote "sudo docker exec circuits-com-db-1 pg_dump -U circuits -d circuits --data-only --table=users > /tmp/users-backup.sql && wc -l < /tmp/users-backup.sql"
+    run_remote "sudo docker exec circuits-com-db-1 psql -U circuits -d circuits -c \"COPY (SELECT u.id, s.name FROM users u JOIN suppliers s ON s.id = u.supplier_id) TO STDOUT\" > /tmp/user-supplier-links.tsv && wc -l < /tmp/user-supplier-links.tsv"
     run_remote "sudo docker exec circuits-com-db-1 pg_dump -U circuits -d circuits --data-only --table=calendar_events --table=calendar_reminder_sends > /tmp/calendar-backup.sql && wc -l < /tmp/calendar-backup.sql"
     run_remote "sudo docker exec circuits-com-db-1 pg_dump -U circuits -d circuits --data-only --table=messages > /tmp/messages-backup.sql && wc -l < /tmp/messages-backup.sql"
+    run_remote "sudo docker exec circuits-com-db-1 pg_dump -U circuits -d circuits --data-only --table=bom_shares > /tmp/bom-shares-backup.sql && wc -l < /tmp/bom-shares-backup.sql"
+    run_remote "sudo docker exec circuits-com-db-1 psql -U circuits -d circuits -c \"COPY (SELECT s.name, f.feed_url, f.api_key, f.auto_import_enabled, f.last_synced_at, f.import_cursor FROM supplier_feeds f JOIN suppliers s ON s.id = f.supplier_id) TO STDOUT\" > /tmp/feeds-backup.tsv && wc -l < /tmp/feeds-backup.tsv"
     echo "Clearing database..."
     run_remote "sudo docker exec circuits-com-db-1 psql -U circuits -d circuits -c 'TRUNCATE sponsors, category_suppliers, categories, suppliers CASCADE;'"
+    echo "Restoring users BEFORE the seed (the seed adopts them; every later restore's ids then resolve)..."
+    run_remote "{ echo \"$usr_pre\"; cat /tmp/users-backup.sql; echo \"$usr_post\"; } | sudo docker exec -i circuits-com-db-1 psql -U circuits -d circuits -v ON_ERROR_STOP=1 && sudo docker exec circuits-com-db-1 psql -U circuits -d circuits -tAc 'SELECT count(*) FROM users;'"
     echo "Reseeding..."
     run_remote "sudo docker exec circuits-com-api-1 python -m app.db.seed"
+    echo "Relinking users to their reseeded suppliers by name..."
+    run_remote "{ echo \"$lnk_pre\"; cat /tmp/user-supplier-links.tsv; printf '%s\n' '\\.'; echo \"$lnk_post\"; } | sudo docker exec -i circuits-com-db-1 psql -U circuits -d circuits -v ON_ERROR_STOP=1"
     echo "Restoring the calendar..."
-    run_remote "sudo docker exec -i circuits-com-db-1 psql -U circuits -d circuits -v ON_ERROR_STOP=1 < /tmp/calendar-backup.sql && sudo docker exec circuits-com-db-1 psql -U circuits -d circuits -tAc 'SELECT count(*) FROM calendar_events;'"
+    run_remote "{ echo \"$cal_pre\"; cat /tmp/calendar-backup.sql; echo \"$cal_post\"; } | sudo docker exec -i circuits-com-db-1 psql -U circuits -d circuits -v ON_ERROR_STOP=1 && sudo docker exec circuits-com-db-1 psql -U circuits -d circuits -tAc 'SELECT count(*) FROM calendar_events;'"
     echo "Restoring the message inbox..."
     run_remote "{ echo \"$msg_pre\"; cat /tmp/messages-backup.sql; echo \"$msg_post\"; } | sudo docker exec -i circuits-com-db-1 psql -U circuits -d circuits -v ON_ERROR_STOP=1 && sudo docker exec circuits-com-db-1 psql -U circuits -d circuits -tAc 'SELECT count(*) FROM messages;'"
-    green "All services rebuilt, nginx restarted. Database cleared and reseeded; calendar and message inbox restored."
+    echo "Restoring shared BOM links..."
+    run_remote "{ echo \"$bom_pre\"; cat /tmp/bom-shares-backup.sql; echo \"$bom_post\"; } | sudo docker exec -i circuits-com-db-1 psql -U circuits -d circuits -v ON_ERROR_STOP=1 && sudo docker exec circuits-com-db-1 psql -U circuits -d circuits -tAc 'SELECT count(*) FROM bom_shares;'"
+    echo "Restoring per-supplier feed config (re-keyed by supplier name)..."
+    run_remote "{ echo \"$feeds_pre\"; cat /tmp/feeds-backup.tsv; printf '%s\n' '\\.'; echo \"$feeds_post\"; } | sudo docker exec -i circuits-com-db-1 psql -U circuits -d circuits -v ON_ERROR_STOP=1 && sudo docker exec circuits-com-db-1 psql -U circuits -d circuits -tAc 'SELECT count(*) FROM supplier_feeds;'"
+    green "All services rebuilt, nginx restarted. Database cleared and reseeded; users, calendar, messages, BOM shares and feed config carried across."
 }
+
 
 show_status() {
     echo "Container status:"

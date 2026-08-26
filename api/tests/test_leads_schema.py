@@ -15,9 +15,20 @@ census below walks the cascade over the ENTIRE metadata and demands that every
 member be DECLARED — reseeded from source, carried across by hand in
 deploy.sh, or a named accepted loss. A new foreign key that drags a table in
 now fails here until somebody decides which of the three it is.
+
+2026-08-25: the census itself was caught certifying two lies. `users` was
+declared reseeded-from-source — but seed.py rebuilds exactly four STAFF rows
+and has never created a customer, so a reseed destroyed every registered
+account. And the calendar restore's safety was argued from `created_by_id`
+being ON DELETE SET NULL — which governs a later delete of the referenced row
+and does nothing for an INSERT naming a row that no longer exists (measured:
+the straight load died on the FK with psql exit 3 and restored ZERO events).
+So declarations below are no longer just listed: they are checked against what
+deploy.sh and seed.py actually do.
 """
 
 import re
+import uuid
 from collections import defaultdict
 from pathlib import Path
 
@@ -41,7 +52,13 @@ NEW_TABLES = [
 TRUNCATE_ROOTS = {"sponsors", "category_suppliers", "categories", "suppliers"}
 
 # Wiped by the TRUNCATE and rebuilt by `python -m app.db.seed`. Losing these is
-# the POINT of a reseed.
+# the POINT of a reseed. (Honesty notes: `parts`/`part_listings`/`price_breaks`
+# come back only as far as the catalog JSON goes — every feed-imported part
+# beyond it (~171k on prod) is destroyed, recoverable only from the full -Fc
+# safety dump deploy_reseed now takes first. `users` and `supplier_feeds` were
+# both listed here until 2026-08-25; both declarations were FALSE — the seed
+# rebuilds exactly four staff accounts and has never written a supplier_feeds
+# row.)
 RESEEDED_FROM_SOURCE = {
     "categories",
     "category_suppliers",
@@ -51,23 +68,56 @@ RESEEDED_FROM_SOURCE = {
     "revenue",
     "sponsors",
     "suppliers",
-    "supplier_feeds",
-    "users",
 }
 
-# Wiped by the TRUNCATE and NOT rebuilt — so deploy_reseed pg_dumps them before
-# and restores them after the seed. Value = the file it stages them in.
+# Wiped by the TRUNCATE and NOT rebuilt — deploy_reseed dumps each one before
+# the TRUNCATE (`dump_marker` is how it is dumped) and restores it from `file`
+# in the `restored` phase. `users` is the keystone and MUST come back
+# before_seed: seed.py's _seed_admin_user keys on username, so the seed ADOPTS
+# the restored staff rows (uuids, bcrypt hashes intact) instead of colliding
+# with them, customers come back whole, and every after_seed restore's user
+# ids then resolve.
 CARRIED_BY_HAND = {
-    "calendar_events": "/tmp/calendar-backup.sql",
-    "calendar_reminder_sends": "/tmp/calendar-backup.sql",
-    "messages": "/tmp/messages-backup.sql",
+    "users": {
+        "file": "/tmp/users-backup.sql",
+        "restored": "before_seed",
+        "dump_marker": "--table=users",
+    },
+    "calendar_events": {
+        "file": "/tmp/calendar-backup.sql",
+        "restored": "after_seed",
+        "dump_marker": "--table=calendar_events",
+    },
+    "calendar_reminder_sends": {
+        "file": "/tmp/calendar-backup.sql",
+        "restored": "after_seed",
+        "dump_marker": "--table=calendar_reminder_sends",
+    },
+    "messages": {
+        "file": "/tmp/messages-backup.sql",
+        "restored": "after_seed",
+        "dump_marker": "--table=messages",
+    },
+    "bom_shares": {
+        "file": "/tmp/bom-shares-backup.sql",
+        "restored": "after_seed",
+        "dump_marker": "--table=bom_shares",
+    },
+    "supplier_feeds": {
+        "file": "/tmp/feeds-backup.tsv",
+        "restored": "after_seed",
+        "dump_marker": "FROM supplier_feeds f",
+    },
 }
 
-# Wiped, not rebuilt, not backed up — known, pre-existing, and deliberately not
-# adjudicated here. `activity_events` is admin feed history; `bom_shares` has
-# been in the cascade since migration 038 and shared BOM links die on a reseed.
-# Listed so they cannot be confused with a NEW entrant.
-ACCEPTED_LOSSES = {"activity_events", "bom_shares"}
+# Wiped, not rebuilt, not backed up individually — deliberate. activity_events
+# is operational history (feed-run lines, admin actions) keyed to supplier
+# uuids the seed re-mints; carrying it would leave rows saying "something
+# happened to a supplier that no longer exists". It IS inside the full -Fc
+# safety dump. bom_shares moved OUT of here 2026-08-25: with users carried, a
+# customer's saved BOM links restore cleanly, and "accepted loss" only ever
+# made sense while their account died anyway.
+ACCEPTED_LOSSES = {"activity_events"}
 
 
 def _truncate_cascade_closure(metadata=None) -> set[str]:
@@ -223,37 +273,167 @@ def test_the_cascade_walk_actually_finds_a_new_dependant():
     assert "unrelated" not in reached
 
 
-def test_carried_tables_are_dumped_before_the_truncate_and_restored_after_the_seed():
-    """Order is the whole trick: restoring before the seed fails the FKs the
-    restored rows point at, and dumping after the TRUNCATE dumps nothing."""
+def test_carried_tables_are_dumped_before_the_truncate_and_restored_in_their_phase():
+    """Order is the whole trick — and `users` is the special case that makes
+    the rest work. Dumping after the TRUNCATE dumps nothing. Restoring users
+    AFTER the seed collides with the freshly minted staff rows on username and
+    lower(email); restoring them BETWEEN the TRUNCATE and the seed lets
+    _seed_admin_user ADOPT them, so every after_seed restore's user ids
+    resolve. Everything else points at users (or, for supplier_feeds, at the
+    reseeded suppliers) and must come back after the seed."""
     reseed = _deploy_reseed_body()
     truncate_at = reseed.index("TRUNCATE sponsors")
     seed_at = reseed.index("app.db.seed")
-    for table, backup_file in sorted(CARRIED_BY_HAND.items()):
-        assert f"--table={table}" in reseed, (
+    assert reseed.index("pre-reseed-safety.dump") < truncate_at, (
+        "the full -Fc safety dump must run while there is still data to dump"
+    )
+    for table, spec in sorted(CARRIED_BY_HAND.items()):
+        assert spec["dump_marker"] in reseed, (
             f"{table} is in the reseed cascade and is not rebuilt by the seed, "
-            f"but deploy_reseed never pg_dumps it — a --reseed drops every row"
+            f"but deploy_reseed never dumps it — a --reseed drops every row"
         )
-        assert reseed.index(backup_file) < truncate_at, (
+        assert reseed.count(spec["file"]) >= 2, (
+            f"{table}'s staging file must appear at least twice: dumped into, restored from"
+        )
+        assert reseed.index(spec["file"]) < truncate_at, (
             f"{table} is backed up after the TRUNCATE has already emptied it"
         )
-        assert reseed.rindex(backup_file) > seed_at, (
-            f"{table} is restored before the seed recreates the rows its FKs point at"
-        )
+        restore_at = reseed.rindex(spec["file"])
+        if spec["restored"] == "before_seed":
+            assert truncate_at < restore_at < seed_at, (
+                f"{table} must be restored BETWEEN the TRUNCATE and the seed — "
+                "restored after it, its unique keys collide with the seed's fresh rows"
+            )
+        else:
+            assert restore_at > seed_at, (
+                f"{table} is restored before the seed recreates the rows its FKs point at"
+            )
 
 
-def test_the_messages_restore_nulls_user_ids_that_no_longer_resolve():
-    """The seed mints new user uuids and never recreates CUSTOMER accounts, so
-    a straight restore dies on messages.user_id and puts back NOTHING. NULL
-    means the shared staff inbox — the honest fallback. Dropping the row is
-    not."""
+def test_the_messages_restore_keeps_user_ids_that_resolve_and_nulls_the_rest():
+    """Users come back with their uuids intact BEFORE messages, so message
+    ownership now genuinely survives a reseed. The NULL-where-unresolvable
+    guard stays as the safety net for a row minted in the seconds between the
+    dumps: NULL means the shared staff inbox, which beats dropping the row or
+    aborting half-restored."""
     reseed = _deploy_reseed_body()
-    assert "SET user_id = NULL" in reseed
+    assert reseed.rindex("/tmp/users-backup.sql") < reseed.rindex("/tmp/messages-backup.sql"), (
+        "messages must be restored after users, or every restored user_id NULLs out"
+    )
+    assert "UPDATE public.messages m SET user_id = NULL" in reseed
     assert "DROP CONSTRAINT IF EXISTS fk_messages_user_id" in reseed
     assert "ADD CONSTRAINT fk_messages_user_id" in reseed, (
         "the constraint must go back on — re-adding it re-validates every restored row"
     )
     assert reseed.count("ON_ERROR_STOP") >= 2, "a half-restored inbox must fail loudly"
+
+
+def test_the_calendar_restore_does_not_trust_on_delete_set_null():
+    """A comment once asserted that created_by_id being ON DELETE SET NULL made
+    the calendar restore a straight psql load. ON DELETE governs a later
+    delete of the referenced ROW; it does nothing for an INSERT naming a row
+    that no longer exists. Measured on the real schema: the straight load died
+    on calendar_events_created_by_id_fkey (psql exit 3) and restored ZERO
+    events, because the seed re-mints every user uuid. Two defenses now,
+    either one sufficient: users are restored before the calendar with their
+    uuids intact, and the load carries the same NULL-where-unresolvable guard
+    the messages restore uses — which IS the column's declared semantics."""
+    reseed = _deploy_reseed_body()
+    assert reseed.rindex("/tmp/users-backup.sql") < reseed.rindex("/tmp/calendar-backup.sql"), (
+        "the calendar must be restored after users, or attribution dies on the FK"
+    )
+    assert "DROP CONSTRAINT IF EXISTS calendar_events_created_by_id_fkey" in reseed
+    assert "UPDATE public.calendar_events e SET created_by_id = NULL" in reseed
+    assert "ADD CONSTRAINT calendar_events_created_by_id_fkey" in reseed
+    assert "ON DELETE SET NULL" in reseed, (
+        "the re-added constraint must keep the column's declared delete semantics"
+    )
+
+
+def test_the_users_restore_carries_customers_and_relinks_suppliers_by_name():
+    """seed.py rebuilds exactly the four staff rows and creates NO customer
+    accounts, so declaring `users` reseeded-from-source certified the loss of
+    every registered customer — login, password hash, and everything keyed to
+    their uuid. The restore must (a) load under the dropped supplier FK, since
+    suppliers is EMPTY at that instant and any kept supplier_id aborts the
+    COPY, (b) NULL those links, (c) re-add the constraint so it re-validates,
+    and (d) relink BY SUPPLIER NAME after the seed — the uuid links are
+    unrecoverable because the seed mints new supplier uuids."""
+    assert "users" not in RESEEDED_FROM_SOURCE
+    assert CARRIED_BY_HAND["users"]["restored"] == "before_seed"
+    reseed = _deploy_reseed_body()
+    assert "DROP CONSTRAINT IF EXISTS users_supplier_id_fkey" in reseed
+    assert "UPDATE public.users u SET supplier_id = NULL" in reseed
+    assert "ADD CONSTRAINT users_supplier_id_fkey" in reseed
+    assert "s.name = l.supplier_name" in reseed, "the relink must key on supplier NAME"
+    assert reseed.rindex("user-supplier-links.tsv") > reseed.index("app.db.seed"), (
+        "the relink needs the seeded suppliers to exist"
+    )
+
+
+def test_the_feed_config_is_rekeyed_by_supplier_name():
+    """supplier_feeds' PRIMARY KEY is the supplier uuid and every supplier uuid
+    changes on a reseed, so a uuid-keyed pg_dump carry can never restore it —
+    and the census used to declare it reseeded-from-source, which seed.py has
+    never done. Losing it meant every "Nightly auto-import" toggle silently
+    turned OFF and every import cursor died. It travels as (supplier NAME,
+    config) and is re-keyed onto the reseeded suppliers; rows whose supplier
+    the seed no longer creates are dropped with the supplier itself."""
+    seed_src = (REPO_ROOT / "api" / "app" / "db" / "seed.py").read_text()
+    assert "supplier_feed" not in seed_src.lower(), (
+        "seed.py now writes supplier_feeds — move it to RESEEDED_FROM_SOURCE "
+        "and retire the name-keyed carry"
+    )
+    reseed = _deploy_reseed_body()
+    assert "--table=supplier_feeds" not in reseed, (
+        "a uuid-keyed pg_dump of supplier_feeds cannot restore onto re-minted suppliers"
+    )
+    assert "FROM supplier_feeds f" in reseed  # the name-keyed COPY dump
+    assert "JOIN public.suppliers s ON s.name = r.supplier_name" in reseed
+    assert "auto_import_enabled" in reseed
+    assert "import_cursor" in reseed
+    assert reseed.rindex("feeds-backup.tsv") > reseed.index("app.db.seed")
+
+
+def test_the_seed_adopts_restored_users_instead_of_recreating_them(db):
+    """The users carry works ONLY because _seed_admin_user keys on username:
+    a restored staff row is adopted (uuid and bcrypt hash kept, the declared
+    role re-asserted) and customer rows are left alone. If the seed ever
+    switches to delete-and-recreate, the carry silently reverts to destroying
+    every uuid the later restores point at — this goes red first."""
+    from app.db.seed import _seed_admin_user
+    from app.models import User
+
+    staff_id = uuid.uuid4()
+    customer_id = uuid.uuid4()
+    db.add(
+        User(
+            id=staff_id,
+            username="matthew",
+            email="matthew@circuitcenter.ai",
+            password_hash="$2b$12$prod-hash-carried-across",
+            role="admin",
+        )
+    )
+    db.add(
+        User(
+            id=customer_id,
+            username="customer@example.com",
+            email="customer@example.com",
+            password_hash="$2b$12$x",
+            role="user",
+        )
+    )
+    db.flush()
+
+    _seed_admin_user(db)
+
+    matthew = db.query(User).filter(User.username == "matthew").one()
+    assert matthew.id == staff_id, "the seed re-minted matthew instead of adopting the restored row"
+    assert matthew.password_hash == "$2b$12$prod-hash-carried-across"
+    assert matthew.role == "owner", "the seed-declared role invariant must still self-heal"
+    assert db.query(User).filter(User.id == customer_id).count() == 1
+    assert db.query(User).count() == 5  # four staff + the customer, no duplicates
 
 
 def test_the_reporting_pull_survives_the_same_foreign_key():

@@ -743,7 +743,7 @@ export default function SponsorFormPage() {
       <header className={styles.pageHead}>
         <div>
           <Link
-            to={prefill && !isEdit ? `/admin/suppliers/${prefill.supplier_id}` : '/admin/sponsors'}
+            to={consolePath(prefill && !isEdit ? `/admin/suppliers/${prefill.supplier_id}` : '/admin/sponsors')}
             className={styles.backLink}
           >
             <ChevronLeft size={14} strokeWidth={2} />

@@ -320,14 +320,14 @@ export default function SupplierFormPage() {
 
   const breadcrumbs = isEdit
     ? [
-        { label: 'Dashboard', href: '/admin' },
-        { label: 'Suppliers', href: '/admin/suppliers' },
-        { label: existingName || 'Edit', href: `/admin/suppliers/${id}` },
+        { label: 'Dashboard', href: consolePath('/admin') },
+        { label: 'Suppliers', href: consolePath('/admin/suppliers') },
+        { label: existingName || 'Edit', href: consolePath(`/admin/suppliers/${id}`) },
         { label: 'Edit' },
       ]
     : [
-        { label: 'Dashboard', href: '/admin' },
-        { label: 'Suppliers', href: '/admin/suppliers' },
+        { label: 'Dashboard', href: consolePath('/admin') },
+        { label: 'Suppliers', href: consolePath('/admin/suppliers') },
         { label: 'New Supplier' },
       ];
 

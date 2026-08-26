@@ -278,11 +278,13 @@ export default function PartFormPage() {
 
   // When the form was opened from a Supplier Quick Action, Cancel should
   // return to that supplier (not the parts list). Same rule for the back link.
-  const backHref = isEdit
-    ? `/admin/parts/${id}`
-    : prefill
-      ? `/admin/suppliers/${prefill.supplier_id}`
-      : '/admin/parts';
+  const backHref = consolePath(
+    isEdit
+      ? `/admin/parts/${id}`
+      : prefill
+        ? `/admin/suppliers/${prefill.supplier_id}`
+        : '/admin/parts',
+  );
   const backLabel = isEdit
     ? 'Back to part'
     : prefill

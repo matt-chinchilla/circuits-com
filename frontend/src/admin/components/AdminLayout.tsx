@@ -506,7 +506,8 @@ export default function AdminLayout({ children, role = 'admin' }: AdminLayoutPro
 
         <div
           key={
-            location.pathname === '/admin' || location.pathname.startsWith('/admin/dashboard')
+            canonicalPath(location.pathname) === '/admin' ||
+            canonicalPath(location.pathname).startsWith('/admin/dashboard')
               ? theme
               : 'admin'
           }

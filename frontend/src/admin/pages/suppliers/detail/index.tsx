@@ -419,8 +419,8 @@ export default function SupplierDetailPage() {
       <div className={styles.page}>
         <Breadcrumbs
           items={[
-            { label: 'Dashboard', href: '/admin' },
-            { label: 'Suppliers', href: '/admin/suppliers' },
+            { label: 'Dashboard', href: consolePath('/admin') },
+            { label: 'Suppliers', href: consolePath('/admin/suppliers') },
             { label: 'Error' },
           ]}
         />
@@ -438,8 +438,8 @@ export default function SupplierDetailPage() {
     <div className={styles.page}>
       <Breadcrumbs
         items={[
-          { label: 'Dashboard', href: '/admin' },
-          { label: 'Suppliers', href: '/admin/suppliers' },
+          { label: 'Dashboard', href: consolePath('/admin') },
+          { label: 'Suppliers', href: consolePath('/admin/suppliers') },
           { label: supplier.name },
         ]}
       />

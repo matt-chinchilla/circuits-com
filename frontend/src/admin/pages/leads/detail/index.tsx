@@ -208,7 +208,7 @@ export default function LeadDetailPage() {
   if (sessionExpired) {
     return (
       <div className={styles.page}>
-        <Breadcrumbs items={[{ label: 'Leads', href: '/admin/leads' }, { label: 'Lead' }]} />
+        <Breadcrumbs items={[{ label: 'Leads', href: consolePath('/admin/leads') }, { label: 'Lead' }]} />
         <div className={styles.panel}>
           <div className={styles.blockedPanel}>
             <p className={styles.blockedTitle}>Signed out</p>
@@ -229,7 +229,7 @@ export default function LeadDetailPage() {
   if (demoBlocked) {
     return (
       <div className={styles.page}>
-        <Breadcrumbs items={[{ label: 'Leads', href: '/admin/leads' }, { label: 'Lead' }]} />
+        <Breadcrumbs items={[{ label: 'Leads', href: consolePath('/admin/leads') }, { label: 'Lead' }]} />
         <div className={styles.panel}>
           <div className={styles.blockedPanel}>
             <p className={styles.blockedTitle}>Not available in demo</p>
@@ -249,7 +249,7 @@ export default function LeadDetailPage() {
   if (error || !lead || !form) {
     return (
       <div className={styles.page}>
-        <Breadcrumbs items={[{ label: 'Leads', href: '/admin/leads' }, { label: 'Lead' }]} />
+        <Breadcrumbs items={[{ label: 'Leads', href: consolePath('/admin/leads') }, { label: 'Lead' }]} />
         <div className={styles.errorPanel}>{error || 'Lead not found.'}</div>
       </div>
     );
@@ -325,7 +325,7 @@ export default function LeadDetailPage() {
   return (
     <div className={styles.page}>
       <Breadcrumbs
-        items={[{ label: 'Leads', href: '/admin/leads' }, { label: lead.company_name }]}
+        items={[{ label: 'Leads', href: consolePath('/admin/leads') }, { label: lead.company_name }]}
       />
 
       <header className={styles.pageHead}>

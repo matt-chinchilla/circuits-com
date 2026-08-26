@@ -416,7 +416,7 @@ export interface AdminCategory {
   }>;
 }
 
-// Sponsors (admin) — API-backed via adminApi (`/admin/sponsors/...`).
+// Sponsors (admin) — API-backed via adminApi's sponsor routes.
 // XOR constraint: exactly one of category_id or keyword must be set.
 //
 // `tier`/`status` are typed as string-literal unions for exhaustive badge
