@@ -45,7 +45,8 @@ repo (`~/circuits-backups/`).
 | Command | Direction | Scope | Semantics |
 |---|---|---|---|
 | `circuitcenter pull` | prod → local | **whole database** | Drop local, restore prod dump. Local-only anything is gone (backed up first). |
-| `circuits pull` | prod → local | reporting + catalog | **Additive** for catalog (natural keys, upsert; local-only rows survive); reporting tables (`page_views`, `messages`) are replaced because prod is the truth for them. |
+| `circuits pull` | prod → local | reporting + catalog | **Additive** for catalog (natural keys, upsert; local-only rows survive); reporting tables (`page_views`, `messages`) are replaced because prod is the truth for them. Does NOT move users. |
+| `circuits pull --users` | prod → local | registered customers | **Additive**, `role='user'` only, upserted on `lower(email)`. Staff rows are never touched — local admin passwords are deliberately not prod's. Company links travel by NAME. Opt-in because it carries real addresses and password hashes onto a dev machine. |
 | `circuits push` | local → prod | **catalog only** | **Additive** upsert by natural keys; never deletes; asks for confirmation before touching prod. Reporting deliberately cannot be pushed. |
 
 `circuits pull` / `circuits push` share one transfer pair —
@@ -63,6 +64,7 @@ idempotent, so an interrupted run loses nothing and a re-run converges.
 | `circuits pull` | Both pulls: reporting, then catalog. |
 | `circuits pull --reporting` | Just `page_views` + `messages` (the standing post-deploy rule). |
 | `circuits pull --catalog` | Just the catalog upsert (after import runs on prod). |
+| `circuits pull --users` | Just the registered customers. NOT part of the default run. |
 | `circuits push` | Export the local catalog, confirm, load into prod. Reminders print for the seo-manifest regen (new part pages need it) and the manufacturer relink (next deploy). |
 | `circuits --fakeuser --up [N]` | Raise the admin presence-fake count (0–10). |
 | `circuits --fakeuser --down [N]` | Lower it; **bare `--down` clears everything** (count and named individuals). |
@@ -119,7 +121,7 @@ circuits() {
     pull) shift; "$HOME/circuits-com/pull-prod-data.sh" "$@" ;;
     push) shift; "$HOME/circuits-com/push-prod-data.sh" "$@" ;;
     --fakeuser) shift; "$HOME/circuits-com/scripts/fakeuser.sh" "$@" ;;
-    *) echo "usage: circuits pull [--reporting|--catalog] | circuits push | circuits --fakeuser --up/--down [N] | --status [--prod]" ;;
+    *) echo "usage: circuits pull [--reporting|--catalog|--users] | circuits push | circuits --fakeuser --up/--down [N] | --status [--prod]" ;;
   esac
 }
 

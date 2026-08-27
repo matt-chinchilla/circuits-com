@@ -512,3 +512,76 @@ def test_the_gate_writes_the_undo_before_destroying_anything():
         "the safety dump must be written BEFORE the TRUNCATE — it is the only "
         "route back for the parts that nothing else carries"
     )
+
+
+# ── `circuits pull --users` ─────────────────────────────────────────────────
+# The mode is additive and CUSTOMER-ONLY. Widening it into a plain `users` copy
+# would (a) overwrite local staff password hashes with prod's, locking the
+# developer out of their own console, and (b) re-mint local user uuids, orphaning
+# every local messages.user_id / calendar_events.created_by_id / bom_shares.user_id
+# that points at them. These pin the four properties that keep it safe.
+
+
+def _pull_script() -> str:
+    script = REPO_ROOT / "pull-prod-data.sh"
+    if not script.exists():
+        pytest.skip("pull-prod-data.sh not present")
+    return script.read_text()
+
+
+def _users_mode() -> str:
+    body = _pull_script()
+    start = body.index('if [[ "$MODE" == "--users" ]]')
+    return body[start : body.index('\necho "done."', start)]
+
+
+def test_the_users_pull_is_not_part_of_the_default_run():
+    """It carries real addresses and password hashes onto a dev machine, so it
+    must be asked for explicitly — never swept in by a bare `circuits pull`."""
+    mode = _users_mode()
+    assert '"$MODE" == "--all"' not in mode.split("\n")[0], (
+        "--users must not run under --all; it has to be opt-in per invocation"
+    )
+
+
+def test_the_users_pull_takes_customers_only():
+    mode = _users_mode()
+    assert "WHERE u.role = 'user'" in mode, (
+        "the export must filter to customers — pulling staff rows would "
+        "overwrite local admin password hashes with production's"
+    )
+
+
+def test_the_users_pull_cannot_overwrite_a_staff_row():
+    """The UPDATE needs role='user' on the LOCAL side too.
+
+    Without it, a customer who registered on prod using a staff address would
+    match that local staff row on email and overwrite its password hash.
+    """
+    mode = _users_mode()
+    update = mode[mode.index("UPDATE users u SET username") :]
+    update = update[: update.index("INSERT INTO users")]
+    assert "u.role = 'user'" in update, (
+        "the upsert must restrict itself to local customer rows"
+    )
+
+
+def test_the_users_pull_matches_on_the_indexed_expression():
+    """lower(email) is what uq_users_email_lower covers, so at most one local
+    row can ever match — and an existing row keeps its uuid, which is what lets
+    local messages stay attached to it."""
+    mode = _users_mode()
+    assert "lower(u.email) = lower(i.email)" in mode
+
+
+def test_the_users_pull_carries_company_links_by_name():
+    """supplier_id / manufacturer_id are per-environment surrogates — the whole
+    catalog transfer pair is natural-key based for this reason — so a pulled
+    uuid would point at nothing locally."""
+    mode = _users_mode()
+    assert "JOIN suppliers s ON s.name = i.supplier_name" in mode
+    assert "JOIN manufacturers m ON m.name = i.manufacturer_name" in mode
+    # And the export sends the NAMES, not the ids it resolved them from.
+    export = mode[mode.index("COPY (") : mode.index(") TO STDOUT")]
+    assert "s.name, m.name" in export
+    assert "u.supplier_id," not in export

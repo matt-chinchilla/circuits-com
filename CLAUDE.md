@@ -33,7 +33,7 @@ npm test                                # vitest run (unit-logic only; *.test.ts
 ./deploy.sh --status | --logs | --cert-renew
 
 # Ops aliases (full reference: ALIASES.md at repo root)
-circuits pull [--reporting|--catalog]   # prod→local (catalog = additive, natural keys)
+circuits pull [--reporting|--catalog|--users]  # prod→local (catalog + users additive)
 circuits push                           # local→prod catalog (additive; asks first)
 circuits --fakeuser ...                 # presence fakes (see ALIASES.md)
 ```
