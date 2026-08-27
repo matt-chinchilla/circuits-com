@@ -27,6 +27,9 @@
 import { Fragment, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useConsolePath } from '@admin/services/consolePath';
+import { useAuth } from '@admin/contexts/AuthContext';
+import { isOwner } from '@admin/services/permissions';
+import { activationControl } from './activationControl';
 
 import { adminApi } from '@admin/services/adminApi';
 import { apiErrorDetail } from '@admin/services/apiError';
@@ -64,11 +67,15 @@ function formatDay(iso: string | null | undefined): string | null {
 export default function UsersListPage() {
   // Canonical /admin paths, rewritten onto whichever mount is rendering (D16).
   const consolePath = useConsolePath();
+  const { user: viewer } = useAuth();
+  const viewerIsOwner = isOwner(viewer);
   const [rows, setRows] = useState<AdminUser[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   // Per-row, so two toggles in flight never disable each other's switch.
   const [savingIds, setSavingIds] = useState<readonly string[]>([]);
+  // Which row is one click away from deletion. Null when nothing is armed.
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [saveError, setSaveError] = useState('');
   // The company-link pickers. One row edits at a time: the manufacturer picker
   // is a live search, and N of them open at once is N debounced request
@@ -163,20 +170,49 @@ export default function UsersListPage() {
   // Optimistic with rollback. The rollback restores THIS ROW's captured value
   // rather than the whole array, so a second toggle finishing in between is
   // not stomped by the first one's failure.
-  const handleActivate = (user: AdminUser, next: boolean) => {
+  // Activation only ever goes one way — the server answers 409
+  // `activation_is_one_way` to anything else, so there is no `next` argument to
+  // get wrong here.
+  const handleActivate = (user: AdminUser) => {
     if (savingIds.includes(user.id)) return;
     setSaveError('');
     setSavingIds((cur) => [...cur, user.id]);
-    patchRow({ ...user, activated_at: next ? new Date().toISOString() : null });
+    patchRow({ ...user, activated_at: new Date().toISOString() });
 
     adminApi
-      .updateUser(user.id, { activated: next })
+      .updateUser(user.id, { activated: true })
       .then(patchRow)
       .catch((err) => {
         patchRow(user);
         setSaveError(
           apiErrorDetail(err) ??
-            `Could not ${next ? 'activate' : 'deactivate'} ${user.full_name}. Nothing was changed.`,
+            `Could not activate ${user.full_name}. Nothing was changed.`,
+        );
+      })
+      .finally(() => {
+        setSavingIds((cur) => cur.filter((id) => id !== user.id));
+      });
+  };
+
+  // Two-step, in place. Deleting a customer removes their login and their own
+  // inbox, so a single stray click should not do it — and a native confirm()
+  // would block the page, which this codebase avoids.
+  const handleDelete = (user: AdminUser) => {
+    if (savingIds.includes(user.id)) return;
+    if (confirmingId !== user.id) {
+      setConfirmingId(user.id);
+      return;
+    }
+    setConfirmingId(null);
+    setSaveError('');
+    setSavingIds((cur) => [...cur, user.id]);
+    adminApi
+      .deleteUser(user.id)
+      .then(() => setRows((cur) => cur?.filter((r) => r.id !== user.id) ?? cur))
+      .catch((err) => {
+        setSaveError(
+          apiErrorDetail(err) ??
+            `Could not delete ${user.full_name}. Nothing was changed.`,
         );
       })
       .finally(() => {
@@ -230,7 +266,7 @@ export default function UsersListPage() {
                 <th>Tier</th>
                 <th>Verified</th>
                 <th>Company</th>
-                <th className={styles.actionHead}>Activate</th>
+                <th className={styles.actionHead}>Access</th>
               </tr>
             </thead>
             <tbody>
@@ -372,17 +408,46 @@ export default function UsersListPage() {
                           </div>
                         </td>
                         <td className={styles.actionCell}>
-                          <button
-                            type="button"
-                            role="switch"
-                            aria-checked={activated}
-                            aria-label={`Account activation for ${u.full_name}`}
-                            disabled={saving}
-                            className={`${styles.pill} ${activated ? styles.pillOn : ''}`}
-                            onClick={() => handleActivate(u, !activated)}
-                          >
-                            <span className={styles.knob} />
-                          </button>
+                          {(() => {
+                            const control = activationControl({
+                              activatedAt: u.activated_at,
+                              viewerIsOwner,
+                            });
+                            if (control.kind === 'activate') {
+                              return (
+                                <button
+                                  type="button"
+                                  disabled={saving}
+                                  className={`${styles.btn} ${styles.btnPrimary}`}
+                                  onClick={() => handleActivate(u)}
+                                >
+                                  {saving ? 'Activating…' : 'Activate'}
+                                </button>
+                              );
+                            }
+                            if (control.kind === 'delete') {
+                              const armed = confirmingId === u.id;
+                              return (
+                                <button
+                                  type="button"
+                                  disabled={saving}
+                                  className={`${styles.btn} ${armed ? styles.btnDanger : styles.btnGhost}`}
+                                  onClick={() => handleDelete(u)}
+                                  onBlur={() => armed && setConfirmingId(null)}
+                                  title={
+                                    armed
+                                      ? 'Removes their sign-in and their own messages. Their company’s listings and any sponsorship keep running.'
+                                      : undefined
+                                  }
+                                >
+                                  {saving ? 'Deleting…' : armed ? 'Confirm delete' : 'Delete'}
+                                </button>
+                              );
+                            }
+                            // Activated, and the viewer is not the owner — DELETE
+                            // is require_owner, so there is nothing to offer.
+                            return <span className={styles.activatedTag}>Activated</span>;
+                          })()}
                         </td>
                       </tr>
                       {editing && (

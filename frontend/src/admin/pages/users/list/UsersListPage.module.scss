@@ -678,3 +678,32 @@
     gap: 10px;
   }
 }
+
+
+/* Armed state for the two-step delete. Only worn while the row is one click
+   from removal, so the colour means "this next click destroys something"
+   rather than decorating a resting control. */
+.btnDanger {
+  background: $error-red;
+  border-color: $error-red;
+  color: #ffffff;
+
+  &:hover {
+    filter: brightness(0.94);
+  }
+}
+
+/* Activated, viewed by an admin who is not the owner. DELETE is owner-only, so
+   there is no control to render — this states the fact instead of showing a
+   button that would 403. */
+.activatedTag {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--a-fg3);
+  background: var(--a-glass-bg, rgba(148, 163, 184, 0.14));
+  border: 1px solid var(--a-border, rgba(148, 163, 184, 0.3));
+}

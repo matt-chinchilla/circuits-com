@@ -62,14 +62,25 @@ def test_activation_stamps_and_is_idempotent(client, db, seeded_db, auth_header)
     assert again.json()["activated_at"] == first, "re-activating must not re-stamp"
 
 
-def test_deactivation_clears_the_stamp(client, db, seeded_db, auth_header):
+def test_deactivation_is_refused_because_activation_is_one_way(
+    client, db, seeded_db, auth_header
+):
+    """This test asserted the OPPOSITE until 2026-08-26.
+
+    Deactivation existed as a way to revoke a lapsed customer without deleting
+    them — but it also reset activated_at to NULL, which made the next
+    Activate a fresh edge that mailed a second welcome. The owner chose a
+    one-way door with deletion as the only way back, which removes the cycle
+    rather than tracking around it. See test_activation_is_one_way.py.
+    """
     from datetime import UTC, datetime
 
     u = _customer(db, activated_at=datetime.now(UTC))
     db.commit()
     r = client.patch(f"/api/admin/users/{u.id}", json={"activated": False},
                      headers=auth_header())
-    assert r.json()["activated_at"] is None
+    assert r.status_code == 409
+    assert r.json()["detail"] == "activation_is_one_way"
 
 
 def test_a_customer_cannot_activate_themselves(client, db, seeded_db, auth_header):

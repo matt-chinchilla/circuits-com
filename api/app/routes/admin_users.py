@@ -19,6 +19,10 @@ from app.services import email as email_service
 from app.services.account_tier import account_tier
 from app.services.auth_service import require_owner, require_staff
 
+# Refused body for an attempted deactivation. A machine-readable code, not
+# prose: the console matches it to explain that the only way back is deletion.
+ONE_WAY_DETAIL = "activation_is_one_way"
+
 router = APIRouter(
     prefix="/api/admin/users",
     tags=["admin-users"],
@@ -126,14 +130,27 @@ def update_user(
 
     activating = False
     if "activated" in fields:
-        if fields["activated"]:
-            # Idempotent: re-activating an active account must not re-stamp,
-            # or the activation email fires again on every save.
-            if user.activated_at is None:
-                user.activated_at = datetime.now(UTC)
-                activating = True
-        else:
-            user.activated_at = None
+        if not fields["activated"]:
+            # Activation is a ONE-WAY DOOR (owner decision, 2026-08-26). It is
+            # refused here rather than merely hidden in the console, because an
+            # invariant that lives only in the UI is not an invariant.
+            #
+            # This is also what makes the activation email safe. The old guard
+            # was `if activated_at is None`, which correctly refused to re-send
+            # while an account was ALREADY active — but deactivating set that
+            # column back to NULL, so the next activation was a genuinely fresh
+            # edge and mailed again (measured: one off/on cycle sent a second
+            # email, two cycles a third). With no route back to NULL, the same
+            # check now means "has never been activated", so no
+            # email-already-sent column is needed.
+            #
+            # Revoking access is DELETE /api/admin/users/{id} (owner-only).
+            raise HTTPException(status_code=409, detail=ONE_WAY_DETAIL)
+        # Idempotent: pressing Activate on an active account is a no-op, never
+        # a second welcome.
+        if user.activated_at is None:
+            user.activated_at = datetime.now(UTC)
+            activating = True
     for attr, value in links.items():
         setattr(user, attr, value)
     db.commit()
