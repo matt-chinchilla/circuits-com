@@ -23,10 +23,10 @@ const SIGNUP = {
   ...BASE,
   type: 'signup',
   payload: {
-    first_name: 'Ada',
-    last_name: 'Lovelace',
-    full_name: 'Ada Lovelace',
-    email: 'ada@example.com',
+    first_name: 'James',
+    last_name: 'Chirichella',
+    full_name: 'James Chirichella',
+    email: 'James@example.com',
     country: 'GB',
   },
 } as Message;
@@ -34,12 +34,12 @@ const SIGNUP = {
 const WELCOME = {
   ...BASE,
   type: 'welcome',
-  payload: { first_name: 'Ada', full_name: 'Ada Lovelace' },
+  payload: { first_name: 'James', full_name: 'James Chirichella' },
 } as Message;
 
 describe('subjectFor', () => {
   it('names the person who signed up', () => {
-    expect(subjectFor(SIGNUP)).toBe('Ada Lovelace signed up');
+    expect(subjectFor(SIGNUP)).toBe('James Chirichella signed up');
   });
 
   it('greets on the welcome row', () => {
@@ -49,7 +49,7 @@ describe('subjectFor', () => {
 
 describe('senderName', () => {
   it('is the new customer on a signup', () => {
-    expect(senderName(SIGNUP)).toBe('Ada Lovelace');
+    expect(senderName(SIGNUP)).toBe('James Chirichella');
   });
 
   it('is the company on a welcome — the customer did not send it', () => {
@@ -59,7 +59,7 @@ describe('senderName', () => {
 
 describe('senderEmail', () => {
   it('reads the verified address off a signup', () => {
-    expect(senderEmail(SIGNUP)).toBe('ada@example.com');
+    expect(senderEmail(SIGNUP)).toBe('James@example.com');
   });
 
   it('is a dash on a welcome, which carries no address at all', () => {
@@ -91,19 +91,19 @@ describe('TYPE_META', () => {
 
 describe('initialsOf', () => {
   it('takes the first letter of the first two words', () => {
-    expect(initialsOf('Ada Lovelace')).toBe('AL');
+    expect(initialsOf('James Chirichella')).toBe('AL');
   });
 
   it('ignores the middle name rather than growing the avatar', () => {
-    expect(initialsOf('Ada Byron Lovelace')).toBe('AB');
+    expect(initialsOf('James Byron Chirichella')).toBe('AB');
   });
 
   it('survives a single name', () => {
-    expect(initialsOf('Ada')).toBe('A');
+    expect(initialsOf('James')).toBe('A');
   });
 
   it('survives extra whitespace', () => {
-    expect(initialsOf('  Ada   Lovelace ')).toBe('AL');
+    expect(initialsOf('  James   Chirichella ')).toBe('AL');
   });
 
   it('falls back rather than rendering an empty avatar', () => {

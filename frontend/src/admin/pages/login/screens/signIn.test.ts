@@ -59,7 +59,7 @@ function type(id: string, value: string) {
 
 /** Fill the form and submit it. The rejection `login` is primed with decides
  *  which outcome the screen has to render. */
-async function attemptSignIn(email = '  Ada@Example.com  ', password = 'Sekret1!') {
+async function attemptSignIn(email = '  James@Example.com  ', password = 'Sekret1!') {
   await act(async () => {
     root.render(createElement(SignIn, { go: vi.fn() }));
   });
@@ -112,7 +112,7 @@ describe('SignIn', () => {
   it('names the address so the user can see the typo they made', async () => {
     login.mockRejectedValue(httpError(403, 'email_not_verified'));
     await attemptSignIn();
-    expect(container.textContent).toContain('Ada@Example.com');
+    expect(container.textContent).toContain('James@Example.com');
   });
 
   it('sends a fresh link through the one endpoint that exists for it', async () => {
@@ -123,7 +123,7 @@ describe('SignIn', () => {
     });
     // Trimmed and lower-cased: the address is the rate-limit key server-side
     // (signup_email_key lower-cases it), and an untrimmed one is a miss.
-    expect(resendVerification).toHaveBeenCalledWith('ada@example.com');
+    expect(resendVerification).toHaveBeenCalledWith('James@example.com');
     expect(container.textContent).toContain('New link sent');
   });
 

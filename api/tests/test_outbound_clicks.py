@@ -219,7 +219,7 @@ def _customer(db, email="c@test.example"):
     u = User(
         id=uuid.uuid4(), username=email, email=email,
         password_hash=hash_password("testpass123"), role="user",
-        first_name="Ada", last_name="Lovelace",
+        first_name="James", last_name="Chirichella",
         email_verified_at=datetime.now(UTC), activated_at=datetime.now(UTC),
     )
     db.add(u)

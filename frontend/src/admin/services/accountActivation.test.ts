@@ -40,7 +40,7 @@ describe('activationFromProbe', () => {
     expect(
       activationFromProbe({
         ok: true,
-        body: { id: 'u1', full_name: 'Ada', email: 'ada@example.com', activated: true },
+        body: { id: 'u1', full_name: 'James', email: 'James@example.com', activated: true },
       }),
     ).toBe(true);
   });
@@ -49,7 +49,7 @@ describe('activationFromProbe', () => {
     expect(
       activationFromProbe({
         ok: true,
-        body: { id: 'u1', full_name: 'Ada', email: 'ada@example.com', activated: false },
+        body: { id: 'u1', full_name: 'James', email: 'James@example.com', activated: false },
       }),
     ).toBe(false);
   });

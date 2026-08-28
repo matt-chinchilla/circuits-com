@@ -10,7 +10,7 @@ from app.models import User
 
 def _customer(db, email="c@test.example", activated_at=None):
     u = User(username=email, email=email, password_hash="x", role="user",
-             first_name="Ada", last_name="Lovelace", signup_country="US",
+             first_name="James", last_name="Chirichella", signup_country="US",
              activated_at=activated_at)
     db.add(u)
     db.flush()

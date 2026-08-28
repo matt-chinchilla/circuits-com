@@ -121,8 +121,8 @@ class TestListMessages:
             seq=1,
             type="contact",
             payload={
-                "name": "Ada Lovelace",
-                "email": "ada@example.test",
+                "name": "James Chirichella",
+                "email": "James@example.test",
                 "subject": "Bug",
                 "message": "Found a glitch",
                 "reason": "general",
@@ -134,7 +134,7 @@ class TestListMessages:
         assert len(rows) == 1
         msg = rows[0]
         assert msg["type"] == "contact"
-        assert msg["payload"]["name"] == "Ada Lovelace"
+        assert msg["payload"]["name"] == "James Chirichella"
         assert msg["payload"]["reason"] == "general"
 
 

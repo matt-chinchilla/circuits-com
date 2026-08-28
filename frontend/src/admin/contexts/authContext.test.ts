@@ -79,14 +79,14 @@ afterEach(async () => {
 
 describe('AuthContext activation probe', () => {
   it('reports a customer NOT activated on the backend 403', async () => {
-    getMe.mockResolvedValue({ id: 'u1', username: 'ada', role: 'user' });
+    getMe.mockResolvedValue({ id: 'u1', username: 'James', role: 'user' });
     getAccountMe.mockRejectedValue(forbidden('account_not_activated'));
     expect(await mount()).toBe('false');
   });
 
   it('reports a customer activated when the probe answers', async () => {
-    getMe.mockResolvedValue({ id: 'u1', username: 'ada', role: 'user' });
-    getAccountMe.mockResolvedValue({ id: 'u1', full_name: 'Ada', email: 'a@b.c', activated: true });
+    getMe.mockResolvedValue({ id: 'u1', username: 'James', role: 'user' });
+    getAccountMe.mockResolvedValue({ id: 'u1', full_name: 'James', email: 'a@b.c', activated: true });
     expect(await mount()).toBe('true');
   });
 
@@ -98,7 +98,7 @@ describe('AuthContext activation probe', () => {
   });
 
   it('fails OPEN when the probe cannot reach the server', async () => {
-    getMe.mockResolvedValue({ id: 'u1', username: 'ada', role: 'user' });
+    getMe.mockResolvedValue({ id: 'u1', username: 'James', role: 'user' });
     getAccountMe.mockRejectedValue(new Error('Network Error'));
     expect(await mount()).toBe('true');
   });
@@ -108,7 +108,7 @@ describe('AuthContext activation probe', () => {
     // answer — either direction is wrong: an activated verdict would open a
     // console the server refuses, and a stale `false` would park somebody who
     // is fine.
-    getMe.mockResolvedValue({ id: 'u1', username: 'ada', role: 'user' });
+    getMe.mockResolvedValue({ id: 'u1', username: 'James', role: 'user' });
     getAccountMe.mockRejectedValue(forbidden('account_not_activated'));
     expect(await mount()).toBe('false');
     await act(async () => {

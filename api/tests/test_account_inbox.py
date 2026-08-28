@@ -37,7 +37,7 @@ def _customer(db, email, *, activated=True, supplier_id=None):
         email=email,
         password_hash=hash_password(PW),
         role="user",
-        first_name="Ada",
+        first_name="James",
         supplier_id=supplier_id,
         email_verified_at=datetime.now(UTC),
         activated_at=datetime.now(UTC) if activated else None,
@@ -54,7 +54,7 @@ def _message(db, *, seq, user_id, mid=None, mtype="welcome", status="new"):
         status=status,
         seq=seq,
         user_id=user_id,
-        payload={"full_name": "Ada Lovelace"},
+        payload={"full_name": "James Chirichella"},
     )
     db.add(msg)
     db.flush()
@@ -386,8 +386,8 @@ class TestTheStaffInboxHoldsOnlyStaffMail:
         client.post(
             "/api/contact",
             json={
-                "name": "Ada Lovelace",
-                "email": "ada@example.com",
+                "name": "James Chirichella",
+                "email": "James@example.com",
                 "subject": "Stock question",
                 "message": "Do you carry the LM7805?",
             },

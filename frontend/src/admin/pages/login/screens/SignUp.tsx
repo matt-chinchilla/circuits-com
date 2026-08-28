@@ -201,7 +201,7 @@ export default function SignUp({ go }: { go: (s: Screen) => void }) {
           icon={I.user}
           value={firstName}
           onChange={setFirstName}
-          placeholder="Ada"
+          placeholder="James"
           autoComplete="given-name"
           autoFocus
           error={attempted ? errors.firstName : undefined}
@@ -212,7 +212,7 @@ export default function SignUp({ go }: { go: (s: Screen) => void }) {
           icon={I.user}
           value={lastName}
           onChange={setLastName}
-          placeholder="Lovelace"
+          placeholder="Chirichella"
           autoComplete="family-name"
           error={attempted ? errors.lastName : undefined}
         />

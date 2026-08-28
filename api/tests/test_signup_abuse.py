@@ -45,7 +45,7 @@ from app.services.rate_limit import (
 )
 
 PW = "Analytical1!"
-GOOD = {"first_name": "Ada", "last_name": "Lovelace", "email": "ada@test.example", "password": PW}
+GOOD = {"first_name": "James", "last_name": "Chirichella", "email": "James@test.example", "password": PW}
 IP = "203.0.113.7"
 OTHER_IP = "198.51.100.9"
 
@@ -203,9 +203,9 @@ class TestTheSlowWalkIsCaught:
     def test_one_address_retried_forever_is_not_a_walk(self, client, db, monkeypatch):
         # The person who forgot they registered. Distinct values, not attempts.
         _mute_mail(monkeypatch)
-        _existing(db, "ada@test.example")
+        _existing(db, "James@test.example")
         for _ in range(PROBE_WIDE_DISTINCT_THRESHOLD + 5):
-            assert _signup(client, "ada@test.example").status_code == 409
+            assert _signup(client, "James@test.example").status_code == 409
 
 
 # ── (c) resend volume ───────────────────────────────────────────────────────
@@ -220,7 +220,7 @@ class TestResendArmsItsBucket:
 
     def test_one_address_stops_receiving_mail_after_the_fifth(self, client, db, monkeypatch):
         sent = _mute_mail(monkeypatch)
-        user = _unverified(db, "ada@test.example")
+        user = _unverified(db, "James@test.example")
         for _ in range(RESEND_EMAIL_THRESHOLD):
             assert _resend(client, user.email).status_code == 200
         assert len(sent) == RESEND_EMAIL_THRESHOLD
@@ -234,7 +234,7 @@ class TestResendArmsItsBucket:
         self, client, db, monkeypatch
     ):
         sent = _mute_mail(monkeypatch)
-        victim = _unverified(db, "ada@test.example")
+        victim = _unverified(db, "James@test.example")
         other = _unverified(db, "grace@test.example")
         for _ in range(RESEND_EMAIL_THRESHOLD + 1):
             _resend(client, victim.email)
@@ -277,7 +277,7 @@ def _activated(db, email: str = "c@test.example") -> User:
         email=email,
         password_hash=hash_password(PW),
         role="user",
-        first_name="Ada",
+        first_name="James",
         email_verified_at=datetime.now(UTC),
         activated_at=datetime.now(UTC),
     )

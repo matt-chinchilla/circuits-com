@@ -14,9 +14,9 @@ from app.services.auth_service import create_token, create_verify_token
 from app.services.rate_limit import limiter, reset_probes
 
 GOOD = {
-    "first_name": "Ada",
-    "last_name": "Lovelace",
-    "email": "ada@test.example",
+    "first_name": "James",
+    "last_name": "Chirichella",
+    "email": "James@test.example",
     "password": "Analytical1!",
 }
 
@@ -52,7 +52,7 @@ def test_verify_stamps_and_creates_both_messages(client, db):
 
     staff = db.query(Message).filter(Message.type == "signup").one()
     assert staff.user_id is None  # the shared staff inbox
-    assert staff.payload["first_name"] == "Ada"
+    assert staff.payload["first_name"] == "James"
 
     welcome = db.query(Message).filter(Message.type == "welcome").one()
     assert welcome.user_id == user.id
@@ -126,7 +126,7 @@ def test_verify_mails_the_welcome(client, db, monkeypatch):
     monkeypatch.setattr(email_service, "send_welcome_email", _capture)
     client.post("/api/auth/verify", json={"token": create_verify_token(str(user.id), user.email)})
 
-    assert sent == {"to": "ada@test.example", "first_name": "Ada"}
+    assert sent == {"to": "James@test.example", "first_name": "James"}
 
 
 # ── The link goes stale (D13) ───────────────────────────────────────────────

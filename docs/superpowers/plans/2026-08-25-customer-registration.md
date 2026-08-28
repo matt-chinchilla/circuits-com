@@ -1206,13 +1206,13 @@ def _parts(msg):
 
 
 def test_verification_is_multipart_alternative_with_a_text_part():
-    msg = _build_verification_email("a@test.example", "Ada", URL)
+    msg = _build_verification_email("a@test.example", "James", URL)
     assert msg.get_content_type() == "multipart/alternative"
     assert _parts(msg) == {"text/plain", "text/html"}
 
 
 def test_the_link_appears_in_both_parts():
-    msg = _build_verification_email("a@test.example", "Ada", URL)
+    msg = _build_verification_email("a@test.example", "James", URL)
     for part in msg.walk():
         if part.is_multipart():
             continue
@@ -1223,9 +1223,9 @@ def test_no_remote_images():
     # Remote images are blocked by default in most clients, and fetching one
     # confirms to the sender that the address is live.
     for msg in (
-        _build_verification_email("a@test.example", "Ada", URL),
-        _build_welcome_email("a@test.example", "Ada"),
-        _build_activation_email("a@test.example", "Ada", "https://circuitcenter.ai/account"),
+        _build_verification_email("a@test.example", "James", URL),
+        _build_welcome_email("a@test.example", "James"),
+        _build_activation_email("a@test.example", "James", "https://circuitcenter.ai/account"),
     ):
         for part in msg.walk():
             if part.get_content_type() == "text/html":
@@ -1233,15 +1233,15 @@ def test_no_remote_images():
 
 
 def test_addressed_to_the_person_not_the_notify_list():
-    msg = _build_welcome_email("a@test.example", "Ada")
+    msg = _build_welcome_email("a@test.example", "James")
     assert msg["To"] == "a@test.example"
 
 
 def test_first_name_is_used():
-    msg = _build_welcome_email("a@test.example", "Ada")
+    msg = _build_welcome_email("a@test.example", "James")
     html = [p.get_content() for p in msg.walk()
             if p.get_content_type() == "text/html"][0]
-    assert "Ada" in html
+    assert "James" in html
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -1425,9 +1425,9 @@ from app.models import User
 from app.services.rate_limit import limiter, reset_probes
 
 GOOD = {
-    "first_name": "Ada",
-    "last_name": "Lovelace",
-    "email": "Ada@Test.Example",
+    "first_name": "James",
+    "last_name": "Chirichella",
+    "email": "James@Test.Example",
     "password": "Analytical1!",
 }
 
@@ -1446,7 +1446,7 @@ def test_returns_202_and_no_token(client):
 
 def test_creates_an_unverified_unactivated_customer(client, db):
     client.post("/api/auth/signup", json=GOOD)
-    u = db.query(User).filter(User.email == "ada@test.example").first()
+    u = db.query(User).filter(User.email == "James@test.example").first()
     assert u is not None
     assert u.role == "user"
     assert u.email_verified_at is None
@@ -1456,13 +1456,13 @@ def test_creates_an_unverified_unactivated_customer(client, db):
 
 def test_username_is_the_lowercased_email(client, db):
     client.post("/api/auth/signup", json=GOOD)
-    u = db.query(User).filter(User.email == "ada@test.example").first()
-    assert u.username == "ada@test.example"
+    u = db.query(User).filter(User.email == "James@test.example").first()
+    assert u.username == "James@test.example"
 
 
 def test_capability_links_are_never_set_by_signup(client, db):
     client.post("/api/auth/signup", json=GOOD)
-    u = db.query(User).filter(User.email == "ada@test.example").first()
+    u = db.query(User).filter(User.email == "James@test.example").first()
     assert u.supplier_id is None
     assert u.manufacturer_id is None
 
@@ -1489,14 +1489,14 @@ def test_a_weak_password_returns_the_shared_policy_shape(client):
 
 def test_duplicate_email_is_reported_plainly(client):
     client.post("/api/auth/signup", json=GOOD)
-    r = client.post("/api/auth/signup", json={**GOOD, "email": "ada@test.example"})
+    r = client.post("/api/auth/signup", json={**GOOD, "email": "James@test.example"})
     assert r.status_code == 409
     assert r.json()["detail"] == "email_taken"
 
 
 def test_duplicate_detection_is_case_insensitive(client):
     client.post("/api/auth/signup", json=GOOD)
-    r = client.post("/api/auth/signup", json={**GOOD, "email": "ADA@TEST.EXAMPLE"})
+    r = client.post("/api/auth/signup", json={**GOOD, "email": "James@TEST.EXAMPLE"})
     assert r.status_code == 409
 
 
@@ -1648,8 +1648,8 @@ from app.models import Message, User
 from app.services.auth_service import create_token, create_verify_token
 from app.services.rate_limit import limiter, reset_probes
 
-GOOD = {"first_name": "Ada", "last_name": "Lovelace",
-        "email": "ada@test.example", "password": "Analytical1!"}
+GOOD = {"first_name": "James", "last_name": "Chirichella",
+        "email": "James@test.example", "password": "Analytical1!"}
 
 
 def setup_function():
@@ -1683,7 +1683,7 @@ def test_verify_stamps_and_creates_both_messages(client, db):
 
     staff = db.query(Message).filter(Message.type == "signup").one()
     assert staff.user_id is None  # the shared staff inbox
-    assert staff.payload["first_name"] == "Ada"
+    assert staff.payload["first_name"] == "James"
 
     welcome = db.query(Message).filter(Message.type == "welcome").one()
     assert welcome.user_id == user.id
@@ -1869,8 +1869,8 @@ from app.models import User
 from app.services.auth_service import create_verify_token
 from app.services.rate_limit import limiter, reset_probes
 
-GOOD = {"first_name": "Ada", "last_name": "Lovelace",
-        "email": "ada@test.example", "password": "Analytical1!"}
+GOOD = {"first_name": "James", "last_name": "Chirichella",
+        "email": "James@test.example", "password": "Analytical1!"}
 
 
 def setup_function():
@@ -2140,7 +2140,7 @@ from app.models import User
 
 def _customer(db, email="c@test.example", activated_at=None):
     u = User(username=email, email=email, password_hash="x", role="user",
-             first_name="Ada", last_name="Lovelace", signup_country="US",
+             first_name="James", last_name="Chirichella", signup_country="US",
              activated_at=activated_at)
     db.add(u)
     db.flush()
@@ -2401,7 +2401,7 @@ PW = "Analytical1!"
 def _activated(db, supplier_id=None):
     u = User(username="c@test.example", email="c@test.example",
              password_hash=hash_password(PW), role="user",
-             first_name="Ada", supplier_id=supplier_id,
+             first_name="James", supplier_id=supplier_id,
              email_verified_at=datetime.now(UTC), activated_at=datetime.now(UTC))
     db.add(u)
     db.flush()
@@ -2587,9 +2587,9 @@ import { describe, expect, it } from 'vitest';
 import { signupFieldErrors } from './signupForm';
 
 const ok = {
-  firstName: 'Ada',
-  lastName: 'Lovelace',
-  email: 'ada@example.com',
+  firstName: 'James',
+  lastName: 'Chirichella',
+  email: 'James@example.com',
   password: 'Analytical1!',
   confirm: 'Analytical1!',
 };

@@ -31,13 +31,13 @@ def _html_of(msg):
 
 
 def test_verification_is_multipart_alternative_with_a_text_part():
-    msg = _build_verification_email("a@test.example", "Ada", URL)
+    msg = _build_verification_email("a@test.example", "James", URL)
     assert msg.get_content_type() == "multipart/alternative"
     assert _parts(msg) == {"text/plain", "text/html"}
 
 
 def test_the_link_appears_in_both_parts():
-    msg = _build_verification_email("a@test.example", "Ada", URL)
+    msg = _build_verification_email("a@test.example", "James", URL)
     for part in msg.walk():
         if part.is_multipart():
             continue
@@ -48,9 +48,9 @@ def test_no_remote_images():
     # Remote images are blocked by default in most clients, and fetching one
     # confirms to the sender that the address is live.
     for msg in (
-        _build_verification_email("a@test.example", "Ada", URL),
-        _build_welcome_email("a@test.example", "Ada"),
-        _build_activation_email("a@test.example", "Ada", "https://circuitcenter.ai/account"),
+        _build_verification_email("a@test.example", "James", URL),
+        _build_welcome_email("a@test.example", "James"),
+        _build_activation_email("a@test.example", "James", "https://circuitcenter.ai/account"),
     ):
         for part in msg.walk():
             if part.get_content_type() == "text/html":
@@ -58,14 +58,14 @@ def test_no_remote_images():
 
 
 def test_addressed_to_the_person_not_the_notify_list():
-    msg = _build_welcome_email("a@test.example", "Ada")
+    msg = _build_welcome_email("a@test.example", "James")
     assert msg["To"] == "a@test.example"
 
 
 def test_first_name_is_used():
-    msg = _build_welcome_email("a@test.example", "Ada")
+    msg = _build_welcome_email("a@test.example", "James")
     html = [p.get_content() for p in msg.walk() if p.get_content_type() == "text/html"][0]
-    assert "Ada" in html
+    assert "James" in html
 
 
 # ── Beyond the brief: the two things that would silently ship broken ────────
@@ -87,16 +87,16 @@ def test_a_missing_first_name_still_greets():
 def test_a_typed_name_cannot_inject_markup():
     """first_name is whatever the registrant typed. It reaches an HTML body,
     so it is escaped there — the plain-text part keeps it verbatim."""
-    msg = _build_welcome_email("a@test.example", "<b>Ada</b>")
-    assert "<b>Ada</b>" not in _html_of(msg)
-    assert "&lt;b&gt;Ada&lt;/b&gt;" in _html_of(msg)
+    msg = _build_welcome_email("a@test.example", "<b>James</b>")
+    assert "<b>James</b>" not in _html_of(msg)
+    assert "&lt;b&gt;James&lt;/b&gt;" in _html_of(msg)
 
 
 def test_every_message_carries_a_subject_and_a_from():
     for msg in (
-        _build_verification_email("a@test.example", "Ada", URL),
-        _build_welcome_email("a@test.example", "Ada"),
-        _build_activation_email("a@test.example", "Ada", URL),
+        _build_verification_email("a@test.example", "James", URL),
+        _build_welcome_email("a@test.example", "James"),
+        _build_activation_email("a@test.example", "James", URL),
     ):
         assert msg["Subject"]
         assert msg["From"]
@@ -106,9 +106,9 @@ def test_every_message_carries_a_subject_and_a_from():
 @pytest.mark.parametrize(
     ("sender", "args"),
     [
-        (send_verification_email, ("a@test.example", "Ada", URL)),
-        (send_welcome_email, ("a@test.example", "Ada")),
-        (send_activation_email, ("a@test.example", "Ada", URL)),
+        (send_verification_email, ("a@test.example", "James", URL)),
+        (send_welcome_email, ("a@test.example", "James")),
+        (send_activation_email, ("a@test.example", "James", URL)),
     ],
 )
 async def test_the_wrappers_hand_a_built_message_to_smtp_send(sender, args):

@@ -9,8 +9,8 @@ from app.models import User
 from app.services.auth_service import create_verify_token
 from app.services.rate_limit import limiter, reset_probes
 
-GOOD = {"first_name": "Ada", "last_name": "Lovelace",
-        "email": "ada@test.example", "password": "Analytical1!"}
+GOOD = {"first_name": "James", "last_name": "Chirichella",
+        "email": "James@test.example", "password": "Analytical1!"}
 
 
 def setup_function():

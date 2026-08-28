@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { signupFieldErrors } from './signupForm';
 
 const ok = {
-  firstName: 'Ada',
-  lastName: 'Lovelace',
-  email: 'ada@example.com',
+  firstName: 'James',
+  lastName: 'Chirichella',
+  email: 'James@example.com',
   password: 'Analytical1!',
   confirm: 'Analytical1!',
 };

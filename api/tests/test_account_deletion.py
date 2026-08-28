@@ -10,7 +10,7 @@ PW = "Analytical1!"
 def _activated(db, supplier_id=None):
     u = User(username="c@test.example", email="c@test.example",
              password_hash=hash_password(PW), role="user",
-             first_name="Ada", supplier_id=supplier_id,
+             first_name="James", supplier_id=supplier_id,
              email_verified_at=datetime.now(UTC), activated_at=datetime.now(UTC))
     db.add(u)
     db.flush()
