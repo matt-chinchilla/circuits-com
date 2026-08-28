@@ -62,7 +62,7 @@ def test_returns_202_and_no_token(client):
 
 def test_creates_an_unverified_unactivated_customer(client, db):
     client.post("/api/auth/signup", json=GOOD)
-    u = db.query(User).filter(User.email == "James@test.example").first()
+    u = db.query(User).filter(User.email == "james@test.example").first()
     assert u is not None
     assert u.role == "user"
     assert u.email_verified_at is None
@@ -72,13 +72,13 @@ def test_creates_an_unverified_unactivated_customer(client, db):
 
 def test_username_is_the_lowercased_email(client, db):
     client.post("/api/auth/signup", json=GOOD)
-    u = db.query(User).filter(User.email == "James@test.example").first()
-    assert u.username == "James@test.example"
+    u = db.query(User).filter(User.email == "james@test.example").first()
+    assert u.username == "james@test.example"
 
 
 def test_capability_links_are_never_set_by_signup(client, db):
     client.post("/api/auth/signup", json=GOOD)
-    u = db.query(User).filter(User.email == "James@test.example").first()
+    u = db.query(User).filter(User.email == "james@test.example").first()
     assert u.supplier_id is None
     assert u.manufacturer_id is None
 
@@ -105,7 +105,7 @@ def test_a_weak_password_returns_the_shared_policy_shape(client):
 
 def test_duplicate_email_is_reported_plainly(client):
     client.post("/api/auth/signup", json=GOOD)
-    r = client.post("/api/auth/signup", json={**GOOD, "email": "James@test.example"})
+    r = client.post("/api/auth/signup", json={**GOOD, "email": "james@test.example"})
     assert r.status_code == 409
     assert r.json()["detail"] == "email_taken"
 
@@ -132,7 +132,7 @@ def test_the_recorded_signup_ip_is_an_address_not_a_rate_limit_bucket(client, db
     # where anybody signed up, and geoip rejects it outright (which is how
     # every IPv6 visitor once landed on the analytics map as "unknown").
     client.post("/api/auth/signup", json=GOOD, headers={"X-Real-IP": "2001:db8:1:2::5"})
-    u = db.query(User).filter(User.email == "James@test.example").first()
+    u = db.query(User).filter(User.email == "james@test.example").first()
     assert u.signup_ip == "2001:db8:1:2::5"
 
 
@@ -140,7 +140,7 @@ def test_a_signup_with_no_readable_address_records_none(client, db):
     # TestClient's host is the literal string "testclient". Storing that (or
     # "unknown") in signup_ip would be inventing data; None is the truth.
     client.post("/api/auth/signup", json=GOOD)
-    u = db.query(User).filter(User.email == "James@test.example").first()
+    u = db.query(User).filter(User.email == "james@test.example").first()
     assert u.signup_ip is None
     assert u.signup_country is None
 
@@ -167,7 +167,7 @@ def test_the_verification_link_is_built_from_the_configured_origin(client, db, m
     base = settings.APP_BASE_URL.rstrip("/")
     assert sent["url"].startswith(f"{base}/admin/verify?token=")
     assert "poisoned" not in sent["url"]
-    assert sent["to"] == "James@test.example"
+    assert sent["to"] == "james@test.example"
     assert sent["first_name"] == "James"
 
 
@@ -185,9 +185,9 @@ def test_the_minted_token_names_this_user_and_this_address(client, db, monkeypat
 
     token = sent["url"].partition("?token=")[2]
     payload = decode_verify_token(token)
-    u = db.query(User).filter(User.email == "James@test.example").first()
+    u = db.query(User).filter(User.email == "james@test.example").first()
     assert payload["sub"] == str(u.id)
-    assert verify_token_matches_email(payload, "James@test.example")
+    assert verify_token_matches_email(payload, "james@test.example")
 
 
 # ── What pays for the 409 (spec §6, middle row) ─────────────────────────────
@@ -195,7 +195,7 @@ def test_the_minted_token_names_this_user_and_this_address(client, db, monkeypat
 
 def test_one_forgetful_customer_retrying_one_address_is_never_paused(client, db):
     # The entire reason the signal is DISTINCT values and not attempts.
-    _existing(db, "James@test.example")
+    _existing(db, "james@test.example")
     for _ in range(20):
         assert client.post("/api/auth/signup", json=GOOD).status_code == 409
     fresh = client.post("/api/auth/signup", json={**GOOD, "email": "grace@test.example"})
@@ -272,8 +272,8 @@ def test_a_racing_signup_for_the_same_address_answers_409_not_500(client, db, mo
             db.add(
                 User(
                     id=uuid_mod.uuid4(),
-                    username="James@test.example",
-                    email="James@test.example",
+                    username="james@test.example",
+                    email="james@test.example",
                     password_hash="x",
                     role="user",
                 )

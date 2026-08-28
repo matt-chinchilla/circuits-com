@@ -10,7 +10,7 @@ from app.services.auth_service import create_verify_token
 from app.services.rate_limit import limiter, reset_probes
 
 GOOD = {"first_name": "James", "last_name": "Chirichella",
-        "email": "James@test.example", "password": "Analytical1!"}
+        "email": "james@test.example", "password": "Analytical1!"}
 
 
 def setup_function():

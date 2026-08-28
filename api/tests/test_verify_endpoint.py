@@ -16,7 +16,7 @@ from app.services.rate_limit import limiter, reset_probes
 GOOD = {
     "first_name": "James",
     "last_name": "Chirichella",
-    "email": "James@test.example",
+    "email": "james@test.example",
     "password": "Analytical1!",
 }
 
@@ -126,7 +126,7 @@ def test_verify_mails_the_welcome(client, db, monkeypatch):
     monkeypatch.setattr(email_service, "send_welcome_email", _capture)
     client.post("/api/auth/verify", json={"token": create_verify_token(str(user.id), user.email)})
 
-    assert sent == {"to": "James@test.example", "first_name": "James"}
+    assert sent == {"to": "james@test.example", "first_name": "James"}
 
 
 # ── The link goes stale (D13) ───────────────────────────────────────────────
