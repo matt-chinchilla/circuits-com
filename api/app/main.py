@@ -8,6 +8,7 @@ from app.routes import (
     account,
     account_catalog,
     account_dashboard,
+    account_expenses,
     account_inbox,
     admin_expenses,
     admin_leads,
@@ -80,6 +81,7 @@ app.include_router(account.router)
 app.include_router(account_catalog.router)
 app.include_router(account_dashboard.router)
 app.include_router(account_dashboard.charts_router)
+app.include_router(account_expenses.router)
 app.include_router(account_inbox.router)
 
 
