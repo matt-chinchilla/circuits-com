@@ -22,6 +22,7 @@ import Icon from '@shared/components/Icon';
 import { BrandColorPicker } from '@shared/components/BrandColorPicker';
 import { BrandColorSelectModal } from '@shared/components/BrandColorSelectModal';
 import ImageUploadField from '@admin/components/ImageUploadField';
+import { useAuth } from '@admin/contexts/AuthContext';
 import QuotePanel from './QuotePanel';
 import styles from './SponsorFormPage.module.scss';
 
@@ -140,7 +141,49 @@ function emptyForm(): FormState {
   };
 }
 
+/**
+ * The customer console mounts this route too (D16), and it must not open.
+ *
+ * A placement is not self-service: Platinum and Gold are single-slot tiers
+ * with partial unique indexes behind them, so a customer edit would either
+ * race the desk or fail at the constraint — and every endpoint this form calls
+ * is `require_staff` regardless. A customer who types the URL gets the honest
+ * answer rather than a form that 403s on save beside a Stripe quote panel that
+ * is not theirs. Their own placements are the read-only list.
+ */
 export default function SponsorFormPage() {
+  const { isCustomer } = useAuth();
+  return isCustomer ? <CustomerSponsorNotice /> : <StaffSponsorFormPage />;
+}
+
+function CustomerSponsorNotice() {
+  // Canonical /admin paths, rewritten onto whichever mount is rendering (D16).
+  const consolePath = useConsolePath();
+  return (
+    <div className={styles.page}>
+      <div className={styles.pageHead}>
+        <Link to={consolePath('/admin/sponsors')} className={styles.backLink}>
+          <ChevronLeft size={14} strokeWidth={2} />
+          Sponsorships
+        </Link>
+      </div>
+      <div className={styles.panel}>
+        <div className={styles.panelHead}>
+          <h2 className={styles.panelTitle}>Sponsorships are arranged with us</h2>
+        </div>
+        <div className={styles.panelBody}>
+          <p className={styles.readOnlyNote}>
+            Placements are sold and changed by the Circuit Center team &mdash; a category
+            banner holds one sponsor at a time, so there is nothing here to edit yourself.
+            The placements your company holds are on the Sponsorships page.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StaffSponsorFormPage() {
   // Canonical /admin paths, rewritten onto whichever mount is rendering (D16).
   const consolePath = useConsolePath();
   const { id } = useParams<{ id: string }>();

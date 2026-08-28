@@ -18,16 +18,17 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models import Manufacturer, ManufacturerAlias, ManufacturerMergeCandidate, Part, Sponsor, Supplier
 from app.models.user import User
-from app.services.auth_service import get_current_user, require_console_user
+from app.services.auth_service import get_current_user, require_staff
 from app.services.manufacturer_canon import canon
 
 router = APIRouter(
     prefix="/api/admin/manufacturers",
     tags=["admin-manufacturers"],
-    # D16: the console pages are shared with activated customers, so the
-    # customer/staff wall sits on the router. It COMPOSES with the per-route
-    # get_current_user gates — it does not replace them.
-    dependencies=[Depends(require_console_user)],
+    # The customer/staff wall (D16) sits on the router: everything served
+    # here is company-wide STAFF data, so an activated customer is refused
+    # with 403 staff_only rather than admitted as a console user. It COMPOSES
+    # with the per-route get_current_user gates — it does not replace them.
+    dependencies=[Depends(require_staff)],
 )
 
 

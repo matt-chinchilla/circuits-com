@@ -128,15 +128,16 @@ class TestForcedChangeGate:
         """This asserted the OPPOSITE until the D16 wall landed.
 
         It used to show a customer-role user REACHING an admin route, refused
-        only on account of their password — which was the whole hole. Every
-        console router now carries ``require_console_user``, so the refusal is
-        about the principal, and it happens whether or not a password is
-        flagged. kennedy_user is verified but not activated (D17).
+        only on account of their password — which was the whole hole. Staff
+        routes now carry ``require_staff`` (the 2026-08-27 fail-closed pass),
+        so the refusal is about the PRINCIPAL and fires before activation is
+        consulted — the body is staff_only for every customer, activated or
+        not. kennedy_user is verified but not activated (D17).
         """
         token = _login(client, email="kennedy_user@test.example").json()["token"]
         resp = client.get(ADMIN_ROUTE, headers=_bearer(token))
         assert resp.status_code == 403
-        assert resp.json()["detail"] == "account_not_activated"
+        assert resp.json()["detail"] == "staff_only"
 
     def test_the_password_gate_still_runs_before_the_wall(self, client, db, seeded_db):
         """Composition order, pinned — the wall ADDS to this gate, never replaces it.

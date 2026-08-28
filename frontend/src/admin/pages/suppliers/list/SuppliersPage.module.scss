@@ -350,3 +350,51 @@
 .error {
   color: var(--a-danger);
 }
+
+// ─── Customer branch (/account/suppliers) ───────────────────────────────────
+//
+// The staff rules above are untouched: these are additions the customer list
+// composes ON TOP of the same card, so both branches stay one design.
+
+// CatalogSwitch centres itself absolutely — it needs a positioned box with a
+// floor height. The staff head carries no switch and so carries neither.
+.pageHeadSwitch {
+  position: relative;
+  min-height: 46px;
+}
+
+// A distributor's own detail page is staff-only (its API is require_staff), so
+// the customer card leads nowhere and must not pretend to: no pointer, no lift.
+// Same specificity as `.supCard:hover`, declared later, so it wins.
+.supCardStatic {
+  cursor: default;
+
+  &:hover {
+    box-shadow: var(--a-glass-hi), var(--a-glass-shadow);
+    transform: none;
+    border-color: var(--a-glass-rim);
+  }
+}
+
+.supSite {
+  font-family: $admin-font-mono;
+  font-size: 12px;
+  color: var(--a-primary);
+  text-decoration: none;
+  align-self: flex-start;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  &:hover {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+}
+
+.supSiteMuted {
+  font-family: $admin-font-mono;
+  font-size: 12px;
+  color: var(--a-fg4);
+}

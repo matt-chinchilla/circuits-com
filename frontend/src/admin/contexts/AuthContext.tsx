@@ -8,7 +8,7 @@ import {
 } from 'react';
 import type { ReactNode } from 'react';
 import { adminApi } from '@admin/services/adminApi';
-import { activationFromProbe } from '@admin/services/accountActivation';
+import { activationFromProbe, type AccountMe } from '@admin/services/accountActivation';
 import { passwordGate } from '@admin/services/passwordGate';
 import type { AuthResponse, UserInfo } from '@admin/types/admin';
 
@@ -39,6 +39,27 @@ interface AuthContextValue {
    * "awaiting approval" optimistically accuses a good customer.
    */
   accountActivated: boolean | null;
+  /**
+   * True when this session belongs to the CUSTOMER mount — the same
+   * CUSTOMER_ROLES list ProtectedRoute routes on. Derived here rather than
+   * re-spelled as `user?.role === 'user'` at each call site, because the
+   * console is one component tree at two mounts (D16) and every customer-only
+   * branch in it has to agree about who a customer is.
+   */
+  isCustomer: boolean;
+  /**
+   * GET /api/account/me for a CUSTOMER — identity, activation, and the two
+   * capability links. `null` for staff, for a signed-out visitor, and while
+   * the probe is in flight.
+   *
+   * The probe already fetches this body to answer the activation question, so
+   * keeping it costs nothing and saves every console page a second round trip
+   * to ask what kind of company this is. Capability is `is_supplier` and
+   * `is_manufacturer`, INDEPENDENTLY: both set is the normal case for the
+   * largest players and neither set is the free browsing account, so a reader
+   * that treats them as one enum has already got Avnet wrong.
+   */
+  account: AccountMe | null;
   /** Sign in with the EMAIL address — there is no username login. */
   login: (email: string, password: string, remember?: boolean) => Promise<void>;
   /** Change the password and adopt the fresh token the server hands back. */
@@ -52,6 +73,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [accountActivated, setAccountActivated] = useState<boolean | null>(null);
+  const [account, setAccount] = useState<AccountMe | null>(null);
   // External store, not React state: the 403 that raises this flag is caught in
   // an axios interceptor, which has no way to reach a context.
   const mustChangePassword = useSyncExternalStore(passwordGate.subscribe, passwordGate.isRequired);
@@ -97,14 +119,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!CUSTOMER_ROLES.includes(user?.role ?? '')) {
       // Staff, or nobody. There is no question to answer.
       setAccountActivated(null);
+      setAccount(null);
       return;
     }
     let cancelled = false;
     setAccountActivated(null);
+    setAccount(null);
     adminApi
       .getAccountMe()
       .then((me) => {
-        if (!cancelled) setAccountActivated(activationFromProbe({ ok: true, body: me }));
+        if (cancelled) return;
+        setAccountActivated(activationFromProbe({ ok: true, body: me }));
+        // The body itself, not just the verdict read off it. A page asking
+        // "am I a distributor?" is asking this same call; throwing the answer
+        // away meant every one of them fetched it again.
+        setAccount(me);
       })
       .catch((err) => {
         if (cancelled) return;
@@ -116,11 +145,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             detail: response?.data?.detail,
           }),
         );
+        // No body, so no capability. Chrome and pages fall back to the
+        // unlinked shape, which is the right answer when nothing is known —
+        // never a guess at what this account might be.
+        setAccount(null);
       });
     return () => {
       cancelled = true;
     };
   }, [user?.id, user?.role]);
+
+  // Same list the probe keys on, so "is this a customer" has one answer per
+  // render rather than one per reader.
+  const isCustomer = CUSTOMER_ROLES.includes(user?.role ?? '');
 
   // One place where a login-shaped payload becomes a session — /auth/login and
   // /auth/change-password both funnel through here so a token is never stored
@@ -151,10 +188,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(() => {
     localStorage.removeItem('admin_token');
     passwordGate.set(false);
-    // The activation verdict clears itself: setUser(null) re-runs the probe
-    // effect, which finds no customer and resets it. Mutation-checked — an
-    // explicit setAccountActivated(null) here changed nothing, so it is not
-    // here. The next person to sign in on this tab inherits nothing.
+    // The activation verdict and the account body clear themselves:
+    // setUser(null) re-runs the probe effect, which finds no customer and
+    // resets both. Mutation-checked — an explicit setAccountActivated(null)
+    // here changed nothing, so it is not here, and `account` is reset on the
+    // same line. The next person to sign in on this tab inherits nothing.
     setUser(null);
   }, []);
 
@@ -166,6 +204,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loading,
         mustChangePassword,
         accountActivated,
+        isCustomer,
+        account,
         login,
         changePassword,
         logout,

@@ -2,10 +2,12 @@ import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Search, ChevronRight, List, Grid as GridIcon, Plus } from 'lucide-react';
 import Breadcrumbs from '@admin/components/Breadcrumbs';
+import { useAuth } from '@admin/contexts/AuthContext';
 import { adminApi } from '@admin/services/adminApi';
 import type { AdminCategory, FeaturedSupplier } from '@admin/types/admin';
 import Icon from '@shared/components/Icon';
 import { categoryPath } from '@shared/utils/categoryPath';
+import AccountCategoriesList from './AccountCategoriesList';
 import styles from './CategoriesPage.module.scss';
 
 type ViewMode = 'tree' | 'grid';
@@ -31,7 +33,22 @@ function resolveFeatured(c: {
   return [];
 }
 
+/**
+ * One URL, two questions.
+ *
+ * Staff get the taxonomy — the whole two-level tree, every node whether or not
+ * anything hangs off it. A customer gets the FLAT, count-ordered list of the
+ * categories their own parts appear in (GET /api/account/categories, scoped
+ * server-side). Two components rather than branches inside one, so the staff
+ * tree below is the code it always was and neither branch's hooks are
+ * conditional.
+ */
 export default function CategoriesPage() {
+  const { isCustomer } = useAuth();
+  return isCustomer ? <AccountCategoriesList /> : <StaffCategoriesPage />;
+}
+
+function StaffCategoriesPage() {
   const [categories, setCategories] = useState<AdminCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());

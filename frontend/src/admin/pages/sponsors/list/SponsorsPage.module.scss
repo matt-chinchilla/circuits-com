@@ -801,3 +801,17 @@
     flex: 1;
   }
 }
+
+// ─── Customer sponsorships ─────────────────────────────────────────────────
+// The read-only table a customer sees of their own placements. Additive only:
+// the staff list above renders exactly as it did.
+
+// The sponsorship's own description, under the placement it belongs to.
+.rowNote {
+  margin-top: 3px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--a-fg3);
+  max-width: 46ch;
+  text-wrap: pretty;
+}

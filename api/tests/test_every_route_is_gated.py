@@ -32,15 +32,18 @@ from app.routes.calendar import require_calendar_access
 from app.services.auth_service import (
     get_authenticated_user,
     require_account_user,
-    require_console_user,
     require_staff,
 )
 
 # The dependencies that name a PRINCIPAL — the D16 customer/staff wall.
-WALL = {require_console_user, require_staff, require_account_user}
+# ``require_console_user`` is deliberately NOT here: the 2026-08-27 fail-closed
+# pass removed its every production use precisely because it ADMITS customer
+# principals. Blessing it would let the next staff route re-open that door
+# with this guard still green.
+WALL = {require_staff, require_account_user}
 
 # ``require_calendar_access`` is a wall too, but the walk below cannot see it:
-# it CALLS require_console_user rather than declaring it, because its other
+# it CALLS require_staff rather than declaring it, because its other
 # door (the Roundcube plugin's shared secret) arrives with no bearer token at
 # all and a declared dependency would 401 it first. Named here by identity so
 # the calendar is neither exempted nor mislabelled public — and backed by
@@ -85,6 +88,7 @@ PUBLIC_ROUTES = {
     ("POST", "/api/join"),
     ("POST", "/api/keyword-request"),
     ("POST", "/api/track"),
+    ("POST", "/api/outbound"),
     ("GET", "/api/sitemap.xml"),
     # Money. The webhook authenticates by HMAC over the raw body, and the
     # self-serve Silver checkout is a PUBLIC purchase path by design.
@@ -167,7 +171,7 @@ def test_every_authenticated_route_carries_the_customer_staff_wall():
             unwalled.append(f"{method} {path}")
     assert not unwalled, (
         "These routes authenticate but never say WHICH principal may pass — "
-        "add require_console_user (or require_staff):\n  " + "\n  ".join(sorted(unwalled))
+        "add require_staff (or require_account_user):\n  " + "\n  ".join(sorted(unwalled))
     )
 
 
@@ -185,11 +189,12 @@ def test_the_calendar_gate_really_is_a_wall(client, seeded_db, auth_header):
     """WALL_BY_CALL is an assertion of fact, so prove the fact.
 
     Naming require_calendar_access as a wall is worthless if it stops being
-    one. kennedy_user is a verified but UNACTIVATED customer, so the console
-    gate must refuse them here exactly as it does on /api/admin/*.
+    one. Since the fail-closed pass (2026-08-27) the calendar is STAFF-only:
+    a customer is refused on PRINCIPAL, before activation is even consulted,
+    so activated and unactivated customers get the same staff_only body.
     """
     resp = client.get(
         "/api/calendar/events", headers=auth_header(email="kennedy_user@test.example")
     )
     assert resp.status_code == 403
-    assert resp.json()["detail"] == "account_not_activated"
+    assert resp.json()["detail"] == "staff_only"

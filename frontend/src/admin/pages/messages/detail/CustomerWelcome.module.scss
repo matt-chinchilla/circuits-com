@@ -1,0 +1,128 @@
+@use '@admin/styles/variables' as *;
+
+// The welcome + orientation centrepiece — the first thing a new customer
+// opens. Same vocabulary as the staff welcome body (centred hero, initials
+// avatar, admin tokens throughout); what it adds is the guide, which is built
+// from the account's own capability links rather than a fixed tour.
+
+.welcome {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 24px;
+}
+
+.hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 28px 24px;
+  text-align: center;
+  background: var(--a-card);
+  border: 1px solid var(--a-border-soft);
+  border-radius: $admin-border-radius;
+}
+
+.avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #0a4a2e, #157a4b);
+  color: #ffffff; // white on the brand green — correct in both themes
+  font-weight: 700;
+  font-size: 18px;
+  letter-spacing: 0.04em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.greeting {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--a-fg1);
+  letter-spacing: -0.01em;
+}
+
+.lede {
+  margin: 0;
+  max-width: 52ch;
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--a-fg2);
+  text-wrap: pretty;
+}
+
+.guideLabel {
+  font-family: $admin-font-mono;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--a-fg4);
+}
+
+.stops {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.stop {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px;
+  border: 1px solid var(--a-border);
+  border-radius: $admin-border-radius;
+  background: var(--a-card);
+  text-decoration: none;
+  transition: border-color 150ms, background-color 150ms;
+
+  &:hover {
+    border-color: var(--a-primary);
+    background: var(--a-hover);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--a-primary);
+    outline-offset: 2px;
+  }
+}
+
+.stopHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--a-fg1);
+}
+
+.stopIcon {
+  font-size: 18px;
+  color: var(--a-primary);
+}
+
+.stopBlurb {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--a-fg3);
+  text-wrap: pretty;
+}
+
+// Shown only to an account holding neither capability link. Says what is true
+// — the pages are theirs and empty — rather than implying they did something
+// wrong or that the console is broken.
+.unlinked {
+  margin: 0;
+  padding: 14px 16px;
+  border: 1px dashed var(--a-border);
+  border-radius: $admin-border-radius;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--a-fg2);
+  text-wrap: pretty;
+}

@@ -595,3 +595,26 @@
   font-size: $admin-font-base;
   color: var(--a-fg3);
 }
+
+/* ── Customer branch (/account/categories) ──────────────────── */
+/* The flat, count-ordered list of the categories the caller's own parts sit
+   in. It reuses the grid cards above; these two rules are the difference — a
+   card that is a real link, and the parent it hangs under. */
+
+.catCardLink {
+  text-decoration: none;
+  color: inherit;
+
+  &:focus-visible {
+    outline: 2px solid var(--a-primary);
+    outline-offset: 2px;
+  }
+}
+
+.catParent {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--a-fg4);
+}

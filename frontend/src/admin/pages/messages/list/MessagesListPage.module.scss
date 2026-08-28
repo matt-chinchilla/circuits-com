@@ -691,3 +691,56 @@
     max-width: 200px;
   }
 }
+
+// ─── Customer inbox ────────────────────────────────────────────────────────
+// The same row material as the staff table with four columns instead of
+// eight. Additive only: the staff grid above renders exactly as it did.
+
+// Four columns fit a phone, so the staff grid's forced scroll width would buy
+// a scrollbar for nothing.
+.table.inboxTable {
+  @media (max-width: $bp-admin-mobile) {
+    thead,
+    tbody {
+      min-width: 0;
+    }
+  }
+}
+
+// Unread reads in the brand accent here, not the alert colour: a recipient's
+// inbox is not a triage queue, and nothing in it is overdue.
+.inboxTable .isNew td:first-child {
+  border-left-color: var(--a-primary);
+}
+
+// The staff list's sticky day headers assume a long scrolling queue; in this
+// short table the stuck cell paints over the first row and eats its clicks.
+.inboxTable .cluster td {
+  position: static;
+}
+
+// A kind of message this build has no chip for — the account inbox is
+// specified to carry receipts and confirmations that do not exist yet, so an
+// unknown type prints its own name rather than vanishing from the row.
+.typePlain {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  border: 1px solid var(--a-border);
+  border-radius: 4px;
+  font-family: $admin-font-mono;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--a-fg3);
+}
+
+// Second line of an empty state, under the headline sentence.
+.emptyNote {
+  max-width: 44ch;
+  text-align: center;
+  font-size: 13px;
+  color: var(--a-fg4);
+  text-wrap: pretty;
+}

@@ -1,0 +1,273 @@
+@use '@shared/styles/variables' as *;
+@use '@admin/styles/variables' as *;
+@use '../glass' as *;
+
+// The customer's own-company surfaces. Page-head metrics are the Manufacturers
+// list's (so the centered switch lands identically on either page) and the
+// card is the supplier-card material read through the same --a-* tokens — no
+// new design language, just the two pages the console did not have.
+
+.page {
+  max-width: 1400px;
+}
+
+// ─── Page head ──────────────────────────────────────────────────────────────
+//
+// `position: relative` + a floor height is load-bearing: CatalogSwitch centres
+// itself absolutely against this box.
+
+.pageHead {
+  position: relative;
+  min-height: 46px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.pageHeadLeft {
+  min-width: 0;
+}
+
+.title {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--a-fg1);
+  letter-spacing: -0.02em;
+  margin: 0 0 4px;
+}
+
+.subtitle {
+  font-size: 14px;
+  color: var(--a-fg3);
+  margin: 0;
+}
+
+// The centered switch is absolute in this header — the text block must yield
+// the middle third or a long subtitle runs beneath the control.
+@media (min-width: #{$bp-desktop + 1px}) {
+  .subtitle {
+    max-width: 34ch;
+  }
+}
+
+// ─── Company card ───────────────────────────────────────────────────────────
+
+.card {
+  @include a-glass-pane;
+  border-radius: var(--a-radius);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  max-width: 720px;
+}
+
+.cardHead {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.logo {
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #a88d2e, #c4a53a);
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 20px;
+  font-family: $admin-font-display;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.logoImg {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: var(--a-hover);
+  border-radius: 12px;
+}
+
+.headBody {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.name {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--a-fg1);
+  margin: 0;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+
+.site {
+  font-family: $admin-font-mono;
+  font-size: 12px;
+  color: var(--a-primary);
+  text-decoration: none;
+  align-self: flex-start;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  &:hover {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+}
+
+.siteMuted {
+  font-family: $admin-font-mono;
+  font-size: 12px;
+  color: var(--a-fg4);
+}
+
+.tierPill {
+  padding: 4px 10px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border-radius: 3px;
+  font-family: $admin-font-display;
+  white-space: nowrap;
+  flex-shrink: 0;
+  background: rgba(148, 163, 184, 0.18);
+  color: var(--a-fg2);
+
+  &[data-tier='gold'] {
+    background: rgba(217, 119, 6, 0.12);
+    color: var(--a-warn);
+  }
+
+  &[data-tier='platinum'] {
+    background: rgba(75, 85, 99, 0.12);
+    color: var(--a-fg2);
+  }
+}
+
+.desc {
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--a-fg2);
+  margin: 0;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0;
+  padding-top: 18px;
+  border-top: 1px solid var(--a-border-soft);
+}
+
+// Column-REVERSE: `dt` must precede `dd` in the markup, the figure reads first.
+.stat {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 4px;
+  min-width: 0;
+}
+
+.statNum {
+  margin: 0;
+  font-family: $admin-font-mono;
+  font-size: 24px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--a-fg1);
+  line-height: 1.1;
+}
+
+.statWord {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--a-fg1);
+  line-height: 1.3;
+}
+
+.statLabel {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--a-fg3);
+}
+
+.cardFoot {
+  margin: 0;
+  font-size: 12px;
+  color: var(--a-fg3);
+  line-height: 1.5;
+}
+
+// ─── Notice (empty states) ──────────────────────────────────────────────────
+
+.notice {
+  @include a-glass-pane;
+  border-radius: var(--a-radius);
+  padding: 48px 32px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.noticeIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--a-hover);
+  color: var(--a-fg3);
+  margin-bottom: 4px;
+}
+
+.noticeTitle {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--a-fg1);
+  margin: 0;
+}
+
+.noticeBody {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--a-fg2);
+  margin: 0;
+  max-width: 52ch;
+}
+
+.noticeHint {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--a-fg3);
+  margin: 0;
+  max-width: 52ch;
+}
+
+.busy {
+  padding: 48px;
+  text-align: center;
+  font-size: 14px;
+  color: var(--a-fg3);
+  margin: 0;
+}

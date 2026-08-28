@@ -24,16 +24,17 @@ from app.config import settings
 from app.db.session import get_db
 from app.models import Sponsor, User
 from app.services import stripe_quotes
-from app.services.auth_service import get_current_user, require_console_user
+from app.services.auth_service import get_current_user, require_staff
 from app.services.stripe_quotes import QUOTE_LADDER, StripeApiError
 
 router = APIRouter(
     prefix="/api/admin",
     tags=["admin-quotes"],
-    # D16: the console pages are shared with activated customers, so the
-    # customer/staff wall sits on the router. It COMPOSES with the per-route
-    # get_current_user gates — it does not replace them.
-    dependencies=[Depends(require_console_user)],
+    # The customer/staff wall (D16) sits on the router: everything served
+    # here is company-wide STAFF data, so an activated customer is refused
+    # with 403 staff_only rather than admitted as a console user. It COMPOSES
+    # with the per-route get_current_user gates — it does not replace them.
+    dependencies=[Depends(require_staff)],
 )
 
 

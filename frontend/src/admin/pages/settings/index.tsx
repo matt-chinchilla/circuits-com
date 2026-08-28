@@ -649,8 +649,14 @@ export default function SettingsPage() {
             <>
               {/* The only server-backed card on this page: real keys, real
                   endpoints. Everything below it is still localStorage demo
-                  state. */}
-              <FeedCredentialsCard onToast={showToast} />
+                  state.
+
+                  Staff only, and gated at the MOUNT: these are OUR distributor
+                  API keys, and the card fetches them the moment it renders. On
+                  the customer mount that request is a 403, which the card can
+                  only report as "Could not load feed credentials." — an error
+                  about a screen a customer was never meant to see. */}
+              {!isCustomer && <FeedCredentialsCard onToast={showToast} />}
 
               <div className={styles.panel}>
                 <div className={styles.panelHead}>

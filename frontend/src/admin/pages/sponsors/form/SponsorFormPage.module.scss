@@ -625,3 +625,13 @@
   grid-template-columns: 1fr 64px 110px;
   gap: 8px;
 }
+
+// The one paragraph a customer sees here instead of the form.
+.readOnlyNote {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--a-fg2);
+  max-width: 62ch;
+  text-wrap: pretty;
+}

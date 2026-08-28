@@ -225,3 +225,53 @@
     transform: translateY(0);
   }
 }
+
+// ─── Customer inbox body ───────────────────────────────────────────────────
+// The fallback layout for a message this build has no designed body for. The
+// account inbox is specified to carry receipts and payment confirmations that
+// do not exist yet, so it renders the fields that actually arrived. Additive
+// only: the staff bodies above are untouched.
+
+.genericBody {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px 24px;
+}
+
+.genericList {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px;
+  margin: 0;
+}
+
+.genericTerm {
+  font-family: $admin-font-mono;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--a-fg3);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.genericValue {
+  margin: 2px 0 0;
+  font-size: 14px;
+  color: var(--a-fg1);
+  overflow-wrap: anywhere;
+}
+
+.genericText {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--a-fg2);
+  text-wrap: pretty;
+}
+
+.genericEmpty {
+  margin: 0;
+  font-size: 14px;
+  color: var(--a-fg3);
+}

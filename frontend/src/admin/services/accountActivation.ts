@@ -15,10 +15,24 @@
  * the bottom, so the decision logic unit-tests with no React and no DOM.
  */
 
+import type { AccountTier } from '@admin/types/account';
+
 /** The EXACT 403 detail the backend sends (`auth_service.NOT_ACTIVATED_DETAIL`). */
 export const NOT_ACTIVATED_DETAIL = 'account_not_activated';
 
-/** GET /api/account/me, as much of it as this file needs. */
+/**
+ * GET /api/account/me — identity, activation, and CAPABILITY.
+ *
+ * This file only reads `activated`; the rest is here because the probe is the
+ * one call that already fetches this body, and AuthContext keeps the whole
+ * object rather than throwing away the answer to "what kind of company is
+ * this?" and asking again.
+ *
+ * Every field past `email` is optional for the same reason `activated` is: the
+ * probe must survive a body that predates a field, and `account` is nullable
+ * anyway, so a consumer optional-chains either way (`account?.is_supplier`
+ * is `boolean | undefined` whichever way this is typed).
+ */
 export interface AccountMe {
   id: string;
   full_name: string;
@@ -30,6 +44,20 @@ export interface AccountMe {
    * this stays correct instead of quietly reporting everyone activated.
    */
   activated?: boolean;
+  /**
+   * D18 — capability is the LINKS the account holds, not a type. Both may be
+   * set at once (Avnet distributes AND manufactures) and neither is the free
+   * browsing account, so read them as two independent booleans. A consumer
+   * that writes `is_supplier ? … : is_manufacturer ? …` has already lost the
+   * largest customers.
+   */
+  is_supplier?: boolean;
+  is_manufacturer?: boolean;
+  /**
+   * Derived from the highest ACTIVE sponsorship the linked supplier holds —
+   * 'free' | 'silver' | 'gold' | 'platinum'. There is no tier column.
+   */
+  tier?: AccountTier;
 }
 
 /** True for the backend's not-activated 403, and for nothing else. */

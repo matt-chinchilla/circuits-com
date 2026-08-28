@@ -6,6 +6,9 @@ from app.admin import setup_admin
 from app.config import settings
 from app.routes import (
     account,
+    account_catalog,
+    account_dashboard,
+    account_inbox,
     admin_expenses,
     admin_leads,
     admin_manufacturers,
@@ -74,6 +77,10 @@ app.include_router(admin_manufacturers.router)
 app.include_router(admin_leads.router)
 app.include_router(admin_users.router)
 app.include_router(account.router)
+app.include_router(account_catalog.router)
+app.include_router(account_dashboard.router)
+app.include_router(account_dashboard.charts_router)
+app.include_router(account_inbox.router)
 
 
 setup_admin(app)

@@ -10,7 +10,9 @@ import {
 import { useNavigate, Link } from 'react-router-dom';
 import { useConsolePath } from '@admin/services/consolePath';
 import { Plus, Upload, Download, Search } from 'lucide-react';
+import { useAuth } from '@admin/contexts/AuthContext';
 import { useDemo } from '@admin/contexts/DemoContext';
+import { accountApi } from '@admin/services/accountApi';
 import { adminApi } from '@admin/services/adminApi';
 import Icon from '@shared/components/Icon';
 import type { Part, PaginatedResponse } from '@admin/types/admin';
@@ -346,6 +348,12 @@ export default function PartsPage() {
   const consolePath = useConsolePath();
   const navigate = useNavigate();
   const { demoMode } = useDemo();
+  // Who is reading decides which catalog this is. A customer sees only their
+  // own rows, and capability is the two links read INDEPENDENTLY — a company
+  // holding both is the normal case for the largest distributors, and holding
+  // neither is the free account, which is a supported state and not an error.
+  const { isCustomer, account } = useAuth();
+  const isLinked = account?.is_supplier === true || account?.is_manufacturer === true;
   const [data, setData] = useState<PaginatedResponse<Part> | null>(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -362,12 +370,16 @@ export default function PartsPage() {
   // Preserve real adminApi.getParts signature (server-side search + pagination)
   const fetchParts = useCallback(() => {
     setLoading(true);
-    adminApi
-      .getParts({ page, search: search.trim() || undefined })
+    const query = { page, search: search.trim() || undefined };
+    // GET /account/parts returns the SAME page shape from the SAME serializer,
+    // scoped server-side — a distributor gets the parts they carry, a maker the
+    // parts they make, and an unlinked account an empty page rather than ours.
+    const request = isCustomer ? accountApi.getAccountParts(query) : adminApi.getParts(query);
+    request
       .then(setData)
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [page, search]);
+  }, [page, search, isCustomer]);
 
   useEffect(() => {
     const timer = setTimeout(fetchParts, 300);
@@ -450,26 +462,41 @@ export default function PartsPage() {
       <div className={styles.pageHead}>
         <div className={styles.pageHeadLeft}>
           <h1>Parts</h1>
-          <p>{totalCount} SKU{totalCount === 1 ? '' : 's'} in catalog{demoMode ? ' (demo data)' : ''}</p>
+          {/* The demo-data suffix is a staff fiction: a customer's rows come
+              from the account routes, which ignore the toggle entirely, so it
+              would be labelling data it did not produce. */}
+          {isCustomer ? (
+            <p>
+              {isLinked
+                ? `${totalCount} SKU${totalCount === 1 ? '' : 's'} in your catalog`
+                : 'Nothing linked to your account yet'}
+            </p>
+          ) : (
+            <p>{totalCount} SKU{totalCount === 1 ? '' : 's'} in catalog{demoMode ? ' (demo data)' : ''}</p>
+          )}
         </div>
-        <div className={styles.pageHeadActions}>
-          <Link to={consolePath('/admin/import')} className={`${styles.btn} ${styles.btnGhost}`}>
-            <Upload />
-            Import CSV
-          </Link>
-          <button type="button" className={`${styles.btn} ${styles.btnGhost}`}>
-            <Download />
-            Export
-          </button>
-          <Link
-            to={consolePath('/admin/parts/new')}
-            data-tour="add-part"
-            className={`${styles.btn} ${styles.btnPrimary}`}
-          >
-            <Plus />
-            Add Part
-          </Link>
-        </div>
+        {/* Import, export and Add Part all write to OUR catalog and are
+            staff-gated server-side. A customer reads their rows here. */}
+        {!isCustomer && (
+          <div className={styles.pageHeadActions}>
+            <Link to={consolePath('/admin/import')} className={`${styles.btn} ${styles.btnGhost}`}>
+              <Upload />
+              Import CSV
+            </Link>
+            <button type="button" className={`${styles.btn} ${styles.btnGhost}`}>
+              <Download />
+              Export
+            </button>
+            <Link
+              to={consolePath('/admin/parts/new')}
+              data-tour="add-part"
+              className={`${styles.btn} ${styles.btnPrimary}`}
+            >
+              <Plus />
+              Add Part
+            </Link>
+          </div>
+        )}
       </div>
 
       <div className={styles.panel}>
@@ -595,7 +622,22 @@ export default function PartsPage() {
             )}
             {!loading && visibleRows.length === 0 && (
               <tr className={styles.emptyRow}>
-                <td colSpan={7}>No parts found.</td>
+                <td colSpan={7}>
+                  {isCustomer && !isLinked ? (
+                    <>
+                      <strong className={styles.emptyTitle}>
+                        Your account is not linked to a company yet.
+                      </strong>
+                      <span className={styles.emptyNote}>
+                        Circuit Center staff link an account to the distributor or manufacturer
+                        it belongs to. The parts you carry or make appear here once yours is
+                        linked.
+                      </span>
+                    </>
+                  ) : (
+                    'No parts found.'
+                  )}
+                </td>
               </tr>
             )}
             {!loading &&

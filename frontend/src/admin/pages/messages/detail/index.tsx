@@ -30,6 +30,8 @@ import {
   toggleRead,
 } from '@admin/services/messageStore';
 import type { AssignedTo, Message } from '@admin/types/messages';
+import { useAuth } from '@admin/contexts/AuthContext';
+import CustomerMessagePage from './CustomerMessagePage';
 import styles from './MessageDetailPage.module.scss';
 
 // Schematic-designator labels for the assignee KV row (U1/U2/U3 mirrors the
@@ -40,7 +42,22 @@ const ASSIGNEE_DESIGNATOR: Record<Exclude<AssignedTo, null>, string> = {
   Ronald: 'U3',
 };
 
+/**
+ * One route, two readers (D16).
+ *
+ * A customer opens their own row through the account API; the staff page below
+ * reads the shared inbox through `messageStore` and carries the triage
+ * workflow with it — archive, assign, the reply panel, the activity log. None
+ * of that is the recipient's, and its optimistic PATCHes would be refused with
+ * a 422 against the account routes, so the two are separate components and the
+ * staff path is exactly what it was.
+ */
 export default function MessageDetailPage() {
+  const { isCustomer } = useAuth();
+  return isCustomer ? <CustomerMessagePage /> : <StaffMessageDetailPage />;
+}
+
+function StaffMessageDetailPage() {
   // Canonical /admin paths, rewritten onto whichever mount is rendering (D16).
   const consolePath = useConsolePath();
   const { id = '' } = useParams<{ id: string }>();

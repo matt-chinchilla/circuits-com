@@ -23,6 +23,12 @@ const SupplierDetailPage = lazy(
   () => import("@admin/pages/suppliers/detail"),
 );
 const SupplierFormPage = lazy(() => import("@admin/pages/suppliers/form"));
+// The customer console's two own-company pages. They have no staff twin: the
+// sidebar offers each one only to an account holding that capability link, and
+// CatalogSwitch is how an account holding both moves between the halves of a
+// pair (surface-map 1).
+const MySupplyPage = lazy(() => import("@admin/pages/suppliers/mine"));
+const MyManufacturingPage = lazy(() => import("@admin/pages/manufacturers/mine"));
 const PartsPage = lazy(() => import("@admin/pages/parts/list"));
 const PartDetailPage = lazy(() => import("@admin/pages/parts/detail"));
 const PartFormPage = lazy(() => import("@admin/pages/parts/form"));
@@ -68,6 +74,8 @@ export default function ConsoleRoutes() {
         path="suppliers/:id/edit"
         element={<SupplierFormPage />}
       />
+      <Route path="my-supply" element={<MySupplyPage />} />
+      <Route path="my-manufacturing" element={<MyManufacturingPage />} />
       <Route path="parts" element={<PartsPage />} />
       <Route path="parts/new" element={<PartFormPage />} />
       <Route path="parts/:id" element={<PartDetailPage />} />

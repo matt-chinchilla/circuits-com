@@ -8,6 +8,7 @@ import Icon from '@shared/components/Icon';
 import BellDropdown from '@admin/components/messages/BellDropdown';
 import PresenceBubbles from '@admin/components/PresenceBubbles';
 import { adminApi } from '@admin/services/adminApi';
+import { accountApi } from '@admin/services/accountApi';
 import { consoleBase, canonicalPath, mountPath } from '@admin/services/consolePath';
 import {
   loadMessages,
@@ -26,7 +27,6 @@ import type { ReactNode } from 'react';
 
 interface AdminLayoutProps {
   children: ReactNode;
-  role?: 'admin' | 'company';
 }
 
 // Sidebar links use Phosphor Light names (v5 design handoff 2026-05-23).
@@ -39,35 +39,104 @@ interface SidebarLink {
   label: string;
   icon: string;
   badgeKey?: BadgeKey;
-  adminOnly?: boolean;
   // Anchor hook for the guided-tour wizard. Falls through to NavLink as
   // data-tour="<value>" so flows can spotlight specific sidebar entries.
   tour?: string;
 }
 
+// STAFF sidebar. The customer's is built from capability instead — see
+// customerLinks() below, which is a different list rather than a filter of
+// this one: every entry here is a staff surface (require_staff routes, our own
+// finances, our own CRM), so "hide some of them" was never the right shape.
 const CATALOG_LINKS: SidebarLink[] = [
   { to: '/admin', label: 'Dashboard', icon: 'gauge', tour: 'side-dashboard' },
   { to: '/admin/parts', label: 'Parts', icon: 'package', badgeKey: 'parts', tour: 'side-parts' },
   { to: '/admin/suppliers', label: 'Suppliers', icon: 'buildings', badgeKey: 'suppliers', tour: 'side-suppliers' },
-  { to: '/admin/manufacturers', label: 'Manufacturers', icon: 'factory', badgeKey: 'manufacturers', adminOnly: true },
-  // The registered-account roster. Staff-only data (require_staff), so it
-  // carries adminOnly like every other internal entity above and below it.
-  { to: '/admin/users', label: 'Users', icon: 'users-three', adminOnly: true },
-  { to: '/admin/categories', label: 'Categories', icon: 'squares-four', adminOnly: true, tour: 'side-categories' },
-  { to: '/admin/sponsors', label: 'Sponsors', icon: 'star', adminOnly: true, tour: 'side-sponsors' },
-  // Operating costs — the other half of the dashboard P&L. Admin-only: it is
-  // internal finance, never anything a supplier login should see.
-  { to: '/admin/expenses', label: 'Expenses', icon: 'receipt', adminOnly: true, tour: 'side-expenses' },
+  { to: '/admin/manufacturers', label: 'Manufacturers', icon: 'factory', badgeKey: 'manufacturers' },
+  // The registered-account roster. Staff-only data (require_staff).
+  { to: '/admin/users', label: 'Users', icon: 'users-three' },
+  { to: '/admin/categories', label: 'Categories', icon: 'squares-four', tour: 'side-categories' },
+  { to: '/admin/sponsors', label: 'Sponsors', icon: 'star', tour: 'side-sponsors' },
+  // Operating costs — the other half of the dashboard P&L. Internal finance,
+  // never anything a customer login should see.
+  { to: '/admin/expenses', label: 'Expenses', icon: 'receipt', tour: 'side-expenses' },
   { to: '/admin/reports', label: 'Reports', icon: 'chart-bar', tour: 'side-reports' },
 ];
 
 const COMMS_LINKS: SidebarLink[] = [
-  { to: '/admin/messages', label: 'Messages', icon: 'envelope', adminOnly: true, tour: 'side-messages' },
+  { to: '/admin/messages', label: 'Messages', icon: 'envelope', tour: 'side-messages' },
 ];
 
 const SYSTEM_LINKS: SidebarLink[] = [
   { to: '/admin/import', label: 'Import Queue', icon: 'upload-simple', badgeKey: 'imports', tour: 'side-import' },
   { to: '/admin/settings', label: 'Settings', icon: 'gear-six', tour: 'side-settings' },
+];
+
+/**
+ * The CUSTOMER sidebar, built from the two capability links (spec §1).
+ *
+ * An account's nature is the links it holds, never a type: `supplier_id` set
+ * makes it a distributor, `manufacturer_id` set makes it a manufacturer, BOTH
+ * set is the normal case for the largest players, and NEITHER is a free
+ * browsing account. So the two flags are read independently and the free
+ * account is a real, supported answer — it gets the five links that mean
+ * something for anybody and no pretend company pages.
+ *
+ * The two PAIRS are `[Suppliers | My Supply]` and
+ * `[Manufacturers | My Manufacturing]`, each fronted by CatalogSwitch on the
+ * page itself. One sidebar entry per pair, named for the route it actually
+ * opens — an entry that opened a different page than its label promises is the
+ * collision the split routes exist to prevent. When the account holds both
+ * links the entry lands on the LIST half and the switch reaches the other; the
+ * ternary that picks it is not the forbidden `elif`, because neither half is
+ * hidden by the other — only one of them is the landing page.
+ *
+ * Never here, for anyone: Users, Leads, Expenses, Import Queue, Reports. Those
+ * are staff surfaces behind require_staff routes or our own finances.
+ */
+function customerLinks(isSupplier: boolean, isManufacturer: boolean): {
+  catalog: SidebarLink[];
+  comms: SidebarLink[];
+} {
+  const catalog: SidebarLink[] = [
+    { to: '/admin', label: 'Dashboard', icon: 'gauge' },
+    { to: '/admin/parts', label: 'Parts', icon: 'package', badgeKey: 'parts' },
+    { to: '/admin/categories', label: 'Categories', icon: 'squares-four' },
+  ];
+
+  if (isSupplier || isManufacturer) {
+    // Pair A. /suppliers is "distributors selling my products" and needs the
+    // manufacturer link; /my-supply is their own distributor page.
+    catalog.push(
+      isManufacturer
+        ? { to: '/admin/suppliers', label: 'Suppliers', icon: 'buildings' }
+        : { to: '/admin/my-supply', label: 'My Supply', icon: 'buildings' },
+    );
+    // Pair B, the same join read the other way: /manufacturers is "makers
+    // whose products I sell" and needs the supplier link.
+    catalog.push(
+      isSupplier
+        ? { to: '/admin/manufacturers', label: 'Manufacturers', icon: 'factory' }
+        : { to: '/admin/my-manufacturing', label: 'My Manufacturing', icon: 'factory' },
+    );
+  }
+
+  // `sponsors.supplier_id` is NOT NULL, so a manufacturer-only account cannot
+  // hold a placement today — the page would be a permanent empty list.
+  if (isSupplier) {
+    catalog.push({ to: '/admin/sponsors', label: 'Sponsors', icon: 'star' });
+  }
+
+  return {
+    catalog,
+    comms: [{ to: '/admin/messages', label: 'Messages', icon: 'envelope' }],
+  };
+}
+
+// The customer's System group. Import Queue is staff-only (the feed runs are
+// ours to spend), so Settings is the whole of it.
+const CUSTOMER_SYSTEM_LINKS: SidebarLink[] = [
+  { to: '/admin/settings', label: 'Settings', icon: 'gear-six' },
 ];
 
 // Demo magnitudes per v5 design data.jsx (hand-tuned to feel believable
@@ -100,6 +169,11 @@ const TITLE_MAP: Record<string, string> = {
   '/admin/expenses/new': 'New Expense',
   '/admin/reports': 'Reports',
   '/admin/messages': 'Messages',
+  // The customer console's two "my own company" routes. Neither matches the
+  // id-shaped regex fallbacks below (a hyphen is not \w), so without these the
+  // topbar would title them "Admin".
+  '/admin/my-supply': 'My Supply',
+  '/admin/my-manufacturing': 'My Manufacturing',
   '/admin/import': 'Import Queue',
   '/admin/settings': 'Settings',
 };
@@ -157,8 +231,11 @@ function SignOutModal({ open, onConfirm, onCancel }: SignOutModalProps) {
   );
 }
 
-export default function AdminLayout({ children, role = 'admin' }: AdminLayoutProps) {
-  const { user, logout } = useAuth();
+export default function AdminLayout({ children }: AdminLayoutProps) {
+  // Who is looking is read from the context, not threaded down as a prop:
+  // App.tsx mounts this same component at both /admin and /account, and a prop
+  // is one more place the two mounts could be told apart differently.
+  const { user, logout, isCustomer, account } = useAuth();
   const { demoMode, toggleDemo } = useDemo();
   const { theme, toggleTheme } = useAdminTheme();
   const location = useLocation();
@@ -168,7 +245,10 @@ export default function AdminLayout({ children, role = 'admin' }: AdminLayoutPro
   const [signOutOpen, setSignOutOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [bellOpen, setBellOpen] = useState(false);
-  const [unread, setUnread] = useState(() => unreadCount());
+  // messageStore's cache is the STAFF inbox and survives a sign-out on the
+  // same tab, so seeding from it would flash a colleague's unread count in a
+  // customer's badge before their own fetch lands.
+  const [unread, setUnread] = useState(() => (isCustomer ? 0 : unreadCount()));
   const [wiggle, setWiggle] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [partsCount, setPartsCount] = useState(0);
@@ -176,12 +256,43 @@ export default function AdminLayout({ children, role = 'admin' }: AdminLayoutPro
   const [manufacturersCount, setManufacturersCount] = useState(0);
   const prevUnread = useRef(unread);
 
+  // Capability, read INDEPENDENTLY — both links set is the normal case and
+  // neither set is the free browsing account. `=== true` because the fields
+  // are optional on a body that may predate them, and an absent flag must
+  // read as "no link", never as truthy.
+  const isSupplier = isCustomer && account?.is_supplier === true;
+  const isManufacturer = isCustomer && account?.is_manufacturer === true;
+
+  // The customer's own parts count. /api/dashboard/stats is require_staff and
+  // would 403 at them on every page, and demo magnitudes are staff-facing
+  // fiction that could never be a customer's data — so this is a different
+  // endpoint, not the same one with a filter. The other three badges have no
+  // account-scoped source at all and are simply absent from their sidebar.
+  useEffect(() => {
+    if (!isCustomer) return undefined;
+    let cancelled = false;
+    accountApi
+      .getAccountDashboard()
+      .then((d) => {
+        if (!cancelled) setPartsCount(d.total_parts);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        console.warn('[AdminLayout] account dashboard fetch failed', err);
+        setPartsCount(0);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isCustomer]);
+
   // Sidebar badge counts. Demo mode = seeded magnitudes; live mode hits
   // /api/dashboard/stats. Import-queue is always 0 in live mode (no
   // backend yet) — badge hides when count is 0. The `cancelled` closure
   // guards against a rapid demoMode toggle stomping demo magnitudes with
   // a late API response.
   useEffect(() => {
+    if (isCustomer) return undefined;
     if (demoMode) {
       setPartsCount(DEMO_BADGES.parts);
       setSuppliersCount(DEMO_BADGES.suppliers);
@@ -207,7 +318,7 @@ export default function AdminLayout({ children, role = 'admin' }: AdminLayoutPro
     return () => {
       cancelled = true;
     };
-  }, [demoMode]);
+  }, [demoMode, isCustomer]);
 
   // Refresh unread count when route changes — covers list/detail navigation
   // that flips messages from new → read. Also auto-closes the mobile drawer.
@@ -215,12 +326,34 @@ export default function AdminLayout({ children, role = 'admin' }: AdminLayoutPro
   // messages from the API so the bell-count stays in sync with the DB even
   // when the admin user is on a non-Messages page.
   useEffect(() => {
+    if (isCustomer) {
+      // A customer's inbox is a different slice of the same table behind a
+      // different route (`messages.user_id` is theirs; NULL is the shared
+      // staff inbox), so it never touches messageStore — whose cache backs
+      // the staff Messages screen and whose fetch is require_staff.
+      let cancelled = false;
+      accountApi
+        .getAccountMessages()
+        .then((rows) => {
+          if (!cancelled) setUnread(rows.filter((m) => !m.read).length);
+        })
+        .catch((err) => {
+          if (cancelled) return;
+          console.warn('[AdminLayout] account messages fetch failed', err);
+          setUnread(0);
+        });
+      setMenuOpen(false);
+      return () => {
+        cancelled = true;
+      };
+    }
     refreshMessages().then(() => {
       setUnread(unreadCount());
     });
     setUnread(unreadCount()); // optimistic read from cache so the badge doesn't flicker
     setMenuOpen(false);
-  }, [location.pathname]);
+    return undefined;
+  }, [location.pathname, isCustomer]);
 
   // Body scroll lock while mobile drawer is open. Cleanup restores prev value.
   useEffect(() => {
@@ -268,10 +401,10 @@ export default function AdminLayout({ children, role = 'admin' }: AdminLayoutPro
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  const catalogVisible =
-    role === 'admin' ? CATALOG_LINKS : CATALOG_LINKS.filter((l) => !l.adminOnly);
-  const commsVisible =
-    role === 'admin' ? COMMS_LINKS : COMMS_LINKS.filter((l) => !l.adminOnly);
+  const customerNav = isCustomer ? customerLinks(isSupplier, isManufacturer) : null;
+  const catalogVisible = customerNav ? customerNav.catalog : CATALOG_LINKS;
+  const commsVisible = customerNav ? customerNav.comms : COMMS_LINKS;
+  const systemVisible = customerNav ? CUSTOMER_SYSTEM_LINKS : SYSTEM_LINKS;
 
   const initials = (user?.username || 'AD').slice(0, 2).toUpperCase();
   const title = pageTitle(location.pathname);
@@ -339,7 +472,7 @@ export default function AdminLayout({ children, role = 'admin' }: AdminLayoutPro
           <Logo variant="badge" size={30} className={styles.sideBrandMark} />
           <div>
             <div className={styles.sideBrandName}>Circuit Center</div>
-            <div className={styles.sideBrandRole}>Admin</div>
+            <div className={styles.sideBrandRole}>{isCustomer ? 'Account' : 'Admin'}</div>
           </div>
         </Link>
 
@@ -354,7 +487,7 @@ export default function AdminLayout({ children, role = 'admin' }: AdminLayoutPro
         )}
 
         <div className={styles.sideGroupLabel}>System</div>
-        {SYSTEM_LINKS.map(renderLink)}
+        {systemVisible.map(renderLink)}
 
         <div className={styles.sideSpacer} />
 
@@ -421,6 +554,7 @@ export default function AdminLayout({ children, role = 'admin' }: AdminLayoutPro
 
           <div className={styles.topbarRight}>
 
+            {!isCustomer && (
             <button
               type="button"
               role="switch"
@@ -437,11 +571,14 @@ export default function AdminLayout({ children, role = 'admin' }: AdminLayoutPro
                 {demoMode ? 'ON' : 'OFF'}
               </span>
             </button>
+            )}
 
             {/* One soft pill groups everything that is "about you": who else is
                 here, the theme toggle, notifications, and your own avatar. */}
             <div className={styles.ctrlPill}>
-              <PresenceBubbles selfUsername={user?.username} />
+              {/* The roster ping is require_staff — for a customer it would be
+                  a 403 every 15 seconds and never a bubble. */}
+              {!isCustomer && <PresenceBubbles selfUsername={user?.username} />}
 
               <button
                 type="button"
@@ -463,7 +600,17 @@ export default function AdminLayout({ children, role = 'admin' }: AdminLayoutPro
                   className={`${styles.chip} ${styles.chipBell} ${wiggle ? styles.bellWiggle : ''}`}
                   title="Notifications"
                   aria-label="Notifications"
-                  onClick={() => setBellOpen((b) => !b)}
+                  onClick={() => {
+                    if (isCustomer) {
+                      // BellDropdown renders the STAFF Message shape — a
+                      // sender to reply to, a designator, a workflow status —
+                      // none of which an account inbox row has. The badge is
+                      // the notification; the inbox is one click away.
+                      navigate(mountPath('/admin/messages', base));
+                      return;
+                    }
+                    setBellOpen((b) => !b);
+                  }}
                 >
                   <Bell size={16} strokeWidth={2} />
                   {unread > 0 && (
@@ -497,10 +644,15 @@ export default function AdminLayout({ children, role = 'admin' }: AdminLayoutPro
               </span>
             </div>
 
-            <Link to={mountPath('/admin/parts/new', base)} className={`${styles.btn} ${styles.btnPrimary}`}>
-              <Plus size={15} strokeWidth={2} />
-              <span className={styles.btnLabel}>New Part</span>
-            </Link>
+            {/* POST /api/parts/ is require_staff, so for a customer this is a
+                button that cannot succeed. Their catalog changes through the
+                feed and through us. */}
+            {!isCustomer && (
+              <Link to={mountPath('/admin/parts/new', base)} className={`${styles.btn} ${styles.btnPrimary}`}>
+                <Plus size={15} strokeWidth={2} />
+                <span className={styles.btnLabel}>New Part</span>
+              </Link>
+            )}
           </div>
         </header>
 

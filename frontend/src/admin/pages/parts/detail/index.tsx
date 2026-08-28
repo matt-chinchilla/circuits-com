@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useConsolePath } from '@admin/services/consolePath';
 import { ArrowLeft, Edit, Trash2, ExternalLink, Check, Plus } from 'lucide-react';
+import { useAuth } from '@admin/contexts/AuthContext';
 import { adminApi } from '@admin/services/adminApi';
 import Icon from '@shared/components/Icon';
 import { lettermark } from '@shared/utils/lettermark';
@@ -40,6 +41,10 @@ function stockClass(qty: number): string {
 export default function PartDetailPage() {
   // Canonical /admin paths, rewritten onto whichever mount is rendering (D16).
   const consolePath = useConsolePath();
+  // Reading a part works for everyone — GET /api/parts/{id} is the public
+  // route. Every WRITE on this page is staff-gated server-side, so for a
+  // customer these controls are buttons whose only outcome is a 403.
+  const { isCustomer } = useAuth();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [part, setPart] = useState<PartDetail | null>(null);
@@ -201,34 +206,36 @@ export default function PartDetailPage() {
             )}
           </p>
         </div>
-        <div className={styles.pageHeadActions}>
-          <button
-            type="button"
-            data-tour="delete-part"
-            // Page identity for the wizard's cleanup step: it spotlights this
-            // button ONLY when the id matches the demo part its own tour
-            // created — every other part is real catalog data. See flows.tsx.
-            data-entity-id={id}
-            className={`${styles.btn} ${styles.btnDangerGhost}`}
-            onClick={() => setPending({ kind: 'part' })}
-            disabled={deleting}
-          >
-            <Trash2 />
-            Delete
-          </button>
-          <Link
-            to={consolePath(`/admin/parts/${id}/listings/new`)}
-            data-tour="add-listing"
-            className={`${styles.btn} ${styles.btnGhost}`}
-          >
-            <Plus />
-            Add distributor
-          </Link>
-          <Link to={consolePath(`/admin/parts/${id}/edit`)} className={`${styles.btn} ${styles.btnPrimary}`}>
-            <Edit />
-            Edit
-          </Link>
-        </div>
+        {!isCustomer && (
+          <div className={styles.pageHeadActions}>
+            <button
+              type="button"
+              data-tour="delete-part"
+              // Page identity for the wizard's cleanup step: it spotlights this
+              // button ONLY when the id matches the demo part its own tour
+              // created — every other part is real catalog data. See flows.tsx.
+              data-entity-id={id}
+              className={`${styles.btn} ${styles.btnDangerGhost}`}
+              onClick={() => setPending({ kind: 'part' })}
+              disabled={deleting}
+            >
+              <Trash2 />
+              Delete
+            </button>
+            <Link
+              to={consolePath(`/admin/parts/${id}/listings/new`)}
+              data-tour="add-listing"
+              className={`${styles.btn} ${styles.btnGhost}`}
+            >
+              <Plus />
+              Add distributor
+            </Link>
+            <Link to={consolePath(`/admin/parts/${id}/edit`)} className={`${styles.btn} ${styles.btnPrimary}`}>
+              <Edit />
+              Edit
+            </Link>
+          </div>
+        )}
       </div>
 
       <div className={styles.detailGrid}>
@@ -368,25 +375,27 @@ export default function PartDetailPage() {
                     <span>
                       {listing.lead_time_days != null ? `${listing.lead_time_days}d lead` : '—'}
                     </span>
-                    <button
-                      type="button"
-                      data-tour="delete-listing"
-                      // Row identity for the wizard's detach step: it must
-                      // spotlight the ONE demo listing it created and never
-                      // guess at a real distributor row. See flows.tsx.
-                      data-listing-id={listing.id}
-                      // Marker for the wizard's defense-in-depth check: the
-                      // detach step also verifies this bears the DEMO- SKU
-                      // before spotlighting, so a real row can never be it.
-                      data-listing-sku={listing.sku ?? undefined}
-                      className={rowStyles.removeBtn}
-                      onClick={() => setPending({ kind: 'listing', listing })}
-                      disabled={deleting}
-                      aria-label={`Remove ${listing.supplier_name ?? 'distributor'} listing`}
-                    >
-                      <Trash2 />
-                      Remove
-                    </button>
+                    {!isCustomer && (
+                      <button
+                        type="button"
+                        data-tour="delete-listing"
+                        // Row identity for the wizard's detach step: it must
+                        // spotlight the ONE demo listing it created and never
+                        // guess at a real distributor row. See flows.tsx.
+                        data-listing-id={listing.id}
+                        // Marker for the wizard's defense-in-depth check: the
+                        // detach step also verifies this bears the DEMO- SKU
+                        // before spotlighting, so a real row can never be it.
+                        data-listing-sku={listing.sku ?? undefined}
+                        className={rowStyles.removeBtn}
+                        onClick={() => setPending({ kind: 'listing', listing })}
+                        disabled={deleting}
+                        aria-label={`Remove ${listing.supplier_name ?? 'distributor'} listing`}
+                      >
+                        <Trash2 />
+                        Remove
+                      </button>
+                    )}
                   </div>
                 </div>
                 {listing.price_breaks.length > 0 && (

@@ -17,13 +17,12 @@ calendar secret stay in the environment where an admin session cannot reach
 them; a key that buys distributor part data is a different blast radius from one
 that moves money.
 
-Auth is `get_current_user` on all three verbs — the demo account keeps its READ
-(the Settings card must render for a prospect) and is refused both writes by the
-global demo read-only gate in auth_service. The demo READ is narrowed further:
-Keys are write-only: `last4` and
-`updated_at` are BLANKED for that caller. Four characters of the live key plus
-the date it was last rotated is reconnaissance for a stranger, and the card
-reads perfectly well without either ("Configured — stored").
+Auth is `require_staff` on all three verbs (router-level): these keys buy
+distributor part data on the company's account, so a customer principal is
+refused with 403 staff_only rather than admitted as a console user.
+
+Keys are write-only in the response either way — the stored secret is never
+echoed back; a reader gets `configured`, `source`, `last4` and `updated_at`.
 """
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -32,16 +31,17 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.models import ProviderCredential, User
-from app.services.auth_service import get_current_user, require_console_user
+from app.services.auth_service import get_current_user, require_staff
 from app.services.part_feed import FEED_PROVIDERS, env_feed_key
 
 router = APIRouter(
     prefix="/api/admin/feed-credentials",
     tags=["admin-feed-credentials"],
-    # D16: the console pages are shared with activated customers, so the
-    # customer/staff wall sits on the router. It COMPOSES with the per-route
-    # get_current_user gates — it does not replace them.
-    dependencies=[Depends(require_console_user)],
+    # The customer/staff wall (D16) sits on the router: everything served
+    # here is company-wide STAFF data, so an activated customer is refused
+    # with 403 staff_only rather than admitted as a console user. It COMPOSES
+    # with the per-route get_current_user gates — it does not replace them.
+    dependencies=[Depends(require_staff)],
 )
 
 # slug → display label, straight off the provider registry: adding Digi-Key
@@ -87,9 +87,11 @@ def _validated_key(raw: str) -> str:
 def _status(db: Session, provider: str, *, redact: bool = False) -> dict:
     """One provider's row of the card. Contains no secret, by construction.
 
-    `redact` blanks the two fields that describe a stored key without being the
-    key — see the demo note in the module docstring. `configured` and `source`
-    stay: the card must still say the feed is set up and where from.
+    `redact` blanks the two fields that describe a stored key without being
+    the key. No caller sets it today (the router is staff-only); it stays
+    because it is the shape a lower-trust reader would need, and `configured`
+    plus `source` survive it — such a card must still say the feed is set up
+    and where from.
     """
     row = db.query(ProviderCredential).filter(ProviderCredential.provider == provider).first()
     stored = (row.api_key or "").strip() if row else ""
@@ -126,11 +128,7 @@ def list_feed_credentials(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Every known provider and where its key is coming from — never the key.
-
-    The demo session reads a REDACTED row (no last4, no updated_at): that door
-    opens for anyone.
-    """
+    """Every known provider and where its key is coming from — never the key."""
     return _all_statuses(db)
 
 
@@ -151,8 +149,6 @@ def set_feed_credential(
     else:
         row.api_key = key
     db.commit()
-    # Redacted for the demo like GET is. Unreachable for that account (the
-    # global read-only gate 403s first) — one rule everywhere beats three.
     return _all_statuses(db)
 
 

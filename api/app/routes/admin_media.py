@@ -7,7 +7,8 @@ Without this, a cross-origin <img> taints the canvas and both
 extraction) throw — which is why the paste-URL path historically skipped the
 cropper entirely.
 
-Auth-gated like the rest of /admin/* via Depends(get_current_user).
+STAFF-only, like the rest of /admin/*: the router carries
+Depends(require_staff), so a customer account gets 403 staff_only.
 
 SSRF guards: http(s) only, every redirect hop re-validated, hostnames that
 resolve to private / loopback / link-local / reserved ranges rejected (blocks
@@ -26,15 +27,16 @@ from anyio import to_thread
 from fastapi import APIRouter, Depends, HTTPException, Response
 
 from app.models.user import User
-from app.services.auth_service import get_current_user, require_console_user
+from app.services.auth_service import get_current_user, require_staff
 
 router = APIRouter(
     prefix="/api/admin",
     tags=["admin-media"],
-    # D16: the console pages are shared with activated customers, so the
-    # customer/staff wall sits on the router. It COMPOSES with the per-route
-    # get_current_user gates — it does not replace them.
-    dependencies=[Depends(require_console_user)],
+    # The customer/staff wall (D16) sits on the router: everything served
+    # here is company-wide STAFF data, so an activated customer is refused
+    # with 403 staff_only rather than admitted as a console user. It COMPOSES
+    # with the per-route get_current_user gates — it does not replace them.
+    dependencies=[Depends(require_staff)],
 )
 
 _MAX_BYTES = 8 * 1024 * 1024  # matches "reasonable logo" — cropper downscales to 256px anyway

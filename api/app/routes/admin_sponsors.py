@@ -7,7 +7,8 @@ category sponsor straight from the `sponsors` table in
 category_service.py) never saw them. This router is the missing WRITE
 path: it persists sponsors so admin edits show up live on the public site.
 
-Auth-gated like the rest of /admin/* via Depends(get_current_user).
+STAFF-only, like the rest of /admin/*: the router carries
+Depends(require_staff), so a customer account gets 403 staff_only.
 
 The Sponsor model enforces a category_id-XOR-keyword CheckConstraint at the
 Postgres level, but tests run on SQLite (which ignores CHECK constraints),
@@ -30,15 +31,16 @@ from app.schemas.sponsor import (
     AdminSponsorResponse,
     AdminSponsorUpdate,
 )
-from app.services.auth_service import get_current_user, require_console_user
+from app.services.auth_service import get_current_user, require_staff
 
 router = APIRouter(
     prefix="/api/admin/sponsors",
     tags=["admin-sponsors"],
-    # D16: the console pages are shared with activated customers, so the
-    # customer/staff wall sits on the router. It COMPOSES with the per-route
-    # get_current_user gates — it does not replace them.
-    dependencies=[Depends(require_console_user)],
+    # The customer/staff wall (D16) sits on the router: everything served
+    # here is company-wide STAFF data, so an activated customer is refused
+    # with 403 staff_only rather than admitted as a console user. It COMPOSES
+    # with the per-route get_current_user gates — it does not replace them.
+    dependencies=[Depends(require_staff)],
 )
 
 

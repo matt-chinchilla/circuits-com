@@ -329,6 +329,23 @@ $a-shadow-sm: var(--a-shadow-sm);
   font-size: 14px;
 }
 
+// The customer console's unlinked state — an account with no company behind it
+// yet. Two lines inside the same centred cell, so the table keeps its shape.
+.emptyTitle {
+  display: block;
+  color: $a-fg1;
+  font-size: 14px;
+  margin-bottom: 6px;
+}
+
+.emptyNote {
+  display: block;
+  max-width: 52ch;
+  margin: 0 auto;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .loading {
   padding: 32px;
   text-align: center;

@@ -14,7 +14,8 @@ Wall-clock (timezone-aware UTC) rather than time.monotonic(): monotonic is
 per-process, meaningless across workers. An NTP step can wobble the 75s TTL by
 its skew — harmless for a presence indicator.
 
-Auth-gated like the rest of /admin/* via Depends(get_current_user).
+STAFF-only, like the rest of /admin/*: the router carries
+Depends(require_staff), so a customer account gets 403 staff_only.
 """
 
 from __future__ import annotations
@@ -28,15 +29,16 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models.presence_fake import PresenceFake
 from app.models.user import User
-from app.services.auth_service import get_current_user, require_console_user
+from app.services.auth_service import get_current_user, require_staff
 
 router = APIRouter(
     prefix="/api/admin",
     tags=["admin-presence"],
-    # D16: the console pages are shared with activated customers, so the
-    # customer/staff wall sits on the router. It COMPOSES with the per-route
-    # get_current_user gates — it does not replace them.
-    dependencies=[Depends(require_console_user)],
+    # The customer/staff wall (D16) sits on the router: everything served
+    # here is company-wide STAFF data, so an activated customer is refused
+    # with 403 staff_only rather than admitted as a console user. It COMPOSES
+    # with the per-route get_current_user gates — it does not replace them.
+    dependencies=[Depends(require_staff)],
 )
 
 # ── Fake-presence roster (the `circuits --fakeuser` lever) ──────────────────

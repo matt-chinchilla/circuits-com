@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useConsolePath } from '@admin/services/consolePath';
 import { Plus, Search, Upload } from 'lucide-react';
 import Breadcrumbs from '@admin/components/Breadcrumbs';
+import { useAuth } from '@admin/contexts/AuthContext';
 import { adminApi } from '@admin/services/adminApi';
 import type { AdminSupplier, AdminSponsor, SponsorTier } from '@admin/types/admin';
 import { lettermark } from '@shared/utils/lettermark';
@@ -14,6 +15,7 @@ import {
   type SupplierSponsorship,
   type SponsorshipFilter,
 } from '../sponsorship';
+import AccountSuppliersList from './AccountSuppliersList';
 import styles from './SuppliersPage.module.scss';
 
 const SPONSORSHIP_CLASS: Record<SupplierSponsorship, string> = {
@@ -23,7 +25,20 @@ const SPONSORSHIP_CLASS: Record<SupplierSponsorship, string> = {
   None: styles.tierNone,
 };
 
+/**
+ * One URL, two questions.
+ *
+ * Staff get every distributor in the catalog; a customer gets the distributors
+ * selling THEIR products (GET /api/account/suppliers, scoped server-side). Two
+ * components rather than branches inside one, so the staff render below is the
+ * code it always was and neither branch's hooks are conditional.
+ */
 export default function SuppliersPage() {
+  const { isCustomer } = useAuth();
+  return isCustomer ? <AccountSuppliersList /> : <StaffSuppliersPage />;
+}
+
+function StaffSuppliersPage() {
   // Canonical /admin paths, rewritten onto whichever mount is rendering (D16).
   const consolePath = useConsolePath();
   const navigate = useNavigate();

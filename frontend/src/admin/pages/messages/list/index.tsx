@@ -45,6 +45,7 @@ import {
 } from '@admin/services/permissions';
 import type { BulkDeleteResult, Message } from '@admin/types/messages';
 import { useAuth } from '@admin/contexts/AuthContext';
+import CustomerInboxPage from './CustomerInboxPage';
 import {
   chunkIds,
   confirmDeleteCopy,
@@ -294,7 +295,23 @@ function SelectAllCheckbox({
   );
 }
 
+/**
+ * One route, two inboxes (D16).
+ *
+ * A customer's mail is their own rows from GET /api/account/messages, and the
+ * whole of the staff page below — the optimistic messageStore, the MSG-####
+ * designator, the new/read/archived/responded workflow, assign, spam and bulk
+ * delete — is machinery for triaging OUR shared inbox. Firing any of it as a
+ * customer would PATCH fields the account API refuses with a 422, so the two
+ * are separate components rather than one page with props: the split is what
+ * keeps the staff path exactly as it was.
+ */
 export default function MessagesListPage() {
+  const { isCustomer } = useAuth();
+  return isCustomer ? <CustomerInboxPage /> : <StaffMessagesListPage />;
+}
+
+function StaffMessagesListPage() {
   // Canonical /admin paths, rewritten onto whichever mount is rendering (D16).
   const consolePath = useConsolePath();
   const navigate = useNavigate();

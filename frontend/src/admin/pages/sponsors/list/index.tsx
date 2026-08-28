@@ -14,7 +14,9 @@ import { adminApi } from '@admin/services/adminApi';
 import Icon from '@shared/components/Icon';
 import type { AdminSponsor, SponsorTier, SponsorStatus } from '@admin/types/admin';
 import { normalizeSponsorTier, SPONSOR_TIER_RANK } from '@admin/services/sponsorTier';
+import { useAuth } from '@admin/contexts/AuthContext';
 import { buildCategoryIndex, placementPath, type CategoryPathEntry } from '../placementPath';
+import CustomerSponsorsPage from './CustomerSponsorsPage';
 import styles from './SponsorsPage.module.scss';
 
 // Phase A6 — list page ported from 2026-04-25 Claude Design bundle
@@ -397,7 +399,22 @@ function ColumnHeader(props: ColumnHeaderProps) {
   );
 }
 
+/**
+ * One route, two pages (D16).
+ *
+ * A customer sees their own placements, read-only, from the account API. The
+ * staff page below is the desk's tooling — every placement in the business,
+ * the column filters over it, New Sponsor and the edit route into the Stripe
+ * quote panel — and all of it reads `require_staff` endpoints, so a customer
+ * mounting it would render a table of 403s rather than a smaller version of
+ * itself. Separate components keep the staff path exactly what it was.
+ */
 export default function SponsorsPage() {
+  const { isCustomer } = useAuth();
+  return isCustomer ? <CustomerSponsorsPage /> : <StaffSponsorsPage />;
+}
+
+function StaffSponsorsPage() {
   // Canonical /admin paths, rewritten onto whichever mount is rendering (D16).
   const consolePath = useConsolePath();
   const navigate = useNavigate();

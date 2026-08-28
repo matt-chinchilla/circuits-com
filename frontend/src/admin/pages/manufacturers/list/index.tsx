@@ -18,11 +18,13 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { useConsolePath } from '@admin/services/consolePath';
 import { Plus } from 'lucide-react';
 
+import { useAuth } from '@admin/contexts/AuthContext';
 import { adminApi } from '@admin/services/adminApi';
 import { apiErrorDetail } from '@admin/services/apiError';
 import type { AdminManufacturer, ManufacturerListResponse } from '@admin/types/manufacturers';
 import { safeHttpUrl } from '@shared/utils/url';
 
+import AccountManufacturersList from './AccountManufacturersList';
 import CatalogSwitch from '../CatalogSwitch';
 import TableSearch from '../TableSearch';
 import ColumnHeader, { type SortDir } from '../ColumnHeader';
@@ -59,7 +61,20 @@ const SOURCE_CLASS: Record<string, string> = {
   manual: styles.sourceManual,
 };
 
+/**
+ * One URL, two questions.
+ *
+ * Staff get the whole 1,800-row roster; a customer gets only the makers whose
+ * products they sell (GET /api/account/manufacturers, scoped server-side). Two
+ * components rather than branches inside one, so the staff render below is the
+ * code it always was and neither branch's hooks are conditional.
+ */
 export default function ManufacturersPage() {
+  const { isCustomer } = useAuth();
+  return isCustomer ? <AccountManufacturersList /> : <StaffManufacturersPage />;
+}
+
+function StaffManufacturersPage() {
   // Canonical /admin paths, rewritten onto whichever mount is rendering (D16).
   const consolePath = useConsolePath();
   const [searchParams, setSearchParams] = useSearchParams();
