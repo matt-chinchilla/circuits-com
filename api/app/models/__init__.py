@@ -6,6 +6,7 @@ from .expense import Expense
 from .lead import Lead, LeadContact
 from .manufacturer import Manufacturer, ManufacturerAlias, ManufacturerMergeCandidate
 from .message import Message
+from .outbound_click import OutboundClick
 from .page_view import PageView
 from .part import Part
 from .part_listing import PartListing, PriceBreak
@@ -31,6 +32,7 @@ __all__ = [
     "Expense",
     "Message",
     "PageView",
+    "OutboundClick",
     "CalendarEvent",
     "CalendarReminderSend",
     "ActivityEvent",

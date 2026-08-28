@@ -1,6 +1,8 @@
 import hashlib
+import json
 import re
 import time
+import uuid as uuid_mod
 from collections import defaultdict
 from datetime import UTC, datetime, timedelta
 
@@ -10,9 +12,9 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.models import User
+from app.models import OutboundClick, PartListing, User
 from app.models.page_view import PageView
-from app.services.auth_service import require_console_user
+from app.services.auth_service import require_staff
 from app.services.geoip import country_for_ip
 from app.services.rate_limit import client_ip, trusted_client_addr
 from app.services.traffic_segments import crawler_family, human_ua_filter, window_bot_uas
@@ -20,11 +22,11 @@ from app.services.traffic_segments import crawler_family, human_ua_filter, windo
 router = APIRouter(prefix="/api", tags=["analytics"])
 
 # ── The customer/staff wall on a MIXED router (D16) ─────────────────────────
-# This module serves BOTH the public site and the console, so the wall cannot
+# This module serves BOTH the public site and staff tooling, so the wall cannot
 # sit on the APIRouter the way it does on every /api/admin/* router — a router
-# dependency here would gate the public reads too. Each console route names
-# `require_console_user` in its signature instead; that dependency runs
-# get_current_user first, so the forced-password gate is unchanged. A console
+# dependency here would gate the public reads too. Each staff route names
+# `require_staff` in its signature instead; that dependency runs
+# get_current_user first, so the forced-password gate is unchanged. A staff
 # route added here must name it too — test_every_route_is_gated.py is what
 # notices if it does not.
 
@@ -142,6 +144,80 @@ def track_page_view(
     db.commit()
 
 
+# ── POST /api/outbound — the referral-click beacon ──────────────────────────
+# Public, like /api/track, and for the same reason: the click it records
+# happens on a public part page for an anonymous visitor. Same posture too —
+# one bucket namespace of its own (a part page fires BOTH a page view and,
+# on a click-through, a beacon; sharing one 30/min allowance would make the
+# tracker and the beacon starve each other), and 204 on every path.
+_OUTBOUND_KEY_PREFIX = "outbound:"
+
+# Two uuids and nothing else. The cap only bounds what an unauthenticated
+# caller can make us parse; a real beacon body is ~100 bytes.
+_OUTBOUND_MAX_BODY_BYTES = 1024
+
+
+def _uuid_or_none(raw: object) -> uuid_mod.UUID | None:
+    if not isinstance(raw, str):
+        return None
+    try:
+        return uuid_mod.UUID(raw)
+    except ValueError:
+        return None
+
+
+@router.post("/outbound", status_code=204)
+async def record_outbound_click(request: Request, db: Session = Depends(get_db)):
+    """A visitor left a part page for a distributor's own site.
+
+    **204 on every path, always** — a valid pair, a malformed body, a
+    well-formed pair naming nothing, a throttled caller. A beacon that answered
+    differently for a real (part, supplier) pair than for an invented one would
+    be an unauthenticated oracle over the catalog's shape, and it is fired by
+    ``navigator.sendBeacon``, which discards the response anyway: there is
+    nobody to tell, so telling is pure downside.
+
+    The body is read RAW rather than through a Pydantic model precisely because
+    of that. FastAPI rejects a malformed JSON body with a 422 before any
+    handler runs, so a declared model would make "always 204" impossible to
+    keep — the guarantee has to be implemented where the bytes arrive.
+
+    JUNK MUST NOT BE STORABLE. Both ids have to parse as uuids AND
+    ``part_listings`` has to confirm that this supplier really does list this
+    part; anything else is dropped. Without that EXISTS a stranger could write
+    arbitrary supplier uuids into a customer's own console numbers, which is
+    the panel this table feeds.
+    """
+    if _throttled(_OUTBOUND_KEY_PREFIX + client_ip(request), time.monotonic()):
+        return
+
+    payload = await request.body()
+    if not payload or len(payload) > _OUTBOUND_MAX_BODY_BYTES:
+        return
+    try:
+        body = json.loads(payload)
+    except ValueError:
+        return
+    if not isinstance(body, dict):
+        return
+
+    part_id = _uuid_or_none(body.get("part_id"))
+    supplier_id = _uuid_or_none(body.get("supplier_id"))
+    if part_id is None or supplier_id is None:
+        return
+
+    listed = (
+        db.query(PartListing.id)
+        .filter(PartListing.part_id == part_id, PartListing.supplier_id == supplier_id)
+        .first()
+    )
+    if listed is None:
+        return
+
+    db.add(OutboundClick(id=uuid_mod.uuid4(), part_id=part_id, supplier_id=supplier_id))
+    db.commit()
+
+
 _geo_since_cache: datetime | None = None
 
 
@@ -173,8 +249,9 @@ def reset_analytics_state() -> None:
 
     An autouse conftest fixture calls it, and both halves matter: the stamp is
     deliberately sticky, and the throttle is keyed per ADDRESS, so every test
-    that posts to /api/track shares one bucket (TestClient is always the same
-    host) and the 31st post in a suite would silently vanish."""
+    that posts to /api/track or /api/outbound shares that endpoint's bucket
+    (TestClient is always the same host) and the 31st post in a suite would
+    silently vanish."""
     global _geo_since_cache
     _geo_since_cache = None
     _rate_buckets.clear()
@@ -185,7 +262,7 @@ def get_analytics(
     days: int = 30,
     segment: str = Query("humans", pattern="^(humans|bots|all)$"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_console_user),
+    current_user: User = Depends(require_staff),
 ):
     days = min(days, 365)
     cutoff = datetime.now(UTC) - timedelta(days=days)

@@ -1,0 +1,194 @@
+@use '@shared/styles/variables' as *;
+
+// Chrome the customer board needs and the staff board does not.
+//
+// Everything shared — `.panel`, `.panelHead`, `.breakdownRow`, `.activityRow`,
+// `.queuePill`, `.emptyChart` — still comes from DashboardPage.module.scss, so
+// the two boards cannot drift apart visually. This file is only the handful of
+// pieces with no staff counterpart, and it is a SEPARATE module rather than an
+// addition to that one so the customer panels can be read (and moved) without
+// hunting through 1,300 lines of staff chrome.
+//
+// Admin tokens only (`var(--a-*)`, defined on `.admin` in
+// AdminLayout.module.scss). No chart colours live here: a canvas cannot
+// resolve a custom property, so series colour comes from `chartTheme.ts`.
+
+// The KPI picker, sitting where the staff comparators put their 3/6/12
+// segmented control. A native <select>: the registry is server-owned and can
+// grow, and five-plus options is a list, not a segmented control.
+.kpiSelect {
+  appearance: none;
+  padding: 5px 28px 5px 10px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  // Explicit: the admin body line-height (1.6) overflows a height-constrained
+  // control.
+  line-height: 1.4;
+  color: var(--a-fg2);
+  background-color: var(--a-track);
+  // The caret is a static inline SVG, so it costs no icon font and no request.
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%236b7280' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  border: 1px solid var(--a-border);
+  border-radius: 6px;
+  cursor: pointer;
+  max-width: 240px;
+
+  &:disabled {
+    cursor: default;
+    opacity: 0.6;
+  }
+}
+
+// A tier badge on a subscription cost line. The tier's own colour arrives
+// inline on `border-color` only — fill and ink stay tokens, so it reads in
+// both admin themes, exactly like the dashboard's account tier badge.
+.tierTag {
+  padding: 1px 7px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  border-radius: 3px;
+  color: var(--a-fg2);
+  background: var(--a-track);
+  border: 1px solid var(--a-border);
+}
+
+// On/off state pills.
+//
+// NOT composed onto the staff module's `.queuePill`: that class sets
+// `border: 1px solid transparent`, and a `border-color` override from a second
+// module is the same specificity — which of the two wins is decided by CSS
+// injection ORDER, i.e. by import order somewhere else in the bundle. Both
+// states are declared here in full so the answer does not depend on that.
+//
+// OFF is a state, not a warning, so it takes the neutral track rather than the
+// staff module's amber `pending`. The green tint is mixed from `--a-ok` rather
+// than copied as a literal rgba, so it follows the token in both themes.
+.statePill {
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.4;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.statePillOn {
+  color: var(--a-ok);
+  background: color-mix(in srgb, var(--a-ok) 12%, transparent);
+  border-color: color-mix(in srgb, var(--a-ok) 30%, transparent);
+}
+
+.statePillOff {
+  color: var(--a-fg3);
+  background: var(--a-track);
+  border-color: var(--a-border);
+}
+
+// A two-line status row — the label above, the value beneath — for facts that
+// are not a chart and not a list (last sync, next steps).
+.factRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--a-border-soft);
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.factLabel {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--a-fg1);
+}
+
+.factValue {
+  font-family: $font-mono;
+  font-size: 12px;
+  color: var(--a-fg3);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.leadList {
+  padding: 6px 0;
+}
+
+.leadRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 11px 20px;
+  border-bottom: 1px solid var(--a-border-soft);
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.leadName {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--a-fg1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.leadStatus {
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  border-radius: 4px;
+  color: var(--a-fg3);
+  background: var(--a-track);
+  border: 1px solid var(--a-border-soft);
+  white-space: nowrap;
+}
+
+// The counterparty legend beside the book-of-business arena — two kinds, so a
+// key rather than the staff board's per-rep list.
+.kindKey {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin: 12px 0 0;
+  padding: 10px 0 0;
+  border-top: 1px solid var(--a-border-soft);
+  list-style: none;
+}
+
+.kindKeyRow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--a-fg2);
+}
+
+.kindKeyDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.kindKeyCount {
+  font-family: $font-mono;
+  font-weight: 700;
+  color: var(--a-fg1);
+  font-variant-numeric: tabular-nums;
+}

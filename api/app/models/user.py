@@ -44,6 +44,12 @@ class User(Base):
     manufacturer_id = Column(
         UUID(as_uuid=True), ForeignKey("manufacturers.id"), nullable=True
     )
+    # Which KPI the customer console's chart tile is showing (migration 045).
+    # NULL = the registry's default. A plain VARCHAR rather than an enum
+    # because the KPI registry is expected to grow, and a stored key that the
+    # registry no longer offers must fall back to the default rather than
+    # break the page — so the validity check lives at the write site.
+    dashboard_kpi = Column(String(40), nullable=True)
     # Admin presence heartbeat (alembic 021) — see routes/admin_presence.py.
     # Nullable: only stamped while an admin has the console open.
     last_seen_at = Column(DateTime(timezone=True), nullable=True)

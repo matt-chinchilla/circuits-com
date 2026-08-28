@@ -44,16 +44,17 @@ from app.models import (
 from app.models.expense import expense_category_label
 from app.models.roles import ADMIN_ROLES
 from app.routes.admin_leads import require_leads_access
-from app.services.auth_service import get_current_user, require_console_user
+from app.services.auth_service import get_current_user, require_staff
 from app.services.traffic_segments import human_ua_filter, window_bot_uas
 
 router = APIRouter(
     prefix="/api/dashboard",
     tags=["dashboard"],
-    # D16: the console pages are shared with activated customers, so the
-    # customer/staff wall sits on the router. It COMPOSES with the per-route
-    # get_current_user gates — it does not replace them.
-    dependencies=[Depends(require_console_user)],
+    # The customer/staff wall (D16) sits on the router: everything served
+    # here is company-wide STAFF data, so an activated customer is refused
+    # with 403 staff_only rather than admitted as a console user. It COMPOSES
+    # with the per-route get_current_user gates — it does not replace them.
+    dependencies=[Depends(require_staff)],
 )
 
 # A second router for the /api/admin/* lookups the dashboard + sponsor form
@@ -61,10 +62,11 @@ router = APIRouter(
 admin_router = APIRouter(
     prefix="/api/admin",
     tags=["admin"],
-    # D16: the console pages are shared with activated customers, so the
-    # customer/staff wall sits on the router. It COMPOSES with the per-route
-    # get_current_user gates — it does not replace them.
-    dependencies=[Depends(require_console_user)],
+    # The customer/staff wall (D16) sits on the router: everything served
+    # here is company-wide STAFF data, so an activated customer is refused
+    # with 403 staff_only rather than admitted as a console user. It COMPOSES
+    # with the per-route get_current_user gates — it does not replace them.
+    dependencies=[Depends(require_staff)],
 )
 
 EASTERN = ZoneInfo("America/New_York")
@@ -249,8 +251,23 @@ def _human_traffic_filters(db: Session, day_list: list[date]) -> tuple:
     return (human_ua_filter(PageView.user_agent, bot_uas),)
 
 
+def _company_rows(query, model):
+    """Restrict a money query to the COMPANY'S own rows.
+
+    ``expenses.user_id`` (migration 045, no FK by design) marks a customer's
+    private cost line. Models without the column (Revenue) pass through.
+    """
+    user_id = getattr(model, "user_id", None)
+    return query.filter(user_id.is_(None)) if user_id is not None else query
+
+
 def _daily_amount_series(db: Session, model, day_list: list[date]) -> list[dict]:
     """Per-day money total, zero-filled across the whole window.
+
+    Money queries run through ``_company_rows`` (above): ``expenses.user_id``
+    (migration 045) marks a CUSTOMER'S private cost line, and the company's
+    P&L/breakdown must never ingest those — wrong as accounting before it is
+    wrong as privacy. Revenue has no such column and passes through untouched.
 
     Rows are attributed to ``period_start`` — the date the money is recognized —
     for both Revenue and Expense. NOTE: seeded rows are MONTHLY recurring
@@ -259,8 +276,12 @@ def _daily_amount_series(db: Session, model, day_list: list[date]) -> list[dict]
     """
     per_day: dict[date, Decimal] = defaultdict(Decimal)
     rows = (
-        db.query(model.period_start, model.amount)
-        .filter(model.period_start >= day_list[0], model.period_start <= day_list[-1])
+        _company_rows(
+            db.query(model.period_start, model.amount).filter(
+                model.period_start >= day_list[0], model.period_start <= day_list[-1]
+            ),
+            model,
+        )
         .all()
     )
     for period_start, amount in rows:
@@ -286,8 +307,12 @@ def _monthly_daily_series(db: Session, model, months: int) -> list[dict]:
 
         totals: dict[int, Decimal] = defaultdict(Decimal)
         rows = (
-            db.query(model.period_start, model.amount)
-            .filter(model.period_start >= first, model.period_start <= last)
+            _company_rows(
+                db.query(model.period_start, model.amount).filter(
+                    model.period_start >= first, model.period_start <= last
+                ),
+                model,
+            )
             .all()
         )
         for period_start, amount in rows:
@@ -337,7 +362,9 @@ def _available_expense_months(db: Session) -> list[str]:
     """
     keys = {
         f"{period_start.year:04d}-{period_start.month:02d}"
-        for (period_start,) in db.query(Expense.period_start).distinct().all()
+        for (period_start,) in _company_rows(
+            db.query(Expense.period_start), Expense
+        ).distinct().all()
         if period_start is not None
     }
     return sorted(keys, reverse=True)[:_MAX_AVAILABLE_MONTHS]
@@ -466,8 +493,12 @@ def get_expenses_breakdown(
     month_start = _parse_month(month)
     month_end = _month_end(month_start)
     rows = (
-        db.query(Expense)
-        .filter(Expense.period_start >= month_start, Expense.period_start <= month_end)
+        _company_rows(
+            db.query(Expense).filter(
+                Expense.period_start >= month_start, Expense.period_start <= month_end
+            ),
+            Expense,
+        )
         .all()
     )
 
@@ -835,7 +866,16 @@ def recent_lead_contacts(
     either). Hand-built dicts, no response_model.
     """
     limit = max(1, min(limit, 100))
-    contacts = db.query(LeadContact).order_by(LeadContact.created_at.desc()).limit(limit).all()
+    # Company rows only — a customer's own prospects (leads.user_id set) are
+    # their private CRM, not the staff feed.
+    contacts = (
+        db.query(LeadContact)
+        .join(Lead, Lead.id == LeadContact.lead_id)
+        .filter(Lead.user_id.is_(None))
+        .order_by(LeadContact.created_at.desc())
+        .limit(limit)
+        .all()
+    )
     lead_ids = {c.lead_id for c in contacts}
     leads = (
         {lead.id: lead for lead in db.query(Lead).filter(Lead.id.in_(lead_ids)).all()}

@@ -47,6 +47,24 @@
   }
 }
 
+// The customer console's tier badge (CustomerDashboard). It sits where the
+// staff page's Export button does, so it inherits `.pageHead`'s flex-end
+// alignment. The tier's own colour arrives inline on `border-color` — fill and
+// ink stay admin tokens so the badge reads in both admin themes, and the tier
+// is carried by the EDGE.
+.tierBadge {
+  padding: 5px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  border-radius: 999px;
+  color: var(--a-fg2);
+  background: var(--a-track);
+  border: 1px solid var(--a-border);
+}
+
 .btn {
   display: inline-flex;
   align-items: center;

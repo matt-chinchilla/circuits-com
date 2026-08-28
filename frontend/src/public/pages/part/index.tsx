@@ -70,6 +70,25 @@ function distributorUrl(website: string | null, mpn: string): string | null {
   return `https://${domain.replace(/^www\./, '')}/search?q=${q}`;
 }
 
+// A visitor leaving us for a distributor's own site — the ONE per-supplier
+// demand signal this site can honestly record, since we never see what happens
+// in the distributor's basket. `sendBeacon` hands the POST to the browser to
+// send outside the page's lifetime, so it survives the tab navigating away and
+// cannot delay the click; the endpoint answers 204 to everything, so there is
+// no response to handle. Absent on older browsers — skip silently, because
+// analytics is never worth breaking a click-through for.
+function pingOutbound(partId: string, supplierId: string): void {
+  if (typeof navigator === 'undefined' || typeof navigator.sendBeacon !== 'function') return;
+  const body = new Blob([JSON.stringify({ part_id: partId, supplier_id: supplierId })], {
+    type: 'application/json',
+  });
+  try {
+    navigator.sendBeacon('/api/outbound', body);
+  } catch {
+    // Queue full, or a browser that throws instead of returning false.
+  }
+}
+
 function statusClass(status: string): string {
   switch (status.toLowerCase()) {
     case 'active':
@@ -432,7 +451,10 @@ export default function PartPage() {
                               animate="visible"
                               whileHover={{ y: -2, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
                               onClick={url ? (e) => {
+                                // The supplier link is a real <a> with its own
+                                // beacon — let it fire once, not twice.
                                 if ((e.target as HTMLElement).closest('a')) return;
+                                pingOutbound(part.id, listing.supplier_id);
                                 window.open(url, '_blank', 'noopener,noreferrer');
                               } : undefined}
                               title={url ? `Buy from ${listing.supplier_name}` : undefined}
@@ -444,6 +466,7 @@ export default function PartPage() {
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className={styles.supplierLink}
+                                    onClick={() => pingOutbound(part.id, listing.supplier_id)}
                                   >
                                     {listing.supplier_name}
                                     <span className={styles.externalIcon} aria-hidden="true">&#8599;</span>

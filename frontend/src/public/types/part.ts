@@ -22,6 +22,10 @@ export interface PriceBreak {
 
 export interface PartListing {
   id: string;
+  // Shipped by `listing_to_dict` since the endpoint was written; declared here
+  // 2026-08-27 so the part page can name the distributor a referral click went
+  // to (POST /api/outbound).
+  supplier_id: string;
   supplier_name: string;
   supplier_website: string | null;
   sku: string | null;

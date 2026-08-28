@@ -82,6 +82,20 @@ class Expense(Base):
     # reason `category` is: the set will grow, and a row inserted by hand in
     # psql must land somewhere sane rather than violating NOT NULL.
     source = Column(String(20), nullable=False, server_default="manual", default=MANUAL_SOURCE)
+    # WHOSE book this row belongs to (migration 045). NULL = Circuit Center's
+    # own operating cost, which is every row the seed, the cost sync and the
+    # admin CRUD have ever written; a uuid = a CUSTOMER's private cost line,
+    # visible only in their console. The staff list filters `IS NULL` so the
+    # company's books never mix the two.
+    #
+    # Plain UUID, NO ForeignKey to users, and that is load-bearing rather than
+    # lazy: `users` sits inside deploy.sh --reseed's TRUNCATE CASCADE graph
+    # (users.supplier_id -> suppliers), and TRUNCATE CASCADE is table-level and
+    # transitive, so an FK here would drag `expenses` into the cascade and a
+    # routine reseed would delete the whole cost history. Ownership is set at
+    # the write site and cleaned up explicitly by DELETE /api/admin/users/{id}.
+    # Guard: tests/test_leads_schema.py's census, tests/test_outbound_clicks.py.
+    user_id = Column(UUID(as_uuid=True), nullable=True, index=True)
     created_at = Column(
         DateTime(timezone=True),
         default=lambda: datetime.now(UTC),

@@ -55,6 +55,15 @@ class Lead(Base):
     last_outcome = Column(String(12), nullable=True)
     last_contacted_at = Column(DateTime(timezone=True), nullable=True)
     contact_attempts = Column(Integer, nullable=False, default=0)
+    # WHOSE call list this row is on (migration 045). NULL = Circuit Center's
+    # own outreach roster — every seeded row — and a uuid = a CUSTOMER's
+    # private prospect, visible only in their console. The staff CRM filters
+    # `IS NULL`, the same way the expenses book does.
+    #
+    # Plain UUID with NO ForeignKey to users, for the same reason
+    # `lead_contacts.recorded_by` is a free string: `users` is inside the
+    # reseed TRUNCATE CASCADE graph and an FK would enrol the whole CRM in it.
+    user_id = Column(UUID(as_uuid=True), nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), default=_now, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=_now, onupdate=_now, nullable=False)
 

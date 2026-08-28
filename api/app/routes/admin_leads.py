@@ -1,11 +1,16 @@
 """Admin Leads CRM — /api/admin/leads. ADMIN-INTERNAL sales data.
 
 Own router by design (never the mixed suppliers router): every route here is
-double-gated. Writes are covered by the demo write-allowlist automatically;
-READS were the hole the retired demo account opened (it handed any anonymous
-visitor a real session), so `require_leads_access` refuses demo on reads too
-— calendar-gate pattern, distinct detail string so a client can tell the
-refusals apart. Guard: test_leads_never_public.py.
+double-gated. The roster is internal sales tooling — real people's contact
+details — so it is STAFF-only on READS as well as writes: the router carries
+`require_staff` and every route additionally names `require_leads_access`, so
+the one leads endpoint that lives on another router (`/api/dashboard/leads/
+recent`) carries the same gate. Guard: test_leads_never_public.py.
+
+THE COMPANY'S CRM IS THE COMPANY'S ROWS (migration 045). `leads` now also holds
+CUSTOMERS' own prospect lists, marked by a non-NULL `user_id`, so every read
+here filters `user_id IS NULL`. A customer's call list is the businesses THEY
+want to sell to — it is not our roster, and it must not appear in it.
 """
 
 from __future__ import annotations
@@ -20,30 +25,30 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models import Lead, LeadContact
 from app.models.user import User
-from app.services.auth_service import get_current_user, require_console_user
+from app.services.auth_service import require_staff
 from app.services.leads import VALID_OUTCOMES, record_outcome
 
 router = APIRouter(
     prefix="/api/admin/leads",
     tags=["admin-leads"],
-    # D16: the console pages are shared with activated customers, so the
-    # customer/staff wall sits on the router. It COMPOSES with the per-route
-    # get_current_user gates — it does not replace them.
-    dependencies=[Depends(require_console_user)],
+    # The customer/staff wall (D16) sits on the router: everything served
+    # here is company-wide STAFF data, so an activated customer is refused
+    # with 403 staff_only rather than admitted as a console user. It COMPOSES
+    # with the per-route get_current_user gates — it does not replace them.
+    dependencies=[Depends(require_staff)],
 )
 
 
 
-def require_leads_access(user: User = Depends(get_current_user)) -> User:
-    """Bearer-authed AND not demo — for READS as well as writes.
+def require_leads_access(user: User = Depends(require_staff)) -> User:
+    """STAFF — for READS as well as writes.
 
-    Depends on ``get_current_user``, NOT ``get_authenticated_user``: the forced
-    password-change gate (`must_change_password` → 403
-    ``password_change_required``) lives there, and depending on the ungated
-    variant made this the ONE admin router a flagged staffer could still read
-    and write while every other page refused them. The demo refusal below is
-    still needed on top — ``get_current_user`` only blocks demo WRITES, and
-    this roster must stay closed to demo on reads too.
+    Depends on ``require_staff``, which composes ``get_current_user``, so the
+    forced password-change gate (`must_change_password` → 403
+    ``password_change_required``) still runs first and a customer account gets
+    403 ``staff_only``. Named separately from the router dependency because
+    ``/api/dashboard/leads/recent`` lives on another router and must carry the
+    same gate — test_leads_never_public.py is what notices if it stops.
     """
     return user
 
@@ -110,7 +115,9 @@ def list_leads(
 ) -> dict:
     per_page = max(1, min(per_page, 100))
     page = max(1, page)
-    query = db.query(Lead)
+    # The company/customer split, before any other filter: see the module
+    # docstring. A customer's own prospects are never roster material.
+    query = db.query(Lead).filter(Lead.user_id.is_(None))
     if q:
         like = f"%{q}%"
         query = query.filter(or_(
@@ -180,11 +187,13 @@ def rep_activity(
 
 
 def _get_lead(db: Session, lead_id: str) -> Lead:
+    """A company row, by id. A customer's own lead is 404 here, not 403 —
+    as far as this roster is concerned that id is not in it."""
     try:
         key = uuid_mod.UUID(lead_id)
     except ValueError:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Lead not found")
-    lead = db.get(Lead, key)
+    lead = db.query(Lead).filter(Lead.id == key, Lead.user_id.is_(None)).first()
     if lead is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Lead not found")
     return lead

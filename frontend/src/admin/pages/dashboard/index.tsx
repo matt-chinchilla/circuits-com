@@ -12,6 +12,12 @@
 // VALUES, never the SHAPE: the day axis, month keys and month lengths come from
 // the real ET calendar either way, so switching the toggle re-labels nothing.
 //
+// ── Who is reading ────────────────────────────────────────────────────────
+// Every request below is staff-gated, so a CUSTOMER never mounts this page at
+// all: `DashboardPage` is a two-line switch and the customer's console home is
+// `./CustomerDashboard`. Not mounting is what makes "zero staff calls" true —
+// a branch inside the render would still have fired these effects.
+//
 // ── Fetching ───────────────────────────────────────────────────────────────
 // Three effects: one for the range-independent payloads and one each for the
 // two comparators (whose `months` query changes with their segmented control).
@@ -22,6 +28,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { Download } from 'lucide-react';
+import { useAuth } from '@admin/contexts/AuthContext';
 import { useDemo } from '@admin/contexts/DemoContext';
 import { adminApi } from '@admin/services/adminApi';
 import { countActiveSponsorsByTier } from '@admin/services/sponsorTier';
@@ -37,6 +44,7 @@ import type {
   TrendPoint,
 } from '@admin/types/admin';
 import type { PlatformEngagementSeries } from '@admin/types/engagement';
+import CustomerDashboard from './CustomerDashboard';
 import ActivityPanel from './components/ActivityPanel';
 import EngagementPanel from './components/EngagementPanel';
 import ExpenseBreakdownPanel from './components/ExpenseBreakdownPanel';
@@ -66,6 +74,14 @@ const TREND_DAYS = 30;
 const EMPTY_TIER_COUNTS: Record<SponsorTier, number> = { Platinum: 0, Gold: 0, Silver: 0 };
 
 export default function DashboardPage() {
+  const { isCustomer } = useAuth();
+  // A switch, not a branch inside one component: the two sides hold different
+  // hooks, and mounting the staff tree for a customer is what would fire the
+  // staff requests.
+  return isCustomer ? <CustomerDashboard /> : <StaffDashboard />;
+}
+
+function StaffDashboard() {
   const { demoMode } = useDemo();
 
   const [stats, setStats] = useState<DashboardStats | null>(null);

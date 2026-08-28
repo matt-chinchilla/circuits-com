@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.db.session import get_db
-from app.models import Manufacturer, Supplier, User
+from app.models import Expense, Lead, Manufacturer, Supplier, User
 from app.services import email as email_service
 from app.services.account_tier import account_tier
 from app.services.auth_service import require_owner, require_staff
@@ -174,10 +174,29 @@ def delete_user(
 ):
     """Owner-only, matching how message deletion is gated for being
     irreversible. Deletes the LOGIN — never the linked Supplier or Sponsor,
-    and never anything in Stripe."""
+    and never anything in Stripe.
+
+    It also deletes the two kinds of row the customer OWNED OUTRIGHT: their
+    private expense lines and their private leads (migration 045). Those
+    columns are plain UUIDs with no foreign key — deliberately, because an FK
+    into `users` would enrol both tables in `deploy.sh --reseed`'s TRUNCATE
+    CASCADE and a routine reseed would destroy the company's whole cost book
+    and CRM. The price of that choice is that no cascade cleans up after a
+    delete, so this handler pays it explicitly. Skip it and the rows outlive
+    the account: invisible to staff (both staff lists filter `user_id IS
+    NULL`), unreachable by their owner, and re-attachable to a stranger the
+    day uuid4 ever repeats.
+
+    `messages` is different and stays untouched here — it has a REAL
+    `ON DELETE CASCADE` foreign key, which is safe because `messages` was
+    already inside the reseed graph and is carried by hand in deploy.sh.
+    """
     user = db.query(User).filter(User.id == _as_uuid(user_id)).first()
     if user is None or user.role != "user":
         raise HTTPException(status_code=404, detail="not_found")
+    # Before the user row goes, while `user.id` is still the key to them.
+    db.query(Expense).filter(Expense.user_id == user.id).delete(synchronize_session=False)
+    db.query(Lead).filter(Lead.user_id == user.id).delete(synchronize_session=False)
     db.delete(user)  # messages cascade via the FK
     db.commit()
     return {"status": "ok"}

@@ -4,10 +4,21 @@ The cost side of the dashboard P&L. Rows are monthly recurring operating
 costs — AWS hosting, the domain registration, SMTP, payment-processor fees,
 LLM usage — each pinned to a `period_start`/`period_end` month like `revenue`.
 
-Auth-gated like the rest of /admin/* via Depends(get_current_user). Shape and
+STAFF-only, like the rest of /admin/*: the router carries
+Depends(require_staff), so a customer account gets 403 staff_only. Shape and
 conventions mirror `admin_sponsors.py`: trailing-slash collection routes (axios
 follows FastAPI's 307), a UUID path-param parse that degrades to 404, and
 `model_dump(exclude_unset=True)` on PATCH so an omitted field is untouched.
+
+THE COMPANY'S BOOKS ARE THE COMPANY'S ROWS (migration 045). `expenses` now also
+holds CUSTOMERS' private cost lines, marked by a non-NULL `user_id`, so every
+read here filters `user_id IS NULL`. Staff being staff is not the question: a
+customer's operating costs are their business, they are not Circuit Center's
+spend, and summing them into this company's P&L would be wrong even if the
+privacy were not. Those rows will carry `source='manual'`, which is also what
+keeps the cost sync's `reconcile_source` from ever deleting them — it only
+removes rows written by the source it is reconciling, and a human's row is
+never that.
 """
 
 import uuid
@@ -18,15 +29,16 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models import Expense, User
 from app.schemas.expense import ExpenseCreate, ExpenseResponse, ExpenseUpdate
-from app.services.auth_service import get_current_user, require_console_user
+from app.services.auth_service import get_current_user, require_staff
 
 router = APIRouter(
     prefix="/api/admin/expenses",
     tags=["admin-expenses"],
-    # D16: the console pages are shared with activated customers, so the
-    # customer/staff wall sits on the router. It COMPOSES with the per-route
-    # get_current_user gates — it does not replace them.
-    dependencies=[Depends(require_console_user)],
+    # The customer/staff wall (D16) sits on the router: everything served
+    # here is company-wide STAFF data, so an activated customer is refused
+    # with 403 staff_only rather than admitted as a console user. It COMPOSES
+    # with the per-route get_current_user gates — it does not replace them.
+    dependencies=[Depends(require_staff)],
 )
 
 
@@ -43,7 +55,18 @@ def _parse_expense_id(expense_id: str) -> uuid.UUID:
 
 
 def _get_or_404(db: Session, expense_id: str) -> Expense:
-    expense = db.query(Expense).filter(Expense.id == _parse_expense_id(expense_id)).first()
+    """A company row, by id. A customer's row is 404 here, not 403.
+
+    The same `user_id IS NULL` filter the list uses, on purpose: this
+    collection is Circuit Center's cost book, and as far as it is concerned a
+    customer's private line is not in it. Answering 403 would confirm the id
+    names something.
+    """
+    expense = (
+        db.query(Expense)
+        .filter(Expense.id == _parse_expense_id(expense_id), Expense.user_id.is_(None))
+        .first()
+    )
     if not expense:
         raise HTTPException(status_code=404, detail="Expense not found")
     return expense
@@ -54,8 +77,16 @@ def list_expenses(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Newest period first, then newest row — stable ordering for the admin table."""
-    return db.query(Expense).order_by(Expense.period_start.desc(), Expense.created_at.desc()).all()
+    """The COMPANY's rows, newest period first — stable ordering for the table.
+
+    `user_id IS NULL` is the company/customer split; see the module docstring.
+    """
+    return (
+        db.query(Expense)
+        .filter(Expense.user_id.is_(None))
+        .order_by(Expense.period_start.desc(), Expense.created_at.desc())
+        .all()
+    )
 
 
 @router.post("/", response_model=ExpenseResponse)
