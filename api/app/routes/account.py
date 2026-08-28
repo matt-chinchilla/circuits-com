@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.models import User
+from app.models import Expense, Lead, User
 from app.services.account_tier import account_tier
 from app.services.auth_service import require_account_user, verify_password
 from app.services.rate_limit import account_delete_key, limiter
@@ -53,18 +53,19 @@ def delete_me(
     db: Session = Depends(get_db),
     user: User = Depends(require_account_user),
 ):
-    """Danger Zone. Deletes the LOGIN and that user's messages.
+    """Danger Zone. Deletes the LOGIN, their messages, and their own book (expenses/leads).
 
     Never the linked Supplier, never a Sponsor, never anything in Stripe: a
     live placement is paid inventory on a public board, and cancelling it
     because someone closed their sign-in would be destroying revenue. An
     account is a key to the building, not the building.
 
-    The only rows that follow the user out are the ones whose FK says so:
-    ``messages.user_id`` is ON DELETE CASCADE (that customer's own inbox, and
-    ONLY theirs — a public form submission carries user_id NULL and stays),
-    while ``bom_shares.user_id`` and ``calendar_events.created_by_id`` are ON
-    DELETE SET NULL, so the artifact survives, unowned.
+    What follows the user out: ``messages.user_id`` rows via their ON DELETE
+    CASCADE FK (that customer's own inbox, and ONLY theirs — a public form
+    submission carries user_id NULL and stays), plus their no-FK owned rows
+    (expenses, leads — see the cleanup below). ``bom_shares.user_id`` and
+    ``calendar_events.created_by_id`` are ON DELETE SET NULL, so those
+    artifacts survive, unowned.
     """
     # Re-authenticate: a stolen session must not be able to destroy an account.
     #
@@ -93,6 +94,15 @@ def delete_me(
             headers={"Retry-After": str(retry_after)} if retry_after else None,
         )
     limiter.clear(key)  # a success clears the ladder, as everywhere else
-    db.delete(user)  # messages cascade via the FK; nothing else is touched
+    # The customer's OWN rows follow them out. Messages cascade via their real
+    # FK; expenses and leads carry a plain no-FK user_id (migration 045's
+    # reseed-safety design), so no cascade exists and both delete doors —
+    # this one and admin_users.delete_user — must pay the cleanup explicitly
+    # or the rows outlive the account, invisible to staff (user_id IS NOT
+    # NULL) and unreachable by their owner.
+
+    db.query(Expense).filter(Expense.user_id == user.id).delete(synchronize_session=False)
+    db.query(Lead).filter(Lead.user_id == user.id).delete(synchronize_session=False)
+    db.delete(user)
     db.commit()
     return {"status": "ok"}

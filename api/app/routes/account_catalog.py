@@ -43,6 +43,7 @@ from app.models import Category, Manufacturer, Part, PartListing, Supplier
 from app.routes.parts import part_to_dict
 from app.routes.suppliers import supplier_to_dict
 from app.services.account_scope import AccountScope, account_scope, parts_visible_to
+from app.services.category_service import _escape_like
 
 router = APIRouter(prefix="/api/account", tags=["account-catalog"])
 
@@ -81,7 +82,10 @@ def _manufacturer_row(m: Manufacturer, parts_count: int) -> dict:
 def list_my_parts(
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
-    search: str | None = None,
+    # Bounded and wildcard-escaped like the category page's q: an unbounded
+    # ILIKE pattern is a scan lever, and a literal % or _ in a SKU must match
+    # itself, not everything.
+    search: str | None = Query(None, max_length=120),
     category_id: str | None = None,
     db: Session = Depends(get_db),
     scope: AccountScope = Depends(account_scope),
@@ -100,8 +104,13 @@ def list_my_parts(
     query = db.query(Part).filter(parts_visible_to(scope))
 
     if search:
-        pattern = f"%{search}%"
-        query = query.filter(or_(Part.sku.ilike(pattern), Part.description.ilike(pattern)))
+        pattern = f"%{_escape_like(search)}%"
+        query = query.filter(
+            or_(
+                Part.sku.ilike(pattern, escape="\\"),
+                Part.description.ilike(pattern, escape="\\"),
+            )
+        )
     if category_id:
         query = query.filter(Part.category_id == _uuid_or_404(category_id))
 
@@ -160,6 +169,11 @@ def list_my_categories(
                 "parent_id": str(c.parent_id) if c.parent_id else None,
                 "parent_name": parent.name if parent else None,
                 "parent_slug": parent.slug if parent else None,
+                # The parent's icon travels with the row so the console can
+                # draw the same two-level tree staff see. A parent that holds
+                # none of the caller's parts is never a row of its own, so
+                # this is the ONLY place its icon could come from.
+                "parent_icon": parent.icon if parent else None,
                 "parts_count": int(counts[c.id]),
             }
         )

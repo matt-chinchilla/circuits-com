@@ -232,6 +232,9 @@ export default function ColumnHeader({
                 className={styles.searchInput}
                 placeholder={`Search ${label.toLowerCase()} or description…`}
                 value={search ?? ''}
+                // The server 422s q past 120 chars; the writer clamps too, but
+                // the input should not let a pasted description overrun it.
+                maxLength={120}
                 onChange={e => setSearch(e.target.value)}
               />
             </div>

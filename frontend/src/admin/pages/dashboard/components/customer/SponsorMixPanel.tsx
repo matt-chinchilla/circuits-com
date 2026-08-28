@@ -67,8 +67,7 @@ export default function SponsorMixPanel({ mix, loading, canSponsor }: SponsorMix
               <>
                 <strong>Sponsorships belong to distributor accounts.</strong>
                 <span>
-                  Your account is linked to a manufacturer, so there is no placement to
-                  show here.
+                  Yours is not linked to one, so there is no placement to show here.
                 </span>
               </>
             ) : (

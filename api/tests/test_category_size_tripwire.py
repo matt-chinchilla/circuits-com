@@ -133,16 +133,23 @@ def test_pages_do_not_overlap(client, db):
 
 
 def test_the_500_ceiling_is_gone(client, db):
-    """`parts_per_page=500` — what every call site used to send — is now a 422.
+    """`parts_per_page=500` — what every call site used to send — CLAMPS to 100.
 
-    The ceiling is 100. It is enforced by the route (`le=`) so an over-large
-    ask is visible to the caller rather than silently clamped, and again by the
-    service's own min() so no internal caller can route around it.
+    Clamped rather than 422ed on purpose (2026-08-27): a tab left open across
+    the deploy runs the previous bundle, which sends 500 on every category
+    navigation; a 422 would hard-error every category page in that tab until a
+    manual refresh, and the stale-bundle recovery path never fires because
+    nothing 404s. The route accepts up to the legacy 500 and the service's
+    min() is the real ceiling. Past 500 the route still refuses loudly.
     """
     _seed_big_category(db, slug="headers-ceiling", count=150)
 
-    assert client.get("/api/categories/headers-ceiling?parts_per_page=500").status_code == 422
-    assert client.get("/api/categories/headers-ceiling?parts_per_page=101").status_code == 422
+    legacy = client.get("/api/categories/headers-ceiling?parts_per_page=500")
+    assert legacy.status_code == 200
+    assert legacy.json()["parts"]["per_page"] == MAX_PER_PAGE
+    assert len(legacy.json()["parts"]["items"]) == MAX_PER_PAGE
+
+    assert client.get("/api/categories/headers-ceiling?parts_per_page=501").status_code == 422
 
     ok = client.get("/api/categories/headers-ceiling?parts_per_page=100")
     assert ok.status_code == 200

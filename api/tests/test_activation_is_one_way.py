@@ -80,18 +80,31 @@ class TestTheDoorOnlyOpens:
     def test_a_refused_deactivation_does_not_apply_the_links_alongside_it(
         self, client, db, seeded_db, auth_header
     ):
-        """The request either happens or it does not — no partial writes."""
+        """The request either happens or it does not — no partial writes.
+
+        The refused body must try to CHANGE something real: an earlier version
+        sent `manufacturer_id: None` at an account whose link was already NULL
+        and asserted an untouched column — a no-op that stayed green even if
+        the route applied links before raising the 409. So: link a real
+        supplier first, have the refused body try to clear it, and assert the
+        link survived.
+        """
         u = _customer(db)
         h = auth_header()
         client.patch(f"/api/admin/users/{u.id}", json={"activated": True}, headers=h)
-        before = db.query(User).filter(User.id == u.id).first().supplier_id
-        client.patch(
+        supplier_id = str(seeded_db["supplier2"].id)
+        r = client.patch(
+            f"/api/admin/users/{u.id}", json={"supplier_id": supplier_id}, headers=h
+        )
+        assert r.status_code == 200
+        refused = client.patch(
             f"/api/admin/users/{u.id}",
-            json={"activated": False, "manufacturer_id": None},
+            json={"activated": False, "supplier_id": None},
             headers=h,
         )
+        assert refused.status_code == 409
         db.expire_all()
-        assert db.query(User).filter(User.id == u.id).first().supplier_id == before
+        assert str(db.query(User).filter(User.id == u.id).first().supplier_id) == supplier_id
 
 
 class TestTheMailGoesOnce:

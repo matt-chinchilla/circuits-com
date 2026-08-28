@@ -76,9 +76,14 @@ def get_category(
     parts_page: int = Query(1, ge=1, alias="parts_page"),
     # Ceiling 100, enforced HERE as well as in the service. The old 500 was the
     # fetch-everything model's page size, and it is gone with it: the block is
-    # filtered, sorted and paged in the database now.
+    # filtered, sorted and paged in the database now. The route still ACCEPTS
+    # up to the old 500 and lets the service CLAMP to MAX_PARTS_PER_PAGE
+    # rather than 422ing: a tab left open across the deploy runs the previous
+    # bundle, which requests parts_per_page=500 on every category navigation —
+    # a 422 would hard-error every category page in that tab until a manual
+    # refresh (vite:preloadError recovery never fires; nothing 404s).
     parts_per_page: int = Query(
-        DEFAULT_PARTS_PER_PAGE, ge=1, le=MAX_PARTS_PER_PAGE, alias="parts_per_page"
+        DEFAULT_PARTS_PER_PAGE, ge=1, le=500, alias="parts_per_page"
     ),
     # Free text over sku OR description — the page's one search box matches
     # both. Bounded so an unbounded ILIKE pattern can't be posted at it.

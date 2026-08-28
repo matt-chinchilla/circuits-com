@@ -278,14 +278,15 @@ class TestDashboardTiles:
     def test_customer_a_never_counts_customer_b(self, api, world):
         a = tiles(api, world["customer_a"])
         b = tiles(api, world["customer_b"])
-        # Different people, different numbers — and the sum of the two is not
-        # what either of them is shown.
+        # The exact pins ARE the scoping proof: an unscoped query hands both
+        # accounts the same union numbers, failing the lines above and below.
+        # (An earlier `a + b != a` flourish was a tautology — true whenever b
+        # is non-zero — and asserted nothing.)
         assert b["total_parts"] == 2  # part1 + part_other
         assert b["active_sponsorships"] == 1
         assert b["monthly_spend"] == 9999.0
         assert b["unread_messages"] == 1
         assert a["monthly_spend"] != b["monthly_spend"]
-        assert a["monthly_spend"] + b["monthly_spend"] != a["monthly_spend"]
 
     def test_an_unlinked_customer_gets_zeroes_and_a_200(self, api, world):
         """The single most important assertion in this file. Signup sets

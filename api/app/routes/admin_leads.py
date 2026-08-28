@@ -154,9 +154,13 @@ def rep_activity(
     user: User = Depends(require_leads_access),
 ) -> dict:
     limit = max(1, min(limit, 500))
+    # Company rows only, like every other read here: the moment anything
+    # records a LeadContact against a customer-owned lead, an unfiltered feed
+    # would surface that customer's private prospects in the rep's activity.
     contacts = (
         db.query(LeadContact)
-        .filter(LeadContact.recorded_by == username)
+        .join(Lead, Lead.id == LeadContact.lead_id)
+        .filter(LeadContact.recorded_by == username, Lead.user_id.is_(None))
         .order_by(LeadContact.created_at.desc())
         .limit(limit)
         .all()
@@ -165,7 +169,8 @@ def rep_activity(
     leads = {l.id: l for l in db.query(Lead).filter(Lead.id.in_(lead_ids)).all()} if lead_ids else {}
     mix_rows = (
         db.query(LeadContact.outcome, func.count(LeadContact.id))
-        .filter(LeadContact.recorded_by == username)
+        .join(Lead, Lead.id == LeadContact.lead_id)
+        .filter(LeadContact.recorded_by == username, Lead.user_id.is_(None))
         .group_by(LeadContact.outcome)
         .all()
     )

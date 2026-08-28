@@ -201,3 +201,29 @@ describe('isUnknownSortError', () => {
     expect(isUnknownSortError(undefined)).toBe(false);
   });
 });
+
+describe('naturalDir — the shared meaning of a bare sort URL', () => {
+  it('a bare ?sort=popular means desc, exactly as the server reads it', () => {
+    // Before this rule a shared ?sort=popular link parsed to asc and the
+    // client re-sent it explicitly — opening parent pages on the parts
+    // nobody stocks, the inverse of what the same URL means to the server.
+    expect(parse('sort=popular').dir).toBe('desc');
+    expect(parse('sort=popular&dir=asc').dir).toBe('asc'); // explicit still wins
+    expect(parse('sort=sku').dir).toBe('asc');
+  });
+
+  it('the writer deletes the natural direction, not blanket asc', () => {
+    expect(write('sort=popular&dir=desc', { dir: 'desc' })).not.toContain('dir=');
+    expect(write('sort=popular', { dir: 'asc' })).toContain('dir=asc');
+    expect(write('sort=sku&dir=asc', { dir: 'asc' })).not.toContain('dir=');
+  });
+});
+
+describe('q is clamped to the server bound', () => {
+  it('a pasted description degrades to a shorter search, never a 422', () => {
+    const long = 'x'.repeat(300);
+    expect(parse(`q=${long}`).q).toHaveLength(120);
+    const written = write('', { q: long });
+    expect(new URLSearchParams(written).get('q')).toHaveLength(120);
+  });
+});

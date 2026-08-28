@@ -177,13 +177,14 @@ export default function UsersListPage() {
     if (savingIds.includes(user.id)) return;
     setSaveError('');
     setSavingIds((cur) => [...cur, user.id]);
-    patchRow({ ...user, activated_at: new Date().toISOString() });
-
+    // No optimistic activated_at stamp: flipping it before the PATCH resolves
+    // swapped the control into its post-activation branch mid-flight, so the
+    // owner pressing Activate watched the button read "Deleting…". The row
+    // updates from the server's response, which is the stamp that counts.
     adminApi
       .updateUser(user.id, { activated: true })
       .then(patchRow)
       .catch((err) => {
-        patchRow(user);
         setSaveError(
           apiErrorDetail(err) ??
             `Could not activate ${user.full_name}. Nothing was changed.`,
@@ -436,7 +437,7 @@ export default function UsersListPage() {
                                   onBlur={() => armed && setConfirmingId(null)}
                                   title={
                                     armed
-                                      ? 'Removes their sign-in and their own messages. Their company’s listings and any sponsorship keep running.'
+                                      ? 'Removes their sign-in, their own messages, and their private expense and lead entries. Their company’s listings and any sponsorship keep running.'
                                       : undefined
                                   }
                                 >

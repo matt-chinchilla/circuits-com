@@ -682,8 +682,9 @@ export const adminApi = {
     patch: { activated?: boolean; supplier_id?: string | null; manufacturer_id?: string | null },
   ) => adminClient.patch<AdminUser>(`/admin/users/${id}`, patch).then((r) => r.data),
 
-  /** Owner-only. Removes the login and that customer's own messages; never
-   *  their company's supplier row, sponsorships, or anything in Stripe. */
+  /** Owner-only. Removes the login, that customer's own messages, and their
+   *  private expense/lead entries; never their company's supplier row,
+   *  sponsorships, or anything in Stripe. */
   deleteUser: (id: string) =>
     adminClient.delete<{ status: string }>(`/admin/users/${id}`).then((r) => r.data),
 

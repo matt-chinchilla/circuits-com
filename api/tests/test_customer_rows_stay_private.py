@@ -92,3 +92,31 @@ def test_a_customers_expenses_stay_out_of_the_company_books(
     infra = [r for r in body["categories"] if r["category"] == "infrastructure"]
     assert infra and float(infra[0]["amount"]) == 100.0
     assert float(body["total"]) == 100.0
+
+
+def test_a_customers_lead_contacts_stay_out_of_the_rep_activity_feed(
+    client, db, seeded_db, auth_header
+):
+    """The third door (found by review, 2026-08-27): /api/admin/leads/reps/{u}
+    joins LeadContact to Lead by recorded_by with no owner filter, so a
+    contact recorded against a customer-owned lead surfaced in the staff rep
+    feed. Mutation-proven: dropping the Lead.user_id.is_(None) join filter in
+    rep_activity reddens this."""
+    customer = _customer(db, email="rep_feed@test.example")
+    ours = Lead(id=uuid.uuid4(), source_key="ours|acme2",
+                company_name="Acme Two", company_slug="acme-two")
+    theirs = Lead(id=uuid.uuid4(), source_key="theirs|globex2",
+                  company_name="Globex Two", company_slug="globex-two",
+                  user_id=customer.id)
+    db.add_all([ours, theirs])
+    db.flush()
+    db.add_all([
+        LeadContact(lead_id=ours.id, outcome="maybe", recorded_by="matthew"),
+        LeadContact(lead_id=theirs.id, outcome="maybe", recorded_by="matthew"),
+    ])
+    db.commit()
+
+    body = client.get("/api/admin/leads/reps/matthew", headers=auth_header()).json()
+    names = [c.get("company_name") for c in body.get("contacts", [])]
+    assert "Acme Two" in names
+    assert "Globex Two" not in names

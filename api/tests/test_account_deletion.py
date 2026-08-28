@@ -174,3 +174,42 @@ def test_an_unactivated_customer_is_refused(client, db):
     r = client.get("/api/account/me", headers=_login(client, "u@test.example"))
     assert r.status_code == 403
     assert r.json()["detail"] == "account_not_activated"
+
+
+def test_self_delete_takes_their_private_book_and_leads_along(client, db):
+    """expenses.user_id / leads.user_id carry NO FK (reseed safety), so no
+    cascade exists — BOTH delete doors pay the cleanup explicitly, and this
+    pins the self-serve one. Without it the rows outlive the account:
+    invisible to staff (user_id IS NOT NULL) and unreachable by their owner.
+
+    Mutation-proven 2026-08-27: removing the two cleanup deletes in
+    account.delete_me reddens exactly this test.
+    """
+    from datetime import date
+
+    from app.models import Expense, Lead
+
+    u = _activated(db)
+    other = User(username="other@test.example", email="other@test.example",
+                 password_hash=hash_password(PW), role="user",
+                 email_verified_at=datetime.now(UTC), activated_at=datetime.now(UTC))
+    db.add(other)
+    db.flush()
+    db.add(Expense(category="logistics", vendor="FedEx", amount=42,
+                   period_start=date(2026, 8, 1), period_end=date(2026, 8, 1),
+                   user_id=u.id))
+    db.add(Lead(company_name="Globex", company_slug="globex",
+                source_key="theirs|globex", user_id=u.id))
+    db.add(Expense(category="logistics", vendor="Kept", amount=7,
+                   period_start=date(2026, 8, 1), period_end=date(2026, 8, 1),
+                   user_id=other.id))
+    db.commit()
+
+    h = _login(client)
+    assert client.request("DELETE", "/api/account/me",
+                          json={"password": PW}, headers=h).status_code == 200
+    db.expire_all()
+    assert db.query(Expense).filter(Expense.user_id == u.id).count() == 0
+    assert db.query(Lead).filter(Lead.user_id == u.id).count() == 0
+    # Another customer's book is untouched — the cleanup is keyed, not a sweep.
+    assert db.query(Expense).filter(Expense.user_id == other.id).count() == 1

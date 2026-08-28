@@ -490,10 +490,15 @@ class TestPaging:
         assert parts["pages"] == 2, "pages count the FILTERED rows"
 
     def test_the_ceiling_is_100(self, client, catalog):
-        assert client.get(f"/api/categories/{PARENT}?parts_per_page=101").status_code == 422
-        # 500 was the fetch-everything page size every call site sent.
-        assert client.get(f"/api/categories/{PARENT}?parts_per_page=500").status_code == 422
+        # 500 was the fetch-everything page size every call site sent — the
+        # route still ACCEPTS up to it and the service CLAMPS to 100, so a tab
+        # running the pre-deploy bundle keeps working instead of 422ing on
+        # every category navigation (see test_category_size_tripwire).
+        assert _parts(client, PARENT, "parts_per_page=500")["per_page"] == 100
+        assert _parts(client, PARENT, "parts_per_page=101")["per_page"] == 100
         assert _parts(client, PARENT, "parts_per_page=100")["per_page"] == 100
+        # Past the legacy ceiling the route still refuses loudly.
+        assert client.get(f"/api/categories/{PARENT}?parts_per_page=501").status_code == 422
 
 
 # ── Rejections ──────────────────────────────────────────────────────────────

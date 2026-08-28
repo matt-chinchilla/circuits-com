@@ -71,6 +71,23 @@ export const DEFAULT_CATEGORY_QUERY: CategoryQuery = {
   sub: [],
 };
 
+/** The server bounds `q` at 120 chars (a 422 past it); clamp before it ships
+ * so a pasted part description degrades to a shorter search, never an error
+ * card. Mirrors `q: Query(None, max_length=120)` in routes/categories.py. */
+export const Q_MAX_LENGTH = 120;
+
+/**
+ * The direction a sort means when the URL names none — MIRRORS the server's
+ * `resolve_sort` rule (popular is stock DESC; every column is asc), the same
+ * two-homes pattern as the password policy. Without this, a shared bare
+ * `?sort=popular` link parsed to 'asc' and the client re-sent it explicitly,
+ * opening parent pages on the parts nobody stocks — inverting what the same
+ * URL means to the server itself.
+ */
+export function naturalDir(sort: SortKey | null): SortDir {
+  return sort === 'popular' ? 'desc' : 'asc';
+}
+
 function isSortKey(value: string | null): value is SortKey {
   return value !== null && (SORT_KEYS as readonly string[]).includes(value);
 }
@@ -93,11 +110,13 @@ function normalizeList(values: string[]): string[] {
 export function parseCategoryQuery(params: URLSearchParams): CategoryQuery {
   const rawPage = Number.parseInt(params.get('p') ?? '1', 10);
   const rawSort = params.get('sort');
+  const sort = isSortKey(rawSort) ? rawSort : null;
+  const rawDir = params.get('dir');
   return {
     page: Number.isFinite(rawPage) && rawPage > 1 ? rawPage : 1,
-    sort: isSortKey(rawSort) ? rawSort : null,
-    dir: params.get('dir') === 'desc' ? 'desc' : 'asc',
-    q: (params.get('q') ?? '').trim(),
+    sort,
+    dir: rawDir === 'desc' ? 'desc' : rawDir === 'asc' ? 'asc' : naturalDir(sort),
+    q: (params.get('q') ?? '').trim().slice(0, Q_MAX_LENGTH),
     mfg: normalizeList(params.getAll('mfg')),
     sub: normalizeList(params.getAll('sub')),
   };
@@ -145,11 +164,14 @@ export function writeCategoryQuery(
     }
   }
   if ('dir' in patch && patch.dir !== undefined && next.get('sort') != null) {
-    if (patch.dir === 'desc') next.set('dir', 'desc');
-    else next.delete('dir');
+    // The sort's NATURAL direction is the deletable default — a bare
+    // ?sort=popular must keep meaning desc to every consumer of the URL.
+    const activeSort = next.get('sort');
+    if (patch.dir === naturalDir(isSortKey(activeSort) ? activeSort : null)) next.delete('dir');
+    else next.set('dir', patch.dir);
   }
   if ('q' in patch) {
-    const q = (patch.q ?? '').trim();
+    const q = (patch.q ?? '').trim().slice(0, Q_MAX_LENGTH);
     if (q) next.set('q', q);
     else next.delete('q');
   }

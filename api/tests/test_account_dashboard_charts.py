@@ -530,12 +530,14 @@ class TestReferralClicks:
     def test_only_this_distributors_clicks_are_counted(self, api, world):
         a = get(api, world["customer_a"], "/referral-clicks")
         b = get(api, world["customer_b"], "/referral-clicks")
+        # The exact pins ARE the scoping proof: the union would be 9, and an
+        # unscoped query hands BOTH accounts 9, failing both lines. (An earlier
+        # `a + b != a` flourish here was a tautology — true whenever b is
+        # non-zero — and asserted nothing; exact values do the work.)
         assert a["total_30d"] == 4  # 3 today + 1 two days ago
         assert b["total_30d"] == 5
         assert a["daily"][-1]["clicks"] == 3
         assert b["daily"][-1]["clicks"] == 5
-        # The union would be 9 — a different number from either.
-        assert a["total_30d"] + b["total_30d"] != a["total_30d"]
 
     def test_the_monthly_series_reaches_further_back_than_the_daily_one(self, api, world):
         body = get(api, world["customer_a"], "/referral-clicks")
