@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import { Download } from 'lucide-react'
 import { useDemo } from '@admin/contexts/DemoContext'
+import { useAuth } from '@admin/contexts/AuthContext'
 import { adminApi } from '@admin/services/adminApi'
 import type {
   AnalyticsData,
@@ -10,6 +11,7 @@ import type {
   RevenueDataPoint,
   PopularData,
 } from '@admin/types/admin'
+import CustomerReportsPage from './CustomerReportsPage'
 import styles from './ReportsPage.module.scss'
 import WorldMapPanel from './WorldMapPanel'
 import { refHost } from './chartKit'
@@ -139,7 +141,7 @@ function Kpi({ label, value, delta, tone = 'neutral', valueStyle }: KpiProps) {
   )
 }
 
-export default function ReportsPage() {
+function StaffReportsPage() {
   const { demoMode } = useDemo()
   const [range, setRange] = useState<RangeKey>('12m')
   const [tab, setTab] = useState<TabKey>('analytics')
@@ -609,4 +611,13 @@ export default function ReportsPage() {
       )}
     </div>
   )
+}
+
+// The route component. Every endpoint the staff page reads is require_staff and
+// platform-wide, so a customer gets a different page over the SAME customer
+// panels — see CustomerReportsPage. The staff body above is unchanged by the
+// split.
+export default function ReportsPage() {
+  const { isCustomer } = useAuth()
+  return isCustomer ? <CustomerReportsPage /> : <StaffReportsPage />
 }

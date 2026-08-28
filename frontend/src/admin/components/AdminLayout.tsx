@@ -91,8 +91,20 @@ const SYSTEM_LINKS: SidebarLink[] = [
  * ternary that picks it is not the forbidden `elif`, because neither half is
  * hidden by the other — only one of them is the landing page.
  *
- * Never here, for anyone: Users, Leads, Expenses, Import Queue, Reports. Those
- * are staff surfaces behind require_staff routes or our own finances.
+ * The last three are for EVERY customer, capability or not:
+ *
+ *  - Sponsors was supplier-only, on the reasoning that `sponsors.supplier_id`
+ *    is NOT NULL so a maker cannot hold a placement. True, and not a reason to
+ *    hide the page: CustomerSponsorsPage says exactly that to a manufacturer
+ *    and shows a free account what a placement is. Hiding it meant the accounts
+ *    most likely to BUY one had no door to it.
+ *  - Reports is a different page from the staff one (CustomerReportsPage), over
+ *    /api/account endpoints only.
+ *  - Expenses is the customer's OWN book — their `expenses` rows, never the
+ *    company's, which the staff list reads as `user_id IS NULL`.
+ *
+ * Never here, for anyone: Users, Leads, Import Queue. Those are staff surfaces
+ * behind require_staff routes.
  */
 function customerLinks(isSupplier: boolean, isManufacturer: boolean): {
   catalog: SidebarLink[];
@@ -121,11 +133,11 @@ function customerLinks(isSupplier: boolean, isManufacturer: boolean): {
     );
   }
 
-  // `sponsors.supplier_id` is NOT NULL, so a manufacturer-only account cannot
-  // hold a placement today — the page would be a permanent empty list.
-  if (isSupplier) {
-    catalog.push({ to: '/admin/sponsors', label: 'Sponsors', icon: 'star' });
-  }
+  catalog.push(
+    { to: '/admin/sponsors', label: 'Sponsors', icon: 'star' },
+    { to: '/admin/reports', label: 'Reports', icon: 'chart-bar' },
+    { to: '/admin/expenses', label: 'Expenses', icon: 'receipt' },
+  );
 
   return {
     catalog,

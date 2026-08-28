@@ -417,3 +417,66 @@ export interface AccountLeadsSummary {
   /** Newest first, at most 5. */
   recent: AccountLeadSummaryRow[];
 }
+
+// ── The customer's own expense book ─────────────────────────────────────────
+//
+// The SAME `expenses` table the staff book reads, split by `user_id`: the
+// company's rows carry NULL, a customer's rows carry theirs (migration 045).
+// That is why the two never see each other's lines, and why a row belonging to
+// somebody else — the company's included — answers 404 rather than 403. A 403
+// would confirm the id names something real.
+
+/**
+ * One line of the caller's own cost book.
+ *
+ * `amount` is a JSON number on this contract, and it is still read through
+ * `Number()` at every render site: the column is Postgres NUMERIC, whose staff
+ * twin arrives as a STRING for exactly that reason (CLAUDE.md). The coercion
+ * costs nothing and is what stops a string comparison the day the two
+ * serializations disagree.
+ */
+export interface AccountExpense {
+  id: string;
+  /** Free text — trimmed and lowercased server-side, 1–30 chars. Rendered
+   *  through `expenseCategoryLabel`, which title-cases anything outside the six
+   *  the staff book happens to use, so a customer's own label reads properly
+   *  without being one of ours. */
+  category: string;
+  vendor: string | null;
+  amount: number;
+  /** `YYYY-MM-DD` — the month this line is filed under. */
+  period_start: string;
+  /** `YYYY-MM-DD`. The server defaults it to `period_start`. */
+  period_end: string | null;
+  description: string | null;
+}
+
+/** GET /api/account/expenses — newest `period_start` first. */
+export interface AccountExpensesResponse {
+  items: AccountExpense[];
+  total_count: number;
+}
+
+/**
+ * POST /api/account/expenses body.
+ *
+ * `user_id` and `source` are the SERVER's to set and are absent here on
+ * purpose: 'manual' is the one source the cost sync's `reconcile_source` never
+ * deletes, so a client able to name the source could have its own row swept
+ * away by the next hourly pass.
+ *
+ * The endpoint forbids extra keys, so a stray field is a 422 rather than
+ * something quietly dropped.
+ */
+export interface AccountExpenseCreate {
+  category: string;
+  amount: number;
+  period_start: string;
+  vendor?: string | null;
+  description?: string | null;
+  period_end?: string | null;
+}
+
+/** PATCH body — every field optional, same forbidden extras. An omitted field
+ *  is left untouched. */
+export type AccountExpenseUpdate = Partial<AccountExpenseCreate>;

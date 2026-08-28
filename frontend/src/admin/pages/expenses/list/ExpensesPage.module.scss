@@ -356,3 +356,66 @@
   border-bottom: none;
   border-top: 1px solid var(--a-border);
 }
+
+// ─── Customer book: month bands + empty state ───────────────────────────────
+//
+// Additive only — every class above is the staff list's and is untouched. The
+// customer's book bands by month instead of filtering by category, so it needs
+// a band row and an empty state that can hold a call to action (the staff
+// page's `.emptyRow` is a table cell and cannot).
+
+.monthRow {
+  th,
+  td {
+    padding: 9px 20px;
+    background: var(--a-bg);
+    border-bottom: 1px solid var(--a-border);
+  }
+}
+
+// The band is a heading, not data: the row hover that lifts a real line would
+// read as "this is clickable". The neutralizer has to name the table to win —
+// `.table tbody tr:hover td` above carries three element selectors to a bare
+// `.monthRow:hover td`'s one, so the shorter rule loses despite being later.
+.table tbody .monthRow:hover {
+  th,
+  td {
+    background: var(--a-bg);
+  }
+}
+
+.monthLabel {
+  text-align: left;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--a-fg3);
+  white-space: nowrap;
+}
+
+.monthTotalCell {
+  white-space: nowrap;
+}
+
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 44px 24px;
+  text-align: center;
+  color: var(--a-fg3);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.emptyStateTitle {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--a-fg1);
+}
+
+.emptyStateBody {
+  max-width: 52ch;
+}

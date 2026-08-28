@@ -14,6 +14,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useConsolePath } from '@admin/services/consolePath';
 import { Pencil, Plus, Search, X } from 'lucide-react';
 import { adminApi } from '@admin/services/adminApi';
+import { useAuth } from '@admin/contexts/AuthContext';
 import {
   EXPENSE_CATEGORIES,
   expenseCategoryLabel,
@@ -21,6 +22,7 @@ import {
 } from '@admin/services/expenseCategories';
 import Icon from '@shared/components/Icon';
 import type { AdminExpense, ExpenseCategory } from '@admin/types/admin';
+import CustomerExpensesPage from './CustomerExpensesPage';
 import styles from './ExpensesPage.module.scss';
 
 type CategoryFilter = 'All' | ExpenseCategory;
@@ -54,7 +56,7 @@ function formatDate(ymd: string | null): string {
   });
 }
 
-export default function ExpensesPage() {
+function StaffExpensesPage() {
   // Canonical /admin paths, rewritten onto whichever mount is rendering (D16).
   const consolePath = useConsolePath();
   const navigate = useNavigate();
@@ -249,4 +251,12 @@ export default function ExpensesPage() {
       </div>
     </div>
   );
+}
+
+// The route component. A customer's book is a different table's slice behind a
+// different router (`/api/account/expenses`, theirs alone) — see
+// CustomerExpensesPage. The staff body above is unchanged by the split.
+export default function ExpensesPage() {
+  const { isCustomer } = useAuth();
+  return isCustomer ? <CustomerExpensesPage /> : <StaffExpensesPage />;
 }

@@ -29,6 +29,10 @@ import type {
   AccountBookOfBusiness,
   AccountCategoriesResponse,
   AccountDashboard,
+  AccountExpense,
+  AccountExpenseCreate,
+  AccountExpensesResponse,
+  AccountExpenseUpdate,
   AccountImportQueue,
   AccountKpi,
   AccountLeadsSummary,
@@ -236,4 +240,38 @@ export const accountApi = {
    *  the five most recent. Empty at first for every account. */
   getAccountLeadsSummary: () =>
     accountClient.get<AccountLeadsSummary>('/account/leads-summary').then((r) => r.data),
+
+  // ── The customer's own expense book ──────────────────────────────────────
+  // The console's only customer-owned CRUD. Everything else under /api/account
+  // reads data we generated about them; these four are their own numbers,
+  // which is why they are the one place a customer WRITES a row rather than a
+  // preference.
+  //
+  // Scoping is the same server-side rule as every read above, doing double
+  // duty here: it decides which rows come back AND which rows can be reached
+  // by id. Nothing in this module sends a user_id — a client-supplied owner is
+  // a client-chosen owner.
+
+  /** GET /account/expenses — this USER's lines, newest period first. Never the
+   *  company's: those are the same table's `user_id IS NULL` rows, and they
+   *  belong to the staff book. */
+  listAccountExpenses: () =>
+    accountClient.get<AccountExpensesResponse>('/account/expenses').then((r) => r.data),
+
+  /** POST /account/expenses — the created row. The server stamps the owner and
+   *  `source='manual'`; the body carries neither. */
+  createAccountExpense: (body: AccountExpenseCreate) =>
+    accountClient.post<AccountExpense>('/account/expenses', body).then((r) => r.data),
+
+  /** PATCH /account/expenses/{id} — partial body, the updated row back. A row
+   *  that is not yours is a 404, so the caller treats it as "gone" rather than
+   *  as a permission problem to explain. */
+  updateAccountExpense: (id: string, body: AccountExpenseUpdate) =>
+    accountClient.patch<AccountExpense>(`/account/expenses/${id}`, body).then((r) => r.data),
+
+  /** DELETE /account/expenses/{id}. Same 404 rule. */
+  deleteAccountExpense: (id: string) =>
+    accountClient
+      .delete<{ status: string }>(`/account/expenses/${id}`)
+      .then((r) => r.data),
 };
