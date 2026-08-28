@@ -12,6 +12,11 @@ export interface AdminLead {
   ring: string | null;
   city: string | null;
   state: string | null;
+  /** Straight-line miles from HQ to the lead's ZIP centroid, one decimal.
+   *  null = ZIP absent/unknown (renders as an em-dash, excluded from
+   *  distance filters server-side). `| null`, not optional: Python None
+   *  arrives as JSON null and `?:` would not catch it. */
+  distance_miles: number | null;
   contact_name: string | null;
   contact_title: string | null;
   needs_enrichment: boolean;

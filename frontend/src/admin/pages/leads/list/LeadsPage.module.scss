@@ -691,3 +691,17 @@
     max-width: 30ch;
   }
 }
+
+// Location cell's distance annotation — `City, ST | 2479 miles`. Mono +
+// tabular so a column of mileages aligns; fg3 keeps the place name primary.
+.distance {
+  font-family: $font-mono;
+  font-size: 12px;
+  color: var(--a-fg3);
+  white-space: nowrap;
+}
+
+.distanceSep {
+  margin: 0 7px;
+  color: var(--a-fg4);
+}

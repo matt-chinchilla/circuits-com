@@ -1,7 +1,17 @@
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import (
+    Boolean,
+    Column,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    Numeric,
+    String,
+    Text,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
@@ -40,6 +50,10 @@ class Lead(Base):
     city = Column(String(80), nullable=True)
     state = Column(String(2), nullable=True)
     postal_code = Column(String(10), nullable=True)
+    # Straight-line miles HQ→ZIP centroid (services/lead_distance, migration
+    # 047), one decimal. Stamped at seed; NULL = ZIP absent/unknown, and the
+    # seed retries NULLs each start so a dataset fix heals old rows.
+    distance_miles = Column(Numeric(7, 1), nullable=True)
     main_phone = Column(String(24), nullable=True)
     website = Column(String(200), nullable=True)
     sales_email = Column(String(200), nullable=True)

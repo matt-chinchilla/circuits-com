@@ -15,6 +15,7 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 
 from app.models import Lead, Manufacturer
+from app.services.lead_distance import distance_from_hq_miles
 from app.services.manufacturer_canon import canon, split_branch
 
 _ENRICHMENT = "ENRICHMENT NEEDED"
@@ -26,7 +27,13 @@ def seed_leads(db: Session, csv_path: Path | None = None) -> dict:
         print("Seed: leads.csv not found, skipping leads.")
         return {}
 
-    counts = {"leads_rows": 0, "leads_created": 0, "enrichment_rows": 0, "linked": 0}
+    counts = {
+        "leads_rows": 0,
+        "leads_created": 0,
+        "enrichment_rows": 0,
+        "linked": 0,
+        "distance_backfilled": 0,
+    }
 
     existing = {l[0] for l in db.query(Lead.source_key).all()}
     mfr_by_canon = {m.canonical_key: m.id for m in db.query(Manufacturer).all()}
@@ -76,6 +83,7 @@ def seed_leads(db: Session, csv_path: Path | None = None) -> dict:
             linkedin_url=clean(r, "LinkedIn URL", 300),
             hours_tz=clean(r, "Hours/Time Zone", 40),
             notes=clean(r, "Growth Signals/Notes", 4000),
+            distance_miles=distance_from_hq_miles(clean(r, "ZIP", 10)),
         )
         db.add(lead)
         counts["leads_created"] += 1
@@ -84,9 +92,24 @@ def seed_leads(db: Session, csv_path: Path | None = None) -> dict:
         if lead.manufacturer_id is not None:
             counts["linked"] += 1
 
+    # Distance backfill — geography, not CRM state, so touching existing rows
+    # here doesn't violate the INSERT-IF-ABSENT contract above. Retries every
+    # NULL each start (359-row roster, one dict lookup per row), so migration
+    # 047's un-backfilled rows and any future centroid-dataset fix both heal
+    # without a hand-run script. Covers ALL rows including customer-owned ones:
+    # distance is measured from OUR HQ either way.
+    for lead in (
+        db.query(Lead).filter(Lead.distance_miles.is_(None), Lead.postal_code.isnot(None)).all()
+    ):
+        miles = distance_from_hq_miles(lead.postal_code)
+        if miles is not None:
+            lead.distance_miles = miles
+            counts["distance_backfilled"] += 1
+
     db.flush()
     print(
         f"Seed: leads — {counts['leads_created']} created of {counts['leads_rows']} rows "
-        f"({counts['enrichment_rows']} need enrichment, {counts['linked']} manufacturer-linked)."
+        f"({counts['enrichment_rows']} need enrichment, {counts['linked']} manufacturer-linked, "
+        f"{counts['distance_backfilled']} distances backfilled)."
     )
     return counts

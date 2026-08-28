@@ -31,6 +31,7 @@ import CatalogSwitch from '../../manufacturers/CatalogSwitch';
 import TableSearch from '../../manufacturers/TableSearch';
 import ColumnHeader, { type SortDir } from '../../manufacturers/ColumnHeader';
 import { classifyLeadsError, SESSION_EXPIRED_MESSAGE } from '../loadError';
+import { DISTANCE_CHOICES, distanceParams, formatMiles, type DistanceFilterKey } from '../distance';
 import { OUTCOME_META, OUTCOME_ORDER, outcomeInkVars } from '../outcome';
 import { relativeTime } from '../time';
 import OutcomeDisc from '../OutcomeDisc';
@@ -43,7 +44,7 @@ const SKELETON_INDEXES = Array.from({ length: SKELETON_ROWS }, (_, i) => i);
 
 // Server sort keys — `_SORTS` in routes/admin_leads.py. Anything else silently
 // falls back to company_name server-side, so this union IS the contract.
-type SortKey = 'company' | 'contact' | 'tier' | 'ring' | 'outcome' | 'contacted';
+type SortKey = 'company' | 'contact' | 'tier' | 'ring' | 'outcome' | 'contacted' | 'distance';
 
 // 'none' is the server's sentinel for "never contacted" (last_outcome IS NULL)
 // — a real filter value, not an absent parameter.
@@ -101,6 +102,7 @@ export default function LeadsPage() {
 
   const [outcomeFilter, setOutcomeFilter] = useState<OutcomeFilter>('all');
   const [tierFilter, setTierFilter] = useState<TierFilter>('all');
+  const [distanceFilter, setDistanceFilter] = useState<DistanceFilterKey>('all');
   const [enrichOnly, setEnrichOnly] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>(null);
@@ -136,6 +138,9 @@ export default function LeadsPage() {
     if (outcomeFilter !== 'all') params.outcome = outcomeFilter;
     if (tierFilter !== 'all') params.tier = tierFilter;
     if (enrichOnly) params.needs_enrichment = true;
+    const distance = distanceParams(distanceFilter);
+    if (distance.min_miles !== undefined) params.min_miles = distance.min_miles;
+    if (distance.max_miles !== undefined) params.max_miles = distance.max_miles;
 
     adminApi
       .getLeads(params)
@@ -176,7 +181,7 @@ export default function LeadsPage() {
     return () => {
       cancelled = true;
     };
-  }, [page, q, outcomeFilter, tierFilter, enrichOnly, sortKey, sortDir, reloadNonce]);
+  }, [page, q, outcomeFilter, tierFilter, distanceFilter, enrichOnly, sortKey, sortDir, reloadNonce]);
 
   // RECOVERY, not just a message. The adminApi interceptor already dropped the
   // dead token, but `AuthContext.user` is React state no 401 ever cleared — so
@@ -195,7 +200,7 @@ export default function LeadsPage() {
   // change, so this effect would also fire on page change and pin the list to
   // page 1 forever; the functional form needs no setter dep. First run is
   // skipped so a deep link like `?p=4` survives mount.
-  const filtersKey = `${q}|${outcomeFilter}|${tierFilter}|${enrichOnly}|${sortKey}|${sortDir}`;
+  const filtersKey = `${q}|${outcomeFilter}|${tierFilter}|${distanceFilter}|${enrichOnly}|${sortKey}|${sortDir}`;
   const firstFiltersRun = useRef(true);
   useEffect(() => {
     if (firstFiltersRun.current) {
@@ -252,7 +257,8 @@ export default function LeadsPage() {
   };
 
 
-  const filtersActive = !!q || outcomeFilter !== 'all' || tierFilter !== 'all' || enrichOnly;
+  const filtersActive =
+    !!q || outcomeFilter !== 'all' || tierFilter !== 'all' || distanceFilter !== 'all' || enrichOnly;
 
   const head = (
     <header className={styles.pageHead}>
@@ -450,7 +456,19 @@ export default function LeadsPage() {
                   onSort={handleSort}
                   sortLabels={{ asc: 'Nearest first', desc: 'Furthest first' }}
                 />
-                <th>Location</th>
+                <ColumnHeader
+                  kind="single-choice"
+                  label="Location"
+                  colKey="distance"
+                  activeKey={sortKey}
+                  dir={sortDir}
+                  onSort={handleSort}
+                  sortLabels={{ asc: 'Nearest first', desc: 'Farthest first' }}
+                  choices={DISTANCE_CHOICES}
+                  neutralKey="all"
+                  value={distanceFilter}
+                  onChange={(next) => setDistanceFilter(next as DistanceFilterKey)}
+                />
                 <ColumnHeader
                   kind="sort-only"
                   label="Last outcome"
@@ -598,7 +616,21 @@ export default function LeadsPage() {
                       </td>
 
                       <td>
-                        {place ?? <span className={styles.muted}>&mdash;</span>}
+                        {place ? (
+                          <>
+                            {place}
+                            {lead.distance_miles != null && (
+                              <span className={styles.distance}>
+                                <span className={styles.distanceSep} aria-hidden="true">
+                                  |
+                                </span>
+                                {formatMiles(lead.distance_miles)}
+                              </span>
+                            )}
+                          </>
+                        ) : (
+                          <span className={styles.muted}>&mdash;</span>
+                        )}
                       </td>
 
                       <td>

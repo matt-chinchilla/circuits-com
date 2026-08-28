@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import uuid as uuid_mod
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
@@ -64,6 +64,9 @@ def _lead_row(lead: Lead) -> dict:
         "ring": lead.ring,
         "city": lead.city,
         "state": lead.state,
+        # Numeric → float here: Postgres NUMERIC serializes as a JSON STRING
+        # (the AdminSponsor.amount trap), and the client sorts/formats this.
+        "distance_miles": float(lead.distance_miles) if lead.distance_miles is not None else None,
         "contact_name": lead.contact_name,
         "contact_title": lead.contact_title,
         "needs_enrichment": lead.needs_enrichment,
@@ -96,6 +99,7 @@ def _lead_detail(lead: Lead) -> dict:
 _SORTS = {
     "company": Lead.company_name, "contact": Lead.contact_name, "tier": Lead.tier,
     "ring": Lead.ring, "outcome": Lead.last_outcome, "contacted": Lead.last_contacted_at,
+    "distance": Lead.distance_miles,
 }
 
 
@@ -108,6 +112,8 @@ def list_leads(
     tier: str | None = None,
     ring: str | None = None,
     needs_enrichment: bool | None = None,
+    min_miles: float | None = Query(None, ge=0),
+    max_miles: float | None = Query(None, ge=0),
     sort: str = "company",
     desc: bool = False,
     db: Session = Depends(get_db),
@@ -134,6 +140,13 @@ def list_leads(
         query = query.filter(Lead.ring == ring)
     if needs_enrichment is not None:
         query = query.filter(Lead.needs_enrichment == needs_enrichment)
+    # Distance filters EXCLUDE unknown-distance rows on purpose: "within 50
+    # miles" is a claim, and a lead whose ZIP we couldn't place can't make it.
+    # (NULL fails both comparisons in SQL, so no explicit isnot(None) needed.)
+    if min_miles is not None:
+        query = query.filter(Lead.distance_miles >= min_miles)
+    if max_miles is not None:
+        query = query.filter(Lead.distance_miles < max_miles)
     total = query.count()
     col = _SORTS.get(sort, Lead.company_name)
     # NULLS LAST in BOTH directions: most sortable columns here are nullable
