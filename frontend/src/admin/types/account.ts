@@ -71,6 +71,9 @@ export interface AccountCategory {
   parent_id: string | null;
   parent_name: string | null;
   parent_slug: string | null;
+  /** The PARENT's icon. A parent holding none of the caller's parts is never a
+   *  row of its own, so this is the only place the console can read it. */
+  parent_icon: string | null;
   parts_count: number;
 }
 

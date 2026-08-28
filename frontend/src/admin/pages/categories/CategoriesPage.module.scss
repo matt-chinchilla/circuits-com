@@ -597,9 +597,10 @@
 }
 
 /* ── Customer branch (/account/categories) ──────────────────── */
-/* The flat, count-ordered list of the categories the caller's own parts sit
-   in. It reuses the grid cards above; these two rules are the difference — a
-   card that is a real link, and the parent it hangs under. */
+/* The customer sees the tree and the grid above, drawn from their own scoped
+   rows — same classes, so the two renders are one page. This single rule is
+   the difference: their blocks and cards navigate to the category, so the
+   heads and cards that are <a> keep the surrounding text styling. */
 
 .catCardLink {
   text-decoration: none;
@@ -609,12 +610,4 @@
     outline: 2px solid var(--a-primary);
     outline-offset: 2px;
   }
-}
-
-.catParent {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--a-fg4);
 }

@@ -318,6 +318,15 @@ class TestCategories:
         assert row["parent_name"] == "Integrated Circuits"
         assert row["parent_slug"] == "integrated-circuits"
 
+    def test_the_parents_icon_travels_so_the_console_can_draw_the_tree(self, api, world):
+        """The customer console rebuilds the staff page's two-level tree out of
+        these flat rows. A parent holding none of the caller's own parts is
+        never a row in its own right, so this field is the ONLY place its icon
+        can come from — without it every parent head draws with a hole."""
+        body = get(api, world["kennedy_user"], "/api/account/categories")
+        row = body["categories"][0]
+        assert row["parent_icon"] == "\u26a1"
+
     def test_unlinked_sees_none(self, api, world):
         assert get(api, world["free_user"], "/api/account/categories")["categories"] == []
 
