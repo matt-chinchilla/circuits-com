@@ -224,24 +224,22 @@ export default function SignIn({ go }: { go: (s: Screen) => void }) {
       <div className="form-meta">
         <p className="recover-line">
           Can&rsquo;t sign in?{' '}
-          <button onClick={() => go('forgot-password')}>Reset your password</button>
-        </p>
-        {/* Two doors to the same screen on purpose: the button below is what a
-            scanner's eye lands on, this line is what a reader finds. */}
-        <p className="recover-line">
-          New here?{' '}
-          <button type="button" onClick={() => go('signup')}>
-            Create an account
+          <button type="button" onClick={() => go('forgot-password')}>
+            Reset your password
           </button>
         </p>
         {/* Deliberately secondary to Sign in — this is the prospective-customer
             door, not the staff one. It replaced the retired "See Demo" button
-            (alembic 044): registration is how prospects get in now. */}
-        <div className="demo-cta">
-          <button type="button" className="btn-demo" onClick={() => go('signup')}>
-            Sign Up &rarr;
+            (alembic 044): registration is how prospects get in now, so the
+            classes say signup rather than the old demo names. The arrow is the
+            shared <Svg d={I.arrow} className="arrow" />, not a &rarr; text
+            glyph, so it inherits the same hover nudge as the primary button. */}
+        <div className="signup-cta">
+          <button type="button" className="btn-signup" onClick={() => go('signup')}>
+            Sign up
+            <Svg d={I.arrow} w={16} className="arrow" />
           </button>
-          <p className="demo-note">Create an account to get started.</p>
+          <p className="signup-note">Create an account to get started.</p>
         </div>
       </div>
     </div>

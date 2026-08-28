@@ -38,6 +38,29 @@
   --ok: #15803d;
   --radius: 10px;
 
+  /* ── Control-state tokens ────────────────────────────────────────────
+     Re-declared here on purpose. These are the admin console's control
+     tokens (AdminLayout.module.scss defines them on `.admin`), but the auth
+     shell renders OUTSIDE AdminLayout, so nothing would inherit them — the
+     DatasheetFrame surface re-declares the same block for the same reason.
+     Same names, same values, so the buttons below press, lift and ring
+     exactly like the console's do. `--a-primary` maps to this page's
+     soldermask green. Change a value here, not at a call site. */
+  --a-primary: var(--exec-green);
+  --a-focus-ring: 0 0 0 3px rgba(10, 74, 46, 0.18), 0 0 0 1.5px var(--a-primary);
+  /* The same ring for a control whose FILL is already --a-primary. The console
+     never needed this (its filled primary declares no focus state at all), but
+     the ring's solid inner stroke is the identical green to this button's
+     background, so it hugs the edge and half-disappears. A white gap first —
+     the standard offset-ring construction — separates the two and the ring
+     reads instantly. Same colours, same 4.5px total reach. */
+  --a-focus-ring-on-fill: 0 0 0 2px #fff, 0 0 0 4.5px var(--a-primary);
+  --a-glass-hi: inset 0 1px 0 rgba(255, 255, 255, 0.75);
+  --a-glass-shadow: 0 1px 2px rgba(0, 0, 0, 0.05), 0 8px 24px -12px rgba(0, 0, 0, 0.14);
+  --a-glass-shadow-hover: 0 2px 4px rgba(0, 0, 0, 0.07),
+    0 14px 28px -10px rgba(0, 0, 0, 0.2);
+  --a-glass-press: inset 0 1px 3px rgba(0, 0, 0, 0.12);
+
   min-height: 100vh;
   font-family: var(--font-body);
   color: var(--fg1);
@@ -645,11 +668,17 @@
       text-decoration: none;
       padding: 8px 12px;
       border-radius: 7px;
-      transition: background-color 140ms, color 140ms;
+      transition: background-color 150ms ease, color 150ms ease;
     }
+    /* Colour-only, so it is NOT gated: the hover gate exists to stop a
+       synthesised tap-hover leaving something MOVED, and nothing moves here. */
     .back-site:hover {
       background: var(--surface);
       color: var(--fg1);
+    }
+    .back-site:focus-visible {
+      outline: none;
+      box-shadow: var(--a-focus-ring);
     }
     .back-site svg {
       width: 14px;
@@ -710,6 +739,7 @@
 
     /* back link (recovery screens) */
     .back-link {
+      position: relative;
       display: inline-flex;
       align-items: center;
       gap: 6px;
@@ -722,14 +752,34 @@
       font-weight: 600;
       color: var(--fg3);
       margin-bottom: 20px;
-      transition: color 140ms;
+      border-radius: 5px;
+      transition: color 150ms ease;
     }
-    .back-link:hover {
-      color: var(--exec-green);
+    /* Hit-area expansion — see .field-link. Nothing sits within 9px. */
+    .back-link::before {
+      content: '';
+      position: absolute;
+      inset: -9px;
+    }
+    .back-link:focus-visible {
+      outline: none;
+      box-shadow: var(--a-focus-ring);
     }
     .back-link svg {
       width: 15px;
       height: 15px;
+      transition: transform 160ms ease;
+    }
+    /* Colour-only — ungated (see .back-site). */
+    .back-link:hover {
+      color: var(--exec-green);
+    }
+    @media (hover: hover) {
+      /* The nudge MOVES the glyph, so this half is gated. Back arrow, so it
+         retreats leftward — same 3px/160ms as every forward arrow here. */
+      .back-link:hover svg {
+        transform: translateX(-3px);
+      }
     }
 
     /* form */
@@ -756,6 +806,7 @@
       letter-spacing: 0.01em;
     }
     .field-link {
+      position: relative;
       background: none;
       border: none;
       cursor: pointer;
@@ -764,11 +815,27 @@
       font-size: 12.5px;
       font-weight: 600;
       color: var(--exec-green);
-      transition: color 140ms;
+      border-radius: 4px;
+      transition: color 150ms ease;
+    }
+    /* Hit-area expansion, the shared `tap-target` mixin's shape written inline
+       (this whole block is :global, so the mixin can't reach it through the
+       cascade): an invisible inset pseudo grows a 15px-tall target without
+       moving the text off its baseline. Asymmetric on purpose — the input
+       shell sits 7px below, so the growth goes UP into the label row's slack
+       rather than swallowing taps on the top edge of the password box. */
+    .field-link::before {
+      content: '';
+      position: absolute;
+      inset: -12px -8px -5px;
     }
     .field-link:hover {
       color: var(--nav-green);
       text-decoration: underline;
+    }
+    .field-link:focus-visible {
+      outline: none;
+      box-shadow: var(--a-focus-ring);
     }
 
     .input-shell {
@@ -827,14 +894,31 @@
       justify-content: center;
       width: 42px;
       flex-shrink: 0;
-      height: 100%;
+      /* `height: 100%` resolved against an auto-height flex parent and gave the
+         eye a 42x18 hit box — the smallest target on the page, on the control
+         most likely to be tapped with a thumb. `align-self: stretch` fills the
+         shell instead — measured 42x43 against the 42x18 it was — with the
+         glyph still centred. */
+      align-self: stretch;
       background: none;
       border: none;
+      border-radius: 0 8px 8px 0;
       cursor: pointer;
       color: var(--fg4);
-      transition: color 140ms;
+      transition: color 150ms ease, background-color 150ms ease;
     }
     .input-shell .reveal:hover {
+      color: var(--fg2);
+      background: var(--surface);
+    }
+    .input-shell .reveal:active {
+      color: var(--exec-green);
+    }
+    /* Inset ring: the shell already draws a focus halo OUTSIDE itself, so an
+       outset ring here would collide with it. */
+    .input-shell .reveal:focus-visible {
+      outline: none;
+      box-shadow: inset 0 0 0 1.5px var(--a-primary);
       color: var(--fg2);
     }
     .input-shell .reveal svg {
@@ -922,6 +1006,12 @@
       gap: 9px;
       cursor: pointer;
       user-select: none;
+      /* Padding grows the row's hit area from 22px to 34px; the negative
+         margin gives the space straight back, so nothing moves. (A ::before
+         can't be used here — the label already hosts the visually-hidden
+         input absolutely.) */
+      padding: 6px 0;
+      margin: -6px 0;
     }
     .remember input {
       position: absolute;
@@ -1009,6 +1099,37 @@
       color: var(--ok);
     }
 
+    /* ── Buttons ───────────────────────────────────────────────────────
+       One state grammar for every control on the auth screens, lifted from
+       the console's `a-glass-ctl` control mixin so these buttons behave like
+       the ones behind the login rather than inventing a fourth dialect:
+
+         rest    static contact + ambient shadow, lit top edge
+         hover   translateY(-1px), shadow deepens  (150ms ease)
+         press   scale(0.97) + inset press shadow
+         focus   --a-focus-ring (--a-focus-ring-on-fill when the button's own
+                 fill IS the ring colour), outline:none
+         icon    translateX(3px) over 160ms
+
+       Load-bearing details:
+       • Before this pass NOT ONE button here declared a focus style, so
+         keyboard users got the UA's 1px black outline — effectively invisible
+         on the dark-green submit. The ring is now the console's own.
+       • `:active` was `translateY(1px)`, the only such press in the repo;
+         everything else scales down. It now matches.
+       • Any hover that MOVES something sits behind `@media (hover: hover)`;
+         colour-only hovers do not. The console gates nothing (it is
+         desktop-shaped), but this page is the one admin surface people reach
+         on a phone, where a synthesised tap-hover would leave the button
+         stuck raised.
+       • Shadows are STATIC values swapped between states — never an animated
+         `drop-shadow()`/`filter` (repo-wide perf rule).
+       • Ordering is load-bearing: these are all one class + one pseudo-class,
+         so SOURCE ORDER decides. hover → active → focus-visible → disabled
+         keeps a focused button's ring while it is hovered, and leaves a
+         disabled one inert whatever the pointer is doing.
+       ───────────────────────────────────────────────────────────────── */
+
     /* submit */
     .btn {
       display: inline-flex;
@@ -1022,33 +1143,55 @@
       font-family: var(--font-body);
       font-size: 14.5px;
       font-weight: 600;
+      /* Buttons inherit the body's 1.6 line-height, which overflows a
+         height-constrained row. Pin it. */
+      line-height: 1;
       letter-spacing: 0.01em;
       color: #fff;
       background: var(--exec-green);
       border: none;
       border-radius: 9px;
       cursor: pointer;
-      transition: background-color 150ms, transform 120ms, box-shadow 200ms;
+      /* Resting depth. The button used to be perfectly flat until hover, so
+         the shadow appeared out of nowhere instead of the button rising. The
+         inset hairline is the console's lit top edge (`.btnPrimary` carries
+         the same one) — the specular a soldermask-green board gets from the
+         light above it. Green-tinted ambient rather than neutral black: the
+         shadow of a green object on white paper. */
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16),
+        0 1px 2px rgba(10, 74, 46, 0.16), 0 8px 24px -12px rgba(10, 74, 46, 0.5);
+      transition: background-color 150ms ease, transform 150ms ease,
+        box-shadow 250ms ease;
     }
-    .btn:hover {
-      background: var(--exec-green-h);
-      box-shadow: 0 6px 18px rgba(10, 74, 46, 0.22);
+    @media (hover: hover) {
+      .btn:hover {
+        background: var(--exec-green-h);
+        transform: translateY(-1px);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16),
+          0 2px 4px rgba(10, 74, 46, 0.18), 0 14px 28px -10px rgba(10, 74, 46, 0.62);
+      }
+      .btn:hover svg.arrow {
+        transform: translateX(3px);
+      }
     }
     .btn:active {
-      transform: translateY(1px);
+      transform: scale(0.97);
+      box-shadow: var(--a-glass-press);
+    }
+    .btn:focus-visible {
+      outline: none;
+      box-shadow: var(--a-focus-ring-on-fill);
     }
     .btn:disabled {
       opacity: 0.72;
       cursor: progress;
+      transform: none;
       box-shadow: none;
     }
     .btn svg.arrow {
       width: 16px;
       height: 16px;
-      transition: transform 160ms;
-    }
-    .btn:hover svg.arrow {
-      transform: translateX(3px);
+      transition: transform 160ms ease;
     }
     .spinner {
       width: 17px;
@@ -1074,6 +1217,7 @@
       color: var(--fg3);
     }
     .recover-line button {
+      position: relative;
       background: none;
       border: none;
       cursor: pointer;
@@ -1082,51 +1226,102 @@
       font-size: 13.5px;
       font-weight: 600;
       color: var(--exec-green);
+      border-radius: 4px;
+      transition: color 150ms ease;
+    }
+    /* Hit-area expansion, the shared `tap-target` mixin's shape written inline
+       (this block is :global, so the mixin can't be included through the
+       cascade here): an invisible inset pseudo grows the target without moving
+       the text off its baseline. Nothing sits within 9px above or below. */
+    .recover-line button::before {
+      content: '';
+      position: absolute;
+      inset: -9px;
     }
     .recover-line button:hover {
+      color: var(--nav-green);
       text-decoration: underline;
     }
-    /* "See Demo" — deliberately quieter than the primary Sign in button */
-    .demo-cta {
+    .recover-line button:focus-visible {
+      outline: none;
+      box-shadow: var(--a-focus-ring);
+    }
+
+    /* The prospective-customer door. Quieter than Sign in — no fill — but it
+       carries the same lift, press, ring and arrow nudge, because it is a real
+       CTA and not a footnote. It used to be grey-on-grey (`--fg2` text on
+       `--surface`), which read as a disabled control; it now sits on white with
+       exec-green text and a soft contact shadow, so it looks pressable at rest.
+       (Classes were `.demo-cta`/`.btn-demo`, left over from the retired See-Demo
+       button — renamed to say what they are.) */
+    .signup-cta {
       display: flex;
       flex-direction: column;
       align-items: stretch;
       gap: 7px;
     }
-    .btn-demo {
+    .btn-signup {
       display: inline-flex;
       align-items: center;
       justify-content: center;
       gap: 8px;
       width: 100%;
-      height: 42px;
+      /* 44px, the tap floor — was 42. */
+      height: 44px;
       padding: 0 16px;
       white-space: nowrap;
       font-family: var(--font-body);
       font-size: 13.5px;
       font-weight: 600;
-      color: var(--fg2);
-      background: var(--surface);
+      line-height: 1;
+      letter-spacing: 0.01em;
+      color: var(--exec-green);
+      background: #fff;
       border: 1px solid var(--border);
       border-radius: 9px;
       cursor: pointer;
-      transition: background-color 140ms, border-color 140ms, color 140ms;
+      box-shadow: var(--a-glass-hi), var(--a-glass-shadow);
+      transition: background-color 150ms ease, border-color 150ms ease,
+        color 150ms ease, transform 150ms ease, box-shadow 250ms ease;
     }
-    .btn-demo:hover {
-      color: var(--exec-green);
-      border-color: var(--exec-green);
-      background: #fff;
+    @media (hover: hover) {
+      .btn-signup:hover {
+        border-color: rgba(10, 74, 46, 0.55);
+        transform: translateY(-1px);
+        box-shadow: var(--a-glass-hi), var(--a-glass-shadow-hover);
+      }
+      .btn-signup:hover svg.arrow {
+        transform: translateX(3px);
+      }
     }
-    .btn-demo:disabled {
+    .btn-signup:active {
+      transform: scale(0.97);
+      box-shadow: var(--a-glass-press);
+    }
+    .btn-signup:focus-visible {
+      outline: none;
+      box-shadow: var(--a-focus-ring);
+    }
+    .btn-signup:disabled {
       opacity: 0.72;
       cursor: progress;
+      transform: none;
+      box-shadow: none;
+    }
+    .btn-signup svg.arrow {
+      width: 16px;
+      height: 16px;
+      transition: transform 160ms ease;
     }
     /* the shared .spinner is white-on-green; recolor it for this quiet button */
-    .btn-demo .spinner {
+    .btn-signup .spinner {
       border-color: rgba(10, 74, 46, 0.25);
       border-top-color: var(--exec-green);
     }
-    .demo-note {
+    /* .demo-note is still the class AwaitingApproval renders (outside this
+       feature's scope); .signup-note is the honest name used here. */
+    .demo-note,
+    .signup-note {
       font-size: 12px;
       line-height: 1.45;
       color: var(--fg4);
@@ -1181,18 +1376,42 @@
       font-family: var(--font-body);
       font-size: 14px;
       font-weight: 600;
+      line-height: 1;
       color: var(--fg1);
       background: #fff;
       border: 1px solid var(--border);
       border-radius: 9px;
       cursor: pointer;
-      transition: background-color 140ms, border-color 140ms;
+      box-shadow: var(--a-glass-hi), var(--a-glass-shadow);
+      transition: background-color 150ms ease, border-color 150ms ease,
+        transform 150ms ease, box-shadow 250ms ease;
     }
-    .btn-ghost:hover {
-      background: var(--surface);
-      border-color: var(--fg4);
+    @media (hover: hover) {
+      .btn-ghost:hover {
+        background: var(--surface);
+        border-color: var(--fg4);
+        transform: translateY(-1px);
+        box-shadow: var(--a-glass-hi), var(--a-glass-shadow-hover);
+      }
+      /* This button's icon is a BACK arrow, so it retreats leftward. Same
+         3px/160ms nudge as every forward arrow, mirrored. */
+      .btn-ghost:hover svg {
+        transform: translateX(-3px);
+      }
+    }
+    .btn-ghost svg {
+      transition: transform 160ms ease;
+    }
+    .btn-ghost:active {
+      transform: scale(0.97);
+      box-shadow: var(--a-glass-press);
+    }
+    .btn-ghost:focus-visible {
+      outline: none;
+      box-shadow: var(--a-focus-ring);
     }
     .resend {
+      position: relative;
       background: none;
       border: none;
       cursor: pointer;
@@ -1201,13 +1420,31 @@
       font-weight: 500;
       color: var(--fg3);
       padding: 4px;
+      border-radius: 6px;
+      transition: color 140ms ease;
+    }
+    /* Hit-area expansion — see .recover-line button. 4px of padding already
+       counts, so -7px lands the row on the same ~35px target as its siblings. */
+    .resend::before {
+      content: '';
+      position: absolute;
+      inset: -7px;
     }
     .resend:hover {
       color: var(--exec-green);
     }
+    .resend:focus-visible {
+      outline: none;
+      box-shadow: var(--a-focus-ring);
+    }
     .resend:disabled {
       color: var(--fg4);
       cursor: default;
+    }
+    /* A disabled resend is a countdown, not a target — retract the hit area so
+       it can't swallow taps meant for the button above it. */
+    .resend:disabled::before {
+      content: none;
     }
 
     /* footer legal */
@@ -1326,6 +1563,32 @@
       .success-mark,
       .banner {
         animation: none;
+      }
+
+      /* Button motion. Every hover/press/focus state still CHANGES — that is
+         what tells you a control is live — it just arrives instantly and
+         nothing translates or scales. Same shape as the console's
+         `a-glass-ctl` reduced-motion block. */
+      .btn,
+      .btn-signup,
+      .btn-ghost,
+      .btn svg.arrow,
+      .btn-signup svg.arrow,
+      .btn-ghost svg,
+      .back-link svg {
+        transition: none;
+      }
+      .btn:hover,
+      .btn:active,
+      .btn-signup:hover,
+      .btn-signup:active,
+      .btn-ghost:hover,
+      .btn-ghost:active,
+      .btn:hover svg.arrow,
+      .btn-signup:hover svg.arrow,
+      .btn-ghost:hover svg,
+      .back-link:hover svg {
+        transform: none;
       }
     }
   }
