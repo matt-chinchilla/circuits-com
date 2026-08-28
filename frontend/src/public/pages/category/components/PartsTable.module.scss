@@ -151,6 +151,31 @@
   font-style: italic;
 }
 
+// The way back out. The empty state REPLACES the table, taking the column
+// headers — and with them the only control that could undo the filter — off
+// screen, so a server-side filter matching nothing would otherwise strand the
+// visitor on a page whose URL they'd have to hand-edit.
+.emptyReset {
+  margin-top: 14px;
+  padding: 8px 16px;
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-style: normal;
+  font-weight: 500;
+  line-height: 1;
+  color: var(--executive-blue, $executive-blue);
+  background: transparent;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: border-color 120ms, background-color 120ms;
+
+  &:hover {
+    border-color: var(--theme-accent, $nav-blue);
+    background: rgba(0, 0, 0, 0.03);
+  }
+}
+
 .hideDesc {
   @media (max-width: 1449px) {
     display: none;

@@ -2,7 +2,14 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import path from 'path'
-import { SW_CACHE_API_CATEGORIES, SW_CACHE_API_GENERAL } from './src/shared/swCacheNames'
+import {
+  SW_CACHE_API_CATEGORIES,
+  SW_CACHE_API_CATEGORY_QUERIES,
+  SW_CACHE_API_GENERAL,
+} from './src/shared/swCacheNames'
+// Import-free module by design (no aliases exist while esbuild loads this
+// config) — see the note at the top of categoryQuery.ts.
+import { CANONICAL_CATEGORY_QUERY } from './src/public/services/categoryQuery'
 import { seoPrerender } from './scripts/seoPrerender'
 
 export default defineConfig({
@@ -21,7 +28,8 @@ export default defineConfig({
             // /api/categories/{slug}/partners — so the Preferred-Partners banner
             // endpoint lands in this StaleWhileRevalidate cache (served instantly
             // cross-session, ETag-revalidated) and is swept by bustSponsorCaches.
-            urlPattern: /\/api\/categories(\/[^/?]+)?(\/partners)?\/?(\?.*)?$/,
+            // Query-string-free only: see the two entries below.
+            urlPattern: /\/api\/categories(\/[^/?]+)?(\/partners)?\/?$/,
             handler: 'StaleWhileRevalidate',
             options: {
               cacheName: SW_CACHE_API_CATEGORIES,
@@ -35,7 +43,43 @@ export default defineConfig({
             },
           },
           {
-            urlPattern: /\/api\/(?!admin|auth|dashboard|track)/,
+            // The category page's CANONICAL DEFAULT page — the exact request an
+            // unparameterized /category/<slug> load makes, and the only one the
+            // hover-prefetch and the index.html LCP preload ever fire. It is the
+            // same content the bare URL above serves (the params only exist
+            // because sorting/filtering/paging moved server-side), so it keeps
+            // StaleWhileRevalidate in the SAME cache: that is what makes a hover
+            // prefetch and a warm return visit paint instantly instead of paying
+            // a round trip. The pattern is BUILT from the constant, so the two
+            // can't drift.
+            urlPattern: new RegExp(
+              `/api/categories/[^/?]+/?\\?${CANONICAL_CATEGORY_QUERY.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`,
+            ),
+            handler: 'StaleWhileRevalidate',
+            options: {
+              cacheName: SW_CACHE_API_CATEGORIES,
+              expiration: { maxEntries: 50, maxAgeSeconds: 60 },
+            },
+          },
+          {
+            // Any OTHER parameterized category request: a specific page, sort,
+            // search or filter. NetworkFirst, because StaleWhileRevalidate here
+            // means clicking "page 2" or a column sort paints the rows you were
+            // already looking at for a frame before the real ones arrive. Own
+            // cache, modest cap — its only job is offline/flaky-network
+            // resilience, and it still expires in 60s.
+            urlPattern: /\/api\/categories\/[^/?]+\/?\?.+$/,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: SW_CACHE_API_CATEGORY_QUERIES,
+              expiration: { maxEntries: 30, maxAgeSeconds: 60 },
+            },
+          },
+          {
+            // account is excluded for the same reason admin/auth/dashboard
+            // are: authenticated per-user payloads must never land in
+            // CacheStorage, where they outlive logout on a shared browser.
+            urlPattern: /\/api\/(?!admin|auth|account|dashboard|track)/,
             handler: 'NetworkFirst',
             options: {
               cacheName: SW_CACHE_API_GENERAL,

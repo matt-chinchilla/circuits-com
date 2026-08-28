@@ -9,3 +9,14 @@
  */
 export const SW_CACHE_API_CATEGORIES = 'api-categories';
 export const SW_CACHE_API_GENERAL = 'api-general';
+
+/**
+ * Parameterized category requests — a specific page / sort / filter of a
+ * category's parts. Held apart from `api-categories` because it is
+ * NetworkFirst, not StaleWhileRevalidate: SWR would paint the PREVIOUS page's
+ * rows for an instant on every pagination or sort click. Its role is offline
+ * resilience, so a stale hit only happens when the network already failed, and
+ * it expires in 60s regardless. Purged by @admin/services/swCache's
+ * SPONSOR_CACHES like its siblings — sponsor blocks ride these responses too.
+ */
+export const SW_CACHE_API_CATEGORY_QUERIES = 'api-category-queries';

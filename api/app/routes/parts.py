@@ -10,19 +10,20 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.models import Category, Part, PartListing, PriceBreak, Supplier, User
-from app.services.auth_service import require_console_user
+from app.services.auth_service import require_staff
 from app.services.part_identity import get_or_create_part
+from app.services.part_pricing import refresh_best_prices
 from app.services.search_service import invalidate_catalog_caches
 from app.utils.image_url import validate_optional_image_url
 
 router = APIRouter(prefix="/api/parts", tags=["parts"])
 
 # ── The customer/staff wall on a MIXED router (D16) ─────────────────────────
-# This module serves BOTH the public site and the console, so the wall cannot
+# This module serves BOTH the public site and staff tooling, so the wall cannot
 # sit on the APIRouter the way it does on every /api/admin/* router — a router
-# dependency here would gate the public reads too. Each console route names
-# `require_console_user` in its signature instead; that dependency runs
-# get_current_user first, so the forced-password gate is unchanged. A console
+# dependency here would gate the public reads too. Each staff route names
+# `require_staff` in its signature instead; that dependency runs
+# get_current_user first, so the forced-password gate is unchanged. A staff
 # route added here must name it too — test_every_route_is_gated.py is what
 # notices if it does not.
 
@@ -327,7 +328,7 @@ def list_parts(
 def create_part(
     body: PartCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_console_user),
+    current_user: User = Depends(require_staff),
 ):
     # Auto-derive sub_slug when category_id resolves to a child category and
     # the caller didn't provide one explicitly. Keeps the denormalization
@@ -391,6 +392,12 @@ def create_part(
             currency=il.currency or "USD",
         )
         db.add(listing)
+        # The denormalized best prices (migration 046) are what the category
+        # page sorts on, and this listing is the part's only offer — leaving
+        # them NULL would file a brand-new priced part under "no price".
+        # Inside the same transaction as the listing, so the two can never
+        # disagree.
+        refresh_best_prices(db, [part.id])
 
     db.commit()
     invalidate_catalog_caches()
@@ -403,7 +410,7 @@ def add_part_listing(
     part_id: str,
     body: ListingCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_console_user),
+    current_user: User = Depends(require_staff),
 ):
     """Add one distributor listing to an existing part.
 
@@ -464,6 +471,9 @@ def add_part_listing(
         currency=body.currency or "USD",
     )
     db.add(listing)
+    # A new distributor on an existing part can only lower its minimum (or be
+    # the first one to set it), so the denormalized columns move here too.
+    refresh_best_prices(db, [part.id])
     db.commit()
     db.refresh(listing)
     return listing_to_dict(listing)
@@ -474,7 +484,7 @@ def delete_part_listing(
     part_id: str,
     listing_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_console_user),
+    current_user: User = Depends(require_staff),
 ):
     """Remove one distributor listing, leaving the Part itself in place."""
     listing = (
@@ -488,6 +498,11 @@ def delete_part_listing(
     if not listing:
         raise HTTPException(404, "Listing not found")
 
+    # Read before the row starts disappearing — `db.expire` below detaches the
+    # loaded state and reading it back through a deleted instance is a trap
+    # nobody needs.
+    part_uuid = listing.part_id
+
     # Price breaks first — same cascade order as delete_part. PriceBreak's
     # listing_id FK is NOT NULL, so the children must go before the parent.
     db.query(PriceBreak).filter(PriceBreak.listing_id == listing.id).delete()
@@ -496,6 +511,13 @@ def delete_part_listing(
     # out the already-gone children's primary key (see CLAUDE.md gotcha).
     db.expire(listing)
     db.delete(listing)
+    # AFTER the delete and BEFORE the commit: removing the cheapest offer
+    # RAISES a part's best price, and removing the only one clears it. A
+    # refresh that ran first would recompute the same value it started with
+    # and the part would keep quoting a listing that no longer exists.
+    # `refresh_best_prices` flushes, so the pending ORM delete is visible to
+    # the aggregate it takes.
+    refresh_best_prices(db, [part_uuid])
     db.commit()
     return {"status": "ok"}
 
@@ -634,7 +656,7 @@ def update_part(
     part_id: str,
     body: PartUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_console_user),
+    current_user: User = Depends(require_staff),
 ):
     part = db.query(Part).filter(Part.id == _to_uuid(part_id)).first()
     if not part:
@@ -656,7 +678,7 @@ def update_part(
 def delete_part(
     part_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_console_user),
+    current_user: User = Depends(require_staff),
 ):
     part = db.query(Part).filter(Part.id == _to_uuid(part_id)).first()
     if not part:
@@ -676,7 +698,7 @@ def delete_part(
 def batch_import(
     body: BatchImportRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_console_user),
+    current_user: User = Depends(require_staff),
 ):
     # Validate supplier exists
     supplier = db.query(Supplier).filter(Supplier.id == _to_uuid(body.supplier_id)).first()
@@ -685,6 +707,11 @@ def batch_import(
 
     created = 0
     errors = []
+    # Parts whose offers this CSV actually touched. Collected rather than
+    # refreshed per row because a real import file is thousands of lines, and
+    # `refresh_best_prices` batches — one pass at the end costs a handful of
+    # grouped queries instead of three per row.
+    repriced_part_ids: list[uuid.UUID] = []
 
     for idx, item in enumerate(body.parts):
         try:
@@ -752,14 +779,27 @@ def batch_import(
                     # see this one without it — the same reason the feed's
                     # _upsert_listing flushes here.
                     db.flush()
+                    touched_part_id = part.id
+                else:
+                    touched_part_id = None
 
             # Only counted once the savepoint released cleanly, i.e. the row
             # really is part of the transaction the commit below persists.
             created += 1
+            # Recorded OUTSIDE the savepoint for the same reason `created` is:
+            # a row whose savepoint rolled back wrote no listing, and adding it
+            # here would ask for a refresh of prices nothing changed.
+            if touched_part_id is not None:
+                repriced_part_ids.append(touched_part_id)
         except Exception as e:
             errors.append({"row": idx, "error": str(e)})
 
     if created > 0:
+        # Before the commit, so the denormalized best prices land in the same
+        # transaction as the listings that set them — a CSV import that dies
+        # here leaves neither behind rather than parts quoting prices from
+        # rows that were rolled back.
+        refresh_best_prices(db, repriced_part_ids)
         db.commit()
         invalidate_catalog_caches()
 

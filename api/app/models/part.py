@@ -9,6 +9,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    Numeric,
     String,
     Text,
     func,
@@ -36,9 +37,7 @@ class Part(Base):
         nullable=True,
         index=True,
     )
-    category_id = Column(
-        UUID(as_uuid=True), ForeignKey("categories.id"), nullable=True, index=True
-    )
+    category_id = Column(UUID(as_uuid=True), ForeignKey("categories.id"), nullable=True, index=True)
     # Denormalized subcategory slug — points at the parent category's
     # subs[].slug (the canonical taxonomy in ui_kits/website/data.js).
     # Stored here so /api/parts/ list responses don't need to join through
@@ -65,6 +64,38 @@ class Part(Base):
     mount = Column(String(8), nullable=True)
     rohs = Column(Boolean, nullable=True)
     lead_time_days = Column(Integer, nullable=True)
+    # ── Denormalized best prices (migration 046) ────────────────────────
+    # MIN(part_listings.unit_price) across this part's offers, and the same
+    # minimum taken over the 10/100/1000 rungs of those listings' ladders.
+    # NULL means "no priced source", which is a real state: a part can exist
+    # with no listing at all, and a listing can carry a ladder that never
+    # quotes 1000.
+    #
+    # They exist so a category page can ORDER BY price in the DATABASE. The
+    # page used to fetch up to 500 parts and sort them in the browser, which
+    # silently truncated 27 of 28 top-level categories once the catalog passed
+    # 200k parts (Connectors showed 500 of 39,353). Computing these four
+    # values per request is three GROUP BY queries over part_listings and
+    # price_breaks; storing them makes the sort a column read.
+    #
+    # DELIBERATELY UNINDEXED, and that is the same discipline the price-break
+    # reconciler follows. `parts` carries eight indexes; an UPDATE that touches
+    # only unindexed columns can be HOT and skips every one of them, which is
+    # what keeps a nightly reprice from rewriting the whole index set. The
+    # sorts these feed run in memory over a set already narrowed to one
+    # category (<=40k rows, milliseconds) — an index would buy that nothing and
+    # would cost a write on every reprice, forever.
+    #
+    # Numeric(10, 4) matches part_listings.unit_price and price_breaks.
+    # unit_price exactly. A narrower scale here would make every refresh see a
+    # difference it can never store and rewrite the row on every pass — the
+    # phantom-diff trap `storable_price` exists to close.
+    # Maintained by app/services/part_pricing.refresh_best_prices; every write
+    # path that can move a part's prices calls it.
+    best_price = Column(Numeric(10, 4), nullable=True)
+    best_price_10 = Column(Numeric(10, 4), nullable=True)
+    best_price_100 = Column(Numeric(10, 4), nullable=True)
+    best_price_1000 = Column(Numeric(10, 4), nullable=True)
     created_at = Column(
         DateTime(timezone=True),
         default=lambda: datetime.now(UTC),

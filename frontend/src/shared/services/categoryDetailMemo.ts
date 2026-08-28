@@ -1,47 +1,91 @@
-// Session cache for the per-category CategoryDetail payload (parts + popular
-// parts + counts + banner data), keyed by the category slug that drives the API
-// fetch. CategoryPage remounts on every (sub)category navigation — it's keyed by
-// pathname via the ErrorBoundary — so without this the parts list AND the "number
-// of parts" count re-fetch behind a loading skeleton each time (the white flash).
-// Reading the memo SYNCHRONOUSLY in the page's useState initializer paints the
-// parts + counts on the first frame of a warm navigation (no flash), while the
-// page revalidates in the background. Mirrors partnersMemo / categoryShellMemo.
+// Session cache for the category page's payload, in TWO parts, because the two
+// halves have different identities.
 //
-// Generic (Map<string, unknown> + get<T>) so this @shared module never imports the
-// @public CategoryDetail type — the shared ↛ public/admin boundary rule.
+// CategoryPage remounts on every (sub)category navigation — it's keyed by
+// pathname via the ErrorBoundary — so without a memo the header, chips, counts
+// and rows all re-fetch behind a loading skeleton each time (the white flash).
+// Reading the memo SYNCHRONOUSLY in the page's useState initializers paints on
+// the first frame of a warm navigation, while the page revalidates behind it.
+// Mirrors partnersMemo / categoryShellMemo.
 //
-// Invalidation: cleared by bustSponsorCaches() (admin/services/swCache.ts) on any
-// sponsor/supplier OR part mutation, alongside the SW caches — so an admin edit is
-// reflected on the next navigation and the memo can never serve stale parts/counts.
+//   CHROME — identity, family tree, sponsor boards. Keyed by SLUG. This is the
+//   half that makes a revisit paint instantly, and it is the same for every
+//   sort/filter/page the visitor picks.
 //
-// Bounded (LRU, MAX entries): each entry can hold up to 500 parts, so an unbounded
-// memo would accumulate real heap across a long browsing session (notably on
-// mobile, where memory pressure already matters). The LRU keeps the most recently
-// visited categories instant and evicts the rest; everything resets on full reload.
-const MAX = 12;
-const cache = new Map<string, unknown>();
+//   ROWS — one page of parts plus the facet counts that describe it. Keyed by
+//   slug + a normalized query signature (see @public/services/categoryQuery),
+//   because sorting, filtering and paging are SERVER-side now: a
+//   ?p=5&sort=qty100 URL must never paint page-1-sku-asc rows. That was the
+//   whole reason a single slug-keyed memo could not survive this rework.
+//
+// Generic (Map<string, unknown> + get<T>) so this @shared module never imports
+// the @public CategoryDetail types — the shared ↛ public/admin boundary rule.
+//
+// Invalidation: clearCategoryDetailMemo() drops BOTH maps, and is called by
+// bustSponsorCaches() (admin/services/swCache.ts) on any sponsor/supplier OR
+// part mutation, alongside the SW caches — so an admin edit is reflected on the
+// next navigation and neither map can serve stale parts or counts.
+//
+// Bounded (LRU): unbounded memos accumulate real heap across a long browsing
+// session, notably on mobile. Chrome entries are small but few categories are
+// visited; rows entries are ~25 parts each and MULTIPLY per category (every
+// page, sort and filter combination is its own key), so they get their own,
+// larger cap. Everything resets on a full reload.
+const CHROME_MAX = 12;
+const ROWS_MAX = 24;
 
-/** Synchronously read a cached CategoryDetail (LRU-touch), or undefined on a miss. */
-export function getCategoryDetailMemo<T>(slug: string): T | undefined {
-  const value = cache.get(slug);
+const chromeCache = new Map<string, unknown>();
+const rowsCache = new Map<string, unknown>();
+
+function readLru<T>(cache: Map<string, unknown>, key: string): T | undefined {
+  const value = cache.get(key);
   if (value !== undefined) {
-    cache.delete(slug);
-    cache.set(slug, value); // move to most-recently-used
+    cache.delete(key);
+    cache.set(key, value); // move to most-recently-used
   }
   return value as T | undefined;
 }
 
-/** Cache a CategoryDetail for a slug, evicting the least-recently-used past MAX. */
-export function setCategoryDetailMemo<T>(slug: string, data: T): void {
-  cache.delete(slug);
-  cache.set(slug, data);
-  if (cache.size > MAX) {
+function writeLru<T>(cache: Map<string, unknown>, key: string, data: T, max: number): void {
+  cache.delete(key);
+  cache.set(key, data);
+  while (cache.size > max) {
     const oldest = cache.keys().next().value;
-    if (oldest !== undefined) cache.delete(oldest);
+    if (oldest === undefined) break;
+    cache.delete(oldest);
   }
 }
 
-/** Drop the whole memo. Called from bustSponsorCaches() on any public-data mutation. */
+/** The rows-cache key. Two arguments so no caller can invent its own spelling. */
+export function categoryRowsKey(slug: string, signature: string): string {
+  return `${slug}?${signature}`;
+}
+
+/** Synchronously read a cached category chrome (LRU-touch), or undefined. */
+export function getCategoryChromeMemo<T>(slug: string): T | undefined {
+  return readLru<T>(chromeCache, slug);
+}
+
+/** Cache a category's chrome, evicting the least-recently-used past the cap. */
+export function setCategoryChromeMemo<T>(slug: string, data: T): void {
+  writeLru(chromeCache, slug, data, CHROME_MAX);
+}
+
+/** Synchronously read a cached rows page by `categoryRowsKey`, or undefined. */
+export function getCategoryRowsMemo<T>(key: string): T | undefined {
+  return readLru<T>(rowsCache, key);
+}
+
+/** Cache one rows page, evicting the least-recently-used past the cap. */
+export function setCategoryRowsMemo<T>(key: string, data: T): void {
+  writeLru(rowsCache, key, data, ROWS_MAX);
+}
+
+/**
+ * Drop BOTH maps. Called from bustSponsorCaches() on any public-data mutation —
+ * clearing only one would leave the page painting a stale half.
+ */
 export function clearCategoryDetailMemo(): void {
-  cache.clear();
+  chromeCache.clear();
+  rowsCache.clear();
 }

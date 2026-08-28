@@ -20,7 +20,6 @@ import uuid
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from decimal import ROUND_HALF_UP, Decimal
 
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session, noload
@@ -43,6 +42,8 @@ from app.services.part_feed.base import FeedPart, PartFeedProvider
 from app.services.part_feed.mouser import FeedFatalError
 from app.services.part_feed.specmap import map_lifecycle, normalize_mount
 from app.services.part_identity import find_part, get_or_create_part
+from app.services.part_pricing import refresh_best_prices
+from app.services.part_pricing import storable_price as _storable_price
 from app.services.search_service import invalidate_catalog_caches
 from app.utils.image_url import validate_optional_image_url
 
@@ -315,32 +316,30 @@ def _supplier_already_lists(db: Session, part_id: uuid.UUID, supplier_id: uuid.U
     )
 
 
-# A feed can quote finer than the column can hold — the captured DigiKey
-# payload prices a reel at 0.03909 against a Numeric(10, 4) column, which
-# stores 0.0391. The incoming value is therefore rounded to the column's OWN
-# scale before anything compares it: comparing raw feed precision against an
-# already-rounded stored value differs on every pass and rewrites the row
-# forever.
+# `_storable_price` — a feed can quote finer than the column can hold: the
+# captured DigiKey payload prices a reel at 0.03909 against a Numeric(10, 4)
+# column, which stores 0.0391. The incoming value is rounded to the column's
+# OWN scale before anything compares it, or a confirming pass differs every
+# time and rewrites the row forever.
 #
-# Read from the schema rather than hardcoded, but note this ONE constant is
-# applied to `price_breaks.unit_price` AND `part_listings.unit_price`. They are
-# both Numeric(10, 4) and a test asserts they stay that way
-# (`TestTheTwoPriceColumnsAgree`), which is the right place for it: a
-# divergence should fail the suite, not refuse to boot the container. The same
-# reasoning covers a column declared as bare `Numeric` — scale None falls back
-# rather than raising a TypeError at import time.
-_declared_scale = PriceBreak.__table__.c.unit_price.type.scale
-_PRICE_QUANTUM = Decimal(1).scaleb(-(4 if _declared_scale is None else _declared_scale))
+# It is IMPORTED from `services/part_pricing` rather than defined here, and the
+# direction is deliberate. The denormalized `parts.best_price*` columns are the
+# same Numeric(10, 4) and have to compare through the identical rounding; two
+# copies of "what the database will actually hold" is how the phantom diff
+# comes back on one path only, with the other path's tests still green.
+# `part_pricing` is the lower-level module (models and nothing else), so it
+# owns the constant and this one consumes it.
 
 
-def _storable_price(value) -> Decimal:
-    """The feed's price as the database will actually hold it."""
-    return Decimal(str(value)).quantize(_PRICE_QUANTUM, rounding=ROUND_HALF_UP)
-
-
-def _sync_price_breaks(db: Session, listing_id: uuid.UUID, feed_breaks) -> None:
+def _sync_price_breaks(db: Session, listing_id: uuid.UUID, feed_breaks) -> bool:
     """Reconcile one listing's price ladder against the feed, writing only the
-    rungs that actually differ.
+    rungs that actually differ. Returns whether any rung actually moved.
+
+    That return value is what lets the denormalized `parts.best_price*` columns
+    stay true without a second scan: the reconciler is the only code that knows
+    whether this pass changed a price, and asking the database again afterwards
+    would put a read on the confirming path — the one path this whole design
+    exists to make free.
 
     This used to be `DELETE WHERE listing_id = ?` plus an INSERT per rung, on
     every pass, whether or not a price had moved. `pg_stat_user_tables` showed
@@ -395,7 +394,8 @@ def _sync_price_breaks(db: Session, listing_id: uuid.UUID, feed_breaks) -> None:
         db.execute(update(PriceBreak), repriced)
     if stale:
         db.execute(delete(PriceBreak).where(PriceBreak.id.in_(stale)))
-    for qty in wanted.keys() - seen:
+    arrived = wanted.keys() - seen
+    for qty in arrived:
         db.add(
             PriceBreak(
                 id=uuid.uuid4(),
@@ -404,6 +404,7 @@ def _sync_price_breaks(db: Session, listing_id: uuid.UUID, feed_breaks) -> None:
                 unit_price=wanted[qty],
             )
         )
+    return bool(repriced or stale or arrived)
 
 
 def _upsert_listing(db: Session, part: Part, supplier: Supplier, fp: FeedPart) -> bool:
@@ -444,6 +445,12 @@ def _upsert_listing(db: Session, part: Part, supplier: Supplier, fp: FeedPart) -
     # — a confirming pass now writes nothing, so feed freshness needs a home
     # that is not a per-row write.)
     unit_price = _storable_price(lowest_qty_break.unit_price)
+    # Tracked separately from the "usable" return value below, and narrower
+    # than "this row was touched": it is true only when something that can move
+    # a MINIMUM moved. A stock or lead-time refresh writes the listing but
+    # cannot change `parts.best_price*`, so it must not drag a part row into
+    # the write set behind it.
+    prices_moved = False
     if listing is None:
         # EVERY field on the constructor. Setting only the identity columns and
         # assigning the rest afterwards cost an INSERT plus an immediate UPDATE
@@ -466,13 +473,30 @@ def _upsert_listing(db: Session, part: Part, supplier: Supplier, fp: FeedPart) -
         # repeated MPN mints a duplicate (part, supplier) listing
         # (review-caught, reproduced).
         db.flush()
+        # A distributor's FIRST offer on this part can only lower the minimum
+        # (or supply the only one there is).
+        prices_moved = True
     else:
         listing.sku = fp.supplier_sku or listing.sku
         listing.stock_quantity = fp.stock_quantity
         listing.lead_time_days = fp.lead_time_days
+        prices_moved = listing.unit_price != unit_price
         listing.unit_price = unit_price
         listing.currency = fp.currency
-    _sync_price_breaks(db, listing.id, fp.price_breaks)
+    if _sync_price_breaks(db, listing.id, fp.price_breaks):
+        prices_moved = True
+    if prices_moved:
+        # The denormalized best prices are refreshed in the SAME transaction as
+        # the offer that moved them, so the caller's per-part commit still
+        # persists one consistent unit of work: a run killed mid-sweep never
+        # leaves a part advertising a price its listings do not support.
+        #
+        # Gated on `prices_moved` rather than run unconditionally because the
+        # confirming pass is the common case — a nightly Mouser sweep re-reads
+        # ~130k listings and moves few of them — and an ungated call would put
+        # three SELECTs per part back onto exactly that path. `refresh_best_
+        # prices` would still write nothing, but the reads are the cost here.
+        refresh_best_prices(db, [part.id])
     return True
 
 

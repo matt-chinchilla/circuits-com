@@ -426,6 +426,57 @@
   margin-top: 32px;
 }
 
+// ─── "Updating" treatment ────────────────────────────────────────────────────
+//
+// Sorting, filtering, searching and paging are server round-trips now. Swapping
+// the content area back to skeletons for each of them would flash the layout on
+// every click, so the rows that are already on screen stay put and DIM while
+// the next set is in flight — opacity only, no geometry, no reflow. The
+// skeleton is reserved for navigation (a different category), where there is
+// genuinely nothing to keep.
+
+.partsArea {
+  position: relative;
+}
+
+.partsBody {
+  transition: opacity 160ms ease;
+}
+
+.partsBodyDim {
+  opacity: 0.42;
+}
+
+// Sits OUTSIDE .partsBody so the label itself isn't dimmed. No transforms —
+// a translate(-50%) here would sub-pixel-blur the text (CLAUDE.md).
+.updatingOverlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 84px;
+  pointer-events: none;
+}
+
+.updatingPill {
+  padding: 7px 16px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.1);
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: $text-secondary;
+  line-height: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .partsBody {
+    transition: none;
+  }
+}
+
 // ─── Skeleton table ──────────────────────────────────────────────────────────
 
 .tableSkeleton {

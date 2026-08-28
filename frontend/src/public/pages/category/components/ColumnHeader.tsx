@@ -1,15 +1,33 @@
-import { useState, useEffect, useLayoutEffect, useRef } from 'react';
+import { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import type { SortDir, SortKey } from '@public/services/categoryQuery';
 import styles from './ColumnHeader.module.scss';
 
 export interface SortState {
-  col: string;
-  dir: 'asc' | 'desc';
+  /**
+   * `null` = the SERVER's default ordering for this scope (leaf → sku asc,
+   * parent → popular desc). No header paints an active arrow in that state,
+   * because the page would otherwise be claiming an order it isn't asking for.
+   */
+  col: SortKey | null;
+  dir: SortDir;
+}
+
+/**
+ * One filter checkbox. `value` is what travels in the URL (a manufacturer NAME
+ * or a subcategory SLUG); `label` is what the reader sees. `count` comes from
+ * the server's facets — computed with every filter applied except this
+ * column's own, so the list never collapses to the current selection.
+ */
+export interface FilterOption {
+  value: string;
+  label: string;
+  count?: number | null;
 }
 
 interface ColumnHeaderProps {
   label: string;
-  sortKey: string;
+  sortKey: SortKey;
   numeric?: boolean;
   hideClass?: string;
   sort: SortState;
@@ -17,18 +35,26 @@ interface ColumnHeaderProps {
   hasSearch?: boolean;
   search?: string;
   setSearch?: (v: string) => void;
-  filterValues?: string[];
+  filterOptions?: FilterOption[];
   filterSelected?: Set<string>;
   setFilterSelected?: (v: Set<string>) => void;
 }
+
+// The option list is now the COMPLETE server-side facet list, not the
+// manufacturers that happened to be in 500 loaded rows — on a big category
+// that is hundreds of entries. Above this many we offer a type-to-narrow box
+// (and render at most VISIBLE_CAP rows, so opening the popover can't stall).
+const SEARCHABLE_FROM = 12;
+const VISIBLE_CAP = 150;
 
 export default function ColumnHeader({
   label, sortKey, numeric, hideClass,
   sort, setSort,
   hasSearch, search, setSearch,
-  filterValues, filterSelected, setFilterSelected,
+  filterOptions, filterSelected, setFilterSelected,
 }: ColumnHeaderProps) {
   const [open, setOpen] = useState(false);
+  const [optionQuery, setOptionQuery] = useState('');
   const [coords, setCoords] = useState<{ top: number; left: number }>({ top: -9999, left: -9999 });
   const thRef = useRef<HTMLTableCellElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -103,13 +129,35 @@ export default function ColumnHeader({
     };
   }, [open, numeric]);
 
+  const options = filterOptions ?? [];
+  const hasOptions = options.length > 0 && filterSelected != null && setFilterSelected != null;
+
+  const shownOptions = useMemo(() => {
+    const needle = optionQuery.trim().toLowerCase();
+    const matches = needle
+      ? options.filter(o => o.label.toLowerCase().includes(needle))
+      : options;
+    return { rows: matches.slice(0, VISIBLE_CAP), hidden: Math.max(0, matches.length - VISIBLE_CAP) };
+  }, [options, optionQuery]);
+
   const isActive = sort.col === sortKey;
   const sortDir = isActive ? sort.dir : null;
-  const hasFilter = filterValues && filterSelected && filterSelected.size < filterValues.length;
-  const hasActiveSearch = hasSearch && search && search.trim().length > 0;
+  // A checked box IS the filter: nothing checked means no param and every row.
+  // (The page used to pre-check every option, back when the options were
+  // whatever the 500 loaded rows contained. This list is the complete server
+  // facet now — see the note beside `mfgSelected` in the page.)
+  const hasFilter = hasOptions && filterSelected.size > 0;
+  const hasActiveSearch = hasSearch && search != null && search.trim().length > 0;
 
   const ariaSort: 'ascending' | 'descending' | 'none' =
     sortDir === 'asc' ? 'ascending' : sortDir === 'desc' ? 'descending' : 'none';
+
+  const toggleOpen = () => {
+    setOpen(o => {
+      if (!o) setOptionQuery('');
+      return !o;
+    });
+  };
 
   return (
     <th
@@ -123,7 +171,7 @@ export default function ColumnHeader({
         className={styles.trigger}
         aria-haspopup="dialog"
         aria-expanded={open}
-        onClick={() => setOpen(o => !o)}
+        onClick={toggleOpen}
       >
         <span className={styles.label}>{label}</span>
         <span className={styles.indicators} aria-hidden="true">
@@ -142,7 +190,20 @@ export default function ColumnHeader({
           style={{ position: 'fixed', top: coords.top, left: coords.left }}
         >
           <div className={styles.section}>
-            <div className={styles.sectionLabel}>Sort</div>
+            <div className={styles.sectionHead}>
+              <span className={styles.sectionLabel}>Sort</span>
+              {isActive && (
+                // The only way back to the server's own ordering — which on a
+                // parent page is the popularity rollup, not sku asc.
+                <button
+                  type="button"
+                  className={styles.link}
+                  onClick={() => { setSort({ col: null, dir: 'asc' }); setOpen(false); }}
+                >
+                  Default order
+                </button>
+              )}
+            </div>
             <div className={styles.sortRow}>
               <button
                 type="button"
@@ -169,36 +230,68 @@ export default function ColumnHeader({
               <input
                 type="search"
                 className={styles.searchInput}
-                placeholder={`Search ${label.toLowerCase()}…`}
+                placeholder={`Search ${label.toLowerCase()} or description…`}
                 value={search ?? ''}
                 onChange={e => setSearch(e.target.value)}
               />
             </div>
           )}
 
-          {filterValues && filterValues.length > 0 && filterSelected && setFilterSelected && (
+          {hasOptions && (
             <div className={styles.section}>
               <div className={styles.sectionHead}>
                 <span className={styles.sectionLabel}>Filter</span>
-                <button type="button" className={styles.link} onClick={() => setFilterSelected(new Set(filterValues))}>All</button>
-                <button type="button" className={styles.link} onClick={() => setFilterSelected(new Set())}>None</button>
+                {/* One link, not the old All/None pair — "all checked" and
+                    "none checked" now mean the same thing on the wire (an
+                    absent param), so Clear is the only distinct action.
+                    Narrowing a long list is what the box below is for. */}
+                <button
+                  type="button"
+                  className={styles.link}
+                  onClick={() => setFilterSelected(new Set())}
+                  disabled={!hasFilter}
+                >
+                  Clear
+                </button>
               </div>
+              {options.length > SEARCHABLE_FROM && (
+                <input
+                  type="search"
+                  className={`${styles.searchInput} ${styles.optionSearch}`}
+                  placeholder={`Find ${label.toLowerCase()}…`}
+                  value={optionQuery}
+                  onChange={e => setOptionQuery(e.target.value)}
+                  aria-label={`Narrow the ${label.toLowerCase()} list`}
+                />
+              )}
               <div className={styles.filterList}>
-                {filterValues.map(v => (
-                  <label key={v} className={styles.filterRow}>
+                {shownOptions.rows.map(option => (
+                  <label key={option.value} className={styles.filterRow}>
                     <input
                       type="checkbox"
-                      checked={filterSelected.has(v)}
+                      checked={filterSelected.has(option.value)}
                       onChange={e => {
                         const next = new Set(filterSelected);
-                        if (e.target.checked) next.add(v); else next.delete(v);
+                        if (e.target.checked) next.add(option.value);
+                        else next.delete(option.value);
                         setFilterSelected(next);
                       }}
                     />
-                    <span className={styles.filterLabel}>{v}</span>
+                    <span className={styles.filterLabel}>{option.label}</span>
+                    {option.count != null && (
+                      <span className={styles.filterCount}>{option.count.toLocaleString()}</span>
+                    )}
                   </label>
                 ))}
+                {shownOptions.rows.length === 0 && (
+                  <p className={styles.filterNote}>No match.</p>
+                )}
               </div>
+              {shownOptions.hidden > 0 && (
+                <p className={styles.filterNote}>
+                  {shownOptions.hidden.toLocaleString()} more &mdash; keep typing to narrow.
+                </p>
+              )}
             </div>
           )}
         </div>,

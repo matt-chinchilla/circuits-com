@@ -42,6 +42,7 @@ from app.models.expense import ESTIMATE_SOURCE, MANUAL_SOURCE
 from app.models.roles import ADMIN_ROLES
 from app.models.sponsor import is_single_slot
 from app.services.aws_cost import estimate_monthly_aws_cost
+from app.services.part_pricing import refresh_best_prices
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -1525,12 +1526,28 @@ def seed(db: Session) -> None:
     # ------------------------------------------------------------------
     # 6. Demo parts (59 synthetic entries)
     # ------------------------------------------------------------------
-    _seed_parts(db, cats, suppliers)
+    created_part_ids = _seed_parts(db, cats, suppliers)
 
     # ------------------------------------------------------------------
     # 7. Real catalog from JSON data files
     # ------------------------------------------------------------------
-    _seed_real_catalog(db, cats, suppliers)
+    created_part_ids += _seed_real_catalog(db, cats, suppliers)
+
+    # ------------------------------------------------------------------
+    # 7a. Denormalized best prices for everything just created
+    # ------------------------------------------------------------------
+    # Migration 046 backfills the four `parts.best_price*` columns, but on a
+    # FRESH database alembic runs BEFORE the seed — it backfills an empty
+    # table, and every part created below would be left at NULL, which the
+    # category page reads as "no price" and sorts to the bottom.
+    #
+    # Scoped to the ids the two steps above actually CREATED, which is what
+    # keeps this off the hot path: the seed re-runs on every api container
+    # start and is get-or-create, so an established database creates nothing
+    # and this call returns immediately without touching a row.
+    if created_part_ids:
+        moved = refresh_best_prices(db, created_part_ids)
+        print(f"Seed: best prices materialized on {moved} parts.")
 
     # ------------------------------------------------------------------
     # 7b. Manufacturers + Leads CRM (2026-08-20; flags mirror compose)
@@ -1887,12 +1904,14 @@ def _seed_parts(
     db: Session,
     cats: dict[str, Category],
     suppliers: dict[str, Supplier],
-) -> None:
+) -> list:
+    """Returns the ids of the parts it created — see `seed()`'s best-price pass."""
     if db.query(Part).first():
-        return
+        return []
 
     random.seed(42)  # reproducible placeholder data
     supplier_list = list(suppliers.values())
+    created: list = []
 
     for subcategory_name, parts_data in _DEMO_CATALOG:
         # Exact-match lookup against the subcategory's own name. The cats
@@ -1916,6 +1935,7 @@ def _seed_parts(
             )
             db.add(part)
             db.flush()
+            created.append(part.id)
 
             # 2-4 distributor listings per part
             num_listings = random.randint(2, 4)
@@ -1947,6 +1967,7 @@ def _seed_parts(
     print(
         f"Seed: {db.query(Part).count()} parts, {db.query(PartListing).count()} listings created."
     )
+    return created
 
 
 # ---------------------------------------------------------------------------
@@ -2086,17 +2107,23 @@ def _seed_real_catalog(
     db: Session,
     cats: dict[str, Category],
     suppliers: dict[str, Supplier],
-) -> None:
-    """Seed real parts from JSON catalog files in catalog_data/."""
+) -> list:
+    """Seed real parts from JSON catalog files in catalog_data/.
+
+    Returns the ids of the parts it CREATED, which is the whole trick behind
+    the best-price pass in `seed()`: this runs on every api container start and
+    creates nothing on all but the first, so the pass costs nothing on the
+    path that matters.
+    """
     catalog_dir = Path(__file__).parent / "catalog_data"
     if not catalog_dir.exists():
         print("Seed: catalog_data/ not found, skipping real catalog.")
-        return
+        return []
 
     json_files = sorted(catalog_dir.glob("*.json"))
     if not json_files:
         print("Seed: no JSON files in catalog_data/, skipping real catalog.")
-        return
+        return []
 
     random.seed(7500)
     slug_to_parent: dict[str, str] = {}
@@ -2108,6 +2135,7 @@ def _seed_real_catalog(
 
     total_parts = 0
     total_listings = 0
+    created_parts: list = []
 
     # One scoped query replaces the old per-row existence probe (2026-08-20
     # audit: the per-row .first() hydrated the selectin listings+breaks cascade
@@ -2166,6 +2194,10 @@ def _seed_real_catalog(
                 # so FK ids resolve at the chunked flush below (create path
                 # went from 3 flushes/part to 1 per 500 parts).
                 db.add(part)
+                # Held as the OBJECT, not `part.id`: without a per-row flush
+                # the python-side uuid default has not run yet and reading the
+                # attribute here would collect a list of Nones.
+                created_parts.append(part)
                 total_parts += 1
 
                 base_cents = p.get("price_cents", 500)
@@ -2210,6 +2242,7 @@ def _seed_real_catalog(
 
     db.flush()
     print(f"Seed: {total_parts} real parts, {total_listings} listings created from catalog JSON.")
+    return [p.id for p in created_parts]
 
 
 # ---------------------------------------------------------------------------

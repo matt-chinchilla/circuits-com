@@ -90,6 +90,7 @@ from app.models import (  # noqa: E402
 )
 from app.routes.analytics import reset_analytics_state  # noqa: E402
 from app.services import rate_limit  # noqa: E402
+from app.services.part_pricing import refresh_best_prices  # noqa: E402
 from app.services.search_service import invalidate_catalog_caches  # noqa: E402
 
 
@@ -376,6 +377,15 @@ def seeded_db(db):
         period_end=date(2026, 3, 31),
     )
     db.add_all([rev1, rev2])
+
+    # The four denormalized `parts.best_price*` columns (migration 046) are
+    # maintained by the WRITE PATHS — the feed importer, the part/listing
+    # routes, the seed, the catalog loader — through one home,
+    # `services.part_pricing.refresh_best_prices`. This fixture inserts its
+    # listings and price breaks directly, behind all of them, so it has to call
+    # the same home or every part it makes quotes NULL on the category page
+    # while its listings plainly carry prices.
+    refresh_best_prices(db, [part1.id, part2.id])
     db.commit()
 
     return {

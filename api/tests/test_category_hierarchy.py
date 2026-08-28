@@ -196,16 +196,24 @@ class TestSubcategoryGetsItsOwnParts:
             f"Subcategory endpoint missing parts; got {skus}"
         )
 
-        # Parent endpoint: should NOT duplicate the subcat's parts
-        # (parts are scoped to their owning category, not rolled up here —
-        # the `parts` list at the parent reflects parts directly on the parent)
+        # Parent endpoint: the `parts` block IS the rollup now.
+        #
+        # DELIBERATE CONTRACT CHANGE (2026-08-27), the same one recorded on
+        # test_categories.test_get_category_parent_rolls_up_child_parts — this
+        # is that pin's twin, and it had to move with it. It used to assert the
+        # parent's `parts` list was empty, because parts live on subcategories
+        # and the page compensated by fetching the separate `popular_parts`
+        # rollup at per_page=500 and paging it in the browser. That truncated
+        # 27 of 28 top-level categories once the catalog passed 200k parts. The
+        # block is scope-aware now: leaf = own parts, parent = self + children.
         resp = client.get("/api/categories/power-mgmt-2")
         assert resp.status_code == 200
         data = resp.json()
         parent_skus = {p["sku"] for p in data["parts"]["items"]}
-        assert parent_skus == set(), (
-            f"Parent endpoint shouldn't show subcat parts in `parts` list; got {parent_skus}"
+        assert parent_skus == {"LM7805CT", "LT3045"}, (
+            f"Parent endpoint should roll its subcats' parts up; got {parent_skus}"
         )
+        assert data["parts"]["total"] == 2
 
 
 class TestSeedAssignsPartsToSubcategories:

@@ -60,8 +60,16 @@
     // <Suspense> + useEffect chain otherwise can't fire the fetch until
     // ~400 ms after navigation start. Stores the in-flight promise on
     // window.__categoryPreload so api.ts can reuse it (avoids a duplicate
-    // origin fetch when the SW cache is cold). URL params MUST match
-    // api.getCategory's exact request (popular_per_page=500 etc).
+    // origin fetch when the SW cache is cold).
+    //
+    // The query string below is CANONICAL_CATEGORY_QUERY from
+    // src/public/services/categoryQuery.ts — the default first page. It is
+    // hard-coded because this script runs at HTML parse time, before any
+    // module exists to import from; src/public/services/categoryQuery.test.ts
+    // asserts this file still contains that exact string, and api.ts's reuse
+    // guard compares the whole string, so a drift costs a wasted fetch rather
+    // than wrong rows. Sorting/filtering/paging are server params now
+    // (parts_per_page=25, not the old 500-row slab that truncated the page).
     (function(){
       // Capture the LAST path segment: flat /category/<slug> OR nested
       // /category/<parent>/<child>. The child slug is globally unique and is
@@ -69,11 +77,16 @@
       // the cache-hit alive for subcategory pages too (2026-06-03 nested URLs).
       var m = location.pathname.match(/^\/category\/(?:[^\/?#]+\/)*([^\/?#]+)/);
       if (!m) return;
+      // A deep link carrying page/sort/filter params asks for different rows,
+      // so the page will decline this preload — don't spend the request.
+      if (/[?&](p|sort|dir|q|mfg|sub)=/.test(location.search)) return;
       var slug = m[1];
-      var path = '/api/categories/' + slug + '/?popular_page=1&popular_per_page=500&parts_page=1&parts_per_page=500';
+      var query = 'popular_page=1&popular_per_page=1&parts_page=1&parts_per_page=25';
+      var path = '/api/categories/' + slug + '/?' + query;
       try {
         window.__categoryPreload = {
           slug: slug,
+          query: query,
           promise: fetch(path, { credentials: 'omit' }).then(function(r){ return r.ok ? r.json() : null; }).catch(function(){ return null; }),
         };
       } catch (_) { /* ignore — page will fetch through axios */ }

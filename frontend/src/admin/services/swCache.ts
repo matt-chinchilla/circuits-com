@@ -1,4 +1,8 @@
-import { SW_CACHE_API_CATEGORIES, SW_CACHE_API_GENERAL } from '@shared/swCacheNames';
+import {
+  SW_CACHE_API_CATEGORIES,
+  SW_CACHE_API_CATEGORY_QUERIES,
+  SW_CACHE_API_GENERAL,
+} from '@shared/swCacheNames';
 import { clearPartnersMemo } from '@shared/services/partnersMemo';
 import { clearCategoryDetailMemo } from '@shared/services/categoryDetailMemo';
 
@@ -8,7 +12,14 @@ import { clearCategoryDetailMemo } from '@shared/services/categoryDetailMemo';
 //  - api-general (NetworkFirst): the keyword sponsor profile pages
 //    (/api/sponsors/keyword/...). NetworkFirst already serves fresh online, so
 //    purging here is the offline/slow-client safety net.
-const SPONSOR_CACHES = [SW_CACHE_API_CATEGORIES, SW_CACHE_API_GENERAL];
+//  - api-category-queries (NetworkFirst): parameterized category-detail
+//    requests (server-side sort/filter/pagination) — same sponsor blocks ride
+//    every one of those responses.
+const SPONSOR_CACHES = [
+  SW_CACHE_API_CATEGORIES,
+  SW_CACHE_API_CATEGORY_QUERIES,
+  SW_CACHE_API_GENERAL,
+];
 
 /**
  * Purge the SW caches holding sponsor-derived public data so the public site

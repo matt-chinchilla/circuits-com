@@ -1,89 +1,178 @@
-"""Deferred-paging TRIPWIRE — guards the fetch-everything category model.
+"""The tripwire fired — this file is now the pin on what replaced it.
 
-The category page fetches every part for a top-level category in ONE request
-(`per_page=500`), then filters/sorts/paginates client-side. Per the approved
-spec (docs/superpowers/specs/2026-06-07-category-page-performance-design.md),
-server-side paging is DEFERRED because at today's scale it would hurt nav
-fluidity for a negligible cold-load gain. This test is the automatic signal
-for if/when that ever needs to flip.
+WHAT THIS FILE USED TO BE. The category page fetched every part for a category
+in ONE request (`per_page=500`) and did the filtering, sorting and paging in
+the browser. Server-side paging was DEFERRED by the 2026-06-07 category-page
+performance spec, which pre-approved this exact rework in its Deferred section
+and asked for a tripwire: a test that replayed the seed's attachment logic over
+`app/db/catalog_data/*.json` and failed once any top-level rollup passed 450
+parts, 90% of the 500 cap.
 
-It computes, for the SEEDED real catalog, each top-level category's part
-rollup — the SUM of its children's parts, which is exactly what
-`category_service._build_popular_parts` loads for a parent page (the biggest
-single-page set) — and asserts the max stays below 90% of the 500 cap.
+IT FIRED. The catalog is past 200k parts: 27 of 28 top-level categories and 127
+of 189 leaf subcategories exceed 500, so pages silently truncated — Connectors
+rendered 500 of 39,353 — and the header count lied about the rest.
 
-WHY MEASURE THE CATALOG JSON DIRECTLY (not the conftest fixture, not a full
-`seed(db)`):
-  - The conftest `seeded_db` fixture has only 2 parts — asserting against it
-    would give false comfort (it can never trip). The REAL ~3,600-part catalog
-    is what matters.
-  - A full `seed(db)` reproduces the exact prod rollup (PMICs = 325) but costs
-    ~35s — too heavy for a guard that runs in every suite run.
-  - `api/app/db/catalog_data/*.json` IS the real catalog prod seeds from. This
-    test replays seed's own attachment logic — map each `sub_slug` to its
-    parent via `CATEGORY_DATA`, dedupe parts by SKU exactly as
-    `_seed_real_catalog` does (`if existing: continue`) — so the number tracks
-    the real data, in milliseconds, with no DB.
-  - Small known delta: this yields 320 vs the DB's 325 (the difference is the
-    handful of `_DEMO_CATALOG` demo parts the full seed also adds). Both are
-    far below the 450 threshold; the JSON figure is slightly conservative.
-  - The ULTIMATE check is prod: the live `/api/categories/` rollup sums.
+WHAT IT IS NOW. Measuring the catalog for growth is pointless once growth is
+handled, so the file keeps its name (the ledger of a tripwire that did its job)
+and pins the behaviour that answers it: a category holding far more than 500
+parts pages correctly, reports a TRUE total, and cannot be talked into
+returning more than 100 rows at a time. If a future change reinstates
+fetch-everything, these assertions fail rather than a threshold silently
+creeping.
+
+The catalog JSON is not needed for any of that — this seeds a category with 512
+parts directly, which is both faster and independent of what the real catalog
+happens to hold this month.
 """
 
-import json
-from pathlib import Path
+import uuid
 
-from app.db.seed import CATEGORY_DATA
+from app.models import Category, Part
 
-# 90% of the 500 fetch-everything cap (per_page=500 at the 3 call sites).
-ROLLUP_THRESHOLD = 450
-CATALOG_DIR = Path(__file__).resolve().parents[1] / "app" / "db" / "catalog_data"
-
-
-def _rollup_by_top_level() -> dict[str, int]:
-    """Parts per top-level category = sum over its children, deduped by SKU —
-    mirrors `_seed_real_catalog` (sorted files, skip already-seen SKU) and the
-    `category_service._build_popular_parts` self+children rollup."""
-    sub_to_parent: dict[str, str] = {}
-    for _name, parent_slug, _icon, subs in CATEGORY_DATA:
-        for _sub_name, sub_slug, _sub_icon in subs:
-            sub_to_parent[sub_slug] = parent_slug
-
-    seen_skus: set[str] = set()
-    rollup: dict[str, int] = {}
-    for jf in sorted(CATALOG_DIR.glob("*.json")):
-        data = json.loads(jf.read_text())
-        for sub_slug, parts_list in data.items():
-            parent_slug = sub_to_parent.get(sub_slug)
-            if parent_slug is None:
-                continue  # unknown sub_slug — seed warns + skips it too
-            for part in parts_list:
-                sku = part["sku"]
-                if sku in seen_skus:
-                    continue  # _seed_real_catalog: `if existing: continue`
-                seen_skus.add(sku)
-                rollup[parent_slug] = rollup.get(parent_slug, 0) + 1
-    return rollup
+# One more than the old 500-row cap: the point is a category the retired model
+# could not have shown whole.
+PART_COUNT = 512
+OLD_FETCH_EVERYTHING_CAP = 500
+MAX_PER_PAGE = 100
 
 
-def test_catalog_dir_present():
-    """Sanity: the real catalog is what we measure. If it ever moves, this
-    tripwire must fail loudly rather than silently pass on an empty rollup."""
-    assert CATALOG_DIR.is_dir(), f"catalog_data dir missing at {CATALOG_DIR}"
-    assert any(CATALOG_DIR.glob("*.json")), "no catalog JSON files to measure"
-
-
-def test_no_category_rollup_exceeds_fetch_everything_threshold():
-    rollup = _rollup_by_top_level()
-    assert rollup, "rollup empty — catalog JSON not measured (see CATALOG_DIR)"
-    biggest_slug = max(rollup, key=lambda k: rollup[k])
-    biggest = rollup[biggest_slug]
-    assert biggest < ROLLUP_THRESHOLD, (
-        f"DEFERRED-PAGING TRIPWIRE TRIPPED: top-level category "
-        f"'{biggest_slug}' has grown to {biggest} parts in its rollup, past "
-        f"the safe threshold of {ROLLUP_THRESHOLD} (90% of the 500 "
-        f"fetch-everything cap). A category has grown past the safe threshold "
-        f"for the fetch-everything model — time to build server-side paging. "
-        f"See docs/superpowers/specs/2026-06-07-category-page-performance-"
-        f"design.md (the 'Deferred' section)."
+def _seed_big_category(db, *, slug: str, count: int = PART_COUNT) -> Category:
+    """A LEAF category holding `count` parts, skus ordered PART-0000 upward."""
+    parent = Category(
+        id=uuid.uuid4(), name="Connectors", slug=f"{slug}-parent", icon="plugs", sort_order=0
     )
+    db.add(parent)
+    db.flush()
+    leaf = Category(
+        id=uuid.uuid4(),
+        name="Headers",
+        slug=slug,
+        icon="plug",
+        parent_id=parent.id,
+        sort_order=0,
+    )
+    db.add(leaf)
+    db.flush()
+    db.add_all(
+        [
+            Part(
+                id=uuid.uuid4(),
+                sku=f"PART-{i:04d}",
+                manufacturer_name="Molex",
+                category_id=leaf.id,
+                sub_slug=slug,
+                lifecycle_status="active",
+            )
+            for i in range(count)
+        ]
+    )
+    db.commit()
+    return leaf
+
+
+def test_a_category_past_the_old_cap_reports_its_true_total(client, db):
+    """The count in the header is the whole category, not the page.
+
+    This is the assertion the truncation broke: Connectors said 500 while
+    holding 39,353, and nothing in the response admitted it.
+    """
+    _seed_big_category(db, slug="headers-total")
+
+    data = client.get("/api/categories/headers-total").json()
+    parts = data["parts"]
+
+    assert parts["total"] == PART_COUNT
+    assert parts["total"] > OLD_FETCH_EVERYTHING_CAP, "the point is a category past the old cap"
+    assert data["facets"]["total_unfiltered"] == PART_COUNT
+
+
+def test_every_part_is_reachable_by_paging(client, db):
+    """Nothing is stranded past the end of the first page.
+
+    Pages the WHOLE category at the maximum page size and asserts the union is
+    the category — the truncated model could reach 500 of these and no more,
+    whatever the client did.
+    """
+    _seed_big_category(db, slug="headers-paging")
+
+    seen: set[str] = set()
+    first = client.get("/api/categories/headers-paging?parts_per_page=100&parts_page=1").json()
+    pages = first["parts"]["pages"]
+    assert pages == 6, f"512 parts at 100/page is 6 pages, got {pages}"
+
+    for page in range(1, pages + 1):
+        body = client.get(
+            f"/api/categories/headers-paging?parts_per_page=100&parts_page={page}"
+        ).json()["parts"]
+        assert body["page"] == page
+        assert body["total"] == PART_COUNT, "the total must not drift between pages"
+        seen.update(p["sku"] for p in body["items"])
+
+    assert len(seen) == PART_COUNT, f"paging reached {len(seen)} of {PART_COUNT} parts"
+    assert seen == {f"PART-{i:04d}" for i in range(PART_COUNT)}
+
+
+def test_pages_do_not_overlap(client, db):
+    """Consecutive pages are disjoint — a wobbly sort would repeat rows on one
+    page while hiding them from another, which is truncation wearing a
+    different hat."""
+    _seed_big_category(db, slug="headers-disjoint")
+
+    def skus(page: int) -> list[str]:
+        body = client.get(
+            f"/api/categories/headers-disjoint?parts_per_page=100&parts_page={page}"
+        ).json()["parts"]
+        return [p["sku"] for p in body["items"]]
+
+    first, second = skus(1), skus(2)
+    assert len(first) == 100 and len(second) == 100
+    assert not set(first) & set(second)
+    # Default leaf sort is sku asc, so the boundary is exact.
+    assert first[0] == "PART-0000"
+    assert second[0] == "PART-0100"
+
+
+def test_the_500_ceiling_is_gone(client, db):
+    """`parts_per_page=500` — what every call site used to send — is now a 422.
+
+    The ceiling is 100. It is enforced by the route (`le=`) so an over-large
+    ask is visible to the caller rather than silently clamped, and again by the
+    service's own min() so no internal caller can route around it.
+    """
+    _seed_big_category(db, slug="headers-ceiling", count=150)
+
+    assert client.get("/api/categories/headers-ceiling?parts_per_page=500").status_code == 422
+    assert client.get("/api/categories/headers-ceiling?parts_per_page=101").status_code == 422
+
+    ok = client.get("/api/categories/headers-ceiling?parts_per_page=100")
+    assert ok.status_code == 200
+    body = ok.json()["parts"]
+    assert body["per_page"] == MAX_PER_PAGE
+    assert len(body["items"]) == MAX_PER_PAGE
+
+
+def test_the_service_enforces_the_ceiling_too(db):
+    """The second layer, proven directly: the route's `le=` cannot be the only
+    guard, or an internal caller reintroduces fetch-everything without a 422 to
+    show for it."""
+    from app.services.category_service import MAX_PARTS_PER_PAGE, get_category_by_slug
+
+    _seed_big_category(db, slug="headers-service", count=150)
+
+    result = get_category_by_slug(db, "headers-service", parts_per_page=500)
+    assert result["parts"]["per_page"] == MAX_PARTS_PER_PAGE
+    assert len(result["parts"]["items"]) == MAX_PARTS_PER_PAGE
+
+
+def test_a_parent_rollup_past_the_cap_pages_too(client, db):
+    """The rollup is the case that actually tripped the old threshold: a
+    top-level category's page shows every part beneath it."""
+    leaf = _seed_big_category(db, slug="headers-rollup")
+    parent_slug = f"{leaf.slug}-parent"
+
+    data = client.get(f"/api/categories/{parent_slug}?parts_per_page=100").json()
+    assert data["parts"]["total"] == PART_COUNT
+    assert data["parts"]["pages"] == 6
+    assert data["facets"]["subs"] == [
+        {"slug": "headers-rollup", "name": "Headers", "count": PART_COUNT}
+    ]

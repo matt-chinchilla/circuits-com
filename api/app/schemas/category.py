@@ -77,6 +77,45 @@ class PartsPage(BaseModel):
 PopularPartsPage = PartsPage
 
 
+class ManufacturerFacet(BaseModel):
+    """One option on the parts table's manufacturer filter, with its count."""
+
+    name: str
+    count: int
+    model_config = ConfigDict(from_attributes=True)
+
+
+class SubcategoryFacet(BaseModel):
+    """One option on a PARENT page's subcategory filter. Keyed by SLUG — the
+    value the client sends back as `sub` — with the display name beside it."""
+
+    slug: str
+    name: str
+    count: int
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CategoryFacets(BaseModel):
+    """The filter option lists for the parts block, plus what the category
+    holds before any filter.
+
+    Faceted-search semantics: each list is computed with every filter EXCEPT
+    its own applied, so choosing a manufacturer narrows the SUBCATEGORY list
+    but leaves the manufacturer list whole — otherwise the control collapses to
+    the one option already chosen and there is no way back to the others.
+
+    `total_unfiltered` is what the scope holds; `PartsPage.total` is what the
+    current filters left of it. The page shows both, which is the honesty the
+    old fetch-500-and-truncate model could not offer.
+    """
+
+    total_unfiltered: int = 0
+    manufacturers: list[ManufacturerFacet] = []
+    # Always empty on a LEAF: there is nothing below it to filter by.
+    subs: list[SubcategoryFacet] = []
+    model_config = ConfigDict(from_attributes=True)
+
+
 class CategoryDetailResponse(CategoryResponse):
     parent: ParentCategoryResponse | None = None
     # `sponsor` = this child's newest visible GOLD sponsor (the single
@@ -85,8 +124,16 @@ class CategoryDetailResponse(CategoryResponse):
     # tier-filtered in category_service. (2026-06-11 tier-boards matrix.)
     sponsor: SponsorResponse | None
     silver: list[SupplierResponse] = []
+    # ONE scope-aware parts block: a leaf's own parts, a parent's rollup over
+    # self + children, filtered/sorted/paged in the DATABASE (2026-08-27).
     parts: PartsPage = PartsPage()
+    # The legacy rollup block, byte-identical to what it always was — the page
+    # no longer reads it, so nothing about it moves while it is retired. That
+    # is also why `facets` is a SIBLING of `parts` rather than a field on it:
+    # both blocks share the one `PartsPage` shape, and the facets describe the
+    # category, not a page of rows.
     popular_parts: PartsPage = PartsPage()
+    facets: CategoryFacets = CategoryFacets()
     model_config = ConfigDict(from_attributes=True)
 
 

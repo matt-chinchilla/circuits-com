@@ -94,15 +94,36 @@ def test_get_category_includes_parts(client, seeded_db):
     assert lm7805["best_price"] is not None
 
 
-def test_get_category_parent_has_no_parts(client, seeded_db):
-    """GET /api/categories/integrated-circuits returns empty parts for parent (parts are on child)."""
+def test_get_category_parent_rolls_up_child_parts(client, seeded_db):
+    """GET /api/categories/integrated-circuits rolls its children's parts up.
+
+    DELIBERATE CONTRACT CHANGE (2026-08-27). This test used to pin the
+    opposite: a parent's `parts` block was its OWN rows only, always empty in
+    practice because the seed attaches every part to a subcategory, and the
+    page compensated by reading the separate `popular_parts` rollup and then
+    filtering/sorting/paging it in the browser. At 200k+ parts that model
+    truncated 27 of 28 top-level categories at 500 rows.
+
+    The `parts` block is now scope-aware — leaf = own parts, parent = the
+    rollup over self + immediate children — so there is ONE block to page, and
+    `total` is the true rollup total instead of a number the client had to
+    know not to trust. The legacy `popular_parts` block still answers exactly
+    as it did (test_category_hierarchy pins it); the page just stops using it.
+    """
     response = client.get("/api/categories/integrated-circuits")
     assert response.status_code == 200
     data = response.json()
 
     assert "parts" in data
-    assert data["parts"]["items"] == []
-    assert data["parts"]["total"] == 0
+    assert data["parts"]["total"] == 2, "parent total is the rollup total, not its own rows"
+    assert {p["sku"] for p in data["parts"]["items"]} == {"LM7805CT", "STM32F407VGT6"}
+    # Each rolled-up row still carries its OWN subcategory's context — the
+    # child's icon, not the parent's — so a mixed rollup stays readable.
+    assert {p["category_icon"] for p in data["parts"]["items"]} == {"\u23f0"}
+    # The facets describe the rollup, and sit beside `parts` on the response.
+    facets = data["facets"]
+    assert facets["total_unfiltered"] == 2
+    assert facets["subs"] == []  # the fixture inserts parts with no sub_slug
 
 
 def test_get_category_not_found(client, seeded_db):

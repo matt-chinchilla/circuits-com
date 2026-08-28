@@ -153,6 +153,15 @@
   &:hover {
     text-decoration: underline;
   }
+
+  // "Clear" with nothing to clear, and "Default order" is only rendered when
+  // this column IS the active sort — a disabled link reads as unavailable
+  // rather than disappearing and reflowing the row.
+  &:disabled {
+    color: var(--glass-ink-muted, #{$text-secondary});
+    cursor: default;
+    text-decoration: none;
+  }
 }
 
 .sortRow {
@@ -260,4 +269,28 @@
   white-space: nowrap;
   text-overflow: ellipsis;
   flex: 1;
+}
+
+// Facet count beside a filter option. The server sends the count for every
+// option (computed with the OTHER filters applied), so "Texas Instruments 412"
+// tells the reader what the checkbox is worth before they spend a round trip.
+.filterCount {
+  flex-shrink: 0;
+  font-family: $font-mono;
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--glass-ink-muted, #{$text-secondary});
+}
+
+// Type-to-narrow box above a long option list (the manufacturer facet on a big
+// category is hundreds of entries now that it comes from the server, not from
+// whatever happened to be in the loaded rows).
+.optionSearch {
+  margin-bottom: 6px;
+}
+
+.filterNote {
+  margin: 6px 0 0;
+  font-size: 0.72rem;
+  color: var(--glass-ink-muted, #{$text-secondary});
 }

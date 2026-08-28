@@ -15,6 +15,7 @@ from decimal import Decimal
 
 from app.db.session import SessionLocal
 from app.models import Category, Part, PartListing, PriceBreak, Supplier
+from app.services.part_pricing import refresh_best_prices
 
 # manufacturer_id: a per-environment surrogate (036) — never applied even if
 # an old export file carries it; seed_manufacturers step 5 re-links by name.
@@ -32,7 +33,16 @@ counts = {
     "parts_new": 0, "parts_updated": 0, "parts_skipped_no_category": 0,
     "listings_new": 0, "listings_updated": 0, "listings_skipped": 0,
     "breaks_written": 0,
+    "best_prices_refreshed": 0,
 }
+
+# Parts whose offers this file touched. This loader replaces each listing's
+# price breaks wholesale, so every listing line can move a minimum — and the
+# denormalized parts.best_price* columns (migration 046) are what the category
+# pages sort on. A pull that skipped them would leave the catalog priced and
+# the sort blind. Held as a set: a 302k-record export names the same part on
+# every one of its listing lines.
+repriced_part_ids = set()
 
 
 def set_fields(obj, data, skip):
@@ -127,6 +137,7 @@ for line_no, line in enumerate(open(sys.argv[1], encoding="utf-8"), 1):
                 )
             )
             counts["breaks_written"] += 1
+        repriced_part_ids.add(part.id)
 
     pending += 1
     if pending >= 500:
@@ -134,5 +145,12 @@ for line_no, line in enumerate(open(sys.argv[1], encoding="utf-8"), 1):
         pending = 0
         print(f"...line {line_no}", file=sys.stderr)
 
+db.commit()
+
+# AFTER the load, not during it: the export writes a part's listings across
+# several lines, so a per-line refresh would recompute the same part once per
+# distributor and still be wrong until the last one landed. Batched internally.
+print(f"...refreshing best prices on {len(repriced_part_ids)} parts", file=sys.stderr)
+counts["best_prices_refreshed"] = refresh_best_prices(db, repriced_part_ids)
 db.commit()
 print(json.dumps(counts, indent=2))

@@ -30,7 +30,32 @@ export interface PartsPage {
 
 export type PopularPartsPage = PartsPage;
 
-export interface CategoryDetail extends Category {
+/**
+ * Faceted-search counts for the category page's filter UI.
+ *
+ * Each list is computed with every filter applied EXCEPT its own, so choosing
+ * one manufacturer never collapses the manufacturer list to that single
+ * option. `total_unfiltered` is the category's true size — the number the
+ * "All" chip and the sub-sheet show — while `parts.total` is what the current
+ * filters leave.
+ */
+export interface CategoryFacets {
+  total_unfiltered: number;
+  manufacturers: { name: string; count: number }[];
+  /** SLUG-keyed. Empty on a leaf category (nothing to group by). */
+  subs: { slug: string; name: string; count: number }[];
+}
+
+/**
+ * Everything on a category page that does NOT change when you sort, filter,
+ * search or paginate: identity, the family tree, and the sponsor boards.
+ *
+ * Split out from the rows so the two can be cached independently — the chrome
+ * by slug (paints the header/chips on the first frame of a revisit), the rows
+ * by slug + query signature (so a `?p=5&sort=qty100` URL can never paint
+ * page-1 rows).
+ */
+export interface CategoryChrome extends Category {
   // Parent carries its own children (siblings of `this`) so subcategory pages
   // can render the SubcategoryChips strip without an extra fetch — see
   // 2026-05-16 fix for intra-category navigation on leaf pages.
@@ -47,10 +72,22 @@ export interface CategoryDetail extends Category {
   // The child category's SILVER sponsors (many) — feeds the SilverPartners
   // directory in the tier row. Empty on parent pages and when unsold.
   silver: import('./sponsor').PartnerSupplier[];
+}
+
+export interface CategoryDetail extends CategoryChrome {
+  // ONE scope-aware block: a leaf's own parts, a parent's rollup over
+  // self + children (each item still carries sub_slug + category names).
+  // `total` is the FILTERED total — the header count, and the number the page
+  // used to lie about while it truncated at 500 rows client-side.
   parts: PartsPage;
-  // Paginated rollup of parts across all subcategories of a parent category.
-  // Powers the "Popular Parts" section. On leaf pages, items is empty.
+  // Legacy rollup block, unchanged and no longer read by this page: the page
+  // asks for popular_per_page=1 and takes its parent ordering from `parts`
+  // (sort=popular) instead. Kept because test_category_hierarchy pins it.
   popular_parts: PopularPartsPage;
+  // Optional so a frontend deployed ahead of the API degrades (no counts, no
+  // filter options) instead of white-screening. `?:` misses null, hence the
+  // explicit `| null` — read it with `!= null`.
+  facets?: CategoryFacets | null;
 }
 
 export interface CategoryPartners {

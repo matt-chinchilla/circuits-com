@@ -23,7 +23,7 @@ from app.models import (
     User,
 )
 from app.services.auth_service import (
-    require_console_user,
+    require_staff,
 )
 from app.services.part_feed import (
     PartFeedProvider,
@@ -46,6 +46,7 @@ from app.services.part_feed.importer import (
     request_feed_stop,
     start_feed_run,
 )
+from app.services.part_pricing import refresh_best_prices
 from app.services.search_service import get_active_supplier_tiers, invalidate_catalog_caches
 from app.utils.color import validate_optional_hex_color
 from app.utils.image_url import validate_optional_image_url
@@ -53,11 +54,11 @@ from app.utils.image_url import validate_optional_image_url
 router = APIRouter(prefix="/api/suppliers", tags=["suppliers"])
 
 # ── The customer/staff wall on a MIXED router (D16) ─────────────────────────
-# This module serves BOTH the public site and the console, so the wall cannot
+# This module serves BOTH the public site and staff tooling, so the wall cannot
 # sit on the APIRouter the way it does on every /api/admin/* router — a router
-# dependency here would gate the public reads too. Each console route names
-# `require_console_user` in its signature instead; that dependency runs
-# get_current_user first, so the forced-password gate is unchanged. A console
+# dependency here would gate the public reads too. Each staff route names
+# `require_staff` in its signature instead; that dependency runs
+# get_current_user first, so the forced-password gate is unchanged. A staff
 # route added here must name it too — test_every_route_is_gated.py is what
 # notices if it does not.
 
@@ -189,7 +190,7 @@ def list_suppliers(db: Session = Depends(get_db)):
 def create_supplier(
     body: SupplierCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_console_user),
+    current_user: User = Depends(require_staff),
 ):
     supplier = Supplier(
         id=uuid.uuid4(),
@@ -242,7 +243,7 @@ def update_supplier(
     supplier_id: str,
     body: SupplierUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_console_user),
+    current_user: User = Depends(require_staff),
 ):
     supplier = _supplier_or_404(db, supplier_id)
 
@@ -260,7 +261,7 @@ def update_supplier(
 def delete_supplier(
     supplier_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_console_user),
+    current_user: User = Depends(require_staff),
 ):
     """Cascade-delete a supplier and every dependent row.
 
@@ -272,10 +273,17 @@ def delete_supplier(
     """
     supplier = _supplier_or_404(db, supplier_id)
 
-    listing_ids = [
-        row[0]
-        for row in db.query(PartListing.id).filter(PartListing.supplier_id == supplier.id).all()
-    ]
+    # Both columns in ONE read. The parts this supplier priced are about to
+    # lose an offer, which RAISES their `best_price` (or clears it, when this
+    # was the only distributor carrying them) — and after the delete there is
+    # nothing left to tell us which parts those were.
+    doomed = (
+        db.query(PartListing.id, PartListing.part_id)
+        .filter(PartListing.supplier_id == supplier.id)
+        .all()
+    )
+    listing_ids = [row[0] for row in doomed]
+    repriced_part_ids = {row[1] for row in doomed}
     if listing_ids:
         db.query(PriceBreak).filter(PriceBreak.listing_id.in_(listing_ids)).delete(
             synchronize_session=False
@@ -302,6 +310,17 @@ def delete_supplier(
     db.query(SupplierFeed).filter(SupplierFeed.supplier_id == supplier.id).delete(
         synchronize_session=False
     )
+
+    # AFTER the listings are gone and BEFORE the commit, so the aggregates it
+    # takes see the catalog this delete is leaving behind. Batched inside —
+    # Mouser alone carries 130,728 listings on production, and every one of
+    # those parts needs its denormalized price recomputed or the category
+    # pages sort on a distributor that no longer exists. Synchronous ON
+    # PURPOSE: measured 2026-08-27 at 16.8s for a no-op pass over all 130,857
+    # Mouser-listed parts (writes add low-single-digit multiples) — far
+    # inside nginx's 300s proxy_read_timeout, so the deepest feed-scale
+    # delete finishes in-request and needs no worker path.
+    refresh_best_prices(db, repriced_part_ids)
 
     # Bulk deletes bypass session sync; expire the supplier so the upcoming
     # ORM delete doesn't try to NULL composite-PK columns on stale in-memory
@@ -443,7 +462,7 @@ def sync_supplier(
     supplier_id: str,
     limit: int = 25,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_console_user),
+    current_user: User = Depends(require_staff),
 ):
     """Refresh this supplier's listings from its distributor feed.
 
@@ -477,7 +496,7 @@ def import_supplier_parts(
     supplier_id: str,
     calls: int = 200,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_console_user),
+    current_user: User = Depends(require_staff),
 ):
     """Import NEW inventory for this supplier, thinnest subcategory first.
 
@@ -536,7 +555,7 @@ def import_supplier_parts(
 def observe_supplier_feed_run(
     supplier_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_console_user),
+    current_user: User = Depends(require_staff),
 ):
     """Watch the run this supplier already has going — the RE-ATTACH door.
 
@@ -599,7 +618,7 @@ def _feed_settings(db: Session, supplier: Supplier) -> dict:
 def get_feed_settings(
     supplier_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_console_user),
+    current_user: User = Depends(require_staff),
 ):
     """Whether this supplier has a feed, a key, and the nightly run switched on.
 
@@ -616,7 +635,7 @@ def update_feed_settings(
     supplier_id: str,
     body: FeedSettingsUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_console_user),
+    current_user: User = Depends(require_staff),
 ):
     """Flip the nightly auto-import for this supplier.
 
@@ -687,7 +706,7 @@ def get_supplier_parts(
 def pause_feed_run(
     supplier_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_console_user),
+    current_user: User = Depends(require_staff),
 ):
     """Wind down this supplier's ACTIVE run (the owner's second click).
 

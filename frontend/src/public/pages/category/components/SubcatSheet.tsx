@@ -20,8 +20,14 @@ interface SubcatSheetProps {
   subcategories: Subcategory[];
   /** Active child slug; null on the parent ("All") page. */
   activeSlug: string | null;
-  /** Live client-side counts (parent page); falls back to server parts_count. */
+  /**
+   * Per-subcategory counts from the server's facets (parent page only, and
+   * narrowed by whatever filters are active); falls back to the category's own
+   * `parts_count` when the map has no entry — which is every leaf page, where
+   * the facets describe the leaf rather than the family.
+   */
   counts?: Map<string, number>;
+  /** The family's unfiltered size. NULL on a leaf, which cannot know it. */
   totalParts?: number | null;
 }
 

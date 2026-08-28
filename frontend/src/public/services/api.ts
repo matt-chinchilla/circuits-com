@@ -5,6 +5,7 @@ import type { Sponsor } from '@public/types/sponsor';
 import type { PartDetail, RelatedParts } from '@public/types/part';
 import type { SearchResultsV2, PublicManufacturers } from '@public/types/search';
 
+import { CANONICAL_CATEGORY_QUERY } from '@public/services/categoryQuery';
 import { API_BASE_URL } from '@shared/services/constants';
 export { API_BASE_URL };
 
@@ -21,40 +22,48 @@ export const api = {
   getCategories: () =>
     client.get<Category[]>('/categories/').then(r => r.data),
 
-  getCategory: async (slug: string, popularPage = 1, popularPerPage = 20, partsPage = 1, partsPerPage = 20) => {
+  /**
+   * One page of a category.
+   *
+   * `query` is a ready-made query string from
+   * `@public/services/categoryQuery.categoryRequestQuery` — sorting, filtering,
+   * searching and pagination are all server-side since the catalog passed 200k
+   * parts (the old fixed 500-row fetch silently truncated 27 of 28 top-level
+   * categories). It is passed as a STRING, not axios `params`, because three
+   * other places have to produce the byte-identical URL: index.html's preload,
+   * the Workbox route, and the Service Worker's cache key.
+   */
+  getCategory: async (slug: string, query: string = CANONICAL_CATEGORY_QUERY) => {
     // Reuse the index.html preload fetch (2026-05-30): the inline
     // <script> in frontend/index.html fires the same URL at HTML parse
     // time on direct loads of /category/<slug>. Reading its promise
     // here means the React tree's first paint waits ~3 ms (network)
     // instead of ~400 ms (chunks + mount + axios cold start).
+    //
+    // The guard compares the WHOLE query string, not a couple of page sizes:
+    // the preload can only ever have fetched the canonical default page, so a
+    // deep link carrying ?p / ?sort / filters must decline the reuse rather
+    // than paint someone else's rows.
     const preload = typeof window !== 'undefined'
-      ? (window as unknown as { __categoryPreload?: { slug: string; promise: Promise<CategoryDetail | null> } }).__categoryPreload
+      ? (window as unknown as { __categoryPreload?: { slug: string; query?: string; promise: Promise<CategoryDetail | null> } }).__categoryPreload
       : undefined;
-    if (
-      preload && preload.slug === slug
-      && popularPage === 1 && popularPerPage === 500
-      && partsPage === 1 && partsPerPage === 500
-    ) {
+    if (preload && preload.slug === slug && preload.query === query) {
       delete (window as unknown as { __categoryPreload?: unknown }).__categoryPreload;
       const cached = await preload.promise;
       if (cached) return cached;
     }
-    const r = await client.get<CategoryDetail>(`/categories/${slug}/`, {
-      params: {
-        popular_page: popularPage, popular_per_page: popularPerPage,
-        parts_page: partsPage, parts_per_page: partsPerPage,
-      },
-    });
+    const r = await client.get<CategoryDetail>(`/categories/${slug}/?${query}`);
     return r.data;
   },
 
   // Hover-prefetch the category's API data so the Service Worker caches it
-  // before the click. MUST mirror the category page's call
-  // (`getCategory(slug, 1, 500, 1, 500)`) exactly so the cached URL matches.
+  // before the click. MUST request the canonical default page — the same URL
+  // the page asks for on a param-free navigation, which is what every hover
+  // target (a card, a chip, a search hit) leads to.
   prefetchCategory: (slug: string) => {
     if (_prefetchedCategories.has(slug)) return;
     _prefetchedCategories.add(slug);
-    api.getCategory(slug, 1, 500, 1, 500).catch(() => {});
+    api.getCategory(slug, CANONICAL_CATEGORY_QUERY).catch(() => {});
   },
 
   // Top-level Platinum Category Sponsor (small, cacheable) → { slug, name,

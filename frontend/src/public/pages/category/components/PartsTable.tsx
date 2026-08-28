@@ -4,7 +4,7 @@ import type { PublicPart } from '@public/types/part';
 import { formatPrice } from '@public/services/format';
 import Icon from '@shared/components/Icon';
 import ColumnHeader from './ColumnHeader';
-import type { SortState } from './ColumnHeader';
+import type { FilterOption, SortState } from './ColumnHeader';
 import styles from './PartsTable.module.scss';
 
 interface PartsTableProps {
@@ -13,10 +13,24 @@ interface PartsTableProps {
   setSort: (s: SortState) => void;
   skuSearch: string;
   setSkuSearch: (v: string) => void;
-  mfgValues: string[];
+  /**
+   * Is the server currently narrowing the result set? Emptiness means two
+   * different things — "your filters match nothing" and "this category holds
+   * no parts yet" — and only the page knows which, now that the rows arrive
+   * pre-filtered.
+   */
+  filtersActive: boolean;
+  /**
+   * Present only while `filtersActive`. Without it, a filter that matches
+   * nothing is a DEAD END: the empty state replaces the table, the column
+   * headers go with it, and the popover that could undo the filter is gone.
+   */
+  onClearFilters?: () => void;
+  mfgOptions: FilterOption[];
   mfgSelected: Set<string>;
   setMfgSelected: (v: Set<string>) => void;
-  subValues?: string[];
+  /** Parent pages only: the Category column. `undefined` on a leaf. */
+  subOptions?: FilterOption[];
   subSelected?: Set<string>;
   setSubSelected?: (v: Set<string>) => void;
   subSlugToName?: Record<string, string>;
@@ -35,16 +49,15 @@ const rowVariants = {
 export default function PartsTable({
   parts, sort, setSort,
   skuSearch, setSkuSearch,
-  mfgValues, mfgSelected, setMfgSelected,
-  subValues, subSelected, setSubSelected,
+  filtersActive, onClearFilters,
+  mfgOptions, mfgSelected, setMfgSelected,
+  subOptions, subSelected, setSubSelected,
   subSlugToName, subSlugToIcon,
 }: PartsTableProps) {
   if (parts.length === 0) {
     // "No parts match the filters" is a LIE on a category that simply has no
     // inventory yet (the default state of the 2026-08-16 expansion pages) —
-    // only claim filtering when a filter is actually active.
-    const filtersActive =
-      skuSearch.trim() !== '' || mfgSelected.size > 0 || (subSelected?.size ?? 0) > 0;
+    // only claim filtering when the request actually carried one.
     return (
       <div className={styles.empty}>
         <p>
@@ -52,11 +65,19 @@ export default function PartsTable({
             ? 'No parts match the current filters.'
             : 'No parts listed here yet — inventory for this category is on its way.'}
         </p>
+        {filtersActive && onClearFilters && (
+          <button type="button" className={styles.emptyReset} onClick={onClearFilters}>
+            Clear filters
+          </button>
+        )}
       </div>
     );
   }
 
-  const showSubColumn = subValues && subValues.length > 0;
+  // Driven by the PAGE's parent/leaf knowledge, not by whether the facet list
+  // has arrived — deriving it from option count made the column appear a frame
+  // late and shift the table.
+  const showSubColumn = subOptions != null && subSelected != null && setSubSelected != null;
 
   return (
     <div className={styles.tableWrap}>
@@ -75,15 +96,15 @@ export default function PartsTable({
             <ColumnHeader
               label="Manufacturer" sortKey="mfg"
               sort={sort} setSort={setSort}
-              filterValues={mfgValues}
+              filterOptions={mfgOptions}
               filterSelected={mfgSelected}
               setFilterSelected={setMfgSelected}
             />
-            {showSubColumn && subSelected && setSubSelected && (
+            {showSubColumn && (
               <ColumnHeader
                 label="Category" sortKey="sub" hideClass={styles.hideMobile}
                 sort={sort} setSort={setSort}
-                filterValues={subValues}
+                filterOptions={subOptions}
                 filterSelected={subSelected}
                 setFilterSelected={setSubSelected}
               />
