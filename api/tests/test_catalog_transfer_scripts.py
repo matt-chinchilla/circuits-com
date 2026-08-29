@@ -35,3 +35,26 @@ def test_load_refuses_a_manufacturer_surrogate_from_old_exports():
         "supplier upserts must skip manufacturer_id too — suppliers carry the "
         "same FK plus the uq_suppliers_manufacturer partial-unique index"
     )
+
+
+def test_load_reconciles_breaks_instead_of_replacing_them():
+    """2026-08-28 rework: the loader used to DELETE + re-INSERT every price
+    break on every pass (~850k row-ops and ~1/2 GB WAL for a no-op pull —
+    the importer's pre-reconciler disease). The blanket per-listing delete
+    must not come back; deletes are id-targeted diffs only."""
+    src = (SCRIPTS / "catalog_load.py").read_text()
+    assert ".delete()" not in src, (
+        "a Query.delete() in the loader is the wholesale-replace pattern — "
+        "reconcile rung-by-rung instead"
+    )
+    assert "PriceBreak.id.in_" in src, "break deletes must target diffed ids"
+
+
+def test_load_keys_parts_on_the_real_identity():
+    """Part identity is (manufacturer, case-folded MPN) — test_part_identity's
+    49 cross-manufacturer MPN pairs are REAL distinct products, and the old
+    sku-only key folded each pair into one row and cross-wrote it on every
+    pull. The loader must key through canon(manufacturer_name) + upper(sku)."""
+    src = (SCRIPTS / "catalog_load.py").read_text()
+    assert "from app.services.manufacturer_canon import canon" in src
+    assert "def part_identity" in src and "canon(" in src and ".upper()" in src

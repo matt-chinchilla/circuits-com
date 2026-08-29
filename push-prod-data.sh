@@ -45,14 +45,18 @@ printf '\033[0;33m%s\033[0m\n' \
 read -p "Continue? (y/N) " -n 1 -r; echo
 [[ $REPLY =~ ^[Yy]$ ]] || { echo "Aborted — prod untouched."; exit 0; }
 
-echo "==> copying $SIZE to prod (this can take a minute)"
+# gzip for the wire (~8x, 280MB -> 35MB measured 2026-08-28); unpacked on
+# the prod box before the container copy.
+gzip -f "$TMP/catalog.jsonl"
+GZSIZE="$(du -h "$TMP/catalog.jsonl.gz" | cut -f1)"
+echo "==> copying $GZSIZE (gzipped from $SIZE) to prod"
 push_key
 scp -o ConnectTimeout=10 -o StrictHostKeyChecking=no \
-  "$TMP/catalog.jsonl" "ec2-user@$EIP:/tmp/catalog-push.jsonl"
+  "$TMP/catalog.jsonl.gz" "ec2-user@$EIP:/tmp/catalog-push.jsonl.gz"
 push_key
-"${SSH[@]}" "sudo docker cp /tmp/catalog-push.jsonl circuits-com-api-1:/tmp/catalog-push.jsonl && rm /tmp/catalog-push.jsonl"
+"${SSH[@]}" "gunzip -f /tmp/catalog-push.jsonl.gz && sudo docker cp /tmp/catalog-push.jsonl circuits-com-api-1:/tmp/catalog-push.jsonl && rm /tmp/catalog-push.jsonl"
 
-echo "==> loading on prod (per-500 commits; progress lines below)"
+echo "==> loading on prod (diff reconcile; progress lines below)"
 push_key
 "${SSH[@]}" "cd /opt/circuits-com && sudo docker compose exec -T api python - /tmp/catalog-push.jsonl" \
   < "$REPO_DIR/scripts/catalog_load.py"

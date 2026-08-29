@@ -75,8 +75,11 @@ fi
 if [[ "$MODE" == "--all" || "$MODE" == "--catalog" ]]; then
   echo "==> catalog pull (suppliers/parts/listings/price breaks, natural keys)"
   push_key
-  "${SSH[@]}" "cd /opt/circuits-com && sudo docker compose exec -T api python -" \
-    < "$REPO_DIR/scripts/catalog_export.py" > "$TMP/catalog.jsonl"
+  # gzip on the prod side: the JSONL compresses ~8x (280MB -> 35MB measured
+  # 2026-08-28), and the wire is the slow leg of a pull.
+  "${SSH[@]}" "cd /opt/circuits-com && sudo docker compose exec -T api python - | gzip -c" \
+    < "$REPO_DIR/scripts/catalog_export.py" > "$TMP/catalog.jsonl.gz"
+  gunzip -f "$TMP/catalog.jsonl.gz"
   API_ID="$(docker compose -f "$REPO_DIR/docker-compose.yml" ps -q api)"
   docker cp "$TMP/catalog.jsonl" "$API_ID:/tmp/catalog.jsonl"
   docker compose -f "$REPO_DIR/docker-compose.yml" exec -T api python - /tmp/catalog.jsonl \
