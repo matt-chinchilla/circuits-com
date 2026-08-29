@@ -34,7 +34,7 @@ import httpx
 
 from app.config import settings
 from app.services.manufacturer_canon import canon
-from app.services.part_feed.base import FeedPart, FeedPriceBreak
+from app.services.part_feed.base import FeedPart, FeedPriceBreak, send_with_retries
 
 # FeedScope lives in `importer` because that is the module that CONSUMES scopes
 # and owns the sweep strategies; a provider only ever constructs one. The
@@ -500,14 +500,17 @@ class DigiKeyProvider:
             cls = type(self)
             if cls._token and time.monotonic() < cls._token_expires_at:
                 return cls._token
-            response = self._client.post(
-                f"{self.host}/v1/oauth2/token",
-                data={
-                    "client_id": self.client_id,
-                    "client_secret": self.client_secret,
-                    "grant_type": "client_credentials",
-                },
-                headers={"Content-Type": "application/x-www-form-urlencoded"},
+            response = send_with_retries(
+                lambda: self._client.post(
+                    f"{self.host}/v1/oauth2/token",
+                    data={
+                        "client_id": self.client_id,
+                        "client_secret": self.client_secret,
+                        "grant_type": "client_credentials",
+                    },
+                    headers={"Content-Type": "application/x-www-form-urlencoded"},
+                ),
+                "DigiKey token request",
             )
             if response.status_code != 200:
                 # NEVER echo the body: it can carry the client_id.
@@ -550,9 +553,18 @@ class DigiKeyProvider:
             cls._last_call = time.monotonic()
 
     def _post(self, path: str, payload: dict) -> dict:
-        self._throttle()
-        response = self._client.post(f"{self.host}{path}", headers=self._headers(), json=payload)
-        self.calls_made += 1
+        def _send() -> httpx.Response:
+            # Throttle + count INSIDE the attempt: a retry re-paces the gap
+            # and spends real quota. One transient 500 used to end the whole
+            # night here (2026-08-29, 32s into an overnight sweep).
+            self._throttle()
+            response = self._client.post(
+                f"{self.host}{path}", headers=self._headers(), json=payload
+            )
+            self.calls_made += 1
+            return response
+
+        response = send_with_retries(_send, f"DigiKey {path}")
         self._raise_for_quota(response)
         if response.status_code == 400 and self._is_window_refusal(response):
             # Translated HERE rather than in a caller, because every caller

@@ -64,10 +64,15 @@ def no_env_key(monkeypatch):
 
 @pytest.fixture
 def budget(monkeypatch):
-    """Set the night's call budget for one test."""
+    """Set the night's call budget for one test.
+
+    Clears the per-provider overrides too: these tests exercise the SPLIT
+    MECHANISM, and the shipped mouser headroom default (config.py,
+    2026-08-28) would silently shadow the scalar under test."""
 
     def _set(calls: int):
         monkeypatch.setattr(settings, "FEED_IMPORT_CALL_BUDGET", calls)
+        monkeypatch.setattr(settings, "FEED_IMPORT_CALL_BUDGETS", {})
 
     return _set
 

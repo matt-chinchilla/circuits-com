@@ -1,7 +1,52 @@
 """Provider-agnostic shapes for distributor part feeds."""
 
+import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Protocol
+
+import httpx
+
+# ── transient-failure retries ───────────────────────────────────────────────
+#
+# A distributor's API throws the occasional server-side 5xx or drops a
+# connection — normal weather for any HTTP service. Before 2026-08-29 every
+# provider treated ANY non-200 as run-ending, so an overnight continuous
+# sweep died on the first blip: measured on prod, ONE DigiKey HTTP 500,
+# 32 seconds and 2 calls into the owner's overnight run, ended it. Genuine
+# walls (401/403/429 — quota or credentials) are still immediate: retrying
+# those burns quota on answers that cannot change.
+TRANSIENT_STATUSES = frozenset({500, 502, 503, 504})
+TRANSIENT_RETRY_DELAYS = (2.0, 8.0, 20.0)
+
+
+def send_with_retries(send: Callable[[], httpx.Response], describe: str) -> httpx.Response:
+    """Run ``send`` (which should include the provider's own throttle, so a
+    retry re-paces) until it returns a non-transient response.
+
+    A transient STATUS on the last attempt is returned as-is — the provider's
+    own status handling raises its usual error with the real code. A
+    connection error on the last attempt becomes FeedFatalError with a PLAIN
+    message: httpx exception text embeds the request URL, and Mouser's key
+    rides the query string (the never-chain rule in mouser.py).
+    """
+    from app.services.part_feed.mouser import FeedFatalError  # circular-at-import only
+
+    for delay in (*TRANSIENT_RETRY_DELAYS, None):
+        try:
+            response = send()
+        except httpx.TransportError:
+            if delay is None:
+                raise FeedFatalError(
+                    f"{describe}: connection failed and retries were exhausted"
+                ) from None
+            time.sleep(delay)
+            continue
+        if response.status_code in TRANSIENT_STATUSES and delay is not None:
+            time.sleep(delay)
+            continue
+        return response
+    raise AssertionError("unreachable: the delay=None pass returns or raises")
 
 
 @dataclass

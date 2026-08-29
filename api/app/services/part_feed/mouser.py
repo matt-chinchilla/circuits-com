@@ -19,6 +19,8 @@ import time
 import httpx
 
 from app.config import settings
+from app.services.part_feed.base import FeedPart, FeedPriceBreak, send_with_retries
+from app.services.part_feed.specmap import map_mount, map_rohs
 
 # Mouser's API takes the key ONLY as a `?apiKey=` query parameter, and httpx
 # logs every request URL at INFO — which printed the live production key into
@@ -27,8 +29,6 @@ from app.config import settings
 # the URL, so every process that can make the call (api, feed-import, jobs)
 # inherits the redaction without each entrypoint remembering to.
 logging.getLogger("httpx").setLevel(logging.WARNING)
-from app.services.part_feed.base import FeedPart, FeedPriceBreak
-from app.services.part_feed.specmap import map_mount, map_rohs
 
 _BASE = "https://api.mouser.com/api/v1"
 _CALL_GAP_SECONDS = 2.1  # ~28/min, under the 30/min ceiling
@@ -206,12 +206,16 @@ class MouserProvider:
             time.sleep(wait)
 
     def _post(self, path: str, body: dict) -> dict:
-        self._throttle()
-        # Counted BEFORE the request, not after a 2xx: the quota is spent when
-        # the call leaves, and a run that only counted successes would loop on
-        # a failing key forever.
-        self.calls_made += 1
-        resp = self._client.post(f"{_BASE}{path}", params={"apiKey": self.api_key}, json=body)
+        def _send() -> httpx.Response:
+            # Throttle + count INSIDE the attempt: a retry must re-pace the
+            # account-wide gap, and it spends real quota — counted BEFORE the
+            # request, not after a 2xx, so a run that only counted successes
+            # can't loop on a failing key forever.
+            self._throttle()
+            self.calls_made += 1
+            return self._client.post(f"{_BASE}{path}", params={"apiKey": self.api_key}, json=body)
+
+        resp = send_with_retries(_send, f"Mouser {path}")
         # NEVER raise_for_status / chain httpx errors: their messages embed
         # the full request URL, and the key rides the query string — a bad
         # key would print itself into the operator's terminal (review-caught).
