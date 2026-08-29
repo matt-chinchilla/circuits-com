@@ -205,6 +205,69 @@ export default function LeadDetailPage() {
     }
   };
 
+  // The enrichment form re-renders the page per keystroke; the append-only
+  // timeline (unbounded history, Intl-formatted stamps, disc styles) is the
+  // expensive part — memoized against everything except the history itself.
+  //
+  // MUST sit ABOVE every conditional return: c0305ba placed it after the
+  // loading/error returns, so the loading render ran fewer hooks than the
+  // loaded one — React #310, and every successful load crashed to the
+  // ErrorBoundary. The memo already tolerates lead === null; position is
+  // the only thing keeping it legal.
+  const timeline = useMemo(
+    () =>
+      lead ? (
+        <ol className={styles.timeline}>
+                {lead.contacts.map((c) => {
+                  const meta = OUTCOME_META[c.outcome];
+                  return (
+                    <li key={c.id} className={styles.entry}>
+                      <div className={styles.entryDisc}>
+                        <OutcomeDisc
+                          outcome={c.outcome}
+                          contactName={c.recorded_by}
+                          size={22}
+                        />
+                      </div>
+                      <div className={styles.entryBody}>
+                        <p className={styles.entryHead}>
+                          <span className={styles.entryWord} style={outcomeInkVars(meta)}>
+                            <span aria-hidden="true">{meta.glyph}</span>
+                            {meta.word}
+                          </span>
+                          {c.sale_tier && (
+                            <span className={styles.tierLabel}>{c.sale_tier}</span>
+                          )}
+                        </p>
+                        {c.note && <p className={styles.entryNote}>{c.note}</p>}
+                        <p className={styles.entryMeta}>
+                          {c.recorded_by ? (
+                            <Link
+                              to={consolePath(`/admin/leads/reps/${encodeURIComponent(c.recorded_by)}`)}
+                              className={styles.repLink}
+                            >
+                              {c.recorded_by}
+                            </Link>
+                          ) : (
+                            <span className={styles.muted}>unknown rep</span>
+                          )}
+                          <span className={styles.dot} aria-hidden="true">
+                            &middot;
+                          </span>
+                          {formatStamp(c.created_at)}
+                        </p>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ol>
+      ) : null,
+    // consolePath belongs here even though it is stable per mount: the memo
+    // renders links with it, and a dep list that omits a captured value is
+    // one refactor away from a stale one.
+    [lead?.contacts, consolePath],
+  );
+
   if (sessionExpired) {
     return (
       <div className={styles.page}>
@@ -264,63 +327,6 @@ export default function LeadDetailPage() {
 
   const setField = (key: keyof EnrichForm, value: string) =>
     setForm((prev) => (prev ? { ...prev, [key]: value } : prev));
-
-  // The enrichment form re-renders the page per keystroke; the append-only
-  // timeline (unbounded history, Intl-formatted stamps, disc styles) is the
-  // expensive part — memoized against everything except the history itself.
-  const timeline = useMemo(
-    () =>
-      lead ? (
-        <ol className={styles.timeline}>
-                {lead.contacts.map((c) => {
-                  const meta = OUTCOME_META[c.outcome];
-                  return (
-                    <li key={c.id} className={styles.entry}>
-                      <div className={styles.entryDisc}>
-                        <OutcomeDisc
-                          outcome={c.outcome}
-                          contactName={c.recorded_by}
-                          size={22}
-                        />
-                      </div>
-                      <div className={styles.entryBody}>
-                        <p className={styles.entryHead}>
-                          <span className={styles.entryWord} style={outcomeInkVars(meta)}>
-                            <span aria-hidden="true">{meta.glyph}</span>
-                            {meta.word}
-                          </span>
-                          {c.sale_tier && (
-                            <span className={styles.tierLabel}>{c.sale_tier}</span>
-                          )}
-                        </p>
-                        {c.note && <p className={styles.entryNote}>{c.note}</p>}
-                        <p className={styles.entryMeta}>
-                          {c.recorded_by ? (
-                            <Link
-                              to={consolePath(`/admin/leads/reps/${encodeURIComponent(c.recorded_by)}`)}
-                              className={styles.repLink}
-                            >
-                              {c.recorded_by}
-                            </Link>
-                          ) : (
-                            <span className={styles.muted}>unknown rep</span>
-                          )}
-                          <span className={styles.dot} aria-hidden="true">
-                            &middot;
-                          </span>
-                          {formatStamp(c.created_at)}
-                        </p>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ol>
-      ) : null,
-    // consolePath belongs here even though it is stable per mount: the memo
-    // renders links with it, and a dep list that omits a captured value is
-    // one refactor away from a stale one.
-    [lead?.contacts, consolePath],
-  );
 
   return (
     <div className={styles.page}>
