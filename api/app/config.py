@@ -259,7 +259,17 @@ class Settings(BaseSettings):
     # ~1,000/day, and one shared counter lets whichever provider the nightly
     # sweep reaches first spend the other's allowance — which surfaces as a
     # quota wall that looks like the second provider being down.
-    FEED_IMPORT_CALL_BUDGETS: dict[str, int] = {}
+    #
+    # Mouser defaults LOWER than the scalar on purpose (measured 2026-08-28):
+    # its ~1,000/day quota also feeds the BOM resolver (100/day) and the
+    # owner's daytime Sync/Import clicks, and a nightly 850 left the key
+    # quota-walled by evening EVERY day — an admin clicking Sync met an
+    # instant 403 that read as "the Mouser API is broken/slow". 600 leaves
+    # ~300 calls of interactive headroom after the resolver. DigiKey has no
+    # BOM traffic, so it keeps the scalar. A CODE default, not a compose one:
+    # a JSON value inside `${VAR:-...}` is exactly the empty-string-destroys-
+    # the-default compose trap, so ops overrides go in this file.
+    FEED_IMPORT_CALL_BUDGETS: dict[str, int] = {"mouser": 600}
 
     # BOM live-resolve daily provider-call budget (spec §6). Per-worker,
     # in-process — the documented single-worker posture.

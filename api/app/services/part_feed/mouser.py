@@ -10,6 +10,7 @@ Rate limits (free tier): ~30 calls/min, ~1,000/day — the provider sleeps
 between calls, so batch sizes (--limit) are the real throttle knob.
 """
 
+import logging
 import math
 import re
 import threading
@@ -18,6 +19,14 @@ import time
 import httpx
 
 from app.config import settings
+
+# Mouser's API takes the key ONLY as a `?apiKey=` query parameter, and httpx
+# logs every request URL at INFO — which printed the live production key into
+# the container logs on every call (seen in the feed-import log 2026-08-28).
+# The logger is capped at WARNING here, in the module that puts the secret in
+# the URL, so every process that can make the call (api, feed-import, jobs)
+# inherits the redaction without each entrypoint remembering to.
+logging.getLogger("httpx").setLevel(logging.WARNING)
 from app.services.part_feed.base import FeedPart, FeedPriceBreak
 from app.services.part_feed.specmap import map_mount, map_rohs
 
