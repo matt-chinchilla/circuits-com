@@ -1232,14 +1232,25 @@ class _FamilySweep(SweepStrategy):
     distributor's manufacturer id, which is what makes a six-character prefix a
     precise question instead of a catalog-wide one.
 
-    It CREATES NOTHING. A DigiKey-only part would land with `category_id` NULL,
-    and 0 of 175,728 parts are in that state today — such a part is reachable
-    from no page on the site. Creating them needs a category map and is
-    deliberately Phase 4.
+    IT ALSO CREATES — Phase 4, shipped 2026-08-29, without the taxonomy map
+    the original deferral assumed. A family window is derived from parts we
+    ALREADY hold, and those members know where they live: when the family's
+    categorised parts agree on one category by a two-thirds share, an unheld
+    sibling on the same page is filed there (`SN74LV @ TI` siblings are logic
+    parts; the measured cost of NOT creating was 23,530 brand-new parts read
+    and discarded in one 850-call night). A family whose members disagree — or
+    carry no category at all — still declines: an uncategorised part is a page
+    no visitor can reach, and a coin-flip category is worse than absence.
     """
 
     namespace = CURSOR_NS_FAMILY
     unit_noun = "part families"
+
+    def __init__(self) -> None:
+        # Anchor cache, per run: {(canonical_key, prefix): (cat_id, sub_slug) | None}.
+        # Resolved lazily at absorb time — only families that actually meet an
+        # unheld part pay the query, and a 50-row page pays it once.
+        self._anchors: dict[tuple[str, str], tuple[uuid.UUID, str | None] | None] = {}
 
     # Set by `units()` on every scan: True when the scan saw families but every
     # one of them was already exhausted. `units()` filters those out (they must
@@ -1509,6 +1520,40 @@ class _FamilySweep(SweepStrategy):
             return None
         return _Family(canonical_key, row[0], row[1], prefix, row[2])
 
+    def _anchor(self, db: Session, family: _Family) -> tuple[uuid.UUID, str | None] | None:
+        """Where this family's parts live, when its members agree.
+
+        The dominant `category_id` among OUR categorised parts under
+        (manufacturer, prefix), accepted only at a two-thirds share — a family
+        split down the middle has no opinion worth filing a new part under.
+        Returns the `(category_id, sub_slug)` pair `_new_part` wants: a CHILD
+        category contributes its slug as `sub_slug` (the category page filters
+        on it), a top-level one contributes None — the same convention
+        `create_part` keeps.
+        """
+        key = (family.canonical_key, family.prefix)
+        if key in self._anchors:
+            return self._anchors[key]
+        rows = (
+            db.query(Part.category_id, func.count(Part.id))
+            .filter(
+                Part.manufacturer_id == family.manufacturer_id,
+                func.upper(func.substr(Part.sku, 1, len(family.prefix))) == family.prefix,
+                Part.category_id.isnot(None),
+            )
+            .group_by(Part.category_id)
+            .order_by(func.count(Part.id).desc())
+            .all()
+        )
+        anchor = None
+        total = sum(n for _, n in rows)
+        if rows and rows[0][1] * 3 >= total * 2:
+            cat = db.query(Category).filter(Category.id == rows[0][0]).first()
+            if cat is not None:
+                anchor = (cat.id, cat.slug if cat.parent_id is not None else None)
+        self._anchors[key] = anchor
+        return anchor
+
     def absorb(self, db, supplier, unit, fp, counts) -> dict | None:
         family: _Family = unit.payload
         manufacturer_id = self._resolve_maker(
@@ -1524,17 +1569,39 @@ class _FamilySweep(SweepStrategy):
             counts.off_scope += 1
             return None
         part = find_part(db, manufacturer_id, fp.mpn)
+        is_new = False
         if part is None:
-            # We do not hold this part. Creating it is Phase 4 and gated on a
-            # category map — an uncategorised part is a page nothing links to.
-            counts.absent += 1
-            return None
-        if _supplier_already_lists(db, part.id, supplier.id):
+            # Phase 4: an unheld sibling rides in on a page already paid for.
+            # Create it ONLY when the family's own held parts agree on where it
+            # lives (_anchor); otherwise decline exactly as before — an
+            # uncategorised part is a page nothing links to.
+            anchor = self._anchor(db, family)
+            if anchor is None:
+                counts.absent += 1
+                return None
+            cat_id, sub_slug = anchor
+            try:
+                part, is_new = get_or_create_part(
+                    db,
+                    sku=fp.mpn,
+                    manufacturer_name=fp.manufacturer,
+                    # Defaults, not captures — the same late-binding guard the
+                    # category sweep documents on its own call.
+                    build=lambda mid, fp=fp, cat_id=cat_id, sub_slug=sub_slug: _new_part(
+                        fp, cat_id, sub_slug, manufacturer_id=mid
+                    ),
+                )
+            except ValueError:
+                # No usable manufacturer key — one bad row must not end the
+                # night (the category sweep's own rule).
+                counts.absent += 1
+                return None
+        if not is_new and _supplier_already_lists(db, part.id, supplier.id):
             # Sync Inventory's territory. Refreshing it here would spend a
             # rate-limited call to do the other button's job.
             counts.already_listed += 1
             return None
-        action, image_url = _absorb_feed_part(db, supplier, part, fp, is_new=False, counts=counts)
+        action, image_url = _absorb_feed_part(db, supplier, part, fp, is_new=is_new, counts=counts)
         return sync_event(
             "part_synced",
             str(supplier.id),
@@ -1637,9 +1704,10 @@ class _FamilySweep(SweepStrategy):
 
     def finished_detail(self, counts, provider) -> str:
         return (
+            f"{counts.created} created · "
             f"{counts.listing_added} listings added · "
             f"{counts.already_listed} already listed · "
-            f"{counts.absent} not in our catalog · "
+            f"{counts.absent} declined — no category consensus · "
             f"{counts.off_scope} off scope · {provider.calls_made} calls used"
         )
 

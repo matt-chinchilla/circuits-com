@@ -529,10 +529,13 @@ class TestTheFamilySweepOnlyEverAddsAnOffer:
         assert mfr == "296"
         assert start_at == 0
 
-    def test_a_part_we_do_NOT_hold_is_declined_with_no_write(self, db, seeded_db):
-        """Creating it is Phase 4 and gated on a category map. Until then the
-        honest answer is to leave it alone — a part with no category is a page
-        no visitor can reach from anywhere on the site."""
+    def test_an_unheld_part_in_an_UNCATEGORISED_family_is_declined_with_no_write(
+        self, db, seeded_db
+    ):
+        """Phase 4 creates ONLY under a family whose held members say where it
+        lives. This family's one member has no category, so there is no anchor
+        and the honest answer is still to leave it alone — a part with no
+        category is a page no visitor can reach from anywhere on the site."""
         maker = _maker(db, "Texas Instruments", "texas instruments")
         _held(db, maker, "SN74LV1T08DBVR")
         db.commit()
@@ -548,6 +551,95 @@ class TestTheFamilySweepOnlyEverAddsAnOffer:
         assert _actions(events) == []
         assert db.query(Part).filter(Part.sku == "SN74LV595APW").count() == 0
         assert _counts(events)["created"] == 0
+
+    def test_an_unheld_sibling_is_created_into_the_familys_own_category(self, db, seeded_db):
+        """Phase 4 (2026-08-29): the family window was derived from parts we
+        hold, and when their categories agree the unheld sibling on the same
+        page is filed with them — the measured alternative was 23,530 new
+        parts read and discarded in one 850-call night."""
+        child = db.query(Category).filter(Category.parent_id.isnot(None)).first()
+        maker = _maker(db, "Texas Instruments", "texas instruments")
+        _held(db, maker, "SN74LV1T08DBVR", category=child)
+        _held(db, maker, "SN74LV2T45DCU", category=child)
+        db.commit()
+        provider = ScopedFakeProvider(
+            manufacturer_ids={"texas instruments": 296},
+            results_by_keyword={
+                "SN74LV": [_feed_part("SN74LV595APW", manufacturer="Texas Instruments")]
+            },
+        )
+
+        events = self._sweep(db, seeded_db, provider)
+
+        assert _actions(events) == ["created"]
+        assert _counts(events)["created"] == 1
+        created = db.query(Part).filter(Part.sku == "SN74LV595APW").one()
+        assert created.category_id == child.id
+        assert created.sub_slug == child.slug
+        assert created.manufacturer_id is not None
+        # The offer rides in with the row — a created part is a priced part.
+        assert (
+            db.query(PartListing)
+            .filter_by(part_id=created.id, supplier_id=seeded_db["supplier1"].id)
+            .count()
+            == 1
+        )
+
+    def test_a_family_split_down_the_middle_declines_the_sibling(self, db, seeded_db):
+        """No two-thirds consensus, no anchor: a coin-flip category is worse
+        than absence."""
+        parent = db.query(Category).filter(Category.parent_id.is_(None)).first()
+        cats = [
+            Category(
+                id=uuid.uuid4(),
+                name=f"Split {i}",
+                slug=f"split-{i}",
+                icon="cpu",
+                parent_id=parent.id,
+                sort_order=90 + i,
+            )
+            for i in (1, 2)
+        ]
+        db.add_all(cats)
+        db.flush()
+        maker = _maker(db, "Texas Instruments", "texas instruments")
+        _held(db, maker, "SN74LV1T08DBVR", category=cats[0])
+        _held(db, maker, "SN74LV2T45DCU", category=cats[1])
+        db.commit()
+        provider = ScopedFakeProvider(
+            manufacturer_ids={"texas instruments": 296},
+            results_by_keyword={
+                "SN74LV": [_feed_part("SN74LV595APW", manufacturer="Texas Instruments")]
+            },
+        )
+
+        events = self._sweep(db, seeded_db, provider)
+
+        assert _actions(events) == []
+        assert db.query(Part).filter(Part.sku == "SN74LV595APW").count() == 0
+        assert _counts(events)["created"] == 0
+
+    def test_a_top_level_anchor_files_the_sibling_without_a_sub_slug(self, db, seeded_db):
+        """Old seeds attach parts to TOP-LEVEL categories; a family anchored
+        there must file the sibling the same way `create_part` would —
+        `sub_slug` None, never the parent's slug (the category page filters
+        on `sub_slug` and a parent slug there matches nothing)."""
+        parent = db.query(Category).filter(Category.parent_id.is_(None)).first()
+        maker = _maker(db, "Texas Instruments", "texas instruments")
+        _held(db, maker, "SN74LV1T08DBVR", category=parent)
+        db.commit()
+        provider = ScopedFakeProvider(
+            manufacturer_ids={"texas instruments": 296},
+            results_by_keyword={
+                "SN74LV": [_feed_part("SN74LV595APW", manufacturer="Texas Instruments")]
+            },
+        )
+
+        self._sweep(db, seeded_db, provider)
+
+        created = db.query(Part).filter(Part.sku == "SN74LV595APW").one()
+        assert created.category_id == parent.id
+        assert created.sub_slug is None
 
     def test_a_part_this_supplier_ALREADY_lists_is_left_untouched(self, db, seeded_db):
         maker = _maker(db, "Texas Instruments", "texas instruments")
