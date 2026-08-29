@@ -127,7 +127,13 @@
   border: 1px solid var(--cp-rim);
   border-radius: 8px;
   box-shadow: var(--cp-shadow);
-  overflow: hidden;
+  // The panel sizes to its content; only a viewport shorter than the panel
+  // introduces scrolling, and then the WHOLE panel scrolls — an inner-list
+  // cap cut the last option mid-row behind a default scrollbar, which read
+  // as broken every time the menu opened.
+  max-height: calc(100vh - 16px);
+  overflow: hidden auto;
+  overscroll-behavior: contain;
   // Restore body-text styling inside (the TH is uppercase + small + tracked).
   text-transform: none;
   letter-spacing: 0;
@@ -135,6 +141,10 @@
   font-weight: 400;
   color: var(--cp-fg);
   animation: columnPanelIn 160ms cubic-bezier(0.2, 0.9, 0.3, 1);
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
 }
 
 @keyframes columnPanelIn {
@@ -216,8 +226,6 @@
   list-style: none;
   margin: 0;
   padding: 4px 0;
-  max-height: 240px;
-  overflow-y: auto;
 }
 
 .choiceOption {

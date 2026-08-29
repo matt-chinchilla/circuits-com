@@ -227,6 +227,15 @@ export default function LeadsPage() {
     window.scrollTo({ top: 0, left: 0 });
   };
 
+  // Two loading postures. Skeletons are for the FIRST paint only, when there
+  // is nothing else to show; once rows exist, a refetch (filter, sort, page)
+  // keeps them rendered and dims the body instead — swapping 50 real rows for
+  // 8 skeleton stubs collapsed the table and jumped the scroll on every
+  // filter click. Stale rows under a veil are the same contract the public
+  // category page keeps: revalidate in place, never demolish.
+  const initialLoading = loading && data === null;
+  const refreshing = loading && data !== null;
+
   const rows: AdminLead[] = data?.leads ?? [];
   const total = data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PER_PAGE));
@@ -414,7 +423,7 @@ export default function LeadsPage() {
         )}
 
         <div className={styles.tableWrap}>
-          <table className={styles.table}>
+          <table className={styles.table} aria-busy={loading || undefined}>
             <thead>
               <tr>
                 <th className={styles.discHead}>
@@ -490,8 +499,8 @@ export default function LeadsPage() {
                 />
               </tr>
             </thead>
-            <tbody>
-              {loading &&
+            <tbody className={refreshing ? styles.bodyRefreshing : undefined}>
+              {initialLoading &&
                 SKELETON_INDEXES.map((i) => (
                   <tr key={`skel-${i}`} className={styles.skelRow} aria-hidden="true">
                     <td>
@@ -525,7 +534,7 @@ export default function LeadsPage() {
                   </tr>
                 ))}
 
-              {!loading &&
+              {!initialLoading &&
                 rows.map((lead) => {
                   const meta = lead.last_outcome ? OUTCOME_META[lead.last_outcome] : null;
                   const place = locationLabel(lead);

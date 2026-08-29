@@ -705,3 +705,15 @@
   margin: 0 7px;
   color: var(--a-fg4);
 }
+
+// Refetch veil — a filter/sort/page change re-queries while the previous rows
+// stay rendered; the body dims under it instead of collapsing into skeletons
+// (which dropped 50 rows to 8 stubs and jumped the scroll on every click).
+.table tbody {
+  transition: opacity 160ms ease;
+}
+
+.bodyRefreshing {
+  opacity: 0.45;
+  pointer-events: none;
+}
