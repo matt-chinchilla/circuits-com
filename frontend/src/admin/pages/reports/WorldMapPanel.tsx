@@ -5,9 +5,9 @@
 // choropleth — an inferno slice, cool-dark to hot, which is the palette a
 // reader already associates with a heat map. It replaced the original
 // single-hue green ramp on 2026-08-30 (owner feedback: an all-green heat map
-// does not read as heat). The ramp, its measurements and the reason the
-// bottom stop sits where it does all live in viewershipBins.ts — change it
-// there, never here.
+// does not read as heat). The ramp lives in viewershipBins.ts; the two option
+// objects it colors live in mapOptions.ts. This file is the state machine,
+// the interactions and the DOM around them.
 //
 // Data honesty: country capture is FORWARD-ONLY (ip_hash is one-way, so
 // history can never be geolocated). Until data exists the panel says so
@@ -16,14 +16,9 @@
 //
 // ── Two views, one card (2026-08-30) ───────────────────────────────────────
 // Clicking the United States drills into a state choropleth with a city-dot
-// layer. The two views differ structurally, not just in data:
-//   world — a bare `series-map` over `world110`, naturalEarth1-projected.
-//   us    — a `geo` COMPONENT carrying the states, with the choropleth map
-//           series bound by `geoIndex` and the city scatter bound by
-//           `coordinateSystem: 'geo'`. A scatter cannot address a map series'
-//           private coordinate system, so the dots are what force the geo
-//           component; the world view is left alone.
-// Each view carries its OWN collecting state: state-level capture started
+// layer. The two views differ structurally, not just in data — mapOptions.ts
+// carries that story, since it is the file that builds the difference. Each
+// view also carries its OWN collecting state: state-level capture started
 // later than country capture, so a card full of countries can still have
 // nothing to say about states.
 //
@@ -43,21 +38,15 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { RefObject } from 'react';
-import type { EChartsCoreOption, EChartsType } from 'echarts/core';
+import type { EChartsType } from 'echarts/core';
 import EChart from '@admin/components/charts/EChart';
-// Importing this module is what pulls MapChart + VisualMapComponent + the geo
-// coordinate system + ScatterChart into the bundle — it is scoped to this
-// panel on purpose, so no other admin chart page pays for the map renderer.
+// Importing this module is what pulls MapChart + the geo coordinate system +
+// ScatterChart into the bundle — it is scoped to this panel on purpose, so no
+// other admin chart page pays for the map renderer.
 import { registerMapOnce } from '@admin/components/charts/echartsMap';
 import type { AnalyticsData } from '@admin/types/admin';
 import { countryName, flagEmoji } from '@admin/services/country';
-import {
-  albersUsaProject,
-  naturalEarth1Project,
-  naturalEarth1Unproject,
-  usPlanarProject,
-  usPlanarUnproject,
-} from './mapProjections';
+import { albersUsaProject } from './mapProjections';
 import { binColorFor, buildBins } from './viewershipBins';
 import {
   cityLabel,
@@ -65,95 +54,35 @@ import {
   deviceSplitLabel,
   formatLastSeen,
   networkLines,
-  plural,
   viewsVisitorsLabel,
 } from './cityIntel';
-import { MAX_STATE_ZOOM, featureBounds, viewForBounds } from './usZoom';
+import {
+  MAP_BOX,
+  MAP_NAME,
+  US_MAP_NAME,
+  buildUsOption,
+  buildWorldOption,
+} from './mapOptions';
+import type { CityPoint, UsCityRow, UsStateRow } from './mapOptions';
+import { featureBounds, viewForBounds } from './usZoom';
 import type { BBox } from './usZoom';
 import styles from './ReportsPage.module.scss';
 
-const MAP_NAME = 'world110';
-const US_MAP_NAME = 'usStatesAlbers';
-const LAND_NO_DATA = '#1a2440';
-const BORDER = '#2b3a5e';
-/** Hover reads as HEAT taken to its limit — a pale gold above the ramp's
- *  hottest stop — so the highlight belongs to the same language as the fill
- *  underneath it instead of arriving from a different palette. */
-const HOVER_LAND = '#ffe3a3';
-const HOVER_BORDER = '#fff3d6';
-/** City dots are ringed in the card's own ground rather than tinted: each dot
- *  wears its OWN bin's color (see cityPoints), so the only thing that can
- *  separate a dot from a hot state beneath it is a dark edge. */
-const CITY_DOT_EDGE = '#0f1526';
-const CITY_DOT_EDGE_HOVER = '#fff3d6';
-/** A state that HAS data also gets this edge, so the choropleth reads as
- *  color-coded even where the COOL low bins sit close to the empty navy —
- *  that is the job, and this orchid is picked for it: measured 4.98:1 against
- *  the empty land and 2.87:1 against bin 1, staying in the purple family that
- *  anchors the ramp's cool end. It goes quiet against the hot bins (1.20:1 on
- *  bin 4), which is fine — a state that bright needs no edge to be noticed. */
-const VISITED_BORDER = '#b083bd';
 const CITY_R_MIN = 4;
 // 11, not 14: at the auto-fit the Northeast corridor overlaps into a blob at
 // 14 (measured 2026-08-30); zooming in is what earns the detail back.
 const CITY_R_MAX = 11;
 
-const WORLD_PROJECTION = {
-  project: naturalEarth1Project,
-  unproject: naturalEarth1Unproject,
-};
-// Identity, and NOT omitted — see the Y-convention note in mapProjections.ts.
-const US_PROJECTION = { project: usPlanarProject, unproject: usPlanarUnproject };
-
-// SECURITY: every tooltip `formatter` below returns an HTML string. All
-// interpolated values today come from the committed geojson properties or
-// the API's own place labels — never from anything a visitor controls (UA,
-// referrer and path never reach a geo field). Keep it that way: free-form
-// strings like network names belong on the intel card, which renders React
-// TEXT nodes, not here.
-const TOOLTIP_CHROME = {
-  backgroundColor: '#141d36',
-  borderColor: '#2b3a63',
-  textStyle: { color: '#e8eef9', fontSize: 12 },
-};
-
-/** Layout shared by both views so the two maps sit in the same box. The
- *  legend lives in the DOM below the canvas (owner call, 2026-08-30 — the
- *  in-canvas visualMap printed on top of the states once a zoom filled the
- *  frame), so the box no longer reserves a bottom row for it. */
-const MAP_BOX = { top: 8, bottom: 10, left: 8, right: 8 };
-
-const LAND_STYLE = {
-  itemStyle: { areaColor: LAND_NO_DATA, borderColor: BORDER, borderWidth: 0.6 },
-  emphasis: {
-    label: { show: false },
-    itemStyle: { areaColor: HOVER_LAND, borderColor: HOVER_BORDER },
-  },
-  select: { disabled: true },
-};
+/** How many rows the rank rail shows beside the map, either view. */
+const RANK_ROWS = 8;
 
 type MapView = 'world' | 'us';
-
-type UsState = NonNullable<AnalyticsData['us_states']>[number];
-type UsCity = NonNullable<AnalyticsData['us_cities']>[number];
-
-/** A city already projected into the states asset's planar frame. The whole
- *  source row rides along as `row` so the click handler reads it straight off
- *  `params.data` — matching a clicked dot back by name would break the moment
- *  two states share a town name. */
-interface CityPoint {
-  name: string;
-  value: [number, number, number];
-  symbolSize: number;
-  itemStyle: { color: string };
-  row: UsCity;
-}
 
 /** The open intel card. `at` is a position in pixels inside `.wmMap`; null is
  *  the pinned corner slot the keyboard path uses, which needs no click to
  *  anchor to. */
 interface CityIntel {
-  row: UsCity;
+  row: UsCityRow;
   at: { left: number; top: number } | null;
 }
 
@@ -164,8 +93,70 @@ interface WorldGeoJson {
   features: Array<{ properties?: { iso?: string } }>;
 }
 
+type UsGeoJson = Parameters<typeof featureBounds>[0];
+
+/**
+ * Both geojson assets load the same way: a cancel-flagged dynamic import
+ * whose default export is handed to `onReady`, and whose failure downgrades
+ * the panel to its rank rail rather than an eternal "Loading map…". Returns
+ * the effect cleanup.
+ *
+ * `load` is a thunk rather than a specifier so each call site keeps a STATIC
+ * `import()` literal — that is what lets Vite split the asset into its own
+ * chunk at all.
+ */
+function loadMapAsset<T>(
+  load: () => Promise<unknown>,
+  onReady: (asset: T) => void,
+  onError: () => void,
+): () => void {
+  let cancelled = false;
+  load()
+    .then((mod) => {
+      if (cancelled) return;
+      onReady(((mod as { default?: T }).default ?? mod) as T);
+    })
+    .catch(() => {
+      if (!cancelled) onError();
+    });
+  return () => {
+    cancelled = true;
+  };
+}
+
 function segmentLabel(segment: AnalyticsData['segment']): string {
   return segment === 'humans' ? 'Human traffic' : segment === 'bots' ? 'Crawler traffic' : 'All traffic';
+}
+
+/** Floor 2: prod's day-one state is exactly one country with one view, and a
+ *  100%-wide rank bar for a single view overstates it. The bins themselves
+ *  need no floor — buildBins(1) is a valid one-piece legend. */
+function rankMax(rows: Array<{ views: number }>): number {
+  return Math.max(2, ...rows.map((r) => r.views));
+}
+
+/** The collecting-state copy. Both views explain the same thing — capture is
+ *  forward-only because stored IPs are one-way hashes — and differ only in
+ *  what was not captured, so the sentence is built once. */
+function collectingCopy(
+  isUs: boolean,
+  segment: AnalyticsData['segment'],
+  since: string | null | undefined,
+): { heading: string; body: string } {
+  const sinceNote = since ? ` (since ${since.slice(0, 10)})` : '';
+  const [subject, noun] = isUs
+    ? ['States and towns are', 'state']
+    : ['Locations are', 'location'];
+  return {
+    heading: isUs
+      ? `No state-resolved ${segmentLabel(segment).toLowerCase()} yet`
+      : 'No located visits yet',
+    // The dash is written as an escape, the way cityIntel.ts writes its
+    // interpunct: a raw glyph in a TS string gets mangled by edit tooling
+    // (CLAUDE.md), and this one used to be a `&mdash;` entity that only
+    // worked because it sat in JSX text rather than in a string.
+    body: `${subject} resolved when a page view lands${sinceNote}. Earlier history has no ${noun} \u2014 stored IPs are one-way hashes.`,
+  };
 }
 
 interface WorldMapPanelProps {
@@ -218,50 +209,38 @@ export default function WorldMapPanel({
   // the page.
   const intelTriggerRef = useRef<HTMLElement | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    import('@admin/components/charts/world-110m.geo.json')
-      .then((mod) => {
-        if (cancelled) return;
-        const world = ((mod as { default?: WorldGeoJson }).default ?? mod) as WorldGeoJson;
-        // Antarctica reaches -90°, and on a 300px-tall card that single
-        // feature costs a third of the vertical budget to draw a landmass
-        // that will never send a page view.
-        registerMapOnce(MAP_NAME, {
-          ...world,
-          features: world.features.filter((f) => f.properties?.iso !== 'AQ'),
-        });
-        setMapReady(true);
-      })
-      .catch(() => {
-        if (!cancelled) setMapError(true); // the rank list still renders
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  useEffect(
+    () =>
+      loadMapAsset<WorldGeoJson>(
+        () => import('@admin/components/charts/world-110m.geo.json'),
+        (world) => {
+          // Antarctica reaches -90°, and on a 300px-tall card that single
+          // feature costs a third of the vertical budget to draw a landmass
+          // that will never send a page view.
+          registerMapOnce(MAP_NAME, {
+            ...world,
+            features: world.features.filter((f) => f.properties?.iso !== 'AQ'),
+          });
+          setMapReady(true);
+        },
+        () => setMapError(true), // the rank list still renders
+      ),
+    [],
+  );
 
   // The states asset is ~131 kB and most sessions never drill in, so it is
   // fetched on the first click rather than alongside the world.
   useEffect(() => {
     if (view !== 'us' || usMapReady) return;
-    let cancelled = false;
-    import('@admin/components/charts/us-states-albers.geo.json')
-      .then((mod) => {
-        if (cancelled) return;
-        const states = ((mod as { default: object }).default ?? mod) as Parameters<
-          typeof featureBounds
-        >[0];
+    return loadMapAsset<UsGeoJson>(
+      () => import('@admin/components/charts/us-states-albers.geo.json'),
+      (states) => {
         usBoundsRef.current = featureBounds(states);
         registerMapOnce(US_MAP_NAME, states);
         setUsMapReady(true);
-      })
-      .catch(() => {
-        if (!cancelled) setMapError(true); // the rank list still renders
-      });
-    return () => {
-      cancelled = true;
-    };
+      },
+      () => setMapError(true), // the rank list still renders
+    );
   }, [view, usMapReady]);
 
   const closeIntel = useCallback((restoreFocus: boolean) => {
@@ -303,16 +282,11 @@ export default function WorldMapPanel({
     closeRef.current?.focus({ preventScroll: true });
   }, [intel]);
 
-  // Floor 2: prod's day-one state is exactly one country with one view, and a
-  // 100%-wide rank bar for a single view overstates it. The bins themselves
-  // need no floor — buildBins(1) is a valid one-piece legend.
-  const maxViews = Math.max(2, ...countries.map((c) => c.views));
-  const collecting = countries.length === 0;
+  const stateRows: UsStateRow[] = useMemo(() => usStates ?? [], [usStates]);
+  const cityRows: UsCityRow[] = useMemo(() => usCities ?? [], [usCities]);
 
-  const stateRows: UsState[] = useMemo(() => usStates ?? [], [usStates]);
-  const cityRows: UsCity[] = useMemo(() => usCities ?? [], [usCities]);
-  const usMaxViews = Math.max(2, ...stateRows.map((s) => s.views));
-  const usCollecting = stateRows.length === 0;
+  const maxViews = rankMax(countries);
+  const usMaxViews = rankMax(stateRows);
 
   const worldBins = useMemo(() => buildBins(maxViews), [maxViews]);
   const usBins = useMemo(() => buildBins(usMaxViews), [usMaxViews]);
@@ -348,12 +322,14 @@ export default function WorldMapPanel({
         const p = params as {
           name?: string;
           seriesType?: string;
-          data?: { row?: UsCity };
+          data?: { row?: UsCityRow };
           event?: { offsetX?: number; offsetY?: number };
         } | null;
         if (!p?.name) return;
         if (view === 'world') {
-          if (p.name === 'US') setView('us');
+          // Through enterUs, same as the keyboard pill — the raw setView here
+          // used to leak a world roam's Reset pill into the fresh US auto-fit.
+          if (p.name === 'US') enterUs();
           return;
         }
         if (p.seriesType === 'scatter') {
@@ -399,49 +375,11 @@ export default function WorldMapPanel({
         setZoomed(zoom > 1.0001 || p?.dx != null || p?.dy != null);
       },
     }),
-    [view],
+    [view, enterUs],
   );
 
-  const worldOption: EChartsCoreOption = useMemo(
-    () => ({
-      backgroundColor: 'transparent',
-      tooltip: {
-        trigger: 'item',
-        ...TOOLTIP_CHROME,
-        formatter: (p: { name?: string; value?: number }) => {
-          const code = p.name ?? '';
-          if (!code) return '';
-          const v = typeof p.value === 'number' && !Number.isNaN(p.value) ? p.value : 0;
-          const row = countries.find((c) => c.code === code);
-          const visitors = row ? ` · ${plural(row.visitors, 'visitor')}` : '';
-          return `${flagEmoji(code)} ${countryName(code)}<br/>${plural(v, 'view')}${visitors}`;
-        },
-      },
-      series: [
-        {
-          type: 'map',
-          map: MAP_NAME,
-          nameProperty: 'iso',
-          projection: WORLD_PROJECTION,
-          // Wheel-over-map means "zoom the map", not "scroll the page" —
-          // owner call, 2026-08-30, after the world view ignored the wheel
-          // while the US view obeyed it.
-          roam: true,
-          scaleLimit: { min: 1, max: MAX_STATE_ZOOM },
-          ...MAP_BOX,
-          ...LAND_STYLE,
-          // Colored per item off the shared bins (the DOM legend below the
-          // canvas is the one scale for everything) — there is no visualMap
-          // anywhere in this panel anymore, so an empty map needs no special
-          // casing to stay honestly navy.
-          data: countries.map((c) => ({
-            name: c.code,
-            value: c.views,
-            itemStyle: { areaColor: binColorFor(c.views, worldBins) },
-          })),
-        },
-      ],
-    }),
+  const worldOption = useMemo(
+    () => buildWorldOption({ countries, bins: worldBins }),
     [countries, worldBins],
   );
 
@@ -468,81 +406,8 @@ export default function WorldMapPanel({
     return points;
   }, [cityRows, usBins]);
 
-  const usOption: EChartsCoreOption = useMemo(
-    () => ({
-      backgroundColor: 'transparent',
-      tooltip: {
-        trigger: 'item',
-        ...TOOLTIP_CHROME,
-        formatter: (p: {
-          seriesType?: string;
-          name?: string;
-          value?: number | number[];
-          data?: { name?: string; value?: number[] };
-        }) => {
-          const name = p.name ?? '';
-          if (!name) return '';
-          if (p.seriesType === 'scatter') {
-            const views = p.data?.value?.[2] ?? 0;
-            return `${name}<br/>${plural(views, 'view')}`;
-          }
-          const row = stateRows.find((s) => s.name === name);
-          if (!row) return `${name}<br/>No visits recorded`;
-          return `${name}<br/>${plural(row.views, 'view')} · ${plural(row.visitors, 'visitor')}`;
-        },
-      },
-      geo: {
-        map: US_MAP_NAME,
-        nameProperty: 'name',
-        projection: US_PROJECTION,
-        roam: true,
-        scaleLimit: { min: 1, max: MAX_STATE_ZOOM },
-        ...MAP_BOX,
-        ...LAND_STYLE,
-      },
-      series: [
-        {
-          type: 'map',
-          geoIndex: 0,
-          // The geo component's no-label emphasis does NOT reach the series —
-          // without this, hovering a state stamps its name on the map while
-          // hovering a country never does.
-          emphasis: { label: { show: false } },
-          // Fill from the shared bins (same mechanism as the dots — no
-          // visualMap); the orchid edge marks "has data" at a glance where
-          // the two coolest bins sit close to the empty navy under dots.
-          data: stateRows.map((s) => ({
-            name: s.name,
-            value: s.views,
-            itemStyle: {
-              areaColor: binColorFor(s.views, usBins),
-              borderColor: VISITED_BORDER,
-              borderWidth: 0.9,
-            },
-          })),
-        },
-        {
-          type: 'scatter',
-          coordinateSystem: 'geo',
-          geoIndex: 0,
-          symbol: 'circle',
-          // Near-opaque: the fill has to match its legend swatch to be worth
-          // reading off the legend at all. Overlapping dots are separated by
-          // the ring, not by translucency.
-          itemStyle: {
-            opacity: 0.9,
-            borderColor: CITY_DOT_EDGE,
-            borderWidth: 1,
-          },
-          emphasis: {
-            scale: 1.2,
-            itemStyle: { opacity: 1, borderColor: CITY_DOT_EDGE_HOVER, borderWidth: 1.4 },
-          },
-          label: { show: false },
-          data: cityPoints,
-        },
-      ],
-    }),
+  const usOption = useMemo(
+    () => buildUsOption({ stateRows, cityPoints, bins: usBins }),
     [stateRows, cityPoints, usBins],
   );
 
@@ -577,9 +442,8 @@ export default function WorldMapPanel({
   const isUs = view === 'us';
   const canDrill = stateRows.length > 0 || countries.some((c) => c.code === 'US');
   const chartReady = isUs ? usMapReady : mapReady;
-  const showingCollecting = isUs ? usCollecting : collecting;
-  const top = countries.slice(0, 8);
-  const topStates = stateRows.slice(0, 8);
+  const showingCollecting = isUs ? stateRows.length === 0 : countries.length === 0;
+  const collect = collectingCopy(isUs, segment, isUs ? regionTrackedSince : geoTrackedSince);
 
   return (
     <div className={`${styles.chartCard} ${styles.chartFull} ${styles.wmCard}`}>
@@ -609,9 +473,7 @@ export default function WorldMapPanel({
         </div>
         <span className={`${styles.chartSub} ${styles.wmSub}`}>
           {showingCollecting
-            ? isUs
-              ? 'Collecting — state is recorded from today forward'
-              : 'Collecting — country is recorded from today forward'
+            ? `Collecting — ${isUs ? 'state' : 'country'} is recorded from today forward`
             : isUs
               ? `${segmentLabel(segment)} by state — click a state to zoom, a town for detail`
               : `${segmentLabel(segment)} by location — scroll to zoom`}
@@ -658,67 +520,32 @@ export default function WorldMapPanel({
               onClose={() => closeIntel(true)}
             />
           )}
-          {showingCollecting &&
-            (isUs ? (
-              <div className={styles.wmCollect}>
-                <strong>No state-resolved {segmentLabel(segment).toLowerCase()} yet</strong>
-                <p>
-                  States and towns are resolved when a page view lands
-                  {regionTrackedSince ? ` (since ${regionTrackedSince.slice(0, 10)})` : ''}. Earlier
-                  history has no state &mdash; stored IPs are one-way hashes.
-                </p>
-              </div>
-            ) : (
-              <div className={styles.wmCollect}>
-                <strong>No located visits yet</strong>
-                <p>
-                  Locations are resolved when a page view lands
-                  {geoTrackedSince ? ` (since ${geoTrackedSince.slice(0, 10)})` : ''}. Earlier
-                  history has no location &mdash; stored IPs are one-way hashes.
-                </p>
-              </div>
-            ))}
+          {showingCollecting && (
+            <div className={styles.wmCollect}>
+              <strong>{collect.heading}</strong>
+              <p>{collect.body}</p>
+            </div>
+          )}
         </div>
 
-        {!showingCollecting && !isUs && (
+        {!showingCollecting && (
           <div className={styles.wmRank}>
-            {top.map((c) => (
-              <div key={c.code} className={styles.wmRow}>
-                <span className={styles.wmFlag} aria-hidden="true">
-                  {flagEmoji(c.code)}
-                </span>
-                <span className={styles.wmName} title={countryName(c.code)}>
-                  {countryName(c.code)}
-                </span>
-                <span className={styles.wmTrack}>
-                  <span
-                    className={styles.wmFill}
-                    style={{ width: `${Math.max(4, (c.views / maxViews) * 100)}%` }}
+            {isUs
+              ? stateRows
+                  .slice(0, RANK_ROWS)
+                  .map((s) => (
+                    <RankRow key={s.name} name={s.name} views={s.views} max={usMaxViews} />
+                  ))
+              : countries.slice(0, RANK_ROWS).map((c) => (
+                  <RankRow
+                    key={c.code}
+                    flag={flagEmoji(c.code)}
+                    name={countryName(c.code)}
+                    views={c.views}
+                    max={maxViews}
                   />
-                </span>
-                <span className={styles.wmVal}>{c.views.toLocaleString()}</span>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {!showingCollecting && isUs && (
-          <div className={styles.wmRank}>
-            {topStates.map((s) => (
-              <div key={s.name} className={`${styles.wmRow} ${styles.wmRowPlain}`}>
-                <span className={styles.wmName} title={s.name}>
-                  {s.name}
-                </span>
-                <span className={styles.wmTrack}>
-                  <span
-                    className={styles.wmFill}
-                    style={{ width: `${Math.max(4, (s.views / usMaxViews) * 100)}%` }}
-                  />
-                </span>
-                <span className={styles.wmVal}>{s.views.toLocaleString()}</span>
-              </div>
-            ))}
-            {cityRows.length > 0 && (
+                ))}
+            {isUs && cityRows.length > 0 && (
               <div className={styles.wmTowns}>
                 <span className={styles.wmTownsTitle}>Towns · {cityRows.length}</span>
                 {/* Buttons, not rows: the dots they mirror are canvas pixels,
@@ -726,21 +553,21 @@ export default function WorldMapPanel({
                     which is why it lists EVERY town, scrolling, not a top 6
                     that would leave the rest pointer-only. */}
                 <div className={styles.wmTownsList}>
-                {cityRows.map((c, i) => (
-                  <button
-                    key={`${c.city}|${c.region ?? ''}|${i}`}
-                    type="button"
-                    className={styles.wmTown}
-                    aria-haspopup="dialog"
-                    onClick={(e) => {
-                      intelTriggerRef.current = e.currentTarget;
-                      setIntel({ row: c, at: null });
-                    }}
-                  >
-                    <span className={styles.wmTownName}>{cityLabel(c)}</span>
-                    <span className={styles.wmVal}>{c.views.toLocaleString()}</span>
-                  </button>
-                ))}
+                  {cityRows.map((c, i) => (
+                    <button
+                      key={`${c.city}|${c.region ?? ''}|${i}`}
+                      type="button"
+                      className={styles.wmTown}
+                      aria-haspopup="dialog"
+                      onClick={(e) => {
+                        intelTriggerRef.current = e.currentTarget;
+                        setIntel({ row: c, at: null });
+                      }}
+                    >
+                      <span className={styles.wmTownName}>{cityLabel(c)}</span>
+                      <span className={styles.wmVal}>{c.views.toLocaleString()}</span>
+                    </button>
+                  ))}
                 </div>
               </div>
             )}
@@ -753,6 +580,37 @@ export default function WorldMapPanel({
           IP Geolocation by DB-IP
         </a>
       </div>
+    </div>
+  );
+}
+
+/** One rank-rail row. The flag column is what separates the two views: the
+ *  world rail carries one, the state rail takes the column back. */
+function RankRow({
+  flag,
+  name,
+  views,
+  max,
+}: {
+  flag?: string;
+  name: string;
+  views: number;
+  max: number;
+}) {
+  return (
+    <div className={flag === undefined ? `${styles.wmRow} ${styles.wmRowPlain}` : styles.wmRow}>
+      {flag !== undefined && (
+        <span className={styles.wmFlag} aria-hidden="true">
+          {flag}
+        </span>
+      )}
+      <span className={styles.wmName} title={name}>
+        {name}
+      </span>
+      <span className={styles.wmTrack}>
+        <span className={styles.wmFill} style={{ width: `${Math.max(4, (views / max) * 100)}%` }} />
+      </span>
+      <span className={styles.wmVal}>{views.toLocaleString()}</span>
     </div>
   );
 }
