@@ -90,6 +90,11 @@ PUBLIC_ROUTES = {
     ("POST", "/api/track"),
     ("POST", "/api/outbound"),
     ("GET", "/api/sitemap.xml"),
+    # Read-only, hard-capped ranked slug slice the build-time SEO prerender
+    # reads. Public for the same reason the sitemap is: it advertises URLs
+    # that are themselves public, and gating it would put a bearer token in
+    # the manifest-regen CLI.
+    ("GET", "/api/seo/prerender-parts"),
     # Money. The webhook authenticates by HMAC over the raw body, and the
     # self-serve Silver checkout is a PUBLIC purchase path by design.
     ("POST", "/api/stripe/webhook"),

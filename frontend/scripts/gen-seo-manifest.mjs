@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// Regenerates frontend/seo-manifest.json — the category snapshot the build-time
-// SEO prerender (scripts/seoPrerender.ts) turns into 90 indexable category
-// documents.
+// Regenerates frontend/seo-manifest.json — the route snapshot the build-time
+// SEO prerender (scripts/seoPrerender.ts) turns into indexable HTML documents:
+// every category and subcategory, plus a CAPPED, ranked slice of parts.
 //
 // It is a COMMITTED snapshot, not a build-time fetch, because the frontend
 // Docker build stage has neither network access nor a database: `docker compose
@@ -58,45 +58,51 @@ const categories = await getJson(`${API_BASE}/categories/`);
 const topLevel = categories.filter((c) => Array.isArray(c.children));
 
 /**
- * Every part, paged out of the list endpoint.
+ * The CAPPED, ranked part slice — one request to /api/seo/prerender-parts.
  *
  * Parts are ~97% of the sitemap, so leaving them out of the manifest left the
- * overwhelming majority of the site on the generic shell. Only the fields
- * `partSeo` reads are kept — the full payload carries listings and price
- * breaks, which would bloat a committed file by two orders of magnitude for
- * data no head tag uses.
+ * overwhelming majority of the site on the generic shell. But the prerender
+ * writes one FILE per route, and the catalog passed 270k parts: every part
+ * would mean a multi-GB dist/ that no deploy can carry. The server therefore
+ * hands back a hard-capped, ranked slice (photo AND price first, then stock
+ * descending, then newest) and the rest of the catalog falls back to the SPA
+ * shell + client-side helmet — already the behaviour of every part added since
+ * the last regen. The dynamic /api/sitemap.xml stays FULL; the cap bounds what
+ * ships as static HTML, never what is advertised to crawlers.
  *
- * `description` is truncated here rather than at render: it only ever reaches
- * a meta description, which search engines cut around 160 chars anyway, and
- * the untruncated copy across 3,600 parts is most of the file size.
+ * The ranking lives server-side because it needs a SUM over part_listings that
+ * no public list endpoint exposes, and paging 270k rows through /api/parts/
+ * would be ~2,700 requests of data the head tags never read.
+ *
+ * Only the fields `partSeo` reads are kept. `description` is truncated here
+ * rather than at render: it only ever reaches a meta description, which search
+ * engines cut around 160 chars anyway, and the untruncated copy is most of the
+ * file size.
  */
 async function fetchParts() {
-  // /api/parts/ caps per_page at 100 (le=100 in the route); the 500 ceiling
-  // belongs to the CATEGORY endpoint, not this one.
-  const perPage = 100;
-  const parts = [];
-  for (let page = 1; ; page += 1) {
-    const payload = await getJson(`${API_BASE}/parts/?page=${page}&per_page=${perPage}`);
-    const batch = payload.parts ?? payload.items ?? [];
-    for (const p of batch) {
-      if (!p.slug) continue; // no slug, no stable URL to prerender
-      parts.push({
-        slug: p.slug,
-        sku: p.sku,
-        manufacturerName: p.manufacturer_name ?? null,
-        description: (p.description ?? '').slice(0, 200) || null,
-        categoryName: p.category_name ?? null,
-        categorySlug: p.category_slug ?? null,
-        parentCategorySlug: p.parent_category_slug ?? null,
-        bestPrice: p.best_price ?? null,
-      });
-    }
-    if (batch.length < perPage) break;
-  }
+  const payload = await getJson(`${API_BASE}/seo/prerender-parts`);
+  const parts = (payload.parts ?? []).map((p) => ({
+    slug: p.slug,
+    sku: p.sku,
+    manufacturerName: p.manufacturer_name ?? null,
+    description: (p.description ?? '').slice(0, 200) || null,
+    categoryName: p.category_name ?? null,
+    categorySlug: p.category_slug ?? null,
+    parentCategorySlug: p.parent_category_slug ?? null,
+    bestPrice: p.best_price ?? null,
+  }));
   // Duplicate slugs are expected (same SKU, two manufacturers). One file per
-  // URL: the first wins, matching what /parts/by-slug returns.
+  // URL: the first wins, matching what /parts/by-slug returns. Deduping AFTER
+  // the cap means a duplicate costs a slot rather than promoting a lower-ranked
+  // part — the shortfall is a handful of rows out of 15,000.
   const seen = new Set();
   return parts.filter((p) => !seen.has(p.slug) && seen.add(p.slug));
+}
+
+/** Total parts in the catalog, so the summary can say whether the cap bites. */
+async function catalogPartTotal() {
+  const payload = await getJson(`${API_BASE}/parts/?page=1&per_page=1`);
+  return payload.total ?? null;
 }
 
 const manifest = {
@@ -118,8 +124,16 @@ const manifest = {
 writeFileSync(OUT, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
 
 const childCount = manifest.categories.reduce((n, c) => n + c.children.length, 0);
+const partTotal = await catalogPartTotal();
+// Say plainly whether the cap is binding. A silently-capped manifest looks
+// identical to a small catalog, and the difference is ~250k pages.
+const partNote =
+  partTotal != null && partTotal > manifest.parts.length
+    ? ` (CAPPED — ${partTotal.toLocaleString('en-US')} in catalog; the rest serve the SPA shell)`
+    : '';
 console.log(
-  `wrote ${path.relative(process.cwd(), OUT)}: ` +
-    `${manifest.categories.length} categories + ${childCount} subcategories + ` +
-    `${manifest.parts.length} parts (source ${API_BASE})`,
+  `wrote ${path.relative(process.cwd(), OUT)} (source ${API_BASE})\n` +
+    `  categories:    ${manifest.categories.length}\n` +
+    `  subcategories: ${childCount}\n` +
+    `  parts:         ${manifest.parts.length}${partNote}`,
 );

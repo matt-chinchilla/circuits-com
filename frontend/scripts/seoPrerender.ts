@@ -9,17 +9,26 @@
 // with the try_files rule already in frontend/nginx.conf — no runtime cost, no
 // extra request-path service, and not one byte added to the JS bundle.
 //
-// Scope is every templated route: home, the static pages, 15 categories, 75
-// subcategories, and all ~3,600 part pages — 3,709 documents.
+// Scope is every templated route: home, the static pages, EVERY category and
+// subcategory, and a CAPPED slice of part pages.
 //
 // Parts were excluded in the first pass on the assumption that prerendering
 // them would be expensive. It is not: renderRoute is regex replacement over the
 // built shell, not React SSR, so each document costs a few string operations
-// and one file write. Including them takes the build from ~12s to ~20s and
-// dist/ from 6 MB to 48 MB. That disk is worth it — parts are ~97% of the
+// and one file write. That is why parts are here at all — they are ~97% of the
 // sitemap, so excluding them left the overwhelming majority of the site on the
 // generic shell, and part-number searches are the long tail a components
 // directory actually wins.
+//
+// Cheap per document is not free in aggregate, though. Each part page is a
+// ~13 KB file, so the catalog's 270k+ parts would be a multi-GB dist/ — past
+// what the frontend image, the deploy and the t3.small disk can carry. The
+// manifest therefore ships a RANKED slice (see gen-seo-manifest.mjs): parts
+// with a photo AND a price first, then stock descending, then newest. Parts
+// outside it serve the SPA shell and get their head tags from helmet after
+// hydration, which is already what every part added since the last regen does.
+// The dynamic /api/sitemap.xml stays FULL — the cap bounds static HTML, never
+// what is advertised to crawlers.
 //
 // The route data comes from seo-manifest.json, a snapshot committed alongside
 // the code because the frontend build stage has no network and no database.
@@ -259,17 +268,12 @@ function buildRoutes(manifest: SeoManifest | null): PrerenderRoute[] {
     }
   }
 
-  // Parts are ~97% of the sitemap. Leaving them client-rendered meant the
-  // overwhelming majority of the site served one byte-identical shell with no
-  // title, canonical or Product markup — which is where the long-tail
-  // part-number traffic a components directory actually wins would come from.
-  //
-  // Affordable because renderRoute is string templating, not React SSR: each
-  // document is a handful of regex replacements over the shell, so the cost is
-  // file writes rather than rendering. Only parts WITH a slug are here (the
-  // manifest drops the rest), since /part/<uuid> canonicalizes to the slug
-  // form anyway — prerendering both shapes would emit two documents that
-  // disagree about which is canonical.
+  // Already capped and ranked by the manifest generator — this loop writes
+  // whatever it is given and does no selection of its own, so the policy has
+  // exactly one home. Only parts WITH a slug are here (the manifest drops the
+  // rest), since /part/<uuid> canonicalizes to the slug form anyway —
+  // prerendering both shapes would emit two documents that disagree about
+  // which is canonical.
   for (const part of manifest?.parts ?? []) {
     routes.push({
       urlPath: `/part/${part.slug}`,
@@ -322,7 +326,16 @@ export function seoPrerender(options: { manifestPath: string; outDir: string }):
           mkdirSync(path.dirname(dest), { recursive: true });
           writeFileSync(dest, renderRoute(shell, route), 'utf8');
         }
-        this.info(`[seo-prerender] wrote ${routes.length} indexable HTML documents`);
+        // Broken down by type because the part count is the one that can
+        // silently collapse: a manifest regenerated against an API without
+        // the capped-slice endpoint would still emit a plausible-looking
+        // total made entirely of categories.
+        const parts = routes.filter((r) => r.urlPath.startsWith('/part/')).length;
+        const categories = routes.filter((r) => r.urlPath.startsWith('/category/')).length;
+        this.info(
+          `[seo-prerender] wrote ${routes.length} indexable HTML documents ` +
+            `(${routes.length - parts - categories} static, ${categories} category, ${parts} part)`,
+        );
       },
     },
   };
