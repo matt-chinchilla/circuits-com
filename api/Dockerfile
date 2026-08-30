@@ -28,9 +28,16 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --system -e .
 
 # ── GeoIP databases (DB-IP Lite, CC-BY 4.0 — https://db-ip.com) ─────────
-# City (~124MB) and ASN (~9MB), fetched in ONE layer keyed on ONE month ARG,
-# BEFORE `COPY . .` on purpose: a code change never re-fetches either file,
-# and bumping the month is still the single-line edit it was.
+# City (~124MB) and ASN (~9MB), fetched in ONE cached layer BEFORE `COPY . .`
+# so a code change never re-fetches either file.
+#
+# THE MONTH IS RESOLVED AT BUILD TIME, NOT PINNED. DB-IP's CDN keeps only the
+# current and previous month (probed 2026-08-30: 2026-08→206, 2026-07→206,
+# 2026-06→404, 2026-09→404), so a hardcoded month is a landmine that detonates
+# on the first cache-busted build after it expires — and `docker builder
+# prune -af` is this repo's documented disk-reclaim step. The script walks
+# today's month back two; `--build-arg DBIP_MONTH=YYYY-MM` overrides for a
+# reproducible build. The RUN string never changes, so the layer still caches.
 #
 # They download straight into the app's data directory rather than a staging
 # path because COPY MERGES into an existing directory — the context's
@@ -39,29 +46,63 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # .dockerignore excludes the local city and ASN files from the context: they
 # would only overwrite these, and at the cost of shipping them twice.
 #
-# HARD FAILURE is deliberate. A soft fall-through would leave geoip.py quietly
-# serving country-only results from the committed fallback, and nobody would
-# notice the map had lost its cities for weeks. A broken build is loud and one
-# retry away. The per-file reader probe is what makes that guarantee real — a
-# truncated stream can still gunzip, and a blob that is not a database would
-# otherwise be found by production rather than by the build.
-ARG DBIP_CITY_MONTH=2026-08
+# HARD FAILURE (after the walk-back) is deliberate. A soft fall-through would
+# leave geoip.py quietly serving country-only results from the committed
+# fallback, and nobody would notice the map had lost its cities for weeks. A
+# broken build is loud. The per-file reader probe is what makes that guarantee
+# real — a truncated stream can still gunzip, and a blob that is not a
+# database would otherwise be found by production rather than by the build.
+ARG DBIP_MONTH=""
 RUN python - <<'GEOIP'
-import gzip, os, shutil, urllib.request
+import datetime, gzip, os, shutil, urllib.error, urllib.request
 import maxminddb
 
-month = os.environ["DBIP_CITY_MONTH"]
 data_dir = "/app/app/data"
 os.makedirs(data_dir, exist_ok=True)
 
+# db-ip.com answers 403 to urllib's DEFAULT User-Agent. Any explicit one is
+# accepted; this is not an auth token, just a name for their logs. Measured,
+# not guessed — the build failed on exactly this before the header was added.
+UA = {"User-Agent": "circuitcenter-build/1.0"}
 
-def fetch(edition, probe):
-    url = f"https://download.db-ip.com/free/dbip-{edition}-lite-{month}.mmdb.gz"
+
+def url_for(edition, month):
+    return f"https://download.db-ip.com/free/dbip-{edition}-lite-{month}.mmdb.gz"
+
+
+def candidate_months():
+    pinned = os.environ.get("DBIP_MONTH", "").strip()
+    if pinned:
+        return [pinned]
+    day = datetime.date.today().replace(day=1)
+    months = []
+    for _ in range(3):
+        months.append(day.strftime("%Y-%m"))
+        day = (day - datetime.timedelta(days=1)).replace(day=1)
+    return months
+
+
+def resolve_month():
+    tried = candidate_months()
+    for month in tried:
+        probe = urllib.request.Request(url_for("city", month), headers=UA, method="HEAD")
+        try:
+            with urllib.request.urlopen(probe, timeout=60):
+                return month
+        except urllib.error.HTTPError as err:
+            if err.code == 404:
+                continue
+            raise
+    raise SystemExit(
+        f"No DB-IP release found for any of {tried}. DB-IP keeps only the newest "
+        "months; pass --build-arg DBIP_MONTH=YYYY-MM (the ARG above this RUN) "
+        "with a month that exists at download.db-ip.com/free/."
+    )
+
+
+def fetch(edition, month, probe):
     out = os.path.join(data_dir, f"dbip-{edition}-lite.mmdb")
-    # db-ip.com answers 403 to urllib's DEFAULT User-Agent. Any explicit one
-    # is accepted; this is not an auth token, just a name for their logs.
-    # Measured, not guessed — the build failed on exactly this before it.
-    request = urllib.request.Request(url, headers={"User-Agent": "circuitcenter-build/1.0"})
+    request = urllib.request.Request(url_for(edition, month), headers=UA)
     with urllib.request.urlopen(request, timeout=180) as response:
         with gzip.GzipFile(fileobj=response) as unzipped, open(out, "wb") as handle:
             shutil.copyfileobj(unzipped, handle)
@@ -78,8 +119,9 @@ def asn_probe(record):
     assert record["autonomous_system_organization"], record
 
 
-fetch("city", city_probe)
-fetch("asn", asn_probe)
+month = resolve_month()
+fetch("city", month, city_probe)
+fetch("asn", month, asn_probe)
 GEOIP
 
 COPY . .

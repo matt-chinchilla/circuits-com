@@ -164,7 +164,9 @@ describe('formatLastSeen', () => {
 });
 
 describe('clampCardPosition', () => {
-  const box = { width: 620, height: 300 };
+  // Derived from the card constant, not hardcoded, so a re-measured ceiling
+  // (190 → 224 on 2026-08-30) cannot silently break placement expectations.
+  const box = { width: INTEL_CARD.width * 3, height: INTEL_CARD.height + 120 };
 
   it('sits just past the click when there is room', () => {
     expect(clampCardPosition(40, 60, box)).toEqual({ left: 52, top: 72 });
@@ -196,5 +198,19 @@ describe('clampCardPosition', () => {
     const { left, top } = clampCardPosition(0, 0, { width: 0, height: 0 });
     expect(Number.isFinite(left)).toBe(true);
     expect(Number.isFinite(top)).toBe(true);
+  });
+});
+
+describe('formatLastSeen year handling', () => {
+  it('omits the year for a date in the current year', () => {
+    const iso = `${new Date().getFullYear()}-03-15 09:30:00.000000+00:00`;
+    const out = formatLastSeen(iso);
+    expect(out).not.toBeNull();
+    expect(out).not.toContain(`${new Date().getFullYear()}`);
+  });
+
+  it('shows the year once it differs, so stale data cannot pass as fresh', () => {
+    const out = formatLastSeen('2001-08-30 14:05:00+00:00');
+    expect(out).toContain('2001');
   });
 });

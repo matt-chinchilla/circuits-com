@@ -41,7 +41,7 @@
 // are buttons opening the same card in a pinned corner slot, because a
 // canvas dot is not a keyboard target.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { RefObject } from 'react';
 import type { EChartsCoreOption, EChartsType } from 'echarts/core';
 import EChart from '@admin/components/charts/EChart';
@@ -105,6 +105,12 @@ const WORLD_PROJECTION = {
 // Identity, and NOT omitted — see the Y-convention note in mapProjections.ts.
 const US_PROJECTION = { project: usPlanarProject, unproject: usPlanarUnproject };
 
+// SECURITY: every tooltip `formatter` below returns an HTML string. All
+// interpolated values today come from the committed geojson properties or
+// the API's own place labels — never from anything a visitor controls (UA,
+// referrer and path never reach a geo field). Keep it that way: free-form
+// strings like network names belong on the intel card, which renders React
+// TEXT nodes, not here.
 const TOOLTIP_CHROME = {
   backgroundColor: '#141d36',
   borderColor: '#2b3a63',
@@ -182,13 +188,16 @@ export default function WorldMapPanel({
   const [view, setView] = useState<MapView>('world');
   const [mapReady, setMapReady] = useState(false);
   const [usMapReady, setUsMapReady] = useState(false);
+  // A failed geojson chunk must not read as an eternal "Loading map…" — the
+  // rank rail still renders, but the box says what actually happened.
+  const [mapError, setMapError] = useState(false);
   // True once the CURRENT view has been zoomed — by a state click or a
   // wheel/drag roam — so the "Reset view" pill knows to appear.
   const [zoomed, setZoomed] = useState(false);
-  // Bumping this rebuilds the option object VERBATIM, and the wrapper's
-  // notMerge re-apply is what resets a wheel/drag roam: the roam zoom lives
-  // in ECharts' component model, which a full option replace rebuilds at the
-  // declared (auto-fit) view. One mechanism, both maps — no reset math.
+  // Bumping this remounts the chart (it is part of the EChart key), and a
+  // fresh mount lays the map out at its declared auto-fit — that IS the
+  // reset, for both views, with no per-view math. A real dependency the
+  // renderer visibly consumes, not a phantom entry in a memo's dep array.
   const [resetNonce, setResetNonce] = useState(0);
   const [intel, setIntel] = useState<CityIntel | null>(null);
   // The live chart instance (captured per mount via onReady; the key={view}
@@ -203,6 +212,11 @@ export default function WorldMapPanel({
   const mapRef = useRef<HTMLDivElement | null>(null);
   const cardRef = useRef<HTMLDivElement | null>(null);
   const closeRef = useRef<HTMLButtonElement | null>(null);
+  // Whatever opened the card (a Top-towns button; null for a canvas dot,
+  // which is not focusable). A keyboard close hands focus back to it, so
+  // reading several towns in a row is not several trips from the top of
+  // the page.
+  const intelTriggerRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -220,7 +234,7 @@ export default function WorldMapPanel({
         setMapReady(true);
       })
       .catch(() => {
-        /* map asset failed to load — the rank list still renders */
+        if (!cancelled) setMapError(true); // the rank list still renders
       });
     return () => {
       cancelled = true;
@@ -243,12 +257,20 @@ export default function WorldMapPanel({
         setUsMapReady(true);
       })
       .catch(() => {
-        /* states asset failed to load — the rank list still renders */
+        if (!cancelled) setMapError(true); // the rank list still renders
       });
     return () => {
       cancelled = true;
     };
   }, [view, usMapReady]);
+
+  const closeIntel = useCallback((restoreFocus: boolean) => {
+    setIntel(null);
+    if (restoreFocus && intelTriggerRef.current?.isConnected) {
+      intelTriggerRef.current.focus({ preventScroll: true });
+    }
+    intelTriggerRef.current = null;
+  }, []);
 
   // Dismissal, all four doors at once. `mousedown` rather than `click` is
   // load-bearing: ECharts opens the card on `click`, which fires AFTER
@@ -257,12 +279,12 @@ export default function WorldMapPanel({
   useEffect(() => {
     if (!intel) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setIntel(null);
+      if (e.key === 'Escape') closeIntel(true);
     };
     const onDown = (e: MouseEvent) => {
       // `Node.contains(window)` THROWS — narrow before calling it (CLAUDE.md).
       if (e.target instanceof Node && cardRef.current?.contains(e.target)) return;
-      setIntel(null);
+      closeIntel(false); // a pointer close keeps focus where the user clicked
     };
     document.addEventListener('keydown', onKey);
     document.addEventListener('mousedown', onDown);
@@ -270,7 +292,7 @@ export default function WorldMapPanel({
       document.removeEventListener('keydown', onKey);
       document.removeEventListener('mousedown', onDown);
     };
-  }, [intel]);
+  }, [intel, closeIntel]);
 
   // Move focus into the card so Esc and Tab land somewhere sensible — this is
   // what makes the Top-towns buttons an actual keyboard path rather than a
@@ -339,6 +361,7 @@ export default function WorldMapPanel({
           const row = p.data?.row;
           if (!row) return;
           const box = mapRef.current;
+          intelTriggerRef.current = null; // a canvas dot is not focusable
           setIntel({
             row,
             at: clampCardPosition(p.event?.offsetX ?? 0, p.event?.offsetY ?? 0, {
@@ -357,8 +380,24 @@ export default function WorldMapPanel({
         chart.setOption({ geo: viewForBounds(bounds, info.frame, plotW, plotH) });
         setZoomed(true);
       },
-      // Wheel zoom / drag pan, EITHER view — surface the reset pill.
-      georoam: () => setZoomed(true),
+      // Wheel zoom / drag pan, EITHER view. The event also fires when
+      // scaleLimit clamps the gesture to NOTHING (a wheel-down at the zoom
+      // floor), and even a clamped roam writes a concrete `center` into the
+      // option (measured 2026-08-30) — so the tells are the RESULTING zoom
+      // and the event's own pan deltas, never `center != null`. A drag pan
+      // carries dx/dy and really moves the view; a clamped wheel carries
+      // neither and leaves zoom at the floor.
+      georoam: (params: unknown) => {
+        const chart = usChartRef.current;
+        if (!chart || chart.isDisposed()) return;
+        const p = params as { dx?: number; dy?: number } | null;
+        const opt = chart.getOption() as {
+          geo?: Array<{ zoom?: number }>;
+          series?: Array<{ zoom?: number }>;
+        };
+        const zoom = (view === 'us' ? opt.geo?.[0] : opt.series?.[0])?.zoom ?? 1;
+        setZoomed(zoom > 1.0001 || p?.dx != null || p?.dy != null);
+      },
     }),
     [view],
   );
@@ -403,7 +442,7 @@ export default function WorldMapPanel({
         },
       ],
     }),
-    [countries, worldBins, resetNonce],
+    [countries, worldBins],
   );
 
   const cityPoints: CityPoint[] = useMemo(() => {
@@ -465,6 +504,10 @@ export default function WorldMapPanel({
         {
           type: 'map',
           geoIndex: 0,
+          // The geo component's no-label emphasis does NOT reach the series —
+          // without this, hovering a state stamps its name on the map while
+          // hovering a country never does.
+          emphasis: { label: { show: false } },
           // Fill from the shared bins (same mechanism as the dots — no
           // visualMap); the orchid edge marks "has data" at a glance where
           // the two coolest bins sit close to the empty navy under dots.
@@ -500,8 +543,36 @@ export default function WorldMapPanel({
         },
       ],
     }),
-    [stateRows, cityPoints, usBins, resetNonce],
+    [stateRows, cityPoints, usBins],
   );
+
+  // The option prop is applied notMerge, so ANY rebuild (segment change,
+  // data refresh) silently resets a wheel roam — the pill must not outlive
+  // the zoom it described. Imperative click-zooms rebuild nothing, so the
+  // pill correctly survives them.
+  useEffect(() => {
+    setZoomed(false);
+  }, [worldOption, usOption]);
+
+  // The INTEL_CARD constant is a ceiling estimate; fonts and platform can
+  // move the real rendered height, so the card is measured after layout and
+  // nudged back inside the map box if any edge escaped. One-shot: once it
+  // fits, the correction is zero and the state stops changing.
+  useLayoutEffect(() => {
+    const card = cardRef.current;
+    const box = mapRef.current;
+    if (!intel?.at || !card || !box) return;
+    const c = card.getBoundingClientRect();
+    const b = box.getBoundingClientRect();
+    const dx = Math.max(0, c.right - (b.right - 8));
+    const dy = Math.max(0, c.bottom - (b.bottom - 8));
+    if (dx < 1 && dy < 1) return;
+    setIntel((cur) =>
+      cur?.at
+        ? { ...cur, at: { left: Math.max(8, cur.at.left - dx), top: Math.max(8, cur.at.top - dy) } }
+        : cur,
+    );
+  }, [intel]);
 
   const isUs = view === 'us';
   const canDrill = stateRows.length > 0 || countries.some((c) => c.code === 'US');
@@ -509,7 +580,6 @@ export default function WorldMapPanel({
   const showingCollecting = isUs ? usCollecting : collecting;
   const top = countries.slice(0, 8);
   const topStates = stateRows.slice(0, 8);
-  const topTowns = cityRows.slice(0, 6);
 
   return (
     <div className={`${styles.chartCard} ${styles.chartFull} ${styles.wmCard}`}>
@@ -552,14 +622,16 @@ export default function WorldMapPanel({
         <div className={styles.wmMap} ref={mapRef}>
           {chartReady ? (
             <EChart
-              key={view}
+              key={`${view}:${resetNonce}`}
               option={isUs ? usOption : worldOption}
               onEvents={onEvents}
               onReady={captureChart}
               style={{ height: 300 }}
             />
           ) : (
-            <div className={styles.wmLoading}>Loading map&hellip;</div>
+            <div className={styles.wmLoading}>
+              {mapError ? 'The map could not load — refresh to try again.' : 'Loading map…'}
+            </div>
           )}
           {/* The one scale for both layers, as DOM below the canvas — never
               painted over the geography, whatever the zoom does. */}
@@ -583,13 +655,13 @@ export default function WorldMapPanel({
               intel={intel}
               cardRef={cardRef}
               closeRef={closeRef}
-              onClose={() => setIntel(null)}
+              onClose={() => closeIntel(true)}
             />
           )}
           {showingCollecting &&
             (isUs ? (
               <div className={styles.wmCollect}>
-                <strong>No state-level visits yet</strong>
+                <strong>No state-resolved {segmentLabel(segment).toLowerCase()} yet</strong>
                 <p>
                   States and towns are resolved when a page view lands
                   {regionTrackedSince ? ` (since ${regionTrackedSince.slice(0, 10)})` : ''}. Earlier
@@ -646,23 +718,30 @@ export default function WorldMapPanel({
                 <span className={styles.wmVal}>{s.views.toLocaleString()}</span>
               </div>
             ))}
-            {topTowns.length > 0 && (
+            {cityRows.length > 0 && (
               <div className={styles.wmTowns}>
-                <span className={styles.wmTownsTitle}>Top towns</span>
+                <span className={styles.wmTownsTitle}>Towns · {cityRows.length}</span>
                 {/* Buttons, not rows: the dots they mirror are canvas pixels,
-                    so this list is the only keyboard route to a town's card. */}
-                {topTowns.map((c, i) => (
+                    so this list is the only keyboard route to a town's card —
+                    which is why it lists EVERY town, scrolling, not a top 6
+                    that would leave the rest pointer-only. */}
+                <div className={styles.wmTownsList}>
+                {cityRows.map((c, i) => (
                   <button
                     key={`${c.city}|${c.region ?? ''}|${i}`}
                     type="button"
                     className={styles.wmTown}
                     aria-haspopup="dialog"
-                    onClick={() => setIntel({ row: c, at: null })}
+                    onClick={(e) => {
+                      intelTriggerRef.current = e.currentTarget;
+                      setIntel({ row: c, at: null });
+                    }}
                   >
                     <span className={styles.wmTownName}>{cityLabel(c)}</span>
                     <span className={styles.wmVal}>{c.views.toLocaleString()}</span>
                   </button>
                 ))}
+                </div>
               </div>
             )}
           </div>
@@ -722,7 +801,7 @@ function CityIntelCard({ intel, cardRef, closeRef, onClose }: CityIntelCardProps
         <div className={styles.wmIntelSection}>
           <span className={styles.wmIntelLabel}>Networks</span>
           {networks.map((line) => (
-            <span key={line} className={styles.wmIntelLine}>
+            <span key={line} className={styles.wmIntelLine} title={line}>
               {line}
             </span>
           ))}

@@ -515,3 +515,47 @@ class TestTrackStampsNetwork:
         resp = client.post("/api/track", json={"path": "/", "session_id": "net-2"})
         assert resp.status_code == 204
         assert db.query(PageView).filter(PageView.session_id == "net-2").one().network is None
+
+
+class TestDistrictSuffix:
+    """DB-IP labels sub-city records "City (District)" — 16.6% of US lookups
+    (measured over 20,000 random addresses). The stored city is the metro."""
+
+    @pytest.mark.parametrize(
+        ("raw", "stored"),
+        [
+            ("New York (Midtown)", "New York"),
+            ("Philadelphia (South Philadelphia East)", "Philadelphia"),
+            ("Los Angeles (South Los Angeles)", "Los Angeles"),
+            ("Plain City", "Plain City"),
+        ],
+    )
+    def test_the_district_qualifier_is_stripped(self, fake_reader, raw, stored):
+        fake_reader({"city": {"names": {"en": raw}}})
+        assert geo_for_ip("8.8.8.8").city == stored
+
+    def test_a_suffix_only_label_is_no_city_at_all(self, fake_reader):
+        fake_reader({"city": {"names": {"en": "(Midtown)"}}})
+        assert geo_for_ip("8.8.8.8").city is None
+
+    def test_the_strip_runs_before_the_width_cut(self, fake_reader):
+        # 76 chars of name + a suffix that crosses the 80 boundary: truncating
+        # first would leave an unbalanced "(Distr" that no pattern matches.
+        fake_reader({"city": {"names": {"en": "C" * 76 + " (District name)"}}})
+        assert geo_for_ip("8.8.8.8").city == "C" * 76
+
+
+class TestTrackSurvivesARaisingLookup:
+    def test_a_geo_bug_costs_the_columns_not_the_page_view(self, client, db, monkeypatch):
+        """The fail-open contract, enforced at the call site: even if
+        geo_for_ip itself RAISES, /api/track stores the view with NULLs."""
+        from app.routes import analytics as analytics_route
+
+        def boom(ip):
+            raise RuntimeError("reader exploded")
+
+        monkeypatch.setattr(analytics_route, "geo_for_ip", boom)
+        resp = client.post("/api/track", json={"path": "/", "session_id": "boom-1"})
+        assert resp.status_code == 204
+        row = db.query(PageView).filter(PageView.session_id == "boom-1").one()
+        assert (row.country, row.region, row.city, row.network) == (None, None, None, None)

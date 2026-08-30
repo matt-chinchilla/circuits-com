@@ -1093,7 +1093,9 @@
   color: #e8eef9;
 }
 
-// "Top towns" — the city-dot layer read as a list, under the state ranks.
+// "Towns" — the city-dot layer read as a list, under the state ranks. It
+// lists EVERY town (the buttons are the dots' only keyboard path), so the
+// list scrolls past ~6 rows instead of growing the card.
 .wmTowns {
   display: flex;
   flex-direction: column;
@@ -1101,6 +1103,15 @@
   margin-top: 4px;
   padding-top: 10px;
   border-top: 1px solid #1c2742;
+}
+
+.wmTownsList {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  max-height: 154px;
+  overflow-y: auto;
+  @include scrollbar-thin(4px, 2px);
 }
 
 .wmTownsTitle {
@@ -1126,11 +1137,11 @@
   background: none;
   border: 0;
   border-radius: 5px;
-  padding: 2px 4px;
-  // No `width` — a definite cross-size would switch off the column's stretch
-  // and leave the hover surface bleeding 4px left but 4px short on the right.
-  // Stretch plus these margins is what makes the bleed symmetric.
-  margin: 0 -4px;
+  // Flush with the rail — the old `padding 4px + margin 0 -4px` bleed pushed
+  // these rows 4px past the container's right edge, the worst offender in the
+  // page's 390px overflow (measured 2026-08-30).
+  padding: 2px 0;
+  margin: 0;
   transition: background 120ms ease;
 
   &:hover .wmTownName {

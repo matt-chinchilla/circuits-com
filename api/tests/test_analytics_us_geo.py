@@ -151,8 +151,8 @@ class TestUsCities:
         ]
 
     def test_same_name_in_two_states_stays_two_bubbles(self, client, db, seeded_db, auth_header):
-        """The coordinates are in the GROUP BY because a name alone is not a
-        place: Springfield MA and Springfield IL are different pins."""
+        """REGION is what makes a name a place: Springfield MA and Springfield
+        IL are different pins even though the label matches."""
         db.add_all(
             [
                 _view(
@@ -448,3 +448,86 @@ class TestUsCityIntel:
         db.commit()
         (row,) = _get(client, auth_header, days=30)["us_cities"]
         assert row["networks"] == [{"name": "Verizon Fios", "views": 1}]
+
+
+class TestMetroGrouping:
+    """DB-IP resolves many addresses to sub-city districts: same (stripped)
+    label, same region, DIFFERENT centroid. One metro must stay one bubble."""
+
+    def test_district_centroids_merge_into_one_bubble_at_their_mean(
+        self, client, db, seeded_db, auth_header
+    ):
+        db.add_all(
+            [
+                _view("m-1", region="New York", city="New York", latitude=40.75, longitude=-73.99),
+                _view("m-2", region="New York", city="New York", latitude=40.81, longitude=-73.95),
+            ]
+        )
+        db.commit()
+        (row,) = _get(client, auth_header)["us_cities"]
+        assert row["views"] == 2
+        assert (row["lat"], row["lng"]) == (40.78, -73.97)
+
+    def test_the_merged_bubble_owns_all_of_the_metro_intel(
+        self, client, db, seeded_db, auth_header
+    ):
+        db.add_all(
+            [
+                _view(
+                    "mi-1",
+                    region="New York",
+                    city="New York",
+                    latitude=40.75,
+                    longitude=-73.99,
+                    network="Verizon Fios",
+                ),
+                _view(
+                    "mi-2",
+                    region="New York",
+                    city="New York",
+                    latitude=40.81,
+                    longitude=-73.95,
+                    network="Spectrum",
+                ),
+            ]
+        )
+        db.commit()
+        (row,) = _get(client, auth_header)["us_cities"]
+        assert row["visitors"] == 2
+        assert {n["name"] for n in row["networks"]} == {"Verizon Fios", "Spectrum"}
+
+
+class TestBreakdownIsolation:
+    def test_two_cities_never_share_each_others_networks_or_devices(
+        self, client, db, seeded_db, auth_header
+    ):
+        """The bucket key is built by hand in two places — this is the test
+        that goes red if either ever drops half the key."""
+        db.add_all(
+            [
+                _view(
+                    "iso-a",
+                    region="Texas",
+                    city="Austin",
+                    latitude=30.27,
+                    longitude=-97.74,
+                    network="AT&T Internet",
+                    device_type="desktop",
+                ),
+                _view(
+                    "iso-b",
+                    region="Illinois",
+                    city="Chicago",
+                    latitude=41.88,
+                    longitude=-87.63,
+                    network="Comcast Cable",
+                    device_type="mobile",
+                ),
+            ]
+        )
+        db.commit()
+        cities = {c["city"]: c for c in _get(client, auth_header)["us_cities"]}
+        assert cities["Austin"]["networks"] == [{"name": "AT&T Internet", "views": 1}]
+        assert cities["Austin"]["devices"] == [{"type": "desktop", "views": 1}]
+        assert cities["Chicago"]["networks"] == [{"name": "Comcast Cable", "views": 1}]
+        assert cities["Chicago"]["devices"] == [{"type": "mobile", "views": 1}]

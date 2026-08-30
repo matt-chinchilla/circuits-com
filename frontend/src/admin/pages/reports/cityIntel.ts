@@ -119,18 +119,23 @@ function toParsableIso(value: string): string {
   return !hasZone && iso.includes('T') ? `${iso}Z` : iso;
 }
 
-/** A short local date+time, e.g. "Aug 30, 2:05 PM". Null for an absent or
- *  unparseable value so the caller drops the line. */
+/** A short local date+time, e.g. "Aug 30, 2:05 PM" — with the year appended
+ *  once it differs from the current one, so a stale "Aug 30" from last year
+ *  cannot masquerade as today. Null for an absent or unparseable value so the
+ *  caller drops the line. */
 export function formatLastSeen(value?: string | null): string | null {
   if (!value) return null;
   const ms = Date.parse(toParsableIso(value));
   if (Number.isNaN(ms)) return null;
-  return new Date(ms).toLocaleString(undefined, {
+  const date = new Date(ms);
+  const options: Intl.DateTimeFormatOptions = {
     month: 'short',
     day: 'numeric',
     hour: 'numeric',
     minute: '2-digit',
-  });
+  };
+  if (date.getFullYear() !== new Date().getFullYear()) options.year = 'numeric';
+  return date.toLocaleString(undefined, options);
 }
 
 export interface CardBox {
@@ -142,12 +147,14 @@ export interface CardBox {
  * The card's own size, in CSS pixels. COUPLED to `.wmIntel` in
  * ReportsPage.module.scss: the width is that rule's `width`, and the height is
  * a deliberate CEILING for the tallest the card can get (title + count line +
- * three network lines + a device line + the last-seen line). Clamping against
- * a ceiling can only place a short card higher or further left than it
- * strictly needed — clamping against an under-estimate would let it hang off
- * the map, which is the failure worth avoiding.
+ * three network lines + a device line + the last-seen line — MEASURED at
+ * 211px rendered, 2026-08-30; the first estimate of 190 let the card hang 8px
+ * off the map). Clamping against a ceiling can only place a short card higher
+ * or further left than it strictly needed; the panel also re-measures the
+ * real card after layout and nudges it inside, so this constant is the first
+ * pass, not the guarantee.
  */
-export const INTEL_CARD: CardBox = { width: 216, height: 190 };
+export const INTEL_CARD: CardBox = { width: 216, height: 224 };
 
 /** Gap between the click point and the card, and between the card and the
  *  edges of the map box. */

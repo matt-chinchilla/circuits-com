@@ -15,7 +15,7 @@ from app.db.session import get_db
 from app.models import OutboundClick, PartListing, User
 from app.models.page_view import PageView
 from app.services.auth_service import require_staff
-from app.services.geoip import geo_for_ip
+from app.services.geoip import EMPTY_GEO, geo_for_ip
 from app.services.rate_limit import client_ip, trusted_client_addr
 from app.services.traffic_segments import crawler_family, human_ua_filter, window_bot_uas
 
@@ -127,11 +127,15 @@ def track_page_view(
     # NETWORK for IPv6, which the GeoIP reader rejects outright, so every IPv6
     # visitor was landing as "unknown" and every IPv6 subscriber shared one hash.
     addr = trusted_client_addr(request)
-    # ONE lookup for all five columns. Fail-open by contract: any geo problem
-    # yields the empty result and stores NULLs, never raises. How much comes
-    # back depends on which database the container has — country-only from the
-    # committed file, city detail from the one the image downloads.
-    geo = geo_for_ip(addr)
+    # ONE lookup for all the geo columns. Fail-open by contract: any geo
+    # problem yields the empty result and stores NULLs. geoip promises never
+    # to raise, but the promise is ALSO enforced here at the one call site
+    # that matters — a public tracking endpoint must never lose a page view
+    # to a lookup bug.
+    try:
+        geo = geo_for_ip(addr)
+    except Exception:
+        geo = EMPTY_GEO
 
     db.add(
         PageView(
@@ -493,20 +497,26 @@ def get_analytics(
         )
         .filter(recent, *seg, PageView.country == "US", PageView.region.isnot(None))
         .group_by(PageView.region)
-        .order_by(view_count.desc())
+        # Name tiebreaker: equal-count states must not swap between requests.
+        .order_by(view_count.desc(), PageView.region.asc())
         .all()
     )
 
     # A bubble needs a name AND a point, so all three are required — a city
     # whose centroid the database does not carry is counted in the state layer
-    # and simply has no bubble. The coordinates are in the GROUP BY because
-    # they identify the place: two cities can share a name across states.
+    # and simply has no bubble. The identity of a bubble is (city, region):
+    # region is what keeps Springfield MA and Springfield IL apart, and the
+    # coordinates are AVERAGED rather than grouped on — DB-IP resolves many
+    # addresses to sub-city districts whose labels are stripped at write time
+    # but whose centroids differ, and grouping on the point would fragment one
+    # metro into several bubbles that each claim a slice of its traffic.
+    # The city tiebreaker keeps the 60-row cut stable between requests.
     city_rows = (
         db.query(
             PageView.city,
             PageView.region,
-            PageView.latitude,
-            PageView.longitude,
+            func.avg(PageView.latitude).label("lat"),
+            func.avg(PageView.longitude).label("lng"),
             view_count.label("views"),
             unique_sessions.label("visitors"),
             func.max(PageView.created_at).label("last_seen"),
@@ -519,8 +529,8 @@ def get_analytics(
             PageView.latitude.isnot(None),
             PageView.longitude.isnot(None),
         )
-        .group_by(PageView.city, PageView.region, PageView.latitude, PageView.longitude)
-        .order_by(view_count.desc())
+        .group_by(PageView.city, PageView.region)
+        .order_by(view_count.desc(), PageView.city.asc())
         .limit(60)
         .all()
     )
@@ -533,12 +543,7 @@ def get_analytics(
     # US, city and point present) so their key space matches it exactly;
     # anything that is not one of the 60 surviving keys is dropped in the
     # loop below rather than being asked for separately.
-    city_key_columns = (
-        PageView.city,
-        PageView.region,
-        PageView.latitude,
-        PageView.longitude,
-    )
+    city_key_columns = (PageView.city, PageView.region)
     city_filters = (
         recent,
         *seg,
@@ -551,21 +556,22 @@ def get_analytics(
     def _breakdown(column):
         """(city key, `column`) → views, ordered so the first rows seen for a
         key are that key's busiest. A global ORDER BY is enough for that: if
-        the whole result descends by views, then so does any subset of it."""
+        the whole result descends by views, then so does any subset of it.
+        The column tiebreaker makes a top-3 cut among equals deterministic."""
         return (
             db.query(*city_key_columns, column, view_count.label("views"))
             .filter(*city_filters, column.isnot(None))
             .group_by(*city_key_columns, column)
-            .order_by(view_count.desc())
+            .order_by(view_count.desc(), column.asc())
             .all()
         )
 
-    surviving_keys = {(r.city, r.region, r.latitude, r.longitude) for r in city_rows}
+    surviving_keys = {(r.city, r.region) for r in city_rows}
 
     def _bucket(rows, value_of, label, limit=None):
         buckets: dict[tuple, list[dict]] = defaultdict(list)
         for row in rows:
-            key = (row.city, row.region, row.latitude, row.longitude)
+            key = (row.city, row.region)
             if key not in surviving_keys:
                 continue
             entries = buckets[key]
@@ -580,13 +586,14 @@ def get_analytics(
 
     us_cities = []
     for row in city_rows:
-        key = (row.city, row.region, row.latitude, row.longitude)
+        key = (row.city, row.region)
         us_cities.append(
             {
                 "city": row.city,
                 "region": row.region,
-                "lat": row.latitude,
-                "lng": row.longitude,
+                # Re-rounded because an average of 2dp inputs need not be 2dp.
+                "lat": round(row.lat, 2),
+                "lng": round(row.lng, 2),
                 "views": row.views,
                 "visitors": row.visitors,
                 "last_seen": str(row.last_seen) if row.last_seen is not None else None,
