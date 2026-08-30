@@ -1575,6 +1575,14 @@ class _FamilySweep(SweepStrategy):
             # Create it ONLY when the family's own held parts agree on where it
             # lives (_anchor); otherwise decline exactly as before — an
             # uncategorised part is a page nothing links to.
+            if not fp.mpn.upper().startswith(family.prefix):
+                # Keyword search is fuzzier than a prefix: a row that merely
+                # MENTIONS the family (in a description, an accessory listing)
+                # is not a sibling, and filing it under the family's category
+                # would be a quiet mis-shelving. Held parts found above are
+                # identity-matched and unaffected; this gates only creation.
+                counts.off_scope += 1
+                return None
             anchor = self._anchor(db, family)
             if anchor is None:
                 counts.absent += 1

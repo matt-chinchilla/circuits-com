@@ -143,6 +143,13 @@ class MouserProvider:
     supplier_website = "mouser.com"
     records_per_call = 50  # Mouser's keyword-search page size
 
+    # FAMILY windows, not category keywords (2026-08-30). The 99 category
+    # keywords exhausted their reachable slice (~130k of Mouser's 8.4M parts)
+    # and the sweep was wrapping back over fully-known pages — measured live:
+    # 105 calls, 4,949 rows, 25 new. MPN-prefix families derived from our own
+    # catalog open fresh windows anywhere in the space.
+    import_strategy = "family"
+
     # The rate ceiling belongs to the API KEY, not to a provider instance, and
     # the sync route builds ONE provider per run — two admins syncing at once
     # are two instances in two threadpool threads. Per-instance timestamps let
@@ -186,6 +193,26 @@ class MouserProvider:
         provider per run and closes it when the stream ends; without this the
         keep-alive sockets sit until GC."""
         self._client.close()
+
+    @classmethod
+    def manufacturer_scope(cls, canonical_key: str, keyword: str, label: str | None = None):
+        """A family window, deliberately UNSCOPED — Mouser's search has no
+        manufacturer filter to ask for.
+
+        This is NOT the sin FeedScopeUnsupported exists to prevent (dropping a
+        REQUESTED filter silently): no filter is ever requested, `search_scoped`
+        takes its documented bare-keyword path, and `_resolve_maker`
+        name-verifies every row against the family's maker — anyone else's rows
+        are counted off-scope, never priced. The economics also differ from
+        DigiKey's refusal rationale: DigiKey serves a hard 300-record window
+        (unscoped = reading somebody else's inventory), while Mouser pages
+        keyword results deeply, so an unscoped prefix window can actually be
+        read out. `canonical_key` is unused by construction — every maker gets
+        the same bare window and the absorb side sorts the rows.
+        """
+        from app.services.part_feed.importer import FeedScope  # circular at module load only
+
+        return FeedScope(keyword=keyword, label=label)
 
     def _throttle(self) -> None:
         """Hold the account-wide gap before the next call.
