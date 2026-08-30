@@ -3,14 +3,27 @@
 // ── Why this file exists ───────────────────────────────────────────────────
 // `echarts.use([...])` is a side effect at module scope, so whatever module
 // performs it drags those chart/component modules into its importer's graph.
-// MapChart + VisualMapComponent are used by exactly ONE panel in the whole
-// admin console (reports/WorldMapPanel — Visitors by Country), but they used
-// to be registered in EChart.tsx, which all six Dashboard panels import. Every
-// admin chart page therefore paid for the map renderer, the geo coordinate
-// system and the visualMap component it never renders.
+// Everything registered below is used by exactly ONE panel in the whole admin
+// console (reports/WorldMapPanel — Visitors by Country), but MapChart +
+// VisualMapComponent used to be registered in EChart.tsx, which all six
+// Dashboard panels import. Every admin chart page therefore paid for the map
+// renderer, the geo coordinate system and the visualMap component it never
+// renders.
 //
 // Keeping them here means only WorldMapPanel reaches them in the SOURCE graph,
 // and Dashboard no longer runs the map/geo/visualMap `install` functions.
+//
+// ── What is registered, and why each one ───────────────────────────────────
+//   MapChart           — both choropleths (world countries, US states).
+//   VisualMapComponent — the piecewise viewership legend.
+//   GeoComponent       — the US drill-down only. A `series-scatter` can bind
+//                        to `coordinateSystem: 'geo'` but NOT to a map
+//                        series' private coordinate system, so the city-dot
+//                        layer forces the US view into a `geo` component with
+//                        the map series attached by `geoIndex`. The world view
+//                        stays a bare map series and never installs it at
+//                        runtime (the import cost is shared either way).
+//   ScatterChart       — the US city dots.
 //
 // ── The byte split is NOT achievable today (measured 2026-08-21) ───────────
 // `vite.config.ts` manualChunks groups by module path, so all of
@@ -28,13 +41,14 @@
 // Do NOT import this from EChart.tsx or from any Dashboard panel.
 
 import * as echarts from 'echarts/core';
-import { MapChart } from 'echarts/charts';
-import { VisualMapComponent } from 'echarts/components';
+import { MapChart, ScatterChart } from 'echarts/charts';
+import { GeoComponent, VisualMapComponent } from 'echarts/components';
 
-echarts.use([MapChart, VisualMapComponent]);
+echarts.use([MapChart, ScatterChart, GeoComponent, VisualMapComponent]);
 
 /** Register a GeoJSON map once per name (WorldMapPanel lazy-loads the
- *  committed world-110m asset and hands it here before first render). */
+ *  committed world-110m and us-states-albers assets and hands each here
+ *  before that view's first render). */
 const registeredMaps = new Set<string>();
 
 export function registerMapOnce(name: string, geoJson: object): void {

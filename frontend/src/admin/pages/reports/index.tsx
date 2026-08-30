@@ -479,6 +479,9 @@ function StaffReportsPage() {
                   countries={analytics.countries}
                   geoTrackedSince={analytics.geo_tracked_since}
                   segment={analytics.segment}
+                  usStates={analytics.us_states}
+                  usCities={analytics.us_cities}
+                  regionTrackedSince={analytics.region_tracked_since}
                 />
 
                 <div className={`${styles.chartCard} ${styles.chartFull}`}>

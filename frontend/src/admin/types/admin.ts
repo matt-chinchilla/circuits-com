@@ -348,6 +348,22 @@ export interface AnalyticsData {
   countries: Array<{ code: string; views: number; visitors: number }>;
   geo_unknown_views: number;
   geo_tracked_since: string | null;
+  // ── US drill-down (region capture, 2026-08-30) ───────────────────────────
+  // Windowed and segmented exactly like `countries`, and OPTIONAL: an API
+  // that predates region capture omits them entirely, and the panel has to
+  // render its collecting state rather than an empty country.
+  /** Segment-filtered US views by state NAME ("New York"), views desc. */
+  us_states?: Array<{ name: string; views: number; visitors: number }>;
+  /** Top 60 US cities with 2-decimal centroid lat/lng. */
+  us_cities?: Array<{
+    city: string;
+    region: string | null;
+    lat: number;
+    lng: number;
+    views: number;
+  }>;
+  /** First day a page view could carry a state. Null while none has. */
+  region_tracked_since?: string | null;
 }
 
 export type AnalyticsSegment = AnalyticsData['segment'];

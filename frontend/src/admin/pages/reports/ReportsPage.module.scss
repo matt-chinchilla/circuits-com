@@ -894,6 +894,47 @@
   color: #e8eef9;
 }
 
+// Title-row pill: "United States →" going in, "← World" coming back. One slot,
+// one treatment, so the drill-down has a keyboard path in BOTH directions —
+// the canvas click that also opens it is pointer-only.
+.wmCrumb {
+  flex: 0 0 auto;
+  appearance: none;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  color: #93a2c4;
+  background: #16203a;
+  border: 1px solid #2b3a63;
+  border-radius: 999px;
+  padding: 5px 10px;
+  transition:
+    color 120ms ease,
+    background 120ms ease,
+    border-color 120ms ease;
+
+  &:hover {
+    color: #e8eef9;
+    background: #1c2947;
+    border-color: #3c4f80;
+  }
+
+  &:focus-visible {
+    outline: 2px solid #57c78c;
+    outline-offset: 2px;
+  }
+}
+
+.wmTitleRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
 .wmSub {
   color: #61719b;
 }
@@ -968,6 +1009,11 @@
   gap: 8px;
 }
 
+// US view has no flags — the state name takes the column back.
+.wmRowPlain {
+  grid-template-columns: minmax(0, 1fr) 72px 52px;
+}
+
 .wmFlag {
   font-size: 15px;
   line-height: 1;
@@ -999,6 +1045,37 @@
   font-size: 12px;
   text-align: right;
   color: #e8eef9;
+}
+
+// "Top towns" — the city-dot layer read as a list, under the state ranks.
+.wmTowns {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px solid #1c2742;
+}
+
+.wmTownsTitle {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #61719b;
+}
+
+.wmTown {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 52px;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.wmTownName {
+  font-size: 11.5px;
+  color: #93a2c4;
+  @include truncate;
 }
 
 .wmFoot {
