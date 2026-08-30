@@ -24,9 +24,14 @@
 // Each view carries its OWN collecting state: state-level capture started
 // later than country capture, so a card full of countries can still have
 // nothing to say about states.
+//
+// The US view zooms: click a state to frame it (usZoom.ts does the fit math),
+// wheel/drag to roam free, "Reset view" to come home. Zoom is applied
+// imperatively (merge-setOption on the captured instance) because the React
+// option prop is applied notMerge and would stomp the user's roam.
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { EChartsCoreOption } from 'echarts/core';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { EChartsCoreOption, EChartsType } from 'echarts/core';
 import EChart from '@admin/components/charts/EChart';
 // Importing this module is what pulls MapChart + VisualMapComponent + the geo
 // coordinate system + ScatterChart into the bundle — it is scoped to this
@@ -42,6 +47,8 @@ import {
   usPlanarUnproject,
 } from './mapProjections';
 import { buildBins } from './viewershipBins';
+import { MAX_STATE_ZOOM, featureBounds, homeView, viewForBounds } from './usZoom';
+import type { BBox } from './usZoom';
 import styles from './ReportsPage.module.scss';
 
 const MAP_NAME = 'world110';
@@ -55,8 +62,13 @@ const HOVER_BORDER = '#d7ffe8';
  *  underneath them, and every green is already spoken for by the ramp. */
 const CITY_DOT = '#e8c252';
 const CITY_DOT_EDGE = '#4a3a0d';
+/** A state that HAS data also gets this edge, so the choropleth reads as
+ *  color-coded even where the dark low bins sit close to the empty navy. */
+const VISITED_BORDER = '#3fa172';
 const CITY_R_MIN = 4;
-const CITY_R_MAX = 14;
+// 11, not 14: at the auto-fit the Northeast corridor overlaps into a blob at
+// 14 (measured 2026-08-30); zooming in is what earns the detail back.
+const CITY_R_MAX = 11;
 
 const WORLD_PROJECTION = {
   project: naturalEarth1Project,
@@ -131,6 +143,17 @@ export default function WorldMapPanel({
   const [view, setView] = useState<MapView>('world');
   const [mapReady, setMapReady] = useState(false);
   const [usMapReady, setUsMapReady] = useState(false);
+  // True once the US view has been zoomed — by a state click or a wheel/drag
+  // roam — so the "Reset view" pill knows to appear.
+  const [usZoomed, setUsZoomed] = useState(false);
+  // The live chart instance (captured per mount via onReady; the key={view}
+  // remount swaps it) and the states asset's bounding boxes, both consumed
+  // imperatively by the zoom handlers. Zoom goes through merge-setOption on
+  // the instance rather than the React option: the option prop is applied
+  // notMerge, so putting center/zoom there would discard the user's wheel
+  // roam on every unrelated re-render.
+  const usChartRef = useRef<EChartsType | null>(null);
+  const usBoundsRef = useRef<{ byName: Record<string, BBox>; frame: BBox } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -163,7 +186,11 @@ export default function WorldMapPanel({
     import('@admin/components/charts/us-states-albers.geo.json')
       .then((mod) => {
         if (cancelled) return;
-        registerMapOnce(US_MAP_NAME, (mod as { default: object }).default ?? mod);
+        const states = ((mod as { default: object }).default ?? mod) as Parameters<
+          typeof featureBounds
+        >[0];
+        usBoundsRef.current = featureBounds(states);
+        registerMapOnce(US_MAP_NAME, states);
         setUsMapReady(true);
       })
       .catch(() => {
@@ -186,18 +213,52 @@ export default function WorldMapPanel({
   const usCollecting = stateRows.length === 0;
 
   const enterUs = useCallback(() => setView('us'), []);
-  const backToWorld = useCallback(() => setView('world'), []);
+  const backToWorld = useCallback(() => {
+    setView('world');
+    setUsZoomed(false); // a fresh drill-in starts at the auto-fit
+  }, []);
 
-  // Only the world map is clickable-through; no state drills any further, and
-  // no state is named 'US', so the guard doubles as the US view's no-op.
+  const captureChart = useCallback((chart: EChartsType) => {
+    // Both views' instances land here (one per key={view} mount); the zoom
+    // handlers only ever run while the US view is the mounted one.
+    usChartRef.current = chart;
+  }, []);
+
+  const resetUsView = useCallback(() => {
+    const info = usBoundsRef.current;
+    const chart = usChartRef.current;
+    if (info && chart && !chart.isDisposed()) {
+      chart.setOption({ geo: homeView(info.frame) });
+    }
+    setUsZoomed(false);
+  }, []);
+
+  // World: clicking the US drills in. US: clicking any state zooms to it —
+  // which is also what un-piles the Northeast city dots, since symbols keep
+  // their pixel size while the geography under them expands.
   const onEvents = useMemo(
     () => ({
       click: (params: unknown) => {
-        const p = params as { name?: string } | null;
-        if (p?.name === 'US') setView('us');
+        const p = params as { name?: string; seriesType?: string } | null;
+        if (!p?.name) return;
+        if (view === 'world') {
+          if (p.name === 'US') setView('us');
+          return;
+        }
+        if (p.seriesType === 'scatter') return; // a dot is a place, not a frame
+        const info = usBoundsRef.current;
+        const chart = usChartRef.current;
+        const bounds = info?.byName[p.name];
+        if (!info || !bounds || !chart || chart.isDisposed()) return;
+        const plotW = Math.max(chart.getWidth() - MAP_BOX.left - MAP_BOX.right, 1);
+        const plotH = Math.max(chart.getHeight() - MAP_BOX.top - MAP_BOX.bottom, 1);
+        chart.setOption({ geo: viewForBounds(bounds, info.frame, plotW, plotH) });
+        setUsZoomed(true);
       },
+      // Wheel zoom / drag pan — user roam should surface the reset pill too.
+      georoam: () => setUsZoomed(true),
     }),
-    [],
+    [view],
   );
 
   const worldOption: EChartsCoreOption = useMemo(
@@ -284,7 +345,8 @@ export default function WorldMapPanel({
         map: US_MAP_NAME,
         nameProperty: 'name',
         projection: US_PROJECTION,
-        roam: false,
+        roam: true,
+        scaleLimit: { min: 1, max: MAX_STATE_ZOOM },
         ...MAP_BOX,
         ...LAND_STYLE,
       },
@@ -292,7 +354,13 @@ export default function WorldMapPanel({
         {
           type: 'map',
           geoIndex: 0,
-          data: stateRows.map((s) => ({ name: s.name, value: s.views })),
+          // The green edge marks "has data" at a glance — the two darkest
+          // bins sit close to the empty navy under a layer of amber dots.
+          data: stateRows.map((s) => ({
+            name: s.name,
+            value: s.views,
+            itemStyle: { borderColor: VISITED_BORDER, borderWidth: 0.9 },
+          })),
         },
         {
           type: 'scatter',
@@ -301,9 +369,9 @@ export default function WorldMapPanel({
           symbol: 'circle',
           itemStyle: {
             color: CITY_DOT,
-            opacity: 0.85,
+            opacity: 0.78,
             borderColor: CITY_DOT_EDGE,
-            borderWidth: 0.8,
+            borderWidth: 1,
           },
           emphasis: { scale: 1.2, itemStyle: { opacity: 1 } },
           label: { show: false },
@@ -334,6 +402,11 @@ export default function WorldMapPanel({
           <h3 className={`${styles.chartTitle} ${styles.wmTitle}`}>
             {isUs ? 'Visitors by State' : 'Visitors by Country'}
           </h3>
+          {isUs && usZoomed && (
+            <button type="button" className={styles.wmCrumb} onClick={resetUsView}>
+              Reset view
+            </button>
+          )}
           {/* The canvas click is the discoverable way in, but it is not a
               keyboard one — the entry pill and the back pill share a slot so
               the drill-down is reachable without a pointer. */}
@@ -348,7 +421,9 @@ export default function WorldMapPanel({
             ? isUs
               ? 'Collecting — state is recorded from today forward'
               : 'Collecting — country is recorded from today forward'
-            : `${segmentLabel(segment)} by ${isUs ? 'state, with the busiest towns' : 'location'}`}
+            : isUs
+              ? `${segmentLabel(segment)} by state — click a state to zoom in`
+              : `${segmentLabel(segment)} by location`}
         </span>
       </div>
 
@@ -359,6 +434,7 @@ export default function WorldMapPanel({
               key={view}
               option={isUs ? usOption : worldOption}
               onEvents={onEvents}
+              onReady={captureChart}
               style={{ height: 300 }}
             />
           ) : (
