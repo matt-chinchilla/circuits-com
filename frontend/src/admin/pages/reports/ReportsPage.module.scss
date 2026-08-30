@@ -123,6 +123,11 @@
   margin-bottom: 16px;
   border-bottom: 1px solid var(--a-border-soft);
   overflow-x: auto;
+  // Explicit, because `overflow-x: auto` alone COMPUTES overflow-y to auto
+  // (visible can't pair with a scrolling axis) — and the active tab's
+  // underline once hung 1px below the button, which was enough for a full
+  // vertical scrollbar beside the tabs.
+  overflow-y: hidden;
   @include scrollbar-thin(4px, 2px);
 }
 
@@ -151,7 +156,11 @@
       position: absolute;
       left: 0;
       right: 0;
-      bottom: -1px;
+      // Flush with the button's own bottom — NOT -1px over the strip's
+      // border. Hanging below the button is vertical overflow, and the strip
+      // must scroll horizontally, so anything below the line becomes either
+      // a scrollbar (overflow-y auto) or a shaved underline (hidden).
+      bottom: 0;
       height: 2px;
       background: var(--a-primary);
     }
@@ -882,8 +891,11 @@
 }
 
 // ── Visitors by Country — the dark signature panel ──────────────────────────
-// PCB-dark ground (#0d1512) on the light admin surface; single-hue green
-// choropleth ramp validated against this surface (chartKit provenance).
+// Night-indigo ground on the light admin surface, carrying a THERMAL
+// choropleth: an inferno slice, cool-dark to hot. The ramp itself and its
+// measurements live in viewershipBins.ts (VIEWERSHIP_RAMP) — the hexes that
+// appear below are the two ENDS of that ramp, quoted here so the rank bars,
+// the focus rings and the map all speak one language. Retint both together.
 
 .wmCard {
   background: linear-gradient(180deg, #121a30 0%, #0f1526 100%);
@@ -921,8 +933,10 @@
     border-color: #3c4f80;
   }
 
+  // The ramp's hottest stop — 10.9:1 on this pill, and the same accent the
+  // rank bars and the map hover already use.
   &:focus-visible {
-    outline: 2px solid #57c78c;
+    outline: 2px solid #f7cd3a;
     outline-offset: 2px;
   }
 }
@@ -1032,11 +1046,13 @@
   overflow: hidden;
 }
 
+// The rank bar sweeps the same ramp the map does, cool end to hot end, so a
+// long bar and a hot state are visibly the same statement.
 .wmFill {
   display: block;
   height: 100%;
   border-radius: 4px;
-  background: linear-gradient(90deg, #2f7d5b, #57c78c);
+  background: linear-gradient(90deg, #832168, #e15933 55%, #f7cd3a);
 }
 
 .wmVal {
@@ -1065,17 +1081,152 @@
   color: #61719b;
 }
 
+// A <button>, not a row: the city dots it mirrors are canvas pixels, so this
+// list is the only keyboard route into a town's intel card. Button chrome is
+// reset back to a table row on purpose — it must not read as a control strip.
 .wmTown {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 52px;
   align-items: baseline;
   gap: 8px;
+  width: 100%;
+  appearance: none;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: 5px;
+  padding: 2px 4px;
+  margin: 0 -4px;
+  transition: background 120ms ease;
+
+  &:hover .wmTownName {
+    color: #dbe4f5;
+  }
+
+  &:hover {
+    background: #16203a;
+  }
+
+  &:focus-visible {
+    outline: 2px solid #f7cd3a;
+    outline-offset: 1px;
+  }
 }
 
 .wmTownName {
   font-size: 11.5px;
   color: #93a2c4;
   @include truncate;
+}
+
+// ── City intel card ────────────────────────────────────────────────────────
+// Anchored at the click inside .wmMap (JS clamps it so it never leaves the
+// box), or pinned to the corner when opened from the Top-towns buttons. Chrome
+// is the TOOLTIP_CHROME family, because it answers the same question the
+// tooltip does — just at more length and without vanishing on mouse-out.
+//
+// `width` here is COUPLED to INTEL_CARD in cityIntel.ts, which is what the
+// clamp math measures against. Change both or the card can hang off the map.
+.wmIntel {
+  position: absolute;
+  z-index: 3;
+  width: 216px;
+  // Backstop for the one case the clamp cannot solve — a map box narrower
+  // than the card (the stacked phone layout gives the plot ~256px, so this
+  // is close). Shrinking beats hanging off the edge.
+  max-width: calc(100% - 20px);
+  box-sizing: border-box;
+  padding: 9px 11px 10px;
+  background: #141d36;
+  border: 1px solid #2b3a63;
+  border-radius: 9px;
+  box-shadow: 0 10px 24px rgba(4, 8, 20, 0.55);
+  color: #e8eef9;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+// The keyboard slot: no click to anchor to, so it always opens in the same
+// place rather than somewhere the user has to go looking for it.
+.wmIntelPinned {
+  left: 10px;
+  top: 10px;
+}
+
+.wmIntelHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.wmIntelTitle {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #e8eef9;
+  min-width: 0;
+}
+
+.wmIntelClose {
+  flex: 0 0 auto;
+  appearance: none;
+  cursor: pointer;
+  line-height: 1;
+  font-size: 11px;
+  color: #93a2c4;
+  background: none;
+  border: 0;
+  border-radius: 4px;
+  padding: 2px 3px;
+  margin: -2px -3px 0 0;
+
+  &:hover {
+    color: #e8eef9;
+  }
+
+  &:focus-visible {
+    outline: 2px solid #f7cd3a;
+    outline-offset: 1px;
+  }
+}
+
+.wmIntelStat {
+  margin-top: 2px;
+  font-family: ui-monospace, 'SF Mono', monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 11.5px;
+  color: #dbe4f5;
+}
+
+.wmIntelSection {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-top: 8px;
+  padding-top: 7px;
+  border-top: 1px solid #22304f;
+}
+
+.wmIntelLabel {
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #61719b;
+}
+
+.wmIntelLine {
+  font-size: 11.5px;
+  color: #dbe4f5;
+  @include truncate;
+}
+
+.wmIntelMeta {
+  margin-top: 8px;
+  font-size: 10.5px;
+  color: #61719b;
 }
 
 .wmFoot {
