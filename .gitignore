@@ -85,3 +85,12 @@ circuits-ai-payments-addendum.md
 # true: `git check-ignore` exited 1. Nothing had leaked, because no real config
 # had been created yet — the trap was armed and had not been stepped on.
 mail/roundcube-plugins/*/config.inc.php
+
+# The city-level GeoIP database (~124MB, DB-IP Lite CC-BY 4.0). Too big to
+# commit and freely re-downloadable: the API image fetches it in a cached
+# build layer (api/Dockerfile), and services/geoip.py falls back to the
+# COMMITTED dbip-country-lite.mmdb beside it when it is absent. Untracked
+# files in this repo are not harmless — deploy.sh bails on any of them with
+# a two-line warning and exit 0, so an unignored 124MB blob here silently
+# kills deploys that look like they succeeded.
+api/app/data/dbip-city-lite.mmdb

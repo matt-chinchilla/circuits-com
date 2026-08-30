@@ -15,7 +15,7 @@ from app.db.session import get_db
 from app.models import OutboundClick, PartListing, User
 from app.models.page_view import PageView
 from app.services.auth_service import require_staff
-from app.services.geoip import country_for_ip
+from app.services.geoip import geo_for_ip
 from app.services.rate_limit import client_ip, trusted_client_addr
 from app.services.traffic_segments import crawler_family, human_ua_filter, window_bot_uas
 
@@ -127,6 +127,11 @@ def track_page_view(
     # NETWORK for IPv6, which the GeoIP reader rejects outright, so every IPv6
     # visitor was landing as "unknown" and every IPv6 subscriber shared one hash.
     addr = trusted_client_addr(request)
+    # ONE lookup for all five columns. Fail-open by contract: any geo problem
+    # yields the empty result and stores NULLs, never raises. How much comes
+    # back depends on which database the container has — country-only from the
+    # committed file, city detail from the one the image downloads.
+    geo = geo_for_ip(addr)
 
     db.add(
         PageView(
@@ -137,8 +142,11 @@ def track_page_view(
             ip_hash=_hash_ip(addr),
             device_type=_parse_device(ua),
             browser=_parse_browser(ua),
-            # Fail-open by contract: any geo problem stores NULL, never raises.
-            country=country_for_ip(addr),
+            country=geo.country,
+            region=geo.region,
+            city=geo.city,
+            latitude=geo.latitude,
+            longitude=geo.longitude,
         )
     )
     db.commit()
@@ -243,17 +251,42 @@ def _geo_tracked_since(db: Session) -> datetime | None:
     return _geo_since_cache
 
 
-def reset_analytics_state() -> None:
-    """Test seam for BOTH pieces of process memory this module keeps — the
-    "country data since" stamp and the /api/track throttle buckets.
+_region_since_cache: datetime | None = None
 
-    An autouse conftest fixture calls it, and both halves matter: the stamp is
+
+def _region_tracked_since(db: Session) -> datetime | None:
+    """The FIRST page view that ever carried a region — the city-data stamp.
+
+    Its own stamp rather than a reuse of `geo_tracked_since`, because the two
+    answer different questions and are months apart: country capture started
+    at migration 040, city detail at 048. Sharing one would have the panel
+    claim city coverage back to the country start date, over a stretch of
+    history where every row's region is NULL and always will be.
+
+    Same sticky-cache reasoning as above — it can only move BACKWARD, and a
+    NULL is deliberately NOT cached so the first real row can land.
+    """
+    global _region_since_cache
+    if _region_since_cache is None:
+        _region_since_cache = (
+            db.query(func.min(PageView.created_at)).filter(PageView.region.isnot(None)).scalar()
+        )
+    return _region_since_cache
+
+
+def reset_analytics_state() -> None:
+    """Test seam for every piece of process memory this module keeps — the
+    "country data since" and "city data since" stamps, and the /api/track
+    throttle buckets.
+
+    An autouse conftest fixture calls it, and all of it matters: the stamps are
     deliberately sticky, and the throttle is keyed per ADDRESS, so every test
     that posts to /api/track or /api/outbound shares that endpoint's bucket
     (TestClient is always the same host) and the 31st post in a suite would
     silently vanish."""
-    global _geo_since_cache
+    global _geo_since_cache, _region_since_cache
     _geo_since_cache = None
+    _region_since_cache = None
     _rate_buckets.clear()
 
 
@@ -441,6 +474,49 @@ def get_analytics(
     )
     geo_since = _geo_tracked_since(db)
 
+    # US detail — the same window and segment as the country roll-up above.
+    # Scoped to the US because that is the map these back (a state choropleth
+    # and a city bubble layer); `region` elsewhere is a province or a
+    # prefecture and does not belong on either.
+    state_rows = (
+        db.query(
+            PageView.region,
+            view_count.label("views"),
+            unique_sessions.label("visitors"),
+        )
+        .filter(recent, *seg, PageView.country == "US", PageView.region.isnot(None))
+        .group_by(PageView.region)
+        .order_by(view_count.desc())
+        .all()
+    )
+
+    # A bubble needs a name AND a point, so all three are required — a city
+    # whose centroid the database does not carry is counted in the state layer
+    # and simply has no bubble. The coordinates are in the GROUP BY because
+    # they identify the place: two cities can share a name across states.
+    city_rows = (
+        db.query(
+            PageView.city,
+            PageView.region,
+            PageView.latitude,
+            PageView.longitude,
+            view_count.label("views"),
+        )
+        .filter(
+            recent,
+            *seg,
+            PageView.country == "US",
+            PageView.city.isnot(None),
+            PageView.latitude.isnot(None),
+            PageView.longitude.isnot(None),
+        )
+        .group_by(PageView.city, PageView.region, PageView.latitude, PageView.longitude)
+        .order_by(view_count.desc())
+        .limit(60)
+        .all()
+    )
+    region_since = _region_tracked_since(db)
+
     return {
         "period_days": days,
         "segment": segment,
@@ -456,6 +532,20 @@ def get_analytics(
         ],
         "geo_unknown_views": geo_unknown,
         "geo_tracked_since": str(geo_since) if geo_since is not None else None,
+        "us_states": [
+            {"name": row.region, "views": row.views, "visitors": row.visitors} for row in state_rows
+        ],
+        "us_cities": [
+            {
+                "city": row.city,
+                "region": row.region,
+                "lat": row.latitude,
+                "lng": row.longitude,
+                "views": row.views,
+            }
+            for row in city_rows
+        ],
+        "region_tracked_since": str(region_since) if region_since is not None else None,
         "daily_traffic": [
             {"day": str(row.day), "views": row.views, "visitors": row.visitors}
             for row in daily_traffic

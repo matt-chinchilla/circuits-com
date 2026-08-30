@@ -48,3 +48,11 @@ CHANGELOG*
 # OS noise
 .DS_Store
 Thumbs.db
+
+# The city-level GeoIP database (~124MB). The IMAGE downloads it in a cached
+# build layer straight into app/data/, so shipping the local copy through the
+# build context would only overwrite that file with an identical one — at the
+# cost of 124MB on every single build. The country-lite file beside it is
+# committed and MUST keep shipping: it is the fallback when the city DB is
+# absent, and it is what a plain checkout geolocates with.
+app/data/dbip-city-lite.mmdb

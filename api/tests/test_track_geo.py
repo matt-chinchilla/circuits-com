@@ -10,7 +10,7 @@ import pytest
 
 from app.models.page_view import PageView
 from app.services import geoip
-from app.services.geoip import country_for_ip, reset_geoip
+from app.services.geoip import GeoResult, country_for_ip, reset_geoip
 
 
 @pytest.fixture(autouse=True)
@@ -20,39 +20,56 @@ def _fresh_reader():
     reset_geoip()
 
 
+def _hide_every_database(monkeypatch):
+    """Both candidates gone. Patching only one leaves the other to open, and
+    since the city file is present on a built machine and absent on a fresh
+    checkout, a one-path patch would pass or fail by environment."""
+    monkeypatch.setattr(geoip, "CITY_DB_PATH", Path("/nonexistent/city.mmdb"))
+    monkeypatch.setattr(geoip, "COUNTRY_DB_PATH", Path("/nonexistent/country.mmdb"))
+
+
+def _skip_without_a_database():
+    if not (geoip.CITY_DB_PATH.exists() or geoip.COUNTRY_DB_PATH.exists()):
+        pytest.skip("no mmdb present")
+
+
 class TestCountryForIp:
     def test_none_ip_is_none(self):
         assert country_for_ip(None) is None
         assert country_for_ip("") is None
 
     def test_missing_database_fails_open(self, monkeypatch):
-        monkeypatch.setattr(geoip, "DB_PATH", Path("/nonexistent/geo.mmdb"))
+        _hide_every_database(monkeypatch)
         assert country_for_ip("8.8.8.8") is None
         # The failed open is remembered — no per-request retry storm.
         assert geoip._open_failed is True
 
     def test_reset_clears_failure_memo(self, monkeypatch):
-        monkeypatch.setattr(geoip, "DB_PATH", Path("/nonexistent/geo.mmdb"))
+        _hide_every_database(monkeypatch)
         country_for_ip("8.8.8.8")
         assert geoip._open_failed is True
         reset_geoip()
         assert geoip._open_failed is False
 
     def test_invalid_ip_is_none_and_reader_survives(self):
-        if not geoip.DB_PATH.exists():
-            pytest.skip("committed mmdb not present")
+        _skip_without_a_database()
         assert country_for_ip("testclient") is None
         assert country_for_ip("not-an-ip") is None
         # Reader stays healthy for the next lookup.
         assert geoip._open_failed is False
 
     def test_known_public_ip_resolves(self):
-        if not geoip.DB_PATH.exists():
-            pytest.skip("committed mmdb not present")
+        _skip_without_a_database()
         iso = country_for_ip("8.8.8.8")
         assert iso is not None
         assert len(iso) == 2
         assert iso == iso.upper()
+
+    def test_it_delegates_to_geo_for_ip(self, monkeypatch):
+        """The signup path imports this name and stores nothing but the ISO
+        code; it must stay a view onto the one lookup, not a second reader."""
+        monkeypatch.setattr(geoip, "geo_for_ip", lambda ip: GeoResult(country="PT", city="Lisbon"))
+        assert country_for_ip("8.8.8.8") == "PT"
 
 
 class TestTrackStoresCountry:
@@ -64,10 +81,10 @@ class TestTrackStoresCountry:
         assert row.country is None
 
     def test_track_stores_resolved_country(self, client, db, monkeypatch):
-        # country_for_ip is imported into the route module's namespace.
+        # geo_for_ip is imported into the route module's namespace.
         from app.routes import analytics as analytics_route
 
-        monkeypatch.setattr(analytics_route, "country_for_ip", lambda ip: "US")
+        monkeypatch.setattr(analytics_route, "geo_for_ip", lambda ip: GeoResult(country="US"))
         client.post("/api/track", json={"path": "/", "session_id": "geo-s2"})
         row = db.query(PageView).filter(PageView.session_id == "geo-s2").one()
         assert row.country == "US"
@@ -81,9 +98,9 @@ class TestTrackStoresCountry:
 
         def fake_lookup(ip):
             seen.append(ip)
-            return {"10.0.0.7": "DE", "9.9.9.9": "XX"}.get(ip or "")
+            return GeoResult(country={"10.0.0.7": "DE", "9.9.9.9": "XX"}.get(ip or ""))
 
-        monkeypatch.setattr(analytics_route, "country_for_ip", fake_lookup)
+        monkeypatch.setattr(analytics_route, "geo_for_ip", fake_lookup)
         client.post(
             "/api/track",
             json={"path": "/", "session_id": "geo-s3"},
@@ -168,9 +185,9 @@ class TestIpv6VisitorsGeolocate:
         def fake_lookup(ip):
             seen.append(ip)
             # A reader really does reject a network string; model that.
-            return None if ip is None or "/" in ip else "NL"
+            return GeoResult() if ip is None or "/" in ip else GeoResult(country="NL")
 
-        monkeypatch.setattr(analytics_route, "country_for_ip", fake_lookup)
+        monkeypatch.setattr(analytics_route, "geo_for_ip", fake_lookup)
         client.post(
             "/api/track",
             json={"path": "/", "session_id": "v6-s1"},

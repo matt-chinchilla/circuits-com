@@ -1,7 +1,7 @@
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import Column, DateTime, String
+from sqlalchemy import Column, DateTime, Float, String
 from sqlalchemy.dialects.postgresql import UUID
 
 from app.db.session import Base
@@ -22,6 +22,16 @@ class PageView(Base):
     # 040). NULL = unknown: rows written before the column existed (ip_hash
     # is one-way, so history can never be backfilled) or a failed lookup.
     country = Column(String(2), nullable=True)
+    # City-level detail from the same track-time lookup (migration 048), and
+    # forward-only for the same reason: the rows above this migration keep a
+    # country and nothing finer, forever. `region` is the subdivision NAME
+    # ("New York"), not a code — DB-IP Lite ships no subdivision iso_code.
+    # The point is a CITY CENTROID rounded to 2dp (~1.1km), not a visitor's
+    # position; the pair is written together or not at all.
+    region = Column(String(80), nullable=True)
+    city = Column(String(80), nullable=True)
+    latitude = Column(Float, nullable=True)
+    longitude = Column(Float, nullable=True)
     created_at = Column(
         DateTime(timezone=True),
         default=lambda: datetime.now(UTC),
