@@ -983,6 +983,36 @@
   font-size: 13px;
 }
 
+// The bin legend, as DOM under the canvas — never painted over the geography
+// (the in-canvas visualMap was, once a zoom filled the frame).
+.wmLegend {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding: 4px 2px 0;
+  font-size: 10px;
+  color: #93a2c4;
+}
+
+.wmLegendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.wmLegendSwatch {
+  width: 11px;
+  height: 11px;
+  border-radius: 2px;
+  flex: 0 0 auto;
+}
+
+.wmLegendUnit {
+  color: #61719b;
+  letter-spacing: 0.04em;
+}
+
 .wmCollect {
   position: absolute;
   inset: 0;

@@ -59,7 +59,6 @@ import {
   usPlanarUnproject,
 } from './mapProjections';
 import { binColorFor, buildBins } from './viewershipBins';
-import type { ViewershipBin } from './viewershipBins';
 import {
   cityLabel,
   clampCardPosition,
@@ -69,7 +68,7 @@ import {
   plural,
   viewsVisitorsLabel,
 } from './cityIntel';
-import { MAX_STATE_ZOOM, featureBounds, homeView, viewForBounds } from './usZoom';
+import { MAX_STATE_ZOOM, featureBounds, viewForBounds } from './usZoom';
 import type { BBox } from './usZoom';
 import styles from './ReportsPage.module.scss';
 
@@ -112,9 +111,11 @@ const TOOLTIP_CHROME = {
   textStyle: { color: '#e8eef9', fontSize: 12 },
 };
 
-/** Layout shared by both views so the two maps sit in the same box; `bottom`
- *  reserves the piecewise legend's row. */
-const MAP_BOX = { top: 8, bottom: 26, left: 8, right: 8 };
+/** Layout shared by both views so the two maps sit in the same box. The
+ *  legend lives in the DOM below the canvas (owner call, 2026-08-30 — the
+ *  in-canvas visualMap printed on top of the states once a zoom filled the
+ *  frame), so the box no longer reserves a bottom row for it. */
+const MAP_BOX = { top: 8, bottom: 10, left: 8, right: 8 };
 
 const LAND_STYLE = {
   itemStyle: { areaColor: LAND_NO_DATA, borderColor: BORDER, borderWidth: 0.6 },
@@ -181,9 +182,14 @@ export default function WorldMapPanel({
   const [view, setView] = useState<MapView>('world');
   const [mapReady, setMapReady] = useState(false);
   const [usMapReady, setUsMapReady] = useState(false);
-  // True once the US view has been zoomed — by a state click or a wheel/drag
-  // roam — so the "Reset view" pill knows to appear.
-  const [usZoomed, setUsZoomed] = useState(false);
+  // True once the CURRENT view has been zoomed — by a state click or a
+  // wheel/drag roam — so the "Reset view" pill knows to appear.
+  const [zoomed, setZoomed] = useState(false);
+  // Bumping this rebuilds the option object VERBATIM, and the wrapper's
+  // notMerge re-apply is what resets a wheel/drag roam: the roam zoom lives
+  // in ECharts' component model, which a full option replace rebuilds at the
+  // declared (auto-fit) view. One mechanism, both maps — no reset math.
+  const [resetNonce, setResetNonce] = useState(0);
   const [intel, setIntel] = useState<CityIntel | null>(null);
   // The live chart instance (captured per mount via onReady; the key={view}
   // remount swaps it) and the states asset's bounding boxes, both consumed
@@ -289,26 +295,25 @@ export default function WorldMapPanel({
   const worldBins = useMemo(() => buildBins(maxViews), [maxViews]);
   const usBins = useMemo(() => buildBins(usMaxViews), [usMaxViews]);
 
-  const enterUs = useCallback(() => setView('us'), []);
+  const enterUs = useCallback(() => {
+    setView('us');
+    setZoomed(false); // each view starts at its own auto-fit
+  }, []);
   const backToWorld = useCallback(() => {
     setView('world');
-    setUsZoomed(false); // a fresh drill-in starts at the auto-fit
+    setZoomed(false);
     setIntel(null); // the card belongs to the US view only
   }, []);
 
   const captureChart = useCallback((chart: EChartsType) => {
-    // Both views' instances land here (one per key={view} mount); the zoom
-    // handlers only ever run while the US view is the mounted one.
+    // Both views' instances land here (one per key={view} mount); the
+    // click-to-zoom handler only ever runs while the US view is mounted.
     usChartRef.current = chart;
   }, []);
 
-  const resetUsView = useCallback(() => {
-    const info = usBoundsRef.current;
-    const chart = usChartRef.current;
-    if (info && chart && !chart.isDisposed()) {
-      chart.setOption({ geo: homeView(info.frame) });
-    }
-    setUsZoomed(false);
+  const resetView = useCallback(() => {
+    setResetNonce((n) => n + 1);
+    setZoomed(false);
   }, []);
 
   // World: clicking the US drills in. US: clicking a dot opens its intel card,
@@ -350,10 +355,10 @@ export default function WorldMapPanel({
         const plotW = Math.max(chart.getWidth() - MAP_BOX.left - MAP_BOX.right, 1);
         const plotH = Math.max(chart.getHeight() - MAP_BOX.top - MAP_BOX.bottom, 1);
         chart.setOption({ geo: viewForBounds(bounds, info.frame, plotW, plotH) });
-        setUsZoomed(true);
+        setZoomed(true);
       },
-      // Wheel zoom / drag pan — user roam should surface the reset pill too.
-      georoam: () => setUsZoomed(true),
+      // Wheel zoom / drag pan, EITHER view — surface the reset pill.
+      georoam: () => setZoomed(true),
     }),
     [view],
   );
@@ -373,24 +378,32 @@ export default function WorldMapPanel({
           return `${flagEmoji(code)} ${countryName(code)}<br/>${plural(v, 'view')}${visitors}`;
         },
       },
-      // In the collecting state the component is OMITTED outright: a mounted
-      // visualMap paints every no-data region with its default outOfRange
-      // color, turning an honest empty map into a lie.
-      ...(collecting ? {} : { visualMap: buildVisualMap(worldBins) }),
       series: [
         {
           type: 'map',
           map: MAP_NAME,
           nameProperty: 'iso',
           projection: WORLD_PROJECTION,
-          roam: false,
+          // Wheel-over-map means "zoom the map", not "scroll the page" —
+          // owner call, 2026-08-30, after the world view ignored the wheel
+          // while the US view obeyed it.
+          roam: true,
+          scaleLimit: { min: 1, max: MAX_STATE_ZOOM },
           ...MAP_BOX,
           ...LAND_STYLE,
-          data: countries.map((c) => ({ name: c.code, value: c.views })),
+          // Colored per item off the shared bins (the DOM legend below the
+          // canvas is the one scale for everything) — there is no visualMap
+          // anywhere in this panel anymore, so an empty map needs no special
+          // casing to stay honestly navy.
+          data: countries.map((c) => ({
+            name: c.code,
+            value: c.views,
+            itemStyle: { areaColor: binColorFor(c.views, worldBins) },
+          })),
         },
       ],
     }),
-    [countries, worldBins, collecting],
+    [countries, worldBins, resetNonce],
   );
 
   const cityPoints: CityPoint[] = useMemo(() => {
@@ -439,11 +452,6 @@ export default function WorldMapPanel({
           return `${name}<br/>${plural(row.views, 'view')} · ${plural(row.visitors, 'visitor')}`;
         },
       },
-      // `seriesIndex: 0` scopes the ramp to the choropleth. The dots already
-      // carry their bin color per data item; letting the visualMap reach them
-      // would re-derive it AND overwrite the dark ring that keeps a dot
-      // legible on a hot state.
-      ...(usCollecting ? {} : { visualMap: { ...buildVisualMap(usBins), seriesIndex: 0 } }),
       geo: {
         map: US_MAP_NAME,
         nameProperty: 'name',
@@ -457,12 +465,17 @@ export default function WorldMapPanel({
         {
           type: 'map',
           geoIndex: 0,
-          // The orchid edge marks "has data" at a glance — the two coolest
-          // bins sit close to the empty navy under a layer of dots.
+          // Fill from the shared bins (same mechanism as the dots — no
+          // visualMap); the orchid edge marks "has data" at a glance where
+          // the two coolest bins sit close to the empty navy under dots.
           data: stateRows.map((s) => ({
             name: s.name,
             value: s.views,
-            itemStyle: { borderColor: VISITED_BORDER, borderWidth: 0.9 },
+            itemStyle: {
+              areaColor: binColorFor(s.views, usBins),
+              borderColor: VISITED_BORDER,
+              borderWidth: 0.9,
+            },
           })),
         },
         {
@@ -487,7 +500,7 @@ export default function WorldMapPanel({
         },
       ],
     }),
-    [stateRows, cityPoints, usCollecting, usBins],
+    [stateRows, cityPoints, usBins, resetNonce],
   );
 
   const isUs = view === 'us';
@@ -510,8 +523,8 @@ export default function WorldMapPanel({
           <h3 className={`${styles.chartTitle} ${styles.wmTitle}`}>
             {isUs ? 'Visitors by State' : 'Visitors by Country'}
           </h3>
-          {isUs && usZoomed && (
-            <button type="button" className={styles.wmCrumb} onClick={resetUsView}>
+          {zoomed && (
+            <button type="button" className={styles.wmCrumb} onClick={resetView}>
               Reset view
             </button>
           )}
@@ -531,7 +544,7 @@ export default function WorldMapPanel({
               : 'Collecting — country is recorded from today forward'
             : isUs
               ? `${segmentLabel(segment)} by state — click a state to zoom, a town for detail`
-              : `${segmentLabel(segment)} by location`}
+              : `${segmentLabel(segment)} by location — scroll to zoom`}
         </span>
       </div>
 
@@ -547,6 +560,23 @@ export default function WorldMapPanel({
             />
           ) : (
             <div className={styles.wmLoading}>Loading map&hellip;</div>
+          )}
+          {/* The one scale for both layers, as DOM below the canvas — never
+              painted over the geography, whatever the zoom does. */}
+          {!showingCollecting && chartReady && (
+            <div className={styles.wmLegend}>
+              {(isUs ? usBins : worldBins).map((b) => (
+                <span key={b.label} className={styles.wmLegendItem}>
+                  <span
+                    className={styles.wmLegendSwatch}
+                    style={{ background: b.color }}
+                    aria-hidden="true"
+                  />
+                  {b.label}
+                </span>
+              ))}
+              <span className={styles.wmLegendUnit}>views</span>
+            </div>
           )}
           {isUs && intel && (
             <CityIntelCard
@@ -709,28 +739,4 @@ function CityIntelCard({ intel, cardRef, closeRef, onClose }: CityIntelCardProps
       {lastSeen && <div className={styles.wmIntelMeta}>Last seen {lastSeen}</div>}
     </div>
   );
-}
-
-/** The piecewise legend. Sized and positioned to sit in the row `MAP_BOX`
- *  reserves at the bottom of the plot. In the US view it explains BOTH layers
- *  at once — the state fills and the city dots draw from the same bins. */
-function buildVisualMap(bins: ViewershipBin[]) {
-  return {
-    show: true,
-    type: 'piecewise' as const,
-    orient: 'horizontal' as const,
-    // Tight on purpose: five pieces with four-digit labels are ~290px wide,
-    // and on a phone the stacked card only gives the plot ~256px. The gaps
-    // are what keep the last label on-canvas there.
-    left: 10,
-    bottom: 4,
-    itemWidth: 11,
-    itemHeight: 11,
-    itemGap: 7,
-    textGap: 4,
-    showLabel: true,
-    pieces: bins,
-    outOfRange: { color: LAND_NO_DATA },
-    textStyle: { color: '#93a2c4', fontSize: 10 },
-  };
 }

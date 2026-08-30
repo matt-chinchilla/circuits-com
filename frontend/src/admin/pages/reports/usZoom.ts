@@ -90,9 +90,3 @@ export function viewForBounds(
   const zoom = Math.min(Math.max((FIT_MARGIN * fitState) / fitFrame, 1), MAX_STATE_ZOOM);
   return { center: [(minX + maxX) / 2, (minY + maxY) / 2], zoom };
 }
-
-/** The reset view: ECharts' own auto-fit, expressed explicitly so an
- *  imperative merge-setOption can restore it after any roam. */
-export function homeView(frame: BBox): { center: [number, number]; zoom: number } {
-  return { center: [(frame[0] + frame[2]) / 2, (frame[1] + frame[3]) / 2], zoom: 1 };
-}

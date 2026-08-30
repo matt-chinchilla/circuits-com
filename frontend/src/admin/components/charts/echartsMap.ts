@@ -15,7 +15,6 @@
 //
 // ── What is registered, and why each one ───────────────────────────────────
 //   MapChart           — both choropleths (world countries, US states).
-//   VisualMapComponent — the piecewise viewership legend.
 //   GeoComponent       — the US drill-down only. A `series-scatter` can bind
 //                        to `coordinateSystem: 'geo'` but NOT to a map
 //                        series' private coordinate system, so the city-dot
@@ -24,6 +23,9 @@
 //                        stays a bare map series and never installs it at
 //                        runtime (the import cost is shared either way).
 //   ScatterChart       — the US city dots.
+//   (VisualMapComponent was here 2026-08-30, briefly: the in-canvas legend
+//   painted over the states once a zoom filled the frame, so the legend is
+//   DOM now and every region/dot is colored per data item instead.)
 //
 // ── The byte split is NOT achievable today (measured 2026-08-21) ───────────
 // `vite.config.ts` manualChunks groups by module path, so all of
@@ -42,9 +44,9 @@
 
 import * as echarts from 'echarts/core';
 import { MapChart, ScatterChart } from 'echarts/charts';
-import { GeoComponent, VisualMapComponent } from 'echarts/components';
+import { GeoComponent } from 'echarts/components';
 
-echarts.use([MapChart, ScatterChart, GeoComponent, VisualMapComponent]);
+echarts.use([MapChart, ScatterChart, GeoComponent]);
 
 /** Register a GeoJSON map once per name (WorldMapPanel lazy-loads the
  *  committed world-110m and us-states-albers assets and hands each here

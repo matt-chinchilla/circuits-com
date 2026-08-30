@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { featureBounds, homeView, viewForBounds, MAX_STATE_ZOOM } from './usZoom';
+import { featureBounds, viewForBounds, MAX_STATE_ZOOM } from './usZoom';
 
 const square = (name: string, x0: number, y0: number, x1: number, y1: number) => ({
   properties: { name },
@@ -81,11 +81,5 @@ describe('viewForBounds', () => {
   it('never zooms below the auto-fit and never past the cap', () => {
     expect(viewForBounds([0, 0, 1000, 500], frame, 800, 300).zoom).toBe(1);
     expect(viewForBounds([10, 10, 11, 11], frame, 1000, 500).zoom).toBe(MAX_STATE_ZOOM);
-  });
-});
-
-describe('homeView', () => {
-  it('is the frame midpoint at zoom 1', () => {
-    expect(homeView([0, 0, 975, 610])).toEqual({ center: [487.5, 305], zoom: 1 });
   });
 });
