@@ -354,13 +354,25 @@ export interface AnalyticsData {
   // render its collecting state rather than an empty country.
   /** Segment-filtered US views by state NAME ("New York"), views desc. */
   us_states?: Array<{ name: string; views: number; visitors: number }>;
-  /** Top 60 US cities with 2-decimal centroid lat/lng. */
+  /** Top 60 US cities with 2-decimal centroid lat/lng.
+   *
+   *  Everything after `views` is the visitor-intel payload the map's city
+   *  card reads (2026-08-30) and is OPTIONAL on both counts: an API that
+   *  predates it omits the fields, and the card simply draws fewer sections.
+   *  Typed `?: T | null` rather than bare `?:` on purpose — `?:` catches only
+   *  `undefined`, and Python `None` arrives as JSON `null` (CLAUDE.md), so
+   *  every read guards with `!= null` / a length check. */
   us_cities?: Array<{
     city: string;
     region: string | null;
     lat: number;
     lng: number;
     views: number;
+    visitors?: number | null;
+    /** Last page view from this city, UTC. */
+    last_seen?: string | null;
+    networks?: Array<{ name: string; views: number }> | null;
+    devices?: Array<{ type: string; views: number }> | null;
   }>;
   /** First day a page view could carry a state. Null while none has. */
   region_tracked_since?: string | null;

@@ -1,11 +1,13 @@
 // Visitors by Country — the site-analytics signature panel.
 //
 // The signature panel of the analytics instrument zone (design pass
-// 2026-08-21): the referenced kit's night-indigo ground carrying Circuit
-// Center's single-hue GREEN choropleth — the one place the brand color
-// burns bright inside the fig's atmosphere. Ramp #245c44→#82f2b2
-// re-validated with the dataviz palette script against the zone surface
-// #0f1526 (ordinal mode, all checks pass).
+// 2026-08-21): the referenced kit's night-indigo ground carrying a THERMAL
+// choropleth — an inferno slice, cool-dark to hot, which is the palette a
+// reader already associates with a heat map. It replaced the original
+// single-hue green ramp on 2026-08-30 (owner feedback: an all-green heat map
+// does not read as heat). The ramp, its measurements and the reason the
+// bottom stop sits where it does all live in viewershipBins.ts — change it
+// there, never here.
 //
 // Data honesty: country capture is FORWARD-ONLY (ip_hash is one-way, so
 // history can never be geolocated). Until data exists the panel says so
@@ -29,8 +31,18 @@
 // wheel/drag to roam free, "Reset view" to come home. Zoom is applied
 // imperatively (merge-setOption on the captured instance) because the React
 // option prop is applied notMerge and would stomp the user's roam.
+//
+// ── The city intel card (2026-08-30) ───────────────────────────────────────
+// Clicking a city dot opens ONE popover anchored at the click, inside the map
+// box, reporting who that town actually was: views + visitors, its top
+// networks, its device split and when it was last seen. Those fields are
+// OPTIONAL on the payload, so the same panel renders against an API that
+// predates them — absent sections are simply not drawn. The Top-towns rows
+// are buttons opening the same card in a pinned corner slot, because a
+// canvas dot is not a keyboard target.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { RefObject } from 'react';
 import type { EChartsCoreOption, EChartsType } from 'echarts/core';
 import EChart from '@admin/components/charts/EChart';
 // Importing this module is what pulls MapChart + VisualMapComponent + the geo
@@ -46,7 +58,17 @@ import {
   usPlanarProject,
   usPlanarUnproject,
 } from './mapProjections';
-import { buildBins } from './viewershipBins';
+import { binColorFor, buildBins } from './viewershipBins';
+import type { ViewershipBin } from './viewershipBins';
+import {
+  cityLabel,
+  clampCardPosition,
+  deviceSplitLabel,
+  formatLastSeen,
+  networkLines,
+  plural,
+  viewsVisitorsLabel,
+} from './cityIntel';
 import { MAX_STATE_ZOOM, featureBounds, homeView, viewForBounds } from './usZoom';
 import type { BBox } from './usZoom';
 import styles from './ReportsPage.module.scss';
@@ -55,16 +77,23 @@ const MAP_NAME = 'world110';
 const US_MAP_NAME = 'usStatesAlbers';
 const LAND_NO_DATA = '#1a2440';
 const BORDER = '#2b3a5e';
-const HOVER_LAND = '#a5f7c6';
-const HOVER_BORDER = '#d7ffe8';
-/** The stock underglow amber (`--underglow`), the one non-green hue on the
- *  card. City dots must read as a different KIND of thing from the states
- *  underneath them, and every green is already spoken for by the ramp. */
-const CITY_DOT = '#e8c252';
-const CITY_DOT_EDGE = '#4a3a0d';
+/** Hover reads as HEAT taken to its limit — a pale gold above the ramp's
+ *  hottest stop — so the highlight belongs to the same language as the fill
+ *  underneath it instead of arriving from a different palette. */
+const HOVER_LAND = '#ffe3a3';
+const HOVER_BORDER = '#fff3d6';
+/** City dots are ringed in the card's own ground rather than tinted: each dot
+ *  wears its OWN bin's color (see cityPoints), so the only thing that can
+ *  separate a dot from a hot state beneath it is a dark edge. */
+const CITY_DOT_EDGE = '#0f1526';
+const CITY_DOT_EDGE_HOVER = '#fff3d6';
 /** A state that HAS data also gets this edge, so the choropleth reads as
- *  color-coded even where the dark low bins sit close to the empty navy. */
-const VISITED_BORDER = '#3fa172';
+ *  color-coded even where the COOL low bins sit close to the empty navy —
+ *  that is the job, and this orchid is picked for it: measured 4.98:1 against
+ *  the empty land and 2.87:1 against bin 1, staying in the purple family that
+ *  anchors the ramp's cool end. It goes quiet against the hot bins (1.20:1 on
+ *  bin 4), which is fine — a state that bright needs no edge to be noticed. */
+const VISITED_BORDER = '#b083bd';
 const CITY_R_MIN = 4;
 // 11, not 14: at the auto-fit the Northeast corridor overlaps into a blob at
 // 14 (measured 2026-08-30); zooming in is what earns the detail back.
@@ -101,11 +130,24 @@ type MapView = 'world' | 'us';
 type UsState = NonNullable<AnalyticsData['us_states']>[number];
 type UsCity = NonNullable<AnalyticsData['us_cities']>[number];
 
-/** A city already projected into the states asset's planar frame. */
+/** A city already projected into the states asset's planar frame. The whole
+ *  source row rides along as `row` so the click handler reads it straight off
+ *  `params.data` — matching a clicked dot back by name would break the moment
+ *  two states share a town name. */
 interface CityPoint {
   name: string;
   value: [number, number, number];
   symbolSize: number;
+  itemStyle: { color: string };
+  row: UsCity;
+}
+
+/** The open intel card. `at` is a position in pixels inside `.wmMap`; null is
+ *  the pinned corner slot the keyboard path uses, which needs no click to
+ *  anchor to. */
+interface CityIntel {
+  row: UsCity;
+  at: { left: number; top: number } | null;
 }
 
 /** The world asset is a faithful mirror of its upstream source, Antarctica
@@ -113,10 +155,6 @@ interface CityPoint {
 interface WorldGeoJson {
   type: string;
   features: Array<{ properties?: { iso?: string } }>;
-}
-
-function plural(n: number, word: string): string {
-  return `${n} ${word}${n === 1 ? '' : 's'}`;
 }
 
 function segmentLabel(segment: AnalyticsData['segment']): string {
@@ -146,6 +184,7 @@ export default function WorldMapPanel({
   // True once the US view has been zoomed — by a state click or a wheel/drag
   // roam — so the "Reset view" pill knows to appear.
   const [usZoomed, setUsZoomed] = useState(false);
+  const [intel, setIntel] = useState<CityIntel | null>(null);
   // The live chart instance (captured per mount via onReady; the key={view}
   // remount swaps it) and the states asset's bounding boxes, both consumed
   // imperatively by the zoom handlers. Zoom goes through merge-setOption on
@@ -154,6 +193,10 @@ export default function WorldMapPanel({
   // roam on every unrelated re-render.
   const usChartRef = useRef<EChartsType | null>(null);
   const usBoundsRef = useRef<{ byName: Record<string, BBox>; frame: BBox } | null>(null);
+  // The intel card's positioning frame and its two focus/hit-test anchors.
+  const mapRef = useRef<HTMLDivElement | null>(null);
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  const closeRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -201,6 +244,37 @@ export default function WorldMapPanel({
     };
   }, [view, usMapReady]);
 
+  // Dismissal, all four doors at once. `mousedown` rather than `click` is
+  // load-bearing: ECharts opens the card on `click`, which fires AFTER
+  // mousedown, so clicking a second dot closes the first card and then opens
+  // the new one — in that order — instead of the two racing each other.
+  useEffect(() => {
+    if (!intel) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIntel(null);
+    };
+    const onDown = (e: MouseEvent) => {
+      // `Node.contains(window)` THROWS — narrow before calling it (CLAUDE.md).
+      if (e.target instanceof Node && cardRef.current?.contains(e.target)) return;
+      setIntel(null);
+    };
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('mousedown', onDown);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('mousedown', onDown);
+    };
+  }, [intel]);
+
+  // Move focus into the card so Esc and Tab land somewhere sensible — this is
+  // what makes the Top-towns buttons an actual keyboard path rather than a
+  // button that opens something unreachable. preventScroll: the card is
+  // absolutely positioned inside a panel that must not jump.
+  useEffect(() => {
+    if (!intel) return;
+    closeRef.current?.focus({ preventScroll: true });
+  }, [intel]);
+
   // Floor 2: prod's day-one state is exactly one country with one view, and a
   // 100%-wide rank bar for a single view overstates it. The bins themselves
   // need no floor — buildBins(1) is a valid one-piece legend.
@@ -212,10 +286,14 @@ export default function WorldMapPanel({
   const usMaxViews = Math.max(2, ...stateRows.map((s) => s.views));
   const usCollecting = stateRows.length === 0;
 
+  const worldBins = useMemo(() => buildBins(maxViews), [maxViews]);
+  const usBins = useMemo(() => buildBins(usMaxViews), [usMaxViews]);
+
   const enterUs = useCallback(() => setView('us'), []);
   const backToWorld = useCallback(() => {
     setView('world');
     setUsZoomed(false); // a fresh drill-in starts at the auto-fit
+    setIntel(null); // the card belongs to the US view only
   }, []);
 
   const captureChart = useCallback((chart: EChartsType) => {
@@ -233,19 +311,38 @@ export default function WorldMapPanel({
     setUsZoomed(false);
   }, []);
 
-  // World: clicking the US drills in. US: clicking any state zooms to it —
-  // which is also what un-piles the Northeast city dots, since symbols keep
-  // their pixel size while the geography under them expands.
+  // World: clicking the US drills in. US: clicking a dot opens its intel card,
+  // and clicking any state zooms to it — which is also what un-piles the
+  // Northeast city dots, since symbols keep their pixel size while the
+  // geography under them expands.
   const onEvents = useMemo(
     () => ({
       click: (params: unknown) => {
-        const p = params as { name?: string; seriesType?: string } | null;
+        const p = params as {
+          name?: string;
+          seriesType?: string;
+          data?: { row?: UsCity };
+          event?: { offsetX?: number; offsetY?: number };
+        } | null;
         if (!p?.name) return;
         if (view === 'world') {
           if (p.name === 'US') setView('us');
           return;
         }
-        if (p.seriesType === 'scatter') return; // a dot is a place, not a frame
+        if (p.seriesType === 'scatter') {
+          // A dot is a place, not a frame: it opens the card, never zooms.
+          const row = p.data?.row;
+          if (!row) return;
+          const box = mapRef.current;
+          setIntel({
+            row,
+            at: clampCardPosition(p.event?.offsetX ?? 0, p.event?.offsetY ?? 0, {
+              width: box?.clientWidth ?? 0,
+              height: box?.clientHeight ?? 0,
+            }),
+          });
+          return;
+        }
         const info = usBoundsRef.current;
         const chart = usChartRef.current;
         const bounds = info?.byName[p.name];
@@ -278,8 +375,8 @@ export default function WorldMapPanel({
       },
       // In the collecting state the component is OMITTED outright: a mounted
       // visualMap paints every no-data region with its default outOfRange
-      // color (theme green), turning an honest empty map into a lie.
-      ...(collecting ? {} : { visualMap: buildVisualMap(maxViews) }),
+      // color, turning an honest empty map into a lie.
+      ...(collecting ? {} : { visualMap: buildVisualMap(worldBins) }),
       series: [
         {
           type: 'map',
@@ -293,7 +390,7 @@ export default function WorldMapPanel({
         },
       ],
     }),
-    [countries, maxViews, collecting],
+    [countries, worldBins, collecting],
   );
 
   const cityPoints: CityPoint[] = useMemo(() => {
@@ -307,13 +404,17 @@ export default function WorldMapPanel({
       if (!xy) continue;
       const radius = CITY_R_MIN + (CITY_R_MAX - CITY_R_MIN) * Math.sqrt(c.views / peak);
       points.push({
-        name: c.region ? `${c.city}, ${c.region}` : c.city,
+        name: cityLabel(c),
         value: [xy[0], xy[1], c.views],
         symbolSize: radius * 2,
+        // Each dot takes ITS OWN bin's color off the same ladder the states
+        // use, so the one piecewise legend under the map explains both layers.
+        itemStyle: { color: binColorFor(c.views, usBins) },
+        row: c,
       });
     }
     return points;
-  }, [cityRows]);
+  }, [cityRows, usBins]);
 
   const usOption: EChartsCoreOption = useMemo(
     () => ({
@@ -338,9 +439,11 @@ export default function WorldMapPanel({
           return `${name}<br/>${plural(row.views, 'view')} · ${plural(row.visitors, 'visitor')}`;
         },
       },
-      // `seriesIndex: 0` scopes the ramp to the choropleth — without it the
-      // visualMap also recolors the city dots, which are deliberately amber.
-      ...(usCollecting ? {} : { visualMap: { ...buildVisualMap(usMaxViews), seriesIndex: 0 } }),
+      // `seriesIndex: 0` scopes the ramp to the choropleth. The dots already
+      // carry their bin color per data item; letting the visualMap reach them
+      // would re-derive it AND overwrite the dark ring that keeps a dot
+      // legible on a hot state.
+      ...(usCollecting ? {} : { visualMap: { ...buildVisualMap(usBins), seriesIndex: 0 } }),
       geo: {
         map: US_MAP_NAME,
         nameProperty: 'name',
@@ -354,8 +457,8 @@ export default function WorldMapPanel({
         {
           type: 'map',
           geoIndex: 0,
-          // The green edge marks "has data" at a glance — the two darkest
-          // bins sit close to the empty navy under a layer of amber dots.
+          // The orchid edge marks "has data" at a glance — the two coolest
+          // bins sit close to the empty navy under a layer of dots.
           data: stateRows.map((s) => ({
             name: s.name,
             value: s.views,
@@ -367,19 +470,24 @@ export default function WorldMapPanel({
           coordinateSystem: 'geo',
           geoIndex: 0,
           symbol: 'circle',
+          // Near-opaque: the fill has to match its legend swatch to be worth
+          // reading off the legend at all. Overlapping dots are separated by
+          // the ring, not by translucency.
           itemStyle: {
-            color: CITY_DOT,
-            opacity: 0.78,
+            opacity: 0.9,
             borderColor: CITY_DOT_EDGE,
             borderWidth: 1,
           },
-          emphasis: { scale: 1.2, itemStyle: { opacity: 1 } },
+          emphasis: {
+            scale: 1.2,
+            itemStyle: { opacity: 1, borderColor: CITY_DOT_EDGE_HOVER, borderWidth: 1.4 },
+          },
           label: { show: false },
           data: cityPoints,
         },
       ],
     }),
-    [stateRows, cityPoints, usCollecting, usMaxViews],
+    [stateRows, cityPoints, usCollecting, usBins],
   );
 
   const isUs = view === 'us';
@@ -422,13 +530,13 @@ export default function WorldMapPanel({
               ? 'Collecting — state is recorded from today forward'
               : 'Collecting — country is recorded from today forward'
             : isUs
-              ? `${segmentLabel(segment)} by state — click a state to zoom in`
+              ? `${segmentLabel(segment)} by state — click a state to zoom, a town for detail`
               : `${segmentLabel(segment)} by location`}
         </span>
       </div>
 
       <div className={styles.wmBody} data-collecting={showingCollecting || undefined}>
-        <div className={styles.wmMap}>
+        <div className={styles.wmMap} ref={mapRef}>
           {chartReady ? (
             <EChart
               key={view}
@@ -439,6 +547,14 @@ export default function WorldMapPanel({
             />
           ) : (
             <div className={styles.wmLoading}>Loading map&hellip;</div>
+          )}
+          {isUs && intel && (
+            <CityIntelCard
+              intel={intel}
+              cardRef={cardRef}
+              closeRef={closeRef}
+              onClose={() => setIntel(null)}
+            />
           )}
           {showingCollecting &&
             (isUs ? (
@@ -503,13 +619,19 @@ export default function WorldMapPanel({
             {topTowns.length > 0 && (
               <div className={styles.wmTowns}>
                 <span className={styles.wmTownsTitle}>Top towns</span>
+                {/* Buttons, not rows: the dots they mirror are canvas pixels,
+                    so this list is the only keyboard route to a town's card. */}
                 {topTowns.map((c, i) => (
-                  <div key={`${c.city}|${c.region ?? ''}|${i}`} className={styles.wmTown}>
-                    <span className={styles.wmTownName}>
-                      {c.region ? `${c.city}, ${c.region}` : c.city}
-                    </span>
+                  <button
+                    key={`${c.city}|${c.region ?? ''}|${i}`}
+                    type="button"
+                    className={styles.wmTown}
+                    aria-haspopup="dialog"
+                    onClick={() => setIntel({ row: c, at: null })}
+                  >
+                    <span className={styles.wmTownName}>{cityLabel(c)}</span>
                     <span className={styles.wmVal}>{c.views.toLocaleString()}</span>
-                  </div>
+                  </button>
                 ))}
               </div>
             )}
@@ -526,9 +648,73 @@ export default function WorldMapPanel({
   );
 }
 
+interface CityIntelCardProps {
+  intel: CityIntel;
+  cardRef: RefObject<HTMLDivElement | null>;
+  closeRef: RefObject<HTMLButtonElement | null>;
+  onClose: () => void;
+}
+
+/** The intel popover. Every section is conditional: this renders correctly
+ *  against a payload that carries nothing but `views`, which is exactly what
+ *  an API older than the intel fields sends. */
+function CityIntelCard({ intel, cardRef, closeRef, onClose }: CityIntelCardProps) {
+  const { row, at } = intel;
+  const title = cityLabel(row);
+  const networks = networkLines(row.networks);
+  const devices = deviceSplitLabel(row.devices);
+  const lastSeen = formatLastSeen(row.last_seen);
+
+  return (
+    <div
+      ref={cardRef}
+      role="dialog"
+      aria-label={`${title} visitor detail`}
+      className={at ? styles.wmIntel : `${styles.wmIntel} ${styles.wmIntelPinned}`}
+      style={at ? { left: at.left, top: at.top } : undefined}
+    >
+      <div className={styles.wmIntelHead}>
+        <span className={styles.wmIntelTitle}>{title}</span>
+        <button
+          ref={closeRef}
+          type="button"
+          className={styles.wmIntelClose}
+          onClick={onClose}
+          aria-label="Close visitor detail"
+        >
+          <span aria-hidden="true">&#10005;</span>
+        </button>
+      </div>
+
+      <div className={styles.wmIntelStat}>{viewsVisitorsLabel(row.views, row.visitors)}</div>
+
+      {networks.length > 0 && (
+        <div className={styles.wmIntelSection}>
+          <span className={styles.wmIntelLabel}>Networks</span>
+          {networks.map((line) => (
+            <span key={line} className={styles.wmIntelLine}>
+              {line}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {devices && (
+        <div className={styles.wmIntelSection}>
+          <span className={styles.wmIntelLabel}>Devices</span>
+          <span className={styles.wmIntelLine}>{devices}</span>
+        </div>
+      )}
+
+      {lastSeen && <div className={styles.wmIntelMeta}>Last seen {lastSeen}</div>}
+    </div>
+  );
+}
+
 /** The piecewise legend. Sized and positioned to sit in the row `MAP_BOX`
- *  reserves at the bottom of the plot. */
-function buildVisualMap(maxViews: number) {
+ *  reserves at the bottom of the plot. In the US view it explains BOTH layers
+ *  at once — the state fills and the city dots draw from the same bins. */
+function buildVisualMap(bins: ViewershipBin[]) {
   return {
     show: true,
     type: 'piecewise' as const,
@@ -543,7 +729,7 @@ function buildVisualMap(maxViews: number) {
     itemGap: 7,
     textGap: 4,
     showLabel: true,
-    pieces: buildBins(maxViews),
+    pieces: bins,
     outOfRange: { color: LAND_NO_DATA },
     textStyle: { color: '#93a2c4', fontSize: 10 },
   };

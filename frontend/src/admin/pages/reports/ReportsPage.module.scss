@@ -1089,7 +1089,6 @@
   grid-template-columns: minmax(0, 1fr) 52px;
   align-items: baseline;
   gap: 8px;
-  width: 100%;
   appearance: none;
   cursor: pointer;
   font: inherit;
@@ -1098,6 +1097,9 @@
   border: 0;
   border-radius: 5px;
   padding: 2px 4px;
+  // No `width` — a definite cross-size would switch off the column's stretch
+  // and leave the hover surface bleeding 4px left but 4px short on the right.
+  // Stretch plus these margins is what makes the bleed symmetric.
   margin: 0 -4px;
   transition: background 120ms ease;
 

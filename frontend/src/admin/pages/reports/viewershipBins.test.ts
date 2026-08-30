@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildBins, VIEWERSHIP_RAMP } from './viewershipBins';
+import { binColorFor, buildBins, VIEWERSHIP_RAMP } from './viewershipBins';
 
 /** Every integer 1..upTo must fall in exactly one piece. */
 function pieceIndexFor(bins: ReturnType<typeof buildBins>, value: number): number[] {
@@ -96,5 +96,122 @@ describe('buildBins', () => {
       expect(bins.length).toBeLessThanOrEqual(VIEWERSHIP_RAMP.length);
       expect(bins[0].gte).toBe(1);
     }
+  });
+});
+
+// ── The thermal ramp's own invariants ──────────────────────────────────────
+// The ramp is an inferno slice whose ONE promise to a color-blind reader is
+// that luminance rises with the view count. These pin that promise, and the
+// clearance the darkest bin needs from the empty-land navy, so a future
+// re-tint cannot quietly break either.
+
+/** WCAG relative luminance. */
+function luminance(hex: string): number {
+  const n = parseInt(hex.slice(1), 16);
+  const channel = (c: number) => {
+    const s = c / 255;
+    return s <= 0.04045 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+  };
+  return (
+    0.2126 * channel((n >> 16) & 255) +
+    0.7152 * channel((n >> 8) & 255) +
+    0.0722 * channel(n & 255)
+  );
+}
+
+function contrast(a: string, b: string): number {
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+/** `LAND_NO_DATA` in WorldMapPanel — a region nobody visited. */
+const EMPTY_LAND = '#1a2440';
+/** `.wmCard`'s zone surface, which the legend swatches sit on. */
+const ZONE_SURFACE = '#0f1526';
+
+describe('VIEWERSHIP_RAMP', () => {
+  it('is five well-formed hex stops', () => {
+    expect(VIEWERSHIP_RAMP).toHaveLength(5);
+    for (const stop of VIEWERSHIP_RAMP) expect(stop).toMatch(/^#[0-9a-f]{6}$/);
+  });
+
+  it('rises monotonically in luminance, which is the whole CVD story', () => {
+    const ls = VIEWERSHIP_RAMP.map(luminance);
+    for (let i = 1; i < ls.length; i++) {
+      expect(ls[i], `stop ${i} (${VIEWERSHIP_RAMP[i]})`).toBeGreaterThan(ls[i - 1]);
+    }
+  });
+
+  it('separates every neighbouring pair enough to read as a step', () => {
+    for (let i = 1; i < VIEWERSHIP_RAMP.length; i++) {
+      expect(
+        contrast(VIEWERSHIP_RAMP[i], VIEWERSHIP_RAMP[i - 1]),
+        `${VIEWERSHIP_RAMP[i - 1]} -> ${VIEWERSHIP_RAMP[i]}`,
+      ).toBeGreaterThan(1.35);
+    }
+  });
+
+  it('runs cool to hot rather than through one cold hue', () => {
+    // The owner's whole complaint about the green ramp was that it did not
+    // read as heat. Pinned by CHANNEL ORDER, which survives any re-tint
+    // inside the inferno family: the coolest stop sits on the blue side of
+    // green, and the hottest is unambiguously warm (R > G > B). The retired
+    // green ramp (#245c44 -> #82f2b2) fails both ends.
+    const channels = (hex: string) => {
+      const n = parseInt(hex.slice(1), 16);
+      return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+    };
+    const coolest = channels(VIEWERSHIP_RAMP[0]);
+    expect(coolest.b).toBeGreaterThan(coolest.g);
+    const hottest = channels(VIEWERSHIP_RAMP[VIEWERSHIP_RAMP.length - 1]);
+    expect(hottest.r).toBeGreaterThan(hottest.g);
+    expect(hottest.g).toBeGreaterThan(hottest.b);
+  });
+
+  it('keeps its coolest stop clear of the empty-land navy and the surface', () => {
+    // Measured 2026-08-30: 1.74:1 vs the navy, 2.06:1 vs the surface. A rung
+    // that fails these reads as "nobody visited" instead of "one visitor".
+    expect(contrast(VIEWERSHIP_RAMP[0], EMPTY_LAND)).toBeGreaterThan(1.6);
+    expect(contrast(VIEWERSHIP_RAMP[0], ZONE_SURFACE)).toBeGreaterThan(2.0);
+  });
+});
+
+describe('binColorFor', () => {
+  it('gives a count the exact color its own legend piece carries', () => {
+    const bins = buildBins(250);
+    for (const bin of bins) {
+      expect(binColorFor(bin.gte, bins)).toBe(bin.color);
+      if (bin.lte !== undefined) expect(binColorFor(bin.lte, bins)).toBe(bin.color);
+    }
+  });
+
+  it('agrees with the legend for every count in range', () => {
+    const bins = buildBins(250);
+    for (let v = 1; v <= 400; v++) {
+      const owner = bins.find((b) => v >= b.gte && (b.lte === undefined || v <= b.lte));
+      expect(binColorFor(v, bins), `views=${v}`).toBe(owner?.color);
+    }
+  });
+
+  it('sends anything above the top edge to the open hottest piece', () => {
+    const bins = buildBins(250);
+    const hottest = bins[bins.length - 1].color;
+    for (const v of [250, 1000, 999_999]) expect(binColorFor(v, bins)).toBe(hottest);
+  });
+
+  it('floors a count below the first edge instead of returning nothing', () => {
+    const bins = buildBins(250);
+    for (const v of [0, -3]) expect(binColorFor(v, bins)).toBe(bins[0].color);
+  });
+
+  it('still answers when there are no bins at all', () => {
+    expect(binColorFor(5, [])).toBe(VIEWERSHIP_RAMP[0]);
+  });
+
+  it('works on the degenerate one-piece legend a one-view day produces', () => {
+    const bins = buildBins(1);
+    expect(bins).toHaveLength(1);
+    expect(binColorFor(1, bins)).toBe(bins[0].color);
+    expect(binColorFor(9000, bins)).toBe(bins[0].color);
   });
 });

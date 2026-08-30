@@ -14,8 +14,34 @@
 // strided the ladder instead, and the first realistic dataset collapsed the
 // legend to three bins; measured 2026-08-30, max=533 → 1-9/10-99/100+.)
 
-/** Ramp validated on the zone surface #0f1526 (.wmCard) — ordinal, all pass. */
-export const VIEWERSHIP_RAMP = ['#245c44', '#2f7d5b', '#3fa172', '#57c78c', '#82f2b2'];
+/**
+ * The THERMAL ramp — an inferno slice, cool-dark to hot (2026-08-30).
+ *
+ * Replaces the single-hue green ramp (#245c44 → #82f2b2) on owner feedback:
+ * a heat map should read as heat, the way geo-heatmap/heatmap-ts render one.
+ * The stops are sampled from matplotlib's `inferno` between roughly its 0.36
+ * and 0.88 positions — the ends are cut off deliberately. Inferno's true
+ * bottom is near-black, which is indistinguishable from the empty-land navy
+ * on this card, and its true top is near-white, which would out-shout the
+ * card chrome around it.
+ *
+ * LUMINANCE RISES MONOTONICALLY across the five stops, and that monotonicity
+ * is the CVD story: a protan or deutan viewer who cannot separate the magenta
+ * from the red still reads the ORDER, because every step is brighter than the
+ * one below it. Measured relative luminance steps land at ~1.55:1 between
+ * neighbours, evenly, with 5.8:1 end to end.
+ *
+ * MEASURED, not eyeballed (dataviz `validate_palette.js`, ordinal mode, dark,
+ * surface #0f1526 — the .wmCard zone surface): all four ordinal checks pass,
+ * light-end contrast 2.06:1. Bin 1 also stands 1.74:1 off the empty-land navy
+ * #1a2440, so an unvisited region never reads as a merely-cold one. The
+ * inferno slice starting at #65156e FAILED that light-end check at 1.63:1,
+ * which is why the bottom stop sits where it does rather than lower.
+ *
+ * The city-dot layer draws from this same ramp via `binColorFor`, so ONE
+ * legend explains the states and the dots on top of them.
+ */
+export const VIEWERSHIP_RAMP = ['#832168', '#b83656', '#e15933', '#f78e12', '#f7cd3a'];
 
 const MAX_BINS = VIEWERSHIP_RAMP.length;
 
@@ -46,7 +72,7 @@ function halfDecadeLadder(max: number): number[] {
 }
 
 /** Spread `count` bins across the full ramp so the top bin is always the
- *  brightest and the bottom the darkest, however few bins there are. */
+ *  hottest and the bottom the coolest, however few bins there are. */
 function rampColor(index: number, count: number): string {
   if (count < 2) return VIEWERSHIP_RAMP[VIEWERSHIP_RAMP.length - 1];
   return VIEWERSHIP_RAMP[Math.round((index * (VIEWERSHIP_RAMP.length - 1)) / (count - 1))];
@@ -73,4 +99,26 @@ export function buildBins(maxViews: number): ViewershipBin[] {
     const lte = next - 1;
     return { gte, lte, label: gte === lte ? `${gte}` : `${gte}–${lte}`, color };
   });
+}
+
+/**
+ * The color the legend already assigns to `views`.
+ *
+ * This is what lets the city dots share the states' scale instead of carrying
+ * a hue of their own: a dot painted by its OWN bin means the single piecewise
+ * legend under the map explains both layers at once. A city is always at most
+ * as busy as the state containing it, so its dot lands on the same rung or a
+ * cooler one — which is exactly why the dots need a dark ring rather than a
+ * contrasting fill to stay separable over a hot state.
+ *
+ * A count below the first edge (0, or a negative from a malformed payload)
+ * takes the floor bin: the honest answer for "less than the smallest thing we
+ * drew a color for". Above the last edge cannot happen — the top piece is open.
+ */
+export function binColorFor(views: number, bins: ViewershipBin[]): string {
+  if (bins.length === 0) return VIEWERSHIP_RAMP[0];
+  for (const bin of bins) {
+    if (views >= bin.gte && (bin.lte === undefined || views <= bin.lte)) return bin.color;
+  }
+  return bins[0].color;
 }

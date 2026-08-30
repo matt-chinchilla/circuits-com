@@ -147,6 +147,7 @@ def track_page_view(
             city=geo.city,
             latitude=geo.latitude,
             longitude=geo.longitude,
+            network=geo.network,
         )
     )
     db.commit()
@@ -288,6 +289,12 @@ def reset_analytics_state() -> None:
     _geo_since_cache = None
     _region_since_cache = None
     _rate_buckets.clear()
+
+
+# How many networks a single city dot names. Three fits the panel and is
+# where the tail stops being interesting; the rest is summarised by the dot's
+# own view count.
+_CITY_NETWORK_LIMIT = 3
 
 
 @router.get("/dashboard/analytics")
@@ -501,6 +508,8 @@ def get_analytics(
             PageView.latitude,
             PageView.longitude,
             view_count.label("views"),
+            unique_sessions.label("visitors"),
+            func.max(PageView.created_at).label("last_seen"),
         )
         .filter(
             recent,
@@ -515,6 +524,79 @@ def get_analytics(
         .limit(60)
         .all()
     )
+
+    # Per-city breakdowns: TWO grouped queries, not sixty. Each is the city
+    # query's own key plus one breakdown column, and Python does the bucketing
+    # — a query per dot would turn one dashboard load into 121 round trips.
+    #
+    # Both carry the SAME filters as the city query above (window, segment,
+    # US, city and point present) so their key space matches it exactly;
+    # anything that is not one of the 60 surviving keys is dropped in the
+    # loop below rather than being asked for separately.
+    city_key_columns = (
+        PageView.city,
+        PageView.region,
+        PageView.latitude,
+        PageView.longitude,
+    )
+    city_filters = (
+        recent,
+        *seg,
+        PageView.country == "US",
+        PageView.city.isnot(None),
+        PageView.latitude.isnot(None),
+        PageView.longitude.isnot(None),
+    )
+
+    def _breakdown(column):
+        """(city key, `column`) → views, ordered so the first rows seen for a
+        key are that key's busiest. A global ORDER BY is enough for that: if
+        the whole result descends by views, then so does any subset of it."""
+        return (
+            db.query(*city_key_columns, column, view_count.label("views"))
+            .filter(*city_filters, column.isnot(None))
+            .group_by(*city_key_columns, column)
+            .order_by(view_count.desc())
+            .all()
+        )
+
+    surviving_keys = {(r.city, r.region, r.latitude, r.longitude) for r in city_rows}
+
+    def _bucket(rows, value_of, label, limit=None):
+        buckets: dict[tuple, list[dict]] = defaultdict(list)
+        for row in rows:
+            key = (row.city, row.region, row.latitude, row.longitude)
+            if key not in surviving_keys:
+                continue
+            entries = buckets[key]
+            if limit is None or len(entries) < limit:
+                entries.append({label: value_of(row), "views": row.views})
+        return buckets
+
+    networks_by_city = _bucket(
+        _breakdown(PageView.network), lambda r: r.network, "name", _CITY_NETWORK_LIMIT
+    )
+    devices_by_city = _bucket(_breakdown(PageView.device_type), lambda r: r.device_type, "type")
+
+    us_cities = []
+    for row in city_rows:
+        key = (row.city, row.region, row.latitude, row.longitude)
+        us_cities.append(
+            {
+                "city": row.city,
+                "region": row.region,
+                "lat": row.latitude,
+                "lng": row.longitude,
+                "views": row.views,
+                "visitors": row.visitors,
+                "last_seen": str(row.last_seen) if row.last_seen is not None else None,
+                # A city whose every view predates the ASN database gets an
+                # empty list, never a fabricated "Unknown" network.
+                "networks": networks_by_city.get(key, []),
+                "devices": devices_by_city.get(key, []),
+            }
+        )
+
     region_since = _region_tracked_since(db)
 
     return {
@@ -535,16 +617,7 @@ def get_analytics(
         "us_states": [
             {"name": row.region, "views": row.views, "visitors": row.visitors} for row in state_rows
         ],
-        "us_cities": [
-            {
-                "city": row.city,
-                "region": row.region,
-                "lat": row.latitude,
-                "lng": row.longitude,
-                "views": row.views,
-            }
-            for row in city_rows
-        ],
+        "us_cities": us_cities,
         "region_tracked_since": str(region_since) if region_since is not None else None,
         "daily_traffic": [
             {"day": str(row.day), "views": row.views, "visitors": row.visitors}

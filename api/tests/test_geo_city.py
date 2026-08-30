@@ -11,6 +11,7 @@ from an actual lookup: note that `subdivisions[0]` carries `names` and NO
 """
 
 import copy
+from pathlib import Path
 
 import pytest
 
@@ -47,8 +48,18 @@ class FakeReader:
 
 
 @pytest.fixture(autouse=True)
-def _fresh_reader():
+def _fresh_reader(monkeypatch):
+    """Reset both readers, and switch the ASN database OFF by default.
+
+    Not optional hygiene — without it these tests read whatever ASN file the
+    machine happens to have. The file is gitignored and the image downloads
+    it, so `geo_for_ip("8.8.8.8")` returns network="Google LLC" on a built
+    machine and None on a fresh checkout, and every exact-equality assertion
+    below passes or fails by environment. A test that wants a network installs
+    one explicitly through `fake_asn_reader`.
+    """
     reset_geoip()
+    monkeypatch.setattr(geoip, "ASN_DB_PATH", Path("/nonexistent/asn.mmdb"))
     yield
     reset_geoip()
 
@@ -59,6 +70,17 @@ def fake_reader(monkeypatch):
         reader = FakeReader(record, raises)
         monkeypatch.setattr(geoip, "_reader", reader)
         monkeypatch.setattr(geoip, "_open_failed", False)
+        return reader
+
+    return _install
+
+
+@pytest.fixture
+def fake_asn_reader(monkeypatch):
+    def _install(record=None, raises=None):
+        reader = FakeReader(record, raises)
+        monkeypatch.setattr(geoip, "_asn_reader", reader)
+        monkeypatch.setattr(geoip, "_asn_open_failed", False)
         return reader
 
     return _install
@@ -389,5 +411,107 @@ class TestSchema:
         # contract instead (the established pattern for length checks).
         assert columns.region.type.length == 80
         assert columns.city.type.length == 80
-        for name in ("region", "city", "latitude", "longitude"):
+        assert columns.network.type.length == 120
+        for name in ("region", "city", "latitude", "longitude", "network"):
             assert columns[name].nullable is True, name
+
+
+# The ASN record is FLAT (its metadata says compat=GeoLite2-ASN — verified
+# against the real 2026-08 file): no nested `names` mapping.
+ASN_RECORD = {"autonomous_system_organization": "Verizon Business", "autonomous_system_number": 701}
+
+
+class TestNetworkLookup:
+    """The second reader: `network` from dbip-asn-lite, independent of place."""
+
+    def test_place_and_network_combine_into_one_result(self, fake_reader, fake_asn_reader):
+        fake_reader(FULL_RECORD)
+        fake_asn_reader(ASN_RECORD)
+        assert geo_for_ip("8.8.8.8") == GeoResult(
+            country="US",
+            region="California",
+            city="Mountain View",
+            latitude=37.42,
+            # -122.085 stores one ulp BELOW .085, so round-half-even gives .08.
+            longitude=-122.08,
+            network="Verizon Business",
+        )
+
+    def test_network_stands_alone_when_no_place_database_exists(
+        self, monkeypatch, tmp_path, fake_asn_reader
+    ):
+        monkeypatch.setattr(geoip, "CITY_DB_PATH", tmp_path / "no-city.mmdb")
+        monkeypatch.setattr(geoip, "COUNTRY_DB_PATH", tmp_path / "no-country.mmdb")
+        fake_asn_reader(ASN_RECORD)
+        assert geo_for_ip("8.8.8.8") == GeoResult(network="Verizon Business")
+
+    def test_a_missing_asn_file_costs_nothing_but_the_network(self, fake_reader):
+        # The autouse fixture already points ASN_DB_PATH at a nonexistent
+        # file — this is the fresh-checkout machine.
+        fake_reader(FULL_RECORD)
+        result = geo_for_ip("8.8.8.8")
+        assert result.city == "Mountain View"
+        assert result.network is None
+
+    def test_asn_open_failure_is_memoized_separately_from_place(self, fake_reader):
+        fake_reader(FULL_RECORD)
+        geo_for_ip("8.8.8.8")
+        # The failed ASN open must be remembered on ITS memo without marking
+        # the healthy place reader dead.
+        assert geoip._asn_open_failed is True
+        assert geoip._open_failed is False
+        assert geo_for_ip("8.8.8.8").city == "Mountain View"
+
+    def test_a_raising_asn_reader_loses_only_the_network(self, fake_reader, fake_asn_reader):
+        fake_reader(FULL_RECORD)
+        fake_asn_reader(raises=ValueError("not an IP"))
+        result = geo_for_ip("8.8.8.8")
+        assert result.country == "US"
+        assert result.network is None
+
+    @pytest.mark.parametrize(
+        "record",
+        [
+            None,
+            "AS701 Verizon",
+            {"autonomous_system_number": 701},
+            {"autonomous_system_organization": 701},
+            {"autonomous_system_organization": "   "},
+        ],
+    )
+    def test_shapes_that_are_not_an_org_name_yield_none(self, fake_asn_reader, record):
+        fake_asn_reader(record)
+        assert geo_for_ip("8.8.8.8").network is None
+
+    def test_the_org_is_cut_to_the_column_width(self, fake_asn_reader):
+        fake_asn_reader({"autonomous_system_organization": "N" * 150})
+        assert geo_for_ip("8.8.8.8").network == "N" * 120
+
+    def test_reset_clears_the_asn_memo_too(self, fake_asn_reader):
+        fake_asn_reader(ASN_RECORD)
+        assert geo_for_ip("8.8.8.8").network == "Verizon Business"
+        reset_geoip()
+        assert geoip._asn_reader is None
+        assert geoip._asn_open_failed is False
+
+
+class TestTrackStampsNetwork:
+    def test_the_network_lands_in_its_column(self, client, db, monkeypatch):
+        from app.routes import analytics as analytics_route
+
+        monkeypatch.setattr(
+            analytics_route,
+            "geo_for_ip",
+            lambda ip: GeoResult(country="US", network="Optimum Online"),
+        )
+        client.post("/api/track", json={"path": "/", "session_id": "net-1"})
+        row = db.query(PageView).filter(PageView.session_id == "net-1").one()
+        assert row.network == "Optimum Online"
+
+    def test_no_network_is_a_null_not_a_missing_row(self, client, db, monkeypatch):
+        from app.routes import analytics as analytics_route
+
+        monkeypatch.setattr(analytics_route, "geo_for_ip", lambda ip: EMPTY_GEO)
+        resp = client.post("/api/track", json={"path": "/", "session_id": "net-2"})
+        assert resp.status_code == 204
+        assert db.query(PageView).filter(PageView.session_id == "net-2").one().network is None

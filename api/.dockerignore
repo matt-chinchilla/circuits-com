@@ -56,3 +56,8 @@ Thumbs.db
 # committed and MUST keep shipping: it is the fallback when the city DB is
 # absent, and it is what a plain checkout geolocates with.
 app/data/dbip-city-lite.mmdb
+
+# The ASN database (~9MB), same deal as the city file above: the image
+# downloads it in that same cached layer, so the context copy would only
+# overwrite an identical file.
+app/data/dbip-asn-lite.mmdb

@@ -1,14 +1,25 @@
-"""IP → place lookup for page-view tracking (country, region, city, point).
+"""IP → place and network lookup for page-view tracking.
 
-Reads a DB-IP Lite database (CC-BY 4.0, https://db-ip.com; the admin analytics
-page carries the required attribution link). TWO databases can back this, and
-which one is present decides how much detail a lookup can yield:
+Reads DB-IP Lite databases (CC-BY 4.0, https://db-ip.com; the admin analytics
+page carries the required attribution link). TWO INDEPENDENT readers, because
+they answer different questions and either can be absent on its own:
 
+PLACE (country, region, city, point) — first of:
   * ``data/dbip-city-lite.mmdb`` — city-level, ~124MB, NOT committed. The
     Docker image downloads it at build time and .gitignore/.dockerignore keep
-    it out of the repo and the build context. Yields every field.
+    it out of the repo and the build context. Yields every place field.
   * ``data/dbip-country-lite.mmdb`` — country-only, ~8MB, COMMITTED. The
     fallback, so a checkout without the big file still geolocates.
+
+NETWORK (the AS organization behind the address):
+  * ``data/dbip-asn-lite.mmdb`` — ~9MB, NOT committed, downloaded in the same
+    build layer. It has NO fallback: absent means every view stores network
+    NULL, which is exactly what the pre-049 history looks like anyway.
+
+The two are deliberately not one lookup. A city database with no ASN file
+beside it must still resolve cities, and an ASN file with no city database
+must still name networks — so each reader carries its OWN open-failure memo
+and neither can disable the other.
 
 Preference is by FILE EXISTENCE, deliberately, rather than a setting: the
 compose `environment:` block is an allowlist that has silently dropped four
@@ -22,7 +33,7 @@ predate the columns and stay NULL forever (ip_hash is one-way).
 """
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import maxminddb
@@ -30,11 +41,17 @@ import maxminddb
 _DATA_DIR = Path(__file__).resolve().parents[1] / "data"
 CITY_DB_PATH = _DATA_DIR / "dbip-city-lite.mmdb"
 COUNTRY_DB_PATH = _DATA_DIR / "dbip-country-lite.mmdb"
+ASN_DB_PATH = _DATA_DIR / "dbip-asn-lite.mmdb"
 
 # Region and city names are stored in String(80) columns. The longest real
 # place names run well under this; the cap is what stops a surprising record
 # from raising on insert.
 _NAME_MAX = 80
+
+# AS organization names are stored in String(120). Real ones run long —
+# "Comcast Cable Communications, LLC" is 33 — but registry strings are free
+# text and a few are much longer, so the column width is enforced here.
+_NETWORK_MAX = 120
 
 # Two decimals ≈ 1.1km. The free tier's coordinates are city CENTROIDS, so
 # every extra digit would be precision the data does not have — and storing a
@@ -44,38 +61,60 @@ _COORD_DP = 2
 
 @dataclass(frozen=True)
 class GeoResult:
-    """Everything one lookup could resolve. Every field independently optional:
-    the country DB fills only `country`, and the city DB routinely knows a
-    country and a point for an IP whose city it cannot name."""
+    """Everything the readers could resolve. Every field independently
+    optional: the country DB fills only `country`, the city DB routinely knows
+    a country and a point for an IP whose city it cannot name, and `network`
+    comes from a separate database that may not be there at all."""
 
     country: str | None = None
     region: str | None = None
     city: str | None = None
     latitude: float | None = None
     longitude: float | None = None
+    network: str | None = None
 
 
 EMPTY_GEO = GeoResult()
 
 _reader: "maxminddb.Reader | None" = None
 _open_failed = False
+_asn_reader: "maxminddb.Reader | None" = None
+_asn_open_failed = False
+
+
+def _open_first(paths) -> "maxminddb.Reader | None":
+    """The first of `paths` that exists AND opens. Present-but-corrupt is not
+    the same as absent, so an open error falls through to the next candidate
+    rather than ending the search."""
+    for path in paths:
+        try:
+            if not path.exists():
+                continue
+            return maxminddb.open_database(str(path))
+        except Exception:
+            continue
+    return None
 
 
 def _get_reader() -> "maxminddb.Reader | None":
     global _reader, _open_failed
     if _reader is None and not _open_failed:
-        for path in (CITY_DB_PATH, COUNTRY_DB_PATH):
-            try:
-                if not path.exists():
-                    continue
-                _reader = maxminddb.open_database(str(path))
-                break
-            except Exception:
-                continue
+        _reader = _open_first((CITY_DB_PATH, COUNTRY_DB_PATH))
         if _reader is None:
             # Missing/corrupt files: remember and never retry per-request.
             _open_failed = True
     return _reader
+
+
+def _get_asn_reader() -> "maxminddb.Reader | None":
+    """Its OWN memo — a missing ASN file must not mark the place reader dead
+    (or vice versa), which one shared flag would do."""
+    global _asn_reader, _asn_open_failed
+    if _asn_reader is None and not _asn_open_failed:
+        _asn_reader = _open_first((ASN_DB_PATH,))
+        if _asn_reader is None:
+            _asn_open_failed = True
+    return _asn_reader
 
 
 def _name(value: object) -> str | None:
@@ -113,10 +152,8 @@ def _region(record: dict) -> str | None:
     return _name(first.get("names")) if isinstance(first, dict) else None
 
 
-def geo_for_ip(ip: str | None) -> GeoResult:
-    """One mmdb lookup, everything it knows. Never raises."""
-    if not ip:
-        return EMPTY_GEO
+def _place_for_ip(ip: str) -> GeoResult:
+    """Country/region/city/point from the place reader. Never raises."""
     reader = _get_reader()
     if reader is None:
         return EMPTY_GEO
@@ -155,18 +192,68 @@ def geo_for_ip(ip: str | None) -> GeoResult:
     )
 
 
+def _network_for_ip(ip: str) -> str | None:
+    """The AS organization behind the address — "Comcast Cable
+    Communications, LLC", not an AS number.
+
+    The record is GeoLite2-ASN shaped and FLAT (verified against the real
+    2026-08 file, whose metadata literally says `compat=GeoLite2-ASN`):
+    `autonomous_system_organization` and `autonomous_system_number` sit at the
+    top level, with no nested `names` mapping to dig through. A private or
+    unrouted address simply has no record and returns None.
+
+    The AS number is deliberately NOT stored. The panel shows a name to a
+    human, the number would need the name to be legible anyway, and a column
+    nothing reads is a column that rots.
+    """
+    reader = _get_asn_reader()
+    if reader is None:
+        return None
+    try:
+        record = reader.get(ip)
+    except Exception:
+        return None
+    if not isinstance(record, dict):
+        return None
+    org = record.get("autonomous_system_organization")
+    if not isinstance(org, str):
+        return None
+    org = org.strip()[:_NETWORK_MAX]
+    return org or None
+
+
+def geo_for_ip(ip: str | None) -> GeoResult:
+    """Place AND network for one address. Never raises.
+
+    Two reads rather than one because they come from two databases, and each
+    half stands alone: a view can carry a city with no network (no ASN file)
+    or a network with no city (country-lite fallback only).
+    """
+    if not ip:
+        return EMPTY_GEO
+    place = _place_for_ip(ip)
+    network = _network_for_ip(ip)
+    if network is None:
+        return place
+    return replace(place, network=network)
+
+
 def country_for_ip(ip: str | None) -> str | None:
     """ISO-3166 alpha-2 only. Kept for the signup path, which stores nothing else."""
     return geo_for_ip(ip).country
 
 
 def reset_geoip() -> None:
-    """Test seam: drop the cached reader/open-failure state."""
-    global _reader, _open_failed
-    if _reader is not None:
-        try:
-            _reader.close()
-        except Exception:
-            pass
+    """Test seam: drop every cached reader and open-failure memo. BOTH
+    readers, or a test that hid one database would leak it into the next."""
+    global _reader, _open_failed, _asn_reader, _asn_open_failed
+    for reader in (_reader, _asn_reader):
+        if reader is not None:
+            try:
+                reader.close()
+            except Exception:
+                pass
     _reader = None
     _open_failed = False
+    _asn_reader = None
+    _asn_open_failed = False

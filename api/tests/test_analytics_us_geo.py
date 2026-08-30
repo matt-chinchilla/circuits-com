@@ -41,6 +41,14 @@ def _get(client, auth_header, **params):
     return resp.json()
 
 
+def _core(row):
+    """A city row without its intel fields (visitors/last_seen/networks/
+    devices) — for tests about grouping and ordering, where a nondeterministic
+    `last_seen` timestamp would poison exact equality. The intel fields get
+    their own class below."""
+    return {k: row[k] for k in ("city", "region", "lat", "lng", "views")}
+
+
 class TestUsStates:
     def _seed(self, db):
         """NY: 3 views over 2 sessions. CA: 2 views, 2 sessions. TX: 1."""
@@ -137,7 +145,7 @@ class TestUsCities:
             ]
         )
         db.commit()
-        assert _get(client, auth_header)["us_cities"] == [
+        assert [_core(c) for c in _get(client, auth_header)["us_cities"]] == [
             {"city": "Albany", "region": "New York", "lat": 42.65, "lng": -73.76, "views": 2},
             {"city": "Austin", "region": "Texas", "lat": 30.27, "lng": -97.74, "views": 1},
         ]
@@ -180,7 +188,7 @@ class TestUsCities:
         The pin is still plottable, so it is still returned."""
         db.add(_view("nr-1", region=None, city="Somewhere", latitude=41.0, longitude=-72.0))
         db.commit()
-        assert _get(client, auth_header)["us_cities"] == [
+        assert [_core(c) for c in _get(client, auth_header)["us_cities"]] == [
             {"city": "Somewhere", "region": None, "lat": 41.0, "lng": -72.0, "views": 1}
         ]
 
@@ -220,7 +228,7 @@ class TestUsCities:
         db.commit()
         cities = _get(client, auth_header)["us_cities"]
         assert len(cities) == 60
-        assert cities[0] == {
+        assert _core(cities[0]) == {
             "city": "City79",
             "region": "Iowa",
             "lat": 40.79,
@@ -354,3 +362,89 @@ class TestPayloadIsAdditive:
         assert data["geo_unknown_views"] == 1
         for key in ("us_states", "us_cities", "region_tracked_since"):
             assert key in data
+
+
+class TestUsCityIntel:
+    """The dot-click card's data: visitors, last_seen, networks, devices —
+    stamped per city row, same window and segment as the row itself."""
+
+    def _seed_one_city(self, db, **overrides):
+        base = {"region": "New York", "city": "Ronkonkoma", "latitude": 40.82, "longitude": -73.11}
+        base.update(overrides)
+        return _view(base.pop("session_id"), **base)
+
+    def test_visitors_are_distinct_sessions(self, client, db, seeded_db, auth_header):
+        for sid in ("v-a", "v-a", "v-a", "v-b"):
+            db.add(self._seed_one_city(db, session_id=sid))
+        db.commit()
+        (row,) = _get(client, auth_header)["us_cities"]
+        assert (row["views"], row["visitors"]) == (4, 2)
+
+    def test_last_seen_is_the_newest_view(self, client, db, seeded_db, auth_header):
+        now = datetime.now(UTC)
+        newest = now - timedelta(days=2)
+        db.add(self._seed_one_city(db, session_id="ls-1", created_at=now - timedelta(days=9)))
+        db.add(self._seed_one_city(db, session_id="ls-2", created_at=newest))
+        db.commit()
+        (row,) = _get(client, auth_header)["us_cities"]
+        assert row["last_seen"] is not None
+        assert row["last_seen"].startswith(str(newest.date()))
+
+    def test_networks_are_the_top_three_by_views(self, client, db, seeded_db, auth_header):
+        counts = {"Verizon Fios": 5, "Optimum Online": 4, "Spectrum": 3, "Comcast Cable": 2}
+        for name, n in counts.items():
+            for i in range(n):
+                db.add(self._seed_one_city(db, session_id=f"nw-{name}-{i}", network=name))
+        db.add(self._seed_one_city(db, session_id="nw-null", network=None))
+        db.commit()
+        (row,) = _get(client, auth_header)["us_cities"]
+        # Top THREE, busiest first; the fourth network and the NULL row are
+        # summarised only by the dot's own view count.
+        assert row["networks"] == [
+            {"name": "Verizon Fios", "views": 5},
+            {"name": "Optimum Online", "views": 4},
+            {"name": "Spectrum", "views": 3},
+        ]
+        assert row["views"] == 15
+
+    def test_a_city_with_no_network_rows_gets_an_empty_list(
+        self, client, db, seeded_db, auth_header
+    ):
+        db.add(self._seed_one_city(db, session_id="nn-1"))
+        db.commit()
+        (row,) = _get(client, auth_header)["us_cities"]
+        assert row["networks"] == []
+        assert row["devices"] == []
+
+    def test_devices_split_by_type(self, client, db, seeded_db, auth_header):
+        for i in range(3):
+            db.add(self._seed_one_city(db, session_id=f"dv-d-{i}", device_type="desktop"))
+        db.add(self._seed_one_city(db, session_id="dv-m", device_type="mobile"))
+        db.commit()
+        (row,) = _get(client, auth_header)["us_cities"]
+        assert row["devices"] == [
+            {"type": "desktop", "views": 3},
+            {"type": "mobile", "views": 1},
+        ]
+
+    def test_breakdowns_respect_the_segment(self, client, db, seeded_db, auth_header):
+        db.add(self._seed_one_city(db, session_id="sg-h", network="Verizon Fios"))
+        for i in range(5):
+            db.add(
+                self._seed_one_city(
+                    db, session_id=f"sg-b-{i}", network="CrawlerNet", user_agent=BOT_UA
+                )
+            )
+        db.commit()
+        (human_row,) = _get(client, auth_header)["us_cities"]
+        assert human_row["networks"] == [{"name": "Verizon Fios", "views": 1}]
+        (bot_row,) = _get(client, auth_header, segment="bots")["us_cities"]
+        assert bot_row["networks"] == [{"name": "CrawlerNet", "views": 5}]
+
+    def test_breakdowns_respect_the_window(self, client, db, seeded_db, auth_header):
+        old = datetime.now(UTC) - timedelta(days=90)
+        db.add(self._seed_one_city(db, session_id="wn-new", network="Verizon Fios"))
+        db.add(self._seed_one_city(db, session_id="wn-old", network="Frontier", created_at=old))
+        db.commit()
+        (row,) = _get(client, auth_header, days=30)["us_cities"]
+        assert row["networks"] == [{"name": "Verizon Fios", "views": 1}]

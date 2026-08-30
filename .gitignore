@@ -94,3 +94,9 @@ mail/roundcube-plugins/*/config.inc.php
 # a two-line warning and exit 0, so an unignored 124MB blob here silently
 # kills deploys that look like they succeeded.
 api/app/data/dbip-city-lite.mmdb
+
+# The ASN database (~9MB, DB-IP Lite CC-BY 4.0) — the AS organization behind
+# a visitor's address. Downloaded in the same cached build layer as the city
+# file above, and unlike that one it has NO committed fallback: absent simply
+# means every page view stores network NULL.
+api/app/data/dbip-asn-lite.mmdb

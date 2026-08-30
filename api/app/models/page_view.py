@@ -32,6 +32,10 @@ class PageView(Base):
     city = Column(String(80), nullable=True)
     latitude = Column(Float, nullable=True)
     longitude = Column(Float, nullable=True)
+    # The AS organization behind the address (migration 049), from a SEPARATE
+    # DB-IP file that may be absent — so NULL here means either "pre-049" or
+    # "no ASN database in this image", and both read the same from a query.
+    network = Column(String(120), nullable=True)
     created_at = Column(
         DateTime(timezone=True),
         default=lambda: datetime.now(UTC),
