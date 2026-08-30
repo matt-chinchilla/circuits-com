@@ -15,15 +15,19 @@ import re
 import uuid
 from pathlib import Path
 
-from sqlalchemy.orm import Session
+from sqlalchemy import func
+from sqlalchemy.orm import Session, aliased
 
 from app.models import Manufacturer, ManufacturerAlias, ManufacturerMergeCandidate, Part
 from app.services.manufacturer_canon import canon, domain_of
 
 _NEVER_MERGE = [
     # (left canon, right canon, evidence) — from the call list's own warning.
-    ("microchip technology", "microchip usa",
-     "call list: 'INDEPENDENT — not Microchip Technology'"),
+    (
+        "microchip technology",
+        "microchip usa",
+        "call list: 'INDEPENDENT — not Microchip Technology'",
+    ),
 ]
 
 
@@ -39,16 +43,19 @@ def seed_manufacturers(db: Session, csv_path: Path | None = None) -> dict:
         return {}
 
     counts = {
-        "manufacturers_csv": 0, "manufacturers_created": 0,
-        "catalog_names": 0, "provisional_created": 0,
-        "aliases_created": 0, "candidates_created": 0, "parts_backfilled": 0,
+        "manufacturers_csv": 0,
+        "manufacturers_created": 0,
+        "catalog_names": 0,
+        "provisional_created": 0,
+        "aliases_created": 0,
+        "candidates_created": 0,
+        "parts_backfilled": 0,
+        "parts_collision_skipped": 0,
     }
 
     by_canon = {m.canonical_key: m for m in db.query(Manufacturer).all()}
     existing_slugs = {m.slug for m in by_canon.values()}
-    alias_by_canon = {
-        a.alias_canon: a.manufacturer_id for a in db.query(ManufacturerAlias).all()
-    }
+    alias_by_canon = {a.alias_canon: a.manufacturer_id for a in db.query(ManufacturerAlias).all()}
     existing_candidates = {
         (str(c.left_manufacturer_id), c.right_alias, c.rule)
         for c in db.query(ManufacturerMergeCandidate).all()
@@ -65,33 +72,49 @@ def seed_manufacturers(db: Session, csv_path: Path | None = None) -> dict:
     def add_alias(m: Manufacturer, raw: str, key: str, source: str) -> None:
         if key in alias_by_canon:
             return
-        db.add(ManufacturerAlias(
-            manufacturer_id=m.id, alias_canon=key, alias=raw[:200],
-            source=source, confidence="auto",
-        ))
+        db.add(
+            ManufacturerAlias(
+                manufacturer_id=m.id,
+                alias_canon=key,
+                alias=raw[:200],
+                source=source,
+                confidence="auto",
+            )
+        )
         alias_by_canon[key] = m.id
         counts["aliases_created"] += 1
 
-    def add_candidate(left: Manufacturer, right_alias: str, rule: str,
-                      evidence: str, status: str = "pending") -> None:
+    def add_candidate(
+        left: Manufacturer, right_alias: str, rule: str, evidence: str, status: str = "pending"
+    ) -> None:
         sig = (str(left.id), right_alias[:200], rule)
         if sig in existing_candidates:
             return
-        db.add(ManufacturerMergeCandidate(
-            id=uuid.uuid4(), left_manufacturer_id=left.id,
-            right_alias=right_alias[:200], rule=rule, evidence=evidence, status=status,
-        ))
+        db.add(
+            ManufacturerMergeCandidate(
+                id=uuid.uuid4(),
+                left_manufacturer_id=left.id,
+                right_alias=right_alias[:200],
+                rule=rule,
+                evidence=evidence,
+                status=status,
+            )
+        )
         existing_candidates.add(sig)
         counts["candidates_created"] += 1
 
-    def get_or_create(name: str, key: str, source: str, website: str | None = None,
-                      external: int | None = None) -> Manufacturer:
+    def get_or_create(
+        name: str, key: str, source: str, website: str | None = None, external: int | None = None
+    ) -> Manufacturer:
         m = by_canon.get(key)
         if m is not None:
             return m
         m = Manufacturer(
-            id=uuid.uuid4(), name=name[:200], slug=unique_slug(name),
-            canonical_key=key, website=(website or None),
+            id=uuid.uuid4(),
+            name=name[:200],
+            slug=unique_slug(name),
+            canonical_key=key,
+            website=(website or None),
             external_part_count=external,
             external_part_count_source="breakdown_csv" if external is not None else None,
             source=source,
@@ -111,7 +134,11 @@ def seed_manufacturers(db: Session, csv_path: Path | None = None) -> dict:
         name = r["Company"].strip()
         key = canon(name)
         dom = domain_of(r.get("URL"))
-        external = int(r["Number of parts"]) if str(r.get("Number of parts", "")).strip().isdigit() else None
+        external = (
+            int(r["Number of parts"])
+            if str(r.get("Number of parts", "")).strip().isdigit()
+            else None
+        )
         first = csv_first_name.get(key)
         if first is not None and first != name:
             # CSV-internal canon collision (Amphenol / Amphenol Ltd): keep BOTH
@@ -119,8 +146,12 @@ def seed_manufacturers(db: Session, csv_path: Path | None = None) -> dict:
             key2 = f"{key}|{dom or _slugify(name)}"[:220]
             m2 = get_or_create(name, key2, "csv", r.get("URL", "").strip() or None, external)
             add_alias(m2, name, key2, "breakdown")
-            add_candidate(by_canon[key], name, "csv-collision",
-                          f"same canon '{key}' as '{first}'; domains differ")
+            add_candidate(
+                by_canon[key],
+                name,
+                "csv-collision",
+                f"same canon '{key}' as '{first}'; domains differ",
+            )
             continue
         csv_first_name[key] = name
         m = get_or_create(name, key, "csv", r.get("URL", "").strip() or None, external)
@@ -149,16 +180,21 @@ def seed_manufacturers(db: Session, csv_path: Path | None = None) -> dict:
             head = canon(raw.split("/")[0])
             key = canon(raw)
             if head and head != key and head in by_canon:
-                add_candidate(by_canon[head], raw, "slash-head",
-                              f"'{raw}' head-matches '{by_canon[head].name}'")
+                add_candidate(
+                    by_canon[head],
+                    raw,
+                    "slash-head",
+                    f"'{raw}' head-matches '{by_canon[head].name}'",
+                )
     keys_sorted = sorted(by_canon)
     for i, key in enumerate(keys_sorted):
         prefix = key + " "
         j = i + 1
         while j < len(keys_sorted) and keys_sorted[j].startswith(prefix):
             longer = by_canon[keys_sorted[j]]
-            add_candidate(by_canon[key], longer.name, "prefix",
-                          f"'{longer.canonical_key}' extends '{key}'")
+            add_candidate(
+                by_canon[key], longer.name, "prefix", f"'{longer.canonical_key}' extends '{key}'"
+            )
             j += 1
 
     for left_key, right_key, evidence in _NEVER_MERGE:
@@ -169,6 +205,15 @@ def seed_manufacturers(db: Session, csv_path: Path | None = None) -> dict:
     db.flush()
 
     # ── Step 5: backfill parts.manufacturer_id (bulk, per manufacturer) ──
+    #
+    # COLLISION-TOLERANT (hardened 2026-08-30, after the second crash-loop).
+    # An unlinked TWIN — same sku and maker as a row that is already linked,
+    # legal under uq_parts_manufacturer_sku_upper only because NULLs compare
+    # distinct — cannot be linked: the UPDATE would collide with the original
+    # and kill the boot (6 twins did exactly that on 2026-08-27; 48 more
+    # existed by 2026-08-28). Such twins are left unlinked ON PURPOSE — they
+    # are duplicate ROWS, and linking is not the tool that merges rows. They
+    # are counted out loud below so the backlog is visible, not silent.
     raw_to_mid: dict[str, uuid.UUID] = {}
     for raw in catalog_names:
         mid = alias_by_canon.get(canon(raw))
@@ -178,14 +223,29 @@ def seed_manufacturers(db: Session, csv_path: Path | None = None) -> dict:
     for raw, mid in raw_to_mid.items():
         mids.setdefault(mid, []).append(raw)
     for mid, names in mids.items():
+        linked_twin = aliased(Part)
+        collides = (
+            db.query(linked_twin.id)
+            .filter(
+                linked_twin.manufacturer_id == mid,
+                func.upper(linked_twin.sku) == func.upper(Part.sku),
+            )
+            .exists()
+        )
         counts["parts_backfilled"] += (
             db.query(Part)
-            .filter(Part.manufacturer_name.in_(names), Part.manufacturer_id.is_(None))
+            .filter(Part.manufacturer_name.in_(names), Part.manufacturer_id.is_(None), ~collides)
             .update({Part.manufacturer_id: mid}, synchronize_session=False)
+        )
+    if raw_to_mid:
+        counts["parts_collision_skipped"] = (
+            db.query(func.count(Part.id))
+            .filter(Part.manufacturer_name.in_(list(raw_to_mid)), Part.manufacturer_id.is_(None))
+            .scalar()
+            or 0
         )
 
     # ── Step 6: recompute catalog_part_count (one GROUP BY) ──────────────
-    from sqlalchemy import func
     live = dict(
         (row[0], row[1])
         for row in db.query(Part.manufacturer_id, func.count(Part.id))
@@ -200,6 +260,7 @@ def seed_manufacturers(db: Session, csv_path: Path | None = None) -> dict:
     print(
         f"Seed: manufacturers — {counts['manufacturers_created']} created "
         f"({counts['provisional_created']} provisional), {counts['aliases_created']} aliases, "
-        f"{counts['candidates_created']} review candidates, {counts['parts_backfilled']} parts linked."
+        f"{counts['candidates_created']} review candidates, {counts['parts_backfilled']} parts linked, "
+        f"{counts['parts_collision_skipped']} collision twins left unlinked."
     )
     return counts
