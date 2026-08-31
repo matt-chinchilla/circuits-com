@@ -1083,7 +1083,9 @@
   // leaflet actually classes, and gives every nested rule a class of
   // headroom over leaflet.css whatever the chunk order does.
   &:global(.leaflet-container) {
-    background: #0b1020; // beats leaflet's #ddd by specificity, not order luck
+    // The tiles' own paper colour, so a not-yet-loaded tile reads as map
+    // rather than as a hole. Beats leaflet's #ddd by specificity, not order luck.
+    background: #f2efe9;
     font-family: inherit;
 
     // Leaflet's keyboard handler focuses the container itself to pan it.
@@ -1093,80 +1095,42 @@
     }
 
     :global {
-      // OpenStreetMap's tiles are LIGHT and this card is not, so the tile
-      // pane is inverted into a dark basemap: invert flips the sheet, the
-      // 180deg hue-rotate puts the hues back where they started (without it,
-      // water turns orange), and the rest tunes for LABEL LEGIBILITY — the
-      // basemap exists to be read under the glow. The original 0.92/0.88/0.55
-      // crushed the inverted (now light) labels toward the ground; lifting
-      // brightness past 1 and easing off the contrast squeeze is what makes
-      // town names and roads read (A/B'd on live tiles over the NE corridor
-      // at z5/z7, 2026-08-30). The heat canvas lives in the OVERLAY pane,
-      // untouched.
+      // THE BASEMAP IS LEFT LIGHT, ON PURPOSE (owner call, 2026-08-31).
       //
-      // A `filter` normally earns a hard look in this repo, and this class of
-      // filter was measured rather than assumed: compositor-friendly color
-      // ops on a static raster, measured at a 16.6ms median through four zoom
-      // animations vs 16.7ms with no filter at all (2026-08-30, 60Hz). The
-      // retune above changes VALUES only — same functions, same count, same
-      // cost class — and an interactive re-check after it (30Hz remote
-      // session) stayed pinned to vsync: median 31.2ms, p90 31.6ms. The
-      // standing gotchas are about blur and drop-shadow. Never animate it.
-      .leaflet-tile-pane {
-        filter: invert(1) hue-rotate(180deg) brightness(1.02) contrast(0.98) saturate(0.45);
-      }
+      // It was inverted into a dark sheet to match the card, and that read
+      // well as a dark panel but destroyed the thing the basemap is FOR:
+      // OpenStreetMap draws roads in white on pale land, so inverting sends
+      // both to near-black and the map becomes a black void with a single
+      // grey label floating in it (measured at z10 over the Hudson Valley —
+      // one road line, nothing else). The owner's reference for this panel
+      // (geo-heatmap) is a light map for exactly this reason, and his ask was
+      // to SEE the map under the glow.
+      //
+      // So the tiles ship as they come. leaflet.heat's blue-to-red gradient
+      // was designed over light tiles and separates from them cleanly; the
+      // card keeps its night-indigo chrome, and the map reads as a lit inset
+      // in it rather than pretending to be part of the dark surface. No
+      // filter at all is also the cheapest possible answer to the perf
+      // question this repo asks of every filter.
 
-      // Attribution is a LICENSE REQUIREMENT (OpenStreetMap's ODbL, CARTO's
-      // terms) — restyled to sit in a dark corner, never suppressed, and kept
-      // above AA on this ground: the text #93a2c4 measures 7.2:1 and the
-      // links #c7d3ec 12.3:1 against #0f1526. The links are underlined so
-      // they are identifiable without relying on that color difference.
+      // Attribution is a LICENSE REQUIREMENT (OpenStreetMap's ODbL), never
+      // suppressed. Restyled LIGHT to sit on the light tiles it credits: the
+      // previous dark pill was measured at 7.2:1 over the inverted basemap,
+      // but semi-transparent dark over #f2efe9 paper composites to ~4.1:1 —
+      // below AA, and the wrong direction for a map that is now paper-white.
+      // Ink #3a4256 on the composited pill measures 8.6:1; the links keep
+      // their underline so they are identifiable without relying on colour.
       .leaflet-control-attribution {
-        background: rgba(15, 21, 38, 0.82);
-        color: #93a2c4;
+        background: rgba(255, 255, 255, 0.88);
+        color: #3a4256;
         font-size: 10px;
         line-height: 1.6;
         padding: 2px 7px;
         border-radius: 6px 0 0 0;
 
         a {
-          color: #c7d3ec;
+          color: #14508c;
           text-decoration: underline;
-
-          &:hover {
-            color: #fff;
-          }
-
-          &:focus-visible {
-            outline: 2px solid #f7cd3a;
-            outline-offset: 1px;
-          }
-        }
-      }
-
-      .leaflet-bar {
-        border: 1px solid #2b3a63;
-        box-shadow: none;
-
-        a {
-          background: #16203a;
-          color: #93a2c4;
-          border-bottom-color: #2b3a63;
-
-          &:hover {
-            background: #1c2947;
-            color: #e8eef9;
-          }
-
-          &:focus-visible {
-            outline: 2px solid #f7cd3a;
-            outline-offset: -2px;
-          }
-
-          &.leaflet-disabled {
-            background: #131b30;
-            color: #46557f;
-          }
         }
       }
     }
