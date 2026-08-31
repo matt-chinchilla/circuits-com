@@ -11,6 +11,8 @@ import {
   KIND_BADGE,
   matchBadge,
   ORG_FILTERS,
+  ORG_SORTS,
+  sortOrganizations,
   emptyMessage,
   filterCount,
   filterOrganizations,
@@ -18,6 +20,7 @@ import {
   locationSummary,
   visitorLine,
   type OrgFilter,
+  type OrgSort,
 } from './orgRows';
 import styles from './OrganizationsPanel.module.scss';
 
@@ -45,6 +48,7 @@ export default function OrganizationsPanel({ days, segment }: Props) {
   const [data, setData] = useState<OrganizationsResponse | null>(null);
   const [status, setStatus] = useState<Status>('loading');
   const [filter, setFilter] = useState<OrgFilter>('corporate');
+  const [sort, setSort] = useState<OrgSort>('visitors');
   const [openName, setOpenName] = useState<string | null>(null);
 
   useEffect(() => {
@@ -74,7 +78,10 @@ export default function OrganizationsPanel({ days, segment }: Props) {
     hosting: data?.hosting_count ?? 0,
     matched: data?.matched_count ?? 0,
   };
-  const rows = filterOrganizations(data?.organizations ?? [], filter);
+  const rows = sortOrganizations(
+    filterOrganizations(data?.organizations ?? [], filter),
+    sort,
+  );
 
   return (
     <section className={styles.orgCard} aria-labelledby="org-panel-title">
@@ -102,6 +109,28 @@ export default function OrganizationsPanel({ days, segment }: Props) {
         ))}
       </div>
 
+      {/* Sort sits under the chips, not among them: the chips choose WHICH
+          organizations, this chooses their ORDER, and merging the two rows
+          would read as one set of mutually exclusive options. */}
+      <div className={styles.sortRow}>
+        <span className={styles.sortLabel} id="org-sort-label">
+          Sort
+        </span>
+        <div role="group" aria-labelledby="org-sort-label" className={styles.sortGroup}>
+          {ORG_SORTS.map(({ key, label }) => (
+            <button
+              key={key}
+              type="button"
+              className={`${styles.sortBtn} ${sort === key ? styles.sortOn : ''}`}
+              aria-pressed={sort === key}
+              onClick={() => setSort(key)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {status === 'loading' && <p className={styles.state}>Loading organizations…</p>}
 
       {status === 'error' && (
@@ -117,7 +146,7 @@ export default function OrganizationsPanel({ days, segment }: Props) {
       )}
 
       {status === 'ready' && rows.length > 0 && (
-        <ul className={styles.list}>
+        <ul className={styles.list} tabIndex={0} aria-label="Visiting organizations">
           {rows.map((org) => (
             <OrgRow
               key={org.name}

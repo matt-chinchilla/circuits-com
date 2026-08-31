@@ -7,6 +7,7 @@ import {
   filterCount,
   filterOrganizations,
   matchBadge,
+  sortOrganizations,
   locationLabel,
   locationSummary,
   visitorLine,
@@ -197,17 +198,15 @@ describe('matched rows', () => {
     ]);
   });
 
-  it('floats matched rows to the top of every other view', () => {
-    expect(filterOrganizations(rows, 'all').map((o) => o.name)).toEqual([
-      'Cirrus Logic Inc.',
-      'Club Car, LLC',
-      'Verizon Business',
-      'Some Startup LLC',
-    ]);
+  it('selects membership only — ORDER is sortOrganizations\' job', () => {
+    // The two were one function until 2026-08-31, when sorting became
+    // user-chosen. Splitting them means matched-first is asserted in ONE
+    // place instead of two that can disagree; this pins the split.
+    expect(filterOrganizations(rows, 'all').map((o) => o.name)).toEqual(rows.map((o) => o.name));
     expect(filterOrganizations(rows, 'corporate').map((o) => o.name)).toEqual([
       'Cirrus Logic Inc.',
-      'Club Car, LLC',
       'Some Startup LLC',
+      'Club Car, LLC',
     ]);
   });
 
@@ -216,5 +215,82 @@ describe('matched rows', () => {
     expect(matchBadge('manufacturer')).toBe('Tracked manufacturer');
     expect(matchBadge('linkedin')).toBe('LinkedIn connection');
     expect(matchBadge('something-we-add-later')).toBeTruthy();
+  });
+});
+
+describe('sortOrganizations', () => {
+  const org = (
+    name: string,
+    visitors: number,
+    last_seen: string | null,
+    match: { kind: string; name: string } | null = null,
+  ) =>
+    ({
+      name,
+      kind: 'corporate',
+      match: match ? { ...match, id: name } : null,
+      views: visitors,
+      visitors,
+      first_seen: null,
+      last_seen,
+      locations: [],
+      top_pages: [],
+      referrers: [],
+      devices: [],
+    }) as unknown as Parameters<typeof sortOrganizations>[0][number];
+
+  const rows = [
+    org('Delta Corp', 2, '2026-08-01 10:00:00+00:00'),
+    org('alpha systems', 9, '2026-06-01 10:00:00+00:00'),
+    org('Charlie Ltd', 5, '2026-08-30 10:00:00+00:00'),
+    org('Bravo Inc', 5, null),
+  ];
+
+  it('sorts by visitors, then views, then name — a total order', () => {
+    expect(sortOrganizations(rows, 'visitors').map((o) => o.name)).toEqual([
+      'alpha systems',
+      'Bravo Inc',
+      'Charlie Ltd',
+      'Delta Corp',
+    ]);
+  });
+
+  it('sorts alphabetically ignoring case, so "alpha" is not last', () => {
+    expect(sortOrganizations(rows, 'name').map((o) => o.name)).toEqual([
+      'alpha systems',
+      'Bravo Inc',
+      'Charlie Ltd',
+      'Delta Corp',
+    ]);
+  });
+
+  it('sorts most-recent first and sinks rows with no timestamp', () => {
+    expect(sortOrganizations(rows, 'recent').map((o) => o.name)).toEqual([
+      'Charlie Ltd',
+      'Delta Corp',
+      'alpha systems',
+      'Bravo Inc',
+    ]);
+  });
+
+  it('reads the API timestamp shape rather than returning NaN for it', () => {
+    // Python's `str(datetime)`: space separator, six fractional digits. Parsed
+    // naively this is NaN in Safari and every row ties at -Infinity.
+    const a = org('A', 1, '2026-08-30 14:05:00.123456+00:00');
+    const b = org('B', 1, '2026-01-01 14:05:00.123456+00:00');
+    expect(sortOrganizations([b, a], 'recent').map((o) => o.name)).toEqual(['A', 'B']);
+  });
+
+  it('keeps matched organizations on top under EVERY sort', () => {
+    const withMatch = [...rows, org('Zulu Metals', 1, null, { kind: 'lead', name: 'Zulu Metals' })];
+    for (const key of ['visitors', 'recent', 'name'] as const) {
+      expect(sortOrganizations(withMatch, key)[0].name, key).toBe('Zulu Metals');
+    }
+  });
+
+  it('does not mutate the array it was given', () => {
+    const original = [...rows];
+    sortOrganizations(rows, 'name');
+    expect(rows).toEqual(original);
   });
 });

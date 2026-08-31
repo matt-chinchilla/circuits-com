@@ -70,9 +70,11 @@ export function filterOrganizations(
   organizations: VisitorOrganization[],
   filter: OrgFilter,
 ): VisitorOrganization[] {
-  if (filter === 'all') return matchedFirst(organizations);
+  // Ordering (including matched-first) belongs to sortOrganizations — this
+  // only decides membership, so the two cannot disagree about the top row.
+  if (filter === 'all') return organizations;
   if (filter === 'matched') return organizations.filter((org) => org.match != null);
-  return matchedFirst(organizations.filter((org) => org.kind === filter));
+  return organizations.filter((org) => org.kind === filter);
 }
 
 /**
@@ -128,4 +130,63 @@ export function emptyMessage(
     return `None of your leads or tracked manufacturers visited in this window — ${plural(total, 'other organization')} did.`;
   }
   return `No ${FILTER_LABEL[filter].toLowerCase()} in this window — ${plural(total, 'organization')} of another kind did visit.`;
+}
+
+/**
+ * How the list is ordered. The server sorts by DISTINCT VISITORS, which
+ * answers "who is most interested" — but that is one question of three, and
+ * the other two are the ones a person reaches for when scanning a long list
+ * (owner, 2026-08-31): when did they last come, and where is the name I am
+ * looking for.
+ */
+export type OrgSort = 'visitors' | 'recent' | 'name';
+
+export const ORG_SORTS: Array<{ key: OrgSort; label: string }> = [
+  { key: 'visitors', label: 'Most visitors' },
+  { key: 'recent', label: 'Most recent' },
+  { key: 'name', label: 'A–Z' },
+];
+
+/** Epoch millis for a row's last visit; -Infinity when it has none, so rows
+ *  with no timestamp sink rather than sorting as 1970. */
+function lastSeenAt(org: VisitorOrganization): number {
+  if (!org.last_seen) return -Infinity;
+  // Same normalization cityIntel does: the API sends Python's `str(datetime)`
+  // (space separator, six fractional digits), which Safari parses as NaN.
+  const iso = org.last_seen.trim().replace(' ', 'T').replace(/(\.\d{3})\d+/, '$1');
+  const ms = Date.parse(/(?:[zZ]|[+-]\d{2}:?\d{2})$/.test(iso) ? iso : `${iso}Z`);
+  return Number.isNaN(ms) ? -Infinity : ms;
+}
+
+/**
+ * Sort a filtered list, keeping matched rows on top.
+ *
+ * Matched-first survives every sort on purpose: an organization already on the
+ * call list is the row the panel exists to surface, and burying it under an
+ * alphabet would defeat the feature. Within each group the chosen key applies,
+ * and NAME is always the final tiebreaker so the order is total — two rows
+ * with the same count or the same timestamp must not swap between renders.
+ */
+export function sortOrganizations(
+  organizations: VisitorOrganization[],
+  sort: OrgSort,
+): VisitorOrganization[] {
+  const byName = (a: VisitorOrganization, b: VisitorOrganization) =>
+    a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+
+  const compare = (a: VisitorOrganization, b: VisitorOrganization): number => {
+    const matched = Number(b.match != null) - Number(a.match != null);
+    if (matched !== 0) return matched;
+    if (sort === 'name') return byName(a, b);
+    if (sort === 'recent') {
+      const gap = lastSeenAt(b) - lastSeenAt(a);
+      if (gap !== 0) return gap;
+      return byName(a, b);
+    }
+    if (b.visitors !== a.visitors) return b.visitors - a.visitors;
+    if (b.views !== a.views) return b.views - a.views;
+    return byName(a, b);
+  };
+
+  return [...organizations].sort(compare);
 }
