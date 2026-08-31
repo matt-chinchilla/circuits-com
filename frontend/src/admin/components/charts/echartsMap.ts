@@ -22,7 +22,30 @@
 //                        the map series attached by `geoIndex`. The world view
 //                        stays a bare map series and never installs it at
 //                        runtime (the import cost is shared either way).
-//   ScatterChart       — the US city dots.
+//   ScatterChart       — the US city dots AND the always-on state labels: the
+//                        label layer is a silent scatter of invisible points
+//                        carrying only text, so nothing hovers or selects it
+//                        and the three no-label suppressions in mapOptions.ts
+//                        stay exactly as they are.
+//   LinesChart         — the leader lines from the ten states too small to
+//                        hold a label to the open water where their codes are
+//                        drawn (the nine of the northeastern seaboard, on one
+//                        rail, plus Hawaii).
+//   LabelLayout        — and this one is NOT optional, however much it looks
+//                        like it. `echarts/core` calls `use(installLabelLayout)`
+//                        itself, with the source comment "TODO will be
+//                        treeshaked" beside it — and it is: echarts' own
+//                        `sideEffects` list does not name `lib/export/core.js`,
+//                        so Rollup drops that call from a production build.
+//                        The symptom is exact and silent: `labelLayout:
+//                        { hideOverlap: true }` works in dev and in a plain
+//                        `<script>` echarts, and does nothing at all in the
+//                        shipped bundle. MEASURED 2026-08-31 by hooking
+//                        `CanvasRenderingContext2D.fillText` on the live page —
+//                        51 of 51 state codes painted at a 320px width where
+//                        the same option culls 15 of them outside the bundler
+//                        (and `shiftLayoutOnXY`, the layout helper, was absent
+//                        from `dist/assets/echarts-*.js` entirely).
 //   (VisualMapComponent was here 2026-08-30, briefly: the in-canvas legend
 //   painted over the states once a zoom filled the frame, so the legend is
 //   DOM now and every region/dot is colored per data item instead.)
@@ -43,10 +66,11 @@
 // Do NOT import this from EChart.tsx or from any Dashboard panel.
 
 import * as echarts from 'echarts/core';
-import { MapChart, ScatterChart } from 'echarts/charts';
+import { LinesChart, MapChart, ScatterChart } from 'echarts/charts';
 import { GeoComponent } from 'echarts/components';
+import { LabelLayout } from 'echarts/features';
 
-echarts.use([MapChart, ScatterChart, GeoComponent]);
+echarts.use([MapChart, ScatterChart, LinesChart, GeoComponent, LabelLayout]);
 
 /** Register a GeoJSON map once per name (WorldMapPanel lazy-loads the
  *  committed world-110m and us-states-albers assets and hands each here

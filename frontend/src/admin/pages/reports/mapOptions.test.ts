@@ -1,17 +1,22 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { countryName, flagEmoji } from '@admin/services/country';
 import {
   COUNTRY_PROJECTION,
+  LABEL_SERIES_ID,
+  LEADER_SERIES_ID,
   MAP_BOX,
   MAP_NAME,
   US_MAP_NAME,
   WORLD_FRAME_ASPECT,
   buildCountryOption,
+  buildLabelLayer,
   buildUsOption,
   buildWorldOption,
 } from './mapOptions';
 import type { CityPoint, CountryRow, RegionPaint, UsCityRow, UsStateRow } from './mapOptions';
-import { binColorFor, buildBins } from './viewershipBins';
+import { VIEWERSHIP_RAMP, binColorFor, buildBins } from './viewershipBins';
+import { US_STATE_LABELS } from './stateLabels';
 import { naturalEarth1Project } from './mapProjections';
 import { frameAspect } from './usZoom';
 import world110 from '@admin/components/charts/world-110m.geo.json';
@@ -94,14 +99,23 @@ interface DataItem {
   value?: number;
   itemStyle?: ItemStyle;
   row?: UsCityRow;
+  coords?: Array<[number, number]>;
 }
 interface RegionStyle {
   name?: string;
   itemStyle?: ItemStyle;
-  emphasis?: { label?: { show?: boolean }; itemStyle?: ItemStyle };
+  emphasis?: { label?: LabelStyle; itemStyle?: ItemStyle };
 }
 
+interface LabelStyle {
+  show?: boolean;
+  color?: string;
+  textBorderColor?: string;
+  textBorderWidth?: number;
+  minMargin?: number;
+}
 interface MapNode {
+  id?: string;
   regions?: RegionStyle[];
   type?: string;
   map?: string;
@@ -112,9 +126,12 @@ interface MapNode {
   roam?: boolean;
   scaleLimit?: { min?: number; max?: number };
   projection?: { project?: unknown; unproject?: unknown };
-  emphasis?: { label?: { show?: boolean }; itemStyle?: ItemStyle; scale?: number };
-  label?: { show?: boolean };
+  emphasis?: { label?: LabelStyle; itemStyle?: ItemStyle; scale?: number };
+  label?: LabelStyle;
   select?: { disabled?: boolean };
+  silent?: boolean;
+  symbolSize?: number;
+  labelLayout?: (p: { dataIndex?: number }) => { hideOverlap?: boolean };
   itemStyle?: ItemStyle;
   top?: number;
   bottom?: number;
@@ -257,7 +274,11 @@ describe('buildUsOption', () => {
     expect(opt.geo?.nameProperty).toBe('name');
 
     const series = opt.series ?? [];
-    expect(series).toHaveLength(2);
+    // Four: the choropleth, the city dots, then the label layer's leader
+    // lines and its codes. The first two indices are pinned because the panel
+    // and every test below read the option back positionally — the label
+    // layer is APPENDED, never spliced in front.
+    expect(series).toHaveLength(4);
     expect(series[0].type).toBe('map');
     expect(series[0].geoIndex).toBe(0);
     expect(series[0].map).toBeUndefined(); // it borrows the geo component's
@@ -491,9 +512,18 @@ describe('buildUsOption is buildCountryOption, wired to the albers asset', () =>
       })),
       cityPoints: CITY_POINTS,
       bins: US_BINS,
+      labels: US_STATE_LABELS,
     }) as unknown as Opt;
     expect(JSON.stringify(direct.geo?.regions)).toBe(JSON.stringify(us().geo?.regions));
     expect(JSON.stringify(direct.series?.[0].data)).toBe(JSON.stringify(us().series?.[0].data));
+    // The label layer too — WorldMapPanel builds the US view through
+    // `buildCountryOption` with `labels: US_STATE_LABELS`, which is the SAME
+    // call this makes. Nothing ships `buildUsOption` today, so without this
+    // the two could drift and only the builder nobody renders would be tested.
+    // (Found the hard way: the labels were wired into `buildUsOption` alone
+    // and rendered nowhere.)
+    expect(JSON.stringify(direct.series?.[2].data)).toBe(JSON.stringify(us().series?.[2].data));
+    expect(JSON.stringify(direct.series?.[3].data)).toBe(JSON.stringify(us().series?.[3].data));
   });
 });
 
@@ -573,5 +603,277 @@ describe('the fit preserves the geography, at every box shape', () => {
       else if (f.geometry?.type === 'MultiPolygon') visit(f.geometry.coordinates, 3);
     }
     expect(frameAspect([minX, minY, maxX, maxY])).toBeCloseTo(WORLD_FRAME_ASPECT, 4);
+  });
+});
+
+// ── The always-on state labels (2026-08-31) ─────────────────────────────────
+// Owner ask: "the names of the states [should be] always visible in 'United
+// States' view". What these pin is the two things that would silently undo it:
+// the label arriving as ECharts' own region label (which the panel spent a day
+// suppressing on three separate paths), and an ink that cannot be read on the
+// bin it lands on.
+
+/** WCAG 2.x relative luminance / contrast ratio, on 6-digit hex. Written out
+ *  here rather than imported because the POINT of this block is to re-measure
+ *  the numbers in mapOptions' comment from first principles. */
+function luminance(hex: string): number {
+  const channels = [1, 3, 5]
+    .map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
+    .map((v) => (v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)));
+  return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
+}
+function contrast(a: string, b: string): number {
+  const [x, y] = [luminance(a), luminance(b)];
+  return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+}
+
+/** Every surface a label can land on: the whole thermal ramp, the empty-land
+ *  slate, the sea plate the SCSS paints under the canvas, and the pale gold a
+ *  hovered region turns. Quoted from mapOptions/ReportsPage for the same
+ *  reason LAND_NO_DATA is above — a retint on either side must fail here. */
+const LABEL_SURFACES = [...VIEWERSHIP_RAMP, LAND_NO_DATA, '#0b1020', '#ffe3a3'];
+
+const usLabelSeries = () => (us().series ?? [])[3];
+const usLeaderSeries = () => (us().series ?? [])[2];
+
+describe('the state labels are a layer of their own', () => {
+  it('never turns ECharts’ region labels back on to get them', () => {
+    // The three suppressions this panel fought for. Labels that arrive by
+    // flipping any of these come back in ECharts' default grey on a hover or
+    // a select, which is the bug, not the feature.
+    const opt = us();
+    // ECharts' own default for a geo label is off; what this pins is that
+    // nothing here has turned it ON, on any of the three paths that stamp a
+    // name over the map.
+    expect(opt.geo?.label?.show).not.toBe(true);
+    expect(opt.geo?.emphasis?.label?.show).toBe(false);
+    expect(opt.series?.[0].emphasis?.label?.show).toBe(false);
+    for (const region of opt.geo?.regions ?? []) {
+      expect(region.emphasis?.label?.show).toBe(false);
+    }
+  });
+
+  it('draws two-letter codes, one per state in the committed asset', () => {
+    const data = usLabelSeries().data ?? [];
+    expect(data).toHaveLength(51);
+    for (const item of data) expect(item.name).toMatch(/^[A-Z]{2}$/);
+    expect(new Set(data.map((d) => d.name)).size).toBe(51);
+  });
+
+  it('is SILENT — a label must not eat the click that zooms a state', () => {
+    // The click handler reads `seriesType === 'scatter'` to open a city card
+    // and treats anything else as a region zoom. A label layer that emitted
+    // events would do both wrong.
+    expect(usLabelSeries().silent).toBe(true);
+    expect(usLeaderSeries().silent).toBe(true);
+    // And invisible without being SIZELESS: ECharts scales the label with its
+    // host symbol path, so `symbolSize: 0` renders no text at all (found on
+    // the live canvas — the leaders drew, the codes did not).
+    expect(usLabelSeries().symbolSize).toBeGreaterThan(0);
+    expect(usLabelSeries().itemStyle?.color).toBe('transparent');
+  });
+
+  it('hides what will not fit rather than printing mush', () => {
+    // The whole small-screen story: the US is ~304px wide on a 320px phone.
+    // hideOverlap re-runs on every layout pass, roam included, so zooming in
+    // is what earns the crowded codes back. MEASURED on the live page by
+    // hooking fillText: 51 of 51 codes painted at 1440 and 768, 41 at 390,
+    // 32 at 320 — and 51 again at any of them once a region is clicked.
+    const layout = usLabelSeries().labelLayout!;
+    // The ten out on the water are exempt: each has a leader line drawn for
+    // it, and a culled one leaves a hairline pointing at nothing.
+    const moved = US_STATE_LABELS.filter(
+      (l) => l.at[0] !== l.anchor[0] || l.at[1] !== l.anchor[1],
+    ).length;
+    for (let i = 0; i < moved; i++) expect(layout({ dataIndex: i }).hideOverlap).toBe(false);
+    expect(layout({ dataIndex: moved }).hideOverlap).toBe(true);
+    expect(layout({ dataIndex: 50 }).hideOverlap).toBe(true);
+    // And the cull runs on a rect with a margin. Without one, two codes that
+    // merely TOUCH both survive and read as a single word — West Virginia and
+    // Virginia rendered "WVVA" at 390px, measured on the live canvas.
+    expect(usLabelSeries().label?.minMargin).toBeGreaterThan(0);
+  });
+
+  it('puts the moved labels FIRST, which is what makes them survive', () => {
+    // ECharts breaks hideOverlap ties by list order (priority is the host
+    // symbol's area, and every symbol here is invisible, so they all tie).
+    // The ten states whose labels sit out on the water are the ones a reader
+    // cannot identify by shape, so they are the ones that must not be culled.
+    const data = usLabelSeries().data ?? [];
+    const moved = US_STATE_LABELS.filter(
+      (l) => l.at[0] !== l.anchor[0] || l.at[1] !== l.anchor[1],
+    ).map((l) => l.code);
+    expect(moved).toHaveLength(10);
+    expect(data.slice(0, 10).map((d) => d.name)).toEqual(moved);
+  });
+
+  it('draws one leader per moved label, and none for the rest', () => {
+    const leaders = usLeaderSeries();
+    expect(leaders.type).toBe('lines');
+    expect(leaders.coordinateSystem).toBe('geo');
+    expect(leaders.data).toHaveLength(10);
+  });
+
+  it('stops each leader short of its own text', () => {
+    // A line that ran all the way to the label point would underline it.
+    for (const line of usLeaderSeries().data ?? []) {
+      const [from, to] = line.coords ?? [];
+      const label = US_STATE_LABELS.find(
+        (l) => l.anchor[0] === from[0] && l.anchor[1] === from[1],
+      );
+      expect(label).toBeDefined();
+      // The end sits ON the segment, short of the label, never past it.
+      const full = Math.hypot(label!.at[0] - from[0], label!.at[1] - from[1]);
+      const drawn = Math.hypot(to[0] - from[0], to[1] - from[1]);
+      expect(drawn).toBeLessThan(full);
+      expect(full - drawn).toBeCloseTo(22, 6);
+    }
+  });
+
+  it('is legible on EVERY surface it can land on — measured, not asserted', () => {
+    // No single ink survives a ramp that runs purple -> cyan -> yellow -> red.
+    // The gate is the PAIR: on every surface, either the ink or its halo
+    // clears AA, and the glyph core always reads against its own outline.
+    const label = usLabelSeries().label!;
+    const ink = label.color!;
+    const halo = label.textBorderColor!;
+    expect(label.textBorderWidth).toBeGreaterThanOrEqual(2);
+    expect(contrast(ink, halo)).toBeGreaterThanOrEqual(4.5);
+    for (const surface of LABEL_SURFACES) {
+      const best = Math.max(contrast(ink, surface), contrast(halo, surface));
+      expect(
+        best,
+        `neither ${ink} nor its halo ${halo} is legible on ${surface}`,
+      ).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it('leaves every other country’s option exactly as it was', () => {
+    // No anchors have been measured for anywhere but the US, and a label layer
+    // without them would be guesswork drawn on top of real data.
+    const gb = buildCountryOption({
+      mapName: 'admin1:GB',
+      projection: COUNTRY_PROJECTION,
+      regions: [{ feature: 'England', label: 'England', views: 4, visitors: 2 }],
+      cityPoints: [],
+      bins: buildBins(4),
+    }) as unknown as Opt;
+    expect(gb.series).toHaveLength(2);
+  });
+});
+
+// ── Zoom compensation (2026-08-31) ──────────────────────────────────────────
+// The moved labels are offset in the geo's OWN units, which is what keeps the
+// stack the same shape at 320px and at 1440px. Units scale with `geo.zoom`
+// too, though, so clicking New York flung Vermont's label four times further
+// into the Atlantic and pushed half the stack off the frame — the reader zoomed
+// in on precisely the states the stack exists for and lost it. WorldMapPanel
+// merges this layer back in on every roam; these pin the arithmetic.
+
+describe('the stack holds its distance in PIXELS as the map zooms', () => {
+  const labelOf = (layer: unknown[], code: string) =>
+    ((layer[1] as MapNode).data ?? []).find((d) => d.name === code)!;
+  const anchorOf = (code: string) => US_STATE_LABELS.find((l) => l.code === code)!;
+
+  it('is the identity at the auto-fit', () => {
+    expect(JSON.stringify(buildLabelLayer(US_STATE_LABELS, 1))).toBe(
+      JSON.stringify(buildLabelLayer(US_STATE_LABELS)),
+    );
+    const ri = labelOf(buildLabelLayer(US_STATE_LABELS, 1), 'RI');
+    expect(ri.value).toEqual(anchorOf('RI').at);
+  });
+
+  it('halves a moved label’s offset when the map doubles', () => {
+    // Geo units halve, screen pixels stay put — that IS the fix.
+    const ri = anchorOf('RI');
+    const drawn = labelOf(buildLabelLayer(US_STATE_LABELS, 2), 'RI').value as number[];
+    expect(drawn[0]).toBeCloseTo(ri.anchor[0] + (ri.at[0] - ri.anchor[0]) / 2, 6);
+    expect(drawn[1]).toBeCloseTo(ri.anchor[1] + (ri.at[1] - ri.anchor[1]) / 2, 6);
+  });
+
+  it('leaves an unmoved label exactly where its state is, at any zoom', () => {
+    for (const zoom of [1, 2, 7, 12]) {
+      const tx = labelOf(buildLabelLayer(US_STATE_LABELS, zoom), 'TX');
+      expect(tx.value).toEqual(anchorOf('TX').anchor);
+    }
+  });
+
+  it('shrinks the leader’s gap with it, so the line still stops short', () => {
+    // The gap is 22 units at zoom 1, which is ~7px. Held FIXED while the
+    // offsets shrink, it swallows the whole offset — Vermont's is 77 units, so
+    // by zoom 4 the "gap" is longer than the leader and `leaderEnd` gives back
+    // the label point itself: the line then runs under its own text, at exactly
+    // the zoom where the reader is looking at Vermont. What has to hold is that
+    // the gap stays constant IN PIXELS, which is `gap * zoom == 22` in units.
+    for (const zoom of [1, 4, 12]) {
+      const leaders = (buildLabelLayer(US_STATE_LABELS, zoom)[0] as MapNode).data ?? [];
+      expect(leaders).toHaveLength(10);
+      for (const line of leaders) {
+        const [from, to] = line.coords!;
+        const label = US_STATE_LABELS.find(
+          (l) => l.anchor[0] === from[0] && l.anchor[1] === from[1],
+        )!;
+        const full = Math.hypot(
+          (label.at[0] - from[0]) / zoom,
+          (label.at[1] - from[1]) / zoom,
+        );
+        const drawn = Math.hypot(to[0] - from[0], to[1] - from[1]);
+        expect(drawn).toBeGreaterThan(0);
+        expect(drawn).toBeLessThan(full);
+        expect((full - drawn) * zoom).toBeCloseTo(22, 6);
+      }
+    }
+  });
+
+  it('carries stable series ids, because the panel merges by id', () => {
+    // An index-keyed merge would rewrite the choropleth and the city dots.
+    const layer = buildLabelLayer(US_STATE_LABELS, 3);
+    expect((layer[0] as MapNode).id).toBe(LEADER_SERIES_ID);
+    expect((layer[1] as MapNode).id).toBe(LABEL_SERIES_ID);
+    expect((us().series ?? [])[2].id).toBe(LEADER_SERIES_ID);
+    expect((us().series ?? [])[3].id).toBe(LABEL_SERIES_ID);
+  });
+});
+
+// ── The registration this whole layer depends on (2026-08-31) ──────────────
+// A source-text guard, deliberately, because the failure is a BUNDLER one and
+// nothing that runs in this suite can see it: `echarts/core` calls
+// `use(installLabelLayout)` itself — with the comment "TODO will be treeshaked"
+// beside it in echarts' own source — and echarts' `sideEffects` list does not
+// name `lib/export/core.js`, so Rollup drops that call from the production
+// build. Everything above still passes; `hideOverlap` simply stops working in
+// the shipped bundle, silently. MEASURED by hooking `fillText` on the live
+// page: 51 of 51 codes painted at a 320px width where the same option culls
+// 19 of them in dev.
+
+describe('the label layer is registered, not assumed', () => {
+  it('is wired into the builder the PANEL actually calls', () => {
+    // WorldMapPanel builds every country view — the US included — through
+    // `buildCountryOption`; `buildUsOption` has no production caller. The
+    // labels were wired into `buildUsOption` alone first, and rendered
+    // nowhere: every test above passed against a builder nothing shipped.
+    const panel = readFileSync(new URL('./WorldMapPanel.tsx', import.meta.url), 'utf8');
+    expect(panel).toMatch(/labels:\s*shapes\.code === US \? US_STATE_LABELS/);
+    // And it keeps the LIVE chart in step with the zoom, which no option
+    // rebuild ever sees: the click-zoom and the wheel roam are both
+    // imperative, so without this merge the stack drifts off the frame at
+    // exactly the zoom the reader chose it for.
+    expect(panel).toMatch(/setOption\(\{\s*series:\s*buildLabelLayer\(/);
+  });
+
+  it('names LabelLayout in the map panel’s own echarts.use call', () => {
+    const source = readFileSync(
+      new URL('../../components/charts/echartsMap.ts', import.meta.url),
+      'utf8',
+    );
+    // The REAL call, not the several the file's own comments quote — it is
+    // the one that registers the map chart. (A grep guard that matches its own
+    // documentation is the trap CLAUDE.md records for `test_no_type_url_form_input`.)
+    const registration = [...source.matchAll(/echarts\.use\(\[([^\]]*)\]\)/g)]
+      .map((m) => m[1])
+      .find((body) => body.includes('MapChart'));
+    expect(registration, 'echartsMap.ts no longer registers MapChart').toBeDefined();
+    expect(registration).toContain('LabelLayout');
+    expect(source).toContain("from 'echarts/features'");
   });
 });

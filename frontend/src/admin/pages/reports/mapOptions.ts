@@ -47,6 +47,7 @@ import {
   usPlanarUnproject,
 } from './mapProjections';
 import { plural } from './cityIntel';
+import { US_STATE_LABELS } from './stateLabels';
 import { binColorFor } from './viewershipBins';
 import type { ViewershipBin } from './viewershipBins';
 import { MAX_STATE_ZOOM } from './usZoom';
@@ -101,6 +102,56 @@ const CITY_DOT_EDGE_HOVER = '#fff3d6';
  *  anchors the ramp's cool end. It goes quiet against the hot bins, which is
  *  fine — a region that bright needs no edge to be noticed. */
 const VISITED_BORDER = '#b083bd';
+
+/** ── The always-on region labels (2026-08-31, owner: "the names of the states
+ *  [should be] always visible in 'United States' view") ────────────────────
+ *
+ *  A LABEL LAYER, not `geo.label`. The three `label: { show: false }` blocks
+ *  further down are the record of a fight — after the click-to-zoom's merge
+ *  `setOption` touches the geo, ECharts starts stamping region names in its
+ *  own default grey on hover, and the series' own select style parks a clicked
+ *  state under a grey name until the next click. Turning any of those on is
+ *  how the default ink gets back in. So the suppressions stay exactly as they
+ *  are, and the labels arrive as their own silent scatter series that nothing
+ *  hovers, nothing selects and nothing merges.
+ *
+ *  ── The ink is a PAIR, and it has to be ──────────────────────────────────
+ *  These sit on the thermal ramp, which runs from deep purple through cyan
+ *  and yellow to red. No single ink survives that. Measured contrast against
+ *  every surface a label can land on:
+ *
+ *      surface        white ink   dark halo
+ *      purple #7b3fa0    6.86        2.76
+ *      blue   #2c5eff    5.06        3.74
+ *      cyan   #15cae7    1.97        9.59
+ *      green  #3add87    1.77       10.70
+ *      yellow #f4d343    1.47       12.84
+ *      red    #ff4221    3.47        5.46
+ *      empty land        12.18       1.55
+ *      sea plate         18.93       1.00
+ *      hover gold        1.25       15.12
+ *
+ *  White alone fails on four of the nine; the dark halo fails on four others.
+ *  Together they never both fail: the WEAKEST surface still clears 5.06:1
+ *  through one channel or the other (blue, on the ink), and the glyph core
+ *  reads against its own outline at 18.93:1. That pairing is the gate, and
+ *  `mapOptions.test.ts` re-measures it rather than trusting this comment.
+ *
+ *  The halo IS the sea plate's own ground, so a label out over the water
+ *  carries no visible outline at all — only the nine stacked ones do that,
+ *  and there the halo is what keeps them off the graticule. */
+const LABEL_INK = '#ffffff';
+const LABEL_HALO = '#0b1020';
+const LABEL_HALO_WIDTH = 3;
+const LABEL_SIZE = 10;
+const LABEL_MIN_MARGIN = 2;
+/** The leader lines run almost entirely over the sea plate (8.69:1 there,
+ *  5.59:1 on the stretch of empty land they leave from) and stay in the
+ *  panel's own blue-slate family rather than introducing a colour. */
+const LEADER = '#9fb0d4';
+/** How far short of its label a leader stops, in asset units, so the line
+ *  never underlines the text it points at. */
+const LEADER_GAP = 22;
 
 const WORLD_PROJECTION = {
   project: naturalEarth1Project,
@@ -258,6 +309,172 @@ export interface RegionPaint {
   visitors: number;
 }
 
+/** One always-on label. `anchor` is where the region IS and `at` is where the
+ *  text goes; they differ only for a polygon too small to hold its own label,
+ *  which then earns a leader line back to itself. Both are in the geo's own
+ *  coordinate space, so the layer scales with the map at every viewport. */
+export interface RegionLabel {
+  /** The short string actually drawn — a two-letter postal code, for the US. */
+  code: string;
+  anchor: [number, number];
+  at: [number, number];
+}
+
+/** A point `gap` short of `to`, along the line from `from`. Keeps the leader
+ *  from running under its own text. A nudge shorter than the gap gets no
+ *  shortening — it would reverse the line. */
+function leaderEnd(from: [number, number], to: [number, number], gap: number): [number, number] {
+  const dx = to[0] - from[0];
+  const dy = to[1] - from[1];
+  const length = Math.hypot(dx, dy);
+  if (length <= gap) return to;
+  const t = (length - gap) / length;
+  return [from[0] + dx * t, from[1] + dy * t];
+}
+
+/** Series ids, so the panel can merge new label positions into a LIVE chart
+ *  without addressing series by index — the two below are appended after the
+ *  choropleth and the city dots, and an index-keyed merge would silently
+ *  rewrite those instead if that order ever changed. */
+export const LEADER_SERIES_ID = 'regionLabelLeaders';
+export const LABEL_SERIES_ID = 'regionLabels';
+
+/**
+ * The label layer, at a given map zoom.
+ *
+ * ── Why zoom is an argument (2026-08-31) ──────────────────────────────────
+ * The moved labels are offset in the geo's OWN units, which is what makes the
+ * stack hold its shape from a 320px phone to a 1440px desktop. But units also
+ * scale with `geo.zoom`, so clicking New York used to fling Vermont's label
+ * four times further out and push half the stack off the frame — the reader
+ * zoomed in on exactly the states that need the stack and lost it.
+ *
+ * Dividing the offset by the zoom fixes both ends at once: at the auto-fit
+ * (zoom 1) this is the identity, and at any zoom the label sits the SAME
+ * number of pixels from its state as it did before. The leader's gap is
+ * divided with it, or a 22-unit gap would swallow a 19-unit offset at zoom 4
+ * and the line would disappear.
+ */
+export function buildLabelLayer(labels: RegionLabel[], zoom = 1): unknown[] {
+  return labelLayer(
+    labels.map((l) =>
+      l.at[0] === l.anchor[0] && l.at[1] === l.anchor[1]
+        ? l
+        : {
+            ...l,
+            at: [
+              l.anchor[0] + (l.at[0] - l.anchor[0]) / zoom,
+              l.anchor[1] + (l.at[1] - l.anchor[1]) / zoom,
+            ] as [number, number],
+          },
+    ),
+    LEADER_GAP / zoom,
+  );
+}
+
+/**
+ * The label layer: a leader-line series for the moved labels, then the labels
+ * themselves. Both are `silent` — this layer must never eat the click that
+ * zooms a region or the hover that opens its tooltip.
+ *
+ * `hideOverlap` is the whole small-screen story. It runs on every layout pass
+ * INCLUDING a roam, so a phone frame that cannot fit every code shows the ones
+ * that fit and gives the rest back as the reader zooms in, rather than
+ * printing mush.
+ *
+ * The moved labels are EXEMPT from it, and the caller's ordering is what makes
+ * that expressible: they come first, so "moved" is a prefix of the data and the
+ * exemption is an index compare. Two reasons they are exempt — they are the
+ * regions a reader cannot identify by shape at all, which is the whole ask; and
+ * each has a leader line drawn for it by the series above, which `hideOverlap`
+ * knows nothing about, so culling one leaves a hairline pointing at nothing
+ * (measured: three orphan leaders at 320px before the exemption).
+ */
+function labelLayer(labels: RegionLabel[], gap: number): unknown[] {
+  const moved = labels.filter((l) => l.at[0] !== l.anchor[0] || l.at[1] !== l.anchor[1]);
+  const leaders = moved.length
+    ? [
+        {
+          id: LEADER_SERIES_ID,
+          type: 'lines',
+          coordinateSystem: 'geo',
+          geoIndex: 0,
+          silent: true,
+          polyline: false,
+          // A tick at the region end and nothing at the label end: the dot is
+          // what says WHICH polygon a label out over the water belongs to. It
+          // wears the label's own ink and halo for the same reason the text
+          // does — it lands on whatever bin the region was painted.
+          symbol: ['circle', 'none'],
+          symbolSize: [4, 0],
+          itemStyle: { color: LABEL_INK, borderColor: LABEL_HALO, borderWidth: 1 },
+          lineStyle: { color: LEADER, width: 0.9, opacity: 1 },
+          // Same reason as the labels below: the whole point of this layer is
+          // that it reaches OUTSIDE the geography.
+          clip: false,
+          data: moved.map((l) => ({ coords: [l.anchor, leaderEnd(l.anchor, l.at, gap)] })),
+          z: 4,
+        },
+      ]
+    : [];
+  return [
+    ...leaders,
+    {
+      id: LABEL_SERIES_ID,
+      type: 'scatter',
+      coordinateSystem: 'geo',
+      geoIndex: 0,
+      silent: true,
+      // A transparent 2px symbol, NOT `symbolSize: 0`. ECharts hangs the label
+      // off the symbol path and scales that path by `symbolSize / 2`, so a
+      // zero size collapses the text with it — measured on the live canvas,
+      // where the leader lines drew and not one code did. Transparent rather
+      // than `opacity: 0` for the same class of reason: the label inherits the
+      // symbol's opacity as its own default.
+      symbolSize: 2,
+      itemStyle: { color: 'transparent' },
+      // ECharts drops any symbol whose POINT falls outside the fitted map rect
+      // and never draws its label. The stack deliberately sits in the water
+      // beyond the coastline, close enough to the frame's edge that its text
+      // runs past it — measured with clip on, the codes were sliced down the
+      // middle at both phone widths. Off, they spend the plot box's own 8px
+      // inset, which is what that inset is for.
+      clip: false,
+      label: {
+        show: true,
+        position: 'inside',
+        formatter: '{b}',
+        color: LABEL_INK,
+        fontSize: LABEL_SIZE,
+        fontWeight: 600,
+        textBorderColor: LABEL_HALO,
+        textBorderWidth: LABEL_HALO_WIDTH,
+        // The collision box, not visible padding: `hideOverlap` culls on these
+        // rects, and without a margin two codes that merely TOUCH both survive
+        // and read as one word — West Virginia and Virginia rendered "WVVA" at
+        // 390px, measured. 2 rather than 3: both stop the merge, and 3 cost
+        // two further labels at phone width for no legibility gained (37 vs 35
+        // of 51 drawn at 390px; desktop draws all 51 at either).
+        minMargin: LABEL_MIN_MARGIN,
+      },
+      // Culling, with the moved labels EXEMPT. `hideOverlap` re-runs on every
+      // layout pass including a roam, so a phone frame that can only fit
+      // two-thirds of the codes shows the two-thirds that fit and reveals the
+      // rest as the reader zooms in, rather than printing mush. But the ten
+      // out on the water are exactly the ones a reader cannot identify by
+      // shape, and each has a LEADER LINE drawn for it by the series above —
+      // a culled one would leave a hairline pointing at nothing (measured: 3
+      // orphan leaders at 320px). They are ordered first by the caller, so
+      // "moved" is a prefix of the data and the test is an index compare.
+      labelLayout: (params: { dataIndex?: number }) => ({
+        hideOverlap: (params.dataIndex ?? 0) >= moved.length,
+      }),
+      data: labels.map((l) => ({ name: l.code, value: l.at })),
+      z: 5,
+    },
+  ];
+}
+
 /** A country drill-down: the geo component carrying that country's outlines,
  *  the choropleth bound to it by `geoIndex`, and the city dots on top of
  *  both. */
@@ -267,12 +484,22 @@ export function buildCountryOption({
   regions,
   cityPoints,
   bins,
+  labels,
+  labelZoom = 1,
 }: {
   mapName: string;
   projection: { project: (p: [number, number]) => [number, number]; unproject: (p: [number, number]) => [number, number] };
   regions: RegionPaint[];
   cityPoints: CityPoint[];
   bins: ViewershipBin[];
+  /** The always-on label layer. Absent for a country whose subdivisions have
+   *  no measured anchors — every view outside the United States today, which
+   *  is why those options are byte-for-byte what they were. */
+  labels?: RegionLabel[];
+  /** The zoom the labels should be laid out for. Only ever anything but 1
+   *  when a rebuild happens to coincide with a zoomed view; the panel keeps
+   *  the live chart in step by merging `buildLabelLayer` on roam. */
+  labelZoom?: number;
 }): EChartsCoreOption {
   return {
     backgroundColor: 'transparent',
@@ -372,13 +599,20 @@ export function buildCountryOption({
         label: { show: false },
         data: cityPoints,
       },
+      // Appended, never spliced in front: the map series is index 0 and the
+      // city dots index 1 everywhere that reads this option back.
+      ...(labels?.length ? buildLabelLayer(labels, labelZoom) : []),
     ],
   };
 }
 
 /** The United States drill-down — the country builder above, wired to the
  *  pre-projected AlbersUSA asset. A state row IS its own polygon here, so the
- *  join the rest of the world needs collapses to the identity. */
+ *  join the rest of the world needs collapses to the identity.
+ *
+ *  The labels are unconditional: they are a property of the GEOGRAPHY, not of
+ *  the window's data, so a state with no visits this month is still named. A
+ *  map whose empty states are anonymous is the thing the owner asked to fix. */
 export function buildUsOption({
   stateRows,
   cityPoints,
@@ -399,6 +633,7 @@ export function buildUsOption({
     })),
     cityPoints,
     bins,
+    labels: US_STATE_LABELS,
   });
 }
 

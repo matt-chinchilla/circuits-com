@@ -102,10 +102,12 @@ import {
   US_PROJECTION,
   WORLD_FRAME_ASPECT,
   buildCountryOption,
+  buildLabelLayer,
   buildWorldOption,
 } from './mapOptions';
 import type { CityPoint, RegionPaint } from './mapOptions';
 import { buildRegionIndex, resolveRegions } from './regionJoin';
+import { US_STATE_LABELS } from './stateLabels';
 import { featureBounds, frameAspect, unionBounds, viewForBounds } from './usZoom';
 import type { BBox } from './usZoom';
 import type { HeatMapViewProps } from './HeatMapView';
@@ -598,6 +600,35 @@ export default function WorldMapPanel({
     [openIntel],
   );
 
+  /**
+   * The zoom the label layer was last laid out for.
+   *
+   * The moved labels are offset in GEO units so the stack keeps its shape at
+   * every viewport, which means they also scale with zoom — click New York and
+   * Vermont's label used to swing four times further out into the Atlantic,
+   * taking half the stack off the frame. `buildLabelLayer` divides the offsets
+   * by the zoom, so this ref is what keeps the LIVE chart in step with a zoom
+   * the React option never sees (click-zoom and roam are both imperative).
+   */
+  const labelZoomRef = useRef(1);
+  const syncLabelZoom = useCallback(
+    (zoom: number) => {
+      const chart = chartRef.current;
+      if (!chart || chart.isDisposed() || country !== US) return;
+      const next = Math.max(1, zoom);
+      // A wheel gesture fires a stream of georoam events; the labels only have
+      // to keep up with the ones a reader can see. 2% is below the threshold
+      // at which a 10px label visibly moves.
+      if (Math.abs(next - labelZoomRef.current) / labelZoomRef.current < 0.02) return;
+      labelZoomRef.current = next;
+      // Merged by series ID, never by index: this option carries only the two
+      // label series, and an index-keyed merge would rewrite the choropleth
+      // and the city dots instead.
+      chart.setOption({ series: buildLabelLayer(US_STATE_LABELS, next) });
+    },
+    [country],
+  );
+
   const captureChart = useCallback((chart: EChartsType) => {
     // Every view's instance lands here (one per key mount); the click-to-zoom
     // handler only ever runs while a country view is mounted.
@@ -607,6 +638,7 @@ export default function WorldMapPanel({
   const resetView = useCallback(() => {
     setResetNonce((n) => n + 1);
     setZoomed(false);
+    labelZoomRef.current = 1; // the remount lays out at the auto-fit again
   }, []);
 
   // The join, once per (asset, region payload). `owners` is what the
@@ -695,12 +727,15 @@ export default function WorldMapPanel({
         // {center, zoom} merge re-armed the geo's own hover emphasis with
         // ECharts' default region-name stamp (measured 2026-08-30) even
         // though the built option already said show:false.
+        const fit = viewForBounds(bounds, info.bounds.frame);
         chart.setOption({
           geo: {
-            ...viewForBounds(bounds, info.bounds.frame),
+            ...fit,
             emphasis: { label: { show: false } },
           },
         });
+        // The stack rides the same zoom the geography just took.
+        syncLabelZoom(fit.zoom);
         setZoomed(true);
       },
       // Wheel zoom / drag pan, ANY view. The event also fires when
@@ -719,10 +754,11 @@ export default function WorldMapPanel({
           series?: Array<{ zoom?: number }>;
         };
         const zoom = (view === 'country' ? opt.geo?.[0] : opt.series?.[0])?.zoom ?? 1;
+        syncLabelZoom(zoom);
         setZoomed(zoom > 1.0001 || p?.dx != null || p?.dy != null);
       },
     }),
-    [view, drillable, enterCountry, shapes, resolved],
+    [view, drillable, enterCountry, shapes, resolved, syncLabelZoom],
   );
 
   const worldOption = useMemo(
@@ -764,6 +800,11 @@ export default function WorldMapPanel({
       regions: regionPaint,
       cityPoints,
       bins: regionBins,
+      // The United States is the one country whose subdivisions have measured
+      // label anchors (stateLabels.ts). Everywhere else the geometry is a
+      // Natural Earth admin-1 set nobody has placed labels in, and guessing
+      // them would put text on top of the data — so those views carry none.
+      labels: shapes.code === US ? US_STATE_LABELS : undefined,
     });
   }, [shapes, country, regionPaint, cityPoints, regionBins]);
 
@@ -773,6 +814,9 @@ export default function WorldMapPanel({
   // pill correctly survives them.
   useEffect(() => {
     setZoomed(false);
+    // The option prop is applied notMerge, so a rebuild also puts the geo back
+    // at its auto-fit — and with it the label layer this ref tracks.
+    labelZoomRef.current = 1;
   }, [worldOption, countryOption]);
 
   // The INTEL_CARD constant is a ceiling estimate; fonts and platform can
