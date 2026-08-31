@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import { Download } from 'lucide-react'
 import { useDemo } from '@admin/contexts/DemoContext'
@@ -16,6 +16,7 @@ import { pageLabel, pageUrl } from './pageLabels'
 import styles from './ReportsPage.module.scss'
 import WorldMapPanel from './WorldMapPanel'
 import OrganizationsPanel from './organizations'
+import { focusFor, type LocationFocus } from './locationFocus'
 import { refHost } from './chartKit'
 import { IZ } from './chartParts'
 import {
@@ -151,6 +152,19 @@ function StaffReportsPage() {
   const [revenue, setRevenue] = useState<RevenueDataPoint[]>([])
   const [popular, setPopular] = useState<PopularData | null>(null)
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null)
+  // "Show me that place on the map" — raised by a location click in the
+  // Visiting Organizations panel and handed to the map above it. The page
+  // holds it because the two are SIBLINGS; a store would be a second source
+  // of truth about which place is selected, and the map already owns that.
+  // The counter is what makes a repeat click on the same location re-fire.
+  const [mapFocus, setMapFocus] = useState<LocationFocus | null>(null)
+  const focusSeq = useRef(0)
+  const focusLocation = useCallback((location: Parameters<typeof focusFor>[0]) => {
+    focusSeq.current += 1
+    const next = focusFor(location, focusSeq.current)
+    if (next) setMapFocus(next)
+  }, [])
+
   const [segment, setSegment] = useState<AnalyticsSegment>('humans')
   const [segmentError, setSegmentError] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -487,9 +501,14 @@ function StaffReportsPage() {
                   regionCountries={analytics.region_countries}
                   regionTrackedSince={analytics.region_tracked_since}
                   locatedTowns={analytics.located_towns}
+                  focus={mapFocus}
                 />
 
-                <OrganizationsPanel days={RANGE_DAYS[range]} segment={segment} />
+                <OrganizationsPanel
+                  days={RANGE_DAYS[range]}
+                  segment={segment}
+                  onFocusLocation={focusLocation}
+                />
 
                 <div className={`${styles.chartCard} ${styles.chartFull}`}>
                   <div className={styles.chartHead}>

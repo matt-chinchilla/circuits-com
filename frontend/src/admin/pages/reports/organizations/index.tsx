@@ -2,10 +2,11 @@ import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { adminApi } from '@admin/services/adminApi';
-import type { OrganizationsResponse, VisitorOrganization } from '@admin/services/adminApi';
+import type { OrgLocation, OrganizationsResponse, VisitorOrganization } from '@admin/services/adminApi';
 import type { AnalyticsSegment } from '@admin/types/admin';
 import { deviceSplitLabel, formatLastSeen } from '../cityIntel';
-import { refHost } from '../chartKit';
+import { flagEmoji, refHost } from '../chartKit';
+import { countryName } from '@admin/services/country';
 import {
   FILTER_LABEL,
   KIND_BADGE,
@@ -40,11 +41,16 @@ import styles from './OrganizationsPanel.module.scss';
 interface Props {
   days: number;
   segment: AnalyticsSegment;
+  /** A location the reader clicked in "Where & how". The page passes it to
+   *  the map panel, which shows the place on whichever view is open. Absent
+   *  when no map is mounted, and every location then renders as plain text —
+   *  a control that goes nowhere is worse than a label. */
+  onFocusLocation?: (location: OrgLocation) => void;
 }
 
 type Status = 'loading' | 'ready' | 'error';
 
-export default function OrganizationsPanel({ days, segment }: Props) {
+export default function OrganizationsPanel({ days, segment, onFocusLocation }: Props) {
   const [data, setData] = useState<OrganizationsResponse | null>(null);
   const [status, setStatus] = useState<Status>('loading');
   const [filter, setFilter] = useState<OrgFilter>('corporate');
@@ -153,6 +159,7 @@ export default function OrganizationsPanel({ days, segment }: Props) {
               org={org}
               open={openName === org.name}
               onToggle={() => setOpenName(openName === org.name ? null : org.name)}
+              onFocusLocation={onFocusLocation}
             />
           ))}
         </ul>
@@ -171,10 +178,12 @@ function OrgRow({
   org,
   open,
   onToggle,
+  onFocusLocation,
 }: {
   org: VisitorOrganization;
   open: boolean;
   onToggle: () => void;
+  onFocusLocation?: (location: OrgLocation) => void;
 }) {
   // The id has to survive an organization name containing anything at all —
   // DB-IP emits quotes, commas and non-ASCII ("UAB \"Bite Lietuva\"").
@@ -260,12 +269,45 @@ function OrgRow({
             <ul className={styles.detailList}>
               {org.locations.map((loc) => {
                 const label = locationLabel(loc);
-                return label ? (
+                if (!label) return null;
+                // Clickable only when BOTH halves are true: somebody is
+                // listening, and the row carries a country to point at. A
+                // location with no country renders as the plain text it
+                // always was rather than as a control that does nothing.
+                const canFocus = !!onFocusLocation && !!loc.country;
+                const flag = loc.country ? (
+                  <span
+                    className={styles.detailFlag}
+                    // The glyph is decoration beside a name that already says
+                    // the place; a screen reader gets the country spelled out
+                    // on the control instead.
+                    aria-hidden="true"
+                  >
+                    {flagEmoji(loc.country)}
+                  </span>
+                ) : null;
+                return (
                   <li key={`${loc.city}-${loc.region}-${loc.country}`}>
-                    <span className={styles.detailPath}>{label}</span>
+                    {canFocus ? (
+                      <button
+                        type="button"
+                        className={styles.detailPlaceBtn}
+                        title={`Show ${label} on the map`}
+                        aria-label={`Show ${label}, ${countryName(loc.country as string)}, on the map`}
+                        onClick={() => onFocusLocation?.(loc)}
+                      >
+                        {flag}
+                        <span className={styles.detailPath}>{label}</span>
+                      </button>
+                    ) : (
+                      <span className={styles.detailPlace}>
+                        {flag}
+                        <span className={styles.detailPath}>{label}</span>
+                      </span>
+                    )}
                     <span className={styles.detailNum}>{loc.views}</span>
                   </li>
-                ) : null;
+                );
               })}
             </ul>
             <p className={styles.detailFoot}>

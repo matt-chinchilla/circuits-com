@@ -84,6 +84,7 @@ import type { Admin1Feature } from '@admin/components/charts/admin1';
 import { adminApi } from '@admin/services/adminApi';
 import type { AnalyticsData, GeoCityRow, GeoRegionRow } from '@admin/types/admin';
 import { countryName, flagEmoji } from '@admin/services/country';
+import { matchTown, type LocationFocus } from './locationFocus';
 import { albersUsaProject } from './mapProjections';
 import { binColorFor, buildBins } from './viewershipBins';
 import {
@@ -276,6 +277,13 @@ interface WorldMapPanelProps {
    *  rows — the rows are fetched with that view's Leaflet chunk. Absent on an
    *  API that predates it, which simply does not offer the view. */
   locatedTowns?: number;
+  /** "Show me this place" — raised by a location click in the Visiting
+   *  Organizations panel below and routed here by the page. Acted on in
+   *  WHICHEVER view is open, deliberately: the reader clicked while looking
+   *  at one map, and switching them to the other one would answer a question
+   *  they did not ask. The `nonce` is what lets the same location be clicked
+   *  twice; see `locationFocus.ts`. */
+  focus?: LocationFocus | null;
 }
 
 export default function WorldMapPanel({
@@ -288,6 +296,7 @@ export default function WorldMapPanel({
   regionCountries,
   regionTrackedSince,
   locatedTowns = 0,
+  focus = null,
 }: WorldMapPanelProps) {
   const [view, setView] = useState<MapView>('world');
   /** The country the drill-down is showing; null while `view` is not
@@ -599,6 +608,56 @@ export default function WorldMapPanel({
     },
     [openIntel],
   );
+
+  /**
+   * "Show me that place" — a location clicked in the Visiting Organizations
+   * panel below.
+   *
+   * Acted on in WHICHEVER view is open. The reader clicked while looking at
+   * one map; silently switching them to the other would answer a question
+   * they did not ask, and the two maps disagree about what a click even means
+   * (the density map flies to a town, the choropleth drills into a country).
+   *
+   *   heat      — fly to the town and open its card, the same pair the Towns
+   *               list uses. A country with no town we can place does nothing
+   *               rather than moving the map somewhere arbitrary.
+   *   world     — drill into the country, which is what clicking it does.
+   *   country   — already inside a drill-down: open the town's card if it is
+   *               this country's, otherwise switch to the requested one.
+   *
+   * Keyed on `focus?.nonce`, NOT on the object: the same location clicked
+   * twice is the same value, and an effect keyed on it would fire once and
+   * then go quiet for that place forever. The other reads are deliberately
+   * out of the dep list for the same reason — this must fire on a click, not
+   * on a town list arriving.
+   */
+  useEffect(() => {
+    if (!focus) return;
+    const box = mapRef.current;
+    // The panel sits above the organizations list, so a click down there
+    // moves the reader's answer off-screen unless we bring it back.
+    box?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+    if (view === 'heat') {
+      const hit = matchTown(towns?.rows ?? [], focus);
+      if (!hit) return;
+      intelTriggerRef.current = null;
+      setFocusNonce((n) => n + 1);
+      openIntel(hit, null);
+      return;
+    }
+
+    if (view === 'country' && country === focus.country) {
+      const hit = matchTown(cityRows, focus);
+      if (hit) openIntel(hit, null);
+      return;
+    }
+
+    enterCountry(focus.country);
+    // Deps are the nonce ALONE, on purpose (see above). Everything else read
+    // here is intentionally omitted: re-running when the town list loads or
+    // the view changes would re-fly the map long after the click.
+  }, [focus?.nonce]);
 
   /**
    * The zoom the label layer was last laid out for.

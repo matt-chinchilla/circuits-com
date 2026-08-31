@@ -299,6 +299,53 @@ $hairline: #26325a;
   white-space: nowrap;
 }
 
+// ── A location that takes you to the map (2026-08-31) ───────────────────────
+// The flag and the name are one control, so the whole place is the target
+// rather than a 14px glyph. `min-width: 0` on BOTH the control and the name
+// keeps the flex min-content chain broken all the way down — without it a
+// long "Frankfurt am Main, Hesse" pushes the view count off the card instead
+// of ellipsing, which is the same trap `.rowMain` documents above.
+.detailPlace,
+.detailPlaceBtn {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+  min-width: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+}
+
+.detailPlaceBtn {
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  // Underline on hover only: at rest these sit in a dense three-column block
+  // and a permanent underline on every row reads as noise, not as affordance.
+  transition: color 120ms ease;
+
+  &:hover {
+    color: $ink;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  &:focus-visible {
+    outline: 2px solid #2299bf;
+    outline-offset: 2px;
+    border-radius: 3px;
+  }
+}
+
+// The flag never shrinks: it is a fixed-width glyph and letting flex squeeze
+// it turns the emoji into a sliver before the text has ellipsed at all.
+.detailFlag {
+  flex: 0 0 auto;
+  font-size: 12px;
+  line-height: 1;
+}
+
 .detailNum {
   flex: 0 0 auto;
   font-family: $font-mono;
