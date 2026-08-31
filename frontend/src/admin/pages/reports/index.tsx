@@ -12,6 +12,7 @@ import type {
   PopularData,
 } from '@admin/types/admin'
 import CustomerReportsPage from './CustomerReportsPage'
+import { pageLabel, pageUrl } from './pageLabels'
 import styles from './ReportsPage.module.scss'
 import WorldMapPanel from './WorldMapPanel'
 import OrganizationsPanel from './organizations'
@@ -469,7 +470,7 @@ function StaffReportsPage() {
                 <Kpi label="Pages / visit" value={analytics.avg_pages_per_visit} delta="average" />
                 <Kpi
                   label="Top page"
-                  value={analytics.top_pages[0]?.path ?? '—'}
+                  value={pageUrl(analytics.top_pages[0]?.path)}
                   valueStyle={{ fontSize: 16 }}
                   delta={`${analytics.top_pages[0]?.views ?? 0} views`}
                 />
@@ -480,10 +481,12 @@ function StaffReportsPage() {
                   countries={analytics.countries}
                   geoTrackedSince={analytics.geo_tracked_since}
                   segment={analytics.segment}
+                  days={RANGE_DAYS[range]}
                   usStates={analytics.us_states}
                   usCities={analytics.us_cities}
+                  regionCountries={analytics.region_countries}
                   regionTrackedSince={analytics.region_tracked_since}
-                  heatPoints={analytics.heat_points}
+                  locatedTowns={analytics.located_towns}
                 />
 
                 <OrganizationsPanel days={RANGE_DAYS[range]} segment={segment} />
@@ -509,7 +512,9 @@ function StaffReportsPage() {
                       <tbody>
                         {analytics.top_pages.slice(0, 10).map(p => (
                           <tr key={p.path}>
-                            <td className={styles.pathCell} title={p.path}>{p.path}</td>
+                            <td className={styles.pathCell} title={pageUrl(p.path)}>
+                              {pageLabel(p.path)}
+                            </td>
                             <td className={styles.numCell}>{p.views}</td>
                             <td className={styles.numCell}>{p.visitors}</td>
                           </tr>

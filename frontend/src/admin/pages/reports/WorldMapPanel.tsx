@@ -14,15 +14,33 @@
 // instead of rendering an empty map as if the world sent nobody. The DB-IP
 // attribution link is a CC-BY license requirement, not decoration.
 //
-// ── Two views, one card (2026-08-30) ───────────────────────────────────────
-// Clicking the United States drills into a state choropleth with a city-dot
-// layer. The two views differ structurally, not just in data — mapOptions.ts
-// carries that story, since it is the file that builds the difference. Each
-// view also carries its OWN collecting state: state-level capture started
-// later than country capture, so a card full of countries can still have
-// nothing to say about states.
+// ── Three views, one card ──────────────────────────────────────────────────
+// Clicking a country drills into its first-level subdivisions with a city-dot
+// layer. That drill-down was United-States-only when it shipped (2026-08-30)
+// and reaches EVERY country as of the same day: `region`, `city` and the
+// centroid were always stamped on every located page view, the US scoping
+// lived only in the queries. mapOptions.ts carries the structural story of
+// how a country view differs from the world view.
 //
-// The US view zooms: click a state to frame it (usZoom.ts does the fit math),
+// Each view also carries its OWN collecting state: region-level capture
+// started later than country capture, so a card full of countries can still
+// have nothing to say about a country's regions.
+//
+// ── What varies between countries, and what does not ───────────────────────
+// The United States keeps its pre-projected AlbersUSA asset — Alaska and
+// Hawaii are inset INTO that geometry, and reprojecting it would scatter them
+// back across the Pacific — and its regions ride along inside
+// /dashboard/analytics, so the landing drill-down opens with no round trip.
+// Every other country lazy-loads its own Natural Earth admin-1 asset
+// (@admin/components/charts/admin1) and fetches /dashboard/geo/{code}.
+//
+// Beyond those two, everything is shared: the bins, the ramp, the city dots,
+// the intel card, click-a-region zoom, the rank rail. The one genuinely new
+// piece is the NAME JOIN — DB-IP writes one English subdivision label and
+// Natural Earth carries several spellings at its own admin level — and it
+// lives in regionJoin.ts, measured against the real database.
+//
+// The view zooms: click a region to frame it (usZoom.ts does the fit math),
 // wheel/drag to roam free, "Reset view" to come home. Zoom is applied
 // imperatively (merge-setOption on the captured instance) because the React
 // option prop is applied notMerge and would stomp the user's roam.
@@ -36,14 +54,22 @@
 // visual language on purpose — see that file — which is why the bin legend
 // under the map is hidden while it is up.
 //
+// It is NOT a lesser view. It used to be: it painted anonymous points, so it
+// could be looked at and not asked anything, while every piece of reporting
+// depth lived in the choropleth. Owner call, 2026-08-30 — "having those
+// functionalities be fully-separated in the 2 maps feels strange" — so the
+// density layer now reads IDENTIFIED towns (GET /dashboard/towns) and carries
+// the same intel card, the same towns list and the same keyboard route as the
+// drill-down. All three views open one card from one component.
+//
 // ── The city intel card (2026-08-30) ───────────────────────────────────────
-// Clicking a city dot opens ONE popover anchored at the click, inside the map
-// box, reporting who that town actually was: views + visitors, its top
-// networks, its device split and when it was last seen. Those fields are
-// OPTIONAL on the payload, so the same panel renders against an API that
-// predates them — absent sections are simply not drawn. The Top-towns rows
-// are buttons opening the same card in a pinned corner slot, because a
-// canvas dot is not a keyboard target.
+// Clicking a city dot — or a heat blob — opens ONE popover anchored at the
+// click, inside the map box, reporting who that town actually was: views +
+// visitors, its top networks, its device split and when it was last seen.
+// Those fields are OPTIONAL on the payload, so the same panel renders against
+// an API that predates them — absent sections are simply not drawn. The
+// Top-towns rows are buttons opening the same card in a pinned corner slot,
+// because neither a canvas dot nor a heat blob is a keyboard target.
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { ComponentType, ReactNode, RefObject } from 'react';
@@ -53,7 +79,10 @@ import EChart from '@admin/components/charts/EChart';
 // ScatterChart into the bundle — it is scoped to this panel on purpose, so no
 // other admin chart page pays for the map renderer.
 import { registerMapOnce } from '@admin/components/charts/echartsMap';
-import type { AnalyticsData } from '@admin/types/admin';
+import { ADMIN1_COUNTRIES, loadAdmin1 } from '@admin/components/charts/admin1';
+import type { Admin1Feature } from '@admin/components/charts/admin1';
+import { adminApi } from '@admin/services/adminApi';
+import type { AnalyticsData, GeoCityRow, GeoRegionRow } from '@admin/types/admin';
 import { countryName, flagEmoji } from '@admin/services/country';
 import { albersUsaProject } from './mapProjections';
 import { binColorFor, buildBins } from './viewershipBins';
@@ -63,17 +92,21 @@ import {
   deviceSplitLabel,
   formatLastSeen,
   networkLines,
+  townKey,
   viewsVisitorsLabel,
 } from './cityIntel';
 import {
+  COUNTRY_PROJECTION,
   MAP_BOX,
   MAP_NAME,
   US_MAP_NAME,
-  buildUsOption,
+  US_PROJECTION,
+  buildCountryOption,
   buildWorldOption,
 } from './mapOptions';
-import type { CityPoint, UsCityRow, UsStateRow } from './mapOptions';
-import { featureBounds, viewForBounds } from './usZoom';
+import type { CityPoint, RegionPaint } from './mapOptions';
+import { buildRegionIndex, resolveRegions } from './regionJoin';
+import { featureBounds, unionBounds, viewForBounds } from './usZoom';
 import type { BBox } from './usZoom';
 import type { HeatMapViewProps } from './HeatMapView';
 import { heatLegendTicks } from './heatWeights';
@@ -87,13 +120,35 @@ const CITY_R_MAX = 11;
 /** How many rows the rank rail shows beside the map, either view. */
 const RANK_ROWS = 8;
 
-type MapView = 'world' | 'us' | 'heat';
+/** The United States is the one country whose geometry is pre-projected and
+ *  whose detail arrives inside the analytics payload. Named rather than
+ *  spelled inline so every place that special-cases it is greppable. */
+const US = 'US';
+
+/**
+ * Whether an intel card may be ANCHORED to the click that opened it.
+ *
+ * It may not on a phone. Measured at 390px: the card is 216x211 inside a
+ * 336x300 map box — 45% of the map — so wherever it is anchored it hides the
+ * place it is describing, and there is no position inside the box that is not
+ * "over the map". At that width every card opens in the pinned slot instead,
+ * which the SCSS docks BELOW the map where a whole column is going spare.
+ *
+ * Read at open time rather than tracked as state: a viewport that crosses
+ * this boundary while a card happens to be open is not worth a resize
+ * listener, and the next open gets it right.
+ */
+function anchoredCards(): boolean {
+  return window.matchMedia?.(`(min-width: ${820 + 1}px)`).matches ?? true;
+}
+
+type MapView = 'world' | 'country' | 'heat';
 
 /** The open intel card. `at` is a position in pixels inside `.wmMap`; null is
  *  the pinned corner slot the keyboard path uses, which needs no click to
  *  anchor to. */
 interface CityIntel {
-  row: UsCityRow;
+  row: GeoCityRow;
   at: { left: number; top: number } | null;
 }
 
@@ -104,7 +159,35 @@ interface WorldGeoJson {
   features: Array<{ properties?: { iso?: string } }>;
 }
 
-type UsGeoJson = Parameters<typeof featureBounds>[0];
+/** Any admin-1 asset, ours or the pre-projected US one. The US file carries
+ *  only `name`, which is all the join needs from it — its state names are
+ *  DB-IP's state names, exactly (measured: all 30 recorded, see
+ *  regionJoin.test.ts). */
+interface RegionGeoJson {
+  features: Admin1Feature[];
+}
+
+/** Everything a country view needs from its geometry, resolved once when the
+ *  asset lands: which country it belongs to, the ECharts map name it was
+ *  registered under, the projection the geo component will use, the name
+ *  index the join reads, and per-feature bounding boxes IN PROJECTED SPACE
+ *  for the click-to-zoom fit. */
+interface CountryShapes {
+  code: string;
+  mapName: string;
+  projection: typeof US_PROJECTION;
+  index: ReturnType<typeof buildRegionIndex>;
+  bounds: { byName: Record<string, BBox>; frame: BBox };
+}
+
+/** One country's detail as fetched. Held with its code so a late response for
+ *  a country the reader has already left cannot paint the new one. */
+interface CountryDetail {
+  code: string;
+  regions: GeoRegionRow[];
+  cities: GeoCityRow[];
+  regionTrackedSince: string | null;
+}
 
 /**
  * Both geojson assets load the same way: a cancel-flagged dynamic import
@@ -148,25 +231,26 @@ function rankMax(rows: Array<{ views: number }>): number {
 
 /** The collecting-state copy. Both views explain the same thing — capture is
  *  forward-only because stored IPs are one-way hashes — and differ only in
- *  what was not captured, so the sentence is built once. */
+ *  what was not captured, so the sentence is built once. `noun` is the word
+ *  for a subdivision: a state in the US, a region anywhere else. */
 function collectingCopy(
-  isUs: boolean,
+  noun: string | null,
   segment: AnalyticsData['segment'],
   since: string | null | undefined,
 ): { heading: string; body: string } {
   const sinceNote = since ? ` (since ${since.slice(0, 10)})` : '';
-  const [subject, noun] = isUs
-    ? ['States and towns are', 'state']
+  const [subject, thing] = noun
+    ? [`${noun[0].toUpperCase()}${noun.slice(1)}s and towns are`, noun]
     : ['Locations are', 'location'];
   return {
-    heading: isUs
-      ? `No state-resolved ${segmentLabel(segment).toLowerCase()} yet`
+    heading: noun
+      ? `No ${noun}-resolved ${segmentLabel(segment).toLowerCase()} yet`
       : 'No located visits yet',
     // The dash is written as an escape, the way cityIntel.ts writes its
     // interpunct: a raw glyph in a TS string gets mangled by edit tooling
     // (CLAUDE.md), and this one used to be a `&mdash;` entity that only
     // worked because it sat in JSX text rather than in a string.
-    body: `${subject} resolved when a page view lands${sinceNote}. Earlier history has no ${noun} \u2014 stored IPs are one-way hashes.`,
+    body: `${subject} resolved when a page view lands${sinceNote}. Earlier history has no ${thing} \u2014 stored IPs are one-way hashes.`,
   };
 }
 
@@ -174,28 +258,50 @@ interface WorldMapPanelProps {
   countries: AnalyticsData['countries'];
   geoTrackedSince: string | null;
   segment: AnalyticsData['segment'];
+  /** The page's own window, so a drill-down fetch describes the same visits
+   *  the world map above it is already drawing. */
+  days: number;
   usStates?: AnalyticsData['us_states'];
   usCities?: AnalyticsData['us_cities'];
+  /** Countries with at least one region-stamped view in this window. A
+   *  country outside it must not offer a drill-down — clicking it would open
+   *  an empty choropleth the reader cannot tell from a slow one. Absent on an
+   *  API that predates it, which degrades to "the US only", the behaviour
+   *  before every country drilled in. */
+  regionCountries?: string[];
   regionTrackedSince?: string | null;
-  heatPoints?: AnalyticsData['heat_points'];
+  /** How many identified towns the density view would draw. A COUNT, not the
+   *  rows — the rows are fetched with that view's Leaflet chunk. Absent on an
+   *  API that predates it, which simply does not offer the view. */
+  locatedTowns?: number;
 }
 
 export default function WorldMapPanel({
   countries,
   geoTrackedSince,
   segment,
+  days,
   usStates,
   usCities,
+  regionCountries,
   regionTrackedSince,
-  heatPoints,
+  locatedTowns = 0,
 }: WorldMapPanelProps) {
   const [view, setView] = useState<MapView>('world');
+  /** The country the drill-down is showing; null while `view` is not
+   *  'country'. ISO alpha-2, straight off the world asset's `iso` property. */
+  const [country, setCountry] = useState<string | null>(null);
   const [mapReady, setMapReady] = useState(false);
-  const [usMapReady, setUsMapReady] = useState(false);
-  // A failed geojson chunk must not read as an eternal "Loading map…" — the
-  // rank rail still renders, but the box says what actually happened.
-  const [mapError, setMapError] = useState(false);
-  // True once the CURRENT view has been zoomed — by a state click or a
+  const [shapes, setShapes] = useState<CountryShapes | null>(null);
+  const [detail, setDetail] = useState<CountryDetail | null>(null);
+  // Which VIEW's asset failed to load, if any. Scoped rather than a single
+  // boolean: with one flag a country whose chunk failed left the world view
+  // claiming the same failure after the reader backed out of it, and a world
+  // failure was silently cleared by drilling in. A failed chunk must not read
+  // as an eternal "Loading map…" either — the rank rail still renders, but
+  // the box says what actually happened, for the view it happened in.
+  const [mapError, setMapError] = useState<MapView | null>(null);
+  // True once the CURRENT view has been zoomed — by a region click or a
   // wheel/drag roam — so the "Reset view" pill knows to appear.
   const [zoomed, setZoomed] = useState(false);
   // Bumping this remounts the chart (it is part of the EChart key), and a
@@ -210,14 +316,21 @@ export default function WorldMapPanel({
   // happened and the rank rail keeps working — instead of throwing to the
   // route's error boundary and taking the whole Reports page with it.
   const [HeatView, setHeatView] = useState<ComponentType<HeatMapViewProps> | null>(null);
+  // The density view's own rows, fetched with its Leaflet chunk. Held with
+  // the window they describe so a stale window's towns cannot paint a new one.
+  const [towns, setTowns] = useState<{ days: number; segment: string; rows: GeoCityRow[] } | null>(
+    null,
+  );
+  // Bumped only when a card is opened from the KEYBOARD towns list, which is
+  // the one case where the density map should fly to the town. A map click
+  // must not yank the view out from under the cursor that made it.
+  const [focusNonce, setFocusNonce] = useState(0);
   // The live chart instance (captured per mount via onReady; the key={view}
-  // remount swaps it) and the states asset's bounding boxes, both consumed
-  // imperatively by the zoom handlers. Zoom goes through merge-setOption on
-  // the instance rather than the React option: the option prop is applied
-  // notMerge, so putting center/zoom there would discard the user's wheel
-  // roam on every unrelated re-render.
-  const usChartRef = useRef<EChartsType | null>(null);
-  const usBoundsRef = useRef<{ byName: Record<string, BBox>; frame: BBox } | null>(null);
+  // remount swaps it), consumed imperatively by the zoom handlers. Zoom goes
+  // through merge-setOption on the instance rather than the React option: the
+  // option prop is applied notMerge, so putting center/zoom there would
+  // discard the user's wheel roam on every unrelated re-render.
+  const chartRef = useRef<EChartsType | null>(null);
   // The intel card's positioning frame and its two focus/hit-test anchors.
   const mapRef = useRef<HTMLDivElement | null>(null);
   const cardRef = useRef<HTMLDivElement | null>(null);
@@ -242,25 +355,77 @@ export default function WorldMapPanel({
           });
           setMapReady(true);
         },
-        () => setMapError(true), // the rank list still renders
+        () => setMapError('world'), // the rank list still renders
       ),
     [],
   );
 
-  // The states asset is ~131 kB and most sessions never drill in, so it is
-  // fetched on the first click rather than alongside the world.
+  // The drilled-into country's outlines. Most sessions never drill in, and no
+  // session drills into more than a few countries, so geometry is fetched on
+  // the click that needs it — the US asset is ~131 kB and a Natural Earth
+  // country is ~18 kB (median, measured).
   useEffect(() => {
-    if (view !== 'us' || usMapReady) return;
-    return loadMapAsset<UsGeoJson>(
-      () => import('@admin/components/charts/us-states-albers.geo.json'),
-      (states) => {
-        usBoundsRef.current = featureBounds(states);
-        registerMapOnce(US_MAP_NAME, states);
-        setUsMapReady(true);
+    if (view !== 'country' || !country || shapes?.code === country) return;
+    const isUs = country === US;
+    return loadMapAsset<RegionGeoJson>(
+      () =>
+        isUs ? import('@admin/components/charts/us-states-albers.geo.json') : loadAdmin1(country),
+      (asset) => {
+        const projection = isUs ? US_PROJECTION : COUNTRY_PROJECTION;
+        // One registered name per country; `registerMapOnce` makes a revisit
+        // free. The US keeps its historical name so nothing else has to move.
+        const mapName = isUs ? US_MAP_NAME : `admin1:${country}`;
+        registerMapOnce(mapName, asset);
+        setShapes({
+          code: country,
+          mapName,
+          projection,
+          index: buildRegionIndex(asset.features),
+          // In PROJECTED space, with the very function the geo component
+          // uses: a box measured in raw degrees would describe a rectangle
+          // the renderer never draws, and the fitted zoom would be wrong by
+          // exactly the projection's own distortion.
+          bounds: featureBounds(asset, projection.project),
+        });
       },
-      () => setMapError(true), // the rank list still renders
+      () => setMapError('country'), // the rank list still renders
     );
-  }, [view, usMapReady]);
+  }, [view, country, shapes]);
+
+  // The drilled-into country's numbers. The US ships inside the analytics
+  // payload already (it is the landing drill-down), so only the rest of the
+  // world costs a request — and it is cancel-flagged, because `days` and
+  // `segment` change from buttons a reader can click faster than a response
+  // returns.
+  useEffect(() => {
+    if (view !== 'country' || !country || country === US) return;
+    if (detail?.code === country) return;
+    let cancelled = false;
+    adminApi
+      .getCountryGeo(country, days, segment)
+      .then((payload) => {
+        if (cancelled) return;
+        setDetail({
+          code: payload.country,
+          regions: payload.regions,
+          cities: payload.cities,
+          regionTrackedSince: payload.region_tracked_since,
+        });
+      })
+      .catch(() => {
+        if (!cancelled) setMapError('country'); // the rank rail has nothing to show either
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [view, country, days, segment, detail]);
+
+  // A window or segment change invalidates a fetched country, the same way it
+  // rebuilds every other number on the page. Dropping it here rather than
+  // keying the fetch effect on it keeps ONE fetch per (country, window).
+  useEffect(() => {
+    setDetail(null);
+  }, [days, segment]);
 
   const closeIntel = useCallback((restoreFocus: boolean) => {
     setIntel(null);
@@ -301,57 +466,142 @@ export default function WorldMapPanel({
     closeRef.current?.focus({ preventScroll: true });
   }, [intel]);
 
-  const stateRows: UsStateRow[] = useMemo(() => usStates ?? [], [usStates]);
-  const cityRows: UsCityRow[] = useMemo(() => usCities ?? [], [usCities]);
-  // Global, not US-scoped: the density layer draws every located point.
-  const heatRows = useMemo(() => heatPoints ?? [], [heatPoints]);
+  const isUsView = country === US;
+  const dataReady = isUsView || detail?.code === country;
+  const regionRows: GeoRegionRow[] = useMemo(() => {
+    if (view !== 'country') return [];
+    if (isUsView) return usStates ?? [];
+    return detail?.code === country ? detail.regions : [];
+  }, [view, isUsView, usStates, detail, country]);
+  const cityRows: GeoCityRow[] = useMemo(() => {
+    if (view !== 'country') return [];
+    if (isUsView) return usCities ?? [];
+    return detail?.code === country ? detail.cities : [];
+  }, [view, isUsView, usCities, detail, country]);
+
+  // Global, not country-scoped: the density layer draws every located town.
+  const heatRows: GeoCityRow[] = useMemo(
+    () => (towns && towns.days === days && towns.segment === segment ? towns.rows : []),
+    [towns, days, segment],
+  );
   // The density view's gradient key: the window's decades read back as tick
   // labels, off the same ladder that scales the weights. Empty for a
   // sub-decade window, which hides the key — there is no ladder to explain.
   const heatTicks = useMemo(
-    () => heatLegendTicks(Math.max(1, ...heatRows.map((p) => p[2]))),
+    () => heatLegendTicks(Math.max(1, ...heatRows.map((t) => t.views))),
     [heatRows],
   );
 
   // Leaflet + leaflet.heat + leaflet.css, on the first visit to the density
-  // view and never before — the same reasoning as the states asset above, at
-  // roughly the same weight. A window with nothing located is not worth the
+  // view and never before — the same reasoning as the country assets above,
+  // at roughly the same weight. A window with nothing located is not worth the
   // fetch either, and cannot reach this view anyway (the entry pill is gated
   // on the same count).
   useEffect(() => {
-    if (view !== 'heat' || HeatView || heatRows.length === 0) return;
+    if (view !== 'heat' || HeatView || locatedTowns === 0) return;
     return loadMapAsset<ComponentType<HeatMapViewProps>>(
       () => import('./HeatMapView'),
       (mod) => setHeatView(() => mod),
-      () => setMapError(true), // the rank list still renders
+      () => setMapError('heat'), // the rank list still renders
     );
-  }, [view, HeatView, heatRows.length]);
+  }, [view, HeatView, locatedTowns]);
+
+  // The density view's rows, fetched beside that chunk and on the same terms:
+  // it is the whole world's towns WITH their visitor intel (measured 278 rows
+  // / 13.7 kB gzipped), which is a third of the Leaflet bytes landing next to
+  // it — and it is what lets a click on a blob open a real card with no second
+  // request. Cancel-flagged, because `days` and `segment` change from buttons.
+  useEffect(() => {
+    if (view !== 'heat' || locatedTowns === 0) return;
+    if (towns && towns.days === days && towns.segment === segment) return;
+    let cancelled = false;
+    adminApi
+      .getTowns(days, segment)
+      .then((payload) => {
+        if (!cancelled) setTowns({ days, segment, rows: payload.towns });
+      })
+      .catch(() => {
+        if (!cancelled) setMapError('heat'); // the rank rail still renders
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [view, days, segment, towns, locatedTowns]);
 
   const maxViews = rankMax(countries);
-  const usMaxViews = rankMax(stateRows);
+  const regionMaxViews = rankMax(regionRows);
 
   const worldBins = useMemo(() => buildBins(maxViews), [maxViews]);
-  const usBins = useMemo(() => buildBins(usMaxViews), [usMaxViews]);
+  const regionBins = useMemo(() => buildBins(regionMaxViews), [regionMaxViews]);
 
-  const enterUs = useCallback(() => {
-    setView('us');
+  /** Which countries the reader may open. Falls back to the United States
+   *  alone against an API that does not report the set — that is exactly the
+   *  behaviour before every country drilled in. */
+  const drillable = useMemo(() => {
+    if (regionCountries) return new Set(regionCountries);
+    return new Set(countries.some((c) => c.code === US) ? [US] : []);
+  }, [regionCountries, countries]);
+
+  const enterCountry = useCallback((code: string) => {
+    setView('country');
+    setCountry(code);
     setZoomed(false); // each view starts at its own auto-fit
+    setIntel(null);
+    setMapError((e) => (e === 'country' ? null : e)); // it belonged to the last country
   }, []);
   const enterHeat = useCallback(() => {
     setView('heat');
     setZoomed(false);
-    setIntel(null); // the card belongs to the US view only
+    setIntel(null); // a card belongs to the view that opened it
+    setMapError((e) => (e === 'heat' ? null : e));
   }, []);
   const backToWorld = useCallback(() => {
     setView('world');
+    setCountry(null);
     setZoomed(false);
-    setIntel(null); // the card belongs to the US view only
+    setIntel(null); // a card belongs to the view that opened it
   }, []);
 
+  /** Open the intel card for a town. `client` is a click position in VIEWPORT
+   *  coordinates (a heat-map click), converted here into the map box's own
+   *  frame — the panel owns the card's frame, so every view hands it a
+   *  position and lets it do the clamping. `null` is the pinned corner slot
+   *  the keyboard list uses. */
+  const openIntel = useCallback((row: GeoCityRow, client: { x: number; y: number } | null) => {
+    const box = mapRef.current;
+    if (!client || !box || !anchoredCards()) {
+      setIntel({ row, at: null });
+      return;
+    }
+    const rect = box.getBoundingClientRect();
+    setIntel({
+      row,
+      at: clampCardPosition(client.x - rect.left, client.y - rect.top, {
+        width: box.clientWidth,
+        height: box.clientHeight,
+      }),
+    });
+  }, []);
+
+  /** A click on the density map: a town, or nothing. Nothing CLOSES the card
+   *  rather than leaving a stale one open over a place the reader just moved
+   *  away from — a blob is soft, and "I missed" has to be legible. */
+  const onHeatSelect = useCallback(
+    (row: GeoCityRow | null, clientX: number, clientY: number) => {
+      intelTriggerRef.current = null; // a heat blob is not focusable
+      if (!row) {
+        setIntel(null);
+        return;
+      }
+      openIntel(row, { x: clientX, y: clientY });
+    },
+    [openIntel],
+  );
+
   const captureChart = useCallback((chart: EChartsType) => {
-    // Both views' instances land here (one per key={view} mount); the
-    // click-to-zoom handler only ever runs while the US view is mounted.
-    usChartRef.current = chart;
+    // Every view's instance lands here (one per key mount); the click-to-zoom
+    // handler only ever runs while a country view is mounted.
+    chartRef.current = chart;
   }, []);
 
   const resetView = useCallback(() => {
@@ -359,24 +609,49 @@ export default function WorldMapPanel({
     setZoomed(false);
   }, []);
 
-  // World: clicking the US drills in. US: clicking a dot opens its intel card,
-  // and clicking any state zooms to it — which is also what un-piles the
-  // Northeast city dots, since symbols keep their pixel size while the
-  // geography under them expands.
+  // The join, once per (asset, region payload). `owners` is what the
+  // choropleth paints — one entry per POLYGON, carrying the subdivision row
+  // above it — and `unmatched` is the honest remainder: regions the asset has
+  // no shape for, which keep their rank-rail row and their numbers.
+  const resolved = useMemo(() => {
+    if (!shapes || shapes.code !== country) return null;
+    return resolveRegions(shapes.index, regionRows);
+  }, [shapes, country, regionRows]);
+
+  const unmatchedNames = useMemo(
+    () => new Set((resolved?.unmatched ?? []).map((row) => row.name)),
+    [resolved],
+  );
+
+  const regionPaint: RegionPaint[] = useMemo(() => {
+    if (!resolved) return [];
+    return [...resolved.owners].map(([feature, row]) => ({
+      feature,
+      label: row.name,
+      views: row.views,
+      visitors: row.visitors,
+    }));
+  }, [resolved]);
+
+  // World: clicking a country with region data drills in. Country: clicking a
+  // dot opens its intel card, and clicking any region zooms to it — which is
+  // also what un-piles crowded city dots, since symbols keep their pixel size
+  // while the geography under them expands.
   const onEvents = useMemo(
     () => ({
       click: (params: unknown) => {
         const p = params as {
           name?: string;
           seriesType?: string;
-          data?: { row?: UsCityRow };
+          data?: { row?: GeoCityRow };
           event?: { offsetX?: number; offsetY?: number };
         } | null;
         if (!p?.name) return;
         if (view === 'world') {
-          // Through enterUs, same as the keyboard pill — the raw setView here
-          // used to leak a world roam's Reset pill into the fresh US auto-fit.
-          if (p.name === 'US') enterUs();
+          // Through enterCountry, same as the rank rail's buttons — a raw
+          // setView here used to leak a world roam's Reset pill into the
+          // fresh drill-down's auto-fit.
+          if (drillable.has(p.name)) enterCountry(p.name);
           return;
         }
         if (p.seriesType === 'scatter') {
@@ -385,34 +660,48 @@ export default function WorldMapPanel({
           if (!row) return;
           const box = mapRef.current;
           intelTriggerRef.current = null; // a canvas dot is not focusable
+          // ECharts reports offsets inside the canvas, which shares an origin
+          // with the map box, so this path clamps directly rather than going
+          // through openIntel's viewport conversion. On a phone it takes the
+          // same docked slot everything else does.
           setIntel({
             row,
-            at: clampCardPosition(p.event?.offsetX ?? 0, p.event?.offsetY ?? 0, {
-              width: box?.clientWidth ?? 0,
-              height: box?.clientHeight ?? 0,
-            }),
+            at: anchoredCards()
+              ? clampCardPosition(p.event?.offsetX ?? 0, p.event?.offsetY ?? 0, {
+                  width: box?.clientWidth ?? 0,
+                  height: box?.clientHeight ?? 0,
+                })
+              : null,
           });
           return;
         }
-        const info = usBoundsRef.current;
-        const chart = usChartRef.current;
-        const bounds = info?.byName[p.name];
-        if (!info || !bounds || !chart || chart.isDisposed()) return;
+        const info = shapes;
+        const chart = chartRef.current;
+        if (!info || !chart || chart.isDisposed()) return;
+        // A subdivision the join spread over several polygons (England is 150
+        // districts) is framed by their UNION — zooming to whichever one was
+        // under the cursor would frame a county and call it a country.
+        const owner = resolved?.owners.get(p.name);
+        const frameNames = (owner && resolved?.featuresByRegion.get(owner.name)) ?? [p.name];
+        const bounds = unionBounds(
+          frameNames.map((name) => info.bounds.byName[name]).filter(Boolean),
+        );
+        if (!bounds) return;
         const plotW = Math.max(chart.getWidth() - MAP_BOX.left - MAP_BOX.right, 1);
         const plotH = Math.max(chart.getHeight() - MAP_BOX.top - MAP_BOX.bottom, 1);
         // The label suppression rides along with every merge: a bare
         // {center, zoom} merge re-armed the geo's own hover emphasis with
-        // ECharts' default state-name stamp (measured 2026-08-30) even
+        // ECharts' default region-name stamp (measured 2026-08-30) even
         // though the built option already said show:false.
         chart.setOption({
           geo: {
-            ...viewForBounds(bounds, info.frame, plotW, plotH),
+            ...viewForBounds(bounds, info.bounds.frame, plotW, plotH),
             emphasis: { label: { show: false } },
           },
         });
         setZoomed(true);
       },
-      // Wheel zoom / drag pan, EITHER view. The event also fires when
+      // Wheel zoom / drag pan, ANY view. The event also fires when
       // scaleLimit clamps the gesture to NOTHING (a wheel-down at the zoom
       // floor), and even a clamped roam writes a concrete `center` into the
       // option (measured 2026-08-30) — so the tells are the RESULTING zoom
@@ -420,18 +709,18 @@ export default function WorldMapPanel({
       // carries dx/dy and really moves the view; a clamped wheel carries
       // neither and leaves zoom at the floor.
       georoam: (params: unknown) => {
-        const chart = usChartRef.current;
+        const chart = chartRef.current;
         if (!chart || chart.isDisposed()) return;
         const p = params as { dx?: number; dy?: number } | null;
         const opt = chart.getOption() as {
           geo?: Array<{ zoom?: number }>;
           series?: Array<{ zoom?: number }>;
         };
-        const zoom = (view === 'us' ? opt.geo?.[0] : opt.series?.[0])?.zoom ?? 1;
+        const zoom = (view === 'country' ? opt.geo?.[0] : opt.series?.[0])?.zoom ?? 1;
         setZoomed(zoom > 1.0001 || p?.dx != null || p?.dy != null);
       },
     }),
-    [view, enterUs],
+    [view, drillable, enterCountry, shapes, resolved],
   );
 
   const worldOption = useMemo(
@@ -443,29 +732,38 @@ export default function WorldMapPanel({
     const peak = Math.max(1, ...cityRows.map((c) => c.views));
     const points: CityPoint[] = [];
     for (const c of cityRows) {
-      const xy = albersUsaProject([c.lng, c.lat]);
-      // A centroid the geo database put offshore (or outside the three albers
-      // zones at all) has nowhere honest to sit — drop it rather than clamp it
-      // onto a state it does not belong to.
+      // The US asset is PLANAR, so its dots are pre-projected into the same
+      // frame as the outlines. Every other country's geo component carries a
+      // real projection and takes degrees, projecting the dots itself.
+      const xy = isUsView ? albersUsaProject([c.lng, c.lat]) : ([c.lng, c.lat] as [number, number]);
+      // A centroid the geo database put outside the three albers zones has
+      // nowhere honest to sit — drop it rather than clamp it onto a state it
+      // does not belong to.
       if (!xy) continue;
       const radius = CITY_R_MIN + (CITY_R_MAX - CITY_R_MIN) * Math.sqrt(c.views / peak);
       points.push({
         name: cityLabel(c),
         value: [xy[0], xy[1], c.views],
         symbolSize: radius * 2,
-        // Each dot takes ITS OWN bin's color off the same ladder the states
+        // Each dot takes ITS OWN bin's color off the same ladder the regions
         // use, so the one piecewise legend under the map explains both layers.
-        itemStyle: { color: binColorFor(c.views, usBins) },
+        itemStyle: { color: binColorFor(c.views, regionBins) },
         row: c,
       });
     }
     return points;
-  }, [cityRows, usBins]);
+  }, [cityRows, regionBins, isUsView]);
 
-  const usOption = useMemo(
-    () => buildUsOption({ stateRows, cityPoints, bins: usBins }),
-    [stateRows, cityPoints, usBins],
-  );
+  const countryOption = useMemo(() => {
+    if (!shapes || shapes.code !== country) return null;
+    return buildCountryOption({
+      mapName: shapes.mapName,
+      projection: shapes.projection,
+      regions: regionPaint,
+      cityPoints,
+      bins: regionBins,
+    });
+  }, [shapes, country, regionPaint, cityPoints, regionBins]);
 
   // The option prop is applied notMerge, so ANY rebuild (segment change,
   // data refresh) silently resets a wheel roam — the pill must not outlive
@@ -473,7 +771,7 @@ export default function WorldMapPanel({
   // pill correctly survives them.
   useEffect(() => {
     setZoomed(false);
-  }, [worldOption, usOption]);
+  }, [worldOption, countryOption]);
 
   // The INTEL_CARD constant is a ceiling estimate; fonts and platform can
   // move the real rendered height, so the card is measured after layout and
@@ -495,20 +793,38 @@ export default function WorldMapPanel({
     );
   }, [intel]);
 
-  const isUs = view === 'us';
+  const isCountry = view === 'country';
   const isHeat = view === 'heat';
-  const canDrill = stateRows.length > 0 || countries.some((c) => c.code === 'US');
-  const chartReady = isUs ? usMapReady : mapReady;
+  // The towns this view can open a card for: a country's, or the world's.
+  // ONE list feeding ONE keyboard route feeding ONE card — the density view
+  // stopped being the view you could only look at when this stopped being
+  // `isCountry ? cityRows : []`.
+  const townRows: GeoCityRow[] = isHeat ? heatRows : isCountry ? cityRows : [];
+  const regionNoun = isUsView ? 'state' : 'region';
+  const chartReady = isCountry ? countryOption !== null && dataReady : mapReady;
   const showingCollecting = isHeat
-    ? heatRows.length === 0
-    : isUs
-      ? stateRows.length === 0
+    ? locatedTowns === 0
+    : isCountry
+      ? dataReady && regionRows.length === 0
       : countries.length === 0;
   // The density layer plots LOCATED VISITS, which is exactly what the world
   // view's copy already explains — so heat borrows that wording rather than
-  // inventing a third one (isUs is false here by construction).
-  const collect = collectingCopy(isUs, segment, isUs ? regionTrackedSince : geoTrackedSince);
-  const loadingCopy = mapError ? 'The map could not load — refresh to try again.' : 'Loading map…';
+  // inventing a third one.
+  const collect = collectingCopy(
+    isCountry ? regionNoun : null,
+    segment,
+    isCountry ? (detail?.regionTrackedSince ?? regionTrackedSince) : geoTrackedSince,
+  );
+  // A country with visitor data but no committed outline is a REAL state, not
+  // a failure: Natural Earth's admin-1 set does not reach every territory. It
+  // reads differently from a broken chunk because the fix is different — there
+  // is nothing to retry, and the numbers on the right are the whole answer.
+  const noShapes = isCountry && country !== null && country !== US && !ADMIN1_COUNTRIES.has(country);
+  const loadingCopy = noShapes
+    ? `No map outline for ${countryName(country ?? '')} \u2014 its regions are listed on the right.`
+    : mapError === view
+      ? 'The map could not load \u2014 refresh to try again.'
+      : 'Loading map…';
 
   // The map box's body, resolved once here rather than as three nested
   // ternaries inside the JSX.
@@ -517,15 +833,22 @@ export default function WorldMapPanel({
     mapBody = showingCollecting ? (
       <div className={styles.wmHeatGhost} />
     ) : HeatView ? (
-      <HeatView points={heatRows} fitNonce={resetNonce} onRoam={setZoomed} />
+      <HeatView
+        towns={heatRows}
+        fitNonce={resetNonce}
+        onRoam={setZoomed}
+        onSelect={onHeatSelect}
+        selected={intel?.row ?? null}
+        focusNonce={focusNonce}
+      />
     ) : (
       <div className={styles.wmLoading}>{loadingCopy}</div>
     );
   } else if (chartReady) {
     mapBody = (
       <EChart
-        key={`${view}:${resetNonce}`}
-        option={isUs ? usOption : worldOption}
+        key={`${view}:${country ?? ''}:${resetNonce}`}
+        option={isCountry ? countryOption! : worldOption}
         onEvents={onEvents}
         onReady={captureChart}
         // The stage owns the height (CSS aspect-ratio, clamped) — the chart
@@ -537,38 +860,35 @@ export default function WorldMapPanel({
     mapBody = <div className={styles.wmLoading}>{loadingCopy}</div>;
   }
 
+  const title = isCountry
+    ? `${flagEmoji(country ?? '')} ${countryName(country ?? '')}`.trim()
+    : isHeat
+      ? 'Visitor Density'
+      : 'Visitors by Country';
+
   return (
     <div className={`${styles.chartCard} ${styles.chartFull} ${styles.wmCard}`}>
       <div className={styles.chartHead}>
         <div className={styles.wmTitleRow}>
-          {(isUs || isHeat) && (
+          {(isCountry || isHeat) && (
             <button type="button" className={styles.wmCrumb} onClick={backToWorld}>
               <span aria-hidden="true">&#8592;</span> World
             </button>
           )}
-          <h3 className={`${styles.chartTitle} ${styles.wmTitle}`}>
-            {isUs ? 'Visitors by State' : isHeat ? 'Visitor Density' : 'Visitors by Country'}
-          </h3>
+          <h3 className={`${styles.chartTitle} ${styles.wmTitle}`}>{title}</h3>
           {zoomed && (
             <button type="button" className={styles.wmCrumb} onClick={resetView}>
               Reset view
             </button>
           )}
-          {/* The canvas click is the discoverable way in, but it is not a
-              keyboard one — the entry pill and the back pill share a slot so
-              the drill-down is reachable without a pointer. */}
-          {!isUs && !isHeat && canDrill && (
-            <button type="button" className={styles.wmCrumb} onClick={enterUs}>
-              United States <span aria-hidden="true">&#8594;</span>
-            </button>
-          )}
           {/* Offered from the world view only. The density layer IS the world
-              — reaching it from the US drill-down would be a third pill in a
-              row that already carries a crumb, a title and a Reset, to save
-              one click on the "World" pill sitting beside it. Gated on having
-              points for the same reason the US pill is gated on canDrill: a
-              view that can only say "collecting" is not worth an entrance. */}
-          {!isUs && !isHeat && heatRows.length > 0 && (
+              — reaching it from a drill-down would be a third pill in a row
+              that already carries a crumb, a title and a Reset, to save one
+              click on the "World" pill sitting beside it. Gated on having
+              points for the same reason a country is gated on having regions:
+              a view that can only say "collecting" is not worth an
+              entrance. */}
+          {!isCountry && !isHeat && locatedTowns > 0 && (
             <button type="button" className={styles.wmCrumb} onClick={enterHeat}>
               Heat map <span aria-hidden="true">&#8594;</span>
             </button>
@@ -576,12 +896,12 @@ export default function WorldMapPanel({
         </div>
         <span className={`${styles.chartSub} ${styles.wmSub}`}>
           {showingCollecting
-            ? `Collecting — ${isUs ? 'state' : 'country'} is recorded from today forward`
+            ? `Collecting — ${isCountry ? regionNoun : 'country'} is recorded from today forward`
             : isHeat
-              ? `${segmentLabel(segment)} density — scroll to zoom`
-              : isUs
-                ? `${segmentLabel(segment)} by state — click a state to zoom, a town for detail`
-                : `${segmentLabel(segment)} by location — scroll to zoom`}
+              ? `${segmentLabel(segment)} density — click a town for detail`
+              : isCountry
+                ? `${segmentLabel(segment)} by ${regionNoun} — click to zoom, a town for detail`
+                : `${segmentLabel(segment)} by location — click a country to drill in`}
         </span>
       </div>
 
@@ -599,7 +919,7 @@ export default function WorldMapPanel({
               it carries its own gradient key below instead. */}
           {!isHeat && !showingCollecting && chartReady && (
             <div className={styles.wmLegend}>
-              {(isUs ? usBins : worldBins).map((b) => (
+              {(isCountry ? regionBins : worldBins).map((b) => (
                 <span key={b.label} className={styles.wmLegendItem}>
                   <span
                     className={styles.wmLegendSwatch}
@@ -633,7 +953,9 @@ export default function WorldMapPanel({
               </span>
             </div>
           )}
-          {isUs && intel && (
+          {/* Any view that has places in it can have a card open — the two
+              choropleth drill-downs and the density map all open THIS one. */}
+          {intel && (
             <CityIntelCard
               intel={intel}
               cardRef={cardRef}
@@ -655,11 +977,21 @@ export default function WorldMapPanel({
             once the map is a canvas. */}
         {!showingCollecting && (
           <div className={styles.wmRank}>
-            {isUs
-              ? stateRows
+            {isCountry
+              ? regionRows
                   .slice(0, RANK_ROWS)
-                  .map((s) => (
-                    <RankRow key={s.name} name={s.name} views={s.views} max={usMaxViews} />
+                  .map((r) => (
+                    <RankRow
+                      key={r.name}
+                      name={r.name}
+                      views={r.views}
+                      max={regionMaxViews}
+                      note={
+                        unmatchedNames.has(r.name)
+                          ? 'No map outline for this region — the visits are still counted'
+                          : undefined
+                      }
+                    />
                   ))
               : countries.slice(0, RANK_ROWS).map((c) => (
                   <RankRow
@@ -668,27 +1000,49 @@ export default function WorldMapPanel({
                     name={countryName(c.code)}
                     views={c.views}
                     max={maxViews}
+                    // Buttons, not rows, for a country the reader may open:
+                    // the canvas click is the discoverable way in but it is
+                    // not a keyboard one, and a single "United States" pill
+                    // stopped being the answer once every country drills in.
+                    onOpen={drillable.has(c.code) ? () => enterCountry(c.code) : undefined}
                   />
                 ))}
-            {isUs && cityRows.length > 0 && (
+            {townRows.length > 0 && (
               <div className={styles.wmTowns}>
-                <span className={styles.wmTownsTitle}>Towns · {cityRows.length}</span>
-                {/* Buttons, not rows: the dots they mirror are canvas pixels,
-                    so this list is the only keyboard route to a town's card —
-                    which is why it lists EVERY town, scrolling, not a top 6
-                    that would leave the rest pointer-only. */}
+                <span className={styles.wmTownsTitle}>Towns · {townRows.length}</span>
+                {/* Buttons, not rows: the things they mirror are canvas pixels
+                    and heat blobs, so this list is the only keyboard route to
+                    a town's card — which is why it lists EVERY town,
+                    scrolling, not a top 6 that would leave the rest
+                    pointer-only. The density view gets the same list for
+                    exactly that reason: a view you can only look at is not a
+                    reporting view. */}
                 <div className={styles.wmTownsList}>
-                  {cityRows.map((c, i) => (
+                  {townRows.map((c) => (
                     <button
-                      key={`${c.city}|${c.region ?? ''}|${i}`}
+                      key={townKey(c)}
                       type="button"
-                      className={styles.wmTown}
+                      className={
+                        isHeat ? `${styles.wmTown} ${styles.wmTownGlobal}` : styles.wmTown
+                      }
                       aria-haspopup="dialog"
                       onClick={(e) => {
                         intelTriggerRef.current = e.currentTarget;
-                        setIntel({ row: c, at: null });
+                        // The density map flies to a town chosen here; the
+                        // choropleth ignores the nonce and simply opens.
+                        setFocusNonce((n) => n + 1);
+                        openIntel(c, null);
                       }}
                     >
+                      {/* The global list spans countries, so it carries the
+                          flag the world rail carries. `cityLabel` stays the
+                          same string everywhere — the flag is beside it, not
+                          inside it. */}
+                      {isHeat && c.country && (
+                        <span className={styles.wmTownFlag} aria-hidden="true">
+                          {flagEmoji(c.country)}
+                        </span>
+                      )}
                       <span className={styles.wmTownName}>{cityLabel(c)}</span>
                       <span className={styles.wmVal}>{c.views.toLocaleString()}</span>
                     </button>
@@ -710,33 +1064,52 @@ export default function WorldMapPanel({
 }
 
 /** One rank-rail row. The flag column is what separates the two views: the
- *  world rail carries one, the state rail takes the column back. */
+ *  world rail carries one, the region rail takes the column back. `onOpen`
+ *  makes the row a button — the keyboard path into a country. `note` marks a
+ *  region the country's asset has no outline for: the row still reports its
+ *  real numbers, it simply cannot be painted. */
 function RankRow({
   flag,
   name,
   views,
   max,
+  onOpen,
+  note,
 }: {
   flag?: string;
   name: string;
   views: number;
   max: number;
+  onOpen?: () => void;
+  note?: string;
 }) {
-  return (
-    <div className={flag === undefined ? `${styles.wmRow} ${styles.wmRowPlain}` : styles.wmRow}>
+  const className = flag === undefined ? `${styles.wmRow} ${styles.wmRowPlain}` : styles.wmRow;
+  const body = (
+    <>
       {flag !== undefined && (
         <span className={styles.wmFlag} aria-hidden="true">
           {flag}
         </span>
       )}
-      <span className={styles.wmName} title={name}>
+      <span className={styles.wmName} title={note ?? name}>
         {name}
       </span>
       <span className={styles.wmTrack}>
         <span className={styles.wmFill} style={{ width: `${Math.max(4, (views / max) * 100)}%` }} />
       </span>
       <span className={styles.wmVal}>{views.toLocaleString()}</span>
-    </div>
+    </>
+  );
+  if (!onOpen) return <div className={className}>{body}</div>;
+  return (
+    <button
+      type="button"
+      className={`${className} ${styles.wmRowOpen}`}
+      onClick={onOpen}
+      title={`Drill into ${name}`}
+    >
+      {body}
+    </button>
   );
 }
 

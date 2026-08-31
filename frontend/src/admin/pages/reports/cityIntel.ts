@@ -31,6 +31,21 @@ export function cityLabel(row: { city: string; region?: string | null }): string
   return row.region ? `${row.city}, ${row.region}` : row.city;
 }
 
+/** The identity of a town, as one string. It is (country, city, region)
+ *  because that is the key the server groups on — and because the GLOBAL town
+ *  list the density map reads spans countries, where (city, region) alone
+ *  folds London Ontario into London England.
+ *
+ *  Used for React keys and for "is this the town whose card is open", never
+ *  shown to a reader — `cityLabel` is the visible name. */
+export function townKey(row: {
+  city: string;
+  region?: string | null;
+  country?: string | null;
+}): string {
+  return `${row.country ?? ''}|${row.region ?? ''}|${row.city}`;
+}
+
 /** "3 views" / "1 view" — the panel's one pluralizer (tooltips use it too). */
 export function plural(n: number, word: string): string {
   return `${n} ${word}${n === 1 ? '' : 's'}`;

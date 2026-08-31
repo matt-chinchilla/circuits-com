@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import statesGeo from '@admin/components/charts/us-states-albers.geo.json';
 import {
   albersUsaProject,
+  mercatorProject,
+  mercatorUnproject,
   naturalEarth1Project,
   naturalEarth1Unproject,
   usPlanarProject,
@@ -179,5 +181,73 @@ describe('usPlanar', () => {
     expect(usPlanarProject(p)).toEqual(p);
     expect(usPlanarProject(p)).not.toBe(p);
     expect(usPlanarUnproject(usPlanarProject(p))).toEqual(p);
+  });
+});
+
+describe('mercator — the projection every non-US country view uses', () => {
+  it('round-trips a lat/lng grid to within 1e-6 degrees', () => {
+    for (let lat = -80; lat <= 80; lat += 5) {
+      for (let lng = -180; lng <= 180; lng += 15) {
+        const [rlng, rlat] = mercatorUnproject(mercatorProject([lng, lat]));
+        expect(rlng, `lng ${lng},${lat}`).toBeCloseTo(lng, 6);
+        expect(rlat, `lat ${lng},${lat}`).toBeCloseTo(lat, 6);
+      }
+    }
+  });
+
+  it('emits ECharts screen order: north is a SMALLER y than south', () => {
+    // Same trap naturalEarth1 has. The raw formula is north-POSITIVE, so
+    // without the negation every country renders upside down — which is the
+    // documented failure mode of this panel.
+    const oslo = mercatorProject([10.75, 59.91]);
+    const cape = mercatorProject([18.42, -33.92]);
+    expect(oslo[1]).toBeLessThan(cape[1]);
+    expect(mercatorProject([0, 0])[1]).toBeCloseTo(0, 12);
+  });
+
+  it('keeps west of east, so nothing is mirrored', () => {
+    expect(mercatorProject([-9, 40])[0]).toBeLessThan(mercatorProject([30, 40])[0]);
+  });
+
+  it('is CONFORMAL: local aspect matches the true ground aspect', () => {
+    // The measured reason it replaced naturalEarth1 for country views. At a
+    // country's own centre latitude, a degree of longitude is cos(lat) as
+    // long on the ground as a degree of latitude — a projection worth using
+    // at this scale has to reproduce that ratio.
+    for (const lat of [0, 25, 48, 52, 60, 70]) {
+      const dx = mercatorProject([1, lat])[0] - mercatorProject([0, lat])[0];
+      const dy = mercatorProject([0, lat + 0.01])[1] - mercatorProject([0, lat - 0.01])[1];
+      const rendered = dx / (Math.abs(dy) / 0.02);
+      expect(rendered, `lat ${lat}`).toBeCloseTo(Math.cos((lat * Math.PI) / 180), 4);
+    }
+  });
+
+  it('renders Germany at its true aspect where naturalEarth1 stretches it 24%', () => {
+    // The concrete measurement behind the choice, re-derived here so the
+    // claim in mapProjections.ts is a test rather than a comment. Germany's
+    // bounding box, and the ratio of rendered width to rendered height
+    // against the same ratio on the ground.
+    const [w, e, s, n] = [5.87, 15.04, 47.27, 55.06];
+    const groundAspect =
+      ((e - w) * 111.32 * Math.cos((((n + s) / 2) * Math.PI) / 180)) / ((n - s) * 111.13);
+
+    const aspect = (project: (p: [number, number]) => [number, number]) => {
+      const mid = (n + s) / 2;
+      const width = project([e, mid])[0] - project([w, mid])[0];
+      const height = project([w, s])[1] - project([w, n])[1];
+      return Math.abs(width / height);
+    };
+
+    expect(Math.abs(aspect(mercatorProject) / groundAspect - 1)).toBeLessThan(0.01);
+    expect(aspect(naturalEarth1Project) / groundAspect - 1).toBeGreaterThan(0.2);
+  });
+
+  it('clamps the poles rather than returning Infinity', () => {
+    // Antarctica reaches -90 in the source data, where the raw formula
+    // diverges. A NaN coordinate takes the whole canvas down.
+    for (const lat of [90, -90, 89.999, -89.999]) {
+      const [, y] = mercatorProject([0, lat]);
+      expect(Number.isFinite(y), `lat ${lat}`).toBe(true);
+    }
   });
 });

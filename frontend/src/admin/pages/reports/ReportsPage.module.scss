@@ -1003,6 +1003,26 @@
   min-height: 300px;
   max-height: 500px;
 
+  // The SEA PLATE (2026-08-31 — owner: countries were "very hard to see
+  // against the dark-blue"). The ECharts canvas is transparent, so this
+  // background IS the ocean: a recessed plate DARKER than the card face,
+  // etched with a faint graticule — and because land is painted opaque on the
+  // canvas above, the grid only ever shows over open water, which is the
+  // texture channel that separates sea from land beyond the color step. The
+  // vignette shades the plate's edges so the geography holds the middle.
+  // Layer order: vignette over graticule over ground. Land/border inks live
+  // in mapOptions.ts (measured against THIS #0b1020 — retint together); the
+  // ground tone is the same deep ground .wmHeat and .wmHeatGhost already use,
+  // and the ring is the card's own border ink. Fixed values by the
+  // instrument-zone convention above.
+  background:
+    radial-gradient(130% 105% at 50% 40%, rgba(3, 6, 14, 0) 55%, rgba(3, 6, 14, 0.5) 100%),
+    repeating-linear-gradient(0deg, rgba(101, 125, 180, 0.1) 0 1px, transparent 1px 32px),
+    repeating-linear-gradient(90deg, rgba(101, 125, 180, 0.1) 0 1px, transparent 1px 32px),
+    #0b1020;
+  border: 1px solid #26325a;
+  border-radius: 8px; // matches .wmHeat, so the density view shares the frame
+
   // Below tablet the ratio has no room to work and turns hostile: during
   // grid intrinsic sizing the percentage width reads as auto, so the
   // min-height TRANSFERS through the ratio into a ~562px min-width and
@@ -1062,6 +1082,36 @@
 // leaflet.css rather than from this module, hence the `:global` scoping — all
 // of it NESTED inside the hashed .wmHeat so nothing here can reach a leaflet
 // map on some other admin page.
+// The density view's frame: the Leaflet host plus the touch hint that sits
+// over it. A wrapper rather than positioning the hint against `.wmMap`,
+// because the hint belongs to the map it is explaining and must travel with
+// it if the stage ever changes shape.
+.wmHeatWrap {
+  position: relative;
+  height: 100%;
+}
+
+// "Use two fingers to pan" — raised only by a one-finger drag on a coarse
+// pointer, so it never appears on a desktop. Centred low so it does not sit
+// over the zoom control (top-left) or the attribution (bottom-right), both of
+// which must stay reachable and legible.
+.wmHeatHint {
+  position: absolute;
+  left: 50%;
+  bottom: 34px;
+  transform: translateX(-50%);
+  z-index: 500; // over leaflet's panes (400) and under its controls (800)
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(15, 21, 38, 0.92);
+  border: 1px solid #2b3a63;
+  color: #e8eef9;
+  font-size: 11.5px;
+  line-height: 1;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
 .wmHeat {
   height: 100%;
   border-radius: 8px;
@@ -1250,9 +1300,50 @@
   gap: 8px;
 }
 
-// US view has no flags — the state name takes the column back.
+// A drill-down view has no flags — the region name takes the column back.
 .wmRowPlain {
   grid-template-columns: minmax(0, 1fr) 72px 52px;
+}
+
+// A country the reader may open. The canvas click is the discoverable way in
+// but it is not a keyboard one, so every drillable row in the world rail is a
+// real button — which needs the usual UA resets to keep the grid above it.
+// Matches .wmTown, the panel's other list-of-buttons.
+.wmRowOpen {
+  width: 100%;
+  appearance: none;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: 5px;
+  padding: 1px 0;
+  margin: 0;
+  transition: background 120ms ease;
+
+  // A finger, not a cursor. These rows measured 22px tall on a phone
+  // (2026-08-31) and they are the ONLY way into a country's drill-down there,
+  // since the discoverable route is a tap on a 336px-wide world map. Grown by
+  // PADDING rather than by the `tap-target` mixin's ::before overlay: the rail
+  // stacks these 10px apart, so an inset hit area would overlap its
+  // neighbours and a tap near an edge would open the wrong country.
+  @include responsive($bp-admin-mobile) {
+    padding: 10px 0;
+  }
+
+  &:hover {
+    background: #16203a;
+  }
+
+  &:hover .wmName {
+    color: #fff;
+  }
+
+  &:focus-visible {
+    outline: 2px solid #f7cd3a;
+    outline-offset: 1px;
+  }
 }
 
 .wmFlag {
@@ -1312,6 +1403,13 @@
   overflow-y: auto;
   padding-right: 6px;
 
+  // On a phone the rail is stacked UNDER the map with the whole width to
+  // itself, and its rows are the only route to a town's card — so it gets
+  // more of them rather than a 216px window inside an already-scrolling page.
+  @include responsive($bp-admin-mobile) {
+    max-height: 300px;
+  }
+
   // NOT `scrollbar-thin`: that mixin sets `height` (a HORIZONTAL bar's
   // thickness, which does nothing to a vertical one, leaving it default-chunky)
   // and paints the thumb rgba(0,0,0,.15) — black on this night-indigo panel,
@@ -1365,6 +1463,13 @@
   margin: 0;
   transition: background 120ms ease;
 
+  // Same reasoning as .wmRowOpen: 23px is a cursor target, not a finger one,
+  // and on a phone this list is the ONLY way to a town's card — a canvas dot
+  // and a heat blob are both too small to hit at 336px.
+  @include responsive($bp-admin-mobile) {
+    padding: 9px 0;
+  }
+
   &:hover .wmTownName {
     color: #dbe4f5;
   }
@@ -1377,6 +1482,20 @@
     outline: 2px solid #f7cd3a;
     outline-offset: 1px;
   }
+}
+
+// The global town list spans countries, so it carries a flag column the
+// country-scoped list has no use for. Declared AFTER `.wmTown` on purpose:
+// same specificity, so source order is what decides, and above the base rule
+// this modifier silently lost (found 2026-08-31 — the flag became a fourth
+// grid item and every row wrapped onto two lines).
+.wmTownGlobal {
+  grid-template-columns: 18px minmax(0, 1fr) 52px;
+}
+
+.wmTownFlag {
+  font-size: 12px;
+  line-height: 1;
 }
 
 .wmTownName {
@@ -1395,7 +1514,12 @@
 // clamp math measures against. Change both or the card can hang off the map.
 .wmIntel {
   position: absolute;
-  z-index: 3;
+  // ABOVE LEAFLET, not just above the canvas. Leaflet's own panes run 200-700
+  // and its controls sit at 800, all inside the map container — so the `3`
+  // that was plenty over an ECharts canvas put the card BEHIND the density
+  // map entirely (found 2026-08-31: the card opened, reported its content to
+  // the DOM, and was invisible). 900 clears the whole leaflet stack.
+  z-index: 900;
   width: 216px;
   // Backstop for the one case the clamp cannot solve — a map box narrower
   // than the card (the stacked phone layout gives the plot ~256px, so this
@@ -1417,6 +1541,29 @@
 .wmIntelPinned {
   left: 10px;
   top: 10px;
+}
+
+// On a phone the card stops floating and DOCKS under the map.
+//
+// Measured at 390px before this rule: the card is 216x211 inside a 336x300
+// map box — 45% of the map — and it opened over the top-left corner, hiding
+// the very place it was describing. Anchoring it to the tap does not help
+// either, because at this size there is nowhere inside the box that is not
+// "over the map". Below the map there is a whole column doing nothing.
+//
+// This is also what keeps the post-layout nudge effect honest: a statically
+// positioned card ignores `left`/`top`, so an effect that kept nudging one
+// would never converge. The panel therefore opens EVERY card in the pinned
+// slot at this width (`anchoredCards()` in WorldMapPanel), and the nudge
+// never runs because there is no anchor to correct.
+@include responsive($bp-admin-mobile) {
+  .wmIntel {
+    position: static;
+    width: 100%;
+    max-width: none;
+    margin-top: 10px;
+    box-shadow: none;
+  }
 }
 
 .wmIntelHead {

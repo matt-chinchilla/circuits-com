@@ -6,7 +6,7 @@ import uuid as uuid_mod
 from collections import defaultdict
 from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Path, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
@@ -327,11 +327,171 @@ def _window_segment(db: Session, cutoff: datetime, segment: str) -> tuple[list[s
 # own view count.
 _CITY_NETWORK_LIMIT = 3
 
-# The heat layer's runaway guard. Centroid rounding keeps the real number far
-# below this (prod sits at ~311 distinct points worldwide), so the cap only
-# exists so a future finer-grained geo source cannot post a megabyte of
-# coordinates to a dashboard.
-_HEAT_POINT_LIMIT = 3000
+# How many city bubbles ONE country may return. The rank rail beside the map
+# lists them all, so this is a readability limit, not a runaway guard.
+_CITY_LIMIT = 60
+
+# The global town list's runaway guard. Town grouping keeps the real number
+# far below this (prod sits at 288 towns worldwide), so the cap only exists so
+# a future finer-grained geo source cannot post a megabyte to a dashboard.
+_TOWN_LIMIT = 1000
+
+
+# ── The two per-country detail layers, as ONE piece of machinery ────────────
+# The map's drill-down is a state choropleth (`_region_rows`) over a city
+# bubble layer (`_city_rows`). Both were written inline inside
+# /dashboard/analytics for the United States and are now called with a country
+# code instead: `us_states`/`us_cities` are literally the `country == "US"`
+# case of these functions, and /dashboard/geo/{code} is every other case.
+#
+# They stay two functions rather than one because the caller needs them
+# separately — /dashboard/analytics ships the US pair inline while the
+# per-country route ships whichever country was asked for — but the caps,
+# the tiebreakers and the metro-grouping rule below are shared BY
+# CONSTRUCTION, so the two views can never drift into disagreeing about what
+# a "region" or a "town" is.
+
+
+def _region_rows(db: Session, recent, seg: list, country: str) -> list[dict]:
+    """Views by first-level subdivision inside ONE country, busiest first.
+
+    `region` is a state in the US, a province in Canada, a prefecture in
+    Japan — whatever DB-IP resolved at track time. Scoping to one country is
+    what makes the name meaningful: "Western" is a province of Sri Lanka and
+    an Australian state, and a global roll-up would add them together.
+    """
+    view_count = func.count(PageView.id)
+    unique_sessions = func.count(func.distinct(PageView.session_id))
+    rows = (
+        db.query(
+            PageView.region,
+            view_count.label("views"),
+            unique_sessions.label("visitors"),
+        )
+        .filter(recent, *seg, PageView.country == country, PageView.region.isnot(None))
+        .group_by(PageView.region)
+        # Name tiebreaker: equal-count regions must not swap between requests.
+        .order_by(view_count.desc(), PageView.region.asc())
+        .all()
+    )
+    return [{"name": r.region, "views": r.views, "visitors": r.visitors} for r in rows]
+
+
+def _city_rows(
+    db: Session, recent, seg: list, country: str | None, limit: int = _CITY_LIMIT
+) -> list[dict]:
+    """The city bubble layer, busiest first, capped.
+
+    `country` scopes it to one country's drill-down; **None means every town
+    on earth**, which is what the density map's identified layer reads.
+
+    A bubble needs a name AND a point, so all three are required — a city
+    whose centroid the database does not carry is counted in the region layer
+    and simply has no bubble. The identity of a bubble is (country, city,
+    region): region is what keeps Springfield MA and Springfield IL apart, and
+    COUNTRY is what keeps a global list from merging two same-named
+    subdivisions in different countries into one town. Grouping on country
+    unconditionally costs a scoped call nothing — the column is constant
+    inside the filter — so both scopes run one query shape.
+
+    The coordinates are AVERAGED rather than grouped on: DB-IP resolves many
+    addresses to sub-city districts whose labels are stripped at write time
+    but whose centroids differ, and grouping on the point would fragment one
+    metro into several bubbles that each claim a slice of its traffic.
+    The city tiebreaker keeps the cut stable between requests.
+    """
+    view_count = func.count(PageView.id)
+    unique_sessions = func.count(func.distinct(PageView.session_id))
+    city_filters = (
+        recent,
+        *seg,
+        *([PageView.country == country] if country is not None else []),
+        PageView.city.isnot(None),
+        PageView.latitude.isnot(None),
+        PageView.longitude.isnot(None),
+    )
+    city_rows = (
+        db.query(
+            PageView.country,
+            PageView.city,
+            PageView.region,
+            func.avg(PageView.latitude).label("lat"),
+            func.avg(PageView.longitude).label("lng"),
+            view_count.label("views"),
+            unique_sessions.label("visitors"),
+            func.max(PageView.created_at).label("last_seen"),
+        )
+        .filter(*city_filters)
+        .group_by(PageView.country, PageView.city, PageView.region)
+        .order_by(view_count.desc(), PageView.city.asc())
+        .limit(limit)
+        .all()
+    )
+
+    # Per-city breakdowns: TWO grouped queries, not sixty. Each is the city
+    # query's own key plus one breakdown column, and Python does the bucketing
+    # — a query per dot would turn one dashboard load into 121 round trips.
+    #
+    # Both carry the SAME filters as the city query above (window, segment,
+    # country, city and point present) so their key space matches it exactly;
+    # anything that is not one of the surviving keys is dropped in the loop
+    # below rather than being asked for separately.
+    city_key_columns = (PageView.country, PageView.city, PageView.region)
+
+    def _breakdown(column):
+        """(city key, `column`) → views, ordered so the first rows seen for a
+        key are that key's busiest. A global ORDER BY is enough for that: if
+        the whole result descends by views, then so does any subset of it.
+        The column tiebreaker makes a top-3 cut among equals deterministic."""
+        return (
+            db.query(*city_key_columns, column, view_count.label("views"))
+            .filter(*city_filters, column.isnot(None))
+            .group_by(*city_key_columns, column)
+            .order_by(view_count.desc(), column.asc())
+            .all()
+        )
+
+    surviving_keys = {(r.country, r.city, r.region) for r in city_rows}
+
+    def _bucket(rows, value_of, label, limit=None):
+        buckets: dict[tuple, list[dict]] = defaultdict(list)
+        for row in rows:
+            key = (row.country, row.city, row.region)
+            if key not in surviving_keys:
+                continue
+            entries = buckets[key]
+            if limit is None or len(entries) < limit:
+                entries.append({label: value_of(row), "views": row.views})
+        return buckets
+
+    networks_by_city = _bucket(
+        _breakdown(PageView.network), lambda r: r.network, "name", _CITY_NETWORK_LIMIT
+    )
+    devices_by_city = _bucket(_breakdown(PageView.device_type), lambda r: r.device_type, "type")
+
+    cities = []
+    for row in city_rows:
+        key = (row.country, row.city, row.region)
+        cities.append(
+            {
+                "city": row.city,
+                "region": row.region,
+                # The country the town is in — constant for a drill-down, and
+                # the thing that makes a GLOBAL town list addressable.
+                "country": row.country,
+                # Re-rounded because an average of 2dp inputs need not be 2dp.
+                "lat": round(row.lat, 2),
+                "lng": round(row.lng, 2),
+                "views": row.views,
+                "visitors": row.visitors,
+                "last_seen": str(row.last_seen) if row.last_seen is not None else None,
+                # A city whose every view predates the ASN database gets an
+                # empty list, never a fabricated "Unknown" network.
+                "networks": networks_by_city.get(key, []),
+                "devices": devices_by_city.get(key, []),
+            }
+        )
+    return cities
 
 
 @router.get("/dashboard/analytics")
@@ -507,141 +667,54 @@ def get_analytics(
     geo_since = _geo_tracked_since(db)
 
     # US detail — the same window and segment as the country roll-up above.
-    # Scoped to the US because that is the map these back (a state choropleth
-    # and a city bubble layer); `region` elsewhere is a province or a
-    # prefecture and does not belong on either.
-    state_rows = (
-        db.query(
-            PageView.region,
-            view_count.label("views"),
-            unique_sessions.label("visitors"),
-        )
-        .filter(recent, *seg, PageView.country == "US", PageView.region.isnot(None))
-        .group_by(PageView.region)
-        # Name tiebreaker: equal-count states must not swap between requests.
-        .order_by(view_count.desc(), PageView.region.asc())
-        .all()
-    )
+    # It ships INLINE here (rather than only from /dashboard/geo/US) because
+    # the United States is the map's landing drill-down and its own
+    # pre-projected AlbersUSA asset: the panel opens it without a second
+    # round trip. Every other country goes through the route below, off the
+    # SAME two helpers, so the two paths cannot disagree about a region.
+    us_states = _region_rows(db, recent, seg, "US")
+    us_cities = _city_rows(db, recent, seg, "US")
 
-    # A bubble needs a name AND a point, so all three are required — a city
-    # whose centroid the database does not carry is counted in the state layer
-    # and simply has no bubble. The identity of a bubble is (city, region):
-    # region is what keeps Springfield MA and Springfield IL apart, and the
-    # coordinates are AVERAGED rather than grouped on — DB-IP resolves many
-    # addresses to sub-city districts whose labels are stripped at write time
-    # but whose centroids differ, and grouping on the point would fragment one
-    # metro into several bubbles that each claim a slice of its traffic.
-    # The city tiebreaker keeps the 60-row cut stable between requests.
-    city_rows = (
-        db.query(
-            PageView.city,
-            PageView.region,
-            func.avg(PageView.latitude).label("lat"),
-            func.avg(PageView.longitude).label("lng"),
-            view_count.label("views"),
-            unique_sessions.label("visitors"),
-            func.max(PageView.created_at).label("last_seen"),
-        )
-        .filter(
-            recent,
-            *seg,
-            PageView.country == "US",
-            PageView.city.isnot(None),
-            PageView.latitude.isnot(None),
-            PageView.longitude.isnot(None),
-        )
-        .group_by(PageView.city, PageView.region)
-        .order_by(view_count.desc(), PageView.city.asc())
-        .limit(60)
-        .all()
-    )
-
-    # Per-city breakdowns: TWO grouped queries, not sixty. Each is the city
-    # query's own key plus one breakdown column, and Python does the bucketing
-    # — a query per dot would turn one dashboard load into 121 round trips.
-    #
-    # Both carry the SAME filters as the city query above (window, segment,
-    # US, city and point present) so their key space matches it exactly;
-    # anything that is not one of the 60 surviving keys is dropped in the
-    # loop below rather than being asked for separately.
-    city_key_columns = (PageView.city, PageView.region)
-    city_filters = (
-        recent,
-        *seg,
-        PageView.country == "US",
-        PageView.city.isnot(None),
-        PageView.latitude.isnot(None),
-        PageView.longitude.isnot(None),
-    )
-
-    def _breakdown(column):
-        """(city key, `column`) → views, ordered so the first rows seen for a
-        key are that key's busiest. A global ORDER BY is enough for that: if
-        the whole result descends by views, then so does any subset of it.
-        The column tiebreaker makes a top-3 cut among equals deterministic."""
-        return (
-            db.query(*city_key_columns, column, view_count.label("views"))
-            .filter(*city_filters, column.isnot(None))
-            .group_by(*city_key_columns, column)
-            .order_by(view_count.desc(), column.asc())
+    # Which countries the map may offer a drill-down into. Without this the
+    # panel would have to CLICK to find out, and a country whose every view
+    # is country-lite would open onto an empty choropleth — a dead door the
+    # reader cannot tell from a slow one. One grouped query answers it for
+    # the whole map, in the same window and segment as everything else.
+    region_countries = [
+        row.country
+        for row in (
+            db.query(PageView.country)
+            .filter(recent, *seg, PageView.country.isnot(None), PageView.region.isnot(None))
+            .group_by(PageView.country)
+            .order_by(PageView.country.asc())
             .all()
         )
+    ]
 
-    surviving_keys = {(r.city, r.region) for r in city_rows}
-
-    def _bucket(rows, value_of, label, limit=None):
-        buckets: dict[tuple, list[dict]] = defaultdict(list)
-        for row in rows:
-            key = (row.city, row.region)
-            if key not in surviving_keys:
-                continue
-            entries = buckets[key]
-            if limit is None or len(entries) < limit:
-                entries.append({label: value_of(row), "views": row.views})
-        return buckets
-
-    networks_by_city = _bucket(
-        _breakdown(PageView.network), lambda r: r.network, "name", _CITY_NETWORK_LIMIT
-    )
-    devices_by_city = _bucket(_breakdown(PageView.device_type), lambda r: r.device_type, "type")
-
-    us_cities = []
-    for row in city_rows:
-        key = (row.city, row.region)
-        us_cities.append(
-            {
-                "city": row.city,
-                "region": row.region,
-                # Re-rounded because an average of 2dp inputs need not be 2dp.
-                "lat": round(row.lat, 2),
-                "lng": round(row.lng, 2),
-                "views": row.views,
-                "visitors": row.visitors,
-                "last_seen": str(row.last_seen) if row.last_seen is not None else None,
-                # A city whose every view predates the ASN database gets an
-                # empty list, never a fabricated "Unknown" network.
-                "networks": networks_by_city.get(key, []),
-                "devices": devices_by_city.get(key, []),
-            }
+    # How many TOWNS the density map would have to draw. A count, not the
+    # rows: the density view is behind a pill most sessions never press, and
+    # its Leaflet chunk is already fetched on demand — so its data is too, from
+    # /dashboard/towns. This number exists only so the panel knows whether to
+    # offer the entrance at all, the same job `region_countries` does for the
+    # drill-down. It replaced a `heat_points` array of bare [lat, lng, views]
+    # triples on 2026-08-30, when the density layer gained identity (see that
+    # route) — and the payload got SMALLER, not larger.
+    located_towns = (
+        db.query(func.count())
+        .select_from(
+            db.query(PageView.country, PageView.city, PageView.region)
+            .filter(
+                recent,
+                *seg,
+                PageView.city.isnot(None),
+                PageView.latitude.isnot(None),
+                PageView.longitude.isnot(None),
+            )
+            .group_by(PageView.country, PageView.city, PageView.region)
+            .subquery()
         )
-
-    # Every located point on earth, for the density heat layer — deliberately
-    # NOT the us_cities list, which is US-scoped and capped at 60 because it
-    # feeds a readable rank rail. A heat map wants the whole cloud, and the
-    # cloud is small: coordinates are city CENTROIDS rounded to 2dp, so views
-    # collapse hard (prod: 8,784 located rows over 311 distinct points). The
-    # cap is a runaway guard, not a design limit.
-    #
-    # Emitted as bare [lat, lng, weight] triples rather than objects: this is
-    # the one array in the payload that is plotted, never read, and the key
-    # names would be most of its bytes.
-    heat_rows = (
-        db.query(PageView.latitude, PageView.longitude, view_count.label("views"))
-        .filter(recent, *seg, PageView.latitude.isnot(None), PageView.longitude.isnot(None))
-        .group_by(PageView.latitude, PageView.longitude)
-        .order_by(view_count.desc())
-        .limit(_HEAT_POINT_LIMIT)
-        .all()
+        .scalar()
+        or 0
     )
     region_since = _region_tracked_since(db)
 
@@ -660,12 +733,11 @@ def get_analytics(
         ],
         "geo_unknown_views": geo_unknown,
         "geo_tracked_since": str(geo_since) if geo_since is not None else None,
-        "us_states": [
-            {"name": row.region, "views": row.views, "visitors": row.visitors} for row in state_rows
-        ],
+        "us_states": us_states,
         "us_cities": us_cities,
+        "region_countries": region_countries,
         "region_tracked_since": str(region_since) if region_since is not None else None,
-        "heat_points": [[row.latitude, row.longitude, row.views] for row in heat_rows],
+        "located_towns": located_towns,
         "daily_traffic": [
             {"day": str(row.day), "views": row.views, "visitors": row.visitors}
             for row in daily_traffic
@@ -679,6 +751,110 @@ def get_analytics(
         "top_parts": [{"path": row.path, "views": row.views} for row in top_parts],
         "top_categories": [{"path": row.path, "views": row.views} for row in top_categories],
         "daily_devices": daily_devices,
+    }
+
+
+# ── GET /api/dashboard/geo/{country_code} — the drill-down, anywhere ────────
+# The map panel used to drill into the United States alone, because
+# /dashboard/analytics only ever aggregated `region`/`city` for `country ==
+# "US"`. The COLUMNS were never US-only — DB-IP stamps a region, a city and a
+# centroid on every located view — so this route is the same two aggregations
+# with the country as a parameter, and the US case above is one of its
+# callers rather than a separate implementation.
+#
+# It is its own route rather than more fields on /dashboard/analytics for the
+# same reason /dashboard/organizations is: a drill-down most sessions never
+# open must not be paid for by every load of the Site Analytics tab. One
+# country's detail is fetched when someone actually clicks that country.
+
+
+@router.get("/dashboard/geo/{country_code}")
+def get_country_geo(
+    country_code: str = Path(..., pattern="^[A-Za-z]{2}$"),
+    days: int = 30,
+    segment: str = Query("humans", pattern="^(humans|bots|all)$"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_staff),
+):
+    """One country's regions and towns, same window and segment as the map.
+
+    `country_code` is ISO alpha-2 and case-insensitive; anything else is a
+    422 from the pattern above rather than a query for a country that cannot
+    exist. A WELL-FORMED code with no rows is not an error — it is a country
+    nobody has visited yet, and it answers with empty lists so the panel can
+    render its collecting state instead of an error box.
+    """
+    days = min(days, 365)
+    cutoff = datetime.now(UTC) - timedelta(days=days)
+    recent = PageView.created_at >= cutoff
+    # Stored uppercase by `geo_for_ip`, so the comparison is uppercase too —
+    # a lowercase path segment must not silently return an empty country.
+    code = country_code.upper()
+
+    _bot_uas, seg = _window_segment(db, cutoff, segment)
+
+    return {
+        "country": code,
+        "period_days": days,
+        "segment": segment,
+        "regions": _region_rows(db, recent, seg, code),
+        "cities": _city_rows(db, recent, seg, code),
+        # The panel's collecting copy is about when REGION capture started,
+        # which is a property of the database and not of this country.
+        "region_tracked_since": (
+            str(since) if (since := _region_tracked_since(db)) is not None else None
+        ),
+    }
+
+
+# ── GET /api/dashboard/towns — the density map, with identity ───────────────
+# The density map used to be beautiful and inert. It painted `heat_points`,
+# bare [lat, lng, views] triples grouped on the ROUNDED COORDINATE, and a
+# click could not say which town it had hit — so every piece of reporting
+# depth (the visitor-intel card, the towns list) lived only in the choropleth
+# views. Two maps, two disjoint capability sets, and the prettier one told you
+# less. Owner call, 2026-08-30: fix it.
+#
+# The fix is upstream of the click. This route returns the SAME town rows the
+# drill-down's bubble layer is built from — `_city_rows` with no country — so
+# the density layer paints from identified rows rather than anonymous points,
+# and a click already knows the town, its numbers, its networks and its
+# devices without a second request.
+#
+# THE GROUPING CHANGE IS FREE, MEASURED: rounding to a coordinate produced 311
+# points; grouping into towns produces 288 — and there are ZERO located page
+# views with no city, so nothing is dropped, only merged. The merges are
+# exactly the sub-city districts the bubble layer already merges on purpose
+# ("a metro stays ONE bubble"), which makes the two maps agree about what a
+# place is instead of disagreeing by construction.
+#
+# Its own route rather than more fields on /dashboard/analytics, for the same
+# reason /dashboard/organizations is: the density view is behind a pill, and
+# its Leaflet chunk is already fetched on demand. Every session paid ~7 kB for
+# heat_points; now only the sessions that open the view pay anything.
+
+
+@router.get("/dashboard/towns")
+def get_towns(
+    days: int = 30,
+    segment: str = Query("humans", pattern="^(humans|bots|all)$"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_staff),
+):
+    """Every located town on earth, busiest first, with its visitor intel."""
+    days = min(days, 365)
+    cutoff = datetime.now(UTC) - timedelta(days=days)
+    recent = PageView.created_at >= cutoff
+
+    _bot_uas, seg = _window_segment(db, cutoff, segment)
+
+    return {
+        "period_days": days,
+        "segment": segment,
+        "towns": _city_rows(db, recent, seg, None, limit=_TOWN_LIMIT),
+        "region_tracked_since": (
+            str(since) if (since := _region_tracked_since(db)) is not None else None
+        ),
     }
 
 

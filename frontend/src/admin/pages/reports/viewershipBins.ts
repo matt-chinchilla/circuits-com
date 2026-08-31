@@ -15,33 +15,48 @@
 // legend to three bins; measured 2026-08-30, max=533 → 1-9/10-99/100+.)
 
 /**
- * The THERMAL ramp — an inferno slice, cool-dark to hot (2026-08-30).
+ * The THERMAL ramp — cold purple to hot red (owner call, 2026-08-31).
  *
- * Replaces the single-hue green ramp (#245c44 → #82f2b2) on owner feedback:
- * a heat map should read as heat, the way geo-heatmap/heatmap-ts render one.
- * The stops are sampled from matplotlib's `inferno` between roughly its 0.36
- * and 0.88 positions — the ends are cut off deliberately. Inferno's true
- * bottom is near-black, which is indistinguishable from the empty-land navy
- * on this card, and its true top is near-white, which would out-shout the
- * card chrome around it.
+ * These are the heat map's own blue-cyan-green-yellow-red stops, sampled off
+ * `HEAT_GRADIENT`, with purple prepended so the two maps in this panel speak
+ * ONE language and the choropleth reaches further at the cold end. Six stops
+ * rather than five, which also buys an extra legend bin: with a three-decade
+ * window every bin is a visibly different colour instead of two neighbours
+ * arguing over a hue.
  *
- * LUMINANCE RISES MONOTONICALLY across the five stops, and that monotonicity
- * is the CVD story: a protan or deutan viewer who cannot separate the magenta
- * from the red still reads the ORDER, because every step is brighter than the
- * one below it. Measured relative luminance steps land at ~1.55:1 between
- * neighbours, evenly, with 5.8:1 end to end.
+ * It ENDS AT RED (owner call, 2026-08-31). A white top stop was tried and
+ * removed: on this card white is the ink colour, so the hottest country stopped
+ * reading as "hot" and started reading as a blank hole punched in the map.
  *
- * MEASURED, not eyeballed (dataviz `validate_palette.js`, ordinal mode, dark,
- * surface #0f1526 — the .wmCard zone surface): all four ordinal checks pass,
- * light-end contrast 2.06:1. Bin 1 also stands 1.74:1 off the empty-land navy
- * #1a2440, so an unvisited region never reads as a merely-cold one. The
- * inferno slice starting at #65156e FAILED that light-end check at 1.63:1,
- * which is why the bottom stop sits where it does rather than lower.
+ * THE TRADE, STATED PLAINLY: luminance no longer rises monotonically. The
+ * previous inferno slice did, and that was its colour-blind story — a protan
+ * or deutan reader could rank the bins by brightness alone. A cold-to-hot
+ * rainbow cannot: red is DARKER than the yellow before it (0.27 vs 0.68
+ * relative luminance), so brightness zig-zags near the top. This is the
+ * classic rainbow-colormap objection and it is real.
+ *
+ * What carries the ordering instead: every bin is LABELLED with its own range
+ * in the legend, the rank rail beside the map lists exact counts, and the two
+ * ends are far apart in both hue and brightness (deep purple, hot red). The
+ * ramp is decoration over numbers that are always readable, never the only
+ * channel — which is the condition under which this trade is acceptable.
+ * If it is ever revisited, viridis/inferno are the monotone options.
+ *
+ * MEASURED on the zone surface #0f1526 (2026-08-31): neighbouring stops are
+ * >= 60 apart in RGB distance, and the coolest stands clear of the empty-land
+ * ground so an unvisited region never reads as a merely-cold one.
  *
  * The city-dot layer draws from this same ramp via `binColorFor`, so ONE
  * legend explains the states and the dots on top of them.
  */
-export const VIEWERSHIP_RAMP = ['#832168', '#b83656', '#e15933', '#f78e12', '#f7cd3a'];
+export const VIEWERSHIP_RAMP = [
+  '#7b3fa0', // purple — coldest
+  '#2c5eff', // blue    \
+  '#15cae7', // cyan     |  the heat layer's own gradient stops
+  '#3add87', // green    |
+  '#f4d343', // yellow  /
+  '#ff4221', // red     — hottest, and the heat layer's own top stop
+];
 
 const MAX_BINS = VIEWERSHIP_RAMP.length;
 

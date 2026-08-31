@@ -7,12 +7,28 @@
 // emphasis labels — is a plain object this file returns.
 //
 // ── The two views differ STRUCTURALLY, not just in data ────────────────────
-//   world — a bare `series-map` over `world110`, naturalEarth1-projected.
-//   us    — a `geo` COMPONENT carrying the states, with the choropleth map
-//           series bound by `geoIndex` and the city scatter bound by
-//           `coordinateSystem: 'geo'`. A scatter cannot address a map series'
-//           private coordinate system, so the dots are what force the geo
-//           component; the world view is left alone.
+//   world   — a bare `series-map` over `world110`, naturalEarth1-projected.
+//   country — a `geo` COMPONENT carrying the subdivisions, with the
+//             choropleth map series bound by `geoIndex` and the city scatter
+//             bound by `coordinateSystem: 'geo'`. A scatter cannot address a
+//             map series' private coordinate system, so the dots are what
+//             force the geo component; the world view is left alone.
+//
+// ── One country builder, two callers (2026-08-30) ──────────────────────────
+// The drill-down was United-States-only and `buildUsOption` was its builder.
+// Every country drills in now, and rather than a second near-copy the US is
+// one CALL of `buildCountryOption` — same option shape, same regressions
+// guarded once. What varies is only what genuinely differs between them:
+//
+//   registered map name  — one asset per country.
+//   projection           — the US asset is PRE-PROJECTED (AlbersUSA, insets
+//                          and all), so it takes the identity; every other
+//                          country ships lat/lng and takes mercator.
+//   region entries       — a US state row IS a feature name. Elsewhere one
+//                          DB-IP subdivision can own several Natural Earth
+//                          features (England is 150 districts), so the caller
+//                          hands over a per-FEATURE list carrying the label
+//                          and numbers of the row that owns it.
 //
 // The palette is THERMAL — an inferno slice, cool-dark to hot, which is the
 // palette a reader already associates with a heat map. The ramp, its
@@ -23,6 +39,8 @@ import type { EChartsCoreOption } from 'echarts/core';
 import type { AnalyticsData } from '@admin/types/admin';
 import { countryName, flagEmoji } from '@admin/services/country';
 import {
+  mercatorProject,
+  mercatorUnproject,
   naturalEarth1Project,
   naturalEarth1Unproject,
   usPlanarProject,
@@ -54,8 +72,18 @@ export interface CityPoint {
   row: UsCityRow;
 }
 
-const LAND_NO_DATA = '#1a2440';
-const BORDER = '#2b3a5e';
+/** The geography's own base, retinted 2026-08-31 (owner: "very hard to see the
+ *  different countries against the dark-blue"). The canvas stays transparent;
+ *  what shows behind it is the SEA PLATE `.wmStage` paints in the SCSS —
+ *  #0b1020, DARKER than the card, with a faint graticule that only ever shows
+ *  over open water because opaque land covers it. Land is a lifted slate that
+ *  reads as ground against that sea (1.55:1, up from 1.19:1 against the old
+ *  card-as-ocean), and the border doubles as the COASTLINE — 2.57:1 against
+ *  the sea is what makes a continent's edge findable at world scale. Ceiling
+ *  on the land tone: bin 1 of the ramp (#7b3fa0) must stay clear of it —
+ *  1.78:1 measured, and viewershipBins.test.ts pins the >1.6 floor. */
+const LAND_NO_DATA = '#2a3550';
+const BORDER = '#44557f';
 /** Hover reads as HEAT taken to its limit — a pale gold above the ramp's
  *  hottest stop — so the highlight belongs to the same language as the fill
  *  underneath it instead of arriving from a different palette. */
@@ -66,20 +94,23 @@ const HOVER_BORDER = '#fff3d6';
  *  a hot state beneath it is a dark edge. */
 const CITY_DOT_EDGE = '#0f1526';
 const CITY_DOT_EDGE_HOVER = '#fff3d6';
-/** A state that HAS data also gets this edge, so the choropleth reads as
- *  color-coded even where the COOL low bins sit close to the empty navy —
- *  that is the job, and this orchid is picked for it: measured 4.98:1 against
- *  the empty land and 2.87:1 against bin 1, staying in the purple family that
- *  anchors the ramp's cool end. It goes quiet against the hot bins (1.20:1 on
- *  bin 4), which is fine — a state that bright needs no edge to be noticed. */
+/** A region that HAS data also gets this edge, so the choropleth reads as
+ *  color-coded even where the COOL low bins sit close to the empty slate —
+ *  that is the job, and this orchid is picked for it: measured 3.96:1 against
+ *  the empty land and 2.23:1 against bin 1, staying in the purple family that
+ *  anchors the ramp's cool end. It goes quiet against the hot bins, which is
+ *  fine — a region that bright needs no edge to be noticed. */
 const VISITED_BORDER = '#b083bd';
 
 const WORLD_PROJECTION = {
   project: naturalEarth1Project,
   unproject: naturalEarth1Unproject,
 };
-// Identity, and NOT omitted — see the Y-convention note in mapProjections.ts.
-const US_PROJECTION = { project: usPlanarProject, unproject: usPlanarUnproject };
+/** Identity, and NOT omitted — see the Y-convention note in mapProjections.ts.
+ *  Exported for the same reason COUNTRY_PROJECTION is: the panel hands this
+ *  exact function to `featureBounds`, so the zoom fit is measured in the
+ *  space the renderer actually draws in. */
+export const US_PROJECTION = { project: usPlanarProject, unproject: usPlanarUnproject };
 
 // SECURITY: every tooltip `formatter` below returns an HTML string. All
 // interpolated values today come from the committed geojson properties or
@@ -101,7 +132,11 @@ const TOOLTIP_CHROME = {
 export const MAP_BOX = { top: 8, bottom: 10, left: 8, right: 8 };
 
 const LAND_STYLE = {
-  itemStyle: { areaColor: LAND_NO_DATA, borderColor: BORDER, borderWidth: 0.6 },
+  // 0.8, up from the shipped 0.6 hairline — at world scale the border is the
+  // only thing separating unvisited neighbours, and 0.6 of the old ink was
+  // invisible (1.36:1 over the land it divided; now 1.65:1 over the lighter
+  // land and it holds a visible line).
+  itemStyle: { areaColor: LAND_NO_DATA, borderColor: BORDER, borderWidth: 0.8 },
   emphasis: {
     label: { show: false },
     itemStyle: { areaColor: HOVER_LAND, borderColor: HOVER_BORDER },
@@ -147,24 +182,48 @@ export function buildWorldOption({
         scaleLimit: { min: 1, max: MAX_STATE_ZOOM },
         ...MAP_BOX,
         ...LAND_STYLE,
+        // The visited edge the country views already wear (2026-08-31). Now
+        // that empty land is light enough to read as land, the orchid ring is
+        // what keeps a 1-view country — often a small polygon in a crowded
+        // neighbourhood — louder than the ground around it.
         data: countries.map((c) => ({
           name: c.code,
           value: c.views,
-          itemStyle: { areaColor: binColorFor(c.views, bins) },
+          itemStyle: {
+            areaColor: binColorFor(c.views, bins),
+            borderColor: VISITED_BORDER,
+            borderWidth: 0.9,
+          },
         })),
       },
     ],
   };
 }
 
-/** The US drill-down: the geo component carrying the state outlines, the
- *  choropleth bound to it by `geoIndex`, and the city dots on top of both. */
-export function buildUsOption({
-  stateRows,
+/** One paintable feature: the polygon's own name in the asset, plus the label
+ *  and numbers of the subdivision that owns it. For the United States the
+ *  three collapse into one state row; elsewhere `feature` is a Natural Earth
+ *  admin-1 polygon and `label` is the DB-IP subdivision above it. */
+export interface RegionPaint {
+  feature: string;
+  label: string;
+  views: number;
+  visitors: number;
+}
+
+/** A country drill-down: the geo component carrying that country's outlines,
+ *  the choropleth bound to it by `geoIndex`, and the city dots on top of
+ *  both. */
+export function buildCountryOption({
+  mapName,
+  projection,
+  regions,
   cityPoints,
   bins,
 }: {
-  stateRows: UsStateRow[];
+  mapName: string;
+  projection: { project: (p: [number, number]) => [number, number]; unproject: (p: [number, number]) => [number, number] };
+  regions: RegionPaint[];
   cityPoints: CityPoint[];
   bins: ViewershipBin[];
 }): EChartsCoreOption {
@@ -185,15 +244,17 @@ export function buildUsOption({
           const views = p.data?.value?.[2] ?? 0;
           return `${name}<br/>${plural(views, 'view')}`;
         }
-        const row = stateRows.find((s) => s.name === name);
+        // Hit-testing names the POLYGON; the reader wants the subdivision the
+        // API reported. Hovering any English district must say "England".
+        const row = regions.find((r) => r.feature === name);
         if (!row) return `${name}<br/>No visits recorded`;
-        return `${name}<br/>${plural(row.views, 'view')} · ${plural(row.visitors, 'visitor')}`;
+        return `${row.label}<br/>${plural(row.views, 'view')} · ${plural(row.visitors, 'visitor')}`;
       },
     },
     geo: {
-      map: US_MAP_NAME,
+      map: mapName,
       nameProperty: 'name',
-      projection: US_PROJECTION,
+      projection,
       roam: true,
       scaleLimit: { min: 1, max: MAX_STATE_ZOOM },
       ...MAP_BOX,
@@ -212,10 +273,10 @@ export function buildUsOption({
       // still in the option. Region-level emphasis survives that path; the
       // hover fill is repeated with it so the highlight stays in the ramp's
       // language rather than falling back to ECharts' default gold.
-      regions: stateRows.map((s) => ({
-        name: s.name,
+      regions: regions.map((r) => ({
+        name: r.feature,
         itemStyle: {
-          areaColor: binColorFor(s.views, bins),
+          areaColor: binColorFor(r.views, bins),
           borderColor: VISITED_BORDER,
           borderWidth: 0.9,
         },
@@ -242,7 +303,7 @@ export function buildUsOption({
         select: { disabled: true },
         // Values only — the paint is on `geo.regions` above. The series still
         // carries the numbers so the tooltip and hit-testing work.
-        data: stateRows.map((s) => ({ name: s.name, value: s.views })),
+        data: regions.map((r) => ({ name: r.feature, value: r.views })),
       },
       {
         type: 'scatter',
@@ -267,3 +328,37 @@ export function buildUsOption({
     ],
   };
 }
+
+/** The United States drill-down — the country builder above, wired to the
+ *  pre-projected AlbersUSA asset. A state row IS its own polygon here, so the
+ *  join the rest of the world needs collapses to the identity. */
+export function buildUsOption({
+  stateRows,
+  cityPoints,
+  bins,
+}: {
+  stateRows: UsStateRow[];
+  cityPoints: CityPoint[];
+  bins: ViewershipBin[];
+}): EChartsCoreOption {
+  return buildCountryOption({
+    mapName: US_MAP_NAME,
+    projection: US_PROJECTION,
+    regions: stateRows.map((s) => ({
+      feature: s.name,
+      label: s.name,
+      views: s.views,
+      visitors: s.visitors,
+    })),
+    cityPoints,
+    bins,
+  });
+}
+
+/** The projection every non-US country view uses. Exported so the panel can
+ *  hand the SAME function to `featureBounds` — a zoom fitted in unprojected
+ *  degrees would be wrong by exactly the projection's own distortion. */
+export const COUNTRY_PROJECTION = {
+  project: mercatorProject,
+  unproject: mercatorUnproject,
+};

@@ -41,16 +41,41 @@
 // async chunk. Nothing the public entry statically reaches may import it —
 // the same rule the EChart wrapper carries.
 //
+// ── This view REPORTS, it is not only a picture (2026-08-30) ───────────────
+// It used to paint anonymous [lat, lng, views] triples, so a click could not
+// say which town it had hit and every piece of reporting depth lived in the
+// choropleth views instead. Owner call: "having those functionalities be
+// fully-separated in the 2 maps feels strange". So the layer is built from
+// IDENTIFIED town rows (GET /dashboard/towns — the drill-down's own bubble
+// aggregation with the country dropped), and a click opens the SAME
+// CityIntelCard the choropleth dots open, from the same `cityIntel.ts`
+// helpers. There is no second card and no second notion of what a place is.
+//
+// A heat blob is soft, so hit-testing is NEAREST-TOWN-WITHIN-A-SCREEN-RADIUS
+// rather than a polygon test: `HIT_RADIUS_PX` in SCREEN pixels, so the target
+// stays the same size at every zoom. A click that lands in empty ocean
+// resolves to nothing and closes the card rather than opening an empty one.
+//
+// ── Touch: two fingers to pan, one finger to scroll the page ───────────────
+// A full-width map that swallows vertical swipes is a real trap on a phone.
+// Leaflet's dragging is therefore DISABLED on a coarse pointer and enabled
+// only while two fingers are down (the capture-phase listener runs before
+// Leaflet's own touchstart handler, so the very gesture that enables dragging
+// is the one Leaflet then drags with). Pinch-zoom is unaffected — it is
+// two-fingered already — and a one-finger drag scrolls the page and raises a
+// short hint saying so. On a fine pointer nothing changes.
+//
 // ── Leak discipline ────────────────────────────────────────────────────────
 // A Leaflet map owns tile requests, document-level handlers and an animation
 // frame, so `map.remove()` on unmount is MANDATORY. This repo has a
 // documented history of orphaned render loops (csFx, 2026-06-22); a detached
 // map still fetching tiles is the same class of bug.
 
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import * as L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { prefersReducedMotion } from '@admin/components/charts/chartTheme';
+import type { GeoCityRow } from '@admin/types/admin';
 import { heatBounds, heatBrushForZoom, normalizeHeatDecades } from './heatWeights';
 import type { HeatPoint } from './heatWeights';
 import styles from './ReportsPage.module.scss';
@@ -157,10 +182,20 @@ function loadHeatPlugin(): Promise<typeof L.heatLayer> {
   return heatPluginPromise;
 }
 
+/** How near a click must land to count as hitting a town, in SCREEN pixels
+ *  at any zoom. 28 is a finger — a hair over the 24px Leaflet uses for its
+ *  own marker tolerance and inside the 44px tap target the rest of this
+ *  console aims for, which is right for a target the user can see. */
+const HIT_RADIUS_PX = 28;
+
+/** How long the "two fingers" hint stays up after a one-finger drag. */
+const TOUCH_HINT_MS = 1600;
+
 export interface HeatMapViewProps {
-  /** `[lat, lng, views]` triples straight off the payload — raw counts, not
-   *  intensities. The scaling is this view's job. */
-  points: HeatPoint[];
+  /** Identified towns — the layer's paint AND its click target. Grouped by
+   *  (country, city, region) with an averaged centroid, exactly like the
+   *  choropleth's bubbles, so the two maps agree about what a place is. */
+  towns: GeoCityRow[];
   /** Bumped by the panel's "Reset view" pill. Any change re-frames the map on
    *  the data; the map is NOT remounted, because rebuilding it would throw
    *  away a warm tile cache to do what one `fitBounds` does. */
@@ -168,9 +203,27 @@ export interface HeatMapViewProps {
   /** True once the user has moved the map off that framing, false when a
    *  re-fit puts it back — this is what the Reset pill is bound to. */
   onRoam?: (roamed: boolean) => void;
+  /** A click resolved to a town. The client coordinates travel with it so the
+   *  panel can anchor the card in ITS box — the panel owns the card's frame,
+   *  not this map. `null` is a click that hit nothing. */
+  onSelect?: (town: GeoCityRow | null, clientX: number, clientY: number) => void;
+  /** The town whose card is open, ringed on the map so a soft blob's click
+   *  visibly resolved to a place. */
+  selected?: GeoCityRow | null;
+  /** Bumped when `selected` was chosen from the KEYBOARD list rather than by
+   *  clicking the map, which is when the map should fly to it. A map click
+   *  must not re-centre under the user's own cursor. */
+  focusNonce?: number;
 }
 
-export default function HeatMapView({ points, fitNonce = 0, onRoam }: HeatMapViewProps) {
+export default function HeatMapView({
+  towns,
+  fitNonce = 0,
+  onRoam,
+  onSelect,
+  selected = null,
+  focusNonce = 0,
+}: HeatMapViewProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
   const heatRef = useRef<L.HeatLayer | null>(null);
@@ -179,11 +232,27 @@ export default function HeatMapView({ points, fitNonce = 0, onRoam }: HeatMapVie
   // of those should raise the Reset pill. Both of our moves fire the event
   // synchronously inside the call, so a plain flag is enough — no timers.
   const selfMoveRef = useRef(false);
-  // Latest-ref: the listener effect below must not re-bind on every parent
-  // render just because the callback identity changed.
+  // The ring drawn under the open card, and the "two fingers" hint.
+  const markerRef = useRef<L.CircleMarker | null>(null);
+  const [touchHint, setTouchHint] = useState(false);
+  const hintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Latest-refs: the listener effects below must not re-bind on every parent
+  // render just because a callback identity or the town list changed. The map
+  // is built ONCE; its handlers read the current values through these.
   const onRoamRef = useRef(onRoam);
   onRoamRef.current = onRoam;
+  const onSelectRef = useRef(onSelect);
+  onSelectRef.current = onSelect;
+  const townsRef = useRef(towns);
+  townsRef.current = towns;
 
+  // The density layer's own input, derived from the identified rows. Bare
+  // triples are still what leaflet.heat wants — identity lives beside them in
+  // `towns`, keyed by position in the same array.
+  const points: HeatPoint[] = useMemo(
+    () => towns.map((t) => [t.lat, t.lng, t.views] as HeatPoint),
+    [towns],
+  );
   const heatPoints = useMemo(() => normalizeHeatDecades(points), [points]);
   const bounds = useMemo(() => heatBounds(heatPoints), [heatPoints]);
 
@@ -204,16 +273,83 @@ export default function HeatMapView({ points, fitNonce = 0, onRoam }: HeatMapVie
       maxZoom: TILE_MAX_ZOOM,
       scrollWheelZoom: true,
       worldCopyJump: true,
-      zoomControl: true,
+      // TOP-RIGHT, not Leaflet's top-left default: the panel's pinned intel
+      // card opens at the top-left of the map box (that is the slot the
+      // keyboard towns list uses), and the two landed on exactly the same
+      // pixels — measured 2026-08-31 at 390px, both at x=37 y=82, with
+      // leaflet's control painting over the card's title. Top-right is also
+      // clear of the attribution, which lives bottom-right and is a license
+      // requirement that has to stay legible.
+      zoomControl: false,
       attributionControl: true,
       zoomAnimation: animate,
       fadeAnimation: animate,
     });
+    L.control.zoom({ position: 'topright' }).addTo(map);
     map.attributionControl.setPrefix(LEAFLET_PREFIX);
     L.tileLayer(TILE_URL, {
       maxZoom: TILE_MAX_ZOOM,
       attribution: TILE_ATTRIBUTION,
     }).addTo(map);
+
+    // Two-finger pan on a touch device — see the header. Gated on POINTER
+    // TYPE, not on viewport width: a touch laptop keeps its mouse dragging,
+    // and a narrow desktop window is not a phone.
+    const coarse = window.matchMedia?.('(pointer: coarse)').matches ?? false;
+    let releaseTouch: (() => void) | undefined;
+    if (coarse) {
+      map.dragging.disable();
+      const onTouchStart = (e: TouchEvent) => {
+        if (e.touches.length >= 2) map.dragging.enable();
+      };
+      const onTouchMove = (e: TouchEvent) => {
+        // One finger: the page is scrolling, not the map. Say so once rather
+        // than leaving the reader to conclude the map is broken.
+        if (e.touches.length >= 2) return;
+        setTouchHint(true);
+        if (hintTimerRef.current) clearTimeout(hintTimerRef.current);
+        hintTimerRef.current = setTimeout(() => setTouchHint(false), TOUCH_HINT_MS);
+      };
+      const onTouchEnd = (e: TouchEvent) => {
+        if (e.touches.length < 2) map.dragging.disable();
+      };
+      // CAPTURE phase: Leaflet listens on this same container, so enabling
+      // dragging here happens before its handler sees the very touchstart
+      // that enabled it — otherwise the first two-finger gesture would be
+      // swallowed and the user would have to try twice.
+      host.addEventListener('touchstart', onTouchStart, { capture: true, passive: true });
+      host.addEventListener('touchmove', onTouchMove, { capture: true, passive: true });
+      host.addEventListener('touchend', onTouchEnd, { capture: true, passive: true });
+      host.addEventListener('touchcancel', onTouchEnd, { capture: true, passive: true });
+      releaseTouch = () => {
+        host.removeEventListener('touchstart', onTouchStart, { capture: true });
+        host.removeEventListener('touchmove', onTouchMove, { capture: true });
+        host.removeEventListener('touchend', onTouchEnd, { capture: true });
+        host.removeEventListener('touchcancel', onTouchEnd, { capture: true });
+      };
+    }
+
+    // Hit-testing: nearest town within HIT_RADIUS_PX of the click, measured
+    // in SCREEN space so the target is the same size at every zoom. Empty
+    // ocean resolves to null, which closes the card rather than opening an
+    // empty one.
+    map.on('click', (e: L.LeafletMouseEvent) => {
+      const select = onSelectRef.current;
+      if (!select) return;
+      const origin = e.containerPoint;
+      let best: GeoCityRow | null = null;
+      let bestDistance = HIT_RADIUS_PX;
+      for (const town of townsRef.current) {
+        const point = map.latLngToContainerPoint([town.lat, town.lng]);
+        const distance = Math.hypot(point.x - origin.x, point.y - origin.y);
+        if (distance <= bestDistance) {
+          bestDistance = distance;
+          best = town;
+        }
+      }
+      const src = e.originalEvent;
+      select(best, src.clientX, src.clientY);
+    });
     // The brush is screen pixels, so its geographic meaning changes with the
     // zoom — every zoomend re-tunes it off the ladder, tighter zoomed out.
     // (setOptions redraws through the plugin's own rAF-scheduled _redraw.)
@@ -235,7 +371,30 @@ export default function HeatMapView({ points, fitNonce = 0, onRoam }: HeatMapVie
 
     return () => {
       ro.disconnect();
+      releaseTouch?.();
+      if (hintTimerRef.current) clearTimeout(hintTimerRef.current);
+
+      // DETACH THE HEAT LAYER BEFORE THE MAP GOES, AND CANCEL ITS FRAME.
+      // leaflet.heat redraws on a requestAnimationFrame it stores as `_frame`
+      // and its `_redraw` reads `this._map.getSize()` with no null guard, so a
+      // frame queued by the last zoom/resize and delivered AFTER `map.remove()`
+      // throws `Cannot read properties of null (reading 'getSize')`. Toggling
+      // world -> heat -> world quickly is enough to hit it (found 2026-08-31).
+      // Removing the layer alone does not help: the frame is already queued and
+      // fires against a detached layer. `_frame` is library-internal, hence the
+      // narrow cast and the optional handling — if a future version renames it
+      // the worst case is the old behaviour, not a new crash.
+      const heat = heatRef.current as (L.HeatLayer & { _frame?: number }) | null;
       heatRef.current = null;
+      if (heat) {
+        if (heat._frame) {
+          L.Util.cancelAnimFrame(heat._frame);
+          heat._frame = 0;
+        }
+        map.removeLayer(heat);
+      }
+
+      markerRef.current = null;
       mapRef.current = null;
       map.remove();
     };
@@ -293,13 +452,61 @@ export default function HeatMapView({ points, fitNonce = 0, onRoam }: HeatMapVie
     onRoamRef.current?.(false);
   }, [bounds, fitNonce]);
 
+  // (5) The selection ring. A heat blob is soft, so "which place did I just
+  // click" needs an answer on the map itself, not only in the card. Drawn as
+  // a circleMarker rather than a marker so it needs no icon asset and scales
+  // with nothing — a fixed screen-radius ring, which is exactly the shape of
+  // the hit test that produced it.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    if (markerRef.current) {
+      map.removeLayer(markerRef.current);
+      markerRef.current = null;
+    }
+    if (!selected) return;
+    markerRef.current = L.circleMarker([selected.lat, selected.lng], {
+      radius: 9,
+      weight: 2,
+      color: '#fff3d6',
+      fillColor: '#ffe3a3',
+      fillOpacity: 0.25,
+      // The ring is a readout of the card, never a second click target — a
+      // click on it must fall through to the map's own hit test.
+      interactive: false,
+    }).addTo(map);
+  }, [selected]);
+
+  // (6) Flying to a town chosen from the KEYBOARD list. Deliberately keyed on
+  // `focusNonce` and not on `selected`: a map click must not yank the view
+  // out from under the cursor that made it, and the list is the only other
+  // way a town gets selected.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !selected || focusNonce === 0) return;
+    selfMoveRef.current = true;
+    map.setView([selected.lat, selected.lng], Math.max(map.getZoom(), 6), { animate: false });
+    selfMoveRef.current = false;
+    onRoamRef.current?.(true);
+  }, [focusNonce, selected]);
+
   return (
-    <div
-      ref={hostRef}
-      className={styles.wmHeat}
-      // Leaflet's keyboard handler makes the container itself focusable and
-      // pannable with the arrow keys, so it needs a name.
-      aria-label="Visitor density map"
-    />
+    <div className={styles.wmHeatWrap}>
+      <div
+        ref={hostRef}
+        className={styles.wmHeat}
+        // Leaflet's keyboard handler makes the container itself focusable and
+        // pannable with the arrow keys, so it needs a name.
+        aria-label="Visitor density map"
+      />
+      {/* Only ever raised by a one-finger drag on a coarse pointer, so it
+          never appears on a desktop. aria-live so it is not silent for a
+          screen reader that just heard nothing happen. */}
+      {touchHint && (
+        <div className={styles.wmHeatHint} role="status" aria-live="polite">
+          Use two fingers to pan the map
+        </div>
+      )}
+    </div>
   );
 }

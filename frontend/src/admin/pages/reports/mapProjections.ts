@@ -1,10 +1,11 @@
-// Map projections for the analytics geography panel (world + US drill-down).
+// Map projections for the analytics geography panel (world + drill-downs).
 //
 // Ported from d3-geo / d3-geo-projection (ISC) rather than depended on:
 //   - naturalEarth1  — the raw polynomial + its Newton invert
 //   - albersUsa      — the composite lower-48 / Alaska / Hawaii conic
-// d3-geo is a stream/clip machine we would use two functions of, and the whole
-// of what those two functions are is the arithmetic below. No dependency.
+//   - mercator       — the one-line conformal cylindrical, for country views
+// d3-geo is a stream/clip machine we would use three functions of, and the
+// whole of what those functions are is the arithmetic below. No dependency.
 //
 // ── The Y convention (measured against echarts 6.1.0, 2026-08-30) ──────────
 // `coord/geo/Geo.js` forces `View`'s `invertY` to FALSE whenever a custom
@@ -193,4 +194,44 @@ export function usPlanarProject(point: Point): Point {
 
 export function usPlanarUnproject(point: Point): Point {
   return [point[0], point[1]];
+}
+
+// ── mercator — the projection every NON-US country view uses ───────────────
+// The world view's naturalEarth1 is calibrated to fit a whole globe into a
+// wide frame, and at COUNTRY scale that calibration is a visible shear. Both
+// were measured against each country's true local scale — the ratio of
+// (Δlng · 111.32 · cos φ) to (Δlat · 111.13) across its own bounding box —
+// on 2026-08-30, as rendered-aspect ÷ true-aspect:
+//
+//     country   naturalEarth1   mercator
+//     Germany        +24.5%       -0.5%
+//     Netherlands    +26.9%       -0.2%
+//     United Kingdom +37.0%       -1.0%
+//     Sweden         +66.1%       -2.1%
+//     Canada         +70.9%      -22.5%
+//     Norway        +120.7%      -10.7%
+//
+// naturalEarth1 draws Norway more than twice as wide as it is. Mercator is
+// CONFORMAL, so local shape is correct at every point — its two outliers are
+// countries spanning enormous latitude ranges, where the residual is the
+// familiar high-latitude stretch rather than a squashed coastline, and every
+// region inside them is still the right shape.
+//
+// Same y convention as naturalEarth1: the raw formula is north-positive, so
+// it is negated for ECharts' y-down projected space (see the note at the top
+// of this file). Latitude is clamped to Web Mercator's ±85.05113° — the
+// formula diverges at the poles, and the only admin-1 geometry that reaches
+// them is Antarctica.
+
+const MERCATOR_MAX_LAT = 85.05112878;
+
+/** [lng, lat] degrees -> planar, y DOWN (ECharts screen convention). */
+export function mercatorProject(point: Point): Point {
+  const lat = Math.max(-MERCATOR_MAX_LAT, Math.min(MERCATOR_MAX_LAT, point[1]));
+  return [point[0] * DEG, -Math.log(Math.tan(Math.PI / 4 + (lat * DEG) / 2))];
+}
+
+/** Inverse of `mercatorProject`. Closed form — no iteration needed. */
+export function mercatorUnproject(point: Point): Point {
+  return [point[0] / DEG, (2 * Math.atan(Math.exp(-point[1])) - Math.PI / 2) / DEG];
 }

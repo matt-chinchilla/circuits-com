@@ -4,6 +4,8 @@ import type { AccountMe } from '@admin/services/accountActivation';
 import type {
   AnalyticsData,
   AnalyticsSegment,
+  GeoCityRow,
+  GeoRegionRow,
   AuthResponse,
   UserInfo,
   DashboardStats,
@@ -162,6 +164,41 @@ export interface OrganizationsResponse {
   /** When ASN capture started (migration 049). Null = it has not yet. */
   network_tracked_since: string | null;
   organizations: VisitorOrganization[];
+}
+
+/** GET /dashboard/geo/{code} — ONE country's drill-down.
+ *
+ * The same two aggregations /dashboard/analytics ships inline for the United
+ * States, with the country as a parameter. It is a separate request on
+ * purpose: a drill-down most sessions never open must not be paid for by
+ * every load of the Site Analytics tab.
+ *
+ * A well-formed code nobody has visited answers 200 with empty lists — that
+ * is a country with no traffic, not an error. */
+export interface CountryGeo {
+  /** Echoed back UPPERCASE, whatever case was requested. */
+  country: string;
+  period_days: number;
+  segment: AnalyticsSegment;
+  regions: GeoRegionRow[];
+  cities: GeoCityRow[];
+  /** First day a page view could carry a region. A property of the database,
+   *  not of this country, so it is the same answer everywhere. */
+  region_tracked_since: string | null;
+}
+
+/** GET /dashboard/towns — every located town on earth, with its intel.
+ *
+ * The density map's feed AND its click target: the same rows `CountryGeo`
+ * returns for one country, with the country dropped. Fetched on the first
+ * visit to the density view, beside its Leaflet chunk — measured 2026-08-30
+ * at 278 towns / 71.9 kB raw / 13.7 kB gzipped, which is a third of the
+ * Leaflet chunk sitting next to it. */
+export interface GlobalTowns {
+  period_days: number;
+  segment: AnalyticsSegment;
+  towns: GeoCityRow[];
+  region_tracked_since: string | null;
 }
 
 export interface QuoteCreateResult {
@@ -368,6 +405,21 @@ export const adminApi = {
   getOrganizations: (days = 30, segment: AnalyticsSegment = 'humans') =>
     adminClient
       .get<OrganizationsResponse>('/dashboard/organizations', { params: { days, segment } })
+      .then((r) => r.data),
+
+  /** One country's regions and towns — the map panel's drill-down. Same
+   *  window and segment as getAnalytics for the same reason: the drill-down
+   *  and the world map it opened from must describe one set of visits. */
+  getCountryGeo: (code: string, days = 30, segment: AnalyticsSegment = 'humans') =>
+    adminClient
+      .get<CountryGeo>(`/dashboard/geo/${encodeURIComponent(code)}`, { params: { days, segment } })
+      .then((r) => r.data),
+
+  /** Every located town on earth — the density map's layer and its click
+   *  target. Same window and segment as the map it is drawn beside. */
+  getTowns: (days = 30, segment: AnalyticsSegment = 'humans') =>
+    adminClient
+      .get<GlobalTowns>('/dashboard/towns', { params: { days, segment } })
       .then((r) => r.data),
 
   // ── Dashboard overhaul (2026-07-30) ──────────────────────────────────────

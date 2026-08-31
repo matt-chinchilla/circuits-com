@@ -24,7 +24,12 @@ $grid-gap: 20px;
 // No webfont download; system font is always available and matches the OS
 // chrome users already see. Mono resolves through ui-monospace -> SF Mono.
 $font-heading: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', 'Inter', system-ui, sans-serif;
-$font-body:    -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', 'Inter', system-ui, sans-serif;
+// 'Twemoji Country Flags' leads the stack but can only ever claim FLAG
+// codepoints: its @font-face in global.scss carries a `unicode-range` of
+// U+1F1E6-1F1FF, so every other character falls straight through to the
+// native stack and the file is not even fetched by a page without a flag.
+// It is here because Windows ships no flag glyphs at all — see that note.
+$font-body:    'Twemoji Country Flags', -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', 'Inter', system-ui, sans-serif;
 $font-mono:    ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
 
 // Breakpoints

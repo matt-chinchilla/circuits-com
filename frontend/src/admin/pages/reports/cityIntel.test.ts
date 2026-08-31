@@ -7,6 +7,7 @@ import {
   formatLastSeen,
   networkLines,
   plural,
+  townKey,
   viewsVisitorsLabel,
 } from './cityIntel';
 
@@ -212,5 +213,34 @@ describe('formatLastSeen year handling', () => {
   it('shows the year once it differs, so stale data cannot pass as fresh', () => {
     const out = formatLastSeen('2001-08-30 14:05:00+00:00');
     expect(out).toContain('2001');
+  });
+});
+
+describe('townKey', () => {
+  it('separates two towns that share a name in different countries', () => {
+    // The GLOBAL town list the density map reads spans countries, where
+    // (city, region) alone would fold these two into one place.
+    const ontario = { city: 'London', region: 'Ontario', country: 'CA' };
+    const england = { city: 'London', region: 'England', country: 'GB' };
+    expect(townKey(ontario)).not.toBe(townKey(england));
+  });
+
+  it('separates two towns that share a name in the same country', () => {
+    expect(townKey({ city: 'Springfield', region: 'Illinois', country: 'US' })).not.toBe(
+      townKey({ city: 'Springfield', region: 'Massachusetts', country: 'US' }),
+    );
+  });
+
+  it('is stable for the same town however the row was fetched', () => {
+    // The country drill-down and the global town list return the same row;
+    // an open card must survive switching between the two views.
+    expect(townKey({ city: 'Munich', region: 'Bavaria', country: 'DE' })).toBe(
+      townKey({ city: 'Munich', region: 'Bavaria', country: 'DE' }),
+    );
+  });
+
+  it('tolerates the nullable halves rather than throwing', () => {
+    expect(townKey({ city: 'Somewhere', region: null, country: null })).toContain('Somewhere');
+    expect(townKey({ city: 'Somewhere' })).toBe(townKey({ city: 'Somewhere', region: null }));
   });
 });

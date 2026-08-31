@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { countryName, flagEmoji } from '@admin/services/country';
-import { MAP_BOX, MAP_NAME, US_MAP_NAME, buildUsOption, buildWorldOption } from './mapOptions';
-import type { CityPoint, CountryRow, UsCityRow, UsStateRow } from './mapOptions';
+import {
+  COUNTRY_PROJECTION,
+  MAP_BOX,
+  MAP_NAME,
+  US_MAP_NAME,
+  buildCountryOption,
+  buildUsOption,
+  buildWorldOption,
+} from './mapOptions';
+import type { CityPoint, CountryRow, RegionPaint, UsCityRow, UsStateRow } from './mapOptions';
 import { binColorFor, buildBins } from './viewershipBins';
 
 // These pin the SHIPPED shape of the two map options — every one of them is a
@@ -55,11 +63,11 @@ const CITY_POINTS: CityPoint[] = [ALBANY, AUSTIN].map((row, i) => ({
   row,
 }));
 
-/** The empty-land navy and the visited-state orchid, quoted from mapOptions.
+/** The empty-land slate and the visited-region orchid, quoted from mapOptions.
  *  Both are measured values (see the comments there) — pinning them here is
  *  what makes a silent retint show up as a failed test rather than a washed
  *  out map nobody notices. */
-const LAND_NO_DATA = '#1a2440';
+const LAND_NO_DATA = '#2a3550';
 const VISITED_BORDER = '#b083bd';
 
 // ── Just enough of the option shape to assert on ────────────────────────────
@@ -155,13 +163,18 @@ describe('buildWorldOption', () => {
     );
   });
 
-  it('colors every country off the shared bins', () => {
+  it('colors every country off the shared bins, ringed by the visited edge', () => {
     const data = world().series?.[0].data ?? [];
     expect(data).toHaveLength(COUNTRIES.length);
     data.forEach((item, i) => {
       expect(item.name).toBe(COUNTRIES[i].code);
       expect(item.value).toBe(COUNTRIES[i].views);
       expect(item.itemStyle?.areaColor).toBe(binColorFor(COUNTRIES[i].views, WORLD_BINS));
+      // The same orchid edge the country views carry (2026-08-31): with empty
+      // land lifted to a readable slate, the ring is what keeps a small
+      // 1-view country louder than the ground around it.
+      expect(item.itemStyle?.borderColor).toBe(VISITED_BORDER);
+      expect(item.itemStyle?.borderWidth).toBe(0.9);
     });
     // The whole point of dropping the visualMap: no item may be left uncolored.
     expect(data.every((d) => typeof d.itemStyle?.areaColor === 'string')).toBe(true);
@@ -171,7 +184,7 @@ describe('buildWorldOption', () => {
     expect(world().series?.[0].emphasis?.label?.show).toBe(false);
   });
 
-  it('keeps unvisited land honestly navy and unselectable', () => {
+  it('keeps unvisited land honestly empty-slate and unselectable', () => {
     const series = world().series?.[0];
     expect(series?.itemStyle?.areaColor).toBe(LAND_NO_DATA);
     expect(series?.select?.disabled).toBe(true);
@@ -371,5 +384,96 @@ describe('buildUsOption tooltip', () => {
 
   it('renders nothing for a nameless hover', () => {
     expect(format({ seriesType: 'scatter', data: { value: [0, 0, 3] } })).toBe('');
+  });
+});
+
+// ── buildCountryOption — the generalized drill-down ─────────────────────────
+// buildUsOption is one CALL of this, so everything above already exercises the
+// shared shape. What is left to pin is the part the United States can never
+// reach: a DB-IP subdivision that owns SEVERAL Natural Earth polygons.
+
+describe('buildCountryOption for a country whose regions span many polygons', () => {
+  // Italy: DB-IP reports "Lazio", Natural Earth ships its five provinces.
+  const LAZIO: RegionPaint[] = [
+    { feature: 'Rome', label: 'Lazio', views: 40, visitors: 21 },
+    { feature: 'Latina', label: 'Lazio', views: 40, visitors: 21 },
+    { feature: 'Naples', label: 'Campania', views: 3, visitors: 3 },
+  ];
+  const BINS = buildBins(40);
+  const italy = () =>
+    buildCountryOption({
+      mapName: 'admin1:IT',
+      projection: COUNTRY_PROJECTION,
+      regions: LAZIO,
+      cityPoints: [],
+      bins: BINS,
+    }) as unknown as Opt;
+
+  it('paints one geo.region per POLYGON, all carrying their region colour', () => {
+    const regions = italy().geo?.regions ?? [];
+    expect(regions.map((r) => r.name)).toEqual(['Rome', 'Latina', 'Naples']);
+    expect(regions[0].itemStyle?.areaColor).toBe(binColorFor(40, BINS));
+    expect(regions[1].itemStyle?.areaColor).toBe(regions[0].itemStyle?.areaColor);
+    expect(regions[2].itemStyle?.areaColor).toBe(binColorFor(3, BINS));
+  });
+
+  it('registers the country asset by its own map name', () => {
+    expect(italy().geo?.map).toBe('admin1:IT');
+    expect(italy().geo?.nameProperty).toBe('name');
+  });
+
+  it('projects through mercator in both directions', () => {
+    expect(typeof italy().geo?.projection?.project).toBe('function');
+    expect(typeof italy().geo?.projection?.unproject).toBe('function');
+  });
+
+  it('names the SUBDIVISION in the tooltip, not the polygon under the cursor', () => {
+    // Hit-testing reports "Latina"; the reader asked about Lazio. Without
+    // this the drill-down would report Italian provinces and British
+    // districts the API never mentioned and the rank rail never lists.
+    const format = (p: unknown) => italy().tooltip?.formatter?.(p) ?? '';
+    expect(format({ name: 'Latina', value: 40 })).toBe('Lazio<br/>40 views · 21 visitors');
+    expect(format({ name: 'Rome', value: 40 })).toBe('Lazio<br/>40 views · 21 visitors');
+  });
+
+  it('says so plainly for a polygon no subdivision claimed', () => {
+    expect(italy().tooltip?.formatter?.({ name: 'Milan' })).toBe('Milan<br/>No visits recorded');
+  });
+
+  it('still builds for a country whose regions found no polygons at all', () => {
+    const empty = buildCountryOption({
+      mapName: 'admin1:LK',
+      projection: COUNTRY_PROJECTION,
+      regions: [],
+      cityPoints: [],
+      bins: buildBins(2),
+    }) as unknown as Opt;
+    expect(empty.geo?.regions).toEqual([]);
+    expect(empty.series?.[0].data).toEqual([]);
+    expect(empty.geo?.itemStyle?.areaColor).toBe(LAND_NO_DATA);
+  });
+});
+
+describe('buildUsOption is buildCountryOption, wired to the albers asset', () => {
+  it('produces the same option as the generalized builder given the same rows', () => {
+    // The US path must not fork: it is the one country whose asset is
+    // pre-projected, and that is ALL that differs.
+    const direct = buildCountryOption({
+      mapName: US_MAP_NAME,
+      projection: {
+        project: (p: [number, number]) => [p[0], p[1]],
+        unproject: (p: [number, number]) => [p[0], p[1]],
+      },
+      regions: STATES.map((s) => ({
+        feature: s.name,
+        label: s.name,
+        views: s.views,
+        visitors: s.visitors,
+      })),
+      cityPoints: CITY_POINTS,
+      bins: US_BINS,
+    }) as unknown as Opt;
+    expect(JSON.stringify(direct.geo?.regions)).toBe(JSON.stringify(us().geo?.regions));
+    expect(JSON.stringify(direct.series?.[0].data)).toBe(JSON.stringify(us().series?.[0].data));
   });
 });

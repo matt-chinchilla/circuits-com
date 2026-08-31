@@ -348,43 +348,78 @@ export interface AnalyticsData {
   countries: Array<{ code: string; views: number; visitors: number }>;
   geo_unknown_views: number;
   geo_tracked_since: string | null;
-  // ── US drill-down (region capture, 2026-08-30) ───────────────────────────
+  // ── The drill-down layers (region capture, 2026-08-30) ───────────────────
   // Windowed and segmented exactly like `countries`, and OPTIONAL: an API
   // that predates region capture omits them entirely, and the panel has to
   // render its collecting state rather than an empty country.
+  //
+  // The United States ships INLINE here because it is the map's landing
+  // drill-down and the panel opens it without a second round trip. Every
+  // OTHER country comes from GET /dashboard/geo/{code}, built by the same
+  // two server-side helpers — see `CountryGeo` in adminApi.ts.
   /** Segment-filtered US views by state NAME ("New York"), views desc. */
-  us_states?: Array<{ name: string; views: number; visitors: number }>;
-  /** Top 60 US cities with 2-decimal centroid lat/lng.
-   *
-   *  Everything after `views` is the visitor-intel payload the map's city
-   *  card reads (2026-08-30) and is OPTIONAL on both counts: an API that
-   *  predates it omits the fields, and the card simply draws fewer sections.
-   *  Typed `?: T | null` rather than bare `?:` on purpose — `?:` catches only
-   *  `undefined`, and Python `None` arrives as JSON `null` (CLAUDE.md), so
-   *  every read guards with `!= null` / a length check. */
-  us_cities?: Array<{
-    city: string;
-    region: string | null;
-    lat: number;
-    lng: number;
-    views: number;
-    visitors?: number | null;
-    /** Last page view from this city, UTC. */
-    last_seen?: string | null;
-    networks?: Array<{ name: string; views: number }> | null;
-    devices?: Array<{ type: string; views: number }> | null;
-  }>;
+  us_states?: GeoRegionRow[];
+  /** Top 60 US cities with 2-decimal centroid lat/lng. */
+  us_cities?: GeoCityRow[];
+  /** ISO alpha-2 of every country with at least one region-stamped view in
+   *  this window and segment — the set the map may offer a drill-down into.
+   *  Without it the panel would have to CLICK to find out, and a country
+   *  whose every view is country-lite would open onto an empty choropleth: a
+   *  dead door a reader cannot tell from a slow one. Optional, and an API
+   *  that omits it degrades to offering the United States alone, which is
+   *  what the panel did before every country drilled in. */
+  region_countries?: string[];
   /** First day a page view could carry a state. Null while none has. */
   region_tracked_since?: string | null;
   // ── Density heat layer (2026-08-30) ──────────────────────────────────────
-  /** Every located point on earth, `[lat, lng, views]`, hottest first and
-   *  capped server-side. GLOBAL, not US-scoped, and deliberately bare triples
-   *  rather than objects: this is the one array in the payload that is only
-   *  ever plotted, so the key names would be most of its bytes.
+  /** How many identified towns the density map would draw — a COUNT, not the
+   *  rows. The density view is behind a pill and its Leaflet chunk is already
+   *  fetched on demand, so its data is too (GET /dashboard/towns); this
+   *  number exists only so the panel knows whether to offer the entrance,
+   *  the same job `region_countries` does for the drill-down.
    *
-   *  Optional like the two above — an API that predates the heat layer omits
-   *  it, and the panel simply does not offer the view. */
-  heat_points?: Array<[number, number, number]>;
+   *  It replaced a `heat_points` array of bare [lat, lng, views] triples when
+   *  the density layer gained identity — the payload got smaller, and a click
+   *  on the map can now say which town it hit.
+   *
+   *  Optional like the fields above: an API that predates it omits the field,
+   *  and the panel simply does not offer the view. */
+  located_towns?: number;
+}
+
+/** One first-level subdivision — a US state, a Canadian province, a Japanese
+ *  prefecture — named exactly as DB-IP wrote it. Shared by the inline US
+ *  layer and the per-country route, because the server builds both from one
+ *  helper and a type that let them drift would hide it. */
+export interface GeoRegionRow {
+  name: string;
+  views: number;
+  visitors: number;
+}
+
+/** One town bubble: a 2-decimal centroid plus the visitor intel the map's
+ *  city card reads.
+ *
+ *  Everything after `views` is OPTIONAL on two counts: an API that predates
+ *  the intel fields omits them, and the card simply draws fewer sections.
+ *  Typed `?: T | null` rather than bare `?:` on purpose — `?:` catches only
+ *  `undefined`, and Python `None` arrives as JSON `null` (CLAUDE.md), so
+ *  every read guards with `!= null` / a length check. */
+export interface GeoCityRow {
+  city: string;
+  region: string | null;
+  /** ISO alpha-2. Constant inside a country drill-down and load-bearing in the
+   *  GLOBAL town list, where (city, region) alone would fold London Ontario
+   *  into London England. Optional because it post-dates the field set. */
+  country?: string | null;
+  lat: number;
+  lng: number;
+  views: number;
+  visitors?: number | null;
+  /** Last page view from this city, UTC. */
+  last_seen?: string | null;
+  networks?: Array<{ name: string; views: number }> | null;
+  devices?: Array<{ type: string; views: number }> | null;
 }
 
 export type AnalyticsSegment = AnalyticsData['segment'];

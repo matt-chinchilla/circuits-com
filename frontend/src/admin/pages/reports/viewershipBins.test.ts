@@ -62,8 +62,8 @@ describe('buildBins', () => {
   });
 
   it('degrades to a single honest piece on a one-view day', () => {
-    expect(buildBins(1)).toEqual([{ gte: 1, label: '1+', color: VIEWERSHIP_RAMP[4] }]);
-    expect(buildBins(2)).toEqual([{ gte: 1, label: '1+', color: VIEWERSHIP_RAMP[4] }]);
+    expect(buildBins(1)).toEqual([{ gte: 1, label: '1+', color: VIEWERSHIP_RAMP[VIEWERSHIP_RAMP.length - 1] }]);
+    expect(buildBins(2)).toEqual([{ gte: 1, label: '1+', color: VIEWERSHIP_RAMP[VIEWERSHIP_RAMP.length - 1] }]);
   });
 
   it('folds the TOP of the ladder once it outruns the ramp, never the tail', () => {
@@ -74,7 +74,8 @@ describe('buildBins', () => {
       '3–9',
       '10–29',
       '30–99',
-      '100+',
+      '100–299',
+      '300+',
     ]);
   });
 
@@ -124,53 +125,92 @@ function contrast(a: string, b: string): number {
   return (hi + 0.05) / (lo + 0.05);
 }
 
-/** `LAND_NO_DATA` in WorldMapPanel — a region nobody visited. */
-const EMPTY_LAND = '#1a2440';
+/** `LAND_NO_DATA` in mapOptions — a region nobody visited. */
+const EMPTY_LAND = '#2a3550'; // lifted 2026-08-31 with the sea-plate pass
 /** `.wmCard`'s zone surface, which the legend swatches sit on. */
 const ZONE_SURFACE = '#0f1526';
 
 describe('VIEWERSHIP_RAMP', () => {
-  it('is five well-formed hex stops', () => {
-    expect(VIEWERSHIP_RAMP).toHaveLength(5);
+  it('is six well-formed hex stops', () => {
+    expect(VIEWERSHIP_RAMP).toHaveLength(6);
     for (const stop of VIEWERSHIP_RAMP) expect(stop).toMatch(/^#[0-9a-f]{6}$/);
   });
 
-  it('rises monotonically in luminance, which is the whole CVD story', () => {
+  it('does NOT claim monotone luminance — the rainbow trade, pinned on purpose', () => {
+    // The retired inferno slice rose monotonically and that was its
+    // colour-blind story. A cold-to-hot rainbow cannot: red is darker than
+    // the yellow before it. This test exists so the trade stays DELIBERATE —
+    // if someone restores a monotone ramp they must delete this and restore
+    // the old guarantee, rather than silently changing what the map promises.
     const ls = VIEWERSHIP_RAMP.map(luminance);
-    for (let i = 1; i < ls.length; i++) {
-      expect(ls[i], `stop ${i} (${VIEWERSHIP_RAMP[i]})`).toBeGreaterThan(ls[i - 1]);
-    }
+    const dips = ls.filter((l, i) => i > 0 && l < ls[i - 1]);
+    expect(dips.length).toBeGreaterThan(0);
+    // The ends still order correctly, which is what makes the scale readable
+    // at a glance even though the middle zig-zags.
+    expect(ls[ls.length - 1]).toBeGreaterThan(ls[0]);
   });
 
   it('separates every neighbouring pair enough to read as a step', () => {
+    // Measured as COLOUR distance, not luminance contrast. On a rainbow the
+    // two are different questions: cyan and green sit at nearly the same
+    // brightness (1.12:1) yet are obviously different colours (distance 105).
+    // Luminance was the right test for the monotone inferno ramp and is the
+    // wrong one here — see the ramp's own note about what this trades away.
+    const rgb = (hex: string) => {
+      const n = parseInt(hex.slice(1), 16);
+      return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+    };
+    const distance = (a: string, b: string) => {
+      const [ar, ag, ab] = rgb(a);
+      const [br, bg, bb] = rgb(b);
+      return Math.hypot(ar - br, ag - bg, ab - bb);
+    };
     for (let i = 1; i < VIEWERSHIP_RAMP.length; i++) {
       expect(
-        contrast(VIEWERSHIP_RAMP[i], VIEWERSHIP_RAMP[i - 1]),
+        distance(VIEWERSHIP_RAMP[i], VIEWERSHIP_RAMP[i - 1]),
         `${VIEWERSHIP_RAMP[i - 1]} -> ${VIEWERSHIP_RAMP[i]}`,
-      ).toBeGreaterThan(1.35);
+      ).toBeGreaterThan(60);
     }
   });
 
-  it('runs cool to hot rather than through one cold hue', () => {
-    // The owner's whole complaint about the green ramp was that it did not
-    // read as heat. Pinned by CHANNEL ORDER, which survives any re-tint
-    // inside the inferno family: the coolest stop sits on the blue side of
-    // green, and the hottest is unambiguously warm (R > G > B). The retired
-    // green ramp (#245c44 -> #82f2b2) fails both ends.
+  it('every stop is distinct, so seven bins are seven colours', () => {
+    expect(new Set(VIEWERSHIP_RAMP).size).toBe(VIEWERSHIP_RAMP.length);
+  });
+
+  it('runs cool to hot: purple at the floor, red at the ceiling', () => {
     const channels = (hex: string) => {
       const n = parseInt(hex.slice(1), 16);
       return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
     };
+    // Coolest reads purple — blue-dominant with red above green.
     const coolest = channels(VIEWERSHIP_RAMP[0]);
     expect(coolest.b).toBeGreaterThan(coolest.g);
+    expect(coolest.r).toBeGreaterThan(coolest.g);
+    // Hottest reads red — red-dominant by a wide margin. White was tried as
+    // a top stop and removed: it is the card's INK colour, so a white country
+    // read as a hole in the map rather than as the busiest place on it.
     const hottest = channels(VIEWERSHIP_RAMP[VIEWERSHIP_RAMP.length - 1]);
-    expect(hottest.r).toBeGreaterThan(hottest.g);
-    expect(hottest.g).toBeGreaterThan(hottest.b);
+    expect(hottest.r).toBeGreaterThan(200);
+    expect(hottest.r - Math.max(hottest.g, hottest.b)).toBeGreaterThan(120);
+    expect(VIEWERSHIP_RAMP).not.toContain('#ffffff');
+  });
+
+  it('shares the heat layer\'s own stops so the two maps speak one language', () => {
+    // The middle five are sampled from HEAT_GRADIENT; purple and white only
+    // extend the ends. If the heat gradient is ever retuned, these move with
+    // it — that is the point of pinning them here.
+    expect(VIEWERSHIP_RAMP.slice(1)).toEqual([
+      '#2c5eff',
+      '#15cae7',
+      '#3add87',
+      '#f4d343',
+      '#ff4221',
+    ]);
   });
 
   it('keeps its coolest stop clear of the empty-land navy and the surface', () => {
-    // Measured 2026-08-30: 1.74:1 vs the navy, 2.06:1 vs the surface. A rung
-    // that fails these reads as "nobody visited" instead of "one visitor".
+    // Measured 2026-08-31 on the new purple floor: an unvisited region must
+    // never read as a merely-cold one.
     expect(contrast(VIEWERSHIP_RAMP[0], EMPTY_LAND)).toBeGreaterThan(1.6);
     expect(contrast(VIEWERSHIP_RAMP[0], ZONE_SURFACE)).toBeGreaterThan(2.0);
   });

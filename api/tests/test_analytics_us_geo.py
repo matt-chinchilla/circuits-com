@@ -533,11 +533,19 @@ class TestBreakdownIsolation:
         assert cities["Chicago"]["devices"] == [{"type": "mobile", "views": 1}]
 
 
-class TestHeatPoints:
-    """The density layer's feed: every located point on earth, not the
-    US-scoped, 60-capped bubble list beside it."""
+class TestLocatedTowns:
+    """`located_towns` — the density view's entrance gate.
 
-    def test_points_are_global_not_us_only(self, client, db, seeded_db, auth_header):
+    It replaced a `heat_points` array of bare [lat, lng, views] triples on
+    2026-08-30, when the density layer gained identity: the rows themselves
+    moved to GET /dashboard/towns (tested in test_analytics_country_geo.py),
+    because the view they feed is behind a pill most sessions never press.
+    What stays here is the COUNT, and only because the panel has to know
+    whether to offer the entrance at all — the same job `region_countries`
+    does for the drill-down.
+    """
+
+    def test_it_counts_towns_globally_not_just_the_us(self, client, db, seeded_db, auth_header):
         db.add_all(
             [
                 _view("h-us", region="Texas", city="Austin", latitude=30.27, longitude=-97.74),
@@ -545,21 +553,44 @@ class TestHeatPoints:
             ]
         )
         db.commit()
-        points = _get(client, auth_header)["heat_points"]
-        assert sorted(p[:2] for p in points) == [[30.27, -97.74], [52.52, 13.4]]
+        assert _get(client, auth_header)["located_towns"] == 2
 
-    def test_a_point_is_lat_lng_weight_and_weight_is_views(
-        self, client, db, seeded_db, auth_header
-    ):
+    def test_a_town_is_counted_once_however_busy(self, client, db, seeded_db, auth_header):
         for i in range(3):
             db.add(_view(f"hw-{i}", city="Austin", latitude=30.27, longitude=-97.74))
         db.commit()
-        assert _get(client, auth_header)["heat_points"] == [[30.27, -97.74, 3]]
+        assert _get(client, auth_header)["located_towns"] == 1
 
-    def test_rows_without_a_point_contribute_nothing(self, client, db, seeded_db, auth_header):
+    def test_two_countries_may_share_a_town_name(self, client, db, seeded_db, auth_header):
+        """Identity is (country, city, region). A global list keyed on the name
+        alone would fold these two into one place."""
+        db.add_all(
+            [
+                _view(
+                    "tc-us",
+                    country="US",
+                    region="Ontario",
+                    city="London",
+                    latitude=42.98,
+                    longitude=-81.24,
+                ),
+                _view(
+                    "tc-gb",
+                    country="GB",
+                    region="England",
+                    city="London",
+                    latitude=51.51,
+                    longitude=-0.13,
+                ),
+            ]
+        )
+        db.commit()
+        assert _get(client, auth_header)["located_towns"] == 2
+
+    def test_rows_without_a_point_or_a_name_are_not_towns(self, client, db, seeded_db, auth_header):
         db.add_all([_view("hn-1", city="Nowhere"), _view("hn-2", country="US")])
         db.commit()
-        assert _get(client, auth_header)["heat_points"] == []
+        assert _get(client, auth_header)["located_towns"] == 0
 
     def test_the_segment_and_window_apply(self, client, db, seeded_db, auth_header):
         old = datetime.now(UTC) - timedelta(days=90)
@@ -571,12 +602,6 @@ class TestHeatPoints:
             ]
         )
         db.commit()
-        assert _get(client, auth_header, days=30)["heat_points"] == [[30.27, -97.74, 1]]
-        assert _get(client, auth_header, days=30, segment="bots")["heat_points"] == [[1.0, 1.0, 1]]
-
-    def test_hottest_points_come_first(self, client, db, seeded_db, auth_header):
-        db.add(_view("ho-1", city="Quiet", latitude=10.0, longitude=10.0))
-        for i in range(4):
-            db.add(_view(f"ho-b{i}", city="Busy", latitude=20.0, longitude=20.0))
-        db.commit()
-        assert [p[2] for p in _get(client, auth_header)["heat_points"]] == [4, 1]
+        assert _get(client, auth_header, days=30)["located_towns"] == 1
+        assert _get(client, auth_header, days=30, segment="bots")["located_towns"] == 1
+        assert _get(client, auth_header, days=365, segment="all")["located_towns"] == 3
