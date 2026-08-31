@@ -5,12 +5,24 @@ import {
   MAP_BOX,
   MAP_NAME,
   US_MAP_NAME,
+  WORLD_FRAME_ASPECT,
   buildCountryOption,
   buildUsOption,
   buildWorldOption,
 } from './mapOptions';
 import type { CityPoint, CountryRow, RegionPaint, UsCityRow, UsStateRow } from './mapOptions';
 import { binColorFor, buildBins } from './viewershipBins';
+import { naturalEarth1Project } from './mapProjections';
+import { frameAspect } from './usZoom';
+import world110 from '@admin/components/charts/world-110m.geo.json';
+
+/** Only what the frame math reads off the committed world asset. */
+interface WorldAsset {
+  features: Array<{
+    properties?: { iso?: string };
+    geometry?: { type?: string; coordinates?: unknown };
+  }>;
+}
 
 // These pin the SHIPPED shape of the two map options — every one of them is a
 // fix that was found by hand in a live browser and would otherwise regress
@@ -108,6 +120,8 @@ interface MapNode {
   bottom?: number;
   left?: number;
   right?: number;
+  preserveAspect?: boolean | string;
+  roamTrigger?: string;
   data?: DataItem[];
 }
 interface Opt {
@@ -126,11 +140,16 @@ const us = () =>
     bins: US_BINS,
   }) as unknown as Opt;
 
+/** Everything MAP_BOX contributes to a view: the four insets AND the two
+ *  options that make the fit aspect-preserving. Compared against MAP_BOX
+ *  itself, so a key added there has to reach BOTH views or these fail. */
 const fits = (node: MapNode | undefined) => ({
   top: node?.top,
   bottom: node?.bottom,
   left: node?.left,
   right: node?.right,
+  preserveAspect: node?.preserveAspect,
+  roamTrigger: node?.roamTrigger,
 });
 
 describe('buildWorldOption', () => {
@@ -475,5 +494,84 @@ describe('buildUsOption is buildCountryOption, wired to the albers asset', () =>
     }) as unknown as Opt;
     expect(JSON.stringify(direct.geo?.regions)).toBe(JSON.stringify(us().geo?.regions));
     expect(JSON.stringify(direct.series?.[0].data)).toBe(JSON.stringify(us().series?.[0].data));
+  });
+});
+
+// ── The geometry guard (2026-08-31) ─────────────────────────────────────────
+// The bug these pin: ECharts fits geography to the plot rect and STRETCHES it
+// to fill — it never letterboxes on its own. Measured on the live canvas by
+// scanning the drawn ink's bounding box, the ink aspect equalled the plot-rect
+// aspect at every viewport, so the world (true 2.298:1) drew at 0.83:1 on a
+// 320px phone and 1.93:1 on a 1440px desktop. Nothing in the option said so;
+// the only tell was the shape of the continents.
+describe('the fit preserves the geography, at every box shape', () => {
+  it('asks ECharts to CONTAIN rather than fill', () => {
+    // `true` is contain-and-centre; `'cover'` would crop the map to the box,
+    // which is the same class of lie in the other direction — the reader would
+    // lose whole countries off the edges without being told.
+    expect(MAP_BOX.preserveAspect).toBe(true);
+  });
+
+  it('hands the whole canvas back to roam, since the fit now leaves water', () => {
+    // Roam is hit-tested against the FITTED rect (echarts MapDraw uses
+    // `coordinateSystem.containPoint`), so the open water letterboxing creates
+    // would otherwise swallow the wheel and the drag over its own bands.
+    expect(MAP_BOX.roamTrigger).toBe('global');
+  });
+
+  it('carries it on the world series AND on both drill-down geos', () => {
+    // One object spread into both builders is the whole guarantee: a fix that
+    // reached only the view someone happened to be looking at is how this
+    // shipped warped in the first place.
+    expect(fits(world().series?.[0])).toEqual(MAP_BOX);
+    expect(fits(us().geo)).toEqual(MAP_BOX);
+    expect(
+      fits(
+        (
+          buildCountryOption({
+            mapName: 'admin1:GB',
+            projection: COUNTRY_PROJECTION,
+            regions: [{ feature: 'England', label: 'England', views: 4, visitors: 2 }],
+            cityPoints: [],
+            bins: buildBins(4),
+          }) as unknown as Opt
+        ).geo,
+      ),
+    ).toEqual(MAP_BOX);
+  });
+
+  it('publishes a world frame ratio that IS the committed asset\u2019s own', () => {
+    // WORLD_FRAME_ASPECT is what the panel hands the SCSS as `--wm-aspect`,
+    // so the sea plate and the map inside it are one measurement. Re-derived
+    // here from the shipped geojson under the shipped projection — swap the
+    // asset for a different world and this fails rather than quietly leaving
+    // the plate the wrong shape.
+    //
+    // Antarctica is excluded because the panel excludes it (it reaches -90 and
+    // costs a third of the vertical budget to draw a landmass that will never
+    // send a page view). Keeping it would make the true ratio 1.93, and the
+    // difference between the two is exactly the size of the mistake available
+    // here.
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    const visit = (coords: unknown, depth: number): void => {
+      if (depth === 0) {
+        const [x, y] = naturalEarth1Project(coords as [number, number]);
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+        return;
+      }
+      for (const part of coords as unknown[]) visit(part, depth - 1);
+    };
+    for (const f of (world110 as WorldAsset).features) {
+      if (f.properties?.iso === 'AQ') continue;
+      if (f.geometry?.type === 'Polygon') visit(f.geometry.coordinates, 2);
+      else if (f.geometry?.type === 'MultiPolygon') visit(f.geometry.coordinates, 3);
+    }
+    expect(frameAspect([minX, minY, maxX, maxY])).toBeCloseTo(WORLD_FRAME_ASPECT, 4);
   });
 });

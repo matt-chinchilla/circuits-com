@@ -991,15 +991,33 @@
 // slot for maps that are ~2:1 by nature (naturalEarth1 and Albers both), so
 // on a wide desktop a third of the box was empty margin and the geography
 // drew small (measured 2026-08-30: 585px of drawn map in an 817px box).
-// 15/8 tracks the projections' shape; the clamp keeps phones from a sliver
-// and ultrawide from a wall.
+//
+// ── The ratio is DATA now, not a literal (2026-08-31) ───────────────────────
+// It was 15/8 — an approximation of the world's shape, which the map was then
+// STRETCHED to fill, because ECharts fits geography to the plot rect and does
+// not letterbox unless asked. So the ratio was load-bearing and wrong at every
+// size, catastrophically so below tablet where the branch below dropped it and
+// left the map in a near-square (measured: 0.83:1 drawn for a 2.30:1 world at
+// 320vw). `preserveAspect` in mapOptions.ts is the fix; with it in place this
+// ratio can no longer distort anything, and it is free to be COMPOSITIONAL.
+//
+// `--wm-aspect` is set inline by WorldMapPanel from the geometry actually on
+// screen — the world's 2.30:1, or the drilled-in country's own — so the plate
+// and the map it holds are one measurement. There is deliberately NO literal
+// fallback: an unset custom property makes this declaration compute to `auto`,
+// and min-height takes over, which is the right degraded frame anyway.
 .wmStage {
   position: relative;
   // Explicit, not auto: with an auto width, a max-height clamp TRANSFERS
   // back through the aspect-ratio and narrows the box (measured 938px in a
   // 1038px column). A definite width keeps the clamp height-only.
   width: 100%;
-  aspect-ratio: 15 / 8;
+  aspect-ratio: var(--wm-aspect);
+  // The clamps are what keep a subject-driven frame sane: a portrait country
+  // (Chile is 0.19:1) would otherwise ask for a card several screens tall,
+  // and a wide one (Puerto Rico 4.26:1) for a letterbox slit. Between them the
+  // frame tracks its subject; outside them the map letterboxes into open
+  // water, which the plate is drawn to read as.
   min-height: 300px;
   max-height: 500px;
 
@@ -1023,16 +1041,34 @@
   border: 1px solid #26325a;
   border-radius: 8px; // matches .wmHeat, so the density view shares the frame
 
-  // Below tablet the ratio has no room to work and turns hostile: during
-  // grid intrinsic sizing the percentage width reads as auto, so the
-  // min-height TRANSFERS through the ratio into a ~562px min-width and
-  // blows the card past its track (measured 421px of stage in a 347px
-  // column at 390vw, the map's right edge clipped). A fixed height — the
-  // shipped mobile height — sidesteps intrinsic transfer entirely.
+  // Below tablet the ratio STAYS — dropping it is what exposed the stretch
+  // most brutally (a 2.30:1 world drawn at 1.08:1 on a 390px phone). What
+  // changes is the ceiling: the map now has the whole column to itself here,
+  // so a portrait country can be given real height rather than the desktop
+  // proportion of a much narrower box.
+  //
+  // The hazard this branch used to sidestep is real and still watched: during
+  // grid intrinsic sizing a percentage width reads as auto, and a min-height
+  // can then TRANSFER through the ratio into a min-width (it once put 421px
+  // of stage in a 347px column). What holds it now is the track and the item,
+  // not the absence of a ratio — `.wmBody` is `minmax(0, 1fr)` here and
+  // `.wmMap` is `min-width: 0`, so neither can be pushed past its column.
+  // Verified by measurement at 320, 390 and 768: the stage matches its column
+  // to the pixel. If that ever regresses, the floor is the thing to drop.
   @include responsive($bp-tablet) {
-    aspect-ratio: auto;
-    height: 300px;
-    min-height: 0;
+    max-height: 420px;
+  }
+
+  // The FLOOR is the intel card's, not the map's: 300px is what guarantees a
+  // 216x224 card anchored at a click still lands inside the box (cityIntel's
+  // `place()` pins-and-clips when it cannot, which is a fallback, not a
+  // target). Below 820 the card stops being anchored at all — `anchoredCards()`
+  // docks it under the map, same threshold as $bp-admin-mobile — so the floor
+  // has nothing left to protect and can come down to what the MAP wants. A
+  // 2.30:1 world in a ~320px phone column is only ~140px tall; 190 gives it
+  // presence without spending a third of a phone screen on open water.
+  @include responsive($bp-admin-mobile) {
+    min-height: 190px;
   }
 }
 

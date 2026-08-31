@@ -115,15 +115,38 @@ export const MAX_STATE_ZOOM = 12;
 /** Breathing room around the fitted region, as a fraction of the tight fit. */
 const FIT_MARGIN = 0.82;
 
-/** The `geo.center`/`geo.zoom` pair that frames one region in a plot box of
- *  `plotW`x`plotH` CSS pixels. Zoom never goes below 1 (zooming OUT past the
- *  auto-fit just letterboxes) and is capped at MAX_STATE_ZOOM. */
-export function viewForBounds(
-  bounds: BBox,
-  frame: BBox,
-  plotW: number,
-  plotH: number,
-): { center: [number, number]; zoom: number } {
+/** A projected frame's width / height — the shape of the geography itself,
+ *  which is what the sea plate's `aspect-ratio` is set from so the frame the
+ *  CSS draws and the geometry ECharts fits into it are one measurement. */
+export function frameAspect(frame: BBox): number {
+  const w = frame[2] - frame[0];
+  const h = frame[3] - frame[1];
+  return h > 0 && w > 0 ? w / h : 1;
+}
+
+/**
+ * The `geo.center`/`geo.zoom` pair that frames one region. Zoom never goes
+ * below 1 (zooming OUT past the auto-fit just shows more open water) and is
+ * capped at MAX_STATE_ZOOM.
+ *
+ * ── No pixels, and that is the point (2026-08-31) ──────────────────────────
+ * `geo.zoom` is relative to ECharts' own auto-fit of the whole asset into its
+ * view rect, and that fit PRESERVES ASPECT now (`preserveAspect` on MAP_BOX
+ * in mapOptions.ts). Frame and region are therefore scaled by the same factor
+ * on both axes, and every pixel term cancels:
+ *
+ *     zoom = fitRegion / fitFrame
+ *          = min(viewW/w, viewH/h) / min(viewW/frameW, viewH/frameH)
+ *          = min(frameW/w, frameH/h)      because viewW/viewH == frameW/frameH
+ *
+ * This also FIXES a bug the stretch was hiding rather than merely simplifying
+ * one: the caller used to hand over the whole plot rect, which after
+ * letterboxing is bigger than the drawn map on one axis, so a tall region
+ * would have over-zoomed by exactly that overhang. Keeping a `chart.getWidth()`
+ * in this math would quietly re-couple the zoom to the box shape — the thing
+ * the aspect fix exists to decouple.
+ */
+export function viewForBounds(bounds: BBox, frame: BBox): { center: [number, number]; zoom: number } {
   const [minX, minY, maxX, maxY] = bounds;
   const frameW = Math.max(frame[2] - frame[0], Number.MIN_VALUE);
   const frameH = Math.max(frame[3] - frame[1], Number.MIN_VALUE);
@@ -134,8 +157,6 @@ export function viewForBounds(
   // rectangle bigger than itself, pinning the zoom at the auto-fit.
   const w = Math.max(maxX - minX, frameW / 1e4);
   const h = Math.max(maxY - minY, frameH / 1e4);
-  const fitFrame = Math.min(plotW / frameW, plotH / frameH);
-  const fitState = Math.min(plotW / w, plotH / h);
-  const zoom = Math.min(Math.max((FIT_MARGIN * fitState) / fitFrame, 1), MAX_STATE_ZOOM);
+  const zoom = Math.min(Math.max(FIT_MARGIN * Math.min(frameW / w, frameH / h), 1), MAX_STATE_ZOOM);
   return { center: [(minX + maxX) / 2, (minY + maxY) / 2], zoom };
 }

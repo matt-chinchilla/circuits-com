@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { featureBounds, unionBounds, viewForBounds, MAX_STATE_ZOOM } from './usZoom';
+import { featureBounds, frameAspect, unionBounds, viewForBounds, MAX_STATE_ZOOM } from './usZoom';
 import { mercatorProject } from './mapProjections';
 
 const square = (name: string, x0: number, y0: number, x1: number, y1: number) => ({
@@ -118,23 +118,23 @@ describe('viewForBounds', () => {
   const frame: [number, number, number, number] = [0, 0, 1000, 500];
 
   it('centers on the state and zooms by the fit ratio', () => {
-    // A 100x50 state in a 1000x500 frame shown in a 1000x500 plot: the frame
-    // fits at 1, the state at 10, margined to 8.2.
-    const v = viewForBounds([200, 100, 300, 150], frame, 1000, 500);
+    // A 100x50 state in a 1000x500 frame: the region is a tenth of the frame
+    // on both axes, so it fits at 10, margined to 8.2.
+    const v = viewForBounds([200, 100, 300, 150], frame);
     expect(v.center).toEqual([250, 125]);
     expect(v.zoom).toBeCloseTo(8.2, 5);
   });
 
-  it('letterboxes on the tight axis like ECharts does', () => {
-    // Tall state in a wide plot: height is the binding axis for the state,
-    // width for nothing — fitState = 200/100, fitFrame = 200/500.
-    const v = viewForBounds([0, 0, 50, 100], frame, 1000, 200);
-    expect(v.zoom).toBeCloseTo((0.82 * (200 / 100)) / (200 / 500), 5);
+  it('binds on whichever axis the region fills more of', () => {
+    // A 50x100 region in a 1000x500 frame: 20x the frame's width but only 5x
+    // its height, so height binds. That choice is a property of the two boxes
+    // — the plot rect has nothing to say about it.
+    expect(viewForBounds([0, 0, 50, 100], frame).zoom).toBeCloseTo(0.82 * 5, 5);
   });
 
   it('never zooms below the auto-fit and never past the cap', () => {
-    expect(viewForBounds([0, 0, 1000, 500], frame, 800, 300).zoom).toBe(1);
-    expect(viewForBounds([10, 10, 11, 11], frame, 1000, 500).zoom).toBe(MAX_STATE_ZOOM);
+    expect(viewForBounds([0, 0, 1000, 500], frame).zoom).toBe(1);
+    expect(viewForBounds([10, 10, 11, 11], frame).zoom).toBe(MAX_STATE_ZOOM);
   });
 
   it('works in radian-scale space, where the whole world is 6.28 wide', () => {
@@ -143,8 +143,33 @@ describe('viewForBounds', () => {
     // catastrophic in projected radians — every region would be clamped to a
     // rectangle bigger than the country and every click would return zoom 1.
     const radianFrame: [number, number, number, number] = [-0.2, -0.2, 0.2, 0.2];
-    const v = viewForBounds([-0.02, -0.02, 0.02, 0.02], radianFrame, 1000, 500);
+    const v = viewForBounds([-0.02, -0.02, 0.02, 0.02], radianFrame);
     expect(v.zoom).toBeGreaterThan(5);
     expect(v.center).toEqual([0, 0]);
+  });
+
+  it('takes NO pixel box — the fit cannot be re-coupled to the frame shape', () => {
+    // REGRESSION GUARD for the 2026-08-31 aspect fix. The zoom used to be
+    // measured against the plot rect, which was fine only while ECharts
+    // STRETCHED the map to fill it. Now that the fit preserves aspect, the
+    // drawn map is smaller than the plot rect on one axis, and a zoom that
+    // still read `chart.getWidth()` would over-zoom by exactly that overhang.
+    // Arity is the cheapest way to pin it: a two-argument function cannot be
+    // handed a box shape at all.
+    expect(viewForBounds.length).toBe(2);
+  });
+});
+
+describe('frameAspect', () => {
+  it('is the projected frame width over its height', () => {
+    expect(frameAspect([0, 0, 1000, 500])).toBeCloseTo(2, 10);
+    expect(frameAspect([-2.7025, -1.3788, 2.7025, 0.9731])).toBeCloseTo(2.2981, 3);
+  });
+
+  it('falls back to a square rather than dividing by a degenerate frame', () => {
+    // A frame with no extent would otherwise publish Infinity or NaN into the
+    // stage's `aspect-ratio`, which takes the plate with it.
+    expect(frameAspect([5, 5, 5, 5])).toBe(1);
+    expect(frameAspect([Infinity, Infinity, -Infinity, -Infinity])).toBe(1);
   });
 });

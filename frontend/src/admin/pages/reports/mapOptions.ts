@@ -127,9 +127,56 @@ const TOOLTIP_CHROME = {
 /** Layout shared by both views so the two maps sit in the same box. The
  *  legend lives in the DOM below the canvas (owner call, 2026-08-30 — the
  *  in-canvas visualMap printed on top of the states once a zoom filled the
- *  frame), so the box no longer reserves a bottom row for it. The panel reads
- *  these same insets to size the plot for its click-to-zoom fit math. */
-export const MAP_BOX = { top: 8, bottom: 10, left: 8, right: 8 };
+ *  frame), so the box no longer reserves a bottom row for it.
+ *
+ *  ── `preserveAspect` is THE geometry fix (2026-08-31) ─────────────────────
+ *  Without it ECharts STRETCHES the geography to exactly fill this box — it
+ *  fits, it never letterboxes. Measured on the live canvas by scanning the
+ *  drawn ink's bounding box: the ink aspect equalled the plot-rect aspect at
+ *  every viewport, so the world (true projected aspect 2.298) rendered at
+ *  0.833 on a 320px phone — 2.8x too tall — and at 1.93 on a 1440px desktop.
+ *  It is NOT a mobile-only bug; every size was warped, by a different amount.
+ *
+ *  The mechanism, from echarts 6.1.0 source: `coord/geo/geoCreator.js`
+ *  computes the right aspect (`rect.width / rect.height * aspectScale`) and
+ *  then `util/layout.js applyPreserveAspect` DISCARDS it unless this option
+ *  is set — `GeoModel.defaultOption` never sets it, and `getLayoutRect` only
+ *  consults an aspect when a dimension is indeterminate, which the four
+ *  insets above never leave. `aspectScale` is not an alternative lever:
+ *  `Geo.js` pins it to 1 whenever a custom `projection` is supplied, which
+ *  is always, here.
+ *
+ *  `true` means CONTAIN, centered (`'cover'` is the crop variant) — so the
+ *  box's shape is now a free design choice and no CSS change can warp the
+ *  map again. It lives on MAP_BOX rather than in each builder because the
+ *  guarantee is only worth anything if BOTH views have it, and both spread
+ *  this one object.
+ *
+ *  `roamTrigger` is the other half of the same change, not a spare: roam is
+ *  hit-tested against `coordinateSystem.containPoint` (`MapDraw.js`), which
+ *  is the FITTED rect — so the open water that letterboxing creates would
+ *  swallow the wheel and the drag. 'global' hands the whole canvas back. */
+export const MAP_BOX = {
+  top: 8,
+  bottom: 10,
+  left: 8,
+  right: 8,
+  preserveAspect: true,
+  roamTrigger: 'global',
+};
+
+/** The world asset's TRUE projected aspect: the naturalEarth1 extent of
+ *  `world-110m.geo.json` with Antarctica filtered out, width / height =
+ *  5.404999 / 2.351896. Computed over every ring of every feature, and
+ *  re-derived from the committed asset by `mapAspect.test.ts` so it cannot
+ *  drift if the asset is ever replaced.
+ *
+ *  The panel publishes this to the SCSS as `--wm-aspect`, which is why the
+ *  number lives here and not in ReportsPage.module.scss: the frame the sea
+ *  plate draws and the geometry ECharts fits into it are then the same
+ *  measurement, and a stale CSS ratio can only ever cost a band of open
+ *  water — never a stretched continent. */
+export const WORLD_FRAME_ASPECT = 2.2981;
 
 const LAND_STYLE = {
   // 0.8, up from the shipped 0.6 hairline — at world scale the border is the

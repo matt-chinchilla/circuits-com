@@ -72,7 +72,7 @@
 // because neither a canvas dot nor a heat blob is a keyboard target.
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { ComponentType, ReactNode, RefObject } from 'react';
+import type { ComponentType, CSSProperties, ReactNode, RefObject } from 'react';
 import type { EChartsType } from 'echarts/core';
 import EChart from '@admin/components/charts/EChart';
 // Importing this module is what pulls MapChart + the geo coordinate system +
@@ -97,16 +97,16 @@ import {
 } from './cityIntel';
 import {
   COUNTRY_PROJECTION,
-  MAP_BOX,
   MAP_NAME,
   US_MAP_NAME,
   US_PROJECTION,
+  WORLD_FRAME_ASPECT,
   buildCountryOption,
   buildWorldOption,
 } from './mapOptions';
 import type { CityPoint, RegionPaint } from './mapOptions';
 import { buildRegionIndex, resolveRegions } from './regionJoin';
-import { featureBounds, unionBounds, viewForBounds } from './usZoom';
+import { featureBounds, frameAspect, unionBounds, viewForBounds } from './usZoom';
 import type { BBox } from './usZoom';
 import type { HeatMapViewProps } from './HeatMapView';
 import { heatLegendTicks } from './heatWeights';
@@ -687,15 +687,17 @@ export default function WorldMapPanel({
           frameNames.map((name) => info.bounds.byName[name]).filter(Boolean),
         );
         if (!bounds) return;
-        const plotW = Math.max(chart.getWidth() - MAP_BOX.left - MAP_BOX.right, 1);
-        const plotH = Math.max(chart.getHeight() - MAP_BOX.top - MAP_BOX.bottom, 1);
+        // No plot rect: with the fit aspect-preserving, the zoom that frames a
+        // region is a ratio between two boxes in PROJECTED space and the pixels
+        // cancel out — see viewForBounds. Measuring against the plot rect (as
+        // this did) would now over-zoom by the letterbox overhang.
         // The label suppression rides along with every merge: a bare
         // {center, zoom} merge re-armed the geo's own hover emphasis with
         // ECharts' default region-name stamp (measured 2026-08-30) even
         // though the built option already said show:false.
         chart.setOption({
           geo: {
-            ...viewForBounds(bounds, info.bounds.frame, plotW, plotH),
+            ...viewForBounds(bounds, info.bounds.frame),
             emphasis: { label: { show: false } },
           },
         });
@@ -866,6 +868,33 @@ export default function WorldMapPanel({
       ? 'Visitor Density'
       : 'Visitors by Country';
 
+  // The sea plate's own proportions, published to the SCSS as `--wm-aspect`
+  // (2026-08-31). The frame TRACKS ITS SUBJECT rather than approximating one
+  // shape for all three views, because the subjects are not one shape: the
+  // world is 2.30:1, the United States 1.71:1, and the admin-1 assets run
+  // from Chile at 0.19 to Puerto Rico at 4.26 (measured over all 236). A
+  // single CSS ratio can serve at most one of them, which is what the old
+  // hardcoded 15/8 was — an approximation of the world that then had to be
+  // dropped entirely below tablet.
+  //
+  // This is COMPOSITION now, not correctness: `preserveAspect` means a frame
+  // that disagrees with its map costs a band of open water and nothing else.
+  // The plate is drawn as sea (graticule + vignette), so that band reads as
+  // ocean — but there is no reason to spend a phone's vertical budget on
+  // ocean when the number that would avoid it is already in hand. The height
+  // clamps in the SCSS are what keep a portrait country from a two-screen
+  // card and a wide one from a letterbox slot.
+  //
+  // The density view keeps the world's frame: it IS the world, and a Leaflet
+  // map fills whatever box it is given.
+  const stageStyle = useMemo(() => {
+    const aspect =
+      isCountry && shapes && shapes.code === country
+        ? frameAspect(shapes.bounds.frame)
+        : WORLD_FRAME_ASPECT;
+    return { '--wm-aspect': String(aspect) } as CSSProperties;
+  }, [isCountry, shapes, country]);
+
   return (
     <div className={`${styles.chartCard} ${styles.chartFull} ${styles.wmCard}`}>
       <div className={styles.chartHead}>
@@ -907,10 +936,12 @@ export default function WorldMapPanel({
 
       <div className={styles.wmBody} data-collecting={showingCollecting || undefined}>
         <div className={styles.wmMap} ref={mapRef}>
-          {/* The stage owns the map's proportions (aspect-ratio in the SCSS,
-              clamped) so all three views share one steady frame — the box no
-              longer jumps between a loading div, a canvas and a tile map. */}
-          <div className={styles.wmStage}>{mapBody}</div>
+          {/* The stage owns the map's proportions — `--wm-aspect` above, then
+              aspect-ratio + height clamps in the SCSS — so a loading div, a
+              canvas and a tile map all occupy the same frame. */}
+          <div className={styles.wmStage} style={stageStyle}>
+            {mapBody}
+          </div>
           {/* The one scale for both CHOROPLETH layers, as DOM below the
               canvas — never painted over the geography, whatever the zoom
               does. The density view is excluded on purpose: its color comes
