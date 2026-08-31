@@ -75,7 +75,13 @@ interface DataItem {
   itemStyle?: ItemStyle;
   row?: UsCityRow;
 }
+interface RegionStyle {
+  name?: string;
+  itemStyle?: ItemStyle;
+}
+
 interface MapNode {
+  regions?: RegionStyle[];
   type?: string;
   map?: string;
   nameProperty?: string;
@@ -252,15 +258,28 @@ describe('buildUsOption', () => {
     expect('visualMap' in opt).toBe(false);
   });
 
-  it('colors every state off the shared bins and edges it as visited', () => {
+  it('paints the states on geo.regions, which is the only place that renders', () => {
+    // REGRESSION GUARD (shipped 2026-08-30, caught on the live canvas): a
+    // `series-map` bound through `geoIndex` hands region rendering to the geo
+    // component, so per-item `itemStyle` on the SERIES DATA is silently
+    // ignored and every state paints the empty-land navy. The fills must be
+    // on `geo.regions`.
+    const regions = us().geo?.regions ?? [];
+    expect(regions).toHaveLength(STATES.length);
+    regions.forEach((region, i) => {
+      expect(region.name).toBe(STATES[i].name);
+      expect(region.itemStyle?.areaColor).toBe(binColorFor(STATES[i].views, US_BINS));
+      expect(region.itemStyle?.borderColor).toBe(VISITED_BORDER);
+      expect(region.itemStyle?.borderWidth).toBe(0.9);
+    });
+  });
+
+  it('keeps the state VALUES on the series, so tooltips still have numbers', () => {
     const data = us().series?.[0].data ?? [];
     expect(data).toHaveLength(STATES.length);
     data.forEach((item, i) => {
       expect(item.name).toBe(STATES[i].name);
       expect(item.value).toBe(STATES[i].views);
-      expect(item.itemStyle?.areaColor).toBe(binColorFor(STATES[i].views, US_BINS));
-      expect(item.itemStyle?.borderColor).toBe(VISITED_BORDER);
-      expect(item.itemStyle?.borderWidth).toBe(0.9);
     });
   });
 

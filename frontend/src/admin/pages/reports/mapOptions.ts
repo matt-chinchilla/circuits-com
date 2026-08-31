@@ -198,6 +198,21 @@ export function buildUsOption({
       scaleLimit: { min: 1, max: MAX_STATE_ZOOM },
       ...MAP_BOX,
       ...LAND_STYLE,
+      // THE FILLS LIVE HERE, NOT ON THE SERIES DATA (fixed 2026-08-30 after
+      // shipping the bug). A `series-map` bound through `geoIndex` hands
+      // region rendering to the geo component, and the series' per-item
+      // `itemStyle` is then ignored — the world view colors correctly only
+      // because it has no geo component. Symptom to recognise: every state
+      // paints LAND_NO_DATA navy while the city dots keep their colors.
+      // Measured on the live canvas: 117,011 navy pixels against 367 of ramp.
+      regions: stateRows.map((s) => ({
+        name: s.name,
+        itemStyle: {
+          areaColor: binColorFor(s.views, bins),
+          borderColor: VISITED_BORDER,
+          borderWidth: 0.9,
+        },
+      })),
     },
     series: [
       {
@@ -207,18 +222,9 @@ export function buildUsOption({
         // without this, hovering a state stamps its name on the map while
         // hovering a country never does.
         emphasis: { label: { show: false } },
-        // Fill from the shared bins (same mechanism as the dots — no
-        // visualMap); the orchid edge marks "has data" at a glance where
-        // the two coolest bins sit close to the empty navy under dots.
-        data: stateRows.map((s) => ({
-          name: s.name,
-          value: s.views,
-          itemStyle: {
-            areaColor: binColorFor(s.views, bins),
-            borderColor: VISITED_BORDER,
-            borderWidth: 0.9,
-          },
-        })),
+        // Values only — the paint is on `geo.regions` above. The series still
+        // carries the numbers so the tooltip and hit-testing work.
+        data: stateRows.map((s) => ({ name: s.name, value: s.views })),
       },
       {
         type: 'scatter',
