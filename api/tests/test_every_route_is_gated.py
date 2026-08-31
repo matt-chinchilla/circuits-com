@@ -83,6 +83,11 @@ PUBLIC_ROUTES = {
     ("GET", "/api/search/"),
     ("GET", "/api/manufacturers/"),
     ("GET", "/api/sponsors/keyword/{keyword}"),
+    # Four catalog totals behind the About page's stat strip. Public
+    # because the page is, and because every figure in it is already
+    # countable from the sitemap — it names no supplier and exposes no
+    # id, only how many of each thing exists.
+    ("GET", "/api/stats/"),
     # Public forms and instrumentation.
     ("POST", "/api/contact"),
     ("POST", "/api/join"),

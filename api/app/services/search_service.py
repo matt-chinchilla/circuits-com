@@ -26,6 +26,7 @@ from app.services.category_service import (
     part_counts_by_category,
 )
 from app.services.search_suggest import closest_score, did_you_mean
+from app.services.site_stats import invalidate_site_stats_cache
 
 PARTS_LIMIT = 20
 SECTION_LIMIT = 12
@@ -127,7 +128,7 @@ def get_public_manufacturers(db: Session) -> list[dict]:
 
 
 def invalidate_catalog_caches() -> None:
-    """Drop ALL three catalog-derived TTL caches at once.
+    """Drop ALL FOUR catalog-derived TTL caches at once.
 
     Two callers, one seam. (1) Every catalog MUTATION — part create/update/
     delete, batch import, supplier create/update/delete, and the end of a feed
@@ -146,6 +147,10 @@ def invalidate_catalog_caches() -> None:
     _manufacturers_cache = None
     _vocab_cache = None
     _backfill_ids_cache = None
+    # The About page's public totals live in their own module but expire on the
+    # same event, so they hang off this one seam rather than a second one every
+    # future mutation site would have to remember to call.
+    invalidate_site_stats_cache()
 
 
 # ── Batched SearchPart enrichment ───────────────────────────────────────────

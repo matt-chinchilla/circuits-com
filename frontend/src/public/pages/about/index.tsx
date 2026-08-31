@@ -5,6 +5,9 @@ import { STATIC_PAGE_SEO } from "@public/services/seoRoutes";
 import { Link } from 'react-router-dom'
 import PageHeaderBand from '@public/components/layout/PageHeaderBand'
 import Icon from '@shared/components/Icon'
+import { api } from '@public/services/api'
+import type { SiteStats } from '@public/types/stats'
+import { NO_VALUE, STAT_TILES, compactCount } from './siteStats'
 import styles from './AboutPage.module.scss'
 
 const ABOUT_STEPS = [
@@ -29,13 +32,6 @@ const ABOUT_STEPS = [
     description:
       'Click through to the distributor of your choice in a new tab. We never gate the buy-link — your relationship is with them.',
   },
-] as const
-
-const ABOUT_STATS = [
-  { num: '28', label: 'Component Categories', suffix: '' },
-  { num: '189', label: 'Subcategories', suffix: '' },
-  { num: '13.8', label: 'Distributor Parts', suffix: 'M' },
-  { num: '23', label: 'Years Online', suffix: '' },
 ] as const
 
 const ABOUT_WHY = [
@@ -85,6 +81,37 @@ function useInView<T extends Element>() {
   return [ref, seen] as const
 }
 
+/**
+ * The strip's four figures, or null until they land.
+ *
+ * They were four hardcoded strings until 2026-08-31 — 13.8M parts against a
+ * real catalog of 314k, and a "23 Years Online" that was never true at all.
+ * There is deliberately NO fallback constant: a stale literal is the defect
+ * this replaced, so a failed fetch shows `NO_VALUE` and says nothing rather
+ * than something plausible and wrong.
+ */
+function useSiteStats(): SiteStats | null {
+  const [stats, setStats] = useState<SiteStats | null>(null)
+
+  useEffect(() => {
+    // Cancel-flag: the request outlives a fast back-navigation off /about.
+    let cancelled = false
+    api
+      .getSiteStats()
+      .then((s) => {
+        if (!cancelled) setStats(s)
+      })
+      // Swallowed on purpose — the strip degrades to dashes and the rest of
+      // the page is unaffected.
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  return stats
+}
+
 interface StatTickerProps {
   value: string
   suffix: string
@@ -128,6 +155,7 @@ export default function AboutPage() {
   const [stepsRef, stepsSeen] = useInView<HTMLElement>()
   const [statsRef, statsSeen] = useInView<HTMLElement>()
   const [whyRef, whySeen] = useInView<HTMLElement>()
+  const stats = useSiteStats()
 
   return (
     <motion.div
@@ -141,7 +169,7 @@ export default function AboutPage() {
       <PageHeaderBand
         page="about"
         title="About Circuit Center"
-        subtitle="The trusted directory for integrated circuits — connecting buyers, suppliers, and engineers since 2003."
+        subtitle="Your trusted directory for all things PCB. Connecting distributors, manufacturers, &amp; engineers since 2026"
       />
 
       {/*
@@ -196,12 +224,27 @@ export default function AboutPage() {
         className={`${styles.aboutSection} ${styles.aboutStats} ${statsSeen ? styles.seen : ''}`}
       >
         <div className={styles.aboutStatsGrid}>
-          {ABOUT_STATS.map((s) => (
-            <div key={s.label} className={styles.aboutStat}>
-              <StatTicker value={s.num} suffix={s.suffix} />
-              <span className={styles.aboutStatLabel}>{s.label}</span>
-            </div>
-          ))}
+          {STAT_TILES.map((tile) => {
+            // StatTicker is keyed by the resolved value so it mounts fresh and
+            // animates 0 -> N the moment the totals land, instead of sitting
+            // at whatever it had already counted to.
+            //
+            // `compactCount` returns null for anything that is not a real
+            // count, which covers the case TypeScript cannot: the payload came
+            // off the network, so a field renamed server-side is `undefined`
+            // here and must show the dash rather than a confident "0".
+            const value = stats ? compactCount(stats[tile.key]) : null
+            return (
+              <div key={tile.key} className={styles.aboutStat}>
+                {value ? (
+                  <StatTicker key={value.num} value={value.num} suffix={value.suffix} />
+                ) : (
+                  <span className={styles.aboutStatNum}>{NO_VALUE}</span>
+                )}
+                <span className={styles.aboutStatLabel}>{tile.label}</span>
+              </div>
+            )
+          })}
         </div>
       </section>
 

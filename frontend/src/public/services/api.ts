@@ -4,6 +4,7 @@ import type { Supplier } from '@public/types/supplier';
 import type { Sponsor } from '@public/types/sponsor';
 import type { PartDetail, RelatedParts } from '@public/types/part';
 import type { SearchResultsV2, PublicManufacturers } from '@public/types/search';
+import type { SiteStats } from '@public/types/stats';
 
 import { CANONICAL_CATEGORY_QUERY } from '@public/services/categoryQuery';
 import { API_BASE_URL } from '@shared/services/constants';
@@ -21,6 +22,17 @@ const _prefetchedCategories = new Set<string>();
 export const api = {
   getCategories: () =>
     client.get<Category[]>('/categories/').then(r => r.data),
+
+  /**
+   * Public catalog totals — the About page's stat strip.
+   *
+   * Server-cached for 600s and sent with a matching `max-age`, so this costs
+   * one request per visitor per ten minutes rather than four counts per view.
+   * Callers must handle a rejection by showing NO number: the whole point of
+   * the endpoint is that the page stopped shipping figures nothing verifies.
+   */
+  getSiteStats: () =>
+    client.get<SiteStats>('/stats/').then(r => r.data),
 
   /**
    * One page of a category.

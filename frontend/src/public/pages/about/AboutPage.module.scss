@@ -239,6 +239,21 @@
   line-height: 1;
   margin-bottom: 6px;
   font-variant-numeric: tabular-nums;
+
+  // The NUMBER, not the label, sets each column's minimum width on mobile:
+  // it is one unbreakable token at 2.6rem, where every label wraps at a
+  // space. MEASURED 2026-08-31: "314.3K" is 148px against a ~132px column at
+  // a 320px viewport, so the two-column grid asked for 307px and had 280 —
+  // clipped rather than scrolled, because global.scss sets
+  // `html, body { overflow-x: clip }`. It was already 9px over with the old
+  // hardcoded "13.8M" (130px); reading the real catalog made it 27px.
+  //
+  // Scaling with the viewport fixes it for any figure the catalog can
+  // produce rather than for today's: the count crosses into "1.0M" (4 chars,
+  // narrower) eventually, but it passes through 6 characters on the way.
+  @include responsive($bp-mobile) {
+    font-size: clamp(1.75rem, 7.5vw, 2.6rem);
+  }
 }
 
 .aboutStatLabel {

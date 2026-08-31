@@ -33,6 +33,7 @@ from app.routes import (
     search,
     sitemap,
     sponsors,
+    stats,
     stripe_webhooks,
     suppliers,
 )
@@ -56,6 +57,7 @@ app.include_router(search.router)
 app.include_router(manufacturers.router)
 app.include_router(forms.router)
 app.include_router(sponsors.router)
+app.include_router(stats.router)
 app.include_router(auth.router)
 app.include_router(dashboard.router)
 # Dashboard also owns a small /api/admin/* lookup router (sales reps).
