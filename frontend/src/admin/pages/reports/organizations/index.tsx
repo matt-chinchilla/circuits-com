@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { adminApi } from '@admin/services/adminApi';
@@ -46,11 +46,23 @@ interface Props {
    *  when no map is mounted, and every location then renders as plain text —
    *  a control that goes nowhere is worse than a label. */
   onFocusLocation?: (location: OrgLocation) => void;
+  /** The countries the map will actually open — `analytics.region_countries`,
+   *  the SAME list the map gates its own two doors on. This roll-up keeps
+   *  country-only rows on purpose ("a country with no city is still an
+   *  answer"), so it routinely lists countries the map refuses to drill into;
+   *  without this those rendered as buttons onto the "Collecting" overlay.
+   *  Absent means "gate nothing", which is the pre-region behaviour. */
+  focusableCountries?: readonly string[];
 }
 
 type Status = 'loading' | 'ready' | 'error';
 
-export default function OrganizationsPanel({ days, segment, onFocusLocation }: Props) {
+export default function OrganizationsPanel({
+  days,
+  segment,
+  onFocusLocation,
+  focusableCountries,
+}: Props) {
   const [data, setData] = useState<OrganizationsResponse | null>(null);
   const [status, setStatus] = useState<Status>('loading');
   const [filter, setFilter] = useState<OrgFilter>('corporate');
@@ -84,6 +96,12 @@ export default function OrganizationsPanel({ days, segment, onFocusLocation }: P
     hosting: data?.hosting_count ?? 0,
     matched: data?.matched_count ?? 0,
   };
+  // A Set once per render rather than an `includes` per location row.
+  // `undefined` (an API that predates region capture) means gate nothing.
+  const focusable = useMemo(
+    () => (focusableCountries ? new Set(focusableCountries) : null),
+    [focusableCountries],
+  );
   const rows = sortOrganizations(
     filterOrganizations(data?.organizations ?? [], filter),
     sort,
@@ -160,6 +178,7 @@ export default function OrganizationsPanel({ days, segment, onFocusLocation }: P
               open={openName === org.name}
               onToggle={() => setOpenName(openName === org.name ? null : org.name)}
               onFocusLocation={onFocusLocation}
+              focusable={focusable}
             />
           ))}
         </ul>
@@ -179,11 +198,13 @@ function OrgRow({
   open,
   onToggle,
   onFocusLocation,
+  focusable,
 }: {
   org: VisitorOrganization;
   open: boolean;
   onToggle: () => void;
   onFocusLocation?: (location: OrgLocation) => void;
+  focusable: ReadonlySet<string> | null;
 }) {
   // The id has to survive an organization name containing anything at all —
   // DB-IP emits quotes, commas and non-ASCII ("UAB \"Bite Lietuva\"").
@@ -274,7 +295,10 @@ function OrgRow({
                 // listening, and the row carries a country to point at. A
                 // location with no country renders as the plain text it
                 // always was rather than as a control that does nothing.
-                const canFocus = !!onFocusLocation && !!loc.country;
+                const canFocus =
+                  !!onFocusLocation &&
+                  !!loc.country &&
+                  (!focusable || focusable.has(loc.country));
                 const flag = loc.country ? (
                   <span
                     className={styles.detailFlag}

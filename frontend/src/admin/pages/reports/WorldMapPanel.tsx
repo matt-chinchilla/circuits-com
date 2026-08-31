@@ -84,7 +84,7 @@ import type { Admin1Feature } from '@admin/components/charts/admin1';
 import { adminApi } from '@admin/services/adminApi';
 import type { AnalyticsData, GeoCityRow, GeoRegionRow } from '@admin/types/admin';
 import { countryName, flagEmoji } from '@admin/services/country';
-import { matchTown, type LocationFocus } from './locationFocus';
+import { focusPlan, type LocationFocus } from './locationFocus';
 import { albersUsaProject } from './mapProjections';
 import { binColorFor, buildBins } from './viewershipBins';
 import {
@@ -336,6 +336,8 @@ export default function WorldMapPanel({
   // the one case where the density map should fly to the town. A map click
   // must not yank the view out from under the cursor that made it.
   const [focusNonce, setFocusNonce] = useState(0);
+  /** The last `focus.nonce` this panel acted on — see the focus effect. */
+  const handledFocusRef = useRef(focus?.nonce ?? 0);
   // The live chart instance (captured per mount via onReady; the key={view}
   // remount swaps it), consumed imperatively by the zoom handlers. Zoom goes
   // through merge-setOption on the instance rather than the React option: the
@@ -633,27 +635,47 @@ export default function WorldMapPanel({
    */
   useEffect(() => {
     if (!focus) return;
+    // ONE-SHOT, and the ref is what makes it one. A dep of `[focus?.nonce]`
+    // cannot tell "the nonce changed" from "this component mounted with a
+    // nonce already in the parent's state" — and the parent OUTLIVES this
+    // panel, which is rendered inside `{tab === 'site' && …}`. So without
+    // this a tab round-trip replayed a click made minutes ago: the page
+    // smooth-scrolled itself down and the map re-drilled, on every
+    // round-trip, forever. Initialising from the prop makes a mount that
+    // inherits a stale focus a no-op; `focusSeq` pre-increments from 0 so a
+    // real click always carries >= 1 and can never collide with the default.
+    if (focus.nonce === handledFocusRef.current) return;
+    handledFocusRef.current = focus.nonce;
+
     const box = mapRef.current;
     // The panel sits above the organizations list, so a click down there
     // moves the reader's answer off-screen unless we bring it back.
     box?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    // Whatever the reader activated is where focus must RETURN when the card
+    // closes. The two canvas paths null this deliberately (a heat blob is not
+    // focusable); a location button is, and dropping it sent Escape's focus
+    // to document.body and restarted tabbing at the top of the page.
+    const trigger = document.activeElement;
+    intelTriggerRef.current = trigger instanceof HTMLElement ? trigger : null;
 
-    if (view === 'heat') {
-      const hit = matchTown(towns?.rows ?? [], focus);
-      if (!hit) return;
-      intelTriggerRef.current = null;
+    // WHAT to do is decided in locationFocus.ts, where the routing rules are
+    // testable without a map; this only executes the answer.
+    const plan = focusPlan({
+      view,
+      current: country,
+      focus,
+      towns: towns?.rows ?? [],
+      cityRows,
+      drillable,
+    });
+    if (plan.kind === 'flyToTown') {
       setFocusNonce((n) => n + 1);
-      openIntel(hit, null);
-      return;
+      openIntel(plan.town, null);
+    } else if (plan.kind === 'openTown') {
+      openIntel(plan.town, null);
+    } else if (plan.kind === 'enterCountry') {
+      enterCountry(plan.country);
     }
-
-    if (view === 'country' && country === focus.country) {
-      const hit = matchTown(cityRows, focus);
-      if (hit) openIntel(hit, null);
-      return;
-    }
-
-    enterCountry(focus.country);
     // Deps are the nonce ALONE, on purpose (see above). Everything else read
     // here is intentionally omitted: re-running when the town list loads or
     // the view changes would re-fly the map long after the click.
@@ -683,7 +705,14 @@ export default function WorldMapPanel({
       // Merged by series ID, never by index: this option carries only the two
       // label series, and an index-keyed merge would rewrite the choropleth
       // and the city dots instead.
-      chart.setOption({ series: buildLabelLayer(US_STATE_LABELS, next) });
+      //
+      // `lazyUpdate` defers the update to zrender's next frame, so a wheel
+      // gesture — which fires a stream of georoam events, several per frame —
+      // collapses them into one instead of paying a full synchronous update
+      // and canvas flush per event. The 2% gate above decides WHETHER the
+      // labels moved enough to matter; this decides HOW OFTEN that decision
+      // is allowed to reach the canvas, and the two are not the same lever.
+      chart.setOption({ series: buildLabelLayer(US_STATE_LABELS, next) }, { lazyUpdate: true });
     },
     [country],
   );

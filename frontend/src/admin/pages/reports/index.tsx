@@ -508,6 +508,7 @@ function StaffReportsPage() {
                   days={RANGE_DAYS[range]}
                   segment={segment}
                   onFocusLocation={focusLocation}
+                  focusableCountries={analytics.region_countries}
                 />
 
                 <div className={`${styles.chartCard} ${styles.chartFull}`}>

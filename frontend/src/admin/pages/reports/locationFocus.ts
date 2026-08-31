@@ -80,3 +80,55 @@ export function matchTown(towns: readonly GeoCityRow[], focus: LocationFocus): G
   const region = norm(focus.region);
   return sameCity.find((t) => norm(t.region) === region) ?? sameCity[0];
 }
+
+/** What the map should DO about a focus request. Pulled out of the effect so
+ *  the routing rules — which view wins, what a non-drillable country does,
+ *  when a town beats a drill-down — are testable without a map, a canvas or a
+ *  Leaflet tile server. The effect's job is then only to execute one of these. */
+export type FocusPlan =
+  | { kind: 'none' }
+  /** Fly the density map to this town and open its card. */
+  | { kind: 'flyToTown'; town: GeoCityRow }
+  /** Already inside this country: just open the town's card. */
+  | { kind: 'openTown'; town: GeoCityRow }
+  /** Drill the choropleth into this country. */
+  | { kind: 'enterCountry'; country: string };
+
+/**
+ * Route a focus request, given what the map currently has.
+ *
+ * ACTS IN WHICHEVER VIEW IS OPEN. The reader clicked while looking at one
+ * map; switching them to the other answers a question they did not ask.
+ *
+ * `drillable` is the same set the map gates its own two doors on (the map
+ * click and the rank rail). A country whose every view is country-lite has no
+ * regions to draw, so opening it strands the reader in the "Collecting"
+ * overlay — and the organization roll-up offers exactly those countries,
+ * because it keeps country-only rows on purpose. Passing `null` gates
+ * nothing, which is the behaviour before region capture existed.
+ */
+export function focusPlan(input: {
+  view: 'world' | 'country' | 'heat';
+  /** The country the drill-down is currently showing, if any. */
+  current: string | null;
+  focus: LocationFocus;
+  /** The density map's global town list. */
+  towns: readonly GeoCityRow[];
+  /** The open country view's own city rows. */
+  cityRows: readonly GeoCityRow[];
+  drillable: ReadonlySet<string> | null;
+}): FocusPlan {
+  const { view, current, focus, towns, cityRows, drillable } = input;
+  if (view === 'heat') {
+    const town = matchTown(towns, focus);
+    // No town we can place does NOTHING, rather than moving the density map
+    // somewhere arbitrary and calling it an answer.
+    return town ? { kind: 'flyToTown', town } : { kind: 'none' };
+  }
+  if (view === 'country' && current === focus.country) {
+    const town = matchTown(cityRows, focus);
+    return town ? { kind: 'openTown', town } : { kind: 'none' };
+  }
+  if (drillable && !drillable.has(focus.country)) return { kind: 'none' };
+  return { kind: 'enterCountry', country: focus.country };
+}

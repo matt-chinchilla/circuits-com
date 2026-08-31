@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { focusFor, matchTown } from './locationFocus';
+import { focusFor, focusPlan, matchTown } from './locationFocus';
 import type { GeoCityRow } from '@admin/types/admin';
 
 const town = (city: string, region: string | null, country: string | null, extra = {}): GeoCityRow =>
@@ -96,5 +96,82 @@ describe('matchTown', () => {
 
   it('does not match the same city in the wrong country', () => {
     expect(matchTown(towns, { city: 'London', region: null, country: 'FR', nonce: 1 })).toBeNull();
+  });
+});
+
+describe('focusPlan', () => {
+  const austin = town('Austin', 'Texas', 'US');
+  const towns = [austin, town('Berlin', 'Berlin', 'DE')];
+  const at = (city: string, country: string) => ({ city, region: null, country, nonce: 1 });
+  const US_ONLY = new Set(['US']);
+
+  it('flies the density map to the town, without leaving the density view', () => {
+    const plan = focusPlan({
+      view: 'heat', current: null, focus: at('Austin', 'US'), towns, cityRows: [], drillable: US_ONLY,
+    });
+    expect(plan).toEqual({ kind: 'flyToTown', town: austin });
+  });
+
+  it('does nothing in the density view when no town can be placed', () => {
+    // Moving the map somewhere arbitrary is worse than not moving it.
+    expect(focusPlan({
+      view: 'heat', current: null, focus: at('Nowhere', 'US'), towns, cityRows: [], drillable: null,
+    })).toEqual({ kind: 'none' });
+  });
+
+  it('flies to a town even when its country is not drillable', () => {
+    // `drillable` is about REGION data; the density map is about towns. A
+    // country with towns but no regions must still be reachable here.
+    expect(focusPlan({
+      view: 'heat', current: null, focus: at('Berlin', 'DE'), towns, cityRows: [], drillable: US_ONLY,
+    }).kind).toBe('flyToTown');
+  });
+
+  it('opens the card when already inside that country', () => {
+    expect(focusPlan({
+      view: 'country', current: 'US', focus: at('Austin', 'US'), towns: [], cityRows: [austin],
+      drillable: US_ONLY,
+    })).toEqual({ kind: 'openTown', town: austin });
+  });
+
+  it('switches country when the drill-down is showing a different one', () => {
+    expect(focusPlan({
+      view: 'country', current: 'DE', focus: at('Austin', 'US'), towns: [], cityRows: [],
+      drillable: US_ONLY,
+    })).toEqual({ kind: 'enterCountry', country: 'US' });
+  });
+
+  it('drills in from the world view', () => {
+    expect(focusPlan({
+      view: 'world', current: null, focus: at('Austin', 'US'), towns: [], cityRows: [],
+      drillable: US_ONLY,
+    })).toEqual({ kind: 'enterCountry', country: 'US' });
+  });
+
+  it('REFUSES to open a country the map itself will not open', () => {
+    // The dead door: a country whose every view is country-lite has no
+    // regions to draw, so drilling in strands the reader in the "Collecting"
+    // overlay. The map gates its own two doors on this set; so does this.
+    expect(focusPlan({
+      view: 'world', current: null, focus: at('Dhaka', 'BD'), towns: [], cityRows: [],
+      drillable: US_ONLY,
+    })).toEqual({ kind: 'none' });
+  });
+
+  it('gates nothing when the drillable set is absent', () => {
+    // An API predating region capture: behave as before it existed.
+    expect(focusPlan({
+      view: 'world', current: null, focus: at('Dhaka', 'BD'), towns: [], cityRows: [],
+      drillable: null,
+    })).toEqual({ kind: 'enterCountry', country: 'BD' });
+  });
+
+  it('does not drill in just because the open country has no matching town', () => {
+    // Already inside the US and the town is unknown: stay put rather than
+    // re-entering the country the reader is already looking at.
+    expect(focusPlan({
+      view: 'country', current: 'US', focus: at('Nowhere', 'US'), towns: [], cityRows: [],
+      drillable: US_ONLY,
+    })).toEqual({ kind: 'none' });
   });
 });
