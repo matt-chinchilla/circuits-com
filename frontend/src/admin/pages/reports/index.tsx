@@ -442,7 +442,7 @@ function StaffReportsPage() {
               {segmentError
                 ? `Couldn’t load that view — still showing ${shownSegment === 'humans' ? 'human' : shownSegment === 'bots' ? 'crawler' : 'all'} traffic.`
                 : shownSegment === 'humans'
-                  ? 'Crawlers are filtered out — these numbers are people.'
+                  ? 'Crawlers have been filtered out, people only'
                   : shownSegment === 'bots'
                     ? 'Crawler and bot traffic only.'
                     : 'Everything the tracker recorded, crawlers included.'}

@@ -59,6 +59,12 @@
   border-radius: 6px;
   padding: 2px;
   gap: 2px;
+  // The counts make this the widest single control on the page (306px at 390
+  // with 6,240 / 7,280 / 13,520 in it). `max-width` + wrap keeps a narrow
+  // phone from pushing it past its column rather than letting it clip.
+  max-width: 100%;
+  flex-wrap: wrap;
+  justify-content: center;
 }
 
 .segBtn {
@@ -821,6 +827,15 @@
   gap: 14px;
   flex-wrap: wrap;
   margin-bottom: 16px;
+
+  // Centred on a phone (owner, 2026-08-31). On desktop the bar reads as the
+  // left edge of a wide instrument row; at 390 the track is 306px of a 362px
+  // column, so flush-left left a lopsided 56px gap on one side and nothing on
+  // the other. Centring is the whole fix — the track keeps its intrinsic
+  // width, so nothing about the glass or the hit targets changes.
+  @include responsive($bp-admin-mobile) {
+    justify-content: center;
+  }
 }
 
 .segCount {
@@ -834,6 +849,14 @@
 .segmentNote {
   font-size: 12px;
   color: var(--a-fg3);
+
+  // Follows the track: the note wraps to its own line well before the phone
+  // breakpoint, and a centred track above a flush-left caption reads as a
+  // mistake rather than a choice.
+  @include responsive($bp-admin-mobile) {
+    text-align: center;
+    width: 100%;
+  }
 }
 
 // ── AI & Search Crawlers panel ───────────────────────────────────────────────
