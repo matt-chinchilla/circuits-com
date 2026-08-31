@@ -78,6 +78,7 @@ interface DataItem {
 interface RegionStyle {
   name?: string;
   itemStyle?: ItemStyle;
+  emphasis?: { label?: { show?: boolean }; itemStyle?: ItemStyle };
 }
 
 interface MapNode {
@@ -289,6 +290,29 @@ describe('buildUsOption', () => {
     expect(us().geo?.emphasis?.label?.show).toBe(false);
     expect(us().series?.[0].emphasis?.label?.show).toBe(false);
     expect(us().series?.[1].label?.show).toBe(false);
+  });
+
+  it('disables select on the map series — a zoom click must not park a state gold', () => {
+    // REGRESSION GUARD (found 2026-08-30 on the live canvas): the click that
+    // zooms a state was ALSO selecting it on the series — the geo's
+    // select.disabled does not reach a geoIndex-bound series — leaving it in
+    // ECharts' default select style: pale gold fill, grey name stamp.
+    expect(us().series?.[0].select?.disabled).toBe(true);
+  });
+
+  it('suppresses the hover label on every REGION too', () => {
+    // REGRESSION GUARD (found 2026-08-30 on the live canvas): after the
+    // click-to-zoom's merge-setOption touched the geo, hovering a state
+    // stamped its name in ECharts' default grey even with the component and
+    // series suppression above in place. Region-level emphasis survives that
+    // path, and repeats the hover fill so the highlight keeps the ramp's
+    // pale-gold language instead of ECharts' default.
+    const regions = us().geo?.regions ?? [];
+    expect(regions.length).toBeGreaterThan(0);
+    for (const region of regions) {
+      expect(region.emphasis?.label?.show).toBe(false);
+      expect(region.emphasis?.itemStyle?.areaColor).toBe('#ffe3a3');
+    }
   });
 
   it('keeps each dot on its own bin color and carries its source row', () => {

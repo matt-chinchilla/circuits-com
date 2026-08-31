@@ -376,6 +376,15 @@ export interface AnalyticsData {
   }>;
   /** First day a page view could carry a state. Null while none has. */
   region_tracked_since?: string | null;
+  // ── Density heat layer (2026-08-30) ──────────────────────────────────────
+  /** Every located point on earth, `[lat, lng, views]`, hottest first and
+   *  capped server-side. GLOBAL, not US-scoped, and deliberately bare triples
+   *  rather than objects: this is the one array in the payload that is only
+   *  ever plotted, so the key names would be most of its bytes.
+   *
+   *  Optional like the two above — an API that predates the heat layer omits
+   *  it, and the panel simply does not offer the view. */
+  heat_points?: Array<[number, number, number]>;
 }
 
 export type AnalyticsSegment = AnalyticsData['segment'];

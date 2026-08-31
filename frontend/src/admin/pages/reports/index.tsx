@@ -14,6 +14,7 @@ import type {
 import CustomerReportsPage from './CustomerReportsPage'
 import styles from './ReportsPage.module.scss'
 import WorldMapPanel from './WorldMapPanel'
+import OrganizationsPanel from './organizations'
 import { refHost } from './chartKit'
 import { IZ } from './chartParts'
 import {
@@ -482,7 +483,10 @@ function StaffReportsPage() {
                   usStates={analytics.us_states}
                   usCities={analytics.us_cities}
                   regionTrackedSince={analytics.region_tracked_since}
+                  heatPoints={analytics.heat_points}
                 />
+
+                <OrganizationsPanel days={RANGE_DAYS[range]} segment={segment} />
 
                 <div className={`${styles.chartCard} ${styles.chartFull}`}>
                   <div className={styles.chartHead}>

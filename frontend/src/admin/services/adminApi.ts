@@ -3,6 +3,7 @@ import { API_BASE_URL } from '@shared/services/constants';
 import type { AccountMe } from '@admin/services/accountActivation';
 import type {
   AnalyticsData,
+  AnalyticsSegment,
   AuthResponse,
   UserInfo,
   DashboardStats,
@@ -102,6 +103,65 @@ export interface QuoteCreateBody {
     state: string;
     postal_code: string;
   };
+}
+
+// ── GET /dashboard/organizations (2026-08-30) ───────────────────────────────
+// Which COMPANIES are visiting, derived from `page_views.network` (the AS
+// organization DB-IP resolved at track time). `kind` is classified SERVER-side
+// at read time — see api/app/services/org_classify.py — so the keyword list
+// stays editable without a migration and this client never has to agree with
+// a second copy of it.
+
+export type OrgKind = 'corporate' | 'isp' | 'hosting';
+
+export interface OrgLocation {
+  city: string | null;
+  region: string | null;
+  country: string | null;
+  views: number;
+}
+
+/** Where we already know this organization from. `kind` is a plain string,
+ *  not a union: the server treats it as an open set so a future LinkedIn
+ *  connections import adds a source without a type change on either side. */
+export interface OrgMatch {
+  kind: string;
+  name: string;
+  id: string | null;
+}
+
+export interface VisitorOrganization {
+  name: string;
+  kind: OrgKind;
+  /** Non-null when this organization is already a lead or a tracked
+   *  manufacturer — the rows the panel exists to surface. */
+  match: OrgMatch | null;
+  views: number;
+  visitors: number;
+  first_seen: string | null;
+  last_seen: string | null;
+  /** Top 3 by views. Empty when the visit predates city capture. */
+  locations: OrgLocation[];
+  /** Top 5 by views — what this organization came here to research. */
+  top_pages: Array<{ path: string; views: number }>;
+  /** Top 3 by views; rows with no referrer are not a source. */
+  referrers: Array<{ referrer: string; views: number }>;
+  devices: Array<{ type: string; views: number }>;
+}
+
+export interface OrganizationsResponse {
+  /** Organizations matching a lead or manufacturer. OVERLAPS the three kind
+   *  counts (a matched row is also corporate/isp/hosting) — never add it in. */
+  matched_count: number;
+  period_days: number;
+  segment: AnalyticsSegment;
+  /** The three counts PARTITION `organizations` — their sum is its length. */
+  corporate_count: number;
+  isp_count: number;
+  hosting_count: number;
+  /** When ASN capture started (migration 049). Null = it has not yet. */
+  network_tracked_since: string | null;
+  organizations: VisitorOrganization[];
 }
 
 export interface QuoteCreateResult {
@@ -300,6 +360,14 @@ export const adminApi = {
   getAnalytics: (days = 30, segment: 'humans' | 'bots' | 'all' = 'humans') =>
     adminClient
       .get<AnalyticsData>('/dashboard/analytics', { params: { days, segment } })
+      .then((r) => r.data),
+
+  // Same window and segment as getAnalytics above, deliberately: the two
+  // panels sit on one screen and a row that disagreed with the map about who
+  // visited would be worse than no row.
+  getOrganizations: (days = 30, segment: AnalyticsSegment = 'humans') =>
+    adminClient
+      .get<OrganizationsResponse>('/dashboard/organizations', { params: { days, segment } })
       .then((r) => r.data),
 
   // ── Dashboard overhaul (2026-07-30) ──────────────────────────────────────

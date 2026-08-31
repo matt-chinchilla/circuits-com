@@ -267,6 +267,17 @@
   @media (max-width: 1100px) {
     grid-template-columns: 1fr;
   }
+
+  // A grid item's automatic minimum is its content's min-content, so ONE
+  // unbreakable child (Top Pages' `min-width: 360px` table; a wide row in
+  // any future card) inflates the SHARED track past the phone viewport and
+  // clips every card on the row (measured 2026-08-30: a 447px track in a
+  // 347px grid at 390vw, ~70px sliced off each card's right edge). Zeroing
+  // the items' minimum lets the track win; anything genuinely wider scrolls
+  // inside its own wrapper, which is what .tableScroll is for.
+  > * {
+    min-width: 0;
+  }
 }
 
 
@@ -974,8 +985,39 @@
   min-width: 0;
 }
 
+// The map's frame, shared by all three views (canvas, tile map, loading and
+// ghost states alike) so switching views never jumps the card. Proportions
+// rather than a fixed height: the old hardcoded 300px left a 2.7:1 letterbox
+// slot for maps that are ~2:1 by nature (naturalEarth1 and Albers both), so
+// on a wide desktop a third of the box was empty margin and the geography
+// drew small (measured 2026-08-30: 585px of drawn map in an 817px box).
+// 15/8 tracks the projections' shape; the clamp keeps phones from a sliver
+// and ultrawide from a wall.
+.wmStage {
+  position: relative;
+  // Explicit, not auto: with an auto width, a max-height clamp TRANSFERS
+  // back through the aspect-ratio and narrows the box (measured 938px in a
+  // 1038px column). A definite width keeps the clamp height-only.
+  width: 100%;
+  aspect-ratio: 15 / 8;
+  min-height: 300px;
+  max-height: 500px;
+
+  // Below tablet the ratio has no room to work and turns hostile: during
+  // grid intrinsic sizing the percentage width reads as auto, so the
+  // min-height TRANSFERS through the ratio into a ~562px min-width and
+  // blows the card past its track (measured 421px of stage in a 347px
+  // column at 390vw, the map's right edge clipped). A fixed height — the
+  // shipped mobile height — sidesteps intrinsic transfer entirely.
+  @include responsive($bp-tablet) {
+    aspect-ratio: auto;
+    height: 300px;
+    min-height: 0;
+  }
+}
+
 .wmLoading {
-  height: 300px;
+  height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1011,6 +1053,197 @@
 .wmLegendUnit {
   color: #61719b;
   letter-spacing: 0.04em;
+}
+
+// ── The density view's slippy map (2026-08-30) ──────────────────────────────
+// A real Leaflet map, so most of what needs styling here is LEAFLET's own
+// chrome, which ships dark-on-white and would otherwise drop a bright card
+// into the corner of a night-indigo panel. Those class names come from
+// leaflet.css rather than from this module, hence the `:global` scoping — all
+// of it NESTED inside the hashed .wmHeat so nothing here can reach a leaflet
+// map on some other admin page.
+.wmHeat {
+  height: 100%;
+  border-radius: 8px;
+  overflow: hidden;
+  // What shows through while tiles load: the card's own ground, so a slow
+  // network reads as an empty map rather than as leaflet's default grey.
+  background: #0b1020;
+
+  // Leaflet stamps `leaflet-container` on THIS element — the host div — not
+  // on a child, so a descendant `.wmHeat .leaflet-container { ... }` matches
+  // NOTHING (that dead selector is how the container overrides silently
+  // never applied, found 2026-08-30). And specificity here is LOAD-BEARING:
+  // leaflet.css styles the attribution via
+  // `.leaflet-container .leaflet-control-attribution` (0,2,0), which TIES a
+  // plain `.wmHeat .leaflet-control-attribution` and then wins on source
+  // order, because the leaflet chunk's CSS lands after this module's — that
+  // is exactly how the credit shipped as pale text on leaflet's white pill.
+  // This compound selector fixes both at once: it targets the element
+  // leaflet actually classes, and gives every nested rule a class of
+  // headroom over leaflet.css whatever the chunk order does.
+  &:global(.leaflet-container) {
+    background: #0b1020; // beats leaflet's #ddd by specificity, not order luck
+    font-family: inherit;
+
+    // Leaflet's keyboard handler focuses the container itself to pan it.
+    &:focus-visible {
+      outline: 2px solid #f7cd3a;
+      outline-offset: -2px;
+    }
+
+    :global {
+      // OpenStreetMap's tiles are LIGHT and this card is not, so the tile
+      // pane is inverted into a dark basemap: invert flips the sheet, the
+      // 180deg hue-rotate puts the hues back where they started (without it,
+      // water turns orange), and the rest tunes for LABEL LEGIBILITY — the
+      // basemap exists to be read under the glow. The original 0.92/0.88/0.55
+      // crushed the inverted (now light) labels toward the ground; lifting
+      // brightness past 1 and easing off the contrast squeeze is what makes
+      // town names and roads read (A/B'd on live tiles over the NE corridor
+      // at z5/z7, 2026-08-30). The heat canvas lives in the OVERLAY pane,
+      // untouched.
+      //
+      // A `filter` normally earns a hard look in this repo, and this class of
+      // filter was measured rather than assumed: compositor-friendly color
+      // ops on a static raster, measured at a 16.6ms median through four zoom
+      // animations vs 16.7ms with no filter at all (2026-08-30, 60Hz). The
+      // retune above changes VALUES only — same functions, same count, same
+      // cost class — and an interactive re-check after it (30Hz remote
+      // session) stayed pinned to vsync: median 31.2ms, p90 31.6ms. The
+      // standing gotchas are about blur and drop-shadow. Never animate it.
+      .leaflet-tile-pane {
+        filter: invert(1) hue-rotate(180deg) brightness(1.02) contrast(0.98) saturate(0.45);
+      }
+
+      // Attribution is a LICENSE REQUIREMENT (OpenStreetMap's ODbL, CARTO's
+      // terms) — restyled to sit in a dark corner, never suppressed, and kept
+      // above AA on this ground: the text #93a2c4 measures 7.2:1 and the
+      // links #c7d3ec 12.3:1 against #0f1526. The links are underlined so
+      // they are identifiable without relying on that color difference.
+      .leaflet-control-attribution {
+        background: rgba(15, 21, 38, 0.82);
+        color: #93a2c4;
+        font-size: 10px;
+        line-height: 1.6;
+        padding: 2px 7px;
+        border-radius: 6px 0 0 0;
+
+        a {
+          color: #c7d3ec;
+          text-decoration: underline;
+
+          &:hover {
+            color: #fff;
+          }
+
+          &:focus-visible {
+            outline: 2px solid #f7cd3a;
+            outline-offset: 1px;
+          }
+        }
+      }
+
+      .leaflet-bar {
+        border: 1px solid #2b3a63;
+        box-shadow: none;
+
+        a {
+          background: #16203a;
+          color: #93a2c4;
+          border-bottom-color: #2b3a63;
+
+          &:hover {
+            background: #1c2947;
+            color: #e8eef9;
+          }
+
+          &:focus-visible {
+            outline: 2px solid #f7cd3a;
+            outline-offset: -2px;
+          }
+
+          &.leaflet-disabled {
+            background: #131b30;
+            color: #46557f;
+          }
+        }
+      }
+    }
+  }
+}
+
+// The map box's stand-in while the density view has nothing to draw: it fills
+// the same stage the map would so the collecting overlay above it (absolutely
+// positioned against .wmMap) has a panel to sit on, and it costs no chunk —
+// the leaflet bundle is never fetched to render an empty world.
+.wmHeatGhost {
+  height: 100%;
+  border-radius: 8px;
+  background: #0b1020;
+}
+
+// The density view's key: the layer's own blue->red gradient with the
+// window's decades ticked along it (built by heatLegendTicks). These hexes
+// MIRROR HEAT_GRADIENT in HeatMapView.tsx — SCSS cannot import them, so
+// retint both together (same contract as .wmFill quoting the ramp ends).
+// The first stop is held to 20% because a canvas gradient paints solid
+// first-stop color below its first offset, and the drawn layer does exactly
+// that.
+.wmHeatKey {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 8px 2px 0;
+}
+
+.wmHeatKeyLabel {
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #61719b;
+}
+
+.wmHeatKeyScale {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  // Reserves the tick row under the bar — the ticks are absolute.
+  padding-bottom: 14px;
+}
+
+.wmHeatKeyBar {
+  display: block;
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(
+    90deg,
+    #2c5cff 0%,
+    #2c5cff 20%,
+    #12d7e6 40%,
+    #3ddc7f 60%,
+    #ffd23f 80%,
+    #ff3b1f 100%
+  );
+}
+
+.wmHeatKeyTick {
+  position: absolute;
+  top: 9px;
+  transform: translateX(-50%);
+  font-family: ui-monospace, 'SF Mono', monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 9.5px;
+  line-height: 1;
+  color: #93a2c4;
+
+  // The peak tick sits at 100% — anchored by its right edge so it never
+  // hangs past the bar.
+  &:last-child {
+    transform: translateX(-100%);
+  }
 }
 
 .wmCollect {
@@ -1109,9 +1342,33 @@
   display: flex;
   flex-direction: column;
   gap: 7px;
-  max-height: 154px;
+  // Sized against the taller stage: ~12 rows beside a ~430px map keeps the
+  // rail from stretching the card past the map (8 rank rows + this).
+  max-height: 216px;
   overflow-y: auto;
-  @include scrollbar-thin(4px, 2px);
+  padding-right: 6px;
+
+  // NOT `scrollbar-thin`: that mixin sets `height` (a HORIZONTAL bar's
+  // thickness, which does nothing to a vertical one, leaving it default-chunky)
+  // and paints the thumb rgba(0,0,0,.15) — black on this night-indigo panel,
+  // i.e. invisible. This is the vertical, dark-surface version.
+  scrollbar-width: thin;
+  scrollbar-color: #2b3a63 transparent; // thumb, track (standard property)
+
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: #2b3a63;
+    border-radius: 3px;
+
+    &:hover {
+      background: #3c4f80;
+    }
+  }
 }
 
 .wmTownsTitle {

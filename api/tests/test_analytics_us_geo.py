@@ -531,3 +531,52 @@ class TestBreakdownIsolation:
         assert cities["Austin"]["devices"] == [{"type": "desktop", "views": 1}]
         assert cities["Chicago"]["networks"] == [{"name": "Comcast Cable", "views": 1}]
         assert cities["Chicago"]["devices"] == [{"type": "mobile", "views": 1}]
+
+
+class TestHeatPoints:
+    """The density layer's feed: every located point on earth, not the
+    US-scoped, 60-capped bubble list beside it."""
+
+    def test_points_are_global_not_us_only(self, client, db, seeded_db, auth_header):
+        db.add_all(
+            [
+                _view("h-us", region="Texas", city="Austin", latitude=30.27, longitude=-97.74),
+                _view("h-de", country="DE", city="Berlin", latitude=52.52, longitude=13.4),
+            ]
+        )
+        db.commit()
+        points = _get(client, auth_header)["heat_points"]
+        assert sorted(p[:2] for p in points) == [[30.27, -97.74], [52.52, 13.4]]
+
+    def test_a_point_is_lat_lng_weight_and_weight_is_views(
+        self, client, db, seeded_db, auth_header
+    ):
+        for i in range(3):
+            db.add(_view(f"hw-{i}", city="Austin", latitude=30.27, longitude=-97.74))
+        db.commit()
+        assert _get(client, auth_header)["heat_points"] == [[30.27, -97.74, 3]]
+
+    def test_rows_without_a_point_contribute_nothing(self, client, db, seeded_db, auth_header):
+        db.add_all([_view("hn-1", city="Nowhere"), _view("hn-2", country="US")])
+        db.commit()
+        assert _get(client, auth_header)["heat_points"] == []
+
+    def test_the_segment_and_window_apply(self, client, db, seeded_db, auth_header):
+        old = datetime.now(UTC) - timedelta(days=90)
+        db.add_all(
+            [
+                _view("hs-h", city="Austin", latitude=30.27, longitude=-97.74),
+                _view("hs-b", city="Bot", latitude=1.0, longitude=1.0, user_agent=BOT_UA),
+                _view("hs-o", city="Old", latitude=2.0, longitude=2.0, created_at=old),
+            ]
+        )
+        db.commit()
+        assert _get(client, auth_header, days=30)["heat_points"] == [[30.27, -97.74, 1]]
+        assert _get(client, auth_header, days=30, segment="bots")["heat_points"] == [[1.0, 1.0, 1]]
+
+    def test_hottest_points_come_first(self, client, db, seeded_db, auth_header):
+        db.add(_view("ho-1", city="Quiet", latitude=10.0, longitude=10.0))
+        for i in range(4):
+            db.add(_view(f"ho-b{i}", city="Busy", latitude=20.0, longitude=20.0))
+        db.commit()
+        assert [p[2] for p in _get(client, auth_header)["heat_points"]] == [4, 1]

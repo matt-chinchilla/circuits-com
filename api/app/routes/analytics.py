@@ -8,7 +8,7 @@ from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel, Field
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
@@ -16,6 +16,8 @@ from app.models import OutboundClick, PartListing, User
 from app.models.page_view import PageView
 from app.services.auth_service import require_staff
 from app.services.geoip import EMPTY_GEO, geo_for_ip
+from app.services.org_classify import classify_network
+from app.services.org_match import OrgMatcher
 from app.services.rate_limit import client_ip, trusted_client_addr
 from app.services.traffic_segments import crawler_family, human_ua_filter, window_bot_uas
 
@@ -281,24 +283,55 @@ def _region_tracked_since(db: Session) -> datetime | None:
 
 def reset_analytics_state() -> None:
     """Test seam for every piece of process memory this module keeps — the
-    "country data since" and "city data since" stamps, and the /api/track
-    throttle buckets.
+    "country data since", "city data since" and "network data since" stamps,
+    and the /api/track throttle buckets.
 
     An autouse conftest fixture calls it, and all of it matters: the stamps are
     deliberately sticky, and the throttle is keyed per ADDRESS, so every test
     that posts to /api/track or /api/outbound shares that endpoint's bucket
     (TestClient is always the same host) and the 31st post in a suite would
     silently vanish."""
-    global _geo_since_cache, _region_since_cache
+    global _geo_since_cache, _region_since_cache, _network_since_cache
     _geo_since_cache = None
     _region_since_cache = None
+    _network_since_cache = None
     _rate_buckets.clear()
+
+
+def _window_segment(db: Session, cutoff: datetime, segment: str) -> tuple[list[str], list]:
+    """The window's bot user agents, and the row filter `segment` implies.
+
+    Bot/human segmentation is READ-time: classify the window's DISTINCT user
+    agents in Python (exact regex semantics, retroactive over all history),
+    then filter rows with plain IN/NOT IN so every aggregation stays in SQL.
+    Defaults to "humans" — crawler floods must not read as visitors
+    (2026-08-20: one Meta crawler = "712 visitors").
+
+    ONE home for it because two dashboard routes now need the identical
+    window: /dashboard/analytics and /dashboard/organizations paint the same
+    traffic, and a segment rule that drifted between them would have the
+    organization panel disagree with the map above it about who visited.
+    """
+    bot_uas = window_bot_uas(db, cutoff)
+    if segment == "humans" and bot_uas:
+        return bot_uas, [human_ua_filter(PageView.user_agent, bot_uas)]
+    if segment == "bots":
+        # No bot UAs in the window means the bot segment is EMPTY, which is
+        # not the same as unfiltered — hence the impossible predicate.
+        return bot_uas, [PageView.user_agent.in_(bot_uas) if bot_uas else PageView.id.is_(None)]
+    return bot_uas, []
 
 
 # How many networks a single city dot names. Three fits the panel and is
 # where the tail stops being interesting; the rest is summarised by the dot's
 # own view count.
 _CITY_NETWORK_LIMIT = 3
+
+# The heat layer's runaway guard. Centroid rounding keeps the real number far
+# below this (prod sits at ~311 distinct points worldwide), so the cap only
+# exists so a future finer-grained geo source cannot post a megabyte of
+# coordinates to a dashboard.
+_HEAT_POINT_LIMIT = 3000
 
 
 @router.get("/dashboard/analytics")
@@ -314,19 +347,7 @@ def get_analytics(
     view_count = func.count(PageView.id)
     unique_sessions = func.count(func.distinct(PageView.session_id))
 
-    # Bot/human segmentation is READ-time: classify the window's DISTINCT
-    # user agents in Python (exact regex semantics, retroactive over all
-    # history), then filter rows with plain IN/NOT IN so every aggregation
-    # below stays in SQL. Defaults to "humans" — crawler floods must not
-    # read as visitors (2026-08-20: one Meta crawler = "712 visitors").
-    bot_uas = window_bot_uas(db, cutoff)
-
-    if segment == "humans" and bot_uas:
-        seg = [human_ua_filter(PageView.user_agent, bot_uas)]
-    elif segment == "bots":
-        seg = [PageView.user_agent.in_(bot_uas)] if bot_uas else [PageView.id.is_(None)]
-    else:
-        seg = []
+    bot_uas, seg = _window_segment(db, cutoff, segment)
 
     unique_visitors = db.query(unique_sessions).filter(recent, *seg).scalar() or 0
 
@@ -604,6 +625,24 @@ def get_analytics(
             }
         )
 
+    # Every located point on earth, for the density heat layer — deliberately
+    # NOT the us_cities list, which is US-scoped and capped at 60 because it
+    # feeds a readable rank rail. A heat map wants the whole cloud, and the
+    # cloud is small: coordinates are city CENTROIDS rounded to 2dp, so views
+    # collapse hard (prod: 8,784 located rows over 311 distinct points). The
+    # cap is a runaway guard, not a design limit.
+    #
+    # Emitted as bare [lat, lng, weight] triples rather than objects: this is
+    # the one array in the payload that is plotted, never read, and the key
+    # names would be most of its bytes.
+    heat_rows = (
+        db.query(PageView.latitude, PageView.longitude, view_count.label("views"))
+        .filter(recent, *seg, PageView.latitude.isnot(None), PageView.longitude.isnot(None))
+        .group_by(PageView.latitude, PageView.longitude)
+        .order_by(view_count.desc())
+        .limit(_HEAT_POINT_LIMIT)
+        .all()
+    )
     region_since = _region_tracked_since(db)
 
     return {
@@ -626,6 +665,7 @@ def get_analytics(
         ],
         "us_cities": us_cities,
         "region_tracked_since": str(region_since) if region_since is not None else None,
+        "heat_points": [[row.latitude, row.longitude, row.views] for row in heat_rows],
         "daily_traffic": [
             {"day": str(row.day), "views": row.views, "visitors": row.visitors}
             for row in daily_traffic
@@ -639,4 +679,224 @@ def get_analytics(
         "top_parts": [{"path": row.path, "views": row.views} for row in top_parts],
         "top_categories": [{"path": row.path, "views": row.views} for row in top_categories],
         "daily_devices": daily_devices,
+    }
+
+
+# ── GET /api/dashboard/organizations — who, not just where ──────────────────
+# The map panel above this one answers "where are the visitors"; this one
+# answers the owner's actual question, "which COMPANIES are visiting". Same
+# rows, same window, same segment — a different axis (`page_views.network`,
+# the AS organization DB-IP resolved at track time).
+
+_network_since_cache: datetime | None = None
+
+
+def _network_tracked_since(db: Session) -> datetime | None:
+    """The FIRST page view that ever carried a network name.
+
+    Its own stamp for the same reason `_region_tracked_since` is not
+    `_geo_tracked_since`: ASN capture started at migration 049, months after
+    country (040) and later than city (048). The panel prints it so an empty
+    list reads as "capture started on X and nothing has resolved since"
+    rather than "nobody visited".
+
+    Same sticky-cache contract as its two siblings — it can only move
+    BACKWARD, and a NULL is deliberately NOT cached so the first real row can
+    land on a database that has none yet.
+    """
+    global _network_since_cache
+    if _network_since_cache is None:
+        _network_since_cache = (
+            db.query(func.min(PageView.created_at)).filter(PageView.network.isnot(None)).scalar()
+        )
+    return _network_since_cache
+
+
+# The organization list's runaway guard. Production has resolved 177 distinct
+# networks in its whole history, so the cap is nowhere near binding; it exists
+# so a future traffic shape cannot post a megabyte of AS names to a dashboard.
+# The three summary counts describe the rows actually RETURNED, which is what
+# the panel's filter chips count.
+_ORG_LIMIT = 200
+
+# Per-organization detail depth. Three locations and three referrers fit the
+# expanded row; five pages is where "what did they research" stops being a
+# sentence and starts being a log.
+_ORG_LOCATION_LIMIT = 3
+_ORG_PAGE_LIMIT = 5
+_ORG_REFERRER_LIMIT = 3
+
+
+@router.get("/dashboard/organizations")
+def get_organizations(
+    days: int = 30,
+    segment: str = Query("humans", pattern="^(humans|bots|all)$"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_staff),
+):
+    """Visiting organizations, busiest first by DISTINCT visitors.
+
+    SIX grouped queries plus the segment's user-agent probe and a one-time
+    capture stamp — never one query per organization. Four of the six are the
+    same shape as the map's per-city breakdowns: the organization key plus one
+    breakdown column, bucketed in Python. A query per row would turn one
+    dashboard load into 800 round trips.
+
+    Classification is READ-time (`services/org_classify`) and deliberately
+    unstored: no column, no migration, and a keyword list that can be
+    corrected for ALL of history — including rows already written — in one
+    deploy.
+    """
+    days = min(days, 365)
+    cutoff = datetime.now(UTC) - timedelta(days=days)
+    recent = PageView.created_at >= cutoff
+    view_count = func.count(PageView.id)
+    unique_sessions = func.count(func.distinct(PageView.session_id))
+
+    _bot_uas, seg = _window_segment(db, cutoff, segment)
+
+    # Every query below carries these filters, so their key spaces match the
+    # organization query's exactly and a breakdown can never smuggle in a row
+    # the roll-up did not count.
+    named = (recent, *seg, PageView.network.isnot(None))
+
+    org_rows = (
+        db.query(
+            PageView.network,
+            view_count.label("views"),
+            unique_sessions.label("visitors"),
+            func.min(PageView.created_at).label("first_seen"),
+            func.max(PageView.created_at).label("last_seen"),
+        )
+        .filter(*named)
+        .group_by(PageView.network)
+        # Visitors first — the owner's question is how many PEOPLE from a
+        # company, not how many pages one of them opened. Name tiebreaker so
+        # equal-count organizations cannot swap between requests.
+        .order_by(unique_sessions.desc(), view_count.desc(), PageView.network.asc())
+        .limit(_ORG_LIMIT)
+        .all()
+    )
+
+    def _blank_last(column):
+        """A NULL-safe ascending tiebreaker. `city` and `region` are nullable
+        in the location key, and SQLite and Postgres disagree about where
+        NULLs sort — coalescing to the empty string makes the cut identical on
+        both engines."""
+        return func.coalesce(column, "").asc()
+
+    location_rows = (
+        db.query(
+            PageView.network,
+            PageView.city,
+            PageView.region,
+            PageView.country,
+            view_count.label("views"),
+        )
+        # A country with no city is still an answer ("somewhere in Germany"),
+        # so only a row with neither is dropped.
+        .filter(*named, or_(PageView.city.isnot(None), PageView.country.isnot(None)))
+        .group_by(PageView.network, PageView.city, PageView.region, PageView.country)
+        .order_by(
+            view_count.desc(),
+            _blank_last(PageView.city),
+            _blank_last(PageView.region),
+            _blank_last(PageView.country),
+        )
+        .all()
+    )
+
+    def _breakdown(column):
+        """(network, `column`) → views, globally ordered so the first rows
+        seen for a network are that network's busiest — if the whole result
+        descends by views then so does any subset of it. The column
+        tiebreaker makes a top-N cut among equals deterministic."""
+        return (
+            db.query(PageView.network, column, view_count.label("views"))
+            .filter(*named, column.isnot(None))
+            .group_by(PageView.network, column)
+            .order_by(view_count.desc(), column.asc())
+            .all()
+        )
+
+    page_rows = _breakdown(PageView.path)
+    referrer_rows = _breakdown(PageView.referrer)
+    device_rows = _breakdown(PageView.device_type)
+
+    surviving = {row.network for row in org_rows}
+
+    def _bucket(rows, build, limit=None):
+        buckets: dict[str, list[dict]] = defaultdict(list)
+        for row in rows:
+            if row.network not in surviving:
+                continue
+            entries = buckets[row.network]
+            if limit is None or len(entries) < limit:
+                entries.append(build(row))
+        return buckets
+
+    locations = _bucket(
+        location_rows,
+        lambda r: {"city": r.city, "region": r.region, "country": r.country, "views": r.views},
+        _ORG_LOCATION_LIMIT,
+    )
+    pages = _bucket(page_rows, lambda r: {"path": r.path, "views": r.views}, _ORG_PAGE_LIMIT)
+    referrers = _bucket(
+        referrer_rows,
+        lambda r: {"referrer": r.referrer, "views": r.views},
+        _ORG_REFERRER_LIMIT,
+    )
+    devices = _bucket(device_rows, lambda r: {"type": r.device_type, "views": r.views})
+
+    counts = {"corporate": 0, "isp": 0, "hosting": 0, "matched": 0}
+    # ONE bulk read of the leads + manufacturer canon maps, outside the loop.
+    matcher = OrgMatcher.build(db)
+    organizations = []
+    for row in org_rows:
+        kind = classify_network(row.network)
+        if kind == "unknown":
+            # A network column holding only whitespace is not an organization.
+            # Dropping it here keeps the three counts a partition of the list,
+            # which is what the panel's filter chips assume.
+            continue
+        counts[kind] += 1
+        match = matcher.match(row.network)
+        if match is not None:
+            counts["matched"] += 1
+        organizations.append(
+            {
+                "name": row.network,
+                "kind": kind,
+                # Already on the call list, or already a manufacturer we
+                # track: the row the owner most wants to see. None when the
+                # visitor is nobody we know yet.
+                "match": (
+                    {"kind": match.kind, "name": match.name, "id": match.id}
+                    if match is not None
+                    else None
+                ),
+                "views": row.views,
+                "visitors": row.visitors,
+                "first_seen": str(row.first_seen) if row.first_seen is not None else None,
+                "last_seen": str(row.last_seen) if row.last_seen is not None else None,
+                # Empty lists rather than fabricated placeholders: an
+                # organization whose views all predate city capture genuinely
+                # has no locations to show.
+                "locations": locations.get(row.network, []),
+                "top_pages": pages.get(row.network, []),
+                "referrers": referrers.get(row.network, []),
+                "devices": devices.get(row.network, []),
+            }
+        )
+
+    network_since = _network_tracked_since(db)
+    return {
+        "period_days": days,
+        "segment": segment,
+        "corporate_count": counts["corporate"],
+        "isp_count": counts["isp"],
+        "hosting_count": counts["hosting"],
+        "matched_count": counts["matched"],
+        "network_tracked_since": str(network_since) if network_since is not None else None,
+        "organizations": organizations,
     }

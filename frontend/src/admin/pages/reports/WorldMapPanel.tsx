@@ -27,6 +27,15 @@
 // imperatively (merge-setOption on the captured instance) because the React
 // option prop is applied notMerge and would stomp the user's roam.
 //
+// ── The density heat map (2026-08-30) ──────────────────────────────────────
+// A THIRD view, and the only one that is not ECharts: a real Leaflet slippy
+// map (tiles, labels, roads) under a blurred blue->red density layer, which
+// is the look the owner asked for. It lives in HeatMapView.tsx behind the
+// same cancel-flagged dynamic import the geojson assets use, so its ~163 kB
+// of Leaflet is only fetched by someone who opens it. It speaks its own
+// visual language on purpose — see that file — which is why the bin legend
+// under the map is hidden while it is up.
+//
 // ── The city intel card (2026-08-30) ───────────────────────────────────────
 // Clicking a city dot opens ONE popover anchored at the click, inside the map
 // box, reporting who that town actually was: views + visitors, its top
@@ -37,7 +46,7 @@
 // canvas dot is not a keyboard target.
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { RefObject } from 'react';
+import type { ComponentType, ReactNode, RefObject } from 'react';
 import type { EChartsType } from 'echarts/core';
 import EChart from '@admin/components/charts/EChart';
 // Importing this module is what pulls MapChart + the geo coordinate system +
@@ -66,6 +75,8 @@ import {
 import type { CityPoint, UsCityRow, UsStateRow } from './mapOptions';
 import { featureBounds, viewForBounds } from './usZoom';
 import type { BBox } from './usZoom';
+import type { HeatMapViewProps } from './HeatMapView';
+import { heatLegendTicks } from './heatWeights';
 import styles from './ReportsPage.module.scss';
 
 const CITY_R_MIN = 4;
@@ -76,7 +87,7 @@ const CITY_R_MAX = 11;
 /** How many rows the rank rail shows beside the map, either view. */
 const RANK_ROWS = 8;
 
-type MapView = 'world' | 'us';
+type MapView = 'world' | 'us' | 'heat';
 
 /** The open intel card. `at` is a position in pixels inside `.wmMap`; null is
  *  the pinned corner slot the keyboard path uses, which needs no click to
@@ -166,6 +177,7 @@ interface WorldMapPanelProps {
   usStates?: AnalyticsData['us_states'];
   usCities?: AnalyticsData['us_cities'];
   regionTrackedSince?: string | null;
+  heatPoints?: AnalyticsData['heat_points'];
 }
 
 export default function WorldMapPanel({
@@ -175,6 +187,7 @@ export default function WorldMapPanel({
   usStates,
   usCities,
   regionTrackedSince,
+  heatPoints,
 }: WorldMapPanelProps) {
   const [view, setView] = useState<MapView>('world');
   const [mapReady, setMapReady] = useState(false);
@@ -191,6 +204,12 @@ export default function WorldMapPanel({
   // renderer visibly consumes, not a phantom entry in a memo's dep array.
   const [resetNonce, setResetNonce] = useState(0);
   const [intel, setIntel] = useState<CityIntel | null>(null);
+  // The density view's component, fetched on the first visit to it. Held as
+  // state rather than reached through React.lazy so a failed chunk lands in
+  // the SAME degradation the geojson assets already have — the box says what
+  // happened and the rank rail keeps working — instead of throwing to the
+  // route's error boundary and taking the whole Reports page with it.
+  const [HeatView, setHeatView] = useState<ComponentType<HeatMapViewProps> | null>(null);
   // The live chart instance (captured per mount via onReady; the key={view}
   // remount swaps it) and the states asset's bounding boxes, both consumed
   // imperatively by the zoom handlers. Zoom goes through merge-setOption on
@@ -284,6 +303,29 @@ export default function WorldMapPanel({
 
   const stateRows: UsStateRow[] = useMemo(() => usStates ?? [], [usStates]);
   const cityRows: UsCityRow[] = useMemo(() => usCities ?? [], [usCities]);
+  // Global, not US-scoped: the density layer draws every located point.
+  const heatRows = useMemo(() => heatPoints ?? [], [heatPoints]);
+  // The density view's gradient key: the window's decades read back as tick
+  // labels, off the same ladder that scales the weights. Empty for a
+  // sub-decade window, which hides the key — there is no ladder to explain.
+  const heatTicks = useMemo(
+    () => heatLegendTicks(Math.max(1, ...heatRows.map((p) => p[2]))),
+    [heatRows],
+  );
+
+  // Leaflet + leaflet.heat + leaflet.css, on the first visit to the density
+  // view and never before — the same reasoning as the states asset above, at
+  // roughly the same weight. A window with nothing located is not worth the
+  // fetch either, and cannot reach this view anyway (the entry pill is gated
+  // on the same count).
+  useEffect(() => {
+    if (view !== 'heat' || HeatView || heatRows.length === 0) return;
+    return loadMapAsset<ComponentType<HeatMapViewProps>>(
+      () => import('./HeatMapView'),
+      (mod) => setHeatView(() => mod),
+      () => setMapError(true), // the rank list still renders
+    );
+  }, [view, HeatView, heatRows.length]);
 
   const maxViews = rankMax(countries);
   const usMaxViews = rankMax(stateRows);
@@ -294,6 +336,11 @@ export default function WorldMapPanel({
   const enterUs = useCallback(() => {
     setView('us');
     setZoomed(false); // each view starts at its own auto-fit
+  }, []);
+  const enterHeat = useCallback(() => {
+    setView('heat');
+    setZoomed(false);
+    setIntel(null); // the card belongs to the US view only
   }, []);
   const backToWorld = useCallback(() => {
     setView('world');
@@ -353,7 +400,16 @@ export default function WorldMapPanel({
         if (!info || !bounds || !chart || chart.isDisposed()) return;
         const plotW = Math.max(chart.getWidth() - MAP_BOX.left - MAP_BOX.right, 1);
         const plotH = Math.max(chart.getHeight() - MAP_BOX.top - MAP_BOX.bottom, 1);
-        chart.setOption({ geo: viewForBounds(bounds, info.frame, plotW, plotH) });
+        // The label suppression rides along with every merge: a bare
+        // {center, zoom} merge re-armed the geo's own hover emphasis with
+        // ECharts' default state-name stamp (measured 2026-08-30) even
+        // though the built option already said show:false.
+        chart.setOption({
+          geo: {
+            ...viewForBounds(bounds, info.frame, plotW, plotH),
+            emphasis: { label: { show: false } },
+          },
+        });
         setZoomed(true);
       },
       // Wheel zoom / drag pan, EITHER view. The event also fires when
@@ -440,22 +496,58 @@ export default function WorldMapPanel({
   }, [intel]);
 
   const isUs = view === 'us';
+  const isHeat = view === 'heat';
   const canDrill = stateRows.length > 0 || countries.some((c) => c.code === 'US');
   const chartReady = isUs ? usMapReady : mapReady;
-  const showingCollecting = isUs ? stateRows.length === 0 : countries.length === 0;
+  const showingCollecting = isHeat
+    ? heatRows.length === 0
+    : isUs
+      ? stateRows.length === 0
+      : countries.length === 0;
+  // The density layer plots LOCATED VISITS, which is exactly what the world
+  // view's copy already explains — so heat borrows that wording rather than
+  // inventing a third one (isUs is false here by construction).
   const collect = collectingCopy(isUs, segment, isUs ? regionTrackedSince : geoTrackedSince);
+  const loadingCopy = mapError ? 'The map could not load — refresh to try again.' : 'Loading map…';
+
+  // The map box's body, resolved once here rather than as three nested
+  // ternaries inside the JSX.
+  let mapBody: ReactNode;
+  if (isHeat) {
+    mapBody = showingCollecting ? (
+      <div className={styles.wmHeatGhost} />
+    ) : HeatView ? (
+      <HeatView points={heatRows} fitNonce={resetNonce} onRoam={setZoomed} />
+    ) : (
+      <div className={styles.wmLoading}>{loadingCopy}</div>
+    );
+  } else if (chartReady) {
+    mapBody = (
+      <EChart
+        key={`${view}:${resetNonce}`}
+        option={isUs ? usOption : worldOption}
+        onEvents={onEvents}
+        onReady={captureChart}
+        // The stage owns the height (CSS aspect-ratio, clamped) — the chart
+        // just fills it, and the wrapper's ResizeObserver keeps it fitted.
+        style={{ height: '100%' }}
+      />
+    );
+  } else {
+    mapBody = <div className={styles.wmLoading}>{loadingCopy}</div>;
+  }
 
   return (
     <div className={`${styles.chartCard} ${styles.chartFull} ${styles.wmCard}`}>
       <div className={styles.chartHead}>
         <div className={styles.wmTitleRow}>
-          {isUs && (
+          {(isUs || isHeat) && (
             <button type="button" className={styles.wmCrumb} onClick={backToWorld}>
               <span aria-hidden="true">&#8592;</span> World
             </button>
           )}
           <h3 className={`${styles.chartTitle} ${styles.wmTitle}`}>
-            {isUs ? 'Visitors by State' : 'Visitors by Country'}
+            {isUs ? 'Visitors by State' : isHeat ? 'Visitor Density' : 'Visitors by Country'}
           </h3>
           {zoomed && (
             <button type="button" className={styles.wmCrumb} onClick={resetView}>
@@ -465,39 +557,47 @@ export default function WorldMapPanel({
           {/* The canvas click is the discoverable way in, but it is not a
               keyboard one — the entry pill and the back pill share a slot so
               the drill-down is reachable without a pointer. */}
-          {!isUs && canDrill && (
+          {!isUs && !isHeat && canDrill && (
             <button type="button" className={styles.wmCrumb} onClick={enterUs}>
               United States <span aria-hidden="true">&#8594;</span>
+            </button>
+          )}
+          {/* Offered from the world view only. The density layer IS the world
+              — reaching it from the US drill-down would be a third pill in a
+              row that already carries a crumb, a title and a Reset, to save
+              one click on the "World" pill sitting beside it. Gated on having
+              points for the same reason the US pill is gated on canDrill: a
+              view that can only say "collecting" is not worth an entrance. */}
+          {!isUs && !isHeat && heatRows.length > 0 && (
+            <button type="button" className={styles.wmCrumb} onClick={enterHeat}>
+              Heat map <span aria-hidden="true">&#8594;</span>
             </button>
           )}
         </div>
         <span className={`${styles.chartSub} ${styles.wmSub}`}>
           {showingCollecting
             ? `Collecting — ${isUs ? 'state' : 'country'} is recorded from today forward`
-            : isUs
-              ? `${segmentLabel(segment)} by state — click a state to zoom, a town for detail`
-              : `${segmentLabel(segment)} by location — scroll to zoom`}
+            : isHeat
+              ? `${segmentLabel(segment)} density — scroll to zoom`
+              : isUs
+                ? `${segmentLabel(segment)} by state — click a state to zoom, a town for detail`
+                : `${segmentLabel(segment)} by location — scroll to zoom`}
         </span>
       </div>
 
       <div className={styles.wmBody} data-collecting={showingCollecting || undefined}>
         <div className={styles.wmMap} ref={mapRef}>
-          {chartReady ? (
-            <EChart
-              key={`${view}:${resetNonce}`}
-              option={isUs ? usOption : worldOption}
-              onEvents={onEvents}
-              onReady={captureChart}
-              style={{ height: 300 }}
-            />
-          ) : (
-            <div className={styles.wmLoading}>
-              {mapError ? 'The map could not load — refresh to try again.' : 'Loading map…'}
-            </div>
-          )}
-          {/* The one scale for both layers, as DOM below the canvas — never
-              painted over the geography, whatever the zoom does. */}
-          {!showingCollecting && chartReady && (
+          {/* The stage owns the map's proportions (aspect-ratio in the SCSS,
+              clamped) so all three views share one steady frame — the box no
+              longer jumps between a loading div, a canvas and a tile map. */}
+          <div className={styles.wmStage}>{mapBody}</div>
+          {/* The one scale for both CHOROPLETH layers, as DOM below the
+              canvas — never painted over the geography, whatever the zoom
+              does. The density view is excluded on purpose: its color comes
+              from accumulated alpha rather than from these bins, so the
+              legend would be describing something that view does not do —
+              it carries its own gradient key below instead. */}
+          {!isHeat && !showingCollecting && chartReady && (
             <div className={styles.wmLegend}>
               {(isUs ? usBins : worldBins).map((b) => (
                 <span key={b.label} className={styles.wmLegendItem}>
@@ -510,6 +610,27 @@ export default function WorldMapPanel({
                 </span>
               ))}
               <span className={styles.wmLegendUnit}>views</span>
+            </div>
+          )}
+          {/* The density view's key: the blue->red gradient with the window's
+              own decades ticked along it, positioned by the same ladder that
+              scaled the weights. It reads what a LONE town of that count
+              paints; overlap only ever pushes a cell hotter, which the title
+              text says. */}
+          {isHeat && !showingCollecting && heatTicks.length > 0 && (
+            <div className={styles.wmHeatKey}>
+              <span className={styles.wmHeatKeyLabel}>Views per town</span>
+              <span
+                className={styles.wmHeatKeyScale}
+                title="Overlapping towns accumulate toward the hot end"
+              >
+                <span className={styles.wmHeatKeyBar} aria-hidden="true" />
+                {heatTicks.map((t) => (
+                  <span key={t.label} className={styles.wmHeatKeyTick} style={{ left: `${t.t * 100}%` }}>
+                    {t.label}
+                  </span>
+                ))}
+              </span>
             </div>
           )}
           {isUs && intel && (
@@ -528,6 +649,10 @@ export default function WorldMapPanel({
           )}
         </div>
 
+        {/* The rail stays up in the density view, listing countries: it is the
+            same data the layer is drawing, it is the card's only exact-number
+            readout, and it is the only part of the box a keyboard can reach
+            once the map is a canvas. */}
         {!showingCollecting && (
           <div className={styles.wmRank}>
             {isUs

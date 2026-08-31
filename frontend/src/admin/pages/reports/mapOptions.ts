@@ -205,12 +205,23 @@ export function buildUsOption({
       // because it has no geo component. Symptom to recognise: every state
       // paints LAND_NO_DATA navy while the city dots keep their colors.
       // Measured on the live canvas: 117,011 navy pixels against 367 of ramp.
+      // Each region ALSO re-asserts the no-label hover (found 2026-08-30 on
+      // the live canvas): after the click-to-zoom's merge-setOption touches
+      // the geo, hovering a state started stamping its name in ECharts'
+      // default grey even though the component-level suppression above was
+      // still in the option. Region-level emphasis survives that path; the
+      // hover fill is repeated with it so the highlight stays in the ramp's
+      // language rather than falling back to ECharts' default gold.
       regions: stateRows.map((s) => ({
         name: s.name,
         itemStyle: {
           areaColor: binColorFor(s.views, bins),
           borderColor: VISITED_BORDER,
           borderWidth: 0.9,
+        },
+        emphasis: {
+          label: { show: false },
+          itemStyle: { areaColor: HOVER_LAND, borderColor: HOVER_BORDER },
         },
       })),
     },
@@ -222,6 +233,13 @@ export function buildUsOption({
         // without this, hovering a state stamps its name on the map while
         // hovering a country never does.
         emphasis: { label: { show: false } },
+        // And neither does the geo's disabled SELECT (found 2026-08-30 on
+        // the live canvas): the click that zooms a state was ALSO selecting
+        // it on this series, leaving the state parked in ECharts' default
+        // select style — pale gold fill with a grey name stamped on it —
+        // until the next click. The world view never showed it because its
+        // series carries the full LAND_STYLE, select.disabled included.
+        select: { disabled: true },
         // Values only — the paint is on `geo.regions` above. The series still
         // carries the numbers so the tooltip and hit-testing work.
         data: stateRows.map((s) => ({ name: s.name, value: s.views })),

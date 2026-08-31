@@ -1,0 +1,305 @@
+// Visitor Density — the geography panel's third view (2026-08-30).
+//
+// A REAL slippy map: raster tiles with roads and labels, zoom and pan, under
+// a blurred blue->cyan->green->yellow->red density layer. That is the look of
+// luka1199/geo-heatmap, which the owner asked for; that project is Folium,
+// which is Leaflet + Leaflet.heat over OSM tiles, so this reproduces it with
+// Leaflet directly rather than through Folium's generated HTML.
+//
+// ── Why OSM's own tiles, and why they are darkened in CSS ──────────────────
+// The plan was CARTO's keyless dark basemap. MEASURED 2026-08-30: CARTO no
+// longer has a keyless tier — every style (dark_all, voyager) still returns
+// HTTP 200 with a tile, but the tile is stamped "API KEY REQUIRED", so the
+// failure is a watermark rather than an error and no status check would have
+// caught it. Do not "restore" a cartocdn URL without loading one and LOOKING
+// at it.
+//
+// So the basemap is OpenStreetMap's own standard tiles: keyless, genuinely
+// free under a published usage policy, and the exact basemap the reference
+// project uses. They are LIGHT, which a night-indigo panel is not, so the
+// SCSS darkens the tile pane with a compositor-friendly filter — measured at
+// 16.6ms median / zero frames over 32ms through four zoom animations, which
+// is the same as no filter at all (this repo's standing suspicion of `filter`
+// is about blur and drop-shadow, not about an inverted raster).
+//
+// OSM's tile policy is the constraint that matters if this ever moves: it
+// permits light use like an admin panel, not a public page's traffic.
+//
+// ── This layer speaks a DIFFERENT visual language from the rest of the card ─
+// The choropleth and the city dots share ONE inferno ramp, explained by the
+// DOM legend under the map (viewershipBins.ts). This layer deliberately does
+// not join them. Its color is the reference's blue->red family, and more to
+// the point a heat blob's color comes from ACCUMULATED alpha at each pixel
+// rather than from a per-feature bin — so a piecewise legend would be
+// describing something the layer does not do. That is why the panel hides the
+// bin legend while this view is up, and why retinting VIEWERSHIP_RAMP must
+// not drag this gradient along with it.
+//
+// ── Bundle discipline ──────────────────────────────────────────────────────
+// Leaflet plus its CSS is ~163 kB that only this view needs, so WorldMapPanel
+// reaches this file through a dynamic `import()` and it lands in its own
+// async chunk. Nothing the public entry statically reaches may import it —
+// the same rule the EChart wrapper carries.
+//
+// ── Leak discipline ────────────────────────────────────────────────────────
+// A Leaflet map owns tile requests, document-level handlers and an animation
+// frame, so `map.remove()` on unmount is MANDATORY. This repo has a
+// documented history of orphaned render loops (csFx, 2026-06-22); a detached
+// map still fetching tiles is the same class of bug.
+
+import { useEffect, useMemo, useRef } from 'react';
+import * as L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+import { prefersReducedMotion } from '@admin/components/charts/chartTheme';
+import { heatBounds, heatBrushForZoom, normalizeHeatDecades } from './heatWeights';
+import type { HeatPoint } from './heatWeights';
+import styles from './ReportsPage.module.scss';
+
+/** Keyless and free — the reason no Google Maps billing account is in the
+ *  picture. Single host: the old a/b/c subdomain sharding is deprecated. */
+const TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+
+/** A LICENSE REQUIREMENT, not decoration: OpenStreetMap's terms require the
+ *  credit to be visible on the map itself. Leaflet paints it into the corner
+ *  control; the SCSS restyles that control to suit a dark panel and never
+ *  suppresses it. */
+const TILE_ATTRIBUTION =
+  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+
+/** Leaflet's own credit, minus the flag graphic its 1.9 default carries —
+ *  the credit is worth keeping, the graphic is noise in an admin panel. */
+const LEAFLET_PREFIX = '<a href="https://leafletjs.com/">Leaflet</a>';
+
+/** OSM's standard tiles stop at 19; asking for 20 only earns 404s. */
+const TILE_MAX_ZOOM = 19;
+/** Where the map sits when there is nothing to fit to. */
+const WORLD_CENTER: [number, number] = [20, 0];
+const WORLD_ZOOM = 2;
+/** How far the initial fit may zoom in. Without it a window whose traffic all
+ *  came from one metro opens at street level, which is a picture of one road
+ *  rather than of the visitors. */
+const FIT_MAX_ZOOM = 6;
+
+/**
+ * The reference's ramp, not this card's inferno one — see the header. The
+ * stops are read off ACCUMULATED alpha, so the low end is what a lone
+ * tail point paints and the high end is what a hotspot (or a genuinely dense
+ * cluster) burns through to.
+ *
+ * Five stops for a reason: weights arrive laddered by ORDER OF MAGNITUDE
+ * (heatWeights.ts), so with a three-decade window each decade lands roughly
+ * one stop further along — the ones blue, the tens cyan, the hundreds green,
+ * the thousands yellow into red.
+ */
+const HEAT_GRADIENT: Record<number, string> = {
+  0.2: '#2c5cff', // deep blue — one town, one view
+  0.4: '#12d7e6', // cyan
+  0.6: '#3ddc7f', // green
+  0.8: '#ffd23f', // yellow
+  1.0: '#ff3b1f', // red — the peak of the window
+};
+
+const HEAT_OPTIONS: L.HeatMapOptions = {
+  // Weights arrive pre-scaled onto [DECADE_FLOOR, 1] by heatWeights.ts, so the
+  // divisor is 1 and a cell's accumulated weight IS its alpha. Anything above
+  // 1 is a cell holding several points, which clips to full heat on purpose:
+  // that clipping is what makes density read as density.
+  max: 1,
+  // THE trap in this plugin. leaflet.heat multiplies every weight by
+  // 1 / 2^min(maxZoom - zoom, 12), defaulting maxZoom to the MAP's max zoom —
+  // which here is 19, so at a world view of zoom 2 every weight would be
+  // scaled by 1/4096 and the layer would simply not appear. Our weights are
+  // already normalised for the whole window rather than per-zoom, so we opt
+  // out of that factor entirely: pinning maxZoom to 0 makes the exponent
+  // clamp to 0, and the factor exactly 1, at every zoom we can reach.
+  maxZoom: 0,
+  // radius/blur are deliberately ABSENT here: they are screen-pixel values,
+  // so one fixed pair cannot serve both a world view and a street view — at
+  // z2 the old 24/18 smeared one metro across a subcontinent. The zoom-scaled
+  // pair comes from heatBrushForZoom (heatWeights.ts, where the ladder is
+  // testable), merged in at layer construction and re-applied on `zoomend`.
+  // Left at the plugin's default so it sits BELOW heatWeights' DECADE_FLOOR
+  // (0.18) and can never quietly override the ladder — that module is the one
+  // authority on how faint the bottom decade is allowed to get.
+  minOpacity: 0.05,
+  gradient: HEAT_GRADIENT,
+};
+
+/**
+ * leaflet.heat, loaded once per session.
+ *
+ * The plugin's dist is a classic Leaflet plugin script — no module wrapper at
+ * all. It reads `L.Layer` and writes `L.HeatLayer` / `L.heatLayer` on whatever
+ * `L` its scope resolves to, which under a bundler is the GLOBAL one, so the
+ * global has to exist before the plugin module evaluates. Two consequences
+ * shape this function:
+ *
+ *  - the import must be DYNAMIC, because a static `import 'leaflet.heat'`
+ *    would hoist above the assignment below and blow up on `L is not defined`;
+ *  - the global cannot be the ES module namespace object, which is SEALED —
+ *    the plugin's very first act is to add a property to it. It gets a mutable
+ *    shallow copy instead, which carries the same `Layer`, `Bounds`, `point`
+ *    and `DomUtil` the plugin reaches for, so the layers it constructs are
+ *    genuine Leaflet layers.
+ *
+ * The global stays set for the life of the page: the plugin's `_animateZoom`
+ * reaches for `L.DomUtil` on every zoom, not just at construction.
+ */
+let heatPluginPromise: Promise<typeof L.heatLayer> | null = null;
+
+function loadHeatPlugin(): Promise<typeof L.heatLayer> {
+  heatPluginPromise ??= (async () => {
+    const scope: Record<string, unknown> = { ...L };
+    (window as unknown as { L?: unknown }).L = scope;
+    await import('leaflet.heat');
+    return scope.heatLayer as typeof L.heatLayer;
+  })();
+  return heatPluginPromise;
+}
+
+export interface HeatMapViewProps {
+  /** `[lat, lng, views]` triples straight off the payload — raw counts, not
+   *  intensities. The scaling is this view's job. */
+  points: HeatPoint[];
+  /** Bumped by the panel's "Reset view" pill. Any change re-frames the map on
+   *  the data; the map is NOT remounted, because rebuilding it would throw
+   *  away a warm tile cache to do what one `fitBounds` does. */
+  fitNonce?: number;
+  /** True once the user has moved the map off that framing, false when a
+   *  re-fit puts it back — this is what the Reset pill is bound to. */
+  onRoam?: (roamed: boolean) => void;
+}
+
+export default function HeatMapView({ points, fitNonce = 0, onRoam }: HeatMapViewProps) {
+  const hostRef = useRef<HTMLDivElement | null>(null);
+  const mapRef = useRef<L.Map | null>(null);
+  const heatRef = useRef<L.HeatLayer | null>(null);
+  // Set around every move WE make. Leaflet fires `moveend` identically for a
+  // programmatic fit, a container resize and a user drag, and only the last
+  // of those should raise the Reset pill. Both of our moves fire the event
+  // synchronously inside the call, so a plain flag is enough — no timers.
+  const selfMoveRef = useRef(false);
+  // Latest-ref: the listener effect below must not re-bind on every parent
+  // render just because the callback identity changed.
+  const onRoamRef = useRef(onRoam);
+  onRoamRef.current = onRoam;
+
+  const heatPoints = useMemo(() => normalizeHeatDecades(points), [points]);
+  const bounds = useMemo(() => heatBounds(heatPoints), [heatPoints]);
+
+  // (1) Lifecycle. Runs once (twice under StrictMode, which tears the map
+  // down and rebuilds it — `map.remove()` clears the container's leaflet id,
+  // so the second init does not hit "Map container is already initialized").
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!host) return;
+
+    // Read per mount, same as the EChart wrapper: a reduced-motion user gets
+    // instant zoom/fade cuts instead of Leaflet's ~250ms scale animation.
+    const animate = !prefersReducedMotion();
+    const map = L.map(host, {
+      center: WORLD_CENTER,
+      zoom: WORLD_ZOOM,
+      minZoom: 1,
+      maxZoom: TILE_MAX_ZOOM,
+      scrollWheelZoom: true,
+      worldCopyJump: true,
+      zoomControl: true,
+      attributionControl: true,
+      zoomAnimation: animate,
+      fadeAnimation: animate,
+    });
+    map.attributionControl.setPrefix(LEAFLET_PREFIX);
+    L.tileLayer(TILE_URL, {
+      maxZoom: TILE_MAX_ZOOM,
+      attribution: TILE_ATTRIBUTION,
+    }).addTo(map);
+    // The brush is screen pixels, so its geographic meaning changes with the
+    // zoom — every zoomend re-tunes it off the ladder, tighter zoomed out.
+    // (setOptions redraws through the plugin's own rAF-scheduled _redraw.)
+    map.on('zoomend', () => {
+      heatRef.current?.setOptions(heatBrushForZoom(map.getZoom()));
+    });
+    mapRef.current = map;
+
+    // Leaflet renders a grey half-map when its container changes size after
+    // init, which is exactly what a grid cell in this panel does on the first
+    // layout pass and on every window resize.
+    const ro = new ResizeObserver(() => {
+      if (!mapRef.current) return;
+      selfMoveRef.current = true;
+      map.invalidateSize({ animate: false });
+      selfMoveRef.current = false;
+    });
+    ro.observe(host);
+
+    return () => {
+      ro.disconnect();
+      heatRef.current = null;
+      mapRef.current = null;
+      map.remove();
+    };
+  }, []);
+
+  // (2) Roam reporting. Declared BEFORE the fit effect so the initial fit is
+  // already being listened to and correctly reports "not roamed".
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const onMoveEnd = () => {
+      if (selfMoveRef.current) return;
+      onRoamRef.current?.(true);
+    };
+    map.on('moveend', onMoveEnd);
+    return () => {
+      map.off('moveend', onMoveEnd);
+    };
+  }, []);
+
+  // (3) The heat layer. Rebuilt whenever the scaled points change — a segment
+  // switch or a window change re-scales every weight against a new peak, so
+  // there is nothing to merge into the old layer.
+  useEffect(() => {
+    let cancelled = false;
+    loadHeatPlugin()
+      .then((heatLayer) => {
+        const map = mapRef.current;
+        if (cancelled || !map) return;
+        if (heatRef.current) map.removeLayer(heatRef.current);
+        heatRef.current = heatLayer(heatPoints, {
+          ...HEAT_OPTIONS,
+          ...heatBrushForZoom(map.getZoom()),
+        }).addTo(map);
+      })
+      // A failed chunk leaves the basemap and its attribution standing rather
+      // than blanking the panel; the rank rail beside it still has the
+      // numbers.
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [heatPoints]);
+
+  // (4) Framing. Runs on mount, whenever the data's extent changes, and on
+  // every Reset. `animate: false` keeps `moveend` synchronous, which is what
+  // lets the self-move flag above be a plain boolean.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    selfMoveRef.current = true;
+    if (bounds) map.fitBounds(bounds, { padding: [24, 24], maxZoom: FIT_MAX_ZOOM, animate: false });
+    else map.setView(WORLD_CENTER, WORLD_ZOOM, { animate: false });
+    selfMoveRef.current = false;
+    onRoamRef.current?.(false);
+  }, [bounds, fitNonce]);
+
+  return (
+    <div
+      ref={hostRef}
+      className={styles.wmHeat}
+      // Leaflet's keyboard handler makes the container itself focusable and
+      // pannable with the arrow keys, so it needs a name.
+      aria-label="Visitor density map"
+    />
+  );
+}
