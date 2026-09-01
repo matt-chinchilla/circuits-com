@@ -94,7 +94,11 @@ PUBLIC_ROUTES = {
     ("POST", "/api/keyword-request"),
     ("POST", "/api/track"),
     ("POST", "/api/outbound"),
+    # The sitemap is an INDEX plus its children (2026-09-01). All three
+    # advertise nothing but URLs that are themselves public.
     ("GET", "/api/sitemap.xml"),
+    ("GET", "/api/sitemap-core.xml"),
+    ("GET", "/api/sitemap-parts-{page}.xml"),
     # Read-only, hard-capped ranked slug slice the build-time SEO prerender
     # reads. Public for the same reason the sitemap is: it advertises URLs
     # that are themselves public, and gating it would put a bearer token in

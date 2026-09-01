@@ -58,3 +58,35 @@ def test_spa_fallback_shell_carries_no_canonical():
         "falls back to it — part pages, keyword profiles and 404s would all "
         "point at whichever URL it names."
     )
+
+
+# ── The prod sitemap-index seam ─────────────────────────────────────────────
+# GET /api/sitemap.xml advertises child sitemaps at the PUBLIC root
+# (/sitemap-core.xml, /sitemap-parts-{n}.xml — the sitemap path-scope rule
+# forbids serving them from /api/). Only nginx.ssl.conf bridges that gap, and
+# no API test can see it: delete the location block and 3,000 tests stay green
+# while every advertised child 404s on prod.
+
+PROD_NGINX_CONF = Path(__file__).resolve().parents[2] / "nginx" / "nginx.ssl.conf"
+
+
+def test_prod_nginx_routes_the_sitemap_children():
+    conf = PROD_NGINX_CONF.read_text()
+    match = re.search(
+        r"location\s+~\s+\^/\(sitemap-\[a-z0-9-\]\+\\\.xml\)\$\s*\{([^}]*)\}", conf
+    )
+    assert match, (
+        "nginx.ssl.conf must carry the regex location for /sitemap-*.xml — "
+        "without it the index at /api/sitemap.xml advertises children that "
+        "404, which reads to Google as a broken sitemap."
+    )
+    assert "proxy_pass http://api/api/$1;" in match.group(1), (
+        "the child location must proxy to the api using the captured filename "
+        "(proxy_pass http://api/api/$1;)."
+    )
+
+
+def test_prod_nginx_still_routes_the_sitemap_index():
+    conf = PROD_NGINX_CONF.read_text()
+    assert "location = /sitemap.xml" in conf
+    assert "proxy_pass http://api/api/sitemap.xml;" in conf
