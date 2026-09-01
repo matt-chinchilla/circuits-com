@@ -91,19 +91,19 @@ describe('TYPE_META', () => {
 
 describe('initialsOf', () => {
   it('takes the first letter of the first two words', () => {
-    expect(initialsOf('James Chirichella')).toBe('AL');
+    expect(initialsOf('James Chirichella')).toBe('JC');
   });
 
   it('ignores the middle name rather than growing the avatar', () => {
-    expect(initialsOf('James Byron Chirichella')).toBe('AB');
+    expect(initialsOf('James Byron Chirichella')).toBe('JB');
   });
 
   it('survives a single name', () => {
-    expect(initialsOf('James')).toBe('A');
+    expect(initialsOf('James')).toBe('J');
   });
 
   it('survives extra whitespace', () => {
-    expect(initialsOf('  James   Chirichella ')).toBe('AL');
+    expect(initialsOf('  James   Chirichella ')).toBe('JC');
   });
 
   it('falls back rather than rendering an empty avatar', () => {

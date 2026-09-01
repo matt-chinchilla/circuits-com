@@ -123,7 +123,7 @@ describe('SignIn', () => {
     });
     // Trimmed and lower-cased: the address is the rate-limit key server-side
     // (signup_email_key lower-cases it), and an untrimmed one is a miss.
-    expect(resendVerification).toHaveBeenCalledWith('James@example.com');
+    expect(resendVerification).toHaveBeenCalledWith('james@example.com');
     expect(container.textContent).toContain('New link sent');
   });
 
