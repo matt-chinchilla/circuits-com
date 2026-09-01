@@ -115,7 +115,7 @@ export const STATIC_PAGE_SEO: Record<StaticPageKey, PageSeo> = {
   search: {
     title: 'Search Electronic Components | Circuit Center',
     description:
-      'Search 170,000+ electronic components across dozens of distributors by part number, manufacturer, or category.',
+      'Search hundreds of thousands of electronic components across dozens of distributors by part number, manufacturer, or category.',
     canonical: null,
     robots: 'noindex, follow',
     jsonLd: [],

@@ -34,6 +34,12 @@ describe('Organization JSON-LD', () => {
     expect(logo).not.toMatch(/\.svg$/);
   });
 
+  it('dates the founding to the real launch year', () => {
+    // The site itself says "since 2026"; an invented earlier year in the entity
+    // graph contradicts the visible copy and cannot be substantiated.
+    expect(org.foundingDate).toBe('2026');
+  });
+
   it('omits sameAs until real profile URLs exist', () => {
     // A sameAs pointing at profiles that don't exist is worse than none —
     // it breaks entity resolution instead of helping it.

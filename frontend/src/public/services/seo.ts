@@ -32,7 +32,7 @@ export const ORGANIZATION_JSONLD = JSON.stringify({
   image: ORGANIZATION_LOGO,
   description:
     'Circuit Center is an electronic components directory. Compare prices and stock for integrated circuits, microcontrollers, sensors, and passives across authorized distributors, with datasheets and lifecycle status on every part.',
-  foundingDate: '2003',
+  foundingDate: '2026',
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -117,9 +117,9 @@ const WEBSITE_JSONLD = JSON.stringify({
 export function homeSeo(categories: SeoLink[] = []): PageSeo {
   return {
     title:
-      'The Integrated Circuits Directory — Compare Prices & Distributors | Circuit Center',
+      'Circuit Center — The Integrated Circuits Directory | Compare Prices & Distributors',
     description:
-      'Compare prices and stock for 170,000+ electronic components from dozens of distributors. ICs, MCUs, sensors, and more.',
+      'Circuit Center — the electronic components directory. Compare prices and stock for hundreds of thousands of parts across Digi-Key, Mouser, Arrow, and more.',
     canonical: `${SITE_ORIGIN}/`,
     jsonLd: [ORGANIZATION_JSONLD, WEBSITE_JSONLD],
     heading: 'Circuit Center — The Integrated Circuits Directory',
