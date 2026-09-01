@@ -138,7 +138,18 @@ function Kpi({ label, value, delta, tone = 'neutral', valueStyle }: KpiProps) {
   return (
     <div className={styles.repKpi}>
       <div className={styles.repKpiLabel}>{label}</div>
-      <div className={styles.repKpiVal} style={valueStyle}>{value}</div>
+      {/* `title` only for a string value, and only because one of these four
+          can now ellipse: Top Page is a full URL and the longest real one
+          (`/category/power-management-ics-pmics/ldo-regulators`) does not fit
+          a phone at any font size we would want to read. The numbers never
+          truncate, and a tooltip repeating "6,513" would be noise. */}
+      <div
+        className={styles.repKpiVal}
+        style={valueStyle}
+        title={typeof value === 'string' ? value : undefined}
+      >
+        {value}
+      </div>
       <div className={`${styles.repKpiDelta} ${styles[tone]}`}>{delta}</div>
     </div>
   )
