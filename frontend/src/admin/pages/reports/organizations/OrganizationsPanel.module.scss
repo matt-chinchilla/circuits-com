@@ -76,6 +76,10 @@ $hairline: #26325a;
   margin-bottom: 14px;
 }
 
+// Keycaps (2026-09-01): the chips and sort keys share one tactile grammar —
+// a lit top edge, a shadowed under-edge, a 1px lift on hover and a press-down
+// on click. Depth is layered STATIC box-shadow; only `transform` ever
+// animates (the standing perf rules: no animated shadows or filters).
 .chip {
   display: inline-flex;
   align-items: center;
@@ -85,16 +89,34 @@ $hairline: #26325a;
   padding: 7px 11px;
   border-radius: 999px;
   border: 1px solid $hairline;
-  background: rgba(20, 28, 51, 0.6);
+  background: linear-gradient(180deg, #1a2440 0%, #131b32 100%);
   color: $ink-2;
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  transition: border-color 140ms ease, color 140ms ease, background-color 140ms ease;
+  box-shadow:
+    inset 0 1px 0 rgba(232, 238, 249, 0.09),
+    0 2px 0 rgba(4, 8, 20, 0.55),
+    0 3px 8px -2px rgba(4, 8, 20, 0.45);
+  transition:
+    border-color 140ms ease,
+    color 140ms ease,
+    transform 140ms ease;
 
-  &:hover {
-    color: $ink;
-    border-color: #35447a;
+  // Desktop-only lift — `whileHover`-style motion on touch reads as a jump.
+  @media (hover: hover) {
+    &:hover {
+      color: $ink;
+      border-color: #35447a;
+      transform: translateY(-1px);
+    }
+  }
+
+  &:active {
+    transform: translateY(1px);
+    box-shadow:
+      inset 0 1px 2px rgba(4, 8, 20, 0.5),
+      0 1px 0 rgba(4, 8, 20, 0.55);
   }
 
   &:focus-visible {
@@ -103,10 +125,45 @@ $hairline: #26325a;
   }
 }
 
+// The active chip is LIT in its own kind's color — the same trio the row
+// badges already carry (cyan companies, violet ISPs, bronze hosting, the
+// leads gold for matched), so the filter you chose and the rows it produces
+// agree about what color the answer is.
 .chipOn {
   color: $ink;
   border-color: #2299bf;
-  background: rgba(34, 153, 191, 0.14);
+  background: linear-gradient(180deg, rgba(34, 153, 191, 0.3), rgba(34, 153, 191, 0.1));
+  box-shadow:
+    inset 0 1px 0 rgba(127, 208, 234, 0.24),
+    0 2px 0 rgba(4, 8, 20, 0.55),
+    0 0 14px -4px rgba(34, 153, 191, 0.55);
+
+  &[data-filter='isp'] {
+    border-color: rgba(132, 103, 224, 0.65);
+    background: linear-gradient(180deg, rgba(132, 103, 224, 0.28), rgba(132, 103, 224, 0.1));
+    box-shadow:
+      inset 0 1px 0 rgba(179, 162, 240, 0.24),
+      0 2px 0 rgba(4, 8, 20, 0.55),
+      0 0 14px -4px rgba(132, 103, 224, 0.55);
+  }
+
+  &[data-filter='hosting'] {
+    border-color: rgba(168, 132, 46, 0.65);
+    background: linear-gradient(180deg, rgba(168, 132, 46, 0.28), rgba(168, 132, 46, 0.1));
+    box-shadow:
+      inset 0 1px 0 rgba(231, 201, 121, 0.24),
+      0 2px 0 rgba(4, 8, 20, 0.55),
+      0 0 14px -4px rgba(168, 132, 46, 0.55);
+  }
+
+  &[data-filter='matched'] {
+    border-color: rgba(247, 205, 58, 0.6);
+    background: linear-gradient(180deg, rgba(247, 205, 58, 0.24), rgba(247, 205, 58, 0.08));
+    box-shadow:
+      inset 0 1px 0 rgba(247, 205, 58, 0.26),
+      0 2px 0 rgba(4, 8, 20, 0.55),
+      0 0 14px -4px rgba(247, 205, 58, 0.5);
+  }
 }
 
 .chipCount {
@@ -116,6 +173,18 @@ $hairline: #26325a;
 
   .chipOn & {
     color: #7fd0ea;
+  }
+
+  .chipOn[data-filter='isp'] & {
+    color: #b3a2f0;
+  }
+
+  .chipOn[data-filter='hosting'] & {
+    color: #e7c979;
+  }
+
+  .chipOn[data-filter='matched'] & {
+    color: #f7cd3a;
   }
 }
 
@@ -250,19 +319,49 @@ $hairline: #26325a;
 
 // ─── Expanded detail ────────────────────────────────────────────────────────
 
+// The expansion is a DRAWER: recessed below the list surface (darker fill,
+// inset top shadow) so open rows read as opened, not as more list.
 .detail {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 14px 20px;
-  padding: 4px 4px 16px 28px;
+  gap: 16px 22px;
+  margin: 2px 2px 14px 26px;
+  padding: 14px 16px;
+  border: 1px solid rgba(38, 50, 90, 0.55);
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(8, 12, 24, 0.55), rgba(11, 16, 32, 0.3));
+  box-shadow: inset 0 2px 6px rgba(2, 5, 14, 0.4);
 
   @media (max-width: $bp-admin-compact) {
-    padding-left: 4px;
+    margin-left: 2px;
+    padding: 12px;
   }
 }
 
+// Each column opens with its own colored rule — the LINE that separates the
+// three answers, and it survives the grid wrapping to one column on a phone
+// (a divider between tracks would not). One color per question: pages are
+// the zone cyan, referrers the violet, places the map-beacon gold — the same
+// gold as the ring the click lights up, so cause and effect match.
 .detailBlock {
   min-width: 0;
+  border-left: 2px solid var(--tone-rule, $hairline);
+  padding-left: 12px;
+
+  &[data-tone='pages'] {
+    --tone-rule: rgba(34, 153, 191, 0.55);
+    --tone-ink: #7fd0ea;
+  }
+
+  &[data-tone='from'] {
+    --tone-rule: rgba(132, 103, 224, 0.5);
+    --tone-ink: #b3a2f0;
+  }
+
+  &[data-tone='where'] {
+    --tone-rule: rgba(240, 205, 106, 0.5);
+    --tone-ink: #f0cd6a;
+  }
 }
 
 .detailTitle {
@@ -271,7 +370,7 @@ $hairline: #26325a;
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: $ink-3;
+  color: var(--tone-ink, $ink-3);
 }
 
 .detailList {
@@ -317,24 +416,32 @@ $hairline: #26325a;
 }
 
 .detailPlaceBtn {
-  padding: 0;
+  // Chip geometry via negative margin, so the text still aligns with the
+  // plain-label rows above and below it at rest.
+  padding: 2px 8px;
+  margin: -2px -8px;
   border: 0;
+  border-radius: 6px;
   background: none;
   cursor: pointer;
-  // Underline on hover only: at rest these sit in a dense three-column block
-  // and a permanent underline on every row reads as noise, not as affordance.
-  transition: color 120ms ease;
+  // At rest it reads as text in a dense block (documented choice); on hover
+  // it lights in the SAME gold the map's beacon pulses in — the affordance
+  // says exactly what the click does.
+  transition:
+    color 120ms ease,
+    background-color 120ms ease;
 
-  &:hover {
-    color: $ink;
-    text-decoration: underline;
-    text-underline-offset: 2px;
+  @media (hover: hover) {
+    &:hover {
+      color: #ffe9b0;
+      background: rgba(247, 205, 58, 0.1);
+      box-shadow: inset 0 0 0 1px rgba(240, 205, 106, 0.35);
+    }
   }
 
   &:focus-visible {
-    outline: 2px solid #2299bf;
-    outline-offset: 2px;
-    border-radius: 3px;
+    outline: 2px solid #f0cd6a;
+    outline-offset: 1px;
   }
 }
 
@@ -344,6 +451,20 @@ $hairline: #26325a;
   flex: 0 0 auto;
   font-size: 12px;
   line-height: 1;
+}
+
+// "· Denmark" after "Gellerup, Central Jutland" — the country a reader
+// should not need Danish geography to infer. Never shrinks and never wraps:
+// the city name ellipses first, the answer survives.
+.detailCountry {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: $ink-3;
+  white-space: nowrap;
+
+  &::before {
+    content: '· ';
+  }
 }
 
 .detailNum {
@@ -425,30 +546,42 @@ $hairline: #26325a;
   color: #61719b;
 }
 
+// The sort control is a TRAY of keys: the group is recessed (inset shadow),
+// each key is raised off it, and choosing one presses it INTO the tray —
+// stays down, lit cyan. Chose-ness is depth, not just tint.
 .sortGroup {
   display: inline-flex;
-  gap: 2px;
-  padding: 2px;
+  gap: 3px;
+  padding: 3px;
   border: 1px solid #26325a;
-  border-radius: 7px;
-  background: rgba(11, 16, 32, 0.55);
+  border-radius: 9px;
+  background: linear-gradient(180deg, rgba(6, 10, 22, 0.9), rgba(13, 19, 37, 0.7));
+  box-shadow:
+    inset 0 2px 5px rgba(2, 5, 14, 0.6),
+    inset 0 -1px 0 rgba(232, 238, 249, 0.04);
 }
 
 .sortBtn {
   appearance: none;
   border: 0;
-  background: transparent;
+  background: linear-gradient(180deg, #1d2846 0%, #151e38 100%);
   cursor: pointer;
   font: 500 11.5px/1 inherit;
   color: #93a2c4;
   padding: 5px 10px;
-  border-radius: 5px;
+  border-radius: 6px;
+  box-shadow:
+    inset 0 1px 0 rgba(232, 238, 249, 0.08),
+    0 1px 0 rgba(4, 8, 20, 0.5);
   transition:
     color 120ms ease,
-    background 120ms ease;
+    transform 120ms ease;
 
-  &:hover {
-    color: #e8eef9;
+  @media (hover: hover) {
+    &:hover {
+      color: #e8eef9;
+      transform: translateY(-1px);
+    }
   }
 
   &:focus-visible {
@@ -458,9 +591,21 @@ $hairline: #26325a;
 }
 
 .sortOn {
-  background: #1c2947;
-  color: #e8eef9;
+  background: linear-gradient(180deg, #0d1730 0%, #122040 100%);
+  color: #7fd0ea;
   font-weight: 600;
+  transform: translateY(1px);
+  box-shadow:
+    inset 0 2px 4px rgba(2, 5, 14, 0.7),
+    inset 0 0 0 1px rgba(34, 153, 191, 0.4);
+
+  // The pressed key stays pressed — hover must not un-press it.
+  @media (hover: hover) {
+    &:hover {
+      color: #a5e0f2;
+      transform: translateY(1px);
+    }
+  }
 }
 
 .list {
@@ -493,5 +638,41 @@ $hairline: #26325a;
   &:focus-visible {
     outline: 2px solid #f4d343;
     outline-offset: 2px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chip,
+  .sortBtn,
+  .detailPlaceBtn {
+    transition: none;
+
+    &:hover,
+    &:active {
+      transform: none;
+    }
+  }
+}
+
+// The full page list (2026-09-01: every page ships, not a top-5 cut) scrolls
+// inside the drawer so a ninety-page visitor and a three-page visitor open
+// to the same-height row. ~8 rows visible; the dark thumb matches `.list`.
+.detailListScroll {
+  max-height: 176px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 6px;
+  scrollbar-width: thin;
+  scrollbar-color: #2b3a63 transparent;
+
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: #2b3a63;
+    border-radius: 3px;
   }
 }

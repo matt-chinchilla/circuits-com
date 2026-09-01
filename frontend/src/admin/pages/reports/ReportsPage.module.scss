@@ -1726,3 +1726,42 @@
     }
   }
 }
+
+// ── The heat map's beacon ring (2026-09-01) ─────────────────────────────────
+// Leaflet draws the selection ring as an SVG path and hands it this class;
+// CSS pulses the stroke so "which place did I just click" is answered by the
+// map itself. Stroke properties only — a transform would scale the path from
+// the SVG origin, not the ring's own center. CSS wins over Leaflet's
+// presentation attributes, so the resting frame restates them.
+.wmBeaconRing {
+  animation: wmBeaconPulse 1.9s ease-in-out infinite;
+}
+
+@keyframes wmBeaconPulse {
+  0%,
+  100% {
+    stroke-width: 2;
+    stroke-opacity: 1;
+    fill-opacity: 0.25;
+  }
+
+  50% {
+    stroke-width: 6;
+    stroke-opacity: 0.45;
+    fill-opacity: 0.1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wmBeaconRing {
+    animation: none;
+  }
+}
+
+// Literal addresses on the intel card (migration 050) — data, so mono, like
+// every other machine-string on this page.
+.wmIntelMono {
+  font-family: $font-mono;
+  font-size: 11px;
+  letter-spacing: 0.01em;
+}

@@ -471,6 +471,9 @@ export default function HeatMapView({
       color: '#fff3d6',
       fillColor: '#ffe3a3',
       fillOpacity: 0.25,
+      // The SVG path carries a class so CSS can pulse the stroke — the same
+      // "show me which dot" beacon the country views draw with effectScatter.
+      className: styles.wmBeaconRing,
       // The ring is a readout of the card, never a second click target — a
       // click on it must fall through to the map's own hit test.
       interactive: false,

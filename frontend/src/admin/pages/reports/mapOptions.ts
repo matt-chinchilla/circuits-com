@@ -644,3 +644,38 @@ export const COUNTRY_PROJECTION = {
   project: mercatorProject,
   unproject: mercatorUnproject,
 };
+
+// ── The focus beacon (2026-09-01) ───────────────────────────────────────────
+// One ripple on ONE dot: while a town's intel card is open on a country view,
+// the dot the card describes carries a gold ripple so the reader can find it
+// among its neighbours. It answers the "Where & how" buttons in the
+// organizations panel, whose click may land on a map of forty near-identical
+// dots. Silent — the beacon is a readout of the open card, never a second hit
+// target, so a click falls through to the dot beneath it. The gold is the
+// heat view's own selection ring (#ffe3a3): "the place you asked about" is
+// one color on both maps.
+export const FOCUS_BEACON_ID = 'focus-beacon';
+
+export function focusBeacon(point: [number, number] | null, reducedMotion: boolean) {
+  return {
+    id: FOCUS_BEACON_ID,
+    type: 'effectScatter' as const,
+    coordinateSystem: 'geo' as const,
+    geoIndex: 0,
+    silent: true,
+    z: 12,
+    symbolSize: 12,
+    itemStyle: {
+      color: 'rgba(255, 227, 163, 0.9)',
+      shadowBlur: 12,
+      shadowColor: '#ffe3a3',
+    },
+    // The ripple is the "look here". Under prefers-reduced-motion it degrades
+    // to the glowing dot alone: scale 1 keeps the ripple at the symbol's own
+    // edge, which reads as a static halo rather than motion.
+    rippleEffect: reducedMotion
+      ? { scale: 1, period: 10, brushType: 'stroke' as const }
+      : { scale: 3.4, period: 2.5, brushType: 'stroke' as const },
+    data: point ? [point] : [],
+  };
+}

@@ -27,6 +27,10 @@
 //                        carrying only text, so nothing hovers or selects it
 //                        and the three no-label suppressions in mapOptions.ts
 //                        stay exactly as they are.
+//   EffectScatterChart — the focus beacon: one silent ripple on the dot
+//                        whose intel card is open, merged in by series id
+//                        from WorldMapPanel (mapOptions.focusBeacon). It is
+//                        how a "Where & how" click says WHICH dot it meant.
 //   LinesChart         — the leader lines from the ten states too small to
 //                        hold a label to the open water where their codes are
 //                        drawn (the nine of the northeastern seaboard, on one
@@ -66,11 +70,11 @@
 // Do NOT import this from EChart.tsx or from any Dashboard panel.
 
 import * as echarts from 'echarts/core';
-import { LinesChart, MapChart, ScatterChart } from 'echarts/charts';
+import { EffectScatterChart, LinesChart, MapChart, ScatterChart } from 'echarts/charts';
 import { GeoComponent } from 'echarts/components';
 import { LabelLayout } from 'echarts/features';
 
-echarts.use([MapChart, ScatterChart, LinesChart, GeoComponent, LabelLayout]);
+echarts.use([MapChart, ScatterChart, EffectScatterChart, LinesChart, GeoComponent, LabelLayout]);
 
 /** Register a GeoJSON map once per name (WorldMapPanel lazy-loads the
  *  committed world-110m and us-states-albers assets and hands each here

@@ -124,6 +124,7 @@ export default function OrganizationsPanel({
             key={key}
             type="button"
             className={`${styles.chip} ${filter === key ? styles.chipOn : ''}`}
+            data-filter={key}
             aria-pressed={filter === key}
             onClick={() => setFilter(key)}
           >
@@ -252,24 +253,33 @@ function OrgRow({
 
       {open && (
         <div className={styles.detail} id={detailId}>
-          <DetailBlock title="Pages viewed">
+          <DetailBlock title="Pages viewed" tone="pages">
             {org.top_pages.length === 0 ? (
               <p className={styles.detailEmpty}>No pages recorded.</p>
             ) : (
-              <ul className={styles.detailList}>
-                {org.top_pages.map((page) => (
-                  <li key={page.path}>
-                    <span className={styles.detailPath} title={page.path}>
-                      {page.path}
-                    </span>
-                    <span className={styles.detailNum}>{page.views}</span>
-                  </li>
-                ))}
-              </ul>
+              <>
+                {/* Every page, scrolling in place — the drawer keeps its
+                    height whether the visitor read three pages or ninety. */}
+                <ul className={`${styles.detailList} ${styles.detailListScroll}`}>
+                  {org.top_pages.map((page) => (
+                    <li key={page.path}>
+                      <span className={styles.detailPath} title={page.path}>
+                        {page.path}
+                      </span>
+                      <span className={styles.detailNum}>{page.views}</span>
+                    </li>
+                  ))}
+                </ul>
+                {org.pages_total != null && org.pages_total > org.top_pages.length && (
+                  <p className={styles.detailFoot}>
+                    +{org.pages_total - org.top_pages.length} more not shown
+                  </p>
+                )}
+              </>
             )}
           </DetailBlock>
 
-          <DetailBlock title="Came from">
+          <DetailBlock title="Came from" tone="from">
             {org.referrers.length === 0 ? (
               <p className={styles.detailEmpty}>Direct — no referrer sent.</p>
             ) : (
@@ -286,7 +296,7 @@ function OrgRow({
             )}
           </DetailBlock>
 
-          <DetailBlock title="Where & how">
+          <DetailBlock title="Where & how" tone="where">
             <ul className={styles.detailList}>
               {org.locations.map((loc) => {
                 const label = locationLabel(loc);
@@ -299,6 +309,12 @@ function OrgRow({
                   !!onFocusLocation &&
                   !!loc.country &&
                   (!focusable || focusable.has(loc.country));
+                // "Gellerup, Central Jutland" answers WHERE only if you know
+                // your Danish geography — when the label is a city or region,
+                // the country is spelled out beside it. A country-only row's
+                // label already IS the country name, so it takes no suffix.
+                const suffix =
+                  (loc.city || loc.region) && loc.country ? countryName(loc.country) : null;
                 const flag = loc.country ? (
                   <span
                     className={styles.detailFlag}
@@ -322,11 +338,13 @@ function OrgRow({
                       >
                         {flag}
                         <span className={styles.detailPath}>{label}</span>
+                        {suffix && <span className={styles.detailCountry}>{suffix}</span>}
                       </button>
                     ) : (
                       <span className={styles.detailPlace}>
                         {flag}
                         <span className={styles.detailPath}>{label}</span>
+                        {suffix && <span className={styles.detailCountry}>{suffix}</span>}
                       </span>
                     )}
                     <span className={styles.detailNum}>{loc.views}</span>
@@ -345,9 +363,19 @@ function OrgRow({
   );
 }
 
-function DetailBlock({ title, children }: { title: string; children: ReactNode }) {
+function DetailBlock({
+  title,
+  tone,
+  children,
+}: {
+  title: string;
+  /** Which of the three columns this is — each keeps one color: pages are
+   *  the zone cyan, referrers the violet, places the map's beacon gold. */
+  tone: 'pages' | 'from' | 'where';
+  children: ReactNode;
+}) {
   return (
-    <div className={styles.detailBlock}>
+    <div className={styles.detailBlock} data-tone={tone}>
       <h4 className={styles.detailTitle}>{title}</h4>
       {children}
     </div>

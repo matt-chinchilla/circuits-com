@@ -105,6 +105,7 @@ import {
   buildCountryOption,
   buildLabelLayer,
   buildWorldOption,
+  focusBeacon,
 } from './mapOptions';
 import type { CityPoint, RegionPaint } from './mapOptions';
 import { buildRegionIndex, resolveRegions } from './regionJoin';
@@ -896,6 +897,30 @@ export default function WorldMapPanel({
     });
   }, [shapes, country, regionPaint, cityPoints, regionBins]);
 
+  /**
+   * The gold beacon (2026-09-01). While a town's intel card is open on a
+   * country view, its dot ripples so the reader can see WHICH dot the card
+   * describes — the answer to a "Where & how" click that lands on a map of
+   * forty near-identical dots. Applied imperatively BY SERIES ID because the
+   * option prop is notMerge: `countryOption` is a dep precisely so a rebuild
+   * (segment change, refresh) that wipes the merged series puts it back —
+   * child effects run before this one, so the notMerge apply always loses.
+   * The US frame is planar, so the beacon pre-projects exactly as the dots
+   * do; a centroid outside the albers zones clears it rather than guessing.
+   */
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (!chart || chart.isDisposed() || view !== 'country') return;
+    const row = intel?.row ?? null;
+    const point = row
+      ? isUsView
+        ? albersUsaProject([row.lng, row.lat])
+        : ([row.lng, row.lat] as [number, number])
+      : null;
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    chart.setOption({ series: [focusBeacon(point, reduced)] }, { lazyUpdate: true });
+  }, [intel, view, isUsView, countryOption]);
+
   // The option prop is applied notMerge, so ANY rebuild (segment change,
   // data refresh) silently resets a wheel roam — the pill must not outlive
   // the zoom it described. Imperative click-zooms rebuild nothing, so the
@@ -1322,6 +1347,21 @@ function CityIntelCard({ intel, cardRef, closeRef, onClose }: CityIntelCardProps
           {networks.map((line) => (
             <span key={line} className={styles.wmIntelLine} title={line}>
               {line}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {(row.addresses ?? []).length > 0 && (
+        <div className={styles.wmIntelSection}>
+          <span className={styles.wmIntelLabel}>Addresses</span>
+          {(row.addresses ?? []).map((a) => (
+            <span
+              key={a.ip}
+              className={`${styles.wmIntelLine} ${styles.wmIntelMono}`}
+              title={`${a.ip} — ${a.views} views`}
+            >
+              {a.ip} ({a.views})
             </span>
           ))}
         </div>
