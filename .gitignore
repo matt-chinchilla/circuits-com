@@ -100,3 +100,6 @@ api/app/data/dbip-city-lite.mmdb
 # file above, and unlike that one it has NO committed fallback: absent simply
 # means every page view stores network NULL.
 api/app/data/dbip-asn-lite.mmdb
+
+# Composed client invoices (.eml/.html contain client PII)
+invoices/
