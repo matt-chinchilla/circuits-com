@@ -407,6 +407,25 @@ class TestUsCityIntel:
         ]
         assert row["views"] == 15
 
+    def test_addresses_are_the_top_three_and_history_gets_an_empty_list(
+        self, client, db, seeded_db, auth_header
+    ):
+        """Migration 050: the card's ADDRESSES section — top three literal
+        addresses by views, and rows from before capture (ip NULL) simply
+        never appear, the same forward-only posture as networks."""
+        counts = {"203.0.113.5": 4, "203.0.113.9": 3, "198.51.100.2": 2, "192.0.2.44": 1}
+        for addr, n in counts.items():
+            for i in range(n):
+                db.add(self._seed_one_city(db, session_id=f"ip-{addr}-{i}", ip=addr))
+        db.add(self._seed_one_city(db, session_id="ip-null", ip=None))
+        db.commit()
+        (row,) = _get(client, auth_header)["us_cities"]
+        assert row["addresses"] == [
+            {"ip": "203.0.113.5", "views": 4},
+            {"ip": "203.0.113.9", "views": 3},
+            {"ip": "198.51.100.2", "views": 2},
+        ]
+
     def test_a_city_with_no_network_rows_gets_an_empty_list(
         self, client, db, seeded_db, auth_header
     ):

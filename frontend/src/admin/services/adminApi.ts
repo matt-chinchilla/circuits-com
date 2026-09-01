@@ -144,8 +144,11 @@ export interface VisitorOrganization {
   last_seen: string | null;
   /** Top 3 by views. Empty when the visit predates city capture. */
   locations: OrgLocation[];
-  /** Top 5 by views — what this organization came here to research. */
+  /** Every page, by views, up to a 200-row crawler guard — what this
+   *  organization came here to research. */
   top_pages: Array<{ path: string; views: number }>;
+  /** Distinct pages BEFORE the guard, so the panel can say "+N more". */
+  pages_total?: number;
   /** Top 3 by views; rows with no referrer are not a source. */
   referrers: Array<{ referrer: string; views: number }>;
   devices: Array<{ type: string; views: number }>;

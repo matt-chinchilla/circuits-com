@@ -146,6 +146,9 @@ def track_page_view(
             user_agent=ua[:500] if ua else None,
             session_id=payload.session_id,
             ip_hash=_hash_ip(addr),
+            # The literal address too (migration 050, owner decision) — the
+            # town card's ADDRESSES section reads it, behind require_staff.
+            ip=addr or None,
             device_type=_parse_device(ua),
             browser=_parse_browser(ua),
             country=geo.country,
@@ -326,6 +329,9 @@ def _window_segment(db: Session, cutoff: datetime, segment: str) -> tuple[list[s
 # where the tail stops being interesting; the rest is summarised by the dot's
 # own view count.
 _CITY_NETWORK_LIMIT = 3
+# Distinct literal addresses shown on a town's intel card. Three, like the
+# networks above it: the card answers "who is this", not "list my logfile".
+_CITY_ADDRESS_LIMIT = 3
 
 # How many city bubbles ONE country may return. The rank rail beside the map
 # lists them all, so this is a readability limit, not a runaway guard.
@@ -468,6 +474,7 @@ def _city_rows(
         _breakdown(PageView.network), lambda r: r.network, "name", _CITY_NETWORK_LIMIT
     )
     devices_by_city = _bucket(_breakdown(PageView.device_type), lambda r: r.device_type, "type")
+    addresses_by_city = _bucket(_breakdown(PageView.ip), lambda r: r.ip, "ip", _CITY_ADDRESS_LIMIT)
 
     cities = []
     for row in city_rows:
@@ -489,6 +496,9 @@ def _city_rows(
                 # empty list, never a fabricated "Unknown" network.
                 "networks": networks_by_city.get(key, []),
                 "devices": devices_by_city.get(key, []),
+                # Busiest literal addresses (migration 050) — forward-only,
+                # so a town whose views all predate capture gets [].
+                "addresses": addresses_by_city.get(key, []),
             }
         )
     return cities
@@ -899,7 +909,11 @@ _ORG_LIMIT = 200
 # expanded row; five pages is where "what did they research" stops being a
 # sentence and starts being a log.
 _ORG_LOCATION_LIMIT = 3
-_ORG_PAGE_LIMIT = 5
+# 200 is "all of them" for any real company while keeping a hosting crawler
+# that touched half the catalog from shipping ten thousand rows per org —
+# `pages_total` beside it is what keeps the cut honest (owner, 2026-09-01:
+# the expansion should show every page, scrollable).
+_ORG_PAGE_LIMIT = 200
 _ORG_REFERRER_LIMIT = 3
 
 
@@ -1017,6 +1031,12 @@ def get_organizations(
         _ORG_LOCATION_LIMIT,
     )
     pages = _bucket(page_rows, lambda r: {"path": r.path, "views": r.views}, _ORG_PAGE_LIMIT)
+    # Distinct pages per network BEFORE the cap, so the panel can say
+    # "+N more" instead of silently pretending the cut is the whole story.
+    pages_total: dict[str, int] = defaultdict(int)
+    for row in page_rows:
+        if row.network in surviving:
+            pages_total[row.network] += 1
     referrers = _bucket(
         referrer_rows,
         lambda r: {"referrer": r.referrer, "views": r.views},
@@ -1060,6 +1080,7 @@ def get_organizations(
                 # has no locations to show.
                 "locations": locations.get(row.network, []),
                 "top_pages": pages.get(row.network, []),
+                "pages_total": pages_total.get(row.network, 0),
                 "referrers": referrers.get(row.network, []),
                 "devices": devices.get(row.network, []),
             }

@@ -16,6 +16,12 @@ class PageView(Base):
     user_agent = Column(String(500), nullable=True)
     session_id = Column(String(64), nullable=False, index=True)
     ip_hash = Column(String(64), nullable=True)
+    # The literal address (owner decision 2026-09-01): stored so the town
+    # intel card can answer "which address was this" — admin-only surfaces,
+    # behind require_staff like every reader of this table. Forward-only like
+    # all the geo columns (the hash can't be reversed to backfill history).
+    # String(45) fits the longest IPv6 textual form.
+    ip = Column(String(45), nullable=True)
     device_type = Column(String(20), nullable=True)
     browser = Column(String(50), nullable=True)
     # ISO-3166 alpha-2, resolved at track-time from the client IP (migration

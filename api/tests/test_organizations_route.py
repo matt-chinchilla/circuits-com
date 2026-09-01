@@ -273,7 +273,11 @@ class TestWhatTheyRead:
     """The expander's payload — the part of the panel that answers "what did
     this company come here to research"."""
 
-    def test_top_five_pages_by_views(self, client, db, seeded_db, auth_header):
+    def test_every_page_ships_with_an_honest_total(self, client, db, seeded_db, auth_header):
+        """Owner decision 2026-09-01: the expansion shows EVERY page — the cap
+        is a crawler guard (200), not a top-5 cut — and `pages_total` counts
+        the distinct pages BEFORE the cap so the panel can say "+N more"
+        instead of silently pretending the cut is the whole story."""
         for n, path in enumerate(["/a", "/b", "/c", "/d", "/e", "/f"]):
             for i in range(6 - n):
                 db.add(_view(f"{path}-{i}", path=path))
@@ -285,7 +289,19 @@ class TestWhatTheyRead:
             {"path": "/c", "views": 4},
             {"path": "/d", "views": 3},
             {"path": "/e", "views": 2},
+            {"path": "/f", "views": 1},
         ]
+        assert row["pages_total"] == 6
+
+    def test_the_page_list_is_capped_but_the_total_is_not(
+        self, client, db, seeded_db, auth_header
+    ):
+        for n in range(205):
+            db.add(_view(f"cap-{n}", path=f"/p/{n:03d}"))
+        db.commit()
+        (row,) = _orgs(client, auth_header)
+        assert len(row["top_pages"]) == 200
+        assert row["pages_total"] == 205
 
     def test_top_three_referrers_and_nulls_are_not_a_source(
         self, client, db, seeded_db, auth_header

@@ -517,6 +517,31 @@ class TestTrackStampsNetwork:
         assert db.query(PageView).filter(PageView.session_id == "net-2").one().network is None
 
 
+class TestTrackStampsAddress:
+    """Migration 050 (owner decision 2026-09-01): the literal client address
+    is stored beside the one-way hash, forward-only, for the staff-gated
+    town intel card. The hash keeps its own column untouched."""
+
+    def test_the_address_lands_in_its_column(self, client, db, monkeypatch):
+        from app.routes import analytics as analytics_route
+
+        monkeypatch.setattr(analytics_route, "geo_for_ip", lambda ip: EMPTY_GEO)
+        monkeypatch.setattr(analytics_route, "trusted_client_addr", lambda request: "203.0.113.7")
+        client.post("/api/track", json={"path": "/", "session_id": "ip-1"})
+        row = db.query(PageView).filter(PageView.session_id == "ip-1").one()
+        assert row.ip == "203.0.113.7"
+        assert row.ip_hash is not None and row.ip_hash != row.ip
+
+    def test_an_empty_address_stores_null_not_empty_string(self, client, db, monkeypatch):
+        from app.routes import analytics as analytics_route
+
+        monkeypatch.setattr(analytics_route, "geo_for_ip", lambda ip: EMPTY_GEO)
+        monkeypatch.setattr(analytics_route, "trusted_client_addr", lambda request: "")
+        resp = client.post("/api/track", json={"path": "/", "session_id": "ip-2"})
+        assert resp.status_code == 204
+        assert db.query(PageView).filter(PageView.session_id == "ip-2").one().ip is None
+
+
 class TestDistrictSuffix:
     """DB-IP labels sub-city records "City (District)" — 16.6% of US lookups
     (measured over 20,000 random addresses). The stored city is the metro."""

@@ -420,6 +420,9 @@ export interface GeoCityRow {
   last_seen?: string | null;
   networks?: Array<{ name: string; views: number }> | null;
   devices?: Array<{ type: string; views: number }> | null;
+  /** Busiest literal client addresses (migration 050) — forward-only, so a
+   *  town whose views all predate capture carries an empty list or nothing. */
+  addresses?: Array<{ ip: string; views: number }> | null;
 }
 
 export type AnalyticsSegment = AnalyticsData['segment'];
