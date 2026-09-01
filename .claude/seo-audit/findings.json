@@ -6,9 +6,13 @@
       "id": "not-indexed-no-external-mentions",
       "severity": "P0",
       "title": "Domain has no discovery path: zero external mentions, zero backlinks, no Search Console or Bing registration",
-      "evidence": "WebSearch site:circuitcenter.ai -> zero results from the domain (only unrelated circuit*.ai companies). WebSearch \"circuitcenter.ai\" (quoted) -> zero pages on the web mention the domain; results are circuit.ai, circuitry.ai, circuitai.vercel.app. Zero mentions => assume zero backlinks => no crawler discovery path. Owner evidence 2026-08-31: GSC not registered, Bing Webmaster not registered (\"No, neither\"); owner paged many pages deep on Google for \"circuit center\" and the site never appears. Site live since ~2026-05-14, i.e. ~3.5 months with no discovery. NOT a robots/noindex defect: curl robots.txt allows all public routes, and served pages carry no noindex (only /search does, deliberately).",
+      "evidence": "WebSearch site:circuitcenter.ai -> zero results from the domain (only unrelated circuit*.ai companies). WebSearch \"circuitcenter.ai\" (quoted) -> zero pages on the web mention the domain; results are circuit.ai, circuitry.ai, circuitai.vercel.app. Zero mentions => assume zero backlinks => no crawler discovery path. Owner evidence 2026-08-31: GSC not registered, Bing Webmaster not registered (\"No, neither\"); owner paged many pages deep on Google for \"circuit center\" and the site never appears. Site live since ~2026-05-14, i.e. ~3.5 months with no discovery. NOT a robots/noindex defect: curl robots.txt allows all public routes, and served pages carry no noindex (only /search does, deliberately). ADDENDUM 2026-09-01 (post-GSC-verification): GSC URL Inspection shows the HOMEPAGE is already indexed ('URL is on Google', page indexed, HTTPS ok) \u2014 so the homepage's problem is ranking/authority for the brand term, not discovery. Zero external mentions, zero backlinks, and the unindexed deep pages remain true and open; GSC Pages report will quantify deep-page coverage in ~a day.",
       "fix": "[OWNER] Register + verify circuitcenter.ai in Google Search Console and Bing Webmaster Tools, then submit the sitemap (fix sitemap-exceeds-50000-url-limit FIRST or submission is rejected). [OWNER] Create the real external mentions that produce a crawl path: LinkedIn company page, Crunchbase, GitHub org, an industry directory listing. These are off-site actions; no repo change fixes this.",
-      "keywords": ["circuit center", "circuitcenter.ai", "all"],
+      "keywords": [
+        "circuit center",
+        "circuitcenter.ai",
+        "all"
+      ],
       "status": "open",
       "first_seen": "2026-09-01T03:44:41Z",
       "last_seen": "2026-09-01T03:44:41Z"
@@ -16,10 +20,12 @@
     {
       "id": "sitemap-exceeds-50000-url-limit",
       "severity": "P1",
-      "title": "sitemap.xml is a single 312,634-URL <urlset> — 6.25x the 50,000-URL protocol cap, so the whole file is rejected",
+      "title": "sitemap.xml is a single 312,634-URL <urlset> \u2014 6.25x the 50,000-URL protocol cap, so the whole file is rejected",
       "evidence": "curl -s https://circuitcenter.ai/sitemap.xml | grep -c '<loc>' -> 312634. head -c 200 shows a bare <urlset>, not a <sitemapindex>. Uncompressed size 47,074,247 bytes (44.9 MB, under the 50MB cap but 6.25x over the URL cap). Serves in 4.9s (2.6MB gzipped on the wire). sitemap.py:116 emits one flat urlset with no cap; the part loop at ~line 101 does db.query(Part.id, Part.slug).all() with no limit. robots.txt advertises this file as the only sitemap, and it is the ONLY discovery path for part pages (see part-pages-orphaned-no-internal-links).",
-      "fix": "api/app/routes/sitemap.py:116 — emit a <sitemapindex> pointing at paged child sitemaps of <=50,000 URLs each (e.g. /sitemap-parts-1.xml). Given the domain currently has zero authority, cap the advertised part URLs to a tiered slice (the highest-value parts) rather than all 312k — six figures of URLs from a zero-mention domain reads spam-shaped and earns near-zero crawl budget. Align that cap with PRERENDER_PART_LIMIT (sitemap.py:147) so every advertised URL is one that actually prerenders.",
-      "keywords": ["all long-tail part-number terms"],
+      "fix": "api/app/routes/sitemap.py:116 \u2014 emit a <sitemapindex> pointing at paged child sitemaps of <=50,000 URLs each (e.g. /sitemap-parts-1.xml). Given the domain currently has zero authority, cap the advertised part URLs to a tiered slice (the highest-value parts) rather than all 312k \u2014 six figures of URLs from a zero-mention domain reads spam-shaped and earns near-zero crawl budget. Align that cap with PRERENDER_PART_LIMIT (sitemap.py:147) so every advertised URL is one that actually prerenders.",
+      "keywords": [
+        "all long-tail part-number terms"
+      ],
       "status": "open",
       "first_seen": "2026-09-01T03:44:41Z",
       "last_seen": "2026-09-01T03:44:41Z"
@@ -27,10 +33,13 @@
     {
       "id": "part-pages-serve-generic-shell",
       "severity": "P1",
-      "title": "~95% of advertised part URLs return HTML byte-identical to a nonexistent page — no title, no canonical, no h1, no schema",
-      "evidence": "Googlebot-UA fetch: /part/agq200s12z and /part/686720050001 both md5 70d845415f9e, 8291 bytes — IDENTICAL to /nonexistent-page-xyz (md5 70d845415f9e). That shell has title 'Circuit Center — The Integrated Circuits Directory' (same as a 404), 0 application/ld+json blocks, 0 <h1>, and NO <noscript> block at all. Random sample of 40 sitemap part URLs: 38 shell / 2 prerendered (95%). Arithmetic agrees: frontend/seo-manifest.json holds 14,937 parts vs 312,409 part URLs in the sitemap = 4.8% coverage. Parts INSIDE the manifest are correct (/part/cc0402krx7r7bb104 -> md5 b2ac121475c0, title 'CC0402KRX7R7BB104 by YAGEO — Buy from Distributors | Circuit Center', canonical + Product JSON-LD present). Not a data problem: /api/parts/by-slug/agq200s12z returns 200. Cause is the cap mismatch — PRERENDER_PART_LIMIT = 15_000 at api/app/routes/sitemap.py:147 vs an uncapped sitemap part loop. Category coverage is fine by contrast: sample of 25 category URLs -> 0 shell / 25 prerendered.",
-      "fix": "Make the sitemap's part slice and the prerender's part slice the SAME set. Either raise PRERENDER_PART_LIMIT (api/app/routes/sitemap.py:147) and regenerate frontend/seo-manifest.json via `node scripts/gen-seo-manifest.mjs`, or cap the sitemap to the prerendered slice (preferred at current authority). Note the committed manifest was generated 2026-08-30 from source 'http://localhost/api' with only 28 categories and 14,937 parts — regenerate it against PROD data, not local. Cost note: prerendering more routes grows build time and the static doc count; it adds no runtime dependency and no client bundle weight.",
-      "keywords": ["part number long-tail", "MPN queries"],
+      "title": "~95% of advertised part URLs return HTML byte-identical to a nonexistent page \u2014 no title, no canonical, no h1, no schema",
+      "evidence": "Googlebot-UA fetch: /part/agq200s12z and /part/686720050001 both md5 70d845415f9e, 8291 bytes \u2014 IDENTICAL to /nonexistent-page-xyz (md5 70d845415f9e). That shell has title 'Circuit Center \u2014 The Integrated Circuits Directory' (same as a 404), 0 application/ld+json blocks, 0 <h1>, and NO <noscript> block at all. Random sample of 40 sitemap part URLs: 38 shell / 2 prerendered (95%). Arithmetic agrees: frontend/seo-manifest.json holds 14,937 parts vs 312,409 part URLs in the sitemap = 4.8% coverage. Parts INSIDE the manifest are correct (/part/cc0402krx7r7bb104 -> md5 b2ac121475c0, title 'CC0402KRX7R7BB104 by YAGEO \u2014 Buy from Distributors | Circuit Center', canonical + Product JSON-LD present). Not a data problem: /api/parts/by-slug/agq200s12z returns 200. Cause is the cap mismatch \u2014 PRERENDER_PART_LIMIT = 15_000 at api/app/routes/sitemap.py:147 vs an uncapped sitemap part loop. Category coverage is fine by contrast: sample of 25 category URLs -> 0 shell / 25 prerendered.",
+      "fix": "Make the sitemap's part slice and the prerender's part slice the SAME set. Either raise PRERENDER_PART_LIMIT (api/app/routes/sitemap.py:147) and regenerate frontend/seo-manifest.json via `node scripts/gen-seo-manifest.mjs`, or cap the sitemap to the prerendered slice (preferred at current authority). Note the committed manifest was generated 2026-08-30 from source 'http://localhost/api' with only 28 categories and 14,937 parts \u2014 regenerate it against PROD data, not local. Cost note: prerendering more routes grows build time and the static doc count; it adds no runtime dependency and no client bundle weight.",
+      "keywords": [
+        "part number long-tail",
+        "MPN queries"
+      ],
       "status": "open",
       "first_seen": "2026-09-01T03:44:41Z",
       "last_seen": "2026-09-01T03:44:41Z"
@@ -38,10 +47,13 @@
     {
       "id": "part-pages-orphaned-no-internal-links",
       "severity": "P1",
-      "title": "No part page is reachable by any crawlable link — the raw-HTML link graph dead-ends at subcategory",
+      "title": "No part page is reachable by any crawlable link \u2014 the raw-HTML link graph dead-ends at subcategory",
       "evidence": "Parsed <a href> out of the Googlebot-served HTML at each hop. Home: 32 links, 25 of them /category/*. Category /category/power-management-ics-pmics: 6 links, all subcategories, ZERO matching /part/. Subcategory /category/power-management-ics-pmics/ldo-regulators: 2 links, both UP (/ and the parent). All 312,409 part URLs are therefore sitemap-only orphans, and the sitemap itself is rejected (see sitemap-exceeds-50000-url-limit). Orphaned pages in a sitemap still get ignored.",
-      "fix": "Add crawlable part links to the prerendered <noscript> block on subcategory pages in frontend/scripts/seoPrerender.ts — the subcategory noscript currently emits only <h1>, a boilerplate <p> and two breadcrumb links. Emitting the page-1 parts list there (25 links, matching the visible table) gives a home -> category -> subcategory -> part path in raw HTML. Zero client-bundle cost: it is static markup inside noscript.",
-      "keywords": ["part number long-tail", "MPN queries"],
+      "fix": "Add crawlable part links to the prerendered <noscript> block on subcategory pages in frontend/scripts/seoPrerender.ts \u2014 the subcategory noscript currently emits only <h1>, a boilerplate <p> and two breadcrumb links. Emitting the page-1 parts list there (25 links, matching the visible table) gives a home -> category -> subcategory -> part path in raw HTML. Zero client-bundle cost: it is static markup inside noscript.",
+      "keywords": [
+        "part number long-tail",
+        "MPN queries"
+      ],
       "status": "open",
       "first_seen": "2026-09-01T03:44:41Z",
       "last_seen": "2026-09-01T03:44:41Z"
@@ -51,8 +63,12 @@
       "severity": "P1",
       "title": "\"circuit center\" is owned by an established Pittsburgh event venue with an exact-match domain and heavy citations",
       "evidence": "WebSearch \"circuit center\" first page is entirely The Circuit Center, a Pittsburgh wedding/event venue: circuitcenterpgh.com (exact-match domain), facebook.com/CircuitCenter, Yelp, The Knot, WeddingWire, Fever, 10times, thecommonplea.com. That is a real-world local entity with a physical address (5 Hot Metal St), a phone number, and years of third-party citations. circuitcenter.ai has zero mentions anywhere (see not-indexed-no-external-mentions), so it currently has no entity footprint to compete with. On-page entity signals ARE present and correct: served homepage carries Organization JSON-LD (@id https://circuitcenter.ai/#organization, name 'Circuit Center', crawlable logo at /images/apple-touch-icon.png -> HTTP 200) plus WebSite + SearchAction.",
-      "fix": "Do not chase the bare head term \"circuit center\" — it is not winnable against an entrenched exact-match-domain local entity, and the site is not even in the index yet. Target the disambiguated brand variants the owner can actually own: \"circuit center ai\", \"circuitcenter.ai\", \"circuit center components\", \"circuit center electronic components directory\". Winning those requires entity signals off-site (see organization-missing-sameas), not on-page changes. Secondary: the homepage <title> puts the brand LAST — 'The Integrated Circuits Directory — Compare Prices & Distributors | Circuit Center' (frontend/src/public/services/seo.ts). Leading the homepage title with the brand strengthens the brand-query match.",
-      "keywords": ["circuit center", "circuit center ai", "circuitcenter.ai"],
+      "fix": "Do not chase the bare head term \"circuit center\" \u2014 it is not winnable against an entrenched exact-match-domain local entity, and the site is not even in the index yet. Target the disambiguated brand variants the owner can actually own: \"circuit center ai\", \"circuitcenter.ai\", \"circuit center components\", \"circuit center electronic components directory\". Winning those requires entity signals off-site (see organization-missing-sameas), not on-page changes. Secondary: the homepage <title> puts the brand LAST \u2014 'The Integrated Circuits Directory \u2014 Compare Prices & Distributors | Circuit Center' (frontend/src/public/services/seo.ts). Leading the homepage title with the brand strengthens the brand-query match.",
+      "keywords": [
+        "circuit center",
+        "circuit center ai",
+        "circuitcenter.ai"
+      ],
       "status": "open",
       "first_seen": "2026-09-01T03:44:41Z",
       "last_seen": "2026-09-01T03:44:41Z"
@@ -60,10 +76,14 @@
     {
       "id": "organization-missing-sameas",
       "severity": "P1",
-      "title": "Organization JSON-LD has no sameAs because no real Circuit Center profiles exist — the entity has nothing to resolve against",
-      "evidence": "Served homepage Organization JSON-LD contains name, url, logo, image, description, foundingDate and NO sameAs. Source frontend/src/public/services/seo.ts:20-21 documents this deliberately: 'sameAs is deliberately ABSENT: no verified Circuit Center social profiles exist yet.' Guard test at seo.test.ts:37 pins the omission. The CODE IS CORRECT — a fabricated sameAs would be worse. The gap is that no profiles exist to link, which is also why the quoted-domain search returns zero mentions.",
-      "fix": "[OWNER] Create real, owned profiles first — LinkedIn company page, Crunchbase, GitHub org — then wire their URLs into ORGANIZATION_JSONLD at frontend/src/public/services/seo.ts:24-36. Never invent a profile URL. This is the same action that fixes the zero-mentions problem, so it pays twice.",
-      "keywords": ["circuit center", "circuit center ai", "brand"],
+      "title": "Organization JSON-LD has no sameAs because no real Circuit Center profiles exist \u2014 the entity has nothing to resolve against",
+      "evidence": "Served homepage Organization JSON-LD contains name, url, logo, image, description, foundingDate and NO sameAs. Source frontend/src/public/services/seo.ts:20-21 documents this deliberately: 'sameAs is deliberately ABSENT: no verified Circuit Center social profiles exist yet.' Guard test at seo.test.ts:37 pins the omission. The CODE IS CORRECT \u2014 a fabricated sameAs would be worse. The gap is that no profiles exist to link, which is also why the quoted-domain search returns zero mentions.",
+      "fix": "[OWNER] Create real, owned profiles first \u2014 LinkedIn company page, Crunchbase, GitHub org \u2014 then wire their URLs into ORGANIZATION_JSONLD at frontend/src/public/services/seo.ts:24-36. Never invent a profile URL. This is the same action that fixes the zero-mentions problem, so it pays twice.",
+      "keywords": [
+        "circuit center",
+        "circuit center ai",
+        "brand"
+      ],
       "status": "open",
       "first_seen": "2026-09-01T03:44:41Z",
       "last_seen": "2026-09-01T03:44:41Z"
@@ -72,9 +92,12 @@
       "id": "og-image-404-sitewide",
       "severity": "P1",
       "title": "og:image and twitter:image point at /images/og-default.png, which returns 404 on every page",
-      "evidence": "curl -s -o /dev/null -w '%{http_code}' https://circuitcenter.ai/images/og-default.png -> 404. The tag is on every served page (homepage: <meta property=\"og:image\" content=\"https://circuitcenter.ai/images/og-default.png\" />). The file does not exist in the repo either: frontend/public/images/ contains apple-touch-icon.png, favicon-*.png, favicon.ico, logo-badge-*.png, logo-lockup.png, logo-mark.svg, logo-monogram-mockup.png, site.webmanifest — no og-default.png. Referenced at frontend/index.html:42 (og:image) and frontend/index.html:46 (twitter:image).",
-      "fix": "Add frontend/public/images/og-default.png (1200x630) — logo-lockup.png is already in the repo and is the obvious source. Alternatively repoint frontend/index.html:42 and :46 at an existing asset. Every share of this domain currently renders a linkless grey card, which suppresses exactly the social pickup that would create the first external mentions.",
-      "keywords": ["brand", "circuit center"],
+      "evidence": "curl -s -o /dev/null -w '%{http_code}' https://circuitcenter.ai/images/og-default.png -> 404. The tag is on every served page (homepage: <meta property=\"og:image\" content=\"https://circuitcenter.ai/images/og-default.png\" />). The file does not exist in the repo either: frontend/public/images/ contains apple-touch-icon.png, favicon-*.png, favicon.ico, logo-badge-*.png, logo-lockup.png, logo-mark.svg, logo-monogram-mockup.png, site.webmanifest \u2014 no og-default.png. Referenced at frontend/index.html:42 (og:image) and frontend/index.html:46 (twitter:image).",
+      "fix": "Add frontend/public/images/og-default.png (1200x630) \u2014 logo-lockup.png is already in the repo and is the obvious source. Alternatively repoint frontend/index.html:42 and :46 at an existing asset. Every share of this domain currently renders a linkless grey card, which suppresses exactly the social pickup that would create the first external mentions.",
+      "keywords": [
+        "brand",
+        "circuit center"
+      ],
       "status": "open",
       "first_seen": "2026-09-01T03:44:41Z",
       "last_seen": "2026-09-01T03:44:41Z"
@@ -83,9 +106,12 @@
       "id": "organization-foundingdate-false",
       "severity": "P2",
       "title": "Organization schema claims foundingDate 2003 for a site that went live 2026-05-14",
-      "evidence": "Served homepage JSON-LD: \"foundingDate\":\"2003\". Source frontend/src/public/services/seo.ts:35. Owner evidence 2026-08-31: production went live ~2026-05-14. This is the same untrue claim CLAUDE.md records as already removed from the visible About strip ('a 23 Years Online that was never true') — it survived in structured data. Structured data that contradicts reality is a manual-action risk, the same class as Product/offers markup that disagrees with the page.",
-      "fix": "frontend/src/public/services/seo.ts:35 — set the real founding year or drop the property. An omitted foundingDate costs nothing; a false one is a liability.",
-      "keywords": ["circuit center", "brand"],
+      "evidence": "Served homepage JSON-LD: \"foundingDate\":\"2003\". Source frontend/src/public/services/seo.ts:35. Owner evidence 2026-08-31: production went live ~2026-05-14. This is the same untrue claim CLAUDE.md records as already removed from the visible About strip ('a 23 Years Online that was never true') \u2014 it survived in structured data. Structured data that contradicts reality is a manual-action risk, the same class as Product/offers markup that disagrees with the page.",
+      "fix": "frontend/src/public/services/seo.ts:35 \u2014 set the real founding year or drop the property. An omitted foundingDate costs nothing; a false one is a liability.",
+      "keywords": [
+        "circuit center",
+        "brand"
+      ],
       "status": "open",
       "first_seen": "2026-09-01T03:44:41Z",
       "last_seen": "2026-09-01T03:44:41Z"
@@ -93,10 +119,13 @@
     {
       "id": "thin-crawlable-body-content",
       "severity": "P2",
-      "title": "Prerendered pages carry only a <noscript> stub — 233-906 chars of crawlable text; subcategory copy is templated boilerplate",
-      "evidence": "Visible text with tags stripped (noscript RETAINED, scripts/styles removed): home 844 chars, category/power-management-ics-pmics 906, category/.../ldo-regulators 237, part/cc0402krx7r7bb104 233, /about 299, /bom 312, /join 322. All visible content lives inside <noscript>; the real body renders only after hydration. The 189 subcategory pages share one template — ldo-regulators reads 'Compare prices for Voltage Regulators (LDOs) components from top distributors on Circuit Center.' with only the name swapped, which is a duplicate-content signal at scale. Top-level categories are better: they carry the real Category.description prose (906 chars).",
-      "fix": "Extend frontend/scripts/seoPrerender.ts to write richer noscript bodies. Highest value: give subcategories real per-row description text (the same Category.description mechanism top-level categories already use, seeded via CATEGORY_DESCRIPTIONS in api/app/db/seed.py) instead of the shared template, and emit the parts list (which also fixes part-pages-orphaned-no-internal-links). Static markup only — no runtime dependency, no client bundle growth.",
-      "keywords": ["category terms", "component class long-tail"],
+      "title": "Prerendered pages carry only a <noscript> stub \u2014 233-906 chars of crawlable text; subcategory copy is templated boilerplate",
+      "evidence": "Visible text with tags stripped (noscript RETAINED, scripts/styles removed): home 844 chars, category/power-management-ics-pmics 906, category/.../ldo-regulators 237, part/cc0402krx7r7bb104 233, /about 299, /bom 312, /join 322. All visible content lives inside <noscript>; the real body renders only after hydration. The 189 subcategory pages share one template \u2014 ldo-regulators reads 'Compare prices for Voltage Regulators (LDOs) components from top distributors on Circuit Center.' with only the name swapped, which is a duplicate-content signal at scale. Top-level categories are better: they carry the real Category.description prose (906 chars).",
+      "fix": "Extend frontend/scripts/seoPrerender.ts to write richer noscript bodies. Highest value: give subcategories real per-row description text (the same Category.description mechanism top-level categories already use, seeded via CATEGORY_DESCRIPTIONS in api/app/db/seed.py) instead of the shared template, and emit the parts list (which also fixes part-pages-orphaned-no-internal-links). Static markup only \u2014 no runtime dependency, no client bundle growth.",
+      "keywords": [
+        "category terms",
+        "component class long-tail"
+      ],
       "status": "open",
       "first_seen": "2026-09-01T03:44:41Z",
       "last_seen": "2026-09-01T03:44:41Z"
@@ -105,8 +134,8 @@
       "id": "soft-404-unknown-urls-return-200",
       "severity": "P2",
       "title": "Unknown URLs return HTTP 200 with the generic shell instead of 404",
-      "evidence": "curl -s -o /dev/null -w '%{http_code}' https://circuitcenter.ai/nonexistent-page-xyz -> 200, body md5 70d845415f9e (8291 bytes). Combined with part-pages-serve-generic-shell, that means ~297,000 advertised URLs and every typo/stale URL all return 200 with byte-identical content — a mass duplicate/soft-404 signal that wastes the crawl budget the domain does not yet have.",
-      "fix": "Have nginx serve the SPA fallback with a 404 status for unmatched paths (the React NotFoundPage at App.tsx:228 already renders correctly; only the status code is wrong). Lower value than the sitemap and prerender fixes and partially subsumed by them — do it after those.",
+      "evidence": "curl -s -o /dev/null -w '%{http_code}' https://circuitcenter.ai/nonexistent-page-xyz -> 200, body md5 70d845415f9e (8291 bytes). Combined with part-pages-serve-generic-shell, that means ~297,000 advertised URLs and every typo/stale URL all return 200 with byte-identical content \u2014 a mass duplicate/soft-404 signal that wastes the crawl budget the domain does not yet have.",
+      "fix": "Have nginx serve the SPA fallback with a 404 status for unmatched paths (the React NotFoundPage at App.tsx:228 already renders correctly; only the status code is wrong). Lower value than the sitemap and prerender fixes and partially subsumed by them \u2014 do it after those.",
       "keywords": [],
       "status": "open",
       "first_seen": "2026-09-01T03:44:41Z",
@@ -116,9 +145,12 @@
       "id": "stale-hardcoded-part-count-in-meta",
       "severity": "P2",
       "title": "Meta/OG descriptions hardcode \"170,000+\" components against a live figure of 309,365",
-      "evidence": "curl -s https://circuitcenter.ai/api/stats/ -> {\"parts\":309365,\"distributors\":55,\"categories\":28,\"subcategories\":189}. The literal '170,000+' appears at frontend/index.html:26 (description), :40 (og:description), :45 (twitter:description) and frontend/src/public/services/seo.ts:122. Not a penalty risk — the claim is conservative and technically true — but it understates the catalog by 45% in the snippet that would appear in search results, and it is the exact stale-literal class CLAUDE.md requires be sourced from GET /api/stats/.",
-      "fix": "Regenerate the home description from the site_stats figure at build time (frontend/src/public/services/seo.ts:122 and frontend/index.html:26/40/45), or round to a durable band. Build-time substitution only — do not put a stats fetch in the request path.",
-      "keywords": ["electronic components directory", "compare component prices"],
+      "evidence": "curl -s https://circuitcenter.ai/api/stats/ -> {\"parts\":309365,\"distributors\":55,\"categories\":28,\"subcategories\":189}. The literal '170,000+' appears at frontend/index.html:26 (description), :40 (og:description), :45 (twitter:description) and frontend/src/public/services/seo.ts:122. Not a penalty risk \u2014 the claim is conservative and technically true \u2014 but it understates the catalog by 45% in the snippet that would appear in search results, and it is the exact stale-literal class CLAUDE.md requires be sourced from GET /api/stats/.",
+      "fix": "Regenerate the home description from the site_stats figure at build time (frontend/src/public/services/seo.ts:122 and frontend/index.html:26/40/45), or round to a durable band. Build-time substitution only \u2014 do not put a stats fetch in the request path.",
+      "keywords": [
+        "electronic components directory",
+        "compare component prices"
+      ],
       "status": "open",
       "first_seen": "2026-09-01T03:44:41Z",
       "last_seen": "2026-09-01T03:44:41Z"
