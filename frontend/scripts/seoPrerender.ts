@@ -27,8 +27,9 @@
 // with a photo AND a price first, then stock descending, then newest. Parts
 // outside it serve the SPA shell and get their head tags from helmet after
 // hydration, which is already what every part added since the last regen does.
-// The dynamic /api/sitemap.xml stays FULL — the cap bounds static HTML, never
-// what is advertised to crawlers.
+// The sitemap advertises exactly this same slice: /api/sitemap-parts-{n}.xml
+// is built from the identical ranked query, so one knob (PRERENDER_PART_LIMIT)
+// moves both surfaces and no advertised URL serves the bare shell.
 //
 // The route data comes from seo-manifest.json, a snapshot committed alongside
 // the code because the frontend build stage has no network and no database.
@@ -52,7 +53,13 @@ interface ManifestCategory {
   slug: string;
   name: string;
   description?: string | null;
-  children?: { slug: string; name: string; description?: string | null }[];
+  children?: {
+    slug: string;
+    name: string;
+    description?: string | null;
+    /** Page-1 part links, rendered into this subcategory's noscript body. */
+    parts?: SeoLink[];
+  }[];
 }
 
 interface ManifestPart {
@@ -255,15 +262,28 @@ function buildRoutes(manifest: SeoManifest | null): PrerenderRoute[] {
       }),
     });
     for (const child of children) {
+      const seo = categorySeo({
+        name: child.name,
+        canonicalPath: `/category/${category.slug}/${child.slug}`,
+        description: child.description ?? null,
+        parent: { name: category.name, slug: category.slug },
+      });
       routes.push({
         urlPath: `/category/${category.slug}/${child.slug}`,
         file: `category/${category.slug}/${child.slug}/index.html`,
-        seo: categorySeo({
-          name: child.name,
-          canonicalPath: `/category/${category.slug}/${child.slug}`,
-          description: child.description ?? null,
-          parent: { name: category.name, slug: category.slug },
-        }),
+        // The subcategory's own parts, APPENDED after the breadcrumb links
+        // categorySeo built. Without them the prerendered document links only
+        // upward, and every part page below it is a crawl orphan reachable
+        // solely through the sitemap — a discovered URL with nothing linking
+        // to it carries no internal signal at all. This is the one place the
+        // home -> category -> subcategory -> part path exists in raw HTML.
+        //
+        // Appended here rather than passed as categorySeo's `children`: that
+        // field means subcategories, and the runtime <PageHead> on the live
+        // category page has no part list to pass, so a builder argument would
+        // have to be one the two consumers disagree about. links only feed the
+        // noscript body, which the prerender alone emits.
+        seo: { ...seo, links: [...seo.links, ...(child.parts ?? [])] },
       });
     }
   }

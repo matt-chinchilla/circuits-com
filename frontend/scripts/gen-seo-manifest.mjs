@@ -32,12 +32,60 @@ async function getJson(url) {
 
 // The list endpoint omits `description` on children, so each subcategory needs
 // its own detail call. parts/popular page sizes are pinned to 1 — the payload
-// is otherwise several hundred KB per category and none of it is used here.
+// is otherwise several hundred KB per category and none of it is used here, and
+// the part LINKS below come from a different endpoint (see childPartLinks).
 async function childDescription(slug) {
   const detail = await getJson(
     `${API_BASE}/categories/${slug}/?parts_per_page=1&popular_per_page=1`,
   );
   return detail.description ?? null;
+}
+
+/** How many parts a subcategory links to — one screenful, matching page 1. */
+const PART_LINKS_PER_SUBCATEGORY = 25;
+
+/**
+ * Page-1 part links for ONE subcategory — the reason part pages are reachable.
+ *
+ * Every part URL used to be a crawl orphan: the prerendered subcategory
+ * document links only UPWARD (home + parent), because the parts themselves are
+ * fetched and rendered by JS that a crawler reading raw HTML never runs. So the
+ * static site had no path from home to any of the ~15,000 prerendered part
+ * documents — they were reachable only through the sitemap. These links close
+ * that gap: home -> category -> subcategory -> part, all in served HTML.
+ *
+ * The rows come from /api/parts/ rather than the category detail call above
+ * because the category detail's part items carry NO `slug` (see
+ * category_service._build_public_parts — id, sku, prices, no slug), and the
+ * prerender keys one document per part SLUG. Deriving the slug from the SKU
+ * client-side would mirror `slugify_sku` in a second language with nothing
+ * guarding the pair, and every drift would be a link to a 404. /api/parts/
+ * hands back the stored slug, and its `Part.sku` ordering is the same ordering
+ * a leaf category page opens on (`resolve_sort` defaults a leaf to sku asc), so
+ * these are the parts a visitor actually sees on page 1.
+ *
+ * Only slug/sku/manufacturer are read, and only the rendered href+label are
+ * kept: the manifest is committed, and the full rows would add megabytes of
+ * prices and descriptions that the noscript link list never reads.
+ */
+async function childPartLinks(categoryId) {
+  const payload = await getJson(
+    `${API_BASE}/parts/?category_id=${encodeURIComponent(categoryId)}` +
+      `&per_page=${PART_LINKS_PER_SUBCATEGORY}`,
+  );
+  const seen = new Set();
+  const links = [];
+  for (const part of payload.items ?? []) {
+    // A part with no slug has no prerendered document and no slug URL to point
+    // at; /part/<uuid> would resolve to the generic SPA shell for a crawler.
+    if (!part.slug || seen.has(part.slug)) continue;
+    seen.add(part.slug);
+    links.push({
+      href: `/part/${part.slug}`,
+      label: part.manufacturer_name ? `${part.sku} — ${part.manufacturer_name}` : part.sku,
+    });
+  }
+  return links;
 }
 
 async function mapWithConcurrency(items, limit, fn) {
@@ -67,8 +115,9 @@ const topLevel = categories.filter((c) => Array.isArray(c.children));
  * hands back a hard-capped, ranked slice (photo AND price first, then stock
  * descending, then newest) and the rest of the catalog falls back to the SPA
  * shell + client-side helmet — already the behaviour of every part added since
- * the last regen. The dynamic /api/sitemap.xml stays FULL; the cap bounds what
- * ships as static HTML, never what is advertised to crawlers.
+ * the last regen. The sitemap advertises exactly the same capped ranked slice
+ * (/api/sitemap-parts-{n}.xml shares the _ranked_parts query), so one knob —
+ * PRERENDER_PART_LIMIT — moves both surfaces together.
  *
  * The ranking lives server-side because it needs a SUM over part_listings that
  * no public list endpoint exposes, and paging 270k rows through /api/parts/
@@ -116,6 +165,7 @@ const manifest = {
       slug: child.slug,
       name: child.name,
       description: await childDescription(child.slug),
+      parts: await childPartLinks(child.id),
     })),
   })),
   parts: await fetchParts(),
@@ -124,6 +174,11 @@ const manifest = {
 writeFileSync(OUT, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
 
 const childCount = manifest.categories.reduce((n, c) => n + c.children.length, 0);
+const children = manifest.categories.flatMap((c) => c.children);
+const partLinkCount = children.reduce((n, c) => n + c.parts.length, 0);
+// A subcategory with zero part links is the orphan symptom coming back, and it
+// looks identical to a genuinely empty subcategory in the file itself.
+const emptyChildren = children.filter((c) => c.parts.length === 0).length;
 const partTotal = await catalogPartTotal();
 // Say plainly whether the cap is binding. A silently-capped manifest looks
 // identical to a small catalog, and the difference is ~250k pages.
@@ -135,5 +190,8 @@ console.log(
   `wrote ${path.relative(process.cwd(), OUT)} (source ${API_BASE})\n` +
     `  categories:    ${manifest.categories.length}\n` +
     `  subcategories: ${childCount}\n` +
+    `  part links:    ${partLinkCount} across subcategories` +
+    (emptyChildren ? ` (${emptyChildren} with NONE)` : '') +
+    `\n` +
     `  parts:         ${manifest.parts.length}${partNote}`,
 );
