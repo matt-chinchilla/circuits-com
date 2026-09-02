@@ -38,6 +38,15 @@
   flex-direction: column;
   align-items: center;
   gap: 20px;
+  // .content is the single flex item of .hero (display: flex), so it defaults
+  // to min-width: auto = min-content — which the 720px-capable search bar
+  // (SearchBar variant="hero") pins wide. On a phone that made .content
+  // 450px inside a 390px viewport and the search bar bled past the right
+  // edge. min-width: 0 + width: 100% bounds it to the hero's content box so
+  // the search form flexes and shrinks instead. Same companion pattern
+  // CLAUDE.md documents for .contentWide breaking the flex min-content chain.
+  width: 100%;
+  min-width: 0;
 }
 
 .heading {
