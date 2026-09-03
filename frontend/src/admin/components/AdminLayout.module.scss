@@ -209,6 +209,16 @@
   padding: 20px 12px;
   display: flex;
   flex-direction: column;
+  // The rail is exactly one viewport tall and sticky, so anything the nav
+  // pushes past the bottom edge is not merely off-screen but UNREACHABLE —
+  // page scroll never moves a sticky top:0 element. At 110% browser zoom
+  // (or a short window) the 13-link nav did exactly that and hid Back to
+  // Site / Sign Out (owner report 2026-09-03). Same rule the mobile drawer
+  // has carried since the iPhone-SE-landscape fix; at 100% nothing overflows
+  // and no scrollbar appears.
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
 }
 
 .sideBrand {
