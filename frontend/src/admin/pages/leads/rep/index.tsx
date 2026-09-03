@@ -105,10 +105,10 @@ export default function RepPage() {
         {crumbs}
         <div className={styles.panel}>
           <div className={styles.blockedPanel}>
-            <p className={styles.blockedTitle}>Not available in demo</p>
+            <p className={styles.blockedTitle}>Not available for this account</p>
             <p className={styles.blockedBody}>
-              Call activity names real people and real companies, so the demo account is refused at
-              the API.
+              Call activity names real people and real companies, so a view-only account is refused
+              at the API.
             </p>
           </div>
         </div>

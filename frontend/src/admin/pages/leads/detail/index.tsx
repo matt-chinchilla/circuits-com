@@ -295,9 +295,9 @@ export default function LeadDetailPage() {
         <Breadcrumbs items={[{ label: 'Leads', href: consolePath('/admin/leads') }, { label: 'Lead' }]} />
         <div className={styles.panel}>
           <div className={styles.blockedPanel}>
-            <p className={styles.blockedTitle}>Not available in demo</p>
+            <p className={styles.blockedTitle}>Not available for this account</p>
             <p className={styles.blockedBody}>
-              Lead records hold real contact details, so the demo account is refused at the API.
+              Lead records hold real contact details, so a view-only account is refused at the API.
             </p>
           </div>
         </div>

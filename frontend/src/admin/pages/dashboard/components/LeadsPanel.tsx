@@ -48,7 +48,7 @@ const PREVIEW_ROWS = 10;
  *  first expand (the rare path pays, not every dashboard visit). */
 const INITIAL_LIMIT = PREVIEW_ROWS + 1;
 
-const DEMO_NOTICE = 'Not available in demo.';
+const DEMO_NOTICE = 'Not available for this account.';
 const BLOCKED_NOTICE = "Recent contacts aren't available right now.";
 
 

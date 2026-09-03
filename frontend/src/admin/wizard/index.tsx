@@ -13,13 +13,15 @@
 // them out of. That is also what keeps `helpers.navTo` honest: it addresses
 // /admin absolutely, which is correct for the only audience that can see it.
 import { useAuth } from '@admin/contexts/AuthContext';
-import { isStaff } from '@admin/services/permissions';
+import { isReadOnly, isStaff } from '@admin/services/permissions';
 import WizardApp from './WizardApp';
 
 export function Wizard() {
   const { user } = useAuth();
   // Before the early return, so the hook order is the same on every render.
-  if (!isStaff(user)) return null;
+  // Acting staff only: every tour is a create-flow (supplier, part, sponsor)
+  // that a read-only viewer would hit 403 read_only on at the first Save.
+  if (!isStaff(user) || isReadOnly(user)) return null;
   return <WizardApp />;
 }
 

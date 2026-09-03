@@ -538,7 +538,10 @@
 }
 
 // "Demo" mark — quiet, not a banner. Tells a prospect what they're looking at.
-.demoBadge {
+// .readOnlyBadge is the same mark for a read-only viewer (alembic 051): both
+// tell a prospect what they are looking at, in the same voice.
+.demoBadge,
+.readOnlyBadge {
   display: inline-flex;
   align-items: center;
   padding: 3px 9px;

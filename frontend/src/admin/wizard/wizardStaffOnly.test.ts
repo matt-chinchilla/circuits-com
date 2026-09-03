@@ -19,9 +19,11 @@ const layout = readFileSync(
 );
 
 describe('the wizard entry is staff-gated', () => {
-  it('checks isStaff before rendering the wizard', () => {
-    expect(entry).toContain("import { isStaff } from '@admin/services/permissions';");
-    expect(entry).toMatch(/if\s*\(!isStaff\(user\)\)\s*return null;/);
+  it('checks isStaff — and refuses a read-only viewer — before rendering', () => {
+    // Every tour is a create-flow; a `viewer` (alembic 051) would hit
+    // 403 read_only at the first Save, so the gate is ACTING staff.
+    expect(entry).toContain("import { isReadOnly, isStaff } from '@admin/services/permissions';");
+    expect(entry).toMatch(/if\s*\(!isStaff\(user\)\s*\|\|\s*isReadOnly\(user\)\)\s*return null;/);
   });
 
   it('does not re-export WizardApp raw', () => {

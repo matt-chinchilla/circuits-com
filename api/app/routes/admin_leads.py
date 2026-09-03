@@ -25,7 +25,7 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models import Lead, LeadContact
 from app.models.user import User
-from app.services.auth_service import require_staff
+from app.services.auth_service import is_viewer, require_staff
 from app.services.leads import VALID_OUTCOMES, record_outcome
 
 router = APIRouter(
@@ -39,9 +39,16 @@ router = APIRouter(
 )
 
 
+# A read-only `viewer` (alembic 051) is refused here on READS: the roster is
+# real people's personal phone numbers, collected for the owner's own outreach
+# (the CLAUDE.md phone carve-out is INTERNAL), and a viewer is by definition
+# someone outside the company being shown the console. The client already
+# renders this exact detail as a quiet "no leads for this account" state.
+NO_LEADS_ACCESS_DETAIL = "no_leads_access"
+
 
 def require_leads_access(user: User = Depends(require_staff)) -> User:
-    """STAFF — for READS as well as writes.
+    """ACTING staff — for READS as well as writes.
 
     Depends on ``require_staff``, which composes ``get_current_user``, so the
     forced password-change gate (`must_change_password` → 403
@@ -50,6 +57,8 @@ def require_leads_access(user: User = Depends(require_staff)) -> User:
     ``/api/dashboard/leads/recent`` lives on another router and must carry the
     same gate — test_leads_never_public.py is what notices if it stops.
     """
+    if is_viewer(user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=NO_LEADS_ACCESS_DETAIL)
     return user
 
 
@@ -78,27 +87,41 @@ def _lead_row(lead: Lead) -> dict:
 
 def _lead_detail(lead: Lead) -> dict:
     d = _lead_row(lead)
-    d.update({
-        "street": lead.street, "postal_code": lead.postal_code,
-        "main_phone": lead.main_phone, "website": lead.website,
-        "sales_email": lead.sales_email, "direct_phone": lead.direct_phone,
-        "contact_email": lead.contact_email, "linkedin_url": lead.linkedin_url,
-        "hours_tz": lead.hours_tz, "notes": lead.notes,
-        "contacts": [
-            {
-                "id": str(c.id), "outcome": c.outcome, "sale_tier": c.sale_tier,
-                "note": c.note, "recorded_by": c.recorded_by,
-                "created_at": c.created_at.isoformat(),
-            }
-            for c in lead.contacts
-        ],
-    })
+    d.update(
+        {
+            "street": lead.street,
+            "postal_code": lead.postal_code,
+            "main_phone": lead.main_phone,
+            "website": lead.website,
+            "sales_email": lead.sales_email,
+            "direct_phone": lead.direct_phone,
+            "contact_email": lead.contact_email,
+            "linkedin_url": lead.linkedin_url,
+            "hours_tz": lead.hours_tz,
+            "notes": lead.notes,
+            "contacts": [
+                {
+                    "id": str(c.id),
+                    "outcome": c.outcome,
+                    "sale_tier": c.sale_tier,
+                    "note": c.note,
+                    "recorded_by": c.recorded_by,
+                    "created_at": c.created_at.isoformat(),
+                }
+                for c in lead.contacts
+            ],
+        }
+    )
     return d
 
 
 _SORTS = {
-    "company": Lead.company_name, "contact": Lead.contact_name, "tier": Lead.tier,
-    "ring": Lead.ring, "outcome": Lead.last_outcome, "contacted": Lead.last_contacted_at,
+    "company": Lead.company_name,
+    "contact": Lead.contact_name,
+    "tier": Lead.tier,
+    "ring": Lead.ring,
+    "outcome": Lead.last_outcome,
+    "contacted": Lead.last_contacted_at,
     "distance": Lead.distance_miles,
 }
 
@@ -126,10 +149,14 @@ def list_leads(
     query = db.query(Lead).filter(Lead.user_id.is_(None))
     if q:
         like = f"%{q}%"
-        query = query.filter(or_(
-            Lead.company_name.ilike(like), Lead.contact_name.ilike(like),
-            Lead.city.ilike(like), Lead.notes.ilike(like),
-        ))
+        query = query.filter(
+            or_(
+                Lead.company_name.ilike(like),
+                Lead.contact_name.ilike(like),
+                Lead.city.ilike(like),
+                Lead.notes.ilike(like),
+            )
+        )
     if outcome == "none":
         query = query.filter(Lead.last_outcome.is_(None))
     elif outcome:
@@ -155,8 +182,18 @@ def list_leads(
     # defaults the other way, so only an explicit nullslast() behaves the same
     # in tests and prod.
     order = col.desc().nullslast() if desc else col.asc().nullslast()
-    rows = query.order_by(order, Lead.company_name.asc()).offset((page - 1) * per_page).limit(per_page).all()
-    return {"leads": [_lead_row(x) for x in rows], "total": total, "page": page, "per_page": per_page}
+    rows = (
+        query.order_by(order, Lead.company_name.asc())
+        .offset((page - 1) * per_page)
+        .limit(per_page)
+        .all()
+    )
+    return {
+        "leads": [_lead_row(x) for x in rows],
+        "total": total,
+        "page": page,
+        "per_page": per_page,
+    }
 
 
 @router.get("/reps/{username}")
@@ -179,7 +216,9 @@ def rep_activity(
         .all()
     )
     lead_ids = {c.lead_id for c in contacts}
-    leads = {l.id: l for l in db.query(Lead).filter(Lead.id.in_(lead_ids)).all()} if lead_ids else {}
+    leads = (
+        {l.id: l for l in db.query(Lead).filter(Lead.id.in_(lead_ids)).all()} if lead_ids else {}
+    )
     mix_rows = (
         db.query(LeadContact.outcome, func.count(LeadContact.id))
         .join(Lead, Lead.id == LeadContact.lead_id)
@@ -192,10 +231,13 @@ def rep_activity(
         "outcome_mix": {row[0]: row[1] for row in mix_rows},
         "contacts": [
             {
-                "id": str(c.id), "lead_id": str(c.lead_id),
+                "id": str(c.id),
+                "lead_id": str(c.lead_id),
                 "company_name": leads[c.lead_id].company_name if c.lead_id in leads else None,
                 "contact_name": leads[c.lead_id].contact_name if c.lead_id in leads else None,
-                "outcome": c.outcome, "sale_tier": c.sale_tier, "note": c.note,
+                "outcome": c.outcome,
+                "sale_tier": c.sale_tier,
+                "note": c.note,
                 "recorded_by": c.recorded_by,
                 "created_at": c.created_at.isoformat(),
             }
@@ -218,7 +260,9 @@ def _get_lead(db: Session, lead_id: str) -> Lead:
 
 
 @router.get("/{lead_id}")
-def get_lead(lead_id: str, db: Session = Depends(get_db), user: User = Depends(require_leads_access)) -> dict:
+def get_lead(
+    lead_id: str, db: Session = Depends(get_db), user: User = Depends(require_leads_access)
+) -> dict:
     return _lead_detail(_get_lead(db, lead_id))
 
 
@@ -266,7 +310,11 @@ def create_contact(
     if body.outcome not in VALID_OUTCOMES:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail="invalid_outcome")
     record_outcome(
-        db, lead=lead, outcome=body.outcome, sale_tier=body.sale_tier,
-        note=body.note, recorded_by=user.username,
+        db,
+        lead=lead,
+        outcome=body.outcome,
+        sale_tier=body.sale_tier,
+        note=body.note,
+        recorded_by=user.username,
     )
     return _lead_detail(lead)

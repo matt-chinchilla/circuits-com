@@ -10,6 +10,7 @@ import type { ReactNode } from 'react';
 import { adminApi } from '@admin/services/adminApi';
 import { activationFromProbe, type AccountMe } from '@admin/services/accountActivation';
 import { passwordGate } from '@admin/services/passwordGate';
+import { isReadOnly } from '@admin/services/permissions';
 import type { AuthResponse, UserInfo } from '@admin/types/admin';
 
 /**
@@ -47,6 +48,11 @@ interface AuthContextValue {
    * branch in it has to agree about who a customer is.
    */
   isCustomer: boolean;
+  /**
+   * True for read-only staff (`viewer`, alembic 051). The server refuses
+   * every write with 403 read_only; this lets the chrome say so up front.
+   */
+  isReadOnly: boolean;
   /**
    * GET /api/account/me for a CUSTOMER — identity, activation, and the two
    * capability links. `null` for staff, for a signed-out visitor, and while
@@ -205,6 +211,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         mustChangePassword,
         accountActivated,
         isCustomer,
+        // One spelling of "read-only" — permissions.isReadOnly — shared with
+        // any page that hides a write affordance for a viewer.
+        isReadOnly: isReadOnly(user),
         account,
         login,
         changePassword,

@@ -12,7 +12,7 @@
  * So the address is derived HERE, behind the staff check, and the page renders
  * the link only when this returns one.
  */
-import { isStaff } from '@admin/services/permissions';
+import { isReadOnly, isStaff } from '@admin/services/permissions';
 import type { UserInfo } from '@admin/types/admin';
 
 /** Where the company's mail lives. Kept beside the address so both move
@@ -32,7 +32,8 @@ export const MAIL_DOMAIN = 'circuitcenter.ai';
 export function staffMailboxAddress(
   user: Pick<UserInfo, 'role' | 'username'> | null | undefined,
 ): string | null {
-  if (!isStaff(user) || !user) return null;
+  // A viewer (read-only staff) is an outsider with no mailbox on the server.
+  if (!isStaff(user) || isReadOnly(user) || !user) return null;
   const local = user.username.trim().toLowerCase();
   if (!local || /[@\s]/.test(local)) return null;
   return `${local}@${MAIL_DOMAIN}`;

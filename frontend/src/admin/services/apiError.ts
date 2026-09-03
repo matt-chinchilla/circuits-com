@@ -16,6 +16,8 @@ const CODE_MESSAGES: Record<string, string> = {
   // supplier with no feed provider, or no key for the one it has. Names the fix
   // rather than the code, and matches the greyed switch's own hint.
   feed_not_configured: 'Add this supplier’s API key in Settings to enable nightly imports.',
+  // auth_service.READ_ONLY_DETAIL — a `viewer` account on any write.
+  read_only: 'This account is view-only — changes are disabled.',
 };
 
 /**

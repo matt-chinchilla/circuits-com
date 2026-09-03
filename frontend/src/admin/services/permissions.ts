@@ -72,5 +72,22 @@ export function canDeleteMessages(
  * A null user — still loading, or signed out — is not staff.
  */
 export function isStaff(user: Pick<UserInfo, 'role'> | null | undefined): boolean {
-  return user?.role === 'admin' || user?.role === 'owner';
+  return user?.role === 'admin' || user?.role === 'owner' || user?.role === 'viewer';
+}
+
+/**
+ * The backend's read-only 403 — auth_service.READ_ONLY_DETAIL. A `viewer`
+ * (alembic 051) gets this on every POST/PATCH/PUT/DELETE behind the staff
+ * wall; apiError.ts maps it to a sentence so a form never prints the bare code.
+ */
+export const READ_ONLY_DETAIL = 'read_only';
+
+/**
+ * Is this account read-only staff — sees the whole console, changes nothing?
+ *
+ * The server enforces it (every mutation is 403 read_only); this only lets the
+ * chrome SAY so, so the person knows why a Save button did nothing.
+ */
+export function isReadOnly(user: Pick<UserInfo, 'role'> | null | undefined): boolean {
+  return user?.role === 'viewer';
 }

@@ -3,12 +3,14 @@
 SQLite ignores VARCHAR lengths, so length contracts are asserted on the
 column type rather than by inserting an over-long value.
 """
+
 from app.models import Message, User
 
 
 def test_role_enum_has_user_not_company():
     values = set(User.__table__.c.role.type.enums)
-    assert values == {"admin", "user", "owner"}
+    # 'viewer' = read-only staff (alembic 051).
+    assert values == {"admin", "user", "owner", "viewer"}
     assert User.__table__.c.role.default.arg == "user"
 
 

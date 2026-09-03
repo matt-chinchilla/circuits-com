@@ -11,7 +11,7 @@ import type { ReactNode } from 'react';
 /**
  * Roles that belong on the CUSTOMER mount. Matches the `user_role` enum in
  * api/app/models/user.py, where a customer is `user` (renamed from `company`
- * by alembic 043); `admin` and `owner` are staff.
+ * by alembic 043); `admin`, `owner`, and the read-only `viewer` (051) are staff.
  */
 const CUSTOMER_ROLES = ['user'];
 

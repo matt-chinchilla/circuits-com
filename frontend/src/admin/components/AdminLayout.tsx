@@ -247,7 +247,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   // Who is looking is read from the context, not threaded down as a prop:
   // App.tsx mounts this same component at both /admin and /account, and a prop
   // is one more place the two mounts could be told apart differently.
-  const { user, logout, isCustomer, account } = useAuth();
+  const { user, logout, isCustomer, isReadOnly, account } = useAuth();
   const { demoMode, toggleDemo } = useDemo();
   const { theme, toggleTheme } = useAdminTheme();
   const location = useLocation();
@@ -484,7 +484,9 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
           <Logo variant="badge" size={30} className={styles.sideBrandMark} />
           <div>
             <div className={styles.sideBrandName}>Circuit Center</div>
-            <div className={styles.sideBrandRole}>{isCustomer ? 'Account' : 'Admin'}</div>
+            <div className={styles.sideBrandRole}>
+              {isCustomer ? 'Account' : isReadOnly ? 'View only' : 'Admin'}
+            </div>
           </div>
         </Link>
 
@@ -565,6 +567,17 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
           </div>
 
           <div className={styles.topbarRight}>
+
+            {/* Read-only staff: say so where every Save/Delete would otherwise
+                fail with no warning. The server is the enforcement. */}
+            {isReadOnly && (
+              <span
+                className={styles.readOnlyBadge}
+                title="This account can see everything and change nothing"
+              >
+                View only
+              </span>
+            )}
 
             {!isCustomer && (
             <button

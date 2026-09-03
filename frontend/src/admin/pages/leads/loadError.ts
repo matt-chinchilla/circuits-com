@@ -24,8 +24,13 @@ import axios from 'axios';
 
 import { apiErrorDetail } from '@admin/services/apiError';
 
-/** The exact 403 detail `require_leads_access` sends for the demo account. */
-export const DEMO_NO_LEADS_DETAIL = 'demo_account_no_leads';
+/**
+ * The exact 403 detail `require_leads_access` sends for an account that may
+ * open the console but not the lead roster — today the read-only `viewer`
+ * (alembic 051); it was the demo account before 043 retired it. The kind is
+ * still 'demo' downstream: the pages render the same quiet blocked state.
+ */
+export const NO_LEADS_ACCESS_DETAIL = 'no_leads_access';
 
 /**
  * The ONE thing a retired session says. Deliberately not "401", not
@@ -73,7 +78,7 @@ export function classifyLeadsError(err: unknown, fallback: string): LeadsLoadErr
     : undefined;
   const detail = apiErrorDetail(err);
 
-  if (status === 403 && rawDetail === DEMO_NO_LEADS_DETAIL) {
+  if (status === 403 && rawDetail === NO_LEADS_ACCESS_DETAIL) {
     return { kind: 'demo', message: '' };
   }
   if (status === 401) {

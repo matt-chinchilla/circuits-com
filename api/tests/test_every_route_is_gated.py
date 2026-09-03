@@ -33,6 +33,7 @@ from app.services.auth_service import (
     get_authenticated_user,
     require_account_user,
     require_staff,
+    require_staff_reader,
 )
 
 # The dependencies that name a PRINCIPAL — the D16 customer/staff wall.
@@ -40,7 +41,11 @@ from app.services.auth_service import (
 # pass removed its every production use precisely because it ADMITS customer
 # principals. Blessing it would let the next staff route re-open that door
 # with this guard still green.
-WALL = {require_staff, require_account_user}
+# ``require_staff_reader`` is the same staff wall minus the viewer verb check
+# (alembic 051) — one router, the presence heartbeat, declares it so a
+# read-only viewer can still ping. It refuses customers exactly as
+# require_staff does, which is what makes it a wall.
+WALL = {require_staff, require_staff_reader, require_account_user}
 
 # ``require_calendar_access`` is a wall too, but the walk below cannot see it:
 # it CALLS require_staff rather than declaring it, because its other

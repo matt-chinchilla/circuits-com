@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import Boolean, Column, DateTime, Enum, ForeignKey, Index, String, func
 from sqlalchemy.dialects.postgresql import UUID
@@ -21,7 +21,7 @@ class User(Base):
     email = Column(String(255), nullable=False, index=True)
     password_hash = Column(String(200), nullable=False)
     role = Column(
-        Enum("admin", "user", "owner", name="user_role", create_constraint=True),
+        Enum("admin", "user", "owner", "viewer", name="user_role", create_constraint=True),
         nullable=False,
         default="user",
     )
@@ -86,13 +86,13 @@ class User(Base):
     prev_login_ip = Column(String(45), nullable=True)
     created_at = Column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
         nullable=False,
     )
     updated_at = Column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
         nullable=False,
     )
 

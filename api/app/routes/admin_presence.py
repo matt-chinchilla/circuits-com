@@ -20,7 +20,7 @@ Depends(require_staff), so a customer account gets 403 staff_only.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
@@ -29,7 +29,7 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models.presence_fake import PresenceFake
 from app.models.user import User
-from app.services.auth_service import get_current_user, require_staff
+from app.services.auth_service import get_current_user, require_staff_reader
 
 router = APIRouter(
     prefix="/api/admin",
@@ -38,7 +38,10 @@ router = APIRouter(
     # here is company-wide STAFF data, so an activated customer is refused
     # with 403 staff_only rather than admitted as a console user. It COMPOSES
     # with the per-route get_current_user gates — it does not replace them.
-    dependencies=[Depends(require_staff)],
+    # require_staff_READER, not require_staff: the ping is a POST that a
+    # read-only viewer must still be allowed to send (it stamps only their own
+    # last_seen_at), so this router skips the viewer verb check on purpose.
+    dependencies=[Depends(require_staff_reader)],
 )
 
 # ── Fake-presence roster (the `circuits --fakeuser` lever) ──────────────────
@@ -77,7 +80,7 @@ class PresenceUser(BaseModel):
 
 def _now() -> datetime:
     """Clock seam — tests monkeypatch this to fast-forward the TTL."""
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 @router.post("/presence/ping", response_model=list[PresenceUser])

@@ -315,11 +315,11 @@ export default function LeadsPage() {
         {head}
         <div className={styles.panel}>
           <div className={styles.blockedPanel}>
-            <p className={styles.blockedTitle}>Not available in demo</p>
+            <p className={styles.blockedTitle}>Not available for this account</p>
             <p className={styles.blockedBody}>
-              The lead roster holds real contact details for real people, so the demo account is
-              refused at the API &mdash; on reads as well as edits. Sign in with a staff account to
-              work the call list.
+              The lead roster holds real contact details for real people, so a view-only account
+              is refused at the API &mdash; on reads as well as edits. Sign in with a staff account
+              to work the call list.
             </p>
           </div>
         </div>

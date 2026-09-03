@@ -4,14 +4,14 @@ from datetime import UTC, datetime, timedelta
 
 import bcrypt
 import jwt
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.db.session import get_db
 from app.models import User
-from app.models.roles import ADMIN_ROLES, CUSTOMER_ROLES
+from app.models.roles import CUSTOMER_ROLES, STAFF_ROLES, VIEWER_ROLES
 
 security = HTTPBearer(auto_error=False)
 
@@ -230,6 +230,7 @@ def verify_token_matches_email(payload: dict, email: str) -> bool:
 # this exact string, so changing it silently breaks the forced-reset UX.
 PASSWORD_CHANGE_REQUIRED_DETAIL = "password_change_required"
 
+
 def get_authenticated_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(security),
     db: Session = Depends(get_db),
@@ -366,6 +367,10 @@ def require_owner(user: User = Depends(get_current_user)) -> User:
 # forced-password gate still runs first.
 STAFF_ONLY_DETAIL = "staff_only"
 NOT_ACTIVATED_DETAIL = "account_not_activated"
+# A viewer (read-only staff, alembic 051) on any verb that could change data.
+READ_ONLY_DETAIL = "read_only"
+# RFC 9110 "safe" methods — the only verbs a read-only account may use.
+SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 
 
 def _role_of(user: User) -> str:
@@ -379,21 +384,69 @@ def _role_of(user: User) -> str:
 
 
 def is_staff(user: User | None) -> bool:
-    return user is not None and _role_of(user) in ADMIN_ROLES
+    """Everyone the /admin mount belongs to — acting admins AND read-only
+    viewers. Membership is STAFF_ROLES, not ADMIN_ROLES: a viewer clears the
+    wall on reads and is stopped by require_staff's verb check on writes."""
+    return user is not None and _role_of(user) in STAFF_ROLES
+
+
+def is_viewer(user: User | None) -> bool:
+    """Read-only staff (alembic 051) — sees everything staff sees, changes nothing."""
+    return user is not None and _role_of(user) in VIEWER_ROLES
 
 
 def is_customer(user: User | None) -> bool:
     return user is not None and _role_of(user) in CUSTOMER_ROLES
 
 
-def require_staff(user: User = Depends(get_current_user)) -> User:
-    """Staff-only routes: /api/admin/users, message deletion, anything that
-    manages OTHER accounts."""
+def _refuse_non_staff(user: User) -> None:
+    """The customer/staff wall itself — a plain helper, NOT a dependency.
+
+    Deliberately not ``Depends``-wired: a default that only DI resolves is
+    skipped by a direct call, and the calendar gate CALLS require_staff (its
+    plugin door arrives with no bearer). The first cut of alembic 051 made
+    exactly that mistake and let a customer read /api/calendar/events —
+    test_every_route_is_gated.py::test_the_calendar_gate_really_is_a_wall
+    is what caught it.
+    """
     if not is_staff(user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=STAFF_ONLY_DETAIL,
         )
+
+
+def require_staff(request: Request, user: User = Depends(get_current_user)) -> User:
+    """Staff-only routes: /api/admin/users, message deletion, anything that
+    manages OTHER accounts.
+
+    A ``viewer`` (read-only staff, alembic 051) passes on the safe verbs and
+    is refused with 403 ``read_only`` on POST/PATCH/PUT/DELETE. The check
+    lives HERE, in the one wall every staff router already declares (most at
+    router level), so a mutation route added later is read-only for viewers
+    without a per-route opt-in it could forget. A route whose non-GET verb is
+    a heartbeat rather than an edit opts OUT explicitly via
+    :func:`require_staff_reader`.
+    """
+    _refuse_non_staff(user)
+    if is_viewer(user) and request.method.upper() not in SAFE_METHODS:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=READ_ONLY_DETAIL,
+        )
+    return user
+
+
+def require_staff_reader(user: User = Depends(get_current_user)) -> User:
+    """The staff wall WITHOUT the viewer verb check.
+
+    For the presence heartbeat only (routes/admin_presence.py): its POST
+    stamps the caller's OWN last_seen_at and returns who is online. A viewer
+    with the console open should show up in the bubbles like anyone else, and
+    refusing the ping would log a 403 in their console every 30s for nothing.
+    Do not reach for this on a route that edits data.
+    """
+    _refuse_non_staff(user)
     return user
 
 

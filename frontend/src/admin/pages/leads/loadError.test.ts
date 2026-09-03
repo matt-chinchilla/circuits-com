@@ -2,7 +2,7 @@ import { AxiosError, AxiosHeaders } from 'axios';
 import { describe, expect, it } from 'vitest';
 
 import {
-  DEMO_NO_LEADS_DETAIL,
+  NO_LEADS_ACCESS_DETAIL,
   SESSION_EXPIRED_MESSAGE,
   classifyLeadsError,
 } from './loadError';
@@ -25,7 +25,7 @@ function axiosErr(status: number, detail?: unknown): AxiosError {
 
 describe('classifyLeadsError', () => {
   it('recognises the demo refusal by its exact detail', () => {
-    expect(classifyLeadsError(axiosErr(403, DEMO_NO_LEADS_DETAIL), FALLBACK).kind).toBe('demo');
+    expect(classifyLeadsError(axiosErr(403, NO_LEADS_ACCESS_DETAIL), FALLBACK).kind).toBe('demo');
   });
 
   it('does not treat any other 403 as the demo refusal', () => {

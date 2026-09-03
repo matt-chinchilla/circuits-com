@@ -23,7 +23,10 @@ export interface UserInfo {
   // delete affordances on `owner`, and ProtectedRoute routes 'user' to the
   // /account mount (the server's 403s are the real enforcement in both cases),
   // so the union must not lie about what can arrive.
-  role: 'admin' | 'user' | 'owner';
+  // 'viewer' (alembic 051) is read-only staff: the /admin mount opens, every
+  // write is a 403 read_only from the server. `isReadOnly` on AuthContext is
+  // the client-side mirror.
+  role: 'admin' | 'user' | 'owner' | 'viewer';
   supplier_id?: string;
   /**
    * Present on GET /auth/me only; the nested `user` of a login response omits

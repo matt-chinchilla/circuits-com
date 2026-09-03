@@ -27,7 +27,7 @@ import logging
 import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 from fastapi.security import HTTPAuthorizationCredentials
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import func
@@ -94,9 +94,7 @@ def _plugin_secret_matches(presented: str | None) -> bool:
     # this value (secrets.token_urlsafe) is pure ASCII, and it fails closed
     # either way; but an operator using a passphrase would have hit a 401 with
     # a correct secret and no way to tell why.
-    return hmac.compare_digest(
-        candidate.encode("latin-1", "replace"), configured.encode("utf-8")
-    )
+    return hmac.compare_digest(candidate.encode("latin-1", "replace"), configured.encode("utf-8"))
 
 
 def _resolve_actor(db: Session, presented_email: str | None) -> User | None:
@@ -117,6 +115,7 @@ def _resolve_actor(db: Session, presented_email: str | None) -> User | None:
 
 
 def require_calendar_access(
+    request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(security),
     x_calendar_secret: str | None = Header(default=None, alias=CALENDAR_SECRET_HEADER),
     x_calendar_actor: str | None = Header(default=None, alias=CALENDAR_ACTOR_HEADER),
@@ -161,7 +160,8 @@ def require_calendar_access(
     # also why test_every_route_is_gated.py names require_calendar_access as a
     # gate in its own right: the walk over route.dependant.dependencies cannot
     # see through a plain call.
-    return require_staff(get_current_user(user))
+    # `request` rides along for require_staff's viewer verb check (alembic 051).
+    return require_staff(request, get_current_user(user))
 
 
 # ── Schemas ─────────────────────────────────────────────────────────────────
