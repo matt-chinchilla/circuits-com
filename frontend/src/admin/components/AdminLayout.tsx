@@ -359,12 +359,18 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
         cancelled = true;
       };
     }
+    // adminApi.getMessages is cached for 45s, so this is one request per
+    // burst of navigation, not one per click; the flag stops a late resolve
+    // from stacking a stale count on a newer one.
+    let staffCancelled = false;
     refreshMessages().then(() => {
-      setUnread(unreadCount());
+      if (!staffCancelled) setUnread(unreadCount());
     });
     setUnread(unreadCount()); // optimistic read from cache so the badge doesn't flicker
     setMenuOpen(false);
-    return undefined;
+    return () => {
+      staffCancelled = true;
+    };
   }, [location.pathname, isCustomer]);
 
   // Body scroll lock while mobile drawer is open. Cleanup restores prev value.

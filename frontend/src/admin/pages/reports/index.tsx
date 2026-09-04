@@ -1,15 +1,14 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import { Download } from 'lucide-react'
 import { useDemo } from '@admin/contexts/DemoContext'
 import { useAuth } from '@admin/contexts/AuthContext'
 import { adminApi } from '@admin/services/adminApi'
+import { useCachedQuery } from '@admin/services/queryCache'
+import { ChartMotion } from '@admin/components/charts/ChartMotion'
 import type {
-  AnalyticsData,
   AnalyticsSegment,
-  DashboardStats,
   RevenueDataPoint,
-  PopularData,
 } from '@admin/types/admin'
 import CustomerReportsPage from './CustomerReportsPage'
 import { pageLabel, pageUrl } from './pageLabels'
@@ -155,14 +154,24 @@ function Kpi({ label, value, delta, tone = 'neutral', valueStyle }: KpiProps) {
   )
 }
 
+const EMPTY_REVENUE: RevenueDataPoint[] = []
+
+// The range-independent trio, cached as ONE entry. Not per-call caught on
+// purpose: the page has always treated any of the three failing as "Failed to
+// load report data." rather than rendering a partial report.
+async function loadReportsCore() {
+  const [stats, revenue, popular] = await Promise.all([
+    adminApi.getStats(),
+    adminApi.getRevenue(),
+    adminApi.getPopular(),
+  ])
+  return { stats, revenue, popular }
+}
+
 function StaffReportsPage() {
   const { demoMode } = useDemo()
   const [range, setRange] = useState<RangeKey>('12m')
   const [tab, setTab] = useState<TabKey>('analytics')
-  const [stats, setStats] = useState<DashboardStats | null>(null)
-  const [revenue, setRevenue] = useState<RevenueDataPoint[]>([])
-  const [popular, setPopular] = useState<PopularData | null>(null)
-  const [analytics, setAnalytics] = useState<AnalyticsData | null>(null)
   // "Show me that place on the map" — raised by a location click in the
   // Visiting Organizations panel and handed to the map above it. The page
   // holds it because the two are SIBLINGS; a store would be a second source
@@ -177,44 +186,30 @@ function StaffReportsPage() {
   }, [])
 
   const [segment, setSegment] = useState<AnalyticsSegment>('humans')
-  const [segmentError, setSegmentError] = useState(false)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
 
-  useEffect(() => {
-    let cancelled = false
-    setLoading(true)
-    Promise.all([adminApi.getStats(), adminApi.getRevenue(), adminApi.getPopular()])
-      .then(([s, r, p]) => {
-        if (cancelled) return
-        setStats(s)
-        setRevenue(r)
-        setPopular(p)
-        setError('')
-      })
-      .catch(() => { if (!cancelled) setError('Failed to load report data.') })
-      .finally(() => { if (!cancelled) setLoading(false) })
-    return () => { cancelled = true }
-  }, [demoMode])
-
-  useEffect(() => {
-    let cancelled = false
-    adminApi.getAnalytics(RANGE_DAYS[range], segment)
-      .then(a => {
-        if (cancelled) return
-        setAnalytics(a)
-        setSegmentError(false)
-      })
-      .catch(() => {
-        // The toggle already flipped but the data did not — captions must
-        // keep describing the DATA (analytics.segment), and the failure is
-        // said out loud instead of silently mislabeling human numbers.
-        if (!cancelled) setSegmentError(true)
-      })
-    return () => { cancelled = true }
-    // segment is part of the query — the charts' pinned tooltips clear
-    // automatically because the data identity changes.
-  }, [demoMode, range, segment])
+  // Both reads come from the module-level query cache (see the dashboard):
+  // a revisit renders from memory with no request, a stale one refreshes in
+  // the background and repaints only on a real change. Neither key carries
+  // `demoMode` — demo replaces the RESULTS, so the payloads are the same
+  // either way and the old `[demoMode]` deps only refetched to discard.
+  const core = useCachedQuery('reports:core', loadReportsCore)
+  // The segment is part of the key, and the previous payload stays up while
+  // the new one loads so the toggle never blanks the charts it relabels.
+  // Captions keep describing the DATA (analytics.segment) — see shownSegment.
+  const analyticsQ = useCachedQuery(
+    `reports:analytics:${RANGE_DAYS[range]}:${segment}`,
+    () => adminApi.getAnalytics(RANGE_DAYS[range], segment),
+    { keepPrevious: true },
+  )
+  const stats = core.data?.stats ?? null
+  const revenue = core.data?.revenue ?? EMPTY_REVENUE
+  const popular = core.data?.popular ?? null
+  const analytics = analyticsQ.data ?? null
+  const loading = core.loading
+  const error = core.error !== undefined && core.data === undefined ? 'Failed to load report data.' : ''
+  // The toggle already flipped but the data did not — said out loud instead
+  // of silently mislabeling human numbers.
+  const segmentError = analyticsQ.error !== undefined
 
   // The segment the RENDERED data actually represents (response-carried);
   // falls back to the requested one before first load.
@@ -279,6 +274,7 @@ function StaffReportsPage() {
   }
 
   return (
+    <ChartMotion animateEntry={!core.fromCache}>
     <div>
       <div className={styles.pageHead}>
         <div className={styles.pageHeadLeft}>
@@ -653,6 +649,7 @@ function StaffReportsPage() {
         </>
       )}
     </div>
+    </ChartMotion>
   )
 }
 

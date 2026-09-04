@@ -15,6 +15,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import EChart from '@admin/components/charts/EChart';
 import { CHART_SERIES } from '@admin/components/charts/chartTheme';
 import { accountApi } from '@admin/services/accountApi';
+import { useCachedQuery } from '@admin/services/queryCache';
 import type { AccountKpi } from '@admin/types/account';
 import { rankedBarOption } from './chartOptions';
 import { kpiAxisFormat, kpiChoices, kpiLabel, kpiValueFormat } from './kpiMeta';
@@ -23,10 +24,15 @@ import own from './CustomerPanels.module.scss';
 import './echartsCustomer';
 
 export default function KpiPanel() {
-  const [kpi, setKpi] = useState<AccountKpi | null>(null);
-  const [loading, setLoading] = useState(true);
+  // The read is cached with the rest of the board; the PUT's reply overrides
+  // it for this mount (and drops the cache, so the next visit re-reads).
+  const query = useCachedQuery('account:kpi', () => accountApi.getAccountKpi());
+  const [written, setWritten] = useState<AccountKpi | null>(null);
+  const kpi: AccountKpi | null = written ?? query.data ?? null;
+  const loading = query.loading;
   const [saving, setSaving] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [writeFailed, setWriteFailed] = useState(false);
+  const failed = writeFailed || (query.error !== undefined && kpi === null);
   // The PUT is event-driven, so it cannot carry an effect's cancel flag. Set
   // true INSIDE the effect (not at declaration): StrictMode tears every effect
   // down and re-runs it, and a mount-only `false` would leave the panel inert.
@@ -39,41 +45,22 @@ export default function KpiPanel() {
     };
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-    accountApi
-      .getAccountKpi()
-      .then((next) => {
-        if (cancelled) return;
-        setKpi(next);
-      })
-      .catch(() => {
-        if (!cancelled) setFailed(true);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
   const choose = (key: string) => {
     if (!key || key === kpi?.selected) return;
     setSaving(true);
-    setFailed(false);
+    setWriteFailed(false);
     accountApi
       .setAccountKpi(key)
       .then((next) => {
         if (!aliveRef.current) return;
         // The reply IS the panel — replacing state with it is what keeps the
         // chart and its heading from disagreeing for a frame.
-        setKpi(next);
+        setWritten(next);
       })
       .catch(() => {
         // The previous KPI stays on screen and the selector snaps back to it,
         // which is the truth: nothing was saved.
-        if (aliveRef.current) setFailed(true);
+        if (aliveRef.current) setWriteFailed(true);
       })
       .finally(() => {
         if (aliveRef.current) setSaving(false);

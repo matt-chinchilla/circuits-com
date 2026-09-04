@@ -40,6 +40,7 @@ import type {
 import type { PlatformEngagementSeries } from '@admin/types/engagement';
 import type { AdminUser } from '@admin/types/users';
 import { bustSponsorCaches } from '@admin/services/swCache';
+import { invalidateQueries, runQuery } from '@admin/services/queryCache';
 import { isPasswordChangeRequired, passwordGate } from '@admin/services/passwordGate';
 import { isReauthChallenge } from '@admin/services/reauthChallenge';
 
@@ -236,8 +237,38 @@ adminClient.interceptors.request.use((config) => {
   return config;
 });
 
+// Requests that are not edits even though they are POSTs: dropping the
+// in-memory query cache for a heartbeat would refetch every page on a 30s
+// timer, which is the behaviour the cache exists to end.
+const NON_MUTATING_POSTS = ['/admin/presence/ping', '/auth/'];
+
+function invalidateAfterMutation(config: { method?: string; url?: string } | undefined): void {
+  const method = (config?.method ?? 'get').toLowerCase();
+  if (method === 'get' || method === 'head' || method === 'options') return;
+  const url = config?.url ?? '';
+  if (NON_MUTATING_POSTS.some((p) => url.includes(p))) return;
+  // Fail-closed: EVERY cached read goes, not just the ones this mutation
+  // obviously touches — a new part moves the dashboard's Total Parts AND the
+  // parts list AND the supplier's count, and no per-route map would stay
+  // complete. The next visit refetches; that is the cost of never showing an
+  // operator a number their own edit just changed.
+  invalidateQueries();
+}
+
+// Reads that are the same for every page — pickers, lists, badges — go
+// through the module-level query cache, so the third page to ask for the
+// supplier list (114 KB, mostly base64 logos) pays nothing. The response
+// interceptor above drops every entry after any mutation. Hits are CLONED:
+// a page may sort or patch what it receives, and the cache must not see that.
+export function cachedRead<T>(key: string, fetcher: () => Promise<T>, maxAge?: number): Promise<T> {
+  return runQuery(key, fetcher, maxAge).then((value) => structuredClone(value));
+}
+
 adminClient.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    invalidateAfterMutation(response.config);
+    return response;
+  },
   (error) => {
     const status = error.response?.status;
     // Every 401 retires the session EXCEPT the Danger Zone's re-auth, whose
@@ -383,8 +414,9 @@ export const adminApi = {
       .post<{ status: string }>('/auth/reset-password', { token, new_password: newPassword })
       .then((r) => r.data),
 
+  // Cached: the layout's sidebar badges and the dashboard both read it.
   getStats: () =>
-    adminClient.get<DashboardStats>('/dashboard/stats').then((r) => r.data),
+    cachedRead('stats', () => adminClient.get<DashboardStats>('/dashboard/stats').then((r) => r.data)),
 
   getActivity: () =>
     adminClient.get<ActivityItem[]>('/dashboard/activity').then((r) => r.data),
@@ -472,7 +504,9 @@ export const adminApi = {
   // Trailing slash on list/create matches the router's `@router.get("/")` (same
   // shape as /admin/sponsors/) — without it FastAPI 307-redirects and every
   // call pays an extra round-trip.
-  listExpenses: () => adminClient.get<AdminExpense[]>('/admin/expenses/').then((r) => r.data),
+  // Cached so the list → edit hop (the form finds its row in this list) is free.
+  listExpenses: () =>
+    cachedRead('expenses:list', () => adminClient.get<AdminExpense[]>('/admin/expenses/').then((r) => r.data)),
 
   createExpense: (data: ExpenseCreate) =>
     adminClient.post<AdminExpense>('/admin/expenses/', data).then((r) => r.data),
@@ -486,7 +520,7 @@ export const adminApi = {
   /** GET /admin/sales-reps — admin-role usernames; the sponsor form's `sold_by`
    *  options (e.g. Anthony, Daniel, Ronald). */
   getSalesRepOptions: () =>
-    adminClient.get<SalesRepOptions>('/admin/sales-reps').then((r) => r.data),
+    cachedRead('sales-rep-options', () => adminClient.get<SalesRepOptions>('/admin/sales-reps').then((r) => r.data)),
 
   /**
    * GET /api/dashboard/engagement?days=30 -> PlatformEngagementSeries[]
@@ -558,7 +592,7 @@ export const adminApi = {
     ),
 
   getSuppliers: () =>
-    adminClient.get<AdminSupplier[]>('/suppliers/').then((r) => r.data),
+    cachedRead('suppliers:list', () => adminClient.get<AdminSupplier[]>('/suppliers/').then((r) => r.data)),
 
   getSupplier: (id: string) =>
     adminClient.get<AdminSupplier>(`/suppliers/${id}`).then((r) => r.data),
@@ -584,10 +618,12 @@ export const adminApi = {
       .then((r) => r.data),
 
   getCategories: () =>
-    adminClient.get<AdminCategory[]>('/categories/').then((r) => r.data),
+    cachedRead('categories:list', () => adminClient.get<AdminCategory[]>('/categories/').then((r) => r.data)),
 
+  // 45s: the layout re-reads this on EVERY navigation for the bell badge (the
+  // whole inbox, unpaginated); a burst of clicks is now one request.
   getMessages: () =>
-    adminClient.get<Message[]>('/admin/messages/').then((r) => r.data),
+    cachedRead('messages:list', () => adminClient.get<Message[]>('/admin/messages/').then((r) => r.data), 45_000),
 
   getMessage: (id: string) =>
     adminClient.get<Message>(`/admin/messages/${id}`).then((r) => r.data),
@@ -617,7 +653,7 @@ export const adminApi = {
       .then((r) => r.data),
 
   getSponsors: () =>
-    adminClient.get<AdminSponsor[]>('/admin/sponsors/').then((r) => r.data),
+    cachedRead('sponsors:list', () => adminClient.get<AdminSponsor[]>('/admin/sponsors/').then((r) => r.data)),
 
   // sponsor create/update/delete all bust the sponsor caches so the public
   // banner reflects the change on next navigation.
@@ -636,8 +672,9 @@ export const adminApi = {
   // All four 404 when STRIPE_SECRET_KEY is unconfigured server-side; the
   // panel treats that as "billing not set up" rather than an error.
 
+  // A fixed price ladder — cached for the session.
   getQuoteLadder: () =>
-    adminClient.get<QuoteLadderResponse>('/admin/quote-ladder').then((r) => r.data),
+    cachedRead('quote-ladder', () => adminClient.get<QuoteLadderResponse>('/admin/quote-ladder').then((r) => r.data), 60 * 60 * 1000),
 
   getSponsorQuotes: (sponsorId: string) =>
     adminClient
@@ -798,7 +835,7 @@ export const adminApi = {
   // The server returns UNACTIVATED FIRST, then newest — the page's job is to
   // show who is waiting. Callers must not re-sort into created-desc and undo it.
   getUsers: () =>
-    adminClient.get<AdminUser[]>('/admin/users/').then((r) => r.data),
+    cachedRead('users:list', () => adminClient.get<AdminUser[]>('/admin/users/').then((r) => r.data)),
 
   updateUser: (
     id: string,

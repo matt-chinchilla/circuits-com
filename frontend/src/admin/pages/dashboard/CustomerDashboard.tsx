@@ -34,20 +34,13 @@
 // anyway — and importing it would pull the async `echarts` chunk into a screen
 // that draws no chart (see EChart's bundle-discipline note).
 
-import { useEffect, useState } from 'react';
 import { useAuth } from '@admin/contexts/AuthContext';
 import { accountApi } from '@admin/services/accountApi';
+import { useCachedQuery } from '@admin/services/queryCache';
+import { ChartMotion } from '@admin/components/charts/ChartMotion';
 import { tierColorSet } from '@admin/components/charts/chartTheme';
 import type {
   AccountActivityEvent,
-  AccountBookOfBusiness,
-  AccountDashboard,
-  AccountFeedState,
-  AccountLeadsSummary,
-  AccountOperatingCosts,
-  AccountReferralClicks,
-  AccountRevenue,
-  AccountSponsorMix,
 } from '@admin/types/account';
 import ActivityPanel from './components/customer/ActivityPanel';
 import BookOfBusinessPanel from './components/customer/BookOfBusinessPanel';
@@ -96,32 +89,13 @@ function Tile({ label, value, hint, toneClass }: TileProps) {
   );
 }
 
-export default function CustomerDashboard() {
-  const { account } = useAuth();
-  const [data, setData] = useState<AccountDashboard | null>(null);
-  const [referrals, setReferrals] = useState<AccountReferralClicks | null>(null);
-  const [revenue, setRevenue] = useState<AccountRevenue | null>(null);
-  const [mix, setMix] = useState<AccountSponsorMix | null>(null);
-  const [book, setBook] = useState<AccountBookOfBusiness | null>(null);
-  const [activity, setActivity] = useState<AccountActivityEvent[]>([]);
-  const [feed, setFeed] = useState<AccountFeedState | null>(null);
-  const [costs, setCosts] = useState<AccountOperatingCosts | null>(null);
-  const [leads, setLeads] = useState<AccountLeadsSummary | null>(null);
-  const [loading, setLoading] = useState(true);
+const EMPTY_EVENTS: AccountActivityEvent[] = [];
 
-  // One effect for the whole board, the staff shell's shape: every request is
-  // individually `.catch`-ed to a neutral fallback so one failing endpoint
-  // degrades a single panel instead of blanking the page, and the cancel flag
-  // stops a late resolve from setting state on an unmounted page.
-  //
-  // The KPI panel is absent from this list on purpose — it owns a WRITE, and
-  // its PUT returns the recomputed panel, so its read and its write are one
-  // piece of state that belongs inside it. The costs panel takes its first
-  // month from here and fetches any other month itself, the way the staff cost
-  // breakdown does.
-  useEffect(() => {
-    let cancelled = false;
-    Promise.all([
+// Every request individually `.catch`-ed to a neutral fallback so one failing
+// endpoint degrades a single panel instead of blanking the page.
+async function loadAccountCore() {
+  const [dash, clicks, rev, sponsorMix, counterparties, events, queue, spend, sales] =
+    await Promise.all([
       accountApi.getAccountDashboard().catch(() => null),
       accountApi.getAccountReferralClicks().catch(() => null),
       accountApi.getAccountRevenue().catch(() => null),
@@ -131,29 +105,33 @@ export default function CustomerDashboard() {
       accountApi.getAccountImportQueue().catch(() => null),
       accountApi.getAccountOperatingCosts().catch(() => null),
       accountApi.getAccountLeadsSummary().catch(() => null),
-    ])
-      .then(([dash, clicks, rev, sponsorMix, counterparties, events, queue, spend, sales]) => {
-        if (cancelled) return;
-        // Each stays null on failure, which renders em dashes and loading-less
-        // empty states rather than zeroes: an unlinked account really does
-        // have nothing, a failed request does not know.
-        setData(dash);
-        setReferrals(clicks);
-        setRevenue(rev);
-        setMix(sponsorMix);
-        setBook(counterparties);
-        setActivity(events?.events ?? []);
-        setFeed(queue?.feed ?? null);
-        setCosts(spend);
-        setLeads(sales);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    ]);
+  return { dash, clicks, rev, sponsorMix, counterparties, events, queue, spend, sales };
+}
+
+export default function CustomerDashboard() {
+  const { account } = useAuth();
+  // The whole board is ONE cached entry (see the staff dashboard): a revisit
+  // renders from memory with no request, a stale one refreshes in the
+  // background and repaints only on a real change. The KPI panel is absent
+  // from it on purpose — it owns a WRITE, and its PUT returns the recomputed
+  // panel, so its read and its write are one piece of state inside it. The
+  // costs panel takes its first month from here and fetches other months
+  // itself, the way the staff cost breakdown does.
+  const core = useCachedQuery('account:core', loadAccountCore);
+  // Each stays null on failure, which renders em dashes and loading-less
+  // empty states rather than zeroes: an unlinked account really does have
+  // nothing, a failed request does not know.
+  const data = core.data?.dash ?? null;
+  const referrals = core.data?.clicks ?? null;
+  const revenue = core.data?.rev ?? null;
+  const mix = core.data?.sponsorMix ?? null;
+  const book = core.data?.counterparties ?? null;
+  const activity = core.data?.events?.events ?? EMPTY_EVENTS;
+  const feed = core.data?.queue?.feed ?? null;
+  const costs = core.data?.spend ?? null;
+  const leads = core.data?.sales ?? null;
+  const loading = core.loading;
 
   // Capability is the two links, read INDEPENDENTLY — both set is the normal
   // case for the largest distributors and neither set is the free browsing
@@ -171,6 +149,7 @@ export default function CustomerDashboard() {
   const money = (value: number | undefined) => (data ? usd(value ?? 0) : '—');
 
   return (
+    <ChartMotion animateEntry={!core.fromCache}>
     <div>
       <div className={styles.pageHead}>
         <div className={styles.pageHeadLeft}>
@@ -261,5 +240,6 @@ export default function CustomerDashboard() {
         <ImportQueuePanel feed={feed} loading={loading} />
       </div>
     </div>
+    </ChartMotion>
   );
 }

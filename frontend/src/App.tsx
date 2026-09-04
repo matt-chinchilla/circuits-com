@@ -99,6 +99,10 @@ function App() {
   useEffect(() => {
     if (prefetched.current) return;
     prefetched.current = true;
+    // The console never navigates to these; an admin session was paying for
+    // five public chunks it would not open.
+    const path = window.location.pathname;
+    if (path.startsWith("/admin") || path.startsWith("/account")) return;
     const start = () => {
       const idle = window.requestIdleCallback ?? ((cb: () => void) => setTimeout(cb, 200));
       idle(() => {

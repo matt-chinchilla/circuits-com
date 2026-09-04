@@ -24,13 +24,14 @@
 // three either way. Every chip carries the glyph AND the word, so colour never
 // carries the outcome alone (the CVD constraint recorded in outcome.ts).
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useConsolePath } from '@admin/services/consolePath';
 import { classifyLeadsError } from '@admin/pages/leads/loadError';
 import { OUTCOME_META, firstInitial } from '@admin/pages/leads/outcome';
 import { relativeTime } from '@admin/pages/leads/time';
 import { adminApi } from '@admin/services/adminApi';
+import { useCachedQuery } from '@admin/services/queryCache';
 import type { RecentLeadContact } from '@admin/types/leads';
 import { count } from './format';
 import styles from '../DashboardPage.module.scss';
@@ -50,6 +51,7 @@ const INITIAL_LIMIT = PREVIEW_ROWS + 1;
 
 const DEMO_NOTICE = 'Not available for this account.';
 const BLOCKED_NOTICE = "Recent contacts aren't available right now.";
+const EMPTY_CONTACTS: RecentLeadContact[] = [];
 
 
 interface LeadsPanelProps {
@@ -59,45 +61,29 @@ interface LeadsPanelProps {
 export default function LeadsPanel({ demoMode }: LeadsPanelProps) {
   // Canonical /admin paths, rewritten onto whichever mount is rendering (D16).
   const consolePath = useConsolePath();
-  const [contacts, setContacts] = useState<RecentLeadContact[]>([]);
-  const [notice, setNotice] = useState<string | null>(null);
-  const [loading, setLoading] = useState(!demoMode);
+  // A null key in demo mode is the "don't fetch" branch: nothing is requested
+  // and the panel shows the demo notice. Otherwise the preview window comes
+  // from the query cache like the rest of the dashboard.
+  const query = useCachedQuery(demoMode ? null : 'dashboard:leadContacts', () =>
+    adminApi.getRecentLeadContacts(INITIAL_LIMIT),
+  );
+  // The first expand upgrades to the full window; it lives beside the cached
+  // preview rather than inside it so the cache never holds a page-sized list.
+  const [fullContacts, setFullContacts] = useState<RecentLeadContact[] | null>(null);
   const [expanded, setExpanded] = useState(false);
-
-  useEffect(() => {
-    if (demoMode) {
-      setContacts([]);
-      setNotice(DEMO_NOTICE);
-      setLoading(false);
-      setExpanded(false);
-      return;
-    }
-    let cancelled = false;
-    setLoading(true);
-    setNotice(null);
-    adminApi
-      .getRecentLeadContacts(INITIAL_LIMIT)
-      .then((res) => {
-        if (cancelled) return;
-        setContacts(res.contacts ?? []);
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        setContacts([]);
-        // The demo refusal is an expected state, not a failure — it gets the
-        // same quiet body as demo mode, never an error surface.
-        // Review finding: string-comparing the TRANSLATED channel breaks the
-        // day the code lands in CODE_MESSAGES — classify on the raw detail.
-        const failure = classifyLeadsError(err, BLOCKED_NOTICE);
-        setNotice(failure.kind === 'demo' ? DEMO_NOTICE : BLOCKED_NOTICE);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [demoMode]);
+  const contacts: RecentLeadContact[] = fullContacts ?? query.data?.contacts ?? EMPTY_CONTACTS;
+  const loading = !demoMode && query.loading;
+  // The access refusal is an expected state, not a failure — it gets the same
+  // quiet body as demo mode, never an error surface. Classified on the RAW
+  // detail: string-comparing the translated channel would break the day the
+  // code lands in CODE_MESSAGES.
+  const notice: string | null = demoMode
+    ? DEMO_NOTICE
+    : query.error !== undefined
+      ? classifyLeadsError(query.error, BLOCKED_NOTICE).kind === 'demo'
+        ? DEMO_NOTICE
+        : BLOCKED_NOTICE
+      : null;
 
   // The endpoint already orders `created_at DESC` and caps at 100, so the head
   // of the list is the newest and the count is a floor, not a total — the chip
@@ -111,7 +97,7 @@ export default function LeadsPanel({ demoMode }: LeadsPanelProps) {
     if (!expanded && contacts.length <= INITIAL_LIMIT) {
       adminApi
         .getRecentLeadContacts(FETCH_LIMIT)
-        .then((res) => setContacts(res.contacts ?? []))
+        .then((res) => setFullContacts(res.contacts ?? []))
         .catch(() => {});
     }
   };

@@ -357,6 +357,14 @@ export default function PartsPage() {
   const [data, setData] = useState<PaginatedResponse<Part> | null>(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  // Debounce the TERM, not the fetch: a fresh mount and a page change fetch at
+  // once; only typing waits 300ms for the operator to finish the word. (The
+  // old timer sat on the fetch itself, so every first paint idled 300ms.)
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
   const [filter, setFilter] = useState<'all' | 'active' | 'nrnd' | 'obsolete'>('all');
   const [page, setPage] = useState(1);
 
@@ -370,7 +378,7 @@ export default function PartsPage() {
   // Preserve real adminApi.getParts signature (server-side search + pagination)
   const fetchParts = useCallback(() => {
     setLoading(true);
-    const query = { page, search: search.trim() || undefined };
+    const query = { page, search: debouncedSearch.trim() || undefined };
     // GET /account/parts returns the SAME page shape from the SAME serializer,
     // scoped server-side — a distributor gets the parts they carry, a maker the
     // parts they make, and an unlinked account an empty page rather than ours.
@@ -379,11 +387,10 @@ export default function PartsPage() {
       .then(setData)
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [page, search, isCustomer]);
+  }, [page, debouncedSearch, isCustomer]);
 
   useEffect(() => {
-    const timer = setTimeout(fetchParts, 300);
-    return () => clearTimeout(timer);
+    fetchParts();
   }, [fetchParts]);
 
   // Option pools — derived from the full current page (data.items), NOT from

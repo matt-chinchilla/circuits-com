@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { adminApi } from '@admin/services/adminApi';
+import { useCachedQuery } from '@admin/services/queryCache';
 import type { OrgLocation, OrganizationsResponse, VisitorOrganization } from '@admin/services/adminApi';
 import type { AnalyticsSegment } from '@admin/types/admin';
 import { deviceSplitLabel, formatLastSeen } from '../cityIntel';
@@ -63,32 +64,20 @@ export default function OrganizationsPanel({
   onFocusLocation,
   focusableCountries,
 }: Props) {
-  const [data, setData] = useState<OrganizationsResponse | null>(null);
-  const [status, setStatus] = useState<Status>('loading');
   const [filter, setFilter] = useState<OrgFilter>('corporate');
   const [sort, setSort] = useState<OrgSort>('visitors');
   const [openName, setOpenName] = useState<string | null>(null);
 
-  useEffect(() => {
-    // Cancel-flag: `days` and `segment` change from buttons a user can click
-    // faster than the request returns, and a late response must not overwrite
-    // a newer one.
-    let cancelled = false;
-    setStatus('loading');
-    adminApi
-      .getOrganizations(days, segment)
-      .then((payload) => {
-        if (cancelled) return;
-        setData(payload);
-        setStatus('ready');
-      })
-      .catch(() => {
-        if (!cancelled) setStatus('error');
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [days, segment]);
+  // Keyed on the window and segment, so a late response for an older pair
+  // can never overwrite a newer one, and a pair the operator already looked at
+  // renders from memory. (The Site tab unmounts this panel on every tab
+  // switch; the cache is what makes coming back free.)
+  const query = useCachedQuery(`reports:orgs:${days}:${segment}`, () =>
+    adminApi.getOrganizations(days, segment),
+  );
+  const data: OrganizationsResponse | null = query.data ?? null;
+  const status: Status =
+    query.loading ? 'loading' : query.error !== undefined && data === null ? 'error' : 'ready';
 
   const counts = {
     corporate: data?.corporate_count ?? 0,

@@ -22,7 +22,8 @@
 
 import axios from 'axios';
 import { API_BASE_URL } from '@shared/services/constants';
-import { adminApi, authHeaders, onUnauthorized } from '@admin/services/adminApi';
+import { adminApi, authHeaders, cachedRead, onUnauthorized } from '@admin/services/adminApi';
+import { invalidateQueries } from '@admin/services/queryCache';
 import { isPasswordChangeRequired, passwordGate } from '@admin/services/passwordGate';
 import type {
   AccountActivityResponse,
@@ -61,7 +62,13 @@ accountClient.interceptors.request.use((config) => {
 });
 
 accountClient.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    // Same rule as adminClient: a customer's own write (the KPI pick, a
+    // profile edit) drops every cached read so the next visit is honest.
+    const method = (response.config?.method ?? 'get').toLowerCase();
+    if (method !== 'get' && method !== 'head' && method !== 'options') invalidateQueries();
+    return response;
+  },
   (error) => {
     const status = error.response?.status;
     if (status === 401) {
@@ -106,8 +113,9 @@ export const accountApi = {
 
   /** GET /api/account/dashboard — the five scoped tiles. An unlinked account
    *  gets zeroes and a 200, which is the truth: it has not bought anything. */
+  // Cached: the layout's parts badge and the customer dashboard both read it.
   getAccountDashboard: () =>
-    accountClient.get<AccountDashboard>('/account/dashboard').then((r) => r.data),
+    cachedRead('account:dashboard', () => accountClient.get<AccountDashboard>('/account/dashboard').then((r) => r.data)),
 
   /** GET /api/account/parts — same page shape as the admin parts list. */
   getAccountParts: (params: AccountPartsQuery = {}) =>
@@ -175,7 +183,8 @@ export const accountApi = {
 
   /** GET /account/kpi — the chosen KPI's points, plus the registry entries this
    *  account's capability links actually allow. */
-  getAccountKpi: () => accountClient.get<AccountKpi>('/account/kpi').then((r) => r.data),
+  getAccountKpi: () =>
+    cachedRead('account:kpi', () => accountClient.get<AccountKpi>('/account/kpi').then((r) => r.data)),
 
   /**
    * PUT /account/kpi — persist the pick to `users.dashboard_kpi` and get the

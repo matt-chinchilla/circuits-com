@@ -33,6 +33,7 @@ import {
 } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
 import { ADMIN_CHART_THEME_NAME, buildAdminTheme, prefersReducedMotion } from './chartTheme';
+import { useChartEntryAnimation } from './ChartMotion';
 
 // Explicit registration — anything not listed here is tree-shaken away.
 // TooltipComponent transitively installs the axis-pointer used by
@@ -95,6 +96,12 @@ export default function EChart({ option, style, className, onEvents, onReady }: 
   // over a stale onReady — and a new callback identity must not re-init.
   const onReadyRef = useRef(onReady);
   onReadyRef.current = onReady;
+  // Entry-animation gate (see ./ChartMotion). Only the FIRST setOption of an
+  // instance is affected: a mount from cached data paints without the draw-in,
+  // and any later setOption (a refresh that changed the data) animates the
+  // UPDATE as usual, because `notMerge` drops the one-off `animation:false`.
+  const animateEntry = useChartEntryAnimation();
+  const paintedRef = useRef(false);
 
   // (1) Lifecycle. Runs once (twice under StrictMode, which tears down and
   // re-runs EVERY effect — including the setOption effect below, so the
@@ -106,14 +113,23 @@ export default function EChart({ option, style, className, onEvents, onReady }: 
     echarts.registerTheme(ADMIN_CHART_THEME_NAME, buildAdminTheme());
     const chart = echarts.init(host, ADMIN_CHART_THEME_NAME, { renderer: 'canvas' });
     chartRef.current = chart;
+    paintedRef.current = false; // a fresh instance has not painted (StrictMode re-init included)
     onReadyRef.current?.(chart);
 
     // Resize on container change. ECharts warns (and lays out garbage) on a
     // 0-sized box, which is exactly what a collapsed/hidden panel reports.
+    // The observer delivers an initial observation by spec — at the size init
+    // just laid out — so without this guard every chart paid a second full
+    // layout+repaint before it had drawn a frame.
+    let lastW = host.clientWidth;
+    let lastH = host.clientHeight;
     const ro = new ResizeObserver(() => {
       if (chart.isDisposed()) return;
       const { clientWidth, clientHeight } = host;
       if (clientWidth <= 0 || clientHeight <= 0) return;
+      if (clientWidth === lastW && clientHeight === lastH) return;
+      lastW = clientWidth;
+      lastH = clientHeight;
       chart.resize();
     });
     ro.observe(host);
@@ -130,7 +146,14 @@ export default function EChart({ option, style, className, onEvents, onReady }: 
   useEffect(() => {
     const chart = chartRef.current;
     if (!chart || chart.isDisposed()) return;
-    chart.setOption(applyMotionPreference(option), { notMerge: true });
+    const skipEntry = !animateEntry && !paintedRef.current;
+    paintedRef.current = true;
+    chart.setOption(
+      applyMotionPreference(skipEntry ? { ...option, animation: false } : option),
+      { notMerge: true },
+    );
+    // `animateEntry` is deliberately NOT a dep: it only matters for the first
+    // paint of an instance, and a later flip must not force a redraw.
   }, [option]);
 
   // (3) Events. Bound off the instance, torn down on unmount / handler change.

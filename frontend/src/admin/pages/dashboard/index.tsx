@@ -26,11 +26,13 @@
 // effect carries the repo's cancel flag so a late resolve cannot set state on
 // an unmounted page.
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Download } from 'lucide-react';
 import { useAuth } from '@admin/contexts/AuthContext';
 import { useDemo } from '@admin/contexts/DemoContext';
 import { adminApi } from '@admin/services/adminApi';
+import { useCachedQuery } from '@admin/services/queryCache';
+import { ChartMotion } from '@admin/components/charts/ChartMotion';
 import { countActiveSponsorsByTier } from '@admin/services/sponsorTier';
 import type {
   ActivityItem,
@@ -71,6 +73,39 @@ import styles from './DashboardPage.module.scss';
 
 const TREND_DAYS = 30;
 
+interface DashboardCore {
+  stats: DashboardStats | null;
+  activity: ActivityItem[];
+  sponsors: AdminSponsor[];
+  trends: DashboardTrends | null;
+  salesReps: SalesRep[];
+  breakdown: ExpensesBreakdown | null;
+  engagement: PlatformEngagementSeries[];
+}
+
+const EMPTY_ACTIVITY: ActivityItem[] = [];
+const EMPTY_SPONSORS: AdminSponsor[] = [];
+const EMPTY_REPS: SalesRep[] = [];
+const EMPTY_ENGAGEMENT: PlatformEngagementSeries[] = [];
+const EMPTY_MONTHS: MonthlyCompareMonth[] = [];
+
+// The range-independent payloads, fetched in parallel and cached as ONE entry
+// so a revisit is a single equality check rather than seven. Each read is
+// best-effort: a failed panel degrades to its empty state, never the page.
+async function loadDashboardCore(): Promise<DashboardCore> {
+  const [stats, activity, sponsors, trends, reps, breakdown, engagement] = await Promise.all([
+    adminApi.getStats().catch(() => null),
+    adminApi.getActivity().catch(() => [] as ActivityItem[]),
+    adminApi.getSponsors().catch(() => [] as AdminSponsor[]),
+    adminApi.getTrends(TREND_DAYS).catch(() => null),
+    adminApi.getSalesReps().catch(() => ({ reps: [] as SalesRep[] })),
+    adminApi.getExpensesBreakdown().catch(() => null),
+    // Stub today — resolves [] until the engagement endpoint lands.
+    adminApi.getEngagement(TREND_DAYS).catch(() => [] as PlatformEngagementSeries[]),
+  ]);
+  return { stats, activity, sponsors, trends, salesReps: reps.reps ?? [], breakdown, engagement };
+}
+
 const EMPTY_TIER_COUNTS: Record<SponsorTier, number> = { Platinum: 0, Gold: 0, Silver: 0 };
 
 export default function DashboardPage() {
@@ -84,14 +119,16 @@ export default function DashboardPage() {
 function StaffDashboard() {
   const { demoMode } = useDemo();
 
-  const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [activity, setActivity] = useState<ActivityItem[]>([]);
-  const [sponsors, setSponsors] = useState<AdminSponsor[]>([]);
-  const [trends, setTrends] = useState<DashboardTrends | null>(null);
-  const [salesReps, setSalesReps] = useState<SalesRep[]>([]);
-  const [breakdown, setBreakdown] = useState<ExpensesBreakdown | null>(null);
-  const [engagement, setEngagement] = useState<PlatformEngagementSeries[]>([]);
-  const [loading, setLoading] = useState(true);
+  // ── Data ─────────────────────────────────────────────────────────────────
+  // Every read goes through the module-level query cache (owner, 2026-09-03:
+  // "going back to the dashboard should not require a re-query every time").
+  // A revisit inside the freshness window renders synchronously from memory
+  // with NO request; a stale revisit renders from memory and refreshes in the
+  // background, re-rendering only if a payload actually changed; the first
+  // visit is the only one that shows the skeletons. `demoMode` is deliberately
+  // not part of any key — the payload is the same either way, the demo branch
+  // just renders generated data instead.
+  const core = useCachedQuery('dashboard:core', loadDashboardCore);
 
   // TODO: move both windows to Settings — they are a per-admin preference, not
   // page state. Local `useState` keeps this shippable without a settings
@@ -99,81 +136,29 @@ function StaffDashboard() {
   // a longer horizon than bookings).
   const [revenueRange, setRevenueRange] = useState<CompareRange>(3);
   const [expenseRange, setExpenseRange] = useState<CompareRange>(3);
-  const [revenueMonths, setRevenueMonths] = useState<MonthlyCompareMonth[]>([]);
-  const [expenseMonths, setExpenseMonths] = useState<MonthlyCompareMonth[]>([]);
-  const [revenueLoading, setRevenueLoading] = useState(true);
-  const [expenseLoading, setExpenseLoading] = useState(true);
+  // One query EACH, keyed on its own window: a combined key would refetch both
+  // endpoints every time either segmented control moved.
+  const revenue = useCachedQuery(`dashboard:revenue:${revenueRange}`, () =>
+    adminApi.getRevenueCompare(revenueRange).catch(() => ({ months: [] as MonthlyCompareMonth[] })),
+  );
+  const expenses = useCachedQuery(`dashboard:expenses:${expenseRange}`, () =>
+    adminApi.getExpenses(expenseRange).catch(() => ({ months: [] as MonthlyCompareMonth[] })),
+  );
 
-  // ── Range-independent payloads ───────────────────────────────────────────
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    Promise.all([
-      adminApi.getStats().catch(() => null),
-      adminApi.getActivity().catch(() => [] as ActivityItem[]),
-      // Best-effort: the tier mix degrades to its empty state rather than
-      // failing the page.
-      adminApi.getSponsors().catch(() => [] as AdminSponsor[]),
-      adminApi.getTrends(TREND_DAYS).catch(() => null),
-      adminApi.getSalesReps().catch(() => ({ reps: [] as SalesRep[] })),
-      adminApi.getExpensesBreakdown().catch(() => null),
-      // Stub today — resolves [] until the engagement endpoint lands.
-      adminApi.getEngagement(TREND_DAYS).catch(() => [] as PlatformEngagementSeries[]),
-    ])
-      .then(([s, a, sp, t, reps, bd, eng]) => {
-        if (cancelled) return;
-        setStats(s);
-        setActivity(a);
-        setSponsors(sp);
-        setTrends(t);
-        setSalesReps(reps.reps ?? []);
-        setBreakdown(bd);
-        setEngagement(eng);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [demoMode]);
-
-  // ── Comparators ──────────────────────────────────────────────────────────
-  // One effect EACH, keyed only on its own window: a combined effect refetched
-  // both endpoints every time either segmented control moved. Neither depends
-  // on `demoMode` — the payload is the same either way, the demo branch just
-  // renders generated months instead.
-  useEffect(() => {
-    let cancelled = false;
-    setRevenueLoading(true);
-    adminApi
-      .getRevenueCompare(revenueRange)
-      .catch(() => ({ months: [] }))
-      .then((rev) => {
-        if (cancelled) return;
-        setRevenueMonths(rev.months ?? []);
-        setRevenueLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [revenueRange]);
-
-  useEffect(() => {
-    let cancelled = false;
-    setExpenseLoading(true);
-    adminApi
-      .getExpenses(expenseRange)
-      .catch(() => ({ months: [] }))
-      .then((exp) => {
-        if (cancelled) return;
-        setExpenseMonths(exp.months ?? []);
-        setExpenseLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [expenseRange]);
+  // Stable empties (module-level) so the memos below don't re-run on every
+  // render while a payload is still missing.
+  const stats = core.data?.stats ?? null;
+  const activity = core.data?.activity ?? EMPTY_ACTIVITY;
+  const sponsors = core.data?.sponsors ?? EMPTY_SPONSORS;
+  const trends = core.data?.trends ?? null;
+  const salesReps = core.data?.salesReps ?? EMPTY_REPS;
+  const breakdown = core.data?.breakdown ?? null;
+  const engagement = core.data?.engagement ?? EMPTY_ENGAGEMENT;
+  const loading = core.loading;
+  const revenueMonths = revenue.data?.months ?? EMPTY_MONTHS;
+  const expenseMonths = expenses.data?.months ?? EMPTY_MONTHS;
+  const revenueLoading = revenue.loading;
+  const expenseLoading = expenses.loading;
 
   // ── Derived: day axis ────────────────────────────────────────────────────
   // Demo curves ride the REAL ET day axis, so the hover readout names a real
@@ -245,6 +230,9 @@ function StaffDashboard() {
   }, [demoMode, sponsors]);
 
   return (
+    // Charts mounting from cached data paint without their draw-in; a refresh
+    // that changes the data still animates the update.
+    <ChartMotion animateEntry={!core.fromCache}>
     <div>
       <div className={styles.pageHead}>
         <div className={styles.pageHeadLeft}>
@@ -349,5 +337,6 @@ function StaffDashboard() {
         <ImportQueuePanel demoMode={demoMode} />
       </div>
     </div>
+    </ChartMotion>
   );
 }
