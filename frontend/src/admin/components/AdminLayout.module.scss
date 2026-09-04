@@ -224,19 +224,46 @@
   // Two rules keep the scrollbar out of sight at 100% (owner, same day):
   // the nav's own density fits a ~740px viewport (see the metrics on
   // .sideItem / .sideGroupLabel and the short-viewport step below), and when
-  // zoom does force an overflow the rail is a thin track whose thumb is
-  // invisible until the pointer is over the sidebar — the same quiet-at-rest,
-  // accented-on-hover language as the topbar chips. Standard properties only:
-  // Chromium ≥121 ignores ::-webkit-scrollbar once scrollbar-width is set.
+  // zoom does force an overflow the rail is a 6px track whose rounded thumb
+  // is invisible until the pointer is over the sidebar — the same
+  // quiet-at-rest, accented-on-hover language as the topbar chips.
+  //
+  // TWO engines, TWO rule sets, never both on one element: Chromium/WebKit
+  // draw a designed rail only through ::-webkit-scrollbar-*, and Chromium
+  // ≥121 IGNORES those the moment `scrollbar-width`/`scrollbar-color` is
+  // also set (which is how the first cut of this shipped Chrome's stock thin
+  // bar — owner: "visible and not stylized"). Firefox has no pseudo-elements
+  // and takes the standard properties, gated behind @supports so Chromium
+  // never sees them.
   overflow-y: auto;
   overscroll-behavior: contain;
-  scrollbar-width: thin;
-  scrollbar-color: transparent transparent;
-  transition: scrollbar-color 150ms;
 
-  &:hover,
-  &:focus-within {
-    scrollbar-color: var(--a-scroll-thumb) transparent;
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: transparent;
+    border-radius: 999px;
+  }
+
+  &:hover::-webkit-scrollbar-thumb,
+  &:focus-within::-webkit-scrollbar-thumb {
+    background: var(--a-scroll-thumb);
+  }
+
+  @supports not selector(::-webkit-scrollbar) {
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+
+    &:hover,
+    &:focus-within {
+      scrollbar-color: var(--a-scroll-thumb) transparent;
+    }
   }
 }
 
