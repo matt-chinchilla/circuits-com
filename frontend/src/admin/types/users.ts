@@ -1,8 +1,9 @@
 // The registered-account roster — admin-only (customer registration, D16).
 //
-// One row per `users.role = 'user'` account. Staff logins are NOT in here:
-// `GET /api/admin/users/` filters to customers, and the route itself is
-// require_staff, so this type never describes anything a customer can read.
+// One row per `users.role = 'user'` account PLUS read-only `viewer` staff
+// (alembic 051) — the owner's one view of every outside account. Admin/owner
+// logins are NOT in here, and the route itself is require_staff, so this
+// type never describes anything a customer can read.
 
 export interface AdminUser {
   id: string;
@@ -26,4 +27,7 @@ export interface AdminUser {
   activated_at?: string | null;
   supplier_id?: string | null;
   manufacturer_id?: string | null;
+  // A viewer gets a badge and no controls: activation, company links and
+  // delete are customer-only server-side (404 for anything else).
+  role: 'user' | 'viewer';
 }

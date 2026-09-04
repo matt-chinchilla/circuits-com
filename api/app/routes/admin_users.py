@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.db.session import get_db
 from app.models import Expense, Lead, Manufacturer, Supplier, User
+from app.models.roles import VIEWER_ROLES
 from app.services import email as email_service
 from app.services.account_tier import account_tier
 from app.services.auth_service import require_owner, require_staff
@@ -40,9 +41,7 @@ class UserUpdate(BaseModel):
 
 def _row(db: Session, u: User) -> dict:
     supplier = (
-        db.query(Supplier).filter(Supplier.id == u.supplier_id).first()
-        if u.supplier_id
-        else None
+        db.query(Supplier).filter(Supplier.id == u.supplier_id).first() if u.supplier_id else None
     )
     full_name = " ".join(p for p in (u.first_name, u.last_name) if p).strip()
     return {
@@ -58,6 +57,9 @@ def _row(db: Session, u: User) -> dict:
         "tier": account_tier(db, u),
         "email_verified_at": u.email_verified_at,
         "activated_at": u.activated_at,
+        # 'user' or 'viewer' — the page badges a viewer and offers it no
+        # activation/link/delete controls (those routes 404 a non-customer).
+        "role": getattr(u.role, "value", u.role),
         "supplier_id": str(u.supplier_id) if u.supplier_id else None,
         "manufacturer_id": str(u.manufacturer_id) if u.manufacturer_id else None,
     }
@@ -68,10 +70,15 @@ def list_users(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_staff),
 ):
-    # Unactivated first: the page's job is to show you who is waiting.
+    # Customers AND read-only viewers (alembic 051): a viewer is an outsider
+    # the owner granted the console to, and the owner's one place to see
+    # every outside account is this roster — promoting Anthony Shaw to viewer
+    # made him vanish from it (owner, 2026-09-04: "he's gone"). Admin/owner
+    # rows stay out; the PATCH/DELETE routes below still manage customers
+    # only. Unactivated first: the page's job is to show you who is waiting.
     rows = (
         db.query(User)
-        .filter(User.role == "user")
+        .filter(User.role.in_(("user", *VIEWER_ROLES)))
         .order_by(User.activated_at.isnot(None), User.created_at.desc())
         .all()
     )

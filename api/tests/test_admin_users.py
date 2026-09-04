@@ -9,9 +9,16 @@ from app.models import User
 
 
 def _customer(db, email="c@test.example", activated_at=None):
-    u = User(username=email, email=email, password_hash="x", role="user",
-             first_name="James", last_name="Chirichella", signup_country="US",
-             activated_at=activated_at)
+    u = User(
+        username=email,
+        email=email,
+        password_hash="x",
+        role="user",
+        first_name="James",
+        last_name="Chirichella",
+        signup_country="US",
+        activated_at=activated_at,
+    )
     db.add(u)
     db.flush()
     return u
@@ -20,8 +27,7 @@ def _customer(db, email="c@test.example", activated_at=None):
 def test_a_customer_cannot_read_the_roster(client, db, seeded_db, auth_header):
     _customer(db)
     db.commit()
-    r = client.get("/api/admin/users/",
-                   headers=auth_header(email="kennedy_user@test.example"))
+    r = client.get("/api/admin/users/", headers=auth_header(email="kennedy_user@test.example"))
     assert r.status_code == 403
     assert r.json()["detail"] == "staff_only"
 
@@ -35,36 +41,74 @@ def test_staff_can_read_the_roster(client, db, seeded_db, auth_header):
     assert "c@test.example" in emails
 
 
-def test_the_roster_carries_the_columns_the_page_renders(
-    client, db, seeded_db, auth_header
-):
+def test_the_roster_carries_the_columns_the_page_renders(client, db, seeded_db, auth_header):
     _customer(db)
     db.commit()
-    row = [u for u in client.get("/api/admin/users/",
-                                 headers=auth_header()).json()
-           if u["email"] == "c@test.example"][0]
-    for key in ("id", "full_name", "email", "created_at", "signup_country",
-                "website", "tier", "email_verified_at", "activated_at",
-                "supplier_id", "manufacturer_id"):
+    row = [
+        u
+        for u in client.get("/api/admin/users/", headers=auth_header()).json()
+        if u["email"] == "c@test.example"
+    ][0]
+    for key in (
+        "id",
+        "full_name",
+        "email",
+        "created_at",
+        "signup_country",
+        "website",
+        "tier",
+        "email_verified_at",
+        "activated_at",
+        "supplier_id",
+        "manufacturer_id",
+        "role",
+    ):
         assert key in row, f"missing {key}"
+    assert row["role"] == "user"
+
+
+def test_a_viewer_is_listed_on_the_roster_but_not_managed_by_it(client, db, seeded_db, auth_header):
+    """Read-only staff (alembic 051) show up — the owner's only view of every
+    outside account — badged by role; admin/owner rows never do; and the
+    customer-only mutation routes still answer 404 for a viewer."""
+    from datetime import UTC, datetime
+
+    v = User(
+        username="v@test.example",
+        email="v@test.example",
+        password_hash="x",
+        role="viewer",
+        email_verified_at=datetime.now(UTC),
+    )
+    db.add(v)
+    db.commit()
+    headers = auth_header()
+    roster = client.get("/api/admin/users/", headers=headers).json()
+    by_email = {u["email"]: u for u in roster}
+    assert by_email["v@test.example"]["role"] == "viewer"
+    assert "admin@test.example" not in by_email
+    assert (
+        client.patch(
+            f"/api/admin/users/{v.id}", json={"activated": True}, headers=headers
+        ).status_code
+        == 404
+    )
 
 
 def test_activation_stamps_and_is_idempotent(client, db, seeded_db, auth_header):
     u = _customer(db)
     db.commit()
-    r = client.patch(f"/api/admin/users/{u.id}", json={"activated": True},
-                     headers=auth_header())
+    r = client.patch(f"/api/admin/users/{u.id}", json={"activated": True}, headers=auth_header())
     assert r.status_code == 200
     first = r.json()["activated_at"]
     assert first is not None
-    again = client.patch(f"/api/admin/users/{u.id}", json={"activated": True},
-                         headers=auth_header())
+    again = client.patch(
+        f"/api/admin/users/{u.id}", json={"activated": True}, headers=auth_header()
+    )
     assert again.json()["activated_at"] == first, "re-activating must not re-stamp"
 
 
-def test_deactivation_is_refused_because_activation_is_one_way(
-    client, db, seeded_db, auth_header
-):
+def test_deactivation_is_refused_because_activation_is_one_way(client, db, seeded_db, auth_header):
     """This test asserted the OPPOSITE until 2026-08-26.
 
     Deactivation existed as a way to revoke a lapsed customer without deleting
@@ -77,8 +121,7 @@ def test_deactivation_is_refused_because_activation_is_one_way(
 
     u = _customer(db, activated_at=datetime.now(UTC))
     db.commit()
-    r = client.patch(f"/api/admin/users/{u.id}", json={"activated": False},
-                     headers=auth_header())
+    r = client.patch(f"/api/admin/users/{u.id}", json={"activated": False}, headers=auth_header())
     assert r.status_code == 409
     assert r.json()["detail"] == "activation_is_one_way"
 
@@ -86,8 +129,11 @@ def test_deactivation_is_refused_because_activation_is_one_way(
 def test_a_customer_cannot_activate_themselves(client, db, seeded_db, auth_header):
     u = _customer(db)
     db.commit()
-    r = client.patch(f"/api/admin/users/{u.id}", json={"activated": True},
-                     headers=auth_header(email="kennedy_user@test.example"))
+    r = client.patch(
+        f"/api/admin/users/{u.id}",
+        json={"activated": True},
+        headers=auth_header(email="kennedy_user@test.example"),
+    )
     assert r.status_code == 403
 
 
@@ -135,19 +181,31 @@ def test_the_roster_manages_customers_only(client, db, seeded_db, auth_header):
 
     headers = auth_header()
     admin_id = seeded_db["admin_user"].id
-    assert client.patch(
-        f"/api/admin/users/{admin_id}", json={"activated": True}, headers=headers
-    ).status_code == 404
-    assert client.patch(
-        f"/api/admin/users/{uuid.uuid4()}", json={"activated": True}, headers=headers
-    ).status_code == 404
-    assert client.patch(
-        "/api/admin/users/not-a-uuid", json={"activated": True}, headers=headers
-    ).status_code == 422
+    assert (
+        client.patch(
+            f"/api/admin/users/{admin_id}", json={"activated": True}, headers=headers
+        ).status_code
+        == 404
+    )
+    assert (
+        client.patch(
+            f"/api/admin/users/{uuid.uuid4()}", json={"activated": True}, headers=headers
+        ).status_code
+        == 404
+    )
+    assert (
+        client.patch(
+            "/api/admin/users/not-a-uuid", json={"activated": True}, headers=headers
+        ).status_code
+        == 422
+    )
     # extra="forbid" — the body may never carry `role`.
-    assert client.patch(
-        f"/api/admin/users/{uuid.uuid4()}", json={"role": "owner"}, headers=headers
-    ).status_code == 422
+    assert (
+        client.patch(
+            f"/api/admin/users/{uuid.uuid4()}", json={"role": "owner"}, headers=headers
+        ).status_code
+        == 422
+    )
     assert client.get("/api/admin/users/").status_code == 401
 
 
@@ -163,9 +221,14 @@ def _owner(db, email="owner@test.example"):
     which is deliberately NOT enough (auth_service.require_owner)."""
     from app.services.auth_service import hash_password
 
-    u = User(username=email, email=email,
-             password_hash=hash_password("testpass123"), role="owner",
-             first_name="Mat", last_name="Owner")
+    u = User(
+        username=email,
+        email=email,
+        password_hash=hash_password("testpass123"),
+        role="owner",
+        first_name="Mat",
+        last_name="Owner",
+    )
     db.add(u)
     db.flush()
     return u
@@ -175,8 +238,7 @@ def test_the_owner_can_actually_delete_a_customer(client, db, seeded_db, auth_he
     u = _customer(db)
     _owner(db)
     db.commit()
-    r = client.delete(f"/api/admin/users/{u.id}",
-                      headers=auth_header(email="owner@test.example"))
+    r = client.delete(f"/api/admin/users/{u.id}", headers=auth_header(email="owner@test.example"))
     assert r.status_code == 200
     db.expire_all()
     assert db.query(User).filter(User.email == "c@test.example").count() == 0
@@ -190,14 +252,11 @@ def test_deleting_a_customer_takes_their_own_inbox_with_them(client, db, seeded_
 
     u = _customer(db)
     _owner(db)
-    db.add(Message(id="am1", type="welcome", status="new", seq=9201,
-                   user_id=u.id, payload={}))
-    db.add(Message(id="am2", type="signup", status="new", seq=9202,
-                   user_id=None, payload={}))
+    db.add(Message(id="am1", type="welcome", status="new", seq=9201, user_id=u.id, payload={}))
+    db.add(Message(id="am2", type="signup", status="new", seq=9202, user_id=None, payload={}))
     db.commit()
 
-    r = client.delete(f"/api/admin/users/{u.id}",
-                      headers=auth_header(email="owner@test.example"))
+    r = client.delete(f"/api/admin/users/{u.id}", headers=auth_header(email="owner@test.example"))
     assert r.status_code == 200
     db.expire_all()
     assert db.query(User).filter(User.email == "c@test.example").count() == 0
@@ -229,10 +288,8 @@ def test_delete_answers_404_and_422_rather_than_500(client, db, seeded_db, auth_
     _owner(db)
     db.commit()
     headers = auth_header(email="owner@test.example")
-    assert client.delete(f"/api/admin/users/{uuid.uuid4()}",
-                         headers=headers).status_code == 404
-    assert client.delete("/api/admin/users/not-a-uuid",
-                         headers=headers).status_code == 422
+    assert client.delete(f"/api/admin/users/{uuid.uuid4()}", headers=headers).status_code == 404
+    assert client.delete("/api/admin/users/not-a-uuid", headers=headers).status_code == 422
     assert client.delete(f"/api/admin/users/{uuid.uuid4()}").status_code == 401
 
 
@@ -290,23 +347,31 @@ def test_a_real_link_is_still_accepted(client, db, seeded_db, auth_header):
     from app.models import Manufacturer
 
     u = _customer(db)
-    maker = Manufacturer(name="Nordic Semiconductor", slug="nordic-semiconductor",
-                         canonical_key="nordic semiconductor")
+    maker = Manufacturer(
+        name="Nordic Semiconductor",
+        slug="nordic-semiconductor",
+        canonical_key="nordic semiconductor",
+    )
     db.add(maker)
     db.commit()
     supplier = seeded_db["supplier2"]
     headers = auth_header()
 
-    r = client.patch(f"/api/admin/users/{u.id}",
-                     json={"supplier_id": str(supplier.id),
-                           "manufacturer_id": str(maker.id)}, headers=headers)
+    r = client.patch(
+        f"/api/admin/users/{u.id}",
+        json={"supplier_id": str(supplier.id), "manufacturer_id": str(maker.id)},
+        headers=headers,
+    )
     assert r.status_code == 200
     assert r.json()["supplier_id"] == str(supplier.id)
     assert r.json()["manufacturer_id"] == str(maker.id)
     assert r.json()["company"] == "Kennedy Electronics"
 
-    r = client.patch(f"/api/admin/users/{u.id}",
-                     json={"supplier_id": None, "manufacturer_id": None}, headers=headers)
+    r = client.patch(
+        f"/api/admin/users/{u.id}",
+        json={"supplier_id": None, "manufacturer_id": None},
+        headers=headers,
+    )
     assert r.status_code == 200
     assert r.json()["supplier_id"] is None
     assert r.json()["manufacturer_id"] is None

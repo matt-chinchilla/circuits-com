@@ -222,7 +222,7 @@ export default function UsersListPage() {
   };
 
   const list = rows ?? [];
-  const waiting = list.filter((u) => u.activated_at == null).length;
+  const waiting = list.filter((u) => u.role !== 'viewer' && u.activated_at == null).length;
 
   return (
     <div className={styles.page}>
@@ -231,7 +231,7 @@ export default function UsersListPage() {
           <h1 className={styles.title}>Users</h1>
           <p className={styles.subtitle}>
             Everyone who registered for an account &mdash; unactivated first, because they are
-            the ones waiting on us.
+            the ones waiting on us &mdash; plus anyone given view-only access to this console.
           </p>
         </div>
         {!loading && list.length > 0 && (
@@ -307,6 +307,8 @@ export default function UsersListPage() {
               {!loading &&
                 list.map((u) => {
                   const activated = u.activated_at != null;
+                  // Read-only staff: badged, never "waiting", no controls.
+                  const isViewer = u.role === 'viewer';
                   const saving = savingIds.includes(u.id);
                   const site = u.website ? safeHttpUrl(u.website) : null;
                   const verifiedOn = formatDay(u.email_verified_at);
@@ -318,7 +320,7 @@ export default function UsersListPage() {
                   const linked = u.supplier_id != null || u.manufacturer_id != null;
                   return (
                     <Fragment key={u.id}>
-                      <tr className={activated ? undefined : styles.rowWaiting}>
+                      <tr className={activated || isViewer ? undefined : styles.rowWaiting}>
                         <td className={styles.nameCell}>{u.full_name}</td>
                         <td className={styles.emailCell}>
                           <a href={`mailto:${u.email}`} className={styles.emailLink}>
@@ -353,9 +355,13 @@ export default function UsersListPage() {
                           )}
                         </td>
                         <td>
-                          <span className={`${styles.tierChip} ${TIER_CLASS[u.tier] ?? ''}`}>
-                            {u.tier}
-                          </span>
+                          {isViewer ? (
+                            <span className={styles.muted}>&mdash;</span>
+                          ) : (
+                            <span className={`${styles.tierChip} ${TIER_CLASS[u.tier] ?? ''}`}>
+                              {u.tier}
+                            </span>
+                          )}
                         </td>
                         <td>
                           {verifiedOn ? (
@@ -372,6 +378,9 @@ export default function UsersListPage() {
                           )}
                         </td>
                         <td className={styles.companyCell}>
+                          {isViewer ? (
+                            <span className={styles.muted}>Staff, view only</span>
+                          ) : (
                           <div className={styles.linkStack}>
                             {/* Two links, shown separately: an account may be a
                                 distributor, a manufacturer, or both. */}
@@ -407,9 +416,20 @@ export default function UsersListPage() {
                               {editing ? 'Close' : linked ? 'Change company' : 'Link company'}
                             </button>
                           </div>
+                          )}
                         </td>
                         <td className={styles.actionCell}>
                           {(() => {
+                            if (isViewer) {
+                              return (
+                                <span
+                                  className={styles.activatedTag}
+                                  title="Read-only staff: sees the whole console, can change nothing"
+                                >
+                                  View only
+                                </span>
+                              );
+                            }
                             const control = activationControl({
                               activatedAt: u.activated_at,
                               viewerIsOwner,
