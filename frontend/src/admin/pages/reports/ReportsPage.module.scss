@@ -432,6 +432,13 @@
     gap: 10px;
   }
 
+  // In a COLUMN flex box the desktop `flex: 1 1 320px` basis becomes a
+  // 320px HEIGHT — the first phone cut opened a blank band between the
+  // title and the switch. Auto here; the title is as tall as its text.
+  .flowHeadText {
+    flex: 0 0 auto;
+  }
+
   .flowSeg {
     display: flex;
     width: 100%;
