@@ -13,7 +13,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import EChart from '@admin/components/charts/EChart'
-import { sankeyOption } from '@admin/components/charts/options'
+import { LAST_COLUMN_LABEL_ROOM, sankeyOption } from '@admin/components/charts/options'
 import { adminApi } from '@admin/services/adminApi'
 import { useCachedQuery } from '@admin/services/queryCache'
 import type { AnalyticsSegment, FlowPayload } from '@admin/types/admin'
@@ -62,6 +62,15 @@ export function drawableFlow(flow: FlowPayload, minClicks = MIN_CLICKS_TO_DRAW) 
   }
 }
 
+/** Pixels per node in the widest column, plus chrome; clamped to the card. */
+export function flowHeight(nodes: readonly { column: number }[], narrow: boolean): number {
+  const perColumn = new Map<number, number>()
+  for (const n of nodes) perColumn.set(n.column, (perColumn.get(n.column) ?? 0) + 1)
+  const widest = Math.max(0, ...perColumn.values())
+  if (narrow) return Math.min(900, Math.max(640, 44 * widest + 120))
+  return Math.min(760, Math.max(440, 28 * widest + 80))
+}
+
 interface FlowsPanelProps {
   days: number
   segment: AnalyticsSegment
@@ -77,13 +86,21 @@ export default function FlowsPanel({ days, segment }: FlowsPanelProps) {
   )
   const flow = query.data
 
+  // The card grows with its widest column so a dozen subcategories are
+  // bands, not hairlines; capped so a phone never scrolls a wall of chart.
+  const height = useMemo(() => {
+    if (!flow) return narrow ? 640 : 440
+    return flowHeight(drawableFlow(flow).nodes, narrow)
+  }, [flow, narrow])
+
+  const columns = flow ? drawableFlow(flow).columns : []
+
   const option = useMemo(() => {
     if (!flow || flow.total === 0) return null
-    const { nodes, links, columns } = drawableFlow(flow)
+    const { nodes, links } = drawableFlow(flow)
     return sankeyOption({
       nodes,
       links,
-      columns,
       unit: flow.unit,
       total: flow.total,
       orient: narrow ? 'vertical' : 'horizontal',
@@ -125,10 +142,26 @@ export default function FlowsPanel({ days, segment }: FlowsPanelProps) {
         </div>
       </div>
 
+      {option && columns.length > 0 && (
+        // Headings in the DOM, spread across the columns' real extent: the
+        // first sits on the first column's left edge, the last on the last
+        // column's (the chart keeps LAST_COLUMN_LABEL_ROOM free right of it).
+        <div
+          className={styles.flowColumns}
+          style={narrow ? undefined : { paddingRight: LAST_COLUMN_LABEL_ROOM }}
+          aria-hidden="true"
+        >
+          {narrow ? (
+            <span>{columns.join(' → ')}</span>
+          ) : (
+            columns.map((c) => <span key={c}>{c}</span>)
+          )}
+        </div>
+      )}
       {option ? (
-        <EChart option={option} className={styles.flowChart} style={{ height: narrow ? 640 : 440 }} />
+        <EChart option={option} className={styles.flowChart} style={{ height }} />
       ) : (
-        <div className={styles.flowEmpty} style={{ height: narrow ? 640 : 440 }}>
+        <div className={styles.flowEmpty} style={{ height }}>
           {query.loading ? 'Loading…' : `No ${flow?.unit ?? 'traffic'} in this window yet.`}
         </div>
       )}

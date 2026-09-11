@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { FlowPayload } from '@admin/types/admin';
-import { MIN_CLICKS_TO_DRAW, drawableFlow } from './FlowsPanel';
+import { MIN_CLICKS_TO_DRAW, drawableFlow, flowHeight } from './FlowsPanel';
 
 const parts: FlowPayload = {
   kind: 'parts',
@@ -43,5 +43,19 @@ describe('drawableFlow', () => {
   it('never adds a distributor column to the traffic flow', () => {
     const d = drawableFlow({ ...parts, kind: 'traffic', clicks_total: 999 });
     expect(d.withDistributors).toBe(false);
+  });
+});
+
+describe('flowHeight', () => {
+  const col = (n: number, column: number) => Array.from({ length: n }, () => ({ column }));
+  it('grows with the widest column and clamps to the card', () => {
+    expect(flowHeight([...col(3, 0), ...col(5, 1), ...col(4, 2)], false)).toBe(440);
+    expect(flowHeight([...col(3, 0), ...col(14, 1), ...col(13, 2)], false)).toBe(28 * 14 + 80);
+    expect(flowHeight(col(60, 1), false)).toBe(760);
+    expect(flowHeight([], false)).toBe(440);
+  });
+  it('gives a phone the taller vertical budget', () => {
+    expect(flowHeight(col(5, 1), true)).toBe(640);
+    expect(flowHeight(col(30, 1), true)).toBe(900);
   });
 });

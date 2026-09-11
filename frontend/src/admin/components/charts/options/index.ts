@@ -34,7 +34,7 @@ export type {
 // (imported directly by its host) — it is NOT an option builder, so it stays
 // out of this barrel on purpose.
 
-export { columnColor, sankeyOption } from './sankeyOption';
+export { LAST_COLUMN_LABEL_ROOM, columnColor, sankeyOption } from './sankeyOption';
 export type { SankeyLink, SankeyNode, SankeyOptionInput } from './sankeyOption';
 
 export { escapeHtml, tooltipCard, tooltipItems, tooltipRow, numericValue } from './tooltip';

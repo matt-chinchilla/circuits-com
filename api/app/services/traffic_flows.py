@@ -31,6 +31,7 @@ DIRECT = "Direct"
 OTHER_SITES = "Other sites"
 LEFT = "Left the site"
 OTHER_PARTS = "All other parts"
+OTHER_SUBCATEGORIES = "Other subcategories"
 OWN_HOST = "circuitcenter.ai"
 
 # A referrer host is bucketed by its DOMAIN LABELS (``www.google.co.kr`` →
@@ -64,9 +65,25 @@ _SOURCE_HOSTS: dict[str, str] = {
     "fb.me": "Facebook",
 }
 
-# Sources smaller than this many sessions fold into "Other sites" so the
-# column stays legible; Direct is never folded — it is the honest bulk.
+# Nodes smaller than this fold into their column's "Other" so the column
+# stays legible: the larger of an absolute floor and a share of the total,
+# because a twelve-month window makes a two-session source a hairline whose
+# label collides with its neighbours. Direct and "Left the site" never fold
+# — they are the honest bulk and the honest end.
 SOURCE_MIN_SESSIONS = 5
+MIN_NODE_SHARE = 0.01
+
+
+def node_floor(total: int) -> int:
+    """Floor for a SOURCE node: an absolute five sessions or 1%."""
+    return max(SOURCE_MIN_SESSIONS, int(total * MIN_NODE_SHARE))
+
+
+def page_floor(total: int) -> int:
+    """Floor for a PAGE-TYPE node: share only. A week with thirty sessions
+    should still show that one of them started on the BOM tool; only a big
+    window folds the sub-1% tail."""
+    return max(1, int(total * MIN_NODE_SHARE))
 
 
 def referrer_host(referrer: str | None) -> str:
@@ -156,7 +173,12 @@ def _assemble(columns: list[str], links: Counter, hints: dict[str, str] | None =
         column_of[dst] = int(dst.split(":", 1)[0])
     ordered = sorted(
         column_of,
-        key=lambda nid: (column_of[nid], nid.endswith(":" + OTHER_PARTS), -weight[nid], nid),
+        key=lambda nid: (
+            column_of[nid],
+            nid.endswith(":" + OTHER_PARTS) or nid.endswith(":" + OTHER_SUBCATEGORIES),
+            -weight[nid],
+            nid,
+        ),
     )
     nodes = [_node(column_of[nid], nid.split(":", 1)[1], hints.get(nid)) for nid in ordered]
     link_rows = [
@@ -181,15 +203,23 @@ def traffic_flow(rows: Iterable[tuple[str, int, str | None, str | None]]) -> dic
         elif rank == 2:
             second[session_id] = page_type(path)
 
+    src_floor = node_floor(len(first))
+    pg_floor = page_floor(len(first))
     per_source: Counter = Counter(src for src, _ in first.values())
-    keep = {src for src, n in per_source.items() if src == DIRECT or n >= SOURCE_MIN_SESSIONS}
+    per_landing: Counter = Counter(landing for _, landing in first.values())
+    per_next: Counter = Counter(second.get(sid, LEFT) for sid in first)
+    keep_source = {s for s, n in per_source.items() if s == DIRECT or n >= src_floor}
+    keep_landing = {p for p, n in per_landing.items() if n >= pg_floor}
+    keep_next = {p for p, n in per_next.items() if p == LEFT or n >= pg_floor}
 
     links: Counter = Counter()
     for session_id, (src, landing) in first.items():
-        source = src if src in keep else OTHER_SITES
+        source = src if src in keep_source else OTHER_SITES
+        landed = landing if landing in keep_landing else OTHER_PAGES
         nxt = second.get(session_id, LEFT)
-        links[(f"0:{source}", f"1:{landing}")] += 1
-        links[(f"1:{landing}", f"2:{nxt}")] += 1
+        nxt = nxt if nxt in keep_next else OTHER_PAGES
+        links[(f"0:{source}", f"1:{landed}")] += 1
+        links[(f"1:{landed}", f"2:{nxt}")] += 1
 
     payload = _assemble(["Source", "Landing page", "Next step"], links)
     payload.update(kind="traffic", unit="sessions", total=len(first))
@@ -213,10 +243,17 @@ def parts_flow(
     parts_by_token: dict[str, PartRef],
     clicks: Iterable[tuple[str, str, int]],
     limit: int = 12,
+    subcategory_limit: int = 12,
 ) -> dict:
     """``token_views`` = views per ``/part/<token>``; ``parts_by_token`` maps
     the tokens that resolve to a catalog part (the rest are DROPPED);
-    ``clicks`` = (part_id, distributor_name, count) in the window."""
+    ``clicks`` = (part_id, distributor_name, count) in the window.
+
+    Both middle and right columns are capped, largest-first, with the tail
+    pooled into ONE node each: production has ~60 subcategories with views
+    in a month, and a Sankey column of sixty 6px nodes is a barcode, not a
+    chart. The category column is the catalog's 15 roots and needs no cap.
+    """
     views_by_part: dict[str, int] = defaultdict(int)
     ref_by_part: dict[str, PartRef] = {}
     for token, n in token_views.items():
@@ -229,13 +266,19 @@ def parts_flow(
     ranked = sorted(views_by_part.items(), key=lambda kv: (-kv[1], ref_by_part[kv[0]].sku))
     top = {pid for pid, _ in ranked[:limit]}
 
+    views_by_sub: Counter = Counter()
+    for pid, n in views_by_part.items():
+        views_by_sub[ref_by_part[pid].subcategory] += n
+    kept_subs = {sub for sub, _ in views_by_sub.most_common(subcategory_limit)}
+
     links: Counter = Counter()
     hints: dict[str, str] = {}
     for pid, n in views_by_part.items():
         ref = ref_by_part[pid]
-        links[(f"0:{ref.category}", f"1:{ref.subcategory}")] += n
+        sub_label = ref.subcategory if ref.subcategory in kept_subs else OTHER_SUBCATEGORIES
+        links[(f"0:{ref.category}", f"1:{sub_label}")] += n
         part_label = ref.sku if pid in top else OTHER_PARTS
-        links[(f"1:{ref.subcategory}", f"2:{part_label}")] += n
+        links[(f"1:{sub_label}", f"2:{part_label}")] += n
         if pid in top:
             hints[f"2:{ref.sku}"] = ref.manufacturer
 

@@ -15,7 +15,10 @@ from app.services.traffic_flows import (
     LEFT,
     OTHER_PARTS,
     OTHER_SITES,
+    OTHER_SUBCATEGORIES,
     PartRef,
+    node_floor,
+    page_floor,
     page_type,
     part_token,
     parts_flow,
@@ -191,3 +194,45 @@ def test_parts_route_resolves_slug_and_uuid_paths_and_drops_ghosts(
     assert sku_node["hint"] == "Texas Instruments"
     assert body["clicks_total"] == 1
     assert body["distributor_links"][0]["target"] == f"3:{supplier.name}"
+
+
+def test_parts_flow_pools_the_subcategory_tail_too():
+    """Sixty subcategories with views is a barcode, not a chart: past the cap
+    the tail becomes one pooled node, placed last, and every view still
+    reaches the part column through it."""
+    parts = {
+        f"sku{i}": PartRef(f"p{i}", f"SKU{i}", "Maker", "Semis", f"Sub{i}") for i in range(1, 8)
+    }
+    views = {f"sku{i}": 100 - i for i in range(1, 8)}
+    payload = parts_flow(views, parts, clicks=[], limit=3, subcategory_limit=4)
+    subs = [n["label"] for n in payload["nodes"] if n["column"] == 1]
+    assert subs == ["Sub1", "Sub2", "Sub3", "Sub4", OTHER_SUBCATEGORIES]
+    pooled_in = sum(
+        link["value"] for link in payload["links"] if link["target"] == f"1:{OTHER_SUBCATEGORIES}"
+    )
+    pooled_out = sum(
+        link["value"] for link in payload["links"] if link["source"] == f"1:{OTHER_SUBCATEGORIES}"
+    )
+    assert pooled_in == pooled_out == sum(views[f"sku{i}"] for i in (5, 6, 7))
+    assert payload["total"] == sum(views.values())
+
+
+def test_the_fold_floor_scales_with_the_window():
+    """Five sessions is the floor for a small window; a twelve-month window
+    folds anything under 1% so hairline nodes never collide."""
+    assert node_floor(8) == 5
+    assert node_floor(499) == 5
+    assert node_floor(1640) == 16
+    # page types have no absolute floor: a tiny window keeps every type
+    assert page_floor(8) == 1
+    assert page_floor(1640) == 16
+    rows = [(f"d{i}", 1, "/", None) for i in range(1000)]  # Direct → Home
+    rows += [(f"g{i}", 1, "/", "https://www.google.com/") for i in range(20)]
+    rows += [(f"b{i}", 1, "/bom", "https://www.bing.com/") for i in range(6)]  # under 1% of 1026
+    payload = traffic_flow(rows)
+    ids = {n["id"] for n in payload["nodes"]}
+    assert "0:Google" in ids and "0:Bing" not in ids and "0:Other sites" in ids
+    assert "1:BOM tool" not in ids and "1:Other pages" in ids
+    assert (
+        sum(link["value"] for link in payload["links"] if link["source"].startswith("0:")) == 1026
+    )

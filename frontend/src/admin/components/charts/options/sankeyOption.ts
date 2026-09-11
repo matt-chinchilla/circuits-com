@@ -32,8 +32,6 @@ export interface SankeyLink {
 export interface SankeyOptionInput {
   nodes: readonly SankeyNode[];
   links: readonly SankeyLink[];
-  /** Column headings, index-aligned with `node.column`. */
-  columns: readonly string[];
   /** The unit every value is counted in — "sessions", "views", "clicks". */
   unit: string;
   /** What 100% means for a link's share: the flow's total. */
@@ -50,11 +48,14 @@ export function columnColor(column: number, colors: readonly string[] = CHART_SE
   return colors[((column % colors.length) + colors.length) % colors.length] ?? CHART_SERIES[0];
 }
 
+/** Pixels reserved right of the last column for its labels (horizontal). */
+export const LAST_COLUMN_LABEL_ROOM = 132;
+
 const pct = (value: number, total: number): string =>
   total > 0 ? `${((100 * value) / total).toFixed(value / total < 0.01 ? 2 : 1)}%` : '—';
 
 export function sankeyOption(input: SankeyOptionInput): EChartsCoreOption {
-  const { nodes, links, columns, unit, total, orient = 'horizontal', colors = CHART_SERIES } = input;
+  const { nodes, links, unit, total, orient = 'horizontal', colors = CHART_SERIES } = input;
   const labelOf = new Map<string, string>();
   const hintOf = new Map<string, string>();
   const colorOf = new Map<string, string>();
@@ -104,35 +105,38 @@ export function sankeyOption(input: SankeyOptionInput): EChartsCoreOption {
         ]);
       },
     },
-    // Column headings, drawn as plain text at each column's edge.
-    graphic: columns.map((title, i) => ({
-      type: 'text',
-      ...(vertical
-        ? { left: 8, top: `${(100 * i) / columns.length}%` }
-        : { left: `${(100 * i) / Math.max(1, columns.length - 1)}%`, top: 0 }),
-      style: { text: title.toUpperCase(), font: `600 10px ${CHART_FONT}`, fill: '#64748b' },
-      silent: true,
-      z: 10,
-    })),
+    // Column headings are DOM, not canvas: the host lays them over the
+    // columns' true x positions (FlowsPanel), which a canvas text at a
+    // percentage cannot know once margins are involved.
     series: [
       {
         type: 'sankey',
         orient,
+        // Labels sit to the RIGHT of a node (top, when vertical), outside the
+        // layout, so the last column needs its own margin or its labels are
+        // painted off the canvas — the first cut lost the whole third column.
         left: 4,
-        right: vertical ? 4 : 4,
-        top: vertical ? 20 : 22,
-        bottom: 4,
+        right: vertical ? 4 : LAST_COLUMN_LABEL_ROOM,
+        top: vertical ? 26 : 6,
+        bottom: 6,
         nodeWidth: vertical ? 12 : 14,
-        nodeGap: vertical ? 6 : 10,
+        nodeGap: vertical ? 8 : 10,
         nodeAlign: 'justify',
         layoutIterations: 0,
         draggable: false,
         emphasis: { focus: 'adjacency' },
         lineStyle: { color: 'gradient', opacity: 0.32, curveness: 0.5 },
+        // Tiny tail nodes (a two-session source) would stack their labels on
+        // top of each other; the server folds most of them, and this hides
+        // whatever still collides rather than printing an unreadable smear.
+        labelLayout: { hideOverlap: true },
         label: {
           position: vertical ? 'top' : 'right',
           fontFamily: CHART_FONT,
           fontSize: 11,
+          // A hairline halo so a label stays legible over a ribbon.
+          textBorderColor: 'rgba(15, 21, 38, 0.85)',
+          textBorderWidth: 2,
           formatter: (raw: unknown) => {
             const name = (raw as { name?: string }).name ?? '';
             return labelOf.get(name) ?? name;

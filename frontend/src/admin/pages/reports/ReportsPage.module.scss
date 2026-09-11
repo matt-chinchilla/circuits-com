@@ -367,6 +367,29 @@
   width: 100%;
 }
 
+// Column headings: first flush left, last flush right (over the last column,
+// whose label room the chart reserves), the rest centred between.
+.flowColumns {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 2px 0 4px;
+  padding-left: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #61719b;
+
+  span:first-child {
+    text-align: left;
+  }
+
+  span:last-child {
+    text-align: right;
+  }
+}
+
 .flowEmpty {
   display: flex;
   align-items: center;

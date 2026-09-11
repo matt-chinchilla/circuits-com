@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { columnColor, sankeyOption, type SankeyLink, type SankeyNode } from './sankeyOption';
+import {
+  LAST_COLUMN_LABEL_ROOM,
+  columnColor,
+  sankeyOption,
+  type SankeyLink,
+  type SankeyNode,
+} from './sankeyOption';
 
 const nodes: SankeyNode[] = [
   { id: '0:Direct', label: 'Direct', column: 0 },
@@ -17,7 +23,7 @@ const links: SankeyLink[] = [
   { source: '1:Part page', target: '2:Ghost', value: 5 },
   { source: '1:Part page', target: '1:Part page', value: 1 },
 ];
-const base = { nodes, links, columns: ['Source', 'Landing', 'Next'], unit: 'sessions', total: 40 };
+const base = { nodes, links, unit: 'sessions', total: 40 };
 
 function series(opt: ReturnType<typeof sankeyOption>) {
   return (opt as { series: Array<Record<string, unknown>> }).series[0];
@@ -57,6 +63,12 @@ describe('sankeyOption', () => {
     const s = series(sankeyOption({ ...base, orient: 'vertical' }));
     expect(s.orient).toBe('vertical');
     expect((s.label as { position: string }).position).toBe('top');
+  });
+
+  it('reserves room for the last column\'s labels only when horizontal', () => {
+    expect(series(sankeyOption(base)).right).toBe(LAST_COLUMN_LABEL_ROOM);
+    expect(series(sankeyOption({ ...base, orient: 'vertical' })).right).toBe(4);
+    expect(series(sankeyOption(base)).labelLayout).toEqual({ hideOverlap: true });
   });
 
   it('tooltip names both ends of a link with its share of the total', () => {

@@ -169,6 +169,6 @@ def parts(
         (str(pid), names.get(str(sid), "Unknown distributor"), int(n)) for pid, sid, n in click_rows
     ]
 
-    payload = parts_flow(token_views, parts_by_token, clicks, limit=limit)
+    payload = parts_flow(token_views, parts_by_token, clicks, limit=limit, subcategory_limit=limit)
     payload.update(period_days=days, segment=segment)
     return payload
