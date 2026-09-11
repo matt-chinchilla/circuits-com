@@ -247,8 +247,35 @@ export default function CategoryPage() {
   }, [location.pathname]);
   const onChild = !!childSlug;
 
+  // A COLD direct load (a bookmark, a search result, a shared link) has no
+  // memo to paint from, and the detail request is the expensive one — so the
+  // header, the chips and the About copy come from the small categories list
+  // instead (2026-09-11: LCP on /category/connectors was 3.5s, 99.5% of it
+  // waiting for the parts payload to paint a paragraph that never needed it).
+  // Skipped the moment either memo already knows this category.
+  const [listShell, setListShell] = useState<{ shell: CategoryShell; description: string | null } | null>(null);
+  useEffect(() => {
+    if (chrome || !topSlug || getCategoryShell(topSlug)) return undefined;
+    let cancelled = false;
+    api.getCategories()
+      .then((all) => {
+        if (cancelled) return;
+        const top = all.find((c) => c.slug === topSlug)
+          ?? all.find((c) => c.children.some((child) => child.slug === topSlug));
+        if (!top) return;
+        const shell: CategoryShell = { name: top.name, slug: top.slug, icon: top.icon, children: top.children };
+        setCategoryShell(shell);
+        setListShell({ shell, description: top.description ?? null });
+      })
+      .catch(() => { /* the detail fetch still paints everything */ });
+    return () => {
+      cancelled = true;
+    };
+  }, [chrome, topSlug]);
+
   // Stable top-level identity + sibling list. Prefer freshly-loaded data; fall
-  // back to the session memo while a sibling-nav remount's own fetch is pending.
+  // back to the session memo while a sibling-nav remount's own fetch is pending,
+  // then to the categories list on a cold load.
   const shell: CategoryShell | null = useMemo(() => {
     if (chrome) {
       if (isParent) {
@@ -259,8 +286,8 @@ export default function CategoryPage() {
         return { name: p.name, slug: p.slug, icon: p.icon, children: p.children };
       }
     }
-    return (topSlug ? getCategoryShell(topSlug) : undefined) ?? null;
-  }, [chrome, isParent, topSlug]);
+    return (topSlug ? getCategoryShell(topSlug) : undefined) ?? listShell?.shell ?? null;
+  }, [chrome, isParent, topSlug, listShell]);
 
   // The current page's label + icon (breadcrumb current crumb + page title): the
   // matching sibling on a child page, the top-level itself on a parent page.
@@ -573,6 +600,20 @@ export default function CategoryPage() {
               <SkeletonLoader width="100%" height="340px" borderRadius="14px" />
               <SkeletonLoader width="100%" height="340px" borderRadius="8px" />
             </div>
+            {/* The page's prose, painted from the categories list before the
+                parts payload lands — it is the page's largest text block, so
+                this is what moves LCP off the parts query. Parent pages only:
+                subcategories carry no copy, and the parent's would be wrong
+                under a child's title. Same markup as the loaded block below,
+                so nothing shifts when the detail replaces it. */}
+            {!onChild && listShell?.description && (
+              <section className={styles.about} aria-labelledby="category-about">
+                <h2 id="category-about" className={styles.aboutTitle}>
+                  About {listShell.shell.name}
+                </h2>
+                <p className={styles.aboutBody}>{listShell.description}</p>
+              </section>
+            )}
             <div className={styles.tableSkeleton}>
               <SkeletonLoader width="100%" height="40px" borderRadius="4px" />
               {Array.from({ length: 8 }).map((_, i) => (
