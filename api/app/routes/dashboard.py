@@ -22,7 +22,7 @@ from decimal import Decimal
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import extract, func, or_
+from sqlalchemy import case, extract, func, or_
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
@@ -198,6 +198,33 @@ def _month_end(first_of_month: date) -> date:
 # ---------------------------------------------------------------------------
 
 
+def _day_bucket_counts(
+    db: Session, column, day_list: list[date], extra_filters=()
+) -> dict[date, int]:
+    """Rows per EST day, counted IN SQL — one GROUP BY, never a Python loop per row.
+
+    The window's day boundaries are UTC instants (``_day_start_utc``, DST-exact),
+    and a CASE ladder over them labels each row with its day index, so ONE
+    statement returns at most ``len(day_list)`` rows on either engine — no
+    ``date_trunc``/``strftime`` dialect split, and the same bind-parameter
+    comparison the rest of this module already relies on. Measured on prod
+    2026-09-11: streaming the 566k in-window ``parts.created_at`` values
+    through ``_est_day`` cost 3.7s per dashboard load; grouped, the read is
+    the ~250ms scan alone. Rows dated on/after the day AFTER the window's last
+    day are excluded (future-dated rows wait for their day).
+    """
+    bounds = [_day_start_utc(day) for day in day_list]
+    bounds.append(_day_start_utc(day_list[-1] + timedelta(days=1)))
+    bucket = case(*[(column < bounds[i + 1], i) for i in range(len(day_list))]).label("bucket")
+    rows = (
+        db.query(bucket, func.count())
+        .filter(column >= bounds[0], column < bounds[-1], *extra_filters)
+        .group_by(bucket)
+        .all()
+    )
+    return {day_list[int(index)]: int(count) for index, count in rows}
+
+
 def _cumulative_series(db: Session, model, day_list: list[date]) -> list[dict]:
     """Running total of rows whose ``created_at`` is on/before each day.
 
@@ -205,8 +232,8 @@ def _cumulative_series(db: Session, model, day_list: list[date]) -> list[dict]:
     with no new rows, so the series never dips or gaps. Rows created before the
     window (and rows with a NULL ``created_at`` — legacy seed data predating
     migration 002's timestamp columns) form the starting baseline, so day 1 is a
-    true cumulative total rather than a window-local count. Only the in-window
-    timestamps are pulled into Python; the rest collapse to one COUNT.
+    true cumulative total rather than a window-local count. Two statements
+    whatever the row count: the baseline COUNT and the grouped per-day counts.
     """
     cutoff = _day_start_utc(day_list[0])
     baseline = (
@@ -215,13 +242,7 @@ def _cumulative_series(db: Session, model, day_list: list[date]) -> list[dict]:
         .scalar()
         or 0
     )
-
-    per_day: dict[date, int] = defaultdict(int)
-    for (created,) in db.query(model.created_at).filter(model.created_at >= cutoff).all():
-        day = _est_day(created)
-        # Future-dated rows are excluded until their day is reached.
-        if day is not None and day <= day_list[-1]:
-            per_day[day] += 1
+    per_day = _day_bucket_counts(db, model.created_at, day_list)
 
     running = baseline
     series = []
@@ -233,13 +254,7 @@ def _cumulative_series(db: Session, model, day_list: list[date]) -> list[dict]:
 
 def _daily_count_series(db: Session, model, day_list: list[date], extra_filters=()) -> list[dict]:
     """Per-day row count, zero-filled across the whole window."""
-    cutoff = _day_start_utc(day_list[0])
-    per_day: dict[date, int] = defaultdict(int)
-    query = db.query(model.created_at).filter(model.created_at >= cutoff, *extra_filters)
-    for (created,) in query.all():
-        day = _est_day(created)
-        if day is not None and day <= day_list[-1]:
-            per_day[day] += 1
+    per_day = _day_bucket_counts(db, model.created_at, day_list, extra_filters)
     return [{"day": day.isoformat(), "value": per_day.get(day, 0)} for day in day_list]
 
 
@@ -275,15 +290,12 @@ def _daily_amount_series(db: Session, model, day_list: list[date]) -> list[dict]
     need either daily rows or an amortization pass (deliberately not faked here).
     """
     per_day: dict[date, Decimal] = defaultdict(Decimal)
-    rows = (
-        _company_rows(
-            db.query(model.period_start, model.amount).filter(
-                model.period_start >= day_list[0], model.period_start <= day_list[-1]
-            ),
-            model,
-        )
-        .all()
-    )
+    rows = _company_rows(
+        db.query(model.period_start, model.amount).filter(
+            model.period_start >= day_list[0], model.period_start <= day_list[-1]
+        ),
+        model,
+    ).all()
     for period_start, amount in rows:
         per_day[period_start] += Decimal(str(amount or 0))
     return [
@@ -306,15 +318,12 @@ def _monthly_daily_series(db: Session, model, months: int) -> list[dict]:
         last = _month_end(first)
 
         totals: dict[int, Decimal] = defaultdict(Decimal)
-        rows = (
-            _company_rows(
-                db.query(model.period_start, model.amount).filter(
-                    model.period_start >= first, model.period_start <= last
-                ),
-                model,
-            )
-            .all()
-        )
+        rows = _company_rows(
+            db.query(model.period_start, model.amount).filter(
+                model.period_start >= first, model.period_start <= last
+            ),
+            model,
+        ).all()
         for period_start, amount in rows:
             totals[period_start.day] += Decimal(str(amount or 0))
 
@@ -362,9 +371,9 @@ def _available_expense_months(db: Session) -> list[str]:
     """
     keys = {
         f"{period_start.year:04d}-{period_start.month:02d}"
-        for (period_start,) in _company_rows(
-            db.query(Expense.period_start), Expense
-        ).distinct().all()
+        for (period_start,) in _company_rows(db.query(Expense.period_start), Expense)
+        .distinct()
+        .all()
         if period_start is not None
     }
     return sorted(keys, reverse=True)[:_MAX_AVAILABLE_MONTHS]
@@ -492,15 +501,12 @@ def get_expenses_breakdown(
     """
     month_start = _parse_month(month)
     month_end = _month_end(month_start)
-    rows = (
-        _company_rows(
-            db.query(Expense).filter(
-                Expense.period_start >= month_start, Expense.period_start <= month_end
-            ),
-            Expense,
-        )
-        .all()
-    )
+    rows = _company_rows(
+        db.query(Expense).filter(
+            Expense.period_start >= month_start, Expense.period_start <= month_end
+        ),
+        Expense,
+    ).all()
 
     grouped: dict[str, dict] = {}
     for row in rows:

@@ -18,7 +18,10 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
-from app.models import Category, Expense, PageView, Revenue, Sponsor
+from app.models import Category, Expense, PageView, Part, Revenue, Sponsor
+from app.routes.dashboard import _day_start_utc
+
+from .feed_helpers import StatementCounter
 
 EASTERN = ZoneInfo("America/New_York")
 
@@ -150,6 +153,68 @@ class TestTrends:
             # Rows seeded "now" land on today's bucket; the final point is the
             # full table count either way (forward-filled, never window-local).
             assert values[-1] == total, name
+
+    def test_a_row_seconds_before_est_midnight_counts_on_the_previous_day(
+        self, client, seeded_db, db
+    ):
+        """The per-day buckets are EST days (DST-exact), not UTC days.
+
+        A part created one minute before EST midnight belongs to yesterday even
+        though its UTC clock already reads today; one created AT that midnight is
+        today's. The SQL CASE ladder must agree with `_est_day` at the boundary.
+        """
+        today = _today_est()
+        midnight = _day_start_utc(today)
+        child = db.query(Category).filter(Category.parent_id.isnot(None)).first()
+        db.add_all(
+            [
+                Part(
+                    id=uuid.uuid4(),
+                    sku="BOUNDARY-YESTERDAY",
+                    manufacturer_name="Test",
+                    category_id=child.id,
+                    created_at=midnight - timedelta(minutes=1),
+                ),
+                Part(
+                    id=uuid.uuid4(),
+                    sku="BOUNDARY-TODAY",
+                    manufacturer_name="Test",
+                    category_id=child.id,
+                    created_at=midnight,
+                ),
+            ]
+        )
+        db.commit()
+
+        values = [
+            pt["value"]
+            for pt in client.get(
+                "/api/dashboard/trends?days=3", headers=_auth_header(client)
+            ).json()["series"]["parts"]
+        ]
+        # Yesterday: the boundary row only. Today: it, the seeded pair, and the
+        # midnight row — cumulative, so the last point is the whole table.
+        assert values[-2] == 1
+        assert values[-1] == 4
+
+    def test_trends_counts_in_sql_and_never_streams_rows(self, client, seeded_db, db):
+        """Guard for the 2026-09-11 regression: 566k in-window parts on prod were
+        streamed into Python one `created_at` at a time (3.7s per dashboard
+        load). The fingerprint is a statement that PROJECTS the timestamp
+        column (one row per row) instead of counting it; the bot-UA DISTINCT
+        over page_views is bounded by distinct agents, not rows, and stays."""
+        with StatementCounter(db) as counter:
+            assert (
+                client.get(
+                    "/api/dashboard/trends?days=30", headers=_auth_header(client)
+                ).status_code
+                == 200
+            )
+        for table in ("parts", "suppliers", "sponsors", "page_views"):
+            reads = [s for s in counter.statements if f"FROM {table}" in s]
+            assert reads, table
+            streamed = [s for s in reads if f"SELECT {table}.created_at" in s]
+            assert not streamed, (table, streamed)
 
     def test_traffic_is_a_zero_filled_daily_count(self, client, seeded_db, db):
         today = _today_est()
