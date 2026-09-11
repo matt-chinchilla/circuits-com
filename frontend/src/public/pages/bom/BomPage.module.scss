@@ -171,7 +171,8 @@
   }
 }
 
-.pasteToggle {
+.pasteToggle,
+.exampleBtn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -180,6 +181,11 @@
   font-family: $font-body;
   font-size: 0.86rem;
   @include bom-glass-control;
+}
+
+.exampleBtn:disabled {
+  opacity: 0.6;
+  cursor: progress;
 }
 
 // The two info cards under the dropzone (Upload artboard).

@@ -23,6 +23,14 @@ const ACCEPT: Accept = {
 
 const SPREADSHEET_EXTENSIONS = ['.xls', '.xlsx'];
 
+/** A real six-line KiCad-style export shipped as a static asset (owner,
+ *  2026-09-11): one click shows a first-time visitor what a priced BOM looks
+ *  like, and gives the owner a fixed reference run. It travels through the
+ *  SAME reader as a dropped file, so what it demonstrates is the real path. */
+const EXAMPLE_BOM_URL = '/samples/circuitcenter-example-bom.xlsx';
+const EXAMPLE_BOM_NAME = 'circuitcenter-example-bom.xlsx';
+const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+
 /** The columns the auto-mapper recognises without asking — shown as chips so
  *  the person can see their export will land before they drop it. */
 const DETECTED_COLUMNS = [
@@ -97,6 +105,20 @@ export default function BomIntake({ onParsed }: BomIntakeProps) {
     [readFile],
   );
 
+  const loadExample = useCallback(async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(EXAMPLE_BOM_URL);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      await readFile(new File([blob], EXAMPLE_BOM_NAME, { type: XLSX_MIME }));
+    } catch {
+      setError('The example BOM could not be loaded right now. Drop a file of your own instead.');
+      setBusy(false);
+    }
+  }, [readFile]);
+
   const { getRootProps, getInputProps, isDragActive, open } = useDropzone({
     onDrop,
     accept: ACCEPT,
@@ -167,6 +189,14 @@ export default function BomIntake({ onParsed }: BomIntakeProps) {
         <div className={styles.btnRow}>
           <button type="button" className={styles.dropBtn} onClick={open} disabled={busy}>
             {busy ? 'Reading…' : 'Choose a file'}
+          </button>
+          <button
+            type="button"
+            className={styles.exampleBtn}
+            onClick={() => void loadExample()}
+            disabled={busy}
+          >
+            Try the example BOM
           </button>
           {!pasteOpen && (
             <button type="button" className={styles.pasteToggle} onClick={revealPaste}>
