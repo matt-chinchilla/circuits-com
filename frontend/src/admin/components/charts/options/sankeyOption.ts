@@ -126,7 +126,12 @@ export function sankeyOption(input: SankeyOptionInput): EChartsCoreOption {
         nodeAlign: 'justify',
         layoutIterations: 0,
         draggable: false,
-        emphasis: { focus: 'adjacency' },
+        // 'trajectory', not 'adjacency': hovering a source must light the
+        // WHOLE path through it (source → landing → next), which adjacency
+        // only did for middle nodes because they touch both neighbours.
+        // Click-to-keep lives in ../sankeyPin (installed by the host).
+        emphasis: { focus: 'trajectory', lineStyle: { opacity: 0.72 } },
+        blur: { lineStyle: { opacity: 0.05 }, itemStyle: { opacity: 0.22 }, label: { opacity: 0.3 } },
         lineStyle: { color: 'gradient', opacity: 0.32, curveness: 0.5 },
         // Tiny tail nodes (a two-session source) would stack their labels on
         // top of each other; the server folds most of them, and this hides

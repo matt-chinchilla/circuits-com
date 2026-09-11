@@ -11,8 +11,10 @@
 // paints from memory; the previous flow stays up while a range/segment change
 // loads so the toggle never blanks the chart.
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { EChartsType } from 'echarts/core'
 import EChart from '@admin/components/charts/EChart'
+import { installSankeyPin, type SankeyPin } from '@admin/components/charts/sankeyPin'
 import { LAST_COLUMN_LABEL_ROOM, sankeyOption } from '@admin/components/charts/options'
 import { adminApi } from '@admin/services/adminApi'
 import { useCachedQuery } from '@admin/services/queryCache'
@@ -107,6 +109,25 @@ export default function FlowsPanel({ days, segment }: FlowsPanelProps) {
     })
   }, [flow, narrow])
 
+  // Click-to-keep: one pin per chart INSTANCE (EChart re-inits under
+  // StrictMode and hands each instance to onReady), forgotten whenever the
+  // option is rebuilt, unbound when the panel goes.
+  const pinRef = useRef<SankeyPin | null>(null)
+  const onReady = useCallback((chart: EChartsType) => {
+    pinRef.current?.uninstall()
+    pinRef.current = installSankeyPin(chart)
+  }, [])
+  useEffect(() => {
+    pinRef.current?.reset()
+  }, [option])
+  useEffect(
+    () => () => {
+      pinRef.current?.uninstall()
+      pinRef.current = null
+    },
+    [],
+  )
+
   const caption = flow
     ? `${flow.total.toLocaleString()} ${flow.unit} · last ${days} days · ${SEGMENT_LABEL[segment]}`
     : query.error !== undefined
@@ -116,10 +137,10 @@ export default function FlowsPanel({ days, segment }: FlowsPanelProps) {
   const shownKind = flow?.kind ?? kind
   const note =
     shownKind === 'traffic'
-      ? 'Direct is every visit that arrived without a referrer — typed, bookmarked, or sent by an app that strips one, which Reddit’s app and most email clients do.'
+      ? 'Hover a band to follow it; click to keep it lit. Direct is every visit that arrived without a referrer — typed, bookmarked, or sent by an app that strips one, which Reddit’s app and most email clients do.'
       : flow && (flow.clicks_total ?? 0) > 0 && (flow.clicks_total ?? 0) < MIN_CLICKS_TO_DRAW
-        ? `Top brands by part views; hover a brand for its most-viewed parts. ${flow.clicks_total} click${flow.clicks_total === 1 ? '' : 's'} out to distributors so far — that column appears at ${MIN_CLICKS_TO_DRAW}.`
-        : 'Top brands by part views; hover a brand for its most-viewed parts. Distributor clicks join as a fourth column once there are enough to read.'
+        ? `Hover a band to follow it; click to keep it lit. Top brands by part views; a brand’s tooltip lists its most-viewed parts. ${flow.clicks_total} click${flow.clicks_total === 1 ? '' : 's'} out to distributors so far — that column appears at ${MIN_CLICKS_TO_DRAW}.`
+        : 'Hover a band to follow it; click to keep it lit. Top brands by part views; a brand’s tooltip lists its most-viewed parts. Distributor clicks join as a fourth column once there are enough to read.'
 
   return (
     <section className={`${styles.chartCard} ${styles.flowCard}`} aria-label="Visitor flows">
@@ -162,7 +183,7 @@ export default function FlowsPanel({ days, segment }: FlowsPanelProps) {
         </div>
       )}
       {option ? (
-        <EChart option={option} className={styles.flowChart} style={{ height }} />
+        <EChart option={option} className={styles.flowChart} style={{ height }} onReady={onReady} />
       ) : (
         <div className={styles.flowEmpty} style={{ height }}>
           {query.loading ? 'Loading…' : `No ${flow?.unit ?? 'traffic'} in this window yet.`}

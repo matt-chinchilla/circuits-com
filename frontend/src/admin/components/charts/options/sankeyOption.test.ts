@@ -49,6 +49,12 @@ describe('sankeyOption', () => {
     expect(out.some((l) => l.source === l.target)).toBe(false);
   });
 
+  it('lights the whole trajectory on hover, not just adjacent links', () => {
+    const s = series(sankeyOption(base));
+    expect((s.emphasis as { focus: string }).focus).toBe('trajectory');
+    expect((s.blur as { lineStyle: { opacity: number } }).lineStyle.opacity).toBeLessThan(0.1);
+  });
+
   it('keeps data order for layout (layoutIterations 0) and colors by column', () => {
     const s = series(sankeyOption(base));
     expect(s.layoutIterations).toBe(0);
