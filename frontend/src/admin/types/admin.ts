@@ -453,6 +453,8 @@ export interface FlowPayload {
   links: FlowLink[];
   unit: 'sessions' | 'views';
   total: number;
+  // Parts flow only: what the third column is ('maker' = brand, 'part' = SKU).
+  by?: 'maker' | 'part';
   // Parts flow only: distributor clicks out of the part column, sent apart
   // from `links` so the client draws the column only when it is readable.
   clicks_total?: number;

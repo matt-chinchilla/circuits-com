@@ -48,7 +48,7 @@ const SEGMENT_LABEL: Record<AnalyticsSegment, string> = {
 
 const TITLE: Record<FlowKind, string> = {
   traffic: 'Where visitors come from, and what they do next',
-  parts: 'What people look at, part by part',
+  parts: 'Which parts people look at, by category and brand',
 }
 
 /** Assemble the drawable flow: the distributor column joins only past the floor. */
@@ -113,18 +113,21 @@ export default function FlowsPanel({ days, segment }: FlowsPanelProps) {
       ? 'Couldn’t load this flow.'
       : 'Loading…'
 
+  const shownKind = flow?.kind ?? kind
   const note =
-    kind === 'traffic'
+    shownKind === 'traffic'
       ? 'Direct is every visit that arrived without a referrer — typed, bookmarked, or sent by an app that strips one, which Reddit’s app and most email clients do.'
       : flow && (flow.clicks_total ?? 0) > 0 && (flow.clicks_total ?? 0) < MIN_CLICKS_TO_DRAW
-        ? `Top parts by views; the rest are pooled. ${flow.clicks_total} click${flow.clicks_total === 1 ? '' : 's'} out to distributors so far — that column appears at ${MIN_CLICKS_TO_DRAW}.`
-        : 'Top parts by views; the rest are pooled. Distributor clicks join as a fourth column once there are enough to read.'
+        ? `Top brands by part views; hover a brand for its most-viewed parts. ${flow.clicks_total} click${flow.clicks_total === 1 ? '' : 's'} out to distributors so far — that column appears at ${MIN_CLICKS_TO_DRAW}.`
+        : 'Top brands by part views; hover a brand for its most-viewed parts. Distributor clicks join as a fourth column once there are enough to read.'
 
   return (
     <section className={`${styles.chartCard} ${styles.flowCard}`} aria-label="Visitor flows">
       <div className={styles.chartHead}>
         <div className={styles.flowHeadText}>
-          <h3 className={styles.chartTitle}>{TITLE[kind]}</h3>
+          {/* Titled off the flow on screen, not the toggle: with keepPrevious
+              the previous chart stays up for one round trip after a click. */}
+          <h3 className={styles.chartTitle}>{TITLE[flow?.kind ?? kind]}</h3>
           <span className={styles.chartSub}>{caption}</span>
         </div>
         <div className={styles.seg} role="group" aria-label="Which flow">

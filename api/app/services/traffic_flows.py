@@ -32,6 +32,8 @@ OTHER_SITES = "Other sites"
 LEFT = "Left the site"
 OTHER_PARTS = "All other parts"
 OTHER_SUBCATEGORIES = "Other subcategories"
+OTHER_CATEGORIES = "Other categories"
+OTHER_BRANDS = "Other brands"
 OWN_HOST = "circuitcenter.ai"
 
 # A referrer host is bucketed by its DOMAIN LABELS (``www.google.co.kr`` →
@@ -93,7 +95,13 @@ def referrer_host(referrer: str | None) -> str:
     raw = referrer.strip()
     if not raw:
         return ""
-    parsed = urlparse(raw if "://" in raw else "//" + raw)
+    # ``urlsplit`` raises ValueError on a bracketed authority ("[", "https://[x]/")
+    # and the referrer is free-form public input stored verbatim — one crafted
+    # /api/track row must not 500 every staff read of this flow for a year.
+    try:
+        parsed = urlparse(raw if "://" in raw else "//" + raw)
+    except ValueError:
+        return ""
     host = parsed.netloc.lower().rsplit("@", 1)[-1].split(":", 1)[0]
     return host[4:] if host.startswith("www.") else host
 
@@ -175,7 +183,8 @@ def _assemble(columns: list[str], links: Counter, hints: dict[str, str] | None =
         column_of,
         key=lambda nid: (
             column_of[nid],
-            nid.endswith(":" + OTHER_PARTS) or nid.endswith(":" + OTHER_SUBCATEGORIES),
+            nid.split(":", 1)[1]
+            in (OTHER_PARTS, OTHER_SUBCATEGORIES, OTHER_CATEGORIES, OTHER_BRANDS),
             -weight[nid],
             nid,
         ),
@@ -194,7 +203,14 @@ def _assemble(columns: list[str], links: Counter, hints: dict[str, str] | None =
 
 def traffic_flow(rows: Iterable[tuple[str, int, str | None, str | None]]) -> dict:
     """``rows`` = (session_id, rank_within_session, path, referrer) for the
-    first TWO views of every session in the window, in any order."""
+    first TWO views of every session in the window, in any order.
+
+    A session that began BEFORE the window has its first in-window view
+    ranked 1, so its "landing page" is really a mid-session page and its
+    referrer (our own host) buckets as Direct. Accepted: it is a sliver at
+    every offered range, and the alternative — scanning history to find the
+    true entry — would make the window mean two different things.
+    """
     first: dict[str, tuple[str, str]] = {}
     second: dict[str, str] = {}
     for session_id, rank, path, referrer in rows:
@@ -244,15 +260,23 @@ def parts_flow(
     clicks: Iterable[tuple[str, str, int]],
     limit: int = 12,
     subcategory_limit: int = 12,
+    category_limit: int = 10,
+    by: str = "maker",
 ) -> dict:
     """``token_views`` = views per ``/part/<token>``; ``parts_by_token`` maps
     the tokens that resolve to a catalog part (the rest are DROPPED);
     ``clicks`` = (part_id, distributor_name, count) in the window.
 
-    Both middle and right columns are capped, largest-first, with the tail
-    pooled into ONE node each: production has ~60 subcategories with views
-    in a month, and a Sankey column of sixty 6px nodes is a barcode, not a
-    chart. The category column is the catalog's 15 roots and needs no cap.
+    Every column is capped largest-first with its tail pooled into ONE node:
+    production has ~60 subcategories with views in a month, and a Sankey
+    column of sixty 6px nodes is a barcode, not a chart.
+
+    The third column is the BRAND (``by="maker"``) rather than the part
+    unless asked: on production ~2,900 parts share ~3,000 monthly views —
+    one view each — so a part column is 98% "All other parts" with twelve
+    hairlines on top. Brands concentrate (a dozen makers carry most views),
+    and each brand node carries its top parts in the tooltip hint, which is
+    where part-level popularity is actually legible.
     """
     views_by_part: dict[str, int] = defaultdict(int)
     ref_by_part: dict[str, PartRef] = {}
@@ -263,38 +287,57 @@ def parts_flow(
         views_by_part[ref.part_id] += n
         ref_by_part[ref.part_id] = ref
 
-    ranked = sorted(views_by_part.items(), key=lambda kv: (-kv[1], ref_by_part[kv[0]].sku))
-    top = {pid for pid, _ in ranked[:limit]}
+    def third_label(ref: PartRef) -> str:
+        return (ref.manufacturer or "Unknown brand") if by == "maker" else ref.sku
 
-    views_by_sub: Counter = Counter()
-    for pid, n in views_by_part.items():
-        views_by_sub[ref_by_part[pid].subcategory] += n
-    kept_subs = {sub for sub, _ in views_by_sub.most_common(subcategory_limit)}
-
-    links: Counter = Counter()
-    hints: dict[str, str] = {}
+    by_third: Counter = Counter()
+    by_sub: Counter = Counter()
+    by_cat: Counter = Counter()
     for pid, n in views_by_part.items():
         ref = ref_by_part[pid]
-        sub_label = ref.subcategory if ref.subcategory in kept_subs else OTHER_SUBCATEGORIES
-        links[(f"0:{ref.category}", f"1:{sub_label}")] += n
-        part_label = ref.sku if pid in top else OTHER_PARTS
-        links[(f"1:{sub_label}", f"2:{part_label}")] += n
-        if pid in top:
-            hints[f"2:{ref.sku}"] = ref.manufacturer
+        by_third[third_label(ref)] += n
+        by_sub[ref.subcategory] += n
+        by_cat[ref.category] += n
+    kept_third = {k for k, _ in by_third.most_common(limit)}
+    kept_subs = {k for k, _ in by_sub.most_common(subcategory_limit)}
+    kept_cats = {k for k, _ in by_cat.most_common(category_limit)}
+    third_pool = OTHER_BRANDS if by == "maker" else OTHER_PARTS
+
+    links: Counter = Counter()
+    # Top parts per third-column node, for the tooltip: {label: Counter(sku)}
+    top_parts: dict[str, Counter] = defaultdict(Counter)
+    for pid, n in views_by_part.items():
+        ref = ref_by_part[pid]
+        cat = ref.category if ref.category in kept_cats else OTHER_CATEGORIES
+        sub = ref.subcategory if ref.subcategory in kept_subs else OTHER_SUBCATEGORIES
+        third = third_label(ref) if third_label(ref) in kept_third else third_pool
+        links[(f"0:{cat}", f"1:{sub}")] += n
+        links[(f"1:{sub}", f"2:{third}")] += n
+        top_parts[third][ref.sku] += n
+
+    hints: dict[str, str] = {}
+    for label, skus in top_parts.items():
+        if by == "maker":
+            hints[f"2:{label}"] = "Top: " + " · ".join(sku for sku, _ in skus.most_common(3))
+        elif label != OTHER_PARTS:
+            ref = next(r for r in ref_by_part.values() if r.sku == label)
+            hints[f"2:{label}"] = ref.manufacturer
 
     total_views = sum(views_by_part.values())
-    payload = _assemble(["Category", "Subcategory", "Part"], links, hints)
-    payload.update(kind="parts", unit="views", total=total_views)
+    columns = ["Category", "Subcategory", "Brand" if by == "maker" else "Part"]
+    payload = _assemble(columns, links, hints)
+    payload.update(kind="parts", unit="views", total=total_views, by=by)
 
-    # Distributor column: clicks out of the part nodes above. Kept separate so
-    # the client decides whether the count is large enough to draw.
+    # Distributor column: clicks out of the third-column nodes above. Kept
+    # separate so the client decides whether the count is large enough to draw.
     dist: Counter = Counter()
     clicks_total = 0
     for pid, distributor, n in clicks:
         if pid not in ref_by_part or n <= 0:
             continue
         clicks_total += n
-        source = ref_by_part[pid].sku if pid in top else OTHER_PARTS
+        ref = ref_by_part[pid]
+        source = third_label(ref) if third_label(ref) in kept_third else third_pool
         dist[(f"2:{source}", f"3:{distributor}")] += n
     payload["clicks_total"] = clicks_total
     payload["distributor_links"] = [

@@ -71,6 +71,30 @@ describe('sankeyOption', () => {
     expect(series(sankeyOption(base)).labelLayout).toEqual({ hideOverlap: true });
   });
 
+  it('pins every node to its column (ECharts would otherwise move sinks right)', () => {
+    const data = series(sankeyOption(base)).data as Array<{ name: string; depth: number }>;
+    expect(data.map((d) => [d.name, d.depth])).toEqual([
+      ['0:Direct', 0],
+      ['0:Google', 0],
+      ['1:Part page', 1],
+      ['2:Part page', 2],
+      ['2:Left the site', 2],
+    ]);
+  });
+
+  it('escapes tooltip HTML exactly once', () => {
+    const amp = {
+      ...base,
+      nodes: [...nodes, { id: '0:Motor & Motion <ICs>', label: 'Motor & Motion <ICs>', column: 0 }],
+      links: [...links, { source: '0:Motor & Motion <ICs>', target: '1:Part page', value: 2 }],
+    };
+    const formatter = (sankeyOption(amp) as { tooltip: { formatter: (p: unknown) => string } }).tooltip.formatter;
+    const html = formatter({ dataType: 'node', name: '0:Motor & Motion <ICs>', value: 2 });
+    expect(html).toContain('Motor &amp; Motion &lt;ICs&gt;');
+    expect(html).not.toContain('&amp;amp;');
+    expect(html).not.toContain('<ICs>');
+  });
+
   it('tooltip names both ends of a link with its share of the total', () => {
     const formatter = (sankeyOption(base) as { tooltip: { formatter: (p: unknown) => string } }).tooltip.formatter;
     const html = formatter({ dataType: 'edge', data: { source: '0:Google', target: '1:Part page', value: 10 } });

@@ -13,7 +13,7 @@
 
 import type { EChartsCoreOption } from 'echarts/core';
 import { CHART_DURATION, CHART_EASING, CHART_FONT, CHART_SERIES, withAlpha } from '../chartTheme';
-import { escapeHtml, tooltipCard, tooltipRow } from './tooltip';
+import { tooltipCard, tooltipRow } from './tooltip';
 
 export interface SankeyNode {
   id: string;
@@ -88,19 +88,21 @@ export function sankeyOption(input: SankeyOptionInput): EChartsCoreOption {
           value?: number;
           data?: { source?: string; target?: string; value?: number };
         };
+        // tooltipCard escapes its title itself — pre-escaping here turned
+        // "Microcontrollers & Processors" into "&amp;amp;" on hover.
         if (p.dataType === 'edge' && p.data) {
           const from = labelOf.get(p.data.source ?? '') ?? '';
           const to = labelOf.get(p.data.target ?? '') ?? '';
           const v = Number(p.data.value) || 0;
-          return tooltipCard(`${escapeHtml(from)} → ${escapeHtml(to)}`, [
+          return tooltipCard(`${from} → ${to}`, [
             tooltipRow(colorFor(p.data.source ?? ''), unit, `${fmt(v)} · ${pct(v, total)}`),
           ]);
         }
         const id = p.name ?? '';
         const v = Number(p.value) || 0;
-        const label = escapeHtml(labelOf.get(id) ?? id);
+        const label = labelOf.get(id) ?? id;
         const hint = hintOf.get(id);
-        return tooltipCard(hint ? `${label} · ${escapeHtml(hint)}` : label, [
+        return tooltipCard(hint ? `${label} · ${hint}` : label, [
           tooltipRow(colorFor(id), unit, `${fmt(v)} · ${pct(v, total)}`),
         ]);
       },
@@ -134,6 +136,10 @@ export function sankeyOption(input: SankeyOptionInput): EChartsCoreOption {
           position: vertical ? 'top' : 'right',
           fontFamily: CHART_FONT,
           fontSize: 11,
+          // The Reports card is dark in both admin themes (#131c33), so the
+          // label ink is fixed to the card's own title tone rather than the
+          // theme's muted default, which read as grey-on-navy over ribbons.
+          color: '#dfe6f5',
           // A hairline halo so a label stays legible over a ribbon.
           textBorderColor: 'rgba(15, 21, 38, 0.85)',
           textBorderWidth: 2,
@@ -142,8 +148,13 @@ export function sankeyOption(input: SankeyOptionInput): EChartsCoreOption {
             return labelOf.get(name) ?? name;
           },
         },
+        // `depth` pins each node to the server's column. Without it ECharts
+        // moves every node with no OUTGOING link to the LAST column
+        // (moveSinksRight), so once the distributor column exists a brand
+        // nobody clicked out of would be drawn under "Distributor".
         data: nodes.map((n) => ({
           name: n.id,
+          depth: n.column,
           itemStyle: { color: colorFor(n.id), borderColor: withAlpha(colorFor(n.id), 0.5) },
         })),
         links: safeLinks.map((l) => ({ source: l.source, target: l.target, value: l.value })),

@@ -17,7 +17,7 @@ from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.models import Category, OutboundClick, PageView, Part, Supplier, User
+from app.models import Category, OutboundClick, PageView, Part, Supplier
 from app.routes.analytics import _window_segment
 from app.services.auth_service import require_staff
 from app.services.traffic_flows import PartRef, part_token, parts_flow, traffic_flow
@@ -43,7 +43,6 @@ def traffic(
     days: int = Query(30, ge=1, le=365),
     segment: Segment = "humans",
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_staff),
 ):
     cutoff = _cutoff(days)
     _, seg = _window_segment(db, cutoff, segment)
@@ -85,8 +84,8 @@ def parts(
     days: int = Query(30, ge=1, le=365),
     segment: Segment = "humans",
     limit: int = Query(12, ge=3, le=40),
+    by: Literal["maker", "part"] = "maker",
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_staff),
 ):
     cutoff = _cutoff(days)
     _, seg = _window_segment(db, cutoff, segment)
@@ -104,13 +103,18 @@ def parts(
 
     # Resolve tokens to catalog parts: a path may carry the slug OR the uuid
     # (both are canonical entry forms), and both must land on the same part.
+    # Explicit COLUMNS, never ``db.query(Part)``: Part.listings and, through
+    # them, price_breaks are lazy="selectin", so an entity query here would
+    # hydrate every listing and rung of every viewed part (the trap
+    # category_service documents and test_search_v2 guards).
     uuid_tokens = [t for t in token_views if _is_uuid(t)]
     slug_tokens = [t for t in token_views if not _is_uuid(t)]
-    found: list[Part] = []
+    cols = (Part.id, Part.sku, Part.slug, Part.category_id, Part.sub_slug, Part.manufacturer_name)
+    found: list = []
     for chunk in _chunks(uuid_tokens):
-        found += db.query(Part).filter(Part.id.in_([uuid_mod.UUID(t) for t in chunk])).all()
+        found += db.query(*cols).filter(Part.id.in_([uuid_mod.UUID(t) for t in chunk])).all()
     for chunk in _chunks(slug_tokens):
-        found += db.query(Part).filter(Part.slug.in_(chunk)).all()
+        found += db.query(*cols).filter(Part.slug.in_(chunk)).all()
 
     categories = {
         str(c.id): (c.name, str(c.parent_id) if c.parent_id else None, c.slug)
@@ -118,7 +122,7 @@ def parts(
     }
     by_slug = {c[2]: cid for cid, c in categories.items()}
 
-    def place(part: Part) -> tuple[str, str]:
+    def place(part) -> tuple[str, str]:
         cid = str(part.category_id) if part.category_id else None
         cat = categories.get(cid) if cid else None
         if cat is None:
@@ -169,6 +173,8 @@ def parts(
         (str(pid), names.get(str(sid), "Unknown distributor"), int(n)) for pid, sid, n in click_rows
     ]
 
-    payload = parts_flow(token_views, parts_by_token, clicks, limit=limit, subcategory_limit=limit)
+    payload = parts_flow(
+        token_views, parts_by_token, clicks, limit=limit, subcategory_limit=limit, by=by
+    )
     payload.update(period_days=days, segment=segment)
     return payload

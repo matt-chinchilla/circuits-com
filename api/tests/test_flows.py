@@ -13,6 +13,8 @@ from app.models import Category, OutboundClick, PageView, Part, Supplier
 from app.services.traffic_flows import (
     DIRECT,
     LEFT,
+    OTHER_BRANDS,
+    OTHER_CATEGORIES,
     OTHER_PARTS,
     OTHER_SITES,
     OTHER_SUBCATEGORIES,
@@ -35,6 +37,9 @@ BOT_UA = "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.htm
 
 def test_referrers_bucket_by_domain_label_not_substring():
     assert source_of(None) == DIRECT
+    # public input: a bracketed authority makes urlsplit raise — must bucket, not 500
+    assert source_of("[") == DIRECT
+    assert source_of("https://[foo]/x") == DIRECT
     assert source_of("") == DIRECT
     assert source_of("https://circuitcenter.ai/category/x") == DIRECT  # a reload of our own page
     assert source_of("https://www.google.com/") == "Google"
@@ -91,8 +96,13 @@ def test_traffic_flow_conserves_every_session_across_columns():
 
 
 def test_parts_flow_drops_unresolved_tokens_and_pools_the_tail():
-    ref = lambda i, cat="Semis", sub="MCUs": PartRef(f"p{i}", f"SKU{i}", "Maker", cat, sub)  # noqa: E731
-    parts = {f"sku{i}": ref(i) for i in range(1, 6)}
+    """The third column is the BRAND: each brand node carries its top parts as
+    the tooltip hint, the tail pools into "Other brands", and a token that
+    resolves to no catalog part is never a node."""
+    makers = ["TI", "ST", "ADI", "Molex", "Microchip"]
+    parts = {
+        f"sku{i}": PartRef(f"p{i}", f"SKU{i}", makers[i - 1], "Semis", "MCUs") for i in range(1, 6)
+    }
     parts["p1-uuid"] = parts["sku1"]  # the uuid form of part 1 merges into it
     views = {f"sku{i}": 10 * i for i in range(1, 6)}
     views["p1-uuid"] = 7
@@ -101,18 +111,43 @@ def test_parts_flow_drops_unresolved_tokens_and_pools_the_tail():
     ids = {n["id"] for n in payload["nodes"]}
     assert not any("fake" in i for i in ids)
     assert payload["total"] == sum(views[k] for k in views if k != "fake-part-1")
-    assert {"2:SKU5", "2:SKU4", "2:SKU3", f"2:{OTHER_PARTS}"} <= ids
-    assert "2:SKU1" not in ids  # below the top 3 → pooled
-    pooled = next(link for link in payload["links"] if link["target"] == f"2:{OTHER_PARTS}")
-    assert pooled["value"] == 10 + 7 + 20  # parts 1 (both forms) and 2
-    part_col = [n["label"] for n in payload["nodes"] if n["column"] == 2]
-    assert part_col[-1] == OTHER_PARTS  # the pool sits last, whatever its size
+    assert payload["columns"] == ["Category", "Subcategory", "Brand"] and payload["by"] == "maker"
+    assert {"2:Microchip", "2:Molex", "2:ADI", f"2:{OTHER_BRANDS}"} <= ids
+    assert "2:TI" not in ids  # below the top 3 → pooled
+    pooled = next(link for link in payload["links"] if link["target"] == f"2:{OTHER_BRANDS}")
+    assert pooled["value"] == 10 + 7 + 20  # TI (both forms) and ST
+    third = [n["label"] for n in payload["nodes"] if n["column"] == 2]
+    assert third[-1] == OTHER_BRANDS  # the pool sits last, whatever its size
+    microchip = next(n for n in payload["nodes"] if n["id"] == "2:Microchip")
+    assert microchip["hint"] == "Top: SKU5"
     assert payload["clicks_total"] == 4
     assert {"3:Digi-Key", "3:Mouser"} == {n["id"] for n in payload["distributor_nodes"]}
     assert any(
-        link["source"] == f"2:{OTHER_PARTS}" and link["target"] == "3:Mouser"
+        link["source"] == f"2:{OTHER_BRANDS}" and link["target"] == "3:Mouser"
         for link in payload["distributor_links"]
     )
+
+
+def test_parts_flow_can_still_be_asked_for_parts():
+    parts = {
+        "a": PartRef("p1", "SKU-A", "TI", "Semis", "MCUs"),
+        "b": PartRef("p2", "SKU-B", "ST", "Semis", "MCUs"),
+    }
+    payload = parts_flow({"a": 5, "b": 3}, parts, clicks=[], limit=1, by="part")
+    ids = {n["id"] for n in payload["nodes"]}
+    assert payload["columns"][2] == "Part" and payload["by"] == "part"
+    assert "2:SKU-A" in ids and f"2:{OTHER_PARTS}" in ids and "2:SKU-B" not in ids
+    assert next(n for n in payload["nodes"] if n["id"] == "2:SKU-A")["hint"] == "TI"
+
+
+def test_parts_flow_caps_the_category_column():
+    parts = {f"s{i}": PartRef(f"p{i}", f"SKU{i}", "TI", f"Cat{i}", f"Sub{i}") for i in range(1, 14)}
+    views = {f"s{i}": 100 - i for i in range(1, 14)}
+    payload = parts_flow(views, parts, clicks=[], limit=12, subcategory_limit=12, category_limit=10)
+    cats = [n["label"] for n in payload["nodes"] if n["column"] == 0]
+    assert cats[:10] == [f"Cat{i}" for i in range(1, 11)] and cats[-1] == OTHER_CATEGORIES
+    assert len(cats) == 11
+    assert payload["total"] == sum(views.values())
 
 
 # ── routes ───────────────────────────────────────────────────────────────────
@@ -180,20 +215,27 @@ def test_parts_route_resolves_slug_and_uuid_paths_and_drops_ghosts(
     _view(db, "a", f"/part/{part.slug}")
     _view(db, "b", f"/part/{part.id}")
     _view(db, "c", "/part/fake-part-1")
-    _view(db, "d", "/part/fake-part-2", ua=BOT_UA)
+    _view(db, "d", f"/part/{part.slug}", ua=BOT_UA)  # a crawler on the REAL part
     db.add(OutboundClick(part_id=part.id, supplier_id=supplier.id))
     db.commit()
     r = client.get("/api/dashboard/flows/parts?days=7", headers=auth_header())
     assert r.status_code == 200
     body = r.json()
-    assert body["unit"] == "views" and body["total"] == 2  # slug + uuid forms merge, ghosts drop
+    # slug + uuid forms merge, the ghost drops, the crawler is out of "humans"
+    assert body["unit"] == "views" and body["total"] == 2
     ids = {n["id"] for n in body["nodes"]}
-    assert {"0:Semiconductors", "1:Voltage regulators", "2:FLOW-7805"} <= ids
+    assert {"0:Semiconductors", "1:Voltage regulators", "2:Texas Instruments"} <= ids
     assert not any("fake" in i.lower() for i in ids)
-    sku_node = next(n for n in body["nodes"] if n["id"] == "2:FLOW-7805")
-    assert sku_node["hint"] == "Texas Instruments"
+    brand = next(n for n in body["nodes"] if n["id"] == "2:Texas Instruments")
+    assert brand["hint"] == "Top: FLOW-7805"
     assert body["clicks_total"] == 1
     assert body["distributor_links"][0]["target"] == f"3:{supplier.name}"
+    everyone = client.get(
+        "/api/dashboard/flows/parts?days=7&segment=all", headers=auth_header()
+    ).json()
+    assert everyone["total"] == 3
+    by_part = client.get("/api/dashboard/flows/parts?days=7&by=part", headers=auth_header()).json()
+    assert "2:FLOW-7805" in {n["id"] for n in by_part["nodes"]}
 
 
 def test_parts_flow_pools_the_subcategory_tail_too():
