@@ -348,6 +348,45 @@
   color: #61719b;
 }
 
+// ─── Flows (Sankey) panel ────────────────────────────────────────────────────
+// One .chartCard that spans the tab. The head reuses the tab's own segment
+// control for the Traffic/Parts toggle; the chart host gets an explicit
+// height (ECharts inits at 0px otherwise — see EChart.tsx).
+.flowCard {
+  margin-bottom: 16px;
+}
+
+.flowHeadText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.flowChart {
+  width: 100%;
+}
+
+.flowEmpty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #61719b;
+  font-size: 13px;
+  border: 1px dashed #26325a;
+  border-radius: 8px;
+}
+
+// The chart's one caveat, in the card's quiet voice — an em dash and a
+// sentence, never a warning triangle.
+.flowNote {
+  margin: 10px 0 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: #61719b;
+  max-width: 78ch;
+}
+
 .chartWrap {
   width: 100%;
   position: relative;

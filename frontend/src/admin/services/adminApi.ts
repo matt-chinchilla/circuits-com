@@ -22,6 +22,7 @@ import type {
   AdminSponsor,
   AdminExpense,
   DashboardTrends,
+  FlowPayload,
   ExpenseCreate,
   ExpenseUpdate,
   ExpensesBreakdown,
@@ -448,6 +449,12 @@ export const adminApi = {
   getCountryGeo: (code: string, days = 30, segment: AnalyticsSegment = 'humans') =>
     adminClient
       .get<CountryGeo>(`/dashboard/geo/${encodeURIComponent(code)}`, { params: { days, segment } })
+      .then((r) => r.data),
+
+  /** GET /dashboard/flows/{kind} — a Sankey's nodes + links for the window. */
+  getFlow: (kind: 'traffic' | 'parts', days = 30, segment: AnalyticsSegment = 'humans') =>
+    adminClient
+      .get<FlowPayload>(`/dashboard/flows/${kind}`, { params: { days, segment } })
       .then((r) => r.data),
 
   /** Every located town on earth — the density map's layer and its click

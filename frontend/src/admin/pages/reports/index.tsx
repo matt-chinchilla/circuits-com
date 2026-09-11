@@ -14,6 +14,7 @@ import CustomerReportsPage from './CustomerReportsPage'
 import { pageLabel, pageUrl } from './pageLabels'
 import styles from './ReportsPage.module.scss'
 import WorldMapPanel from './WorldMapPanel'
+import FlowsPanel from './FlowsPanel'
 import OrganizationsPanel from './organizations'
 import { focusFor, type LocationFocus } from './locationFocus'
 import { refHost } from './chartKit'
@@ -469,6 +470,11 @@ function StaffReportsPage() {
                     : 'Everything the tracker recorded, crawlers included.'}
             </span>
           </div>
+
+          {/* The flows lead the tab: the one chart a partner reads without a
+              legend. They take the same window and segment as everything
+              below, and nothing else on the tab depends on them. */}
+          <FlowsPanel days={RANGE_DAYS[range]} segment={segment} />
 
           {!analytics || analytics.human_views + analytics.bot_views === 0 ? (
             <div className={styles.analyticsEmpty}>

@@ -27,6 +27,7 @@ from app.routes import (
     checkout,
     dashboard,
     feed_credentials,
+    flows,
     forms,
     manufacturers,
     parts,
@@ -69,6 +70,7 @@ app.include_router(admin_expenses.router)
 app.include_router(admin_media.router)
 app.include_router(admin_presence.router)
 app.include_router(analytics.router)
+app.include_router(flows.router)
 app.include_router(calendar.router)
 app.include_router(sitemap.router)
 app.include_router(stripe_webhooks.router)

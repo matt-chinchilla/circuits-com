@@ -430,6 +430,36 @@ export interface GeoCityRow {
 
 export type AnalyticsSegment = AnalyticsData['segment'];
 
+// ── Flows (Sankey) — GET /api/dashboard/flows/{traffic|parts} ──────────────
+// Node ids are `<column>:<label>` (a label may repeat across columns); the
+// chart keys on `id` and prints `label`. Values are whole units of `unit`.
+export interface FlowNode {
+  id: string;
+  label: string;
+  column: number;
+  hint?: string | null;
+}
+export interface FlowLink {
+  source: string;
+  target: string;
+  value: number;
+}
+export interface FlowPayload {
+  kind: 'traffic' | 'parts';
+  period_days: number;
+  segment: AnalyticsSegment;
+  columns: string[];
+  nodes: FlowNode[];
+  links: FlowLink[];
+  unit: 'sessions' | 'views';
+  total: number;
+  // Parts flow only: distributor clicks out of the part column, sent apart
+  // from `links` so the client draws the column only when it is readable.
+  clicks_total?: number;
+  distributor_links?: FlowLink[];
+  distributor_nodes?: FlowNode[];
+}
+
 // Pagination
 export interface PaginatedResponse<T> {
   items: T[];

@@ -23,7 +23,7 @@ import { useEffect, useRef } from 'react';
 import type { CSSProperties } from 'react';
 import * as echarts from 'echarts/core';
 import type { EChartsCoreOption, EChartsType } from 'echarts/core';
-import { CustomChart, GraphChart, LineChart, PieChart } from 'echarts/charts';
+import { CustomChart, GraphChart, LineChart, PieChart, SankeyChart } from 'echarts/charts';
 import {
   GraphicComponent,
   GridComponent,
@@ -49,6 +49,8 @@ echarts.use([
   PieChart,
   CustomChart,
   GraphChart,
+  // Sankey: the Reports flows panel (traffic sources, part popularity).
+  SankeyChart,
   GridComponent,
   TooltipComponent,
   LegendComponent,
