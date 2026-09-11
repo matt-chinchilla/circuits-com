@@ -225,6 +225,7 @@ def _build_search_parts(db: Session, parts: list[Part]) -> list[dict]:
                 "category_icon": icon,
                 "category_slug": slug,
                 "parent_category_slug": parent_slug,
+                "image_url": p.image_url,
             }
         )
     return out

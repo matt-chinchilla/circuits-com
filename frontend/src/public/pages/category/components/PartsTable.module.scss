@@ -39,7 +39,9 @@
 }
 
 .td {
-  padding: 12px 14px;
+  // 8px, not 12px: the SKU cell now carries a 36px thumbnail, and 12px on
+  // either side of it made a 60px row — 52px keeps 25 rows on a laptop.
+  padding: 8px 14px;
   font-size: 0.88rem;
   color: $text-primary;
   vertical-align: middle;
@@ -84,6 +86,9 @@
   }
 }
 
+// Thumbnail + SKU are ONE link: the photo is the bigger tap target, and the
+// underline on hover lands on the text alone (an image has nothing to
+// underline), which is the BOM table's read of the same row.
 .skuLink {
   color: var(--theme-accent);
   text-decoration: none;
@@ -91,18 +96,21 @@
   font-family: $font-mono;
   font-size: 0.85rem;
   transition: color 120ms;
-  display: inline-flex;
+  // flex, not inline-flex: an inline box sits on the cell's text baseline and
+  // the 36px thumbnail then drags a descender gap under it (measured: 60px
+  // rows instead of 8 + 36 + 8 = 52).
+  display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 10px;
+  white-space: nowrap;
 
-  &:hover {
+  &:hover .skuText {
     text-decoration: underline;
   }
 }
 
-.partIcon {
-  font-size: 1rem;
-  line-height: 1;
+.skuText {
+  min-width: 0;
 }
 
 .manufacturer {
@@ -190,6 +198,6 @@
 
 @media (max-width: 640px) {
   .td {
-    padding: 10px 8px;
+    padding: 8px 8px;
   }
 }

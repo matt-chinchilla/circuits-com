@@ -98,22 +98,8 @@
   }
 }
 
-// 36px in-table variant of the kit's .sr-thumb (.sr-thumb-sm merged in):
-// accent-10% fill, 1px DASHED accent-45% border, Phosphor glyph in the
-// brand's executive blue.
-.thumb {
-  width: 36px;
-  height: 36px;
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--theme-accent) 10%, transparent);
-  border: 1px dashed color-mix(in srgb, var(--theme-accent) 45%, transparent);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: $executive-blue;
-  font-size: 1.05rem;
-  flex-shrink: 0;
-}
+// The 36px thumb beside the SKU is the shared PartThumb widget (photo, else
+// the kit's dashed .sr-thumb-sm glyph tile) — its styles live with it.
 
 .status {
   font-size: 0.62rem;

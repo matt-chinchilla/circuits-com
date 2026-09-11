@@ -6,11 +6,12 @@
 // the row onClick is a mouse-convenience layer on top and bails when the
 // event originated inside that anchor so navigation never double-fires.
 //
-// 11 columns: Part (thumb + SKU + description) · Manufacturer · Package ·
+// 11 columns: Part (thumb + SKU + description; the thumb is the shared
+// PartThumb — the product photo when the feed has one, else the glyph tile) · Manufacturer · Package ·
 // Mount · RoHS · Lead · MOQ · Dist. · Best Price · Stock · Status. Every
 // nullable spec field renders the em dash, never a blank cell.
 import { Link, useNavigate } from 'react-router-dom';
-import Icon from '@shared/components/Icon';
+import PartThumb from '@public/components/widgets/PartThumb';
 import type { SearchPart } from '@public/types/search';
 import { formatCount, formatLeadTime, formatPrice, formatRohs } from '../lib/srFormat';
 import styles from './SrPartsTable.module.scss';
@@ -54,9 +55,7 @@ export default function SrPartsTable({ rows }: { rows: SearchPart[] }) {
             >
               <td>
                 <span className={styles.tdPart}>
-                  <span className={styles.thumb} aria-hidden="true">
-                    <Icon name={p.category_icon ?? 'lightning'} />
-                  </span>
+                  <PartThumb src={p.image_url} icon={p.category_icon ?? 'lightning'} />
                   <span className={styles.tdId}>
                     <Link to={`/part/${p.slug}`} className={styles.sku}>
                       {p.sku}

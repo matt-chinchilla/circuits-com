@@ -12,6 +12,10 @@ export interface PublicPart {
   best_price_1000: number | null;
   category_icon: string | null;
   sub_slug: string | null;
+  /** The stored product photo (a feed's or an admin's URL). Optional on the
+   *  TYPE because a service-worker-cached page from before 2026-09-11 lacks
+   *  it — render the glyph tile for `undefined` exactly as for `null`. */
+  image_url?: string | null;
 }
 
 export interface PriceBreak {

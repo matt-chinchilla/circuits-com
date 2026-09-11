@@ -1,4 +1,5 @@
 from uuid import UUID
+
 from pydantic import BaseModel, ConfigDict
 
 
@@ -25,6 +26,9 @@ class PublicPartResponse(BaseModel):
     best_price_100: float | None = None
     best_price_1000: float | None = None
     category_icon: str | None = None
+    # The row thumbnail beside the SKU (2026-09-11). Declared here because a
+    # `response_model` silently DROPS any field it does not name.
+    image_url: str | None = None
     sub_slug: str | None = None
 
     model_config = ConfigDict(from_attributes=True)

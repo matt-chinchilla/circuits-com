@@ -1,0 +1,34 @@
+@use '@shared/styles/variables' as *;
+
+// One geometry for both tiers, so a row's height is the same whether the part
+// has a photo or not (the BOM tool's 36px / 7px radius).
+.img,
+.fallback {
+  display: block;
+  width: 36px;
+  height: 36px;
+  border-radius: 7px;
+  flex-shrink: 0;
+}
+
+.img {
+  // contain, not cover: a distributor photo is a product ON a background, and
+  // cropping to fill lops the leads off a through-hole part.
+  object-fit: contain;
+  background: #ffffff;
+  box-shadow:
+    inset 0 0 0 1px rgba(26, 31, 35, 0.1),
+    0 1px 2px rgba(16, 24, 32, 0.06);
+}
+
+// The glyph tile the search table already drew: accent-10% fill, dashed
+// accent-45% rim, the icon in the brand's executive blue.
+.fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.05rem;
+  color: $executive-blue;
+  background: color-mix(in srgb, var(--theme-accent, #{$nav-blue}) 10%, transparent);
+  border: 1px dashed color-mix(in srgb, var(--theme-accent, #{$nav-blue}) 45%, transparent);
+}

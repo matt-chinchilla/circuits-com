@@ -174,6 +174,16 @@ class TestScope:
 
 
 class TestDefaults:
+    def test_rows_carry_the_product_photo_url(self, client, catalog, db):
+        """The thumbnail beside the SKU (2026-09-11) is a column read on the
+        same row; a part without a photo says so with null, never a blank."""
+        part = db.query(Part).filter(Part.sku == "RES-100").one()
+        part.image_url = "https://cdn.example.com/res-100.jpg"
+        db.commit()
+        by_sku = {p["sku"]: p for p in _parts(client, RESISTORS)["items"]}
+        assert by_sku["RES-100"]["image_url"] == "https://cdn.example.com/res-100.jpg"
+        assert by_sku["RES-200"]["image_url"] is None
+
     def test_leaf_defaults_to_sku_ascending(self, client, catalog):
         assert _skus(client, RESISTORS) == ["RES-100", "RES-200", "RES-300"]
 

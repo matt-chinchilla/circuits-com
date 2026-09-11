@@ -412,6 +412,7 @@ def _build_public_parts(
         Part.best_price_1000,
         Part.category_id,
         Part.sub_slug,
+        Part.image_url,
     ).filter(scope, *applied)
 
     if token == "popular":
@@ -458,6 +459,10 @@ def _build_public_parts(
             "best_price_1000": _price(row.best_price_1000),
             "category_icon": _icon_str(icon_by_cat.get(row.category_id)),
             "sub_slug": row.sub_slug,
+            # The row thumbnail (owner, 2026-09-11: the photo beside the SKU, as
+            # the BOM tool draws it). The client guards the URL before it
+            # becomes an <img src>; here it is a column read like the rest.
+            "image_url": row.image_url,
         }
         for row in rows
     ]

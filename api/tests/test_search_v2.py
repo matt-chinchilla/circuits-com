@@ -51,6 +51,7 @@ SEARCH_PART_KEYS = {
     "category_icon",
     "category_slug",
     "parent_category_slug",
+    "image_url",
 }
 
 
@@ -223,8 +224,9 @@ class TestParts:
 
     def test_dist_count_counts_each_distributor_once(self, client, db, seeded_db):
         """Two DIFFERENT suppliers on one part read as two distributors."""
-        other = Supplier(id=uuid.uuid4(), name="Avnet Test", website="avnet.test",
-                         email="s@avnet.test")
+        other = Supplier(
+            id=uuid.uuid4(), name="Avnet Test", website="avnet.test", email="s@avnet.test"
+        )
         db.add(other)
         db.flush()
         db.add(

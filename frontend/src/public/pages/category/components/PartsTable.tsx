@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import type { PublicPart } from '@public/types/part';
 import { formatPrice } from '@public/services/format';
 import Icon from '@shared/components/Icon';
+import PartThumb from '@public/components/widgets/PartThumb';
 import ColumnHeader from './ColumnHeader';
 import type { FilterOption, SortState } from './ColumnHeader';
 import styles from './PartsTable.module.scss';
@@ -127,8 +128,8 @@ export default function PartsTable({
             >
               <td className={styles.td}>
                 <Link to={`/part/${part.id}`} className={styles.skuLink}>
-                  {part.category_icon && <span className={styles.partIcon}><Icon name={part.category_icon} /></span>}
-                  {part.sku}
+                  <PartThumb src={part.image_url} icon={part.category_icon} />
+                  <span className={styles.skuText}>{part.sku}</span>
                 </Link>
               </td>
               <td className={`${styles.td} ${styles.tdDesc}`}>

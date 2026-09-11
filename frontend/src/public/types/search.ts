@@ -20,6 +20,8 @@ export interface SearchPart {
   category_icon: string | null;
   category_slug: string | null;
   parent_category_slug: string | null;
+  /** See PublicPart.image_url — optional for the same cached-payload reason. */
+  image_url?: string | null;
 }
 
 export interface SearchCategoryChild {
