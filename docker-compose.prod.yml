@@ -215,6 +215,20 @@ services:
   # being unbounded, not the current size.
   db:
     logging: *default-logging
+    # Postgres 16's defaults assume a laptop: 128MB of shared_buffers against a
+    # 1.3GB database on a 1.9GB box meant every cold category page read from
+    # disk (6.8s cold vs 3.3s warm on the connectors page, measured
+    # 2026-09-11), and effective_cache_size=4GB told the planner the box had
+    # RAM it does not. Applied on RECREATE (`up -d`), which every full deploy
+    # does; a `restart` keeps the old command.
+    shm_size: 256m
+    command: >
+      postgres
+      -c shared_buffers=512MB
+      -c effective_cache_size=1GB
+      -c work_mem=8MB
+      -c maintenance_work_mem=128MB
+      -c random_page_cost=1.1
 
   n8n:
     logging: *default-logging
