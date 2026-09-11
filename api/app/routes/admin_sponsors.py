@@ -31,6 +31,7 @@ from app.schemas.sponsor import (
     AdminSponsorResponse,
     AdminSponsorUpdate,
 )
+from app.services import category_cache
 from app.services.auth_service import get_current_user, require_staff
 
 router = APIRouter(
@@ -223,6 +224,7 @@ def create_sponsor(
     db.add(sponsor)
     try:
         db.commit()
+        category_cache.clear()
     except IntegrityError:
         # UNIQUE(supplier_id, category_id|keyword) — the company already
         # sponsors this category/keyword (no duplicate placements).
@@ -287,6 +289,7 @@ def update_sponsor(
 
     try:
         db.commit()
+        category_cache.clear()
     except IntegrityError:
         db.rollback()
         raise HTTPException(
@@ -312,3 +315,4 @@ def delete_sponsor(
     # category page — no CategorySupplier reversal needed.
     db.delete(sponsor)
     db.commit()
+    category_cache.clear()

@@ -20,6 +20,7 @@ from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, aliased, defaultload, raiseload
 
 from app.models import Category, Part, PartListing, PriceBreak, Sponsor, Supplier
+from app.services import category_cache
 from app.services.category_service import (
     TIER_ORDER,
     active_sponsor_filter,
@@ -151,6 +152,9 @@ def invalidate_catalog_caches() -> None:
     # same event, so they hang off this one seam rather than a second one every
     # future mutation site would have to remember to call.
     invalidate_site_stats_cache()
+    # The rendered category pages (services/category_cache) hold parts counts,
+    # rows and facets from the same tables — same seam, same moment.
+    category_cache.clear()
 
 
 # ── Batched SearchPart enrichment ───────────────────────────────────────────

@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
@@ -39,8 +41,22 @@ from app.routes import (
     stripe_webhooks,
     suppliers,
 )
+from app.routes.categories import warm_category_cache
+from app.services import category_cache
 
-app = FastAPI(title="Circuit Center API", version="0.1.0")
+
+@asynccontextmanager
+async def _lifespan(_: FastAPI):
+    """Render every category's first page into the process cache shortly after
+    boot and every 25 minutes after (services/category_cache), so the pages
+    visitors land on are never built on a visitor's clock. Off under pytest."""
+    if settings.CATEGORY_CACHE_WARM:
+        category_cache.start_warmer(warm_category_cache)
+    yield
+
+
+app = FastAPI(title="Circuit Center API", version="0.1.0", lifespan=_lifespan)
+
 
 app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=["*"])
 app.add_middleware(

@@ -5,6 +5,8 @@ from decimal import Decimal
 
 # Set DATABASE_URL before any app imports so pydantic-settings doesn't fail
 os.environ.setdefault("DATABASE_URL", "sqlite:///./test.db")
+# The category-page warmer must never start under pytest (see app/config.py).
+os.environ.setdefault("CATEGORY_CACHE_WARM", "false")
 
 import bcrypt
 import pytest
@@ -92,6 +94,19 @@ from app.routes.analytics import reset_analytics_state  # noqa: E402
 from app.services import rate_limit  # noqa: E402
 from app.services.part_pricing import refresh_best_prices  # noqa: E402
 from app.services.search_service import invalidate_catalog_caches  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def reset_category_cache():
+    """The rendered-page cache is process memory (app/services/category_cache):
+    empty it per test, rebuild stale hits synchronously, and let a rebuild open
+    its session on THIS suite's engine rather than the app's."""
+    from app.services import category_cache
+
+    category_cache._reset_for_tests()
+    category_cache.session_factory = TestingSessionLocal
+    yield
+    category_cache._reset_for_tests()
 
 
 @pytest.fixture(autouse=True)

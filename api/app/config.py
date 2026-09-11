@@ -43,6 +43,13 @@ class Settings(BaseSettings):
     SEED_MANUFACTURERS: bool = True
     SEED_LEADS: bool = True
 
+    # Render every category's canonical first page into the process cache at
+    # startup and on an interval (app/services/category_cache.py), so the
+    # pages visitors land on are never built on a visitor's clock. Off in the
+    # test suite (conftest sets the env var) — a background thread rendering
+    # against the test database would race every test's own session.
+    CATEGORY_CACHE_WARM: bool = True
+
     # uvicorn worker count the container actually runs. COUPLED to the
     # `--workers` flag in docker-compose.prod.yml: the same ${API_WORKERS}
     # interpolation feeds both the command and this env var, so the process
