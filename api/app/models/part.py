@@ -96,6 +96,14 @@ class Part(Base):
     best_price_10 = Column(Numeric(10, 4), nullable=True)
     best_price_100 = Column(Numeric(10, 4), nullable=True)
     best_price_1000 = Column(Numeric(10, 4), nullable=True)
+    # Sum of `part_listings.stock_quantity` across the part's distributors —
+    # the "popular" ordering's key, denormalized (migration 053) so a parent
+    # category's page 1 is an ordered scan instead of a 115k-row join+group
+    # per request (1.1s on prod, measured 2026-09-11). Maintained by the SAME
+    # single home as the four prices above: `refresh_best_prices` recomputes
+    # it for every part it is handed, so no write path can move a listing's
+    # stock without moving this.
+    total_stock = Column(Integer, nullable=False, default=0, server_default="0")
     created_at = Column(
         DateTime(timezone=True),
         default=lambda: datetime.now(UTC),

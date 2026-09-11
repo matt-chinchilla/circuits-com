@@ -80,9 +80,10 @@ export interface CategoryDetail extends CategoryChrome {
   // `total` is the FILTERED total — the header count, and the number the page
   // used to lie about while it truncated at 500 rows client-side.
   parts: PartsPage;
-  // Legacy rollup block, unchanged and no longer read by this page: the page
-  // asks for popular_per_page=1 and takes its parent ordering from `parts`
-  // (sort=popular) instead. Kept because test_category_hierarchy pins it.
+  // Legacy rollup block, RETIRED server-side 2026-09-11: always the empty
+  // shape now (building it was 1.3s per request on the connectors page). The
+  // page takes its parent ordering from `parts` (sort=popular); the field
+  // stays on the wire so a tab on an older bundle keeps parsing.
   popular_parts: PopularPartsPage;
   // Optional so a frontend deployed ahead of the API degrades (no counts, no
   // filter options) instead of white-screening. `?:` misses null, hence the

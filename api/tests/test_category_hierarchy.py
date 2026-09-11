@@ -20,6 +20,7 @@ import uuid
 from decimal import Decimal
 
 from app.models import Category, Part, PartListing, Supplier
+from app.services.part_pricing import refresh_best_prices
 
 
 class TestCategoryResponseExposesSiblings:
@@ -33,22 +34,37 @@ class TestCategoryResponseExposesSiblings:
         """
         # Parent with 3 subcategories
         parent = Category(
-            id=uuid.uuid4(), name="Power Mgmt", slug="power-mgmt",
-            icon="⚡", sort_order=0,
+            id=uuid.uuid4(),
+            name="Power Mgmt",
+            slug="power-mgmt",
+            icon="⚡",
+            sort_order=0,
         )
         db.add(parent)
         db.flush()
         sub_a = Category(
-            id=uuid.uuid4(), name="LDOs", slug="ldos",
-            icon="🔋", parent_id=parent.id, sort_order=0,
+            id=uuid.uuid4(),
+            name="LDOs",
+            slug="ldos",
+            icon="🔋",
+            parent_id=parent.id,
+            sort_order=0,
         )
         sub_b = Category(
-            id=uuid.uuid4(), name="DC-DC", slug="dc-dc",
-            icon="🔌", parent_id=parent.id, sort_order=1,
+            id=uuid.uuid4(),
+            name="DC-DC",
+            slug="dc-dc",
+            icon="🔌",
+            parent_id=parent.id,
+            sort_order=1,
         )
         sub_c = Category(
-            id=uuid.uuid4(), name="BMS", slug="bms",
-            icon="🔋", parent_id=parent.id, sort_order=2,
+            id=uuid.uuid4(),
+            name="BMS",
+            slug="bms",
+            icon="🔋",
+            parent_id=parent.id,
+            sort_order=2,
         )
         db.add_all([sub_a, sub_b, sub_c])
         db.commit()
@@ -83,14 +99,21 @@ class TestPartResponseIncludesParentCategory:
         that user requested.
         """
         parent = Category(
-            id=uuid.uuid4(), name="Power Mgmt", slug="power-mgmt",
-            icon="⚡", sort_order=0,
+            id=uuid.uuid4(),
+            name="Power Mgmt",
+            slug="power-mgmt",
+            icon="⚡",
+            sort_order=0,
         )
         db.add(parent)
         db.flush()
         sub = Category(
-            id=uuid.uuid4(), name="BMS", slug="bms",
-            icon="🔋", parent_id=parent.id, sort_order=0,
+            id=uuid.uuid4(),
+            name="BMS",
+            slug="bms",
+            icon="🔋",
+            parent_id=parent.id,
+            sort_order=0,
         )
         db.add(sub)
         db.flush()
@@ -130,8 +153,11 @@ class TestPartResponseIncludesParentCategory:
         parent directly.
         """
         top = Category(
-            id=uuid.uuid4(), name="Standalone", slug="standalone",
-            icon="🔧", sort_order=0,
+            id=uuid.uuid4(),
+            name="Standalone",
+            slug="standalone",
+            icon="🔧",
+            sort_order=0,
         )
         db.add(top)
         db.flush()
@@ -165,26 +191,35 @@ class TestSubcategoryGetsItsOwnParts:
 
     def test_subcategory_endpoint_returns_its_parts(self, client, db):
         parent = Category(
-            id=uuid.uuid4(), name="Power Mgmt", slug="power-mgmt-2",
-            icon="⚡", sort_order=0,
+            id=uuid.uuid4(),
+            name="Power Mgmt",
+            slug="power-mgmt-2",
+            icon="⚡",
+            sort_order=0,
         )
         db.add(parent)
         db.flush()
         sub = Category(
-            id=uuid.uuid4(), name="LDOs", slug="ldos-2",
-            icon="🔋", parent_id=parent.id, sort_order=0,
+            id=uuid.uuid4(),
+            name="LDOs",
+            slug="ldos-2",
+            icon="🔋",
+            parent_id=parent.id,
+            sort_order=0,
         )
         db.add(sub)
         db.flush()
         # Two parts, both on the subcategory (not parent)
         for sku, mfg in [("LM7805CT", "TI"), ("LT3045", "ADI")]:
-            db.add(Part(
-                id=uuid.uuid4(),
-                sku=sku,
-                manufacturer_name=mfg,
-                category_id=sub.id,
-                lifecycle_status="active",
-            ))
+            db.add(
+                Part(
+                    id=uuid.uuid4(),
+                    sku=sku,
+                    manufacturer_name=mfg,
+                    category_id=sub.id,
+                    lifecycle_status="active",
+                )
+            )
         db.commit()
 
         # Subcategory endpoint surfaces both parts
@@ -192,9 +227,7 @@ class TestSubcategoryGetsItsOwnParts:
         assert resp.status_code == 200
         data = resp.json()
         skus = {p["sku"] for p in data["parts"]["items"]}
-        assert skus == {"LM7805CT", "LT3045"}, (
-            f"Subcategory endpoint missing parts; got {skus}"
-        )
+        assert skus == {"LM7805CT", "LT3045"}, f"Subcategory endpoint missing parts; got {skus}"
 
         # Parent endpoint: the `parts` block IS the rollup now.
         #
@@ -226,6 +259,7 @@ class TestSeedAssignsPartsToSubcategories:
 
     def test_seed_attaches_parts_to_subcategories(self, db):
         from app.db.seed import seed
+
         seed(db)
 
         # Pick a known subcategory and assert it has parts directly attached.
@@ -241,13 +275,12 @@ class TestSeedAssignsPartsToSubcategories:
             "not on the parent PMICs category."
         )
         bms_skus = {p.sku for p in bms_parts}
-        assert "BQ24195" in bms_skus, (
-            f"BQ24195 should be on BMS subcategory; BMS has: {bms_skus}"
-        )
+        assert "BQ24195" in bms_skus, f"BQ24195 should be on BMS subcategory; BMS has: {bms_skus}"
 
     def test_seed_does_not_attach_parts_to_pmics_toplevel(self, db):
         """All PMIC-category parts go to subcategories, not the top-level."""
         from app.db.seed import seed
+
         seed(db)
 
         pmics = db.query(Category).filter(Category.slug == "power-management-ics-pmics").first()
@@ -262,10 +295,10 @@ class TestSeedAssignsPartsToSubcategories:
 
 
 class TestPopularPartsRollupOnParent:
-    """Parent category pages need a flat 'Popular Parts' rollup spanning all
-    subcategories, ranked by aggregate stock (proxy for popularity until
-    click-count metrics land). Without rollup, the parent page renders an
-    empty parts section because every part now lives on a subcategory.
+    """Parent category pages serve a flat rollup spanning all subcategories,
+    ranked by aggregate stock (proxy for popularity until click-count metrics
+    land). Since 2026-08-27 that rollup IS the `parts` block (sort=popular);
+    the separate `popular_parts` block is retired (2026-09-11) and empty.
     """
 
     def _make_supplier(self, db):
@@ -290,39 +323,54 @@ class TestPopularPartsRollupOnParent:
         # (part, supplier) impossible — which is the point of the constraint,
         # so the fixture models real shape instead of the old duplicate.
         for stock in stocks:
-            db.add(PartListing(
-                id=uuid.uuid4(),
-                part_id=part.id,
-                supplier_id=self._make_supplier(db).id,
-                stock_quantity=stock,
-                unit_price=Decimal("1.00"),
-            ))
+            db.add(
+                PartListing(
+                    id=uuid.uuid4(),
+                    part_id=part.id,
+                    supplier_id=self._make_supplier(db).id,
+                    stock_quantity=stock,
+                    unit_price=Decimal("1.00"),
+                )
+            )
         db.flush()
+        # Every real write path ends here; the popular ordering reads the
+        # column this stamps, not the listings.
+        refresh_best_prices(db, [part.id])
         return part
 
-    def test_parent_category_returns_popular_parts_across_children(self, client, db):
-        """The parent endpoint surfaces parts from ALL its subcategories,
-        sorted by total stock across listings (highest first).
+    def test_parent_page_orders_its_rollup_by_total_stock(self, client, db):
+        """The parent endpoint's `parts` block spans ALL its subcategories,
+        most-stocked first — `parts.total_stock` (migration 053), which
+        `refresh_best_prices` keeps exact on every write path.
         """
         parent = Category(
-            id=uuid.uuid4(), name="Power Mgmt", slug="power-mgmt-3",
-            icon="⚡", sort_order=0,
+            id=uuid.uuid4(),
+            name="Power Mgmt",
+            slug="power-mgmt-3",
+            icon="⚡",
+            sort_order=0,
         )
         db.add(parent)
         db.flush()
         sub_ldo = Category(
-            id=uuid.uuid4(), name="LDOs", slug="ldos-3",
-            icon="🔋", parent_id=parent.id, sort_order=0,
+            id=uuid.uuid4(),
+            name="LDOs",
+            slug="ldos-3",
+            icon="🔋",
+            parent_id=parent.id,
+            sort_order=0,
         )
         sub_bms = Category(
-            id=uuid.uuid4(), name="BMS", slug="bms-3",
-            icon="🔋", parent_id=parent.id, sort_order=1,
+            id=uuid.uuid4(),
+            name="BMS",
+            slug="bms-3",
+            icon="🔋",
+            parent_id=parent.id,
+            sort_order=1,
         )
         db.add_all([sub_ldo, sub_bms])
         db.flush()
 
-        # Stock spread so we can verify the ORDER BY: LM7805 has highest total
-        # (5000+3000=8000), BQ24195 second (4500), LT3045 third (2000).
         self._make_part(db, sku="LM7805CT", cat=sub_ldo, stocks=[5000, 3000])
         self._make_part(db, sku="LT3045", cat=sub_ldo, stocks=[2000])
         self._make_part(db, sku="BQ24195", cat=sub_bms, stocks=[4500])
@@ -331,62 +379,77 @@ class TestPopularPartsRollupOnParent:
         resp = client.get("/api/categories/power-mgmt-3")
         assert resp.status_code == 200
         data = resp.json()
+        assert [p["sku"] for p in data["parts"]["items"]] == ["LM7805CT", "BQ24195", "LT3045"]
+        assert data["parts"]["total"] == 3
+        # The children's chips carry their own counts from the same GROUP BY.
+        assert {c["slug"]: c["parts_count"] for c in data["children"]} == {"ldos-3": 2, "bms-3": 1}
+        # RETIRED 2026-09-11: the legacy rollup is an empty block whatever the
+        # page asks for — building it was 1.3s per request on the connectors
+        # page and the client had ignored it since 2026-08-27.
+        assert data["popular_parts"] == {
+            "items": [],
+            "total": 0,
+            "page": 1,
+            "pages": 1,
+            "per_page": 20,
+        }
 
-        assert "popular_parts" in data, (
-            "Parent endpoint must expose popular_parts rollup for the "
-            "Popular Parts section on the parent page"
-        )
-        popular = data["popular_parts"]
-        # Pagination meta is part of the contract — frontend renders
-        # Google-style numbered controls based on these fields.
-        assert "items" in popular and "total" in popular and "page" in popular
-        skus_ordered = [p["sku"] for p in popular["items"]]
-        assert skus_ordered == ["LM7805CT", "BQ24195", "LT3045"], (
-            f"Popular parts should be sorted by total stock DESC; got {skus_ordered}"
-        )
-        assert popular["total"] == 3
-        assert popular["page"] == 1
-        assert popular["pages"] == 1
-
-    def test_popular_parts_pagination(self, client, db):
-        """page/per_page query params slice the rollup correctly."""
+    def test_the_rollup_pages_through_parts_page(self, client, db):
+        """parts_page/parts_per_page slice the rollup in stock order."""
         parent = Category(
-            id=uuid.uuid4(), name="P", slug="p-pag", icon="⚡", sort_order=0,
+            id=uuid.uuid4(),
+            name="P",
+            slug="p-pag",
+            icon="⚡",
+            sort_order=0,
         )
         db.add(parent)
         db.flush()
         sub = Category(
-            id=uuid.uuid4(), name="S", slug="s-pag", icon="🔋",
-            parent_id=parent.id, sort_order=0,
+            id=uuid.uuid4(),
+            name="S",
+            slug="s-pag",
+            icon="🔋",
+            parent_id=parent.id,
+            sort_order=0,
         )
         db.add(sub)
         db.flush()
-        # 5 parts so per_page=2 → 3 pages
         for i in range(5):
             self._make_part(db, sku=f"PART{i}", cat=sub, stocks=[1000 - i * 100])
         db.commit()
 
-        resp = client.get("/api/categories/p-pag?popular_per_page=2&popular_page=2")
+        resp = client.get("/api/categories/p-pag?parts_per_page=2&parts_page=2")
         assert resp.status_code == 200
-        popular = resp.json()["popular_parts"]
-        assert popular["total"] == 5
-        assert popular["per_page"] == 2
-        assert popular["page"] == 2
-        assert popular["pages"] == 3
-        # Items 3-4 (zero-indexed) on page 2 with per_page=2 = parts 2 & 3 in stock-order
-        assert len(popular["items"]) == 2
+        parts = resp.json()["parts"]
+        assert parts["total"] == 5
+        assert parts["per_page"] == 2
+        assert parts["page"] == 2
+        assert parts["pages"] == 3
+        assert [p["sku"] for p in parts["items"]] == ["PART2", "PART3"]
+        # The legacy params are accepted (a tab on the previous bundle sends
+        # them) and change nothing but the echoed per_page.
+        legacy = client.get("/api/categories/p-pag?popular_per_page=2&popular_page=2").json()
+        assert legacy["popular_parts"]["items"] == []
+        assert legacy["popular_parts"]["per_page"] == 2
 
-    def test_leaf_category_popular_parts_empty(self, client, db):
-        """popular_parts is only populated for parent categories; on a leaf
-        page the existing `parts` field is the source of truth."""
+    def test_a_leaf_serves_its_own_parts_and_the_same_empty_legacy_block(self, client, db):
         parent = Category(
-            id=uuid.uuid4(), name="X", slug="x-3", icon="⚡", sort_order=0,
+            id=uuid.uuid4(),
+            name="X",
+            slug="x-3",
+            icon="⚡",
+            sort_order=0,
         )
         db.add(parent)
         db.flush()
         sub = Category(
-            id=uuid.uuid4(), name="Y", slug="y-3", icon="🔋",
-            parent_id=parent.id, sort_order=0,
+            id=uuid.uuid4(),
+            name="Y",
+            slug="y-3",
+            icon="🔋",
+            parent_id=parent.id,
+            sort_order=0,
         )
         db.add(sub)
         db.flush()
@@ -396,7 +459,7 @@ class TestPopularPartsRollupOnParent:
         resp = client.get("/api/categories/y-3")
         assert resp.status_code == 200
         data = resp.json()
-        # Leaf pages: popular_parts has the shape but empty items
+        assert [p["sku"] for p in data["parts"]["items"]] == ["ABC"]
         assert data["popular_parts"]["items"] == []
         assert data["popular_parts"]["total"] == 0
         assert {p["sku"] for p in data["parts"]["items"]} == {"ABC"}

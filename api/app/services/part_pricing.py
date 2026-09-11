@@ -150,23 +150,31 @@ def refresh_best_prices(
 
 
 def _refresh_chunk(db: Session, ids: list[uuid.UUID]) -> int:
-    wanted: dict[uuid.UUID, dict[str, Decimal | None]] = {
+    wanted: dict[uuid.UUID, dict[str, Decimal | int | None]] = {
         # Absence IS the answer for a part with no priced source: it starts at
         # all-NULL and only the aggregates below lift it off that, so a part
         # whose last listing was just deleted is CLEARED rather than left
-        # quoting a price nothing backs.
-        pid: dict.fromkeys(BEST_PRICE_COLUMNS)
+        # quoting a price nothing backs. Stock starts at zero the same way.
+        pid: {**dict.fromkeys(BEST_PRICE_COLUMNS), "total_stock": 0}
         for pid in ids
     }
 
-    for part_id, low in db.execute(
-        select(PartListing.part_id, func.min(PartListing.unit_price))
+    # One pass over the listings for the base price AND the stock sum — the
+    # `total_stock` column (migration 053) is the category page's "popular"
+    # ordering, and it moves in the same statement as the price it sits beside.
+    for part_id, low, stock in db.execute(
+        select(
+            PartListing.part_id,
+            func.min(PartListing.unit_price),
+            func.coalesce(func.sum(PartListing.stock_quantity), 0),
+        )
         .where(PartListing.part_id.in_(ids))
         .group_by(PartListing.part_id)
     ):
         row = wanted.get(_as_uuid(part_id))
         if row is not None:
             row["best_price"] = _storable_or_none(low)
+            row["total_stock"] = int(stock or 0)
 
     # ONE query for all three rungs, grouped by (part, quantity). Three
     # separate queries is what the per-request version did, and this runs on
@@ -200,6 +208,7 @@ def _refresh_chunk(db: Session, ids: list[uuid.UUID]) -> int:
             Part.best_price_10,
             Part.best_price_100,
             Part.best_price_1000,
+            Part.total_stock,
         ).where(Part.id.in_(ids))
     ).all()
 
@@ -224,10 +233,11 @@ def _refresh_chunk(db: Session, ids: list[uuid.UUID]) -> int:
         # the rounding on the comparison means that change is safe when someone
         # makes it. `TestARefreshThatChangesNothingWritesNothing` is where it
         # would be caught.
-        current = {
+        current: dict[str, Decimal | int | None] = {
             column: _storable_or_none(row[offset])
             for offset, column in enumerate(BEST_PRICE_COLUMNS, start=1)
         }
+        current["total_stock"] = int(row[len(BEST_PRICE_COLUMNS) + 1] or 0)
         if current != want:
             changed.append({"id": pid, **want})
 
@@ -238,8 +248,32 @@ def _refresh_chunk(db: Session, ids: list[uuid.UUID]) -> int:
         # raises InvalidRequestError on the executemany path (the same trap
         # `_sync_price_breaks` documents).
         #
-        # Every changed row is written whole — all four columns — because one
+        # Every changed row is written whole — all five columns — because one
         # row version costs the same whichever subset moved, and none of the
-        # four is indexed, so the UPDATE stays HOT-eligible either way.
+        # five is indexed (total_stock deliberately so — see migration 053),
+        # so the UPDATE stays HOT-eligible either way.
         db.execute(update(Part), changed)
     return len(changed)
+
+
+def reconcile_total_stock(db: Session) -> int:
+    """Bring EVERY part's `total_stock` back in line with its listings, in one
+    set-based statement; returns the rows that moved.
+
+    `refresh_best_prices` keeps the column exact on every path that calls it.
+    The one path that does not is the feed importer's stock-only update — by
+    design (TestTheFeedImporterKeepsThemTrue: a stock-only refresh must not
+    recompute the part, or the nightly sweep rewrites a part row per listing
+    it merely confirms). So the "popular" ordering is allowed to lag, and this
+    is what bounds the lag: the category-cache warmer runs it before every
+    warm cycle (25 min), on the api process, against the database the nightly
+    feed-import container also writes. A correlated subquery rather than
+    UPDATE…FROM so SQLite (the suite) and Postgres read the same statement.
+    """
+    total = (
+        select(func.coalesce(func.sum(PartListing.stock_quantity), 0))
+        .where(PartListing.part_id == Part.id)
+        .scalar_subquery()
+    )
+    result = db.execute(update(Part).where(Part.total_stock != total).values(total_stock=total))
+    return int(result.rowcount or 0)

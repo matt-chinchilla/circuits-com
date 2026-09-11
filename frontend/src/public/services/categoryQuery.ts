@@ -210,10 +210,11 @@ export function categoryQuerySignature(query: CategoryQuery): string {
 /**
  * The request query string for `GET /api/categories/{slug}/`.
  *
- * `popular_per_page=1` is deliberate: the legacy `popular_parts` block keeps
- * its exact old behavior for the tests that pin it, but the page reads the
- * scope-aware `parts` block now, so we ask for the smallest legal rollup
- * instead of a second 500-row payload.
+ * `popular_per_page=1` is a leftover the server now ignores: the legacy
+ * `popular_parts` block was retired 2026-09-11 (always empty). The params stay
+ * in the string because index.html's preload fetch and the API's warmed cache
+ * key are built from this EXACT query (categoryQuery.test.ts pins it), so a
+ * change here is a change in three places or a cold cache for everyone.
  *
  * Built with URLSearchParams (not axios `params`) so the string is ours: the
  * Service Worker keys its cache on the URL, and index.html's preload has to

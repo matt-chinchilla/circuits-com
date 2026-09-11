@@ -34,6 +34,7 @@ from app.models import Part, PartListing, PriceBreak, Supplier
 from app.services.part_feed.importer import _upsert_listing
 from app.services.part_pricing import (
     BEST_PRICE_COLUMNS,
+    reconcile_total_stock,
     refresh_best_prices,
     storable_price,
 )
@@ -714,3 +715,53 @@ class TestAFreshDatabaseComesUpPriced:
             )
         ).scalar()
         assert mismatched == 0, f"{mismatched} seeded parts hold a best_price no listing quotes"
+
+
+class TestTotalStock:
+    """`parts.total_stock` (migration 053) — the category page's popular
+    ordering — travels with the prices on every refresh, and the set-based
+    reconcile bounds the one path that deliberately skips the refresh."""
+
+    def _stock(self, db, sku: str) -> int:
+        db.expire_all()
+        return int(db.query(Part).filter(Part.sku == sku).one().total_stock)
+
+    def test_refresh_sums_the_listings_stock(self, db, catalog):
+        listings = db.query(PartListing).join(Part).filter(Part.sku == "PRICED-1").all()
+        for i, listing in enumerate(listings):
+            listing.stock_quantity = 1000 * (i + 1)
+        db.flush()
+        refresh_best_prices(db, [listing.part_id for listing in listings])
+        db.commit()
+        assert self._stock(db, "PRICED-1") == sum(1000 * (i + 1) for i in range(len(listings)))
+        assert self._stock(db, "BARE-1") == 0
+
+    def test_losing_a_listing_lowers_it(self, db, catalog):
+        listings = db.query(PartListing).join(Part).filter(Part.sku == "PRICED-1").all()
+        for listing in listings:
+            listing.stock_quantity = 500
+        part_id = listings[0].part_id
+        db.flush()
+        refresh_best_prices(db, [part_id])
+        db.commit()
+        assert self._stock(db, "PRICED-1") == 500 * len(listings)
+        db.query(PriceBreak).filter(PriceBreak.listing_id == listings[0].id).delete()
+        db.delete(listings[0])
+        db.flush()
+        refresh_best_prices(db, [part_id])
+        db.commit()
+        assert self._stock(db, "PRICED-1") == 500 * (len(listings) - 1)
+
+    def test_reconcile_catches_up_a_stock_only_update(self, db, catalog):
+        """The feed importer's stock-only path leaves the part row alone by
+        design (TestTheFeedImporterKeepsThemTrue); the reconcile is what the
+        category-cache warmer runs so the ordering never lags a cycle."""
+        listing = db.query(PartListing).join(Part).filter(Part.sku == "PARTIAL-1").one()
+        listing.stock_quantity = 4242
+        db.commit()
+        assert self._stock(db, "PARTIAL-1") == 0  # nothing refreshed it
+        assert reconcile_total_stock(db) == 1
+        db.commit()
+        assert self._stock(db, "PARTIAL-1") == 4242
+        # Idempotent: a second pass finds nothing to move.
+        assert reconcile_total_stock(db) == 0

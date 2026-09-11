@@ -1,7 +1,7 @@
 from sqlalchemy import case, func, nullslast, or_
 from sqlalchemy.orm import Session
 
-from app.models import Category, Part, PartListing, PriceBreak, Sponsor, Supplier
+from app.models import Category, Part, PartListing, Sponsor, Supplier
 
 
 def active_sponsor_filter():
@@ -223,9 +223,9 @@ def resolve_sort(sort: str | None, direction: str | None, is_parent: bool) -> tu
     """``(token, descending)`` for this scope, or raise.
 
     The DEFAULT differs by scope on purpose. A leaf opens on ``sku`` asc — a
-    stable, scannable list. A parent opens on ``popular``, which is the
-    ordering `_build_popular_parts` was designed around and which the old
-    client-side re-sort destroyed the moment the rows arrived.
+    stable, scannable list. A parent opens on ``popular`` (total stock across
+    distributors, most-stocked first), which the old client-side re-sort
+    destroyed the moment the rows arrived.
 
     An ABSENT ``dir`` follows the sort rather than a blanket "asc": popular
     means total stock DESCENDING — most-stocked first is the whole idea, and
@@ -286,7 +286,7 @@ def _except(clauses: dict, own: str) -> list:
     return [clause for key, clause in clauses.items() if key != own and clause is not None]
 
 
-def _order_terms(token: str, descending: bool, total_stock=None) -> list:
+def _order_terms(token: str, descending: bool) -> list:
     """ORDER BY for a resolved sort token.
 
     Always ends with a unique column so paging is deterministic: two parts with
@@ -294,7 +294,9 @@ def _order_terms(token: str, descending: bool, total_stock=None) -> list:
     swap places between page 1 and page 2 and hide one of themselves.
     """
     if token == "popular":
-        primary = total_stock.desc() if descending else total_stock.asc()
+        # The denormalized column (migration 053), not a join + GROUP BY over
+        # every listing in the category on every request.
+        primary = Part.total_stock.desc() if descending else Part.total_stock.asc()
         return [primary, Part.sku.asc(), Part.id.asc()]
     column = _SORT_COLUMNS[token]
     primary = column.desc() if descending else column.asc()
@@ -308,14 +310,25 @@ def _price(value) -> float | None:
     return float(value) if value is not None else None
 
 
-def _build_facets(db: Session, scope, clauses: dict, children: list, is_parent: bool) -> dict:
+def _build_facets(
+    db: Session,
+    scope,
+    clauses: dict,
+    children: list,
+    is_parent: bool,
+    counts_by_category: dict,
+) -> dict:
     """Option lists for the page's filter controls, plus the unfiltered total.
 
     `total_unfiltered` is what the category HOLDS; the block's `total` is what
     the current filters left. The page shows both ("312 of 39,353"), which is
     the honesty the 500-row truncation could not offer.
+
+    `counts_by_category` is the scope's one GROUP BY (category_id → rows),
+    computed once by the caller: the unfiltered total is its sum, not a
+    second count(*) over 115k rows. The two option lists still query.
     """
-    total_unfiltered = int(db.query(func.count(Part.id)).filter(scope).scalar() or 0)
+    total_unfiltered = sum(counts_by_category.values())
 
     mfg_count = func.count(Part.id)
     manufacturers = [
@@ -332,10 +345,10 @@ def _build_facets(db: Session, scope, clauses: dict, children: list, is_parent: 
 
     subs: list[dict] = []
     if is_parent:
-        # Names come off the children already loaded for the response — no
-        # query. A sub_slug with no matching child (denormalized data can
-        # outlive a rename) still surfaces, labelled by its own slug, rather
-        # than vanishing from a list the client filters by.
+        # Grouped by `sub_slug` — the column the `sub=` filter tests — rather
+        # than derived from the per-category counts: a part with no sub_slug
+        # (test fixtures; legacy rows) counts toward its category but can
+        # never be selected by the facet, so it must not be offered by it.
         name_by_slug = {child.slug: child.name for child in children}
         sub_count = func.count(Part.id)
         subs = [
@@ -390,7 +403,18 @@ def _build_public_parts(
     clauses = _filter_clauses(q, manufacturers, subs if is_parent else ())
     applied = [clause for clause in clauses.values() if clause is not None]
 
-    total = int(db.query(func.count(Part.id)).filter(scope, *applied).scalar() or 0)
+    # The scope's ONE aggregate pass (category_id → rows). It is the unfiltered
+    # total, the subcategory facet, the children's `parts_count` chips, and —
+    # when no filter is applied, which is every first visit — the page's total
+    # too, so the connectors page (115k rows) counts itself once, not four
+    # times (measured 2026-09-11: three separate count(*) at 0.5s + 0.12s +
+    # 0.12s warm, plus this GROUP BY at 0.3s).
+    scope_ids = [category.id, *[child.id for child in children]]
+    counts_by_category = part_counts_by_category(db, scope_ids)
+    if applied:
+        total = int(db.query(func.count(Part.id)).filter(scope, *applied).scalar() or 0)
+    else:
+        total = sum(counts_by_category.values())
     pages = max(1, (total + per_page - 1) // per_page)
     page = max(1, min(page, pages))
 
@@ -415,15 +439,9 @@ def _build_public_parts(
         Part.image_url,
     ).filter(scope, *applied)
 
-    if token == "popular":
-        total_stock = func.coalesce(func.sum(PartListing.stock_quantity), 0)
-        query = (
-            query.outerjoin(PartListing, PartListing.part_id == Part.id)
-            .group_by(Part.id)
-            .order_by(*_order_terms(token, descending, total_stock))
-        )
-    else:
-        query = query.order_by(*_order_terms(token, descending))
+    # "popular" is a plain column sort since migration 053 (parts.total_stock);
+    # the join + GROUP BY over every listing in the category is gone.
+    query = query.order_by(*_order_terms(token, descending))
 
     rows = query.offset((page - 1) * per_page).limit(per_page).all()
 
@@ -473,124 +491,15 @@ def _build_public_parts(
         "page": page,
         "pages": pages,
         "per_page": per_page,
-        "facets": _build_facets(db, scope, clauses, children, is_parent),
+        "facets": _build_facets(db, scope, clauses, children, is_parent, counts_by_category),
+        # Lifted by get_category_by_slug for the children's chips — the same
+        # GROUP BY, not a second one.
+        "counts_by_category": counts_by_category,
     }
 
 
 def _icon_str(value) -> str | None:
     return str(value) if value is not None else None
-
-
-def _build_popular_parts(db: Session, parent_id, page: int = 1, per_page: int = 20) -> dict:
-    """Paginated rollup of parts across a parent category AND its immediate
-    subcategories, ranked by aggregate stock across all listings.
-
-    Powers the "Popular Parts" section on parent category pages. Designed to
-    scale to thousands of parts — frontend pages through `per_page` rows at
-    a time with Google-style numbered controls. The sort metric will
-    eventually blend in click-count once analytics ship; the contract
-    (most-popular first, paginated) stays stable.
-
-    Returns a dict matching `PopularPartsPage` schema (items + meta).
-
-    LEGACY as of 2026-08-27, and deliberately UNCHANGED. The `parts` block
-    above is scope-aware now — a parent's page rolls up self + children, sorted
-    by this same stock metric by default — so the page asks for
-    popular_page=1&popular_per_page=1 and ignores what comes back. This
-    function keeps its exact behaviour (shape, stock-DESC ordering, pagination,
-    the per-page aggregate queries) because test_category_hierarchy pins it and
-    because a retired block that also changes is two migrations at once. Add
-    nothing here; the block above is where the parts list lives.
-    """
-    page = max(1, page)
-    per_page = max(1, min(per_page, 500))  # cap to prevent abuse
-
-    # Self + immediate children (2-level tree only — matches the seed shape).
-    cat_id_rows = (
-        db.query(Category.id)
-        .filter((Category.id == parent_id) | (Category.parent_id == parent_id))
-        .all()
-    )
-    cat_ids = [row[0] for row in cat_id_rows]
-    if not cat_ids:
-        return {"items": [], "total": 0, "page": 1, "pages": 1, "per_page": per_page}
-
-    total_stock = func.coalesce(func.sum(PartListing.stock_quantity), 0)
-
-    base_query = (
-        db.query(
-            Part,
-            total_stock.label("total_stock"),
-            func.min(PartListing.unit_price).label("best_price"),
-            func.count(PartListing.id).label("listings_count"),
-        )
-        .outerjoin(PartListing, PartListing.part_id == Part.id)
-        .filter(Part.category_id.in_(cat_ids))
-        .group_by(Part.id)
-        .order_by(total_stock.desc(), Part.sku)
-    )
-
-    # Use a subquery for an accurate total when GROUP BY is involved
-    total = (db.query(func.count(Part.id)).filter(Part.category_id.in_(cat_ids)).scalar()) or 0
-    pages = max(1, (total + per_page - 1) // per_page)
-    offset = (page - 1) * per_page
-
-    rows = base_query.offset(offset).limit(per_page).all()
-
-    # Each part may live on a different subcategory — surface that subcat's
-    # icon in the table for visual context.
-    cat_icon_by_id: dict = {
-        row[0]: row[1]
-        for row in db.query(Category.id, Category.icon).filter(Category.id.in_(cat_ids)).all()
-    }
-
-    part_ids = [part.id for part, _, _, _ in rows]
-    tier_prices: dict[str, dict[int, float | None]] = {}
-    for qty in (10, 100, 1000):
-        tier_rows = (
-            db.query(
-                PartListing.part_id,
-                func.min(PriceBreak.unit_price),
-            )
-            .join(PriceBreak, PriceBreak.listing_id == PartListing.id)
-            .filter(
-                PartListing.part_id.in_(part_ids),
-                PriceBreak.min_quantity == qty,
-            )
-            .group_by(PartListing.part_id)
-            .all()
-        )
-        for row in tier_rows:
-            pid_str = str(row[0])
-            price_val = row[1]
-            tier_prices.setdefault(pid_str, {})[qty] = (
-                float(price_val) if price_val is not None else None
-            )
-
-    items = [
-        {
-            "id": part.id,
-            "sku": part.sku,
-            "description": part.description,
-            "manufacturer_name": part.manufacturer_name,
-            "lifecycle_status": part.lifecycle_status,
-            "listings_count": int(listings_count or 0),
-            "best_price": float(best_price) if best_price is not None else None,
-            "best_price_10": tier_prices.get(str(part.id), {}).get(10),
-            "best_price_100": tier_prices.get(str(part.id), {}).get(100),
-            "best_price_1000": tier_prices.get(str(part.id), {}).get(1000),
-            "category_icon": cat_icon_by_id.get(part.category_id),
-            "sub_slug": part.sub_slug,
-        }
-        for part, _, best_price, listings_count in rows
-    ]
-    return {
-        "items": items,
-        "total": int(total),
-        "page": page,
-        "pages": pages,
-        "per_page": per_page,
-    }
 
 
 def get_category_by_slug(
@@ -691,22 +600,24 @@ def get_category_by_slug(
     # and the block itself keeps the plain PartsPage shape it shares with the
     # legacy `popular_parts`.
     facets = parts.pop("facets")
+    counts = parts.pop("counts_by_category")
 
-    # On a parent category page, surface a "Popular Parts" rollup spanning
-    # all subcategories. Leaf pages skip this (their `parts` list IS the
-    # source of truth for that category).
-    if category.children:
-        popular_parts = _build_popular_parts(
-            db, category.id, page=popular_page, per_page=popular_per_page
-        )
-    else:
-        popular_parts = {
-            "items": [],
-            "total": 0,
-            "page": 1,
-            "pages": 1,
-            "per_page": popular_per_page,
-        }
+    # RETIRED 2026-09-11: the legacy `popular_parts` rollup is an empty block
+    # now. The page has taken its parent ordering from `parts` (sort=popular)
+    # since 2026-08-27 and asked for popular_per_page=1 only to throw the row
+    # away — and building that one row was the single most expensive thing
+    # this function did (1.3s on the connectors page: an outer join, a GROUP
+    # BY over 115k parts and a full sort, on top of the same aggregation the
+    # parts block ran). The wire shape survives for a tab still running the
+    # previous bundle; `popular_page`/`popular_per_page` are accepted and
+    # ignored.
+    popular_parts = {
+        "items": [],
+        "total": 0,
+        "page": 1,
+        "pages": 1,
+        "per_page": popular_per_page,
+    }
 
     # Child/sibling count pills. Only get_all_categories stamped parts_count,
     # so this response served the schema default 0 for every child — the chip
@@ -715,10 +626,13 @@ def get_category_by_slug(
     family = list(category.children)
     if category.parent is not None:
         family.extend(category.parent.children)
-    if family:
-        counts = part_counts_by_category(db, [c.id for c in family])
-        for child in family:
-            child.parts_count = counts.get(child.id, 0)
+    # A parent's family is its children, whose counts the parts block already
+    # holds; a leaf's family is its siblings, which still need the one query.
+    missing = [c.id for c in family if c.id not in counts]
+    if missing:
+        counts.update(part_counts_by_category(db, missing))
+    for child in family:
+        child.parts_count = counts.get(child.id, 0)
 
     return {
         "category": category,
