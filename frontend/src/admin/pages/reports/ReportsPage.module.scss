@@ -353,7 +353,12 @@
 // control for the Traffic/Parts toggle; the chart host gets an explicit
 // height (ECharts inits at 0px otherwise — see EChart.tsx).
 .flowCard {
-  margin-bottom: 16px;
+  // Sits in the charts grid like any other card; the grid gap spaces it.
+  min-width: 0;
+}
+
+.flowHead {
+  align-items: flex-start;
 }
 
 .flowHeadText {
@@ -361,6 +366,104 @@
   flex-direction: column;
   gap: 2px;
   min-width: 0;
+  flex: 1 1 320px;
+}
+
+.flowSeg {
+  flex: 0 0 auto;
+}
+
+// The Numbers view: the rows the replaced bar chart drew, as a table a
+// person can quote from. Label ellipsises (hosts and SKUs run long), the
+// figures right-align on tabular digits.
+.flowTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+  table-layout: fixed;
+
+  th,
+  td {
+    padding: 7px 10px;
+    border-bottom: 1px solid #1c2742;
+    text-align: left;
+    white-space: nowrap;
+  }
+
+  th {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #61719b;
+  }
+
+  td {
+    color: #c9d3ea;
+  }
+
+  tbody tr:last-child td {
+    border-bottom: none;
+  }
+}
+
+.flowLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.flowNum {
+  width: 92px;
+  text-align: right !important;
+  font-variant-numeric: tabular-nums;
+}
+
+.flowShare {
+  color: #93a2c4;
+}
+
+// Phone: the head stacks (title, then a full-width Flow/Numbers switch), the
+// heading row reads as one line, the table keeps its three columns by
+// shrinking the figure columns rather than scrolling.
+@media (max-width: 720px) {
+  .flowHead {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .flowSeg {
+    display: flex;
+    width: 100%;
+
+    .segBtn {
+      flex: 1 1 0;
+      justify-content: center;
+    }
+  }
+
+  .flowColumns {
+    padding-left: 0;
+    font-size: 9.5px;
+    letter-spacing: 0.06em;
+  }
+
+  .flowTable {
+    font-size: 12px;
+
+    th,
+    td {
+      padding: 6px 6px;
+    }
+  }
+
+  .flowNum {
+    width: 64px;
+  }
+
+  .flowNote {
+    font-size: 10.5px;
+  }
 }
 
 .flowChart {

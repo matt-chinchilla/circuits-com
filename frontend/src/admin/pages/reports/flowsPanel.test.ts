@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { FlowPayload } from '@admin/types/admin';
-import { MIN_CLICKS_TO_DRAW, drawableFlow, flowHeight } from './FlowsPanel';
+import { MIN_CLICKS_TO_DRAW, drawableFlow, flowHeight, withShare } from './FlowsPanel';
 
 const parts: FlowPayload = {
   kind: 'parts',
@@ -57,5 +57,25 @@ describe('flowHeight', () => {
   it('gives a phone the taller vertical budget', () => {
     expect(flowHeight(col(5, 1), true)).toBe(640);
     expect(flowHeight(col(30, 1), true)).toBe(900);
+  });
+});
+
+describe('withShare (the Numbers view)', () => {
+  it('keeps the rows and adds each one\'s share of the table total', () => {
+    const rows = withShare([
+      ['www.reddit.com', 60],
+      ['www.google.com', 30],
+      ['t.co', 10],
+    ]);
+    expect(rows.map((r) => [r.label, r.value, r.share])).toEqual([
+      ['www.reddit.com', 60, '60.0%'],
+      ['www.google.com', 30, '30.0%'],
+      ['t.co', 10, '10.0%'],
+    ]);
+  });
+
+  it('never divides by zero', () => {
+    expect(withShare([['a', 0]])[0].share).toBe('—');
+    expect(withShare([])).toEqual([]);
   });
 });

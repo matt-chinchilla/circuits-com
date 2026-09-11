@@ -471,11 +471,6 @@ function StaffReportsPage() {
             </span>
           </div>
 
-          {/* The flows lead the tab: the one chart a partner reads without a
-              legend. They take the same window and segment as everything
-              below, and nothing else on the tab depends on them. */}
-          <FlowsPanel days={RANGE_DAYS[range]} segment={segment} />
-
           {!analytics || analytics.human_views + analytics.bot_views === 0 ? (
             <div className={styles.analyticsEmpty}>
               <strong>No analytics data yet</strong>
@@ -609,21 +604,17 @@ function StaffReportsPage() {
                   </div>
                 )}
 
-                {analytics.referrers.length > 0 && (
-                  <div className={`${styles.chartCard} ${styles.chartFull}`}>
-                    <div className={styles.chartHead}>
-                      <h3 className={styles.chartTitle}>Traffic Sources</h3>
-                      <span className={styles.chartSub}>Top referrers · shown as sites</span>
-                    </div>
-                    <HBarChart
-                      data={refRows}
-                      max={Math.max(1, ...refRows.map(([, v]) => v))}
-                    />
-                  </div>
-                )}
+                {/* Replaced the "Traffic Sources" bars (owner, 2026-09-11); the
+                    same referrer-site rows are the panel's Numbers view. */}
+                <FlowsPanel
+                  kind="traffic"
+                  days={RANGE_DAYS[range]}
+                  segment={segment}
+                  numbers={{ label: 'Site', value: 'Views', rows: refRows }}
+                />
 
                 {analytics.top_categories.length > 0 && (
-                  <div className={styles.chartCard}>
+                  <div className={`${styles.chartCard} ${styles.chartFull}`}>
                     <div className={styles.chartHead}>
                       <h3 className={styles.chartTitle}>Popular Categories</h3>
                       <span className={styles.chartSub}>Most viewed category pages</span>
@@ -636,19 +627,18 @@ function StaffReportsPage() {
                   </div>
                 )}
 
-                {analytics.top_parts.length > 0 && (
-                  <div className={styles.chartCard}>
-                    <div className={styles.chartHead}>
-                      <h3 className={styles.chartTitle}>Popular Parts</h3>
-                      <span className={styles.chartSub}>Most viewed part pages</span>
-                    </div>
-                    <HBarChart
-                      data={analytics.top_parts.map(p => [p.path.replace('/part/', ''), p.views])}
-                      max={Math.max(1, ...analytics.top_parts.map(p => p.views))}
-                      color={IZ.gold}
-                    />
-                  </div>
-                )}
+                {/* Replaced the "Popular Parts" bars (owner, 2026-09-11); the same
+                    part-page rows are the panel's Numbers view. */}
+                <FlowsPanel
+                  kind="parts"
+                  days={RANGE_DAYS[range]}
+                  segment={segment}
+                  numbers={{
+                    label: 'Part',
+                    value: 'Views',
+                    rows: analytics.top_parts.map((p) => [p.path.replace('/part/', ''), p.views] as const),
+                  }}
+                />
               </div>
             </>
           )}

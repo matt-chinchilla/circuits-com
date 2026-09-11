@@ -1,15 +1,21 @@
-// FlowsPanel — the two Sankeys on the Site Analytics tab.
+// FlowsPanel — one Sankey card on the Site Analytics tab, in the place of
+// the bar chart it replaced (owner, 2026-09-11: the flows were meant to take
+// over "Traffic Sources" and "Popular Parts", not sit above them).
 //
-// "Traffic sources": one session flows from where it came from, to the page
-// it landed on, to what it did next. "Part popularity": one part-page view
-// flows from category, to subcategory, to the part — and on to the
-// distributor it clicked out to, once there are enough clicks to read (a
-// twelve-click column is hairlines and a huge "stayed" band; below the floor
-// the clicks live in the caption instead).
+// "traffic": one session flows from where it came from, to the page it
+// landed on, to what it did next. "parts": one part-page view flows from
+// category, to subcategory, to the brand — and on to the distributor it
+// clicked out to, once there are enough clicks to read (a twelve-click column
+// is hairlines and a huge "stayed" band; below the floor the clicks live in
+// the caption instead).
 //
-// Both read through the query cache like the rest of Reports, so a revisit
-// paints from memory; the previous flow stays up while a range/segment change
-// loads so the toggle never blanks the chart.
+// The exact figures the old chart showed stay one click away: the Flow /
+// Numbers switch swaps the Sankey for a plain table of the SAME rows the bar
+// chart drew (referrer sites → views; part pages → views), because a flow
+// diagram is for reading a story and a table is for quoting a number.
+//
+// Reads through the query cache like the rest of Reports, so a revisit paints
+// from memory; the previous flow stays up while a range/segment change loads.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { EChartsType } from 'echarts/core'
@@ -22,6 +28,7 @@ import type { AnalyticsSegment, FlowPayload } from '@admin/types/admin'
 import styles from './ReportsPage.module.scss'
 
 type FlowKind = FlowPayload['kind']
+type View = 'flow' | 'numbers'
 
 /** Distributor clicks in the window before the fourth column is drawn. */
 export const MIN_CLICKS_TO_DRAW = 30
@@ -73,13 +80,36 @@ export function flowHeight(nodes: readonly { column: number }[], narrow: boolean
   return Math.min(760, Math.max(440, 28 * widest + 80))
 }
 
-interface FlowsPanelProps {
-  days: number
-  segment: AnalyticsSegment
+/** The Numbers view: the SAME rows the replaced bar chart drew. */
+export interface NumberRows {
+  /** Heading of the label column ("Site", "Part"). */
+  label: string
+  /** Heading of the value column ("Views"). */
+  value: string
+  rows: ReadonlyArray<readonly [string, number]>
 }
 
-export default function FlowsPanel({ days, segment }: FlowsPanelProps) {
-  const [kind, setKind] = useState<FlowKind>('traffic')
+/** Rows with each one's share of the table's own total, for the third column. */
+export function withShare(
+  rows: ReadonlyArray<readonly [string, number]>,
+): Array<{ label: string; value: number; share: string }> {
+  const total = rows.reduce((sum, [, v]) => sum + (Number(v) || 0), 0)
+  return rows.map(([label, value]) => ({
+    label,
+    value,
+    share: total > 0 ? `${((100 * value) / total).toFixed(1)}%` : '—',
+  }))
+}
+
+interface FlowsPanelProps {
+  kind: FlowKind
+  days: number
+  segment: AnalyticsSegment
+  numbers: NumberRows
+}
+
+export default function FlowsPanel({ kind, days, segment, numbers }: FlowsPanelProps) {
+  const [view, setView] = useState<View>('flow')
   const narrow = useNarrow()
   const query = useCachedQuery(
     `reports:flow:${kind}:${days}:${segment}`,
@@ -128,68 +158,103 @@ export default function FlowsPanel({ days, segment }: FlowsPanelProps) {
     [],
   )
 
-  const caption = flow
-    ? `${flow.total.toLocaleString()} ${flow.unit} · last ${days} days · ${SEGMENT_LABEL[segment]}`
-    : query.error !== undefined
-      ? 'Couldn’t load this flow.'
-      : 'Loading…'
+  const tableRows = useMemo(() => withShare(numbers.rows), [numbers.rows])
 
-  const shownKind = flow?.kind ?? kind
+  const caption =
+    view === 'numbers'
+      ? `The figures behind the flow · last ${days} days · ${SEGMENT_LABEL[segment]}`
+      : flow
+        ? `${flow.total.toLocaleString()} ${flow.unit} · last ${days} days · ${SEGMENT_LABEL[segment]}`
+        : query.error !== undefined
+          ? 'Couldn’t load this flow.'
+          : 'Loading…'
+
   const note =
-    shownKind === 'traffic'
+    kind === 'traffic'
       ? 'Hover a band to follow it; click to keep it lit. Direct is every visit that arrived without a referrer — typed, bookmarked, or sent by an app that strips one, which Reddit’s app and most email clients do.'
       : flow && (flow.clicks_total ?? 0) > 0 && (flow.clicks_total ?? 0) < MIN_CLICKS_TO_DRAW
         ? `Hover a band to follow it; click to keep it lit. Top brands by part views; a brand’s tooltip lists its most-viewed parts. ${flow.clicks_total} click${flow.clicks_total === 1 ? '' : 's'} out to distributors so far — that column appears at ${MIN_CLICKS_TO_DRAW}.`
         : 'Hover a band to follow it; click to keep it lit. Top brands by part views; a brand’s tooltip lists its most-viewed parts. Distributor clicks join as a fourth column once there are enough to read.'
 
   return (
-    <section className={`${styles.chartCard} ${styles.flowCard}`} aria-label="Visitor flows">
-      <div className={styles.chartHead}>
+    <section className={`${styles.chartCard} ${styles.chartFull} ${styles.flowCard}`} aria-label={TITLE[kind]}>
+      <div className={`${styles.chartHead} ${styles.flowHead}`}>
         <div className={styles.flowHeadText}>
-          {/* Titled off the flow on screen, not the toggle: with keepPrevious
-              the previous chart stays up for one round trip after a click. */}
-          <h3 className={styles.chartTitle}>{TITLE[flow?.kind ?? kind]}</h3>
+          <h3 className={styles.chartTitle}>{TITLE[kind]}</h3>
           <span className={styles.chartSub}>{caption}</span>
         </div>
-        <div className={styles.seg} role="group" aria-label="Which flow">
-          {(['traffic', 'parts'] as const).map((k) => (
+        <div className={`${styles.seg} ${styles.flowSeg}`} role="group" aria-label="Flow or numbers">
+          {(['flow', 'numbers'] as const).map((v) => (
             <button
-              key={k}
+              key={v}
               type="button"
-              className={`${styles.segBtn} ${kind === k ? styles.on : ''}`}
-              aria-pressed={kind === k}
-              onClick={() => setKind(k)}
+              className={`${styles.segBtn} ${view === v ? styles.on : ''}`}
+              aria-pressed={view === v}
+              onClick={() => setView(v)}
             >
-              {k === 'traffic' ? 'Traffic sources' : 'Part popularity'}
+              {v === 'flow' ? 'Flow' : 'Numbers'}
             </button>
           ))}
         </div>
       </div>
 
-      {option && columns.length > 0 && (
-        // Headings in the DOM, spread across the columns' real extent: the
-        // first sits on the first column's left edge, the last on the last
-        // column's (the chart keeps LAST_COLUMN_LABEL_ROOM free right of it).
-        <div
-          className={styles.flowColumns}
-          style={narrow ? undefined : { paddingRight: LAST_COLUMN_LABEL_ROOM }}
-          aria-hidden="true"
-        >
-          {narrow ? (
-            <span>{columns.join(' → ')}</span>
+      {view === 'numbers' ? (
+        <div className={styles.tableScroll}>
+          {tableRows.length === 0 ? (
+            <div className={styles.flowEmpty} style={{ height: 160 }}>
+              No {numbers.value.toLowerCase()} in this window yet.
+            </div>
           ) : (
-            columns.map((c) => <span key={c}>{c}</span>)
+            <table className={styles.flowTable}>
+              <thead>
+                <tr>
+                  <th>{numbers.label}</th>
+                  <th className={styles.flowNum}>{numbers.value}</th>
+                  <th className={styles.flowNum}>Share</th>
+                </tr>
+              </thead>
+              <tbody>
+                {tableRows.map((r) => (
+                  <tr key={r.label}>
+                    <td className={styles.flowLabel} title={r.label}>
+                      {r.label}
+                    </td>
+                    <td className={styles.flowNum}>{r.value.toLocaleString()}</td>
+                    <td className={`${styles.flowNum} ${styles.flowShare}`}>{r.share}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           )}
         </div>
-      )}
-      {option ? (
-        <EChart option={option} className={styles.flowChart} style={{ height }} onReady={onReady} />
       ) : (
-        <div className={styles.flowEmpty} style={{ height }}>
-          {query.loading ? 'Loading…' : `No ${flow?.unit ?? 'traffic'} in this window yet.`}
-        </div>
+        <>
+          {option && columns.length > 0 && (
+            // Headings in the DOM, spread across the columns' real extent: the
+            // first sits on the first column's left edge, the last on the last
+            // column's (the chart keeps LAST_COLUMN_LABEL_ROOM free right of it).
+            <div
+              className={styles.flowColumns}
+              style={narrow ? undefined : { paddingRight: LAST_COLUMN_LABEL_ROOM }}
+              aria-hidden="true"
+            >
+              {narrow ? (
+                <span>{columns.join(' → ')}</span>
+              ) : (
+                columns.map((c) => <span key={c}>{c}</span>)
+              )}
+            </div>
+          )}
+          {option ? (
+            <EChart option={option} className={styles.flowChart} style={{ height }} onReady={onReady} />
+          ) : (
+            <div className={styles.flowEmpty} style={{ height }}>
+              {query.loading ? 'Loading…' : `No ${flow?.unit ?? 'traffic'} in this window yet.`}
+            </div>
+          )}
+          <p className={styles.flowNote}>{note}</p>
+        </>
       )}
-      <p className={styles.flowNote}>{note}</p>
     </section>
   )
 }
