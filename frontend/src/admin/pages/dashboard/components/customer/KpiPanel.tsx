@@ -16,6 +16,7 @@ import EChart from '@admin/components/charts/EChart';
 import { CHART_SERIES } from '@admin/components/charts/chartTheme';
 import { accountApi } from '@admin/services/accountApi';
 import { useCachedQuery } from '@admin/services/queryCache';
+import { ACCOUNT_SCOPES } from '@admin/services/accountApi';
 import type { AccountKpi } from '@admin/types/account';
 import { rankedBarOption } from './chartOptions';
 import { kpiAxisFormat, kpiChoices, kpiLabel, kpiValueFormat } from './kpiMeta';
@@ -23,10 +24,13 @@ import styles from '../../DashboardPage.module.scss';
 import own from './CustomerPanels.module.scss';
 import './echartsCustomer';
 
+
 export default function KpiPanel() {
   // The read is cached with the rest of the board; the PUT's reply overrides
   // it for this mount (and drops the cache, so the next visit re-reads).
-  const query = useCachedQuery('account:kpi', () => accountApi.getAccountKpi());
+  const query = useCachedQuery('account:kpi', () => accountApi.getAccountKpi(), {
+    scopes: ACCOUNT_SCOPES,
+  });
   const [written, setWritten] = useState<AccountKpi | null>(null);
   const kpi: AccountKpi | null = written ?? query.data ?? null;
   const loading = query.loading;

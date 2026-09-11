@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { adminApi } from '@admin/services/adminApi';
-import { useCachedQuery } from '@admin/services/queryCache';
+import { useCachedQuery, type DataScope } from '@admin/services/queryCache';
 import type { OrgLocation, OrganizationsResponse, VisitorOrganization } from '@admin/services/adminApi';
 import type { AnalyticsSegment } from '@admin/types/admin';
 import { deviceSplitLabel, formatLastSeen } from '../cityIntel';
@@ -25,6 +25,8 @@ import {
   type OrgSort,
 } from './orgRows';
 import styles from './OrganizationsPanel.module.scss';
+
+const TRAFFIC_SCOPES: readonly DataScope[] = ['traffic'];
 
 /**
  * Visiting Organizations — the "which companies are on the site" panel.
@@ -72,8 +74,10 @@ export default function OrganizationsPanel({
   // can never overwrite a newer one, and a pair the operator already looked at
   // renders from memory. (The Site tab unmounts this panel on every tab
   // switch; the cache is what makes coming back free.)
-  const query = useCachedQuery(`reports:orgs:${days}:${segment}`, () =>
-    adminApi.getOrganizations(days, segment),
+  const query = useCachedQuery(
+    `reports:orgs:${days}:${segment}`,
+    () => adminApi.getOrganizations(days, segment),
+    { scopes: TRAFFIC_SCOPES },
   );
   const data: OrganizationsResponse | null = query.data ?? null;
   const status: Status =

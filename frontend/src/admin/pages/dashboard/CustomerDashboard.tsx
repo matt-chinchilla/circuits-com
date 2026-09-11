@@ -37,6 +37,7 @@
 import { useAuth } from '@admin/contexts/AuthContext';
 import { accountApi } from '@admin/services/accountApi';
 import { useCachedQuery } from '@admin/services/queryCache';
+import { ACCOUNT_SCOPES } from '@admin/services/accountApi';
 import { ChartMotion } from '@admin/components/charts/ChartMotion';
 import { tierColorSet } from '@admin/components/charts/chartTheme';
 import type {
@@ -55,6 +56,7 @@ import SponsorMixPanel from './components/customer/SponsorMixPanel';
 import TrafficPanel from './components/customer/TrafficPanel';
 import { count, usd } from './components/format';
 import styles from './DashboardPage.module.scss';
+
 
 /**
  * TitleCase for the badge, read case-insensitively like every other tier site
@@ -118,7 +120,7 @@ export default function CustomerDashboard() {
   // panel, so its read and its write are one piece of state inside it. The
   // costs panel takes its first month from here and fetches other months
   // itself, the way the staff cost breakdown does.
-  const core = useCachedQuery('account:core', loadAccountCore);
+  const core = useCachedQuery('account:core', loadAccountCore, { scopes: ACCOUNT_SCOPES });
   // Each stays null on failure, which renders em dashes and loading-less
   // empty states rather than zeroes: an unlinked account really does have
   // nothing, a failed request does not know.

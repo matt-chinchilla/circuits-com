@@ -127,9 +127,13 @@ PUBLIC_ROUTES = {
 # a flagged user has to be able to ask who they are and set a new password, and
 # an unactivated customer has to get far enough to be told they are not
 # activated. Both are on get_authenticated_user for exactly that reason.
+# ``/api/data-versions`` is the third: staff and customers both keep a persisted
+# query cache and both ask this one GET whether anything changed before they
+# refetch; it returns opaque per-scope hashes and sits on get_current_user.
 EXEMPT_FROM_THE_WALL = {
     ("GET", "/api/auth/me"),
     ("POST", "/api/auth/change-password"),
+    ("GET", "/api/data-versions"),
 }
 
 

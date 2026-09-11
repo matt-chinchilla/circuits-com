@@ -23,9 +23,12 @@ import EChart from '@admin/components/charts/EChart'
 import { installSankeyPin, type SankeyPin } from '@admin/components/charts/sankeyPin'
 import { LAST_COLUMN_LABEL_ROOM, sankeyOption } from '@admin/components/charts/options'
 import { adminApi } from '@admin/services/adminApi'
-import { useCachedQuery } from '@admin/services/queryCache'
+import { useCachedQuery, type DataScope } from '@admin/services/queryCache'
 import type { AnalyticsSegment, FlowPayload } from '@admin/types/admin'
 import styles from './ReportsPage.module.scss'
+
+const TRAFFIC_SCOPES: readonly DataScope[] = ['traffic']
+const PARTS_FLOW_SCOPES: readonly DataScope[] = ['traffic', 'catalog']
 
 type FlowKind = FlowPayload['kind']
 type View = 'flow' | 'numbers'
@@ -114,7 +117,9 @@ export default function FlowsPanel({ kind, days, segment, numbers }: FlowsPanelP
   const query = useCachedQuery(
     `reports:flow:${kind}:${days}:${segment}`,
     () => adminApi.getFlow(kind, days, segment),
-    { keepPrevious: true },
+    // The parts flow labels views with catalog names, so a catalog change
+    // (the nightly import) is a change to it too.
+    { keepPrevious: true, scopes: kind === 'parts' ? PARTS_FLOW_SCOPES : TRAFFIC_SCOPES },
   )
   const flow = query.data
 

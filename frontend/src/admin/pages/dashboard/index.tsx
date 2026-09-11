@@ -31,7 +31,7 @@ import { Download } from 'lucide-react';
 import { useAuth } from '@admin/contexts/AuthContext';
 import { useDemo } from '@admin/contexts/DemoContext';
 import { adminApi } from '@admin/services/adminApi';
-import { useCachedQuery } from '@admin/services/queryCache';
+import { useCachedQuery, type DataScope } from '@admin/services/queryCache';
 import { ChartMotion } from '@admin/components/charts/ChartMotion';
 import { countActiveSponsorsByTier } from '@admin/services/sponsorTier';
 import type {
@@ -108,6 +108,11 @@ async function loadDashboardCore(): Promise<DashboardCore> {
 
 const EMPTY_TIER_COUNTS: Record<SponsorTier, number> = { Platinum: 0, Gold: 0, Silver: 0 };
 
+// What the core payload aggregates — the change check re-validates a stale
+// visit against these table families instead of re-running seven reads.
+const DASHBOARD_SCOPES: readonly DataScope[] = ['catalog', 'money', 'sponsors', 'activity', 'traffic'];
+const MONEY_SCOPES: readonly DataScope[] = ['money'];
+
 export default function DashboardPage() {
   const { isCustomer } = useAuth();
   // A switch, not a branch inside one component: the two sides hold different
@@ -128,7 +133,7 @@ function StaffDashboard() {
   // visit is the only one that shows the skeletons. `demoMode` is deliberately
   // not part of any key — the payload is the same either way, the demo branch
   // just renders generated data instead.
-  const core = useCachedQuery('dashboard:core', loadDashboardCore);
+  const core = useCachedQuery('dashboard:core', loadDashboardCore, { scopes: DASHBOARD_SCOPES });
 
   // TODO: move both windows to Settings — they are a per-admin preference, not
   // page state. Local `useState` keeps this shippable without a settings
@@ -138,11 +143,16 @@ function StaffDashboard() {
   const [expenseRange, setExpenseRange] = useState<CompareRange>(3);
   // One query EACH, keyed on its own window: a combined key would refetch both
   // endpoints every time either segmented control moved.
-  const revenue = useCachedQuery(`dashboard:revenue:${revenueRange}`, () =>
-    adminApi.getRevenueCompare(revenueRange).catch(() => ({ months: [] as MonthlyCompareMonth[] })),
+  const revenue = useCachedQuery(
+    `dashboard:revenue:${revenueRange}`,
+    () =>
+      adminApi.getRevenueCompare(revenueRange).catch(() => ({ months: [] as MonthlyCompareMonth[] })),
+    { scopes: MONEY_SCOPES },
   );
-  const expenses = useCachedQuery(`dashboard:expenses:${expenseRange}`, () =>
-    adminApi.getExpenses(expenseRange).catch(() => ({ months: [] as MonthlyCompareMonth[] })),
+  const expenses = useCachedQuery(
+    `dashboard:expenses:${expenseRange}`,
+    () => adminApi.getExpenses(expenseRange).catch(() => ({ months: [] as MonthlyCompareMonth[] })),
+    { scopes: MONEY_SCOPES },
   );
 
   // Stable empties (module-level) so the memos below don't re-run on every

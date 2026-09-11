@@ -4,7 +4,7 @@ import { Download } from 'lucide-react'
 import { useDemo } from '@admin/contexts/DemoContext'
 import { useAuth } from '@admin/contexts/AuthContext'
 import { adminApi } from '@admin/services/adminApi'
-import { useCachedQuery } from '@admin/services/queryCache'
+import { useCachedQuery, type DataScope } from '@admin/services/queryCache'
 import { ChartMotion } from '@admin/components/charts/ChartMotion'
 import type {
   AnalyticsSegment,
@@ -28,6 +28,10 @@ import {
   TrafficChart,
 } from './charts'
 import type { RevSeriesPoint } from './charts'
+
+// The change check re-validates a stale visit against these table families.
+const REPORTS_SCOPES: readonly DataScope[] = ['catalog', 'money', 'sponsors']
+const TRAFFIC_SCOPES: readonly DataScope[] = ['traffic']
 
 // ReportsPage — Phase A7 port of the 2026-04-25 Claude Design bundle.
 // The hand-rolled native SVG charts live in charts.tsx (replaces Recharts
@@ -193,14 +197,14 @@ function StaffReportsPage() {
   // the background and repaints only on a real change. Neither key carries
   // `demoMode` — demo replaces the RESULTS, so the payloads are the same
   // either way and the old `[demoMode]` deps only refetched to discard.
-  const core = useCachedQuery('reports:core', loadReportsCore)
+  const core = useCachedQuery('reports:core', loadReportsCore, { scopes: REPORTS_SCOPES })
   // The segment is part of the key, and the previous payload stays up while
   // the new one loads so the toggle never blanks the charts it relabels.
   // Captions keep describing the DATA (analytics.segment) — see shownSegment.
   const analyticsQ = useCachedQuery(
     `reports:analytics:${RANGE_DAYS[range]}:${segment}`,
     () => adminApi.getAnalytics(RANGE_DAYS[range], segment),
-    { keepPrevious: true },
+    { keepPrevious: true, scopes: TRAFFIC_SCOPES },
   )
   const stats = core.data?.stats ?? null
   const revenue = core.data?.revenue ?? EMPTY_REVENUE

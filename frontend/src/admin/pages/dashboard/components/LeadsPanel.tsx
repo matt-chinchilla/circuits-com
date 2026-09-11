@@ -31,10 +31,12 @@ import { classifyLeadsError } from '@admin/pages/leads/loadError';
 import { OUTCOME_META, firstInitial } from '@admin/pages/leads/outcome';
 import { relativeTime } from '@admin/pages/leads/time';
 import { adminApi } from '@admin/services/adminApi';
-import { useCachedQuery } from '@admin/services/queryCache';
+import { useCachedQuery, type DataScope } from '@admin/services/queryCache';
 import type { RecentLeadContact } from '@admin/types/leads';
 import { count } from './format';
 import styles from '../DashboardPage.module.scss';
+
+const LEAD_SCOPES: readonly DataScope[] = ['leads'];
 
 /** `admin_leads.DEMO_LEADS_FORBIDDEN_DETAIL`, matched verbatim so an ordinary
  *  permissions 403 can never be mistaken for the demo read-refusal. */
@@ -64,8 +66,10 @@ export default function LeadsPanel({ demoMode }: LeadsPanelProps) {
   // A null key in demo mode is the "don't fetch" branch: nothing is requested
   // and the panel shows the demo notice. Otherwise the preview window comes
   // from the query cache like the rest of the dashboard.
-  const query = useCachedQuery(demoMode ? null : 'dashboard:leadContacts', () =>
-    adminApi.getRecentLeadContacts(INITIAL_LIMIT),
+  const query = useCachedQuery(
+    demoMode ? null : 'dashboard:leadContacts',
+    () => adminApi.getRecentLeadContacts(INITIAL_LIMIT),
+    { scopes: LEAD_SCOPES },
   );
   // The first expand upgrades to the full window; it lives beside the cached
   // preview rather than inside it so the cache never holds a page-sized list.

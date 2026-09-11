@@ -10,6 +10,7 @@ import type { ReactNode } from 'react';
 import { adminApi } from '@admin/services/adminApi';
 import { activationFromProbe, type AccountMe } from '@admin/services/accountActivation';
 import { passwordGate } from '@admin/services/passwordGate';
+import { clearPersistedQueries } from '@admin/services/queryCache';
 import { isReadOnly } from '@admin/services/permissions';
 import type { AuthResponse, UserInfo } from '@admin/types/admin';
 
@@ -193,6 +194,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(() => {
     localStorage.removeItem('admin_token');
+    // Signing out on a shared browser must leave none of this person's
+    // cached payloads behind for the next sign-in to hydrate from.
+    clearPersistedQueries();
     passwordGate.set(false);
     // The activation verdict and the account body clear themselves:
     // setUser(null) re-runs the probe effect, which finds no customer and

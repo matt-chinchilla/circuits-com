@@ -41,7 +41,14 @@ import type {
 import type { PlatformEngagementSeries } from '@admin/types/engagement';
 import type { AdminUser } from '@admin/types/users';
 import { bustSponsorCaches } from '@admin/services/swCache';
-import { invalidateQueries, runQuery } from '@admin/services/queryCache';
+import {
+  invalidateQueries,
+  runQuery,
+  setVersionSource,
+  type RunQueryOptions,
+  type ScopeVersions,
+} from '@admin/services/queryCache';
+import { readToken } from '@admin/services/sessionToken';
 import { isPasswordChangeRequired, passwordGate } from '@admin/services/passwordGate';
 import { isReauthChallenge } from '@admin/services/reauthChallenge';
 
@@ -220,7 +227,7 @@ const adminClient = axios.create({ baseURL: API_BASE_URL });
  * storage key. Non-axios transports (syncStream's streaming fetch) consume
  * this too, so a change to where the token lives cannot silently miss one. */
 export function authHeaders(): Record<string, string> {
-  const token = localStorage.getItem('admin_token');
+  const token = readToken();
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
@@ -261,9 +268,20 @@ function invalidateAfterMutation(config: { method?: string; url?: string } | und
 // supplier list (114 KB, mostly base64 logos) pays nothing. The response
 // interceptor above drops every entry after any mutation. Hits are CLONED:
 // a page may sort or patch what it receives, and the cache must not see that.
-export function cachedRead<T>(key: string, fetcher: () => Promise<T>, maxAge?: number): Promise<T> {
-  return runQuery(key, fetcher, maxAge).then((value) => structuredClone(value));
+export function cachedRead<T>(
+  key: string,
+  fetcher: () => Promise<T>,
+  options?: RunQueryOptions,
+): Promise<T> {
+  return runQuery(key, fetcher, options).then((value) => structuredClone(value));
 }
+
+// The change check behind every stale entry (see queryCache): one GET that
+// says which table families moved since a payload was fetched. Installed
+// here because the cache cannot import the client that imports it.
+setVersionSource(() =>
+  adminClient.get<{ scopes: ScopeVersions }>('/data-versions').then((r) => r.data.scopes),
+);
 
 adminClient.interceptors.response.use(
   (response) => {
@@ -417,7 +435,9 @@ export const adminApi = {
 
   // Cached: the layout's sidebar badges and the dashboard both read it.
   getStats: () =>
-    cachedRead('stats', () => adminClient.get<DashboardStats>('/dashboard/stats').then((r) => r.data)),
+    cachedRead('stats', () => adminClient.get<DashboardStats>('/dashboard/stats').then((r) => r.data), {
+      scopes: ['catalog', 'money', 'sponsors'],
+    }),
 
   getActivity: () =>
     adminClient.get<ActivityItem[]>('/dashboard/activity').then((r) => r.data),
@@ -513,7 +533,9 @@ export const adminApi = {
   // call pays an extra round-trip.
   // Cached so the list → edit hop (the form finds its row in this list) is free.
   listExpenses: () =>
-    cachedRead('expenses:list', () => adminClient.get<AdminExpense[]>('/admin/expenses/').then((r) => r.data)),
+    cachedRead('expenses:list', () => adminClient.get<AdminExpense[]>('/admin/expenses/').then((r) => r.data), {
+      scopes: ['money'],
+    }),
 
   createExpense: (data: ExpenseCreate) =>
     adminClient.post<AdminExpense>('/admin/expenses/', data).then((r) => r.data),
@@ -527,7 +549,9 @@ export const adminApi = {
   /** GET /admin/sales-reps — admin-role usernames; the sponsor form's `sold_by`
    *  options (e.g. Anthony, Daniel, Ronald). */
   getSalesRepOptions: () =>
-    cachedRead('sales-rep-options', () => adminClient.get<SalesRepOptions>('/admin/sales-reps').then((r) => r.data)),
+    cachedRead('sales-rep-options', () => adminClient.get<SalesRepOptions>('/admin/sales-reps').then((r) => r.data), {
+      scopes: ['people'],
+    }),
 
   /**
    * GET /api/dashboard/engagement?days=30 -> PlatformEngagementSeries[]
@@ -599,7 +623,9 @@ export const adminApi = {
     ),
 
   getSuppliers: () =>
-    cachedRead('suppliers:list', () => adminClient.get<AdminSupplier[]>('/suppliers/').then((r) => r.data)),
+    cachedRead('suppliers:list', () => adminClient.get<AdminSupplier[]>('/suppliers/').then((r) => r.data), {
+      scopes: ['catalog'],
+    }),
 
   getSupplier: (id: string) =>
     adminClient.get<AdminSupplier>(`/suppliers/${id}`).then((r) => r.data),
@@ -625,12 +651,17 @@ export const adminApi = {
       .then((r) => r.data),
 
   getCategories: () =>
-    cachedRead('categories:list', () => adminClient.get<AdminCategory[]>('/categories/').then((r) => r.data)),
+    cachedRead('categories:list', () => adminClient.get<AdminCategory[]>('/categories/').then((r) => r.data), {
+      scopes: ['catalog'],
+    }),
 
   // 45s: the layout re-reads this on EVERY navigation for the bell badge (the
   // whole inbox, unpaginated); a burst of clicks is now one request.
   getMessages: () =>
-    cachedRead('messages:list', () => adminClient.get<Message[]>('/admin/messages/').then((r) => r.data), 45_000),
+    cachedRead('messages:list', () => adminClient.get<Message[]>('/admin/messages/').then((r) => r.data), {
+      maxAge: 45_000,
+      scopes: ['messages'],
+    }),
 
   getMessage: (id: string) =>
     adminClient.get<Message>(`/admin/messages/${id}`).then((r) => r.data),
@@ -660,7 +691,9 @@ export const adminApi = {
       .then((r) => r.data),
 
   getSponsors: () =>
-    cachedRead('sponsors:list', () => adminClient.get<AdminSponsor[]>('/admin/sponsors/').then((r) => r.data)),
+    cachedRead('sponsors:list', () => adminClient.get<AdminSponsor[]>('/admin/sponsors/').then((r) => r.data), {
+      scopes: ['sponsors'],
+    }),
 
   // sponsor create/update/delete all bust the sponsor caches so the public
   // banner reflects the change on next navigation.
@@ -681,7 +714,9 @@ export const adminApi = {
 
   // A fixed price ladder — cached for the session.
   getQuoteLadder: () =>
-    cachedRead('quote-ladder', () => adminClient.get<QuoteLadderResponse>('/admin/quote-ladder').then((r) => r.data), 60 * 60 * 1000),
+    cachedRead('quote-ladder', () => adminClient.get<QuoteLadderResponse>('/admin/quote-ladder').then((r) => r.data), {
+      maxAge: 60 * 60 * 1000,
+    }),
 
   getSponsorQuotes: (sponsorId: string) =>
     adminClient
@@ -842,7 +877,9 @@ export const adminApi = {
   // The server returns UNACTIVATED FIRST, then newest — the page's job is to
   // show who is waiting. Callers must not re-sort into created-desc and undo it.
   getUsers: () =>
-    cachedRead('users:list', () => adminClient.get<AdminUser[]>('/admin/users/').then((r) => r.data)),
+    cachedRead('users:list', () => adminClient.get<AdminUser[]>('/admin/users/').then((r) => r.data), {
+      scopes: ['people'],
+    }),
 
   updateUser: (
     id: string,

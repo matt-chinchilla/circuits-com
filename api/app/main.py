@@ -26,6 +26,7 @@ from app.routes import (
     categories,
     checkout,
     dashboard,
+    data_versions,
     feed_credentials,
     flows,
     forms,
@@ -63,6 +64,7 @@ app.include_router(auth.router)
 app.include_router(dashboard.router)
 # Dashboard also owns a small /api/admin/* lookup router (sales reps).
 app.include_router(dashboard.admin_router)
+app.include_router(data_versions.router)
 app.include_router(parts.router)
 app.include_router(admin_messages.router)
 app.include_router(admin_sponsors.router)
