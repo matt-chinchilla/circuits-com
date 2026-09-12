@@ -16,6 +16,9 @@ describe('normalizeEntryName', () => {
     expect(normalizeEntryName('../x.kicad_sch')).toBeNull();
     expect(normalizeEntryName('a/../x.kicad_sch')).toBeNull();
     expect(normalizeEntryName('dir/')).toBeNull();
+    expect(normalizeEntryName('.')).toBeNull();
+    expect(normalizeEntryName('a/.')).toBeNull();
+    expect(normalizeEntryName('./x.kicad_sch')).toBe('x.kicad_sch');
   });
 });
 

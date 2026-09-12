@@ -14,8 +14,9 @@ export function normalizeEntryName(name: string): string | null {
   if (slashed === '' || slashed.endsWith('/')) return null;
   const parts = slashed.split('/');
   if (parts.some((seg) => seg === '..' || seg === '')) return null;
-  const joined = parts.filter((seg) => seg !== '.').join('/');
-  return joined === '' ? null : joined;
+  // A trailing `.` names the directory itself ("a/." is "a/"), never a file.
+  if (parts[parts.length - 1] === '.') return null;
+  return parts.filter((seg) => seg !== '.').join('/');
 }
 
 export function isKicadName(path: string): boolean {
@@ -64,16 +65,18 @@ export async function unzipToFiles(file: File, guard: ArchiveGuard = ARCHIVE_GUA
     if (err instanceof KicadReadError) throw err;
     throw new KicadReadError('That file is not a zip archive this browser can open.', 'unreadable');
   }
+  // fflate hands entries back in zip order; a path-sorted result is a stable
+  // contract for the project assembler and for tests that index into it.
   const sorted = Object.entries(entries)
     .map(([name, data]) => [normalizeEntryName(name) ?? name, data] as const)
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  // Two entries that normalize to one path (a/b vs a\b) would let the later
+  // copy shadow a real sheet in the project's path-keyed Map — refuse instead.
   for (let i = 1; i < sorted.length; i++) {
     const name = sorted[i]![0];
     if (name === sorted[i - 1]![0]) {
       throw new KicadReadError(`That archive names the same file twice: ${name}.`, 'archive');
     }
   }
-  // fflate hands entries back in zip order; a path-sorted result is a stable
-  // contract for the project assembler and for tests that index into it.
   return sorted.map(([name, data]) => new File([data], name));
 }
