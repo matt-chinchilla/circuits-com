@@ -278,10 +278,11 @@ git checkout -- .   # leave the clone clean; the vendoring script applies the pa
 
 ```js
 // frontend/scripts/vendor-kicanvas.mjs
-// Re-vendors KiCanvas from the pinned commit: copies src/, third_party/ (earcut,
-// which src/ imports by relative path), tsconfig.json and LICENSE.md into
-// vendor/kicanvas, applies patches/*.patch in order, and writes UPSTREAM +
-// MANIFEST.sha256 over BOTH copied trees. Run by hand, only on a deliberate
+// Re-vendors KiCanvas from the pinned commit: copies src/, third_party/earcut/
+// (the ONLY third_party module src/ compiles; the rest is ~16 MB of font
+// authoring sources), tsconfig.json and LICENSE.md into vendor/kicanvas, applies
+// patches/*.patch in order, and writes UPSTREAM + MANIFEST.sha256 over BOTH
+// copied trees. Run by hand, only on a deliberate
 // upstream bump.
 import { execSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -326,7 +327,7 @@ if (process.argv[1] && resolve(process.argv[1]) === resolve(import.meta.filename
   rmSync(join(VENDOR, 'third_party'), { recursive: true, force: true });
   mkdirSync(join(VENDOR, 'patches'), { recursive: true });
   cpSync(join(work, 'src'), join(VENDOR, 'src'), { recursive: true });
-  cpSync(join(work, 'third_party'), join(VENDOR, 'third_party'), { recursive: true });
+  cpSync(join(work, 'third_party', 'earcut'), join(VENDOR, 'third_party', 'earcut'), { recursive: true });
   for (const f of ['tsconfig.json', 'LICENSE.md']) cpSync(join(work, f), join(VENDOR, f));
   writeFileSync(join(VENDOR, 'UPSTREAM'), `${REPO}\n${SHA}\n${DATE}\n`);
 
@@ -369,7 +370,7 @@ mkdir -p vendor/kicanvas/patches
 cp /tmp/0001-no-web-fonts.patch vendor/kicanvas/patches/0001-no-web-fonts.patch
 cp /tmp/0002-icon-codepoints.patch vendor/kicanvas/patches/0002-icon-codepoints.patch
 node scripts/vendor-kicanvas.mjs
-# Expect: "applied 0001-no-web-fonts.patch", "applied 0002-icon-codepoints.patch", "vendored N files at b031159e" (149 under src/ plus third_party/)
+# Expect: "applied 0001-no-web-fonts.patch", "applied 0002-icon-codepoints.patch", "vendored N files at b031159e" (149 under src/ plus 2 under third_party/earcut/ = 151)
 grep -rn "fonts.googleapis.com\|fonts.gstatic.com\|Nunito" vendor/kicanvas/src && echo "PATCH FAILED" || echo "no web-font references"
 ```
 
@@ -553,8 +554,10 @@ for (const host of FORBIDDEN) if (out.includes(host)) fail(`bundle references ${
 // A bundle can pass the hash and host checks and still render nothing (an entry
 // that forgot a side-effect import did exactly that once): the four custom
 // elements the site relies on must be defined in the output.
+// Checked as `define("<name>"`: the bare name also appears in CSS selectors and
+// templates, which the broken bundle contained three times each.
 for (const element of ['kicanvas-embed', 'kicanvas-source', 'kc-board-app', 'kc-schematic-app']) {
-  if (!out.includes(element)) fail(`bundle does not define <${element}>`);
+  if (!out.includes(`define("${element}"`)) fail(`bundle never registers <${element}>`);
 }
 console.log(`build-kicanvas: ${OUT} ${out.length.toLocaleString('en-US')} bytes`);
 ```

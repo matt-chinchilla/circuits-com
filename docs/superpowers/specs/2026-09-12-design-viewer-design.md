@@ -319,7 +319,7 @@ handing the string to the shadow root), `define DEBUG=false` — into
 integrity gate**: after bundling it recomputes SHA-256 over `vendor/kicanvas/src/**` and
 `third_party/**` against `MANIFEST.sha256` and fails the build (non-zero) on any
 mismatch, if any of the four custom elements (`kicanvas-embed`, `kicanvas-source`,
-`kc-board-app`, `kc-schematic-app`) is missing from the output, or if the output
+`kc-board-app`, `kc-schematic-app`) is not registered (`define("<name>"`) in the output, or if the output
 contains `fonts.googleapis.com` or `fonts.gstatic.com`. `package.json`
 gains `"prebuild"` and `"predev"` running it and `esbuild` as an explicit pinned
 devDependency. The frontend Docker image runs `npm run build`, so **this build
@@ -330,8 +330,7 @@ declares its own aliases); `manualChunks` maps `/vendor/build/kicanvas` to a
 `kicanvas` chunk. The host imports it with `import('@vendor-build/kicanvas')`,
 typed by a one-line `declare module`. Vite hashes and minifies; nginx serves it
 gzip-compressed (no brotli in this stack) and immutable like every other hashed
-chunk. The packet measured the upstream bundle at 112 KB gzip; the Phase 0 spike
-records the real chunk size and §10's gate is that number +10%.
+chunk. Measured at Task 0.3: 462,478 B raw, 108,039 B gzip -9 (the packet had 112 KB for the upstream bundle); §10's gate is 119 KB gzip (measured +10%).
 
 `vendorIntegrity.test.ts` runs the same two checks under `npm test` as the fast
 local echo. The `.eslintrc.json` `vendor/` ignore is belt-and-braces: lint runs
