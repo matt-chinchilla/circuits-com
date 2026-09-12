@@ -1,0 +1,69 @@
+diff --git a/src/kc-ui/icon.ts b/src/kc-ui/icon.ts
+index 8af8ff8..3235344 100644
+--- a/src/kc-ui/icon.ts
++++ b/src/kc-ui/icon.ts
+@@ -7,9 +7,30 @@
+ import { css, html } from "../base/web-components";
+ import { KCUIElement } from "./element";
+ 
+-/**
+- * kc-ui-icon is a material symbol
+- */
++// Circuit Center patch (0002-icon-codepoints): the site serves a 16-glyph subset
++// of Material Symbols Outlined with no ligature table, so the icon NAME in the
++// element's text is mapped to its codepoint here. Names not in the map render
++// as their text, which is visibly wrong rather than silently blank.
++const CODEPOINTS: Record<string, string> = {
++    category: "\ue72c",
++    check: "\ue668",
++    close: "\ue5cd",
++    download: "\uf090",
++    flip: "\ue3e8",
++    folder: "\ue2c7",
++    help: "\ue8fd",
++    hub: "\ue9f4",
++    info: "\ue88e",
++    interests: "\ue7c8",
++    layers: "\ue53b",
++    list: "\ue896",
++    memory: "\ue322",
++    settings: "\ue8b8",
++    visibility: "\ue8f4",
++    "question-mark": "\ueb8b",
++    question_mark: "\ueb8b",
++};
++
+ export class KCUIIconElement extends KCUIElement {
+     public static sprites_url: string = "";
+ 
+@@ -27,9 +48,6 @@ export class KCUIIconElement extends KCUIElement {
+                 white-space: nowrap;
+                 word-wrap: normal;
+                 direction: ltr;
+-                -webkit-font-feature-settings: "liga";
+-                -moz-font-feature-settings: "liga";
+-                font-feature-settings: "liga";
+                 -webkit-font-smoothing: antialiased;
+                 user-select: none;
+             }
+@@ -43,17 +61,16 @@ export class KCUIIconElement extends KCUIElement {
+     ];
+ 
+     override render() {
+-        const text = this.textContent ?? "";
++        const text = (this.textContent ?? "").trim();
+         if (text.startsWith("svg:")) {
+             const name = text.slice(4);
+-            // TODO: 404 error?
+             const url = `${KCUIIconElement.sprites_url}#${name}`;
+             return html`<svg viewBox="0 0 48 48" width="48">
+                 <use xlink:href="${url}" />
+             </svg>`;
+-        } else {
+-            return html`<slot></slot>`;
+         }
++        const glyph = CODEPOINTS[text];
++        return glyph === undefined ? html`<slot></slot>` : html`${glyph}`;
+     }
+ }
+ 

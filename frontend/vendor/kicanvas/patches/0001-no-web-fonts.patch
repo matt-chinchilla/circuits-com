@@ -1,0 +1,26 @@
+diff --git a/src/kicanvas/elements/kicanvas-embed.ts b/src/kicanvas/elements/kicanvas-embed.ts
+index c21bc7c..5ae9266 100644
+--- a/src/kicanvas/elements/kicanvas-embed.ts
++++ b/src/kicanvas/elements/kicanvas-embed.ts
+@@ -45,7 +45,7 @@ class KiCanvasEmbedElement extends KCUIElement {
+                 background-color: aqua;
+                 color: var(--fg);
+                 font-family:
+-                    "Nunito", ui-rounded, "Hiragino Maru Gothic ProN",
++                    ui-rounded, "Hiragino Maru Gothic ProN",
+                     Quicksand, Comfortaa, Manjari, "Arial Rounded MT Bold",
+                     Calibri, source-sans-pro, sans-serif;
+                 contain: layout paint;
+@@ -323,12 +323,3 @@ class KiCanvasSourceElement extends CustomElement {
+ 
+ window.customElements.define("kicanvas-source", KiCanvasSourceElement);
+ 
+-/* Import required fonts.
+- * TODO: Package these up as part of KiCanvas
+- */
+-document.body.appendChild(
+-    html`<link
+-        rel="stylesheet"
+-        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@48,400,0,0&family=Nunito:wght@300;400;500;600;700&display=swap"
+-        crossorigin="anonymous" />`,
+-);
