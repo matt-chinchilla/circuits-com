@@ -316,9 +316,11 @@ loaders `.js` → ts and `.css`/`.svg`/`.glsl`/`.kicad_wks` → **text** (this i
 Vite cannot compile the tree directly: it would inject the CSS globally instead of
 handing the string to the shadow root), `define DEBUG=false` — into
 `frontend/vendor/build/kicanvas.js` (gitignored). **The script is also the
-integrity gate**: after bundling it recomputes SHA-256 over `vendor/kicanvas/src/**`
-against `MANIFEST.sha256` and fails the build (non-zero) on any mismatch or if the
-output contains `fonts.googleapis.com` or `fonts.gstatic.com`. `package.json`
+integrity gate**: after bundling it recomputes SHA-256 over `vendor/kicanvas/src/**` and
+`third_party/**` against `MANIFEST.sha256` and fails the build (non-zero) on any
+mismatch, if any of the four custom elements (`kicanvas-embed`, `kicanvas-source`,
+`kc-board-app`, `kc-schematic-app`) is missing from the output, or if the output
+contains `fonts.googleapis.com` or `fonts.gstatic.com`. `package.json`
 gains `"prebuild"` and `"predev"` running it and `esbuild` as an explicit pinned
 devDependency. The frontend Docker image runs `npm run build`, so **this build
 runs on the t3.small at deploy time**; the Deploy gate (§11) records that the
