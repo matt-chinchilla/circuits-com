@@ -866,7 +866,7 @@ frontend/public/vendor/kicanvas/NOTICE.txt
 frontend/public/fonts/kicanvas/material-symbols-subset-v1.woff2 (+ LICENSE-Apache-2.0.txt)
 frontend/public/samples/glasgow-revC3.zip             (0BSD; credited in the intake and NOTICE.txt)
 frontend/src/public/services/kicad/{types.ts, sexpr.ts, project.ts, schematicBom.ts, boardStackup.ts, zip.ts, fixtures.ts, *.test.ts}
-frontend/src/public/services/kicad/fixtures/{glasgow-revC3/, bad-thing-panel/, kicad5-header.sch, kicad-demos/ (after LICENSE), each with LICENSE + SOURCE}
+frontend/src/public/services/kicad/fixtures/{glasgow-revC3/, bad-thing-panel/, kicad5-header.sch, kicad-demos/ (CC BY-SA 4.0 — KiCad's LICENSE.README carves demos/* out of the GPLv3 code licence; committed after LICENSE exists), each with LICENSE + SOURCE}
 LICENSE                                               (GPL-3.0-or-later, Phase 0, after the acronym is confirmed) + license fields in frontend/package.json and api/pyproject.toml
 frontend/src/public/services/bom/**                   (moved from pages/bom/lib; + useBomWorkbench.ts, bomWorkbench.test.ts)
 frontend/src/public/components/bom/**                 (moved from pages/bom/components, minus BomIntake)
