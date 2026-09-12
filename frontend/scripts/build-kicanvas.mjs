@@ -13,6 +13,20 @@ import { dirname, join, relative, resolve } from 'node:path';
 const VENDOR = resolve(import.meta.dirname, '../vendor/kicanvas');
 const OUT = resolve(import.meta.dirname, '../vendor/build/kicanvas.js');
 const FORBIDDEN = ['fonts.googleapis.com', 'fonts.gstatic.com'];
+// Everything the bundle compiles is hashed, so the gate guards the whole input
+// and not just src/ -- third_party/earcut is a real dependency of the WebGL
+// renderer (src/graphics/webgl/vector.ts) and the only thing src/ takes from
+// upstream's third_party/. Keep in step with vendor-kicanvas.mjs.
+const VENDORED_DIRS = ['src', 'third_party/earcut'];
+// The four elements the site mounts. This looks for the REGISTRATION CALL, not
+// the bare name, and that distinction is the whole point: `kc-board-app` and
+// `kc-schematic-app` also occur in kicanvas-embed's CSS selector and its html
+// template, so a bundle that never registers them still contains each string
+// three times. A hash-clean, font-clean 142 KB bundle with no renderers, no
+// viewers and no fonts in it passed every other check here once -- the embed
+// only type-imports those two classes, so entry.ts has to import them for
+// their side effect or they (and everything they pull) vanish.
+const REQUIRED_ELEMENTS = ['kicanvas-embed', 'kicanvas-source', 'kc-board-app', 'kc-schematic-app'];
 
 function fail(message) {
   console.error(`build-kicanvas: ${message}`);
@@ -35,7 +49,7 @@ const manifest = new Map(
       return [path, hash];
     }),
 );
-for (const file of walk(join(VENDOR, 'src'))) {
+for (const file of VENDORED_DIRS.flatMap((d) => walk(join(VENDOR, d)))) {
   const rel = relative(VENDOR, file).split('\\').join('/');
   const hash = createHash('sha256').update(readFileSync(file)).digest('hex');
   if (manifest.get(rel) !== hash) fail(`vendored file drifted from the manifest: ${rel}`);
@@ -73,4 +87,9 @@ await esbuild.build({
 
 const out = readFileSync(OUT, 'utf8');
 for (const host of FORBIDDEN) if (out.includes(host)) fail(`bundle references ${host}`);
+for (const el of REQUIRED_ELEMENTS) {
+  if (!out.includes(`define("${el}"`) && !out.includes(`define('${el}'`)) {
+    fail(`bundle never registers <${el}> — entry.ts is probably missing a side-effect import`);
+  }
+}
 console.log(`build-kicanvas: ${OUT} ${out.length.toLocaleString('en-US')} bytes`);

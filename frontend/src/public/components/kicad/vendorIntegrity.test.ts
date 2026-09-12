@@ -10,6 +10,11 @@ import { describe, expect, it } from 'vitest';
 const VENDOR = resolve(__dirname, '../../../../vendor/kicanvas');
 const PINNED = 'b031159eb74aaa7eef2b026fd85d35bc05ff2095';
 const FORBIDDEN = ['fonts.googleapis.com', 'fonts.gstatic.com', 'Nunito'];
+// Both vendored trees are hashed: third_party/earcut is a real dependency of
+// the WebGL renderer (and the only thing src/ takes from upstream's
+// third_party/), so leaving it outside the manifest would put compiled input
+// outside the integrity gate.
+const VENDORED_DIRS = ['src', 'third_party/earcut'];
 
 function walk(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
@@ -19,7 +24,7 @@ function walk(dir: string): string[] {
 }
 
 describe('vendored KiCanvas', () => {
-  const files = walk(join(VENDOR, 'src')).sort();
+  const files = VENDORED_DIRS.flatMap((d) => walk(join(VENDOR, d))).sort();
   const manifest = new Map(
     readFileSync(join(VENDOR, 'MANIFEST.sha256'), 'utf8')
       .trim()
