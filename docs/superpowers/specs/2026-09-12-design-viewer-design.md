@@ -275,19 +275,28 @@ where `filter(info: UnzipFileInfo)` runs **before** any entry is inflated and
 sees `name`, `size` (compressed) and `originalSize` (declared uncompressed).
 Two guards, deliberately separate:
 
-- **Archive guard** (bomb protection, independent of what the tool reads):
-  refuse when the archive itself exceeds 60 MB, when the sum of declared
-  `originalSize` exceeds 250 MB, or when any entry's `originalSize / size`
-  exceeds 100:1. Declared sizes are attacker-controlled; the ratio cap and the
-  archive-size cap are what actually bound the inflate. **Recorded (Task 1.3)**:
-  fflate calls `filter` once per entry with only the header-declared `size`/
+- **Archive guard** (bomb protection): the whole-archive size cap (60 MB) is
+  independent of content — it is checked against the raw file before any
+  entry is even parsed. The per-entry ratio cap (`originalSize / size` over
+  100:1) and the running declared-total cap (sum of `originalSize` over
+  250 MB) are both checked inside `filter`, so in practice they apply only to
+  entries that survive the KiCad name filter — the same, tighter set of
+  entries §4.2's intake caps then bound — not every entry in the archive.
+  Declared sizes are attacker-controlled; the ratio cap and the archive-size
+  cap are what actually bound the inflate. **Recorded (Task 1.3)**: fflate
+  calls `filter` once per entry with only the header-declared `size`/
   `originalSize` — no bytes are inflated yet — and a throw from `filter`
-  propagates out of `unzipSync` synchronously, producing no output at all for
-  that entry or any other. Measured against the test's 512 KB/100:1 bomb:
+  propagates out of `unzipSync` synchronously: the returned object is
+  discarded, so the caller never sees any entry, including ones already
+  inflated earlier in the same call (entries earlier in the central directory
+  are inflated before a later throw — the guard does not undo that). Because
+  the running declared-total check runs before every `return true`, the
+  transient inflated total can never exceed `declaredTotalBytes` at the point
+  the guard trips. Measured against the test's single-entry 512 KB/100:1 bomb:
   throwing from `filter` completed in ~1.2ms with zero bytes returned, versus
   ~7.5ms and the full 524,288-byte buffer when the same entry was allowed to
   actually inflate (`filter` returning `true` instead). So "fflate throws from
-  `filter` and inflates nothing" is confirmed, not assumed.
+  `filter` and inflates nothing" is confirmed for that case, not assumed.
 - **Intake caps** (§4.2) apply only to entries that survive the ignore filter;
   nothing else is inflated.
 

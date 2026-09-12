@@ -56,4 +56,8 @@ describe('unzipToFiles', () => {
     for (let i = 0; i < 5; i++) entries[`s${i}.kicad_sch`] = `(kicad_sch (version 20250114) (uuid "u${i}") ${'(junk "x")'.repeat(40)})`;
     await expect(unzipToFiles(zipFile(entries), { ...ARCHIVE_GUARD, declaredTotalBytes: 1024 })).rejects.toMatchObject({ kind: 'archive' });
   });
+
+  it('refuses an archive whose entries collide after normalization', async () => {
+    await expect(unzipToFiles(zipFile({ 'a/b.kicad_sch': '(kicad_sch)', 'a\\b.kicad_sch': '(kicad_sch)' }))).rejects.toMatchObject({ kind: 'archive' });
+  });
 });
