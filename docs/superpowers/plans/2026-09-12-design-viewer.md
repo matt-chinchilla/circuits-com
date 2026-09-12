@@ -1327,6 +1327,10 @@ describe('unzipToFiles', () => {
     await expect(unzipToFiles(bomb)).rejects.toMatchObject({ kind: 'archive' });
   });
 
+  it('refuses an archive whose entries collide after normalization', async () => {
+    await expect(unzipToFiles(zipFile({ 'a/b.kicad_sch': '(kicad_sch)', 'a\\b.kicad_sch': '(kicad_sch)' }))).rejects.toMatchObject({ kind: 'archive' });
+  });
+
   it('refuses when the declared uncompressed total is over the guard (guard injected small)', async () => {
     const entries: Record<string, string> = {};
     for (let i = 0; i < 5; i++) entries[`s${i}.kicad_sch`] = `(kicad_sch (version 20250114) (uuid "u${i}") ${'(junk "x")'.repeat(40)})`;
@@ -1359,8 +1363,9 @@ export function normalizeEntryName(name: string): string | null {
   const slashed = name.replace(/\\/g, '/').replace(/^\/+/, '');
   if (slashed === '' || slashed.endsWith('/')) return null;
   const parts = slashed.split('/');
-  if (parts.some((seg) => seg === '..' || seg === '' )) return null;
-  return parts.filter((seg) => seg !== '.').join('/');
+  if (parts.some((seg) => seg === '..' || seg === '')) return null;
+  const joined = parts.filter((seg) => seg !== '.').join('/');
+  return joined === '' ? null : joined;
 }
 
 export function isKicadName(path: string): boolean {
@@ -1386,6 +1391,7 @@ export async function unzipToFiles(file: File, guard: ArchiveGuard = ARCHIVE_GUA
   const filter = (info: UnzipFileInfo): boolean => {
     const name = normalizeEntryName(info.name);
     if (name == null || isIgnoredPath(name) || !isKicadName(name)) return false;
+    // size 0 → no compressed bytes to expand; the declared-total cap is the bound.
     if (info.size > 0 && info.originalSize / info.size > guard.maxRatio) {
       throw new KicadReadError(
         `That archive has an entry compressed more than ${guard.maxRatio}:1, so it was not opened.`,
@@ -1410,10 +1416,17 @@ export async function unzipToFiles(file: File, guard: ArchiveGuard = ARCHIVE_GUA
   }
   // fflate hands entries back in zip order; a path-sorted result is a stable
   // contract for the project assembler and for tests that index into it.
-  return Object.entries(entries)
+  const sorted = Object.entries(entries)
     .map(([name, data]) => [normalizeEntryName(name) ?? name, data] as const)
-    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-    .map(([name, data]) => new File([data], name));
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  // Two entries that normalize to one path (a/b vs a\b) would let the later
+  // copy shadow a real sheet in the project's path-keyed Map — refuse instead.
+  for (let i = 1; i < sorted.length; i++) {
+    if (sorted[i]![0] === sorted[i - 1]![0]) {
+      throw new KicadReadError(`That archive names the same file twice: ${sorted[i]![0]}.`, 'archive');
+    }
+  }
+  return sorted.map(([name, data]) => new File([data], name));
 }
 ```
 
