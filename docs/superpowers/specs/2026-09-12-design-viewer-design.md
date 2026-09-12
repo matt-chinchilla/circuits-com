@@ -163,9 +163,10 @@ Rules:
   produces the same error. Everything else (`-backups/`, `fp-info-cache`,
   `.kicad_prl`, `.kicad_sym`, `.pretty/`, `.step`, `.wrl`, gerbers, …) is ignored
   silently and never inflated.
-- **Intake caps, applied after the ignore filter**: 40 parsed files, 10 MB per
-  file, 25 MB total (the largest real KiCad file the research measured is
-  4.7 MB; the 85 MB `jetson-agx-thor-baseboard` demo exists and is deliberately
+- **Intake caps, applied after the ignore filter**: 40 parsed files, **8 MB per
+  file, 12 MB total** (owner-approved at the Phase 0 gate, 2026-09-12: his phone
+  survived Glasgow revC3's 4.25 MB; the largest real KiCad file the research
+  measured is 4.7 MB; the 85 MB `jetson-agx-thor-baseboard` demo is deliberately
   over the cap). Over-cap is a hard error naming the cap. **Phase 0 measured the
   parse side: Glasgow revC3's 4.25 MB across five files peaks at 42.8 MB of JS
   heap above a fresh-document baseline — ~10× the input bytes — with no WebGL2
@@ -173,9 +174,9 @@ Rules:
   cap extrapolates to ~250 MB of parse-only heap and the 10 MB per-file cap to
   ~100 MB, both already at or past the iOS tab-kill line §9 names, before any
   render-side allocation. **The caps are therefore NOT confirmed: the measurement
-  argues for lowering the total, and the deciding input — peak heap on the owner's
-  phone, where a GPU makes the vertex buffers real — is owner to measure at the
-  Phase 0 gate.** They stay provisional until then.
+  argues for lowering the total.** The owner's gate test (2026-09-12) — the phone
+  loaded Glasgow in about a second and survived — set the caps above at 12 MB
+  total / 8 MB per file.
 
 ### 4.3 `schematicBom.ts` — `readBomLines(project): ParseResult`
 
@@ -412,14 +413,31 @@ Behaviour:
   `await this.update()` threw out of the renderer mount instead of tessellating —
   the measurement covers parsing and element creation only, and a GPU browser
   doing the real mount can only be slower. Sizing the timeout from it would fire a
-  false `timeout` state on real hardware. **The constant stays unset: owner to
-  measure time-to-app-element in a GPU-capable browser, and on the phone, at the
-  Phase 0 gate**, against the largest permitted file on the slowest device in the
-  playtest matrix, not guessed. **On timeout the embed is
+  false `timeout` state on real hardware. **Owner's gate measurement (2026-09-12):
+  both projects reached the drawing in about one second on his desktop browser
+  and on his phone.** `CANVAS_READY_MS = 5000`: five times the phone's measured
+  second for a 4.25 MB project, so a 12 MB drop (the cap) on the same phone has
+  headroom, and a genuinely stuck mount still surfaces in five seconds. **On
+  timeout the embed is
   unmounted** (so nothing keeps parsing behind an error card) and a "Try again"
   remounts it; a late arrival after teardown is discarded by construction.
-- Container: 60vh on desktop, 50vh at ≤768px, `min-height: 320px`; KiCanvas's
-  own `size-observer` handles resize.
+- **Container fills the area** (owner, Phase 0 gate: "it would be nice to have the
+  browser viewing window for both mobile and desktop fill the whole area"): the
+  loaded phase of `/viewer` is a column — strip and tab row at their natural
+  height, the canvas frame `flex: 1` inside a container whose `min-height` is the
+  dynamic viewport minus the navbar (`calc(100dvh - $nav-height)`), `min-height:
+  320px` on the frame; the same rule at every width. On `/bom` the schematic panel
+  keeps its 45vh. KiCanvas's own `size-observer` follows the box. A **Fullscreen**
+  control on the frame calls `requestFullscreen()` and is hidden where
+  `document.fullscreenEnabled` is false (iOS Safari).
+- **Touch zoom controls** (owner, Phase 0 gate: two-finger zoom on the phone
+  "barely works", and KiCanvas's own roadmap leaves mobile unchecked): the host
+  renders fit / zoom-in / zoom-out buttons over the frame for coarse pointers
+  (`@media (pointer: coarse)`), and keeps them available on desktop, driving the
+  viewer through `CanvasController.zoom('fit' | 'in' | 'out')`, which
+  `kicanvasController` implements by feature-detecting the viewer's camera API
+  (`zoom_to_page()` is documented; the step zoom is found in the source during
+  Task 2.1 and returns `false` when absent, so the buttons hide rather than lie).
 - Missing sheets are the page's notice (from `project.missingSheets`), rendered
   before the canvas mounts; the canvas still mounts with what it has (KiCanvas
   skips a missing sheet with a warning).
@@ -458,6 +476,8 @@ interface CanvasController {
   mount(host: HTMLElement, project: KicadProject): Promise<void>;   // loads every file
   activate(view: 'schematic' | 'board', sheet?: string): Promise<boolean>;
   focusRef(ref: string, sheet?: string): Promise<FocusResult>;
+  /** Fit the page, or step the zoom. False when the renderer exposes no such control (the buttons then hide). */
+  zoom(action: 'fit' | 'in' | 'out'): Promise<boolean>;
   dispose(): void;
   on(event: 'state' | 'selection' | 'documentChanged', handler: (e: CanvasEvent) => void): () => void;
 }
@@ -698,10 +718,10 @@ Every state is a component-owned string; none is a bare exception surfacing.
   allocated, and this bullet's own "usually the largest item" is precisely what
   went unmeasured. At the measured parse ratio the §4.2 caps extrapolate to
   ~250 MB (25 MB total) and ~100 MB (10 MB single file) before any render-side
-  allocation — already at the line above. **Peak JS heap in a GPU-capable browser
-  and on the owner's phone at the largest permitted file is owner to measure at
-  the Phase 0 gate**, and the caps in §4.2 are set from that measurement before
-  Phase 2 ships. Until then they are provisional and this section says so.
+  allocation — already at the line above. **Owner's gate result (2026-09-12): his
+  phone loaded Glasgow revC3 in about a second and the tab survived**, so the caps
+  in §4.2 were lowered to 12 MB total / 8 MB per file (≈120 MB parse-side worst
+  case) rather than confirmed at 25 MB.
 - **WebGL contexts**: one probe per document, released; one embed per project.
 
 ---
