@@ -67,7 +67,7 @@
   /* BOM tool material system (canvas parity 2026-08-21). One scale for BOTH
      rails per the Anatomy artboard: blue ACT / violet NRND / red EOL — deep
      stops of the canvas gradients (the light stops live in the rail mixins,
-     _bomMaterial.scss). Blue+violet stay off the forbidden chartTheme pair
+     public/styles/_bomMaterial.scss). Blue+violet stay off the forbidden chartTheme pair
      (#2563eb + #7c3aed). */
   --bom-card-tint: #f2f4f7;
   --bom-ink-secondary: #676c71; /* measured 4.5+ on the tint — #6b7076 FAILS at 4.24 */

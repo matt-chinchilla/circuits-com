@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import axios from 'axios';
-import { bomApi } from '../lib/bomApi';
-import { priceAt, recommend, tierRankFromOffers } from '../lib/priceBreaks';
-import { buildSharePayload } from '../lib/share';
-import type { TableRow } from '../lib/types';
+import { bomApi } from '@public/services/bom/bomApi';
+import { priceAt, recommend, tierRankFromOffers } from '@public/services/bom/priceBreaks';
+import { buildSharePayload } from '@public/services/bom/share';
+import type { TableRow } from '@public/services/bom/types';
 import styles from './ShareBar.module.scss';
 
 /**

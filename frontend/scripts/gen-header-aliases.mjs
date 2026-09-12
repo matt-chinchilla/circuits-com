@@ -1,4 +1,4 @@
-// Regenerates src/public/pages/bom/lib/headerAliases.ts from the
+// Regenerates src/public/services/bom/headerAliases.ts from the
 // citation-verified raw claims (301 upheld, 14 refuted -> pattern rules).
 //
 // Run from frontend/:  node scripts/gen-header-aliases.mjs
@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const RAW = join(here, '../../docs/design-briefs/bom-header-aliases-raw.json');
-const OUT = join(here, '../src/public/pages/bom/lib/headerAliases.ts');
+const OUT = join(here, '../src/public/services/bom/headerAliases.ts');
 
 const ROLES = ['mpn', 'manufacturer', 'refs', 'qty', 'value', 'footprint',
   'description', 'datasheet', 'dnp', 'distributor_pn'];

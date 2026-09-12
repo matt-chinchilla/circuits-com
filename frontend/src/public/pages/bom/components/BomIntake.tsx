@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
 import { useDropzone, type Accept, type FileRejection } from 'react-dropzone';
-import { parseBomText, parsePasteRows, type ParseResult } from '../lib/parseBom';
-import { readSpreadsheet } from '../lib/xlsx';
+import { parseBomText, parsePasteRows, type ParseResult } from '@public/services/bom/parseBom';
+import { readSpreadsheet } from '@public/services/bom/xlsx';
 import styles from '../BomPage.module.scss';
 
 // Intake is a DUMB TRIGGER: it reads a file (or a pasted block), parses it and

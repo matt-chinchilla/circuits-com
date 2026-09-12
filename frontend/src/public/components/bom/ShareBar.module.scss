@@ -1,6 +1,6 @@
 @use '@shared/styles/variables' as *;
 @use '@shared/styles/mixins' as *;
-@use '../bomMaterial' as *;
+@use '@public/styles/bomMaterial' as *;
 
 // The toolbar (Main artboard): Export priced BOM (lit primary) · Share a
 // link (glass) · Change file (glass). It renders LAST in the DOM so that on

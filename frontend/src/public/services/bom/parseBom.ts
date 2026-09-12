@@ -38,6 +38,13 @@ export const MAX_LINES = 2000;
 /** JLCPCB's attested per-line designator cap (packet section 1). */
 export const MAX_REFS_PER_LINE = 200;
 
+/** The part-identity floor: without an MPN or a value there is nothing to
+ *  price, and every other column is decoration. Lives here (not in the
+ *  mapper) because the KiCad reader must satisfy it too. */
+export function canPrice(roles: (BomRole | null)[]): boolean {
+  return roles.some((role) => role === 'mpn' || role === 'value');
+}
+
 /** A metadata preamble is five lines in the worst attested case; ten is slack. */
 const HEADER_SCAN_ROWS = 10;
 /** One lucky hit is a coincidence; two is a header row. */

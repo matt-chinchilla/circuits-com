@@ -7,15 +7,15 @@ import PageHeaderBand from '@public/components/layout/PageHeaderBand';
 import { STATIC_PAGE_SEO } from '@public/services/seoRoutes';
 import type { PageSeo } from '@public/services/seo';
 import BomIntake from './components/BomIntake';
-import ShareBar, { formatShareDate } from './components/ShareBar';
-import BomTable from './components/BomTable';
-import ColumnMapper, { canPrice } from './components/ColumnMapper';
-import { bomApi } from './lib/bomApi';
-import { applyRoleMap, type ParseResult } from './lib/parseBom';
-import { loadRoleMap, saveRoleMap } from './lib/mapMemory';
-import { parseSharePayload } from './lib/share';
-import type { BomRole } from './lib/headerAliases';
-import type { MissIn, ResolveEvent, TableRow } from './lib/types';
+import ShareBar, { formatShareDate } from '@public/components/bom/ShareBar';
+import BomTable from '@public/components/bom/BomTable';
+import ColumnMapper from './components/ColumnMapper';
+import { bomApi } from '@public/services/bom/bomApi';
+import { applyRoleMap, canPrice, type ParseResult } from '@public/services/bom/parseBom';
+import { loadRoleMap, saveRoleMap } from '@public/services/bom/mapMemory';
+import { parseSharePayload } from '@public/services/bom/share';
+import type { BomRole } from '@public/services/bom/headerAliases';
+import type { MissIn, ResolveEvent, TableRow } from '@public/services/bom/types';
 import styles from './BomPage.module.scss';
 
 /**

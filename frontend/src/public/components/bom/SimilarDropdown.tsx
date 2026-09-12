@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import type { SimilarPart } from '../lib/types';
+import type { SimilarPart } from '@public/services/bom/types';
 import styles from './SimilarDropdown.module.scss';
 
 /**

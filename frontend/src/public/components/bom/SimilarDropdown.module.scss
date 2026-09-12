@@ -1,6 +1,6 @@
 @use '@shared/styles/variables' as *;
 @use '@shared/styles/mixins' as *;
-@use '../bomMaterial' as *;
+@use '@public/styles/bomMaterial' as *;
 
 // The "Similar" picker in the Matches column. The trigger IS the match badge
 // (hatched amber = approximate confidence, per the texture-carries-confidence

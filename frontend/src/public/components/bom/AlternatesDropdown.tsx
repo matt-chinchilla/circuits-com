@@ -5,10 +5,10 @@ import TierBannerRibbon, {
   SPONSOR_TIER_ELEMENT,
   type SponsorTierId,
 } from '@public/components/widgets/TierBannerRibbon';
-import { priceAt } from '../lib/priceBreaks';
-import { priceSourceNote, priceSourceTone } from '../lib/priceSource';
-import { formatUnit } from '../lib/format';
-import type { BomOffer } from '../lib/types';
+import { priceAt } from '@public/services/bom/priceBreaks';
+import { priceSourceNote, priceSourceTone } from '@public/services/bom/priceSource';
+import { formatUnit } from '@public/services/bom/format';
+import type { BomOffer } from '@public/services/bom/types';
 import styles from './AlternatesDropdown.module.scss';
 
 /**

@@ -1,5 +1,5 @@
 @use '@shared/styles/variables' as *;
-@use '../bomMaterial' as *;
+@use '@public/styles/bomMaterial' as *;
 
 // Match-confidence badge, canvas Anatomy artboard: TEXTURE carries the
 // confidence. EXACT is a solid fill (blue since 2026-08-22), APPROX is the

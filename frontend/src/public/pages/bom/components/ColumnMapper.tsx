@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
-import type { BomRole } from '../lib/headerAliases';
-import { previewRows } from '../lib/parseBom';
-import { BOM_ROLES } from '../lib/mapMemory';
+import type { BomRole } from '@public/services/bom/headerAliases';
+import { canPrice, previewRows } from '@public/services/bom/parseBom';
+import { BOM_ROLES } from '@public/services/bom/mapMemory';
 import styles from '../BomPage.module.scss';
 
 /**
@@ -34,12 +34,6 @@ const ROLE_LABELS: Record<BomRole, string> = {
   dnp: 'Do not populate',
   distributor_pn: 'Distributor part number',
 };
-
-/** The part-identity floor: without an MPN or a value there is nothing to
- *  price, and every other column is decoration. */
-export function canPrice(roles: (BomRole | null)[]): boolean {
-  return roles.some((role) => role === 'mpn' || role === 'value');
-}
 
 const PREVIEW_ROWS = 3;
 

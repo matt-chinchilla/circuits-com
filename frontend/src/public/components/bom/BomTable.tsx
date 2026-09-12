@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { priceAt, recommend, tierRankFromOffers } from '../lib/priceBreaks';
-import { availability, type AvailabilityState } from '../lib/availability';
-import { priceSourceNote, priceSourceTone } from '../lib/priceSource';
-import { formatMoney, formatUnit } from '../lib/format';
-import type { BomOffer, TableRow } from '../lib/types';
+import { priceAt, recommend, tierRankFromOffers } from '@public/services/bom/priceBreaks';
+import { availability, type AvailabilityState } from '@public/services/bom/availability';
+import { priceSourceNote, priceSourceTone } from '@public/services/bom/priceSource';
+import { formatMoney, formatUnit } from '@public/services/bom/format';
+import type { BomOffer, TableRow } from '@public/services/bom/types';
 import AlternatesDropdown from './AlternatesDropdown';
 import CoverageStrip, { type CoverageCounts } from './CoverageStrip';
 import TierBannerRibbon, {

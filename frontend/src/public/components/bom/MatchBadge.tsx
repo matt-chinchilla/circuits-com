@@ -1,4 +1,4 @@
-import type { BomRowStatus, RowState } from '../lib/types';
+import type { BomRowStatus, RowState } from '@public/services/bom/types';
 import styles from './MatchBadge.module.scss';
 
 /**

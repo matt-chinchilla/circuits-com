@@ -1,6 +1,6 @@
 @use '@shared/styles/variables' as *;
 @use '@shared/styles/mixins' as *;
-@use '../bomMaterial' as *;
+@use '@public/styles/bomMaterial' as *;
 
 // The alternates picker. Positioned entirely from inline `position: fixed;
 // top; left` set by the component (portaled to <body>, so the scrolling table
