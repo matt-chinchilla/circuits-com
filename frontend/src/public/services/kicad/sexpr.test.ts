@@ -42,15 +42,22 @@ describe('parse', () => {
 describe('topLevelBlocks', () => {
   const board = '(kicad_pcb (version 20241229)\n  (layers (0 "F.Cu" signal))\n  (via (at 1 2) (layers "F.Cu" "B.Cu"))\n  (via blind (at 3 4) (layers "F.Cu" "In1.Cu"))\n  (text "a ) in a string")\n)';
 
-  it('yields depth-1 blocks with heads and byte offsets, ignoring parens inside strings', () => {
+  it('yields depth-1 blocks with heads and offsets, ignoring parens inside strings', () => {
     const blocks = [...topLevelBlocks(board)];
     expect(blocks.map((b) => b.head)).toEqual(['version', 'layers', 'via', 'via', 'text']);
-    const second = blocks[2]!;
-    expect(board.slice(second.start, second.end)).toBe('(via (at 1 2) (layers "F.Cu" "B.Cu"))');
+    const firstVia = blocks[2]!;
+    expect(board.slice(firstVia.start, firstVia.end)).toBe('(via (at 1 2) (layers "F.Cu" "B.Cu"))');
   });
 
   it('never allocates the tree: the slice of a block parses on its own', () => {
     const blind = [...topLevelBlocks(board)][3]!;
     expect(parse(board.slice(blind.start, blind.end))[0]).toEqual(['via', 'blind', ['at', '3', '4'], ['layers', 'F.Cu', 'In1.Cu']]);
+  });
+
+  it('throws on a truncated document instead of yielding a smaller one', () => {
+    expect(() => [...topLevelBlocks('(kicad_pcb (version 1) (via (at 1 2))')]).toThrow(/unbalanced \( at end of input/);
+  });
+  it('throws on a stray closing paren', () => {
+    expect(() => [...topLevelBlocks(') (kicad_pcb (version 1))')]).toThrow(/unbalanced \)/);
   });
 });

@@ -98,8 +98,9 @@ export function children(node: SExpr, name: string): SExpr[][] {
   return out;
 }
 
-/** The string at position `index`, or null when absent or a list. */
-export function atom(node: SExpr[], index: number): string | null {
+/** The string at position `index`, or null when absent, a list, or `node` itself isn't a list. */
+export function atom(node: SExpr, index: number): string | null {
+  if (!Array.isArray(node)) return null;
   const v = node[index];
   return typeof v === 'string' ? v : null;
 }
@@ -110,8 +111,10 @@ export interface TopLevelBlock {
   end: number;
 }
 
-/** Yield the document node's direct children with byte offsets, without
- *  building a tree — the board reader parses only the blocks it needs. */
+/** Yield the document node's direct children, without building a tree — the
+ *  board reader parses only the blocks it needs. `start`/`end` are string
+ *  offsets in UTF-16 code units (`start` inclusive, `end` exclusive), suitable
+ *  only for `text.slice` — not byte offsets. */
 export function* topLevelBlocks(text: string): Generator<TopLevelBlock> {
   const n = text.length;
   let i = 0;
@@ -132,6 +135,7 @@ export function* topLevelBlocks(text: string): Generator<TopLevelBlock> {
       }
       i++;
     } else if (c === ')') {
+      if (depth === 0) throw new Error(`unbalanced ) at ${i}`);
       if (depth === 2 && blockStart >= 0) {
         yield { head: blockHead, start: blockStart, end: i + 1 };
         blockStart = -1;
@@ -142,4 +146,5 @@ export function* topLevelBlocks(text: string): Generator<TopLevelBlock> {
       i++;
     }
   }
+  if (depth !== 0) throw new Error('unbalanced ( at end of input');
 }
