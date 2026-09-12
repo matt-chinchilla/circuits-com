@@ -19,7 +19,7 @@
 - **BOM caps:** `MAX_LINES` 2000 (hard error), `MAX_REFS_PER_LINE` 200 caps the DISPLAYED designators only — `qty` is always the true instance count.
 - **No third-party requests.** The build fails if `fonts.googleapis.com` or `fonts.gstatic.com` survive in the bundle. No Google Fonts anywhere (site rule).
 - **Privacy wording, everywhere public:** "your design files never leave your browser". Never "no upload" (the Share button publishes quantities and designators behind its own disclosure).
-- **Renderer pin:** KiCanvas commit `b031159eb74aaa7eef2b026fd85d35bc05ff2095` (2026-04-28). Two patches only (no web fonts incl. Nunito; icon codepoints). One `<kicanvas-embed>` per project; `controls="basic" controlslist="nodownload nooverlay" theme="kicad"`. `CANVAS_READY_MS = 5000` (owner's gate measurement: ~1 s on desktop and phone for a 4.25 MB project).
+- **Renderer pin:** KiCanvas commit `b031159eb74aaa7eef2b026fd85d35bc05ff2095` (2026-04-28). Two patches only (no web fonts incl. Nunito; icon codepoints). One `<kicanvas-embed>` per project; `controls="basic" controlslist="nodownload nooverlay" theme="kicad"`. `CANVAS_READY_MS = 15000` (first GPU mount of Glasgow measured 4.3 s to the app element; the owner's perceived ~1 s is to first paint), and the ready deadline PAUSES while the tab is hidden (background tabs throttle animation frames — the mount just waits).
 - **Canvas fills the area and is usable by touch (owner, Phase 0 gate):** on `/viewer` the loaded phase is a flex column whose container is `min-height: calc(100dvh - $nav-height)` and the frame is `flex: 1` (min 320px) at every width; a Fullscreen control (`requestFullscreen()`, hidden when `document.fullscreenEnabled` is false); fit / zoom-in / zoom-out buttons over the frame driving `CanvasController.zoom('fit'|'in'|'out')`, always rendered, and essential on coarse pointers (phone pinch-zoom in KiCanvas "barely works").
 - **Licence (spec D6):** the program is GPL v3 or later per the owner (acronym "NPL" awaiting his confirmation). Phase 0 adds `LICENSE` and the `license` fields; third-party notices ship in `frontend/public/vendor/kicanvas/NOTICE.txt`.
 - **Frontend rules (CLAUDE.md):** TS strict — remove unused vars, never `_`-prefix; `field?: T | null` + `!= null`; type-gate is `npx tsc -b` (never `tsc --noEmit`); `npx eslint --ext .ts,.tsx src/`; `npm test` = vitest, node env, `src/**/*.test.ts` only (DOM tests add `// @vitest-environment happy-dom` at the top of the file); SCSS modules `@use '@shared/styles/variables' as *;` etc.; no empty SCSS rules; non-ASCII glyphs in JSX via entities; every `import()` of a route chunk `.catch(() => {})` is NOT used for the renderer (a failed load must surface).
@@ -2823,7 +2823,11 @@ describe('KicanvasController', () => {
     expect(host.firstElementChild?.tagName.toLowerCase()).toBe('kicanvas-embed');
     expect(await c.activate('board')).toBe(true);
     expect(fake.getActive()?.type).toBe('pcb');
+    const sch = fake.embed.shadowRoot!.querySelector('kc-schematic-app') as HTMLElement;
+    const brd = fake.embed.shadowRoot!.querySelector('kc-board-app') as HTMLElement;
+    expect([sch.hidden, brd.hidden]).toEqual([true, false]);
     expect(await c.activate('schematic', 'sub.kicad_sch')).toBe(true);
+    expect([sch.hidden, brd.hidden]).toEqual([false, true]);
     expect(fake.getActive()?.project_path).toBe('sub.kicad_sch:/r/a');
     expect(await c.activate('schematic', '/r/b')).toBe(true);
     expect(fake.getActive()?.project_path).toBe('sub.kicad_sch:/r/b');
@@ -2939,13 +2943,13 @@ type KicanvasApp = HTMLElement & { project?: KicanvasProject; viewer?: KicanvasV
 export interface KicanvasControllerOptions {
   loadModule?: () => Promise<unknown>;
   createEmbed?: () => HTMLElement;
-  /** 5 s: five times the owner's measured ~1 s phone load of a 4.25 MB project (spec §5.2). */
+  /** 15 s: the first GPU mount of Glasgow took 4.3 s to the app element; the deadline pauses while the tab is hidden (spec §5.2). */
   readyMs?: number;
   settleMs?: number;
   sleep?: (ms: number) => Promise<void>;
 }
 
-export const CANVAS_READY_MS = 5000;
+export const CANVAS_READY_MS = 15000;
 const POLL_MS = 50;
 
 let moduleLoad: Promise<unknown> | null = null;
@@ -3057,12 +3061,19 @@ export class KicanvasController implements CanvasController {
     this.embed = embed;
     host.replaceChildren(embed);
 
-    const deadline = Date.now() + this.options.readyMs;
+    let deadline = Date.now() + this.options.readyMs;
     while (Date.now() < deadline) {
       if (this.disposed) return;
       if (this.project()?.active_page != null) {
+        // The embed's own initial page is whatever `first_page` is (the board, on
+        // Glasgow) — the host's first activate() sets the requested view.
         this.emit({ type: 'state', state: 'ready' });
         return;
+      }
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+        // Background tabs throttle animation frames; the mount just waits. Do not
+        // count hidden time against the deadline.
+        deadline += POLL_MS;
       }
       await this.options.sleep(POLL_MS);
       if (this.options.sleep !== defaultSleep && Date.now() >= deadline) break;
@@ -3093,7 +3104,8 @@ export class KicanvasController implements CanvasController {
     } catch {
       return false;
     }
-    const app = view === 'board' ? this.apps().board : this.apps().schematic;
+    const { schematic, board } = this.apps();
+    const app = view === 'board' ? board : schematic;
     const deadline = Date.now() + this.options.settleMs;
     while (Date.now() < deadline) {
       const doc = app?.viewer?.document;
@@ -3101,6 +3113,11 @@ export class KicanvasController implements CanvasController {
       await this.options.sleep(POLL_MS);
       if (this.options.sleep !== defaultSleep) break;
     }
+    // Upstream's app.load() assigns `hidden = false` AFTER an await, so two quick page
+    // changes can leave both apps visible side by side (the owner's "screen duplicates
+    // itself", reproduced 2026-09-12). Visibility is ours to enforce, every time.
+    if (schematic) schematic.hidden = view !== 'schematic';
+    if (board) board.hidden = view !== 'board';
     return true;
   }
 
@@ -3151,7 +3168,28 @@ export class KicanvasController implements CanvasController {
   }
 
   private disposeEmbed(): void {
-    if (this.embed != null && this.host != null && this.embed.parentNode === this.host) this.host.removeChild(this.embed);
+    if (this.embed != null) {
+      // Release the renderer's GL contexts before dropping the element: browsers cap
+      // live contexts and a visitor opening several projects in one tab would otherwise
+      // accumulate them (the spike's repeated loads degraded visibly).
+      const canvases: HTMLCanvasElement[] = [];
+      const walk = (root: ParentNode) => {
+        for (const el of root.querySelectorAll('*')) {
+          if (el instanceof HTMLCanvasElement) canvases.push(el);
+          if (el.shadowRoot) walk(el.shadowRoot);
+        }
+      };
+      if (this.embed.shadowRoot) walk(this.embed.shadowRoot);
+      for (const canvas of canvases) {
+        try {
+          const gl = canvas.getContext('webgl2') as { getExtension?: (n: string) => { loseContext: () => void } | null } | null;
+          gl?.getExtension?.('WEBGL_lose_context')?.loseContext();
+        } catch {
+          // a canvas with a 2d context, or none — nothing to release
+        }
+      }
+      if (this.host != null && this.embed.parentNode === this.host) this.host.removeChild(this.embed);
+    }
     this.embed = null;
   }
 
@@ -3408,6 +3446,10 @@ export default DesignCanvas;
   min-height: 320px;
   box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
   overflow: hidden;
+  // The browser must never compete with the renderer for a two-finger gesture
+  // (CLAUDE.md: pan-y cancels pointermove; none is full tracking).
+  touch-action: none;
+  overscroll-behavior: contain;
 
   &:fullscreen {
     border-radius: 0;

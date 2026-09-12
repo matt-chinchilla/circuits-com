@@ -417,7 +417,14 @@ Behaviour:
   both projects reached the drawing in about one second on his desktop browser
   and on his phone.** `CANVAS_READY_MS = 5000`: five times the phone's measured
   second for a 4.25 MB project, so a 12 MB drop (the cap) on the same phone has
-  headroom, and a genuinely stuck mount still surfaces in five seconds. **On
+  headroom, and a genuinely stuck mount still surfaces in five seconds. Corrected
+  after the controller's own run in the owner's Chrome (2026-09-12): the FIRST
+  mount of Glasgow on a GPU desktop took **4.3 s** to the app element (shader
+  compile and tessellation are real), and the timer must not run while the tab is
+  hidden — Chrome throttles animation frames in background tabs and the mount
+  simply waits. **`CANVAS_READY_MS = 15000`, and the deadline pauses while
+  `document.visibilityState === 'hidden'`** (the host listens to
+  `visibilitychange` and extends the deadline by the hidden interval). **On
   timeout the embed is
   unmounted** (so nothing keeps parsing behind an error card) and a "Try again"
   remounts it; a late arrival after teardown is discarded by construction.
@@ -430,6 +437,10 @@ Behaviour:
   keeps its 45vh. KiCanvas's own `size-observer` follows the box. A **Fullscreen**
   control on the frame calls `requestFullscreen()` and is hidden where
   `document.fullscreenEnabled` is false (iOS Safari).
+- **Touch handling**: the frame sets `touch-action: none` and `overscroll-behavior:
+  contain` so the browser never competes with KiCanvas for a two-finger gesture
+  (the spike page had neither, nor a viewport meta, which is part of why pinch
+  "barely worked" on the phone; the site's pages carry the viewport meta).
 - **Touch zoom controls** (owner, Phase 0 gate: two-finger zoom on the phone
   "barely works", and KiCanvas's own roadmap leaves mobile unchecked): the host
   renders fit / zoom-in / zoom-out buttons over the frame for coarse pointers
@@ -453,7 +464,15 @@ element tree.
 - `activate(embed, view, sheetPath?)`: find the app's public `project`; pick the
   page via `pages()` by type (`pcb` for board) and, for schematics, by filename
   match on `sheetPath` (default `root_schematic_page`); call
-  `set_active_page(page)`; return `true` only if a page was found.
+  `set_active_page(page)`; **then enforce visibility**: `kc-schematic-app.hidden =
+  view !== 'schematic'` and `kc-board-app.hidden = view !== 'board'` after the
+  settle. Upstream's `app.load()` assigns `hidden = false` after an `await`, so two
+  page changes in quick succession leave BOTH apps visible side by side — the
+  "screen duplicates itself" the owner saw at the Phase 0 gate and the controller
+  reproduced in his Chrome (2026-09-12); setting the two flags collapsed it to one
+  drawing. Return `true` only if a page was found. `mount()` ends with an
+  `activate(view)` for the same reason: the embed's own initial page is whatever
+  `first_page` is (the board, on Glasgow), not the requested view.
 - `focusRef(embed, ref, sheetPath?)`: `activate` the sheet if given (the reader
   knows each reference's sheet, so cross-sheet focus is "activate, then select");
   then on the schematic app: return `'unsupported'` unless `viewer?.document` is
@@ -722,7 +741,11 @@ Every state is a component-owned string; none is a bare exception surfacing.
   phone loaded Glasgow revC3 in about a second and the tab survived**, so the caps
   in §4.2 were lowered to 12 MB total / 8 MB per file (≈120 MB parse-side worst
   case) rather than confirmed at 25 MB.
-- **WebGL contexts**: one probe per document, released; one embed per project.
+- **WebGL contexts**: one probe per document, released; one embed per project;
+  on `dispose()` the controller finds the embed's canvases and calls
+  `WEBGL_lose_context.loseContext()` on each before removing the element, so a
+  visitor who opens several projects in one tab does not accumulate live contexts
+  (the spike's repeated loads without disposal degraded visibly).
 
 ---
 
