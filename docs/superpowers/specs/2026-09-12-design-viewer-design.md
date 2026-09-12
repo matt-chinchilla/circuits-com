@@ -279,8 +279,15 @@ Two guards, deliberately separate:
   refuse when the archive itself exceeds 60 MB, when the sum of declared
   `originalSize` exceeds 250 MB, or when any entry's `originalSize / size`
   exceeds 100:1. Declared sizes are attacker-controlled; the ratio cap and the
-  archive-size cap are what actually bound the inflate. Phase 1 verifies fflate's
-  behaviour when an entry inflates past its declared size and records it.
+  archive-size cap are what actually bound the inflate. **Recorded (Task 1.3)**:
+  fflate calls `filter` once per entry with only the header-declared `size`/
+  `originalSize` — no bytes are inflated yet — and a throw from `filter`
+  propagates out of `unzipSync` synchronously, producing no output at all for
+  that entry or any other. Measured against the test's 512 KB/100:1 bomb:
+  throwing from `filter` completed in ~1.2ms with zero bytes returned, versus
+  ~7.5ms and the full 524,288-byte buffer when the same entry was allowed to
+  actually inflate (`filter` returning `true` instead). So "fflate throws from
+  `filter` and inflates nothing" is confirmed, not assumed.
 - **Intake caps** (§4.2) apply only to entries that survive the ignore filter;
   nothing else is inflated.
 
