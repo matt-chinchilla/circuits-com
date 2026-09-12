@@ -13,6 +13,6 @@ describe('fixture corpus', () => {
     expect(fixtureText('kicad5-header.sch').startsWith('EESchema Schematic File Version 2')).toBe(true);
   });
   it.skipIf(!hasFixture('kicad-demos'))('carries the KiCad demos once the licence exists', () => {
-    expect(fixtureText('kicad-demos/SOURCE')).toMatch(/GPL-3.0-or-later/);
+    expect(fixtureText('kicad-demos/SOURCE')).toMatch(/CC BY-SA 4\.0/);
   });
 });

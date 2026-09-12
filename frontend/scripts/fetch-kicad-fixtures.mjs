@@ -1,8 +1,10 @@
 // frontend/scripts/fetch-kicad-fixtures.mjs
 // Downloads the open-hardware fixture corpus at PINNED commits and writes a
 // SOURCE + LICENSE beside each set. Run once; the files are committed.
-// KiCad's own demo projects are GPL-3.0-or-later and are only written when the
-// repo root carries LICENSE (spec D6) — otherwise they are skipped with a note.
+// KiCad's own demo projects are CC BY-SA 4.0 (LICENSE.README carves demos/* out
+// of the GPLv3 code licence). Share-alike files are only written into a repo that
+// carries its own compatible licence (ours: GPL-3.0-or-later, spec D6 — CC BY-SA
+// 4.0 is one-way compatible with GPLv3) — otherwise they are skipped with a note.
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
@@ -26,7 +28,7 @@ const SETS = [
   },
   {
     dir: 'kicad-demos',
-    gplOnly: true,
+    shareAlike: true,
     base: 'https://gitlab.com/kicad/code/kicad/-/raw/a8d6201d6bc1739943ea51b3bc18d8d691503539/demos',
     files: [
       ['complex_hierarchy/complex_hierarchy.kicad_pro', 'complex_hierarchy/complex_hierarchy.kicad_pro'],
@@ -36,7 +38,7 @@ const SETS = [
       ['stickhub/StickHub.kicad_pcb', 'stickhub/StickHub.kicad_pcb'],
     ],
     licenseUrl: 'https://gitlab.com/kicad/code/kicad/-/raw/a8d6201d6bc1739943ea51b3bc18d8d691503539/LICENSE.README',
-    source: 'KiCad demo projects — https://gitlab.com/kicad/code/kicad @ a8d6201d6bc1739943ea51b3bc18d8d691503539 (2026-09-12), GPL-3.0-or-later per LICENSE.README. Retrieved 2026-09-12.',
+    source: 'KiCad demo projects — https://gitlab.com/kicad/code/kicad @ a8d6201d6bc1739943ea51b3bc18d8d691503539 (2026-09-12), CC BY-SA 4.0 per LICENSE.README (demos/* are carved out of the GPLv3 code licence; attribution is this file). Retrieved 2026-09-12.',
   },
 ];
 
@@ -47,8 +49,8 @@ async function fetchText(url) {
 }
 
 for (const set of SETS) {
-  if (set.gplOnly && !existsSync(join(ROOT, 'LICENSE'))) {
-    console.log(`skip ${set.dir}: repo has no LICENSE yet (spec D6) — GPL fixtures wait for it`);
+  if (set.shareAlike && !existsSync(join(ROOT, 'LICENSE'))) {
+    console.log(`skip ${set.dir}: repo has no LICENSE yet (spec D6) — share-alike fixtures wait for it`);
     continue;
   }
   for (const [remote, local] of set.files) {
