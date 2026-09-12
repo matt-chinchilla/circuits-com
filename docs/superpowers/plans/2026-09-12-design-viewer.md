@@ -1408,7 +1408,12 @@ export async function unzipToFiles(file: File, guard: ArchiveGuard = ARCHIVE_GUA
     if (err instanceof KicadReadError) throw err;
     throw new KicadReadError('That file is not a zip archive this browser can open.', 'unreadable');
   }
-  return Object.entries(entries).map(([name, data]) => new File([data], normalizeEntryName(name) ?? name));
+  // fflate hands entries back in zip order; a path-sorted result is a stable
+  // contract for the project assembler and for tests that index into it.
+  return Object.entries(entries)
+    .map(([name, data]) => [normalizeEntryName(name) ?? name, data] as const)
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([name, data]) => new File([data], name));
 }
 ```
 
