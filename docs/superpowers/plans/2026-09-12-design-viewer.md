@@ -1455,7 +1455,7 @@ git commit -m "feat(kicad): zip intake behind fflate's pre-inflate filter — ar
 - Test: `frontend/src/public/services/kicad/fixtures.test.ts`
 
 **Interfaces:**
-- Produces: `fixtureFiles(name): File[]` (reads a corpus directory into `File`s with relative names, node-only, for tests), `fixtureText(rel): string`, and the synthetic documents `SYNTH` used by Tasks 1.5–1.7.
+- Produces: `fixtureFiles(name): File[]` (reads a corpus directory into `File`s with relative names, node-only, for tests), `fixtureText(rel): string`, `hasFixture(set): boolean`, and the synthetic-document builders `symbol(...)`, `schematic(...)`, `sheet(...)` with `ROOT_UUID`/`SHEET_A_UUID`/`SHEET_B_UUID`, used by Tasks 1.5–1.7 (there is no `SYNTH` object — the builders ARE the synthetic corpus).
 
 - [ ] **Step 1: Write the fetch script**
 
