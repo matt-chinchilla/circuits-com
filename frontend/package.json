@@ -5,8 +5,11 @@
   "license": "GPL-3.0-or-later",
   "type": "module",
   "scripts": {
+    "predev": "node scripts/build-kicanvas.mjs",
     "dev": "vite",
+    "prebuild": "node scripts/build-kicanvas.mjs",
     "build": "tsc -b && vite build",
+    "build:kicanvas": "node scripts/build-kicanvas.mjs",
     "preview": "vite preview",
     "test": "vitest run"
   },
@@ -33,6 +36,7 @@
     "@types/react-dom": "^19.0.0",
     "@typescript-eslint/parser": "^8.59.1",
     "@vitejs/plugin-react": "^4.3.0",
+    "esbuild": "0.25.12",
     "eslint": "^8.57.1",
     "eslint-import-resolver-typescript": "^3.10.1",
     "eslint-plugin-import": "^2.32.0",

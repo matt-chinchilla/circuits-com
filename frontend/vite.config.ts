@@ -120,6 +120,7 @@ export default defineConfig({
       '@admin': path.resolve(__dirname, './src/admin'),
       '@public': path.resolve(__dirname, './src/public'),
       '@shared': path.resolve(__dirname, './src/shared'),
+      '@vendor-build': path.resolve(__dirname, './vendor/build'),
     },
   },
   css: {
@@ -170,6 +171,11 @@ export default defineConfig({
           }
           if (id.includes('node_modules/react-router')) {
             return 'router'
+          }
+          // The vendored KiCanvas bundle (scripts/build-kicanvas.mjs) — its
+          // only importer is the lazy /viewer route, so it must stay async.
+          if (id.includes('/vendor/build/kicanvas')) {
+            return 'kicanvas'
           }
           return undefined
         },

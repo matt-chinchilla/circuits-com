@@ -18,6 +18,7 @@ export default defineConfig({
       '@admin': path.resolve(__dirname, './src/admin'),
       '@public': path.resolve(__dirname, './src/public'),
       '@shared': path.resolve(__dirname, './src/shared'),
+      '@vendor-build': path.resolve(__dirname, './vendor/build'),
     },
   },
   test: {
