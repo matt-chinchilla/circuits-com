@@ -1023,16 +1023,24 @@ describe('parse', () => {
 describe('topLevelBlocks', () => {
   const board = '(kicad_pcb (version 20241229)\n  (layers (0 "F.Cu" signal))\n  (via (at 1 2) (layers "F.Cu" "B.Cu"))\n  (via blind (at 3 4) (layers "F.Cu" "In1.Cu"))\n  (text "a ) in a string")\n)';
 
-  it('yields depth-1 blocks with heads and byte offsets, ignoring parens inside strings', () => {
+  it('yields depth-1 blocks with heads and string offsets, ignoring parens inside strings', () => {
     const blocks = [...topLevelBlocks(board)];
     expect(blocks.map((b) => b.head)).toEqual(['version', 'layers', 'via', 'via', 'text']);
-    const second = blocks[2]!;
-    expect(board.slice(second.start, second.end)).toBe('(via (at 1 2) (layers "F.Cu" "B.Cu"))');
+    const firstVia = blocks[2]!;
+    expect(board.slice(firstVia.start, firstVia.end)).toBe('(via (at 1 2) (layers "F.Cu" "B.Cu"))');
   });
 
   it('never allocates the tree: the slice of a block parses on its own', () => {
     const blind = [...topLevelBlocks(board)][3]!;
     expect(parse(board.slice(blind.start, blind.end))[0]).toEqual(['via', 'blind', ['at', '3', '4'], ['layers', 'F.Cu', 'In1.Cu']]);
+  });
+
+  it('throws on a truncated document instead of yielding a smaller one', () => {
+    expect(() => [...topLevelBlocks('(kicad_pcb (version 1) (via (at 1 2))')]).toThrow(/unbalanced \( at end of input/);
+  });
+
+  it('throws on a stray closing paren', () => {
+    expect(() => [...topLevelBlocks(') (kicad_pcb (version 1))')]).toThrow(/unbalanced \)/);
   });
 });
 ```
@@ -1162,8 +1170,10 @@ export function children(node: SExpr, name: string): SExpr[][] {
   return out;
 }
 
-/** The string at position `index`, or null when absent or a list. */
-export function atom(node: SExpr[], index: number): string | null {
+/** The string at position `index`, or null when absent, a list, or when
+ *  `node` itself is an atom (so it composes with `child(...)` results). */
+export function atom(node: SExpr, index: number): string | null {
+  if (!Array.isArray(node)) return null;
   const v = node[index];
   return typeof v === 'string' ? v : null;
 }
@@ -1174,8 +1184,11 @@ export interface TopLevelBlock {
   end: number;
 }
 
-/** Yield the document node's direct children with byte offsets, without
- *  building a tree — the board reader parses only the blocks it needs. */
+/** Yield the document node's direct LIST children with string offsets
+ *  (UTF-16 code units; `start` inclusive, `end` exclusive — only for
+ *  `text.slice`), without building a tree — the board reader parses only the
+ *  blocks it needs. Throws on unbalanced input exactly as `parse` does, so a
+ *  truncated board can never read as a valid smaller one. */
 export function* topLevelBlocks(text: string): Generator<TopLevelBlock> {
   const n = text.length;
   let i = 0;
@@ -1196,6 +1209,7 @@ export function* topLevelBlocks(text: string): Generator<TopLevelBlock> {
       }
       i++;
     } else if (c === ')') {
+      if (depth === 0) throw new Error(`unbalanced ) at ${i}`);
       if (depth === 2 && blockStart >= 0) {
         yield { head: blockHead, start: blockStart, end: i + 1 };
         blockStart = -1;
@@ -1206,6 +1220,7 @@ export function* topLevelBlocks(text: string): Generator<TopLevelBlock> {
       i++;
     }
   }
+  if (depth !== 0) throw new Error('unbalanced ( at end of input');
 }
 ```
 
@@ -1217,19 +1232,19 @@ const SPLIT = /^([^\d]*)(\d*)(.*)$/;
 export function naturalRefCompare(a: string, b: string): number {
   const ma = SPLIT.exec(a) ?? [a, a, '', ''];
   const mb = SPLIT.exec(b) ?? [b, b, '', ''];
-  const prefix = (ma[1] ?? '').localeCompare(mb[1] ?? '');
+  const prefix = (ma[1] ?? '').localeCompare(mb[1] ?? '', 'en');
   if (prefix !== 0) return prefix;
   const na = ma[2] === '' ? -1 : Number(ma[2]);
   const nb = mb[2] === '' ? -1 : Number(mb[2]);
   if (na !== nb) return na - nb;
-  return (ma[3] ?? '').localeCompare(mb[3] ?? '');
+  return (ma[3] ?? '').localeCompare(mb[3] ?? '', 'en');
 }
 ```
 
 - [ ] **Step 5: Run the tests**
 
 Run: `cd frontend && npx vitest run src/public/services/kicad && npx tsc -b && npx eslint --ext .ts,.tsx src/`
-Expected: 9 passed; gates clean.
+Expected: 12 passed; gates clean.
 
 - [ ] **Step 6: Commit**
 
