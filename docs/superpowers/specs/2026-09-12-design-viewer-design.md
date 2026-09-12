@@ -1,6 +1,6 @@
 # Design Viewer — KiCad in the browser, stage 1 — Design Spec
 
-**Date:** 2026-09-12 · **Branch:** `updates` · **Migrations:** none · **Status:** architecture approved in conversation (sections 1–3 of the draft); this revision folds a four-lens adversarial review (facts, implementability, owner intent, security) — 12 blockers and 45 shoulds, all resolved below — and awaits owner review of the file
+**Date:** 2026-09-12 · **Branch:** `updates` · **Migrations:** none · **Status:** architecture approved in conversation (sections 1–3 of the draft); folds a four-lens adversarial review (12 blockers, 45 shoulds); revised the same afternoon for two owner statements — the end state is the **full KiCad suite (editors) in the browser** (D9) and the program's licence is **GPL v3 or later** (D6) — and for the open-hardware fixture corpus (§10). Approved to proceed to planning.
 
 ---
 
@@ -15,12 +15,15 @@ tool accepts the same files, so a KiCad project prices without a CSV export.
 The owner's end goal, verbatim (2026-09-12): *"This application needs to integrate
 the KiCad suite in the browser first, and they eventually will only be able to
 build using items we have listed on our website in a manner similar to what
-DigiKey does."* The owner chose the **library model** for that end state: the
-browser side is a viewer plus BOM pricer; the "build with our parts" half arrives
-later as a Circuit Center KiCad symbol/footprint library for desktop KiCad,
-distributed through KiCad's plugin manager, the way DigiKey's KiCad library works.
-This stage therefore keeps the renderer read-only and keeps every unit the library
-stage will reuse (the reader, the BOM units, the pages) independent of the renderer.
+DigiKey does."* And, the same afternoon: *"eventually, I want people to be able to
+use the full KiCad suite (editors, not just viewers) in this application."* So the
+end state is **KiCad's editors running in the browser**, with the catalog as the
+parts palette. Stage 1 is the read-only half of that road: the renderer is a
+stopgap that a later editor replaces, and everything else built here — the
+reader, the BOM units, the pages, the session — is editor-agnostic by
+construction (§5.5). The Circuit Center symbol/footprint library, the way DigiKey's
+KiCad library carries DigiKey part numbers, is how the catalog becomes the palette
+in either the desktop or the in-browser editor; it is a later stage.
 
 **Explicitly out of this stage** (owner, 2026-09-12: "The focus needs to be on
 making the working KiCad integration & that is all for this stage"): saving
@@ -48,10 +51,10 @@ Owner rulings, 2026-09-12. Settled; do not relitigate in review.
 | D3 | **Anonymous visitors: browser-only, nothing stored.** Saving is a later stage with its own guideline. | Owner ruling; the site has three real customer accounts today. |
 | D4 | **Own pure-TypeScript reader** for BOM lines and stackup; KiCanvas renders only. | Measured live: KiCanvas discards `in_bom` and `dnp`, so its model cannot produce a correct BOM even in principle. |
 | D5 | **KiCanvas vendored as source at commit `b031159eb74aaa7eef2b026fd85d35bc05ff2095`** (2026-04-28, the frozen tip), two patches, built by a pinned esbuild step. | No releases, no npm package, zero commits since April; the source is the only pinnable thing, and the font injection must be patched out. |
-| D6 | KiCanvas licensing: the owner ruled **proceed** in August (BOM spec D8) when the concern was generic. The 2026-09-12 packet then **located** the contradiction — a GPL-2.0-or-later header on `src/kicad/text/newstroke-glyphs.ts`, the 174 KB glyph table that draws every character the renderer produces, versus the project's own MIT `LICENSE.md` — and calls it "the lawyer question, before anything ships publicly" (packet §3 risk 1, §8). **Local phases 0–4 proceed on the August ruling; the Deploy gate in §11 carries an explicit owner decision on the licence before `/viewer` is public.** The notice ships verbatim with a source link either way. | The ruling stands for local work; the new fact is the owner's to rule on before publication, not the spec's to assume. |
+| D6 | **There is no licence question.** Owner, 2026-09-12: *"The program is developed and distributed under the NPL version 3 or greater"* — read as **GPL-3.0-or-later** (KiCad's own licence; "NPL" is taken as a slip of the keys and confirmation has been asked for). Consequences: KiCanvas's GPL-2.0-or-later glyph table and KiCad's GPLv3+ code are licence-compatible with the program; the vendored renderer may be bundled; a future KiCad-as-WebAssembly editor may be served without a licence-driven isolation boundary; KiCad's own GPLv3+ demo projects may be committed as test fixtures. Obligations that follow and are **not yet met**: the public repository (`github.com/matt-chinchilla/circuits-com`) has no `LICENSE` file and no licence field in `frontend/package.json` or `api/pyproject.toml`, so today it is "all rights reserved" by default — Phase 0 adds the licence text and fields once the acronym is confirmed. Third-party notices (KiCanvas's `LICENSE.md`, the icon font's Apache-2.0, fixture attributions) ship in `NOTICE.txt`. | Owner statement. The August ruling (BOM spec D8) and the packet's "lawyer question" are superseded by the program's own licence. |
 | D7 | **Positioning claims the BOM, not the rendering.** The stackup panel ships because the owner specified it, but it is not the headline; the page `<title>` and description lead with the BOM claim. | Four free KiCad viewers exist; PCBWay already shows a layer stack; nobody prices a schematic-side BOM on their own catalog. |
 | D8 | **Every phase is built locally, playtested, and waits for the owner's explicit approval** before the next phase or any deploy. | Owner, 2026-09-12: "It is very important to playtest these features before pushing them all to production." |
-| D9 | The end state is the **library model**, not a browser editor. | Owner choice after the packet priced both; keeps the $0 budget and the read-only renderer. |
+| D9 | The end state is the **full KiCad suite — editors — in the browser**, with the catalog as the parts palette. Stage 1 ships the read-only viewer and is built so the renderer is the one unit an editor replaces: pages, reader, BOM units and session talk to the canvas only through the `CanvasController` protocol (§5.5). KiCanvas is never the base for editing (its own FAQ: read-only by design); the editor path is KiCad compiled to WebAssembly, which PCBJam demonstrated at KiCon Europe 2026-09-07 (packet §6) and which the later stage researches on its own terms. | Owner statement 2026-09-12, replacing the earlier library-model choice. The library itself is still required — it is what makes the catalog the palette. |
 
 ---
 
@@ -67,7 +70,7 @@ touches `@admin` or `@shared`, and the ESLint boundary rules are untouched.
 | **BOM library** (moved) | `@public/services/bom/` | Today's `pages/bom/lib/*` verbatim (`parseBom`, `headerAliases` (generated), `types`, `priceBreaks`, `priceSource`, `availability`, `format`, `mapMemory`, `share`, `xlsx`, `bomApi`, `fixtures`, tests) plus the new `useBomWorkbench.ts`. | existing `/api/bom/*` |
 | **BOM components** (moved) | `@public/components/bom/` | Today's `pages/bom/components/*` (`BomTable`, `CoverageStrip`, `ShareBar`, `MatchBadge`, `AlternatesDropdown`, `SimilarDropdown`, `ColumnMapper`) with their `.module.scss`. `BomIntake` stays page-local on `/bom`. | BOM library |
 | **BOM material** (moved) | `@public/styles/_bomMaterial.scss` | The three recipes both tool pages use (`bom-card`, `bom-glass-control`, `bom-primary-control`). | `@shared/styles` |
-| **Design canvas** | `@public/components/kicad/` | `DesignCanvas.tsx` (host), `kicanvasAdapter.ts` (the only file that touches KiCanvas internals), `StackupPanel.tsx`. | vendored renderer, reader types |
+| **Design canvas** | `@public/components/kicad/` | `canvasController.ts` (the protocol, §5.5), `DesignCanvas.tsx` (the React host over a controller), `kicanvasController.ts` (the KiCanvas implementation — the only file that touches KiCanvas internals), `StackupPanel.tsx`. | vendored renderer, reader types |
 | **Design session** | `@public/services/designSession.ts` | Module-memory holder for `{ project: KicadProject, parsed: ParseResult }` (the category memo pattern). Dies on reload. | reader types, BOM types |
 | **Viewer page** | `@public/pages/viewer/` | `index.tsx`, `components/ViewerIntake.tsx` (its drop zone), `ViewerPage.module.scss`. | everything above |
 | **BOM page** | `@public/pages/bom/` | `index.tsx` and `components/BomIntake.tsx` remain; the page becomes a consumer of the moved library and components like `/viewer`. | everything above |
@@ -242,13 +245,16 @@ interface BoardStackup {
   that sum; `designThicknessMm` is shown separately when present. They are
   different facts and the panel says which is which.
 - **Vias are read with their real extent**: each depth-1 `(via …)` block yields
-  its type from the head (`(via` → through, `(via blind` → blind, `(via micro` →
-  micro, any other second token → `unknown`) and its `(layers A B)` pair; groups
-  are counted by (type, start, end). Verified against `tomu-fpga.kicad_pcb`
-  (KiCanvas `debug/examples`, `(version 20221018)`): 53 `(via blind` and 196
-  `(via micro` blocks; the three scratchpad demo boards carry through vias only.
-  KiCad uses the single token `blind` for blind **and** buried vias, so the panel
-  labels that row "Blind/Buried" as the owner's reference does.
+  its type and flags from the **bare tokens between `via` and the first `(`**, in
+  any order: `blind` or `micro` sets the type (absent → through), `locked` is a
+  flag and never a type, and any other bare token makes the type `unknown`; then
+  its `(layers A B)` pair. Groups are counted by (type, start, end). Verified
+  against `tomu-fpga.kicad_pcb` (KiCanvas `debug/examples`, `(version 20221018)`):
+  53 `(via blind` and 196 `(via micro` blocks; against Glasgow revC3
+  (`(version 20221018)`): 410 `(via` and 7 `(via locked`; the three scratchpad
+  demo boards carry through vias only. KiCad uses the single token `blind` for
+  blind **and** buried vias, so the panel labels that row "Blind/Buried" as the
+  owner's reference does.
 - **Not cross-checked against KiCanvas's stackup model** — the live test showed
   it warns from inside the stackup block on a KiCad 10 board (packet §7.7).
 
@@ -392,7 +398,7 @@ Behaviour:
   before the canvas mounts; the canvas still mounts with what it has (KiCanvas
   skips a missing sheet with a warning).
 
-### 5.3 `kicanvasAdapter.ts`
+### 5.3 `kicanvasController.ts` — the KiCanvas implementation of §5.5
 
 The only file that reaches into KiCanvas. Every function feature-detects and
 returns a result rather than throwing; every branch is unit-tested against a fake
@@ -415,6 +421,34 @@ element tree.
 Board focus is implemented by the same code path and unit-tested, but no page
 calls it in this stage. When the internals move, the page degrades to "open the
 viewer, no auto-focus" — a nice-to-have, never a spec commitment (packet §2).
+
+### 5.5 The canvas is a protocol boundary (`canvasController.ts`) — for D9
+
+Pages, the session and the BOM units never see KiCanvas. They see one interface,
+and stage 1 ships one implementation of it:
+
+```ts
+interface CanvasController {
+  mount(host: HTMLElement, project: KicadProject): Promise<void>;   // loads every file
+  activate(view: 'schematic' | 'board', sheet?: string): Promise<boolean>;
+  focusRef(ref: string, sheet?: string): Promise<FocusResult>;
+  dispose(): void;
+  on(event: 'state' | 'selection' | 'documentChanged', handler: (e: CanvasEvent) => void): () => void;
+}
+```
+
+`kicanvasController.ts` implements it over the vendored web component (§5.2–5.3
+describe its behaviour). `DesignCanvas.tsx` is a thin React host: it owns the
+container element, the WebGL2 memo, the ready timeout, and the error states, and
+calls the controller; it never touches the embed itself. The later editor stage
+implements the same interface over KiCad-as-WebAssembly (in an iframe or a
+worker for isolation and size, not for licence — D6), and adds two things stage 1
+only reserves: the `documentChanged` event, whose payload is the changed file's
+new text so the **same reader** re-derives the BOM from a live edit, and a
+`selection` event for editor → BOM highlighting. `KicadProject` is an immutable
+snapshot; the session replaces the snapshot when a `documentChanged` arrives.
+Nothing in stage 1 emits either event, and the interface is unit-tested through
+the KiCanvas implementation only.
 
 ---
 
@@ -472,11 +506,16 @@ via the shared material recipes. Rejections name the extension, as the BOM
 intake does. A KiCad 5 project gets the "KiCad 6 or newer" message with the
 one-line note that KiCad 6+ can open and re-save it.
 
-**"Try the example project"** is rendered only once the owner has answered a
-separate question at Phase 2: whether his own project may be committed as the
-public sample at `public/samples/circuitcenter-example-project.zip`, or whether
-he supplies a throwaway design for it. The site never ships an invented design,
-and a real design is confidential IP until its owner says otherwise (BOM spec D3).
+**"Try the example project"** loads `public/samples/glasgow-revC3.zip`: the
+Glasgow Interface Explorer revC3 hardware (`github.com/GlasgowEmbedded/glasgow`,
+0BSD, retrieved 2026-09-12) — a real, actively maintained KiCad 7 project with a
+hierarchical schematic (root → `io_banks` → `io_buffer`), a four-layer board with
+a saved stackup, and 417 vias. The intake credits it in one line ("Example:
+Glasgow Interface Explorer revC3, 0BSD") and `NOTICE.txt` carries the licence
+text. The owner pointed at KiCad's "Made with KiCad" showcase for this; his own
+suggestion there (`AntonioMR/ATMEGA328-Motor-Board`) is a KiCad 4 project with
+no licence, so it serves only as an uncommitted example of what the KiCad 5
+refusal looks like.
 
 **Loaded.** A strip: project name, `N sheets · M parts · board: yes/no`, and
 "Open another" (which clears the design session). Then tabs, each shown only
@@ -651,17 +690,33 @@ per file):
   `dnp yes`; user field `MPN`; grouping and natural ref sort; **240 references
   → `qty === 240 && refs.length === 200` with the "+40 more" marker**;
   `canPrice(result.roleByColumn) === true` for a schematic with only `Value`
-  fields; the 2000-line cap), plus the owner's project as an integration fixture
-  with pinned counts. Synthetic fixtures are hand-written minimal documents in
-  `fixtures.ts`, like the BOM parser's; no GPL demo file is ever committed.
+  fields; the 2000-line cap), plus the **real-file corpus** under
+  `frontend/src/public/services/kicad/fixtures/` with pinned counts:
+  - `glasgow-revC3/` (0BSD): `.kicad_pro`, `glasgow.kicad_sch`, `io_banks.kicad_sch`,
+    `io_buffer.kicad_sch`, `glasgow.kicad_pcb` (3.5 MB) — hierarchy, KiCad 7,
+    stackup, `locked` vias, the integration fixture and the public sample;
+  - `bad-thing-panel/` (MIT, `Pakequis/Bad-Thing-of-the-Edge-keyboard`,
+    `Hardware/Panel-board/panel.kicad_sch` 25 KB + `panel.kicad_pcb` 199 KB) —
+    a flat single-sheet KiCad 7 project;
+  - `kicad5-header.sch` — a synthetic two-line file beginning
+    `EESchema Schematic File Version 2`, for the refusal;
+  - KiCad's own demo projects (`complex_hierarchy` for the twice-placed sheet,
+    `stickhub` for the KiCad 10 board format) — GPLv3+, committed under the
+    program's licence **once the `LICENSE` file exists** (D6); until then they are
+    fetched to the scratchpad by a documented script and the tests that need
+    them skip with a named reason.
+  Each fixture directory carries its `LICENSE` and a `SOURCE` line (URL, commit,
+  retrieval date). Synthetic fixtures are hand-written minimal documents in
+  `fixtures.ts`, like the BOM parser's.
 - `boardStackup.test.ts` — stackup present / absent; the `.Cu` selector against
   a 30-row layer table; thickness sum vs design thickness; via groups incl.
   blind, micro, an unknown token, and `(layers A B)` spans; KiCad ≤8 and 9/10
   layer ids both ordering by position; a `topLevelBlocks`-only parse of a
   synthetic board **at the 10 MB cap** with a stated time bound.
-- `kicanvasAdapter.test.ts` — every branch of `activate` and `focusRef` against
-  fake elements, including a missing `project`, a missing page, and a `select`
-  that throws.
+- `kicanvasController.test.ts` — every branch of `mount`, `activate` and
+  `focusRef` against fake elements, including a missing `project`, a missing
+  page, and a `select` that throws; the `CanvasController` contract is exercised
+  only through this implementation in stage 1.
 - `bomWorkbench.test.ts` — the exported reducers: `applyResolveEvent` for each
   event kind, `settleStragglers`, the similar-pick sequence guard dropping a
   superseded response, `pickMisses` with and without DNP.
@@ -674,8 +729,8 @@ Backend: `test_sitemap.py` gains `/viewer`.
 
 Playtests (each phase's gate; the owner runs them from the checklist the plan
 writes): chrome-devtools in a GPU-capable browser against the local stack,
-covering the owner's project and the KiCad demo projects fetched to the
-scratchpad (never committed): render both views, switch sheets, chip → focus
+covering the fixture corpus above and any project the owner drops in: render
+both views, switch sheets, chip → focus
 across sheets, the **set of references** on the BOM tab equal to the reference
 column of a bare `kicad-cli sch export bom` (one row per symbol, no grouping) on
 the same project where the owner can run it — grouping differs by design, the
@@ -687,10 +742,9 @@ NOTICE file served, and the `kicanvas` chunk within the Phase 0 measurement +10%
 
 ## 11. Build order and gates (D8)
 
-**Prerequisite, before Phase 0:** the owner supplies one real KiCad project
-(`.kicad_pro`, every `.kicad_sch`, the `.kicad_pcb`). It is used privately for
-Phases 0–1 and as the integration fixture; whether it becomes the public sample
-is a separate question at Phase 2 (§7.1).
+**Prerequisite, before Phase 0:** the owner confirms the licence acronym (D6:
+"NPL v3 or greater" → GPL-3.0-or-later?). Nothing else is owed; the fixture
+corpus (§10) is open hardware.
 
 Each phase ends with the local stack rebuilt, a written playtest checklist, and a
 **STOP for the owner's explicit approval**. **No phase begins without the previous
@@ -699,12 +753,12 @@ phase — never the deploy, which is a separate explicit ask.**
 
 | Phase | Builds | Playtest gate |
 |---|---|---|
-| **0 — Spike** (throwaway, in the scratchpad) | Vendoring script + esbuild build with the integrity check; a bare page that mounts the built module from **inline `<kicanvas-source>` children** and renders the owner's project and `stickhub` in Chrome with a GPU; `activate` via `app.project.set_active_page` between sheets and to the board; the icon subset renders; measures: chunk size, peak JS heap on desktop and on the owner's phone at the largest permitted file, time-to-app-element for `CANVAS_READY_MS`. | Owner sees both views render and sheets switch; the four measurements are written into §5.1, §5.2, §9 and §10, and the caps are confirmed or lowered. Findings amend this spec before Phase 1. |
+| **0 — Spike + licence** (spike throwaway, in the scratchpad) | The repo gains `LICENSE` (GPL-3.0-or-later text) and the `license` fields in `frontend/package.json` and `api/pyproject.toml` (D6). Vendoring script + esbuild build with the integrity check; a bare page that mounts the built module from **inline `<kicanvas-source>` children** and renders Glasgow revC3 and `stickhub` in Chrome with a GPU; `activate` via `app.project.set_active_page` between sheets and to the board; the icon subset renders; measures: chunk size, peak JS heap on desktop and on the owner's phone at the largest permitted file, time-to-app-element for `CANVAS_READY_MS`. | Owner sees both views render and sheets switch; the four measurements are written into §5.1, §5.2, §9 and §10, and the caps are confirmed or lowered. Findings amend this spec before Phase 1. |
 | **1 — Reader** | `@public/services/kicad/*` + tests + fflate dependency; the fflate over-run behaviour recorded. | `npm test` green; a dev-only console harness prints BOM lines and stackup for a dropped project; owner compares the reference set against KiCad's own export. |
-| **2 — Canvas + `/viewer` (Schematic, Board)** | Vendored tree, patches, build step, `DesignCanvas`, adapter, `ViewerIntake`, the page with two tabs and sheet chips, nav links, SEO/prerender/sitemap, the notice. | Owner opens `/viewer` locally, drops a project, switches sheets and views, sees zero third-party requests and the served notice, tries a phone width; **answers the public-sample question**. |
+| **2 — Canvas + `/viewer` (Schematic, Board)** | Vendored tree, patches, build step, `CanvasController` + `kicanvasController` + `DesignCanvas`, `ViewerIntake`, the page with two tabs and sheet chips, the Glasgow sample, nav links, SEO/prerender/sitemap, the notice. | Owner opens `/viewer` locally, drops a project, switches sheets and views, sees zero third-party requests and the served notice, tries a phone width. |
 | **3 — BOM bridge** | The `pages/bom/lib` and `components` move (D2), `useBomWorkbench` lift (no behaviour change), BOM tab on `/viewer`, KiCad extensions on the `/bom` drop zone, "Continue from the viewer", schematic toggle, design session, chip focus both directions. | Owner prices their project from `/viewer` and from `/bom`, clicks chips both ways, confirms `/bom` CSV and paste paths still behave, confirms one project = one match across the round trip. |
 | **4 — Stackup** | `boardStackup` panel with the three zones, real via spans, honesty states. | Owner compares the panel to Board Setup for their board; a board without a stackup block shows the honest state. |
-| **Deploy** | On the owner's explicit ask only, **after his decision on the KiCanvas licence question (D6)**: deploy-preflight → `./deploy.sh` (the sitemap line makes it a full deploy). | Live: the frontend image built on the box without OOM (wall time recorded); `/viewer` prerendered HTML served; sitemap carries it; chunk sizes; the notice served; one real project end-to-end on prod. |
+| **Deploy** | On the owner's explicit ask only: deploy-preflight → `./deploy.sh` (the sitemap line makes it a full deploy). | Live: the frontend image built on the box without OOM (wall time recorded); `/viewer` prerendered HTML served; sitemap carries it; chunk sizes; the notice served; the Glasgow sample end-to-end on prod. |
 
 ---
 
@@ -717,13 +771,15 @@ frontend/scripts/vendor-kicanvas.mjs
 frontend/scripts/build-kicanvas.mjs                   (bundle + integrity gate)
 frontend/public/vendor/kicanvas/NOTICE.txt
 frontend/public/fonts/kicanvas/material-symbols-subset-v1.woff2 (+ LICENSE-Apache-2.0.txt)
-frontend/public/samples/circuitcenter-example-project.zip     (only after the Phase 2 answer)
+frontend/public/samples/glasgow-revC3.zip             (0BSD; credited in the intake and NOTICE.txt)
 frontend/src/public/services/kicad/{types.ts, sexpr.ts, project.ts, schematicBom.ts, boardStackup.ts, zip.ts, fixtures.ts, *.test.ts}
+frontend/src/public/services/kicad/fixtures/{glasgow-revC3/, bad-thing-panel/, kicad5-header.sch, kicad-demos/ (after LICENSE), each with LICENSE + SOURCE}
+LICENSE                                               (GPL-3.0-or-later, Phase 0, after the acronym is confirmed) + license fields in frontend/package.json and api/pyproject.toml
 frontend/src/public/services/bom/**                   (moved from pages/bom/lib; + useBomWorkbench.ts, bomWorkbench.test.ts)
 frontend/src/public/components/bom/**                 (moved from pages/bom/components, minus BomIntake)
 frontend/src/public/styles/_bomMaterial.scss          (moved from pages/bom/_bomMaterial.scss)
 frontend/src/public/services/designSession.ts (+ test)
-frontend/src/public/components/kicad/{DesignCanvas.tsx, DesignCanvas.module.scss, kicanvasAdapter.ts (+ test), StackupPanel.tsx, StackupPanel.module.scss, vendorBuild.d.ts, vendorIntegrity.test.ts}
+frontend/src/public/components/kicad/{canvasController.ts, kicanvasController.ts (+ test), DesignCanvas.tsx, DesignCanvas.module.scss, StackupPanel.tsx, StackupPanel.module.scss, vendorBuild.d.ts, vendorIntegrity.test.ts}
 frontend/src/public/pages/viewer/{index.tsx, components/ViewerIntake.tsx, ViewerPage.module.scss}
 frontend/src/public/pages/bom/{index.tsx, components/BomIntake.tsx, BomPage.module.scss}   (consumer of the moved units; KiCad extensions; toggle; continue control)
 frontend/src/public/services/seoRoutes.ts             (StaticPageKey + viewer entry)
@@ -755,6 +811,7 @@ product name containing it — no brand policy exists to check).
 | Saving designs to accounts (owner's guideline later) | `designSession` holds `{ project, parsed }`; the strip has room for a save control; the packet's storage decision (Postgres `bytea`, one zip per design, behind a `storage_uri` seam, later S3) is recorded and not built |
 | Referral-click attribution from BOM lines (packet §4 L1/L2 — the sponsor evidence). Measured 2026-09-12 by `psql` on prod: **12 rows total** in `outbound_clicks`, all between 2026-08-29 and 2026-09-01, 10 suppliers, 7 parts — below the console's 30-click drawing floor. | none needed; first follow-up after this stage |
 | KiCad plugin (Python BOM generator that writes a CSV and opens `/bom`) | nothing to reserve — the CSV path it lands on already exists |
-| Circuit Center KiCad symbol/footprint library (the library model's second half) | the reader's role mapping already reads any user field, so a library-stamped `CircuitCenter_PN` field will match exactly the day it exists |
+| **KiCad editors in the browser** (D9 — the end state): KiCad compiled to WebAssembly, served by us, with the catalog as its library; research on reusing PCBJam's GPLv3 build vs building our own, size on the t3.small (static hosting of a ~30 MB compressed binary is fine; the packet's numbers), and the save/persist model that an editor needs (the deferred saving stage) | `CanvasController` (§5.5) is the only seam an editor needs: implement it, emit `documentChanged` and `selection`, and the reader, BOM units, session and pages work unchanged |
+| Circuit Center KiCad symbol/footprint library — the parts palette for both desktop KiCad and the in-browser editor | the reader's role mapping already reads any user field, so a library-stamped `CircuitCenter_PN` field will match exactly the day it exists |
 | Gerber viewer, 3D | none; separate projects per the August packet |
 | Drawing share links | the BOM share link continues to carry the derived BOM only |
