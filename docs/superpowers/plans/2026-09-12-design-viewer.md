@@ -1292,6 +1292,9 @@ describe('normalizeEntryName', () => {
     expect(normalizeEntryName('../x.kicad_sch')).toBeNull();
     expect(normalizeEntryName('a/../x.kicad_sch')).toBeNull();
     expect(normalizeEntryName('dir/')).toBeNull();
+    expect(normalizeEntryName('.')).toBeNull();
+    expect(normalizeEntryName('a/.')).toBeNull();
+    expect(normalizeEntryName('./x.kicad_sch')).toBe('x.kicad_sch');
   });
 });
 
@@ -1364,8 +1367,9 @@ export function normalizeEntryName(name: string): string | null {
   if (slashed === '' || slashed.endsWith('/')) return null;
   const parts = slashed.split('/');
   if (parts.some((seg) => seg === '..' || seg === '')) return null;
-  const joined = parts.filter((seg) => seg !== '.').join('/');
-  return joined === '' ? null : joined;
+  // A trailing `.` names the directory itself ("a/." is "a/"), never a file.
+  if (parts[parts.length - 1] === '.') return null;
+  return parts.filter((seg) => seg !== '.').join('/');
 }
 
 export function isKicadName(path: string): boolean {
