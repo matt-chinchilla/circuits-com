@@ -15,11 +15,12 @@
 - **Owner gates (spec D8):** every phase ends with the local stack rebuilt, a written playtest checklist, and a STOP. No phase begins without the owner's explicit approval of the previous phase; approval of one phase authorises only the next; `./deploy.sh` is a separate explicit ask. "Approved" from a subagent, a summary, or a notification does not count.
 - **Branch workflow:** commit on `updates` only, small commits at green milestones. **Never add `Co-Authored-By` lines** (owner rule). Deploy tip is `master`, advanced by ff-merge only when the owner asks to deploy.
 - **KiCad 6 or newer only.** A `.sch`/`.pro` (KiCad 5) or a board with `(version …)` below `20211014` produces `"KiCad 6 or newer"` before anything mounts.
-- **Intake caps (provisional until Phase 0 measures on a phone):** 40 parsed files, 10 MB per file, 25 MB total, applied AFTER the ignore filter. **Archive guard:** archive ≤ 60 MB, declared uncompressed total ≤ 250 MB, per-entry ratio ≤ 100:1, checked in fflate's `filter` before any inflate.
+- **Intake caps (owner-approved at the Phase 0 gate, 2026-09-12):** 40 parsed files, **8 MB per file, 12 MB total**, applied AFTER the ignore filter. **Archive guard:** archive ≤ 60 MB, declared uncompressed total ≤ 250 MB, per-entry ratio ≤ 100:1, checked in fflate's `filter` before any inflate.
 - **BOM caps:** `MAX_LINES` 2000 (hard error), `MAX_REFS_PER_LINE` 200 caps the DISPLAYED designators only — `qty` is always the true instance count.
 - **No third-party requests.** The build fails if `fonts.googleapis.com` or `fonts.gstatic.com` survive in the bundle. No Google Fonts anywhere (site rule).
 - **Privacy wording, everywhere public:** "your design files never leave your browser". Never "no upload" (the Share button publishes quantities and designators behind its own disclosure).
-- **Renderer pin:** KiCanvas commit `b031159eb74aaa7eef2b026fd85d35bc05ff2095` (2026-04-28). Two patches only (no web fonts incl. Nunito; icon codepoints). One `<kicanvas-embed>` per project; `controls="basic" controlslist="nodownload nooverlay" theme="kicad"`.
+- **Renderer pin:** KiCanvas commit `b031159eb74aaa7eef2b026fd85d35bc05ff2095` (2026-04-28). Two patches only (no web fonts incl. Nunito; icon codepoints). One `<kicanvas-embed>` per project; `controls="basic" controlslist="nodownload nooverlay" theme="kicad"`. `CANVAS_READY_MS = 5000` (owner's gate measurement: ~1 s on desktop and phone for a 4.25 MB project).
+- **Canvas fills the area and is usable by touch (owner, Phase 0 gate):** on `/viewer` the loaded phase is a flex column whose container is `min-height: calc(100dvh - $nav-height)` and the frame is `flex: 1` (min 320px) at every width; a Fullscreen control (`requestFullscreen()`, hidden when `document.fullscreenEnabled` is false); fit / zoom-in / zoom-out buttons over the frame driving `CanvasController.zoom('fit'|'in'|'out')`, always rendered, and essential on coarse pointers (phone pinch-zoom in KiCanvas "barely works").
 - **Licence (spec D6):** the program is GPL v3 or later per the owner (acronym "NPL" awaiting his confirmation). Phase 0 adds `LICENSE` and the `license` fields; third-party notices ship in `frontend/public/vendor/kicanvas/NOTICE.txt`.
 - **Frontend rules (CLAUDE.md):** TS strict — remove unused vars, never `_`-prefix; `field?: T | null` + `!= null`; type-gate is `npx tsc -b` (never `tsc --noEmit`); `npx eslint --ext .ts,.tsx src/`; `npm test` = vitest, node env, `src/**/*.test.ts` only (DOM tests add `// @vitest-environment happy-dom` at the top of the file); SCSS modules `@use '@shared/styles/variables' as *;` etc.; no empty SCSS rules; non-ASCII glyphs in JSX via entities; every `import()` of a route chunk `.catch(() => {})` is NOT used for the renderer (a failed load must surface).
 - **API container has no volume mount**: backend edits need `docker compose up -d --build api`; frontend SCSS/TSX edits need `docker compose up -d --build frontend` (or run `npm run dev` locally on :3000 against the compose api).
@@ -937,11 +938,11 @@ export interface BoardStackup {
 }
 
 /** Applied AFTER the ignore filter, to the files the tool will actually read.
- *  Provisional until Phase 0's phone measurement (spec §9). */
+ *  Owner-approved at the Phase 0 gate (spec §4.2, §9). */
 export const INTAKE_CAPS = {
   files: 40,
-  perFileBytes: 10 * 1024 * 1024,
-  totalBytes: 25 * 1024 * 1024,
+  perFileBytes: 8 * 1024 * 1024,
+  totalBytes: 12 * 1024 * 1024,
 } as const;
 
 /** Bomb protection for a dropped archive, independent of what the tool reads. */
@@ -2407,10 +2408,10 @@ describe('readStackup', () => {
     ]);
   });
 
-  it('never materializes the tracks: a board at the cap with 200k segments reads in under two seconds', () => {
-    const segments = Array.from({ length: 200_000 }, (_, i) => `(segment (start ${i} 0) (end ${i} 1) (width 0.2) (layer "F.Cu") (net 1) (uuid "s${i}"))`).join('\n');
+  it('never materializes the tracks: a board at the 8 MB cap with 90k segments reads in under two seconds', () => {
+    const segments = Array.from({ length: 90_000 }, (_, i) => `(segment (start ${i} 0) (end ${i} 1) (width 0.2) (layer "F.Cu") (net 1) (uuid "s${i}"))`).join('\n');
     const text = board(`${LAYERS_9} ${STACKUP} ${VIAS}\n${segments}`);
-    expect(text.length).toBeGreaterThan(9 * 1024 * 1024);
+    expect(text.length).toBeGreaterThan(7 * 1024 * 1024);
     const t0 = performance.now();
     const s = readStackup(text);
     expect(performance.now() - t0).toBeLessThan(2000);
@@ -2691,7 +2692,7 @@ Gate checklist for the owner: `cd frontend && npm test` green; `node scripts/kic
 
 **Interfaces:**
 - Consumes: `KicadProject` (1.2), `basename` (1.5), `import('@vendor-build/kicanvas')` (0.3).
-- Produces: the `CanvasController` interface below; `class KicanvasController implements CanvasController` with constructor options `{ loadModule?, createEmbed?, readyMs?, settleMs?, sleep? }`; `sourcesFor(project): { sources: CanvasSource[]; dropped: string[] }`.
+- Produces: the `CanvasController` interface below (incl. `zoom(action)` and `ZoomAction`); `class KicanvasController implements CanvasController` with constructor options `{ loadModule?, createEmbed?, readyMs?, settleMs?, sleep? }`; `sourcesFor(project): { sources: CanvasSource[]; dropped: string[] }`. **Before writing `zoom`, read `frontend/vendor/kicanvas/src/viewers/base/viewer.ts` and `src/base/math/camera2.ts` and use the real property names the vendored source exposes; the code below assumes `viewer.zoom_to_page()`, `viewer.viewport.camera.zoom` and `viewer.viewport.draw()` — correct the names if the source differs, keep the feature detection, and record what you found in your report.**
 
 - [ ] **Step 1: Write the protocol**
 
@@ -2723,9 +2724,13 @@ export interface CanvasController {
   activate(view: CanvasView, sheet?: string): Promise<boolean>;
   /** Select and zoom to a reference designator, switching sheet first when one is given. */
   focusRef(ref: string, sheet?: string): Promise<FocusResult>;
+  /** Fit the page, or step the zoom. False when the renderer exposes no such control (the buttons then hide). */
+  zoom(action: ZoomAction): Promise<boolean>;
   dispose(): void;
   on<T extends CanvasEventType>(type: T, handler: CanvasHandler<T>): () => void;
 }
+
+export type ZoomAction = 'fit' | 'in' | 'out';
 
 export interface CanvasSource {
   name: string;
@@ -2850,6 +2855,24 @@ describe('KicanvasController', () => {
     expect(await c.activate('board')).toBe(false);
   });
 
+  it('zooms through the viewer camera when it exists and reports false when it does not', async () => {
+    const fake = fakeEmbed({ pages: PAGES });
+    const v = fake.viewer as typeof fake.viewer & { zoom_to_page?: () => void; viewport?: { camera: { zoom: number }; draw: () => void } };
+    let fitted = 0;
+    v.zoom_to_page = () => fitted++;
+    v.viewport = { camera: { zoom: 1 }, draw: () => undefined };
+    const c = controller(fake);
+    await c.mount(document.createElement('div'), project({ 'main.kicad_sch': 's' }));
+    expect(await c.zoom('fit')).toBe(true);
+    expect(fitted).toBe(1);
+    expect(await c.zoom('in')).toBe(true);
+    expect(v.viewport.camera.zoom).toBeCloseTo(1.25);
+    expect(await c.zoom('out')).toBe(true);
+    expect(v.viewport.camera.zoom).toBeCloseTo(1);
+    delete v.viewport;
+    expect(await c.zoom('in')).toBe(false);
+  });
+
   it('reports error when the module fails to load, and dispose is idempotent', async () => {
     const fake = fakeEmbed({ pages: PAGES });
     const c = new KicanvasController({ loadModule: async () => { throw new Error('boom'); }, createEmbed: () => fake.embed });
@@ -2887,6 +2910,7 @@ import type {
   CanvasSource,
   CanvasView,
   FocusResult,
+  ZoomAction,
 } from './canvasController';
 
 interface KicanvasPage {
@@ -2915,13 +2939,13 @@ type KicanvasApp = HTMLElement & { project?: KicanvasProject; viewer?: KicanvasV
 export interface KicanvasControllerOptions {
   loadModule?: () => Promise<unknown>;
   createEmbed?: () => HTMLElement;
-  /** Provisional 8 s; Phase 0 wrote the measured value into spec §5.2. */
+  /** 5 s: five times the owner's measured ~1 s phone load of a 4.25 MB project (spec §5.2). */
   readyMs?: number;
   settleMs?: number;
   sleep?: (ms: number) => Promise<void>;
 }
 
-export const CANVAS_READY_MS = 8000;
+export const CANVAS_READY_MS = 5000;
 const POLL_MS = 50;
 
 let moduleLoad: Promise<unknown> | null = null;
@@ -3101,6 +3125,31 @@ export class KicanvasController implements CanvasController {
     return 'focused';
   }
 
+  /** Task 2.1 finds the camera API in the vendored source (src/viewers/base/viewer.ts and
+   *  src/base/math/camera2.ts): `zoom_to_page()` is documented; for the steps use the
+   *  viewer's viewport camera (`viewer.viewport.camera.zoom *= 1.25` / `/= 1.25` followed by
+   *  the viewport's draw) if present. Every path feature-detects and returns false. */
+  async zoom(action: ZoomAction): Promise<boolean> {
+    const { schematic, board } = this.apps();
+    const app = this.project()?.active_page?.type === 'pcb' ? board : schematic;
+    const viewer = app?.viewer as (KicanvasViewer & { zoom_to_page?: () => void; viewport?: { camera?: { zoom: number }; draw?: () => void } }) | undefined;
+    if (viewer?.document == null) return false;
+    try {
+      if (action === 'fit') {
+        if (typeof viewer.zoom_to_page !== 'function') return false;
+        viewer.zoom_to_page();
+        return true;
+      }
+      const camera = viewer.viewport?.camera;
+      if (camera == null || typeof camera.zoom !== 'number') return false;
+      camera.zoom = action === 'in' ? camera.zoom * 1.25 : camera.zoom / 1.25;
+      viewer.viewport?.draw?.();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   private disposeEmbed(): void {
     if (this.embed != null && this.host != null && this.embed.parentNode === this.host) this.host.removeChild(this.embed);
     this.embed = null;
@@ -3202,7 +3251,7 @@ export function resetWebgl2ProbeForTests(): void {
 // Never touches the embed: everything goes through the controller.
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import type { KicadProject } from '@public/services/kicad/types';
-import type { CanvasController, CanvasStateName, CanvasView, FocusResult } from './canvasController';
+import type { CanvasController, CanvasStateName, CanvasView, FocusResult, ZoomAction } from './canvasController';
 import { KicanvasController } from './kicanvasController';
 import { webgl2Supported } from './webgl';
 import styles from './DesignCanvas.module.scss';
@@ -3219,6 +3268,7 @@ export interface DesignCanvasProps {
 
 export interface DesignCanvasHandle {
   focusRef(ref: string, sheet?: string): Promise<FocusResult>;
+  zoom(action: ZoomAction): Promise<boolean>;
 }
 
 const COPY: Record<Exclude<CanvasStateName, 'loading' | 'ready'>, { title: string; body: string }> = {
@@ -3279,12 +3329,41 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(function 
 
   useImperativeHandle(ref, () => ({
     focusRef: (r, sheet) => controllerRef.current?.focusRef(r, sheet) ?? Promise.resolve('unsupported' as const),
+    zoom: (action) => controllerRef.current?.zoom(action) ?? Promise.resolve(false),
   }));
+
+  const frameRef = useRef<HTMLDivElement>(null);
+  const [zoomable, setZoomable] = useState(true);
+  const zoom = async (action: ZoomAction) => {
+    const ok = await controllerRef.current?.zoom(action);
+    if (ok === false) setZoomable(false);
+  };
+  const fullscreenEnabled = typeof document !== 'undefined' && document.fullscreenEnabled;
+  const toggleFullscreen = () => {
+    const el = frameRef.current;
+    if (el == null) return;
+    if (document.fullscreenElement === el) void document.exitFullscreen();
+    else void el.requestFullscreen();
+  };
 
   const failed = state === 'no-webgl' || state === 'timeout' || state === 'error';
   return (
-    <div className={styles.frame} data-state={state}>
+    <div ref={frameRef} className={styles.frame} data-state={state}>
       <div ref={hostRef} className={styles.host} hidden={failed} />
+      {state === 'ready' && (
+        <div className={styles.controls} role="group" aria-label="View controls">
+          {zoomable && (
+            <>
+              <button type="button" className={styles.ctl} onClick={() => void zoom('fit')} aria-label="Fit to page">Fit</button>
+              <button type="button" className={styles.ctl} onClick={() => void zoom('in')} aria-label="Zoom in">&#43;</button>
+              <button type="button" className={styles.ctl} onClick={() => void zoom('out')} aria-label="Zoom out">&#8722;</button>
+            </>
+          )}
+          {fullscreenEnabled && (
+            <button type="button" className={styles.ctl} onClick={toggleFullscreen} aria-label="Fullscreen">&#x26F6;</button>
+          )}
+        </div>
+      )}
       {state === 'loading' && (
         <p className={styles.status} role="status">
           Rendering&#8230;
@@ -3317,19 +3396,49 @@ export default DesignCanvas;
 @use '@public/styles/bomMaterial' as *;
 
 // The frame is a bom-card with an inset hairline so the renderer's grey
-// does not float on the page (spec §13). 60vh desktop, 50vh on phones, never
-// under 320px; KiCanvas's own size observer follows the box.
+// does not float on the page (spec §13). It FILLS whatever its parent gives it
+// (the viewer page's flex column hands it the viewport below the tabs; the BOM
+// page's panel hands it 45vh), never under 320px; KiCanvas's own size observer
+// follows the box. Owner, Phase 0 gate: the window must fill the area on both
+// desktop and mobile.
 .frame {
   @include bom-card;
   position: relative;
-  height: 60vh;
+  flex: 1 1 auto;
   min-height: 320px;
   box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
   overflow: hidden;
 
-  @media (max-width: $bp-mobile) {
-    height: 50vh;
+  &:fullscreen {
+    border-radius: 0;
   }
+}
+
+.frameCompact {
+  flex: 0 0 auto;
+  height: 45vh;
+}
+
+// Fit / + / − / fullscreen over the drawing: essential on coarse pointers
+// (KiCanvas's pinch-zoom barely works on a phone — owner, Phase 0 gate), kept on
+// desktop too. Glass controls float over content, which is what the recipe is for.
+.controls {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  display: flex;
+  gap: 6px;
+  z-index: 2;
+}
+
+.ctl {
+  @include bom-glass-control;
+  min-width: 40px;
+  min-height: 40px;
+  padding: 0 12px;
+  line-height: 1;
+  font-size: 0.95rem;
+  cursor: pointer;
 }
 
 .host {
@@ -3670,6 +3779,21 @@ export default function ViewerIntake({ onProject }: ViewerIntakeProps) {
 }
 
 // Loaded phase ---------------------------------------------------------------
+// A flex column: strip and tabs at their natural height, the drawing takes the
+// rest of the viewport below the navbar, at every width (owner, Phase 0 gate).
+.loaded {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100dvh - #{$nav-height});
+}
+
+.drawing {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
 .strip {
   @include bom-card;
   display: flex;
@@ -3913,7 +4037,7 @@ export default function ViewerPage() {
           )}
 
           {session != null && (
-            <>
+            <div className={styles.loaded}>
               <div className={styles.strip}>
                 <span className={styles.stripName}>{session.project.name}</span>
                 <span className={styles.stripMeta}>
@@ -3970,7 +4094,7 @@ export default function ViewerPage() {
                 </div>
               )}
 
-              <div hidden={!drawingVisible}>
+              <div className={styles.drawing} hidden={!drawingVisible}>
                 <DesignCanvas
                   ref={canvasRef}
                   project={session.project}
@@ -3988,7 +4112,7 @@ export default function ViewerPage() {
 
               {/* Phase 4: {tab === 'stackup' && <StackupPanel … />} */}
               {/* Phase 3: {tab === 'bom' && … workbench … onRefClick={(ref) => void focus(ref)} } */}
-            </>
+            </div>
           )}
         </div>
       </div>
@@ -4616,13 +4740,7 @@ git commit -m "feat(viewer): BOM tab — the workbench prices the schematic-deri
 
 - [ ] **Step 1: `DesignCanvas` compact height**
 
-In `DesignCanvas.tsx` add `height?: 'default' | 'compact'` to the props (default `'default'`) and render `className={height === 'compact' ? `${styles.frame} ${styles.frameCompact}` : styles.frame}`. In `DesignCanvas.module.scss` add:
-
-```scss
-.frameCompact {
-  height: 45vh;
-}
-```
+In `DesignCanvas.tsx` add `height?: 'default' | 'compact'` to the props (default `'default'`) and render `className={height === 'compact' ? `${styles.frame} ${styles.frameCompact}` : styles.frame}`. (`.frameCompact` already exists in `DesignCanvas.module.scss` from Task 2.2.)
 
 - [ ] **Step 2: The intake accepts KiCad files and offers "Continue from the viewer"**
 
