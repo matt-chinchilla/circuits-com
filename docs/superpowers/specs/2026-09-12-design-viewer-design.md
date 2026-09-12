@@ -76,8 +76,9 @@ touches `@admin` or `@shared`, and the ESLint boundary rules are untouched.
 | **BOM page** | `@public/pages/bom/` | `index.tsx` and `components/BomIntake.tsx` remain; the page becomes a consumer of the moved library and components like `/viewer`. | everything above |
 
 **The move is mechanical** (`git mv` + import rewrites + the header-alias
-generator's output path + CLAUDE.md path mentions) and lands in Phase 3 with the
-workbench lift, verified by the existing test suite. It is what D2 asks for by
+generator's output path + CLAUDE.md path mentions) and lands as **the first task of
+Phase 1**, before the reader, because the reader imports the BOM `ParseResult` type
+and the alias table from their new home; verified by the existing test suite. It is what D2 asks for by
 name, and it is why the reader's dependency column is honest: it needs the BOM
 `ParseResult` type and the alias table, which after the move are service code,
 not a page's private folder.
@@ -754,9 +755,9 @@ phase — never the deploy, which is a separate explicit ask.**
 | Phase | Builds | Playtest gate |
 |---|---|---|
 | **0 — Spike + licence** (spike throwaway, in the scratchpad) | The repo gains `LICENSE` (GPL-3.0-or-later text) and the `license` fields in `frontend/package.json` and `api/pyproject.toml` (D6). Vendoring script + esbuild build with the integrity check; a bare page that mounts the built module from **inline `<kicanvas-source>` children** and renders Glasgow revC3 and `stickhub` in Chrome with a GPU; `activate` via `app.project.set_active_page` between sheets and to the board; the icon subset renders; measures: chunk size, peak JS heap on desktop and on the owner's phone at the largest permitted file, time-to-app-element for `CANVAS_READY_MS`. | Owner sees both views render and sheets switch; the four measurements are written into §5.1, §5.2, §9 and §10, and the caps are confirmed or lowered. Findings amend this spec before Phase 1. |
-| **1 — Reader** | `@public/services/kicad/*` + tests + fflate dependency; the fflate over-run behaviour recorded. | `npm test` green; a dev-only console harness prints BOM lines and stackup for a dropped project; owner compares the reference set against KiCad's own export. |
+| **1 — BOM units move + Reader** | The `pages/bom/lib` and `components` move (D2, no behaviour change), then `@public/services/kicad/*` + tests + fflate dependency; the fflate over-run behaviour recorded. | `npm test` green; a dev-only console harness prints BOM lines and stackup for a dropped project; owner compares the reference set against KiCad's own export. |
 | **2 — Canvas + `/viewer` (Schematic, Board)** | Vendored tree, patches, build step, `CanvasController` + `kicanvasController` + `DesignCanvas`, `ViewerIntake`, the page with two tabs and sheet chips, the Glasgow sample, nav links, SEO/prerender/sitemap, the notice. | Owner opens `/viewer` locally, drops a project, switches sheets and views, sees zero third-party requests and the served notice, tries a phone width. |
-| **3 — BOM bridge** | The `pages/bom/lib` and `components` move (D2), `useBomWorkbench` lift (no behaviour change), BOM tab on `/viewer`, KiCad extensions on the `/bom` drop zone, "Continue from the viewer", schematic toggle, design session, chip focus both directions. | Owner prices their project from `/viewer` and from `/bom`, clicks chips both ways, confirms `/bom` CSV and paste paths still behave, confirms one project = one match across the round trip. |
+| **3 — BOM bridge** | `useBomWorkbench` lift (no behaviour change), BOM tab on `/viewer`, KiCad extensions on the `/bom` drop zone, "Continue from the viewer", schematic toggle, design session, chip focus both directions. | Owner prices their project from `/viewer` and from `/bom`, clicks chips both ways, confirms `/bom` CSV and paste paths still behave, confirms one project = one match across the round trip. |
 | **4 — Stackup** | `boardStackup` panel with the three zones, real via spans, honesty states. | Owner compares the panel to Board Setup for their board; a board without a stackup block shows the honest state. |
 | **Deploy** | On the owner's explicit ask only: deploy-preflight → `./deploy.sh` (the sitemap line makes it a full deploy). | Live: the frontend image built on the box without OOM (wall time recorded); `/viewer` prerendered HTML served; sitemap carries it; chunk sizes; the notice served; the Glasgow sample end-to-end on prod. |
 
