@@ -166,8 +166,16 @@ Rules:
 - **Intake caps, applied after the ignore filter**: 40 parsed files, 10 MB per
   file, 25 MB total (the largest real KiCad file the research measured is
   4.7 MB; the 85 MB `jetson-agx-thor-baseboard` demo exists and is deliberately
-  over the cap). Over-cap is a hard error naming the cap. These numbers are
-  **provisional until Phase 0 measures peak heap on a phone** (§9).
+  over the cap). Over-cap is a hard error naming the cap. **Phase 0 measured the
+  parse side: Glasgow revC3's 4.25 MB across five files peaks at 42.8 MB of JS
+  heap above a fresh-document baseline — ~10× the input bytes — with no WebGL2
+  context and therefore no vertex buffers (§9).** At that ratio the 25 MB total
+  cap extrapolates to ~250 MB of parse-only heap and the 10 MB per-file cap to
+  ~100 MB, both already at or past the iOS tab-kill line §9 names, before any
+  render-side allocation. **The caps are therefore NOT confirmed: the measurement
+  argues for lowering the total, and the deciding input — peak heap on the owner's
+  phone, where a GPU makes the vertex buffers real — is owner to measure at the
+  Phase 0 gate.** They stay provisional until then.
 
 ### 4.3 `schematicBom.ts` — `readBomLines(project): ParseResult`
 
@@ -382,16 +390,32 @@ Behaviour:
 - Renders `<kicanvas-embed controls="basic" controlslist="nodownload nooverlay" theme="kicad">`
   with one `<kicanvas-source name={pathKey} type={'project'|'schematic'|'board'}>`
   child per project file (the `.kicad_pro` first for sheet names). **Inline
-  multi-source mounting is documented but was not exercised in the packet's live
-  test** (only URL and directory forms were); it is the first item on the
-  Phase 0 spike. If it fails, the fallback is object-URL `src` attributes via the
-  embed's `custom_resolver`, and this section is amended before Phase 2.
+  multi-source mounting is CONFIRMED by the Phase 0 spike (2026-09-12)**: five
+  inline `<kicanvas-source>` children carrying Glasgow revC3's `.kicad_pro`, three
+  `.kicad_sch` and the `.kicad_pcb` produced the whole hierarchy —
+  `glasgow.kicad_pcb` (Board), `glasgow.kicad_sch` (Root), `io_banks.kicad_sch`
+  (IO_Banks) and **both** `io_buffer.kicad_sch` instances (IO_Buffer_A,
+  IO_Buffer_B) as distinct pages keyed by instance path. `#load_src` merges the
+  inline files into a `LocalFileSystem` inside a `MergedFileSystem`, so sub-sheet
+  resolution behaves on the inline path exactly as on the URL path. The
+  object-URL `custom_resolver` fallback is **not needed** and this section stands.
+  `Project.set_active_page` was exercised across all four pages and
+  `viewer.select('U1')` + `zoom_to_selection()` returned a hit, so §5.3's adapter
+  surface is verified against the vendored build.
 - `view` / `activeSheet` changes call the adapter's `activate(...)`; a `project`
   change remounts by `key` (the embed reads inline sources once).
 - Success = the inner app element exists in the shadow root within
-  `CANVAS_READY_MS`; the `loaded` attribute is a false positive (packet). The
-  constant is **sized in Phase 0** against the largest permitted file on the
-  slowest device in the playtest matrix, not guessed. **On timeout the embed is
+  `CANVAS_READY_MS`; the `loaded` attribute is a false positive (packet). Phase 0
+  measured time-to-app-element on desktop: **Glasgow revC3 432 ms** (two runs,
+  432/422) and **StickHub 251 ms** (240/251); the 2×-rounded-up rule gives
+  1000 ms. **That is a FLOOR, not the constant.** The MCP Chrome had no WebGL2, so
+  `await this.update()` threw out of the renderer mount instead of tessellating —
+  the measurement covers parsing and element creation only, and a GPU browser
+  doing the real mount can only be slower. Sizing the timeout from it would fire a
+  false `timeout` state on real hardware. **The constant stays unset: owner to
+  measure time-to-app-element in a GPU-capable browser, and on the phone, at the
+  Phase 0 gate**, against the largest permitted file on the slowest device in the
+  playtest matrix, not guessed. **On timeout the embed is
   unmounted** (so nothing keeps parsing behind an error card) and a "Try again"
   remounts it; a late arrival after teardown is discarded by construction.
 - Container: 60vh on desktop, 50vh at ≤768px, `min-height: 320px`; KiCanvas's
@@ -665,10 +689,19 @@ Every state is a component-owned string; none is a bare exception surfacing.
   `files` and `sheets[].text`, the s-expression arrays, **and KiCanvas's own
   parsed model and vertex buffers**, which for a board is usually the largest
   item. The draft's "well under 200 MB" was an inference from demo boards on a
-  laptop; iOS Safari kills tabs in the low hundreds of MB. **Phase 0 measures
-  peak JS heap on desktop and on the owner's phone at the largest permitted
-  file**, and the caps in §4.2 are set from that measurement before Phase 2
-  ships. Until then they are provisional and this section says so.
+  laptop; iOS Safari kills tabs in the low hundreds of MB. **Phase 0 measured the
+  desktop parse side only** (2026-09-12, `performance.memory.usedJSHeapSize`
+  polled to peak): Glasgow revC3 (4.25 MB across five files) went from a 3.5 MB
+  fresh-document baseline to a **46.3 MB peak** — 42.8 MB added, ~10× the input
+  bytes; StickHub (1.01 MB, one board) peaked at 40.9 MB. **The vertex buffers are
+  NOT in those numbers**: the MCP Chrome had no WebGL2, so the renderer never
+  allocated, and this bullet's own "usually the largest item" is precisely what
+  went unmeasured. At the measured parse ratio the §4.2 caps extrapolate to
+  ~250 MB (25 MB total) and ~100 MB (10 MB single file) before any render-side
+  allocation — already at the line above. **Peak JS heap in a GPU-capable browser
+  and on the owner's phone at the largest permitted file is owner to measure at
+  the Phase 0 gate**, and the caps in §4.2 are set from that measurement before
+  Phase 2 ships. Until then they are provisional and this section says so.
 - **WebGL contexts**: one probe per document, released; one embed per project.
 
 ---
