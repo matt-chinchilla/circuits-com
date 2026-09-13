@@ -4721,7 +4721,7 @@ git commit -m "feat(viewer): design session — one project, one BOM parse, shar
 
 **Interfaces:**
 - Consumes: `buildProject` (1.5), `KicadReadError` (1.2), `KicadProject`.
-- Produces: `<ViewerIntake onProject busy?>`; `/samples/glasgow-revC3.zip`; `/vendor/kicanvas/NOTICE.txt`; the `"Material Symbols Outlined"` face.
+- Produces: `<ViewerIntake onProject>` (busy is internal state); `/samples/glasgow-revC3.zip`; `/vendor/kicanvas/NOTICE.txt`; the `"Material Symbols Outlined"` face.
 
 - [ ] **Step 1: Build the sample zip and the notice**
 
@@ -4885,7 +4885,7 @@ export default function ViewerIntake({ onProject }: ViewerIntakeProps) {
 }
 ```
 
-**Controller ruling (pre-flight scan): no verbatim duplication.** Create `frontend/src/public/styles/_dropFrame.scss` exporting ONE mixin, `drop-frame-intake`, and MOVE into it (cut, not copy) these rule blocks from `BomPage.module.scss`: `.page`, `.stack`, `.intake`, `.drop`, `.dropActive`, `.crop`, `.cropTl`, `.cropTr`, `.cropBl`, `.cropBr`, `.dropLead`, `.btnRow`, `.formatLine`, `.dropBtn`, `.exampleBtn` (with the `.pasteToggle, .exampleBtn` disabled state), `.intakeError`, `.phaseText`, `.phaseWarn`, `.pageError`. The mixin file starts with the same `@use` lines those rules need (`@shared/styles/variables`, `@shared/styles/mixins`, `@public/styles/bomMaterial`). `BomPage.module.scss` then replaces the moved blocks with `@use '@public/styles/dropFrame' as *;` + `@include drop-frame-intake;` at the same position, and `ViewerPage.module.scss` starts with the same `@use` lines plus `@include drop-frame-intake;`. Prove the BOM page is pixel-identical: build the CSS before and after (`npx vite build --mode development` or `npx sass` on the module) and diff the emitted rules for the BOM page's class list — the emitted declarations for every moved class must be unchanged (order within the file may shift). Then add:
+**Controller ruling (pre-flight scan): no verbatim duplication.** Create `frontend/src/public/styles/_dropFrame.scss` exporting ONE mixin, `drop-frame-intake`, and MOVE into it (cut, not copy) these rule blocks from `BomPage.module.scss`: `.page`, `.stack`, `.intake`, `.drop`, `.dropActive`, `.crop`, `.cropTl`, `.cropTr`, `.cropBl`, `.cropBr`, `.dropLead`, `.btnRow`, `.formatLine`, `.dropBtn`, `.exampleBtn` (with the `.pasteToggle, .exampleBtn` disabled state), `.intakeError`, `.phaseText`, `.phaseWarn`, `.pageError`, AND the `@include responsive($bp-mobile) { .page, .drop … }` block (nested selectors a `^\.class` scan misses — it holds only moved classes, and leaving it behind would let /bom override the shared mixin on phones). The mixin file starts with the same `@use` lines those rules need (`@shared/styles/variables`, `@shared/styles/mixins`, `@public/styles/bomMaterial`). `BomPage.module.scss` then replaces the moved blocks with `@use '@public/styles/dropFrame' as *;` + `@include drop-frame-intake;` at the same position, and `ViewerPage.module.scss` starts with the same `@use` lines plus `@include drop-frame-intake;`. Prove the BOM page is pixel-identical: build the CSS before and after (`npx vite build --mode development` or `npx sass` on the module) and diff the emitted rules for the BOM page's class list — the emitted declarations for every moved class must be unchanged (order within the file may shift). Then add:
 
 ```scss
 .credit {
