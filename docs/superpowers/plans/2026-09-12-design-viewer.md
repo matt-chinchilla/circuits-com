@@ -4293,6 +4293,13 @@ export interface DesignCanvasProps {
    * silence.
    */
   onUnrenderableSheets?: (paths: string[]) => void;
+  /**
+   * How much room the frame takes. `default` fills the parent (the viewer hands
+   * it the viewport below the tabs); `compact` is a fixed slice of the viewport,
+   * for a host where the drawing is context beside its real subject — the BOM
+   * page's panel above the priced table.
+   */
+  height?: 'default' | 'compact';
   /** Test seam. Defaults to a KicanvasController. */
   createController?: () => CanvasController;
 }
@@ -4318,7 +4325,7 @@ const COPY: Record<Exclude<CanvasStateName, 'loading' | 'ready'>, { title: strin
 };
 
 const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(function DesignCanvas(
-  { project, view, activeSheet, onState, onUnrenderableSheets, createController },
+  { project, view, activeSheet, onState, onUnrenderableSheets, height = 'default', createController },
   ref,
 ) {
   const hostRef = useRef<HTMLDivElement>(null);
@@ -4415,7 +4422,10 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(function 
 
   const failed = state === 'no-webgl' || state === 'timeout' || state === 'error';
   return (
-    <div ref={frameRef} className={styles.frame}>
+    <div
+      ref={frameRef}
+      className={height === 'compact' ? `${styles.frame} ${styles.frameCompact}` : styles.frame}
+    >
       <div ref={hostRef} className={styles.host} hidden={failed} />
       {state === 'ready' && (
         <div className={styles.controls} role="group" aria-label="View controls">
@@ -4483,6 +4493,19 @@ export default DesignCanvas;
 
   &:fullscreen {
     border-radius: 0;
+  }
+}
+
+// `height="compact"`: the drawing is context, not the subject — the BOM page
+// puts it above a priced table the reader came for, so it takes a fixed slice
+// of the viewport instead of whatever its parent has left. `.frame`'s 320px
+// floor still applies on a short window, and fullscreen overrides both.
+.frameCompact {
+  flex: 0 0 auto;
+  height: 45vh;
+
+  &:fullscreen {
+    height: 100%;
   }
 }
 
@@ -5960,6 +5983,67 @@ export const RESOLVE_CAP = 50;
 export const RESOLVE_STOPPED =
   'Live lookups stopped early. The lines still marked NO MATCH were never looked up — try again in a moment.';
 
+/**
+ * Priced results, keyed by the PARSE they belong to.
+ *
+ * A hook instance dies with its page, and /viewer → /bom is two pages holding
+ * the SAME `parsed` object (the design session's). Without this the second
+ * mount re-issues the match the first already paid for and opens a second
+ * resolve stream, re-spending up to RESOLVE_CAP of the visitor's 100-a-day
+ * budget on lines that came back a minute ago. An SPA return to /viewer's BOM
+ * tab is the same trip.
+ *
+ * A WeakMap, so the entry's lifetime IS the ParseResult's — it dies with the
+ * design session that holds the parse, needs no TTL and cannot collide with
+ * another BOM that happens to share a header signature. `reset()` drops it
+ * explicitly: that is the reader saying this answer is finished with.
+ *
+ * Deliberately not a cache of the NETWORK. It is keyed on object identity, so
+ * re-reading the same file (a fresh ParseResult) prices again — nothing here
+ * can serve a price from a session the reader has already closed.
+ */
+interface PricedSnapshot {
+  rows: TableRow[];
+  resolveNote: string | null;
+  resolveError: string | null;
+}
+
+const priced = new WeakMap<ParseResult, PricedSnapshot>();
+
+/**
+ * File a priced answer against its parse.
+ *
+ * An EMPTY table is never one. A priced BOM has at least one row by
+ * construction — the zero-line guard means `lines.length >= 1` and `buildRows`
+ * maps over `lines` — so `rows: []` here can only be the teardown ref caught
+ * mid-restore, before the queued `setRows` has committed. StrictMode's
+ * mount-only double-invoke (`main.tsx` enables it, so every dev session) opens
+ * that window deterministically: restore → cleanup → restore, with the second
+ * restore reading a snapshot the first had just blanked. Refusing the write is
+ * the whole guard.
+ *
+ * Rows still `resolving` are SETTLED on the way in — one would otherwise be
+ * restored spinning forever with no stream behind it — and their presence is
+ * itself a fact the reader needs: those lines were never looked up. Restored
+ * bare they read NO MATCH, which says the catalog does not carry the part.
+ * `RESOLVE_STOPPED` is the sentence that already owns this, so the snapshot
+ * carries it rather than the `null` a healthy stream leaves behind.
+ */
+function remember(
+  target: ParseResult | null,
+  rows: TableRow[],
+  resolveNote: string | null,
+  resolveError: string | null,
+): void {
+  if (target == null || rows.length === 0) return;
+  const stopped = rows.some((row) => row.state === 'resolving');
+  priced.set(target, {
+    rows: settleStragglers(rows),
+    resolveNote,
+    resolveError: stopped ? RESOLVE_STOPPED : resolveError,
+  });
+}
+
 export function cappedNote(dropped: number): string {
   const lines = dropped === 1 ? 'line was' : 'lines were';
   return (
@@ -6133,10 +6217,19 @@ export interface BomWorkbench {
 }
 
 /**
+ * Phase 1 runs at most once per IDENTITY of `parsed`, ACROSS MOUNTS: the priced
+ * answer is snapshotted against the parse object itself (see `priced` above), so
+ * a second page holding the same parse — /bom continuing a /viewer session, or
+ * an SPA return to the viewer's BOM tab — restores the table with no network at
+ * all. The snapshot's lifetime is the parse object's, which is the design
+ * session's; `reset()` drops it.
+ *
  * @param parsed  The BOM to price, or null for "nothing to price right now" —
- *   which clears any previous result and abandons work in flight. Phase 1 runs
- *   once per IDENTITY of this object, so callers hold it in state, never
- *   rebuild it per render.
+ *   which clears any previous result and abandons work in flight. A parse with
+ *   an error, or with NO LINES, is treated exactly as null: `/bom/match` rejects
+ *   an empty `lines` array (min_length=1), so asking would buy a 422 and render
+ *   it to the reader as "we could not reach the pricing service". Callers hold
+ *   this object in state, never rebuild it per render.
  * @param viewerHref  Stamped onto every row (the §7.6 seam) and nothing else.
  *   Deliberately NOT a match input: it may arrive late — `/bom` gains one when
  *   a KiCad project is opened mid-session — and re-matching then would bin a
@@ -6180,6 +6273,24 @@ export function useBomWorkbench(
   const viewerHrefRef = useRef(viewerHref);
   viewerHrefRef.current = viewerHref;
 
+  /**
+   * Has phase 1 ANSWERED for the current `parsed`? The snapshot guard: an empty
+   * table recorded while the match is still on the wire would be restored, on
+   * the next mount, as "this BOM priced to nothing".
+   */
+  const landedRef = useRef(false);
+
+  /** What the teardown snapshot reads — the last COMMITTED state, since an
+   *  unmount cleanup with `[]` deps closes over the first render. Assigned
+   *  during render, like the two refs above. */
+  const latest = useRef<{
+    parsed: ParseResult | null;
+    rows: TableRow[];
+    note: string | null;
+    error: string | null;
+  }>({ parsed: null, rows: [], note: null, error: null });
+  latest.current = { parsed, rows, note: resolveNote, error: resolveError };
+
   const pickSeqRef = useRef(new Map<number, number>());
 
   // The resolve stream is a socket THIS tab holds open. Leaving the page drops
@@ -6191,6 +6302,14 @@ export function useBomWorkbench(
     () => () => {
       genRef.current += 1;
       resolveAbort.current?.abort();
+      // Leaving MID-STREAM keeps whatever did come back; `remember` settles the
+      // rows still waiting onto their phase-1 answer, exactly as a stream that
+      // died would. The settled commits are snapshotted by the effect below —
+      // this is the one case that never reaches a settled commit.
+      if (landedRef.current) {
+        const last = latest.current;
+        remember(last.parsed, last.rows, last.note, last.error);
+      }
     },
     [],
   );
@@ -6258,19 +6377,42 @@ export function useBomWorkbench(
   useEffect(() => {
     genRef.current += 1;
     const gen = genRef.current;
+    landedRef.current = false;
 
     // Nothing to price: abandon the previous BOM's result rather than leave it
     // rendered under a consumer that has closed its project. The build
     // quantity and DNP choice survive — they are the reader's settings, and
     // only `reset()` owns those. The functional updater keeps the array
     // identity when it is already empty, so a null-armed hook never re-renders.
-    if (parsed == null || parsed.error != null) {
+    //
+    // A parse with no LINES lands here too, and that is the point: the server's
+    // `BomMatchRequest.lines` is min_length=1, so asking about an empty BOM is a
+    // guaranteed 422 that the catch below would render as "we could not reach
+    // the pricing service" — blaming the network for a schematic that simply had
+    // nothing in it. A zero-line BOM is a state, not a failure.
+    if (parsed == null || parsed.error != null || parsed.lines.length === 0) {
       resolveAbort.current?.abort();
       setRows((prev) => (prev.length === 0 ? prev : []));
       setMatching(false);
       setMatchError(null);
       setResolveNote(null);
       setResolveError(null);
+      return;
+    }
+
+    // Already priced under this exact parse — restore it and ask nobody. This
+    // is what makes the /viewer → /bom round trip cost ONE match: the second
+    // page holds the session's parse, not a copy of it.
+    const snapshot = priced.get(parsed);
+    if (snapshot != null) {
+      landedRef.current = true;
+      setRows(snapshot.rows);
+      setMatching(false);
+      setMatchError(null);
+      setResolveNote(snapshot.resolveNote);
+      setResolveError(snapshot.resolveError);
+      // No cleanup: nothing was started, and bumping the generation here would
+      // invalidate the restored answer on the next render.
       return;
     }
 
@@ -6296,6 +6438,7 @@ export function useBomWorkbench(
       )
       .then((serverRows) => {
         if (genRef.current !== gen) return;
+        landedRef.current = true;
         setMatching(false);
         // Hand the rows straight to phase 2 — it owns the setRows, so the
         // lines it is about to look up land already flipped to `resolving`.
@@ -6316,6 +6459,23 @@ export function useBomWorkbench(
       resolveAbort.current?.abort();
     };
   }, [parsed, startResolve]);
+
+  /**
+   * Keep the snapshot current. Every commit where phase 1 has answered and
+   * nothing is still in flight IS an answer worth returning to — the match
+   * landing, a stream that found nothing to ask about, the stream settling, and
+   * a re-stamped `viewerHref` all arrive here.
+   *
+   * Mid-stream commits are skipped: a row still waiting is not an answer, and
+   * re-recording the whole table on each of up to RESOLVE_CAP events is work
+   * nobody reads. The teardown above is what catches a reader who leaves while
+   * the stream is running.
+   */
+  useEffect(() => {
+    if (!landedRef.current || matching) return;
+    if (rows.some((row) => row.state === 'resolving')) return;
+    remember(parsed, rows, resolveNote, resolveError);
+  }, [parsed, rows, matching, resolveNote, resolveError]);
 
   // A viewer route that arrives after the table is priced re-stamps the rows
   // in place. Bailing out on `every` keeps the array identity when nothing
@@ -6379,6 +6539,11 @@ export function useBomWorkbench(
     // are about to clear, nor open a stream against it.
     genRef.current += 1;
     resolveAbort.current?.abort();
+    // The reader is finished with this answer, so the snapshot goes with it —
+    // otherwise handing the same `parsed` back would restore the very table
+    // they just cleared, out of a cache they cannot see.
+    landedRef.current = false;
+    if (latest.current.parsed != null) priced.delete(latest.current.parsed);
     pickSeqRef.current.clear();
     setRows([]);
     setMatchError(null);
@@ -6739,6 +6904,8 @@ git commit -m "feat(bom): the drop zone takes a KiCad project, continues from th
 Rebuild the local stack. Owner checklist: price Glasgow from `/viewer` (BOM tab) and from `/bom` (drop the zip); click chips both ways (`/bom` → `/viewer#ref` focuses; the viewer's BOM tab focuses in place); `/bom` CSV example and paste rows still price; `/bom/s/<slug>` shares still render; the network panel shows one `/api/bom/match` for a `/viewer` → `/bom` "Continue" round trip. Wait for explicit approval before Phase 4.
 
 ---
+
+> **Task 3.4 landed (2026-09-13, commits d02f8de → 882379b → 07c246e → 469e541 → 23c63ba):** `/bom` accepts a KiCad project, continues from the viewer, shows the schematic at a compact height beside the table. Corrections to the text above: (1) the panel/href gate is NOT `session?.project.root != null` (true for ANY open project — a CSV dropped after a `/viewer` visit would have borrowed an unrelated schematic and "Change file" would have destroyed it); it is `design = session != null && parsed === session.parsed ? session : null`, the identity the workbench keys its one match on, and session clearing is conditional on it; (2) `openDesign` is called only once the project is usable for pricing (schematic root + `error == null` + at least one line) — a board-only or over-cap drop shows its message and opens NO session on `/bom`; the Continue offer uses the same predicate; (3) `.frameCompact` did NOT exist before this task (added, with a `:fullscreen` override), and `.schematicPanel` must be a flex COLUMN (absolute children in a flex row resolve to zero width); (4) the hook never issues a match for zero lines, and keeps a module-level per-`parsed` SNAPSHOT (`WeakMap` keyed by the parse object: rows + note, written when the match lands and when the stream settles or the page unmounts, refusing an empty table and carrying `RESOLVE_STOPPED` for rows still resolving; dropped by `reset()`; hydrated on mount with zero requests) — so viewer → BOM tab → `/bom` → Continue costs ONE match and ONE stream, and an SPA re-entry to `/viewer`'s BOM tab does not re-price; (5) a chip clicked while the panel is still rendering is held until the canvas reports ready (the `FocusResult` is still discarded on `/bom` — no toast, `'superseded'` must never toast); (6) the failed/throttled-match state always renders the ShareBar/"Change file" exit. Repo-wide test fact found here: vitest runs `css: false`, so a CSS-module import ECHOES THE KEY — `styles.x` is truthy whether or not the rule exists; a rule's existence needs a source-level SCSS witness (see `bomPage.test.ts`). Parked for the final review: the phone `touch-action` trap of the panel (same as `/viewer`'s canvas), module state read during render (the brief's design), the snapshot's silent price age (a "priced N minutes ago" line is the honest fix; see the standing `price_stale` decision), the silent `/bom` focus on a genuinely missing designator, and a one-commit "Change file" flash before `matching` flips.
 
 # Phase 4 — The stackup panel
 
