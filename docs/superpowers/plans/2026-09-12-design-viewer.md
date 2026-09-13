@@ -2955,7 +2955,16 @@ import type { KicadProject } from '@public/services/kicad/types';
 
 export type CanvasView = 'schematic' | 'board';
 export type CanvasStateName = 'loading' | 'ready' | 'no-webgl' | 'timeout' | 'error';
-export type FocusResult = 'focused' | 'not-found' | 'unsupported';
+/**
+ * What a focus request came to.
+ *
+ * `superseded` is the one that is not a failure: a NEWER gesture — the reader
+ * picking a different sheet while this focus was still loading — took the view,
+ * and the focus stood down rather than dragging the drawing back to where it
+ * was going. A host must treat it as "say nothing": the reader has already
+ * moved on, and narrating the click they abandoned is worse than silence.
+ */
+export type FocusResult = 'focused' | 'not-found' | 'unsupported' | 'superseded';
 
 export type CanvasEvent =
   | { type: 'state'; state: CanvasStateName; detail?: string }
@@ -2974,6 +2983,18 @@ export interface CanvasController {
   focusRef(ref: string, sheet?: string): Promise<FocusResult>;
   /** Fit the page, or step the zoom. False when the renderer exposes no such control (the buttons then hide). */
   zoom(action: ZoomAction): Promise<boolean>;
+  /**
+   * Path keys of sheets THIS renderer cannot draw for this project — answerable
+   * from the project alone, before anything is mounted, so a host can mark them
+   * on the first paint rather than a frame later.
+   *
+   * Optional because it is a statement about one renderer's limits, not about
+   * the project: KiCanvas keys its virtual file system by basename and so must
+   * drop a second `power.kicad_sch`, where a path-keyed renderer drops nothing
+   * and simply does not implement this. A host MUST treat an absent
+   * implementation as "none", never as "unknown".
+   */
+  unrenderableSheets?(project: KicadProject): string[];
   dispose(): void;
   on<T extends CanvasEventType>(type: T, handler: CanvasHandler<T>): () => void;
 }
@@ -3624,6 +3645,10 @@ const ZOOM_MIN = 0.5;
 const ZOOM_MAX = 190;
 const ZOOM_STEP = 1.25;
 
+/** Why an activate did not end with this call owning the view. 'superseded' is
+ *  a newer activate, which is NOT evidence about whether the page exists. */
+type ActivateOutcome = 'ok' | 'superseded' | 'failed';
+
 function sourceType(path: string): CanvasSource['type'] {
   const lower = path.toLowerCase();
   if (lower.endsWith('.kicad_pro')) return 'project';
@@ -3768,6 +3793,13 @@ export class KicanvasController implements CanvasController {
     return this.project()?.active_page?.type === 'pcb' ? board : schematic;
   }
 
+  /** The basename collision, stated as the renderer's own limit. `sourcesFor` is
+   *  the same function mount() builds the embed's sources with, so the answer
+   *  cannot drift from what actually gets handed over. */
+  unrenderableSheets(project: KicadProject): string[] {
+    return sourcesFor(project).dropped;
+  }
+
   async mount(host: HTMLElement, project: KicadProject): Promise<void> {
     const epoch = ++this.epoch;
     this.disposeEmbed();
@@ -3895,11 +3927,23 @@ export class KicanvasController implements CanvasController {
   }
 
   async activate(view: CanvasView, sheet?: string): Promise<boolean> {
+    return (await this.activateFor(view, sheet)) === 'ok';
+  }
+
+  /**
+   * activate() with its REASON kept.
+   *
+   * The public boolean collapses two unrelated facts into one `false`: there is
+   * no such page, and a NEWER activate owns the view. focusRef has to tell them
+   * apart — answering "this reference does not exist" because something else
+   * moved the view is a lie about the reader's own schematic.
+   */
+  private async activateFor(view: CanvasView, sheet?: string): Promise<ActivateOutcome> {
     const seq = ++this.activation;
     const mountEpoch = this.epoch;
     const project = this.project();
     const page = this.findPage(view, sheet);
-    if (project == null || page == null) return false;
+    if (project == null || page == null) return 'failed';
     const { schematic, board } = this.apps();
     const app = view === 'board' ? board : schematic;
     // A viewer that already holds this page's document is in one of TWO states, and they
@@ -3940,7 +3984,7 @@ export class KicanvasController implements CanvasController {
         watch?.cancel();
         if (this.inFlight.get(view) === watch) this.inFlight.delete(view);
       }
-      return false;
+      return 'failed';
     }
     if (watch != null) {
       await this.settle(watch);
@@ -3956,14 +4000,69 @@ export class KicanvasController implements CanvasController {
     // await, so two quick page changes can leave both apps visible side by side (the
     // owner's "screen duplicates itself", reproduced 2026-09-12) — the writes below are
     // how we prevent that, and a stale one would re-create it.
-    if (seq !== this.activation || this.stale(mountEpoch)) return false;
+    if (seq !== this.activation) return 'superseded';
+    if (this.stale(mountEpoch)) return 'failed';
     if (schematic) schematic.hidden = view !== 'schematic';
     if (board) board.hidden = view !== 'board';
-    return true;
+    return 'ok';
+  }
+
+  /**
+   * Put `sheet` on screen FOR A FOCUS, tolerating a host activate that overtakes
+   * this one.
+   *
+   * Being superseded is the ordinary shape of a designator click, not an error:
+   * the page names the designator's own sheet in its own state so the chip bar
+   * agrees with the drawing, and that state change makes the host re-activate on
+   * the very commit this call is awaiting inside. So a superseded activate
+   * RE-WAITS on the newer one — its settle rides the watch that activate armed —
+   * and then asks the only question that matters: is the requested sheet the one
+   * now live? If it is, the newer activate did this call's work for it. If it is
+   * not, the host is asking for somewhere else and the reader's gesture takes
+   * the view back.
+   */
+  private async activateForFocus(sheet: string): Promise<ActivateOutcome> {
+    const outcome = await this.activateFor('schematic', sheet);
+    // 'ok' is done. 'failed' is a real miss (no such page, a dropped basename
+    // twin) or a dead mount: waiting longer cannot conjure a page, and retrying
+    // a set_active_page that threw only throws again.
+    if (outcome !== 'superseded') return outcome;
+
+    // A newer activation owns the view, and WHICH DOCUMENT it landed on says who
+    // issued it.
+    //
+    // The SAME document is the host echoing this very focus: the page names the
+    // designator's own sheet in its state before calling focusRef, so
+    // DesignCanvas re-activates that same file. The waiting is already done —
+    // `activateFor` above rode that activation's own load watch, and upstream
+    // starts no second load for a document the viewer already holds — so the
+    // page is on screen and settled, and this focus may select on it.
+    //
+    // A DIFFERENT document can only be the reader choosing another sheet while
+    // this focus was still loading. That is a newer, deliberate gesture and it
+    // wins. Taking the view back — which this used to do — would snap the
+    // drawing off the sheet they just picked and leave the chip bar naming a
+    // sheet that is not on screen, with nothing to converge it.
+    return this.showing(sheet) ? 'ok' : 'superseded';
+  }
+
+  /** Is the page `sheet` names the one on screen? Compared by DOCUMENT, because
+   *  that is what the viewer holds and what decides what is drawn — two instance
+   *  pages of one file share it (upstream's `file_by_name`), so an instance
+   *  switch within a file is not a different drawing. */
+  private showing(sheet: string): boolean {
+    const wanted = this.findPage('schematic', sheet);
+    const active = this.project()?.active_page ?? null;
+    return wanted != null && active != null && active.document === wanted.document;
   }
 
   async focusRef(ref: string, sheet?: string): Promise<FocusResult> {
-    if (sheet != null && !(await this.activate('schematic', sheet))) return 'not-found';
+    if (sheet != null) {
+      const activated = await this.activateForFocus(sheet);
+      // Stood down for a newer sheet choice — not a statement about `ref`.
+      if (activated === 'superseded') return 'superseded';
+      if (activated === 'failed') return 'not-found';
+    }
     // The app showing the ACTIVE page, exactly as zoom() picks it: BoardViewer.select()
     // also takes a string and resolves a footprint by uuid or reference (vendor
     // viewers/board/viewer.ts:94-106), so with the board active the honest answer is
@@ -4183,6 +4282,17 @@ export interface DesignCanvasProps {
   /** Path key of the schematic to show, or an instance path; default root. */
   activeSheet?: string;
   onState?: (state: CanvasStateName, detail?: string) => void;
+  /**
+   * The sheets the mounted renderer cannot draw for this project, reported once
+   * per mount and BEFORE the renderer bundle is even fetched — so a host can
+   * mark them on the first paint instead of a frame later.
+   *
+   * Always called, with `[]` when the renderer answers none or when there is no
+   * renderer at all (no WebGL2): a host must never be left holding a set from a
+   * previous project, and "this renderer drops nothing" is an answer, not a
+   * silence.
+   */
+  onUnrenderableSheets?: (paths: string[]) => void;
   /** Test seam. Defaults to a KicanvasController. */
   createController?: () => CanvasController;
 }
@@ -4208,7 +4318,7 @@ const COPY: Record<Exclude<CanvasStateName, 'loading' | 'ready'>, { title: strin
 };
 
 const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(function DesignCanvas(
-  { project, view, activeSheet, onState, createController },
+  { project, view, activeSheet, onState, onUnrenderableSheets, createController },
   ref,
 ) {
   const hostRef = useRef<HTMLDivElement>(null);
@@ -4222,11 +4332,19 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(function 
   // is what keeps the callback current without paying that.
   const onStateRef = useRef(onState);
   onStateRef.current = onState;
+  // Same reason as `onState` above: a parent passing an inline arrow must not
+  // remount the canvas — and this one reloads the project.
+  const onUnrenderableRef = useRef(onUnrenderableSheets);
+  onUnrenderableRef.current = onUnrenderableSheets;
 
   useEffect(() => {
     if (!supported) {
       setState('no-webgl');
       onStateRef.current?.('no-webgl');
+      // No renderer means nothing is unrenderable for renderer-specific
+      // reasons. Reporting [] rather than nothing keeps the host from carrying
+      // a previous project's answer into this one.
+      onUnrenderableRef.current?.([]);
       return;
     }
     const host = hostRef.current;
@@ -4234,6 +4352,10 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(function 
     let cancelled = false;
     const controller = (createController ?? (() => new KicanvasController()))();
     controllerRef.current = controller;
+    // BEFORE mount(): that is where the renderer bundle is dynamically imported
+    // and awaited, so answering here costs the host nothing and lands on the
+    // same commit that first paints the sheet chips.
+    onUnrenderableRef.current?.(controller.unrenderableSheets?.(project) ?? []);
     const off = controller.on('state', (e) => {
       if (cancelled) return;
       setState(e.state);
@@ -5052,9 +5174,9 @@ git commit -m "feat(viewer): intake with the Glasgow revC3 sample (0BSD), third-
 ```tsx
 // frontend/src/public/pages/viewer/index.tsx
 // Design Viewer — open a KiCad project in the browser (spec §7.1). Stage 1
-// tabs: Schematic, Board; Phase 3 adds BOM, Phase 4 adds Stackup. ONE canvas
-// element serves both drawing tabs (one embed per project); it is hidden, not
-// unmounted, when another tab is active.
+// tabs: Schematic, Board, BOM; Phase 4 adds Stackup. ONE canvas element serves
+// both drawing tabs (one embed per project); it is hidden, not unmounted, when
+// another tab is active.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useLocation } from 'react-router-dom';
@@ -5062,6 +5184,9 @@ import PageHead from '@public/components/PageHead';
 import PageHeaderBand from '@public/components/layout/PageHeaderBand';
 import DesignCanvas, { type DesignCanvasHandle } from '@public/components/kicad/DesignCanvas';
 import type { CanvasStateName } from '@public/components/kicad/canvasController';
+import BomTable from '@public/components/bom/BomTable';
+import ShareBar from '@public/components/bom/ShareBar';
+import { useBomWorkbench } from '@public/services/bom/useBomWorkbench';
 import { basename } from '@public/services/kicad/project';
 import type { KicadProject } from '@public/services/kicad/types';
 import { clearDesignSession, getDesignSession, openDesign, type DesignSession } from '@public/services/designSession';
@@ -5073,6 +5198,47 @@ type Tab = 'schematic' | 'board' | 'stackup' | 'bom';
 
 export const POSITIONING =
   'Open your KiCad project in the browser and get every line of the BOM priced across our whole distributor catalog — read straight out of your schematic, with no CSV export, no account, and nobody trying to win your board order.';
+
+/** Why a chip is inert, in the two places that have to say it: the hover title
+ *  and the toast a click raises. The renderer addresses its files by BASENAME,
+ *  so a second `power.kicad_sch` cannot be represented at all. */
+const DROPPED_SHEET_HINT =
+  'Another sheet in this project has the same filename, so only one of them can be drawn.';
+
+/** One visually-hidden node carries the reason for every dropped chip; the
+ *  chips point at it with `aria-describedby`, so the reason is ANNOUNCED rather
+ *  than living only in a `title` (inconsistently read, invisible on touch) and
+ *  the dashed styling. */
+const DROPPED_REASON_ID = 'viewer-unrenderable-sheet-reason';
+
+/** The same fact as a toast. `ref` is present when the gesture was about a
+ *  designator rather than the chip itself — the reader needs to know which part
+ *  they clicked went nowhere, not only that some sheet cannot be drawn. */
+function droppedSheetToast(path: string, ref?: string): string {
+  const subject =
+    ref == null
+      ? `${basename(path)} can't be drawn`
+      : `${ref} is on ${basename(path)}, which can't be drawn`;
+  return `${subject} — another sheet in this project has the same filename.`;
+}
+
+/**
+ * The designator a URL is asking us to focus, or null.
+ *
+ * `decodeURIComponent` THROWS on a malformed escape, and `/viewer#%` is one a
+ * truncated pasted link really does produce. The raw text is the fallback: a
+ * reference that fails to match gets an honest "not in this schematic" toast,
+ * where an exception out of an effect takes the page to the ErrorBoundary.
+ */
+function refFromHash(hash: string): string | null {
+  if (hash.length <= 1) return null;
+  const raw = hash.slice(1);
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
+}
 
 function sheetLabel(project: KicadProject, path: string): string {
   const stem = basename(path).replace(/\.kicad_sch$/i, '');
@@ -5090,8 +5256,58 @@ export default function ViewerPage() {
   const [activeSheet, setActiveSheet] = useState<string | undefined>(undefined);
   const [canvasState, setCanvasState] = useState<CanvasStateName>('loading');
   const [toast, setToast] = useState<string | null>(null);
+  /**
+   * Has the BOM tab been opened for THIS project? A one-way latch, not a mirror
+   * of `tab`: the workbench prices once per `parsed` IDENTITY, so a flag that
+   * fell back to false on leaving the tab would hand the hook null and then the
+   * same object again — a fresh identity transition, a second `/api/bom/match`,
+   * and a second bite of the visitor's 100-lookups-a-day resolve budget, all
+   * for a tab click. Latched, the input goes null → parsed → parsed: one match,
+   * and the priced panel survives every flip back to the drawing.
+   */
+  const [bomSeen, setBomSeen] = useState(false);
   const canvasRef = useRef<DesignCanvasHandle>(null);
-  const pendingFocus = useRef<string | null>(location.hash.length > 1 ? decodeURIComponent(location.hash.slice(1)) : null);
+  /** A focus the canvas still owes us, held until it reports `ready`. */
+  const pendingFocus = useRef<string | null>(null);
+  /**
+   * Which gesture owns the view, and therefore the toast.
+   *
+   * A focus is awaited across a sheet load, and the reader can act again inside
+   * that window — another designator, or a sheet chip. Whoever acted LAST is who
+   * the page is answering; an older focus landing afterwards must say nothing,
+   * or the reader is told "U1 was not found" about a click they have already
+   * replaced, over a drawing that is showing something else entirely.
+   */
+  const focusSeq = useRef(0);
+  /**
+   * Sheets the MOUNTED renderer cannot draw for this project — its answer, not
+   * this page's guess. KiCanvas keys its file system by basename and so must
+   * drop a second `power.kicad_sch`; the editor renderer that replaces it later
+   * is path-keyed and will answer none, at which point these chips stop being
+   * marked without a line changing here.
+   *
+   * Reported before the renderer bundle is even fetched, so the chips carry it
+   * on the commit that first paints them.
+   */
+  const [droppedSheets, setDroppedSheets] = useState<ReadonlySet<string>>(new Set());
+  const handleUnrenderable = useCallback((paths: string[]) => {
+    setDroppedSheets((prev) => {
+      // The canvas remounts on every project identity, and re-reporting an
+      // unchanged answer would re-render the whole page for nothing.
+      if (prev.size === paths.length && paths.every((p) => prev.has(p))) return prev;
+      return new Set(paths);
+    });
+  }, []);
+
+  const wb = useBomWorkbench(
+    // Armed by the first BOM-tab visit and never disarmed short of a new
+    // project. A parse that failed has nothing to price — the panel shows the
+    // reason instead.
+    bomSeen && session != null && session.parsed.error == null ? session.parsed : null,
+    // No viewer route: this IS the viewer. Designator chips act in place via
+    // `onRefClick`, which outranks a link (spec §6).
+    null,
+  );
 
   // The session is opened HERE and only here — never in an effect. React 19's
   // StrictMode double-invokes effects, and openDesign re-parses the schematic.
@@ -5101,19 +5317,35 @@ export default function ViewerPage() {
     setTab(defaultTab(next));
     setActiveSheet(undefined);
     setCanvasState('loading');
+    setBomSeen(false);
   }, []);
 
   // Deliberately NOT called on unmount: surviving the /viewer ↔ /bom trip is
   // the whole point of the session. Only this button ends it.
   const openAnother = () => {
+    // reset() FIRST, while the workbench still owns this BOM: it bumps the
+    // generation, so a match already on the wire cannot land on the table we
+    // are emptying and open a resolve stream against it. Clearing the session
+    // (and the latch) is what then holds the hook at null.
+    wb.reset();
     clearDesignSession();
     setSession(null);
+    setBomSeen(false);
     setActiveSheet(undefined);
+    // The canvas is about to unmount with the session. Leaving this at 'ready'
+    // would leave the hash effect believing a drawing is on screen.
+    setCanvasState('loading');
+    setDroppedSheets(new Set());
+    // A toast raised a moment ago would otherwise float over the fresh intake.
+    setToast(null);
     pendingFocus.current = null;
   };
 
   const focus = useCallback(
     async (ref: string) => {
+      // Claimed before any early return, so a focus that answers immediately
+      // still silences an older one that is still in flight.
+      const seq = ++focusSeq.current;
       const s = session;
       if (s == null) return;
       if (s.project.root == null) {
@@ -5123,24 +5355,69 @@ export default function ViewerPage() {
         return;
       }
       const where = s.refs.get(ref);
+      // The same wall `chooseSheet` puts in front of the chips. Without it the
+      // BOM row is a second door onto the state I4 closed: `activeSheet` would
+      // name a sheet the renderer never received, the chip this page marks
+      // "can't be drawn" would take `aria-current`, and the canvas would not
+      // move — inert and silent, through a new entrance.
+      if (where != null && droppedSheets.has(where.sheet)) {
+        setToast(droppedSheetToast(where.sheet, ref));
+        return;
+      }
+      // Page state moves BEFORE the drawing does. DesignCanvas re-activates on
+      // every `view`/`activeSheet` change, and when `setTab` really flips the
+      // view that effect can land AFTER focusRef has finished — re-activating
+      // whatever sheet the page still believed was current and dragging the
+      // canvas off the one the focus just selected. Naming the designator's own
+      // sheet first makes the late activate a no-op instead of a fight.
+      if (where != null) setActiveSheet(where.sheet);
       setTab('schematic');
       const result = await canvasRef.current?.focusRef(ref, where?.instancePath);
+      // A newer gesture took the view while this was loading. 'superseded' is
+      // the renderer saying so; the sequence check catches the rest (a second
+      // designator, or a focus that never reached the renderer at all).
+      if (seq !== focusSeq.current || result === 'superseded') return;
       if (result === 'focused') setToast(`Focused ${ref}`);
       else if (result === 'not-found') setToast(where ? `${ref} was not found on sheet ${basename(where.sheet)}` : `${ref} is not in this schematic`);
       // 'unsupported' (no WebGL, or no renderer mounted) and an absent handle both
       // land here: say so rather than leaving the click with no answer at all.
       else setToast(`${ref} can't be focused — the drawing is not available in this browser.`);
     },
-    [session],
+    [session, droppedSheets],
   );
 
-  // A #ref arrival (from /bom) focuses once, after the canvas is ready.
+  // A #ref the URL is carrying, including one that ARRIVES while this page is
+  // already mounted — a BOM-row link, an in-page anchor, back/forward between
+  // two refs. (Reading the hash once into a ref at mount, as this used to, only
+  // ever saw the first one.)
+  //
+  // The hash alone is the dep list, on purpose: React runs the effect function
+  // belonging to the render that just committed, so `canvasState` and `focus`
+  // are read CURRENT without being depended on — while listing them would
+  // re-fire this on every canvas state change and every new session, re-playing
+  // a hash the reader moved past long ago (and which `openAnother` deliberately
+  // drops).
+  useEffect(() => {
+    const ref = refFromHash(location.hash);
+    pendingFocus.current = ref;
+    if (ref == null || canvasState !== 'ready') return;
+    pendingFocus.current = null;
+    void focus(ref);
+  }, [location.hash]);
+
+  // …and the same focus when the canvas was not ready to take it yet. Declared
+  // AFTER the effect above so a mount carrying #U1 has already recorded it.
   useEffect(() => {
     if (canvasState !== 'ready' || pendingFocus.current == null || session == null) return;
     const ref = pendingFocus.current;
     pendingFocus.current = null;
     void focus(ref);
   }, [canvasState, session, focus]);
+
+  // One-way: see `bomSeen`.
+  useEffect(() => {
+    if (tab === 'bom') setBomSeen(true);
+  }, [tab]);
 
   useEffect(() => {
     if (toast == null) return;
@@ -5154,9 +5431,20 @@ export default function ViewerPage() {
     if (session.project.root != null) out.push({ id: 'schematic', label: 'Schematic' });
     if (session.project.board != null) out.push({ id: 'board', label: 'Board' });
     // Phase 4: { id: 'stackup', label: 'Stackup' } when board != null
-    // Phase 3: { id: 'bom', label: 'BOM' } when root != null
+    if (session.project.root != null) out.push({ id: 'bom', label: 'BOM' });
     return out;
   }, [session]);
+
+  const chooseSheet = (path: string) => {
+    // A sheet chip is a newer gesture than any focus still in flight. The
+    // controller yields the view to it; this hands it the toast to match.
+    focusSeq.current += 1;
+    if (droppedSheets.has(path)) {
+      setToast(droppedSheetToast(path));
+      return;
+    }
+    setActiveSheet(path);
+  };
 
   const drawingVisible = tab === 'schematic' || tab === 'board';
 
@@ -5231,17 +5519,29 @@ export default function ViewerPage() {
 
               {tab === 'schematic' && session.project.sheets.length > 1 && (
                 <div className={styles.chips} role="group" aria-label="Sheets">
-                  {session.project.sheets.map((s) => (
-                    <button
-                      key={s.path}
-                      type="button"
-                      className={styles.chip}
-                      aria-current={(activeSheet ?? session.project.root) === s.path}
-                      onClick={() => setActiveSheet(s.path)}
-                    >
-                      {sheetLabel(session.project, s.path)}
-                    </button>
-                  ))}
+                  {droppedSheets.size > 0 && (
+                    <span id={DROPPED_REASON_ID} className={styles.srOnly}>
+                      {DROPPED_SHEET_HINT}
+                    </span>
+                  )}
+                  {session.project.sheets.map((s) => {
+                    const dropped = droppedSheets.has(s.path);
+                    return (
+                      <button
+                        key={s.path}
+                        type="button"
+                        className={dropped ? `${styles.chip} ${styles.chipDropped}` : styles.chip}
+                        aria-current={(activeSheet ?? session.project.root) === s.path}
+                        aria-disabled={dropped || undefined}
+                        aria-describedby={dropped ? DROPPED_REASON_ID : undefined}
+                        title={dropped ? DROPPED_SHEET_HINT : undefined}
+                        onClick={() => chooseSheet(s.path)}
+                      >
+                        {sheetLabel(session.project, s.path)}
+                        {dropped && <span aria-hidden="true"> &#9888;</span>}
+                      </button>
+                    );
+                  })}
                 </div>
               )}
 
@@ -5252,6 +5552,7 @@ export default function ViewerPage() {
                   view={tab === 'board' ? 'board' : 'schematic'}
                   activeSheet={tab === 'board' ? undefined : activeSheet}
                   onState={setCanvasState}
+                  onUnrenderableSheets={handleUnrenderable}
                 />
                 <p className={styles.notice}>
                   Rendering by KiCanvas &mdash;{' '}
@@ -5261,8 +5562,55 @@ export default function ViewerPage() {
                 </p>
               </div>
 
+              {bomSeen && (
+                <section hidden={tab !== 'bom'} className={styles.bomPanel} aria-label="Bill of materials">
+                  {session.parsed.error != null && (
+                    <p className={styles.pageError} role="alert">
+                      {session.parsed.error}
+                    </p>
+                  )}
+                  {wb.resolveNote != null && <p className={styles.phaseWarn}>{wb.resolveNote}</p>}
+                  {wb.matchError != null && (
+                    <p className={styles.pageError} role="alert">
+                      {wb.matchError}
+                    </p>
+                  )}
+                  {wb.resolveError != null && (
+                    <p className={styles.phaseWarn} role="status">
+                      {wb.resolveError}
+                    </p>
+                  )}
+                  {wb.matching && (
+                    <p className={styles.phaseText} role="status">
+                      Pricing {session.parsed.lines.length.toLocaleString('en-US')}{' '}
+                      {session.parsed.lines.length === 1 ? 'line' : 'lines'} against the catalog&#8230;
+                    </p>
+                  )}
+                  {session.parsed.error == null && session.parsed.lines.length === 0 && (
+                    <p className={styles.phaseText}>
+                      Nothing to price &mdash; no BOM lines were read from this schematic. Power,
+                      virtual and unreferenced symbols, and anything marked not-in-BOM, are left
+                      out on purpose; the notes above this panel say what was skipped.
+                    </p>
+                  )}
+                  {!wb.matching && wb.rows.length > 0 && (
+                    <>
+                      <BomTable
+                        rows={wb.rows}
+                        buildQty={wb.buildQty}
+                        onBuildQtyChange={wb.setBuildQty}
+                        onPickSimilar={wb.pickSimilar}
+                        includeDnp={wb.includeDnp}
+                        onIncludeDnpChange={wb.setIncludeDnp}
+                        onRefClick={(ref) => void focus(ref)}
+                      />
+                      <ShareBar rows={wb.rows} buildQty={wb.buildQty} includeDnp={wb.includeDnp} onChangeFile={openAnother} />
+                    </>
+                  )}
+                </section>
+              )}
+
               {/* Phase 4: {tab === 'stackup' && <StackupPanel … />} */}
-              {/* Phase 3: {tab === 'bom' && … workbench … onRefClick={(ref) => void focus(ref)} } */}
             </div>
           )}
         </div>
@@ -6278,6 +6626,8 @@ git commit -m "feat(viewer): BOM tab — the workbench prices the schematic-deri
 ```
 
 ---
+
+> **Landed (2026-09-13, commits 4065a68 → 1b4083c → ec85b84 → 7417b23 → 5e47264):** the BOM tab as briefed (`bomSeen` latch, one match per project, `viewerHref` null, chips call `focus`). The three carry-forwards closed: I1 (an effect on `location.hash` sets the pending focus and focuses directly when the canvas is ready), I2 (the designator's sheet is set before `focusRef`), I4 (dropped sheets are marked, with the reason reaching assistive tech). Two review rounds changed the CONTROLLER: (1) I2's early `setActiveSheet` makes `DesignCanvas` fire a superseding `activate`, which used to make `focusRef` answer 'not-found' without selecting (a Critical, measured against the real controller); `focusRef` now rides that activation — a SAME-document supersession is the host echoing the focus, so it selects; a DIFFERENT document can only be the reader picking another sheet mid-flight, so the focus yields with the new `FocusResult` member `'superseded'` (hosts say nothing for it — Task 3.4's `/bom` panel discards the result, but any future toast there needs the same rule). The retry loop and its `FOCUS_ACTIVATE_TRIES` bound were dissolved, not parked. (2) The seam carries "which sheets can't be drawn": `CanvasController.unrenderableSheets?(project)` (KiCanvas: `sourcesFor(project).dropped`), called by `DesignCanvas` at mount START and surfaced through `onUnrenderableSheets` (`[]` when unsupported); the page imports nothing from `kicanvasController.ts`. The page's `focus()` carries a `focusSeq` guard (bumped by `focus` and `chooseSheet`) so an abandoned click never toasts. `viewerPage.test.ts` (happy-dom) pins all of it. Parked to Phase 4: tablist roles/`aria-controls`/roving tabindex (the third tab), the twice-placed-sheet residual (chips address paths, `focusRef` addresses instances), the theoretical three-activation case (would need a focus-generation counter). Dev only: `StrictMode` double-invokes the match effect, so a dev network panel shows two `match` calls with the first discarded.
 
 ### Task 3.4: `/bom` accepts KiCad projects, continues from the viewer, shows the schematic (spec §7.2)
 
