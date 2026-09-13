@@ -17,6 +17,8 @@
  */
 import { act, createElement, forwardRef, useImperativeHandle } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 type AnyProps = Record<string, never> & Record<string, unknown>;
@@ -137,12 +139,18 @@ vi.mock('@public/services/bom/useBomWorkbench', () => ({
     return wb;
   },
 }));
-vi.mock('@public/services/designSession', () => ({
-  getDesignSession: () => session,
-  clearDesignSession: () => {
-    session = null;
-  },
-}));
+// PARTIAL: `unpriceableReason` stays REAL, so the Continue gate is exercised
+// against the predicate the intake uses rather than a restatement of it here.
+vi.mock('@public/services/designSession', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@public/services/designSession')>();
+  return {
+    ...actual,
+    getDesignSession: () => session,
+    clearDesignSession: () => {
+      session = null;
+    },
+  };
+});
 
 const { default: BomPage } = await import('./index');
 
@@ -166,15 +174,30 @@ function makeSession(over: { root?: string | null } = {}) {
       missingSheets: ['io.kicad_sch'],
       formatVersions: {},
     },
-    parsed: {
-      lines: [{ index: 0, qty: 2 }],
-      headers: ['Reference', 'Qty', 'Value'],
-      headerSignature: 'kicad-sch',
-      roleByColumn: ['refs', 'qty', 'value'],
-      unmappedColumns: [],
-      warnings: ['One symbol had no value.'],
-      error: null,
-    },
+    // What `readSchematic` really returns for each shape. A root-less project
+    // gets an ERROR parse (schematicBom.ts), never lines — modelling it as
+    // "lines with root: null" describes a state the app cannot produce, and
+    // that is exactly the fiction that hid the unpriceable-session bug.
+    parsed:
+      (over.root === undefined ? 'main.kicad_sch' : over.root) == null
+        ? {
+            lines: [],
+            headers: [],
+            headerSignature: 'kicad-sch',
+            roleByColumn: [],
+            unmappedColumns: [],
+            warnings: [],
+            error: 'No schematic in this project — drop the .kicad_sch files to read a BOM.',
+          }
+        : {
+            lines: [{ index: 0, qty: 2 }],
+            headers: ['Reference', 'Qty', 'Value'],
+            headerSignature: 'kicad-sch',
+            roleByColumn: ['refs', 'qty', 'value'],
+            unmappedColumns: [],
+            warnings: ['One symbol had no value.'],
+            error: null,
+          },
     refs: new Map([
       ['U1', { sheet: 'main.kicad_sch', instancePath: '/r' }],
       ['U9', { sheet: 'sub/power.kicad_sch', instancePath: '/r/a' }],
@@ -292,12 +315,6 @@ describe('a KiCad project dropped on /bom', () => {
     expect(wbCalls.at(-1)?.viewerHref).toBe('/viewer');
   });
 
-  it('offers no viewer route for a board-only project — there is no schematic to focus into', async () => {
-    await render();
-    await dropProject({ root: null });
-    expect(wbCalls.at(-1)?.viewerHref).toBeNull();
-    expect(byText('Show schematic')).toBeUndefined();
-  });
 
   it('carries the project\'s own warnings, not just the parser\'s', async () => {
     await render();
@@ -404,5 +421,61 @@ describe('a BOM that is not the open design', () => {
     await click(testid('change-file') as HTMLElement);
     expect(session).toBeNull();
     expect(wb.reset).toHaveBeenCalled();
+  });
+});
+
+describe('a project open in /viewer that this tool cannot price', () => {
+  it('is not offered as "Continue from the viewer"', async () => {
+    // A board-only project is a fine thing to VIEW. The button would run
+    // `handleParsed` on an error parse and land straight back on the intake
+    // the reader is already looking at.
+    session = makeSession({ root: null });
+    await render();
+    expect(testid('continue')).toBeNull();
+    expect(testid('intake')).not.toBeNull();
+  });
+
+  it('cannot be forced through the continue handler either', async () => {
+    session = makeSession();
+    await render();
+    // The button was drawn for a priceable session; /viewer then swaps in one
+    // that is not. The handler re-reads the session at CLICK time.
+    session = makeSession({ root: null });
+    await click(testid('continue') as HTMLElement);
+    expect(testid('table')).toBeNull();
+    expect(wbCalls.every((c) => c.parsed == null)).toBe(true);
+  });
+});
+
+describe('a table phase with no table', () => {
+  it('still offers the way back to the intake', async () => {
+    // Reachable whenever the pricing service is down or throttling: the rows
+    // are empty, so `ShareBar` — which carries "Change file" — never renders.
+    // Without this the reader is stranded on a red alert.
+    await render();
+    wb.rows = [];
+    wb.matchError = 'We could not reach the pricing service.';
+    await dropCsv();
+    const exit = byText('Change file');
+    expect(exit).toBeDefined();
+    await click(exit as HTMLElement);
+    expect(testid('intake')).not.toBeNull();
+    wb.matchError = null;
+  });
+});
+
+describe('the schematic panel\'s own geometry', () => {
+  it('is a flex COLUMN, or the canvas draws nothing at all', () => {
+    // `.frameCompact` is `flex: 0 0 auto`, i.e. basis auto, and every child
+    // DesignCanvas paints is absolutely positioned — so in a flex ROW the frame
+    // resolves to ZERO content width and the drawing is invisible with no error
+    // anywhere. Asserted on the source because Vitest's CSS-module proxy echoes
+    // class names and can see nothing of the rule itself.
+    const scss = readFileSync(join(__dirname, 'BomPage.module.scss'), 'utf8');
+    const start = scss.indexOf('\n.schematicPanel {');
+    expect(start).toBeGreaterThan(-1);
+    const body = scss.slice(start, scss.indexOf('\n}', start));
+    expect(body).toMatch(/display:\s*flex/);
+    expect(body).toMatch(/flex-direction:\s*column/);
   });
 });

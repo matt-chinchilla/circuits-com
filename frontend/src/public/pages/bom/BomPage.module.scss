@@ -216,6 +216,11 @@
   color: var(--executive-blue, $executive-blue);
 }
 
+// The door back to the intake when the table phase has no table to show.
+.phaseExit {
+  display: flex;
+}
+
 // ─── The schematic beside a priced BOM (KiCad projects only) ────────────────
 // Neither rule carries a margin: `.tablePhase` is a flex column with its own
 // 14px gap, and a margin here would stack on top of it and give this one pair a

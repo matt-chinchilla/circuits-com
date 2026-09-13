@@ -4,6 +4,8 @@
 // (vitest only discovers *.test.ts here) and no testing-library — createRoot + act.
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CanvasController, CanvasStateName } from './canvasController';
 import type { KicadProject } from '@public/services/kicad/types';
@@ -220,6 +222,63 @@ describe('DesignCanvas', () => {
       root.render(createElement(DesignCanvas, props(() => fakeController(['x']).ctrl as never)));
     });
     expect(reported).toEqual([[], []]);
+    await act(async () => root.unmount());
+  });
+});
+
+describe('DesignCanvas — height', () => {
+  /** The frame is the outermost element the component renders. */
+  const frame = () => container.firstElementChild as HTMLElement;
+
+  it('declares the compact rule the class name refers to', () => {
+    // Vitest hands back CSS-module class names from a proxy that ECHOES THE KEY,
+    // so `styles.frameCompact` is a truthy string in a test whether or not the
+    // rule exists. The DOM assertion below therefore cannot see a renamed or
+    // emptied rule — and an empty rule is precisely what makes a CSS-module
+    // class `undefined` in the real build (house gotcha). The source is the
+    // only witness available here.
+    const scss = readFileSync(join(__dirname, 'DesignCanvas.module.scss'), 'utf8');
+    const start = scss.indexOf('\n.frameCompact {');
+    expect(start).toBeGreaterThan(-1);
+    expect(scss.slice(start, scss.indexOf('\n}', start))).toMatch(/height:\s*45vh/);
+  });
+
+  it('takes the compact class only when asked, and never loses the base one', async () => {
+    // Asserted on the REAL component, not a stub: the thing that can break
+    // silently here is a CSS-Modules class resolving to `undefined` because the
+    // rule was renamed or emptied (the standing house gotcha), and only reading
+    // the rendered className catches that.
+    setWebgl(true);
+    await act(async () => {
+      root.render(
+        createElement(DesignCanvas, {
+          project,
+          view: 'schematic' as const,
+          createController: (() => fakeController().ctrl) as never,
+        }),
+      );
+    });
+    const base = [...frame().classList];
+    expect(base).toHaveLength(1);
+    expect(base[0]).toBeTruthy();
+    expect(base[0]).not.toContain('undefined');
+    await act(async () => root.unmount());
+
+    root = createRoot(container);
+    await act(async () => {
+      root.render(
+        createElement(DesignCanvas, {
+          project,
+          view: 'schematic' as const,
+          height: 'compact' as const,
+          createController: (() => fakeController().ctrl) as never,
+        }),
+      );
+    });
+    const compact = [...frame().classList];
+    expect(compact).toHaveLength(2);
+    expect(compact[0]).toBe(base[0]);
+    expect(compact[1]).toMatch(/frameCompact/);
     await act(async () => root.unmount());
   });
 });

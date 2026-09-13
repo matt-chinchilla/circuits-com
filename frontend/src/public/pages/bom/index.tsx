@@ -10,7 +10,7 @@ import ShareBar, { formatShareDate } from '@public/components/bom/ShareBar';
 import BomTable from '@public/components/bom/BomTable';
 import DesignCanvas, { type DesignCanvasHandle } from '@public/components/kicad/DesignCanvas';
 import ColumnMapper from './components/ColumnMapper';
-import { clearDesignSession, getDesignSession } from '@public/services/designSession';
+import { clearDesignSession, getDesignSession, unpriceableReason } from '@public/services/designSession';
 import { bomApi } from '@public/services/bom/bomApi';
 import { applyRoleMap, canPrice, type ParseResult } from '@public/services/bom/parseBom';
 import { loadRoleMap, saveRoleMap } from '@public/services/bom/mapMemory';
@@ -38,6 +38,12 @@ import styles from './BomPage.module.scss';
  */
 
 type Phase = 'intake' | 'mapping' | 'table';
+
+/** The schematic panel's id, so the toggle can NAME what it expands. The panel
+ *  is unmounted while closed rather than hidden — it holds a WebGL context —
+ *  so the reference is dangling half the time, which is the accepted cost of
+ *  not paying for a renderer nobody asked for. */
+const SCHEMATIC_PANEL_ID = 'bom-schematic-panel';
 
 /** `/bom/s/:slug` only: fetching, readable, or gone. */
 type ShareState = 'loading' | 'ready' | 'missing';
@@ -72,10 +78,20 @@ export default function BomPage() {
   /**
    * The design open in this tab, if any — module state, so it is re-read every
    * render rather than mirrored into state that could go stale. It is published
-   * by the intake (which calls `openDesign` in its drop handler) and by /viewer,
+   * by the intake (which publishes it from its drop handler) and by /viewer,
    * and it survives the trip between the two pages: that is the whole point.
    */
   const session = getDesignSession();
+
+  /**
+   * …and the same session only when this tool can actually do something with
+   * it. A board-only project, or a schematic whose symbols are all power flags,
+   * is a perfectly good design to VIEW and nothing to price — offering
+   * "Continue with glasgow from the viewer" for one is a button that can only
+   * bounce off `handleParsed` and return the reader to the intake they are
+   * already looking at.
+   */
+  const offerableSession = session != null && unpriceableReason(session) == null ? session : null;
 
   /**
    * …and the design THESE ROWS came from, which is a different question.
@@ -207,7 +223,9 @@ export default function BomPage() {
    *  that exists when it is pressed. */
   const continueFromViewer = () => {
     const s = getDesignSession();
-    if (s == null) return;
+    // Re-tested at CLICK time, not trusted from the render that drew the
+    // button: the session is module state and /viewer could have replaced it.
+    if (s == null || unpriceableReason(s) != null) return;
     handleParsed(s.parsed, s.project.name, '');
   };
 
@@ -317,7 +335,11 @@ export default function BomPage() {
 
           {!isShare && phase === 'intake' && (
             <>
-              <BomIntake onParsed={handleParsed} session={session} onContinue={continueFromViewer} />
+              <BomIntake
+                onParsed={handleParsed}
+                session={offerableSession}
+                onContinue={continueFromViewer}
+              />
               {parsed?.error != null && (
                 <p className={styles.pageError} role="alert">
                   {parsed.error}
@@ -354,18 +376,6 @@ export default function BomPage() {
                 </p>
               ))}
 
-              {/* A schematic can read cleanly and still yield no line to price
-                  — a sheet of power symbols does. Without this the phase is a
-                  header over blank space, and the reader is left guessing
-                  whether it failed. (A CSV cannot reach here: the parser calls
-                  an empty file an error.) */}
-              {design != null && parsed.error == null && parsed.lines.length === 0 && (
-                <p className={styles.phaseText}>
-                  Nothing to price &mdash; no BOM lines were read from this schematic. Power,
-                  virtual and unreferenced symbols, and anything marked not-in-BOM, are left out on
-                  purpose; the notes above say what was skipped.
-                </p>
-              )}
 
               {wb.resolveNote != null && <p className={styles.phaseWarn}>{wb.resolveNote}</p>}
 
@@ -388,6 +398,20 @@ export default function BomPage() {
                 </p>
               )}
 
+              {/* The way out of a table phase that has no table. `ShareBar`
+                  carries "Change file" when there are rows to export, so with
+                  none the reader was stranded: a match that failed left a red
+                  alert, an empty page and no door back to the intake short of
+                  reloading. Reachable today whenever the pricing service is
+                  down or throttling. */}
+              {!wb.matching && wb.rows.length === 0 && (
+                <div className={styles.phaseExit}>
+                  <button type="button" className={styles.pasteToggle} onClick={startOver}>
+                    Change file
+                  </button>
+                </div>
+              )}
+
               {!wb.matching && wb.rows.length > 0 && (
                 <>
                   {/* The drawing beside the table, on request. Closed by
@@ -402,12 +426,18 @@ export default function BomPage() {
                           className={styles.pasteToggle}
                           onClick={() => setShowSchematic((v) => !v)}
                           aria-expanded={showSchematic}
+                          aria-controls={SCHEMATIC_PANEL_ID}
                         >
                           {showSchematic ? 'Hide schematic' : 'Show schematic'}
                         </button>
                       </div>
                       {showSchematic && (
-                        <div className={styles.schematicPanel}>
+                        <div
+                          id={SCHEMATIC_PANEL_ID}
+                          className={styles.schematicPanel}
+                          role="region"
+                          aria-label="Schematic"
+                        >
                           <DesignCanvas
                             ref={canvasRef}
                             project={design.project}

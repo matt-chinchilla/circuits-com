@@ -81,7 +81,7 @@ export default function ColumnMapper({
       </h2>
       <p className={styles.phaseText}>
         We could not tell which column holds the part. Point us at it and we will remember this
-        layout the next time you upload the same export.
+        layout the next time you drop the same export.
       </p>
 
       <ul className={styles.mapList}>
