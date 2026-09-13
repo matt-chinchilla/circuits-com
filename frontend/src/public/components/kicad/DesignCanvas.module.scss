@@ -1,0 +1,107 @@
+// frontend/src/public/components/kicad/DesignCanvas.module.scss
+@use '@shared/styles/variables' as *;
+@use '@public/styles/bomMaterial' as *;
+
+// The frame is a bom-card with an inset hairline so the renderer's grey
+// does not float on the page (spec §13). It FILLS whatever its parent gives it
+// (the viewer page's flex column hands it the viewport below the tabs; the BOM
+// page's panel hands it 45vh), never under 320px; KiCanvas's own size observer
+// follows the box. Owner, Phase 0 gate: the window must fill the area on both
+// desktop and mobile.
+.frame {
+  @include bom-card;
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 320px;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+  // The browser must never compete with the renderer for a two-finger gesture
+  // (CLAUDE.md: pan-y cancels pointermove; none is full tracking).
+  touch-action: none;
+  overscroll-behavior: contain;
+
+  &:fullscreen {
+    border-radius: 0;
+  }
+}
+
+.frameCompact {
+  flex: 0 0 auto;
+  height: 45vh;
+}
+
+// Fit / + / − / fullscreen over the drawing: essential on coarse pointers
+// (KiCanvas's pinch-zoom barely works on a phone — owner, Phase 0 gate), kept on
+// desktop too. Glass controls float over content, which is what the recipe is for.
+.controls {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  display: flex;
+  gap: 6px;
+  z-index: 2;
+}
+
+.ctl {
+  @include bom-glass-control;
+  min-width: 40px;
+  min-height: 40px;
+  padding: 0 12px;
+  line-height: 1;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.host {
+  position: absolute;
+  inset: 0;
+
+  :global(kicanvas-embed) {
+    width: 100%;
+    height: 100%;
+    aspect-ratio: auto;
+    max-height: none;
+  }
+}
+
+.status {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  display: grid;
+  place-items: center;
+  color: $text-secondary;
+  font-size: 0.9rem;
+  pointer-events: none;
+}
+
+.problem {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  gap: 8px;
+  padding: 24px;
+  text-align: center;
+}
+
+.problemTitle {
+  margin: 0;
+  font-weight: 600;
+  color: $text-primary;
+}
+
+.problemBody {
+  margin: 0;
+  max-width: 44ch;
+  color: $text-secondary;
+  font-size: 0.9rem;
+}
+
+.retry {
+  @include bom-glass-control;
+  justify-self: center;
+  padding: 8px 16px;
+  line-height: 1;
+  cursor: pointer;
+}
