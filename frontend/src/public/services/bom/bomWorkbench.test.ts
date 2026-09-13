@@ -101,7 +101,27 @@ describe('pickMisses', () => {
     expect(pickMisses(rows, false).misses.map((m) => m.index)).toEqual([1, 0]);
     expect(pickMisses(rows, true).misses.map((m) => m.index)).toEqual([1, 0, 2]);
     const many = Array.from({ length: RESOLVE_CAP + 5 }, (_, i) => miss(i));
-    expect(pickMisses(many, false)).toMatchObject({ dropped: 5 });
+    const capped = pickMisses(many, false);
+    // `dropped` alone is computed from the input length, so it stays right even
+    // if the slice is wrong. The SLICE is what the server 422s on (one over and
+    // it rejects the whole stream), so assert its length directly.
+    expect(capped.misses).toHaveLength(RESOLVE_CAP);
+    expect(capped).toMatchObject({ dropped: 5 });
+  });
+
+  it('drops the guesses at the cap, never the MPN-identified certainties', () => {
+    // More lines than the cap, with the MPN'd ones LAST in file order: the
+    // ordering claim is that they still all survive and the value-only
+    // queries are what gets left behind.
+    const valueOnly = Array.from({ length: RESOLVE_CAP }, (_, i) => miss(i));
+    const withMpn = Array.from({ length: 4 }, (_, i) =>
+      miss(RESOLVE_CAP + i, { mpn: `MPN${i}` }),
+    );
+    const { misses, dropped } = pickMisses([...valueOnly, ...withMpn], false);
+    expect(misses).toHaveLength(RESOLVE_CAP);
+    expect(dropped).toBe(4);
+    expect(misses.slice(0, 4).map((m) => m.mpn)).toEqual(['MPN0', 'MPN1', 'MPN2', 'MPN3']);
+    expect(misses.every((m) => m.index !== RESOLVE_CAP - 1)).toBe(true); // a guess fell off
   });
 });
 
@@ -142,8 +162,12 @@ describe('foldSimilarPick', () => {
     });
     expect(out[0]?.server?.similar.map((s) => s.sku)).toEqual(['OLD']);
   });
-  it('leaves other rows and rows with no server answer untouched', () => {
+  it('returns the SAME array when the fresh match has no part', () => {
+    // Reference identity is the behaviour, not an implementation detail: it is
+    // what lets `setRows((prev) => foldSimilarPick(...))` bail out of the
+    // re-render, matching the old code's `if (fresh.part == null) return;`
+    // early exit. `toEqual` would pass for a freshly mapped copy too.
     const rows = [line(0), line(1)];
-    expect(foldSimilarPick(rows, 0, 'X', server({ index: 0, part: null }))).toEqual(rows);
+    expect(foldSimilarPick(rows, 0, 'X', server({ index: 0, part: null }))).toBe(rows);
   });
 });

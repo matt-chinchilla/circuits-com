@@ -176,10 +176,29 @@ export interface BomWorkbench {
   includeDnp: boolean;
   setIncludeDnp: (include: boolean) => void;
   pickSimilar: (rowIndex: number, sku: string) => void;
-  /** Back to nothing: aborts any stream and clears every field. */
+  /**
+   * Back to nothing: abandons every in-flight request, aborts the stream and
+   * clears every field INCLUDING the reader's build quantity and DNP choice.
+   *
+   * Distinct from handing the hook `null`, which means "nothing to price right
+   * now" — that clears the priced result but KEEPS those two settings, so a
+   * consumer that re-derives a BOM (closing and reopening a project) does not
+   * silently reset the quantity somebody typed.
+   */
   reset: () => void;
 }
 
+/**
+ * @param parsed  The BOM to price, or null for "nothing to price right now" —
+ *   which clears any previous result and abandons work in flight. Phase 1 runs
+ *   once per IDENTITY of this object, so callers hold it in state, never
+ *   rebuild it per render.
+ * @param viewerHref  Stamped onto every row (the §7.6 seam) and nothing else.
+ *   Deliberately NOT a match input: it may arrive late — `/bom` gains one when
+ *   a KiCad project is opened mid-session — and re-matching then would bin a
+ *   priced table and re-spend the visitor's daily resolve budget. A change
+ *   re-stamps the rows already on screen instead.
+ */
 export function useBomWorkbench(
   parsed: ParseResult | null,
   viewerHref: string | null,
@@ -194,11 +213,30 @@ export function useBomWorkbench(
   const [includeDnp, setIncludeDnp] = useState(false);
   const includeDnpRef = useRef(includeDnp);
   includeDnpRef.current = includeDnp;
-  const pickSeqRef = useRef(new Map<number, number>());
   // Phase-2 notes, kept apart from `matchError` because neither is fatal: the
   // table is priced and readable with both of them on screen.
   const [resolveNote, setResolveNote] = useState<string | null>(null);
   const [resolveError, setResolveError] = useState<string | null>(null);
+
+  /**
+   * THE staleness mechanism. Every async landing answers one question — "does
+   * this belong to a workbench that still exists?" — by comparing the
+   * generation it was issued under against the current one. Bumped by the four
+   * things that end a workbench: a new `parsed`, its teardown, `reset()` and
+   * unmount.
+   *
+   * It replaces an effect-local `cancelled` flag, which `reset()` could not
+   * reach: a match landing after a clear used to repopulate the emptied table
+   * AND open a fresh stream, spending up to RESOLVE_CAP of the visitor's
+   * 100/day resolve budget on a BOM they had just thrown away.
+   */
+  const genRef = useRef(0);
+
+  /** Read at `buildRows` time rather than depended on — see the doc comment. */
+  const viewerHrefRef = useRef(viewerHref);
+  viewerHrefRef.current = viewerHref;
+
+  const pickSeqRef = useRef(new Map<number, number>());
 
   // The resolve stream is a socket THIS tab holds open. Leaving the page drops
   // it; each miss is one bounded server-side call that finishes on its own
@@ -207,6 +245,7 @@ export function useBomWorkbench(
   const resolveAbort = useRef<AbortController | null>(null);
   useEffect(
     () => () => {
+      genRef.current += 1;
       resolveAbort.current?.abort();
     },
     [],
@@ -220,6 +259,9 @@ export function useBomWorkbench(
    * flashes NO MATCH on its way to being looked up).
    */
   const startResolve = useCallback((built: TableRow[]) => {
+    // Called synchronously from the match landing, which has already proved
+    // its generation current, so reading it here captures the same one.
+    const gen = genRef.current;
     const { misses, dropped } = pickMisses(built, includeDnpRef.current);
     setResolveNote(dropped > 0 ? cappedNote(dropped) : null);
     setResolveError(null);
@@ -239,14 +281,24 @@ export function useBomWorkbench(
     resolveAbort.current = controller;
 
     bomApi
-      .streamResolve(misses, (event) => setRows((prev) => applyResolveEvent(prev, event)), controller.signal)
+      .streamResolve(
+        misses,
+        (event) => {
+          // Events buffered before the abort can still arrive. They name row
+          // INDICES, so replaying one onto a later BOM would stamp a live
+          // price on whatever line happens to sit at that index.
+          if (genRef.current !== gen) return;
+          setRows((prev) => applyResolveEvent(prev, event));
+        },
+        controller.signal,
+      )
       .then(() => {
-        if (controller.signal.aborted) return;
+        if (genRef.current !== gen) return;
         setRows(settleStragglers);
       })
       .catch(() => {
         // An abort resolves down this path too; there is nobody left to tell.
-        if (controller.signal.aborted) return;
+        if (genRef.current !== gen) return;
         setRows(settleStragglers);
         setResolveError(RESOLVE_STOPPED);
       });
@@ -260,12 +312,28 @@ export function useBomWorkbench(
   // no server answer yet would all read NO MATCH, which is a lie for the
   // second and a half it takes to come back.
   useEffect(() => {
-    if (parsed == null || parsed.error != null) return;
+    genRef.current += 1;
+    const gen = genRef.current;
+
+    // Nothing to price: abandon the previous BOM's result rather than leave it
+    // rendered under a consumer that has closed its project. The build
+    // quantity and DNP choice survive — they are the reader's settings, and
+    // only `reset()` owns those. The functional updater keeps the array
+    // identity when it is already empty, so a null-armed hook never re-renders.
+    if (parsed == null || parsed.error != null) {
+      resolveAbort.current?.abort();
+      setRows((prev) => (prev.length === 0 ? prev : []));
+      setMatching(false);
+      setMatchError(null);
+      setResolveNote(null);
+      setResolveError(null);
+      return;
+    }
+
     const lines = parsed.lines;
     setRows([]);
     setMatchError(null);
     setMatching(true);
-    let cancelled = false;
 
     // D7: IDENTITY FIELDS ONLY. Quantities, designators, the DNP flag and the
     // file itself never leave the browser — the privacy claim is structural,
@@ -283,34 +351,55 @@ export function useBomWorkbench(
         })),
       )
       .then((serverRows) => {
-        if (cancelled) return;
+        if (genRef.current !== gen) return;
         setMatching(false);
         // Hand the rows straight to phase 2 — it owns the setRows, so the
         // lines it is about to look up land already flipped to `resolving`.
-        startResolve(buildRows(lines, serverRows, viewerHref));
+        startResolve(buildRows(lines, serverRows, viewerHrefRef.current));
       })
       .catch((err: unknown) => {
-        if (cancelled) return;
+        if (genRef.current !== gen) return;
         const throttled = axios.isAxiosError(err) && err.response?.status === 429;
         setMatchError(throttled ? MATCH_THROTTLED : MATCH_FAILED);
         setMatching(false);
       });
 
     return () => {
-      cancelled = true;
       // A new parse invalidates the previous BOM's stream as surely as
       // leaving does — its events name row indices from a table that no
       // longer exists.
+      genRef.current += 1;
       resolveAbort.current?.abort();
     };
-  }, [parsed, viewerHref, startResolve]);
+  }, [parsed, startResolve]);
 
-  /** Re-match this ONE line by the chosen SKU (identity only travels — D7). */
+  // A viewer route that arrives after the table is priced re-stamps the rows
+  // in place. Bailing out on `every` keeps the array identity when nothing
+  // changed, so the common case (a stable href, or none) costs one comparison
+  // pass and no re-render.
+  useEffect(() => {
+    setRows((prev) =>
+      prev.every((row) => row.viewerHref === viewerHref)
+        ? prev
+        : prev.map((row) => ({ ...row, viewerHref })),
+    );
+  }, [viewerHref]);
+
+  /**
+   * Re-match this ONE line by the chosen SKU (identity only travels — D7).
+   *
+   * Two guards, because they answer different questions. The generation says
+   * the answer still belongs to THIS BOM — without it a pick made before
+   * "Change file" lands on the next BOM's row of the same index and labels
+   * somebody else's part "your pick". The per-row sequence says it is still
+   * the LATEST pick for that row; overlapping picks settle in network order,
+   * so a superseded response must be dropped, not applied (review #4). The
+   * generation cannot express that — both clicks share one generation.
+   */
   const pickSimilar = useCallback(
     (rowIndex: number, sku: string) => {
+      const gen = genRef.current;
       const line = rows.find((r) => r.index === rowIndex);
-      // Last click wins, PER ROW: overlapping picks settle in network order,
-      // so a superseded response must be dropped, not applied (review #4).
       const seq = (pickSeqRef.current.get(rowIndex) ?? 0) + 1;
       pickSeqRef.current.set(rowIndex, seq);
       bomApi
@@ -325,10 +414,12 @@ export function useBomWorkbench(
           },
         ])
         .then(([fresh]) => {
+          if (genRef.current !== gen) return; // another BOM, or cleared
           if (pickSeqRef.current.get(rowIndex) !== seq || fresh == null) return; // superseded
           setRows((prev) => foldSimilarPick(prev, rowIndex, sku, fresh));
         })
         .catch((err) => {
+          if (genRef.current !== gen) return; // another BOM, or cleared
           if (pickSeqRef.current.get(rowIndex) !== seq) return; // superseded
           const throttled = axios.isAxiosError(err) && err.response?.status === 429;
           setResolveError(
@@ -340,7 +431,11 @@ export function useBomWorkbench(
   );
 
   const reset = useCallback(() => {
+    // Bump FIRST: a match already on the wire must not repopulate the table we
+    // are about to clear, nor open a stream against it.
+    genRef.current += 1;
     resolveAbort.current?.abort();
+    pickSeqRef.current.clear();
     setRows([]);
     setMatchError(null);
     setMatching(false);
