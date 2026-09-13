@@ -5549,7 +5549,7 @@ In `pages/viewer/index.tsx`: `import StackupPanel from '@public/components/kicad
 
 - [ ] **Step 3: Gates, smoke, commit, STOP — Phase 4 gate**
 
-Run: `cd frontend && npx tsc -b && npx eslint --ext .ts,.tsx src/ && npm test`. Locally: Glasgow's Stackup tab shows four copper rows with a saved stackup and 417 through vias; the keyboard panel board (drop `bad-thing-panel`) shows its stackup; a board saved without Board Setup (any fresh KiCad board) shows the honest message with copper rows and via counts.
+Run: `cd frontend && npx tsc -b && npx eslint --ext .ts,.tsx src/ && npm test`. Locally: Glasgow's Stackup tab shows four copper rows with a saved stackup and 416 through vias; the keyboard panel board (drop `bad-thing-panel`) shows its stackup; a board saved without Board Setup (any fresh KiCad board) shows the honest message with copper rows and via counts.
 
 ```bash
 git add frontend/src/public/components/kicad/StackupPanel.tsx frontend/src/public/components/kicad/StackupPanel.module.scss frontend/src/public/pages/viewer/index.tsx
