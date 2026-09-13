@@ -3934,8 +3934,12 @@ export class KicanvasController implements CanvasController {
       project.set_active_page(page);
     } catch {
       // Only a watch THIS activate armed: a ridden one still belongs to the earlier
-      // activate that is waiting on it.
-      if (armed) watch?.cancel();
+      // activate that is waiting on it. Drop it from inFlight too, or the next
+      // activate for this view would ride a dead watch for a whole settle budget.
+      if (armed) {
+        watch?.cancel();
+        if (this.inFlight.get(view) === watch) this.inFlight.delete(view);
+      }
       return false;
     }
     if (watch != null) {
@@ -4019,7 +4023,9 @@ export class KicanvasController implements CanvasController {
   private disposeEmbed(): void {
     // These listen on THIS embed's viewers. A new embed's viewers cannot fire them, and a
     // stale unfired one would make the next same-document activate ride a watch that can
-    // never fire and wait out its whole settle budget. dispose() reaches this too.
+    // never fire and wait out its whole settle budget. dispose() reaches this too. A watch
+    // already retired from the map (it outlived its budget) is not cancelled here: its
+    // one-shot listener fires at most once on the old viewer and touches nothing else.
     for (const watch of this.inFlight.values()) watch.cancel();
     this.inFlight.clear();
     if (this.embed != null) {
