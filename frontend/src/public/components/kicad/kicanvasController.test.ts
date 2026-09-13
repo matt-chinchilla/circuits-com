@@ -327,6 +327,73 @@ describe('KicanvasController', () => {
     expect(await c2.focusRef('U1')).toBe('unsupported');
   });
 
+  /**
+   * A focus and a HOST activate racing for the same view.
+   *
+   * This is not hypothetical: `/viewer` names the designator's own sheet in page
+   * state before it calls focusRef (so the chip bar and the drawing agree), and
+   * that state change makes DesignCanvas's activate effect fire on the very
+   * commit focusRef is awaiting inside. The second activate bumps `activation`,
+   * so focusRef's own activate loses the `seq` guard and returns false — and a
+   * SUPERSEDED activate is not the same answer as a missing page. Answering
+   * 'not-found' there tells the reader a reference that is on screen does not
+   * exist.
+   */
+  it('still focuses when a host activate overtakes it onto the SAME sheet', async () => {
+    const fake = fakeEmbed({ pages: PAGES, selectedFor: ['U1'], asyncLoad: true });
+    const c = new KicanvasController({
+      loadModule: async () => undefined,
+      createEmbed: () => fake.embed,
+      readyMs: 500,
+      settleMs: 500,
+      sleep: () => new Promise<void>((resolve) => setTimeout(resolve, 0)),
+    });
+    await c.mount(document.createElement('div'), project({ 'main.kicad_sch': 's', 'sub.kicad_sch': 't' }));
+
+    // The page's two calls, in the order the page makes them: focusRef by
+    // INSTANCE path, then the host effect by FILE path — the same document.
+    const focus = c.focusRef('U1', '/r/a');
+    const host = c.activate('schematic', 'sub.kicad_sch');
+
+    expect(await focus).toBe('focused');
+    expect(await host).toBe(true);
+    expect(fake.selected).toEqual(['U1']);
+    expect(fake.viewer.selected).toBe('U1');
+    expect(fake.getActive()?.project_path).toBe('sub.kicad_sch:/r/a');
+  });
+
+  it('takes the view back when a host activate overtakes it onto a DIFFERENT sheet', async () => {
+    const fake = fakeEmbed({ pages: PAGES, selectedFor: ['U1'], asyncLoad: true });
+    const c = new KicanvasController({
+      loadModule: async () => undefined,
+      createEmbed: () => fake.embed,
+      readyMs: 500,
+      settleMs: 500,
+      sleep: () => new Promise<void>((resolve) => setTimeout(resolve, 0)),
+    });
+    await c.mount(document.createElement('div'), project({ 'main.kicad_sch': 's', 'sub.kicad_sch': 't' }));
+
+    // The stale-activeSheet shape: the host is still asking for the root while
+    // the focus wants a sub-sheet. The focus is the user's gesture and wins.
+    const focus = c.focusRef('U1', '/r/a');
+    const host = c.activate('schematic', 'main.kicad_sch');
+
+    expect(await focus).toBe('focused');
+    void (await host);
+    expect(fake.viewer.selected).toBe('U1');
+    expect(fake.getActive()?.project_path).toBe('sub.kicad_sch:/r/a');
+  });
+
+  it('still answers not-found for a sheet that is genuinely not there', async () => {
+    const fake = fakeEmbed({ pages: PAGES, selectedFor: ['U1'] });
+    const c = controller(fake);
+    await c.mount(document.createElement('div'), project({ 'main.kicad_sch': 's', 'sub.kicad_sch': 't' }));
+    // No page carries this name, so no amount of re-waiting can produce one —
+    // the retry must not turn a real miss into a focus on whatever is on screen.
+    expect(await c.focusRef('U1', 'nowhere.kicad_sch')).toBe('not-found');
+    expect(fake.selected).toEqual([]);
+  });
+
   it('focuses on the BOARD when the board is active — BoardViewer.select takes a ref too', async () => {
     const fake = fakeEmbed({ pages: PAGES, selectedFor: ['U1'], boardSelectedFor: ['U7'] });
     const c = controller(fake);

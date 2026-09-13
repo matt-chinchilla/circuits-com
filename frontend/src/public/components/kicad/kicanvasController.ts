@@ -75,9 +75,19 @@ const KICANVAS_LOAD = 'kicanvas:load';
  *  bounds as the wheel, or it walks the camera somewhere the wheel can never reach
  *  (24 steps in from 1.0 passes 190; the same out reaches ~0.005 — a board drawn as
  *  a dot until the next wheel event silently re-clamps it). */
+/** How many times a focus will take the view back from a host activate that
+ *  overtook it. The host issues one activate per state commit and nothing this
+ *  controller does makes it issue another, so the race converges after one; the
+ *  bound exists only so two focusRef calls racing each other cannot spin. */
+const FOCUS_ACTIVATE_TRIES = 3;
+
 const ZOOM_MIN = 0.5;
 const ZOOM_MAX = 190;
 const ZOOM_STEP = 1.25;
+
+/** Why an activate did not end with this call owning the view. 'superseded' is
+ *  a newer activate, which is NOT evidence about whether the page exists. */
+type ActivateOutcome = 'ok' | 'superseded' | 'failed';
 
 function sourceType(path: string): CanvasSource['type'] {
   const lower = path.toLowerCase();
@@ -350,11 +360,23 @@ export class KicanvasController implements CanvasController {
   }
 
   async activate(view: CanvasView, sheet?: string): Promise<boolean> {
+    return (await this.activateFor(view, sheet)) === 'ok';
+  }
+
+  /**
+   * activate() with its REASON kept.
+   *
+   * The public boolean collapses two unrelated facts into one `false`: there is
+   * no such page, and a NEWER activate owns the view. focusRef has to tell them
+   * apart — answering "this reference does not exist" because something else
+   * moved the view is a lie about the reader's own schematic.
+   */
+  private async activateFor(view: CanvasView, sheet?: string): Promise<ActivateOutcome> {
     const seq = ++this.activation;
     const mountEpoch = this.epoch;
     const project = this.project();
     const page = this.findPage(view, sheet);
-    if (project == null || page == null) return false;
+    if (project == null || page == null) return 'failed';
     const { schematic, board } = this.apps();
     const app = view === 'board' ? board : schematic;
     // A viewer that already holds this page's document is in one of TWO states, and they
@@ -395,7 +417,7 @@ export class KicanvasController implements CanvasController {
         watch?.cancel();
         if (this.inFlight.get(view) === watch) this.inFlight.delete(view);
       }
-      return false;
+      return 'failed';
     }
     if (watch != null) {
       await this.settle(watch);
@@ -411,14 +433,52 @@ export class KicanvasController implements CanvasController {
     // await, so two quick page changes can leave both apps visible side by side (the
     // owner's "screen duplicates itself", reproduced 2026-09-12) — the writes below are
     // how we prevent that, and a stale one would re-create it.
-    if (seq !== this.activation || this.stale(mountEpoch)) return false;
+    if (seq !== this.activation) return 'superseded';
+    if (this.stale(mountEpoch)) return 'failed';
     if (schematic) schematic.hidden = view !== 'schematic';
     if (board) board.hidden = view !== 'board';
-    return true;
+    return 'ok';
+  }
+
+  /**
+   * Put `sheet` on screen FOR A FOCUS, tolerating a host activate that overtakes
+   * this one.
+   *
+   * Being superseded is the ordinary shape of a designator click, not an error:
+   * the page names the designator's own sheet in its own state so the chip bar
+   * agrees with the drawing, and that state change makes the host re-activate on
+   * the very commit this call is awaiting inside. So a superseded activate
+   * RE-WAITS on the newer one — its settle rides the watch that activate armed —
+   * and then asks the only question that matters: is the requested sheet the one
+   * now live? If it is, the newer activate did this call's work for it. If it is
+   * not, the host is asking for somewhere else and the reader's gesture takes
+   * the view back.
+   */
+  private async activateForFocus(sheet: string): Promise<boolean> {
+    for (let attempt = 0; attempt < FOCUS_ACTIVATE_TRIES; attempt += 1) {
+      const outcome = await this.activateFor('schematic', sheet);
+      if (outcome === 'ok') return true;
+      // 'failed' is a real miss (no such page, a dropped basename twin) or a
+      // dead mount. Re-waiting cannot conjure a page, and retrying a
+      // set_active_page that threw only throws again.
+      if (outcome !== 'superseded') return false;
+      if (this.showing(sheet)) return true;
+    }
+    return this.showing(sheet);
+  }
+
+  /** Is the page `sheet` names the one on screen? Compared by DOCUMENT, because
+   *  that is what the viewer holds and what decides what is drawn — two instance
+   *  pages of one file share it (upstream's `file_by_name`), so an instance
+   *  switch within a file is not a different drawing. */
+  private showing(sheet: string): boolean {
+    const wanted = this.findPage('schematic', sheet);
+    const active = this.project()?.active_page ?? null;
+    return wanted != null && active != null && active.document === wanted.document;
   }
 
   async focusRef(ref: string, sheet?: string): Promise<FocusResult> {
-    if (sheet != null && !(await this.activate('schematic', sheet))) return 'not-found';
+    if (sheet != null && !(await this.activateForFocus(sheet))) return 'not-found';
     // The app showing the ACTIVE page, exactly as zoom() picks it: BoardViewer.select()
     // also takes a string and resolves a footprint by uuid or reference (vendor
     // viewers/board/viewer.ts:94-106), so with the board active the honest answer is
