@@ -2547,6 +2547,7 @@ git commit -m "feat(kicad): readSchematic — one BOM line per instance path, Ki
 import { describe, expect, it } from 'vitest';
 import { readStackup } from './boardStackup';
 import { fixtureText, hasFixture } from './fixtures';
+import { KicadReadError } from './types';
 
 const LAYERS_9 = '(layers (0 "F.Cu" signal) (4 "In1.Cu" power) (6 "In2.Cu" mixed) (2 "B.Cu" jumper) (9 "F.Adhes" user "F.Adhesive") (11 "F.Paste" user) (13 "F.SilkS" user "F.Silkscreen") (15 "F.Mask" user) (25 "Edge.Cuts" user))';
 const LAYERS_8 = '(layers (0 "F.Cu" signal) (1 "In1.Cu" power) (2 "In2.Cu" signal) (31 "B.Cu" signal) (32 "B.Adhes" user "B.Adhesive"))';
@@ -2605,11 +2606,16 @@ describe('readStackup', () => {
     expect(s.vias.reduce((n, g) => n + g.count, 0)).toBe(7);
   });
 
-  it('reads Glasgow revC3: four copper layers, a stackup, 410 through + 7 locked-through vias', () => {
+  // DEVIATION from the task brief, which expected 410 plain + 7 locked = 417.
+  // The committed fixture holds 409 plain + 7 locked = 416 top-level (via …)
+  // blocks, every one of them spanning "F.Cu" "B.Cu". Measured over the file
+  // with the same depth-2 walk topLevelBlocks uses; the naive
+  // `grep -c '(via'` reads 418 because it also counts the `(vias` keepout row
+  // and `(viasonmask`, which is where an off-by-one on this number comes from.
+  it('reads Glasgow revC3: four copper layers, a stackup, 409 through + 7 locked-through vias', () => {
     const s = readStackup(fixtureText('glasgow-revC3/glasgow.kicad_pcb'));
     expect(s.copperLayers.map((l) => l.name)).toEqual(['F.Cu', 'In1.Cu', 'In2.Cu', 'B.Cu']);
     expect(s.stackup).not.toBeNull();
-    // 416, not the 417 a bare `grep -c '(via'` reports: that also matches `(vias` (a zone keepout row) and `(viasonmask`.
     expect(s.vias.filter((g) => g.type === 'through').reduce((n, g) => n + g.count, 0)).toBe(416);
     expect(s.vias.some((g) => g.type === 'unknown')).toBe(false);
   });
@@ -2618,6 +2624,32 @@ describe('readStackup', () => {
     const s = readStackup(fixtureText('kicad-demos/stickhub/StickHub.kicad_pcb'));
     expect(s.vias.reduce((n, g) => n + g.count, 0)).toBe(87);
     expect(s.stackup?.some((r) => r.type === 'core')).toBe(true);
+  });
+
+  // Carry-forward from Task 1.5: buildProject accepts a .kicad_pcb with no
+  // (version …), so a mis-typed file can reach this reader. An empty structure
+  // would render as "a board with nothing on it"; the typed error is the truth.
+  it('throws unreadable rather than returning an empty structure when the text is not a board', () => {
+    const thrown = ((): unknown => {
+      try {
+        readStackup('(kicad_sch (version 20250114) (uuid "abc") (paper "A4"))');
+        return null;
+      } catch (err) {
+        return err;
+      }
+    })();
+    expect(thrown).toBeInstanceOf(KicadReadError);
+    expect((thrown as KicadReadError).kind).toBe('unreadable');
+  });
+
+  it('throws unreadable, not a raw scanner error, when the board is truncated', () => {
+    expect(() => readStackup('(kicad_pcb (version 20240108) (layers (0 "F.Cu" signal)) (via (at 1 2)')).toThrow(KicadReadError);
+    expect(() => readStackup('(kicad_pcb (version 20240108) (layers (0 "F.Cu" signal)) (via (at 1 2)')).toThrow(/truncated or malformed/);
+  });
+
+  it('keeps a via unknown once an unknown token is seen, whatever follows it', () => {
+    const s = readStackup(board(`${LAYERS_9} (via micro weird (at 0 0) (layers "F.Cu" "In1.Cu")) (via weird micro (at 0 0) (layers "F.Cu" "In1.Cu"))`));
+    expect(s.vias).toEqual([{ type: 'unknown', start: 'F.Cu', end: 'In1.Cu', count: 2 }]);
   });
 });
 ```
@@ -2635,9 +2667,21 @@ Expected: FAIL — cannot resolve `./boardStackup`.
 // parsing only the blocks it needs via topLevelBlocks so a 10 MB board's
 // tracks are never materialized. Absent facts stay null — never defaulted.
 import { atom, child, children, parse, topLevelBlocks } from './sexpr';
-import type { BoardStackup, CopperLayer, SExpr, StackupRow, ViaGroup, ViaType } from './types';
+import {
+  KicadReadError,
+  type BoardStackup,
+  type CopperLayer,
+  type SExpr,
+  type StackupRow,
+  type ViaGroup,
+  type ViaType,
+} from './types';
 
 const KIND: Record<string, string> = { signal: 'Signal', power: 'Plane', mixed: 'Mixed', jumper: 'Jumper' };
+
+/** A board must open with (kicad_pcb …). buildProject accepts a .kicad_pcb that
+ *  carries no (version …), so a file that is not a board at all can reach here. */
+const BOARD_HEAD = /^\s*\(\s*kicad_pcb[\s()]/;
 
 function num(node: SExpr[] | undefined): number | null {
   const v = node == null ? null : atom(node, 1);
@@ -2693,6 +2737,9 @@ function viaOf(via: SExpr[]): ViaGroup | null {
   for (let i = 1; i < via.length; i++) {
     const token = via[i];
     if (typeof token !== 'string') break;
+    // A token this reader does not know makes the whole via `unknown`, and
+    // stays that way: `(via micro weird …)` is as unknown as `(via weird micro …)`.
+    if (type === 'unknown') continue;
     if (token === 'blind') type = 'blind';
     else if (token === 'micro') type = 'micro';
     else if (token !== 'locked') type = 'unknown';
@@ -2705,13 +2752,26 @@ function viaOf(via: SExpr[]): ViaGroup | null {
 }
 
 export function readStackup(boardText: string): BoardStackup {
+  if (!BOARD_HEAD.test(boardText)) {
+    throw new KicadReadError('That file does not open with (kicad_pcb …) — it is not a KiCad board.', 'unreadable');
+  }
   let copper: CopperLayer[] = [];
   let stackup: StackupRow[] | null = null;
   let copperFinish: string | null = null;
   let designThicknessMm: number | null = null;
   const groups = new Map<string, ViaGroup>();
 
-  for (const block of topLevelBlocks(boardText)) {
+  // One error contract for the reader: a truncated or unbalanced board makes
+  // the scanner throw a plain Error, which the pages never see — it is the
+  // same 'unreadable' as a file that is not a board at all.
+  let blocks: Iterable<{ head: string; start: number; end: number }>;
+  try {
+    blocks = [...topLevelBlocks(boardText)];
+  } catch (err) {
+    if (err instanceof KicadReadError) throw err;
+    throw new KicadReadError('That board file is truncated or malformed and could not be read.', 'unreadable');
+  }
+  for (const block of blocks) {
     if (block.head === 'layers') {
       const node = parseBlock(boardText, block.start, block.end);
       if (node) copper = copperLayers(node);

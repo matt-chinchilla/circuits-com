@@ -261,7 +261,7 @@ interface BoardStackup {
   its `(layers A B)` pair. Groups are counted by (type, start, end). Verified
   against `tomu-fpga.kicad_pcb` (KiCanvas `debug/examples`, `(version 20221018)`):
   53 `(via blind` and 196 `(via micro` blocks; against Glasgow revC3
-  (`(version 20221018)`): 410 `(via` and 7 `(via locked`; the three scratchpad
+  (`(version 20221018)`): 409 `(via` and 7 `(via locked` = 416 through vias (a bare `grep -c` says 418: it also matches `(vias` and `(viasonmask`); the three scratchpad
   demo boards carry through vias only. KiCad uses the single token `blind` for
   blind **and** buried vias, so the panel labels that row "Blind/Buried" as the
   owner's reference does.
