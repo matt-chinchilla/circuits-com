@@ -5403,65 +5403,175 @@ Rebuild the local stack (`docker compose up -d --build frontend`). Owner checkli
 // frontend/src/public/services/bom/bomWorkbench.test.ts
 import { describe, expect, it } from 'vitest';
 import type { BomRow, ResolveEvent, TableRow } from './types';
-import { applyResolveEvent, buildRows, foldSimilarPick, pickMisses, RESOLVE_CAP, settleStragglers } from './useBomWorkbench';
+import {
+  applyResolveEvent,
+  buildRows,
+  foldSimilarPick,
+  pickMisses,
+  RESOLVE_CAP,
+  settleStragglers,
+} from './useBomWorkbench';
 
 const server = (over: Partial<BomRow>): BomRow =>
-  ({ index: 0, status: 'none', part: null, offers: [], similar: [], approx_reason: null, resolve_query: null, ...over }) as BomRow;
+  ({
+    index: 0,
+    status: 'none',
+    part: null,
+    offers: [],
+    similar: [],
+    approx_reason: null,
+    package_warning: null,
+    recommended_supplier_id: null,
+    resolve_query: null,
+    ...over,
+  }) as BomRow;
 
 const line = (index: number, over: Partial<TableRow> = {}): TableRow => ({
-  index, mpn: null, value: '1k', footprint: null, description: null, manufacturer: null, distributorPn: null, qty: 1, refs: [`R${index}`], dnp: false,
-  server: null, state: 'matched', viewerHref: null, ...over,
+  index,
+  mpn: null,
+  value: '1k',
+  footprint: null,
+  description: null,
+  manufacturer: null,
+  distributorPn: null,
+  qty: 1,
+  refs: [`R${index}`],
+  dnp: false,
+  server: null,
+  state: 'matched',
+  viewerHref: null,
+  ...over,
 });
 
 describe('buildRows', () => {
   it('joins server answers by index, marks unanswered lines not_found, and stamps the viewer route', () => {
     const rows = buildRows([line(0), line(1)], [server({ index: 1, status: 'exact' })], '/viewer');
-    expect(rows.map((r) => [r.state, r.server?.status ?? null, r.viewerHref])).toEqual([['not_found', null, '/viewer'], ['matched', 'exact', '/viewer']]);
+    expect(rows.map((r) => [r.state, r.server?.status ?? null, r.viewerHref])).toEqual([
+      ['not_found', null, '/viewer'],
+      ['matched', 'exact', '/viewer'],
+    ]);
   });
 });
 
 describe('applyResolveEvent', () => {
   const rows = [line(0, { state: 'resolving' }), line(1, { state: 'resolving' })];
-  const ev = (over: Partial<ResolveEvent>): ResolveEvent => ({ kind: 'resolved', index: 0, detail: null, row: null, ...over });
+  const ev = (over: Partial<ResolveEvent>): ResolveEvent => ({
+    kind: 'resolved',
+    index: 0,
+    detail: null,
+    row: null,
+    ...over,
+  });
   it('lands a resolved row as resolved_live, and a rowless resolved back on matched', () => {
-    expect(applyResolveEvent(rows, ev({ row: server({ index: 0, status: 'exact_live' }) }))[0]).toMatchObject({ state: 'resolved_live', server: { status: 'exact_live' } });
+    expect(
+      applyResolveEvent(rows, ev({ row: server({ index: 0, status: 'exact_live' }) }))[0],
+    ).toMatchObject({ state: 'resolved_live', server: { status: 'exact_live' } });
     expect(applyResolveEvent(rows, ev({}))[0]?.state).toBe('matched');
   });
   it('maps not_found and resolve_unavailable, touching only the named index', () => {
     const out = applyResolveEvent(rows, ev({ kind: 'not_found', index: 1 }));
     expect(out.map((r) => r.state)).toEqual(['resolving', 'not_found']);
-    expect(applyResolveEvent(rows, ev({ kind: 'resolve_unavailable', index: 0 }))[0]?.state).toBe('unavailable');
+    expect(applyResolveEvent(rows, ev({ kind: 'resolve_unavailable', index: 0 }))[0]?.state).toBe(
+      'unavailable',
+    );
   });
 });
 
 describe('settleStragglers', () => {
   it('returns every still-resolving row to matched', () => {
-    expect(settleStragglers([line(0, { state: 'resolving' }), line(1, { state: 'not_found' })]).map((r) => r.state)).toEqual(['matched', 'not_found']);
+    expect(
+      settleStragglers([line(0, { state: 'resolving' }), line(1, { state: 'not_found' })]).map(
+        (r) => r.state,
+      ),
+    ).toEqual(['matched', 'not_found']);
   });
 });
 
 describe('pickMisses', () => {
-  const miss = (index: number, over: Partial<TableRow> = {}) => line(index, { server: server({ index, status: 'resolve', resolve_query: `q${index}` }), ...over });
+  const miss = (index: number, over: Partial<TableRow> = {}) =>
+    line(index, {
+      server: server({ index, status: 'resolve', resolve_query: `q${index}` }),
+      ...over,
+    });
   it('takes resolve rows with a query, MPN-first, skips DNP unless included, caps at RESOLVE_CAP', () => {
-    const rows = [miss(0), miss(1, { mpn: 'ABC' }), miss(2, { dnp: true }), line(3), miss(4, { server: server({ index: 4, status: 'resolve', resolve_query: '' }) })];
+    const rows = [
+      miss(0),
+      miss(1, { mpn: 'ABC' }),
+      miss(2, { dnp: true }),
+      line(3),
+      miss(4, { server: server({ index: 4, status: 'resolve', resolve_query: '' }) }),
+    ];
     expect(pickMisses(rows, false).misses.map((m) => m.index)).toEqual([1, 0]);
     expect(pickMisses(rows, true).misses.map((m) => m.index)).toEqual([1, 0, 2]);
     const many = Array.from({ length: RESOLVE_CAP + 5 }, (_, i) => miss(i));
-    expect(pickMisses(many, false)).toMatchObject({ dropped: 5 });
+    const capped = pickMisses(many, false);
+    // `dropped` alone is computed from the input length, so it stays right even
+    // if the slice is wrong. The SLICE is what the server 422s on (one over and
+    // it rejects the whole stream), so assert its length directly.
+    expect(capped.misses).toHaveLength(RESOLVE_CAP);
+    expect(capped).toMatchObject({ dropped: 5 });
+  });
+
+  it('drops the guesses at the cap, never the MPN-identified certainties', () => {
+    // More lines than the cap, with the MPN'd ones LAST in file order: the
+    // ordering claim is that they still all survive and the value-only
+    // queries are what gets left behind.
+    const valueOnly = Array.from({ length: RESOLVE_CAP }, (_, i) => miss(i));
+    const withMpn = Array.from({ length: 4 }, (_, i) =>
+      miss(RESOLVE_CAP + i, { mpn: `MPN${i}` }),
+    );
+    const { misses, dropped } = pickMisses([...valueOnly, ...withMpn], false);
+    expect(misses).toHaveLength(RESOLVE_CAP);
+    expect(dropped).toBe(4);
+    expect(misses.slice(0, 4).map((m) => m.mpn)).toEqual(['MPN0', 'MPN1', 'MPN2', 'MPN3']);
+    expect(misses.every((m) => m.index !== RESOLVE_CAP - 1)).toBe(true); // a guess fell off
   });
 });
 
 describe('foldSimilarPick', () => {
   it('swaps in the fresh match as approx and folds the displaced part into the menu', () => {
-    const displaced = { id: 'p1', sku: 'OLD', manufacturer_name: 'M', description: null, package: null, lifecycle_status: null, lifecycle_verified: false };
-    const rows = [line(0, { server: server({ index: 0, status: 'exact', part: displaced as BomRow['part'], similar: [{ ...displaced, id: 'p2', sku: 'NEW' }] }) })];
-    const out = foldSimilarPick(rows, 0, 'NEW', server({ index: 0, status: 'exact', part: { ...displaced, id: 'p2', sku: 'NEW' } as BomRow['part'] }));
-    expect(out[0]?.server).toMatchObject({ status: 'approx', approx_reason: 'your pick — similar part' });
+    const displaced = {
+      id: 'p1',
+      sku: 'OLD',
+      manufacturer_name: 'M',
+      description: null,
+      package: null,
+      lifecycle_status: null,
+      lifecycle_verified: false,
+    };
+    const rows = [
+      line(0, {
+        server: server({
+          index: 0,
+          status: 'exact',
+          part: displaced as BomRow['part'],
+          similar: [{ ...displaced, id: 'p2', sku: 'NEW' }],
+        }),
+      }),
+    ];
+    const out = foldSimilarPick(
+      rows,
+      0,
+      'NEW',
+      server({
+        index: 0,
+        status: 'exact',
+        part: { ...displaced, id: 'p2', sku: 'NEW' } as BomRow['part'],
+      }),
+    );
+    expect(out[0]?.server).toMatchObject({
+      status: 'approx',
+      approx_reason: 'your pick — similar part',
+    });
     expect(out[0]?.server?.similar.map((s) => s.sku)).toEqual(['OLD']);
   });
-  it('leaves other rows and rows with no server answer untouched', () => {
+  it('returns the SAME array when the fresh match has no part', () => {
+    // Reference identity is the behaviour, not an implementation detail: it is
+    // what lets `setRows((prev) => foldSimilarPick(...))` bail out of the
+    // re-render, matching the old code's `if (fresh.part == null) return;`
+    // early exit. `toEqual` would pass for a freshly mapped copy too.
     const rows = [line(0), line(1)];
-    expect(foldSimilarPick(rows, 0, 'X', server({ index: 0, part: null }))).toEqual(rows);
+    expect(foldSimilarPick(rows, 0, 'X', server({ index: 0, part: null }))).toBe(rows);
   });
 });
 ```
@@ -5492,7 +5602,13 @@ export const MATCH_FAILED =
   'We could not reach the pricing service. Your file is still loaded — try again in a moment.';
 export const MATCH_THROTTLED =
   'That is a lot of BOMs in one minute. Wait about a minute and price this one again.';
+
+/** Mirrors `BomResolveRequest.misses` max_length in api/app/schemas/bom.py:
+ *  one over and the server 422s the whole stream, so the cap is enforced here
+ *  and ANNOUNCED — a silently dropped line is a line the reader believes was
+ *  priced. */
 export const RESOLVE_CAP = 50;
+
 export const RESOLVE_STOPPED =
   'Live lookups stopped early. The lines still marked NO MATCH were never looked up — try again in a moment.';
 
@@ -5505,7 +5621,25 @@ export function cappedNote(dropped: number): string {
   );
 }
 
-export function pickMisses(rows: TableRow[], includeDnp: boolean): { misses: MissIn[]; dropped: number } {
+/**
+ * Which lines phase 2 asks a distributor about, in the order it asks.
+ *
+ * MPN'd misses go FIRST: they resolve by an exact part lookup, which is the
+ * one call that either finds the part or proves it does not exist. A
+ * value+footprint query ("10k 0805") is a keyword search whose first hit is a
+ * guess, so when the cap bites it is the guesses that get dropped, never the
+ * certainties.
+ *
+ * DNP lines are not asked about unless the reader has said to include them
+ * (spec §5) — nobody is buying them, and a live lookup costs real distributor
+ * quota. The toggle is read at the moment the stream STARTS: flipping it
+ * afterwards re-counts and re-prices the table from data already in hand, but
+ * it never goes and spends more quota behind the reader's back.
+ */
+export function pickMisses(
+  rows: TableRow[],
+  includeDnp: boolean,
+): { misses: MissIn[]; dropped: number } {
   const withMpn: MissIn[] = [];
   const withoutMpn: MissIn[] = [];
   for (const row of rows) {
@@ -5517,24 +5651,51 @@ export function pickMisses(rows: TableRow[], includeDnp: boolean): { misses: Mis
     (mpn != null ? withMpn : withoutMpn).push({ index: row.index, query, mpn });
   }
   const ordered = [...withMpn, ...withoutMpn];
-  return { misses: ordered.slice(0, RESOLVE_CAP), dropped: Math.max(0, ordered.length - RESOLVE_CAP) };
+  return {
+    misses: ordered.slice(0, RESOLVE_CAP),
+    dropped: Math.max(0, ordered.length - RESOLVE_CAP),
+  };
 }
 
-/** Phase-1 rows: `matched` means "the server answered"; `not_found` means it did not. */
-export function buildRows(lines: ParsedBomLine[], serverRows: BomRow[], viewerHref: string | null): TableRow[] {
+/**
+ * Phase-1 rows: `matched` means "the server answered"; `not_found` means it
+ * did not. The badge then reads the server status, so a `resolve`/`none` row
+ * is still `matched` in this sense and simply renders NO MATCH until phase 2
+ * moves it.
+ *
+ * `viewerHref` is the §7.6 seam: null on the standalone tool, a route when a
+ * viewer session is what produced these lines.
+ */
+export function buildRows(
+  lines: ParsedBomLine[],
+  serverRows: BomRow[],
+  viewerHref: string | null,
+): TableRow[] {
   const byIndex = new Map(serverRows.map((row) => [row.index, row]));
   return lines.map((line) => {
     const server = byIndex.get(line.index) ?? null;
-    return { ...line, server, state: server == null ? ('not_found' as const) : ('matched' as const), viewerHref };
+    return {
+      ...line,
+      server,
+      state: server == null ? ('not_found' as const) : ('matched' as const),
+      viewerHref,
+    };
   });
 }
 
+/** Fold one streamed event into the row it names. Pure so the caller can hand
+ *  it to a functional updater: events arrive over tens of seconds and the
+ *  closure that started the stream has long since gone stale. */
 export function applyResolveEvent(rows: TableRow[], event: ResolveEvent): TableRow[] {
   return rows.map((row) => {
     if (row.index !== event.index) return row;
     switch (event.kind) {
       case 'resolved':
-        return event.row == null ? { ...row, state: 'matched' as const } : { ...row, server: event.row, state: 'resolved_live' as const };
+        // A `resolved` with no row is a malformed event; falling back to the
+        // phase-1 answer is honest, a permanent spinner is not.
+        return event.row == null
+          ? { ...row, state: 'matched' as const }
+          : { ...row, server: event.row, state: 'resolved_live' as const };
       case 'not_found':
         return { ...row, state: 'not_found' as const };
       case 'resolve_unavailable':
@@ -5545,24 +5706,51 @@ export function applyResolveEvent(rows: TableRow[], event: ResolveEvent): TableR
   });
 }
 
+/** The server emits exactly one event per miss, so nothing should still be
+ *  spinning once the stream ends. If something is, the stream died early —
+ *  put the row back on its phase-1 answer rather than spin forever. */
 export function settleStragglers(rows: TableRow[]): TableRow[] {
   return rows.map((row) => (row.state === 'resolving' ? { ...row, state: 'matched' as const } : row));
 }
 
 /** The Matches column's "Similar" pick applied: the fresh match replaces the
- *  answer as approx, the displaced part joins the menu, the pick stays reversible. */
-export function foldSimilarPick(rows: TableRow[], rowIndex: number, sku: string, fresh: BomRow): TableRow[] {
+ *  answer as approx (relative to what was SUBMITTED it is still a substitute),
+ *  the displaced part joins the menu, so the pick stays reversible. */
+export function foldSimilarPick(
+  rows: TableRow[],
+  rowIndex: number,
+  sku: string,
+  fresh: BomRow,
+): TableRow[] {
   if (fresh.part == null) return rows;
   return rows.map((r) => {
     if (r.index !== rowIndex || r.server == null) return r;
     const displaced = r.server.part;
     const keptSimilar = [
       ...(displaced != null
-        ? [{ id: displaced.id, sku: displaced.sku, manufacturer_name: displaced.manufacturer_name, description: displaced.description, package: displaced.package, lifecycle_status: displaced.lifecycle_status, lifecycle_verified: displaced.lifecycle_verified }]
+        ? [
+            {
+              id: displaced.id,
+              sku: displaced.sku,
+              manufacturer_name: displaced.manufacturer_name,
+              description: displaced.description,
+              package: displaced.package,
+              lifecycle_status: displaced.lifecycle_status,
+              lifecycle_verified: displaced.lifecycle_verified,
+            },
+          ]
         : []),
       ...r.server.similar,
     ].filter((s) => s.sku !== sku);
-    return { ...r, server: { ...fresh, status: 'approx' as const, approx_reason: 'your pick — similar part', similar: keptSimilar } };
+    return {
+      ...r,
+      server: {
+        ...fresh,
+        status: 'approx' as const,
+        approx_reason: 'your pick — similar part',
+        similar: keptSimilar,
+      },
+    };
   });
 }
 
@@ -5577,26 +5765,99 @@ export interface BomWorkbench {
   includeDnp: boolean;
   setIncludeDnp: (include: boolean) => void;
   pickSimilar: (rowIndex: number, sku: string) => void;
-  /** Back to nothing: aborts any stream and clears every field. */
+  /**
+   * Back to nothing: abandons every in-flight request, aborts the stream and
+   * clears every field INCLUDING the reader's build quantity and DNP choice.
+   *
+   * TERMINAL for the current `parsed`: pricing does not resume on its own, by
+   * design — re-issuing a match the reader just cancelled would spend the
+   * resolve budget they declined. The hook prices again only when `parsed`
+   * changes IDENTITY, so hand in a fresh parse, or `null` and then the same
+   * one back.
+   *
+   * Distinct from handing the hook `null`, which means "nothing to price right
+   * now" — that clears the priced result but KEEPS those two settings, so a
+   * consumer that re-derives a BOM (closing and reopening a project) does not
+   * silently reset the quantity somebody typed. Null-arming is the better lever
+   * for "close the project"; `reset()` is "change file".
+   */
   reset: () => void;
 }
 
-export function useBomWorkbench(parsed: ParseResult | null, viewerHref: string | null): BomWorkbench {
+/**
+ * @param parsed  The BOM to price, or null for "nothing to price right now" —
+ *   which clears any previous result and abandons work in flight. Phase 1 runs
+ *   once per IDENTITY of this object, so callers hold it in state, never
+ *   rebuild it per render.
+ * @param viewerHref  Stamped onto every row (the §7.6 seam) and nothing else.
+ *   Deliberately NOT a match input: it may arrive late — `/bom` gains one when
+ *   a KiCad project is opened mid-session — and re-matching then would bin a
+ *   priced table and re-spend the visitor's daily resolve budget. A change
+ *   re-stamps the rows already on screen instead.
+ */
+export function useBomWorkbench(
+  parsed: ParseResult | null,
+  viewerHref: string | null,
+): BomWorkbench {
   const [rows, setRows] = useState<TableRow[]>([]);
   const [matching, setMatching] = useState(false);
   const [matchError, setMatchError] = useState<string | null>(null);
   const [buildQty, setBuildQty] = useState(1);
+  // Per-BOM, default OFF (spec §5). A ref shadows it because `startResolve`
+  // runs from the phase-1 effect and must read the CURRENT answer without
+  // re-running the whole match when the reader toggles it.
   const [includeDnp, setIncludeDnp] = useState(false);
   const includeDnpRef = useRef(includeDnp);
   includeDnpRef.current = includeDnp;
-  const pickSeqRef = useRef(new Map<number, number>());
+  // Phase-2 notes, kept apart from `matchError` because neither is fatal: the
+  // table is priced and readable with both of them on screen.
   const [resolveNote, setResolveNote] = useState<string | null>(null);
   const [resolveError, setResolveError] = useState<string | null>(null);
+
+  /**
+   * THE staleness mechanism. Every async landing answers one question — "does
+   * this belong to a workbench that still exists?" — by comparing the
+   * generation it was issued under against the current one. Bumped by the four
+   * things that end a workbench: a new `parsed`, its teardown, `reset()` and
+   * unmount.
+   *
+   * It replaces an effect-local `cancelled` flag, which `reset()` could not
+   * reach: a match landing after a clear used to repopulate the emptied table
+   * AND open a fresh stream, spending up to RESOLVE_CAP of the visitor's
+   * 100/day resolve budget on a BOM they had just thrown away.
+   */
+  const genRef = useRef(0);
+
+  /** Read at `buildRows` time rather than depended on — see the doc comment. */
+  const viewerHrefRef = useRef(viewerHref);
+  viewerHrefRef.current = viewerHref;
+
+  const pickSeqRef = useRef(new Map<number, number>());
+
+  // The resolve stream is a socket THIS tab holds open. Leaving the page drops
+  // it; each miss is one bounded server-side call that finishes on its own
+  // either way, so aborting costs nothing but the reader. One controller is
+  // enough: one stream at a time.
   const resolveAbort = useRef<AbortController | null>(null);
+  useEffect(
+    () => () => {
+      genRef.current += 1;
+      resolveAbort.current?.abort();
+    },
+    [],
+  );
 
-  useEffect(() => () => resolveAbort.current?.abort(), []);
-
+  /**
+   * Phase 2 — the misses go and heal themselves.
+   *
+   * Owns the `setRows` for the rows it is about to ask about (flipping them to
+   * `resolving` in the SAME commit the table first renders in, so no row ever
+   * flashes NO MATCH on its way to being looked up).
+   */
   const startResolve = useCallback((built: TableRow[]) => {
+    // Called synchronously from the match landing, which has already proved
+    // its generation current, so reading it here captures the same one.
+    const gen = genRef.current;
     const { misses, dropped } = pickMisses(built, includeDnpRef.current);
     setResolveNote(dropped > 0 ? cappedNote(dropped) : null);
     setResolveError(null);
@@ -5604,73 +5865,173 @@ export function useBomWorkbench(parsed: ParseResult | null, viewerHref: string |
       setRows(built);
       return;
     }
+
     const asking = new Set(misses.map((m) => m.index));
-    setRows(built.map((row) => (asking.has(row.index) ? { ...row, state: 'resolving' as const } : row)));
+    setRows(
+      built.map((row) => (asking.has(row.index) ? { ...row, state: 'resolving' as const } : row)),
+    );
+
+    // Never two readers on one table: a fresh parse drops the older socket.
     resolveAbort.current?.abort();
     const controller = new AbortController();
     resolveAbort.current = controller;
+
     bomApi
-      .streamResolve(misses, (event) => setRows((prev) => applyResolveEvent(prev, event)), controller.signal)
+      .streamResolve(
+        misses,
+        (event) => {
+          // Events buffered before the abort can still arrive. They name row
+          // INDICES, so replaying one onto a later BOM would stamp a live
+          // price on whatever line happens to sit at that index.
+          if (genRef.current !== gen) return;
+          setRows((prev) => applyResolveEvent(prev, event));
+        },
+        controller.signal,
+      )
       .then(() => {
-        if (controller.signal.aborted) return;
+        if (genRef.current !== gen) return;
         setRows(settleStragglers);
       })
       .catch(() => {
-        if (controller.signal.aborted) return;
+        // An abort resolves down this path too; there is nobody left to tell.
+        if (genRef.current !== gen) return;
         setRows(settleStragglers);
         setResolveError(RESOLVE_STOPPED);
       });
   }, []);
 
-  // Phase 1 — once per parse, keyed on the IDENTITY of `parsed` (callers hold it in state or the session).
+  // Phase 1: ask the catalog about the identity fields, once, per parse —
+  // keyed on the IDENTITY of `parsed`, which callers hold in state or in the
+  // session. A caller that is not ready to price passes null.
+  //
+  // The table is deliberately NOT rendered while this is in flight: rows with
+  // no server answer yet would all read NO MATCH, which is a lie for the
+  // second and a half it takes to come back.
   useEffect(() => {
-    if (parsed == null || parsed.error != null) return;
+    genRef.current += 1;
+    const gen = genRef.current;
+
+    // Nothing to price: abandon the previous BOM's result rather than leave it
+    // rendered under a consumer that has closed its project. The build
+    // quantity and DNP choice survive — they are the reader's settings, and
+    // only `reset()` owns those. The functional updater keeps the array
+    // identity when it is already empty, so a null-armed hook never re-renders.
+    if (parsed == null || parsed.error != null) {
+      resolveAbort.current?.abort();
+      setRows((prev) => (prev.length === 0 ? prev : []));
+      setMatching(false);
+      setMatchError(null);
+      setResolveNote(null);
+      setResolveError(null);
+      return;
+    }
+
     const lines = parsed.lines;
     setRows([]);
     setMatchError(null);
     setMatching(true);
-    let cancelled = false;
+
+    // D7: IDENTITY FIELDS ONLY. Quantities, designators, the DNP flag and the
+    // file itself never leave the browser — the privacy claim is structural,
+    // not a promise, and the /bom/match schema rejects anything else. Pricing
+    // math runs client-side off the break tables the response carries back.
     bomApi
-      .match(lines.map((l) => ({ index: l.index, mpn: l.mpn, value: l.value, footprint: l.footprint, description: l.description, manufacturer: l.manufacturer })))
+      .match(
+        lines.map((line) => ({
+          index: line.index,
+          mpn: line.mpn,
+          value: line.value,
+          footprint: line.footprint,
+          description: line.description,
+          manufacturer: line.manufacturer,
+        })),
+      )
       .then((serverRows) => {
-        if (cancelled) return;
+        if (genRef.current !== gen) return;
         setMatching(false);
-        startResolve(buildRows(lines, serverRows, viewerHref));
+        // Hand the rows straight to phase 2 — it owns the setRows, so the
+        // lines it is about to look up land already flipped to `resolving`.
+        startResolve(buildRows(lines, serverRows, viewerHrefRef.current));
       })
       .catch((err: unknown) => {
-        if (cancelled) return;
+        if (genRef.current !== gen) return;
         const throttled = axios.isAxiosError(err) && err.response?.status === 429;
         setMatchError(throttled ? MATCH_THROTTLED : MATCH_FAILED);
         setMatching(false);
       });
+
     return () => {
-      cancelled = true;
+      // A new parse invalidates the previous BOM's stream as surely as
+      // leaving does — its events name row indices from a table that no
+      // longer exists.
+      genRef.current += 1;
       resolveAbort.current?.abort();
     };
-  }, [parsed, viewerHref, startResolve]);
+  }, [parsed, startResolve]);
 
+  // A viewer route that arrives after the table is priced re-stamps the rows
+  // in place. Bailing out on `every` keeps the array identity when nothing
+  // changed, so the common case (a stable href, or none) costs one comparison
+  // pass and no re-render.
+  useEffect(() => {
+    setRows((prev) =>
+      prev.every((row) => row.viewerHref === viewerHref)
+        ? prev
+        : prev.map((row) => ({ ...row, viewerHref })),
+    );
+  }, [viewerHref]);
+
+  /**
+   * Re-match this ONE line by the chosen SKU (identity only travels — D7).
+   *
+   * Two guards, because they answer different questions. The generation says
+   * the answer still belongs to THIS BOM — without it a pick made before
+   * "Change file" lands on the next BOM's row of the same index and labels
+   * somebody else's part "your pick". The per-row sequence says it is still
+   * the LATEST pick for that row; overlapping picks settle in network order,
+   * so a superseded response must be dropped, not applied (review #4). The
+   * generation cannot express that — both clicks share one generation.
+   */
   const pickSimilar = useCallback(
     (rowIndex: number, sku: string) => {
+      const gen = genRef.current;
       const line = rows.find((r) => r.index === rowIndex);
       const seq = (pickSeqRef.current.get(rowIndex) ?? 0) + 1;
       pickSeqRef.current.set(rowIndex, seq);
       bomApi
-        .match([{ index: rowIndex, mpn: sku, value: null, footprint: line?.footprint ?? null, description: null, manufacturer: null }])
+        .match([
+          {
+            index: rowIndex,
+            mpn: sku,
+            value: null,
+            footprint: line?.footprint ?? null,
+            description: null,
+            manufacturer: null,
+          },
+        ])
         .then(([fresh]) => {
-          if (pickSeqRef.current.get(rowIndex) !== seq || fresh == null) return;
+          if (genRef.current !== gen) return; // another BOM, or cleared
+          if (pickSeqRef.current.get(rowIndex) !== seq || fresh == null) return; // superseded
           setRows((prev) => foldSimilarPick(prev, rowIndex, sku, fresh));
         })
         .catch((err) => {
-          if (pickSeqRef.current.get(rowIndex) !== seq) return;
+          if (genRef.current !== gen) return; // another BOM, or cleared
+          if (pickSeqRef.current.get(rowIndex) !== seq) return; // superseded
           const throttled = axios.isAxiosError(err) && err.response?.status === 429;
-          setResolveError(throttled ? MATCH_THROTTLED : 'Could not switch to that part — try again in a moment.');
+          setResolveError(
+            throttled ? MATCH_THROTTLED : 'Could not switch to that part — try again in a moment.',
+          );
         });
     },
     [rows],
   );
 
   const reset = useCallback(() => {
+    // Bump FIRST: a match already on the wire must not repopulate the table we
+    // are about to clear, nor open a stream against it.
+    genRef.current += 1;
     resolveAbort.current?.abort();
+    pickSeqRef.current.clear();
     setRows([]);
     setMatchError(null);
     setMatching(false);
@@ -5680,7 +6041,19 @@ export function useBomWorkbench(parsed: ParseResult | null, viewerHref: string |
     setIncludeDnp(false);
   }, []);
 
-  return { rows, matching, matchError, resolveNote, resolveError, buildQty, setBuildQty, includeDnp, setIncludeDnp, pickSimilar, reset };
+  return {
+    rows,
+    matching,
+    matchError,
+    resolveNote,
+    resolveError,
+    buildQty,
+    setBuildQty,
+    includeDnp,
+    setIncludeDnp,
+    pickSimilar,
+    reset,
+  };
 }
 ```
 
@@ -5706,6 +6079,8 @@ git commit -m "refactor(bom): useBomWorkbench — match/resolve/qty/DNP/similar-
 ```
 
 ---
+
+> **Landed (2026-09-13, commits 61fcab3 → 0770a66 → 94c0eec):** the blocks above are synced to the landed files. Two review rounds changed the hook's contract from the first draft: (1) `viewerHref` is NOT a dependency of the phase-1 match — it is held in a ref, stamped at `buildRows` time and re-stamped onto existing rows by a separate effect with an identity-preserving bail, so a late-arriving href (Task 3.4's case) never re-matches or aborts the stream; (2) ONE generation ref (bumped by the effect body, its cleanup, `reset()` and unmount) is the staleness rule checked at every async landing — `reset()` therefore invalidates an in-flight match and is TERMINAL for the current `parsed` (hand a new `parsed`, or `null` then a parse, to price again; `null` clears the result but keeps build quantity and DNP); `pickSeqRef` stays beside it because two picks on one row share a generation and only a per-row sequence gives last-click-wins; (3) `frontend/src/public/services/bom/useBomWorkbench.test.ts` (happy-dom harness, `bomApi` mocked, 19 tests, mutation-checked) pins one match per `parsed` identity, the href re-stamp without re-match, stale-parse discard, reset during an in-flight match, null clearing, the stream-failure banner and the terminal reset. Task 3.3 uses `parsed = null` to close a project and reserves `reset()` for "Change file". Under `StrictMode` (dev only) the phase-1 effect double-invokes and a dev network panel shows two `match` calls, the first discarded — not a bug.
 
 ### Task 3.2: Designator chips — the viewer route with a `#ref`, and an in-page click (spec §6)
 
