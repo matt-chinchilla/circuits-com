@@ -25,7 +25,8 @@ export type StaticPageKey =
   | 'keyword'
   | 'privacy'
   | 'search'
-  | 'terms';
+  | 'terms'
+  | 'viewer';
 
 /**
  * Routes whose head is a fixed literal.
@@ -108,6 +109,15 @@ export const STATIC_PAGE_SEO: Record<StaticPageKey, PageSeo> = {
     canonical: `${SITE_ORIGIN}/terms`,
     jsonLd: [],
     heading: 'Terms of Service',
+    links: SITE_LINKS,
+  },
+  viewer: {
+    title: 'Price a KiCad BOM from Your Schematic — Design Viewer | Circuit Center',
+    description:
+      'Open a KiCad project in your browser: schematic, board, stackup, and a BOM read from your schematic and priced across our distributor catalog.',
+    canonical: `${SITE_ORIGIN}/viewer`,
+    jsonLd: [],
+    heading: 'Design Viewer',
     links: SITE_LINKS,
   },
   // Result pages are noindex,follow: the query space is unbounded and every

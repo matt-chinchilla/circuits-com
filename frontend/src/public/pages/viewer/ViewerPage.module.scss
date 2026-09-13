@@ -38,6 +38,14 @@
   flex-direction: column;
   flex: 1 1 auto;
   min-height: 0;
+
+  // `display: flex` is an AUTHOR declaration and so beats the UA sheet's
+  // `[hidden] { display: none }` — nothing in src/ re-states that rule. Without
+  // this the host's `hidden` prop is inert and the drawing would stay on screen
+  // under the Phase 3 BOM tab.
+  &[hidden] {
+    display: none;
+  }
 }
 
 .strip {
@@ -128,4 +136,13 @@
   padding: 10px 16px;
   font-size: 0.88rem;
   z-index: 50;
+}
+
+// The strip above the page is $nav-height-mobile (48px) here, not $nav-height
+// (36px), so the viewport left for the drawing is 12px smaller. Must come AFTER
+// `.loaded` above: same specificity, source order decides (CLAUDE.md).
+@include responsive($bp-mobile) {
+  .loaded {
+    min-height: calc(100dvh - #{$nav-height-mobile});
+  }
 }

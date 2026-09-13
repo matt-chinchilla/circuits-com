@@ -11,6 +11,7 @@ const CategoryPage = lazy(() => import("@public/pages/category"));
 const SearchPage = lazy(() => import("@public/pages/search"));
 const JoinPage = lazy(() => import("@public/pages/join"));
 const BomPage = lazy(() => import("@public/pages/bom"));
+const ViewerPage = lazy(() => import("@public/pages/viewer"));
 const ContactPage = lazy(() => import("@public/pages/contact"));
 const AboutPage = lazy(() => import("@public/pages/about"));
 const KeywordSponsorPage = lazy(() => import("@public/pages/keyword"));
@@ -210,6 +211,7 @@ function App() {
               read-only share of somebody's priced table. */}
           <Route path="/bom" element={<BomPage />} />
           <Route path="/bom/s/:slug" element={<BomPage />} />
+          <Route path="/viewer" element={<ViewerPage />} />
           <Route path="/contact" element={<ContactPage />} />
           <Route path="/about" element={<AboutPage />} />
           <Route path="/keyword" element={<KeywordLandingPage />} />
