@@ -4713,8 +4713,8 @@ git commit -m "feat(viewer): design session — one project, one BOM parse, shar
 ### Task 2.4: The viewer intake, the Glasgow sample, the notice, and the icon font-face (spec §7.1, §5.1)
 
 **Files:**
-- Create: `frontend/src/public/pages/viewer/components/ViewerIntake.tsx`, `frontend/src/public/pages/viewer/ViewerPage.module.scss`, `frontend/public/samples/glasgow-revC3.zip`, `frontend/public/vendor/kicanvas/NOTICE.txt`
-- Modify: `frontend/src/shared/styles/global.scss` (one `@font-face`)
+- Create: `frontend/src/public/pages/viewer/components/ViewerIntake.tsx`, `frontend/src/public/pages/viewer/ViewerPage.module.scss`, `frontend/src/public/styles/_dropFrame.scss` (the shared `drop-frame-intake` mixin — ruling below), `frontend/public/samples/glasgow-revC3.zip`, `frontend/public/vendor/kicanvas/NOTICE.txt`
+- Modify: `frontend/src/shared/styles/global.scss` (one `@font-face`), `frontend/src/public/pages/bom/BomPage.module.scss` (the moved drop-frame blocks become `@include drop-frame-intake;`)
 
 **Interfaces:**
 - Consumes: `buildProject` (1.5), `KicadReadError` (1.2), `KicadProject`.
@@ -4730,6 +4730,7 @@ python3 -m zipfile -l public/samples/glasgow-revC3.zip   # six entries, no direc
 {
   echo "Circuit Center — third-party notices for the Design Viewer"; echo; echo "This programme is licensed under the GNU General Public License v3.0 or later (see /LICENSE in the source repository)."; echo;
   echo "=== KiCanvas — https://github.com/theacodes/kicanvas @ b031159eb74aaa7eef2b026fd85d35bc05ff2095 (vendored as source with two local patches; see frontend/vendor/kicanvas/patches) ==="; echo; cat vendor/kicanvas/LICENSE.md; echo;
+  echo "=== earcut (polygon triangulation, bundled inside the KiCanvas build from frontend/vendor/kicanvas/third_party/earcut) — https://github.com/mapbox/earcut — ISC License ==="; echo; cat vendor/kicanvas/third_party/earcut/LICENSE; echo;
   echo "=== Material Symbols Outlined (16-glyph subset) — https://github.com/google/material-design-icons — Apache License 2.0 ==="; echo; cat public/fonts/kicanvas/LICENSE-Apache-2.0.txt; echo;
   echo "=== Example project: Glasgow Interface Explorer revC3 — https://github.com/GlasgowEmbedded/glasgow @ 49e29452a3372fcc5aea790c080c0be554d15800 — 0BSD ==="; echo; cat src/public/services/kicad/fixtures/glasgow-revC3/LICENSE; echo;
 } > public/vendor/kicanvas/NOTICE.txt
@@ -4881,7 +4882,7 @@ export default function ViewerIntake({ onProject }: ViewerIntakeProps) {
 }
 ```
 
-`frontend/src/public/pages/viewer/ViewerPage.module.scss` — start with the four `@use` lines from `BomPage.module.scss` (replacing `'bomMaterial'` with `'@public/styles/bomMaterial'`), then **copy verbatim** these rule blocks from `BomPage.module.scss`: `.page`, `.stack`, `.intake`, `.drop`, `.dropActive`, `.crop`, `.cropTl`, `.cropTr`, `.cropBl`, `.cropBr`, `.dropLead`, `.btnRow`, `.formatLine`, `.dropBtn`, `.exampleBtn` (and the `.pasteToggle, .exampleBtn` disabled state), `.intakeError`, `.phaseText`, `.phaseWarn`, `.pageError`. Then add:
+**Controller ruling (pre-flight scan): no verbatim duplication.** Create `frontend/src/public/styles/_dropFrame.scss` exporting ONE mixin, `drop-frame-intake`, and MOVE into it (cut, not copy) these rule blocks from `BomPage.module.scss`: `.page`, `.stack`, `.intake`, `.drop`, `.dropActive`, `.crop`, `.cropTl`, `.cropTr`, `.cropBl`, `.cropBr`, `.dropLead`, `.btnRow`, `.formatLine`, `.dropBtn`, `.exampleBtn` (with the `.pasteToggle, .exampleBtn` disabled state), `.intakeError`, `.phaseText`, `.phaseWarn`, `.pageError`. The mixin file starts with the same `@use` lines those rules need (`@shared/styles/variables`, `@shared/styles/mixins`, `@public/styles/bomMaterial`). `BomPage.module.scss` then replaces the moved blocks with `@use '@public/styles/dropFrame' as *;` + `@include drop-frame-intake;` at the same position, and `ViewerPage.module.scss` starts with the same `@use` lines plus `@include drop-frame-intake;`. Prove the BOM page is pixel-identical: build the CSS before and after (`npx vite build --mode development` or `npx sass` on the module) and diff the emitted rules for the BOM page's class list — the emitted declarations for every moved class must be unchanged (order within the file may shift). Then add:
 
 ```scss
 .credit {
@@ -5012,7 +5013,7 @@ Run: `cd frontend && npx tsc -b && npx eslint --ext .ts,.tsx src/` (the SCSS com
 
 ```bash
 cd /home/matthew/circuits-com
-git add frontend/src/public/pages/viewer frontend/public/samples/glasgow-revC3.zip frontend/public/vendor/kicanvas/NOTICE.txt frontend/src/shared/styles/global.scss
+git add frontend/src/public/pages/viewer frontend/public/samples/glasgow-revC3.zip frontend/public/vendor/kicanvas/NOTICE.txt frontend/src/shared/styles/global.scss frontend/src/public/styles/_dropFrame.scss frontend/src/public/pages/bom/BomPage.module.scss
 git commit -m "feat(viewer): intake with the Glasgow revC3 sample (0BSD), third-party NOTICE, icon-subset font face"
 ```
 
