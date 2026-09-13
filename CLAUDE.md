@@ -134,7 +134,7 @@ Aliases `@public/*` / `@admin/*` / `@shared/*` in `vite.config.ts` + `tsconfig.a
 @use '../../styles/mixins' as *;
 @use '../../styles/animations';
 ```
-Mixins in `_mixins.scss`: `container`, `card-base`, `hover-lift`, `responsive($bp)`, `gold-shimmer-border`, `skeleton-shimmer`, `scrollbar-thin($height,$radius)`, `truncate` (single-line ellipsis, `min-width:0` for flex), `line-clamp($lines:3)`, `tap-target($inset:-9px)` (::after hit-area expansion for <44px controls). `$nav-height-mobile: 48px` in `_variables.scss`. Hoist repeated literals here before they sprout four places.
+Mixins in `_mixins.scss`: `container`, `card-base`, `hover-lift`, `responsive($bp)`, `gold-shimmer-border`, `skeleton-shimmer`, `scrollbar-thin($height,$radius)`, `truncate` (single-line ellipsis, `min-width:0` for flex), `line-clamp($lines:3)`, `tap-target($inset:-9px)` (::before hit-area expansion for <44px controls; on adjacent controls cap the inset at half the gap or a sibling's hit area covers the neighbour's face). `$nav-height-mobile: 48px` in `_variables.scss`. Hoist repeated literals here before they sprout four places.
 
 ### Framer Motion page transitions
 ```tsx
