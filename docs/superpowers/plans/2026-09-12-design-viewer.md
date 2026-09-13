@@ -5250,7 +5250,7 @@ export default function ViewerPage() {
                   ref={canvasRef}
                   project={session.project}
                   view={tab === 'board' ? 'board' : 'schematic'}
-                  activeSheet={tab === 'schematic' ? activeSheet : undefined}
+                  activeSheet={tab === 'board' ? undefined : activeSheet}
                   onState={setCanvasState}
                 />
                 <p className={styles.notice}>
@@ -5378,6 +5378,13 @@ Rebuild the local stack (`docker compose up -d --build frontend`). Owner checkli
 ---
 
 # Phase 3 — The BOM bridge
+
+> **Carry-forward from the Task 2.5 review (2026-09-13) — every Phase 3 task that touches `pages/viewer/index.tsx` inherits these:**
+> - **I1** a hash change while already on `/viewer` does nothing (`pendingFocus` is seeded once at mount). Task 3.2's BOM-row link and any in-page `#ref` need an effect on `location.hash` that sets the pending focus and, when the canvas is `ready`, calls `focus` directly.
+> - **I2** `focus()` calls `setTab('schematic')` then `focusRef`; when the view really flips, the host's activate effect can land AFTER the focus with a stale `activeSheet`. Set `activeSheet` to the designator's sheet BEFORE `focusRef` so page state and renderer agree.
+> - **I4** a chip whose sheet the controller dropped (basename collision) is inert with no feedback: `DesignCanvas` discards `activate`'s boolean. Surface it through the handle (or a chip handler that toasts) and mark dropped chips.
+> - (I3 — the non-drawing tab reset the sheet to root — was fixed in Phase 2: `activeSheet` is gated on the view, not the tab.)
+
 
 ### Task 3.1: Lift the workbench out of the BOM page — `useBomWorkbench` with exported reducers (spec §6)
 
