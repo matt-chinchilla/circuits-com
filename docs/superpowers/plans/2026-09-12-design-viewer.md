@@ -6104,6 +6104,15 @@ describe('viewerRefHref', () => {
     expect(viewerRefHref('/viewer', 'R12')).toBe('/viewer#R12');
     expect(viewerRefHref('/viewer', 'U1/2')).toBe('/viewer#U1%2F2');
   });
+
+  it('keeps a base that already carries a query', () => {
+    expect(viewerRefHref('/viewer?doc=x', 'C7')).toBe('/viewer?doc=x#C7');
+  });
+
+  it('round-trips through the decode the viewer page does on mount', () => {
+    const href = viewerRefHref('/viewer', 'U1/2');
+    expect(decodeURIComponent(href.slice(href.indexOf('#') + 1))).toBe('U1/2');
+  });
 });
 ```
 
@@ -6111,7 +6120,12 @@ describe('viewerRefHref', () => {
 // frontend/src/public/services/bom/viewerLink.ts
 /** `TableRow.viewerHref` is the viewer ROUTE; the chip appends the reference
  *  as a hash the viewer page reads on mount (spec §6). One home for the
- *  composition so the two sides cannot drift. */
+ *  composition so the two sides cannot drift.
+ *
+ *  `encodeURIComponent` is the pair of the viewer page's `decodeURIComponent`
+ *  on `location.hash.slice(1)`: a hierarchical designator ("U1/2") would
+ *  otherwise be read back as a path, and a base that already carries a query
+ *  ("/viewer?doc=x") keeps it — the hash is appended, never substituted. */
 export function viewerRefHref(base: string, ref: string): string {
   return `${base}#${encodeURIComponent(ref)}`;
 }
@@ -6161,7 +6175,8 @@ In `BomTable.module.scss`, after `.refChip { … }`:
   @extend .refChip;
   appearance: none;
   border: 0;
-  font: inherit;
+  font-weight: inherit;
+  line-height: inherit; // `font: inherit` would land AFTER the @extend group and reset the mono family/size
   cursor: pointer;
 }
 ```
@@ -6187,6 +6202,8 @@ git commit -m "feat(bom): designator chips link to /viewer#ref or focus in place
 ```
 
 ---
+
+> **Landed (2026-09-13, commits a171441 → 1d12141):** the helper blocks above are synced. The brief's `.refChipButton { font: inherit }` was a defect — Sass emits `@extend`ed declarations at the extendee's position, so the shorthand landed after them and reset the mono family/size (the reviewer compiled the counterfactual); the landed rule inherits only `font-weight` and `line-height`. `BomTable.test.ts` (happy-dom) pins the span/link/button branch, `onRefClick` outranking `viewerHref`, and the per-chip closure on a multi-ref row. The button chip carries `title="Find R12 on the schematic"` and deliberately NO aria-label (the visible designator under the "Designators" header is the accessible name). The prop doc states the precedence rather than forbidding both props — Task 3.4 passes both by design.
 
 ### Task 3.3: The BOM tab on `/viewer` (spec §7.1)
 
