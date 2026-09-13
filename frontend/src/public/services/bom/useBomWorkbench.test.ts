@@ -416,3 +416,132 @@ describe('useBomWorkbench — handed null', () => {
     expect(wb.rows).toBe(before);
   });
 });
+
+describe('useBomWorkbench — a BOM with no lines', () => {
+  it('never asks the server, because an empty match is a guaranteed 422', async () => {
+    // `BomMatchRequest.lines` is min_length=1, so the request the hook used to
+    // send here came back 422 and was rendered as "we could not reach the
+    // pricing service" — blaming the network for a schematic that was simply
+    // empty. Reachable from /viewer's BOM tab on a sheet of power symbols.
+    await render(parse(0));
+    expect(calls.match).toHaveLength(0);
+    expect(calls.stream).toHaveLength(0);
+    expect(wb.matching).toBe(false);
+    expect(wb.matchError).toBeNull();
+    expect(wb.rows).toEqual([]);
+  });
+
+  it('keeps the reader settings, exactly as null-arming does', async () => {
+    const full = parse();
+    await render(full);
+    await act(async () => calls.match[0].resolve([answer(0), answer(1)]));
+    await act(async () => wb.setBuildQty(25));
+
+    await render(parse(0));
+
+    expect(wb.buildQty).toBe(25);
+    expect(calls.match).toHaveLength(1);
+  });
+});
+
+describe('useBomWorkbench — the priced snapshot', () => {
+  /** Tear the tree down and build a fresh one: a NEW hook instance, which is
+   *  what /viewer → /bom is. The module-level snapshot is the only thing that
+   *  can survive it. */
+  async function remount() {
+    await act(async () => {
+      root.unmount();
+    });
+    container.remove();
+    container = document.createElement('div');
+    document.body.append(container);
+    root = createRoot(container);
+  }
+
+  async function priceTwoLines(parsed: ParseResult) {
+    await render(parsed);
+    await act(async () => calls.match[0].resolve([answer(0), answer(1)]));
+  }
+
+  it('restores the table on a second mount without a single request', async () => {
+    const parsed = parse();
+    await priceTwoLines(parsed);
+    const rows = wb.rows;
+    expect(rows).toHaveLength(2);
+
+    await remount();
+    await render(parsed);
+
+    // THE point of the whole mechanism: /viewer priced it, /bom shows it.
+    expect(calls.match).toHaveLength(1);
+    expect(calls.stream).toHaveLength(0);
+    expect(wb.matching).toBe(false);
+    expect(wb.rows).toEqual(rows);
+  });
+
+  it('keys on IDENTITY — the same file read again is priced again', async () => {
+    await priceTwoLines(parse());
+    await remount();
+    // Same content, new object: a re-read is a new BOM, and a price fetched for
+    // a session the reader closed is not one to serve from a cache.
+    await render(parse());
+    expect(calls.match).toHaveLength(2);
+  });
+
+  it('is dropped by reset(), so the cleared table cannot come back', async () => {
+    const parsed = parse();
+    await priceTwoLines(parsed);
+    await act(async () => wb.reset());
+    expect(wb.rows).toEqual([]);
+
+    await remount();
+    await render(parsed);
+
+    expect(calls.match).toHaveLength(2);
+  });
+
+  it('is never written while the match is still on the wire', async () => {
+    const parsed = parse();
+    await render(parsed);
+    // Leave with the request unanswered: an empty table is not an answer, and
+    // recording one would show the next mount a BOM that priced to nothing.
+    await remount();
+    await render(parsed);
+    expect(calls.match).toHaveLength(2);
+    expect(wb.matching).toBe(true);
+  });
+
+  it('keeps what a stream delivered before the reader left mid-flight', async () => {
+    const parsed = parse();
+    await render(parsed);
+    await act(async () => calls.match[0].resolve([answer(0, 'resolve'), answer(1, 'resolve')]));
+    await act(async () => calls.stream[0].onEvent({ kind: 'not_found', index: 0 }));
+    // Row 1 is still `resolving` when the page goes.
+    await remount();
+    await render(parsed);
+
+    expect(calls.match).toHaveLength(1);
+    expect(calls.stream).toHaveLength(1);
+    expect(wb.rows[0]?.state).toBe('not_found');
+    // Settled on the way in: a row restored as `resolving` would spin forever
+    // with no stream behind it.
+    expect(wb.rows[1]?.state).toBe('matched');
+  });
+
+  it('restores the capped-lookup note with the rows it belongs to', async () => {
+    const parsed = parse(60);
+    await render(parsed);
+    await act(async () =>
+      calls.match[0].resolve(Array.from({ length: 60 }, (_, i) => answer(i, 'resolve'))),
+    );
+    await act(async () => calls.stream[0].done.resolve());
+    const note = wb.resolveNote;
+    expect(note).toContain('capped');
+
+    await remount();
+    await render(parsed);
+
+    expect(calls.match).toHaveLength(1);
+    expect(wb.resolveNote).toBe(note);
+  });
+});

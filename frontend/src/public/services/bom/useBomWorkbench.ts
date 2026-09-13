@@ -23,6 +23,45 @@ export const RESOLVE_CAP = 50;
 export const RESOLVE_STOPPED =
   'Live lookups stopped early. The lines still marked NO MATCH were never looked up — try again in a moment.';
 
+/**
+ * Priced results, keyed by the PARSE they belong to.
+ *
+ * A hook instance dies with its page, and /viewer → /bom is two pages holding
+ * the SAME `parsed` object (the design session's). Without this the second
+ * mount re-issues the match the first already paid for and opens a second
+ * resolve stream, re-spending up to RESOLVE_CAP of the visitor's 100-a-day
+ * budget on lines that came back a minute ago. An SPA return to /viewer's BOM
+ * tab is the same trip.
+ *
+ * A WeakMap, so the entry's lifetime IS the ParseResult's — it dies with the
+ * design session that holds the parse, needs no TTL and cannot collide with
+ * another BOM that happens to share a header signature. `reset()` drops it
+ * explicitly: that is the reader saying this answer is finished with.
+ *
+ * Deliberately not a cache of the NETWORK. It is keyed on object identity, so
+ * re-reading the same file (a fresh ParseResult) prices again — nothing here
+ * can serve a price from a session the reader has already closed.
+ */
+interface PricedSnapshot {
+  rows: TableRow[];
+  resolveNote: string | null;
+  resolveError: string | null;
+}
+
+const priced = new WeakMap<ParseResult, PricedSnapshot>();
+
+/** Rows are settled on the way in: a row still `resolving` when the reader left
+ *  would be restored spinning forever, with no stream behind it to finish. */
+function remember(
+  target: ParseResult | null,
+  rows: TableRow[],
+  resolveNote: string | null,
+  resolveError: string | null,
+): void {
+  if (target == null) return;
+  priced.set(target, { rows: settleStragglers(rows), resolveNote, resolveError });
+}
+
 export function cappedNote(dropped: number): string {
   const lines = dropped === 1 ? 'line was' : 'lines were';
   return (
@@ -196,10 +235,19 @@ export interface BomWorkbench {
 }
 
 /**
+ * Phase 1 runs at most once per IDENTITY of `parsed`, ACROSS MOUNTS: the priced
+ * answer is snapshotted against the parse object itself (see `priced` above), so
+ * a second page holding the same parse — /bom continuing a /viewer session, or
+ * an SPA return to the viewer's BOM tab — restores the table with no network at
+ * all. The snapshot's lifetime is the parse object's, which is the design
+ * session's; `reset()` drops it.
+ *
  * @param parsed  The BOM to price, or null for "nothing to price right now" —
- *   which clears any previous result and abandons work in flight. Phase 1 runs
- *   once per IDENTITY of this object, so callers hold it in state, never
- *   rebuild it per render.
+ *   which clears any previous result and abandons work in flight. A parse with
+ *   an error, or with NO LINES, is treated exactly as null: `/bom/match` rejects
+ *   an empty `lines` array (min_length=1), so asking would buy a 422 and render
+ *   it to the reader as "we could not reach the pricing service". Callers hold
+ *   this object in state, never rebuild it per render.
  * @param viewerHref  Stamped onto every row (the §7.6 seam) and nothing else.
  *   Deliberately NOT a match input: it may arrive late — `/bom` gains one when
  *   a KiCad project is opened mid-session — and re-matching then would bin a
@@ -243,6 +291,24 @@ export function useBomWorkbench(
   const viewerHrefRef = useRef(viewerHref);
   viewerHrefRef.current = viewerHref;
 
+  /**
+   * Has phase 1 ANSWERED for the current `parsed`? The snapshot guard: an empty
+   * table recorded while the match is still on the wire would be restored, on
+   * the next mount, as "this BOM priced to nothing".
+   */
+  const landedRef = useRef(false);
+
+  /** What the teardown snapshot reads — the last COMMITTED state, since an
+   *  unmount cleanup with `[]` deps closes over the first render. Assigned
+   *  during render, like the two refs above. */
+  const latest = useRef<{
+    parsed: ParseResult | null;
+    rows: TableRow[];
+    note: string | null;
+    error: string | null;
+  }>({ parsed: null, rows: [], note: null, error: null });
+  latest.current = { parsed, rows, note: resolveNote, error: resolveError };
+
   const pickSeqRef = useRef(new Map<number, number>());
 
   // The resolve stream is a socket THIS tab holds open. Leaving the page drops
@@ -254,6 +320,14 @@ export function useBomWorkbench(
     () => () => {
       genRef.current += 1;
       resolveAbort.current?.abort();
+      // Leaving MID-STREAM keeps whatever did come back; `remember` settles the
+      // rows still waiting onto their phase-1 answer, exactly as a stream that
+      // died would. The settled commits are snapshotted by the effect below —
+      // this is the one case that never reaches a settled commit.
+      if (landedRef.current) {
+        const last = latest.current;
+        remember(last.parsed, last.rows, last.note, last.error);
+      }
     },
     [],
   );
@@ -321,19 +395,42 @@ export function useBomWorkbench(
   useEffect(() => {
     genRef.current += 1;
     const gen = genRef.current;
+    landedRef.current = false;
 
     // Nothing to price: abandon the previous BOM's result rather than leave it
     // rendered under a consumer that has closed its project. The build
     // quantity and DNP choice survive — they are the reader's settings, and
     // only `reset()` owns those. The functional updater keeps the array
     // identity when it is already empty, so a null-armed hook never re-renders.
-    if (parsed == null || parsed.error != null) {
+    //
+    // A parse with no LINES lands here too, and that is the point: the server's
+    // `BomMatchRequest.lines` is min_length=1, so asking about an empty BOM is a
+    // guaranteed 422 that the catch below would render as "we could not reach
+    // the pricing service" — blaming the network for a schematic that simply had
+    // nothing in it. A zero-line BOM is a state, not a failure.
+    if (parsed == null || parsed.error != null || parsed.lines.length === 0) {
       resolveAbort.current?.abort();
       setRows((prev) => (prev.length === 0 ? prev : []));
       setMatching(false);
       setMatchError(null);
       setResolveNote(null);
       setResolveError(null);
+      return;
+    }
+
+    // Already priced under this exact parse — restore it and ask nobody. This
+    // is what makes the /viewer → /bom round trip cost ONE match: the second
+    // page holds the session's parse, not a copy of it.
+    const snapshot = priced.get(parsed);
+    if (snapshot != null) {
+      landedRef.current = true;
+      setRows(snapshot.rows);
+      setMatching(false);
+      setMatchError(null);
+      setResolveNote(snapshot.resolveNote);
+      setResolveError(snapshot.resolveError);
+      // No cleanup: nothing was started, and bumping the generation here would
+      // invalidate the restored answer on the next render.
       return;
     }
 
@@ -359,6 +456,7 @@ export function useBomWorkbench(
       )
       .then((serverRows) => {
         if (genRef.current !== gen) return;
+        landedRef.current = true;
         setMatching(false);
         // Hand the rows straight to phase 2 — it owns the setRows, so the
         // lines it is about to look up land already flipped to `resolving`.
@@ -379,6 +477,23 @@ export function useBomWorkbench(
       resolveAbort.current?.abort();
     };
   }, [parsed, startResolve]);
+
+  /**
+   * Keep the snapshot current. Every commit where phase 1 has answered and
+   * nothing is still in flight IS an answer worth returning to — the match
+   * landing, a stream that found nothing to ask about, the stream settling, and
+   * a re-stamped `viewerHref` all arrive here.
+   *
+   * Mid-stream commits are skipped: a row still waiting is not an answer, and
+   * re-recording the whole table on each of up to RESOLVE_CAP events is work
+   * nobody reads. The teardown above is what catches a reader who leaves while
+   * the stream is running.
+   */
+  useEffect(() => {
+    if (!landedRef.current || matching) return;
+    if (rows.some((row) => row.state === 'resolving')) return;
+    remember(parsed, rows, resolveNote, resolveError);
+  }, [parsed, rows, matching, resolveNote, resolveError]);
 
   // A viewer route that arrives after the table is priced re-stamps the rows
   // in place. Bailing out on `every` keeps the array identity when nothing
@@ -442,6 +557,11 @@ export function useBomWorkbench(
     // are about to clear, nor open a stream against it.
     genRef.current += 1;
     resolveAbort.current?.abort();
+    // The reader is finished with this answer, so the snapshot goes with it —
+    // otherwise handing the same `parsed` back would restore the very table
+    // they just cleared, out of a cache they cannot see.
+    landedRef.current = false;
+    if (latest.current.parsed != null) priced.delete(latest.current.parsed);
     pickSeqRef.current.clear();
     setRows([]);
     setMatchError(null);
