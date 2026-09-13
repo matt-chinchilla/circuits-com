@@ -36,6 +36,9 @@ STATIC_PAGES = [
     # /bom is a real indexable tool page; the share views (/bom/s/*) are
     # deliberately absent — they are per-user documents and render noindex.
     ("/bom", "weekly", "0.6"),
+    # /viewer opens a KiCad project in the browser and prices its BOM — a real
+    # indexable tool page, the same weight as /bom.
+    ("/viewer", "weekly", "0.6"),
     # /pricing merged into /join (2026-08-14) and redirects there — a sitemap
     # entry for a redirecting URL is a crawl-budget leak, not a listing.
     ("/keyword", "weekly", "0.5"),

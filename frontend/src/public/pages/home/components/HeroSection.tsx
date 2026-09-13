@@ -36,6 +36,7 @@ export default function HeroSection() {
           <AnimatedLink to="/search">Find Parts</AnimatedLink>
           <AnimatedLink to="/join">Top Distributors</AnimatedLink>
           <AnimatedLink to="/bom">BOM Tool</AnimatedLink>
+          <AnimatedLink to="/viewer">Design Viewer</AnimatedLink>
         </div>
       </div>
     </section>

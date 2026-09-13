@@ -159,6 +159,7 @@ def test_sitemap_core_keeps_the_static_pages(client, seeded_db):
     assert "https://circuitcenter.ai/" in locs
     assert "https://circuitcenter.ai/join" in locs
     assert "https://circuitcenter.ai/bom" in locs
+    assert "https://circuitcenter.ai/viewer" in locs
 
 
 def test_sitemap_parent_category_is_flat(client, seeded_db):

@@ -191,6 +191,13 @@ export default function BrowseDrawerBody({ open, onClose }: BrowseDrawerBodyProp
               CSV&middot;XLSX
             </span>
           </button>
+          <button type="button" className={styles.item} onClick={() => go("/viewer")}>
+            <Icon name="blueprint" className={styles.itemIcon} />
+            Design Viewer
+            <span className={styles.meta} aria-hidden="true">
+              KiCad
+            </span>
+          </button>
           <button
             type="button"
             className={switcherClass("mfrs")}

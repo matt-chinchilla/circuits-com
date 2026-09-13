@@ -231,6 +231,7 @@ function buildRoutes(manifest: SeoManifest | null): PrerenderRoute[] {
     // self-canonical page for a URL whose content lives somewhere else.
     { urlPath: '/join', file: 'join/index.html', seo: STATIC_PAGE_SEO.join },
     { urlPath: '/bom', file: 'bom/index.html', seo: STATIC_PAGE_SEO.bom },
+    { urlPath: '/viewer', file: 'viewer/index.html', seo: STATIC_PAGE_SEO.viewer },
     { urlPath: '/keyword', file: 'keyword/index.html', seo: STATIC_PAGE_SEO.keyword },
     { urlPath: '/privacy', file: 'privacy/index.html', seo: STATIC_PAGE_SEO.privacy },
     // /terms shared the privacy canonical while it rendered the privacy
