@@ -88,6 +88,10 @@ describe('buildProject', () => {
     await expect(buildProject([f('huge.kicad_pcb', new Uint8Array(INTAKE_CAPS.perFileBytes + 1))])).rejects.toMatchObject({ kind: 'cap' });
   });
 
+  it('refuses a project file with nothing to show', async () => {
+    await expect(buildProject([f('only.kicad_pro', '{}')])).rejects.toMatchObject({ kind: 'empty' });
+  });
+
   it('reads Glasgow revC3: root, two sub-sheets, a board, no missing sheets', async () => {
     const p = await buildProject(fixtureFiles('glasgow-revC3'));
     expect(p.name).toBe('glasgow');

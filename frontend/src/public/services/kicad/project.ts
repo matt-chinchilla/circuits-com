@@ -66,6 +66,13 @@ export function resolveSheetRef(fromPath: string, ref: string, known: Iterable<s
   return { missing: true, candidates };
 }
 
+// The actual size is rounded UP to a tenth: at the exact boundary a plain
+// round renders "is 8.0 MB; the limit per file is 8.0 MB", which reads as a
+// contradiction. The limits keep formatMb — they are exact by construction.
+function formatMbUp(bytes: number): string {
+  return (Math.ceil((bytes / (1024 * 1024)) * 10) / 10).toFixed(1);
+}
+
 function capError(message: string): KicadReadError {
   return new KicadReadError(message, 'cap');
 }
@@ -94,10 +101,10 @@ export async function buildProject(input: File[]): Promise<KicadProject> {
   if (modern.length > INTAKE_CAPS.files) throw capError(`That is ${modern.length} KiCad files; the limit is ${INTAKE_CAPS.files}.`);
   let total = 0;
   for (const c of modern) {
-    if (c.file.size > INTAKE_CAPS.perFileBytes) throw capError(`${basename(c.path)} is ${formatMb(c.file.size)} MB; the limit per file is ${formatMb(INTAKE_CAPS.perFileBytes)} MB.`);
+    if (c.file.size > INTAKE_CAPS.perFileBytes) throw capError(`${basename(c.path)} is ${formatMbUp(c.file.size)} MB; the limit per file is ${formatMb(INTAKE_CAPS.perFileBytes)} MB.`);
     total += c.file.size;
   }
-  if (total > INTAKE_CAPS.totalBytes) throw capError(`Those files total ${formatMb(total)} MB; the limit is ${formatMb(INTAKE_CAPS.totalBytes)} MB.`);
+  if (total > INTAKE_CAPS.totalBytes) throw capError(`Those files total ${formatMbUp(total)} MB; the limit is ${formatMb(INTAKE_CAPS.totalBytes)} MB.`);
 
   const warnings: string[] = [];
   const files = new Map<string, string>();
@@ -113,7 +120,9 @@ export async function buildProject(input: File[]): Promise<KicadProject> {
     if (extensionOf(path) === '.kicad_pcb' && v != null && v < MIN_BOARD_VERSION) throw new KicadReadError(KICAD5_MESSAGE, 'kicad5');
   }
 
-  const proPath = [...files.keys()].find((p) => extensionOf(p) === '.kicad_pro') ?? null;
+  const pros = [...files.keys()].filter((p) => extensionOf(p) === '.kicad_pro');
+  const proPath = pros[0] ?? null;
+  if (pros.length > 1) warnings.push(`${pros.length} project files were dropped; using ${basename(proPath as string)}.`);
   let pro: KicadProject['pro'] = null;
   if (proPath != null) {
     try {
@@ -172,11 +181,18 @@ export async function buildProject(input: File[]): Promise<KicadProject> {
     }
   }
   const unreachable = schematicPaths.filter((p) => !seen.has(p));
-  if (unreachable.length > 0) warnings.push(`${unreachable.length} schematic file(s) are not reachable from the root sheet and were not read: ${unreachable.map(basename).join(', ')}.`);
+  if (unreachable.length > 0) warnings.push(`${unreachable.length} schematic file(s) are not reachable from the root sheet and are not shown: ${unreachable.map(basename).join(', ')}.`);
 
   const boards = [...files.keys()].filter((p) => extensionOf(p) === '.kicad_pcb');
   const board = boards[0] ?? null;
   if (boards.length > 1) warnings.push(`${boards.length} boards were dropped; showing ${basename(board as string)}.`);
+
+  // A drop that yields neither a root schematic nor a board has nothing to
+  // render — a lone .kicad_pro is the common case. Board-only projects are
+  // legitimate, so the predicate needs BOTH to be absent.
+  if (root == null && board == null) {
+    throw new KicadReadError('That project has no schematic or board to show — only a .kicad_pro was found.', 'empty');
+  }
 
   const name = proPath != null ? stem(proPath) : root != null ? stem(root) : board != null ? stem(board) : 'design';
   return { name, files, pro, root, sheets, board, warnings, missingSheets, formatVersions };
