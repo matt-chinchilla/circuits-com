@@ -116,6 +116,24 @@
   }
 }
 
+// A sheet the renderer's basename-keyed file system could not take. Still
+// listed (the reader read it), visibly not selectable, and its click answers
+// with a toast rather than doing nothing. Composed onto `.chip` at the call
+// site, so it only needs the overrides.
+.chipDropped {
+  opacity: 0.6;
+  border-style: dashed;
+  cursor: not-allowed;
+}
+
+// The BOM tab's panel. It sits below the drawing in source order and is shown
+// by `hidden`, so it needs no display of its own — declaring one here would
+// beat the UA sheet's `[hidden] { display: none }` exactly the way `.drawing`
+// above has to work around.
+.bomPanel {
+  margin-top: 4px;
+}
+
 .notice {
   margin: 10px 0 0;
   font-size: 0.78rem;
