@@ -73,6 +73,9 @@ function viaOf(via: SExpr[]): ViaGroup | null {
   for (let i = 1; i < via.length; i++) {
     const token = via[i];
     if (typeof token !== 'string') break;
+    // A token this reader does not know makes the whole via `unknown`, and
+    // stays that way: `(via micro weird …)` is as unknown as `(via weird micro …)`.
+    if (type === 'unknown') continue;
     if (token === 'blind') type = 'blind';
     else if (token === 'micro') type = 'micro';
     else if (token !== 'locked') type = 'unknown';
@@ -94,7 +97,17 @@ export function readStackup(boardText: string): BoardStackup {
   let designThicknessMm: number | null = null;
   const groups = new Map<string, ViaGroup>();
 
-  for (const block of topLevelBlocks(boardText)) {
+  // One error contract for the reader: a truncated or unbalanced board makes
+  // the scanner throw a plain Error, which the pages never see — it is the
+  // same 'unreadable' as a file that is not a board at all.
+  let blocks: Iterable<{ head: string; start: number; end: number }>;
+  try {
+    blocks = [...topLevelBlocks(boardText)];
+  } catch (err) {
+    if (err instanceof KicadReadError) throw err;
+    throw new KicadReadError('That board file is truncated or malformed and could not be read.', 'unreadable');
+  }
+  for (const block of blocks) {
     if (block.head === 'layers') {
       const node = parseBlock(boardText, block.start, block.end);
       if (node) copper = copperLayers(node);

@@ -96,4 +96,14 @@ describe('readStackup', () => {
     expect(thrown).toBeInstanceOf(KicadReadError);
     expect((thrown as KicadReadError).kind).toBe('unreadable');
   });
+
+  it('throws unreadable, not a raw scanner error, when the board is truncated', () => {
+    expect(() => readStackup('(kicad_pcb (version 20240108) (layers (0 "F.Cu" signal)) (via (at 1 2)')).toThrow(KicadReadError);
+    expect(() => readStackup('(kicad_pcb (version 20240108) (layers (0 "F.Cu" signal)) (via (at 1 2)')).toThrow(/truncated or malformed/);
+  });
+
+  it('keeps a via unknown once an unknown token is seen, whatever follows it', () => {
+    const s = readStackup(board(`${LAYERS_9} (via micro weird (at 0 0) (layers "F.Cu" "In1.Cu")) (via weird micro (at 0 0) (layers "F.Cu" "In1.Cu"))`));
+    expect(s.vias).toEqual([{ type: 'unknown', start: 'F.Cu', end: 'In1.Cu', count: 2 }]);
+  });
 });
