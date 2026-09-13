@@ -3056,7 +3056,7 @@ function fakeEmbed(opts: {
   const selected: string[] = [];
   const boardSelected: string[] = [];
   const pending: (() => void)[] = [];
-  const mode = { manual: opts.manualLoad ?? false };
+  const mode = { manual: opts.manualLoad ?? false, deferred: false };
   const viewer = makeViewer(opts.selectedFor ?? [], selected);
   const boardViewer = makeViewer(opts.boardSelectedFor ?? [], boardSelected);
   const proj = {
@@ -3075,15 +3075,19 @@ function fakeEmbed(opts: {
       // returns BEFORE resolve_loaded and no `kicanvas:load` is ever dispatched
       // (viewers/base/document-viewer.ts:58-60, viewers/base/viewer.ts:128-132).
       if (target.document === page.document) return;
+      // The document is assigned when the load STARTS (document-viewer.ts:64); the event
+      // comes only from resolve_loaded, inside the later() tail that positions the camera
+      // and clears the selection (:68-86). Modelling that GAP is what lets a test see a
+      // second activate for this page find the document "already held" mid-load.
+      target.document = page.document;
       const fire = () => {
-        target.document = page.document;
         opts.onLoad?.(page.project_path);
         target.dispatchEvent(new Event(LOAD));
       };
       // A macrotask, deliberately: a microtask would land before activate()'s own
       // continuation regardless of whether it waited, faking the proof below.
       if (mode.manual) pending.push(fire);
-      else if (opts.asyncLoad) setTimeout(fire, 0);
+      else if (mode.deferred) setTimeout(fire, 0);
       else fire();
     },
   };
@@ -3095,8 +3099,11 @@ function fakeEmbed(opts: {
   if (opts.withProject !== false) board.project = proj;
   if (!opts.noViewer) board.viewer = boardViewer;
   shadow.appendChild(board);
-  // The real embed sets an active page after load; the fake does it immediately.
+  // The real embed sets an active page after load; the fake does it immediately — and
+  // always synchronously, so an asyncLoad fixture cannot drop the CONSTRUCTOR's own load
+  // event into the middle of a later assertion.
   proj.set_active_page(proj.root_schematic_page ?? opts.pages[0]!);
+  mode.deferred = opts.asyncLoad ?? false;
   return {
     embed, selected, boardSelected, getActive: () => active, viewer, boardViewer, proj, sch, board, pending,
     setManual: (v: boolean) => { mode.manual = v; },
@@ -3206,6 +3213,55 @@ describe('KicanvasController', () => {
     expect(await c.activate('schematic', '/r/b')).toBe(true);
     expect(fake.getActive()?.project_path).toBe('sub.kicad_sch:/r/b');
     expect(clock).toBe(before);
+  });
+
+  it('never short-circuits past its OWN in-flight load, however fast the second activate is', async () => {
+    // The other half of the same coin. Upstream assigns `this.document = src` when the
+    // load STARTS (vendor viewers/base/document-viewer.ts:64) and only positions the
+    // camera, dispatches kicanvas:load and CLEARS THE SELECTION afterwards, in the
+    // later() tail (:68-86). So holdsDocument() is already true while a load is running:
+    // a second activate that short-circuited there would resolve with nothing positioned,
+    // and the focusRef awaiting it would report 'focused' just before the tail deselects.
+    const fake = fakeEmbed({ pages: PAGES, asyncLoad: true });
+    const c = new KicanvasController({
+      loadModule: async () => undefined,
+      createEmbed: () => fake.embed,
+      readyMs: 500,
+      settleMs: 500,
+      sleep: () => new Promise<void>((resolve) => setTimeout(resolve, 0)),
+    });
+    await c.mount(document.createElement('div'), project({ 'main.kicad_sch': 's', 'sub.kicad_sch': 't' }));
+    const order: string[] = [];
+    fake.viewer.addEventListener(LOAD, () => order.push('load'));
+    const first = c.activate('schematic', '/r/a'); // a real load: the document changes
+    const second = c.activate('schematic', '/r/a'); // same page, its document is already assigned
+    expect(await second).toBe(true);
+    order.push('second');
+    expect(await first).toBe(false); // superseded, so it writes no `hidden` of its own
+    expect(order).toEqual(['load', 'second']);
+  });
+
+  it('retires a watch that outlived its budget, so the next activate for that page is not charged twice', async () => {
+    const fake = fakeEmbed({ pages: PAGES });
+    let clock = 0;
+    const c = new KicanvasController({
+      loadModule: async () => undefined,
+      createEmbed: () => fake.embed,
+      readyMs: 5000,
+      settleMs: 1500,
+      now: () => clock,
+      sleep: async () => { clock += 500; },
+    });
+    await c.mount(document.createElement('div'), project({ 'main.kicad_sch': 's', 'sub.kicad_sch': 't' }));
+    fake.setManual(true); // the load is queued and never fired — the budget runs out
+    expect(await c.activate('schematic', '/r/a')).toBe(true);
+    expect(clock).toBe(1500);
+    // The viewer HOLDS that document now (upstream assigns it when the load starts), and a
+    // watch that never fired is no longer evidence of a load in flight — riding it would
+    // spend the whole budget a second time on the same page. The first switch into a
+    // hidden app times out exactly like this: its canvas is 0x0 until it is shown.
+    expect(await c.activate('schematic', '/r/b')).toBe(true);
+    expect(clock).toBe(1500);
   });
 
   it('does not wait when there is no viewer to signal it — nothing is coming', async () => {
@@ -3354,6 +3410,38 @@ describe('KicanvasController', () => {
     expect(states.filter((s) => s === 'ready')).toEqual(['ready']);
     expect(states).not.toContain('timeout');
     expect(host.firstElementChild).toBe(live.embed);
+  });
+
+  it('an activate superseded by a REMOUNT returns false and leaves the view it captured alone', async () => {
+    const first = fakeEmbed({ pages: PAGES });
+    const live = fakeEmbed({ pages: PAGES });
+    let nextEmbed: HTMLElement = first.embed;
+    let release: () => void = () => undefined;
+    // The second mount parks on its module load, so it never starts an activate of its
+    // own: `seq` stays current and ONLY the epoch half of the guard can catch this one.
+    const parked = new Promise<void>((resolve) => { release = () => resolve(); });
+    let loads = 0;
+    const c = new KicanvasController({
+      loadModule: async () => { if (++loads === 2) await parked; },
+      createEmbed: () => nextEmbed,
+      readyMs: 500,
+      settleMs: 40,
+      sleep: () => new Promise<void>((resolve) => setTimeout(resolve, 0)),
+    });
+    const host = document.createElement('div');
+    const p = project({ 'main.kicad_sch': 's', 'sub.kicad_sch': 't', 'main.kicad_pcb': 'b' });
+    await c.mount(host, p);
+    expect([first.sch.hidden, first.board.hidden]).toEqual([false, true]);
+    first.setManual(true); // the board's load never lands, so the activate is still settling
+    const activating = c.activate('board');
+    nextEmbed = live.embed;
+    const remount = c.mount(host, p); // supersedes that mount mid-settle
+    expect(await activating).toBe(false);
+    expect([first.sch.hidden, first.board.hidden]).toEqual([false, true]); // never flipped to the board
+    release();
+    await remount;
+    expect(host.firstElementChild).toBe(live.embed);
+    expect([live.sch.hidden, live.board.hidden]).toEqual([false, true]);
   });
 
   it('zooms through the viewer camera when it exists and reports false when it does not', async () => {
@@ -3596,7 +3684,10 @@ function holdsDocument(viewer: KicanvasViewer | null, page: KicanvasPage): boole
  *  synchronously cannot dispatch before anyone is listening. */
 interface LoadWatch {
   fired: boolean;
-  /** False when the viewer is not an EventTarget — then the filename fallback is all there is. */
+  /** False when there is no listenable viewer to arm the watch on. `Viewer extends
+   *  EventTarget` upstream (vendor viewers/base/viewer.ts:22), so this means the app has
+   *  not rendered its viewer yet — no load signal can arrive, so settle() returns at once
+   *  rather than spending the budget, and the watch is never recorded as in flight. */
   listening: boolean;
   cancel: () => void;
 }
@@ -3618,6 +3709,10 @@ export class KicanvasController implements CanvasController {
    *  earlier switch must not land on top of a newer one — that IS the "screen duplicates
    *  itself" class, arriving late. */
   private activation = 0;
+  /** The load watch this controller armed for each view and has not yet seen fire.
+   *  `holdsDocument()` turns true when a load BEGINS, not when it ends, so this is the
+   *  only thing that can tell a finished load from one still running — see activate(). */
+  private readonly inFlight = new Map<CanvasView, LoadWatch>();
   /** Path keys sourcesFor() could not hand to the embed (basename collision). */
   private droppedPaths = new Set<string>();
   private readonly handlers = new Map<CanvasEventType, Set<(e: CanvasEvent) => void>>();
@@ -3776,17 +3871,20 @@ export class KicanvasController implements CanvasController {
     const onLoad = () => {
       watch.fired = true;
     };
-    target.addEventListener(KICANVAS_LOAD, onLoad);
+    // One-shot: the listener detaches AS it fires, so a superseded activate never has to
+    // cancel a watch a LATER activate is still riding. cancel() is therefore only for a
+    // watch that can no longer fire — the set_active_page throw, and teardown.
+    target.addEventListener(KICANVAS_LOAD, onLoad, { once: true });
     watch.cancel = () => target.removeEventListener(KICANVAS_LOAD, onLoad);
     return watch;
   }
 
-  /** Waits for one `kicanvas:load`, bounded. Only reached when the viewer does NOT
-   *  already hold the requested document — see holdsDocument(). `Viewer extends
-   *  EventTarget` (vendor viewers/base/viewer.ts:22), so an unlistenable watch means
-   *  there is no viewer at all yet: nothing is coming, and waiting would only burn
-   *  the budget. (The basename comparison this replaced could never observe a
-   *  same-file instance switch, and was unreachable for any real viewer.) */
+  /** Waits for one `kicanvas:load`, bounded. Reached both for a load THIS activate
+   *  started and for one an earlier activate started that this one is riding (see
+   *  activate). An unlistenable watch means there is no viewer at all yet: nothing is
+   *  coming, and waiting would only burn the budget. (The basename comparison this
+   *  replaced could never observe a same-file instance switch, and was unreachable for
+   *  any real viewer.) */
   private async settle(watch: LoadWatch): Promise<void> {
     if (!watch.listening) return;
     const deadline = this.options.now() + this.options.settleMs;
@@ -3804,13 +3902,30 @@ export class KicanvasController implements CanvasController {
     if (project == null || page == null) return false;
     const { schematic, board } = this.apps();
     const app = view === 'board' ? board : schematic;
-    // When the target viewer already holds this page's document upstream dispatches
-    // nothing (holdsDocument), and that is the COMMON gesture: a same-file instance
-    // switch, a return to an app already visited, a second focusRef on the sheet on
-    // screen, mount's closing activate on a single-type project. Arm the listener only
-    // when a load really has to happen — and arm it BEFORE the switch, since
-    // set_active_page dispatches "change" synchronously and the app loads from there.
-    const watch = holdsDocument(viewerOf(app), page) ? null : this.watchLoad(viewerOf(app));
+    // A viewer that already holds this page's document is in one of TWO states, and they
+    // need OPPOSITE treatment. Upstream assigns `this.document = src` when a load STARTS
+    // (vendor viewers/base/document-viewer.ts:64) and only positions the camera, resolves
+    // the load event and CLEARS THE SELECTION afterwards, in the later() tail (:68-86):
+    //   - no load running — upstream's early return (:58-60) dispatches nothing, so
+    //     waiting burns the whole settle budget on the COMMON gesture: a same-file
+    //     instance switch, a return to an app already visited, a second focusRef on the
+    //     sheet on screen, mount's closing activate on a single-type project;
+    //   - a load we started still in flight — nothing is positioned and the deselect has
+    //     not run, so resolving here hands focusRef a 'focused' the tail then undoes
+    //     (a sheet-tab click immediately followed by a BOM-row focusRef is that shape).
+    // The watch armed for this view is the only thing that tells them apart, so RIDE it
+    // rather than discard it. A new one is armed BEFORE the switch, since set_active_page
+    // dispatches "change" synchronously and the app loads from there.
+    let watch: LoadWatch | null = null;
+    let armed = false;
+    if (holdsDocument(viewerOf(app), page)) {
+      const running = this.inFlight.get(view);
+      if (running != null && !running.fired) watch = running;
+    } else {
+      watch = this.watchLoad(viewerOf(app));
+      armed = watch.listening;
+      if (armed) this.inFlight.set(view, watch);
+    }
     try {
       // The PAGE OBJECT, never the path string: upstream's set_active_page falls
       // back to first_page when a path does not resolve (vendor kicanvas/src/
@@ -3818,12 +3933,19 @@ export class KicanvasController implements CanvasController {
       // look like success. findPage decides, so a miss is an honest false.
       project.set_active_page(page);
     } catch {
-      watch?.cancel();
+      // Only a watch THIS activate armed: a ridden one still belongs to the earlier
+      // activate that is waiting on it.
+      if (armed) watch?.cancel();
       return false;
     }
     if (watch != null) {
       await this.settle(watch);
-      watch.cancel();
+      // A watch that outlived its budget is no longer evidence of a load in flight —
+      // leaving it registered would make the NEXT activate for this page ride it and
+      // spend the budget over again. (The first switch into a HIDDEN app always times
+      // out: its canvas is 0x0 and resolve_loaded waits on viewport.ready.) The listener
+      // is one-shot, so nothing has to be cancelled to retire it.
+      if (!watch.fired && this.inFlight.get(view) === watch) this.inFlight.delete(view);
     }
     // A newer activate, or a newer mount, owns the view now: this one is late and must
     // not write `hidden` at all. Upstream's app.load() assigns `hidden = false` AFTER an
@@ -3895,6 +4017,11 @@ export class KicanvasController implements CanvasController {
   }
 
   private disposeEmbed(): void {
+    // These listen on THIS embed's viewers. A new embed's viewers cannot fire them, and a
+    // stale unfired one would make the next same-document activate ride a watch that can
+    // never fire and wait out its whole settle budget. dispose() reaches this too.
+    for (const watch of this.inFlight.values()) watch.cancel();
+    this.inFlight.clear();
     if (this.embed != null) {
       // Release the renderer's GL contexts before dropping the element: browsers cap
       // live contexts and a visitor opening several projects in one tab would otherwise
