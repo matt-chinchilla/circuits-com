@@ -180,10 +180,17 @@ export interface BomWorkbench {
    * Back to nothing: abandons every in-flight request, aborts the stream and
    * clears every field INCLUDING the reader's build quantity and DNP choice.
    *
+   * TERMINAL for the current `parsed`: pricing does not resume on its own, by
+   * design — re-issuing a match the reader just cancelled would spend the
+   * resolve budget they declined. The hook prices again only when `parsed`
+   * changes IDENTITY, so hand in a fresh parse, or `null` and then the same
+   * one back.
+   *
    * Distinct from handing the hook `null`, which means "nothing to price right
    * now" — that clears the priced result but KEEPS those two settings, so a
    * consumer that re-derives a BOM (closing and reopening a project) does not
-   * silently reset the quantity somebody typed.
+   * silently reset the quantity somebody typed. Null-arming is the better lever
+   * for "close the project"; `reset()` is "change file".
    */
   reset: () => void;
 }

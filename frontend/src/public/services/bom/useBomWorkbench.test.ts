@@ -13,7 +13,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ParseResult } from './parseBom';
 import type { BomRow, MissIn, ResolveEvent } from './types';
-import { useBomWorkbench, type BomWorkbench } from './useBomWorkbench';
+import { RESOLVE_STOPPED, useBomWorkbench, type BomWorkbench } from './useBomWorkbench';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -189,6 +189,47 @@ describe('useBomWorkbench — viewerHref', () => {
     await render(parsed, '/viewer');
     expect(wb.rows).toBe(before);
   });
+
+  it('keeps the row array identity when the href CHANGES but the rows already agree', async () => {
+    // The `every` bail's actual job, and the only way to reach it: the effect
+    // has to RUN (so the href must really change) while the rows already carry
+    // that value — which in practice means nothing is priced. The test above
+    // never reaches the bail, because an unchanged href does not re-run the
+    // effect at all. Without the bail this re-renders the BOM table on every
+    // href change for no reason.
+    await render(null, '/a');
+    const before = wb.rows;
+    await render(null, '/b');
+    expect(wb.rows).toBe(before);
+  });
+});
+
+describe('useBomWorkbench — the live BOM stream ends', () => {
+  /** Two lines the server could not match, so phase 2 opens a stream. */
+  async function streaming() {
+    await render(parse());
+    await act(async () => calls.match[0].resolve([answer(0, 'resolve'), answer(1, 'resolve')]));
+    expect(wb.rows.map((r) => r.state)).toEqual(['resolving', 'resolving']);
+    return calls.stream[0];
+  }
+
+  it('settles the stragglers and raises the stopped-early banner when the stream dies', async () => {
+    const stream = await streaming();
+    await act(async () => stream.done.reject(new Error('socket died')));
+    // The banner a visitor actually sees — the suppressed STALE case is tested
+    // below, but this is the path that is supposed to speak up.
+    expect(wb.resolveError).toBe(RESOLVE_STOPPED);
+    // Nothing may be left spinning: the server sends one event per miss, so a
+    // row still `resolving` means the stream died under it.
+    expect(wb.rows.map((r) => r.state)).toEqual(['matched', 'matched']);
+  });
+
+  it('settles the stragglers silently when the stream simply ends', async () => {
+    const stream = await streaming();
+    await act(async () => stream.done.resolve());
+    expect(wb.rows.map((r) => r.state)).toEqual(['matched', 'matched']);
+    expect(wb.resolveError).toBeNull();
+  });
 });
 
 describe('useBomWorkbench — a stale answer never lands', () => {
@@ -251,6 +292,23 @@ describe('useBomWorkbench — reset()', () => {
     expect(wb.rows).toEqual([]);
     expect(calls.stream).toHaveLength(0);
     expect(wb.matching).toBe(false);
+  });
+
+  it('does not re-price after reset() until parsed changes identity', async () => {
+    // The contract 3.3 would otherwise rediscover the hard way. Terminal is
+    // deliberate — re-arming would re-issue the match the reader just
+    // cancelled — and null-arming is the escape hatch.
+    const parsed = parse();
+    await render(parsed);
+    await act(async () => calls.match[0].resolve([answer(0), answer(1)]));
+    await act(async () => wb.reset());
+
+    await render(parsed); // same object
+    expect(calls.match).toHaveLength(1); // terminal, by design
+
+    await render(null);
+    await render(parsed); // null-armed → identity changed → prices again
+    expect(calls.match).toHaveLength(2);
   });
 
   it('clears the settings and drops a live stream', async () => {
