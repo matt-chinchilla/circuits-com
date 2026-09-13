@@ -139,7 +139,10 @@ function holdsDocument(viewer: KicanvasViewer | null, page: KicanvasPage): boole
  *  synchronously cannot dispatch before anyone is listening. */
 interface LoadWatch {
   fired: boolean;
-  /** False when the viewer is not an EventTarget — then the filename fallback is all there is. */
+  /** False when there is no listenable viewer to arm the watch on. `Viewer extends
+   *  EventTarget` upstream (vendor viewers/base/viewer.ts:22), so this means the app has
+   *  not rendered its viewer yet — no load signal can arrive, so settle() returns at once
+   *  rather than spending the budget, and the watch is never recorded as in flight. */
   listening: boolean;
   cancel: () => void;
 }
@@ -161,6 +164,10 @@ export class KicanvasController implements CanvasController {
    *  earlier switch must not land on top of a newer one — that IS the "screen duplicates
    *  itself" class, arriving late. */
   private activation = 0;
+  /** The load watch this controller armed for each view and has not yet seen fire.
+   *  `holdsDocument()` turns true when a load BEGINS, not when it ends, so this is the
+   *  only thing that can tell a finished load from one still running — see activate(). */
+  private readonly inFlight = new Map<CanvasView, LoadWatch>();
   /** Path keys sourcesFor() could not hand to the embed (basename collision). */
   private droppedPaths = new Set<string>();
   private readonly handlers = new Map<CanvasEventType, Set<(e: CanvasEvent) => void>>();
@@ -319,17 +326,20 @@ export class KicanvasController implements CanvasController {
     const onLoad = () => {
       watch.fired = true;
     };
-    target.addEventListener(KICANVAS_LOAD, onLoad);
+    // One-shot: the listener detaches AS it fires, so a superseded activate never has to
+    // cancel a watch a LATER activate is still riding. cancel() is therefore only for a
+    // watch that can no longer fire — the set_active_page throw, and teardown.
+    target.addEventListener(KICANVAS_LOAD, onLoad, { once: true });
     watch.cancel = () => target.removeEventListener(KICANVAS_LOAD, onLoad);
     return watch;
   }
 
-  /** Waits for one `kicanvas:load`, bounded. Only reached when the viewer does NOT
-   *  already hold the requested document — see holdsDocument(). `Viewer extends
-   *  EventTarget` (vendor viewers/base/viewer.ts:22), so an unlistenable watch means
-   *  there is no viewer at all yet: nothing is coming, and waiting would only burn
-   *  the budget. (The basename comparison this replaced could never observe a
-   *  same-file instance switch, and was unreachable for any real viewer.) */
+  /** Waits for one `kicanvas:load`, bounded. Reached both for a load THIS activate
+   *  started and for one an earlier activate started that this one is riding (see
+   *  activate). An unlistenable watch means there is no viewer at all yet: nothing is
+   *  coming, and waiting would only burn the budget. (The basename comparison this
+   *  replaced could never observe a same-file instance switch, and was unreachable for
+   *  any real viewer.) */
   private async settle(watch: LoadWatch): Promise<void> {
     if (!watch.listening) return;
     const deadline = this.options.now() + this.options.settleMs;
@@ -347,13 +357,30 @@ export class KicanvasController implements CanvasController {
     if (project == null || page == null) return false;
     const { schematic, board } = this.apps();
     const app = view === 'board' ? board : schematic;
-    // When the target viewer already holds this page's document upstream dispatches
-    // nothing (holdsDocument), and that is the COMMON gesture: a same-file instance
-    // switch, a return to an app already visited, a second focusRef on the sheet on
-    // screen, mount's closing activate on a single-type project. Arm the listener only
-    // when a load really has to happen — and arm it BEFORE the switch, since
-    // set_active_page dispatches "change" synchronously and the app loads from there.
-    const watch = holdsDocument(viewerOf(app), page) ? null : this.watchLoad(viewerOf(app));
+    // A viewer that already holds this page's document is in one of TWO states, and they
+    // need OPPOSITE treatment. Upstream assigns `this.document = src` when a load STARTS
+    // (vendor viewers/base/document-viewer.ts:64) and only positions the camera, resolves
+    // the load event and CLEARS THE SELECTION afterwards, in the later() tail (:68-86):
+    //   - no load running — upstream's early return (:58-60) dispatches nothing, so
+    //     waiting burns the whole settle budget on the COMMON gesture: a same-file
+    //     instance switch, a return to an app already visited, a second focusRef on the
+    //     sheet on screen, mount's closing activate on a single-type project;
+    //   - a load we started still in flight — nothing is positioned and the deselect has
+    //     not run, so resolving here hands focusRef a 'focused' the tail then undoes
+    //     (a sheet-tab click immediately followed by a BOM-row focusRef is that shape).
+    // The watch armed for this view is the only thing that tells them apart, so RIDE it
+    // rather than discard it. A new one is armed BEFORE the switch, since set_active_page
+    // dispatches "change" synchronously and the app loads from there.
+    let watch: LoadWatch | null = null;
+    let armed = false;
+    if (holdsDocument(viewerOf(app), page)) {
+      const running = this.inFlight.get(view);
+      if (running != null && !running.fired) watch = running;
+    } else {
+      watch = this.watchLoad(viewerOf(app));
+      armed = watch.listening;
+      if (armed) this.inFlight.set(view, watch);
+    }
     try {
       // The PAGE OBJECT, never the path string: upstream's set_active_page falls
       // back to first_page when a path does not resolve (vendor kicanvas/src/
@@ -361,12 +388,19 @@ export class KicanvasController implements CanvasController {
       // look like success. findPage decides, so a miss is an honest false.
       project.set_active_page(page);
     } catch {
-      watch?.cancel();
+      // Only a watch THIS activate armed: a ridden one still belongs to the earlier
+      // activate that is waiting on it.
+      if (armed) watch?.cancel();
       return false;
     }
     if (watch != null) {
       await this.settle(watch);
-      watch.cancel();
+      // A watch that outlived its budget is no longer evidence of a load in flight —
+      // leaving it registered would make the NEXT activate for this page ride it and
+      // spend the budget over again. (The first switch into a HIDDEN app always times
+      // out: its canvas is 0x0 and resolve_loaded waits on viewport.ready.) The listener
+      // is one-shot, so nothing has to be cancelled to retire it.
+      if (!watch.fired && this.inFlight.get(view) === watch) this.inFlight.delete(view);
     }
     // A newer activate, or a newer mount, owns the view now: this one is late and must
     // not write `hidden` at all. Upstream's app.load() assigns `hidden = false` AFTER an
@@ -438,6 +472,11 @@ export class KicanvasController implements CanvasController {
   }
 
   private disposeEmbed(): void {
+    // These listen on THIS embed's viewers. A new embed's viewers cannot fire them, and a
+    // stale unfired one would make the next same-document activate ride a watch that can
+    // never fire and wait out its whole settle budget. dispose() reaches this too.
+    for (const watch of this.inFlight.values()) watch.cancel();
+    this.inFlight.clear();
     if (this.embed != null) {
       // Release the renderer's GL contexts before dropping the element: browsers cap
       // live contexts and a visitor opening several projects in one tab would otherwise

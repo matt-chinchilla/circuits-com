@@ -64,7 +64,7 @@ function fakeEmbed(opts: {
   const selected: string[] = [];
   const boardSelected: string[] = [];
   const pending: (() => void)[] = [];
-  const mode = { manual: opts.manualLoad ?? false };
+  const mode = { manual: opts.manualLoad ?? false, deferred: false };
   const viewer = makeViewer(opts.selectedFor ?? [], selected);
   const boardViewer = makeViewer(opts.boardSelectedFor ?? [], boardSelected);
   const proj = {
@@ -83,15 +83,19 @@ function fakeEmbed(opts: {
       // returns BEFORE resolve_loaded and no `kicanvas:load` is ever dispatched
       // (viewers/base/document-viewer.ts:58-60, viewers/base/viewer.ts:128-132).
       if (target.document === page.document) return;
+      // The document is assigned when the load STARTS (document-viewer.ts:64); the event
+      // comes only from resolve_loaded, inside the later() tail that positions the camera
+      // and clears the selection (:68-86). Modelling that GAP is what lets a test see a
+      // second activate for this page find the document "already held" mid-load.
+      target.document = page.document;
       const fire = () => {
-        target.document = page.document;
         opts.onLoad?.(page.project_path);
         target.dispatchEvent(new Event(LOAD));
       };
       // A macrotask, deliberately: a microtask would land before activate()'s own
       // continuation regardless of whether it waited, faking the proof below.
       if (mode.manual) pending.push(fire);
-      else if (opts.asyncLoad) setTimeout(fire, 0);
+      else if (mode.deferred) setTimeout(fire, 0);
       else fire();
     },
   };
@@ -103,8 +107,11 @@ function fakeEmbed(opts: {
   if (opts.withProject !== false) board.project = proj;
   if (!opts.noViewer) board.viewer = boardViewer;
   shadow.appendChild(board);
-  // The real embed sets an active page after load; the fake does it immediately.
+  // The real embed sets an active page after load; the fake does it immediately — and
+  // always synchronously, so an asyncLoad fixture cannot drop the CONSTRUCTOR's own load
+  // event into the middle of a later assertion.
   proj.set_active_page(proj.root_schematic_page ?? opts.pages[0]!);
+  mode.deferred = opts.asyncLoad ?? false;
   return {
     embed, selected, boardSelected, getActive: () => active, viewer, boardViewer, proj, sch, board, pending,
     setManual: (v: boolean) => { mode.manual = v; },
@@ -214,6 +221,55 @@ describe('KicanvasController', () => {
     expect(await c.activate('schematic', '/r/b')).toBe(true);
     expect(fake.getActive()?.project_path).toBe('sub.kicad_sch:/r/b');
     expect(clock).toBe(before);
+  });
+
+  it('never short-circuits past its OWN in-flight load, however fast the second activate is', async () => {
+    // The other half of the same coin. Upstream assigns `this.document = src` when the
+    // load STARTS (vendor viewers/base/document-viewer.ts:64) and only positions the
+    // camera, dispatches kicanvas:load and CLEARS THE SELECTION afterwards, in the
+    // later() tail (:68-86). So holdsDocument() is already true while a load is running:
+    // a second activate that short-circuited there would resolve with nothing positioned,
+    // and the focusRef awaiting it would report 'focused' just before the tail deselects.
+    const fake = fakeEmbed({ pages: PAGES, asyncLoad: true });
+    const c = new KicanvasController({
+      loadModule: async () => undefined,
+      createEmbed: () => fake.embed,
+      readyMs: 500,
+      settleMs: 500,
+      sleep: () => new Promise<void>((resolve) => setTimeout(resolve, 0)),
+    });
+    await c.mount(document.createElement('div'), project({ 'main.kicad_sch': 's', 'sub.kicad_sch': 't' }));
+    const order: string[] = [];
+    fake.viewer.addEventListener(LOAD, () => order.push('load'));
+    const first = c.activate('schematic', '/r/a'); // a real load: the document changes
+    const second = c.activate('schematic', '/r/a'); // same page, its document is already assigned
+    expect(await second).toBe(true);
+    order.push('second');
+    expect(await first).toBe(false); // superseded, so it writes no `hidden` of its own
+    expect(order).toEqual(['load', 'second']);
+  });
+
+  it('retires a watch that outlived its budget, so the next activate for that page is not charged twice', async () => {
+    const fake = fakeEmbed({ pages: PAGES });
+    let clock = 0;
+    const c = new KicanvasController({
+      loadModule: async () => undefined,
+      createEmbed: () => fake.embed,
+      readyMs: 5000,
+      settleMs: 1500,
+      now: () => clock,
+      sleep: async () => { clock += 500; },
+    });
+    await c.mount(document.createElement('div'), project({ 'main.kicad_sch': 's', 'sub.kicad_sch': 't' }));
+    fake.setManual(true); // the load is queued and never fired — the budget runs out
+    expect(await c.activate('schematic', '/r/a')).toBe(true);
+    expect(clock).toBe(1500);
+    // The viewer HOLDS that document now (upstream assigns it when the load starts), and a
+    // watch that never fired is no longer evidence of a load in flight — riding it would
+    // spend the whole budget a second time on the same page. The first switch into a
+    // hidden app times out exactly like this: its canvas is 0x0 until it is shown.
+    expect(await c.activate('schematic', '/r/b')).toBe(true);
+    expect(clock).toBe(1500);
   });
 
   it('does not wait when there is no viewer to signal it — nothing is coming', async () => {
@@ -362,6 +418,38 @@ describe('KicanvasController', () => {
     expect(states.filter((s) => s === 'ready')).toEqual(['ready']);
     expect(states).not.toContain('timeout');
     expect(host.firstElementChild).toBe(live.embed);
+  });
+
+  it('an activate superseded by a REMOUNT returns false and leaves the view it captured alone', async () => {
+    const first = fakeEmbed({ pages: PAGES });
+    const live = fakeEmbed({ pages: PAGES });
+    let nextEmbed: HTMLElement = first.embed;
+    let release: () => void = () => undefined;
+    // The second mount parks on its module load, so it never starts an activate of its
+    // own: `seq` stays current and ONLY the epoch half of the guard can catch this one.
+    const parked = new Promise<void>((resolve) => { release = () => resolve(); });
+    let loads = 0;
+    const c = new KicanvasController({
+      loadModule: async () => { if (++loads === 2) await parked; },
+      createEmbed: () => nextEmbed,
+      readyMs: 500,
+      settleMs: 40,
+      sleep: () => new Promise<void>((resolve) => setTimeout(resolve, 0)),
+    });
+    const host = document.createElement('div');
+    const p = project({ 'main.kicad_sch': 's', 'sub.kicad_sch': 't', 'main.kicad_pcb': 'b' });
+    await c.mount(host, p);
+    expect([first.sch.hidden, first.board.hidden]).toEqual([false, true]);
+    first.setManual(true); // the board's load never lands, so the activate is still settling
+    const activating = c.activate('board');
+    nextEmbed = live.embed;
+    const remount = c.mount(host, p); // supersedes that mount mid-settle
+    expect(await activating).toBe(false);
+    expect([first.sch.hidden, first.board.hidden]).toEqual([false, true]); // never flipped to the board
+    release();
+    await remount;
+    expect(host.firstElementChild).toBe(live.embed);
+    expect([live.sch.hidden, live.board.hidden]).toEqual([false, true]);
   });
 
   it('zooms through the viewer camera when it exists and reports false when it does not', async () => {
