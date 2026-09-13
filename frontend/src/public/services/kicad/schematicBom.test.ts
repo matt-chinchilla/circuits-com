@@ -1,5 +1,5 @@
 // frontend/src/public/services/kicad/schematicBom.test.ts
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { canPrice, MAX_REFS_PER_LINE } from '@public/services/bom/parseBom';
 import { fixtureFiles, hasFixture, ROOT_UUID, SHEET_A_UUID, SHEET_B_UUID, schematic, sheet, symbol } from './fixtures';
 import { buildProject } from './project';
@@ -117,6 +117,27 @@ describe('readSchematic — rules', () => {
     expect(r.result.error).toMatch(/2,000/);
   });
 
+  // KiCad writes the literal "R?" into the instance table for an unannotated
+  // symbol, so every part answers the same string. Merging them would report a
+  // one-part BOM for a whole board, silently.
+  it('never merges unannotated references, and says the schematic needs annotating', async () => {
+    const body = `${symbol({ lib: 'Device:R', uuid: 'a', ref: 'R?', value: '1k' })} ${symbol({ lib: 'Device:R', uuid: 'b', ref: 'R?', value: '1k' })}`;
+    const r = await lines([f('main.kicad_sch', schematic({ uuid: ROOT_UUID, body }))]);
+    expect(r.instances).toBe(2);
+    expect(r.result.lines[0]).toMatchObject({ qty: 2 });
+    expect(r.result.warnings.filter((w) => /not annotated/.test(w))).toHaveLength(1);
+  });
+
+  // buildProject's BFS de-dupes by path, so a self-referencing sheet mounts
+  // cleanly and reaches this reader; without an ancestor check it expands
+  // 2^MAX_DEPTH times and hangs the tab.
+  it('skips a sheet that references itself instead of recursing forever', async () => {
+    const body = sheet({ uuid: SHEET_A_UUID, file: 'main.kicad_sch', name: 'self' });
+    const r = await lines([f('main.kicad_sch', schematic({ uuid: ROOT_UUID, body }))]);
+    expect(r.instances).toBe(0);
+    expect(r.result.warnings.filter((w) => /references itself/.test(w))).toHaveLength(1);
+  });
+
   it('returns an error, not lines, for a project with no schematic', async () => {
     const r = readBomLines(await buildProject([f('b.kicad_pcb', '(kicad_pcb (version 20241229))')]));
     expect(r.error).toMatch(/no schematic/i);
@@ -125,19 +146,40 @@ describe('readSchematic — rules', () => {
 });
 
 describe('readSchematic — Glasgow revC3', () => {
-  it('reads every reference once, with the twice-placed io_buffer doubled', async () => {
-    const r = await lines(fixtureFiles('glasgow-revC3'));
+  let r: Awaited<ReturnType<typeof lines>>;
+  beforeAll(async () => {
+    r = await lines(fixtureFiles('glasgow-revC3'));
+  });
+
+  it('reads every reference once, with the twice-placed io_buffer doubled', () => {
     const refs = r.result.lines.flatMap((l) => l.refs);
     expect(new Set(refs).size).toBe(refs.length);
     expect(r.instances).toBeGreaterThan(100);
-    // Pin the exact counts on first run and keep them: they are the regression fingerprint.
+    // Pin the exact counts on first run and keep them: they are the regression
+    // fingerprint. lines moved 70 -> 71 when the DNP property started being
+    // honoured: of the five DNP lines, exactly one (ESD5Z5.0T1G / D12,D13) has
+    // a fitted twin it used to merge into. The other four carry footprints
+    // ending in _DNP, so they were never grouped with a fitted part.
     expect({ lines: r.result.lines.length, instances: r.instances }).toMatchInlineSnapshot(`
       {
         "instances": 257,
-        "lines": 70,
+        "lines": 71,
       }
     `);
-    expect([...r.refs.values()].filter((l) => l.sheet === 'io_buffer.kicad_sch').map((l) => l.instancePath)).toHaveLength(r.instances - [...r.refs.values()].filter((l) => l.sheet !== 'io_buffer.kicad_sch').length);
+    // The doubling itself: io_buffer holds 68 non-power designators and is
+    // placed twice, so it contributes 136 of the 257 instances.
+    expect([...r.refs.values()].filter((l) => l.sheet === 'io_buffer.kicad_sch')).toHaveLength(136);
+  });
+
+  // Glasgow writes `(dnp no)` on all 347 symbols and marks its do-not-populate
+  // parts with `(property "DNP" "DNP")` alone: R40 on the root, J10/D12/D13 on
+  // io_banks, and R51/J8/J9/R8 on io_buffer — which is placed TWICE, so those
+  // four are eight instances. 1 + 3 + (4 x 2) = 12 DNP instances from the 8
+  // DNP symbols the review counted in the files.
+  it('honours the DNP property, not only the dnp attribute', () => {
+    const dnpInstances = r.result.lines.filter((l) => l.dnp).reduce((n, l) => n + l.qty, 0);
+    expect(dnpInstances).toBe(12);
+    expect(r.result.lines.flatMap((l) => (l.dnp ? l.refs : []))).toContain('R40');
   });
 });
 

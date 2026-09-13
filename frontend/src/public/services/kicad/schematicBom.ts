@@ -38,6 +38,10 @@ interface Instance {
 
 const BUILTIN_PROPERTIES = new Set(['Reference', 'Value', 'Footprint', 'Datasheet', 'Description']);
 const MAX_DEPTH = 32;
+/** A DNP field is SET unless it says otherwise — exporters write "DNP", "1",
+ *  "yes", "x" or the field's own name, but only a handful of explicit
+ *  negatives. Matching the negatives is the only list that stays closed. */
+const NOT_DNP = /^(no|false|0|n)$/i;
 
 function clean(value: string | null | undefined): string | null {
   if (value == null) return null;
@@ -116,10 +120,13 @@ export function readSchematic(project: KicadProject): SchematicRead {
   const legacy = symbolInstancesTable(rootDoc);
   const instances: Instance[] = [];
   const seen = new Set<string>();
+  const propertySheets = new Set<string>();
+  const selfReferencing = new Set<string>();
   let skippedNotInBom = 0;
-  let skippedPower = 0;
+  let skippedUnusable = 0;
+  let unannotated = 0;
 
-  const visit = (sheetPath: string, sheetUuids: string[], depth: number): void => {
+  const visit = (sheetPath: string, sheetUuids: string[], depth: number, chain: string[]): void => {
     const doc = docs.get(sheetPath);
     if (doc == null) return;
     if (depth > MAX_DEPTH) return;
@@ -135,9 +142,12 @@ export function readSchematic(project: KicadProject): SchematicRead {
       }
       const props = properties(sym);
       const uuid = (atom(child(sym, 'uuid') ?? [], 1) ?? '').toLowerCase();
-      const ref = referenceFromInstances(sym, pathV7) ?? legacy.get(`${pathV6}/${uuid}`.toLowerCase()) ?? clean(props.get('Reference'));
+      // An instance table names this symbol AT THIS PATH; the Reference
+      // property is a per-file cache that cannot distinguish two placements.
+      const tabled = referenceFromInstances(sym, pathV7) ?? legacy.get(`${pathV6}/${uuid}`.toLowerCase()) ?? null;
+      const ref = tabled ?? clean(props.get('Reference'));
       if (ref == null || ref.startsWith('#') || power.has(libId)) {
-        skippedPower++;
+        skippedUnusable++;
         continue;
       }
       // A reference designator names ONE physical part for the whole
@@ -147,11 +157,29 @@ export function readSchematic(project: KicadProject): SchematicRead {
       // io_banks) and a path-scoped key buys that chip twice. A sheet placed
       // twice is re-annotated by KiCad, so its two placements still arrive
       // here as two distinct designators.
-      if (seen.has(ref)) continue;
-      seen.add(ref);
+      //
+      // Two inputs cannot support that reasoning and must never merge:
+      //   - an UNANNOTATED symbol, where every part answers "R?" — keyed by
+      //     the symbol's own uuid (path-qualified, so a twice-placed sheet
+      //     still counts twice);
+      //   - a reference that came from the PROPERTY FALLBACK, where both
+      //     placements of a sheet read the same cached string — keyed by the
+      //     instance path, so the second placement is counted rather than
+      //     silently swallowed (an under-count ships too few parts).
+      const isUnannotated = ref.endsWith('?');
+      if (tabled == null) propertySheets.add(sheetPath);
+      const key = isUnannotated
+        ? `${pathV7}|${uuid === '' ? `#${instances.length}` : uuid}`
+        : tabled == null
+          ? `${pathV7}|${ref}`
+          : ref;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      if (isUnannotated) unannotated++;
       let mpn: string | null = null;
       let manufacturer: string | null = null;
       let distributorPn: string | null = null;
+      let dnpField = false;
       for (const [name, value] of props) {
         if (BUILTIN_PROPERTIES.has(name)) continue;
         const role: BomRole | null = matchHeader(name);
@@ -160,31 +188,50 @@ export function readSchematic(project: KicadProject): SchematicRead {
         if (role === 'mpn' && mpn == null) mpn = v;
         else if (role === 'manufacturer' && manufacturer == null) manufacturer = v;
         else if (role === 'distributor_pn' && distributorPn == null) distributorPn = v;
+        // A DNP FIELD marks the part, not only the `(dnp yes)` attribute:
+        // Glasgow writes `(dnp no)` on all 347 symbols and flags its
+        // do-not-populate parts with `(property "DNP" "DNP")` alone. Anything
+        // that is not an explicit negative counts as set, the way a CSV DNP
+        // column is read.
+        else if (role === 'dnp' && !NOT_DNP.test(v)) dnpField = true;
       }
       instances.push({
         ref, mpn, manufacturer, distributorPn,
         value: clean(props.get('Value')),
         footprint: clean(props.get('Footprint')),
         description: clean(props.get('Description')),
-        dnp: atom(child(sym, 'dnp') ?? [], 1) === 'yes',
+        dnp: dnpField || atom(child(sym, 'dnp') ?? [], 1) === 'yes',
         sheet: sheetPath,
         instancePath: pathV7,
       });
       refs.set(ref, { sheet: sheetPath, instancePath: pathV7 });
     }
+    // Re-entering a sheet is CORRECT — that is how a twice-placed sheet gets
+    // counted twice — so the guard is the ancestor chain, not a visited set.
+    // A sheet that references itself (directly or through a cycle) would
+    // otherwise expand 2^MAX_DEPTH times and hang the tab; KiCad refuses
+    // recursive hierarchies, so skipping is also what the file means.
+    const nextChain = [...chain, sheetPath];
     for (const sh of children(doc, 'sheet')) {
       const uuid = (atom(child(sh, 'uuid') ?? [], 1) ?? '').toLowerCase();
       const file = properties(sh).get('Sheetfile');
       if (uuid === '' || file == null) continue;
       const r = resolveSheetRef(sheetPath, file, docs.keys());
       if ('missing' in r) continue;
-      visit(r.path, [...sheetUuids, uuid], depth + 1);
+      if (nextChain.includes(r.path)) {
+        selfReferencing.add(r.path);
+        continue;
+      }
+      visit(r.path, [...sheetUuids, uuid], depth + 1, nextChain);
     }
   };
-  visit(project.root, [], 0);
+  visit(project.root, [], 0, []);
 
-  const skipped = skippedNotInBom + skippedPower;
-  if (skipped > 0) warnings.push(`${skipped} symbols skipped: ${skippedNotInBom} not in BOM, ${skippedPower} power or virtual.`);
+  const skipped = skippedNotInBom + skippedUnusable;
+  if (skipped > 0) warnings.push(`${skipped} symbols skipped: ${skippedNotInBom} not in BOM, ${skippedUnusable} power, virtual or unreferenced.`);
+  for (const path of selfReferencing) warnings.push(`${basename(path)} references itself (directly or through its sub-sheets); that reference was skipped.`);
+  for (const path of propertySheets) warnings.push(`${basename(path)}: references were read from symbol properties, not instance tables — a sheet placed more than once may show duplicate designators.`);
+  if (unannotated > 0) warnings.push(`${unannotated} symbols are not annotated (R?, U? …); run Tools → Annotate Schematic in KiCad for an accurate BOM.`);
   if (project.missingSheets.length > 0) warnings.push(`Parts on the missing sheet(s) ${project.missingSheets.join(', ')} are not in this BOM.`);
 
   const groups = new Map<string, Instance[]>();
@@ -196,7 +243,9 @@ export function readSchematic(project: KicadProject): SchematicRead {
   }
 
   const lines: ParsedBomLine[] = [];
-  let index = 0;
+  // 1-based, like the CSV path (`parseBom` assigns `i + 1`) — `BomTable`
+  // renders this as the visible line number and `share.ts` round-trips it.
+  let index = 1;
   for (const bucket of groups.values()) {
     const first = bucket[0] as Instance;
     const sorted = bucket.map((i) => i.ref).sort(naturalRefCompare);
