@@ -4083,7 +4083,7 @@ git commit -m "feat(viewer): CanvasController protocol and the KiCanvas implemen
 
 **Files:**
 - Create: `frontend/src/public/components/kicad/DesignCanvas.tsx`, `frontend/src/public/components/kicad/DesignCanvas.module.scss`, `frontend/src/public/components/kicad/webgl.ts`
-- Test: `frontend/src/public/components/kicad/webgl.test.ts` (happy-dom)
+- Test: `frontend/src/public/components/kicad/webgl.test.ts`, `frontend/src/public/components/kicad/DesignCanvas.test.ts` (both happy-dom; the component test drives a fake controller through the `createController` prop with React.createElement + react-dom/client + act — vitest discovers `*.test.ts` only and there is no testing-library)
 
 **Interfaces:**
 - Consumes: `CanvasController`, `CanvasView`, `CanvasStateName`, `FocusResult` (2.1); `KicanvasController` (2.1); `KicadProject` (1.2).
@@ -4133,9 +4133,22 @@ Run: `cd frontend && npx vitest run src/public/components/kicad/webgl.test.ts` �
 // schematic and read as a KiCanvas bug (spec §5.2, §9).
 let probed: boolean | null = null;
 
+/** Only the sliver of the context we touch: enough to release it again. */
+type ProbeContext = { getExtension?: (name: string) => { loseContext: () => void } | null } | null;
+
 export function webgl2Supported(create: () => HTMLCanvasElement = () => document.createElement('canvas')): boolean {
   if (probed != null) return probed;
-  const gl = create().getContext('webgl2') as { getExtension?: (name: string) => { loseContext: () => void } | null } | null;
+  // `getContext` is specced to return null, but fingerprint-blocking browsers and
+  // extensions have been seen to THROW. This runs in a render body, so an escaping
+  // throw would take down the ErrorBoundary instead of showing the no-webgl card the
+  // probe exists for — and with `probed` still null it would throw again every render.
+  let gl: ProbeContext;
+  try {
+    gl = create().getContext('webgl2') as ProbeContext;
+  } catch {
+    probed = false;
+    return probed;
+  }
   probed = gl != null;
   if (gl?.getExtension) gl.getExtension('WEBGL_lose_context')?.loseContext();
   return probed;
@@ -4159,6 +4172,12 @@ import { webgl2Supported } from './webgl';
 import styles from './DesignCanvas.module.scss';
 
 export interface DesignCanvasProps {
+  /**
+   * The project to render. **Referentially stable:** the host keys its mount on object
+   * identity, so a new identity disposes the renderer and reloads the whole project.
+   * Callers pass the SAME object across renders (the design session holds one) — never
+   * a `buildProject(...)` call in a render body or a `useMemo` with an unstable dep.
+   */
   project: KicadProject;
   view: CanvasView;
   /** Path key of the schematic to show, or an instance path; default root. */
@@ -4198,30 +4217,39 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(function 
   const [detail, setDetail] = useState<string | undefined>(undefined);
   const [attempt, setAttempt] = useState(0);
   const supported = webgl2Supported();
+  // `onState` is NOT an effect dep on purpose: a parent passing an inline arrow would
+  // remount the canvas — and reload the project — on every one of its renders. The ref
+  // is what keeps the callback current without paying that.
+  const onStateRef = useRef(onState);
+  onStateRef.current = onState;
 
   useEffect(() => {
     if (!supported) {
       setState('no-webgl');
-      onState?.('no-webgl');
+      onStateRef.current?.('no-webgl');
       return;
     }
     const host = hostRef.current;
     if (host == null) return;
+    let cancelled = false;
     const controller = (createController ?? (() => new KicanvasController()))();
     controllerRef.current = controller;
     const off = controller.on('state', (e) => {
+      if (cancelled) return;
       setState(e.state);
       setDetail(e.detail);
-      onState?.(e.state, e.detail);
+      onStateRef.current?.(e.state, e.detail);
     });
     void controller.mount(host, project);
     return () => {
+      cancelled = true;
       off();
       controller.dispose();
       controllerRef.current = null;
     };
-    // `attempt` re-mounts on "Try again"; onState/createController are stable by convention.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // `attempt` re-mounts on "Try again"; onState/createController are stable by
+    // convention. The react-hooks plugin isn't installed here, so no disable comment
+    // (an unknown rule in a directive is itself an eslint error).
   }, [project, attempt, supported]);
 
   useEffect(() => {
@@ -4229,28 +4257,43 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(function 
     void controllerRef.current?.activate(view, activeSheet);
   }, [state, view, activeSheet]);
 
+  // Both members read `controllerRef.current` at CALL time, so the handle never goes
+  // stale and `[]` keeps its identity fixed — a parent may hold it in a dep array.
   useImperativeHandle(ref, () => ({
     focusRef: (r, sheet) => controllerRef.current?.focusRef(r, sheet) ?? Promise.resolve('unsupported' as const),
     zoom: (action) => controllerRef.current?.zoom(action) ?? Promise.resolve(false),
-  }));
+  }), []);
 
   const frameRef = useRef<HTMLDivElement>(null);
+  // The mount effect's `cancelled` is per ATTEMPT; this is per COMPONENT, which is the
+  // lifetime `zoom` below needs — it is not owned by that effect and awaits across it.
+  const aliveRef = useRef(true);
+  useEffect(() => {
+    aliveRef.current = true;
+    return () => {
+      aliveRef.current = false;
+    };
+  }, []);
   const [zoomable, setZoomable] = useState(true);
   const zoom = async (action: ZoomAction) => {
     const ok = await controllerRef.current?.zoom(action);
-    if (ok === false) setZoomable(false);
+    if (ok === false && aliveRef.current) setZoomable(false);
   };
   const fullscreenEnabled = typeof document !== 'undefined' && document.fullscreenEnabled;
   const toggleFullscreen = () => {
     const el = frameRef.current;
     if (el == null) return;
-    if (document.fullscreenElement === el) void document.exitFullscreen();
-    else void el.requestFullscreen();
+    // Both reject on reachable paths — a permissions-policy denial, an iframe without
+    // allow="fullscreen", a request the browser does not count as user-activated. `void`
+    // discards the VALUE, not the rejection, so without this a plain button click raises
+    // an unhandledrejection.
+    if (document.fullscreenElement === el) void document.exitFullscreen().catch(() => undefined);
+    else void el.requestFullscreen().catch(() => undefined);
   };
 
   const failed = state === 'no-webgl' || state === 'timeout' || state === 'error';
   return (
-    <div ref={frameRef} className={styles.frame} data-state={state}>
+    <div ref={frameRef} className={styles.frame}>
       <div ref={hostRef} className={styles.host} hidden={failed} />
       {state === 'ready' && (
         <div className={styles.controls} role="group" aria-label="View controls">
@@ -4295,6 +4338,7 @@ export default DesignCanvas;
 ```scss
 // frontend/src/public/components/kicad/DesignCanvas.module.scss
 @use '@shared/styles/variables' as *;
+@use '@shared/styles/mixins' as *;
 @use '@public/styles/bomMaterial' as *;
 
 // The frame is a bom-card with an inset hairline so the renderer's grey
@@ -4320,14 +4364,12 @@ export default DesignCanvas;
   }
 }
 
-.frameCompact {
-  flex: 0 0 auto;
-  height: 45vh;
-}
-
 // Fit / + / − / fullscreen over the drawing: essential on coarse pointers
 // (KiCanvas's pinch-zoom barely works on a phone — owner, Phase 0 gate), kept on
 // desktop too. Glass controls float over content, which is what the recipe is for.
+// The 6px gap is what caps the hit-area growth below: the ::before overlays of two
+// neighbours are positioned siblings, so anything past half the gap puts the later
+// button's overlay on top of the earlier one's VISIBLE face and steals its clicks.
 .controls {
   position: absolute;
   right: 12px;
@@ -4339,6 +4381,10 @@ export default DesignCanvas;
 
 .ctl {
   @include bom-glass-control;
+  // `bom-glass-control` sets no `position`, so the mixin's absolute ::before would
+  // anchor to `.frame` without this.
+  position: relative;
+  @include tap-target(-3px);
   min-width: 40px;
   min-height: 40px;
   padding: 0 12px;
@@ -4393,8 +4439,13 @@ export default DesignCanvas;
   font-size: 0.9rem;
 }
 
+// ~31px tall as drawn (13.3px UA button text — `global.scss` gives buttons a
+// font-family but no size — plus 16px padding and 2px border), so it needs 7px to
+// clear 44. It has no neighbour, and 7px stays inside `.problem`'s 8px gap.
 .retry {
   @include bom-glass-control;
+  position: relative;
+  @include tap-target(-7px);
   justify-self: center;
   padding: 8px 16px;
   line-height: 1;
@@ -4403,6 +4454,168 @@ export default DesignCanvas;
 ```
 
 If `bom-glass-control` or `bom-card` need arguments in `_bomMaterial.scss`, mirror how `BomPage.module.scss` calls them.
+
+The component test (review ruling, Task 2.2 fix round 1 — no-webgl builds no controller; retry disposes and rebuilds; unmount mid-mount disposes without a state update; the stale-closure and throwing-probe cases):
+
+```ts
+// @vitest-environment happy-dom
+// Covers the paths the /viewer playtest cannot reach cheaply: the no-webgl short
+// circuit, the retry teardown, and unmount while mount() is still pending. No JSX
+// (vitest only discovers *.test.ts here) and no testing-library — createRoot + act.
+import { act, createElement } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { CanvasController, CanvasStateName } from './canvasController';
+import type { KicadProject } from '@public/services/kicad/types';
+import DesignCanvas from './DesignCanvas';
+import { resetWebgl2ProbeForTests } from './webgl';
+
+(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+const project = { name: 'demo', files: new Map(), sheets: [] } as unknown as KicadProject;
+
+/** Force the probe's answer: happy-dom's canvas has no real webgl2 context. */
+function setWebgl(ok: boolean) {
+  resetWebgl2ProbeForTests();
+  HTMLCanvasElement.prototype.getContext = (() => (ok ? { getExtension: () => null } : null)) as never;
+}
+
+function fakeController() {
+  let handler: ((e: { type: 'state'; state: CanvasStateName }) => void) | null = null;
+  const f = {
+    disposed: 0,
+    emit: (state: CanvasStateName) => handler?.({ type: 'state', state }),
+    // Never resolves: every case here unmounts or retries while mount() is in flight.
+    ctrl: {
+      mount: () => new Promise<void>(() => {}),
+      activate: async () => true,
+      focusRef: async () => 'focused' as const,
+      zoom: async () => true,
+      dispose: () => {
+        f.disposed++;
+      },
+      on: (kind: string, h: unknown) => {
+        if (kind === 'state') handler = h as typeof handler;
+        return () => {
+          handler = null;
+        };
+      },
+    } as unknown as CanvasController,
+  };
+  return f;
+}
+
+let container: HTMLDivElement;
+let root: Root;
+
+beforeEach(() => {
+  container = document.createElement('div');
+  document.body.append(container);
+  root = createRoot(container);
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  container.remove();
+});
+
+describe('DesignCanvas', () => {
+  it('shows the no-webgl card and never builds a controller', async () => {
+    setWebgl(false);
+    let built = 0;
+    const seen: CanvasStateName[] = [];
+    await act(async () => {
+      root.render(
+        createElement(DesignCanvas, {
+          project,
+          view: 'schematic',
+          onState: (s: CanvasStateName) => seen.push(s),
+          createController: () => {
+            built++;
+            return fakeController().ctrl;
+          },
+        }),
+      );
+    });
+    expect(container.textContent).toContain('WebGL disabled');
+    expect(built).toBe(0);
+    expect(seen).toEqual(['no-webgl']);
+    await act(async () => root.unmount());
+  });
+
+  it('disposes the controller and builds a fresh one when retry is clicked', async () => {
+    setWebgl(true);
+    const made: ReturnType<typeof fakeController>[] = [];
+    await act(async () => {
+      root.render(
+        createElement(DesignCanvas, {
+          project,
+          view: 'schematic',
+          createController: () => {
+            const f = fakeController();
+            made.push(f);
+            return f.ctrl;
+          },
+        }),
+      );
+    });
+    expect(made).toHaveLength(1);
+    await act(async () => made[0].emit('timeout'));
+    // Only the retry renders in this state — the zoom cluster is ready-only.
+    const retry = container.querySelector('button');
+    expect(retry?.textContent).toBe('Try again');
+    await act(async () => retry?.click());
+    expect(made[0].disposed).toBe(1);
+    expect(made).toHaveLength(2);
+    await act(async () => root.unmount());
+  });
+
+  it('calls the CURRENT onState, not the one captured when it mounted', async () => {
+    setWebgl(true);
+    const f = fakeController();
+    const first: CanvasStateName[] = [];
+    const second: CanvasStateName[] = [];
+    const render = (onState: (s: CanvasStateName) => void) =>
+      root.render(createElement(DesignCanvas, { project, view: 'schematic', onState, createController: () => f.ctrl }));
+    await act(async () => render((s) => first.push(s)));
+    // Same `project` identity, so this re-renders WITHOUT remounting the controller.
+    await act(async () => render((s) => second.push(s)));
+    await act(async () => f.emit('ready'));
+    expect(second).toEqual(['ready']);
+    expect(first).toEqual([]);
+    await act(async () => root.unmount());
+  });
+
+  it('renders the no-webgl card when the browser THROWS from getContext', async () => {
+    resetWebgl2ProbeForTests();
+    HTMLCanvasElement.prototype.getContext = (() => {
+      throw new Error('blocked by a fingerprint guard');
+    }) as never;
+    await act(async () => {
+      root.render(createElement(DesignCanvas, { project, view: 'schematic' }));
+    });
+    expect(container.textContent).toContain('WebGL disabled');
+    await act(async () => root.unmount());
+  });
+
+  it('disposes on unmount while mount() is pending, with no late state update', async () => {
+    setWebgl(true);
+    const errors: unknown[][] = [];
+    vi.spyOn(console, 'error').mockImplementation((...a: unknown[]) => {
+      errors.push(a);
+    });
+    const f = fakeController();
+    await act(async () => {
+      root.render(createElement(DesignCanvas, { project, view: 'schematic', createController: () => f.ctrl }));
+    });
+    await act(async () => root.unmount());
+    expect(f.disposed).toBe(1);
+    // The controller detached its handler, so a late event reaches no setState.
+    await act(async () => f.emit('ready'));
+    expect(errors).toEqual([]);
+  });
+});
+```
 
 - [ ] **Step 3: Run the tests and gates**
 
