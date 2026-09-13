@@ -92,13 +92,20 @@ vi.mock('@public/components/kicad/DesignCanvas', () => ({
 vi.mock('@public/components/bom/BomTable', () => ({
   default: (props: AnyProps) =>
     createElement(
-      'button',
-      {
-        type: 'button',
-        'data-testid': 'bom-ref',
-        onClick: () => (props.onRefClick as (r: string) => void)('U1'),
-      },
-      'U1',
+      'div',
+      { 'data-testid': 'bom-ref' },
+      ['U1', 'U2'].map((ref) =>
+        createElement(
+          'button',
+          {
+            key: ref,
+            type: 'button',
+            'data-ref': ref,
+            onClick: () => (props.onRefClick as (r: string) => void)(ref),
+          },
+          ref,
+        ),
+      ),
     ),
 }));
 vi.mock('@public/components/bom/ShareBar', () => ({
@@ -149,6 +156,7 @@ function makeSession(over: { root?: string | null; board?: string | null } = {})
     parsed: { lines: [{ index: 0, qty: 2 }], warnings: [], error: null },
     refs: new Map([
       ['U1', { sheet: 'sub/power.kicad_sch', instancePath: '/r/a' }],
+      ['U2', { sheet: 'main.kicad_sch', instancePath: '/r' }],
       // A part the reader can see in the BOM whose sheet the renderer never got.
       ['U9', { sheet: 'alt/power.kicad_sch', instancePath: '/r/b' }],
     ]),
@@ -179,10 +187,28 @@ function byText(text: string): HTMLButtonElement {
   return found;
 }
 
+function bomRef(ref: string): HTMLElement {
+  return container.querySelector(`[data-ref="${ref}"]`) as HTMLElement;
+}
+
 async function click(el: HTMLElement) {
   await act(async () => {
     el.click();
   });
+}
+
+/** Hand back promises the test settles by hand, so two focuses can be in flight
+ *  at once — the shape the sequence guard exists for. In a browser the wait is a
+ *  sheet load; here it is whatever the test wants. */
+function deferFocus(): { ref: string; settle: (result: string) => void }[] {
+  const pending: { ref: string; settle: (result: string) => void }[] = [];
+  canvas.focusRef.mockImplementation(
+    ((ref: string) =>
+      new Promise((resolve) => {
+        pending.push({ ref, settle: resolve as (result: string) => void });
+      })) as never,
+  );
+  return pending;
 }
 
 async function canvasReady() {
@@ -270,7 +296,7 @@ describe('the BOM tab', () => {
     await render();
     await canvasReady();
     await click(byText('BOM'));
-    await click(container.querySelector('[data-testid="bom-ref"]') as HTMLElement);
+    await click(bomRef('U1'));
 
     expect(canvas.focusRef).toHaveBeenCalledWith('U1', '/r/a');
     expect(byText('Schematic').getAttribute('aria-selected')).toBe('true');
@@ -450,5 +476,88 @@ describe('a schematic with nothing to buy', () => {
     const panel = container.querySelector('[aria-label="Bill of materials"]') as HTMLElement;
     expect(panel.textContent).toMatch(/Nothing to price/);
     expect(panel.textContent?.toLowerCase()).not.toContain('upload');
+  });
+});
+
+// NEW-1 and the racing-focus residual: a focus is awaited across a sheet load,
+// and the reader can act again inside that window.
+describe('a gesture made while a focus is still loading', () => {
+  it('answers only the newest designator, however the older one lands', async () => {
+    wb.rows = [{ index: 0 }];
+    await render();
+    await canvasReady();
+    await click(byText('BOM'));
+    const pending = deferFocus();
+
+    await click(bomRef('U1'));
+    await click(bomRef('U2'));
+    expect(pending.map((f) => f.ref)).toEqual(['U1', 'U2']);
+
+    // The newer click lands FIRST and the abandoned one straggles in after —
+    // the real shape, since the sheet being left is usually the slower load.
+    // Ungoverned, the reader is left reading a verdict on a click they replaced.
+    await act(async () => pending[1].settle('focused'));
+    await act(async () => pending[0].settle('not-found'));
+
+    expect(toastText()).toBe('Focused U2');
+  });
+
+  /**
+   * The case the sequence guard alone does NOT cover: a TAB switch moves the
+   * canvas without touching `activeSheet`, so nothing on the page bumps the
+   * sequence — only the renderer knows it stood down, and only by saying so.
+   */
+  it('says nothing when the reader switches to the board mid-focus', async () => {
+    session = makeSession({ board: 'main.kicad_pcb' });
+    wb.rows = [{ index: 0 }];
+    await render();
+    await canvasReady();
+    await click(byText('BOM'));
+    const pending = deferFocus();
+
+    await click(bomRef('U1'));
+    await click(byText('Board'));
+    await act(async () => pending[0].settle('superseded'));
+
+    expect(toastText()).toBeNull();
+  });
+
+  /**
+   * And the case 'superseded' alone does not cover: the focus legitimately WON
+   * its race and reports 'focused', but by the time it answers the reader has
+   * moved to another sheet. "Focused U1" over a drawing showing something else
+   * is the page's own invariant to keep, not the renderer's.
+   */
+  it('does not announce a focus that succeeded after the reader moved on', async () => {
+    wb.rows = [{ index: 0 }];
+    await render();
+    await canvasReady();
+    await click(byText('BOM'));
+    const pending = deferFocus();
+
+    await click(bomRef('U1'));
+    await click(chips()[0]);
+    await act(async () => pending[0].settle('focused'));
+
+    expect(toastText()).toBeNull();
+    expect(canvas.activeSheet).toBe('main.kicad_sch');
+  });
+
+  it('lets a sheet chip keep the view, and says nothing about the focus it displaced', async () => {
+    wb.rows = [{ index: 0 }];
+    await render();
+    await canvasReady();
+    await click(byText('BOM'));
+    const pending = deferFocus();
+
+    await click(bomRef('U1')); // aims at sub/power
+    await click(chips()[0]); // …and the reader picks the root instead
+
+    // What the controller reports once it has stood down for that chip.
+    await act(async () => pending[0].settle('superseded'));
+
+    expect(canvas.activeSheet).toBe('main.kicad_sch');
+    expect(chips()[0].getAttribute('aria-current')).toBe('true');
+    expect(toastText()).toBeNull();
   });
 });

@@ -362,7 +362,19 @@ describe('KicanvasController', () => {
     expect(fake.getActive()?.project_path).toBe('sub.kicad_sch:/r/a');
   });
 
-  it('takes the view back when a host activate overtakes it onto a DIFFERENT sheet', async () => {
+  /**
+   * The other half, and the one the round-1 fix got backwards.
+   *
+   * Because the page names the designator's OWN sheet before it focuses, a host
+   * activate raised for a focus always re-asks for that same file. So an
+   * activation naming a DIFFERENT document cannot be the host echoing this
+   * focus — it can only be the reader clicking another sheet chip while this one
+   * was still loading. Taking the view back there would snap the drawing off the
+   * sheet they just picked and leave the chip bar naming a sheet that is not on
+   * screen, with nothing to converge it. The newer gesture wins; the focus
+   * stands down quietly.
+   */
+  it('yields to a sheet the reader picks while it is still loading', async () => {
     const fake = fakeEmbed({ pages: PAGES, selectedFor: ['U1'], asyncLoad: true });
     const c = new KicanvasController({
       loadModule: async () => undefined,
@@ -373,15 +385,26 @@ describe('KicanvasController', () => {
     });
     await c.mount(document.createElement('div'), project({ 'main.kicad_sch': 's', 'sub.kicad_sch': 't' }));
 
-    // The stale-activeSheet shape: the host is still asking for the root while
-    // the focus wants a sub-sheet. The focus is the user's gesture and wins.
-    const focus = c.focusRef('U1', '/r/a');
-    const host = c.activate('schematic', 'main.kicad_sch');
+    // Every page the view is moved to from here, so "did not re-activate its own
+    // sheet" is proved rather than inferred from the end state.
+    const moves: string[] = [];
+    const set = fake.proj.set_active_page.bind(fake.proj);
+    fake.proj.set_active_page = (page: FakePage | string) => {
+      moves.push(typeof page === 'string' ? page : page.project_path);
+      set(page);
+    };
 
-    expect(await focus).toBe('focused');
-    void (await host);
-    expect(fake.viewer.selected).toBe('U1');
-    expect(fake.getActive()?.project_path).toBe('sub.kicad_sch:/r/a');
+    const focus = c.focusRef('U1', '/r/a');
+    const chip = c.activate('schematic', 'main.kicad_sch');
+
+    expect(await focus).toBe('superseded');
+    void (await chip);
+    // The reader's sheet is live and nothing was selected on it.
+    expect(fake.getActive()?.project_path).toBe('main.kicad_sch');
+    expect(fake.selected).toEqual([]);
+    expect(fake.viewer.selected).toBe(false);
+    // Two moves only: the focus's own, then the chip's. No third one back.
+    expect(moves).toEqual(['sub.kicad_sch:/r/a', 'main.kicad_sch']);
   });
 
   it('still answers not-found for a sheet that is genuinely not there', async () => {

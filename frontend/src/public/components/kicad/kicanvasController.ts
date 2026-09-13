@@ -75,12 +75,6 @@ const KICANVAS_LOAD = 'kicanvas:load';
  *  bounds as the wheel, or it walks the camera somewhere the wheel can never reach
  *  (24 steps in from 1.0 passes 190; the same out reaches ~0.005 — a board drawn as
  *  a dot until the next wheel event silently re-clamps it). */
-/** How many times a focus will take the view back from a host activate that
- *  overtook it. The host issues one activate per state commit and nothing this
- *  controller does makes it issue another, so the race converges after one; the
- *  bound exists only so two focusRef calls racing each other cannot spin. */
-const FOCUS_ACTIVATE_TRIES = 3;
-
 const ZOOM_MIN = 0.5;
 const ZOOM_MAX = 190;
 const ZOOM_STEP = 1.25;
@@ -461,17 +455,29 @@ export class KicanvasController implements CanvasController {
    * not, the host is asking for somewhere else and the reader's gesture takes
    * the view back.
    */
-  private async activateForFocus(sheet: string): Promise<boolean> {
-    for (let attempt = 0; attempt < FOCUS_ACTIVATE_TRIES; attempt += 1) {
-      const outcome = await this.activateFor('schematic', sheet);
-      if (outcome === 'ok') return true;
-      // 'failed' is a real miss (no such page, a dropped basename twin) or a
-      // dead mount. Re-waiting cannot conjure a page, and retrying a
-      // set_active_page that threw only throws again.
-      if (outcome !== 'superseded') return false;
-      if (this.showing(sheet)) return true;
-    }
-    return this.showing(sheet);
+  private async activateForFocus(sheet: string): Promise<ActivateOutcome> {
+    const outcome = await this.activateFor('schematic', sheet);
+    // 'ok' is done. 'failed' is a real miss (no such page, a dropped basename
+    // twin) or a dead mount: waiting longer cannot conjure a page, and retrying
+    // a set_active_page that threw only throws again.
+    if (outcome !== 'superseded') return outcome;
+
+    // A newer activation owns the view, and WHICH DOCUMENT it landed on says who
+    // issued it.
+    //
+    // The SAME document is the host echoing this very focus: the page names the
+    // designator's own sheet in its state before calling focusRef, so
+    // DesignCanvas re-activates that same file. The waiting is already done —
+    // `activateFor` above rode that activation's own load watch, and upstream
+    // starts no second load for a document the viewer already holds — so the
+    // page is on screen and settled, and this focus may select on it.
+    //
+    // A DIFFERENT document can only be the reader choosing another sheet while
+    // this focus was still loading. That is a newer, deliberate gesture and it
+    // wins. Taking the view back — which this used to do — would snap the
+    // drawing off the sheet they just picked and leave the chip bar naming a
+    // sheet that is not on screen, with nothing to converge it.
+    return this.showing(sheet) ? 'ok' : 'superseded';
   }
 
   /** Is the page `sheet` names the one on screen? Compared by DOCUMENT, because
@@ -485,7 +491,12 @@ export class KicanvasController implements CanvasController {
   }
 
   async focusRef(ref: string, sheet?: string): Promise<FocusResult> {
-    if (sheet != null && !(await this.activateForFocus(sheet))) return 'not-found';
+    if (sheet != null) {
+      const activated = await this.activateForFocus(sheet);
+      // Stood down for a newer sheet choice — not a statement about `ref`.
+      if (activated === 'superseded') return 'superseded';
+      if (activated === 'failed') return 'not-found';
+    }
     // The app showing the ACTIVE page, exactly as zoom() picks it: BoardViewer.select()
     // also takes a string and resolves a footprint by uuid or reference (vendor
     // viewers/board/viewer.ts:94-106), so with the board active the honest answer is

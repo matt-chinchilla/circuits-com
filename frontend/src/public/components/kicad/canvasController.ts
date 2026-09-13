@@ -7,7 +7,16 @@ import type { KicadProject } from '@public/services/kicad/types';
 
 export type CanvasView = 'schematic' | 'board';
 export type CanvasStateName = 'loading' | 'ready' | 'no-webgl' | 'timeout' | 'error';
-export type FocusResult = 'focused' | 'not-found' | 'unsupported';
+/**
+ * What a focus request came to.
+ *
+ * `superseded` is the one that is not a failure: a NEWER gesture — the reader
+ * picking a different sheet while this focus was still loading — took the view,
+ * and the focus stood down rather than dragging the drawing back to where it
+ * was going. A host must treat it as "say nothing": the reader has already
+ * moved on, and narrating the click they abandoned is worse than silence.
+ */
+export type FocusResult = 'focused' | 'not-found' | 'unsupported' | 'superseded';
 
 export type CanvasEvent =
   | { type: 'state'; state: CanvasStateName; detail?: string }

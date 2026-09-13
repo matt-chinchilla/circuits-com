@@ -95,6 +95,16 @@ export default function ViewerPage() {
   /** A focus the canvas still owes us, held until it reports `ready`. */
   const pendingFocus = useRef<string | null>(null);
   /**
+   * Which gesture owns the view, and therefore the toast.
+   *
+   * A focus is awaited across a sheet load, and the reader can act again inside
+   * that window — another designator, or a sheet chip. Whoever acted LAST is who
+   * the page is answering; an older focus landing afterwards must say nothing,
+   * or the reader is told "U1 was not found" about a click they have already
+   * replaced, over a drawing that is showing something else entirely.
+   */
+  const focusSeq = useRef(0);
+  /**
    * Sheets the MOUNTED renderer cannot draw for this project — its answer, not
    * this page's guess. KiCanvas keys its file system by basename and so must
    * drop a second `power.kicad_sch`; the editor renderer that replaces it later
@@ -158,6 +168,9 @@ export default function ViewerPage() {
 
   const focus = useCallback(
     async (ref: string) => {
+      // Claimed before any early return, so a focus that answers immediately
+      // still silences an older one that is still in flight.
+      const seq = ++focusSeq.current;
       const s = session;
       if (s == null) return;
       if (s.project.root == null) {
@@ -185,6 +198,10 @@ export default function ViewerPage() {
       if (where != null) setActiveSheet(where.sheet);
       setTab('schematic');
       const result = await canvasRef.current?.focusRef(ref, where?.instancePath);
+      // A newer gesture took the view while this was loading. 'superseded' is
+      // the renderer saying so; the sequence check catches the rest (a second
+      // designator, or a focus that never reached the renderer at all).
+      if (seq !== focusSeq.current || result === 'superseded') return;
       if (result === 'focused') setToast(`Focused ${ref}`);
       else if (result === 'not-found') setToast(where ? `${ref} was not found on sheet ${basename(where.sheet)}` : `${ref} is not in this schematic`);
       // 'unsupported' (no WebGL, or no renderer mounted) and an absent handle both
@@ -244,6 +261,9 @@ export default function ViewerPage() {
   }, [session]);
 
   const chooseSheet = (path: string) => {
+    // A sheet chip is a newer gesture than any focus still in flight. The
+    // controller yields the view to it; this hands it the toast to match.
+    focusSeq.current += 1;
     if (droppedSheets.has(path)) {
       setToast(droppedSheetToast(path));
       return;
