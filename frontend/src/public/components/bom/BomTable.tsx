@@ -4,6 +4,7 @@ import { priceAt, recommend, tierRankFromOffers } from '@public/services/bom/pri
 import { availability, type AvailabilityState } from '@public/services/bom/availability';
 import { priceSourceNote, priceSourceTone } from '@public/services/bom/priceSource';
 import { formatMoney, formatUnit } from '@public/services/bom/format';
+import { viewerRefHref } from '@public/services/bom/viewerLink';
 import type { BomOffer, TableRow } from '@public/services/bom/types';
 import AlternatesDropdown from './AlternatesDropdown';
 import CoverageStrip, { type CoverageCounts } from './CoverageStrip';
@@ -97,6 +98,9 @@ interface BomTableProps {
    *  share view: that table asks nothing of anyone, so the menu renders as a
    *  plain badge there. */
   onPickSimilar: ((index: number, sku: string) => void) | null;
+  /** In-page focus: when present, designator chips are buttons that call it
+   *  and `viewerHref` is ignored. Never both on one table (spec §6). */
+  onRefClick?: (ref: string) => void;
   /** DNP lines counted, priced and totalled like any other line. Default off:
    *  the whole point of the flag is that nobody is buying those parts. */
   includeDnp: boolean;
@@ -261,6 +265,7 @@ export default function BomTable({
   buildQty,
   onBuildQtyChange,
   onPickSimilar,
+  onRefClick,
   includeDnp,
   onIncludeDnpChange,
 }: BomTableProps) {
@@ -518,10 +523,28 @@ export default function BomTable({
                     ) : (
                       <span className={styles.chips}>
                         {row.refs.slice(0, MAX_REF_CHIPS).map((ref) =>
-                          // The §7.6 viewer seam: a text chip today, a jump
-                          // into the schematic the day viewerHref is a route.
-                          row.viewerHref != null ? (
-                            <Link key={ref} className={styles.refChip} to={row.viewerHref}>
+                          // The §7.6 viewer seam, now live in both directions.
+                          // A host that can focus the drawing itself (the
+                          // viewer's BOM tab) passes onRefClick and the chip
+                          // acts in place; a row that merely knows the viewer's
+                          // route links there with the reference as the hash;
+                          // with neither it stays the plain text chip /bom has
+                          // always rendered.
+                          onRefClick != null ? (
+                            <button
+                              key={ref}
+                              type="button"
+                              className={styles.refChipButton}
+                              onClick={() => onRefClick(ref)}
+                            >
+                              {ref}
+                            </button>
+                          ) : row.viewerHref != null ? (
+                            <Link
+                              key={ref}
+                              className={styles.refChip}
+                              to={viewerRefHref(row.viewerHref, ref)}
+                            >
                               {ref}
                             </Link>
                           ) : (

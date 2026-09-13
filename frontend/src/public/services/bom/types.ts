@@ -137,13 +137,15 @@ export type RowState = 'matched' | 'resolving' | 'resolved_live' | 'not_found' |
  * One table row: the parsed line (qty, designators and DNP — all of which
  * stay in the browser, D7) plus whatever the server was able to say about its
  * identity fields.
- *
- * `viewerHref` is the §7.6 seam for the schematic/PCB viewer projects. It is
- * ALWAYS null today and designator chips render as plain text; when a viewer
- * ships it becomes a route and the chips become links with no other change.
  */
 export type TableRow = ParsedBomLine & {
   server: BomRow | null;
   state: RowState;
+  /**
+   * The viewer ROUTE (`/viewer`) when a design session holds a schematic, else
+   * null. The chip appends the reference as a hash via `viewerRefHref`; the
+   * viewer page focuses it on mount. When `BomTable` gets `onRefClick` the
+   * chips call that instead and this field is ignored.
+   */
   viewerHref: string | null;
 };

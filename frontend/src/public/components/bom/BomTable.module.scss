@@ -382,6 +382,23 @@
   @include bom-desig-chip;
 }
 
+// The same chip as an in-page control (the viewer's BOM tab focuses the
+// drawing instead of navigating). @extend rather than a duplicate ruleset so
+// the two flavours cannot drift — but NOT `font: inherit`: Sass emits the
+// extended declarations at `.refChip`'s position, so that shorthand would land
+// afterwards at equal specificity and reset the mono family and 0.72rem back
+// to the cell's. Only the narrow UA impositions are neutralised, and
+// `line-height: inherit` is what a <span> chip already gets from body (1.6) —
+// buttons are the one element browsers force to `normal`.
+.refChipButton {
+  @extend .refChip;
+  appearance: none;
+  border: 0;
+  font-weight: inherit;
+  line-height: inherit;
+  cursor: pointer;
+}
+
 .refMore {
   padding: 2px 6px;
   font-family: $font-mono;
