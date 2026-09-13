@@ -4656,6 +4656,9 @@ describe('designSession', () => {
     expect(getDesignSession()).toBeNull();
     const s = openDesign(project);
     expect(getDesignSession()).toBe(s);
+    // The ONE stable project object: DesignCanvas keys its KiCanvas mount on this
+    // reference, so a clone here would reload the viewer on every /viewer <-> /bom trip.
+    expect(s.project).toBe(project);
     expect(s.parsed.lines).toHaveLength(1);
     expect(s.refs.get('R1')?.sheet).toBe('main.kicad_sch');
     clearDesignSession();
