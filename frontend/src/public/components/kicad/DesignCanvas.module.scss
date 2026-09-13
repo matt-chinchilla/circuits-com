@@ -26,6 +26,19 @@
   }
 }
 
+// `height="compact"`: the drawing is context, not the subject — the BOM page
+// puts it above a priced table the reader came for, so it takes a fixed slice
+// of the viewport instead of whatever its parent has left. `.frame`'s 320px
+// floor still applies on a short window, and fullscreen overrides both.
+.frameCompact {
+  flex: 0 0 auto;
+  height: 45vh;
+
+  &:fullscreen {
+    height: 100%;
+  }
+}
+
 // Fit / + / − / fullscreen over the drawing: essential on coarse pointers
 // (KiCanvas's pinch-zoom barely works on a phone — owner, Phase 0 gate), kept on
 // desktop too. Glass controls float over content, which is what the recipe is for.

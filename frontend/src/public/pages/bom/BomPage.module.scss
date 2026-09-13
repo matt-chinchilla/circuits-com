@@ -216,6 +216,27 @@
   color: var(--executive-blue, $executive-blue);
 }
 
+// ─── The schematic beside a priced BOM (KiCad projects only) ────────────────
+// Neither rule carries a margin: `.tablePhase` is a flex column with its own
+// 14px gap, and a margin here would stack on top of it and give this one pair a
+// rhythm nothing else in the phase has.
+
+.schematicBar {
+  display: flex;
+  justify-content: flex-end;
+}
+
+// A flex COLUMN, like the viewer's `.drawing` — and for the same reason. The
+// canvas frame is `flex: 0 0 auto` under `height="compact"`, and every child it
+// paints is absolutely positioned, so in a flex ROW it would resolve to its
+// content width and draw nothing at all. Down the column that basis is the
+// height it asked for, and the cross axis stretches it to the page.
+.schematicPanel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
 // ─── Shared BOM (/bom/s/:slug) ──────────────────────────────────────────────
 
 .shareBanner {

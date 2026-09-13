@@ -31,6 +31,13 @@ export interface DesignCanvasProps {
    * silence.
    */
   onUnrenderableSheets?: (paths: string[]) => void;
+  /**
+   * How much room the frame takes. `default` fills the parent (the viewer hands
+   * it the viewport below the tabs); `compact` is a fixed slice of the viewport,
+   * for a host where the drawing is context beside its real subject — the BOM
+   * page's panel above the priced table.
+   */
+  height?: 'default' | 'compact';
   /** Test seam. Defaults to a KicanvasController. */
   createController?: () => CanvasController;
 }
@@ -56,7 +63,7 @@ const COPY: Record<Exclude<CanvasStateName, 'loading' | 'ready'>, { title: strin
 };
 
 const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(function DesignCanvas(
-  { project, view, activeSheet, onState, onUnrenderableSheets, createController },
+  { project, view, activeSheet, onState, onUnrenderableSheets, height = 'default', createController },
   ref,
 ) {
   const hostRef = useRef<HTMLDivElement>(null);
@@ -153,7 +160,10 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(function 
 
   const failed = state === 'no-webgl' || state === 'timeout' || state === 'error';
   return (
-    <div ref={frameRef} className={styles.frame}>
+    <div
+      ref={frameRef}
+      className={height === 'compact' ? `${styles.frame} ${styles.frameCompact}` : styles.frame}
+    >
       <div ref={hostRef} className={styles.host} hidden={failed} />
       {state === 'ready' && (
         <div className={styles.controls} role="group" aria-label="View controls">
