@@ -95,16 +95,22 @@ describe('BomTable designator chips', () => {
 
   it('becomes an in-page button that outranks the row route, and never navigates', () => {
     const onRefClick = vi.fn();
-    render(line({ viewerHref: '/viewer' }), onRefClick);
+    // TWO designators, and the SECOND one is clicked: on a single-ref row the
+    // callback argument is indistinguishable from `row.refs[0]`, so a handler
+    // that ignored its own chip would pass. On a real board that mutant
+    // focuses the wrong component, silently.
+    render(line({ refs: ['R12', 'C7'], viewerHref: '/viewer' }), onRefClick);
 
-    const el = chip('R12');
+    const el = chip('C7');
     expect(el.tagName).toBe('BUTTON');
     expect(el.getAttribute('type')).toBe('button');
+    expect(el.getAttribute('title')).toBe('Find C7 on the schematic');
+    expect(el.getAttribute('aria-label')).toBeNull();
     expect(container.querySelector('a[href^="/viewer"]')).toBeNull();
 
     act(() => {
       (el as HTMLButtonElement).click();
     });
-    expect(onRefClick).toHaveBeenCalledExactlyOnceWith('R12');
+    expect(onRefClick).toHaveBeenCalledExactlyOnceWith('C7');
   });
 });

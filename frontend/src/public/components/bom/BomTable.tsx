@@ -99,7 +99,10 @@ interface BomTableProps {
    *  plain badge there. */
   onPickSimilar: ((index: number, sku: string) => void) | null;
   /** In-page focus: when present, designator chips are buttons that call it
-   *  and `viewerHref` is ignored. Never both on one table (spec §6). */
+   *  instead of linking. OUTRANKS `viewerHref` when both are present (spec
+   *  §6) — a host showing the drawing beside the table passes it while that
+   *  panel is open and drops it when closed, so the same table falls back to
+   *  linking out to the viewer. */
   onRefClick?: (ref: string) => void;
   /** DNP lines counted, priced and totalled like any other line. Default off:
    *  the whole point of the flag is that nobody is buying those parts. */
@@ -535,6 +538,11 @@ export default function BomTable({
                               key={ref}
                               type="button"
                               className={styles.refChipButton}
+                              // No aria-label: the visible designator under the
+                              // "Designators" header IS the accessible name, and
+                              // a label would override it. The title is for
+                              // pointer users, who get no other affordance.
+                              title={`Find ${ref} on the schematic`}
                               onClick={() => onRefClick(ref)}
                             >
                               {ref}
