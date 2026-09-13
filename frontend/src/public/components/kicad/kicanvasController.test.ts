@@ -3,7 +3,21 @@ import { describe, expect, it } from 'vitest';
 import type { KicadProject } from '@public/services/kicad/types';
 import { KicanvasController, sourcesFor } from './kicanvasController';
 
-interface FakePage { type: 'pcb' | 'schematic'; filename: string; sheet_path: string; project_path: string }
+interface FakePage { type: 'pcb' | 'schematic'; filename: string; sheet_path: string; project_path: string; document: { filename: string } }
+
+/** ONE document object per FILE, exactly as upstream: `ProjectPage.document` is
+ *  `file_by_name(filename)` (vendor kicanvas/project.ts:393-395), so two instance
+ *  pages of one file hand the viewer the SAME object — which is why upstream's
+ *  `DocumentViewer.load` early-returns and dispatches nothing for that switch. */
+const DOCS = new Map<string, { filename: string }>();
+function docFor(filename: string): { filename: string } {
+  let doc = DOCS.get(filename);
+  if (doc == null) {
+    doc = { filename };
+    DOCS.set(filename, doc);
+  }
+  return doc;
+}
 
 /** `KiCanvasLoadEvent.type` — vendor viewers/base/events.ts:13-14. */
 const LOAD = 'kicanvas:load';
@@ -14,9 +28,9 @@ function project(files: Record<string, string>, extra: Partial<KicadProject> = {
   return { name: 'p', files: map, pro: null, root: sheets[0]?.path ?? null, sheets, board: [...map.keys()].find((k) => k.endsWith('.kicad_pcb')) ?? null, warnings: [], missingSheets: [], formatVersions: {}, ...extra };
 }
 
-function makeViewer(hasDoc: boolean, selectedFor: string[], log: string[]) {
+function makeViewer(selectedFor: string[], log: string[]) {
   return Object.assign(new EventTarget(), {
-    document: (hasDoc ? { filename: 'x.kicad_sch' } : null) as { filename: string } | null,
+    document: null as { filename: string } | null,
     selected: false as boolean | string,
     select(ref: string) {
       log.push(ref);
@@ -36,8 +50,12 @@ function fakeEmbed(opts: {
   boardSelectedFor?: string[];
   viewerDoc?: boolean;
   withProject?: boolean;
-  /** Dispatch the load event on a later turn, to prove activate() waits for it. */
+  /** Dispatch the load on a later turn, to prove activate() waits for it. */
   asyncLoad?: boolean;
+  /** Queue loads in `pending` for the test to fire by hand. */
+  manualLoad?: boolean;
+  /** App elements with no viewer at all — the pre-render state. */
+  noViewer?: boolean;
   onLoad?: (projectPath: string) => void;
 }) {
   const embed = document.createElement('kicanvas-embed');
@@ -45,8 +63,10 @@ function fakeEmbed(opts: {
   let active: FakePage | null = null;
   const selected: string[] = [];
   const boardSelected: string[] = [];
-  const viewer = makeViewer(opts.viewerDoc !== false, opts.selectedFor ?? [], selected);
-  const boardViewer = makeViewer(opts.viewerDoc !== false, opts.boardSelectedFor ?? [], boardSelected);
+  const pending: (() => void)[] = [];
+  const mode = { manual: opts.manualLoad ?? false };
+  const viewer = makeViewer(opts.selectedFor ?? [], selected);
+  const boardViewer = makeViewer(opts.boardSelectedFor ?? [], boardSelected);
   const proj = {
     pages: () => opts.pages,
     get active_page() { return active; },
@@ -56,40 +76,46 @@ function fakeEmbed(opts: {
     set_active_page(p: FakePage | string) {
       active = typeof p === 'string' ? (opts.pages.find((x) => x.project_path === p) ?? null) : p;
       const page = active;
-      if (page != null && opts.viewerDoc !== false) {
-        // The viewer loads the page's FILE: two instances of one file share a filename.
-        viewer.document = { filename: page.filename };
-        boardViewer.document = { filename: page.filename };
-      }
+      if (page == null || opts.viewerDoc === false) return;
+      // kc-board-app loads pcb pages, kc-schematic-app loads schematics.
+      const target = page.type === 'pcb' ? boardViewer : viewer;
+      // Upstream's early return: the viewer already holds this document, so it
+      // returns BEFORE resolve_loaded and no `kicanvas:load` is ever dispatched
+      // (viewers/base/document-viewer.ts:58-60, viewers/base/viewer.ts:128-132).
+      if (target.document === page.document) return;
       const fire = () => {
-        if (page != null) opts.onLoad?.(page.project_path);
-        viewer.dispatchEvent(new Event(LOAD));
-        boardViewer.dispatchEvent(new Event(LOAD));
+        target.document = page.document;
+        opts.onLoad?.(page.project_path);
+        target.dispatchEvent(new Event(LOAD));
       };
       // A macrotask, deliberately: a microtask would land before activate()'s own
       // continuation regardless of whether it waited, faking the proof below.
-      if (opts.asyncLoad) setTimeout(fire, 0);
+      if (mode.manual) pending.push(fire);
+      else if (opts.asyncLoad) setTimeout(fire, 0);
       else fire();
     },
   };
   const sch = document.createElement('kc-schematic-app') as HTMLElement & { project?: unknown; viewer?: unknown };
   if (opts.withProject !== false) sch.project = proj;
-  sch.viewer = viewer;
+  if (!opts.noViewer) sch.viewer = viewer;
   shadow.appendChild(sch);
   const board = document.createElement('kc-board-app') as HTMLElement & { project?: unknown; viewer?: unknown };
   if (opts.withProject !== false) board.project = proj;
-  board.viewer = boardViewer;
+  if (!opts.noViewer) board.viewer = boardViewer;
   shadow.appendChild(board);
   // The real embed sets an active page after load; the fake does it immediately.
   proj.set_active_page(proj.root_schematic_page ?? opts.pages[0]!);
-  return { embed, selected, boardSelected, getActive: () => active, viewer, boardViewer, proj, sch, board };
+  return {
+    embed, selected, boardSelected, getActive: () => active, viewer, boardViewer, proj, sch, board, pending,
+    setManual: (v: boolean) => { mode.manual = v; },
+  };
 }
 
 const PAGES: FakePage[] = [
-  { type: 'schematic', filename: 'main.kicad_sch', sheet_path: '/r', project_path: 'main.kicad_sch' },
-  { type: 'schematic', filename: 'sub.kicad_sch', sheet_path: '/r/a', project_path: 'sub.kicad_sch:/r/a' },
-  { type: 'schematic', filename: 'sub.kicad_sch', sheet_path: '/r/b', project_path: 'sub.kicad_sch:/r/b' },
-  { type: 'pcb', filename: 'main.kicad_pcb', sheet_path: '', project_path: 'main.kicad_pcb' },
+  { type: 'schematic', filename: 'main.kicad_sch', sheet_path: '/r', project_path: 'main.kicad_sch', document: docFor('main.kicad_sch') },
+  { type: 'schematic', filename: 'sub.kicad_sch', sheet_path: '/r/a', project_path: 'sub.kicad_sch:/r/a', document: docFor('sub.kicad_sch') },
+  { type: 'schematic', filename: 'sub.kicad_sch', sheet_path: '/r/b', project_path: 'sub.kicad_sch:/r/b', document: docFor('sub.kicad_sch') },
+  { type: 'pcb', filename: 'main.kicad_pcb', sheet_path: '', project_path: 'main.kicad_pcb', document: docFor('main.kicad_pcb') },
 ];
 
 function controller(fake: ReturnType<typeof fakeEmbed>, readyMs = 500) {
@@ -147,7 +173,7 @@ describe('KicanvasController', () => {
     expect([fake.sch.hidden, fake.board.hidden]).toEqual([false, true]);
   });
 
-  it('waits for the viewer load event when two instances share one file', async () => {
+  it('waits for the viewer load event when the document really changes', async () => {
     const order: string[] = [];
     const fake = fakeEmbed({ pages: PAGES, asyncLoad: true, onLoad: (p) => order.push(`load:${p}`) });
     // A sleep that yields to the macrotask queue, so the load event can actually land.
@@ -160,13 +186,76 @@ describe('KicanvasController', () => {
     });
     await c.mount(document.createElement('div'), project({ 'main.kicad_sch': 's', 'sub.kicad_sch': 't' }));
     order.length = 0;
+    // main.kicad_sch -> sub.kicad_sch is a genuine load, so the caller must not be
+    // told the switch happened until the viewer says it did.
     await c.activate('schematic', '/r/a');
     order.push('activated:/r/a');
-    // Same FILE, different instance: `document.filename` is identical on both sides,
-    // so only the load event can tell the caller the switch really happened.
-    await c.activate('schematic', '/r/b');
-    order.push('activated:/r/b');
-    expect(order).toEqual(['load:sub.kicad_sch:/r/a', 'activated:/r/a', 'load:sub.kicad_sch:/r/b', 'activated:/r/b']);
+    expect(order).toEqual(['load:sub.kicad_sch:/r/a', 'activated:/r/a']);
+  });
+
+  it('settles at once when the viewer already holds the page document, because no event is coming', async () => {
+    const fake = fakeEmbed({ pages: PAGES });
+    let clock = 0;
+    const c = new KicanvasController({
+      loadModule: async () => undefined,
+      createEmbed: () => fake.embed,
+      readyMs: 5000,
+      settleMs: 1500,
+      now: () => clock,
+      sleep: async () => { clock += 1000; }, // any wait at all shows up in the clock
+    });
+    await c.mount(document.createElement('div'), project({ 'main.kicad_sch': 's', 'sub.kicad_sch': 't' }));
+    expect(await c.activate('schematic', '/r/a')).toBe(true);
+    const before = clock;
+    // Same FILE, so the same shared document object: DocumentViewer.load early-returns
+    // before resolve_loaded and dispatches nothing. Waiting would burn the whole
+    // settleMs on what upstream treats as a no-op — and this is the common gesture
+    // (a revisited sheet, a second focusRef, mount's closing activate).
+    expect(await c.activate('schematic', '/r/b')).toBe(true);
+    expect(fake.getActive()?.project_path).toBe('sub.kicad_sch:/r/b');
+    expect(clock).toBe(before);
+  });
+
+  it('does not wait when there is no viewer to signal it — nothing is coming', async () => {
+    // `Viewer extends EventTarget` (vendor viewers/base/viewer.ts:22), so an
+    // unlistenable watch means the app has not rendered its viewer yet, not that the
+    // renderer lacks the event. Either way no load signal can arrive, so waiting for
+    // one would just spend the settle budget.
+    const fake = fakeEmbed({ pages: PAGES, noViewer: true });
+    let clock = 0;
+    const c = new KicanvasController({
+      loadModule: async () => undefined,
+      createEmbed: () => fake.embed,
+      readyMs: 5000,
+      settleMs: 1500,
+      now: () => clock,
+      sleep: async () => { clock += 1000; },
+    });
+    await c.mount(document.createElement('div'), project({ 'main.kicad_sch': 's', 'sub.kicad_sch': 't' }));
+    const before = clock;
+    expect(await c.activate('schematic', '/r/a')).toBe(true);
+    expect(clock).toBe(before);
+  });
+
+  it('a superseded activate never writes hidden: the newer switch wins and the older returns false', async () => {
+    const fake = fakeEmbed({ pages: PAGES });
+    const c = new KicanvasController({
+      loadModule: async () => undefined,
+      createEmbed: () => fake.embed,
+      readyMs: 500,
+      settleMs: 1000,
+      sleep: () => new Promise<void>((resolve) => setTimeout(resolve, 0)),
+    });
+    await c.mount(document.createElement('div'), project({ 'main.kicad_sch': 's', 'sub.kicad_sch': 't', 'main.kicad_pcb': 'b' }));
+    fake.setManual(true); // from here the test decides when each load lands
+    const first = c.activate('board');
+    const second = c.activate('schematic', '/r/a');
+    fake.pending[1]!(); // the schematic loads first, so the SECOND switch completes first
+    expect(await second).toBe(true);
+    expect([fake.sch.hidden, fake.board.hidden]).toEqual([false, true]);
+    fake.pending[0]!(); // the board's load arrives late, after it was superseded
+    expect(await first).toBe(false);
+    expect([fake.sch.hidden, fake.board.hidden]).toEqual([false, true]); // view untouched
   });
 
   it('focuses a reference, reports not-found when the viewer did not select, and unsupported without a document', async () => {
@@ -315,8 +404,8 @@ describe('KicanvasController', () => {
 
   it('refuses a sheet whose file was dropped rather than showing its basename twin', async () => {
     const pages: FakePage[] = [
-      { type: 'schematic', filename: 'main.kicad_sch', sheet_path: '/r', project_path: 'main.kicad_sch' },
-      { type: 'schematic', filename: 'reg.kicad_sch', sheet_path: '/r/x', project_path: 'reg.kicad_sch:/r/x' },
+      { type: 'schematic', filename: 'main.kicad_sch', sheet_path: '/r', project_path: 'main.kicad_sch', document: docFor('main.kicad_sch') },
+      { type: 'schematic', filename: 'reg.kicad_sch', sheet_path: '/r/x', project_path: 'reg.kicad_sch:/r/x', document: docFor('reg.kicad_sch') },
     ];
     const fake = fakeEmbed({ pages });
     const c = controller(fake);

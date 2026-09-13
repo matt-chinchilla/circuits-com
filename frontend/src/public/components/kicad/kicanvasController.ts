@@ -21,6 +21,9 @@ interface KicanvasPage {
   filename: string;
   sheet_path: string;
   project_path: string;
+  /** `ProjectPage.document` — `file_by_name(filename)` (vendor kicanvas/project.ts:393-395),
+   *  so it is ONE object shared by every instance page of a file. */
+  document?: unknown;
 }
 
 interface KicanvasProject {
@@ -120,6 +123,18 @@ function viewerOf(app: KicanvasApp | null): KicanvasViewer | null {
   }
 }
 
+/** The identity upstream's own early return compares. `KCViewerElement.load` hands the
+ *  viewer `src.document`, never the page (vendor kicanvas/elements/common/viewer.ts:77-79),
+ *  and `DocumentViewer.load` returns at once when it already holds that object
+ *  (viewers/base/document-viewer.ts:58-60) — BEFORE `resolve_loaded`, the sole dispatcher
+ *  of `kicanvas:load` (viewers/base/viewer.ts:128-132). So when this is true, NO event is
+ *  coming and waiting for one would burn the whole settle budget. */
+function holdsDocument(viewer: KicanvasViewer | null, page: KicanvasPage): boolean {
+  const held: unknown = viewer?.document;
+  const wanted: unknown = page.document;
+  return held != null && wanted != null && held === wanted;
+}
+
 /** A load listener armed BEFORE a page switch, so a renderer that loads
  *  synchronously cannot dispatch before anyone is listening. */
 interface LoadWatch {
@@ -142,6 +157,10 @@ export class KicanvasController implements CanvasController {
    *  disposeEmbed() — its deadline would otherwise tear down the embed that
    *  replaced it. Remounting is the "Try again" gesture, so this is reachable. */
   private epoch = 0;
+  /** Bumped by every activate(). The `hidden` writes happen after an await, so a slow
+   *  earlier switch must not land on top of a newer one — that IS the "screen duplicates
+   *  itself" class, arriving late. */
+  private activation = 0;
   /** Path keys sourcesFor() could not hand to the embed (basename collision). */
   private droppedPaths = new Set<string>();
   private readonly handlers = new Map<CanvasEventType, Set<(e: CanvasEvent) => void>>();
@@ -305,36 +324,36 @@ export class KicanvasController implements CanvasController {
     return watch;
   }
 
-  /** The viewer's own load signal is the only evidence that survives an instance
-   *  switch WITHIN one file: Glasgow's io_buffer.kicad_sch sits under two sheet
-   *  paths, so `document.filename` is identical on both sides and can never observe
-   *  the switch. focusRef() depends on this — selecting against the outgoing
-   *  instance resolves the wrong hierarchy (SchematicViewer.load re-runs
-   *  update_hierarchical_data, viewers/schematic/viewer.ts:41-52) and the incoming
-   *  load then clears the selection (viewers/base/document-viewer.ts:80-83), so the
-   *  caller would be told `focused` with nothing focused. The filename comparison
-   *  survives only as the fallback for a viewer that dispatches nothing. */
-  private async settle(app: KicanvasApp | null, page: KicanvasPage, watch: LoadWatch): Promise<void> {
+  /** Waits for one `kicanvas:load`, bounded. Only reached when the viewer does NOT
+   *  already hold the requested document — see holdsDocument(). `Viewer extends
+   *  EventTarget` (vendor viewers/base/viewer.ts:22), so an unlistenable watch means
+   *  there is no viewer at all yet: nothing is coming, and waiting would only burn
+   *  the budget. (The basename comparison this replaced could never observe a
+   *  same-file instance switch, and was unreachable for any real viewer.) */
+  private async settle(watch: LoadWatch): Promise<void> {
+    if (!watch.listening) return;
     const deadline = this.options.now() + this.options.settleMs;
     while (this.options.now() < deadline) {
       if (watch.fired) return;
-      if (!watch.listening) {
-        const doc = viewerOf(app)?.document;
-        if (doc == null || doc.filename == null || basename(doc.filename) === basename(page.filename)) return;
-      }
       await this.options.sleep(POLL_MS);
     }
   }
 
   async activate(view: CanvasView, sheet?: string): Promise<boolean> {
+    const seq = ++this.activation;
+    const mountEpoch = this.epoch;
     const project = this.project();
     const page = this.findPage(view, sheet);
     if (project == null || page == null) return false;
     const { schematic, board } = this.apps();
     const app = view === 'board' ? board : schematic;
-    // Armed before the switch: set_active_page dispatches "change" synchronously
-    // and the app begins loading from that handler.
-    const watch = this.watchLoad(viewerOf(app));
+    // When the target viewer already holds this page's document upstream dispatches
+    // nothing (holdsDocument), and that is the COMMON gesture: a same-file instance
+    // switch, a return to an app already visited, a second focusRef on the sheet on
+    // screen, mount's closing activate on a single-type project. Arm the listener only
+    // when a load really has to happen — and arm it BEFORE the switch, since
+    // set_active_page dispatches "change" synchronously and the app loads from there.
+    const watch = holdsDocument(viewerOf(app), page) ? null : this.watchLoad(viewerOf(app));
     try {
       // The PAGE OBJECT, never the path string: upstream's set_active_page falls
       // back to first_page when a path does not resolve (vendor kicanvas/src/
@@ -342,14 +361,19 @@ export class KicanvasController implements CanvasController {
       // look like success. findPage decides, so a miss is an honest false.
       project.set_active_page(page);
     } catch {
-      watch.cancel();
+      watch?.cancel();
       return false;
     }
-    await this.settle(app, page, watch);
-    watch.cancel();
-    // Upstream's app.load() assigns `hidden = false` AFTER an await, so two quick page
-    // changes can leave both apps visible side by side (the owner's "screen duplicates
-    // itself", reproduced 2026-09-12). Visibility is ours to enforce, every time.
+    if (watch != null) {
+      await this.settle(watch);
+      watch.cancel();
+    }
+    // A newer activate, or a newer mount, owns the view now: this one is late and must
+    // not write `hidden` at all. Upstream's app.load() assigns `hidden = false` AFTER an
+    // await, so two quick page changes can leave both apps visible side by side (the
+    // owner's "screen duplicates itself", reproduced 2026-09-12) — the writes below are
+    // how we prevent that, and a stale one would re-create it.
+    if (seq !== this.activation || this.stale(mountEpoch)) return false;
     if (schematic) schematic.hidden = view !== 'schematic';
     if (board) board.hidden = view !== 'board';
     return true;
