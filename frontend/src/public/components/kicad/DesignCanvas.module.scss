@@ -1,5 +1,6 @@
 // frontend/src/public/components/kicad/DesignCanvas.module.scss
 @use '@shared/styles/variables' as *;
+@use '@shared/styles/mixins' as *;
 @use '@public/styles/bomMaterial' as *;
 
 // The frame is a bom-card with an inset hairline so the renderer's grey
@@ -25,14 +26,12 @@
   }
 }
 
-.frameCompact {
-  flex: 0 0 auto;
-  height: 45vh;
-}
-
 // Fit / + / − / fullscreen over the drawing: essential on coarse pointers
 // (KiCanvas's pinch-zoom barely works on a phone — owner, Phase 0 gate), kept on
 // desktop too. Glass controls float over content, which is what the recipe is for.
+// The 6px gap is what caps the hit-area growth below: the ::before overlays of two
+// neighbours are positioned siblings, so anything past half the gap puts the later
+// button's overlay on top of the earlier one's VISIBLE face and steals its clicks.
 .controls {
   position: absolute;
   right: 12px;
@@ -44,6 +43,10 @@
 
 .ctl {
   @include bom-glass-control;
+  // `bom-glass-control` sets no `position`, so the mixin's absolute ::before would
+  // anchor to `.frame` without this.
+  position: relative;
+  @include tap-target(-3px);
   min-width: 40px;
   min-height: 40px;
   padding: 0 12px;
@@ -98,8 +101,13 @@
   font-size: 0.9rem;
 }
 
+// ~31px tall as drawn (13.3px UA button text — `global.scss` gives buttons a
+// font-family but no size — plus 16px padding and 2px border), so it needs 7px to
+// clear 44. It has no neighbour, and 7px stays inside `.problem`'s 8px gap.
 .retry {
   @include bom-glass-control;
+  position: relative;
+  @include tap-target(-7px);
   justify-self: center;
   padding: 8px 16px;
   line-height: 1;

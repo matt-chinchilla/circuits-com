@@ -9,6 +9,12 @@ import { webgl2Supported } from './webgl';
 import styles from './DesignCanvas.module.scss';
 
 export interface DesignCanvasProps {
+  /**
+   * The project to render. **Referentially stable:** the host keys its mount on object
+   * identity, so a new identity disposes the renderer and reloads the whole project.
+   * Callers pass the SAME object across renders (the design session holds one) — never
+   * a `buildProject(...)` call in a render body or a `useMemo` with an unstable dep.
+   */
   project: KicadProject;
   view: CanvasView;
   /** Path key of the schematic to show, or an instance path; default root. */
@@ -48,24 +54,32 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(function 
   const [detail, setDetail] = useState<string | undefined>(undefined);
   const [attempt, setAttempt] = useState(0);
   const supported = webgl2Supported();
+  // `onState` is NOT an effect dep on purpose: a parent passing an inline arrow would
+  // remount the canvas — and reload the project — on every one of its renders. The ref
+  // is what keeps the callback current without paying that.
+  const onStateRef = useRef(onState);
+  onStateRef.current = onState;
 
   useEffect(() => {
     if (!supported) {
       setState('no-webgl');
-      onState?.('no-webgl');
+      onStateRef.current?.('no-webgl');
       return;
     }
     const host = hostRef.current;
     if (host == null) return;
+    let cancelled = false;
     const controller = (createController ?? (() => new KicanvasController()))();
     controllerRef.current = controller;
     const off = controller.on('state', (e) => {
+      if (cancelled) return;
       setState(e.state);
       setDetail(e.detail);
-      onState?.(e.state, e.detail);
+      onStateRef.current?.(e.state, e.detail);
     });
     void controller.mount(host, project);
     return () => {
+      cancelled = true;
       off();
       controller.dispose();
       controllerRef.current = null;
@@ -80,28 +94,43 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(function 
     void controllerRef.current?.activate(view, activeSheet);
   }, [state, view, activeSheet]);
 
+  // Both members read `controllerRef.current` at CALL time, so the handle never goes
+  // stale and `[]` keeps its identity fixed — a parent may hold it in a dep array.
   useImperativeHandle(ref, () => ({
     focusRef: (r, sheet) => controllerRef.current?.focusRef(r, sheet) ?? Promise.resolve('unsupported' as const),
     zoom: (action) => controllerRef.current?.zoom(action) ?? Promise.resolve(false),
-  }));
+  }), []);
 
   const frameRef = useRef<HTMLDivElement>(null);
+  // The mount effect's `cancelled` is per ATTEMPT; this is per COMPONENT, which is the
+  // lifetime `zoom` below needs — it is not owned by that effect and awaits across it.
+  const aliveRef = useRef(true);
+  useEffect(() => {
+    aliveRef.current = true;
+    return () => {
+      aliveRef.current = false;
+    };
+  }, []);
   const [zoomable, setZoomable] = useState(true);
   const zoom = async (action: ZoomAction) => {
     const ok = await controllerRef.current?.zoom(action);
-    if (ok === false) setZoomable(false);
+    if (ok === false && aliveRef.current) setZoomable(false);
   };
   const fullscreenEnabled = typeof document !== 'undefined' && document.fullscreenEnabled;
   const toggleFullscreen = () => {
     const el = frameRef.current;
     if (el == null) return;
-    if (document.fullscreenElement === el) void document.exitFullscreen();
-    else void el.requestFullscreen();
+    // Both reject on reachable paths — a permissions-policy denial, an iframe without
+    // allow="fullscreen", a request the browser does not count as user-activated. `void`
+    // discards the VALUE, not the rejection, so without this a plain button click raises
+    // an unhandledrejection.
+    if (document.fullscreenElement === el) void document.exitFullscreen().catch(() => undefined);
+    else void el.requestFullscreen().catch(() => undefined);
   };
 
   const failed = state === 'no-webgl' || state === 'timeout' || state === 'error';
   return (
-    <div ref={frameRef} className={styles.frame} data-state={state}>
+    <div ref={frameRef} className={styles.frame}>
       <div ref={hostRef} className={styles.host} hidden={failed} />
       {state === 'ready' && (
         <div className={styles.controls} role="group" aria-label="View controls">
