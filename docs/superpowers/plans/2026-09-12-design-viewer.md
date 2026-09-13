@@ -5006,6 +5006,21 @@ export default function ViewerIntake({ onProject }: ViewerIntakeProps) {
   font-size: 0.88rem;
   z-index: 50;
 }
+
+// Task 2.5 review additions (landed 7f3c944): the drawing column must honour the
+// host's `hidden` prop, and the strip above the page is $nav-height-mobile (48px)
+// on phones — same specificity, so this override must sit AFTER `.loaded`.
+.drawing {
+  &[hidden] {
+    display: none;
+  }
+}
+
+@include responsive($bp-mobile) {
+  .loaded {
+    min-height: calc(100dvh - #{$nav-height-mobile});
+  }
+}
 ```
 
 (`scrollbar-thin` is the existing mixin in `@shared/styles/mixins`. If a bom mixin takes parameters, copy the invocation form used in `BomPage.module.scss`.)
@@ -5078,6 +5093,8 @@ export default function ViewerPage() {
   const canvasRef = useRef<DesignCanvasHandle>(null);
   const pendingFocus = useRef<string | null>(location.hash.length > 1 ? decodeURIComponent(location.hash.slice(1)) : null);
 
+  // The session is opened HERE and only here — never in an effect. React 19's
+  // StrictMode double-invokes effects, and openDesign re-parses the schematic.
   const handleProject = useCallback((project: KicadProject) => {
     const next = openDesign(project);
     setSession(next);
@@ -5086,6 +5103,8 @@ export default function ViewerPage() {
     setCanvasState('loading');
   }, []);
 
+  // Deliberately NOT called on unmount: surviving the /viewer ↔ /bom trip is
+  // the whole point of the session. Only this button ends it.
   const openAnother = () => {
     clearDesignSession();
     setSession(null);
@@ -5097,11 +5116,20 @@ export default function ViewerPage() {
     async (ref: string) => {
       const s = session;
       if (s == null) return;
+      if (s.project.root == null) {
+        // Reachable: arrive at /viewer#U1, then open a board-only project. Without
+        // this we would select a Schematic tab that the tablist does not render.
+        setToast(`${ref} can't be shown — this project has no schematic.`);
+        return;
+      }
       const where = s.refs.get(ref);
       setTab('schematic');
       const result = await canvasRef.current?.focusRef(ref, where?.instancePath);
       if (result === 'focused') setToast(`Focused ${ref}`);
       else if (result === 'not-found') setToast(where ? `${ref} was not found on sheet ${basename(where.sheet)}` : `${ref} is not in this schematic`);
+      // 'unsupported' (no WebGL, or no renderer mounted) and an absent handle both
+      // land here: say so rather than leaving the click with no answer at all.
+      else setToast(`${ref} can't be focused — the drawing is not available in this browser.`);
     },
     [session],
   );
@@ -5181,7 +5209,7 @@ export default function ViewerPage() {
               {session.project.missingSheets.length > 0 && (
                 <p className={styles.pageError} role="alert">
                   Missing sheet file{session.project.missingSheets.length === 1 ? '' : 's'}:{' '}
-                  {session.project.missingSheets.join(', ')} — add {session.project.missingSheets.length === 1 ? 'it' : 'them'} to
+                  {session.project.missingSheets.join(', ')} &mdash; add {session.project.missingSheets.length === 1 ? 'it' : 'them'} to
                   the drop and the drawing and BOM will include {session.project.missingSheets.length === 1 ? 'it' : 'them'}.
                 </p>
               )}
