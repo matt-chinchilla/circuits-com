@@ -274,6 +274,11 @@ describe('the BOM tab', () => {
 
     expect(canvas.focusRef).toHaveBeenCalledWith('U1', '/r/a');
     expect(byText('Schematic').getAttribute('aria-selected')).toBe('true');
+    // The success copy, on the path the review measured failing: a designator on
+    // a sheet other than the one displayed. (That the CONTROLLER survives the
+    // host activate this triggers is pinned in kicanvasController.test.ts — the
+    // stub here cannot re-activate.)
+    expect(toastText()).toBe('Focused U1');
   });
 
   it('"Open another" resets the workbench and re-arms it at null', async () => {
