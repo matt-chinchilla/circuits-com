@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import axios from 'axios';
 import { motion } from 'framer-motion';
 import { Link, useParams } from 'react-router-dom';
 import PageHead from '@public/components/PageHead';
@@ -14,8 +13,9 @@ import { bomApi } from '@public/services/bom/bomApi';
 import { applyRoleMap, canPrice, type ParseResult } from '@public/services/bom/parseBom';
 import { loadRoleMap, saveRoleMap } from '@public/services/bom/mapMemory';
 import { parseSharePayload } from '@public/services/bom/share';
+import { useBomWorkbench } from '@public/services/bom/useBomWorkbench';
 import type { BomRole } from '@public/services/bom/headerAliases';
-import type { MissIn, ResolveEvent, TableRow } from '@public/services/bom/types';
+import type { TableRow } from '@public/services/bom/types';
 import styles from './BomPage.module.scss';
 
 /**
@@ -56,65 +56,6 @@ function needsMapping(result: ParseResult): boolean {
   return !canPrice(result.roleByColumn);
 }
 
-const MATCH_FAILED =
-  'We could not reach the pricing service. Your file is still loaded — try again in a moment.';
-const MATCH_THROTTLED =
-  'That is a lot of BOMs in one minute. Wait about a minute and price this one again.';
-
-/** Mirrors `BomResolveRequest.misses` max_length in api/app/schemas/bom.py:
- *  one over and the server 422s the whole stream, so the cap is enforced here
- *  and ANNOUNCED — a silently dropped line is a line the reader believes was
- *  priced. */
-const RESOLVE_CAP = 50;
-
-const RESOLVE_STOPPED =
-  'Live lookups stopped early. The lines still marked NO MATCH were never looked up — try again in a moment.';
-
-function cappedNote(dropped: number): string {
-  const lines = dropped === 1 ? 'line was' : 'lines were';
-  return (
-    `Live lookups are capped at ${RESOLVE_CAP} lines per BOM — ` +
-    `${dropped.toLocaleString('en-US')} further unmatched ${lines} left unresolved. ` +
-    'Request a quote for those lines.'
-  );
-}
-
-/**
- * Which lines phase 2 asks a distributor about, in the order it asks.
- *
- * MPN'd misses go FIRST: they resolve by an exact part lookup, which is the
- * one call that either finds the part or proves it does not exist. A
- * value+footprint query ("10k 0805") is a keyword search whose first hit is a
- * guess, so when the cap bites it is the guesses that get dropped, never the
- * certainties.
- *
- * DNP lines are not asked about unless the reader has said to include them
- * (spec §5) — nobody is buying them, and a live lookup costs real distributor
- * quota. The toggle is read at the moment the stream STARTS: flipping it
- * afterwards re-counts and re-prices the table from data already in hand, but
- * it never goes and spends more quota behind the reader's back.
- */
-function pickMisses(
-  rows: TableRow[],
-  includeDnp: boolean,
-): { misses: MissIn[]; dropped: number } {
-  const withMpn: MissIn[] = [];
-  const withoutMpn: MissIn[] = [];
-  for (const row of rows) {
-    const server = row.server;
-    if ((row.dnp && !includeDnp) || server == null || server.status !== 'resolve') continue;
-    const query = server.resolve_query;
-    if (query == null || query.trim() === '') continue;
-    const mpn = row.mpn != null && row.mpn.trim() !== '' ? row.mpn : null;
-    (mpn != null ? withMpn : withoutMpn).push({ index: row.index, query, mpn });
-  }
-  const ordered = [...withMpn, ...withoutMpn];
-  return {
-    misses: ordered.slice(0, RESOLVE_CAP),
-    dropped: Math.max(0, ordered.length - RESOLVE_CAP),
-  };
-}
-
 export default function BomPage() {
   const { slug } = useParams<{ slug?: string }>();
   const isShare = slug != null;
@@ -123,86 +64,16 @@ export default function BomPage() {
   const [parsed, setParsed] = useState<ParseResult | null>(null);
   const [sourceName, setSourceName] = useState<string | null>(null);
   const [mapRoles, setMapRoles] = useState<(BomRole | null)[]>([]);
-  const [rows, setRows] = useState<TableRow[]>([]);
-  const [matching, setMatching] = useState(false);
-  const [matchError, setMatchError] = useState<string | null>(null);
-  const [buildQty, setBuildQty] = useState(1);
-  // Per-BOM, default OFF (spec §5). A ref shadows it because `startResolve`
-  // runs from the phase-1 effect and must read the CURRENT answer without
-  // re-running the whole match when the reader toggles it.
-  const [includeDnp, setIncludeDnp] = useState(false);
-  const includeDnpRef = useRef(includeDnp);
-  includeDnpRef.current = includeDnp;
-  // Phase-2 notes, kept apart from `matchError` because neither is fatal: the
-  // table is priced and readable with both of them on screen.
-  const pickSeqRef = useRef(new Map<number, number>());
-  const [resolveNote, setResolveNote] = useState<string | null>(null);
-  const [resolveError, setResolveError] = useState<string | null>(null);
 
-  /** The Matches column's "Similar" pick: re-match this ONE line by the
-   *  chosen SKU (identity only travels — D7), keep the row's approx framing
-   *  (relative to what was SUBMITTED it is still a substitute), and fold the
-   *  displaced match back into the menu so the choice stays reversible. */
-  const pickSimilar = (rowIndex: number, sku: string) => {
-    const line = rows.find((r) => r.index === rowIndex);
-    // Last click wins, PER ROW: overlapping picks settle in network order,
-    // so a superseded response must be dropped, not applied (review #4).
-    const seq = (pickSeqRef.current.get(rowIndex) ?? 0) + 1;
-    pickSeqRef.current.set(rowIndex, seq);
-    bomApi
-      .match([
-        {
-          index: rowIndex,
-          mpn: sku,
-          value: null,
-          footprint: line?.footprint ?? null,
-          description: null,
-          manufacturer: null,
-        },
-      ])
-      .then(([fresh]) => {
-        if (pickSeqRef.current.get(rowIndex) !== seq) return; // superseded
-        if (fresh == null || fresh.part == null) return;
-        setRows((prev) =>
-          prev.map((r) => {
-            if (r.index !== rowIndex || r.server == null) return r;
-            const displaced = r.server.part;
-            const keptSimilar = [
-              ...(displaced != null
-                ? [
-                    {
-                      id: displaced.id,
-                      sku: displaced.sku,
-                      manufacturer_name: displaced.manufacturer_name,
-                      description: displaced.description,
-                      package: displaced.package,
-                      lifecycle_status: displaced.lifecycle_status,
-                      lifecycle_verified: displaced.lifecycle_verified,
-                    },
-                  ]
-                : []),
-              ...r.server.similar,
-            ].filter((s) => s.sku !== sku);
-            return {
-              ...r,
-              server: {
-                ...fresh,
-                status: 'approx' as const,
-                approx_reason: 'your pick — similar part',
-                similar: keptSimilar,
-              },
-            };
-          }),
-        );
-      })
-      .catch((err) => {
-        if (pickSeqRef.current.get(rowIndex) !== seq) return; // superseded
-        const throttled = axios.isAxiosError(err) && err.response?.status === 429;
-        setResolveError(
-          throttled ? MATCH_THROTTLED : 'Could not switch to that part — try again in a moment.',
-        );
-      });
-  };
+  // Everything that happens to a BOM once it is ready to price — the match,
+  // the resolve stream, build quantity, the DNP toggle, the similar-pick —
+  // lives in the workbench, which /viewer mounts too (spec §6). Handing it
+  // null is how the page says "not ready": the share view never prices (that
+  // quota is not the reader's to spend), and neither do the intake or mapper
+  // phases. The viewer route stays null here; Task 3.4 fills it in when a
+  // viewer session is what produced these lines.
+  const wb = useBomWorkbench(isShare || phase !== 'table' ? null : parsed, null);
+
   const sourceText = useRef('');
 
   // The share view is its own small machine: one GET, then either a read-only
@@ -212,17 +83,15 @@ export default function BomPage() {
   const [shareState, setShareState] = useState<ShareState>(isShare ? 'loading' : 'ready');
   const [shareExpiry, setShareExpiry] = useState<string | null>(null);
 
-  // The resolve stream is a socket THIS tab holds open. Leaving the page — or
-  // landing on a different share slug — drops it; each miss is one bounded
-  // server-side call that finishes on its own either way, so aborting costs
-  // nothing but the reader. One controller is enough: one stream at a time.
-  const resolveAbort = useRef<AbortController | null>(null);
-  useEffect(
-    () => () => {
-      resolveAbort.current?.abort();
-    },
-    [slug],
-  );
+  // A share's rows are the workbench's opposite number: replayed, never
+  // matched, never resolved. They are held here rather than pushed into the
+  // workbench because nothing the workbench does applies to them — giving it
+  // rows it may not price would be a seam somebody later mistakes for one.
+  // Quantity and the DNP toggle stay live: both are arithmetic on data already
+  // on the page, and ask nothing of anyone.
+  const [shareRows, setShareRows] = useState<TableRow[]>([]);
+  const [shareQty, setShareQty] = useState(1);
+  const [shareDnp, setShareDnp] = useState(false);
 
   // Hydrate a shared BOM. No intake, no mapper, and deliberately NO resolve:
   // the reader of a share did not upload this file, and spending distributor
@@ -241,9 +110,9 @@ export default function BomPage() {
           setShareState('missing');
           return;
         }
-        setRows(hydrated.rows);
-        setBuildQty(hydrated.buildQty);
-        setIncludeDnp(hydrated.includeDnp);
+        setShareRows(hydrated.rows);
+        setShareQty(hydrated.buildQty);
+        setShareDnp(hydrated.includeDnp);
         setShareExpiry(envelope.expires_at);
         setShareState('ready');
       })
@@ -255,144 +124,6 @@ export default function BomPage() {
       cancelled = true;
     };
   }, [slug]);
-
-  // Fold one streamed event into the row it names. Functional updater on
-  // purpose: events arrive over tens of seconds and the closure that started
-  // the stream has long since gone stale.
-  const applyResolveEvent = (event: ResolveEvent) => {
-    setRows((prev) =>
-      prev.map((row) => {
-        if (row.index !== event.index) return row;
-        switch (event.kind) {
-          case 'resolved':
-            // A `resolved` with no row is a malformed event; falling back to
-            // the phase-1 answer is honest, a permanent spinner is not.
-            return event.row == null
-              ? { ...row, state: 'matched' as const }
-              : { ...row, server: event.row, state: 'resolved_live' as const };
-          case 'not_found':
-            return { ...row, state: 'not_found' as const };
-          case 'resolve_unavailable':
-            return { ...row, state: 'unavailable' as const };
-          default:
-            return row;
-        }
-      }),
-    );
-  };
-
-  /** The server emits exactly one event per miss, so nothing should still be
-   *  spinning once the stream ends. If something is, the stream died early —
-   *  put the row back on its phase-1 answer rather than spin forever. */
-  const settleStragglers = () => {
-    setRows((prev) =>
-      prev.map((row) => (row.state === 'resolving' ? { ...row, state: 'matched' as const } : row)),
-    );
-  };
-
-  /**
-   * Phase 2 — the misses go and heal themselves.
-   *
-   * Owns the `setRows` for the rows it is about to ask about (flipping them to
-   * `resolving` in the SAME commit the table first renders in, so no row ever
-   * flashes NO MATCH on its way to being looked up).
-   */
-  const startResolve = (built: TableRow[]) => {
-    const { misses, dropped } = pickMisses(built, includeDnpRef.current);
-    setResolveNote(dropped > 0 ? cappedNote(dropped) : null);
-    setResolveError(null);
-    if (misses.length === 0) {
-      setRows(built);
-      return;
-    }
-
-    const asking = new Set(misses.map((m) => m.index));
-    setRows(
-      built.map((row) => (asking.has(row.index) ? { ...row, state: 'resolving' as const } : row)),
-    );
-
-    // Never two readers on one table: a fresh parse drops the older socket.
-    resolveAbort.current?.abort();
-    const controller = new AbortController();
-    resolveAbort.current = controller;
-
-    bomApi
-      .streamResolve(misses, applyResolveEvent, controller.signal)
-      .then(() => {
-        if (controller.signal.aborted) return;
-        settleStragglers();
-      })
-      .catch(() => {
-        // An abort resolves down this path too; there is nobody left to tell.
-        if (controller.signal.aborted) return;
-        settleStragglers();
-        setResolveError(RESOLVE_STOPPED);
-      });
-  };
-
-  // Phase 1: ask the catalog about the identity fields, once, per parse.
-  //
-  // The table is deliberately NOT rendered while this is in flight: rows with
-  // no server answer yet would all read NO MATCH, which is a lie for the
-  // second and a half it takes to come back.
-  useEffect(() => {
-    if (phase !== 'table' || parsed == null) return;
-    const lines = parsed.lines;
-    setRows([]);
-    setMatchError(null);
-    setMatching(true);
-    let cancelled = false;
-
-    // D7: IDENTITY FIELDS ONLY. Quantities, designators, the DNP flag and the
-    // file itself never leave the browser — the privacy claim is structural,
-    // not a promise, and the /bom/match schema rejects anything else. Pricing
-    // math runs client-side off the break tables the response carries back.
-    bomApi
-      .match(
-        lines.map((line) => ({
-          index: line.index,
-          mpn: line.mpn,
-          value: line.value,
-          footprint: line.footprint,
-          description: line.description,
-          manufacturer: line.manufacturer,
-        })),
-      )
-      .then((serverRows) => {
-        if (cancelled) return;
-        const byIndex = new Map(serverRows.map((row) => [row.index, row]));
-        const built: TableRow[] = lines.map((line) => {
-          const server = byIndex.get(line.index) ?? null;
-          return {
-            ...line,
-            server,
-            // `matched` means "phase 1 answered": the badge then reads the
-            // server status, so a `resolve`/`none` row reads NO MATCH until
-            // phase 2 moves it.
-            state: server == null ? ('not_found' as const) : ('matched' as const),
-            viewerHref: null,
-          };
-        });
-        setMatching(false);
-        // Hand the rows straight to phase 2 — it owns the setRows, so the
-        // lines it is about to look up land already flipped to `resolving`.
-        startResolve(built);
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        const throttled = axios.isAxiosError(err) && err.response?.status === 429;
-        setMatchError(throttled ? MATCH_THROTTLED : MATCH_FAILED);
-        setMatching(false);
-      });
-
-    return () => {
-      cancelled = true;
-      // A new parse invalidates the previous BOM's stream as surely as
-      // leaving does — its events name row indices from a table that no
-      // longer exists.
-      resolveAbort.current?.abort();
-    };
-  }, [phase, parsed]);
 
   const handleParsed = useCallback((result: ParseResult, name: string, text: string) => {
     sourceText.current = text;
@@ -441,18 +172,11 @@ export default function BomPage() {
   }, [parsed, mapRoles]);
 
   const startOver = () => {
-    resolveAbort.current?.abort();
+    wb.reset();
     setParsed(null);
     sourceText.current = '';
     setSourceName(null);
     setMapRoles([]);
-    setRows([]);
-    setMatchError(null);
-    setMatching(false);
-    setResolveNote(null);
-    setResolveError(null);
-    setBuildQty(1);
-    setIncludeDnp(false);
     setPhase('intake');
   };
 
@@ -500,7 +224,7 @@ export default function BomPage() {
             </section>
           )}
 
-          {isShare && shareState === 'ready' && rows.length > 0 && (
+          {isShare && shareState === 'ready' && shareRows.length > 0 && (
             <section className={styles.tablePhase}>
               <p className={styles.shareBanner} role="status">
                 Shared BOM
@@ -511,12 +235,12 @@ export default function BomPage() {
                   stay live because both are arithmetic on data already on the
                   page — they ask nothing of anyone. */}
               <BomTable
-                rows={rows}
-                buildQty={buildQty}
-                onBuildQtyChange={setBuildQty}
+                rows={shareRows}
+                buildQty={shareQty}
+                onBuildQtyChange={setShareQty}
                 onPickSimilar={null}
-                includeDnp={includeDnp}
-                onIncludeDnpChange={setIncludeDnp}
+                includeDnp={shareDnp}
+                onIncludeDnpChange={setShareDnp}
               />
             </section>
           )}
@@ -560,41 +284,41 @@ export default function BomPage() {
                 </p>
               ))}
 
-              {resolveNote != null && <p className={styles.phaseWarn}>{resolveNote}</p>}
+              {wb.resolveNote != null && <p className={styles.phaseWarn}>{wb.resolveNote}</p>}
 
-              {matchError != null && (
+              {wb.matchError != null && (
                 <p className={styles.pageError} role="alert">
-                  {matchError}
+                  {wb.matchError}
                 </p>
               )}
 
-              {resolveError != null && (
+              {wb.resolveError != null && (
                 <p className={styles.phaseWarn} role="status">
-                  {resolveError}
+                  {wb.resolveError}
                 </p>
               )}
 
-              {matching && (
+              {wb.matching && (
                 <p className={styles.phaseText} role="status">
                   Pricing {parsed.lines.length.toLocaleString('en-US')}{' '}
                   {parsed.lines.length === 1 ? 'line' : 'lines'} against the catalog&#8230;
                 </p>
               )}
 
-              {!matching && rows.length > 0 && (
+              {!wb.matching && wb.rows.length > 0 && (
                 <>
                   <BomTable
-                    rows={rows}
-                    buildQty={buildQty}
-                    onBuildQtyChange={setBuildQty}
-                    onPickSimilar={pickSimilar}
-                    includeDnp={includeDnp}
-                    onIncludeDnpChange={setIncludeDnp}
+                    rows={wb.rows}
+                    buildQty={wb.buildQty}
+                    onBuildQtyChange={wb.setBuildQty}
+                    onPickSimilar={wb.pickSimilar}
+                    includeDnp={wb.includeDnp}
+                    onIncludeDnpChange={wb.setIncludeDnp}
                   />
                   <ShareBar
-                    rows={rows}
-                    buildQty={buildQty}
-                    includeDnp={includeDnp}
+                    rows={wb.rows}
+                    buildQty={wb.buildQty}
+                    includeDnp={wb.includeDnp}
                     onChangeFile={startOver}
                   />
                 </>
