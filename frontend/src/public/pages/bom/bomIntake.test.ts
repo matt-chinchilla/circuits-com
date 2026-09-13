@@ -16,24 +16,40 @@ import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { KicadReadError } from '@public/services/kicad/types';
+import { ROOT_UUID, schematic, symbol } from '@public/services/kicad/fixtures';
 
 type AnyProps = Record<string, never> & Record<string, unknown>;
 type Drop = (accepted: File[], rejections: { file: File }[]) => void;
 
 const dropzone = { onDrop: null as Drop | null };
 const buildProject = vi.fn(async (_files: File[]) => project);
-const openDesign = vi.fn((p: unknown) => ({ project: p, parsed: sessionParse, refs: new Map() }));
 
-const project = { name: 'glasgow', root: 'main.kicad_sch' };
-const sessionParse = {
-  lines: [{ index: 0, qty: 1 }],
-  headers: ['Reference'],
-  headerSignature: 'kicad-sch',
-  roleByColumn: ['refs'],
-  unmappedColumns: [],
+const SCH = schematic({
+  uuid: ROOT_UUID,
+  body: symbol({ lib: 'Device:R', uuid: 'x', ref: 'R1', value: '1k' }),
+});
+
+/** Real enough for the REAL schematic reader: `readDesign` and
+ *  `unpriceableReason` are deliberately NOT mocked, so the intake's admission
+ *  test is exercised rather than described. */
+const project = {
+  name: 'glasgow',
+  files: new Map([['main.kicad_sch', SCH]]),
+  pro: null,
+  root: 'main.kicad_sch',
+  sheets: [{ path: 'main.kicad_sch', uuid: ROOT_UUID, text: SCH }],
+  board: null,
   warnings: [],
-  error: null,
+  missingSheets: [],
+  formatVersions: {},
 };
+
+/** What a lone `.kicad_pcb` builds to — a fine thing to VIEW and nothing the
+ *  BOM tool can price. */
+const boardOnly = { ...project, files: new Map(), root: null, sheets: [], board: 'glasgow.kicad_pcb' };
+
+/** Every session the intake published, in order. */
+const published: { project: unknown }[] = [];
 
 vi.mock('react-dropzone', () => ({
   useDropzone: (opts: { onDrop: Drop }) => {
@@ -46,8 +62,24 @@ vi.mock('react-dropzone', () => ({
     };
   },
 }));
-vi.mock('@public/services/kicad/project', () => ({ buildProject: (f: File[]) => buildProject(f) }));
-vi.mock('@public/services/designSession', () => ({ openDesign: (p: unknown) => openDesign(p) }));
+// PARTIAL: `readSchematic` imports `basename` from this same module, so a
+// whole-module replacement makes the real reader throw the moment it walks a
+// sheet — which is how a green "the project reader was called" test can sit
+// beside a drop that actually failed.
+vi.mock('@public/services/kicad/project', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@public/services/kicad/project')>();
+  return { ...actual, buildProject: (f: File[]) => buildProject(f) };
+});
+vi.mock('@public/services/designSession', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@public/services/designSession')>();
+  return {
+    ...actual,
+    publishDesign: (session: { project: unknown }) => {
+      published.push(session);
+      return session;
+    },
+  };
+});
 
 const { default: BomIntake } = await import('./components/BomIntake');
 
@@ -87,7 +119,7 @@ beforeEach(() => {
   dropzone.onDrop = null;
   buildProject.mockClear();
   buildProject.mockImplementation(async () => project);
-  openDesign.mockClear();
+  published.length = 0;
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -109,10 +141,14 @@ describe('routing a drop to the right reader', () => {
       'glasgow.kicad_pro',
       'main.kicad_sch',
     ]);
-    expect(openDesign).toHaveBeenCalledWith(project);
+    expect(published).toHaveLength(1);
+    expect(published[0]?.project).toBe(project);
     // The session's own parse, named by the project, with NO source text: a
     // schematic BOM has no columns to re-materialize (there is no mapper).
-    expect(parsed).toEqual([{ result: sessionParse, name: 'glasgow', text: '' }]);
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0]?.name).toBe('glasgow');
+    expect(parsed[0]?.text).toBe('');
+    expect((parsed[0]?.result as { lines: unknown[] }).lines).toHaveLength(1);
   });
 
   it('sends a zip to the project reader too', async () => {
@@ -184,5 +220,45 @@ describe('when the project reader refuses', () => {
     await drop([file('board.kicad_sch')]);
     const chooser = [...container.querySelectorAll('button')].find((b) => b.textContent === 'Choose a file');
     expect(chooser?.disabled).toBe(false);
+  });
+});
+
+describe('a project the BOM tool cannot price', () => {
+  it('names the reason and opens NO session', async () => {
+    await render();
+    buildProject.mockImplementation(async () => boardOnly);
+    // The format line invites a bare .kicad_pcb, so this is a drop the page
+    // asks for. It reads fine — there is simply no schematic to take a BOM
+    // from — and publishing it would put "Continue with glasgow from the
+    // viewer" in front of somebody who has never opened the viewer.
+    await drop([file('glasgow.kicad_pcb')]);
+    expect(errorText()).toContain('No schematic in this project');
+    expect(published).toHaveLength(0);
+    expect(parsed).toHaveLength(0);
+  });
+
+  it('leaves a project already open in /viewer alone', async () => {
+    await render();
+    buildProject.mockImplementation(async () => boardOnly);
+    await drop([file('glasgow.kicad_pcb')]);
+    // Nothing was published, so nothing was evicted: read-then-publish is what
+    // makes the refusal free of side effects.
+    expect(published).toHaveLength(0);
+  });
+});
+
+describe('more than one BOM at a time', () => {
+  it('asks for one rather than reading the first in silence', async () => {
+    await render();
+    await drop([file('rev-a.csv', 'MPN\nX\n'), file('rev-b.csv', 'MPN\nY\n')]);
+    expect(parsed).toHaveLength(0);
+    expect(errorText()).toContain('one BOM at a time');
+  });
+
+  it('does not mistake a multi-file KiCad project for that', async () => {
+    await render();
+    await drop([file('glasgow.kicad_pro', '{}'), file('main.kicad_sch', '(kicad_sch)')]);
+    expect(errorText()).toBeNull();
+    expect(buildProject).toHaveBeenCalledTimes(1);
   });
 });

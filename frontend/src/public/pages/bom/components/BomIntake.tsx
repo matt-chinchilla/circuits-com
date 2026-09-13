@@ -4,7 +4,12 @@ import { parseBomText, parsePasteRows, type ParseResult } from '@public/services
 import { readSpreadsheet } from '@public/services/bom/xlsx';
 import { buildProject } from '@public/services/kicad/project';
 import { KicadReadError } from '@public/services/kicad/types';
-import { openDesign, type DesignSession } from '@public/services/designSession';
+import {
+  publishDesign,
+  readDesign,
+  unpriceableReason,
+  type DesignSession,
+} from '@public/services/designSession';
 import styles from '../BomPage.module.scss';
 
 // Intake is a DUMB TRIGGER: it reads a file (or a pasted block), parses it and
@@ -112,11 +117,17 @@ export default function BomIntake({ onParsed, session, onContinue }: BomIntakePr
   /**
    * The other reader: a KiCad project, straight to a priced BOM.
    *
-   * `openDesign` is called HERE — in the drop handler, never an effect — because
-   * it re-parses the schematic, and React 19's StrictMode double-invokes
-   * effects. It publishes the session before `onParsed` hands the page the rows,
-   * so the render that shows the table already knows which design they came
-   * from (the viewer link, the schematic panel).
+   * READ, then decide, THEN publish. A project this tool cannot price — a board
+   * with no schematic, a schematic over the line cap, one whose symbols are all
+   * power flags — must not become the session, because a session is what makes
+   * the page offer "Continue with <name> from the viewer" and a drawing beside
+   * the table. Publishing first and clearing on refusal would also evict a
+   * perfectly good project the reader still has open in /viewer.
+   *
+   * The publish happens in this drop handler and never in an effect: reading
+   * re-parses the schematic, and React 19's StrictMode double-invokes effects.
+   * It lands before `onParsed`, so the render that shows the table already knows
+   * which design the rows came from.
    *
    * No column mapper: the reader builds the columns itself, so there is nothing
    * to ask about and no source text to re-materialize — hence the `''`.
@@ -127,8 +138,14 @@ export default function BomIntake({ onParsed, session, onContinue }: BomIntakePr
       setError(null);
       try {
         const project = await buildProject(files);
-        const next = openDesign(project);
-        onParsed(next.parsed, project.name, '');
+        const design = readDesign(project);
+        const problem = unpriceableReason(design);
+        if (problem != null) {
+          setError(problem);
+          return;
+        }
+        publishDesign(design);
+        onParsed(design.parsed, project.name, '');
       } catch (err) {
         // Every refusal buildProject raises — KiCad 5, over a cap, a bad
         // archive, nothing to read — already says which one it was and what to
@@ -160,7 +177,13 @@ export default function BomIntake({ onParsed, session, onContinue }: BomIntakePr
         void readKicad(kicad);
         return;
       }
-      // A BOM is one file (the multi-file drop is the KiCad branch above).
+      // A BOM is one file — the multi-file drop is the KiCad branch above. Say
+      // so rather than reading the first and discarding the rest in silence:
+      // the reader who dropped two revisions needs to know which one is priced.
+      if (accepted.length > 1) {
+        setError('Drop one BOM at a time — or a whole KiCad project, which can be several files.');
+        return;
+      }
       const file = accepted[0];
       if (!file) return;
       void readFile(file);
