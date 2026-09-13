@@ -1,6 +1,7 @@
 @use '@shared/styles/variables' as *;
 @use '@shared/styles/mixins' as *;
 @use '@public/styles/bomMaterial' as *;
+@use '@public/styles/dropFrame' as *;
 
 // BOM pricing tool — page shell + intake surface.
 //
@@ -9,183 +10,14 @@
 // here is the existing theme vocabulary so the page is themed correctly from
 // its first commit rather than being restyled twice.
 
-.page {
-  // The canvas atmosphere: platinum-tinted radials over a cool paper. The
-  // tool commits to this light bench deliberately — the tinted cards need
-  // the wash beneath them to read as glass.
-  background-color: #f2f4f9;
-  background-image:
-    radial-gradient(1150px 540px at 12% -12%, rgba(185, 168, 224, 0.22), transparent 60%),
-    radial-gradient(950px 500px at 96% 0%, rgba(159, 183, 232, 0.2), transparent 58%),
-    radial-gradient(760px 420px at 58% 112%, rgba(217, 161, 184, 0.16), transparent 60%);
-  padding: 36px 20px 64px;
-
-  // Start widening at 1500 rather than 1601 (2026-08-22): the image column
-  // made this an ELEVEN-column table, and at a flat 1376 the surplus came out
-  // of Description, which collapsed to "Wi-Fi…". 92vw first exceeds 1376 at
-  // 1496px, so the bench only ever grows across this breakpoint.
-  @media (min-width: 1500px) {
-    .stack {
-      max-width: 92vw;
-    }
-  }
-}
-
-.stack {
-  // Full bench: the standard container, widening to 90vw on ultrawide — the
-  // same convention as the category pages. A ten-column pricing table jammed
-  // into 1080px was hiding data behind a scrollbar (owner report 2026-08-21).
-  // The canvas bench is 1376 — wider than the site's 1200 container because
-  // ten pricing columns need the room (and 90vw past 1600 keeps the
-  // ultrawide convention).
-  max-width: 1376px;
-  margin: 0 auto;
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-}
-
-// ─── Intake ─────────────────────────────────────────────────────────────────
-
-.intake {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.drop {
-  // The Upload artboard's datasheet card: the bom-card tinted-glass material
-  // with the 24px PCB grid (contact-page motif) layered over its washes and
-  // crop marks in the corners. The grid layers sit FIRST so they paint on
-  // top; the shorthand resets background-size, so the size list follows it.
-  @include bom-card;
-
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  padding: 52px 40px;
-  text-align: center;
-  background:
-    linear-gradient(rgba(10, 74, 46, 0.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(10, 74, 46, 0.035) 1px, transparent 1px),
-    radial-gradient(115% 78% at 0% 0%, rgba(246, 242, 251, 0.8), transparent 56%),
-    radial-gradient(105% 72% at 100% 0%, rgba(159, 183, 232, 0.26), transparent 54%),
-    radial-gradient(95% 88% at 100% 100%, rgba(217, 161, 184, 0.2), transparent 56%)
-    #ffffff;
-  background-size: 24px 24px, 24px 24px, auto, auto, auto;
-  transition: box-shadow 0.15s ease;
-}
-
-.dropActive {
-  // Drag-over affordance only — the resting card carries no ring beyond the
-  // material's own white hairline (canvas parity, 2026-08-21).
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.95),
-    inset 0 0 0 3px rgba(68, 189, 19, 0.55),
-    0 1px 2px rgba(38, 32, 58, 0.06),
-    0 16px 34px -16px rgba(117, 105, 154, 0.36);
-}
-
-// Crop marks — the datasheet corner Ls (contact-page motif), in the dark
-// silkscreen ink the canvas uses, not the bright accent.
-.crop {
-  position: absolute;
-  width: 12px;
-  height: 12px;
-  border: 0 solid rgba(10, 74, 46, 0.55);
-  pointer-events: none;
-}
-
-.cropTl {
-  top: 9px;
-  left: 9px;
-  border-top-width: 1.5px;
-  border-left-width: 1.5px;
-}
-
-.cropTr {
-  top: 9px;
-  right: 9px;
-  border-top-width: 1.5px;
-  border-right-width: 1.5px;
-}
-
-.cropBl {
-  bottom: 9px;
-  left: 9px;
-  border-bottom-width: 1.5px;
-  border-left-width: 1.5px;
-}
-
-.cropBr {
-  bottom: 9px;
-  right: 9px;
-  border-bottom-width: 1.5px;
-  border-right-width: 1.5px;
-}
+// The bench, the drop card and its controls are the SHARED drop-frame
+// intake: /bom and /viewer are one surface, so they are one set of rules
+// (@public/styles/_dropFrame.scss). Everything below it is BOM-only.
+@include drop-frame-intake;
 
 .dropIcon {
   margin-bottom: 4px;
   color: var(--theme-accent, $nav-blue);
-}
-
-.dropLead {
-  margin: 0;
-  font-family: $font-heading;
-  font-size: 1.05rem;
-  font-weight: 600;
-  color: #1a1f23;
-}
-
-.btnRow {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 10px;
-  margin: 12px 0 6px;
-}
-
-.formatLine {
-  margin: 0;
-  font-family: $font-mono;
-  font-size: 0.72rem;
-  letter-spacing: 0.05em;
-  color: var(--bom-ink-secondary, #676c71);
-}
-
-.dropBtn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 12px 22px;
-  min-height: 44px;
-  font-family: $font-body;
-  font-size: 0.88rem;
-  @include bom-primary-control;
-
-  &:disabled {
-    opacity: 0.6;
-    cursor: progress;
-  }
-}
-
-.pasteToggle,
-.exampleBtn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 12px 20px;
-  min-height: 44px;
-  font-family: $font-body;
-  font-size: 0.86rem;
-  @include bom-glass-control;
-}
-
-.exampleBtn:disabled {
-  opacity: 0.6;
-  cursor: progress;
 }
 
 // The two info cards under the dropzone (Upload artboard).
@@ -302,19 +134,6 @@
   }
 }
 
-// ─── Errors + phase placeholder ─────────────────────────────────────────────
-
-.intakeError,
-.pageError {
-  margin: 0;
-  padding: 12px 14px;
-  font-size: 0.9rem;
-  color: $error-red;
-  background: rgba($error-red, 0.07);
-  border-left: 3px solid $error-red;
-  border-radius: 6px;
-}
-
 // The priced-BOM phase is NOT a card: the coverage strip and the table each
 // carry their own surface, and wrapping them in a third would stack three
 // shadows on one screen.
@@ -397,18 +216,6 @@
   color: var(--executive-blue, $executive-blue);
 }
 
-.phaseText {
-  margin: 0;
-  font-size: 0.95rem;
-  color: $text-secondary;
-}
-
-.phaseWarn {
-  margin: 0;
-  font-size: 0.86rem;
-  color: $sponsor-gold;
-}
-
 // ─── Shared BOM (/bom/s/:slug) ──────────────────────────────────────────────
 
 .shareBanner {
@@ -448,16 +255,6 @@
   background: var(--theme-cta-bg, $executive-blue);
   border-radius: 8px;
   text-decoration: none;
-}
-
-@include responsive($bp-mobile) {
-  .page {
-    padding: 24px 14px 48px;
-  }
-
-  .drop {
-    padding: 32px 16px;
-  }
 }
 
 // ─── Column mapper ──────────────────────────────────────────────────────────

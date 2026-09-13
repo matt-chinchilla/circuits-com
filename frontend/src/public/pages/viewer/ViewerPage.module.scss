@@ -1,0 +1,131 @@
+@use '@shared/styles/variables' as *;
+@use '@shared/styles/mixins' as *;
+@use '@public/styles/bomMaterial' as *;
+@use '@public/styles/dropFrame' as *;
+
+// Design viewer — page shell.
+//
+// The intake half is the SHARED drop-frame surface (/bom is the other host),
+// so it arrives as a mixin rather than a second copy of the same rules. The
+// loaded half below is the viewer's own: a strip, the sheet tabs and the
+// drawing, which takes whatever viewport is left.
+@include drop-frame-intake;
+
+.credit {
+  margin: 6px 0 0;
+  font-size: 0.75rem;
+  color: $text-secondary;
+}
+
+.intro {
+  margin: 0 0 18px;
+  max-width: 72ch;
+  color: $text-secondary;
+  font-size: 0.95rem;
+}
+
+// Loaded phase ---------------------------------------------------------------
+// A flex column: strip and tabs at their natural height, the drawing takes the
+// rest of the viewport below the navbar, at every width (owner, Phase 0 gate).
+.loaded {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100dvh - #{$nav-height});
+}
+
+.drawing {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.strip {
+  @include bom-card;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 18px;
+  padding: 12px 16px;
+  margin-bottom: 14px;
+}
+
+.stripName {
+  font-weight: 600;
+  color: $text-primary;
+}
+
+.stripMeta {
+  color: $text-secondary;
+  font-size: 0.88rem;
+}
+
+.stripAction {
+  @include bom-glass-control;
+  margin-left: auto;
+  padding: 7px 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.tabs {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+  margin-bottom: 12px;
+  @include scrollbar-thin(4px);
+}
+
+.tab {
+  @include bom-glass-control;
+  padding: 8px 14px;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+
+  &[aria-selected='true'] {
+    @include bom-primary-control;
+  }
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.chip {
+  @include bom-glass-control;
+  padding: 5px 10px;
+  font-size: 0.8rem;
+  line-height: 1;
+  cursor: pointer;
+
+  &[aria-current='true'] {
+    @include bom-primary-control;
+  }
+}
+
+.notice {
+  margin: 10px 0 0;
+  font-size: 0.78rem;
+  color: $text-secondary;
+
+  a {
+    color: inherit;
+    text-decoration: underline;
+  }
+}
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  @include bom-card;
+  padding: 10px 16px;
+  font-size: 0.88rem;
+  z-index: 50;
+}

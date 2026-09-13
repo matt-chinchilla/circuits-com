@@ -110,3 +110,15 @@ img {
   unicode-range: U+1F1E6-1F1FF;
   font-display: swap;
 }
+
+// The 16-glyph Material Symbols subset the vendored KiCanvas UI expects
+// (frontend/vendor/kicanvas/patches/0002-icon-codepoints.patch). Served from
+// /fonts/ like Phosphor; a regenerated subset gets a new -vN filename because
+// /fonts/* is cached immutable for a year.
+@font-face {
+  font-family: 'Material Symbols Outlined';
+  src: url('/fonts/kicanvas/material-symbols-subset-v1.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
