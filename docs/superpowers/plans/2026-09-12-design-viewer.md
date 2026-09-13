@@ -4142,15 +4142,15 @@ export function webgl2Supported(create: () => HTMLCanvasElement = () => document
   // extensions have been seen to THROW. This runs in a render body, so an escaping
   // throw would take down the ErrorBoundary instead of showing the no-webgl card the
   // probe exists for — and with `probed` still null it would throw again every render.
-  let gl: ProbeContext;
   try {
-    gl = create().getContext('webgl2') as ProbeContext;
+    const gl = create().getContext('webgl2') as ProbeContext;
+    probed = gl != null;
+    // Releasing the probe context is the other call that has been seen to throw;
+    // a throw here must not undo a true verdict.
+    if (gl?.getExtension) gl.getExtension('WEBGL_lose_context')?.loseContext();
   } catch {
-    probed = false;
-    return probed;
+    probed = probed ?? false;
   }
-  probed = gl != null;
-  if (gl?.getExtension) gl.getExtension('WEBGL_lose_context')?.loseContext();
   return probed;
 }
 
