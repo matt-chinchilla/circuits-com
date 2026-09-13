@@ -2405,8 +2405,9 @@ export function readSchematic(project: KicadProject): SchematicRead {
         // A DNP FIELD marks the part, not only the `(dnp yes)` attribute:
         // Glasgow writes `(dnp no)` on all 347 symbols and flags its
         // do-not-populate parts with `(property "DNP" "DNP")` alone. Anything
-        // that is not an explicit negative counts as set, the way a CSV DNP
-        // column is read.
+        // that is not an explicit negative counts as set. Deliberately STRICTER
+        // than the CSV path (`parseBom`: any non-empty cell), because KiCad
+        // field templates commonly default a DNP field to "No" on every part.
         else if (role === 'dnp' && !NOT_DNP.test(v)) dnpField = true;
       }
       instances.push({
@@ -2418,7 +2419,9 @@ export function readSchematic(project: KicadProject): SchematicRead {
         sheet: sheetPath,
         instancePath: pathV7,
       });
-      refs.set(ref, { sheet: sheetPath, instancePath: pathV7 });
+      // First location wins, for every class of reference (a multi-unit part
+      // spread over sheets jumps to the sheet its first unit sits on).
+      if (!refs.has(ref)) refs.set(ref, { sheet: sheetPath, instancePath: pathV7 });
     }
     // Re-entering a sheet is CORRECT — that is how a twice-placed sheet gets
     // counted twice — so the guard is the ancestor chain, not a visited set.
@@ -2445,7 +2448,7 @@ export function readSchematic(project: KicadProject): SchematicRead {
   if (skipped > 0) warnings.push(`${skipped} symbols skipped: ${skippedNotInBom} not in BOM, ${skippedUnusable} power, virtual or unreferenced.`);
   for (const path of selfReferencing) warnings.push(`${basename(path)} references itself (directly or through its sub-sheets); that reference was skipped.`);
   for (const path of propertySheets) warnings.push(`${basename(path)}: references were read from symbol properties, not instance tables — a sheet placed more than once may show duplicate designators.`);
-  if (unannotated > 0) warnings.push(`${unannotated} symbols are not annotated (R?, U? …); run Tools → Annotate Schematic in KiCad for an accurate BOM.`);
+  if (unannotated > 0) warnings.push(`${unannotated} symbol instances are not annotated (R?, U? …); run Tools → Annotate Schematic in KiCad for an accurate BOM.`);
   if (project.missingSheets.length > 0) warnings.push(`Parts on the missing sheet(s) ${project.missingSheets.join(', ')} are not in this BOM.`);
 
   const groups = new Map<string, Instance[]>();
