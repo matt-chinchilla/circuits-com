@@ -126,6 +126,21 @@
   cursor: not-allowed;
 }
 
+// One node, read by every dropped chip through aria-describedby. Public scope
+// has no shared sr-only utility and the >=2-consumer rule says not to invent one
+// for a single caller, so this mirrors the admin pages' own copy.
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 // The BOM tab's panel. It sits below the drawing in source order and is shown
 // by `hidden`, so it needs no display of its own — declaring one here would
 // beat the UA sheet's `[hidden] { display: none }` exactly the way `.drawing`

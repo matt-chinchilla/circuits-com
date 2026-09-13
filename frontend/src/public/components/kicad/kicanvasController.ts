@@ -233,6 +233,13 @@ export class KicanvasController implements CanvasController {
     return this.project()?.active_page?.type === 'pcb' ? board : schematic;
   }
 
+  /** The basename collision, stated as the renderer's own limit. `sourcesFor` is
+   *  the same function mount() builds the embed's sources with, so the answer
+   *  cannot drift from what actually gets handed over. */
+  unrenderableSheets(project: KicadProject): string[] {
+    return sourcesFor(project).dropped;
+  }
+
   async mount(host: HTMLElement, project: KicadProject): Promise<void> {
     const epoch = ++this.epoch;
     this.disposeEmbed();

@@ -9,13 +9,6 @@ import PageHead from '@public/components/PageHead';
 import PageHeaderBand from '@public/components/layout/PageHeaderBand';
 import DesignCanvas, { type DesignCanvasHandle } from '@public/components/kicad/DesignCanvas';
 import type { CanvasStateName } from '@public/components/kicad/canvasController';
-// The one thing this page asks the renderer that is not a command: which files
-// its basename-keyed virtual file system had to drop. `sourcesFor` is the pure,
-// already-tested half of that decision — the controller calls it at mount — and
-// asking it HERE is what lets a chip say so before it is clicked. A post-mount
-// callback would leave the chips unmarked for the first second, which is when
-// they get clicked.
-import { sourcesFor } from '@public/components/kicad/kicanvasController';
 import BomTable from '@public/components/bom/BomTable';
 import ShareBar from '@public/components/bom/ShareBar';
 import { useBomWorkbench } from '@public/services/bom/useBomWorkbench';
@@ -37,8 +30,21 @@ export const POSITIONING =
 const DROPPED_SHEET_HINT =
   'Another sheet in this project has the same filename, so only one of them can be drawn.';
 
-function droppedSheetToast(path: string): string {
-  return `${basename(path)} can't be drawn — another sheet in this project has the same filename.`;
+/** One visually-hidden node carries the reason for every dropped chip; the
+ *  chips point at it with `aria-describedby`, so the reason is ANNOUNCED rather
+ *  than living only in a `title` (inconsistently read, invisible on touch) and
+ *  the dashed styling. */
+const DROPPED_REASON_ID = 'viewer-unrenderable-sheet-reason';
+
+/** The same fact as a toast. `ref` is present when the gesture was about a
+ *  designator rather than the chip itself — the reader needs to know which part
+ *  they clicked went nowhere, not only that some sheet cannot be drawn. */
+function droppedSheetToast(path: string, ref?: string): string {
+  const subject =
+    ref == null
+      ? `${basename(path)} can't be drawn`
+      : `${ref} is on ${basename(path)}, which can't be drawn`;
+  return `${subject} — another sheet in this project has the same filename.`;
 }
 
 /**
@@ -88,6 +94,25 @@ export default function ViewerPage() {
   const canvasRef = useRef<DesignCanvasHandle>(null);
   /** A focus the canvas still owes us, held until it reports `ready`. */
   const pendingFocus = useRef<string | null>(null);
+  /**
+   * Sheets the MOUNTED renderer cannot draw for this project — its answer, not
+   * this page's guess. KiCanvas keys its file system by basename and so must
+   * drop a second `power.kicad_sch`; the editor renderer that replaces it later
+   * is path-keyed and will answer none, at which point these chips stop being
+   * marked without a line changing here.
+   *
+   * Reported before the renderer bundle is even fetched, so the chips carry it
+   * on the commit that first paints them.
+   */
+  const [droppedSheets, setDroppedSheets] = useState<ReadonlySet<string>>(new Set());
+  const handleUnrenderable = useCallback((paths: string[]) => {
+    setDroppedSheets((prev) => {
+      // The canvas remounts on every project identity, and re-reporting an
+      // unchanged answer would re-render the whole page for nothing.
+      if (prev.size === paths.length && paths.every((p) => prev.has(p))) return prev;
+      return new Set(paths);
+    });
+  }, []);
 
   const wb = useBomWorkbench(
     // Armed by the first BOM-tab visit and never disarmed short of a new
@@ -122,6 +147,10 @@ export default function ViewerPage() {
     setSession(null);
     setBomSeen(false);
     setActiveSheet(undefined);
+    // The canvas is about to unmount with the session. Leaving this at 'ready'
+    // would leave the hash effect believing a drawing is on screen.
+    setCanvasState('loading');
+    setDroppedSheets(new Set());
     // A toast raised a moment ago would otherwise float over the fresh intake.
     setToast(null);
     pendingFocus.current = null;
@@ -138,6 +167,15 @@ export default function ViewerPage() {
         return;
       }
       const where = s.refs.get(ref);
+      // The same wall `chooseSheet` puts in front of the chips. Without it the
+      // BOM row is a second door onto the state I4 closed: `activeSheet` would
+      // name a sheet the renderer never received, the chip this page marks
+      // "can't be drawn" would take `aria-current`, and the canvas would not
+      // move — inert and silent, through a new entrance.
+      if (where != null && droppedSheets.has(where.sheet)) {
+        setToast(droppedSheetToast(where.sheet, ref));
+        return;
+      }
       // Page state moves BEFORE the drawing does. DesignCanvas re-activates on
       // every `view`/`activeSheet` change, and when `setTab` really flips the
       // view that effect can land AFTER focusRef has finished — re-activating
@@ -153,7 +191,7 @@ export default function ViewerPage() {
       // land here: say so rather than leaving the click with no answer at all.
       else setToast(`${ref} can't be focused — the drawing is not available in this browser.`);
     },
-    [session],
+    [session, droppedSheets],
   );
 
   // A #ref the URL is carrying, including one that ARRIVES while this page is
@@ -204,19 +242,6 @@ export default function ViewerPage() {
     if (session.project.root != null) out.push({ id: 'bom', label: 'BOM' });
     return out;
   }, [session]);
-
-  /**
-   * Sheets the renderer could not be handed, because a second file shares their
-   * basename. They stay LISTED — the reader really did read them, and a sheet
-   * that silently vanishes from the chip bar is worse than one that says why it
-   * cannot be drawn — but they are marked, and clicking one answers instead of
-   * doing nothing (the controller's `activate` returns false there and nothing
-   * upstream of this page surfaces that boolean).
-   */
-  const droppedSheets = useMemo(
-    () => (session == null ? new Set<string>() : new Set(sourcesFor(session.project).dropped)),
-    [session],
-  );
 
   const chooseSheet = (path: string) => {
     if (droppedSheets.has(path)) {
@@ -299,6 +324,11 @@ export default function ViewerPage() {
 
               {tab === 'schematic' && session.project.sheets.length > 1 && (
                 <div className={styles.chips} role="group" aria-label="Sheets">
+                  {droppedSheets.size > 0 && (
+                    <span id={DROPPED_REASON_ID} className={styles.srOnly}>
+                      {DROPPED_SHEET_HINT}
+                    </span>
+                  )}
                   {session.project.sheets.map((s) => {
                     const dropped = droppedSheets.has(s.path);
                     return (
@@ -308,6 +338,7 @@ export default function ViewerPage() {
                         className={dropped ? `${styles.chip} ${styles.chipDropped}` : styles.chip}
                         aria-current={(activeSheet ?? session.project.root) === s.path}
                         aria-disabled={dropped || undefined}
+                        aria-describedby={dropped ? DROPPED_REASON_ID : undefined}
                         title={dropped ? DROPPED_SHEET_HINT : undefined}
                         onClick={() => chooseSheet(s.path)}
                       >
@@ -326,6 +357,7 @@ export default function ViewerPage() {
                   view={tab === 'board' ? 'board' : 'schematic'}
                   activeSheet={tab === 'board' ? undefined : activeSheet}
                   onState={setCanvasState}
+                  onUnrenderableSheets={handleUnrenderable}
                 />
                 <p className={styles.notice}>
                   Rendering by KiCanvas &mdash;{' '}
@@ -357,6 +389,13 @@ export default function ViewerPage() {
                     <p className={styles.phaseText} role="status">
                       Pricing {session.parsed.lines.length.toLocaleString('en-US')}{' '}
                       {session.parsed.lines.length === 1 ? 'line' : 'lines'} against the catalog&#8230;
+                    </p>
+                  )}
+                  {session.parsed.error == null && session.parsed.lines.length === 0 && (
+                    <p className={styles.phaseText}>
+                      Nothing to price &mdash; no BOM lines were read from this schematic. Power,
+                      virtual and unreferenced symbols, and anything marked not-in-BOM, are left
+                      out on purpose; the notes above this panel say what was skipped.
                     </p>
                   )}
                   {!wb.matching && wb.rows.length > 0 && (

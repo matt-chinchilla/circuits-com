@@ -20,6 +20,17 @@ export interface DesignCanvasProps {
   /** Path key of the schematic to show, or an instance path; default root. */
   activeSheet?: string;
   onState?: (state: CanvasStateName, detail?: string) => void;
+  /**
+   * The sheets the mounted renderer cannot draw for this project, reported once
+   * per mount and BEFORE the renderer bundle is even fetched — so a host can
+   * mark them on the first paint instead of a frame later.
+   *
+   * Always called, with `[]` when the renderer answers none or when there is no
+   * renderer at all (no WebGL2): a host must never be left holding a set from a
+   * previous project, and "this renderer drops nothing" is an answer, not a
+   * silence.
+   */
+  onUnrenderableSheets?: (paths: string[]) => void;
   /** Test seam. Defaults to a KicanvasController. */
   createController?: () => CanvasController;
 }
@@ -45,7 +56,7 @@ const COPY: Record<Exclude<CanvasStateName, 'loading' | 'ready'>, { title: strin
 };
 
 const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(function DesignCanvas(
-  { project, view, activeSheet, onState, createController },
+  { project, view, activeSheet, onState, onUnrenderableSheets, createController },
   ref,
 ) {
   const hostRef = useRef<HTMLDivElement>(null);
@@ -59,11 +70,19 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(function 
   // is what keeps the callback current without paying that.
   const onStateRef = useRef(onState);
   onStateRef.current = onState;
+  // Same reason as `onState` above: a parent passing an inline arrow must not
+  // remount the canvas — and this one reloads the project.
+  const onUnrenderableRef = useRef(onUnrenderableSheets);
+  onUnrenderableRef.current = onUnrenderableSheets;
 
   useEffect(() => {
     if (!supported) {
       setState('no-webgl');
       onStateRef.current?.('no-webgl');
+      // No renderer means nothing is unrenderable for renderer-specific
+      // reasons. Reporting [] rather than nothing keeps the host from carrying
+      // a previous project's answer into this one.
+      onUnrenderableRef.current?.([]);
       return;
     }
     const host = hostRef.current;
@@ -71,6 +90,10 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(function 
     let cancelled = false;
     const controller = (createController ?? (() => new KicanvasController()))();
     controllerRef.current = controller;
+    // BEFORE mount(): that is where the renderer bundle is dynamically imported
+    // and awaited, so answering here costs the host nothing and lands on the
+    // same commit that first paints the sheet chips.
+    onUnrenderableRef.current?.(controller.unrenderableSheets?.(project) ?? []);
     const off = controller.on('state', (e) => {
       if (cancelled) return;
       setState(e.state);

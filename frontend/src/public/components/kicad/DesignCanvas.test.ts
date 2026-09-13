@@ -20,13 +20,24 @@ function setWebgl(ok: boolean) {
   HTMLCanvasElement.prototype.getContext = (() => (ok ? { getExtension: () => null } : null)) as never;
 }
 
-function fakeController() {
+function fakeController(unrenderable?: string[]) {
   let handler: ((e: { type: 'state'; state: CanvasStateName }) => void) | null = null;
   const f = {
     disposed: 0,
+    askedFor: null as KicadProject | null,
     emit: (state: CanvasStateName) => handler?.({ type: 'state', state }),
     // Never resolves: every case here unmounts or retries while mount() is in flight.
     ctrl: {
+      // Optional on the protocol: a renderer that drops nothing does not
+      // implement it, and `undefined` here is how that case is exercised.
+      ...(unrenderable == null
+        ? {}
+        : {
+            unrenderableSheets: (p: KicadProject) => {
+              f.askedFor = p;
+              return unrenderable;
+            },
+          }),
       mount: () => new Promise<void>(() => {}),
       activate: async () => true,
       focusRef: async () => 'focused' as const,
@@ -153,5 +164,62 @@ describe('DesignCanvas', () => {
     // The controller detached its handler, so a late event reaches no setState.
     await act(async () => f.emit('ready'));
     expect(errors).toEqual([]);
+  });
+
+  /**
+   * The seam that keeps renderer-specific limits out of the pages: which sheets
+   * cannot be drawn is the mounted CONTROLLER's answer, and the host reports it
+   * before `mount()` — which is where the renderer bundle is fetched and
+   * awaited — so a host can mark them on the commit that first paints them
+   * rather than a frame later.
+   */
+  it('reports the controller\u2019s unrenderable sheets before the canvas is ready', async () => {
+    setWebgl(true);
+    const f = fakeController(['alt/power.kicad_sch']);
+    const reported: string[][] = [];
+    const seen: CanvasStateName[] = [];
+    await act(async () => {
+      root.render(
+        createElement(DesignCanvas, {
+          project,
+          view: 'schematic',
+          onState: (s: CanvasStateName) => seen.push(s),
+          onUnrenderableSheets: (paths: string[]) => reported.push(paths),
+          createController: () => f.ctrl,
+        }),
+      );
+    });
+    expect(reported).toEqual([['alt/power.kicad_sch']]);
+    // mount() never resolves in this fake, so nothing has reached `ready` — the
+    // answer did not wait for the renderer.
+    expect(seen).toEqual([]);
+    expect(f.askedFor).toBe(project);
+    await act(async () => root.unmount());
+  });
+
+  it('reports an empty list for a renderer that answers none, and with no WebGL at all', async () => {
+    setWebgl(true);
+    const reported: string[][] = [];
+    const props = (createController: () => never) => ({
+      project,
+      view: 'schematic' as const,
+      onUnrenderableSheets: (paths: string[]) => reported.push(paths),
+      createController,
+    });
+    // A controller that does not implement the optional member: "none", never
+    // "unknown" — a host left uninformed would carry a stale set.
+    await act(async () => {
+      root.render(createElement(DesignCanvas, props(() => fakeController().ctrl as never)));
+    });
+    expect(reported).toEqual([[]]);
+    await act(async () => root.unmount());
+
+    setWebgl(false);
+    root = createRoot(container);
+    await act(async () => {
+      root.render(createElement(DesignCanvas, props(() => fakeController(['x']).ctrl as never)));
+    });
+    expect(reported).toEqual([[], []]);
+    await act(async () => root.unmount());
   });
 });

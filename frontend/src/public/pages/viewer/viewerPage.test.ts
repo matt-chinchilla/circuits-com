@@ -10,11 +10,14 @@
  * shape `tsc -b`/eslint exclude), so elements are built with createElement.
  * There is no testing-library — createRoot + act, as DesignCanvas.test.ts does.
  *
- * `sourcesFor` is deliberately NOT mocked: the basename-collision rule it
- * encodes is the whole subject of the dropped-chip test, and a stub would only
- * prove the test's own opinion of it.
+ * The unrenderable-sheet set is DRIVEN through the DesignCanvas stub's
+ * `onUnrenderableSheets` callback rather than computed here. That is the whole
+ * point of the seam: the page holds no opinion about which renderer drops what,
+ * so these tests state the renderer's answer and assert what the page does with
+ * it. The KiCanvas rule itself is pinned in `kicanvasController.test.ts`, and
+ * that the callback carries the controller's answer in `DesignCanvas.test.ts`.
  */
-import { act, createElement, forwardRef, useImperativeHandle } from 'react';
+import { act, createElement, forwardRef, useEffect, useImperativeHandle } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -23,11 +26,13 @@ type AnyProps = Record<string, never> & Record<string, unknown>;
 let hash = '';
 let session: unknown = null;
 
-/** What the canvas host was last rendered with, and the handle it exposes. */
+/** What the canvas host was last rendered with, and the handle it exposes.
+ *  `unrenderable` is what the stubbed renderer reports at mount. */
 const canvas = {
   view: '' as string,
   activeSheet: undefined as string | undefined,
   onState: null as ((s: string) => void) | null,
+  unrenderable: [] as string[],
   focusRef: vi.fn(async (_ref: string, _sheet?: string) => 'focused' as const),
 };
 
@@ -57,7 +62,16 @@ vi.mock('framer-motion', () => ({
 vi.mock('@public/components/PageHead', () => ({ default: () => null }));
 vi.mock('@public/components/layout/PageHeaderBand', () => ({ default: () => null }));
 vi.mock('./components/ViewerIntake', () => ({
-  default: () => createElement('div', { 'data-testid': 'intake' }),
+  default: (props: AnyProps) =>
+    createElement(
+      'button',
+      {
+        type: 'button',
+        'data-testid': 'intake',
+        onClick: () => (props.onProject as (p: unknown) => void)({}),
+      },
+      'drop',
+    ),
 }));
 vi.mock('@public/components/kicad/DesignCanvas', () => ({
   default: forwardRef(function CanvasStub(props: AnyProps, ref: never) {
@@ -65,6 +79,13 @@ vi.mock('@public/components/kicad/DesignCanvas', () => ({
     canvas.activeSheet = props.activeSheet as string | undefined;
     canvas.onState = props.onState as (s: string) => void;
     useImperativeHandle(ref, () => ({ focusRef: canvas.focusRef, zoom: async () => true }), []);
+    // The real host reports in its MOUNT effect, before the renderer bundle is
+    // fetched — an effect here, not a render-body call, for the same reason:
+    // it is a parent setState.
+    const report = props.onUnrenderableSheets as ((paths: string[]) => void) | undefined;
+    useEffect(() => {
+      report?.(canvas.unrenderable);
+    }, [report]);
     return createElement('div', { 'data-testid': 'canvas' });
   }),
 }));
@@ -94,7 +115,10 @@ vi.mock('@public/services/designSession', () => ({
   clearDesignSession: () => {
     session = null;
   },
-  openDesign: () => session,
+  openDesign: () => {
+    session = makeSession();
+    return session;
+  },
 }));
 
 const { default: ViewerPage } = await import('./index');
@@ -123,7 +147,11 @@ function makeSession(over: { root?: string | null; board?: string | null } = {})
       formatVersions: {},
     },
     parsed: { lines: [{ index: 0, qty: 2 }], warnings: [], error: null },
-    refs: new Map([['U1', { sheet: 'sub/power.kicad_sch', instancePath: '/r/a' }]]),
+    refs: new Map([
+      ['U1', { sheet: 'sub/power.kicad_sch', instancePath: '/r/a' }],
+      // A part the reader can see in the BOM whose sheet the renderer never got.
+      ['U9', { sheet: 'alt/power.kicad_sch', instancePath: '/r/b' }],
+    ]),
   };
 }
 
@@ -178,6 +206,9 @@ beforeEach(() => {
   wbCalls.length = 0;
   wb.rows = [];
   wb.matching = false;
+  // The basename twin of sheet 2, which is what the real KiCanvas controller
+  // answers for this fixture (pinned in kicanvasController.test.ts).
+  canvas.unrenderable = ['alt/power.kicad_sch'];
   canvas.focusRef.mockClear();
   canvas.focusRef.mockResolvedValue('focused');
   canvas.activeSheet = undefined;
@@ -328,5 +359,91 @@ describe('a sheet the renderer could not be handed', () => {
     await click(chips()[1]);
     expect(canvas.activeSheet).toBe('sub/power.kicad_sch');
     expect(toastText()).toBeNull();
+  });
+});
+
+// MAJOR-2 — the page holds no opinion about which sheets a renderer can draw;
+// it renders the answer the mounted one gave it.
+describe('the unrenderable-sheet seam', () => {
+  it('marks nothing when the renderer reports no dropped sheets', async () => {
+    canvas.unrenderable = [];
+    await render();
+    expect(chips()).toHaveLength(3);
+    expect(chips().some((c) => c.getAttribute('aria-disabled') === 'true')).toBe(false);
+    await click(chips()[2]);
+    expect(canvas.activeSheet).toBe('alt/power.kicad_sch');
+    expect(toastText()).toBeNull();
+  });
+
+  it('marks whichever sheet the renderer named, not one it worked out itself', async () => {
+    canvas.unrenderable = ['main.kicad_sch'];
+    await render();
+    expect(chips()[0].getAttribute('aria-disabled')).toBe('true');
+    expect(chips()[2].getAttribute('aria-disabled')).toBeNull();
+  });
+
+  // MINOR-3
+  it('gives the dropped chip a described-by reason, not only a title', async () => {
+    await render();
+    const id = chips()[2].getAttribute('aria-describedby');
+    expect(id).not.toBeNull();
+    const reason = container.querySelector(`#${id}`);
+    expect(reason?.textContent).toMatch(/same filename/);
+  });
+});
+
+// MAJOR-1 — the BOM row was a second door onto the inert state I4 closed.
+describe('a designator on a sheet the renderer could not take', () => {
+  it('says which part went nowhere and leaves the sheet alone', async () => {
+    wb.rows = [{ index: 0 }];
+    await render();
+    await canvasReady();
+    await click(byText('BOM'));
+
+    hash = '#U9';
+    await rerender();
+
+    expect(toastText()).toBe(
+      "U9 is on power.kicad_sch, which can't be drawn \u2014 another sheet in this project has the same filename.",
+    );
+    expect(canvas.focusRef).not.toHaveBeenCalled();
+    // The chip this page marks "can't be drawn" must not become the current one.
+    expect(canvas.activeSheet).toBeUndefined();
+    await click(byText('Schematic'));
+    expect(chips()[2].getAttribute('aria-current')).toBe('false');
+  });
+});
+
+// MINOR-1 — every other field was cleared by openAnother; canvasState was not,
+// so the page went on believing a drawing was on screen with no canvas mounted.
+describe('after the project is closed', () => {
+  it('holds a #ref that arrives with nothing open, and focuses it once a project is ready', async () => {
+    await render();
+    await canvasReady();
+    await click(byText('Open another'));
+
+    hash = '#U1';
+    await rerender();
+    // Consuming it here (which a stale 'ready' does) drops it: focus() returns
+    // at once with no session, and nothing is left to replay.
+    expect(canvas.focusRef).not.toHaveBeenCalled();
+
+    await click(container.querySelector('[data-testid="intake"]') as HTMLElement);
+    await canvasReady();
+    expect(canvas.focusRef).toHaveBeenCalledWith('U1', '/r/a');
+  });
+});
+
+// MINOR-4
+describe('a schematic with nothing to buy', () => {
+  it('says so instead of showing a blank panel', async () => {
+    const s = makeSession();
+    s.parsed.lines = [];
+    session = s;
+    await render();
+    await click(byText('BOM'));
+    const panel = container.querySelector('[aria-label="Bill of materials"]') as HTMLElement;
+    expect(panel.textContent).toMatch(/Nothing to price/);
+    expect(panel.textContent?.toLowerCase()).not.toContain('upload');
   });
 });

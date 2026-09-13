@@ -26,6 +26,18 @@ export interface CanvasController {
   focusRef(ref: string, sheet?: string): Promise<FocusResult>;
   /** Fit the page, or step the zoom. False when the renderer exposes no such control (the buttons then hide). */
   zoom(action: ZoomAction): Promise<boolean>;
+  /**
+   * Path keys of sheets THIS renderer cannot draw for this project — answerable
+   * from the project alone, before anything is mounted, so a host can mark them
+   * on the first paint rather than a frame later.
+   *
+   * Optional because it is a statement about one renderer's limits, not about
+   * the project: KiCanvas keys its virtual file system by basename and so must
+   * drop a second `power.kicad_sch`, where a path-keyed renderer drops nothing
+   * and simply does not implement this. A host MUST treat an absent
+   * implementation as "none", never as "unknown".
+   */
+  unrenderableSheets?(project: KicadProject): string[];
   dispose(): void;
   on<T extends CanvasEventType>(type: T, handler: CanvasHandler<T>): () => void;
 }
