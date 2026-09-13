@@ -197,7 +197,7 @@ export default function ViewerPage() {
                   ref={canvasRef}
                   project={session.project}
                   view={tab === 'board' ? 'board' : 'schematic'}
-                  activeSheet={tab === 'schematic' ? activeSheet : undefined}
+                  activeSheet={tab === 'board' ? undefined : activeSheet}
                   onState={setCanvasState}
                 />
                 <p className={styles.notice}>
