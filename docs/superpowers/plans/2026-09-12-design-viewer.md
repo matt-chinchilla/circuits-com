@@ -2609,7 +2609,8 @@ describe('readStackup', () => {
     const s = readStackup(fixtureText('glasgow-revC3/glasgow.kicad_pcb'));
     expect(s.copperLayers.map((l) => l.name)).toEqual(['F.Cu', 'In1.Cu', 'In2.Cu', 'B.Cu']);
     expect(s.stackup).not.toBeNull();
-    expect(s.vias.filter((g) => g.type === 'through').reduce((n, g) => n + g.count, 0)).toBe(417);
+    // 416, not the 417 a bare `grep -c '(via'` reports: that also matches `(vias` (a zone keepout row) and `(viasonmask`.
+    expect(s.vias.filter((g) => g.type === 'through').reduce((n, g) => n + g.count, 0)).toBe(416);
     expect(s.vias.some((g) => g.type === 'unknown')).toBe(false);
   });
 

@@ -591,7 +591,7 @@ one-line note that KiCad 6+ can open and re-save it.
 Glasgow Interface Explorer revC3 hardware (`github.com/GlasgowEmbedded/glasgow`,
 0BSD, retrieved 2026-09-12) — a real, actively maintained KiCad 7 project with a
 hierarchical schematic (root → `io_banks` → `io_buffer`), a four-layer board with
-a saved stackup, and 417 vias. The intake credits it in one line ("Example:
+a saved stackup, and 416 vias (409 plain + 7 locked; a bare `grep -c '(via'` says 418 because it also matches `(vias` and `(viasonmask`). The intake credits it in one line ("Example:
 Glasgow Interface Explorer revC3, 0BSD") and `NOTICE.txt` carries the licence
 text. The owner pointed at KiCad's "Made with KiCad" showcase for this; his own
 suggestion there (`AntonioMR/ATMEGA328-Motor-Board`) is a KiCad 4 project with
