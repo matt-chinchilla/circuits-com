@@ -4,7 +4,7 @@
 // then runs it. The reader is browser code with no DOM dependency, so node's
 // File/Blob (20+) is enough.
 import esbuild from 'esbuild';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
