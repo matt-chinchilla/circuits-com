@@ -8,7 +8,7 @@
 //
 // No JSX (vitest only discovers *.test.ts here) and no testing-library —
 // createRoot + act, the harness DesignCanvas.test.ts established.
-import { act, createElement, type ReactNode } from 'react';
+import { act, createElement, StrictMode, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ParseResult } from './parseBom';
@@ -543,5 +543,72 @@ describe('useBomWorkbench — the priced snapshot', () => {
 
     expect(calls.match).toHaveLength(1);
     expect(wb.resolveNote).toBe(note);
+  });
+});
+
+describe('useBomWorkbench — what the snapshot refuses to record', () => {
+  async function remount() {
+    await act(async () => {
+      root.unmount();
+    });
+    container.remove();
+    container = document.createElement('div');
+    document.body.append(container);
+    root = createRoot(container);
+  }
+
+  it('never files an EMPTY table over a good one, under StrictMode', async () => {
+    const parsed = parse();
+    await render(parsed);
+    await act(async () => calls.match[0].resolve([answer(0), answer(1)]));
+    const rows = wb.rows;
+    expect(rows).toHaveLength(2);
+    await remount();
+
+    // StrictMode (which main.tsx enables, so every dev session) double-invokes
+    // mount effects: restore → cleanup → restore. The cleanup runs BEFORE the
+    // queued setRows has committed, so the teardown ref still holds the
+    // pre-restore []. Filing that blanks the snapshot, and the second restore —
+    // and every later mount — serves an empty table with no match issued.
+    await act(async () => {
+      root.render(
+        createElement(StrictMode, null, createElement(Probe, { parsed, viewerHref: null })),
+      );
+    });
+
+    expect(calls.match).toHaveLength(1);
+    expect(wb.rows).toEqual(rows);
+  });
+
+  it('says the lookups stopped when the reader left mid-stream', async () => {
+    const parsed = parse();
+    await render(parsed);
+    await act(async () => calls.match[0].resolve([answer(0, 'resolve'), answer(1, 'resolve')]));
+    await act(async () => calls.stream[0].onEvent({ kind: 'not_found', index: 0 }));
+    // Row 1 is still `resolving` when the page goes.
+    await remount();
+    await render(parsed);
+
+    // Restored bare, that row reads NO MATCH — which tells the reader the
+    // catalog does not carry the part, when in fact nobody ever looked.
+    expect(wb.resolveError).toBe(RESOLVE_STOPPED);
+    expect(wb.rows[1]?.state).toBe('matched');
+  });
+
+  it('raises no such banner when the stream actually finished', async () => {
+    const parsed = parse();
+    await render(parsed);
+    await act(async () => calls.match[0].resolve([answer(0, 'resolve'), answer(1, 'resolve')]));
+    await act(async () => {
+      calls.stream[0].onEvent({ kind: 'not_found', index: 0 });
+      calls.stream[0].onEvent({ kind: 'not_found', index: 1 });
+    });
+    await act(async () => calls.stream[0].done.resolve());
+    expect(wb.resolveError).toBeNull();
+
+    await remount();
+    await render(parsed);
+
+    expect(wb.resolveError).toBeNull();
   });
 });

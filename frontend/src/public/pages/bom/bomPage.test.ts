@@ -48,6 +48,9 @@ const canvas = {
   project: null as unknown,
   view: '' as string,
   height: undefined as string | undefined,
+  /** The renderer's own state channel — the tests drive it, because a real
+   *  canvas says "Rendering…" for most of the first second after it mounts. */
+  onState: null as ((state: string) => void) | null,
   focusRef: vi.fn(async (_ref: string, _sheet?: string) => 'focused' as const),
 };
 
@@ -129,6 +132,7 @@ vi.mock('@public/components/kicad/DesignCanvas', () => ({
     canvas.project = props.project;
     canvas.view = props.view as string;
     canvas.height = props.height as string | undefined;
+    canvas.onState = props.onState as ((state: string) => void) | null;
     useImperativeHandle(ref, () => ({ focusRef: canvas.focusRef, zoom: async () => true }), []);
     return createElement('div', { 'data-testid': 'canvas' });
   }),
@@ -239,6 +243,17 @@ function testid(id: string): HTMLElement | null {
   return container.querySelector(`[data-testid="${id}"]`);
 }
 
+function bomRef(ref: string): HTMLElement {
+  return container.querySelector(`[data-ref="${ref}"]`) as HTMLElement;
+}
+
+/** The renderer reporting it can take a focus. */
+async function canvasReady() {
+  await act(async () => {
+    canvas.onState?.('ready');
+  });
+}
+
 async function click(el: HTMLElement) {
   await act(async () => {
     el.click();
@@ -273,6 +288,7 @@ beforeEach(() => {
   table.onRefClick = undefined;
   canvas.project = null;
   canvas.height = undefined;
+  canvas.onState = null;
   canvas.focusRef.mockClear();
   wb.rows = [{ index: 0 }];
   wb.matching = false;
@@ -353,8 +369,38 @@ describe('the schematic beside the table', () => {
     await render();
     await dropProject();
     await click(byText('Show schematic') as HTMLElement);
-    await click(container.querySelector('[data-ref="U9"]') as HTMLElement);
+    await canvasReady();
+    await click(bomRef('U9'));
     expect(canvas.focusRef).toHaveBeenCalledWith('U9', '/r/a');
+  });
+
+  it('holds a chip clicked while the drawing is still rendering, then plays it back', async () => {
+    // The panel says "Rendering…" for most of the first second after it opens,
+    // which is exactly when the reader clicks the designator they opened it
+    // for. Calling focusRef into a canvas with no embed answers `unsupported`,
+    // which /bom discards — so the click simply vanished.
+    await render();
+    await dropProject();
+    await click(byText('Show schematic') as HTMLElement);
+    await click(bomRef('U9'));
+    expect(canvas.focusRef).not.toHaveBeenCalled();
+
+    await canvasReady();
+
+    expect(canvas.focusRef).toHaveBeenCalledTimes(1);
+    expect(canvas.focusRef).toHaveBeenCalledWith('U9', '/r/a');
+  });
+
+  it('forgets a held chip when the reader hides the drawing', async () => {
+    await render();
+    await dropProject();
+    await click(byText('Show schematic') as HTMLElement);
+    await click(bomRef('U9'));
+    await click(byText('Hide schematic') as HTMLElement);
+    // Reopening is a fresh renderer; the click belonged to the one that went.
+    await click(byText('Show schematic') as HTMLElement);
+    await canvasReady();
+    expect(canvas.focusRef).not.toHaveBeenCalled();
   });
 
   it('closes when the reader changes file', async () => {

@@ -50,16 +50,38 @@ interface PricedSnapshot {
 
 const priced = new WeakMap<ParseResult, PricedSnapshot>();
 
-/** Rows are settled on the way in: a row still `resolving` when the reader left
- *  would be restored spinning forever, with no stream behind it to finish. */
+/**
+ * File a priced answer against its parse.
+ *
+ * An EMPTY table is never one. A priced BOM has at least one row by
+ * construction — the zero-line guard means `lines.length >= 1` and `buildRows`
+ * maps over `lines` — so `rows: []` here can only be the teardown ref caught
+ * mid-restore, before the queued `setRows` has committed. StrictMode's
+ * mount-only double-invoke (`main.tsx` enables it, so every dev session) opens
+ * that window deterministically: restore → cleanup → restore, with the second
+ * restore reading a snapshot the first had just blanked. Refusing the write is
+ * the whole guard.
+ *
+ * Rows still `resolving` are SETTLED on the way in — one would otherwise be
+ * restored spinning forever with no stream behind it — and their presence is
+ * itself a fact the reader needs: those lines were never looked up. Restored
+ * bare they read NO MATCH, which says the catalog does not carry the part.
+ * `RESOLVE_STOPPED` is the sentence that already owns this, so the snapshot
+ * carries it rather than the `null` a healthy stream leaves behind.
+ */
 function remember(
   target: ParseResult | null,
   rows: TableRow[],
   resolveNote: string | null,
   resolveError: string | null,
 ): void {
-  if (target == null) return;
-  priced.set(target, { rows: settleStragglers(rows), resolveNote, resolveError });
+  if (target == null || rows.length === 0) return;
+  const stopped = rows.some((row) => row.state === 'resolving');
+  priced.set(target, {
+    rows: settleStragglers(rows),
+    resolveNote,
+    resolveError: stopped ? RESOLVE_STOPPED : resolveError,
+  });
 }
 
 export function cappedNote(dropped: number): string {

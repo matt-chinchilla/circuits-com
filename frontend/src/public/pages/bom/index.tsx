@@ -9,6 +9,7 @@ import BomIntake from './components/BomIntake';
 import ShareBar, { formatShareDate } from '@public/components/bom/ShareBar';
 import BomTable from '@public/components/bom/BomTable';
 import DesignCanvas, { type DesignCanvasHandle } from '@public/components/kicad/DesignCanvas';
+import type { CanvasStateName } from '@public/components/kicad/canvasController';
 import ColumnMapper from './components/ColumnMapper';
 import { clearDesignSession, getDesignSession, unpriceableReason } from '@public/services/designSession';
 import { bomApi } from '@public/services/bom/bomApi';
@@ -74,6 +75,12 @@ export default function BomPage() {
   const [mapRoles, setMapRoles] = useState<(BomRole | null)[]>([]);
   const [showSchematic, setShowSchematic] = useState(false);
   const canvasRef = useRef<DesignCanvasHandle>(null);
+  /** The panel's renderer, which is NOT ready the moment the panel opens — it
+   *  says "Rendering…" for most of the first second, and that is exactly when a
+   *  reader clicks the designator they opened it for. */
+  const [canvasState, setCanvasState] = useState<CanvasStateName>('loading');
+  /** A focus the canvas still owes us, held until it reports `ready`. */
+  const pendingFocus = useRef<string | null>(null);
 
   /**
    * The design open in this tab, if any — module state, so it is re-read every
@@ -229,6 +236,45 @@ export default function BomPage() {
     handleParsed(s.parsed, s.project.name, '');
   };
 
+  /**
+   * A designator chip while the drawing is on screen.
+   *
+   * Held rather than dropped when the renderer is not ready: calling `focusRef`
+   * into a canvas that has not mounted its embed answers `unsupported`, which
+   * /bom discards — so the click vanished and the reader is left looking at a
+   * drawing that did not move. The effect below plays it back.
+   */
+  const focusDesignator = (ref: string) => {
+    if (design == null) return;
+    if (canvasState !== 'ready') {
+      pendingFocus.current = ref;
+      return;
+    }
+    void canvasRef.current?.focusRef(ref, design.refs.get(ref)?.instancePath);
+  };
+
+  // …and the same focus once the renderer can take it. `design` is in the deps
+  // because the instance path comes from it; `pendingFocus` is a ref precisely
+  // so a queued click does not re-fire this on every unrelated render.
+  useEffect(() => {
+    if (canvasState !== 'ready' || pendingFocus.current == null || design == null) return;
+    const ref = pendingFocus.current;
+    pendingFocus.current = null;
+    void canvasRef.current?.focusRef(ref, design.refs.get(ref)?.instancePath);
+  }, [canvasState, design]);
+
+  const toggleSchematic = () => {
+    const opening = !showSchematic;
+    if (!opening) {
+      // The canvas unmounts with the panel. A stale `ready` would tell the next
+      // click there is a drawing to focus, and a held ref would fire into a
+      // renderer that no longer exists.
+      pendingFocus.current = null;
+      setCanvasState('loading');
+    }
+    setShowSchematic(opening);
+  };
+
   const startOver = () => {
     // reset() FIRST, while the workbench still owns this BOM: it bumps the
     // generation, so a match already on the wire cannot land on the table we
@@ -239,6 +285,8 @@ export default function BomPage() {
     // reader would lose it from /viewer too, without ever being asked.
     if (design != null) clearDesignSession();
     setShowSchematic(false);
+    setCanvasState('loading');
+    pendingFocus.current = null;
     setParsed(null);
     sourceText.current = '';
     setSourceName(null);
@@ -424,7 +472,7 @@ export default function BomPage() {
                         <button
                           type="button"
                           className={styles.pasteToggle}
-                          onClick={() => setShowSchematic((v) => !v)}
+                          onClick={toggleSchematic}
                           aria-expanded={showSchematic}
                           aria-controls={SCHEMATIC_PANEL_ID}
                         >
@@ -443,6 +491,7 @@ export default function BomPage() {
                             project={design.project}
                             view="schematic"
                             height="compact"
+                            onState={setCanvasState}
                           />
                         </div>
                       )}
@@ -461,15 +510,7 @@ export default function BomPage() {
                     // /viewer#ref. The instance path is what makes a chip on a
                     // sub-sheet land on the right one — `focusRef` switches
                     // sheets itself when it is given one.
-                    onRefClick={
-                      showSchematic && design != null
-                        ? (ref) =>
-                            void canvasRef.current?.focusRef(
-                              ref,
-                              design.refs.get(ref)?.instancePath,
-                            )
-                        : undefined
-                    }
+                    onRefClick={showSchematic && design != null ? focusDesignator : undefined}
                   />
                   <ShareBar
                     rows={wb.rows}
