@@ -1,17 +1,20 @@
-// Design Viewer — open a KiCad project in the browser (spec §7.1). Stage 1
-// tabs: Schematic, Board, BOM; Phase 4 adds Stackup. ONE canvas element serves
-// both drawing tabs (one embed per project); it is hidden, not unmounted, when
-// another tab is active.
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+// Design Viewer — open a KiCad project in the browser (spec §7.1). Tabs:
+// Schematic, Board, Stackup, BOM. ONE canvas element serves both drawing tabs
+// (one embed per project); it is hidden, not unmounted, when another tab is
+// active — and so is every other panel, so that switching tabs never bins work
+// the reader has already paid for.
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { motion } from 'framer-motion';
 import { useLocation } from 'react-router-dom';
 import PageHead from '@public/components/PageHead';
 import PageHeaderBand from '@public/components/layout/PageHeaderBand';
 import DesignCanvas, { type DesignCanvasHandle } from '@public/components/kicad/DesignCanvas';
 import type { CanvasStateName } from '@public/components/kicad/canvasController';
+import StackupPanel from '@public/components/kicad/StackupPanel';
 import BomTable from '@public/components/bom/BomTable';
 import ShareBar from '@public/components/bom/ShareBar';
 import { useBomWorkbench } from '@public/services/bom/useBomWorkbench';
+import { readStackup } from '@public/services/kicad/boardStackup';
 import { basename } from '@public/services/kicad/project';
 import type { KicadProject } from '@public/services/kicad/types';
 import { clearDesignSession, getDesignSession, openDesign, type DesignSession } from '@public/services/designSession';
@@ -70,6 +73,40 @@ function sheetLabel(project: KicadProject, path: string): string {
   return path === project.root ? `${stem} (root)` : stem;
 }
 
+/**
+ * The tablist's wiring, as ids.
+ *
+ * Every tab points `aria-controls` at the panel it opens and every panel points
+ * `aria-labelledby` back at its tab, so the pairing is announced rather than
+ * implied by position. The two DRAWING tabs share one panel on purpose: the
+ * canvas is a single embed per project (hidden, never unmounted), so Schematic
+ * and Board are two labels on one region.
+ *
+ * A reference to an element that is not in the document is worse than none —
+ * `aria-controls` is therefore emitted only for a panel that is really mounted
+ * (the BOM panel arrives with its first visit; the Stackup panel only exists for
+ * a project that has a board).
+ */
+const TAB_ID: Record<Tab, string> = {
+  schematic: 'viewer-tab-schematic',
+  board: 'viewer-tab-board',
+  stackup: 'viewer-tab-stackup',
+  bom: 'viewer-tab-bom',
+};
+
+const PANEL_ID = {
+  drawing: 'viewer-panel-drawing',
+  stackup: 'viewer-panel-stackup',
+  bom: 'viewer-panel-bom',
+} as const;
+
+const PANEL_OF: Record<Tab, keyof typeof PANEL_ID> = {
+  schematic: 'drawing',
+  board: 'drawing',
+  stackup: 'stackup',
+  bom: 'bom',
+};
+
 function defaultTab(session: DesignSession): Tab {
   return session.project.root != null ? 'schematic' : 'board';
 }
@@ -92,6 +129,10 @@ export default function ViewerPage() {
    */
   const [bomSeen, setBomSeen] = useState(false);
   const canvasRef = useRef<DesignCanvasHandle>(null);
+  /** The tab buttons, so an arrow key can move real DOM focus and not only the
+   *  selection. Keyed by tab id rather than by index: `tabs` changes shape with
+   *  the project, and a stale index would focus the wrong button. */
+  const tabRefs = useRef<Partial<Record<Tab, HTMLButtonElement | null>>>({});
   /** A focus the canvas still owes us, held until it reports `ready`. */
   const pendingFocus = useRef<string | null>(null);
   /**
@@ -255,10 +296,77 @@ export default function ViewerPage() {
     const out: { id: Tab; label: string }[] = [];
     if (session.project.root != null) out.push({ id: 'schematic', label: 'Schematic' });
     if (session.project.board != null) out.push({ id: 'board', label: 'Board' });
-    // Phase 4: { id: 'stackup', label: 'Stackup' } when board != null
+    // Offered for any project with a board, INCLUDING one whose board this
+    // reader cannot parse — the panel then says why, which is a better answer
+    // than a tab that quietly is not there.
+    if (session.project.board != null) out.push({ id: 'stackup', label: 'Stackup' });
     if (session.project.root != null) out.push({ id: 'bom', label: 'BOM' });
     return out;
   }, [session]);
+
+  /**
+   * The board's layer stack, or null when there is no board or it cannot be
+   * read.
+   *
+   * `readStackup` THROWS a KicadReadError for a file that does not open with
+   * `(kicad_pcb …)` or that is truncated — and `project.ts` picks the board by
+   * EXTENSION alone, so a mis-saved or half-copied `.kicad_pcb` really does
+   * reach here. Uncaught, that exception is thrown from a render and takes the
+   * whole page to the ErrorBoundary: the reader loses the schematic and the BOM
+   * over a file they may not even have come for. Caught, they lose only the
+   * stackup, and the panel below says so.
+   */
+  const stackup = useMemo(() => {
+    const board = session?.project.board;
+    if (session == null || board == null) return null;
+    try {
+      return readStackup(session.project.files.get(board) ?? '');
+    } catch {
+      return null;
+    }
+  }, [session]);
+
+  /**
+   * Which drawing tab currently labels the shared canvas panel.
+   *
+   * Schematic and Board both control it, so the region's `aria-labelledby` has
+   * to name whichever one is live — and must never name a tab this project does
+   * not have (a board-only drop has no Schematic tab to point at, and a drop
+   * with neither has no drawing tab at all).
+   */
+  const drawingTab: Tab | null = useMemo(() => {
+    const has = (id: Tab) => tabs.some((t) => t.id === id);
+    if (tab === 'board' && has('board')) return 'board';
+    if (has('schematic')) return 'schematic';
+    if (has('board')) return 'board';
+    // A drop with neither a schematic nor a board: no drawing tab to name.
+    return null;
+  }, [tabs, tab]);
+
+  /**
+   * Arrow keys move focus AND selection across the tablist, as the tabs pattern
+   * expects of an automatic-activation tablist; Home and End jump to the ends.
+   * Together with the roving `tabIndex` below this makes the strip ONE tab stop,
+   * so a keyboard reader does not have to step through four buttons to reach the
+   * drawing.
+   */
+  const onTabKeys = (e: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (tabs.length === 0) return;
+    const here = tabs.findIndex((t) => t.id === tab);
+    let next: number;
+    if (e.key === 'ArrowRight') next = (here + 1) % tabs.length;
+    else if (e.key === 'ArrowLeft') next = (here - 1 + tabs.length) % tabs.length;
+    else if (e.key === 'Home') next = 0;
+    else if (e.key === 'End') next = tabs.length - 1;
+    else return;
+    const target = tabs[next];
+    if (target == null) return;
+    // Only now, so an unhandled key (Tab out of the strip, a shortcut) keeps
+    // its default behaviour.
+    e.preventDefault();
+    setTab(target.id);
+    tabRefs.current[target.id]?.focus();
+  };
 
   const chooseSheet = (path: string) => {
     // A sheet chip is a newer gesture than any focus still in flight. The
@@ -327,14 +435,24 @@ export default function ViewerPage() {
                 </p>
               )}
 
-              <div className={styles.tabs} role="tablist" aria-label="Views">
+              <div className={styles.tabs} role="tablist" aria-label="Views" onKeyDown={onTabKeys}>
                 {tabs.map((t) => (
                   <button
                     key={t.id}
+                    id={TAB_ID[t.id]}
                     type="button"
                     role="tab"
                     className={styles.tab}
                     aria-selected={tab === t.id}
+                    // Only for a panel that is really in the document: the BOM
+                    // panel arrives with its first visit.
+                    aria-controls={t.id === 'bom' && !bomSeen ? undefined : PANEL_ID[PANEL_OF[t.id]]}
+                    // Roving: the strip is one tab stop and the arrows move
+                    // inside it.
+                    tabIndex={tab === t.id ? 0 : -1}
+                    ref={(el) => {
+                      tabRefs.current[t.id] = el;
+                    }}
                     onClick={() => setTab(t.id)}
                   >
                     {t.label}
@@ -370,7 +488,13 @@ export default function ViewerPage() {
                 </div>
               )}
 
-              <div className={styles.drawing} hidden={!drawingVisible}>
+              <div
+                id={PANEL_ID.drawing}
+                role="tabpanel"
+                aria-labelledby={drawingTab == null ? undefined : TAB_ID[drawingTab]}
+                className={styles.drawing}
+                hidden={!drawingVisible}
+              >
                 <DesignCanvas
                   ref={canvasRef}
                   project={session.project}
@@ -388,7 +512,16 @@ export default function ViewerPage() {
               </div>
 
               {bomSeen && (
-                <section hidden={tab !== 'bom'} className={styles.bomPanel} aria-label="Bill of materials">
+                <section
+                  id={PANEL_ID.bom}
+                  role="tabpanel"
+                  aria-labelledby={TAB_ID.bom}
+                  hidden={tab !== 'bom'}
+                  className={styles.bomPanel}
+                  // Kept beside `aria-labelledby` (which wins) as the name
+                  // this region has always answered to.
+                  aria-label="Bill of materials"
+                >
                   {session.parsed.error != null && (
                     <p className={styles.pageError} role="alert">
                       {session.parsed.error}
@@ -435,7 +568,29 @@ export default function ViewerPage() {
                 </section>
               )}
 
-              {/* Phase 4: {tab === 'stackup' && <StackupPanel … />} */}
+              {session.project.board != null && (
+                // Mounted for the whole session and hidden when another tab is
+                // live, like every other panel here: the region `aria-controls`
+                // names has to exist, and re-reading the board on each visit
+                // would be work for nothing.
+                <section
+                  id={PANEL_ID.stackup}
+                  role="tabpanel"
+                  aria-labelledby={TAB_ID.stackup}
+                  hidden={tab !== 'stackup'}
+                  className={styles.stackupPanel}
+                >
+                  {stackup != null ? (
+                    <StackupPanel stackup={stackup} />
+                  ) : (
+                    <p className={styles.pageError} role="alert">
+                      {basename(session.project.board)} could not be read as a KiCad board, so there is no
+                      layer stack to show. Open the project in KiCad 6 or newer and save it, then drop it
+                      again.
+                    </p>
+                  )}
+                </section>
+              )}
             </div>
           )}
         </div>

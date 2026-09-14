@@ -33,6 +33,9 @@ const canvas = {
   activeSheet: undefined as string | undefined,
   onState: null as ((s: string) => void) | null,
   unrenderable: [] as string[],
+  /** How many times the host has MOUNTED. The Phase 2 invariant is one embed
+   *  per project, so every tab trip has to leave this alone. */
+  mounts: 0,
   focusRef: vi.fn(async (_ref: string, _sheet?: string) => 'focused' as const),
 };
 
@@ -86,6 +89,9 @@ vi.mock('@public/components/kicad/DesignCanvas', () => ({
     useEffect(() => {
       report?.(canvas.unrenderable);
     }, [report]);
+    useEffect(() => {
+      canvas.mounts += 1;
+    }, []);
     return createElement('div', { 'data-testid': 'canvas' });
   }),
 }));
@@ -131,24 +137,45 @@ vi.mock('@public/services/designSession', () => ({
 const { default: ViewerPage } = await import('./index');
 
 /**
+ * A small but REAL `.kicad_pcb`: two copper layers, a three-row physical
+ * stackup and one through via. `readStackup` is deliberately NOT mocked in this
+ * file — the contract under test is what the page does with a reader that can
+ * throw, so it is fed real text and left to answer.
+ */
+const BOARD_TEXT = `(kicad_pcb (version 20221018)
+  (general (thickness 1.6))
+  (layers (0 "F.Cu" signal) (31 "B.Cu" signal))
+  (setup (stackup
+    (layer "F.Cu" (type "copper") (thickness 0.035))
+    (layer "dielectric 1" (type "core") (thickness 1.53))
+    (layer "B.Cu" (type "copper") (thickness 0.035))
+    (copper_finish "None")))
+  (via (at 1 1) (size 0.6) (drill 0.3) (layers "F.Cu" "B.Cu"))
+)`;
+
+/**
  * A three-sheet project whose second and third sheets share a BASENAME —
  * `sourcesFor` can hand the renderer only one of them, which is the condition
  * the dropped-chip path exists for. U1 lives on the sheet that survives.
  */
-function makeSession(over: { root?: string | null; board?: string | null } = {}) {
+function makeSession(over: { root?: string | null; board?: string | null; boardText?: string } = {}) {
   const sheets = [
     { path: 'main.kicad_sch', uuid: 'r', text: '' },
     { path: 'sub/power.kicad_sch', uuid: 'a', text: '' },
     { path: 'alt/power.kicad_sch', uuid: 'b', text: '' },
   ];
+  const board = over.board ?? null;
+  const files = new Map(sheets.map((s) => [s.path, s.text]));
+  // A board with no text in `files` is the unreadable case, on purpose.
+  if (board != null && over.boardText !== '') files.set(board, over.boardText ?? BOARD_TEXT);
   return {
     project: {
       name: 'demo',
-      files: new Map(sheets.map((s) => [s.path, s.text])),
+      files,
       pro: null,
       root: over.root === undefined ? 'main.kicad_sch' : over.root,
       sheets,
-      board: over.board ?? null,
+      board,
       warnings: [],
       missingSheets: [],
       formatVersions: {},
@@ -221,6 +248,19 @@ function toastText(): string | null {
   return container.querySelector('[role="status"]')?.textContent ?? null;
 }
 
+/** A real bubbling keydown, so it reaches React's handler on the tablist the
+ *  way a keyboard does rather than by calling the prop directly. */
+async function press(el: HTMLElement, key: string) {
+  await act(async () => {
+    el.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
+  });
+}
+
+function tabButtons(): HTMLButtonElement[] {
+  const list = container.querySelector('[role="tablist"]');
+  return list == null ? [] : [...list.querySelectorAll('button')];
+}
+
 function chips(): HTMLButtonElement[] {
   const group = container.querySelector('[aria-label="Sheets"]');
   return group == null ? [] : [...group.querySelectorAll('button')];
@@ -235,6 +275,7 @@ beforeEach(() => {
   // The basename twin of sheet 2, which is what the real KiCanvas controller
   // answers for this fixture (pinned in kicanvasController.test.ts).
   canvas.unrenderable = ['alt/power.kicad_sch'];
+  canvas.mounts = 0;
   canvas.focusRef.mockClear();
   canvas.focusRef.mockResolvedValue('focused');
   canvas.activeSheet = undefined;
@@ -559,5 +600,195 @@ describe('a gesture made while a focus is still loading', () => {
     expect(canvas.activeSheet).toBe('main.kicad_sch');
     expect(chips()[0].getAttribute('aria-current')).toBe('true');
     expect(toastText()).toBeNull();
+  });
+});
+
+// Phase 4 — the third tab, and the a11y contract the tablist grew with it.
+describe('the Stackup tab', () => {
+  const withBoard = () => makeSession({ board: 'main.kicad_pcb' });
+
+  it('is not offered for a project with no board', async () => {
+    await render();
+    expect(buttons().map((b) => b.textContent)).not.toContain('Stackup');
+    expect(container.querySelector('#viewer-panel-stackup')).toBeNull();
+  });
+
+  it('sits after Board and before BOM, so the two drawings stay side by side', async () => {
+    session = withBoard();
+    await render();
+    expect(tabButtons().map((b) => b.textContent)).toEqual(['Schematic', 'Board', 'Stackup', 'BOM']);
+  });
+
+  it('shows the layer stack the board file carries', async () => {
+    session = withBoard();
+    await render();
+    await click(byText('Stackup'));
+
+    const panel = container.querySelector('#viewer-panel-stackup') as HTMLElement;
+    expect(panel.hidden).toBe(false);
+    const text = panel.textContent ?? '';
+    // Read by the REAL reader out of the fixture board: two copper layers, a
+    // three-row stackup, one through via, and a finish of "None".
+    expect(text).toMatch(/F\.Cu/);
+    expect(text).toMatch(/dielectric 1/);
+    expect(text).toMatch(/none specified/);
+    expect(panel.querySelectorAll('tbody tr')).toHaveLength(3);
+    expect(panel.querySelector('svg')).not.toBeNull();
+  });
+
+  it('says why instead of taking the whole page down when the board cannot be read', async () => {
+    // `readStackup` THROWS for anything that is not a board, and `project.ts`
+    // picks the board by extension alone. Uncaught, that exception is raised
+    // from a render and the ErrorBoundary eats the schematic and the BOM too.
+    session = makeSession({ board: 'main.kicad_pcb', boardText: '' });
+    await render();
+    await click(byText('Stackup'));
+
+    const panel = container.querySelector('#viewer-panel-stackup') as HTMLElement;
+    expect(panel.textContent).toMatch(/main\.kicad_pcb could not be read as a KiCad board/);
+    // …and the rest of the page is still standing.
+    expect(byText('Schematic')).toBeDefined();
+    expect(byText('BOM')).toBeDefined();
+    expect(container.querySelector('[data-testid="canvas"]')).not.toBeNull();
+  });
+
+  it('keeps the ONE canvas embed alive across the trip to the stackup and back', async () => {
+    session = withBoard();
+    await render();
+    const embed = container.querySelector('[data-testid="canvas"]');
+    const mounted = canvas.mounts;
+    expect(mounted).toBe(1);
+
+    await click(byText('Stackup'));
+    await click(byText('Board'));
+    await click(byText('Stackup'));
+    await click(byText('Schematic'));
+
+    // The same NODE, and no second mount: re-mounting the embed would re-fetch
+    // the renderer and redraw the board from scratch on a tab click.
+    expect(container.querySelector('[data-testid="canvas"]')).toBe(embed);
+    expect(canvas.mounts).toBe(mounted);
+  });
+
+  it('leaves the chosen sheet alone — a non-drawing tab is not a sheet gesture', async () => {
+    session = withBoard();
+    await render();
+    await canvasReady();
+    await click(chips()[1]);
+    expect(canvas.activeSheet).toBe('sub/power.kicad_sch');
+
+    await click(byText('Stackup'));
+    await click(byText('Schematic'));
+    expect(canvas.activeSheet).toBe('sub/power.kicad_sch');
+  });
+});
+
+describe('the tablist contract', () => {
+  it('pairs every tab with the panel it opens, both ways', async () => {
+    session = makeSession({ board: 'main.kicad_pcb' });
+    await render();
+    const list = container.querySelector('[role="tablist"]') as HTMLElement;
+    expect(list.getAttribute('aria-label')).toBe('Views');
+
+    for (const t of tabButtons()) {
+      expect(t.getAttribute('role')).toBe('tab');
+      expect(t.getAttribute('aria-selected')).not.toBeNull();
+      expect(t.id).not.toBe('');
+      const controls = t.getAttribute('aria-controls');
+      // The BOM panel is not in the document until the tab is first opened, and
+      // a reference to an absent element is worse than none.
+      if (t.textContent === 'BOM') {
+        expect(controls).toBeNull();
+        continue;
+      }
+      const panel = container.querySelector(`#${controls}`);
+      expect(panel, `no panel for ${t.textContent}`).not.toBeNull();
+      expect(panel?.getAttribute('role')).toBe('tabpanel');
+      const labelledBy = panel?.getAttribute('aria-labelledby');
+      // Never a dangling reference, whichever panel it is…
+      expect(tabButtons().some((b) => b.id === labelledBy), `${labelledBy} is not a tab`).toBe(true);
+      // …and where a panel has exactly one tab, that tab. The drawing panel is
+      // the deliberate exception: two tabs, one embed, so it is named by
+      // whichever of them is live (asserted just below).
+      if (controls !== 'viewer-panel-drawing') expect(labelledBy).toBe(t.id);
+    }
+
+    // Both drawing tabs name the SAME region — one embed, two labels — and the
+    // region is labelled by whichever of them is live.
+    const [schematic, board] = tabButtons();
+    expect(schematic!.getAttribute('aria-controls')).toBe(board!.getAttribute('aria-controls'));
+    const drawing = container.querySelector('#viewer-panel-drawing');
+    expect(drawing?.getAttribute('aria-labelledby')).toBe(schematic!.id);
+    await click(board!);
+    expect(container.querySelector('#viewer-panel-drawing')?.getAttribute('aria-labelledby')).toBe(board!.id);
+  });
+
+  it('wires the BOM tab to its panel once that panel exists', async () => {
+    await render();
+    await click(byText('BOM'));
+    const tab = byText('BOM');
+    const panel = container.querySelector(`#${tab.getAttribute('aria-controls')}`);
+    expect(panel?.getAttribute('role')).toBe('tabpanel');
+    expect(panel?.getAttribute('aria-labelledby')).toBe(tab.id);
+  });
+
+  it('is ONE tab stop: only the selected tab is reachable by Tab', async () => {
+    session = makeSession({ board: 'main.kicad_pcb' });
+    await render();
+    expect(tabButtons().map((b) => b.tabIndex)).toEqual([0, -1, -1, -1]);
+    await click(byText('Stackup'));
+    expect(tabButtons().map((b) => b.tabIndex)).toEqual([-1, -1, 0, -1]);
+  });
+
+  it('moves focus AND selection with the arrows, wrapping at both ends', async () => {
+    session = makeSession({ board: 'main.kicad_pcb' });
+    await render();
+    const list = container.querySelector('[role="tablist"]') as HTMLElement;
+
+    await press(list, 'ArrowRight');
+    expect(byText('Board').getAttribute('aria-selected')).toBe('true');
+    expect(document.activeElement).toBe(byText('Board'));
+
+    await press(list, 'ArrowRight');
+    expect(byText('Stackup').getAttribute('aria-selected')).toBe('true');
+    expect(container.querySelector('#viewer-panel-stackup')).not.toBeNull();
+    expect((container.querySelector('#viewer-panel-stackup') as HTMLElement).hidden).toBe(false);
+
+    await press(list, 'ArrowLeft');
+    expect(byText('Board').getAttribute('aria-selected')).toBe('true');
+    expect(document.activeElement).toBe(byText('Board'));
+
+    // Off the left end and round to the last tab.
+    await press(list, 'ArrowLeft');
+    await press(list, 'ArrowLeft');
+    expect(byText('BOM').getAttribute('aria-selected')).toBe('true');
+    await press(list, 'ArrowRight');
+    expect(byText('Schematic').getAttribute('aria-selected')).toBe('true');
+  });
+
+  it('jumps to the first and last tab with Home and End', async () => {
+    session = makeSession({ board: 'main.kicad_pcb' });
+    await render();
+    const list = container.querySelector('[role="tablist"]') as HTMLElement;
+
+    await press(list, 'End');
+    expect(byText('BOM').getAttribute('aria-selected')).toBe('true');
+    expect(document.activeElement).toBe(byText('BOM'));
+
+    await press(list, 'Home');
+    expect(byText('Schematic').getAttribute('aria-selected')).toBe('true');
+    expect(document.activeElement).toBe(byText('Schematic'));
+  });
+
+  it('leaves a key it does not handle to the browser', async () => {
+    await render();
+    const list = container.querySelector('[role="tablist"]') as HTMLElement;
+    const before = byText('Schematic').getAttribute('aria-selected');
+    const event = new KeyboardEvent('keydown', { key: 'a', bubbles: true, cancelable: true });
+    await act(async () => {
+      list.dispatchEvent(event);
+    });
+    expect(event.defaultPrevented).toBe(false);
+    expect(byText('Schematic').getAttribute('aria-selected')).toBe(before);
   });
 });

@@ -1,0 +1,163 @@
+@use '@shared/styles/variables' as *;
+@use '@shared/styles/mixins' as *;
+@use '@public/styles/bomMaterial' as *;
+
+// The Stackup tab's three zones. Colours are the board's own materials: mask
+// green, copper bright, dielectric olive — the reading an assembler already has
+// from looking at a bare PCB edge-on.
+
+.panel {
+  @include bom-card;
+  padding: 16px;
+}
+
+// Both the no-stackup notice and the no-copper-layers one.
+.missing {
+  margin: 0 0 12px;
+  color: $text-secondary;
+  font-size: 0.9rem;
+  max-width: 78ch;
+}
+
+.zones {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(260px, 1.2fr) minmax(180px, 0.8fr);
+  gap: 20px;
+  align-items: start;
+
+  @include responsive($bp-mobile) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.section {
+  margin: 0;
+  // The figure is a grid item; without this the svg's intrinsic width wins the
+  // min-content negotiation and the three columns stop honouring their minmax.
+  min-width: 0;
+}
+
+// `width="100%"` with a viewBox: the height follows the aspect ratio, so the
+// figure scales with its column and the labels inside scale with it.
+.svg {
+  display: block;
+  height: auto;
+}
+
+.caption {
+  margin-top: 6px;
+  font-size: 0.75rem;
+  color: $text-secondary;
+}
+
+// Band fills. Named in camelCase and reached through an exhaustive record in
+// the component, so a new band kind cannot arrive unstyled.
+.bandCopper {
+  fill: #d9a441;
+}
+
+.bandDielectric {
+  fill: #7f8a3d;
+}
+
+.bandMask {
+  fill: #1f7a3f;
+}
+
+.bandOther {
+  fill: #c9ced4;
+}
+
+.leader {
+  stroke: $text-secondary;
+  stroke-width: 1;
+}
+
+// 10 viewBox units. LABEL_GAP in the component is 12 — the line box this needs
+// to clear — and the two are checked against each other by test.
+.label {
+  fill: $text-secondary;
+  font-size: 10px;
+  font-family: $font-mono;
+}
+
+// Via barrels. One rule for the shared shape, then a stroke per type; the
+// unknown one is dashed as well as red, so the distinction survives a
+// colour-blind reading rather than resting on hue alone.
+.viaThrough line,
+.viaBlind line,
+.viaMicro line,
+.viaUnknown line {
+  stroke-width: 4;
+  stroke-linecap: round;
+}
+
+.viaThrough line {
+  stroke: #6b7280;
+}
+
+.viaBlind line {
+  stroke: #2563eb;
+}
+
+.viaMicro line {
+  stroke: #7c3aed;
+}
+
+.viaUnknown line {
+  stroke: $error-red;
+  stroke-dasharray: 3 3;
+}
+
+.table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.85rem;
+
+  th,
+  td {
+    padding: 6px 8px;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    text-align: left;
+  }
+
+  th {
+    font-weight: 600;
+    color: $text-secondary;
+  }
+}
+
+.num {
+  font-family: $font-mono;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+// A flat two-column grid: every dt/dd pair is its own cell, which is why the
+// component groups conditional pairs with fragments and never a wrapper.
+.summary {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 4px 12px;
+  margin: 0;
+  font-size: 0.85rem;
+
+  dt {
+    color: $text-secondary;
+  }
+
+  dd {
+    margin: 0;
+    font-family: $font-mono;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+}
+
+.footnote {
+  margin: 12px 0 0;
+  font-size: 0.75rem;
+  color: $text-secondary;
+  max-width: 78ch;
+}

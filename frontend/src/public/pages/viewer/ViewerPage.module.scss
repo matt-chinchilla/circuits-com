@@ -149,6 +149,12 @@
   margin-top: 4px;
 }
 
+// The Stackup tab's panel, on the same terms as `.bomPanel` above: shown by
+// `hidden`, so it must NOT declare a display of its own.
+.stackupPanel {
+  margin-top: 4px;
+}
+
 .notice {
   margin: 10px 0 0;
   font-size: 0.78rem;
