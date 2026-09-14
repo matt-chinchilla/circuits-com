@@ -5196,20 +5196,23 @@ git commit -m "feat(viewer): intake with the Glasgow revC3 sample (0BSD), third-
 
 ```tsx
 // frontend/src/public/pages/viewer/index.tsx
-// Design Viewer — open a KiCad project in the browser (spec §7.1). Stage 1
-// tabs: Schematic, Board, BOM; Phase 4 adds Stackup. ONE canvas element serves
-// both drawing tabs (one embed per project); it is hidden, not unmounted, when
-// another tab is active.
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+// Design Viewer — open a KiCad project in the browser (spec §7.1). Tabs:
+// Schematic, Board, Stackup, BOM. ONE canvas element serves both drawing tabs
+// (one embed per project); it is hidden, not unmounted, when another tab is
+// active — and so is every other panel, so that switching tabs never bins work
+// the reader has already paid for.
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { motion } from 'framer-motion';
 import { useLocation } from 'react-router-dom';
 import PageHead from '@public/components/PageHead';
 import PageHeaderBand from '@public/components/layout/PageHeaderBand';
 import DesignCanvas, { type DesignCanvasHandle } from '@public/components/kicad/DesignCanvas';
 import type { CanvasStateName } from '@public/components/kicad/canvasController';
+import StackupPanel from '@public/components/kicad/StackupPanel';
 import BomTable from '@public/components/bom/BomTable';
 import ShareBar from '@public/components/bom/ShareBar';
 import { useBomWorkbench } from '@public/services/bom/useBomWorkbench';
+import { readStackup } from '@public/services/kicad/boardStackup';
 import { basename } from '@public/services/kicad/project';
 import type { KicadProject } from '@public/services/kicad/types';
 import { clearDesignSession, getDesignSession, openDesign, type DesignSession } from '@public/services/designSession';
@@ -5268,6 +5271,40 @@ function sheetLabel(project: KicadProject, path: string): string {
   return path === project.root ? `${stem} (root)` : stem;
 }
 
+/**
+ * The tablist's wiring, as ids.
+ *
+ * Every tab points `aria-controls` at the panel it opens and every panel points
+ * `aria-labelledby` back at its tab, so the pairing is announced rather than
+ * implied by position. The two DRAWING tabs share one panel on purpose: the
+ * canvas is a single embed per project (hidden, never unmounted), so Schematic
+ * and Board are two labels on one region.
+ *
+ * A reference to an element that is not in the document is worse than none —
+ * `aria-controls` is therefore emitted only for a panel that is really mounted
+ * (the BOM panel arrives with its first visit; the Stackup panel only exists for
+ * a project that has a board).
+ */
+const TAB_ID: Record<Tab, string> = {
+  schematic: 'viewer-tab-schematic',
+  board: 'viewer-tab-board',
+  stackup: 'viewer-tab-stackup',
+  bom: 'viewer-tab-bom',
+};
+
+const PANEL_ID = {
+  drawing: 'viewer-panel-drawing',
+  stackup: 'viewer-panel-stackup',
+  bom: 'viewer-panel-bom',
+} as const;
+
+const PANEL_OF: Record<Tab, keyof typeof PANEL_ID> = {
+  schematic: 'drawing',
+  board: 'drawing',
+  stackup: 'stackup',
+  bom: 'bom',
+};
+
 function defaultTab(session: DesignSession): Tab {
   return session.project.root != null ? 'schematic' : 'board';
 }
@@ -5290,6 +5327,10 @@ export default function ViewerPage() {
    */
   const [bomSeen, setBomSeen] = useState(false);
   const canvasRef = useRef<DesignCanvasHandle>(null);
+  /** The tab buttons, so an arrow key can move real DOM focus and not only the
+   *  selection. Keyed by tab id rather than by index: `tabs` changes shape with
+   *  the project, and a stale index would focus the wrong button. */
+  const tabRefs = useRef<Partial<Record<Tab, HTMLButtonElement | null>>>({});
   /** A focus the canvas still owes us, held until it reports `ready`. */
   const pendingFocus = useRef<string | null>(null);
   /**
@@ -5453,10 +5494,77 @@ export default function ViewerPage() {
     const out: { id: Tab; label: string }[] = [];
     if (session.project.root != null) out.push({ id: 'schematic', label: 'Schematic' });
     if (session.project.board != null) out.push({ id: 'board', label: 'Board' });
-    // Phase 4: { id: 'stackup', label: 'Stackup' } when board != null
+    // Offered for any project with a board, INCLUDING one whose board this
+    // reader cannot parse — the panel then says why, which is a better answer
+    // than a tab that quietly is not there.
+    if (session.project.board != null) out.push({ id: 'stackup', label: 'Stackup' });
     if (session.project.root != null) out.push({ id: 'bom', label: 'BOM' });
     return out;
   }, [session]);
+
+  /**
+   * The board's layer stack, or null when there is no board or it cannot be
+   * read.
+   *
+   * `readStackup` THROWS a KicadReadError for a file that does not open with
+   * `(kicad_pcb …)` or that is truncated — and `project.ts` picks the board by
+   * EXTENSION alone, so a mis-saved or half-copied `.kicad_pcb` really does
+   * reach here. Uncaught, that exception is thrown from a render and takes the
+   * whole page to the ErrorBoundary: the reader loses the schematic and the BOM
+   * over a file they may not even have come for. Caught, they lose only the
+   * stackup, and the panel below says so.
+   */
+  const stackup = useMemo(() => {
+    const board = session?.project.board;
+    if (session == null || board == null) return null;
+    try {
+      return readStackup(session.project.files.get(board) ?? '');
+    } catch {
+      return null;
+    }
+  }, [session]);
+
+  /**
+   * Which drawing tab currently labels the shared canvas panel.
+   *
+   * Schematic and Board both control it, so the region's `aria-labelledby` has
+   * to name whichever one is live — and must never name a tab this project does
+   * not have (a board-only drop has no Schematic tab to point at, and a drop
+   * with neither has no drawing tab at all).
+   */
+  const drawingTab: Tab | null = useMemo(() => {
+    const has = (id: Tab) => tabs.some((t) => t.id === id);
+    if (tab === 'board' && has('board')) return 'board';
+    if (has('schematic')) return 'schematic';
+    if (has('board')) return 'board';
+    // A drop with neither a schematic nor a board: no drawing tab to name.
+    return null;
+  }, [tabs, tab]);
+
+  /**
+   * Arrow keys move focus AND selection across the tablist, as the tabs pattern
+   * expects of an automatic-activation tablist; Home and End jump to the ends.
+   * Together with the roving `tabIndex` below this makes the strip ONE tab stop,
+   * so a keyboard reader does not have to step through four buttons to reach the
+   * drawing.
+   */
+  const onTabKeys = (e: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (tabs.length === 0) return;
+    const here = tabs.findIndex((t) => t.id === tab);
+    let next: number;
+    if (e.key === 'ArrowRight') next = (here + 1) % tabs.length;
+    else if (e.key === 'ArrowLeft') next = (here - 1 + tabs.length) % tabs.length;
+    else if (e.key === 'Home') next = 0;
+    else if (e.key === 'End') next = tabs.length - 1;
+    else return;
+    const target = tabs[next];
+    if (target == null) return;
+    // Only now, so an unhandled key (Tab out of the strip, a shortcut) keeps
+    // its default behaviour.
+    e.preventDefault();
+    setTab(target.id);
+    tabRefs.current[target.id]?.focus();
+  };
 
   const chooseSheet = (path: string) => {
     // A sheet chip is a newer gesture than any focus still in flight. The
@@ -5525,14 +5633,24 @@ export default function ViewerPage() {
                 </p>
               )}
 
-              <div className={styles.tabs} role="tablist" aria-label="Views">
+              <div className={styles.tabs} role="tablist" aria-label="Views" onKeyDown={onTabKeys}>
                 {tabs.map((t) => (
                   <button
                     key={t.id}
+                    id={TAB_ID[t.id]}
                     type="button"
                     role="tab"
                     className={styles.tab}
                     aria-selected={tab === t.id}
+                    // Only for a panel that is really in the document: the BOM
+                    // panel arrives with its first visit.
+                    aria-controls={t.id === 'bom' && !bomSeen ? undefined : PANEL_ID[PANEL_OF[t.id]]}
+                    // Roving: the strip is one tab stop and the arrows move
+                    // inside it.
+                    tabIndex={tab === t.id ? 0 : -1}
+                    ref={(el) => {
+                      tabRefs.current[t.id] = el;
+                    }}
                     onClick={() => setTab(t.id)}
                   >
                     {t.label}
@@ -5568,7 +5686,13 @@ export default function ViewerPage() {
                 </div>
               )}
 
-              <div className={styles.drawing} hidden={!drawingVisible}>
+              <div
+                id={PANEL_ID.drawing}
+                role="tabpanel"
+                aria-labelledby={drawingTab == null ? undefined : TAB_ID[drawingTab]}
+                className={styles.drawing}
+                hidden={!drawingVisible}
+              >
                 <DesignCanvas
                   ref={canvasRef}
                   project={session.project}
@@ -5586,7 +5710,16 @@ export default function ViewerPage() {
               </div>
 
               {bomSeen && (
-                <section hidden={tab !== 'bom'} className={styles.bomPanel} aria-label="Bill of materials">
+                <section
+                  id={PANEL_ID.bom}
+                  role="tabpanel"
+                  aria-labelledby={TAB_ID.bom}
+                  hidden={tab !== 'bom'}
+                  className={styles.bomPanel}
+                  // Kept beside `aria-labelledby` (which wins) as the name
+                  // this region has always answered to.
+                  aria-label="Bill of materials"
+                >
                   {session.parsed.error != null && (
                     <p className={styles.pageError} role="alert">
                       {session.parsed.error}
@@ -5633,7 +5766,29 @@ export default function ViewerPage() {
                 </section>
               )}
 
-              {/* Phase 4: {tab === 'stackup' && <StackupPanel … />} */}
+              {session.project.board != null && (
+                // Mounted for the whole session and hidden when another tab is
+                // live, like every other panel here: the region `aria-controls`
+                // names has to exist, and re-reading the board on each visit
+                // would be work for nothing.
+                <section
+                  id={PANEL_ID.stackup}
+                  role="tabpanel"
+                  aria-labelledby={TAB_ID.stackup}
+                  hidden={tab !== 'stackup'}
+                  className={styles.stackupPanel}
+                >
+                  {stackup != null ? (
+                    <StackupPanel stackup={stackup} />
+                  ) : (
+                    <p className={styles.pageError} role="alert">
+                      {basename(session.project.board)} could not be read as a KiCad board, so there is no
+                      layer stack to show. Open the project in KiCad 6 or newer and save it, then drop it
+                      again.
+                    </p>
+                  )}
+                </section>
+              )}
             </div>
           )}
         </div>
@@ -6925,7 +7080,7 @@ Rebuild the local stack. Owner checklist: price Glasgow from `/viewer` (BOM tab)
 // frontend/src/public/components/kicad/stackupLayout.test.ts
 import { describe, expect, it } from 'vitest';
 import type { BoardStackup } from '@public/services/kicad/types';
-import { bands, formatMm, summarize, tableRows, viaSpans } from './stackupLayout';
+import { bands, formatMm, minHeightPx, summarize, tableRows, viaSpans } from './stackupLayout';
 
 const FULL: BoardStackup = {
   copperLayers: [{ ordinal: 1, name: 'F.Cu', kind: 'Signal' }, { ordinal: 2, name: 'In1.Cu', kind: 'Plane' }, { ordinal: 3, name: 'B.Cu', kind: 'Signal' }],
@@ -6954,8 +7109,36 @@ const MIXED: BoardStackup = {
   ],
   layerCount: 4,
 };
+/** A kind `boardStackup` has no mapping for is passed straight through, and a
+ *  `.Cu` row written with no type atom reads as the empty string. Both are real
+ *  outputs of the reader, and neither is Signal, Plane, Mixed or Jumper. */
+const UNNAMED: BoardStackup = {
+  ...FULL,
+  copperLayers: [
+    { ordinal: 1, name: 'F.Cu', kind: 'Signal' }, { ordinal: 2, name: 'In1.Cu', kind: 'user_defined' },
+    { ordinal: 3, name: 'In2.Cu', kind: '' }, { ordinal: 4, name: 'B.Cu', kind: 'Signal' },
+  ],
+  layerCount: 4,
+};
 /** 6 measured rows at MIN_BAND 2, plus F.SilkS at HAIRLINE 1. */
 const FLOORS = 13;
+/** Glasgow revC3's own shape — 13 physical rows, 9 of them measured — which is
+ *  where the 22px floor quoted in `bands`' and `minHeightPx`' doc blocks, and
+ *  relied on by the panel, comes from. */
+const GLASGOW_SHAPE: BoardStackup = {
+  ...FULL,
+  stackup: ['F.SilkS', 'F.Paste', 'F.Mask', 'F.Cu', 'dielectric 1', 'In1.Cu', 'dielectric 2', 'In2.Cu', 'dielectric 3', 'B.Cu', 'B.Mask', 'B.Paste', 'B.SilkS'].map(
+    (name, i) => ({
+      name,
+      type: name.endsWith('.Cu') ? 'copper' : 'core',
+      // Only the 9 rows Glasgow records a thickness for; silk and paste carry none.
+      thicknessMm: /SilkS|Paste/.test(name) ? null : 0.1,
+      material: null,
+      epsilonR: null,
+      lossTangent: null,
+    }),
+  ),
+};
 
 describe('tableRows', () => {
   it('renders the physical stack in file order with copper ordinals joined by name', () => {
@@ -6971,9 +7154,27 @@ describe('tableRows', () => {
 
 describe('summarize', () => {
   it('counts what the file carries and labels the two thicknesses separately', () => {
-    expect(summarize(FULL)).toEqual({ total: 3, signal: 2, plane: 1, mixed: 0, jumper: 0, dielectric: 2, listed: '1.198 mm', design: '1.200 mm', thru: 40, blindBuried: 3, micro: 0, unknown: 1, finish: 'ENIG' });
-    expect(summarize(BARE)).toMatchObject({ dielectric: 0, listed: null, design: '1.200 mm', finish: null });
+    expect(summarize(FULL)).toEqual({ total: 3, signal: 2, plane: 1, mixed: 0, jumper: 0, other: 0, dielectric: 2, listed: '1.1980 mm', design: '1.2000 mm', thru: 40, blindBuried: 3, micro: 0, unknown: 1, finish: 'ENIG' });
+    expect(summarize(BARE)).toMatchObject({ dielectric: 0, listed: null, design: '1.2000 mm', finish: null });
+    // Four decimals in BOTH places: a total printed to a different precision
+    // than the rows it sums invites the reader to check the arithmetic and find
+    // it wrong.
+    expect(summarize(FULL).listed).toBe(`${formatMm(FULL.listedThicknessMm)} mm`);
+    // A non-finite figure is no figure — `toFixed` would have printed
+    // "Infinity mm" as though the file had said it.
+    expect(summarize({ ...FULL, listedThicknessMm: Infinity, designThicknessMm: NaN })).toMatchObject({ listed: null, design: null });
   });
+  it('accounts for a copper kind it cannot name at all, so the buckets still add up', () => {
+    const s = summarize(UNNAMED);
+    expect([s.signal, s.plane, s.mixed, s.jumper, s.other]).toEqual([2, 0, 0, 0, 2]);
+    // The invariant the strip is read against: every copper layer lands in
+    // exactly one bucket, whatever KiCad called it.
+    expect(s.signal + s.plane + s.mixed + s.jumper + s.other).toBe(UNNAMED.copperLayers.length);
+    // …and a board using only the named kinds has nothing left over.
+    expect(summarize(FULL).other).toBe(0);
+    expect(summarize(MIXED).other).toBe(0);
+  });
+
   it('accounts for the copper kinds that are neither signal nor plane', () => {
     const s = summarize(MIXED);
     expect([s.total, s.signal, s.plane, s.mixed, s.jumper]).toEqual([4, 2, 0, 1, 1]);
@@ -7034,6 +7235,31 @@ describe('bands geometry', () => {
   });
 });
 
+describe('minHeightPx', () => {
+  it('reports the very floors bands reserves, for a real 13-row board and a bare one', () => {
+    expect(minHeightPx(FULL)).toBe(FLOORS);
+    // 9 measured at 2 + 4 unmeasured at 1 — the 22 both doc blocks quote.
+    expect(minHeightPx(GLASGOW_SHAPE)).toBe(22);
+    // No stackup block: every copper layer weighs the same, so none is a hairline.
+    expect(minHeightPx(BARE)).toBe(6);
+  });
+
+  it('is exactly the height at which bands stops overflowing its box', () => {
+    for (const s of [FULL, GLASGOW_SHAPE, BARE]) {
+      const floor = minHeightPx(s);
+      const bottom = (h: number) => {
+        const b = bands(s, h);
+        return b[b.length - 1]!.y + b[b.length - 1]!.h;
+      };
+      // At the floor it lands exactly; one pixel under, it draws PAST the box
+      // it was given — which is what a caller clamping to this number avoids.
+      expect(bottom(floor)).toBe(floor);
+      expect(bottom(floor - 1)).toBe(floor);
+      expect(bottom(floor + 40)).toBe(floor + 40);
+    }
+  });
+});
+
 describe('viaSpans lanes', () => {
   it('numbers lanes by drawn order, so a group it cannot anchor leaves no empty lane', () => {
     const drawn = bands(FULL, 240);
@@ -7086,6 +7312,8 @@ export interface StackupSummary {
   plane: number;
   mixed: number;
   jumper: number;
+  /** Copper rows whose kind this reader could not name — see `summarize`. */
+  other: number;
   dielectric: number;
   listed: string | null;
   design: string | null;
@@ -7138,6 +7366,17 @@ export function formatMm(value: number | null): string {
  *  recorded) and 0 (a row of no height) come back null, because neither can be
  *  weighed in a proportional stack — the TABLE is where the two stay apart,
  *  since formatMm renders 0 as "0.0000" and null as the placeholder. */
+/** A millimetre figure with its unit, or null when there is no figure. ONE
+ *  formatter for the Thk column and for the two totals (via `formatMm`), so the
+ *  table and the summary can never print the same number to different
+ *  precisions — and so a raw IEEE sum like 1.5999999999999999, which the reader
+ *  keeps unrounded ON PURPOSE because its contract is "the sum of what the file
+ *  lists", is rounded HERE, in the view, where it belongs. A non-finite figure
+ *  is no figure: null, never "Infinity mm". */
+function mmWithUnit(value: number | null): string | null {
+  return value == null || !Number.isFinite(value) ? null : `${formatMm(value)} mm`;
+}
+
 function measuredMm(r: BandRow): number | null {
   return r.thicknessMm != null && r.thicknessMm > 0 ? r.thicknessMm : null;
 }
@@ -7168,26 +7407,68 @@ export function tableRows(s: BoardStackup): StackupTableRow[] {
 /** What the file carries, counted. The four copper kinds are all reported —
  *  KiCad's Board Setup offers Mixed and Jumper beside Signal and Plane, and a
  *  board using one would otherwise read "4 layers · 2 signal · 1 plane" and
- *  leave a layer unaccounted for. The buckets sum to the copper count for every
- *  kind the reader can name. */
+ *  leave a layer unaccounted for. `other` closes that gap for a kind the reader
+ *  cannot name at all, so the five buckets sum to the copper count ALWAYS —
+ *  each layer's kind is one string, so no layer is counted twice and the
+ *  remainder can never go negative. */
 export function summarize(s: BoardStackup): StackupSummary {
   const vias = (t: ViaType) => s.vias.filter((g) => g.type === t).reduce((n, g) => n + g.count, 0);
   const kind = (k: string) => s.copperLayers.filter((c) => c.kind === k).length;
+  const signal = kind('Signal');
+  const plane = kind('Plane');
+  const mixed = kind('Mixed');
+  const jumper = kind('Jumper');
   return {
     total: s.layerCount,
-    signal: kind('Signal'),
-    plane: kind('Plane'),
-    mixed: kind('Mixed'),
-    jumper: kind('Jumper'),
+    signal,
+    plane,
+    mixed,
+    jumper,
+    // The copper rows none of the four named buckets claimed. `boardStackup`
+    // passes a token it has no mapping for straight through, and a `.Cu` row
+    // written with no type atom reads as the empty string — so a board KiCad
+    // has learned a new layer kind for still adds up. Counted as the REMAINDER
+    // rather than by listing tokens: the five buckets then sum to the copper
+    // count for every kind, named or not, and no layer can go unaccounted for.
+    other: s.copperLayers.length - signal - plane - mixed - jumper,
     dielectric: s.stackup == null ? 0 : s.stackup.filter((r) => DIELECTRIC.has(r.type)).length,
-    listed: s.listedThicknessMm == null ? null : `${s.listedThicknessMm.toFixed(3)} mm`,
-    design: s.designThicknessMm == null ? null : `${s.designThicknessMm.toFixed(3)} mm`,
+    listed: mmWithUnit(s.listedThicknessMm),
+    design: mmWithUnit(s.designThicknessMm),
     thru: vias('through'),
     blindBuried: vias('blind'),
     micro: vias('micro'),
     unknown: vias('unknown'),
     finish: s.copperFinish,
   };
+}
+
+/** The rows `bands` draws: the physical stackup when the file has one, else the
+ *  copper layers standing in for it. */
+function drawableRows(s: BoardStackup): BandRow[] {
+  return s.stackup ?? s.copperLayers.map((c) => ({ name: c.name, type: 'copper', thicknessMm: null }));
+}
+
+/** How a row is weighed and how short it is allowed to get. ONE home, because
+ *  `minHeightPx` is only worth anything if it reports the very floors `bands`
+ *  reserves — two copies of this rule would drift, and the panel would size its
+ *  box to a number the layout does not share. */
+function scale(rows: BandRow[]): { weigh: (r: BandRow) => number; floorOf: (r: BandRow) => number } {
+  const anyMeasured = rows.some((r) => measuredMm(r) != null);
+  const weigh = (r: BandRow): number => (anyMeasured ? (measuredMm(r) ?? 0) : 1);
+  return { weigh, floorOf: (r: BandRow): number => (weigh(r) > 0 ? MIN_BAND : HAIRLINE) };
+}
+
+/** The shortest box this stack fits in: the sum of the per-row floors `bands`
+ *  reserves before it shares out any remainder. A real 13-row board returns 22.
+ *
+ *  A caller that sizes its own drawing box MUST NOT go below this. `bands` keeps
+ *  the floors and overflows a box too short for them — which is the honest
+ *  choice for the geometry, and invisible in an SVG, where the overflow is
+ *  simply clipped away outside the viewBox. */
+export function minHeightPx(s: BoardStackup): number {
+  const rows = drawableRows(s);
+  const { floorOf } = scale(rows);
+  return rows.reduce((n, r) => n + floorOf(r), 0);
 }
 
 /** The physical rows as a drawable column. A row's thickness is its weight, so
@@ -7207,10 +7488,8 @@ export function summarize(s: BoardStackup): StackupSummary {
  *  layout, so 0, a negative and NaN all behave the one way. */
 export function bands(s: BoardStackup, heightPx: number): Band[] {
   const box = Number.isFinite(heightPx) ? heightPx : 0;
-  const rows: BandRow[] = s.stackup ?? s.copperLayers.map((c) => ({ name: c.name, type: 'copper', thicknessMm: null }));
-  const anyMeasured = rows.some((r) => measuredMm(r) != null);
-  const weigh = (r: BandRow): number => (anyMeasured ? (measuredMm(r) ?? 0) : 1);
-  const floorOf = (r: BandRow): number => (weigh(r) > 0 ? MIN_BAND : HAIRLINE);
+  const rows = drawableRows(s);
+  const { weigh, floorOf } = scale(rows);
   const totalWeight = rows.reduce((n, r) => n + weigh(r), 0);
   const floors = rows.reduce((n, r) => n + floorOf(r), 0);
   const spare = Math.max(0, box - floors);
@@ -7286,15 +7565,125 @@ git commit -m "feat(viewer): stackup layout helpers — rows joined by name, hon
 // stackup-reference.md): cross-section, layer table, summary. A field the file
 // does not carry is a dash; a board without a saved stackup says so and shows
 // the copper layers and via counts the file does carry.
-import { useMemo } from 'react';
-import type { BoardStackup } from '@public/services/kicad/types';
-import { bands, summarize, tableRows, viaSpans } from './stackupLayout';
+//
+// Every number here is read from the file by `boardStackup` and arranged by
+// `stackupLayout` — this component owns only the drawing box and the wording.
+import { Fragment, useMemo } from 'react';
+import type { BoardStackup, ViaType } from '@public/services/kicad/types';
+import { bands, minHeightPx, summarize, tableRows, viaSpans, type Band, type BandKind } from './stackupLayout';
 import styles from './StackupPanel.module.scss';
 
+/**
+ * The drawing box, in viewBox units.
+ *
+ * The svg is `width="100%"`, so ONE unit is not one pixel: everything inside
+ * scales with the column. WIDTH is deliberately close to the narrowest column
+ * the zones grid can hand it (220px), which keeps that scale near 1 rather
+ * than shrinking a 10-unit label into an unreadable 6px — measured at the
+ * tablet worst case (a ~243px column) as 9.3px, and 12.5px at a 390px phone
+ * where the grid has already reflowed to one column.
+ *
+ * HEIGHT is a starting point, not a promise: a stack with more rows than it can
+ * floor is drawn in a taller box instead (see `height` below).
+ */
+const WIDTH = 260;
 const HEIGHT = 240;
-const WIDTH = 320;
-const STACK_X = 120;
-const STACK_W = 180;
+/** The board itself. Its left edge is where the leader lines land; the gutter
+ *  to its left holds the labels, which are the widest text in the figure
+ *  ("dielectric 1" is 12 characters of mono). */
+const STACK_X = 96;
+const STACK_W = 158;
+const LABEL_X = 86;
+const LEADER_X = 88;
+/** Two label centres closer together than this would overlap at the font size
+ *  `.label` sets. Kept here rather than in the stylesheet because it is
+ *  geometry the placement below has to reason about, and the two are checked
+ *  against each other by test. */
+const LABEL_GAP = 12;
+/** A via lane is drawn in from the board's RIGHT edge. Any lane the helper puts
+ *  further in than this would escape the board's left edge and be drawn over
+ *  the labels, which would read as a barrel through nothing. */
+const LANE_LIMIT = STACK_W - 4;
+/** A figure this file never carried. One constant rather than an em dash typed
+ *  at each of the sites that need it — and a JS string rather than JSX text,
+ *  which is the form edit tooling has mangled into visible escapes before. */
+const ABSENT = '—';
+
+/** Band kind → its class. A record rather than an interpolated class name, so
+ *  a new `BandKind` is a type error here instead of a silently unstyled band. */
+const BAND_CLASS: Record<BandKind, string> = {
+  copper: 'bandCopper',
+  dielectric: 'bandDielectric',
+  mask: 'bandMask',
+  other: 'bandOther',
+};
+
+/** Via type → its class, for the same reason. */
+const VIA_CLASS: Record<ViaType, string> = {
+  through: 'viaThrough',
+  blind: 'viaBlind',
+  micro: 'viaMicro',
+  unknown: 'viaUnknown',
+};
+
+const centreOf = (b: Band): number => b.y + b.h / 2;
+
+/**
+ * Which bands can carry a leader label without colliding.
+ *
+ * A real board defeats "label every row": Glasgow's 13 rows put three ~67-unit
+ * dielectrics beside eight rows of 1-7 units, so the silk, paste, mask and
+ * copper labels at each face land within a few units of one another and render
+ * as a smear. Copper is offered a label FIRST because those rows are the stack's
+ * anatomy and the dielectrics between them hold them apart; everything else
+ * takes a label only if it still clears every label already placed.
+ *
+ * Nothing is lost by a row going unlabelled — the table beside the figure names
+ * every row, which is what its caption says.
+ *
+ * Exported for test: this is the one piece of the panel a DOM assertion cannot
+ * measure, because happy-dom has no layout.
+ */
+export function labelledBands(drawn: Band[], minGap: number = LABEL_GAP): Band[] {
+  const offered = [...drawn.filter((b) => b.kind === 'copper'), ...drawn.filter((b) => b.kind !== 'copper')];
+  const placed: number[] = [];
+  const kept = new Set<Band>();
+  for (const band of offered) {
+    const centre = centreOf(band);
+    if (placed.some((y) => Math.abs(y - centre) < minGap)) continue;
+    placed.push(centre);
+    kept.add(band);
+  }
+  // Back into file order, so the DOM reads top of the board downwards.
+  return drawn.filter((b) => kept.has(b));
+}
+
+/**
+ * Is the figure honestly to scale?
+ *
+ * `bands` weighs a row by its thickness, but falls back to equal bands when NO
+ * row carries one — with no stackup block at all, and also for a block whose
+ * every thickness is absent or zero. Claiming "drawn to scale" over equal bands
+ * would be the one thing this panel exists not to do.
+ */
+function toScale(s: BoardStackup): boolean {
+  return s.stackup != null && s.stackup.some((r) => r.thicknessMm != null && r.thicknessMm > 0);
+}
+
+/**
+ * The copper finish, as a reader should see it.
+ *
+ * KiCad writes `(copper_finish "None")` on every board in our corpus, so this
+ * is the common case and not an edge one. "None" is the file SAYING the finish
+ * is none — a different fact from the field being absent, which is why the
+ * reader keeps them apart and the wording here does too.
+ */
+function finishLabel(finish: string | null): string {
+  if (finish == null) return ABSENT;
+  const trimmed = finish.trim();
+  if (trimmed === '' || trimmed.toLowerCase() === 'none') return 'none specified';
+  return trimmed;
+}
 
 interface StackupPanelProps {
   stackup: BoardStackup;
@@ -7303,90 +7692,154 @@ interface StackupPanelProps {
 export default function StackupPanel({ stackup }: StackupPanelProps) {
   const rows = useMemo(() => tableRows(stackup), [stackup]);
   const summary = useMemo(() => summarize(stackup), [stackup]);
-  const drawn = useMemo(() => bands(stackup, HEIGHT), [stackup]);
+  // Never shorter than the floors `bands` reserves. With HEIGHT at 240 this is
+  // the identity for any real board (Glasgow's floor is 22), and it is here so
+  // that a box made responsive later cannot start drawing rows outside the
+  // viewBox without anything failing.
+  const height = useMemo(() => Math.max(HEIGHT, minHeightPx(stackup)), [stackup]);
+  const drawn = useMemo(() => bands(stackup, height), [stackup, height]);
   const spans = useMemo(() => viaSpans(stackup, drawn), [stackup, drawn]);
+  const labels = useMemo(() => labelledBands(drawn), [drawn]);
+  const lanes = spans.filter((v) => v.x <= LANE_LIMIT);
+  const undrawnLanes = spans.length - lanes.length;
   const missing = stackup.stackup == null;
+  const scaled = toScale(stackup);
+  const buckets = ([
+    ['Signal', summary.signal],
+    ['Plane', summary.plane],
+    ['Mixed', summary.mixed],
+    ['Jumper', summary.jumper],
+    ['Other', summary.other],
+  ] as [string, number][]).filter((b) => b[1] > 0);
 
   return (
     <section className={styles.panel} aria-label="Board stackup">
       {missing && (
-        <p className={styles.missing} role="status">
-          This board has no physical stackup saved (Board Setup &rarr; Physical Stackup in KiCad); showing the copper layers
-          and via counts the file does carry.
+        <p className={styles.missing}>
+          No Board Setup saved &mdash; this board carries no physical stackup (Board Setup &rarr; Physical
+          Stackup in KiCad), so there are no thicknesses to draw it to scale by. The copper layers and via
+          counts below are what the file does carry.
         </p>
       )}
       <div className={styles.zones}>
         <figure className={styles.section}>
-          <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} width="100%" role="img" aria-label="Cross-section of the board stack, to scale">
+          <svg
+            className={styles.svg}
+            viewBox={`0 0 ${WIDTH} ${height}`}
+            width="100%"
+            role="img"
+            aria-label={
+              scaled
+                ? 'Cross-section of the board stack, drawn to scale. The layer table beside it carries the same rows as text.'
+                : 'Cross-section of the board stack, drawn as equal bands because the file records no thicknesses. The layer table beside it carries the same rows as text.'
+            }
+          >
             {drawn.map((b) => (
-              <g key={`${b.name}-${b.y}`}>
-                <rect className={styles[`band_${b.kind}`]} x={STACK_X} y={b.y} width={STACK_W} height={b.h} />
-                <line className={styles.leader} x1={STACK_X - 6} y1={b.y + b.h / 2} x2={STACK_X} y2={b.y + b.h / 2} />
-                <text className={styles.label} x={STACK_X - 10} y={b.y + b.h / 2} textAnchor="end" dominantBaseline="middle">
+              <rect
+                key={`${b.name}-${b.y}`}
+                className={styles[BAND_CLASS[b.kind]]}
+                x={STACK_X}
+                y={b.y}
+                width={STACK_W}
+                height={b.h}
+              />
+            ))}
+            {labels.map((b) => (
+              <g key={`label-${b.name}-${b.y}`}>
+                <line className={styles.leader} x1={LEADER_X} y1={centreOf(b)} x2={STACK_X} y2={centreOf(b)} />
+                <text className={styles.label} x={LABEL_X} y={centreOf(b)} textAnchor="end" dominantBaseline="middle">
                   {b.name}
                 </text>
               </g>
             ))}
-            {spans.map((v, i) => (
-              <g key={i} className={styles[`via_${v.type}`]}>
-                <line x1={STACK_X + STACK_W - v.x} y1={v.y1} x2={STACK_X + STACK_W - v.x} y2={v.y2} />
+            {lanes.map((v, i) => (
+              <g key={`${v.type}-${v.y1}-${v.y2}-${i}`} className={styles[VIA_CLASS[v.type]]}>
+                <line
+                  x1={STACK_X + STACK_W - v.x}
+                  y1={v.y1}
+                  x2={STACK_X + STACK_W - v.x}
+                  y2={v.y2}
+                />
                 <title>{`${v.count} ${v.type} via${v.count === 1 ? '' : 's'}`}</title>
               </g>
             ))}
           </svg>
-          <figcaption className={styles.caption}>Drawn to scale from the thicknesses in the file</figcaption>
+          <figcaption className={styles.caption}>
+            {scaled
+              ? 'Drawn to scale from the thicknesses in the file.'
+              : 'Equal bands — this file records no thicknesses to draw them to scale by.'}{' '}
+            Every row is named in the table.
+          </figcaption>
         </figure>
 
-        <table className={styles.table}>
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>Layer</th>
-              <th>Type</th>
-              <th>Thk (mm)</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r, i) => (
-              <tr key={`${r.layer}-${i}`}>
-                <td className={styles.num}>{r.ordinal}</td>
-                <td>{r.layer}</td>
-                <td>{r.type}</td>
-                <td className={styles.num}>{r.thk}</td>
+        {rows.length === 0 ? (
+          <p className={styles.missing}>This board file lists no copper layers.</p>
+        ) : (
+          <table className={styles.table}>
+            <thead>
+              <tr>
+                <th scope="col">#</th>
+                <th scope="col">Layer</th>
+                <th scope="col">Type</th>
+                <th scope="col">Thk (mm)</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {rows.map((r, i) => (
+                <tr key={`${r.layer}-${i}`}>
+                  <td className={styles.num}>{r.ordinal}</td>
+                  <td>{r.layer}</td>
+                  <td>{r.type}</td>
+                  <td className={styles.num}>{r.thk}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
 
         <dl className={styles.summary}>
-          <dt>Total layers</dt><dd>{summary.total}</dd>
-          <dt>Signal</dt><dd>{summary.signal}</dd>
-          <dt>Plane</dt><dd>{summary.plane}</dd>
-          <dt>Dielectric</dt><dd>{summary.dielectric}</dd>
-          <dt>Listed thickness</dt><dd>{summary.listed ?? '—'}</dd>
+          <dt>Total layers</dt>
+          <dd>{summary.total}</dd>
+          {buckets.map(([label, n]) => (
+            // A Fragment, not a wrapper: `.summary` is a two-column grid, and
+            // any real element here would take one cell and swallow the pair.
+            <Fragment key={label}>
+              <dt>{label}</dt>
+              <dd>{n}</dd>
+            </Fragment>
+          ))}
+          <dt>Dielectric</dt>
+          <dd>{summary.dielectric}</dd>
+          <dt>Listed thickness</dt>
+          <dd>{summary.listed ?? ABSENT}</dd>
           {summary.design != null && (
             <>
-              <dt>Design thickness</dt><dd>{summary.design}</dd>
+              <dt>Design thickness</dt>
+              <dd>{summary.design}</dd>
             </>
           )}
-          {summary.finish != null && (
-            <>
-              <dt>Copper finish</dt><dd>{summary.finish}</dd>
-            </>
-          )}
-          <dt>Thru vias</dt><dd>{summary.thru}</dd>
-          <dt>Blind/Buried vias</dt><dd>{summary.blindBuried}</dd>
-          <dt>Micro vias</dt><dd>{summary.micro}</dd>
+          <dt>Copper finish</dt>
+          <dd>{finishLabel(summary.finish)}</dd>
+          <dt>Thru vias</dt>
+          <dd>{summary.thru}</dd>
+          <dt>Blind/Buried vias</dt>
+          <dd>{summary.blindBuried}</dd>
+          <dt>Micro vias</dt>
+          <dd>{summary.micro}</dd>
           {summary.unknown > 0 && (
             <>
-              <dt>Unknown via type</dt><dd>{summary.unknown}</dd>
+              <dt>Unknown via type</dt>
+              <dd>{summary.unknown}</dd>
             </>
           )}
         </dl>
       </div>
       <p className={styles.footnote}>
-        Listed thickness is the sum of the thicknesses in the stackup block; design thickness is the board setting.
-        KiCad&rsquo;s file does not distinguish blind from buried vias.
+        Listed thickness is the sum of the thicknesses in the stackup block; design thickness is the board
+        setting. KiCad&rsquo;s file does not distinguish blind from buried vias.
+        {summary.other > 0 && ' Other counts copper layers set to a kind this reader has no name for; the table shows what the file calls each one.'}
+        {undrawnLanes > 0 &&
+          ` ${undrawnLanes} more via group${undrawnLanes === 1 ? '' : 's'} ${undrawnLanes === 1 ? 'is' : 'are'} counted here but left out of the figure, which has room for ${lanes.length}.`}
       </p>
     </section>
   );
@@ -7399,29 +7852,46 @@ export default function StackupPanel({ stackup }: StackupPanelProps) {
 @use '@shared/styles/mixins' as *;
 @use '@public/styles/bomMaterial' as *;
 
+// The Stackup tab's three zones. Colours are the board's own materials: mask
+// green, copper bright, dielectric olive — the reading an assembler already has
+// from looking at a bare PCB edge-on.
+
 .panel {
   @include bom-card;
   padding: 16px;
 }
 
+// Both the no-stackup notice and the no-copper-layers one.
 .missing {
   margin: 0 0 12px;
   color: $text-secondary;
   font-size: 0.9rem;
+  max-width: 78ch;
 }
 
 .zones {
   display: grid;
   grid-template-columns: minmax(220px, 1fr) minmax(260px, 1.2fr) minmax(180px, 0.8fr);
   gap: 20px;
+  align-items: start;
 
-  @media (max-width: $bp-mobile) {
+  @include responsive($bp-mobile) {
     grid-template-columns: 1fr;
   }
 }
 
 .section {
   margin: 0;
+  // The figure is a grid item; without this the svg's intrinsic width wins the
+  // min-content negotiation and the three columns stop honouring their minmax.
+  min-width: 0;
+}
+
+// `width="100%"` with a viewBox: the height follows the aspect ratio, so the
+// figure scales with its column and the labels inside scale with it.
+.svg {
+  display: block;
+  height: auto;
 }
 
 .caption {
@@ -7430,34 +7900,64 @@ export default function StackupPanel({ stackup }: StackupPanelProps) {
   color: $text-secondary;
 }
 
-// Band colours are tokens: mask green, copper bright, dielectric olive.
-.band_copper { fill: #d9a441; }
-.band_dielectric { fill: #7f8a3d; }
-.band_mask { fill: #1f7a3f; }
-.band_other { fill: #c9ced4; }
+// Band fills. Named in camelCase and reached through an exhaustive record in
+// the component, so a new band kind cannot arrive unstyled.
+.bandCopper {
+  fill: #d9a441;
+}
+
+.bandDielectric {
+  fill: #7f8a3d;
+}
+
+.bandMask {
+  fill: #1f7a3f;
+}
+
+.bandOther {
+  fill: #c9ced4;
+}
 
 .leader {
   stroke: $text-secondary;
   stroke-width: 1;
 }
 
+// 10 viewBox units. LABEL_GAP in the component is 12 — the line box this needs
+// to clear — and the two are checked against each other by test.
 .label {
   fill: $text-secondary;
-  font-size: 9px;
+  font-size: 10px;
   font-family: $font-mono;
 }
 
-.via_through line,
-.via_blind line,
-.via_micro line,
-.via_unknown line {
+// Via barrels. One rule for the shared shape, then a stroke per type; the
+// unknown one is dashed as well as red, so the distinction survives a
+// colour-blind reading rather than resting on hue alone.
+.viaThrough line,
+.viaBlind line,
+.viaMicro line,
+.viaUnknown line {
   stroke-width: 4;
   stroke-linecap: round;
 }
-.via_through line { stroke: #6b7280; }
-.via_blind line { stroke: #2563eb; }
-.via_micro line { stroke: #7c3aed; }
-.via_unknown line { stroke: $error-red; stroke-dasharray: 3 3; }
+
+.viaThrough line {
+  stroke: #6b7280;
+}
+
+.viaBlind line {
+  stroke: #2563eb;
+}
+
+.viaMicro line {
+  stroke: #7c3aed;
+}
+
+.viaUnknown line {
+  stroke: $error-red;
+  stroke-dasharray: 3 3;
+}
 
 .table {
   width: 100%;
@@ -7484,6 +7984,8 @@ export default function StackupPanel({ stackup }: StackupPanelProps) {
   text-align: right;
 }
 
+// A flat two-column grid: every dt/dd pair is its own cell, which is why the
+// component groups conditional pairs with fragments and never a wrapper.
 .summary {
   display: grid;
   grid-template-columns: auto auto;
@@ -7507,6 +8009,7 @@ export default function StackupPanel({ stackup }: StackupPanelProps) {
   margin: 12px 0 0;
   font-size: 0.75rem;
   color: $text-secondary;
+  max-width: 78ch;
 }
 ```
 
@@ -7526,6 +8029,8 @@ git commit -m "feat(viewer): Stackup tab — cross-section to scale with real vi
 Owner checklist: compare the panel to KiCad's Board Setup → Physical Stackup for Glasgow revC3 and for one of his own boards; confirm the no-stackup state; phone width via `mobile-layout-guard`. Wait for explicit approval before Phase 5.
 
 ---
+
+> **Task 4.2 landed (2026-09-14, commits 1d80ce1 → cb5d04d → 33248bb → the aria-selected test):** blocks synced. Beyond the brief: the summary's copper buckets always sum (`other` for unrecognised kinds; zero buckets hidden); `minHeightPx` exported and the box clamped to it; cross-section labels offered copper-first with colliders dropped (Glasgow shows 7 of 13; the table is the complete record); totals and the Thk column share one four-decimal formatter (KiCad's own Board Setup precision); the tab strip carries the full tablist contract (`tablist` "Views", `tab`/`tabpanel` ids both ways, roving tabindex, Left/Right/Home/End moving focus and selection) with the canvas staying ONE element across every tab (pinned by node identity + mount counter); an unreadable board (`readStackup` throws) still offers the tab with the honest message. Verified in the owner's Chrome on Glasgow. Parked for the final list: `readStackup` runs eagerly on project open (323 ms on an 8 MB board; a first-visit latch is 3 lines); a 3px grid overflow between 769 and 771px; the BOM tab's `aria-controls` names a panel that exists only after the first visit; an orphaned doc comment on `measuredMm`.
 
 # Phase 5 — Docs, then deploy on ask
 
