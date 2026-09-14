@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { BoardStackup } from '@public/services/kicad/types';
-import { bands, formatMm, summarize, tableRows, viaSpans } from './stackupLayout';
+import { bands, formatMm, minHeightPx, summarize, tableRows, viaSpans } from './stackupLayout';
 
 const FULL: BoardStackup = {
   copperLayers: [{ ordinal: 1, name: 'F.Cu', kind: 'Signal' }, { ordinal: 2, name: 'In1.Cu', kind: 'Plane' }, { ordinal: 3, name: 'B.Cu', kind: 'Signal' }],
@@ -29,8 +29,36 @@ const MIXED: BoardStackup = {
   ],
   layerCount: 4,
 };
+/** A kind `boardStackup` has no mapping for is passed straight through, and a
+ *  `.Cu` row written with no type atom reads as the empty string. Both are real
+ *  outputs of the reader, and neither is Signal, Plane, Mixed or Jumper. */
+const UNNAMED: BoardStackup = {
+  ...FULL,
+  copperLayers: [
+    { ordinal: 1, name: 'F.Cu', kind: 'Signal' }, { ordinal: 2, name: 'In1.Cu', kind: 'user_defined' },
+    { ordinal: 3, name: 'In2.Cu', kind: '' }, { ordinal: 4, name: 'B.Cu', kind: 'Signal' },
+  ],
+  layerCount: 4,
+};
 /** 6 measured rows at MIN_BAND 2, plus F.SilkS at HAIRLINE 1. */
 const FLOORS = 13;
+/** Glasgow revC3's own shape — 13 physical rows, 9 of them measured — which is
+ *  where the 22px floor quoted in `bands`' and `minHeightPx`' doc blocks, and
+ *  relied on by the panel, comes from. */
+const GLASGOW_SHAPE: BoardStackup = {
+  ...FULL,
+  stackup: ['F.SilkS', 'F.Paste', 'F.Mask', 'F.Cu', 'dielectric 1', 'In1.Cu', 'dielectric 2', 'In2.Cu', 'dielectric 3', 'B.Cu', 'B.Mask', 'B.Paste', 'B.SilkS'].map(
+    (name, i) => ({
+      name,
+      type: name.endsWith('.Cu') ? 'copper' : 'core',
+      // Only the 9 rows Glasgow records a thickness for; silk and paste carry none.
+      thicknessMm: /SilkS|Paste/.test(name) ? null : 0.1,
+      material: null,
+      epsilonR: null,
+      lossTangent: null,
+    }),
+  ),
+};
 
 describe('tableRows', () => {
   it('renders the physical stack in file order with copper ordinals joined by name', () => {
@@ -46,9 +74,20 @@ describe('tableRows', () => {
 
 describe('summarize', () => {
   it('counts what the file carries and labels the two thicknesses separately', () => {
-    expect(summarize(FULL)).toEqual({ total: 3, signal: 2, plane: 1, mixed: 0, jumper: 0, dielectric: 2, listed: '1.198 mm', design: '1.200 mm', thru: 40, blindBuried: 3, micro: 0, unknown: 1, finish: 'ENIG' });
+    expect(summarize(FULL)).toEqual({ total: 3, signal: 2, plane: 1, mixed: 0, jumper: 0, other: 0, dielectric: 2, listed: '1.198 mm', design: '1.200 mm', thru: 40, blindBuried: 3, micro: 0, unknown: 1, finish: 'ENIG' });
     expect(summarize(BARE)).toMatchObject({ dielectric: 0, listed: null, design: '1.200 mm', finish: null });
   });
+  it('accounts for a copper kind it cannot name at all, so the buckets still add up', () => {
+    const s = summarize(UNNAMED);
+    expect([s.signal, s.plane, s.mixed, s.jumper, s.other]).toEqual([2, 0, 0, 0, 2]);
+    // The invariant the strip is read against: every copper layer lands in
+    // exactly one bucket, whatever KiCad called it.
+    expect(s.signal + s.plane + s.mixed + s.jumper + s.other).toBe(UNNAMED.copperLayers.length);
+    // …and a board using only the named kinds has nothing left over.
+    expect(summarize(FULL).other).toBe(0);
+    expect(summarize(MIXED).other).toBe(0);
+  });
+
   it('accounts for the copper kinds that are neither signal nor plane', () => {
     const s = summarize(MIXED);
     expect([s.total, s.signal, s.plane, s.mixed, s.jumper]).toEqual([4, 2, 0, 1, 1]);
@@ -106,6 +145,31 @@ describe('bands geometry', () => {
   it('classifies each physical row so the cross-section can colour it', () => {
     expect(bands(FULL, 240).map((x) => x.kind)).toEqual(['other', 'mask', 'copper', 'dielectric', 'copper', 'dielectric', 'copper']);
     expect(bands(BARE, 240).map((x) => x.kind)).toEqual(['copper', 'copper', 'copper']);
+  });
+});
+
+describe('minHeightPx', () => {
+  it('reports the very floors bands reserves, for a real 13-row board and a bare one', () => {
+    expect(minHeightPx(FULL)).toBe(FLOORS);
+    // 9 measured at 2 + 4 unmeasured at 1 — the 22 both doc blocks quote.
+    expect(minHeightPx(GLASGOW_SHAPE)).toBe(22);
+    // No stackup block: every copper layer weighs the same, so none is a hairline.
+    expect(minHeightPx(BARE)).toBe(6);
+  });
+
+  it('is exactly the height at which bands stops overflowing its box', () => {
+    for (const s of [FULL, GLASGOW_SHAPE, BARE]) {
+      const floor = minHeightPx(s);
+      const bottom = (h: number) => {
+        const b = bands(s, h);
+        return b[b.length - 1]!.y + b[b.length - 1]!.h;
+      };
+      // At the floor it lands exactly; one pixel under, it draws PAST the box
+      // it was given — which is what a caller clamping to this number avoids.
+      expect(bottom(floor)).toBe(floor);
+      expect(bottom(floor - 1)).toBe(floor);
+      expect(bottom(floor + 40)).toBe(floor + 40);
+    }
   });
 });
 
