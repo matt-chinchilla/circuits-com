@@ -141,8 +141,8 @@ describe('the figures the panel prints', () => {
     // to 1.6 in decimal and to a 17-digit tail in binary.
     expect(String(LISTED)).not.toBe('1.6');
     render(GLASGOW);
-    expect(valueOf('Listed thickness')).toBe('1.600 mm');
-    expect(text()).not.toMatch(/1\.5999|1\.6000000/);
+    expect(valueOf('Listed thickness')).toBe('1.6000 mm');
+    expect(text()).not.toMatch(/1\.5999|1\.60000000/);
   });
 
   it('keeps the listed sum and the design setting as two separate lines', () => {
@@ -150,8 +150,10 @@ describe('the figures the panel prints', () => {
     // the board's setting. Collapsing them would hide a stackup that no longer
     // adds up to the thickness the board was designed to.
     render(GLASGOW);
-    expect(valueOf('Listed thickness')).toBe('1.600 mm');
-    expect(valueOf('Design thickness')).toBe('1.600 mm');
+    // Same precision as the Thk column above it, which is the point of one
+    // shared formatter: the reader can add the rows up and get the total.
+    expect(valueOf('Listed thickness')).toBe('1.6000 mm');
+    expect(valueOf('Design thickness')).toBe('1.6000 mm');
   });
 
   it('says a copper finish of "None" is none specified, and never treats it as a finish name', () => {

@@ -74,8 +74,15 @@ describe('tableRows', () => {
 
 describe('summarize', () => {
   it('counts what the file carries and labels the two thicknesses separately', () => {
-    expect(summarize(FULL)).toEqual({ total: 3, signal: 2, plane: 1, mixed: 0, jumper: 0, other: 0, dielectric: 2, listed: '1.198 mm', design: '1.200 mm', thru: 40, blindBuried: 3, micro: 0, unknown: 1, finish: 'ENIG' });
-    expect(summarize(BARE)).toMatchObject({ dielectric: 0, listed: null, design: '1.200 mm', finish: null });
+    expect(summarize(FULL)).toEqual({ total: 3, signal: 2, plane: 1, mixed: 0, jumper: 0, other: 0, dielectric: 2, listed: '1.1980 mm', design: '1.2000 mm', thru: 40, blindBuried: 3, micro: 0, unknown: 1, finish: 'ENIG' });
+    expect(summarize(BARE)).toMatchObject({ dielectric: 0, listed: null, design: '1.2000 mm', finish: null });
+    // Four decimals in BOTH places: a total printed to a different precision
+    // than the rows it sums invites the reader to check the arithmetic and find
+    // it wrong.
+    expect(summarize(FULL).listed).toBe(`${formatMm(FULL.listedThicknessMm)} mm`);
+    // A non-finite figure is no figure — `toFixed` would have printed
+    // "Infinity mm" as though the file had said it.
+    expect(summarize({ ...FULL, listedThicknessMm: Infinity, designThicknessMm: NaN })).toMatchObject({ listed: null, design: null });
   });
   it('accounts for a copper kind it cannot name at all, so the buckets still add up', () => {
     const s = summarize(UNNAMED);

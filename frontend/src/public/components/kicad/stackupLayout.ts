@@ -72,6 +72,17 @@ export function formatMm(value: number | null): string {
  *  recorded) and 0 (a row of no height) come back null, because neither can be
  *  weighed in a proportional stack — the TABLE is where the two stay apart,
  *  since formatMm renders 0 as "0.0000" and null as the placeholder. */
+/** A millimetre figure with its unit, or null when there is no figure. ONE
+ *  formatter for the Thk column and for the two totals (via `formatMm`), so the
+ *  table and the summary can never print the same number to different
+ *  precisions — and so a raw IEEE sum like 1.5999999999999999, which the reader
+ *  keeps unrounded ON PURPOSE because its contract is "the sum of what the file
+ *  lists", is rounded HERE, in the view, where it belongs. A non-finite figure
+ *  is no figure: null, never "Infinity mm". */
+function mmWithUnit(value: number | null): string | null {
+  return value == null || !Number.isFinite(value) ? null : `${formatMm(value)} mm`;
+}
+
 function measuredMm(r: BandRow): number | null {
   return r.thicknessMm != null && r.thicknessMm > 0 ? r.thicknessMm : null;
 }
@@ -127,8 +138,8 @@ export function summarize(s: BoardStackup): StackupSummary {
     // count for every kind, named or not, and no layer can go unaccounted for.
     other: s.copperLayers.length - signal - plane - mixed - jumper,
     dielectric: s.stackup == null ? 0 : s.stackup.filter((r) => DIELECTRIC.has(r.type)).length,
-    listed: s.listedThicknessMm == null ? null : `${s.listedThicknessMm.toFixed(3)} mm`,
-    design: s.designThicknessMm == null ? null : `${s.designThicknessMm.toFixed(3)} mm`,
+    listed: mmWithUnit(s.listedThicknessMm),
+    design: mmWithUnit(s.designThicknessMm),
     thru: vias('through'),
     blindBuried: vias('blind'),
     micro: vias('micro'),
