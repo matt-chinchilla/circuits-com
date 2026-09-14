@@ -6945,6 +6945,17 @@ const FULL: BoardStackup = {
   layerCount: 3,
 };
 const BARE: BoardStackup = { ...FULL, stackup: null, copperFinish: null, listedThicknessMm: null };
+// KiCad's Board Setup offers Mixed and Jumper beside Signal and Plane.
+const MIXED: BoardStackup = {
+  ...FULL,
+  copperLayers: [
+    { ordinal: 1, name: 'F.Cu', kind: 'Signal' }, { ordinal: 2, name: 'In1.Cu', kind: 'Mixed' },
+    { ordinal: 3, name: 'In2.Cu', kind: 'Jumper' }, { ordinal: 4, name: 'B.Cu', kind: 'Signal' },
+  ],
+  layerCount: 4,
+};
+/** 6 measured rows at MIN_BAND 2, plus F.SilkS at HAIRLINE 1. */
+const FLOORS = 13;
 
 describe('tableRows', () => {
   it('renders the physical stack in file order with copper ordinals joined by name', () => {
@@ -6960,8 +6971,13 @@ describe('tableRows', () => {
 
 describe('summarize', () => {
   it('counts what the file carries and labels the two thicknesses separately', () => {
-    expect(summarize(FULL)).toEqual({ total: 3, signal: 2, plane: 1, dielectric: 2, listed: '1.198 mm', design: '1.200 mm', thru: 40, blindBuried: 3, micro: 0, unknown: 1, finish: 'ENIG' });
+    expect(summarize(FULL)).toEqual({ total: 3, signal: 2, plane: 1, mixed: 0, jumper: 0, dielectric: 2, listed: '1.198 mm', design: '1.200 mm', thru: 40, blindBuried: 3, micro: 0, unknown: 1, finish: 'ENIG' });
     expect(summarize(BARE)).toMatchObject({ dielectric: 0, listed: null, design: '1.200 mm', finish: null });
+  });
+  it('accounts for the copper kinds that are neither signal nor plane', () => {
+    const s = summarize(MIXED);
+    expect([s.total, s.signal, s.plane, s.mixed, s.jumper]).toEqual([4, 2, 0, 1, 1]);
+    expect(s.signal + s.plane + s.mixed + s.jumper).toBe(s.total);
   });
 });
 
@@ -6986,6 +7002,61 @@ describe('formatMm', () => {
     expect(formatMm(null)).toBe('—');
   });
 });
+
+describe('bands geometry', () => {
+  it('fills the box exactly, floors every band, and keeps the file order contiguous', () => {
+    for (const h of [240, 100, 26, 240.7, 199.33]) {
+      const b = bands(FULL, h);
+      expect(b[b.length - 1]!.y + b[b.length - 1]!.h).toBe(h);
+      // Contiguous to the last drawable decimal. A seam is ONE accumulated
+      // value, so the only difference is the sub-ULP of reading it back as
+      // y + (bottom - y) — measured at 1.4e-14px on one seam of the 100px box.
+      const seams = b.map((x, i) => (i === 0 ? 0 : Math.abs(x.y - (b[i - 1]!.y + b[i - 1]!.h))));
+      expect(Math.max(...seams)).toBeLessThan(1e-9);
+      expect(b.map((x) => x.name)).toEqual(FULL.stackup!.map((r) => r.name));
+      expect(b[0]!.h).toBe(1);
+      expect(Math.min(...b.slice(1).map((x) => x.h))).toBeGreaterThanOrEqual(2);
+    }
+  });
+
+  it('keeps every row at its floor when the box is too small, absent, or not a number', () => {
+    for (const h of [FLOORS, 12, 1, 0, -5, NaN, Infinity, -Infinity]) {
+      const b = bands(FULL, h);
+      expect(b[0]!.h).toBe(1);
+      expect(b.slice(1).map((x) => x.h)).toEqual([2, 2, 2, 2, 2, 2]);
+      expect(b[b.length - 1]!.y + b[b.length - 1]!.h).toBe(FLOORS);
+    }
+  });
+
+  it('classifies each physical row so the cross-section can colour it', () => {
+    expect(bands(FULL, 240).map((x) => x.kind)).toEqual(['other', 'mask', 'copper', 'dielectric', 'copper', 'dielectric', 'copper']);
+    expect(bands(BARE, 240).map((x) => x.kind)).toEqual(['copper', 'copper', 'copper']);
+  });
+});
+
+describe('viaSpans lanes', () => {
+  it('numbers lanes by drawn order, so a group it cannot anchor leaves no empty lane', () => {
+    const drawn = bands(FULL, 240);
+    expect(viaSpans(FULL, drawn).map((v) => v.x)).toEqual([24, 42, 60]);
+    const orphan: BoardStackup = {
+      ...FULL,
+      vias: [FULL.vias[0]!, { type: 'micro', start: 'In8.Cu', end: 'In9.Cu', count: 2 }, FULL.vias[1]!],
+    };
+    expect(viaSpans(orphan, drawn).map((v) => [v.type, v.x])).toEqual([['through', 24], ['blind', 42]]);
+  });
+
+  it('drops a via whose two ends land on the same band', () => {
+    const same: BoardStackup = { ...FULL, vias: [{ type: 'through', start: 'F.Cu', end: 'F.Cu', count: 9 }] };
+    expect(viaSpans(same, bands(same, 240))).toEqual([]);
+  });
+});
+
+describe('formatMm', () => {
+  it('never renders a non-finite figure as a number', () => {
+    expect([formatMm(NaN), formatMm(Infinity), formatMm(-Infinity)]).toEqual(['—', '—', '—']);
+    expect(formatMm(0)).toBe('0.0000');
+  });
+});
 ```
 
 - [ ] **Step 2: Run them to verify they fail**
@@ -7000,7 +7071,7 @@ Run: `cd frontend && npx vitest run src/public/components/kicad/stackupLayout.te
 // file order joined to copper ordinals by name; counts of what the file
 // carries; scaled bands for the cross-section; via spans between REAL layers.
 // Absent facts are dashes, never defaults.
-import type { BoardStackup, ViaType } from '@public/services/kicad/types';
+import type { BoardStackup, StackupRow, ViaType } from '@public/services/kicad/types';
 
 export interface StackupTableRow {
   ordinal: string;
@@ -7013,6 +7084,8 @@ export interface StackupSummary {
   total: number;
   signal: number;
   plane: number;
+  mixed: number;
+  jumper: number;
   dielectric: number;
   listed: string | null;
   design: string | null;
@@ -7040,12 +7113,33 @@ export interface ViaSpan {
   y2: number;
 }
 
+/** All `bands` needs of a row — so a board with no stackup block can stand its
+ *  copper layers in for the physical rows without inventing the rest. */
+type BandRow = Pick<StackupRow, 'name' | 'type' | 'thicknessMm'>;
+
 const DIELECTRIC = new Set(['core', 'prepreg']);
 const HAIRLINE = 1;
 const MIN_BAND = 2;
+/** Where the first via lane sits and how far apart the lanes are drawn. A board
+ *  with many blind and micro spans can group into a dozen lanes, so the last
+ *  one sits at LANE_X + 11 × LANE_PITCH — the panel owns whether that fits. */
+const LANE_X = 24;
+const LANE_PITCH = 18;
+/** What a figure the file never carried reads as. */
+const ABSENT = '—';
 
+/** Four decimals of a millimetre, or the placeholder. A thickness that is null
+ *  (never recorded) or non-finite reads as absent — never "0", never "NaN". */
 export function formatMm(value: number | null): string {
-  return value == null ? '—' : value.toFixed(4);
+  return value != null && Number.isFinite(value) ? value.toFixed(4) : ABSENT;
+}
+
+/** A row's thickness when the file recorded a usable one. Both null (never
+ *  recorded) and 0 (a row of no height) come back null, because neither can be
+ *  weighed in a proportional stack — the TABLE is where the two stay apart,
+ *  since formatMm renders 0 as "0.0000" and null as the placeholder. */
+function measuredMm(r: BandRow): number | null {
+  return r.thicknessMm != null && r.thicknessMm > 0 ? r.thicknessMm : null;
 }
 
 function kindOf(name: string, type: string): BandKind {
@@ -7056,10 +7150,10 @@ function kindOf(name: string, type: string): BandKind {
 }
 
 export function tableRows(s: BoardStackup): StackupTableRow[] {
-  const ordinalByName = new Map(s.copperLayers.map((c) => [c.name, c]));
   if (s.stackup == null) {
-    return s.copperLayers.map((c) => ({ ordinal: String(c.ordinal), layer: c.name, type: c.kind, thk: '—' }));
+    return s.copperLayers.map((c) => ({ ordinal: String(c.ordinal), layer: c.name, type: c.kind, thk: formatMm(null) }));
   }
+  const ordinalByName = new Map(s.copperLayers.map((c) => [c.name, c]));
   return s.stackup.map((row) => {
     const copper = ordinalByName.get(row.name);
     return {
@@ -7071,58 +7165,92 @@ export function tableRows(s: BoardStackup): StackupTableRow[] {
   });
 }
 
+/** What the file carries, counted. The four copper kinds are all reported —
+ *  KiCad's Board Setup offers Mixed and Jumper beside Signal and Plane, and a
+ *  board using one would otherwise read "4 layers · 2 signal · 1 plane" and
+ *  leave a layer unaccounted for. The buckets sum to the copper count for every
+ *  kind the reader can name. */
 export function summarize(s: BoardStackup): StackupSummary {
-  const count = (t: ViaType) => s.vias.filter((g) => g.type === t).reduce((n, g) => n + g.count, 0);
+  const vias = (t: ViaType) => s.vias.filter((g) => g.type === t).reduce((n, g) => n + g.count, 0);
+  const kind = (k: string) => s.copperLayers.filter((c) => c.kind === k).length;
   return {
     total: s.layerCount,
-    signal: s.copperLayers.filter((c) => c.kind === 'Signal').length,
-    plane: s.copperLayers.filter((c) => c.kind === 'Plane').length,
+    signal: kind('Signal'),
+    plane: kind('Plane'),
+    mixed: kind('Mixed'),
+    jumper: kind('Jumper'),
     dielectric: s.stackup == null ? 0 : s.stackup.filter((r) => DIELECTRIC.has(r.type)).length,
     listed: s.listedThicknessMm == null ? null : `${s.listedThicknessMm.toFixed(3)} mm`,
     design: s.designThicknessMm == null ? null : `${s.designThicknessMm.toFixed(3)} mm`,
-    thru: count('through'),
-    blindBuried: count('blind'),
-    micro: count('micro'),
-    unknown: count('unknown'),
+    thru: vias('through'),
+    blindBuried: vias('blind'),
+    micro: vias('micro'),
+    unknown: vias('unknown'),
     finish: s.copperFinish,
   };
 }
 
-/** Rows with a thickness share the height in proportion (never under MIN_BAND
- *  px); rows without one get a hairline. Without a stackup block the copper
- *  layers are drawn as equal bands so the via spans still have anchors. */
+/** The physical rows as a drawable column. A row's thickness is its weight, so
+ *  a 1mm core towers over a 35um foil; rows the file never measured get a
+ *  hairline. Every drawn row is reserved its minimum height FIRST and only the
+ *  remainder is shared out by weight — a minimum added after the split would
+ *  push the stack past the box it is drawn in. Bottoms are accumulated rather
+ *  than heights summed, so the last row lands exactly on heightPx (a fractional
+ *  height included) instead of drifting a rounding error past it. Without a
+ *  stackup block the copper layers weigh the same and are drawn as equal bands,
+ *  so the via spans still have anchors to run between.
+ *
+ *  A box too short for the reserved minimums themselves — below 22px for a real
+ *  13-row board — keeps the minimums and overflows rather than shrink every row
+ *  to a sub-pixel sliver that reports success and shows nothing. A heightPx that
+ *  is not a finite number is read as no room at all and gets that same floor
+ *  layout, so 0, a negative and NaN all behave the one way. */
 export function bands(s: BoardStackup, heightPx: number): Band[] {
-  const rows = s.stackup ?? s.copperLayers.map((c) => ({ name: c.name, type: 'copper', thicknessMm: null as number | null }));
-  const sized = rows.filter((r) => r.thicknessMm != null && r.thicknessMm > 0);
-  const total = sized.reduce((n, r) => n + (r.thicknessMm as number), 0);
-  const hairlines = rows.length - sized.length;
-  const available = Math.max(0, heightPx - hairlines * HAIRLINE);
-  const equal = sized.length === 0 ? available / Math.max(1, rows.length) : 0;
+  const box = Number.isFinite(heightPx) ? heightPx : 0;
+  const rows: BandRow[] = s.stackup ?? s.copperLayers.map((c) => ({ name: c.name, type: 'copper', thicknessMm: null }));
+  const anyMeasured = rows.some((r) => measuredMm(r) != null);
+  const weigh = (r: BandRow): number => (anyMeasured ? (measuredMm(r) ?? 0) : 1);
+  const floorOf = (r: BandRow): number => (weigh(r) > 0 ? MIN_BAND : HAIRLINE);
+  const totalWeight = rows.reduce((n, r) => n + weigh(r), 0);
+  const floors = rows.reduce((n, r) => n + floorOf(r), 0);
+  const spare = Math.max(0, box - floors);
+  let seen = 0;
+  let reserved = 0;
   let y = 0;
   return rows.map((r) => {
-    const h = r.thicknessMm != null && r.thicknessMm > 0 && total > 0
-      ? Math.max(MIN_BAND, (r.thicknessMm / total) * available)
-      : sized.length === 0
-        ? Math.max(MIN_BAND, equal)
-        : HAIRLINE;
-    const band: Band = { name: r.name, kind: kindOf(r.name, r.type), y, h };
-    y += h;
+    seen += weigh(r);
+    reserved += floorOf(r);
+    const bottom = totalWeight > 0 ? reserved + (seen / totalWeight) * spare : reserved;
+    const band: Band = { name: r.name, kind: kindOf(r.name, r.type), y, h: bottom - y };
+    y = bottom;
     return band;
   });
 }
 
+/** One lane per via group, run between the centres of the bands it connects.
+ *  Lanes are numbered by DRAWN order, not by position in the file's groups, so
+ *  a group this stack cannot anchor leaves no empty lane behind it. */
 export function viaSpans(s: BoardStackup, drawn: Band[]): ViaSpan[] {
   const centre = (name: string): number | null => {
     const b = drawn.find((x) => x.name === name);
     return b == null ? null : b.y + b.h / 2;
   };
   const out: ViaSpan[] = [];
-  s.vias.forEach((g, i) => {
-    const y1 = centre(g.start);
-    const y2 = centre(g.end);
-    if (y1 == null || y2 == null) return;
-    out.push({ type: g.type, count: g.count, x: 24 + i * 18, y1: Math.min(y1, y2), y2: Math.max(y1, y2) });
-  });
+  for (const g of s.vias) {
+    const a = centre(g.start);
+    const z = centre(g.end);
+    // Both ends have to be drawn for a span to mean anything, and both ends on
+    // ONE band would draw as a zero-length line — invisible, and it would carry
+    // its own count label out of sight with it.
+    if (a == null || z == null || a === z) continue;
+    out.push({
+      type: g.type,
+      count: g.count,
+      x: LANE_X + out.length * LANE_PITCH,
+      y1: Math.min(a, z),
+      y2: Math.max(a, z),
+    });
+  }
   return out;
 }
 ```
@@ -7137,6 +7265,8 @@ git commit -m "feat(viewer): stackup layout helpers — rows joined by name, hon
 ```
 
 ---
+
+> **Task 4.1 landed (2026-09-14, commits 41d2fe6 → 9529e4b):** blocks synced. The brief's `bands()` was wrong — it applied the `MIN_BAND` floor after the proportional split had spent the budget, so its own test failed at 240.0050083472454; the landed algorithm reserves floors first, shares the remainder by weight and accumulates bottoms so the last band lands on `heightPx` exactly (hand-verified at 240/100/26/25/22/240.7; seams pinned to < 1e-9 rather than bit-exact). `summarize` counts EVERY copper kind (`mixed` and `jumper` buckets added; Task 4.2 adds `other` for unrecognised kind tokens so the buckets sum to the copper count). `viaSpans` numbers lanes by drawn order and skips zero-length spans; non-finite heights and values take the floor layout / placeholder. The floors' sum (22px for a 13-row board) is documented on `bands` — Task 4.2 exports `minHeightPx(s)` and clamps its box to it.
 
 ### Task 4.2: `StackupPanel` and the Stackup tab (spec §7.3)
 
