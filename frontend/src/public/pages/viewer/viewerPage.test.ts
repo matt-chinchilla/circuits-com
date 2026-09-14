@@ -736,8 +736,12 @@ describe('the tablist contract', () => {
     session = makeSession({ board: 'main.kicad_pcb' });
     await render();
     expect(tabButtons().map((b) => b.tabIndex)).toEqual([0, -1, -1, -1]);
+    // The negative half of the contract: every OTHER tab says "false", or a
+    // stuck-on attribute tells a screen reader all four views are open.
+    expect(tabButtons().map((b) => b.getAttribute('aria-selected'))).toEqual(['true', 'false', 'false', 'false']);
     await click(byText('Stackup'));
     expect(tabButtons().map((b) => b.tabIndex)).toEqual([-1, -1, 0, -1]);
+    expect(tabButtons().map((b) => b.getAttribute('aria-selected'))).toEqual(['false', 'false', 'true', 'false']);
   });
 
   it('moves focus AND selection with the arrows, wrapping at both ends', async () => {
