@@ -8131,7 +8131,7 @@ Deployed to production 2026-09-14 (master 134ba73) on the owner's instruction at
 
 Nothing below blocks the deploy; each is either cosmetic, dev-only, a product decision, or a theoretical race no page path produces. Grouped by what a fix would need:
 
-**Do at the next touch of the viewer (small, mechanical):**
+**Do at the next touch of the viewer (small, mechanical) — DONE 2026-09-16 as Task 5.2 (commits 40bbfd9..3277053 + fix round; the aria-controls item had already closed in cb5d04d; the `naturalSort` fallback the 1.2 review called unreachable is REACHABLE — a designator containing a line terminator makes `exec` return null — and was kept with a pinning test; the stackup grid now steps to two columns between $bp-mobile and $bp-tablet, unmeasured in a browser: eyeball 769 and 1024px at the next playtest). The list as it stood:**
 - `readStackup` runs eagerly on project open (323 ms on an 8 MB board) — add a first-visit latch like `bomSeen` (3 lines).
 - The BOM tab's `aria-controls` names a panel that exists only after the first visit — render the panel element (empty) from mount, or drop the attribute until the panel mounts.
 - The `/bom` "Change file" exit flashes for one commit before `matching` flips — gate on the hook's phase.
