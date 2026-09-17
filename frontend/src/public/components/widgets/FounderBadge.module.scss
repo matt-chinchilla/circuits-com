@@ -1,0 +1,13 @@
+// FounderBadge — inline geometry only; the material lives in the SVG.
+// `vertical-align` seats it on the name's baseline in an inline run (Gold's
+// h3); `align-self` centres it in a flex row (Platinum's name row, Silver's
+// `.svp-coname`, which aligns its children on the baseline — an svg's
+// baseline is its bottom edge). `flex: 0 0 auto` keeps a truncating name
+// from squeezing the pin.
+.badge {
+  display: inline-block;
+  vertical-align: -0.18em;
+  align-self: center;
+  flex: 0 0 auto;
+  overflow: visible;
+}
