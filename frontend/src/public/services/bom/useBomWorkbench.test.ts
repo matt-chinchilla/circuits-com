@@ -106,9 +106,14 @@ let container: HTMLDivElement;
 let root: Root;
 /** The latest render's workbench — the hook's whole surface, per commit. */
 let wb: BomWorkbench;
+/** `matching` as seen on EVERY render, in order. A consumer paints from each
+ *  one of these, not only from the last, so a flag that arrives a commit late
+ *  is a frame of the wrong screen. */
+let matchingSeen: boolean[] = [];
 
 function Probe({ parsed, viewerHref }: { parsed: ParseResult | null; viewerHref: string | null }) {
   wb = useBomWorkbench(parsed, viewerHref);
+  matchingSeen.push(wb.matching);
   return null as ReactNode;
 }
 
@@ -124,6 +129,7 @@ const flush = () => act(async () => {});
 beforeEach(() => {
   calls.match = [];
   calls.stream = [];
+  matchingSeen = [];
   container = document.createElement('div');
   document.body.append(container);
   root = createRoot(container);
@@ -160,6 +166,27 @@ describe('useBomWorkbench — phase 1 runs once per parse identity', () => {
     await render(parse());
     await render(parse());
     expect(calls.match).toHaveLength(2);
+  });
+
+  it('says it is matching on the FIRST render, never a commit later', async () => {
+    // The effect that issues the match runs after the commit, so `matching`
+    // used to be false over an empty table for exactly one frame — long enough
+    // for /bom to paint its "Change file" exit over a BOM about to be priced.
+    // The match here is left hanging on purpose: the flag under test is the one
+    // the consumer reads while the request is still out.
+    await render(parse());
+    expect(calls.match).toHaveLength(1);
+    expect(matchingSeen[0]).toBe(true);
+    expect(matchingSeen).not.toContain(false);
+  });
+
+  it('never says it is matching for a parse it will not match', async () => {
+    // The other half of the same rule: the derived answer must agree with the
+    // effect's, so neither a zero-line BOM nor a parse that failed can flash
+    // "pricing…" at a reader before settling back.
+    await render(parse(0));
+    expect(calls.match).toHaveLength(0);
+    expect(matchingSeen).not.toContain(true);
   });
 });
 
@@ -470,6 +497,7 @@ describe('useBomWorkbench — the priced snapshot', () => {
     expect(rows).toHaveLength(2);
 
     await remount();
+    matchingSeen = [];
     await render(parsed);
 
     // THE point of the whole mechanism: /viewer priced it, /bom shows it.
@@ -477,6 +505,8 @@ describe('useBomWorkbench — the priced snapshot', () => {
     expect(calls.stream).toHaveLength(0);
     expect(wb.matching).toBe(false);
     expect(wb.rows).toEqual(rows);
+    // …and not even for one commit does the restored table say "pricing…".
+    expect(matchingSeen).not.toContain(true);
   });
 
   it('keys on IDENTITY — the same file read again is priced again', async () => {

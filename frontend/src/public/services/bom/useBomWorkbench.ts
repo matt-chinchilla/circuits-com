@@ -51,6 +51,19 @@ interface PricedSnapshot {
 const priced = new WeakMap<ParseResult, PricedSnapshot>();
 
 /**
+ * Is there anything here for phase 1 to ask the catalog about?
+ *
+ * ONE home for the rule, read from two places that must never disagree: the
+ * effect, which decides whether a request goes out, and the render, which
+ * decides whether the consumer is told "pricing…" on the commit BEFORE that
+ * effect runs. A parse with no lines is a state, not a failure — `/bom/match`
+ * takes `min_length=1` — and an errored parse has nothing to price at all.
+ */
+function hasLinesToPrice(parsed: ParseResult | null): parsed is ParseResult {
+  return parsed != null && parsed.error == null && parsed.lines.length > 0;
+}
+
+/**
  * File a priced answer against its parse.
  *
  * An EMPTY table is never one. A priced BOM has at least one row by
@@ -281,7 +294,7 @@ export function useBomWorkbench(
   viewerHref: string | null,
 ): BomWorkbench {
   const [rows, setRows] = useState<TableRow[]>([]);
-  const [matching, setMatching] = useState(false);
+  const [matchingState, setMatching] = useState(false);
   const [matchError, setMatchError] = useState<string | null>(null);
   const [buildQty, setBuildQty] = useState(1);
   // Per-BOM, default OFF (spec §5). A ref shadows it because `startResolve`
@@ -319,6 +332,29 @@ export function useBomWorkbench(
    * the next mount, as "this BOM priced to nothing".
    */
   const landedRef = useRef(false);
+
+  /**
+   * The parse phase 1 has already spoken for. Whatever it decided — matched,
+   * hydrated from the snapshot, or nothing to price — is in `matchingState`.
+   */
+  const decidedRef = useRef<ParseResult | null>(null);
+
+  /**
+   * Is a match in flight or about to be?
+   *
+   * An effect runs AFTER the commit that changed its deps, so on the first
+   * render for a new `parsed` the state still describes the previous one:
+   * `matching` false over an empty table. `/bom` reads exactly that pair as
+   * "nothing here" and painted its "Change file" exit for one frame over a BOM
+   * that was a tick away from being priced. Until the effect has spoken for
+   * THIS parse, the answer comes from the predicate the effect itself will use
+   * — a priceable parse with no snapshot to hydrate is a match, now, not in a
+   * commit's time.
+   */
+  const matching =
+    decidedRef.current === parsed
+      ? matchingState
+      : hasLinesToPrice(parsed) && !priced.has(parsed);
 
   /** What the teardown snapshot reads — the last COMMITTED state, since an
    *  unmount cleanup with `[]` deps closes over the first render. Assigned
@@ -418,6 +454,8 @@ export function useBomWorkbench(
     genRef.current += 1;
     const gen = genRef.current;
     landedRef.current = false;
+    // From here on the STATE is the answer for this parse — see `matching`.
+    decidedRef.current = parsed;
 
     // Nothing to price: abandon the previous BOM's result rather than leave it
     // rendered under a consumer that has closed its project. The build
@@ -430,7 +468,7 @@ export function useBomWorkbench(
     // guaranteed 422 that the catch below would render as "we could not reach
     // the pricing service" — blaming the network for a schematic that simply had
     // nothing in it. A zero-line BOM is a state, not a failure.
-    if (parsed == null || parsed.error != null || parsed.lines.length === 0) {
+    if (!hasLinesToPrice(parsed)) {
       resolveAbort.current?.abort();
       setRows((prev) => (prev.length === 0 ? prev : []));
       setMatching(false);
