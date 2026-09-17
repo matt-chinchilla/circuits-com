@@ -139,8 +139,8 @@ export default function SupplierFormPage() {
           logo_url: s.logo_url ?? '',
           brand_primary: s.brand_primary ?? '',
           brand_secondary: s.brand_secondary ?? '',
-          // ?? false, not ||: a cached supplier payload written before 054
-          // carries no key at all, and the checkbox must not read `undefined`.
+          // The API always sends a bool; `?? false` keeps the controlled
+          // checkbox from ever reading `undefined` if a payload predates 054.
           founder: s.founder ?? false,
         });
       })

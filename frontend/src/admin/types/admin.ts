@@ -485,9 +485,11 @@ export interface AdminSupplier {
   brand_primary: string | null;
   brand_secondary: string | null;
   // Founding-distributor incentive flag (migration 054). Owner-set; stays true
-  // until sponsor income passes $5,000/month or the owner decides. NOT
-  // nullable — the column is NOT NULL and the API always sends a bool.
-  founder: boolean;
+  // until sponsor income passes $5,000/month or the owner decides. The column
+  // is NOT NULL and the API always sends a bool, but the key is OPTIONAL here
+  // for the same reason PartThumb's `image_url` is: `getSuppliers` is a cached
+  // read, so a payload stored before 054 can still reach a render site.
+  founder?: boolean;
   parts_count?: number;
   revenue_total?: number;
   categories?: string[];
