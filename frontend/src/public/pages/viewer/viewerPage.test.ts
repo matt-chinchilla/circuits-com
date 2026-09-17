@@ -123,6 +123,25 @@ vi.mock('@public/services/bom/useBomWorkbench', () => ({
     return wb;
   },
 }));
+/**
+ * The REAL reader, wrapped so the page's parses can be counted. Not a stub: the
+ * stackup tests below read a real board through this, and the contract the
+ * counter exists for is WHEN the page parses, not what it gets back.
+ */
+const readStackupCalls = vi.fn();
+vi.mock('@public/services/kicad/boardStackup', async () => {
+  const actual =
+    await vi.importActual<typeof import('@public/services/kicad/boardStackup')>(
+      '@public/services/kicad/boardStackup',
+    );
+  return {
+    ...actual,
+    readStackup: (boardText: string) => {
+      readStackupCalls(boardText);
+      return actual.readStackup(boardText);
+    },
+  };
+});
 vi.mock('@public/services/designSession', () => ({
   getDesignSession: () => session,
   clearDesignSession: () => {
@@ -279,6 +298,7 @@ beforeEach(() => {
   canvas.focusRef.mockClear();
   canvas.focusRef.mockResolvedValue('focused');
   canvas.activeSheet = undefined;
+  readStackupCalls.mockClear();
   wb.reset.mockClear();
   container = document.createElement('div');
   document.body.appendChild(container);
@@ -668,6 +688,39 @@ describe('the Stackup tab', () => {
     // the renderer and redraw the board from scratch on a tab click.
     expect(container.querySelector('[data-testid="canvas"]')).toBe(embed);
     expect(canvas.mounts).toBe(mounted);
+  });
+
+  it('reads the board on the FIRST visit to the tab, and only once for the session', async () => {
+    // `readStackup` re-tokenises the whole board — 323 ms on an 8 MB one — and
+    // it used to run on project open, charged to every reader who came for the
+    // schematic and never opened this tab.
+    session = withBoard();
+    await render();
+    expect(byText('Schematic').getAttribute('aria-selected')).toBe('true');
+    expect(readStackupCalls).not.toHaveBeenCalled();
+
+    await click(byText('Stackup'));
+    expect(readStackupCalls).toHaveBeenCalledTimes(1);
+
+    // Latched: leaving and returning must not re-read a board that has not
+    // changed. (Unlatched, the memo's gate would fall back to false on the way
+    // out and parse again on the way in.)
+    await click(byText('Board'));
+    await click(byText('Stackup'));
+    expect(readStackupCalls).toHaveBeenCalledTimes(1);
+  });
+
+  it('never shows "could not be read" about a board it has not tried to read yet', async () => {
+    // The panel is mounted for the whole session, so the latch alone would let
+    // the commit that first reveals the tab paint the error copy — and
+    // role="alert" would ANNOUNCE it — before the read had happened at all.
+    session = withBoard();
+    await render();
+    await click(byText('Stackup'));
+
+    const panel = container.querySelector('#viewer-panel-stackup') as HTMLElement;
+    expect(panel.textContent).not.toMatch(/could not be read/);
+    expect(panel.querySelector('svg')).not.toBeNull();
   });
 
   it('leaves the chosen sheet alone — a non-drawing tab is not a sheet gesture', async () => {

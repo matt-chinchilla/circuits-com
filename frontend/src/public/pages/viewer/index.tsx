@@ -128,6 +128,13 @@ export default function ViewerPage() {
    * and the priced panel survives every flip back to the drawing.
    */
   const [bomSeen, setBomSeen] = useState(false);
+  /**
+   * Has the Stackup tab been opened for THIS project? The same one-way latch as
+   * `bomSeen`, for the same reason in a different currency: `readStackup`
+   * re-tokenises the whole board file, which is 323 ms on an 8 MB one, and a
+   * reader who never opens the tab was paying it on every project open.
+   */
+  const [stackupSeen, setStackupSeen] = useState(false);
   const canvasRef = useRef<DesignCanvasHandle>(null);
   /** The tab buttons, so an arrow key can move real DOM focus and not only the
    *  selection. Keyed by tab id rather than by index: `tabs` changes shape with
@@ -184,6 +191,7 @@ export default function ViewerPage() {
     setActiveSheet(undefined);
     setCanvasState('loading');
     setBomSeen(false);
+    setStackupSeen(false);
   }, []);
 
   // Deliberately NOT called on unmount: surviving the /viewer ↔ /bom trip is
@@ -197,6 +205,7 @@ export default function ViewerPage() {
     clearDesignSession();
     setSession(null);
     setBomSeen(false);
+    setStackupSeen(false);
     setActiveSheet(undefined);
     // The canvas is about to unmount with the session. Leaving this at 'ready'
     // would leave the hash effect believing a drawing is on screen.
@@ -285,6 +294,11 @@ export default function ViewerPage() {
     if (tab === 'bom') setBomSeen(true);
   }, [tab]);
 
+  // One-way: see `stackupSeen`.
+  useEffect(() => {
+    if (tab === 'stackup') setStackupSeen(true);
+  }, [tab]);
+
   useEffect(() => {
     if (toast == null) return;
     const id = setTimeout(() => setToast(null), 2500);
@@ -315,16 +329,25 @@ export default function ViewerPage() {
    * whole page to the ErrorBoundary: the reader loses the schematic and the BOM
    * over a file they may not even have come for. Caught, they lose only the
    * stackup, and the panel below says so.
+   *
+   * Read on the FIRST VISIT to the tab, never on project open: `readStackup`
+   * re-tokenises the whole board, 323 ms on an 8 MB one, and most readers come
+   * for the schematic. `tab === 'stackup'` is ORed in rather than left to the
+   * latch's effect because the panel is mounted for the whole session — a
+   * commit where the tab is live but the latch has not caught up yet would
+   * paint, and `role="alert"` would ANNOUNCE, "could not be read" about a board
+   * nobody has tried to read.
    */
+  const stackupWanted = stackupSeen || tab === 'stackup';
   const stackup = useMemo(() => {
     const board = session?.project.board;
-    if (session == null || board == null) return null;
+    if (session == null || board == null || !stackupWanted) return null;
     try {
       return readStackup(session.project.files.get(board) ?? '');
     } catch {
       return null;
     }
-  }, [session]);
+  }, [session, stackupWanted]);
 
   /**
    * Which drawing tab currently labels the shared canvas panel.
