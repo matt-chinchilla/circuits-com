@@ -19,8 +19,9 @@ authority on intent). Plan + 48 execution rulings:
 
 **What is deployed, and what this file describes.** Phases 0–4 were deployed to
 production 2026-09-14 and **production is still `134ba73`**. The parked
-mechanical batch (`40bbfd9..3277053`, 2026-09-16) and Phase 5's docs (`5041b94`,
-`a640967`, `ef2273b`, `547f8f2`) are on `updates` and are **NOT deployed**. This
+mechanical batch (`40bbfd9..3277053` + `547f8f2`, 2026-09-16) and Phase 5's docs
+(`5041b94`, `a640967`, `ef2273b`, the fix round `853fce1` + `51c54a7`, the sync
+`4798a72` and later) are on `updates` and are **NOT deployed**. This
 file and its CLAUDE.md bullets describe the `updates` tree; anything observed on
 the live site — including the 2026-09-15 zoom report under **Open** — is
 pre-Phase-5 code.
@@ -511,10 +512,10 @@ The spec states the final caps in §4.2 (`:166-167`, "40 parsed files, **8 MB pe
 file, 12 MB total**"), but the *reasoning* around them still quotes the
 pre-Phase-0 provisional 10 MB / 25 MB — §4.2 `:173-175` (the heap extrapolation
 that argued them down), §9 `:743`, `:755`, `:759` (the memory bullet, which ends
-by recording the lowering) — and one genuinely stale line survives in §10 `:809`,
-which describes `boardStackup.test.ts`'s synthetic board as being "at the 10 MB
-cap" when the test itself says 8 MB (`boardStackup.test.ts:54`). Read a figure
-from `types.ts`, never from a planning document.
+by recording the lowering); the one line that had gone stale, §10 `:809`
+describing `boardStackup.test.ts`'s synthetic board as "at the 10 MB cap" when
+the test says 8 MB (`boardStackup.test.ts:54`), was corrected on 2026-09-17
+(`4798a72`). Read a figure from `types.ts`, never from a planning document.
 
 Two entries that normalize to the same path make `unzipToFiles` **throw**
 `KicadReadError(kind 'archive')` naming the path — a silent keep-last lets a
