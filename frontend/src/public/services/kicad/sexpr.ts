@@ -11,7 +11,7 @@ function readQuoted(text: string, start: number): { value: string; end: number }
   let out = '';
   const n = text.length;
   while (i < n) {
-    const c = text[i] as string;
+    const c = text[i];
     if (c === '\\') {
       const e = text[i + 1];
       if (e === 'n') out += '\n';
@@ -52,7 +52,7 @@ export function parse(text: string): SExpr[] {
   const n = text.length;
   let i = 0;
   while (i < n) {
-    const c = text[i] as string;
+    const c = text[i];
     if (c === '(') {
       const node: SExpr[] = [];
       (stack[stack.length - 1] as SExpr[]).push(node);
@@ -70,7 +70,7 @@ export function parse(text: string): SExpr[] {
       i++;
     } else {
       let j = i + 1;
-      while (j < n && !isDelimiter(text[j] as string)) j++;
+      while (j < n && !isDelimiter(text[j])) j++;
       (stack[stack.length - 1] as SExpr[]).push(text.slice(i, j));
       i = j;
     }
@@ -122,7 +122,7 @@ export function* topLevelBlocks(text: string): Generator<TopLevelBlock> {
   let blockStart = -1;
   let blockHead = '';
   while (i < n) {
-    const c = text[i] as string;
+    const c = text[i];
     if (c === '"') {
       i = skipQuoted(text, i);
     } else if (c === '(') {
@@ -130,7 +130,7 @@ export function* topLevelBlocks(text: string): Generator<TopLevelBlock> {
       if (depth === 2) {
         blockStart = i;
         let j = i + 1;
-        while (j < n && !isDelimiter(text[j] as string)) j++;
+        while (j < n && !isDelimiter(text[j])) j++;
         blockHead = text.slice(i + 1, j);
       }
       i++;
