@@ -1,6 +1,9 @@
-// A dropped archive enters through fflate's `filter`, which runs BEFORE any
-// entry is inflated and sees each entry's declared sizes (spec §4.5). Two
-// guards, deliberately separate: the ARCHIVE guard bounds the inflate (declared
+// A dropped archive enters through fflate's `filter`, which sees each entry's
+// declared sizes and runs before THAT entry inflates (spec §4.5) — but fflate
+// inflates every accepted entry inside the same central-directory loop, so a
+// later entry's throw lands after the earlier ones have already inflated and the
+// bound is the running declared total, not zero bytes. Two guards, deliberately
+// separate: the ARCHIVE guard bounds the inflate (declared
 // sizes are attacker-controlled, so the archive-size and ratio caps are what
 // actually hold), and the INTAKE caps in project.ts apply only to the KiCad
 // files that survive the name filter — nothing else is ever inflated.
