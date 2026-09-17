@@ -98,6 +98,9 @@ class SupplierCreate(BaseModel):
     logo_url: str | None = None
     brand_primary: str | None = None
     brand_secondary: str | None = None
+    # Founding-distributor incentive flag (054). Absent key → False, which is
+    # what every supplier in both databases is today.
+    founder: bool = False
 
     @field_validator("logo_url")
     @classmethod
@@ -122,6 +125,9 @@ class SupplierUpdate(BaseModel):
     logo_url: str | None = None
     brand_primary: str | None = None
     brand_secondary: str | None = None
+    # None means "the caller said nothing" — update_supplier dumps with
+    # exclude_unset, so an omitted key leaves the stored flag alone.
+    founder: bool | None = None
 
     @field_validator("logo_url")
     @classmethod
@@ -148,6 +154,7 @@ def supplier_to_dict(supplier: Supplier) -> dict:
         "logo_url": supplier.logo_url,
         "brand_primary": supplier.brand_primary,
         "brand_secondary": supplier.brand_secondary,
+        "founder": bool(supplier.founder),
     }
 
 
@@ -205,6 +212,7 @@ def create_supplier(
         logo_url=body.logo_url,
         brand_primary=body.brand_primary,
         brand_secondary=body.brand_secondary,
+        founder=body.founder,
     )
     db.add(supplier)
     db.commit()

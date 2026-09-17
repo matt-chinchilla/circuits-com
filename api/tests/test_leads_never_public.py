@@ -31,6 +31,10 @@ def test_supplier_public_surfaces_hide_manufacturer_id():
                          "logo_url", "contact_role", "coverage_hours", "brand_primary",
                          "brand_secondary", "manufacturer_id"):
                 setattr(self, attr, None)
+            # founder (054) IS serialized — a public incentive badge, unlike
+            # the bridge column below. Named here so the fake keeps matching
+            # every attribute supplier_to_dict reads.
+            self.founder = False
 
     d = supplier_to_dict(FakeSupplier())
     assert "manufacturer_id" not in d, "supplier_to_dict leaks the bridge column"
