@@ -41,7 +41,14 @@ sup_name = {s.id: s.name for s in db.query(Supplier).all()}
 
 n = 0
 for row in db.execute(select(Supplier.__table__)).mappings():
-    print(json.dumps({"t": "supplier", **row_dict(row, skip=("id", "manufacturer_id"))}))
+    # founder (054) is PER-ENVIRONMENT operational state the owner sets on
+    # prod, not catalog data — `circuits push` upserts suppliers field by
+    # field, so shipping it would overwrite prod's flags with local false.
+    print(
+        json.dumps(
+            {"t": "supplier", **row_dict(row, skip=("id", "manufacturer_id", "founder"))}
+        )
+    )
     n += 1
 
 part_key = {}  # part_id -> (sku, manufacturer)

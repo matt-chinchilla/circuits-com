@@ -42,8 +42,11 @@ from app.services.part_pricing import refresh_best_prices
 
 # manufacturer_id: a per-environment surrogate (036) — never applied even if
 # an old export file carries it; seed_manufacturers step 5 re-links by name.
+# founder (054): per-environment operational state the owner sets on prod —
+# the supplier upsert below writes field by field, so an export carrying it
+# would clobber prod's flags with whatever the local DB happened to hold.
 PART_SKIP = {"category_slug", "t", "manufacturer_id"}
-SUPPLIER_SKIP = {"manufacturer_id"}
+SUPPLIER_SKIP = {"manufacturer_id", "founder"}
 LISTING_NATURAL = {"part_sku", "part_manufacturer", "supplier_name", "price_breaks", "t"}
 
 db = SessionLocal()

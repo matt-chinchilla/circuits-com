@@ -58,3 +58,27 @@ def test_load_keys_parts_on_the_real_identity():
     src = (SCRIPTS / "catalog_load.py").read_text()
     assert "from app.services.manufacturer_canon import canon" in src
     assert "def part_identity" in src and "canon(" in src and ".upper()" in src
+
+
+def test_neither_side_carries_the_founder_flag():
+    """`suppliers.founder` (054) is PER-ENVIRONMENT operational state, not
+    catalog data: the owner sets it on prod, and `circuits push` upserts an
+    existing supplier field by field (catalog_load's supplier branch walks
+    rec.items() and setattr's each column). A local DB where every row is
+    false would therefore overwrite prod's founding distributors on the next
+    push. Skipped on BOTH sides — at the source so it never travels, and at
+    the boundary so an export file written before this fix still loads."""
+    export = (SCRIPTS / "catalog_export.py").read_text()
+    supplier_line = next(
+        line for line in export.splitlines() if '"t": "supplier"' in line and "row_dict(" in line
+    )
+    assert "founder" in supplier_line, (
+        "the supplier row_dict must skip founder — per-environment state, not "
+        f"a natural key: {supplier_line.strip()}"
+    )
+
+    load = (SCRIPTS / "catalog_load.py").read_text()
+    assert '"founder"' in load.split("SUPPLIER_SKIP =")[1].split("\n")[0], (
+        "SUPPLIER_SKIP must drop founder so an old export cannot clobber "
+        "prod's flags"
+    )
