@@ -72,7 +72,10 @@ def test_neither_side_carries_the_founder_flag():
     supplier_line = next(
         line for line in export.splitlines() if '"t": "supplier"' in line and "row_dict(" in line
     )
-    assert "founder" in supplier_line, (
+    # The exact tuple, not just the substring: a regression that re-adds the
+    # flag alongside the skip (`**row_dict(row, skip=("id", "manufacturer_id")),
+    # "founder": row["founder"]`) still has "founder" somewhere on the line.
+    assert 'skip=("id", "manufacturer_id", "founder")' in supplier_line, (
         "the supplier row_dict must skip founder — per-environment state, not "
         f"a natural key: {supplier_line.strip()}"
     )
