@@ -55,7 +55,7 @@ export function parse(text: string): SExpr[] {
     const c = text[i];
     if (c === '(') {
       const node: SExpr[] = [];
-      (stack[stack.length - 1] as SExpr[]).push(node);
+      stack[stack.length - 1].push(node);
       stack.push(node);
       i++;
     } else if (c === ')') {
@@ -64,14 +64,14 @@ export function parse(text: string): SExpr[] {
       i++;
     } else if (c === '"') {
       const { value, end } = readQuoted(text, i);
-      (stack[stack.length - 1] as SExpr[]).push(value);
+      stack[stack.length - 1].push(value);
       i = end;
     } else if (c === ' ' || c === '\n' || c === '\t' || c === '\r') {
       i++;
     } else {
       let j = i + 1;
       while (j < n && !isDelimiter(text[j])) j++;
-      (stack[stack.length - 1] as SExpr[]).push(text.slice(i, j));
+      stack[stack.length - 1].push(text.slice(i, j));
       i = j;
     }
   }

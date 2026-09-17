@@ -4,7 +4,7 @@
 // SOURCE beside them; the synthetic documents below are hand-written minimal
 // KiCad files, one per reader rule, like the BOM parser's own fixtures.
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
-import { join, relative, resolve, sep } from 'node:path';
+import { join, posix, relative, resolve, sep } from 'node:path';
 
 const ROOT = resolve(__dirname, 'fixtures');
 
@@ -31,7 +31,11 @@ export function fixtureFiles(set: string): File[] {
   // `odd\name.kicad_sch` into a directory that never existed.
   return walk(dir)
     .map((path) => ({ path, name: relative(dir, path).split(sep).join('/') }))
-    .filter(({ name }) => !META_FILES.has(name.slice(name.lastIndexOf('/') + 1)))
+    // `posix.basename`, not `basename`: `name` is already slash-normalised, and
+    // the win32 implementation would ALSO split on a backslash — undoing, for a
+    // file legitimately called `odd\name.kicad_sch`, exactly what `sep` above
+    // is there to preserve.
+    .filter(({ name }) => !META_FILES.has(posix.basename(name)))
     .map(({ path, name }) => new File([readFileSync(path)], name));
 }
 

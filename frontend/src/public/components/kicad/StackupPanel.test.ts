@@ -400,8 +400,11 @@ describe('the stylesheet the figure depends on', () => {
       /grid-template-columns:\s*minmax\(220px, 1fr\) minmax\(260px, 1\.2fr\) minmax\(180px, 0\.8fr\)/,
     );
     // The step: two columns from $bp-mobile to $bp-tablet, summary spanning.
+    // Asserted on the HAYSTACK, not on the slice: `indexOf` returns -1 when the
+    // block is gone and `slice(-1)` is the last CHARACTER, never '', so an
+    // "is it there" check written against the slice could never fire.
+    expect(body).toContain('responsive($bp-tablet)');
     const step = body.slice(body.indexOf('responsive($bp-tablet)'));
-    expect(step).not.toBe('');
     expect(step).toMatch(/grid-template-columns:\s*minmax\(220px, 1fr\) minmax\(260px, 1\.2fr\);/);
     expect(step).toMatch(/grid-column:\s*1 \/ -1/);
     // …and one column on a phone, still the last word in the file so that it

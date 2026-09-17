@@ -17,7 +17,7 @@
  * it. The KiCanvas rule itself is pinned in `kicanvasController.test.ts`, and
  * that the callback carries the controller's answer in `DesignCanvas.test.ts`.
  */
-import { act, createElement, forwardRef, useEffect, useImperativeHandle } from 'react';
+import { act, createElement, forwardRef, Profiler, useEffect, useImperativeHandle } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -221,6 +221,43 @@ async function render() {
 /** Re-render in place — what a same-route hash change looks like to the page. */
 async function rerender() {
   await render();
+}
+
+/** The stackup panel as it stood at ONE commit. */
+interface StackupCommit {
+  visible: boolean;
+  saysUnreadable: boolean;
+}
+
+/**
+ * Render inside a `<Profiler>` that snapshots the stackup panel at EVERY
+ * commit, and hand back the growing record.
+ *
+ * A post-`act()` assertion cannot see the frame the render-phase term of
+ * `stackupWanted` exists for. `act` flushes the selection commit, THEN the
+ * latch effect, THEN the re-render before it returns — so a latch-only build
+ * has already parsed the board and painted the panel by the time the test
+ * looks, and the commit in between, where the panel is visible and still
+ * carrying the `role="alert"` "could not be read" copy, has been and gone.
+ * `onRender` runs in the commit phase with the DOM already mutated, so it sees
+ * each commit the way a screen — and a screen reader — would.
+ */
+async function renderWatchingStackup(): Promise<StackupCommit[]> {
+  const commits: StackupCommit[] = [];
+  const probe = () => {
+    const panel = container.querySelector('#viewer-panel-stackup');
+    if (!(panel instanceof HTMLElement)) return;
+    commits.push({
+      visible: !panel.hidden,
+      saysUnreadable: /could not be read/.test(panel.textContent ?? ''),
+    });
+  };
+  await act(async () => {
+    root.render(
+      createElement(Profiler, { id: 'viewer', onRender: probe }, createElement(ViewerPage)),
+    );
+  });
+  return commits;
 }
 
 function buttons(): HTMLButtonElement[] {
@@ -714,9 +751,18 @@ describe('the Stackup tab', () => {
     // The panel is mounted for the whole session, so the latch alone would let
     // the commit that first reveals the tab paint the error copy — and
     // role="alert" would ANNOUNCE it — before the read had happened at all.
+    //
+    // Judged per COMMIT, because the latch repairs it one commit later and a
+    // post-`act` read sees only the repair: this is what makes the gate's
+    // `|| tab === 'stackup'` term load-bearing rather than decorative.
     session = withBoard();
-    await render();
+    const commits = await renderWatchingStackup();
     await click(byText('Stackup'));
+
+    const shown = commits.filter((c) => c.visible);
+    // Not vacuous: the tab really was revealed while the probe was watching.
+    expect(shown.length).toBeGreaterThan(0);
+    expect(shown.map((c) => c.saysUnreadable)).not.toContain(true);
 
     const panel = container.querySelector('#viewer-panel-stackup') as HTMLElement;
     expect(panel.textContent).not.toMatch(/could not be read/);
