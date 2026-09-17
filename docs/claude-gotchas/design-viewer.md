@@ -79,7 +79,7 @@ hashed set — **151 entries** in `MANIFEST.sha256` — and
 
 - **`entry.ts`**, the esbuild entry point (`build-kicanvas.mjs:73`) — ours, not
   upstream's;
-- **`tsconfig.json`**, which esbuild is pointed at (`:81`);
+- **`tsconfig.json`**, which esbuild is pointed at (`:83`);
 - **`patches/`**, excluded on purpose — `0001-no-web-fonts.patch` necessarily
   *contains* the font host it removes, so hashing it and scanning it for hosts
   are mutually exclusive.

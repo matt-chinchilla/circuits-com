@@ -806,7 +806,7 @@ per file):
   a 30-row layer table; thickness sum vs design thickness; via groups incl.
   blind, micro, an unknown token, and `(layers A B)` spans; KiCad ≤8 and 9/10
   layer ids both ordering by position; a `topLevelBlocks`-only parse of a
-  synthetic board **at the 10 MB cap** with a stated time bound.
+  synthetic board **at the 8 MB per-file cap** (`INTAKE_CAPS.perFileBytes`; 10 MB was the pre-Phase-0 provisional) with a stated time bound.
 - `kicanvasController.test.ts` — every branch of `mount`, `activate` and
   `focusRef` against fake elements, including a missing `project`, a missing
   page, and a `select` that throws; the `CanvasController` contract is exercised
