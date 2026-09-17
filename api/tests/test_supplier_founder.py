@@ -210,3 +210,38 @@ def test_migration_054_is_chained_to_053():
     )
     assert "nullable=False" in src
     assert 'op.drop_column("suppliers", "founder")' in src, "downgrade must drop the column"
+
+
+# ── (e) the sponsor boards carry it (the badge's data) ──────────────────────
+
+
+def test_sponsor_boards_carry_founder(db, client, tier_boards, seeded_db):
+    """The Platinum (`/partners`) and Gold (`/{slug}` → `sponsor`) boards are
+    hand-serialized SponsorResponse dicts, so a key the schema names but the
+    dict omits would silently read back False for every founder. Flip the
+    fixture's supplier and read it through both boards, plus the keyword
+    route (the other hand-built SponsorResponse site)."""
+    from app.models import Sponsor
+
+    # Platinum on parent2 is supplier1; the Gold slot on `child` is supplier2.
+    supplier1, supplier2 = seeded_db["supplier1"], seeded_db["supplier2"]
+    parent2, child = tier_boards["parent2"], seeded_db["child"]
+
+    plat = client.get(f"/api/categories/{parent2.slug}/partners").json()["platinum"]
+    assert plat["founder"] is False
+    gold = client.get(f"/api/categories/{child.slug}").json()["sponsor"]
+    assert gold is not None and gold["founder"] is False
+
+    supplier1.founder = True
+    supplier2.founder = True
+    db.add(Sponsor(supplier_id=supplier1.id, keyword="founder-kw", tier="gold"))
+    db.commit()
+    from app.services.category_cache import clear as clear_category_cache
+
+    clear_category_cache()
+
+    plat = client.get(f"/api/categories/{parent2.slug}/partners").json()["platinum"]
+    assert plat["supplier_name"] == supplier1.name and plat["founder"] is True
+    gold = client.get(f"/api/categories/{child.slug}").json()["sponsor"]
+    assert gold["supplier_name"] == supplier2.name and gold["founder"] is True
+    assert client.get("/api/sponsors/keyword/founder-kw").json()["founder"] is True

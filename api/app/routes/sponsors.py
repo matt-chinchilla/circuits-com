@@ -31,4 +31,5 @@ def get_sponsor_by_keyword(keyword: str, db: Session = Depends(get_db)):
         brand_secondary=sponsor.brand_secondary
         or (supplier.brand_secondary if supplier else None),
         brand_takeover=bool(sponsor.brand_primary or sponsor.brand_secondary),
+        founder=bool(supplier.founder) if supplier else False,
     )

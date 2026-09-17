@@ -113,6 +113,10 @@ def _sponsor_board_dict(sponsor: Sponsor, supplier: Supplier | None) -> dict:
         "brand_secondary": sponsor.brand_secondary
         or (supplier.brand_secondary if supplier else None),
         "brand_takeover": bool(sponsor.brand_primary or sponsor.brand_secondary),
+        # 054: the founding-distributor flag rides the Platinum + Gold boards so
+        # the badge renders beside the company name. Per-environment state,
+        # read off the supplier — never off the sponsor row.
+        "founder": bool(supplier.founder) if supplier else False,
     }
 
 
