@@ -321,6 +321,15 @@
   border: 1px dashed var(--a-danger);
 }
 
+// Founding-distributor mark (054). Sits BESIDE the sponsorship badge, never
+// instead of it — the two answer different questions (what they pay for vs.
+// whether they were an early partner), so it needs its own hue rather than
+// reusing a tier class.
+.founderChip {
+  background: rgba(21, 128, 61, 0.10);
+  color: var(--a-ok);
+}
+
 .tierAuthorized {
   background: rgba(21, 128, 61, 0.10);
   color: var(--a-ok);

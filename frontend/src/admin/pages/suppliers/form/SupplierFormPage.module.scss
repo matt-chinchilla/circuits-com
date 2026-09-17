@@ -124,6 +124,25 @@
   color: var(--a-fg3);
 }
 
+// Checkbox row (Founding distributor). Label wraps the input so the whole
+// row is the hit area; `accent-color` keeps the native control on-theme
+// rather than re-skinning it, matching the parts form's listing toggle.
+.checkField {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--a-fg2);
+  cursor: pointer;
+  user-select: none;
+
+  input[type='checkbox'] {
+    cursor: pointer;
+    accent-color: var(--a-primary);
+  }
+}
+
 .fieldError {
   font-size: 12px;
   color: var(--a-danger);

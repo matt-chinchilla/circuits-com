@@ -192,6 +192,11 @@ function StaffSuppliersPage() {
                       <span className={`${styles.supTier} ${SPONSORSHIP_CLASS[sponsorship]}`}>
                         {sponsorship}
                       </span>
+                      {supplier.founder && (
+                        <span className={`${styles.supTier} ${styles.founderChip}`}>
+                          Founder
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>

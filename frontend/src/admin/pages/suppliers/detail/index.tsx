@@ -577,6 +577,10 @@ export default function SupplierDetailPage() {
               <dd className={styles.mono}>{websiteHost || '—'}</dd>
             </div>
             <div>
+              <dt>Founding distributor</dt>
+              <dd>{supplier.founder ? 'Yes' : 'No'}</dd>
+            </div>
+            <div>
               <dt>Categories</dt>
               <dd>
                 {supplier.categories && supplier.categories.length > 0
