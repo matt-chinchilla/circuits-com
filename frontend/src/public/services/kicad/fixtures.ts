@@ -4,7 +4,7 @@
 // SOURCE beside them; the synthetic documents below are hand-written minimal
 // KiCad files, one per reader rule, like the BOM parser's own fixtures.
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
-import { join, relative, resolve } from 'node:path';
+import { join, relative, resolve, sep } from 'node:path';
 
 const ROOT = resolve(__dirname, 'fixtures');
 
@@ -15,12 +15,24 @@ function walk(dir: string): string[] {
   });
 }
 
+/** The provenance files that sit beside every set. Not fixtures — a project
+ *  built out of them would carry two files KiCad never wrote. */
+const META_FILES = new Set(['LICENSE', 'SOURCE']);
+
 /** Every file of a set as `File`s named by their path relative to the set. */
 export function fixtureFiles(set: string): File[] {
   const dir = join(ROOT, set);
+  // Normalise ONCE, before anything else reads the path. The exclusion below
+  // used to test the raw `walk()` result, which carries the PLATFORM separator
+  // (`path.join`), while the slashes were only fixed later in the `.map()` — so
+  // on Windows `…\LICENSE` matched neither `/LICENSE` nor `/SOURCE` and both
+  // files went into the project. `sep`, never a literal backslash: on POSIX a
+  // backslash is a legal filename character, and splitting on it would rewrite
+  // `odd\name.kicad_sch` into a directory that never existed.
   return walk(dir)
-    .filter((p) => !p.endsWith('/LICENSE') && !p.endsWith('/SOURCE'))
-    .map((p) => new File([readFileSync(p)], relative(dir, p).split('\\').join('/')));
+    .map((path) => ({ path, name: relative(dir, path).split(sep).join('/') }))
+    .filter(({ name }) => !META_FILES.has(name.slice(name.lastIndexOf('/') + 1)))
+    .map(({ path, name }) => new File([readFileSync(path)], name));
 }
 
 export function fixtureText(rel: string): string {
