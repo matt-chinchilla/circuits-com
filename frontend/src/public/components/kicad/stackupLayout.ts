@@ -68,10 +68,6 @@ export function formatMm(value: number | null): string {
   return value != null && Number.isFinite(value) ? value.toFixed(4) : ABSENT;
 }
 
-/** A row's thickness when the file recorded a usable one. Both null (never
- *  recorded) and 0 (a row of no height) come back null, because neither can be
- *  weighed in a proportional stack — the TABLE is where the two stay apart,
- *  since formatMm renders 0 as "0.0000" and null as the placeholder. */
 /** A millimetre figure with its unit, or null when there is no figure. ONE
  *  formatter for the Thk column and for the two totals (via `formatMm`), so the
  *  table and the summary can never print the same number to different
@@ -83,6 +79,10 @@ function mmWithUnit(value: number | null): string | null {
   return value == null || !Number.isFinite(value) ? null : `${formatMm(value)} mm`;
 }
 
+/** A row's thickness when the file recorded a usable one. Both null (never
+ *  recorded) and 0 (a row of no height) come back null, because neither can be
+ *  weighed in a proportional stack — the TABLE is where the two stay apart,
+ *  since formatMm renders 0 as "0.0000" and null as the placeholder. */
 function measuredMm(r: BandRow): number | null {
   return r.thicknessMm != null && r.thicknessMm > 0 ? r.thicknessMm : null;
 }
