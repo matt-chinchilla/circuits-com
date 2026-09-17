@@ -387,6 +387,30 @@ describe('the stylesheet the figure depends on', () => {
     }
   });
 
+  it('drops to two columns below $bp-tablet, because three never fit the card there', () => {
+    // Three columns need their floors plus two gaps — 220 + 260 + 180 + 40 =
+    // 700px of CONTENT — and the panel's content box is the viewport less 40
+    // (.page) less 32 (.panel padding) less 2 (its border), so 700px does not
+    // arrive until 774px. Held at three, the grid overflowed the card by 5px at
+    // 769px. Read from the SOURCE: vitest runs with CSS off, so the class names
+    // the DOM assertions above use prove nothing about any rule.
+    const body = ruleBody('.zones');
+    // The three-column default, and the floors this arithmetic is about.
+    expect(body).toMatch(
+      /grid-template-columns:\s*minmax\(220px, 1fr\) minmax\(260px, 1\.2fr\) minmax\(180px, 0\.8fr\)/,
+    );
+    // The step: two columns from $bp-mobile to $bp-tablet, summary spanning.
+    const step = body.slice(body.indexOf('responsive($bp-tablet)'));
+    expect(step).not.toBe('');
+    expect(step).toMatch(/grid-template-columns:\s*minmax\(220px, 1fr\) minmax\(260px, 1\.2fr\);/);
+    expect(step).toMatch(/grid-column:\s*1 \/ -1/);
+    // …and one column on a phone, still the last word in the file so that it
+    // wins at 768px where both queries match.
+    expect(body.indexOf('responsive($bp-mobile)')).toBeGreaterThan(
+      body.indexOf('responsive($bp-tablet)'),
+    );
+  });
+
   it('keeps the label font smaller than the gap the placement reserves for it', () => {
     // The two halves of one measurement living in two files: `.label`'s
     // font-size here, LABEL_GAP in the component. A font raised past the gap

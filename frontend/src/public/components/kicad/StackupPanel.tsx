@@ -16,10 +16,12 @@ import styles from './StackupPanel.module.scss';
  *
  * The svg is `width="100%"`, so ONE unit is not one pixel: everything inside
  * scales with the column. WIDTH is deliberately close to the narrowest column
- * the zones grid can hand it (220px), which keeps that scale near 1 rather
- * than shrinking a 10-unit label into an unreadable 6px — measured at the
- * tablet worst case (a ~243px column) as 9.3px, and 12.5px at a 390px phone
- * where the grid has already reflowed to one column.
+ * the zones grid can hand it (its 220px floor), which keeps that scale near 1
+ * rather than shrinking a 10-unit label into an unreadable 6px. A column ON
+ * that floor scales the label to 8.46px, which is why `.zones` steps down to
+ * two columns below $bp-tablet rather than holding three at their floors: the
+ * figure gets 307px at 769px (11.8px labels) and 12.6px at a 390px phone, where
+ * the grid has already reflowed to one column.
  *
  * HEIGHT is a starting point, not a promise: a stack with more rows than it can
  * floor is drawn in a taller box instead (see `height` below).

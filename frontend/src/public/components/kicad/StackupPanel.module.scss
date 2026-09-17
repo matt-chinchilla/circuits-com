@@ -25,6 +25,27 @@
   gap: 20px;
   align-items: start;
 
+  // Three columns need 700px of CONTENT — the floors 220 + 260 + 180, plus two
+  // 20px gaps — and the panel's content box is the viewport less 40 (.page side
+  // padding) less 32 (.panel padding) less 2 (.panel border). 700px therefore
+  // does not arrive until 774px, so the three-column grid overflowed the card by
+  // 5px at 769px, the first width past $bp-mobile. Fitting is not the only
+  // question either: for a good way above that every column sits ON its floor,
+  // and a 220px figure scales the svg's 10-unit labels (WIDTH 260) to 8.46px.
+  //
+  // Hence a step, not lower floors: from $bp-mobile to $bp-tablet the figure
+  // takes one column beside the table and the summary spans underneath. Two
+  // floors and one gap are 500px, which fits from 769px on, and the figure is
+  // handed 307px at 769px (labels 11.8px) rising to 423px at 1024px — the same
+  // range the already-reflowed phone layout gives it.
+  @include responsive($bp-tablet) {
+    grid-template-columns: minmax(220px, 1fr) minmax(260px, 1.2fr);
+
+    .summary {
+      grid-column: 1 / -1;
+    }
+  }
+
   @include responsive($bp-mobile) {
     grid-template-columns: 1fr;
   }
