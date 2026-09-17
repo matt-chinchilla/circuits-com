@@ -34,6 +34,7 @@ import { isDataImage, safeHttpUrl, safeImageUrl } from '@shared/utils/url';
 import { brandVars, CsCopy, csTelHref, mountTileField } from './csFx';
 import type { TileField } from './csFx';
 import uploadIcon from './upload-icon.png';
+import FounderBadge from '@public/components/widgets/FounderBadge';
 import './categorySponsor.scss';
 
 interface BoardData {
@@ -50,6 +51,7 @@ interface BoardData {
   designator?: string;
   brandPrimary?: string;
   brandSecondary?: string;
+  founder?: boolean;
 }
 
 interface PitchState {
@@ -411,6 +413,7 @@ export default function CategorySponsor({
         email: sponsor.email || '',
         websiteHref: safeHttpUrl(sponsor.website),
         designator: 'CS1 · CATEGORY-SPONSOR',
+        founder: sponsor.founder === true,
         // Brand takeover of a REAL sponsor uses the STORED hex (never pixel-
         // extracted from a remote logo — canvas taint). safeHexColor gates the
         // #RRGGBB shape; a null/invalid value → undefined → platinum default.
@@ -583,19 +586,22 @@ export default function CategorySponsor({
             )}
           </button>
           <span className="csbA-co">
-            {s.websiteHref ? (
-              <a
-                className="csbA-coname"
-                href={s.websiteHref}
-                target="_blank"
-                rel="sponsored noopener noreferrer"
-                title={'Visit ' + s.company}
-              >
-                {s.company}
-              </a>
-            ) : (
-              <span className="csbA-coname">{s.company}</span>
-            )}
+            <span className="csbA-conamerow">
+              {s.websiteHref ? (
+                <a
+                  className="csbA-coname"
+                  href={s.websiteHref}
+                  target="_blank"
+                  rel="sponsored noopener noreferrer"
+                  title={'Visit ' + s.company}
+                >
+                  {s.company}
+                </a>
+              ) : (
+                <span className="csbA-coname">{s.company}</span>
+              )}
+              {s.founder && <FounderBadge size={22} />}
+            </span>
           </span>
         </div>
       </div>

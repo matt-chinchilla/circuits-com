@@ -12,6 +12,9 @@ export interface Sponsor {
   phone: string | null;
   email: string | null;
   contact_name: string | null;
+  // 054 founding-distributor flag, read off the joined supplier. Optional:
+  // a service-worker-cached category payload predates the key.
+  founder?: boolean | null;
 }
 
 /**
@@ -37,6 +40,7 @@ export interface PlatinumSponsor {
   brand_primary?: string | null;
   brand_secondary?: string | null;
   brand_takeover?: boolean | null;
+  founder?: boolean | null; // 054 — see Sponsor
 }
 
 /**
@@ -55,4 +59,5 @@ export interface PartnerSupplier {
   contact_role?: string | null;
   description?: string | null;
   logo_url?: string | null;
+  founder?: boolean | null; // 054 — see Sponsor
 }

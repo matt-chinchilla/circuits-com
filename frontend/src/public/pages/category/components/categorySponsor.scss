@@ -445,6 +445,14 @@
   gap: 3px;
   min-width: 0;
 }
+/* The name and its founder pin on one row — the badge sits BESIDE the
+   link, never inside it. */
+.csbA-conamerow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
 .csbA-coname {
   font-family: var(--font-heading);
   font-size: 1.42rem;

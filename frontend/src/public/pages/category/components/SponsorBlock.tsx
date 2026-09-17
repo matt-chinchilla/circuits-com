@@ -4,6 +4,7 @@ import type { Sponsor } from '@public/types/sponsor';
 import { isDataImage, safeHttpUrl, safeImageUrl } from '@shared/utils/url';
 import { lettermark } from '@shared/utils/lettermark';
 import { formatPhone } from '@shared/utils/phone';
+import FounderBadge from '@public/components/widgets/FounderBadge';
 import styles from './SponsorBlock.module.scss';
 
 interface SponsorBlockProps {
@@ -541,7 +542,10 @@ export default function SponsorBlock({ sponsor }: SponsorBlockProps) {
         <SbLogo src={safeImageUrl(sponsor.image_url ?? sponsor.logo_url)} name={sponsor.supplier_name} />
       </div>
 
-      <h3 className={styles.name}>{sponsor.supplier_name}</h3>
+      <h3 className={styles.name}>
+        <span className={styles.nameText}>{sponsor.supplier_name}</span>
+        {sponsor.founder === true && <FounderBadge size={18} />}
+      </h3>
 
       {sponsor.description && <p className={styles.description}>{sponsor.description}</p>}
 

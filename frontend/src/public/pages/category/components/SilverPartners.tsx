@@ -21,6 +21,7 @@ import CircuitTraces from '@public/components/widgets/CircuitTraces';
 import type { PartnerSupplier } from '@public/types/sponsor';
 import { isDataImage, safeHttpUrl, safeImageUrl } from '@shared/utils/url';
 import { formatPhone } from '@shared/utils/phone';
+import FounderBadge from '@public/components/widgets/FounderBadge';
 import { CsCopy, csTelHref } from './csFx';
 import { api } from '@public/services/api';
 import SilverCheckoutModal from './SilverCheckoutModal';
@@ -64,11 +65,13 @@ interface SvChipData {
   role: string;
   phone: string;
   email: string;
+  founder: boolean;
 }
 
 function toChipData(s: PartnerSupplier): SvChipData {
   return {
     name: s.name,
+    founder: s.founder === true,
     lettermark: svLettermark(s.name),
     logoSrc: safeImageUrl(s.logo_url),
     // The stored website may be a bare host (digikey.com) OR already-schemed.
@@ -146,6 +149,7 @@ const SvChip = ({
     <div className="svp-col">
       <span className="svp-coname">
         <span className="svp-conametxt">{s.name}</span>
+        {s.founder && <FounderBadge size={15} />}
       </span>
       {s.website && (
         <a

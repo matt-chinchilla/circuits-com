@@ -438,8 +438,16 @@
   @include truncate;
 }
 
+// The name is a flex row so the founder pin can sit beside it; the
+// truncation moves onto the text span (a flex item can't ellipsize itself).
 .name {
   color: #f4ecd6;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.nameText {
+  @include truncate;
 }
 
 .title {
