@@ -579,6 +579,13 @@ def get_category_by_slug(
             "contact_role": s.contact_role,
             "description": s.description,
             "logo_url": s.logo_url,
+            # This dict is the ONE hand-built payload declared as a
+            # SupplierResponse (`CategoryDetailResponse.silver`), and the route
+            # has no response_model to catch the drift — a key named by the
+            # schema but missing here reads back as the field default the
+            # moment anyone does validate through it. 054's founder flag has
+            # to be listed by both sites or neither.
+            "founder": bool(s.founder),
         }
         for s in silver_rows
     ]

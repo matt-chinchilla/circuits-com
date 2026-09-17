@@ -139,6 +139,27 @@ def test_post_refuses_an_explicit_null_with_422(client, seeded_db):
     assert resp.status_code == 422, resp.text
 
 
+def test_the_silver_directory_carries_the_flag(client, db, tier_boards, seeded_db):
+    """`CategoryDetailResponse.silver` is declared `list[SupplierResponse]`,
+    but `GET /api/categories/{slug}` has no response_model and the payload is
+    built field by field in category_service — so a field the schema names and
+    the dict omits is simply absent today, and would read back as the field
+    DEFAULT (False) the day anything validates through that schema. The
+    Silver board is also where a founding-distributor mark would most
+    plausibly render."""
+    supplier = seeded_db["supplier1"]
+    supplier.founder = True
+    db.commit()
+
+    body = client.get(f"/api/categories/{tier_boards['child2'].slug}").json()
+    by_name = {s["name"]: s for s in body["silver"]}
+    assert by_name, "the tier_boards fixture seeds two Silver sponsors"
+    assert all("founder" in s for s in by_name.values()), by_name
+    assert by_name[supplier.name]["founder"] is True
+    # The other Silver occupant is untouched — not a blanket true.
+    assert by_name[seeded_db["supplier2"].name]["founder"] is False
+
+
 # ── (d) the read-only staff wall (alembic 051) ──────────────────────────────
 
 
