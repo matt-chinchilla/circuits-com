@@ -256,6 +256,14 @@ def update_supplier(
     supplier = _supplier_or_404(db, supplier_id)
 
     update_data = body.model_dump(exclude_unset=True)
+
+    # Every other column on this schema is nullable, so an explicit null
+    # legitimately CLEARS it. `founder` (054) backs a NOT NULL column — a null
+    # there would only surface as a 500 IntegrityError at commit, so reject it
+    # as a 422 (admin_expenses does the same for its four required fields).
+    if "founder" in update_data and update_data["founder"] is None:
+        raise HTTPException(status_code=422, detail="founder cannot be null.")
+
     for key, value in update_data.items():
         setattr(supplier, key, value)
 

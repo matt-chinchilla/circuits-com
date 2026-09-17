@@ -113,6 +113,32 @@ def test_put_without_the_key_leaves_the_flag_alone(client, seeded_db):
     assert resp.json()["founder"] is True
 
 
+def test_put_refuses_an_explicit_null_with_422(client, seeded_db):
+    """`SupplierUpdate.founder` is `bool | None` because Pydantic needs the
+    None to mean "unset" — but it cannot tell an omitted key from an explicit
+    null, and this is the schema's first NOT NULL column. Without the guard
+    the setattr loop writes None and the request 500s at commit."""
+    headers = _auth_header(client)
+    created = client.post(
+        "/api/suppliers/", json={"name": "Null Founder Co", "founder": True}, headers=headers
+    ).json()
+    resp = client.put(f"/api/suppliers/{created['id']}", json={"founder": None}, headers=headers)
+    assert resp.status_code == 422, resp.text
+    # The rejected write left the row exactly as it was.
+    assert client.get(f"/api/suppliers/{created['id']}").json()["founder"] is True
+
+
+def test_post_refuses_an_explicit_null_with_422(client, seeded_db):
+    """The create path needs no guard — `SupplierCreate.founder` is a plain
+    `bool`, so Pydantic itself rejects the null. Pinned so a later "make it
+    optional like the others" edit has to notice it is load-bearing."""
+    headers = _auth_header(client)
+    resp = client.post(
+        "/api/suppliers/", json={"name": "Null Create Co", "founder": None}, headers=headers
+    )
+    assert resp.status_code == 422, resp.text
+
+
 # ── (d) the read-only staff wall (alembic 051) ──────────────────────────────
 
 
