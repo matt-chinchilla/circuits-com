@@ -10,4 +10,8 @@
   align-self: center;
   flex: 0 0 auto;
   overflow: visible;
+  // Breathing room from the name, on top of each row's 8px gap (owner,
+  // 2026-09-17: "a little bit more space"). In em so it scales with the
+  // name's type: ~6px on Platinum, ~5px on Gold, ~4px on Silver.
+  margin-inline-start: 0.28em;
 }
