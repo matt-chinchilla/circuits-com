@@ -24,3 +24,19 @@ holds the full story — evidence, measurements, dates, refuted hypotheses.
 - **Circle completion at Gold/Silver/keyword is gated on `isDataImage(src) && naturalWidth===naturalHeight` in `onLoad`** — NOT on data-URL-ness alone: pre-2026-07 uploads were aspect-preserving (rectangular data-URL wordmarks exist in the DB) and must keep letterbox rendering. New crops are always square → circle-clip class per site (`logoCropped`/`svp-markimg-cropped`/`logoFull`). Known heuristic limit: a legacy data-URL from a SQUARE source will circle-crop (corners clipped) — "my logo's corners got cut" reports trace here. Platinum always circle-clipped, but round 2 (`a995e18`) adds the same `onLoad` gate to `CsLogo` (it had `onError` only) driving a new `csbA-logoimg-flush` class, and ALL 4 sites' cropped classes now size FLUSH to their solid rim (`calc(100% - Npx)` + `object-fit: cover`; rims are INSET box-shadows that paint under the img, hence the calc; keyword's `.logoFull` needs its `max-width/height: 100%` lines — the base `.logo` caps at 80%); legacy letterboxed logos stay gated out identically. Admin thumbnails stay rounded-square.
 
 - **Admin sponsors LIST — column-header sort/filter + supplier→placement link (2026-07-29)** — `/admin/sponsors` reuses the admin PARTS-list LOCAL `ColumnHeader` (discriminated `kind: sort-only|text-multi|bucket-numeric`; admin↛@public forbids the public category `ColumnHeader`, so DON'T import it — port the admin one). Tier sorts by `SPONSOR_TIER_RANK` (NOT alphabetical); the 6 column filters COMPOSE with the tier chips + search. Clip fix: SponsorsPage `.panel` overflow `hidden→visible` + per-corner radii, `.tableWrap` loses `overflow-x:auto` (moved onto `.table` ≤820px) — both clipped the absolute dropdown. PartsPage uses LOCAL `$a-*` SCSS tokens, SponsorsPage uses `var(--a-*)` — translate when porting. Supplier name → live placement via `sponsors/placementPath.ts` (+vitest): `category_id`→`categoryPath(slug,parentSlug)` (`@shared`, admin-OK), `keyword`→`/keyword/<encodeURIComponent(trim)>`; built from a best-effort cancel-flagged `getCategories()` id→slug index (`buildCategoryIndex`), links degrade to plain text on fetch fail.
+
+
+## Founder badge on the boards (2026-09-17/18)
+
+Beside the company name on Platinum (`CategorySponsor.tsx`, 22px), Gold (`SponsorBlock.tsx`, 18px)
+and Silver (`SilverPartners.tsx`, 15px) sits `<FounderBadge look={s.badge} size={N} />` from
+`@shared/components/FounderBadge/`: a thin React host around the owner's `<fire-badge>` custom
+element (Claude Design project "Burning Badge", vendored byte-identical, sha in `PROVENANCE.md`).
+The element paints an enamel pin plus a canvas particle fire that rises ~2.4× the pin's size ABOVE
+it — the Gold `h3` needed `overflow: visible` (the truncate mixin's `overflow: hidden` clipped the
+flame; ellipsis lives on `.nameText`). `s.badge` is `{key, scheme, intensity, opacity, sparks} |
+null` from `services/badges.supplier_badge_fields` (a payload with no enabled founder-family row
+renders nothing). Look changes come from the admin/customer `BadgeEditorOverlay`; a write clears
+the category cache through `invalidate_catalog_caches()`. Spec:
+`docs/superpowers/specs/2026-09-18-supplier-badges-design.md`. Design captures and the editor
+proof live under `.superpowers/sdd/2026-09-1{7-supplier-founder,8-supplier-badges}/` (gitignored).
