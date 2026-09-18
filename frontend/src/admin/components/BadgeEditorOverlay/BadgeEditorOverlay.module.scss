@@ -1,0 +1,260 @@
+// BadgeEditorOverlay — full-viewport badge editor.
+//
+// The ink is the design page's own `#1c1f22`: the mark is a FIRE, and the
+// only honest place to judge one is against something near-black. That is
+// also why this overlay is not a card on the admin bench — a pale surface
+// would flatter every scheme equally and decide nothing.
+//
+// Height budget (the owner's rule: never a scroll at 1366x768) —
+//   bar 64 + schemes 160 + boards 120 + paddings ~= 420px.
+// The fire reaches 2.4x the pin ABOVE it and one pin to each side and costs
+// NO layout, so every row here keeps `overflow: visible` and buys its
+// headroom with padding instead.
+
+@use '@shared/styles/variables' as *;
+
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: #1c1f22;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  overflow: visible;
+}
+
+.sheet {
+  width: 100%;
+  max-width: 1180px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  color: #e6e9ee;
+}
+
+// ── Top bar ────────────────────────────────────────────────────────────────
+
+.bar {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 18px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(230, 233, 238, 0.14);
+}
+
+.title {
+  font-family: $font-heading;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  margin: 0;
+  color: #f2f4f7;
+  margin-right: auto;
+}
+
+.control {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 12px;
+}
+
+.controlLabel {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(230, 233, 238, 0.55);
+}
+
+.select {
+  font: inherit;
+  // Body's 1.6 overflows a height-constrained control (house gotcha).
+  line-height: 1;
+  font-size: 13px;
+  padding: 7px 9px;
+  border-radius: 6px;
+  border: 1px solid rgba(230, 233, 238, 0.22);
+  background: #24282c;
+  color: #e6e9ee;
+  cursor: pointer;
+}
+
+.sliderRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.value {
+  font-family: $font-mono;
+  font-size: 12px;
+  color: rgba(230, 233, 238, 0.75);
+  min-width: 34px;
+}
+
+.barActions {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.btn {
+  font: inherit;
+  line-height: 1;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 9px 16px;
+  border-radius: 6px;
+  border: 1px solid rgba(230, 233, 238, 0.24);
+  background: transparent;
+  color: #e6e9ee;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+}
+
+.btnPrimary {
+  background: $nav-blue;
+  border-color: $nav-blue;
+  color: #0b1a10;
+}
+
+.btnDanger {
+  color: #ff8b7a;
+  border-color: rgba(255, 139, 122, 0.45);
+}
+
+.error {
+  font-size: 13px;
+  color: #ff8b7a;
+}
+
+// ── Sections ───────────────────────────────────────────────────────────────
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sectionTitle {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(230, 233, 238, 0.55);
+  margin: 0;
+}
+
+.schemes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  // Headroom for the fire, which paints well above the pin without
+  // occupying a pixel of layout.
+  padding-top: 26px;
+  overflow: visible;
+}
+
+.swatch {
+  flex: 1 1 96px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 6px 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(230, 233, 238, 0.12);
+  background: rgba(255, 255, 255, 0.02);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  overflow: visible;
+
+  &[aria-pressed='true'] {
+    border-color: $nav-blue;
+    background: rgba(68, 189, 19, 0.1);
+  }
+}
+
+.swatchName {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(230, 233, 238, 0.7);
+}
+
+// ── Board previews ─────────────────────────────────────────────────────────
+
+.boards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+
+  @media (max-width: 900px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.board {
+  border-radius: 10px;
+  border: 1px solid rgba(230, 233, 238, 0.1);
+  padding: 22px 20px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: visible;
+}
+
+.boardName {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  overflow: visible;
+}
+
+.boardTier {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(230, 233, 238, 0.4);
+}
+
+// The three boards' real inks and type, so the preview IS the answer.
+.boardPlatinum {
+  background: linear-gradient(135deg, #2c3138, #171a1e);
+
+  .boardName {
+    color: #e6e9ee;
+    font-weight: 700;
+    font-size: 22.7px;
+  }
+}
+
+.boardGold {
+  background: radial-gradient(circle at 30% 20%, #2a2410, #0f0e08 70%);
+
+  .boardName {
+    color: #f4ecd6;
+    font-weight: 700;
+    font-size: 18.9px;
+  }
+}
+
+.boardSilver {
+  background: #14171a;
+
+  .boardName {
+    color: #efe6cf;
+    font-weight: 700;
+    font-size: 14.7px;
+  }
+}

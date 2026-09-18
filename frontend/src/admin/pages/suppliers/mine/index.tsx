@@ -12,6 +12,7 @@
 import { useEffect, useState } from 'react';
 import { Link2Off } from 'lucide-react';
 
+import BadgeEditorOverlay from '@admin/components/BadgeEditorOverlay/BadgeEditorOverlay';
 import BadgesPanel from '@admin/components/BadgesPanel/BadgesPanel';
 import { useAuth } from '@admin/contexts/AuthContext';
 import { accountApi, isNotLinked } from '@admin/services/accountApi';
@@ -42,6 +43,8 @@ export default function MySupplyPage() {
   // See the staff detail page: the panel raises the row, the page owns the
   // full-viewport overlay.
   const [editing, setEditing] = useState<SupplierBadge | null>(null);
+  // Bumped on a save so the panel re-reads the row it just changed.
+  const [badgeRefresh, setBadgeRefresh] = useState(0);
 
   useEffect(() => {
     if (!isSupplier) {
@@ -104,9 +107,18 @@ export default function MySupplyPage() {
             partsLabel="Parts you stock"
             tier={account?.tier ?? null}
           />
-          <BadgesPanel mode="account" onEdit={setEditing} />
-          {/* Task 7 mounts <BadgeEditorOverlay> here. */}
-          {editing !== null && null}
+          <BadgesPanel mode="account" onEdit={setEditing} reloadKey={badgeRefresh} />
+          {editing && (
+            <BadgeEditorOverlay
+              mode="account"
+              row={editing}
+              // No customer catalogue door: the overlay offers the key held.
+              catalogue={[]}
+              supplierName={supplier.name}
+              onClose={() => setEditing(null)}
+              onSaved={() => setBadgeRefresh((n) => n + 1)}
+            />
+          )}
         </>
       )}
     </MyCompanyShell>

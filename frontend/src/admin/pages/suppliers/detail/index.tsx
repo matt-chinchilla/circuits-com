@@ -20,7 +20,14 @@ import {
   type RunTally,
   type SyncEvent,
 } from '@admin/services/syncStream';
-import type { AdminSupplier, Part, PaginatedResponse, SupplierBadge } from '@admin/types/admin';
+import type {
+  AdminSupplier,
+  BadgeDef,
+  Part,
+  PaginatedResponse,
+  SupplierBadge,
+} from '@admin/types/admin';
+import BadgeEditorOverlay from '@admin/components/BadgeEditorOverlay/BadgeEditorOverlay';
 import BadgesPanel from '@admin/components/BadgesPanel/BadgesPanel';
 import QuickActionsPanel from './QuickActionsPanel';
 import SyncConsole from './SyncConsole';
@@ -60,6 +67,27 @@ export default function SupplierDetailPage() {
   // hands it up rather than mounting the overlay itself: the overlay is
   // full-viewport and would be trapped in the panel's stacking context.
   const [editing, setEditing] = useState<SupplierBadge | null>(null);
+  // The catalogue rides here rather than up from the panel: the overlay needs
+  // it to offer the family's artwork, and the read is cached, so the panel's
+  // own call and this one are ONE request.
+  const [badgeCatalogue, setBadgeCatalogue] = useState<BadgeDef[]>([]);
+  // Bumped on a save so the panel re-reads the row it just changed.
+  const [badgeRefresh, setBadgeRefresh] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    adminApi
+      .getBadgeCatalogue()
+      .then((rows) => {
+        if (!cancelled) setBadgeCatalogue(rows);
+      })
+      // A missing catalogue is not worth a page-level error: the overlay falls
+      // back to the artwork the holding already names.
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const [parts, setParts] = useState<PaginatedResponse<Part> | null>(null);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
@@ -631,9 +659,18 @@ export default function SupplierDetailPage() {
         </div>
       </div>
 
-      <BadgesPanel mode="staff" supplierId={id} onEdit={setEditing} />
-      {/* Task 7 mounts <BadgeEditorOverlay> here. */}
-      {editing !== null && null}
+      <BadgesPanel mode="staff" supplierId={id} onEdit={setEditing} reloadKey={badgeRefresh} />
+      {editing && supplier && (
+        <BadgeEditorOverlay
+          mode="staff"
+          supplierId={id}
+          row={editing}
+          catalogue={badgeCatalogue}
+          supplierName={supplier.name}
+          onClose={() => setEditing(null)}
+          onSaved={() => setBadgeRefresh((n) => n + 1)}
+        />
+      )}
 
       <div className={`${styles.panel} ${styles.partsPanel}`}>
         <div className={styles.panelHead}>

@@ -33,13 +33,18 @@ export interface BadgesPanelProps {
   /** Staff: required — the supplier whose holdings these are. */
   supplierId?: string;
   onEdit: (row: SupplierBadge) => void;
+  /** Bumped by the page when the EDITOR saved: the overlay's write happened
+   *  outside this component, so the panel needs telling that its row moved. */
+  reloadKey?: number;
 }
 
 const BADGE_SCOPES = ['badges'] as const;
 
-export default function BadgesPanel({ mode, supplierId, onEdit }: BadgesPanelProps) {
+export default function BadgesPanel({ mode, supplierId, onEdit, reloadKey = 0 }: BadgesPanelProps) {
   const staff = mode === 'staff';
   const [reload, setReload] = useState(0);
+  // The page's saves and this panel's own writes share one counter.
+  const turn = reload + reloadKey;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Two-click revoke rather than the browser's native confirmation dialog: a
@@ -54,9 +59,9 @@ export default function BadgesPanel({ mode, supplierId, onEdit }: BadgesPanelPro
 
   const rowsKey = staff
     ? supplierId
-      ? `badges:panel:${supplierId}:${reload}`
+      ? `badges:panel:${supplierId}:${turn}`
       : null
-    : `badges:panel:mine:${reload}`;
+    : `badges:panel:mine:${turn}`;
 
   const rowsQ = useCachedQuery<SupplierBadge[]>(
     rowsKey,
@@ -66,7 +71,7 @@ export default function BadgesPanel({ mode, supplierId, onEdit }: BadgesPanelPro
 
   // The catalogue is a staff door only — a customer has no `GET /api/badges`.
   const catalogueQ = useCachedQuery<BadgeDef[]>(
-    staff ? `badges:panel-catalogue:${reload}` : null,
+    staff ? `badges:panel-catalogue:${turn}` : null,
     () => adminApi.getBadgeCatalogue(),
     { scopes: BADGE_SCOPES },
   );
