@@ -39,6 +39,7 @@ from app.routes import (
     sponsors,
     stats,
     stripe_webhooks,
+    supplier_badges,
     suppliers,
 )
 from app.routes.categories import warm_category_cache
@@ -69,6 +70,7 @@ app.add_middleware(
 
 app.include_router(categories.router)
 app.include_router(suppliers.router)
+app.include_router(supplier_badges.router)
 app.include_router(search.router)
 # Public derived manufacturers (/api/manufacturers) — no collision with the
 # admin CRM router, which mounts at /api/admin/manufacturers.

@@ -19,6 +19,7 @@ from app.models import (
     Revenue,
     Sponsor,
     Supplier,
+    SupplierBadge,
     SupplierFeed,
     User,
 )
@@ -315,6 +316,13 @@ def delete_supplier(
     # that is gone has no nightly import, and the FK carries no cascade, so this
     # row has to go before the supplier does or the DELETE dies on it.
     db.query(SupplierFeed).filter(SupplierFeed.supplier_id == supplier.id).delete(
+        synchronize_session=False
+    )
+    # Badge holdings are dependents too (055): a company that is gone holds
+    # nothing. The FK carries ON DELETE CASCADE, but SQLite does not enforce
+    # foreign keys by default and `Supplier.badges` is a loaded relationship,
+    # so the ORM would otherwise try to blank out the child rows itself.
+    db.query(SupplierBadge).filter(SupplierBadge.supplier_id == supplier.id).delete(
         synchronize_session=False
     )
 

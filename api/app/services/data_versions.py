@@ -53,6 +53,10 @@ SCOPES: dict[str, tuple[str, ...]] = {
     "people": ("users",),
     "messages": ("messages",),
     "leads": ("leads", "lead_contacts"),
+    # A table may sit in TWO scopes: the boards read the badge rows as part of
+    # `catalog`, while the badge editor's own reads want a fingerprint that
+    # moves on a grant WITHOUT the whole catalog (any part write) moving.
+    "badges": ("badges", "supplier_badges"),
 }
 
 _TABLES: tuple[str, ...] = tuple(sorted({t for tables in SCOPES.values() for t in tables}))
