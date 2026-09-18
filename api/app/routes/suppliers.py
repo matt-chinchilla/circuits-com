@@ -25,6 +25,7 @@ from app.models import (
 from app.services.auth_service import (
     require_staff,
 )
+from app.services.badges import supplier_badge_fields
 from app.services.part_feed import (
     PartFeedProvider,
     get_feed_key,
@@ -98,10 +99,6 @@ class SupplierCreate(BaseModel):
     logo_url: str | None = None
     brand_primary: str | None = None
     brand_secondary: str | None = None
-    # Founding-distributor incentive flag (054). Absent key → False, which is
-    # what every supplier in both databases is today.
-    founder: bool = False
-
     @field_validator("logo_url")
     @classmethod
     def _validate_logo_url(cls, v: str | None) -> str | None:
@@ -125,10 +122,6 @@ class SupplierUpdate(BaseModel):
     logo_url: str | None = None
     brand_primary: str | None = None
     brand_secondary: str | None = None
-    # None means "the caller said nothing" — update_supplier dumps with
-    # exclude_unset, so an omitted key leaves the stored flag alone.
-    founder: bool | None = None
-
     @field_validator("logo_url")
     @classmethod
     def _validate_logo_url(cls, v: str | None) -> str | None:
@@ -154,7 +147,10 @@ def supplier_to_dict(supplier: Supplier) -> dict:
         "logo_url": supplier.logo_url,
         "brand_primary": supplier.brand_primary,
         "brand_secondary": supplier.brand_secondary,
-        "founder": bool(supplier.founder),
+        # DERIVED since 055 — an enabled founder-family holding, read through
+        # the one home. There is no column to write, so neither SupplierCreate
+        # nor SupplierUpdate names it; the grant is its own route.
+        "founder": supplier_badge_fields(supplier)["founder"],
     }
 
 
@@ -212,7 +208,6 @@ def create_supplier(
         logo_url=body.logo_url,
         brand_primary=body.brand_primary,
         brand_secondary=body.brand_secondary,
-        founder=body.founder,
     )
     db.add(supplier)
     db.commit()
@@ -256,13 +251,6 @@ def update_supplier(
     supplier = _supplier_or_404(db, supplier_id)
 
     update_data = body.model_dump(exclude_unset=True)
-
-    # Every other column on this schema is nullable, so an explicit null
-    # legitimately CLEARS it. `founder` (054) backs a NOT NULL column — a null
-    # there would only surface as a 500 IntegrityError at commit, so reject it
-    # as a 422 (admin_expenses does the same for its four required fields).
-    if "founder" in update_data and update_data["founder"] is None:
-        raise HTTPException(status_code=422, detail="founder cannot be null.")
 
     for key, value in update_data.items():
         setattr(supplier, key, value)

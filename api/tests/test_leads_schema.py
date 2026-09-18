@@ -117,7 +117,16 @@ CARRIED_BY_HAND = {
 # safety dump. bom_shares moved OUT of here 2026-08-25: with users carried, a
 # customer's saved BOM links restore cleanly, and "accepted loss" only ever
 # made sense while their account died anyway.
-ACCEPTED_LOSSES = {"activity_events"}
+#
+# supplier_badges (055) is the same shape as activity_events: a holding is
+# keyed to a supplier uuid the seed re-mints, so a carried row would name a
+# distributor that no longer exists. This is NOT a new loss — 054's
+# `suppliers.founder` column was already truncated away with its table, and
+# 055 keeps that behavior exactly. The CATALOGUE (`badges`) is outside the
+# cascade (nothing truncated REFERENCES it) and `_seed_badges` rebuilds it
+# from source, so after a reseed the editor still offers both founder keys —
+# only the GRANTS have to be re-applied by hand, and there is one today.
+ACCEPTED_LOSSES = {"activity_events", "supplier_badges"}
 
 
 def _truncate_cascade_closure(metadata=None) -> set[str]:

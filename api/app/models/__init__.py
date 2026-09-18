@@ -1,4 +1,5 @@
 from .activity_event import ActivityEvent
+from .badge import Badge, SupplierBadge
 from .bom_share import BomShare
 from .calendar_event import CalendarEvent, CalendarReminderSend
 from .category import Category
@@ -19,6 +20,8 @@ from .supplier_feed import SupplierFeed
 from .user import User
 
 __all__ = [
+    "Badge",
+    "SupplierBadge",
     "BomShare",
     "Category",
     "Supplier",

@@ -1,7 +1,7 @@
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, String, Text, false, text
+from sqlalchemy import Column, DateTime, ForeignKey, Index, String, Text, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
@@ -45,17 +45,6 @@ class Supplier(Base):
     coverage_hours = Column(String(60), nullable=True)
     brand_primary = Column(String(9), nullable=True)
     brand_secondary = Column(String(9), nullable=True)
-    # Founding-distributor incentive flag (migration 054, owner 2026-09-17).
-    # Owner's rule, verbatim: "It will be a boolean that will remain `True`
-    # until the monthly-income we get from sponsors is over $5,000/month OR
-    # until I decide. This will be `False` for every single supplier in the
-    # DataBase right now because none of them are paying-customers yet."
-    # NOTHING automates that sunset yet — it is set by hand in /admin, and the
-    # $5,000/month trigger is a later decision. PER-ENVIRONMENT operational
-    # state, not catalog data: both halves of the catalog transfer skip it
-    # (test_catalog_transfer_scripts) so a `circuits push` from a local DB
-    # cannot clobber prod's flags.
-    founder = Column(Boolean, nullable=False, default=False, server_default=false())
     created_at = Column(
         DateTime(timezone=True),
         default=lambda: datetime.now(UTC),
@@ -69,6 +58,16 @@ class Supplier(Base):
     )
 
     category_associations = relationship("CategorySupplier", back_populates="supplier", lazy="selectin")
+    # Badge holdings (migration 055). `founder` is no longer a column — it is
+    # DERIVED from an enabled founder-family holding, through the one home
+    # `app/services/badges.py`. selectin so a list payload does not N+1;
+    # delete-orphan so deleting a supplier takes its holdings with it.
+    badges = relationship(
+        "SupplierBadge",
+        back_populates="supplier",
+        lazy="selectin",
+        cascade="all, delete-orphan",
+    )
 
 
 class CategorySupplier(Base):

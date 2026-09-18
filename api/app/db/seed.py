@@ -27,6 +27,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.db.session import SessionLocal
 from app.models import (
+    Badge,
     Category,
     CategorySupplier,
     Expense,
@@ -38,6 +39,7 @@ from app.models import (
     Supplier,
     User,
 )
+from app.models.badge import FOUNDER_BADGE_1, FOUNDER_BADGE_2, FOUNDER_FAMILY
 from app.models.expense import ESTIMATE_SOURCE, MANUAL_SOURCE
 from app.models.roles import ADMIN_ROLES
 from app.models.sponsor import is_single_slot
@@ -891,11 +893,46 @@ def get_or_create_sponsor(
 
 
 # ---------------------------------------------------------------------------
+# Badge catalogue (migration 055)
+# ---------------------------------------------------------------------------
+# What a badge CAN be. The holdings (`supplier_badges`) are per-environment
+# operational state the owner grants by hand, but the CATALOGUE is code — a
+# fresh database must carry both founder keys or the editor has nothing to
+# offer and 055's backfill has nothing to join on. `founder_badge_2` ships
+# `available=False`: it exists so a holding can point at it, but it is not
+# offered until the owner says so.
+BADGE_CATALOGUE = (
+    # key, family, label, available, sort_order
+    (FOUNDER_BADGE_1, FOUNDER_FAMILY, "Founding distributor", True, 0),
+    (FOUNDER_BADGE_2, FOUNDER_FAMILY, "Founding distributor (alternate)", False, 1),
+)
+
+
+def get_or_create_badge(db, key, family, label, available, sort_order) -> Badge:
+    obj = db.query(Badge).filter(Badge.key == key).first()
+    if obj is None:
+        obj = Badge(key=key, family=family, label=label, available=available, sort_order=sort_order)
+        db.add(obj)
+        db.flush()
+    return obj
+
+
+def _seed_badges(db) -> None:
+    for row in BADGE_CATALOGUE:
+        get_or_create_badge(db, *row)
+    db.commit()
+
+
+# ---------------------------------------------------------------------------
 # Main seed function
 # ---------------------------------------------------------------------------
 
 
 def seed(db: Session) -> None:
+    # The catalogue first: everything downstream that grants a badge needs a
+    # row to point at, and it is idempotent by key.
+    _seed_badges(db)
+
     # ------------------------------------------------------------------
     # 1. Categories and subcategories — driven by module-level CATEGORY_DATA
     # ------------------------------------------------------------------

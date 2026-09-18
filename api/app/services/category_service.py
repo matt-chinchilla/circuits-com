@@ -2,6 +2,7 @@ from sqlalchemy import case, func, nullslast, or_
 from sqlalchemy.orm import Session
 
 from app.models import Category, Part, PartListing, Sponsor, Supplier
+from app.services.badges import supplier_badge_fields
 
 
 def active_sponsor_filter():
@@ -113,10 +114,10 @@ def _sponsor_board_dict(sponsor: Sponsor, supplier: Supplier | None) -> dict:
         "brand_secondary": sponsor.brand_secondary
         or (supplier.brand_secondary if supplier else None),
         "brand_takeover": bool(sponsor.brand_primary or sponsor.brand_secondary),
-        # 054: the founding-distributor flag rides the Platinum + Gold boards so
+        # 055: the founding-distributor flag rides the Platinum + Gold boards so
         # the badge renders beside the company name. Per-environment state,
-        # read off the supplier — never off the sponsor row.
-        "founder": bool(supplier.founder) if supplier else False,
+        # DERIVED off the supplier's badge holdings — never off the sponsor row.
+        "founder": supplier_badge_fields(supplier)["founder"],
     }
 
 
@@ -587,9 +588,9 @@ def get_category_by_slug(
             # SupplierResponse (`CategoryDetailResponse.silver`), and the route
             # has no response_model to catch the drift — a key named by the
             # schema but missing here reads back as the field default the
-            # moment anyone does validate through it. 054's founder flag has
-            # to be listed by both sites or neither.
-            "founder": bool(s.founder),
+            # moment anyone does validate through it. The derived founder flag
+            # (055) has to be listed by both sites or neither.
+            "founder": supplier_badge_fields(s)["founder"],
         }
         for s in silver_rows
     ]

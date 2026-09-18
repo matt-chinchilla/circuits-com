@@ -77,6 +77,7 @@ def set_sqlite_pragma(dbapi_connection, connection_record):
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 # Import app-level objects AFTER env var is set
+from app.db.seed import _seed_badges  # noqa: E402
 from app.db.session import Base, get_db  # noqa: E402
 from app.main import app  # noqa: E402
 from app.models import (  # noqa: E402
@@ -216,6 +217,11 @@ def auth_header(client):
 @pytest.fixture
 def seeded_db(db):
     """Seed minimal test data with all model types."""
+    # This fixture builds its rows by hand rather than running `seed()`, so the
+    # badge catalogue (055) has to be seeded explicitly — without it every
+    # holding a test creates has no `badges` row to point its FK at.
+    _seed_badges(db)
+
     # Create parent category
     parent = Category(
         id=uuid.uuid4(),
