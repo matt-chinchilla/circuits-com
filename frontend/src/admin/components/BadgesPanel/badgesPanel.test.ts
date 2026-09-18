@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 /**
- * BadgesPanel — the badge holding on a supplier's page, in both consoles.
+ * BadgesPanel — the badge holding AND its inline editor, in both consoles.
  *
  * Two kinds of test, for two kinds of claim:
  *
@@ -11,17 +11,24 @@
  *  - SOURCE, read off disk: that each page actually MOUNTS the panel, and in
  *    the right place. Nothing else proves the wiring, and a CSS-module class
  *    assertion proves nothing at all here (vitest's `css` is off, so the
- *    import is an echo proxy).
+ *    import is an echo proxy) — an SCSS rule is read from the file instead.
+ *
+ * `<FounderBadge>` stands in for itself, emitting the same tag with the same
+ * attributes. The vendored element needs a real 2D canvas context, which
+ * happy-dom has not got — and the attribute mapping is already pinned by
+ * `founderBadge.test.ts`, so re-proving it here would buy a flaky test and
+ * nothing else. What THIS file has to prove is that the draft reaches every
+ * preview, which the stand-in shows exactly.
  *
  * No JSX — a `*.test.ts` is excluded from `tsc -b`/eslint per CLAUDE.md.
  */
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { SupplierBadge } from '@admin/types/admin';
+import type { BadgeDef, SupplierBadge } from '@admin/types/admin';
 
 const getSupplierBadges = vi.fn();
 const getBadgeCatalogue = vi.fn();
@@ -29,6 +36,7 @@ const grantSupplierBadge = vi.fn();
 const updateSupplierBadge = vi.fn();
 const revokeSupplierBadge = vi.fn();
 const getMyBadges = vi.fn();
+const updateMyBadge = vi.fn();
 
 vi.mock('@admin/services/adminApi', () => ({
   adminApi: {
@@ -40,21 +48,26 @@ vi.mock('@admin/services/adminApi', () => ({
   },
 }));
 vi.mock('@admin/services/accountApi', () => ({
-  accountApi: { getMyBadges: (...a: unknown[]) => getMyBadges(...a) },
+  accountApi: {
+    getMyBadges: (...a: unknown[]) => getMyBadges(...a),
+    updateMyBadge: (...a: unknown[]) => updateMyBadge(...a),
+  },
 }));
-// The mark itself is the shared widget's business (founderBadge.test.ts pins
-// it). Here it stands in for itself so the LOOK reaching it is still readable.
 vi.mock('@shared/components/FounderBadge/FounderBadge', () => ({
   default: ({ look, size }: { look: SupplierBadge; size: number }) =>
-    createElement('span', {
+    createElement('fire-badge', {
       'data-mark': '',
-      'data-scheme': look.scheme,
-      'data-size': String(size),
+      size: String(size),
+      scheme: look.scheme,
+      intensity: String(look.intensity),
+      opacity: String(look.opacity),
+      sparks: look.sparks ? 'true' : 'false',
     }),
 }));
 
 const { default: BadgesPanel } = await import('./BadgesPanel');
 const { _resetQueryCache } = await import('@admin/services/queryCache');
+const { BADGE_SCHEMES } = await import('@shared/types/badge');
 
 const ROW: SupplierBadge = {
   id: 'r1',
@@ -72,9 +85,10 @@ const ROW: SupplierBadge = {
   updated_at: null,
 };
 
-const CATALOGUE = [
+const CATALOGUE: BadgeDef[] = [
   { id: 'b1', key: 'founder_badge_1', family: 'founder', label: 'Founding distributor', available: true, sort_order: 1 },
-  { id: 'b2', key: 'trailblazer', family: 'trail', label: 'Trailblazer', available: false, sort_order: 2 },
+  { id: 'b2', key: 'founder_badge_2', family: 'founder', label: 'Founding distributor II', available: false, sort_order: 2 },
+  { id: 'b3', key: 'trailblazer', family: 'trail', label: 'Trailblazer', available: false, sort_order: 3 },
 ];
 
 let container: HTMLDivElement;
@@ -87,7 +101,8 @@ beforeEach(() => {
   getMyBadges.mockResolvedValue([ROW]);
   getBadgeCatalogue.mockResolvedValue(CATALOGUE);
   grantSupplierBadge.mockResolvedValue(ROW);
-  updateSupplierBadge.mockResolvedValue(ROW);
+  updateSupplierBadge.mockResolvedValue({ ...ROW, scheme: 'white' });
+  updateMyBadge.mockResolvedValue({ ...ROW, scheme: 'white' });
   revokeSupplierBadge.mockResolvedValue({ ok: true });
   container = document.createElement('div');
   document.body.appendChild(container);
@@ -108,60 +123,66 @@ async function mount(props: Record<string, unknown>) {
   return container;
 }
 
+/** Re-mount from scratch in the other mode, inside one test. */
+async function remount(props: Record<string, unknown>) {
+  await act(async () => root.unmount());
+  root = createRoot(container);
+  _resetQueryCache();
+  return mount(props);
+}
+
 const buttons = () => Array.from(container.querySelectorAll('button')) as HTMLButtonElement[];
 const byText = (t: string) => buttons().find((b) => b.textContent?.trim() === t);
+const selects = () => Array.from(container.querySelectorAll('select')) as HTMLSelectElement[];
+const marks = () => Array.from(container.querySelectorAll('fire-badge'));
+const optionsOf = (s: HTMLSelectElement) => Array.from(s.options);
+
+/** React owns the value; setting `.value` alone is invisible to it. */
+function change(el: HTMLSelectElement | HTMLInputElement, value: string) {
+  const proto = el instanceof HTMLSelectElement ? HTMLSelectElement.prototype : HTMLInputElement.prototype;
+  Object.getOwnPropertyDescriptor(proto, 'value')!.set!.call(el, value);
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+  el.dispatchEvent(new Event('change', { bubbles: true }));
+}
 
 describe('BadgesPanel', () => {
   it('renders the holding with its mark, label and appearance key in both modes', async () => {
-    await mount({ mode: 'staff', supplierId: 's1', onEdit: () => undefined });
-    const mark = container.querySelector('[data-mark]');
-    expect(mark?.getAttribute('data-size')).toBe('32');
-    expect(mark?.getAttribute('data-scheme')).toBe('orange');
+    await mount({ mode: 'staff', supplierId: 's1' });
+    const mark = marks()[0];
+    expect(mark.getAttribute('size')).toBe('32');
+    expect(mark.getAttribute('scheme')).toBe('orange');
     expect(container.textContent).toContain('Founding distributor');
     expect(container.textContent).toContain('founder_badge_1');
     expect(getSupplierBadges).toHaveBeenCalledWith('s1');
   });
 
   it('gives staff Grant, Enabled and Revoke, and gives the customer none of them', async () => {
-    await mount({ mode: 'staff', supplierId: 's1', onEdit: () => undefined });
+    await mount({ mode: 'staff', supplierId: 's1' });
     expect(container.textContent).toContain('Grant');
     expect(container.textContent).toContain('Enabled');
     expect(byText('Revoke')).toBeTruthy();
 
-    await act(async () => root.unmount());
-    root = createRoot(container);
-    _resetQueryCache();
-    await mount({ mode: 'account', onEdit: () => undefined });
+    await remount({ mode: 'account' });
     expect(getMyBadges).toHaveBeenCalled();
     expect(container.textContent).not.toContain('Grant');
     expect(container.textContent).not.toContain('Enabled');
     expect(byText('Revoke')).toBeUndefined();
-    // Edit is the customer's one control.
-    expect(byText('Edit')).toBeTruthy();
   });
 
   it('offers only families not already held, and disables what is not available yet', async () => {
-    await mount({ mode: 'staff', supplierId: 's1', onEdit: () => undefined });
-    const options = Array.from(
-      container.querySelectorAll('select option'),
-    ) as HTMLOptionElement[];
-    const values = options.map((o) => o.value);
-    // `founder` is held, so its catalogue entry is gone from the list.
+    await mount({ mode: 'staff', supplierId: 's1' });
+    const grant = container.querySelector('#badge-grant') as HTMLSelectElement;
+    const values = optionsOf(grant).map((o) => o.value);
+    // `founder` is held, so both its catalogue entries are gone from the list.
     expect(values).not.toContain('founder_badge_1');
-    const trail = options.find((o) => o.value === 'trailblazer');
+    expect(values).not.toContain('founder_badge_2');
+    const trail = optionsOf(grant).find((o) => o.value === 'trailblazer');
     expect(trail?.disabled).toBe(true);
     expect(trail?.textContent).toContain('coming soon');
   });
 
-  it('raises the row to the page rather than editing it here', async () => {
-    const onEdit = vi.fn();
-    await mount({ mode: 'account', onEdit });
-    await act(async () => byText('Edit')!.click());
-    expect(onEdit).toHaveBeenCalledWith(expect.objectContaining({ id: 'r1' }));
-  });
-
   it('needs a SECOND revoke click, and never a blocking window.confirm', async () => {
-    await mount({ mode: 'staff', supplierId: 's1', onEdit: () => undefined });
+    await mount({ mode: 'staff', supplierId: 's1' });
     await act(async () => byText('Revoke')!.click());
     expect(revokeSupplierBadge).not.toHaveBeenCalled();
     expect(byText('Really revoke?')).toBeTruthy();
@@ -174,8 +195,8 @@ describe('BadgesPanel', () => {
     expect(src).not.toMatch(/window\s*\.\s*confirm/);
   });
 
-  it('flips Enabled through the staff patch', async () => {
-    await mount({ mode: 'staff', supplierId: 's1', onEdit: () => undefined });
+  it('flips Enabled through the staff patch, without touching the look draft', async () => {
+    await mount({ mode: 'staff', supplierId: 's1' });
     const box = container.querySelector('input[type="checkbox"]') as HTMLInputElement;
     expect(box.checked).toBe(true);
     await act(async () => box.click());
@@ -185,16 +206,110 @@ describe('BadgesPanel', () => {
   it('is empty-but-useful: staff keep the grant control, the customer is told to wait', async () => {
     getSupplierBadges.mockResolvedValue([]);
     getMyBadges.mockResolvedValue([]);
-    await mount({ mode: 'staff', supplierId: 's1', onEdit: () => undefined });
-    expect(container.querySelector('select')).toBeTruthy();
+    await mount({ mode: 'staff', supplierId: 's1' });
+    expect(container.querySelector('#badge-grant')).toBeTruthy();
     expect(container.textContent).not.toContain('once it is granted');
 
-    await act(async () => root.unmount());
-    root = createRoot(container);
-    _resetQueryCache();
-    await mount({ mode: 'account', onEdit: () => undefined });
+    await remount({ mode: 'account' });
     expect(container.textContent).toContain('Your badge will appear here once it is granted.');
-    expect(container.querySelector('select')).toBeNull();
+    // no controls at all when there is nothing to edit
+    expect(selects()).toHaveLength(0);
+  });
+});
+
+// ── The editor, inline and always open ─────────────────────────────────────
+
+describe('the inline editor', () => {
+  it('is open with no Edit button, no dialog and no scrim', async () => {
+    await mount({ mode: 'staff', supplierId: 's1', supplierName: 'Chirichella Inc.' });
+    expect(byText('Edit')).toBeUndefined();
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
+    // the controls are simply THERE
+    expect(container.textContent).toContain('Appearance');
+    expect(container.textContent).toContain('Scheme');
+    expect(byText('Save changes')).toBeTruthy();
+    expect(byText('Discard changes')).toBeTruthy();
+    // nothing left the page scrollable-locked, because nothing locks it
+    expect(document.body.style.overflow).not.toBe('hidden');
+  });
+
+  it('shows one swatch per scheme on the dark bench, plus three board previews', async () => {
+    await mount({ mode: 'staff', supplierId: 's1', supplierName: 'Chirichella Inc.' });
+    const pressed = buttons().filter((b) => b.hasAttribute('aria-pressed'));
+    expect(pressed).toHaveLength(BADGE_SCHEMES.length);
+    expect(pressed).toHaveLength(9);
+    expect(pressed.find((b) => b.getAttribute('aria-pressed') === 'true')?.textContent).toContain(
+      'orange',
+    );
+    // row pin + nine swatches + three boards, all the same widget
+    expect(marks()).toHaveLength(13);
+    expect(container.textContent).toContain('Chirichella Inc.');
+    for (const tier of ['Platinum', 'Gold', 'Silver']) {
+      expect(container.textContent).toContain(tier);
+    }
+
+    // The bench is the ONE dark device, and vitest's `css` is off — so the
+    // rule is read from disk, never from the class-name proxy.
+    const scss = readFileSync(join(__dirname, 'BadgesPanel.module.scss'), 'utf8');
+    expect(scss).toMatch(/\.bench\s*\{[^}]*background:\s*#14171a/);
+  });
+
+  it('repaints every board preview when the scheme select moves', async () => {
+    await mount({ mode: 'staff', supplierId: 's1', supplierName: 'Chirichella Inc.' });
+    const schemeSelect = container.querySelector('#badge-founder-scheme') as HTMLSelectElement;
+    await act(async () => change(schemeSelect, 'white'));
+    // The nine swatches each keep their OWN scheme; the boards follow the draft.
+    const boards = marks().slice(10);
+    expect(boards).toHaveLength(3);
+    for (const b of boards) expect(b.getAttribute('scheme')).toBe('white');
+    const pressedNow = buttons().find((b) => b.getAttribute('aria-pressed') === 'true');
+    expect(pressedNow?.textContent).toContain('white');
+  });
+
+  it('sends ONLY what changed, and discards back to the saved row', async () => {
+    await mount({ mode: 'staff', supplierId: 's1' });
+    expect(byText('Save changes')!.disabled).toBe(true);
+    expect(byText('Discard changes')!.disabled).toBe(true);
+
+    const scheme = container.querySelector('#badge-founder-scheme') as HTMLSelectElement;
+    await act(async () => change(scheme, 'white'));
+    expect(byText('Save changes')!.disabled).toBe(false);
+    await act(async () => byText('Discard changes')!.click());
+    expect(byText('Save changes')!.disabled).toBe(true);
+    expect(updateSupplierBadge).not.toHaveBeenCalled();
+
+    await act(async () => change(scheme, 'white'));
+    await act(async () => byText('Save changes')!.click());
+    expect(updateSupplierBadge).toHaveBeenCalledWith('s1', 'founder', { scheme: 'white' });
+  });
+
+  it('routes a customer save through the account door, and never sends `enabled`', async () => {
+    await mount({ mode: 'account' });
+    const scheme = container.querySelector('#badge-founder-scheme') as HTMLSelectElement;
+    await act(async () => change(scheme, 'white'));
+    await act(async () => byText('Save changes')!.click());
+    expect(updateMyBadge).toHaveBeenCalledWith('founder', { scheme: 'white' });
+    expect(updateSupplierBadge).not.toHaveBeenCalled();
+    // `enabled` is a staff switch that writes on its own; a customer body is
+    // `extra="forbid"` server-side, so it must never ride in this patch.
+    expect(updateMyBadge.mock.calls[0][1]).not.toHaveProperty('enabled');
+  });
+
+  it('offers the family only, and disables an artwork that is not released', async () => {
+    await mount({ mode: 'staff', supplierId: 's1' });
+    const appearance = container.querySelector('#badge-founder-key') as HTMLSelectElement;
+    const opts = optionsOf(appearance);
+    expect(opts.map((o) => o.value)).toEqual(['founder_badge_1', 'founder_badge_2']);
+    const unreleased = opts.find((o) => o.value === 'founder_badge_2')!;
+    expect(unreleased.disabled).toBe(true);
+    expect(unreleased.textContent).toContain('coming soon');
+  });
+
+  it('gives the customer the held artwork as the one honest option, never an empty select', async () => {
+    await mount({ mode: 'account' });
+    expect(getBadgeCatalogue).not.toHaveBeenCalled();
+    const appearance = container.querySelector('#badge-founder-key') as HTMLSelectElement;
+    expect(optionsOf(appearance).map((o) => o.value)).toEqual(['founder_badge_1']);
   });
 });
 
@@ -219,6 +334,29 @@ describe('the panel is actually mounted', () => {
     const panel = src.indexOf('<BadgesPanel mode="account"');
     expect(panel).toBeGreaterThan(card);
     expect(card).toBeGreaterThan(ready);
+  });
+
+  it('carries the console panel rhythm from the ONE home the parts panel reads', () => {
+    const vars = readFileSync(
+      join(__dirname, '..', '..', 'styles', '_variables.scss'),
+      'utf8',
+    );
+    expect(vars).toMatch(/\$admin-panel-gap:\s*20px/);
+    const panel = readFileSync(join(__dirname, 'BadgesPanel.module.scss'), 'utf8');
+    expect(panel).toMatch(/\.panel\s*\{[^}]*margin-top:\s*\$admin-panel-gap/);
+    const page = readFileSync(
+      join(PAGES, 'detail', 'SupplierDetailPage.module.scss'),
+      'utf8',
+    );
+    expect(page).toMatch(/\.partsPanel\s*\{[^}]*margin-top:\s*\$admin-panel-gap/);
+  });
+
+  it('has no separate editor component left to drift from this one', () => {
+    expect(existsSync(join(__dirname, '..', 'BadgeEditorOverlay'))).toBe(false);
+    for (const page of ['detail', 'mine']) {
+      const src = readFileSync(join(PAGES, page, 'index.tsx'), 'utf8');
+      expect(src).not.toMatch(/import .*BadgeEditorOverlay/);
+    }
   });
 
   it("declares the reads' data scope, and the client union still names it", () => {
