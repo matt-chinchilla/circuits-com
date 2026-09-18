@@ -34,6 +34,8 @@ EXPECTED = {
     ("GET", "/api/account/my-supply"),
     ("GET", "/api/account/my-manufacturing"),
     ("GET", "/api/account/sponsors"),
+    ("GET", "/api/account/badges"),
+    ("PATCH", "/api/account/badges/{family}"),
     ("GET", "/api/account/expenses"),
     ("POST", "/api/account/expenses"),
     ("PATCH", "/api/account/expenses/{expense_id}"),
