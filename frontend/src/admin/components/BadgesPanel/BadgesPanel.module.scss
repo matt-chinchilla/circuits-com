@@ -23,6 +23,14 @@
   margin-bottom: 24px;
 }
 
+// In the customer console the panel sits directly under MyCompanyCard, which
+// is capped at 720px — matching it keeps that page reading as ONE column
+// rather than a card with a wider slab bolted beneath it. Staff pages give
+// their panels the full content width, so this is opt-in.
+.panelNarrow {
+  max-width: 720px;
+}
+
 .panelHead {
   display: flex;
   align-items: center;

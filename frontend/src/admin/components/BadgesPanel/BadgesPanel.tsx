@@ -116,7 +116,7 @@ export default function BadgesPanel({ mode, supplierId, onEdit, reloadKey = 0 }:
   };
 
   return (
-    <div className={styles.panel}>
+    <div className={staff ? styles.panel : `${styles.panel} ${styles.panelNarrow}`}>
       <div className={styles.panelHead}>
         <h3 className={styles.panelTitle}>Badges</h3>
         {rowsQ.refreshing && <span className={styles.note}>Refreshing&hellip;</span>}

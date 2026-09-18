@@ -92,10 +92,14 @@ export default function BadgeEditorOverlay({
   useEffect(() => {
     const returnTo = document.activeElement as HTMLElement | null;
     firstRef.current?.focus();
-    const priorOverflow = document.body.style.overflow;
+    const root = document.documentElement;
+    const priorBody = document.body.style.overflow;
+    const priorRoot = root.style.overflow;
     document.body.style.overflow = 'hidden';
+    root.style.overflow = 'hidden';
     return () => {
-      document.body.style.overflow = priorOverflow;
+      document.body.style.overflow = priorBody;
+      root.style.overflow = priorRoot;
       returnTo?.focus?.();
     };
   }, []);

@@ -71,6 +71,9 @@
 }
 
 .select {
+  // Without a cap the widest option ("Founding distributor") sets the box and
+  // the bar reads lopsided.
+  max-width: 190px;
   font: inherit;
   // Body's 1.6 overflows a height-constrained control (house gotcha).
   line-height: 1;
