@@ -1,3 +1,5 @@
+import type { BadgeLook } from '@shared/types/badge';
+
 export interface Sponsor {
   id: string;
   supplier_name: string;
@@ -12,9 +14,13 @@ export interface Sponsor {
   phone: string | null;
   email: string | null;
   contact_name: string | null;
-  // 054 founding-distributor flag, read off the joined supplier. Optional:
-  // a service-worker-cached category payload predates the key.
+  // 054 founding-distributor flag, read off the joined supplier; DERIVED from
+  // the supplier's badge holdings since 055. Optional: a service-worker-cached
+  // category payload predates the key.
   founder?: boolean | null;
+  // 055 — the look that flag shows as (scheme/intensity/opacity/sparks), null
+  // when the supplier holds no enabled badge. Same cached-payload caveat.
+  badge?: BadgeLook | null;
 }
 
 /**
@@ -41,6 +47,7 @@ export interface PlatinumSponsor {
   brand_secondary?: string | null;
   brand_takeover?: boolean | null;
   founder?: boolean | null; // 054 — see Sponsor
+  badge?: BadgeLook | null; // 055 — see Sponsor
 }
 
 /**
@@ -60,4 +67,5 @@ export interface PartnerSupplier {
   description?: string | null;
   logo_url?: string | null;
   founder?: boolean | null; // 054 — see Sponsor
+  badge?: BadgeLook | null; // 055 — see Sponsor
 }
