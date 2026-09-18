@@ -913,7 +913,15 @@ def get_or_create_badge(db, key, family, label, available, sort_order) -> Badge:
     if obj is None:
         obj = Badge(key=key, family=family, label=label, available=available, sort_order=sort_order)
         db.add(obj)
-        db.flush()
+    else:
+        # The catalogue is CODE: re-assert it, the way get_or_create_category
+        # re-asserts icon/sort_order. Without this, flipping `available` in
+        # BADGE_CATALOGUE would be inert in every environment past its first
+        # boot — including prod the moment 055 lands, since the MIGRATION
+        # inserts these rows. Holdings are untouched: they point at `id`.
+        obj.family, obj.label = family, label
+        obj.available, obj.sort_order = available, sort_order
+    db.flush()
     return obj
 
 

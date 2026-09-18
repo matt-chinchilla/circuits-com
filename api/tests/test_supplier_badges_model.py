@@ -116,3 +116,34 @@ def test_migration_054_is_chained_to_053():
     )
     assert "nullable=False" in src
     assert 'op.drop_column("suppliers", "founder")' in src, "downgrade must drop the column"
+
+
+# ── the catalogue is code ───────────────────────────────────────────────────
+
+
+def test_reseeding_re_asserts_the_catalogue(db, seeded_db, monkeypatch):
+    """Flipping a row in BADGE_CATALOGUE and redeploying must take effect. It
+    would not if get_or_create_badge returned early on an existing row — and
+    every environment past its first boot HAS the rows already, because 055's
+    own migration inserts them."""
+    from app.db import seed as seed_module
+
+    before = db.query(Badge).filter_by(key=FOUNDER_BADGE_2).one()
+    assert before.available is False
+
+    monkeypatch.setattr(
+        seed_module,
+        "BADGE_CATALOGUE",
+        (
+            (FOUNDER_BADGE_1, FOUNDER_FAMILY, "Founding distributor", True, 0),
+            (FOUNDER_BADGE_2, FOUNDER_FAMILY, "Founding distributor (alt)", True, 7),
+        ),
+    )
+    seed_module._seed_badges(db)
+
+    after = db.query(Badge).filter_by(key=FOUNDER_BADGE_2).one()
+    assert after.id == before.id, "re-asserting must UPDATE, never insert a twin"
+    assert after.available is True
+    assert after.label == "Founding distributor (alt)"
+    assert after.sort_order == 7
+    assert db.query(Badge).filter_by(key=FOUNDER_BADGE_2).count() == 1
