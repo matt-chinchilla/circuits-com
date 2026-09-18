@@ -10,15 +10,20 @@
 // the Badges panel sits in the stack at exactly the pitch of the panel below
 // it, in BOTH consoles, from one home.
 //
-// ONE deliberately dark device: `.bench`. The fire composites with `lighter`,
-// so on the console's pale surface the flames vanish and the nine schemes read
-// as nine identical pins — the swatches have to burn on near-black whatever
-// the console theme. The board previews carry their own real board inks for
-// the same reason. Nothing else here goes dark; this is console chrome.
+// Shape (owner, 2026-09-18): `.tools` is one general bar across the top, then
+// ONE `.row` per holding carrying its pin, its nine colour swatches and its
+// board preview side by side.
+//
+// TWO deliberately dark devices, both for the same reason: the fire composites
+// with `lighter`, so on the console's pale surface the flames vanish. `.bench`
+// backs the swatch cluster and `.chip` carries a real board ink. Nothing else
+// here goes dark; this is console chrome.
 //
 // The fire canvas reaches 2.4x the pin's size ABOVE it and one size to each
-// side and costs NO layout, so every row here keeps `overflow: visible` and
-// buys its headroom with padding instead.
+// side and costs NO layout, so everything here keeps `overflow: visible` and
+// buys its headroom with padding instead — `.bench` cannot afford the full
+// 2.4x of a 28px pin in a one-line row, so the top wisps paint above it on
+// purpose and only the body of the flame sits on the dark.
 
 @use '@shared/styles/variables' as *;
 @use '@admin/styles/variables' as *;
@@ -58,23 +63,82 @@
 }
 
 .body {
-  padding: 8px 20px 16px;
+  padding: 14px 20px 16px;
 }
 
-// ── One holding ────────────────────────────────────────────────────────────
+// ── The general tools bar ──────────────────────────────────────────────────
 
-.block {
+.tools {
+  display: flex;
+  align-items: flex-end;
+  gap: 14px 16px;
+  // One line is the intent, and the sizes below are chosen so it IS one line
+  // from 1366px up — but it WRAPS rather than clips, because a bar that cuts
+  // its own last button off is worse than a bar on two lines.
+  flex-wrap: wrap;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--a-border-soft);
+}
+
+.control {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding-bottom: 6px;
-
-  & + & {
-    border-top: 1px solid var(--a-border-soft);
-    margin-top: 8px;
-    padding-top: 8px;
-  }
+  gap: 5px;
+  min-width: 0;
+  flex: 0 0 auto;
 }
+
+// The console's own field-label style — not a new device.
+.controlLabel {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--a-fg3);
+  white-space: nowrap;
+}
+
+.sliderRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.slider {
+  // A track shorter than this cannot be aimed at 0.05 steps.
+  min-width: 120px;
+  flex: 0 0 120px;
+}
+
+.switch {
+  // Line it up with the select boxes beside it rather than the label.
+  margin-bottom: 8px;
+}
+
+.value {
+  font-family: $font-mono;
+  font-size: 12px;
+  color: var(--a-fg2);
+  min-width: 34px;
+}
+
+// The bar does not wrap above 900px, so its selects must not be squeezed into
+// clipping their own value ("orang(" was the first cut).
+.tools .select {
+  flex: 0 0 auto;
+  min-width: 112px;
+  max-width: 176px;
+}
+
+.toolActions {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+
+// ── One holding, one line ──────────────────────────────────────────────────
 
 .row {
   display: flex;
@@ -82,7 +146,24 @@
   gap: 16px;
   // The fire reaches well above the pin; this row must never clip it.
   overflow: visible;
-  padding: 18px 0 2px;
+  padding: 16px 0 12px;
+  // Same rule as the tools bar: one line is the intent, wrapping is the
+  // overflow behaviour. The swatch cells and the preview's company name are
+  // both unshrinkable, so without this the account console's 720px panel
+  // pushes the chip straight through its own right border.
+  flex-wrap: wrap;
+
+  & + & {
+    border-top: 1px solid var(--a-border-soft);
+  }
+}
+
+.ident {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 0 0 auto;
+  overflow: visible;
 }
 
 .mark {
@@ -99,13 +180,13 @@
   flex-direction: column;
   gap: 2px;
   min-width: 0;
-  flex: 1;
 }
 
 .rowLabel {
   font-size: 14px;
   font-weight: 600;
   color: var(--a-fg1);
+  white-space: nowrap;
 }
 
 .rowKey {
@@ -114,61 +195,151 @@
   color: var(--a-fg3);
 }
 
+// ── The bench: the swatch cluster's dark backing ───────────────────────────
+
+.bench {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  flex: 0 1 auto;
+  background: #14171a;
+  border-radius: 10px;
+  // Partial headroom on purpose (see the file header): the plume's tip paints
+  // above the strip, its body burns on the dark.
+  padding: 22px 6px 6px;
+  overflow: visible;
+}
+
+.swatch {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 36px;
+  flex: 0 0 auto;
+  padding: 0;
+  border-radius: 7px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  overflow: visible;
+
+  &[aria-pressed='true'] {
+    border-color: $nav-blue;
+    background: rgba(68, 189, 19, 0.14);
+  }
+
+  &:focus-visible {
+    outline: 2px solid $nav-blue;
+    outline-offset: 1px;
+  }
+}
+
+// ── Board preview chips ────────────────────────────────────────────────────
+
+.previews {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: visible;
+}
+
+.chip {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 0 1 auto;
+  min-width: 0;
+  border-radius: 8px;
+  border: 1px solid rgba(230, 233, 238, 0.1);
+  padding: 12px 12px 8px;
+  overflow: visible;
+}
+
+.chipName {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+  overflow: visible;
+}
+
+.chipTier {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(230, 233, 238, 0.4);
+}
+
+// The three boards' real inks and type, compressed to chip scale so the row
+// still reads as one line.
+.chipPlatinum {
+  background: linear-gradient(135deg, #2c3138, #171a1e);
+
+  .chipName {
+    color: #e6e9ee;
+    font-weight: 700;
+    font-size: 16px;
+  }
+}
+
+.chipGold {
+  background: radial-gradient(circle at 30% 20%, #2a2410, #0f0e08 70%);
+
+  .chipName {
+    color: #f4ecd6;
+    font-weight: 700;
+    font-size: 14px;
+  }
+}
+
+.chipSilver {
+  background: #14171a;
+
+  .chipName {
+    color: #efe6cf;
+    font-weight: 700;
+    font-size: 12px;
+  }
+}
+
+// Three chips only where the line has room for them. Below that the row keeps
+// the FIRST one — Platinum, the largest pin and the hardest case to read — and
+// lets the others go (owner, 2026-09-18). The account console's panel is
+// capped at 720px whatever the viewport is, so it says so by class.
+@media (max-width: 1600px) {
+  .chip:not(:first-child) {
+    display: none;
+  }
+}
+
+.panelNarrow .chip:not(:first-child) {
+  display: none;
+}
+
+// ── Staff row controls ─────────────────────────────────────────────────────
+
 .rowActions {
   display: flex;
   align-items: center;
   gap: 10px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-
-// ── Look controls ──────────────────────────────────────────────────────────
-
-.controls {
-  display: flex;
-  align-items: flex-end;
-  flex-wrap: wrap;
-  gap: 16px;
-}
-
-.control {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-
-// The console's own field-label style — not a new device.
-.controlLabel {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--a-fg3);
-}
-
-.sliderRow {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.slider {
-  // A track shorter than this cannot be aimed at 0.05 steps.
-  min-width: 140px;
-}
-
-.value {
-  font-family: $font-mono;
-  font-size: 12px;
-  color: var(--a-fg2);
-  min-width: 34px;
-}
-
-.controlActions {
-  display: flex;
-  align-items: flex-end;
-  gap: 10px;
+  flex: 0 0 auto;
   margin-left: auto;
+}
+
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--a-fg2);
+  cursor: pointer;
+  white-space: nowrap;
 }
 
 .btn {
@@ -183,6 +354,7 @@
   background: transparent;
   color: var(--a-fg1);
   cursor: pointer;
+  white-space: nowrap;
 
   &:hover:not(:disabled) {
     border-color: var(--a-primary);
@@ -217,130 +389,6 @@
   }
 }
 
-.toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  color: var(--a-fg2);
-  cursor: pointer;
-}
-
-// ── The bench: the one dark device ─────────────────────────────────────────
-
-.bench {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  background: #14171a;
-  border-radius: 10px;
-  // Headroom for the fire, which paints well above the pin without occupying
-  // a pixel of layout.
-  padding: 34px 12px 12px;
-  overflow: visible;
-}
-
-.swatch {
-  flex: 1 1 96px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 6px 8px;
-  border-radius: 8px;
-  border: 1px solid rgba(230, 233, 238, 0.12);
-  background: rgba(255, 255, 255, 0.02);
-  color: #e6e9ee;
-  font: inherit;
-  cursor: pointer;
-  overflow: visible;
-
-  &[aria-pressed='true'] {
-    border-color: $nav-blue;
-    background: rgba(68, 189, 19, 0.12);
-  }
-
-  &:focus-visible {
-    outline: 2px solid $nav-blue;
-    outline-offset: 2px;
-  }
-}
-
-.swatchName {
-  font-size: 11px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: rgba(230, 233, 238, 0.7);
-}
-
-// ── Board previews ─────────────────────────────────────────────────────────
-
-.boards {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
-
-  @media (max-width: 900px) {
-    grid-template-columns: 1fr;
-  }
-}
-
-.board {
-  border-radius: 10px;
-  border: 1px solid rgba(230, 233, 238, 0.1);
-  padding: 22px 20px 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  overflow: visible;
-}
-
-.boardName {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  overflow: visible;
-}
-
-.boardTier {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: rgba(230, 233, 238, 0.4);
-}
-
-// The three boards' real inks and type, so the preview IS the answer.
-.boardPlatinum {
-  background: linear-gradient(135deg, #2c3138, #171a1e);
-
-  .boardName {
-    color: #e6e9ee;
-    font-weight: 700;
-    font-size: 22.7px;
-  }
-}
-
-.boardGold {
-  background: radial-gradient(circle at 30% 20%, #2a2410, #0f0e08 70%);
-
-  .boardName {
-    color: #f4ecd6;
-    font-weight: 700;
-    font-size: 18.9px;
-  }
-}
-
-.boardSilver {
-  background: #14171a;
-
-  .boardName {
-    color: #efe6cf;
-    font-weight: 700;
-    font-size: 14.7px;
-  }
-}
-
 // ── Grant + messages ───────────────────────────────────────────────────────
 
 .grant {
@@ -349,7 +397,6 @@
   gap: 10px;
   padding: 12px 0 4px;
   border-top: 1px solid var(--a-border-soft);
-  margin-top: 4px;
 }
 
 .grantLabel {
@@ -370,7 +417,7 @@
   background: var(--a-card);
   color: var(--a-fg1);
   cursor: pointer;
-  max-width: 220px;
+  max-width: 200px;
 
   &:disabled {
     opacity: 0.6;

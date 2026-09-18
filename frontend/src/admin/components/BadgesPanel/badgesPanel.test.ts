@@ -197,10 +197,16 @@ describe('BadgesPanel', () => {
 
   it('flips Enabled through the staff patch, without touching the look draft', async () => {
     await mount({ mode: 'staff', supplierId: 's1' });
-    const box = container.querySelector('input[type="checkbox"]') as HTMLInputElement;
-    expect(box.checked).toBe(true);
-    await act(async () => box.click());
+    // NOT the first checkbox on the page — that is the tools bar's Sparks
+    // switch, which belongs to the draft and must not reach the server here.
+    const enabled = Array.from(container.querySelectorAll('label'))
+      .find((l) => l.textContent?.trim() === 'Enabled')
+      ?.querySelector('input') as HTMLInputElement;
+    expect(enabled.checked).toBe(true);
+    await act(async () => enabled.click());
     expect(updateSupplierBadge).toHaveBeenCalledWith('s1', 'founder', { enabled: false });
+    // and the look is untouched, so nothing is waiting to be saved
+    expect(byText('Save changes')!.disabled).toBe(true);
   });
 
   it('is empty-but-useful: staff keep the grant control, the customer is told to wait', async () => {
@@ -220,6 +226,18 @@ describe('BadgesPanel', () => {
 // ── The editor, inline and always open ─────────────────────────────────────
 
 describe('the inline editor', () => {
+  it('puts the general tools above the badge line, with the swatches inside it', async () => {
+    await mount({ mode: 'staff', supplierId: 's1', supplierName: 'Chirichella Inc.' });
+    const tools = container.querySelector('#badge-scheme')!.closest('div')!.parentElement!;
+    const row = container.querySelector('[aria-pressed]')!.closest('div')!;
+    // the sliders sit in a bar ABOVE the badge's own line…
+    expect(tools.compareDocumentPosition(row) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // …and the swatches and the preview share that line with the pin
+    expect(row.querySelectorAll('[aria-pressed]')).toHaveLength(9);
+    expect(row.textContent).toContain('founder_badge_1');
+    expect(row.textContent).toContain('Platinum');
+  });
+
   it('is open with no Edit button, no dialog and no scrim', async () => {
     await mount({ mode: 'staff', supplierId: 's1', supplierName: 'Chirichella Inc.' });
     expect(byText('Edit')).toBeUndefined();
@@ -233,37 +251,39 @@ describe('the inline editor', () => {
     expect(document.body.style.overflow).not.toBe('hidden');
   });
 
-  it('shows one swatch per scheme on the dark bench, plus three board previews', async () => {
+  it('shows one swatch per scheme on the dark bench, plus the board preview', async () => {
     await mount({ mode: 'staff', supplierId: 's1', supplierName: 'Chirichella Inc.' });
     const pressed = buttons().filter((b) => b.hasAttribute('aria-pressed'));
     expect(pressed).toHaveLength(BADGE_SCHEMES.length);
     expect(pressed).toHaveLength(9);
-    expect(pressed.find((b) => b.getAttribute('aria-pressed') === 'true')?.textContent).toContain(
+    expect(pressed.find((b) => b.getAttribute('aria-pressed') === 'true')?.getAttribute('aria-label')).toBe(
       'orange',
     );
-    // row pin + nine swatches + three boards, all the same widget
+    // row pin + nine swatches + three board chips, all the same widget
     expect(marks()).toHaveLength(13);
     expect(container.textContent).toContain('Chirichella Inc.');
     for (const tier of ['Platinum', 'Gold', 'Silver']) {
       expect(container.textContent).toContain(tier);
     }
 
-    // The bench is the ONE dark device, and vitest's `css` is off — so the
-    // rule is read from disk, never from the class-name proxy.
+    // vitest's `css` is off, so both rules are read from disk, never from the
+    // class-name proxy. The bench is the swatch cluster's dark backing, and
+    // past the width for three chips the row keeps the FIRST one only.
     const scss = readFileSync(join(__dirname, 'BadgesPanel.module.scss'), 'utf8');
     expect(scss).toMatch(/\.bench\s*\{[^}]*background:\s*#14171a/);
+    expect(scss).toMatch(/\.chip:not\(:first-child\)\s*\{\s*display:\s*none/);
   });
 
   it('repaints every board preview when the scheme select moves', async () => {
     await mount({ mode: 'staff', supplierId: 's1', supplierName: 'Chirichella Inc.' });
-    const schemeSelect = container.querySelector('#badge-founder-scheme') as HTMLSelectElement;
+    const schemeSelect = container.querySelector('#badge-scheme') as HTMLSelectElement;
     await act(async () => change(schemeSelect, 'white'));
     // The nine swatches each keep their OWN scheme; the boards follow the draft.
     const boards = marks().slice(10);
     expect(boards).toHaveLength(3);
     for (const b of boards) expect(b.getAttribute('scheme')).toBe('white');
     const pressedNow = buttons().find((b) => b.getAttribute('aria-pressed') === 'true');
-    expect(pressedNow?.textContent).toContain('white');
+    expect(pressedNow?.getAttribute('aria-label')).toBe('white');
   });
 
   it('sends ONLY what changed, and discards back to the saved row', async () => {
@@ -271,7 +291,7 @@ describe('the inline editor', () => {
     expect(byText('Save changes')!.disabled).toBe(true);
     expect(byText('Discard changes')!.disabled).toBe(true);
 
-    const scheme = container.querySelector('#badge-founder-scheme') as HTMLSelectElement;
+    const scheme = container.querySelector('#badge-scheme') as HTMLSelectElement;
     await act(async () => change(scheme, 'white'));
     expect(byText('Save changes')!.disabled).toBe(false);
     await act(async () => byText('Discard changes')!.click());
@@ -285,7 +305,7 @@ describe('the inline editor', () => {
 
   it('routes a customer save through the account door, and never sends `enabled`', async () => {
     await mount({ mode: 'account' });
-    const scheme = container.querySelector('#badge-founder-scheme') as HTMLSelectElement;
+    const scheme = container.querySelector('#badge-scheme') as HTMLSelectElement;
     await act(async () => change(scheme, 'white'));
     await act(async () => byText('Save changes')!.click());
     expect(updateMyBadge).toHaveBeenCalledWith('founder', { scheme: 'white' });
@@ -297,7 +317,7 @@ describe('the inline editor', () => {
 
   it('offers the family only, and disables an artwork that is not released', async () => {
     await mount({ mode: 'staff', supplierId: 's1' });
-    const appearance = container.querySelector('#badge-founder-key') as HTMLSelectElement;
+    const appearance = container.querySelector('#badge-key') as HTMLSelectElement;
     const opts = optionsOf(appearance);
     expect(opts.map((o) => o.value)).toEqual(['founder_badge_1', 'founder_badge_2']);
     const unreleased = opts.find((o) => o.value === 'founder_badge_2')!;
@@ -308,7 +328,7 @@ describe('the inline editor', () => {
   it('gives the customer the held artwork as the one honest option, never an empty select', async () => {
     await mount({ mode: 'account' });
     expect(getBadgeCatalogue).not.toHaveBeenCalled();
-    const appearance = container.querySelector('#badge-founder-key') as HTMLSelectElement;
+    const appearance = container.querySelector('#badge-key') as HTMLSelectElement;
     expect(optionsOf(appearance).map((o) => o.value)).toEqual(['founder_badge_1']);
   });
 });
