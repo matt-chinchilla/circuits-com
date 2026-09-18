@@ -12,6 +12,9 @@ $admin-sidebar-width: 260px;
 $admin-topbar-height: 64px;
 $admin-border-radius: 8px;
 $admin-padding: 24px;
+// Vertical pitch between stacked console panels — the ONE home for that
+// number: `.partsPanel` and the Badges panel both read it, in both consoles.
+$admin-panel-gap: 20px;
 
 // Professional dashboard typography
 $admin-font-display: 'DM Sans', 'Segoe UI', system-ui, sans-serif;
