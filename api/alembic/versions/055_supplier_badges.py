@@ -21,7 +21,15 @@ down_revision = "054"
 branch_labels = None
 depends_on = None
 
-SCHEMES = "'red','orange','yellow','green','blue','indigo','violet','white','black'"
+# Literal DDL on purpose: a migration must not import app code (it has to keep
+# running after the model moves on). `app.models.badge` builds the same three
+# strings from BADGE_SCHEMES / INTENSITY_RANGE / OPACITY_RANGE, and
+# test_supplier_badges_model.py holds these copies against those.
+SCHEME_CHECK = (
+    "scheme IN ('red','orange','yellow','green','blue','indigo','violet','white','black')"
+)
+INTENSITY_CHECK = "intensity >= 0.3 AND intensity <= 2.0"
+OPACITY_CHECK = "opacity >= 0.2 AND opacity <= 1.0"
 
 
 def postgresql_uuid():
@@ -84,13 +92,10 @@ def upgrade() -> None:
             server_default=sa.func.now(),
         ),
         sa.UniqueConstraint("supplier_id", "family", name="uq_supplier_badges_family"),
-        sa.CheckConstraint(f"scheme IN ({SCHEMES})", name="ck_supplier_badges_scheme"),
-        sa.CheckConstraint(
-            "intensity >= 0.3 AND intensity <= 2", name="ck_supplier_badges_intensity"
-        ),
-        sa.CheckConstraint("opacity >= 0.2 AND opacity <= 1", name="ck_supplier_badges_opacity"),
+        sa.CheckConstraint(SCHEME_CHECK, name="ck_supplier_badges_scheme"),
+        sa.CheckConstraint(INTENSITY_CHECK, name="ck_supplier_badges_intensity"),
+        sa.CheckConstraint(OPACITY_CHECK, name="ck_supplier_badges_opacity"),
     )
-    op.create_index("ix_supplier_badges_supplier_id", "supplier_badges", ["supplier_id"])
     op.execute(
         """
         INSERT INTO badges (id, key, family, label, available, sort_order) VALUES
@@ -118,6 +123,5 @@ def downgrade() -> None:
            FROM supplier_badges sb
            WHERE sb.supplier_id = s.id AND sb.family = 'founder' AND sb.enabled"""
     )
-    op.drop_index("ix_supplier_badges_supplier_id", table_name="supplier_badges")
     op.drop_table("supplier_badges")
     op.drop_table("badges")

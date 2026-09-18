@@ -5,10 +5,19 @@ from decimal import Decimal
 from pathlib import Path
 
 import pytest
+from sqlalchemy import CheckConstraint
 from sqlalchemy.exc import IntegrityError
 
 from app.models import Badge, Supplier, SupplierBadge
-from app.models.badge import BADGE_SCHEMES, FOUNDER_BADGE_1, FOUNDER_BADGE_2, FOUNDER_FAMILY
+from app.models.badge import (
+    BADGE_SCHEMES,
+    FOUNDER_BADGE_1,
+    FOUNDER_BADGE_2,
+    FOUNDER_FAMILY,
+    INTENSITY_CHECK_SQL,
+    OPACITY_CHECK_SQL,
+    SCHEME_CHECK_SQL,
+)
 from app.services.badges import badge_look, founder_row, supplier_badge_fields
 
 VERSIONS = Path(__file__).resolve().parents[1] / "alembic" / "versions"
@@ -116,6 +125,94 @@ def test_migration_054_is_chained_to_053():
     )
     assert "nullable=False" in src
     assert 'op.drop_column("suppliers", "founder")' in src, "downgrade must drop the column"
+
+
+# ── the CHECKs, and the three copies of each rule ───────────────────────────
+# SQLite enforces CHECK constraints (measured), so `Base.metadata.create_all`
+# reproduces these and the refusals are testable without Postgres. What SQLite
+# CANNOT see is 055's own copy of the DDL — on prod that is the only copy that
+# exists — so the source-level agreement test below is what stops them drifting.
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        {"scheme": "chartreuse"},
+        {"intensity": Decimal("0.29")},
+        {"intensity": Decimal("2.01")},
+        {"opacity": Decimal("0.19")},
+        {"opacity": Decimal("1.01")},
+    ],
+)
+def test_the_checks_refuse_out_of_range_looks(db, seeded_db, bad):
+    sup = seeded_db["supplier1"]
+    b1 = db.query(Badge).filter_by(key=FOUNDER_BADGE_1).one()
+    db.add(
+        SupplierBadge(
+            id=uuid.uuid4(),
+            supplier_id=sup.id,
+            badge_id=b1.id,
+            family=FOUNDER_FAMILY,
+            **bad,
+        )
+    )
+    with pytest.raises(IntegrityError):
+        db.flush()
+    db.rollback()
+
+
+def test_the_checks_accept_the_range_edges(db, seeded_db):
+    sup = seeded_db["supplier1"]
+    b1 = db.query(Badge).filter_by(key=FOUNDER_BADGE_1).one()
+    db.add(
+        SupplierBadge(
+            id=uuid.uuid4(),
+            supplier_id=sup.id,
+            badge_id=b1.id,
+            family=FOUNDER_FAMILY,
+            scheme="black",
+            intensity=Decimal("0.30"),
+            opacity=Decimal("1.00"),
+        )
+    )
+    db.flush()  # the bounds are INCLUSIVE — a refusal here would be off-by-one
+    db.rollback()
+
+
+def test_the_model_and_055_agree_on_the_checks():
+    """The model builds its CHECKs from BADGE_SCHEMES / the two ranges; 055
+    carries literal DDL because a migration must not import app code. Nothing
+    but this test holds the two copies together."""
+    src = (VERSIONS / "055_supplier_badges.py").read_text()
+    assert f'SCHEME_CHECK = (\n    "{SCHEME_CHECK_SQL}"\n)' in src or (
+        f'SCHEME_CHECK = "{SCHEME_CHECK_SQL}"' in src
+    ), "055's scheme CHECK no longer spells out exactly BADGE_SCHEMES"
+    assert f'INTENSITY_CHECK = "{INTENSITY_CHECK_SQL}"' in src
+    assert f'OPACITY_CHECK = "{OPACITY_CHECK_SQL}"' in src
+    # …and that the literals are what the table is actually built with.
+    for name in ("SCHEME_CHECK", "INTENSITY_CHECK", "OPACITY_CHECK"):
+        assert f"sa.CheckConstraint({name}, name=" in src
+
+
+def test_the_model_checks_are_built_from_the_constants():
+    bodies = {
+        c.name: str(c.sqltext)
+        for c in SupplierBadge.__table__.constraints
+        if isinstance(c, CheckConstraint)
+    }
+    assert bodies["ck_supplier_badges_scheme"] == SCHEME_CHECK_SQL
+    assert bodies["ck_supplier_badges_intensity"] == INTENSITY_CHECK_SQL
+    assert bodies["ck_supplier_badges_opacity"] == OPACITY_CHECK_SQL
+    for scheme in BADGE_SCHEMES:
+        assert f"'{scheme}'" in SCHEME_CHECK_SQL
+
+
+def test_the_holding_has_no_index_beyond_the_family_unique():
+    """`uq_supplier_badges_family` is (supplier_id, family) with supplier_id
+    LEADING, so a second index on supplier_id alone would be pure write cost."""
+    assert [i.name for i in SupplierBadge.__table__.indexes] == []
+    src = (VERSIONS / "055_supplier_badges.py").read_text()
+    assert "ix_supplier_badges_supplier_id" not in src
 
 
 # ── the catalogue is code ───────────────────────────────────────────────────

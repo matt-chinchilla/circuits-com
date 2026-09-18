@@ -31,6 +31,15 @@ BADGE_SCHEMES = ("red", "orange", "yellow", "green", "blue", "indigo", "violet",
 INTENSITY_RANGE = (0.3, 2.0)
 OPACITY_RANGE = (0.2, 1.0)
 
+# The CHECK bodies are BUILT from the constants above so there is one copy of
+# each rule on this side. Migration 055 keeps its own literal DDL — a migration
+# must never import app code, because it has to keep running after the code
+# moves on — and `test_the_model_and_055_agree_on_the_checks` pins the two
+# together on the migration's SOURCE text.
+SCHEME_CHECK_SQL = "scheme IN (" + ",".join(f"'{s}'" for s in BADGE_SCHEMES) + ")"
+INTENSITY_CHECK_SQL = f"intensity >= {INTENSITY_RANGE[0]} AND intensity <= {INTENSITY_RANGE[1]}"
+OPACITY_CHECK_SQL = f"opacity >= {OPACITY_RANGE[0]} AND opacity <= {OPACITY_RANGE[1]}"
+
 
 class Badge(Base):
     __tablename__ = "badges"
@@ -48,20 +57,19 @@ class SupplierBadge(Base):
     __tablename__ = "supplier_badges"
     __table_args__ = (
         UniqueConstraint("supplier_id", "family", name="uq_supplier_badges_family"),
-        CheckConstraint(
-            "scheme IN ('red','orange','yellow','green','blue','indigo','violet','white','black')",
-            name="ck_supplier_badges_scheme",
-        ),
-        CheckConstraint("intensity >= 0.3 AND intensity <= 2", name="ck_supplier_badges_intensity"),
-        CheckConstraint("opacity >= 0.2 AND opacity <= 1", name="ck_supplier_badges_opacity"),
+        CheckConstraint(SCHEME_CHECK_SQL, name="ck_supplier_badges_scheme"),
+        CheckConstraint(INTENSITY_CHECK_SQL, name="ck_supplier_badges_intensity"),
+        CheckConstraint(OPACITY_CHECK_SQL, name="ck_supplier_badges_opacity"),
     )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    # No index of its own: `uq_supplier_badges_family` is (supplier_id, family)
+    # with supplier_id LEADING, so every `WHERE supplier_id = ?` lookup is
+    # already served from it. A second index would be pure write cost.
     supplier_id = Column(
         UUID(as_uuid=True),
         ForeignKey("suppliers.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     badge_id = Column(
         UUID(as_uuid=True), ForeignKey("badges.id", ondelete="RESTRICT"), nullable=False
