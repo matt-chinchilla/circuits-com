@@ -25,7 +25,7 @@ from app.models import (
 from app.services.auth_service import (
     require_staff,
 )
-from app.services.badges import supplier_badge_fields
+from app.services.badges import is_founder
 from app.services.part_feed import (
     PartFeedProvider,
     get_feed_key,
@@ -99,6 +99,7 @@ class SupplierCreate(BaseModel):
     logo_url: str | None = None
     brand_primary: str | None = None
     brand_secondary: str | None = None
+
     @field_validator("logo_url")
     @classmethod
     def _validate_logo_url(cls, v: str | None) -> str | None:
@@ -122,6 +123,7 @@ class SupplierUpdate(BaseModel):
     logo_url: str | None = None
     brand_primary: str | None = None
     brand_secondary: str | None = None
+
     @field_validator("logo_url")
     @classmethod
     def _validate_logo_url(cls, v: str | None) -> str | None:
@@ -150,7 +152,7 @@ def supplier_to_dict(supplier: Supplier) -> dict:
         # DERIVED since 055 — an enabled founder-family holding, read through
         # the one home. There is no column to write, so neither SupplierCreate
         # nor SupplierUpdate names it; the grant is its own route.
-        "founder": supplier_badge_fields(supplier)["founder"],
+        "founder": is_founder(supplier),
     }
 
 

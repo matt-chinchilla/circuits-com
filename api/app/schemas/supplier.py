@@ -14,7 +14,8 @@ class SupplierResponse(BaseModel):
     coverage_hours: str | None = None
     description: str | None = None
     logo_url: str | None = None
-    # Founding-distributor incentive flag (054). PUBLIC on purpose — it is a
-    # badge, not a secret; writes stay staff-only via require_staff.
+    # DERIVED since 055: true when the supplier holds an ENABLED founder-family
+    # badge (`services.badges.is_founder`). There is no write path to this field
+    # any more — granting happens on the badge holding, staff-only.
     founder: bool = False
     model_config = ConfigDict(from_attributes=True)

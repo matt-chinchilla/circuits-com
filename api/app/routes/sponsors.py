@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.schemas import SponsorResponse
 from app.models import Sponsor, Supplier
-from app.services.badges import supplier_badge_fields
+from app.services.badges import is_founder
 
 router = APIRouter(prefix="/api/sponsors", tags=["sponsors"])
 
@@ -29,8 +29,7 @@ def get_sponsor_by_keyword(keyword: str, db: Session = Depends(get_db)):
         email=supplier.email if supplier else None,
         contact_name=supplier.contact_name if supplier else None,
         brand_primary=sponsor.brand_primary or (supplier.brand_primary if supplier else None),
-        brand_secondary=sponsor.brand_secondary
-        or (supplier.brand_secondary if supplier else None),
+        brand_secondary=sponsor.brand_secondary or (supplier.brand_secondary if supplier else None),
         brand_takeover=bool(sponsor.brand_primary or sponsor.brand_secondary),
-        founder=supplier_badge_fields(supplier)["founder"],
+        founder=is_founder(supplier),
     )

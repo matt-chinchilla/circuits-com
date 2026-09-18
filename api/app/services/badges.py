@@ -25,6 +25,12 @@ def badge_look(row: SupplierBadge) -> dict:
     }
 
 
+def is_founder(supplier: Supplier | None) -> bool:
+    """The DERIVED flag on its own — for the payloads that want the bool and
+    nothing else, so they stop building and discarding a `badge_look` dict."""
+    return founder_row(supplier) is not None
+
+
 def supplier_badge_fields(supplier: Supplier | None) -> dict:
     row = founder_row(supplier)
     return {"founder": row is not None, "badge": badge_look(row) if row else None}
