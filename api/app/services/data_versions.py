@@ -43,6 +43,8 @@ SCOPES: dict[str, tuple[str, ...]] = {
         "categories",
         "category_suppliers",
         "manufacturers",
+        "supplier_badges",
+        "badges",  # 055 — `founder` is derived from these now
     ),
     "traffic": ("page_views", "outbound_clicks"),
     "money": ("revenue", "expenses"),
