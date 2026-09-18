@@ -78,6 +78,15 @@ def _badge_or_422(db: Session, key: str, family: str | None = None) -> Badge:
     PATCH must not move a holding out of the family it is keyed on), or the
     catalogue has it marked unavailable — which is how an artwork ships dark
     until the owner releases it.
+
+    `available` means CHOOSABLE, never RENDERABLE: neither `badge_look` nor
+    `serialize_supplier_badge` consults it, so a holding that already points
+    at a key later re-marked unavailable by the seed's re-assert
+    (`app/db/seed.py`, `BADGE_CATALOGUE`) keeps painting. Pulling an artwork
+    closes the door on NEW picks; it never yanks a badge a company was given.
+    Note for the editor (Tasks 7/8): `GET /api/badges` returns unavailable
+    rows on purpose, so the picker must filter on `available` itself or a
+    user chooses a key that 422s here.
     """
     badge = db.query(Badge).filter(Badge.key == key).first()
     if badge is None:

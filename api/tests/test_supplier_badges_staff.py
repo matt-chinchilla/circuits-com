@@ -192,6 +192,15 @@ def test_unknown_supplier_and_unheld_family_are_404(client, seeded_db):
         ).status_code
         == 422
     )
+    # ...and an unavailable one: the catalogue holds `founder_badge_2` dark
+    # until the owner releases it, so it is not choosable on the grant door
+    # either (the brief: "422 unknown/unavailable key").
+    assert (
+        client.post(
+            f"/api/suppliers/{sid}/badges", json={"key": FOUNDER_BADGE_2}, headers=h
+        ).status_code
+        == 422
+    )
 
 
 def test_viewer_reads_but_cannot_write(client, db, seeded_db):
@@ -245,10 +254,11 @@ def test_every_write_invalidates_the_caches(client, seeded_db, monkeypatch):
 
 
 def test_deleting_a_supplier_takes_its_badges_with_it(client, db, seeded_db):
-    """`supplier_badges` is a dependent, not history. The FK carries ON DELETE
-    CASCADE but SQLite does not enforce it by default and the ORM delete would
-    still have to reconcile the loaded collection — so the route bulk-deletes
-    the rows and expires the parent (the blank-out-primary-key gotcha)."""
+    """`supplier_badges` is a dependent, not history: a company that is gone
+    holds nothing, by EITHER road. `Supplier.badges` carries
+    `cascade="all, delete-orphan"` and the FK carries ON DELETE CASCADE, so
+    this test would still pass with `delete_supplier`'s bulk statement removed
+    — it pins the OUTCOME the public boards depend on, not that one line."""
     h = _auth_header(client)
     created = client.post("/api/suppliers/", json={"name": "Badge Cascade Co"}, headers=h).json()
     sid = created["id"]
@@ -258,6 +268,27 @@ def test_deleting_a_supplier_takes_its_badges_with_it(client, db, seeded_db):
     assert client.delete(f"/api/suppliers/{sid}", headers=h).status_code == 200
     db.expire_all()
     assert db.query(SupplierBadge).filter_by(supplier_id=uuid.UUID(sid)).count() == 0
+
+
+def test_a_patch_cannot_move_a_holding_into_another_family(client, db, seeded_db):
+    """A holding is keyed on its family, so a PATCH may only switch to the
+    ALTERNATE ARTWORK of the family it already holds — never sideways into a
+    different one (which would leave the row's `family` disagreeing with its
+    badge and break `uq_supplier_badges_family`). The seeded catalogue is
+    founder-only, so the refusal needs a second family to exist at all."""
+    h = _auth_header(client)
+    sid = str(seeded_db["supplier1"].id)
+    client.post(f"/api/suppliers/{sid}/badges", json={"key": FOUNDER_BADGE_1}, headers=h)
+    # available=True on purpose: the family check runs BEFORE the availability
+    # check, so this must still answer `badge_family_mismatch`.
+    db.add(Badge(key="other_badge_1", family="other", label="Other", available=True, sort_order=9))
+    db.commit()
+
+    r = client.patch(
+        f"/api/suppliers/{sid}/badges/{FOUNDER_FAMILY}", json={"key": "other_badge_1"}, headers=h
+    )
+    assert r.status_code == 422, r.text
+    assert r.json()["detail"] == "badge_family_mismatch"
 
 
 def test_data_versions_has_a_badges_scope():

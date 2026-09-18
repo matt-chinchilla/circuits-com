@@ -319,9 +319,11 @@ def delete_supplier(
         synchronize_session=False
     )
     # Badge holdings are dependents too (055): a company that is gone holds
-    # nothing. The FK carries ON DELETE CASCADE, but SQLite does not enforce
-    # foreign keys by default and `Supplier.badges` is a loaded relationship,
-    # so the ORM would otherwise try to blank out the child rows itself.
+    # nothing. The FK carries ON DELETE CASCADE and `Supplier.badges` carries
+    # `cascade="all, delete-orphan"`, so the rows would go by either road —
+    # this bulk statement is the belt-and-braces version the seven dependents
+    # above already use (one statement instead of N, engine-independent), and
+    # it runs before `db.expire(supplier)` so the reloaded collection is empty.
     db.query(SupplierBadge).filter(SupplierBadge.supplier_id == supplier.id).delete(
         synchronize_session=False
     )
