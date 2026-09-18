@@ -161,7 +161,7 @@ describe('the vendored design file', () => {
   // Recorded in fireBadge/PROVENANCE.md. Re-export the design, do not edit the
   // file: if this fails, either the bytes drifted or the hash + PROVENANCE.md
   // were not updated together.
-  const SHA256 = '2e933e4dd7a74af3044db71c5160273b21f6ab89214450727ea7c88a6f062b90';
+  const SHA256 = '59aa499f4390aa9de516180df1d4556499e18d3d2829370245357bb67f8b6e67';
 
   it('is byte-for-byte the owner’s export', () => {
     expect(createHash('sha256').update(readFileSync(VENDOR)).digest('hex')).toBe(SHA256);

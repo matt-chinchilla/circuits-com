@@ -4,10 +4,10 @@
 
 - Source: the owner's Claude Design project "Burning Badge"
   (`https://claude.ai/design/p/8beb0fe1-a0e1-4d23-acaa-bb0c10e5ed0b`, file
-  `Burning Badge.dc.html`), imported 2026-09-17 22:55 EDT as
+  `Burning Badge.dc.html`), imported 2026-09-17 22:55 EDT, re-exported 2026-09-18 10:10 EDT (white + black accent highlights) as
   `.superpowers/sdd/2026-09-17-supplier-founder/design-import/fire-badge.js`.
-- sha256 `2e933e4dd7a74af3044db71c5160273b21f6ab89214450727ea7c88a6f062b90`
-  (13,547 bytes, 165 lines). Verify with:
+- sha256 `59aa499f4390aa9de516180df1d4556499e18d3d2829370245357bb67f8b6e67`
+  (14,145 bytes, 167 lines). Verify with:
   `cmp .superpowers/sdd/2026-09-17-supplier-founder/design-import/fire-badge.js \
        frontend/src/public/components/widgets/fireBadge/fire-badge.vendor.js`
 - Only the `.js` extension and the name changed; the bytes did not, so the file

@@ -10,15 +10,16 @@
     blue:   { stops: ['#e4f2ff', '#78c4ff', '#2a7ef5', '#1438a8', '#060c34'], spark: '#bfe3ff', glow: '#3a8cff' },
     indigo: { stops: ['#ecebff', '#9c92ff', '#5a3ee8', '#2c1690', '#0c0630'], spark: '#c9c2ff', glow: '#6a4cff' },
     violet: { stops: ['#fbe8ff', '#dc8cff', '#a028f0', '#5c0e98', '#1c0430'], spark: '#ecc4ff', glow: '#b040ff' },
-    white:  { stops: ['#ffffff', '#f2f4f8', '#c8ccd6', '#7a808c', '#2a2d34'], spark: '#ffffff', glow: '#dfe3ea' },
-    black:  { stops: ['#8a8a92', '#3c3c44', '#1a1a20', '#0c0c10', '#000000'], spark: '#b0b0b8', glow: '#2a2a32', dark: true },
+    white:  { stops: ['#ffffff', '#f2f4f8', '#c8ccd6', '#7a808c', '#2a2d34'], spark: '#dff0ff', glow: '#dfe3ea', accent: ['#eaf6ff', '#8cc8ff', '#3a8cff', '#1c48b8', '#0a1440'], accentMix: 0.35 },
+    black:  { stops: ['#8a8a92', '#3c3c44', '#1a1a20', '#0c0c10', '#000000'], spark: '#ff5a48', glow: '#2a2a32', dark: true, accent: ['#ff8a70', '#e83a28', '#a01a10', '#4a0806', '#120202'], accentMix: 0.3 },
   };
 
   const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
   const LUT = {};
   const lut = name => {
     if (LUT[name]) return LUT[name];
-    const st = (SCHEMES[name] || SCHEMES.orange).stops.map(hex), arr = [];
+    const sc = SCHEMES[name.replace(/\+a$/, '')] || SCHEMES.orange;
+    const st = (name.endsWith('+a') && sc.accent ? sc.accent : sc.stops).map(hex), arr = [];
     for (let i = 0; i < 64; i++) {
       const t = i / 63 * (st.length - 1), k = Math.min(st.length - 2, Math.floor(t)), f = t - k, a = st[k], b = st[k + 1];
       arr.push([0, 1, 2].map(j => Math.round(a[j] + (b[j] - a[j]) * f)));
@@ -115,7 +116,7 @@
         const u = Math.random() * 2 - 1, a = Math.PI / 2 + u * Math.abs(u) * 0.75 * Math.PI;
         this._p.push({ x: cx + 0.85 * R * Math.cos(a), y: cy + 0.85 * R * Math.sin(a), vx: (Math.random() - 0.5) * 0.3 * S,
           vy: -(1.0 + Math.random() * 0.9) * S * (1 - 0.45 * Math.abs(u)), life: 0.6 + Math.random() * 0.55, age: 0,
-          r0: (0.16 + Math.random() * 0.14) * S, ph: Math.random() * 6.28, fq: 6 + Math.random() * 6 });
+          r0: (0.16 + Math.random() * 0.14) * S, ph: Math.random() * 6.28, fq: 6 + Math.random() * 6, a: !!sc.accent && Math.random() < sc.accentMix });
       }
       if (o.sparks && Math.random() < dt * 1.6 * o.intensity) {
         this._s.push({ x: cx + (Math.random() - 0.5) * 1.2 * R, y: cy - R * (0.6 + Math.random() * 0.8), vx: (Math.random() - 0.5) * 0.4 * S,
@@ -127,7 +128,7 @@
       // ambient glow behind the badge
       ctx.globalAlpha = o.opacity * 0.1 * flick;
       ctx.drawImage(glowSprite(sc.glow), cx - 1.25 * S, cy - 1.25 * S, 2.5 * S, 2.5 * S);
-      const SP = sprites(o.scheme);
+      const SP = sprites(o.scheme), SPA = sc.accent ? sprites(o.scheme + '+a') : SP;
       // flame bodies
       let P = this._p, n = 0;
       for (let i = 0; i < P.length; i++) { const p = P[i]; if ((p.age += dt) < p.life) P[n++] = p; }
@@ -140,14 +141,15 @@
         const r = p.r0 * (1 - 0.8 * k) + 0.015 * S, al = Math.pow(1 - k, 1.3) * 0.75;
         const ci = Math.min(15, Math.max(0, ((0.2 + k * 0.85 + 0.1 * Math.abs(p.x - cx) / R) * 16) | 0));
         ctx.globalAlpha = o.opacity * al;
-        ctx.drawImage(SP[ci], p.x - r, p.y - r, 2 * r, 2 * r);
+        if (p.a && sc.dark) { ctx.globalCompositeOperation = 'lighter'; ctx.drawImage(SPA[ci], p.x - r, p.y - r, 2 * r, 2 * r); ctx.globalCompositeOperation = 'source-over'; }
+        else ctx.drawImage(p.a ? SPA[ci] : SP[ci], p.x - r, p.y - r, 2 * r, 2 * r);
       }
       // sparks that trail off upward
       const sp = hex(sc.spark);
       let Q = this._s, m = 0;
       for (let i = 0; i < Q.length; i++) { const s = Q[i]; if ((s.age += dt) < s.life && s.y > -s.r) Q[m++] = s; }
       Q.length = m;
-      const spk = glowSprite(sc.spark);
+      const spk = glowSprite(sc.spark); if (sc.dark) ctx.globalCompositeOperation = 'lighter';
       for (const s of Q) {
         const k = s.age / s.life;
         s.vy -= 0.3 * S * dt;
