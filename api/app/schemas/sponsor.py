@@ -28,9 +28,11 @@ class SponsorResponse(BaseModel):
     brand_primary: str | None = None
     brand_secondary: str | None = None
     brand_takeover: bool = False
-    # 054: founding-distributor flag off the joined supplier. Stamped by
-    # `_sponsor_board_dict` AND the keyword route — the two hand-built sites.
+    # 055: founding-distributor flag + the fire look, DERIVED off the joined
+    # supplier's badge holdings. Stamped by `_sponsor_board_dict` AND the
+    # keyword route — the two hand-built sites, both via `supplier_badge_fields`.
     founder: bool = False
+    badge: dict | None = None
     model_config = ConfigDict(from_attributes=True)
 
 

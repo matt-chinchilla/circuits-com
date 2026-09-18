@@ -31,7 +31,10 @@ def test_load_refuses_a_manufacturer_surrogate_from_old_exports():
         "PART_SKIP must drop manufacturer_id so a pre-fix export file still "
         "loads (defense at the boundary, not only at the source)"
     )
-    assert "SUPPLIER_SKIP" in src and '"manufacturer_id"' in src.split("SUPPLIER_SKIP =")[1].split("\n")[0], (
+    assert (
+        "SUPPLIER_SKIP" in src
+        and '"manufacturer_id"' in src.split("SUPPLIER_SKIP =")[1].split("\n")[0]
+    ), (
         "supplier upserts must skip manufacturer_id too — suppliers carry the "
         "same FK plus the uq_suppliers_manufacturer partial-unique index"
     )
@@ -61,13 +64,19 @@ def test_load_keys_parts_on_the_real_identity():
 
 
 def test_neither_side_carries_the_founder_flag():
-    """`suppliers.founder` (054) is PER-ENVIRONMENT operational state, not
-    catalog data: the owner sets it on prod, and `circuits push` upserts an
+    """`suppliers.founder` (054) was PER-ENVIRONMENT operational state, not
+    catalog data: the owner set it on prod, and `circuits push` upserts an
     existing supplier field by field (catalog_load's supplier branch walks
     rec.items() and setattr's each column). A local DB where every row is
     false would therefore overwrite prod's founding distributors on the next
     push. Skipped on BOTH sides — at the source so it never travels, and at
-    the boundary so an export file written before this fix still loads."""
+    the boundary so an export file written before this fix still loads.
+
+    055 DROPPED the column, and both skips STAY anyway: an export file written
+    before 055 still carries a `founder` key, and without the load-side skip
+    the supplier upsert would `setattr` a column that no longer exists. The
+    export-side skip is then just the pair's other half — cheap, and the tuple
+    is what this test pins."""
     export = (SCRIPTS / "catalog_export.py").read_text()
     supplier_line = next(
         line for line in export.splitlines() if '"t": "supplier"' in line and "row_dict(" in line
@@ -82,6 +91,28 @@ def test_neither_side_carries_the_founder_flag():
 
     load = (SCRIPTS / "catalog_load.py").read_text()
     assert '"founder"' in load.split("SUPPLIER_SKIP =")[1].split("\n")[0], (
-        "SUPPLIER_SKIP must drop founder so an old export cannot clobber "
-        "prod's flags"
+        "SUPPLIER_SKIP must drop founder so an old export cannot clobber prod's flags"
     )
+
+
+def test_the_badge_tables_never_travel():
+    """055 replaced the founder flag with `badges` (the catalogue — CODE,
+    rebuilt by `_seed_badges` on every api start) and `supplier_badges` (the
+    holdings — per-environment state keyed to supplier UUIDs that are minted
+    per database). Neither belongs in the catalog transfer: the catalogue would
+    duplicate the seed, and a holding would name a supplier id the other
+    environment has never heard of. The export walks an explicit list of
+    tables, so the guard is that neither name appears in it at all."""
+    export = (SCRIPTS / "catalog_export.py").read_text()
+    for table in ("Badge", "SupplierBadge", "badges", "supplier_badges"):
+        assert table not in export, (
+            f"{table} must never be exported — the badge catalogue is code and "
+            "the holdings are per-environment state keyed on local UUIDs"
+        )
+
+    load = (SCRIPTS / "catalog_load.py").read_text()
+    for table in ("Badge", "SupplierBadge", "supplier_badges"):
+        assert table not in load, (
+            f"{table} must never be applied by the loader — an export claiming "
+            "to carry badges would be writing another database's UUIDs"
+        )

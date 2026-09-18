@@ -25,7 +25,7 @@ from app.models import (
 from app.services.auth_service import (
     require_staff,
 )
-from app.services.badges import is_founder
+from app.services.badges import supplier_badge_fields
 from app.services.part_feed import (
     PartFeedProvider,
     get_feed_key,
@@ -149,10 +149,11 @@ def supplier_to_dict(supplier: Supplier) -> dict:
         "logo_url": supplier.logo_url,
         "brand_primary": supplier.brand_primary,
         "brand_secondary": supplier.brand_secondary,
-        # DERIVED since 055 — an enabled founder-family holding, read through
-        # the one home. There is no column to write, so neither SupplierCreate
-        # nor SupplierUpdate names it; the grant is its own route.
-        "founder": is_founder(supplier),
+        # DERIVED since 055 — `founder` plus the `badge` look the boards paint,
+        # both off an enabled founder-family holding and both stamped by the ONE
+        # home. There is no column to write, so neither SupplierCreate nor
+        # SupplierUpdate names them; the grant is its own route.
+        **supplier_badge_fields(supplier),
     }
 
 

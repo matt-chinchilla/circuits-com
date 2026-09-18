@@ -18,4 +18,9 @@ class SupplierResponse(BaseModel):
     # badge (`services.badges.is_founder`). There is no write path to this field
     # any more — granting happens on the badge holding, staff-only.
     founder: bool = False
+    # The fire look the boards paint: {key, scheme, intensity, opacity, sparks},
+    # or None when the supplier holds no enabled founder-family badge. Built by
+    # the same `supplier_badge_fields` call that derives `founder` — the two are
+    # always stamped together.
+    badge: dict | None = None
     model_config = ConfigDict(from_attributes=True)
