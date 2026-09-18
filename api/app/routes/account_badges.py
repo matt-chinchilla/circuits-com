@@ -26,6 +26,8 @@ through ``require_account_user``: staff are refused 403 here (their door is
 ``/api/suppliers/{id}/badges``) and so is an unactivated customer (D17).
 """
 
+import uuid
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -47,8 +49,10 @@ router = APIRouter(
 NO_SUPPLIER_DETAIL = "no_supplier"
 
 
-def _my_supplier_id(scope: AccountScope):
-    if not scope.is_supplier:
+def _my_supplier_id(scope: AccountScope) -> uuid.UUID:
+    # `scope.supplier_id` is `UUID | None`; `is_supplier` is exactly the
+    # narrowing, so the guard returns the value it proved is present.
+    if not scope.is_supplier or scope.supplier_id is None:
         raise HTTPException(404, NO_SUPPLIER_DETAIL)
     return scope.supplier_id
 

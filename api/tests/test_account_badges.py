@@ -21,7 +21,7 @@ from decimal import Decimal
 
 import pytest
 
-from app.models import Badge, SupplierBadge, User
+from app.models import Badge, Manufacturer, SupplierBadge, User
 from app.models.badge import FOUNDER_BADGE_1, FOUNDER_BADGE_2
 from app.services.auth_service import create_token
 
@@ -77,9 +77,46 @@ def free_user(db):
     return user
 
 
-def test_the_fixture_has_something_to_leak(badge_holders, db):
-    """Guards every "only mine" assertion below from passing vacuously."""
-    assert db.query(SupplierBadge).count() == 2
+@pytest.fixture
+def maker_user(db):
+    """An activated customer linked to a MANUFACTURER only.
+
+    The realistic near-miss for ``is_supplier``: both links live on ``User`` and
+    ``AccountScope`` has no ``elif``, so a route that asked "is this account
+    linked to anything" instead of "does it have a supplier" would pass the
+    neither-link case and fail here.
+    """
+    maker = Manufacturer(
+        id=uuid.uuid4(),
+        name="Badge Maker Co",
+        slug="badge-maker-co",
+        canonical_key="badgemakerco",
+    )
+    db.add(maker)
+    db.flush()
+    user = User(
+        id=uuid.uuid4(),
+        username="maker_badge_user",
+        password_hash="x",
+        role="user",
+        email="maker_badge_user@test.example",
+        email_verified_at=datetime.now(UTC),
+        activated_at=datetime.now(UTC),
+        manufacturer_id=maker.id,
+    )
+    db.add(user)
+    db.commit()
+    return user
+
+
+def test_the_fixture_has_something_to_leak(badge_holders, db, seeded_db):
+    """Guards every "only mine" assertion below from passing vacuously.
+
+    Scoped to the fixture's OWN two claims rather than an absolute table count,
+    so an unrelated holding seeded later cannot redden a badge-scoping test.
+    """
+    assert db.query(SupplierBadge).filter_by(supplier_id=seeded_db["supplier1"].id).count() == 1
+    assert db.query(SupplierBadge).filter_by(supplier_id=seeded_db["supplier2"].id).count() == 1
 
 
 def test_customer_reads_and_restyles_only_their_own(client, db, seeded_db, badge_holders):
@@ -158,7 +195,7 @@ def test_a_family_my_supplier_does_not_hold_is_404(client, badge_holders):
     assert r.status_code == 404 and r.json()["detail"] == "badge_not_held"
 
 
-def test_free_account_gets_404(client, free_user):
+def test_free_account_gets_404(client, free_user, maker_user):
     """No supplier link, no badge surface — and the same answer on both verbs,
     so the reply never reveals whether SOMEBODY holds that family."""
     h = as_(free_user)
@@ -166,6 +203,41 @@ def test_free_account_gets_404(client, free_user):
     assert r.status_code == 404 and r.json()["detail"] == "no_supplier"
     r = client.patch("/api/account/badges/founder", json={"scheme": "red"}, headers=h)
     assert r.status_code == 404 and r.json()["detail"] == "no_supplier"
+
+    # A maker-only account is linked to a company and still has no supplier —
+    # `is_supplier`, not "linked to something", is the predicate.
+    h = as_(maker_user)
+    r = client.get("/api/account/badges", headers=h)
+    assert r.status_code == 404 and r.json()["detail"] == "no_supplier"
+    r = client.patch("/api/account/badges/founder", json={"scheme": "red"}, headers=h)
+    assert r.status_code == 404 and r.json()["detail"] == "no_supplier"
+
+
+def test_a_customer_cannot_reach_the_staff_badge_routes(client, db, seeded_db, badge_holders):
+    """The other half of the wall (global-constraints.md:46): the staff door is
+    `require_staff`, and a customer is not staff.
+
+    Aimed at the customer's OWN supplier id on purpose — not even owning the
+    badge buys the staff door, which is what pins `enabled` as unreachable to
+    the company the badge belongs to.
+    """
+    _mine, _other, h = badge_holders
+    sid = str(seeded_db["supplier2"].id)
+    assert client.get("/api/badges", headers=h).status_code == 403
+    assert client.get(f"/api/suppliers/{sid}/badges", headers=h).status_code == 403
+    assert (
+        client.post(
+            f"/api/suppliers/{sid}/badges", json={"key": FOUNDER_BADGE_1}, headers=h
+        ).status_code
+        == 403
+    )
+    assert (
+        client.patch(
+            f"/api/suppliers/{sid}/badges/founder", json={"enabled": False}, headers=h
+        ).status_code
+        == 403
+    )
+    assert client.delete(f"/api/suppliers/{sid}/badges/founder", headers=h).status_code == 403
 
 
 def test_staff_are_refused(client, db, seeded_db, badge_holders):
