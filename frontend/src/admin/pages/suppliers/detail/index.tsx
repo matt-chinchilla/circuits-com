@@ -20,7 +20,8 @@ import {
   type RunTally,
   type SyncEvent,
 } from '@admin/services/syncStream';
-import type { AdminSupplier, Part, PaginatedResponse } from '@admin/types/admin';
+import type { AdminSupplier, Part, PaginatedResponse, SupplierBadge } from '@admin/types/admin';
+import BadgesPanel from '@admin/components/BadgesPanel/BadgesPanel';
 import QuickActionsPanel from './QuickActionsPanel';
 import SyncConsole from './SyncConsole';
 import NightlyImportToggle from './NightlyImportToggle';
@@ -55,6 +56,10 @@ export default function SupplierDetailPage() {
   const navigate = useNavigate();
   const { demoMode } = useDemo();
   const [supplier, setSupplier] = useState<AdminSupplier | null>(null);
+  // The badge row the editor overlay is open on (null = closed). The panel
+  // hands it up rather than mounting the overlay itself: the overlay is
+  // full-viewport and would be trapped in the panel's stacking context.
+  const [editing, setEditing] = useState<SupplierBadge | null>(null);
   const [parts, setParts] = useState<PaginatedResponse<Part> | null>(null);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
@@ -577,10 +582,6 @@ export default function SupplierDetailPage() {
               <dd className={styles.mono}>{websiteHost || '—'}</dd>
             </div>
             <div>
-              <dt>Founding distributor</dt>
-              <dd>{supplier.founder ? 'Yes' : 'No'}</dd>
-            </div>
-            <div>
               <dt>Categories</dt>
               <dd>
                 {supplier.categories && supplier.categories.length > 0
@@ -629,6 +630,10 @@ export default function SupplierDetailPage() {
           </div>
         </div>
       </div>
+
+      <BadgesPanel mode="staff" supplierId={id} onEdit={setEditing} />
+      {/* Task 7 mounts <BadgeEditorOverlay> here. */}
+      {editing !== null && null}
 
       <div className={`${styles.panel} ${styles.partsPanel}`}>
         <div className={styles.panelHead}>

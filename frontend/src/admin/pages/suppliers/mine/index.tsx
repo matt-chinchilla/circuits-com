@@ -12,10 +12,12 @@
 import { useEffect, useState } from 'react';
 import { Link2Off } from 'lucide-react';
 
+import BadgesPanel from '@admin/components/BadgesPanel/BadgesPanel';
 import { useAuth } from '@admin/contexts/AuthContext';
 import { accountApi, isNotLinked } from '@admin/services/accountApi';
 import { useConsolePath } from '@admin/services/consolePath';
 import type { AccountSupplier } from '@admin/types/account';
+import type { SupplierBadge } from '@admin/types/admin';
 
 import {
   AccountBusy,
@@ -37,6 +39,9 @@ export default function MySupplyPage() {
 
   const [supplier, setSupplier] = useState<AccountSupplier | null>(null);
   const [status, setStatus] = useState<Status>('busy');
+  // See the staff detail page: the panel raises the row, the page owns the
+  // full-viewport overlay.
+  const [editing, setEditing] = useState<SupplierBadge | null>(null);
 
   useEffect(() => {
     if (!isSupplier) {
@@ -89,15 +94,20 @@ export default function MySupplyPage() {
       )}
 
       {status === 'ready' && supplier && (
-        <MyCompanyCard
-          name={supplier.name}
-          logoUrl={supplier.logo_url}
-          website={supplier.website}
-          description={supplier.description}
-          partsCount={supplier.parts_count}
-          partsLabel="Parts you stock"
-          tier={account?.tier ?? null}
-        />
+        <>
+          <MyCompanyCard
+            name={supplier.name}
+            logoUrl={supplier.logo_url}
+            website={supplier.website}
+            description={supplier.description}
+            partsCount={supplier.parts_count}
+            partsLabel="Parts you stock"
+            tier={account?.tier ?? null}
+          />
+          <BadgesPanel mode="account" onEdit={setEditing} />
+          {/* Task 7 mounts <BadgeEditorOverlay> here. */}
+          {editing !== null && null}
+        </>
       )}
     </MyCompanyShell>
   );

@@ -1,3 +1,5 @@
+import type { BadgeLook } from '@shared/types/badge';
+
 // Auth
 // The one login-shaped payload: /auth/login and /auth/change-password both
 // answer with this, so the client stores a token exactly one way. (/auth/demo
@@ -484,16 +486,50 @@ export interface AdminSupplier {
   logo_url: string | null;
   brand_primary: string | null;
   brand_secondary: string | null;
-  // Founding-distributor incentive flag (migration 054). Owner-set; stays true
-  // until sponsor income passes $5,000/month or the owner decides. The column
-  // is NOT NULL and the API always sends a bool, but the key is OPTIONAL here
-  // for the same reason PartThumb's `image_url` is: `getSuppliers` is a cached
-  // read, so a payload stored before 054 can still reach a render site.
-  founder?: boolean;
   parts_count?: number;
   revenue_total?: number;
   categories?: string[];
 }
+
+// ─── Badges (migration 055) ─────────────────────────────────────────────────
+// `founder` is no longer a supplier COLUMN — it is derived from an enabled
+// founder-family holding, and the holding carries the look the boards paint.
+// These three shapes mirror `api/app/services/badges.py`'s serializers, which
+// are the one place a payload answers "what badge does this supplier show".
+
+/** A row of the badge CATALOGUE — the artwork that exists, whether or not it
+ *  is choosable yet. `available: false` is "coming soon", not "hidden": the
+ *  editor shows it disabled so the owner can see what is in the pipeline. */
+export interface BadgeDef {
+  id: string;
+  key: string;
+  family: string;
+  label: string;
+  available: boolean;
+  sort_order: number;
+}
+
+/** One supplier's HOLDING — the catalogue entry it was granted, plus its own
+ *  saved look. Extends `BadgeLook`, so it is passed straight to
+ *  `<FounderBadge look={row} />` with no mapping step. */
+export interface SupplierBadge extends BadgeLook {
+  id: string;
+  supplier_id: string;
+  family: string;
+  label: string;
+  available: boolean;
+  enabled: boolean;
+  granted_at: string | null;
+  updated_at: string | null;
+}
+
+/** The fields a CUSTOMER may change. `enabled` is deliberately absent — the
+ *  server's customer body is `extra="forbid"`, so sending it is a 422, and
+ *  staff widen this with `& { enabled?: boolean }` at the call site rather
+ *  than there being a second patch type to keep in step. */
+export type BadgeLookPatch = Partial<
+  Pick<SupplierBadge, 'key' | 'scheme' | 'intensity' | 'opacity' | 'sparks'>
+>;
 
 // Batch import
 export interface BatchImportResult {

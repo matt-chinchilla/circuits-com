@@ -25,6 +25,7 @@ import { API_BASE_URL } from '@shared/services/constants';
 import { adminApi, authHeaders, cachedRead, onUnauthorized } from '@admin/services/adminApi';
 import { invalidateQueries, type DataScope } from '@admin/services/queryCache';
 import { isPasswordChangeRequired, passwordGate } from '@admin/services/passwordGate';
+import type { BadgeLookPatch, SupplierBadge } from '@admin/types/admin';
 import type {
   AccountActivityResponse,
   AccountBookOfBusiness,
@@ -297,4 +298,25 @@ export const accountApi = {
     accountClient
       .delete<{ status: string }>(`/account/expenses/${id}`)
       .then((r) => r.data),
+
+  // ─── Badges (055) ────────────────────────────────────────────────────────
+  // The customer owns the LOOK of a badge staff granted them, never whether
+  // they have one. There is no customer catalogue door, so the editor offers
+  // the artwork the holding already names; a second artwork reaches customers
+  // the day `GET /api/badges` grows a customer-visible twin.
+
+  /** GET /api/account/badges — my supplier's holdings. `404 no_supplier` for
+   *  an account with no distributor link, which is a STATE, not a failure. */
+  getMyBadges: () =>
+    cachedRead(
+      'account:badges',
+      () => accountClient.get<SupplierBadge[]>('/account/badges').then((r) => r.data),
+      { scopes: ['badges'] },
+    ),
+
+  /** PATCH /account/badges/{family} — look only. Sending `enabled` (or any
+   *  other unknown field) is a 422 by design: the server body forbids extras,
+   *  so `BadgeLookPatch` is the exact set the customer may move. */
+  updateMyBadge: (family: string, patch: BadgeLookPatch) =>
+    accountClient.patch<SupplierBadge>(`/account/badges/${family}`, patch).then((r) => r.data),
 };

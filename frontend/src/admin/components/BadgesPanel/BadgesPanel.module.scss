@@ -1,0 +1,183 @@
+// BadgesPanel — the badge holding, on the supplier's own page.
+//
+// `.panel/.panelHead/.panelTitle` are COPIES of the supplier-detail page's
+// rules, not an import: a CSS Module's class names are local, so a shared
+// component cannot reach a page module's classes. The values are the ones in
+// `pages/suppliers/detail/SupplierDetailPage.module.scss`, so the panel reads
+// as one of that page's panels while the customer console gets the same look
+// without importing anything from the staff pages.
+//
+// The row leaves plenty of vertical air around the mark: the fire canvas
+// reaches 2.4x the pin's size ABOVE it and one size to each side, costing no
+// layout — so nothing on this row may clip, and `overflow` stays visible.
+
+@use '@shared/styles/variables' as *;
+@use '@admin/styles/variables' as *;
+@use '../../pages/glass' as *;
+
+.panel {
+  @include a-glass-pane;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 24px;
+}
+
+.panelHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--a-border-soft);
+}
+
+.panelTitle {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--a-fg1);
+  margin: 0;
+  letter-spacing: -0.005em;
+}
+
+.body {
+  padding: 8px 20px 16px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  // The fire reaches well above the pin; this row must never clip it.
+  overflow: visible;
+  padding: 18px 0 10px;
+
+  & + & {
+    border-top: 1px solid var(--a-border-soft);
+  }
+}
+
+.mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 40px;
+  overflow: visible;
+}
+
+.rowText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.rowLabel {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--a-fg1);
+}
+
+.rowKey {
+  font-family: $font-mono;
+  font-size: 12px;
+  color: var(--a-fg3);
+}
+
+.rowActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.btn {
+  font: inherit;
+  // Body's 1.6 overflows a height-constrained control (house gotcha).
+  line-height: 1;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 7px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--a-border);
+  background: transparent;
+  color: var(--a-fg1);
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    border-color: var(--a-primary);
+    color: var(--a-primary);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+}
+
+.btnDanger {
+  color: var(--a-danger);
+  border-color: var(--a-border);
+
+  &:hover:not(:disabled) {
+    border-color: var(--a-danger);
+    color: var(--a-danger);
+  }
+}
+
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--a-fg2);
+  cursor: pointer;
+}
+
+.grant {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 0 4px;
+  border-top: 1px solid var(--a-border-soft);
+  margin-top: 4px;
+}
+
+.grantLabel {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--a-fg3);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.select {
+  font: inherit;
+  line-height: 1;
+  font-size: 13px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--a-border);
+  background: var(--a-card);
+  color: var(--a-fg1);
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
+}
+
+.note {
+  font-size: 13px;
+  color: var(--a-fg3);
+  padding: 10px 0;
+}
+
+.error {
+  font-size: 13px;
+  color: var(--a-danger);
+  padding: 8px 0 2px;
+}

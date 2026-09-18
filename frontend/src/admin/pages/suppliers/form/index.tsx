@@ -27,7 +27,6 @@ interface FormData {
   logo_url: string;
   brand_primary: string;
   brand_secondary: string;
-  founder: boolean;
 }
 
 interface FormErrors {
@@ -50,7 +49,6 @@ function emptyForm(): FormData {
     logo_url: '',
     brand_primary: '',
     brand_secondary: '',
-    founder: false,
   };
 }
 
@@ -139,9 +137,6 @@ export default function SupplierFormPage() {
           logo_url: s.logo_url ?? '',
           brand_primary: s.brand_primary ?? '',
           brand_secondary: s.brand_secondary ?? '',
-          // The API always sends a bool; `?? false` keeps the controlled
-          // checkbox from ever reading `undefined` if a payload predates 054.
-          founder: s.founder ?? false,
         });
       })
       .catch(() => setToast({ type: 'error', msg: 'Failed to load supplier.' }))
@@ -202,7 +197,6 @@ export default function SupplierFormPage() {
         logo_url: form.logo_url.trim() || null,
         brand_primary,
         brand_secondary,
-        founder: form.founder,
       };
       // Did the company mark change relative to what we loaded? On create there
       // is no prior value, so any present logo counts as changed.
@@ -427,20 +421,6 @@ export default function SupplierFormPage() {
               {errors.brand_secondary && (
                 <div className={styles.fieldError}>{errors.brand_secondary}</div>
               )}
-            </div>
-            <div className={styles.field} data-field="founder">
-              <label className={styles.checkField} htmlFor="sup-founder">
-                <input
-                  id="sup-founder"
-                  type="checkbox"
-                  checked={form.founder}
-                  onChange={(e) => set('founder', e.target.checked)}
-                />
-                <span>Founding distributor</span>
-              </label>
-              <div className={styles.fieldHint}>
-                Early-partner incentive &mdash; set by the owner.
-              </div>
             </div>
           </div>
         </section>

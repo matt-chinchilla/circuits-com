@@ -17,6 +17,9 @@ import type {
   PartListing,
   PaginatedResponse,
   AdminSupplier,
+  BadgeDef,
+  BadgeLookPatch,
+  SupplierBadge,
   BatchImportResult,
   AdminCategory,
   AdminSponsor,
@@ -641,6 +644,52 @@ export const adminApi = {
 
   deleteSupplier: (id: string) =>
     bustingAfter(adminClient.delete(`/suppliers/${id}`).then((r) => r.data)),
+
+  // ─── Badges (055) ────────────────────────────────────────────────────────
+  // The catalogue is tiny and near-static, so it is cached like any other
+  // list read; the per-supplier holdings are cached under their own key.
+  // Both declare the `badges` scope, so the change probe can tell the editor
+  // "nothing moved" without refetching. Every WRITE goes through
+  // `bustingAfter`: a badge is painted on the public sponsor boards, so a
+  // grant, a restyle or a revoke changes bytes the service worker is holding.
+
+  /** GET /api/badges — every artwork that exists, unavailable ones included
+   *  (the editor shows them disabled rather than pretending they are not
+   *  coming). Staff only; a customer has no catalogue door. */
+  getBadgeCatalogue: () =>
+    cachedRead('badges:catalogue', () => adminClient.get<BadgeDef[]>('/badges').then((r) => r.data), {
+      scopes: ['badges'],
+    }),
+
+  /** GET /api/suppliers/{id}/badges — this supplier's holdings, one per family. */
+  getSupplierBadges: (id: string) =>
+    cachedRead(
+      `badges:supplier:${id}`,
+      () => adminClient.get<SupplierBadge[]>(`/suppliers/${id}/badges`).then((r) => r.data),
+      { scopes: ['badges'] },
+    ),
+
+  /** POST — grant a catalogue key. 409 when the family is already held, 422
+   *  when the key is unknown or not yet available. */
+  grantSupplierBadge: (id: string, key: string) =>
+    bustingAfter(
+      adminClient.post<SupplierBadge>(`/suppliers/${id}/badges`, { key }).then((r) => r.data),
+    ),
+
+  /** PATCH — the look, the artwork key, or `enabled`. Staff is the only side
+   *  that may send `enabled`; the customer body forbids it. */
+  updateSupplierBadge: (id: string, family: string, patch: BadgeLookPatch & { enabled?: boolean }) =>
+    bustingAfter(
+      adminClient
+        .patch<SupplierBadge>(`/suppliers/${id}/badges/${family}`, patch)
+        .then((r) => r.data),
+    ),
+
+  /** DELETE — take the holding away. The supplier stops being a founder. */
+  revokeSupplierBadge: (id: string, family: string) =>
+    bustingAfter(
+      adminClient.delete<{ ok: boolean }>(`/suppliers/${id}/badges/${family}`).then((r) => r.data),
+    ),
 
   getSupplierParts: (
     id: string,
