@@ -64,7 +64,7 @@ const FounderBadgeModule = await import('./FounderBadge');
 const FounderBadge = FounderBadgeModule.default;
 const { FOUNDER_BADGE_LABEL } = FounderBadgeModule;
 
-const COMPONENTS = join(__dirname, '..', '..', 'pages', 'category', 'components');
+const COMPONENTS = join(__dirname, '..', '..', '..', 'public', 'pages', 'category', 'components');
 const read = (file: string) => readFileSync(join(COMPONENTS, file), 'utf8');
 
 describe('FounderBadge (DOM)', () => {
@@ -127,6 +127,54 @@ describe('FounderBadge (DOM)', () => {
     }
   });
 
+  it('sets the four fire attributes from a look, and none without one', () => {
+    act(() =>
+      root.render(
+        createElement(FounderBadge, {
+          size: 22,
+          look: {
+            key: 'founder_badge_1',
+            scheme: 'violet',
+            intensity: 1.4,
+            opacity: 0.45,
+            sparks: false,
+          },
+        }),
+      ),
+    );
+    const lit = host.firstElementChild!;
+    expect(lit.getAttribute('scheme')).toBe('violet');
+    expect(lit.getAttribute('intensity')).toBe('1.4');
+    expect(lit.getAttribute('opacity')).toBe('0.45');
+    // the element reads sparks as a STRING attribute, not a boolean presence
+    expect(lit.getAttribute('sparks')).toBe('false');
+
+    // sparks true is still spelled out rather than left to the default
+    act(() =>
+      root.render(
+        createElement(FounderBadge, {
+          size: 22,
+          look: {
+            key: 'founder_badge_2',
+            scheme: 'blue',
+            intensity: 1,
+            opacity: 0.75,
+            sparks: true,
+          },
+        }),
+      ),
+    );
+    expect(host.firstElementChild!.getAttribute('sparks')).toBe('true');
+    // one artwork today: an unknown key renders the same pin
+    expect(host.firstElementChild!.getAttribute('badge')).toBe('true');
+
+    // and a null look is the same as no look at all — the element defaults
+    act(() => root.render(createElement(FounderBadge, { size: 22, look: null })));
+    for (const attr of ['scheme', 'intensity', 'opacity', 'sparks']) {
+      expect(host.firstElementChild!.hasAttribute(attr)).toBe(false);
+    }
+  });
+
   it('upgrades: the element paints its own pin and fire canvas in a shadow root', () => {
     const el = render(22);
     const sh = (el as HTMLElement & { shadowRoot: ShadowRoot | null }).shadowRoot;
@@ -176,9 +224,11 @@ describe('the vendored design file', () => {
 describe('the three boards render the badge beside the company name', () => {
   it('Platinum: beside the coname link/span, keyed on the board data, 22px', () => {
     const src = read('CategorySponsor.tsx');
-    expect(src).toContain("import FounderBadge from '@public/components/widgets/FounderBadge'");
-    expect(src).toContain('founder: sponsor.founder === true');
-    expect(src).toContain('{s.founder && <FounderBadge size={22} />}');
+    expect(src).toContain(
+      "import FounderBadge from '@shared/components/FounderBadge/FounderBadge'",
+    );
+    expect(src).toContain('badge: sponsor.badge ?? null');
+    expect(src).toContain('{s.badge && <FounderBadge look={s.badge} size={22} />}');
     // beside, not inside: the badge follows the closing of the conditional link
     const row = src.slice(src.indexOf('className="csbA-conamerow"'));
     expect(row.indexOf('<FounderBadge')).toBeGreaterThan(row.indexOf(')}'));
@@ -186,7 +236,7 @@ describe('the three boards render the badge beside the company name', () => {
 
   it('Gold: inside the h3 beside the name text, 18px', () => {
     const src = read('SponsorBlock.tsx');
-    expect(src).toContain('{sponsor.founder === true && <FounderBadge size={18} />}');
+    expect(src).toContain('{sponsor.badge && <FounderBadge look={sponsor.badge} size={18} />}');
     expect(src).toContain('<span className={styles.nameText}>{sponsor.supplier_name}</span>');
     const scss = readFileSync(join(COMPONENTS, 'SponsorBlock.module.scss'), 'utf8');
     expect(scss).toMatch(/\.nameText\s*\{\s*@include truncate;/);
@@ -198,13 +248,18 @@ describe('the three boards render the badge beside the company name', () => {
 
   it('Silver: beside the chip name, 15px, carried on the chip data', () => {
     const src = read('SilverPartners.tsx');
-    expect(src).toContain('founder: s.founder === true');
-    expect(src).toContain('{s.founder && <FounderBadge size={15} />}');
+    expect(src).toContain('badge: s.badge ?? null');
+    expect(src).toContain('{s.badge && <FounderBadge look={s.badge} size={15} />}');
   });
 
-  it('the payload types name the flag as optional-nullable on all three shapes', () => {
-    const types = readFileSync(join(__dirname, '..', '..', 'types', 'sponsor.ts'), 'utf8');
+  it('the payload types name the flag and the look as optional-nullable on all three shapes', () => {
+    const types = readFileSync(
+      join(__dirname, '..', '..', '..', 'public', 'types', 'sponsor.ts'),
+      'utf8',
+    );
     expect(types.match(/founder\?: boolean \| null;/g)).toHaveLength(3);
+    expect(types.match(/badge\?: BadgeLook \| null;/g)).toHaveLength(3);
+    expect(types).toContain("import type { BadgeLook } from '@shared/types/badge'");
   });
 
   it('the module rule exists (vitest css is off — read it from disk)', () => {
