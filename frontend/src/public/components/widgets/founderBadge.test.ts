@@ -190,6 +190,10 @@ describe('the three boards render the badge beside the company name', () => {
     expect(src).toContain('<span className={styles.nameText}>{sponsor.supplier_name}</span>');
     const scss = readFileSync(join(COMPONENTS, 'SponsorBlock.module.scss'), 'utf8');
     expect(scss).toMatch(/\.nameText\s*\{\s*@include truncate;/);
+    // The h3 inherits `truncate`'s overflow:hidden from the shared `.name,
+    // .title` block and clipped the fire (measured 40px off the top at 18px).
+    // The ellipsis lives on .nameText, so lifting it here is the whole fix.
+    expect(scss).toMatch(/\.name\s*\{[^}]*overflow:\s*visible/);
   });
 
   it('Silver: beside the chip name, 15px, carried on the chip data', () => {

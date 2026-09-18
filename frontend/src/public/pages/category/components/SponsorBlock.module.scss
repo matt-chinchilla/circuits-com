@@ -440,11 +440,17 @@
 
 // The name is a flex row so the founder pin can sit beside it; the
 // truncation moves onto the text span (a flex item can't ellipsize itself).
+// That leaves this row with `truncate`'s `overflow: hidden` and nothing to
+// clip but the pin's fire, which reaches 2.4× the pin above it — measured on
+// this board at 18px: 40px off the top, 18px right, 8px bottom. Lifting it
+// here is the SMALLEST fix; the ellipsis is unaffected because it lives on
+// .nameText, and `.card` (the next clipper up) has room to spare.
 .name {
   color: #f4ecd6;
   display: flex;
   align-items: center;
   gap: 8px;
+  overflow: visible;
 }
 .nameText {
   @include truncate;
