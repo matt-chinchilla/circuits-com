@@ -1,14 +1,28 @@
-// FounderBadge — inline geometry only; the material lives in the SVG.
-// `vertical-align` seats it on the name's baseline in an inline run (Gold's
-// h3); `align-self` centres it in a flex row (Platinum's name row, Silver's
-// `.svp-coname`, which aligns its children on the baseline — an svg's
-// baseline is its bottom edge). `flex: 0 0 auto` keeps a truncating name
-// from squeezing the pin.
+// FounderBadge — inline geometry only. The pin, the fire and the shadow-DOM
+// layout all live in `fireBadge/fire-badge.vendor.js`; this class is the seam
+// between that element and the three board rows it sits in.
+//
+// These declarations intentionally restate three the vendor's `:host` block
+// also sets (`display`, `flex`, `vertical-align`). They are not redundant: a
+// normal declaration in the DOCUMENT tree beats one from the shadow tree at
+// equal specificity, so this is where the site decides how the pin SEATS, and
+// the vendor file can be re-exported without taking the boards' alignment
+// with it.
 .badge {
   display: inline-block;
+  // Seats the pin on the name's baseline in an inline run (Gold's h3). The
+  // host is an inline-block with no in-flow line boxes, so its baseline is its
+  // bottom edge — the same geometry the inline <svg> had, hence the same
+  // -0.18em the owner approved. Overrides the vendor's `vertical-align: middle`.
   vertical-align: -0.18em;
+  // Centres it in a flex row (Platinum's name row, Silver's `.svp-coname`,
+  // which aligns its children on the baseline).
   align-self: center;
+  // Keeps a truncating name from squeezing the pin.
   flex: 0 0 auto;
+  // The fire canvas is absolutely positioned and reaches 2.4× the pin's size
+  // above it and one size to each side. It must not be clipped here — the
+  // board rows carry matching `overflow: visible` notes.
   overflow: visible;
   // Breathing room from the name, on top of each row's 8px gap (owner,
   // 2026-09-17: "a little bit more space"). In em so it scales with the
