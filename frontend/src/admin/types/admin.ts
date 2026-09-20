@@ -528,7 +528,7 @@ export interface SupplierBadge extends BadgeLook {
  *  staff widen this with `& { enabled?: boolean }` at the call site rather
  *  than there being a second patch type to keep in step. */
 export type BadgeLookPatch = Partial<
-  Pick<SupplierBadge, 'key' | 'scheme' | 'intensity' | 'opacity' | 'sparks'>
+  Pick<SupplierBadge, 'key' | 'scheme' | 'intensity' | 'opacity' | 'sparks' | 'speed'>
 >;
 
 // Batch import

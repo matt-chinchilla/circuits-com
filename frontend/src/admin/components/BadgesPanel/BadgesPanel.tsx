@@ -22,6 +22,11 @@
  * holding carrying its pin, its nine colour swatches, its board preview and
  * (for staff) Enabled/Revoke.
  *
+ * The tools follow the ARTWORK the draft names (2026-09-20, the pulsing badge):
+ * the burning pin gets Intensity / Opacity / Sparks, the pulsing pin gets Glow
+ * (the same `intensity` column, the design's own name for it) and Speed. The
+ * other fields stay stored, so switching artwork and back loses nothing.
+ *
  * That split is why the DRAFT lives up here rather than in the row: the bar
  * and the swatches edit the same draft from two places in the tree. It is a
  * map keyed by family with an `active` family the bar targets — one holding
@@ -52,7 +57,12 @@ import { apiErrorDetail } from '@admin/services/apiError';
 import { useCachedQuery } from '@admin/services/queryCache';
 import type { BadgeDef, BadgeLookPatch, SupplierBadge } from '@admin/types/admin';
 import FounderBadge from '@shared/components/FounderBadge/FounderBadge';
-import { BADGE_RANGES, BADGE_SCHEMES, type BadgeScheme } from '@shared/types/badge';
+import {
+  BADGE_RANGES,
+  BADGE_SCHEMES,
+  badgeArtwork,
+  type BadgeScheme,
+} from '@shared/types/badge';
 
 import styles from './BadgesPanel.module.scss';
 
@@ -84,6 +94,7 @@ interface Draft {
   intensity: number;
   opacity: number;
   sparks: boolean;
+  speed: number;
 }
 
 function draftOf(row: SupplierBadge): Draft {
@@ -93,13 +104,14 @@ function draftOf(row: SupplierBadge): Draft {
     intensity: row.intensity,
     opacity: row.opacity,
     sparks: row.sparks,
+    speed: row.speed,
   };
 }
 
 /** Everything the draft mirrors, in one string: the re-seed trigger. */
 function lookSignature(rows: SupplierBadge[]): string {
   return rows
-    .map((r) => `${r.family}:${r.key}:${r.scheme}:${r.intensity}:${r.opacity}:${r.sparks}`)
+    .map((r) => `${r.family}:${r.key}:${r.scheme}:${r.intensity}:${r.opacity}:${r.sparks}:${r.speed}`)
     .join('|');
 }
 
@@ -212,6 +224,7 @@ export default function BadgesPanel({ mode, supplierId, supplierName }: BadgesPa
     if (activeDraft.intensity !== activeRow.intensity) diff.intensity = activeDraft.intensity;
     if (activeDraft.opacity !== activeRow.opacity) diff.opacity = activeDraft.opacity;
     if (activeDraft.sparks !== activeRow.sparks) diff.sparks = activeDraft.sparks;
+    if (activeDraft.speed !== activeRow.speed) diff.speed = activeDraft.speed;
   }
   const dirty = Object.keys(diff).length > 0;
 
@@ -268,7 +281,7 @@ export default function BadgesPanel({ mode, supplierId, supplierName }: BadgesPa
 
         {/* ── The general tools, across the top ───────────────────────── */}
         {activeRow && activeDraft && (
-          <div className={styles.tools}>
+          <div className={styles.tools} data-artwork={badgeArtwork(activeDraft.key)}>
             <label className={styles.control} htmlFor="badge-key">
               <span className={styles.controlLabel}>Appearance</span>
               <select
@@ -308,7 +321,9 @@ export default function BadgesPanel({ mode, supplierId, supplierName }: BadgesPa
             </label>
 
             <label className={styles.control}>
-              <span className={styles.controlLabel}>Intensity</span>
+              <span className={styles.controlLabel}>
+                {badgeArtwork(activeDraft.key) === 'pulse' ? 'Glow' : 'Intensity'}
+              </span>
               <span className={styles.sliderRow}>
                 <input
                   type="range"
@@ -325,32 +340,54 @@ export default function BadgesPanel({ mode, supplierId, supplierName }: BadgesPa
               </span>
             </label>
 
-            <label className={styles.control}>
-              <span className={styles.controlLabel}>Opacity</span>
-              <span className={styles.sliderRow}>
-                <input
-                  type="range"
-                  className={styles.slider}
-                  min={BADGE_RANGES.opacity.min}
-                  max={BADGE_RANGES.opacity.max}
-                  step={BADGE_RANGES.opacity.step}
-                  value={activeDraft.opacity}
-                  onChange={(e) => set(activeRow.family, 'opacity', Number(e.target.value))}
-                />
-                <span className={styles.value}>{activeDraft.opacity.toFixed(2)}</span>
-              </span>
-            </label>
+            {badgeArtwork(activeDraft.key) === 'fire' && (
+              <>
+                <label className={styles.control}>
+                  <span className={styles.controlLabel}>Opacity</span>
+                  <span className={styles.sliderRow}>
+                    <input
+                      type="range"
+                      className={styles.slider}
+                      min={BADGE_RANGES.opacity.min}
+                      max={BADGE_RANGES.opacity.max}
+                      step={BADGE_RANGES.opacity.step}
+                      value={activeDraft.opacity}
+                      onChange={(e) => set(activeRow.family, 'opacity', Number(e.target.value))}
+                    />
+                    <span className={styles.value}>{activeDraft.opacity.toFixed(2)}</span>
+                  </span>
+                </label>
 
-            <label className={styles.control}>
-              <span className={styles.controlLabel}>Sparks</span>
-              <input
-                type="checkbox"
-                role="switch"
-                className={styles.switch}
-                checked={activeDraft.sparks}
-                onChange={(e) => set(activeRow.family, 'sparks', e.target.checked)}
-              />
-            </label>
+                <label className={styles.control}>
+                  <span className={styles.controlLabel}>Sparks</span>
+                  <input
+                    type="checkbox"
+                    role="switch"
+                    className={styles.switch}
+                    checked={activeDraft.sparks}
+                    onChange={(e) => set(activeRow.family, 'sparks', e.target.checked)}
+                  />
+                </label>
+              </>
+            )}
+
+            {badgeArtwork(activeDraft.key) === 'pulse' && (
+              <label className={styles.control}>
+                <span className={styles.controlLabel}>Speed</span>
+                <span className={styles.sliderRow}>
+                  <input
+                    type="range"
+                    className={styles.slider}
+                    min={BADGE_RANGES.speed.min}
+                    max={BADGE_RANGES.speed.max}
+                    step={BADGE_RANGES.speed.step}
+                    value={activeDraft.speed}
+                    onChange={(e) => set(activeRow.family, 'speed', Number(e.target.value))}
+                  />
+                  <span className={styles.value}>{activeDraft.speed.toFixed(1)}s</span>
+                </span>
+              </label>
+            )}
 
             <span className={styles.toolActions}>
               <button

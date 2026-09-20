@@ -79,6 +79,7 @@ const ROW: SupplierBadge = {
   intensity: 1,
   opacity: 0.75,
   sparks: true,
+  speed: 2.6,
   available: true,
   enabled: true,
   granted_at: null,
