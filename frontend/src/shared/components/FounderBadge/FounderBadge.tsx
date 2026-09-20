@@ -20,9 +20,11 @@
  * payload as `badge`), so all four are spelled out; anything the caller does
  * not have is the server's job to default, never this file's.
  *
- * There is ONE artwork today, so `founder_badge_2` and any key this build has
- * never heard of render the same pin. `key` is carried for the editor and for
- * the day a second artwork lands.
+ * TWO artworks since 2026-09-20. `founder_badge_2` (`PULSE_BADGE_KEY`) is the
+ * owner's "Pulsing Badge" — the vendored `<glow-badge>` in `glowBadge/`, CSS
+ * keyframes in a shadow root, no canvas. It reads the holding's `intensity` as
+ * its `glow` (the ranges nest and share a default) and `speed` as its cycle.
+ * Every other key, and no look at all, is the burning pin.
  *
  * The fire canvas is absolutely positioned and reaches 2.4× the pin's size
  * ABOVE it and one size to each side, so it costs no layout but every board
@@ -33,7 +35,9 @@
  * company, not a destination.
  */
 import type { BadgeLook } from '@shared/types/badge';
+import { badgeArtwork } from '@shared/types/badge';
 import './fireBadge/fire-badge.vendor.js';
+import './glowBadge/glow-badge.vendor.js';
 import styles from './FounderBadge.module.scss';
 
 export const FOUNDER_BADGE_LABEL = 'Founding distributor';
@@ -48,6 +52,22 @@ interface FounderBadgeProps {
 
 export default function FounderBadge({ size = 18, look, className }: FounderBadgeProps) {
   const cls = className ? `${styles.badge} ${className}` : styles.badge;
+
+  if (look && badgeArtwork(look.key) === 'pulse') {
+    return (
+      <glow-badge
+        className={cls}
+        size={size}
+        scheme={look.scheme}
+        glow={look.intensity}
+        speed={look.speed}
+        role="img"
+        aria-label={FOUNDER_BADGE_LABEL}
+        title={FOUNDER_BADGE_LABEL}
+        data-founder-badge=""
+      />
+    );
+  }
 
   return (
     <fire-badge

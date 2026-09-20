@@ -28,12 +28,25 @@ export type BadgeScheme = (typeof BADGE_SCHEMES)[number];
 export const BADGE_RANGES = {
   intensity: { min: 0.3, max: 2, step: 0.1, default: 1 },
   opacity: { min: 0.2, max: 1, step: 0.05, default: 0.75 },
+  /** Pulsing badge only: seconds per cycle (migration 056). */
+  speed: { min: 1, max: 6, step: 0.1, default: 2.6 },
 } as const;
 
+/** The catalogue key that renders the PULSING artwork (`<glow-badge>`); every
+ *  other key renders the burning pin. Mirrors `FOUNDER_BADGE_2` in
+ *  `api/app/models/badge.py`. */
+export const PULSE_BADGE_KEY = 'founder_badge_2';
+
+/** Which tools the editor shows for a key: the fire's sliders or the pulse's. */
+export function badgeArtwork(key: string): 'fire' | 'pulse' {
+  return key === PULSE_BADGE_KEY ? 'pulse' : 'fire';
+}
+
 /**
- * One supplier's visible badge. `key` is the catalogue key (`founder_badge_1`
- * or `founder_badge_2` today); there is one artwork, so an unknown key still
- * renders the pin rather than nothing.
+ * One supplier's visible badge. `key` is the catalogue key: `founder_badge_2`
+ * is the pulsing artwork (scheme + `intensity` as its glow + `speed`), any
+ * other key is the burning pin (scheme/intensity/opacity/sparks). Every field
+ * is stored for every holding so switching artwork and back loses nothing.
  */
 export interface BadgeLook {
   key: string;
@@ -41,4 +54,5 @@ export interface BadgeLook {
   intensity: number;
   opacity: number;
   sparks: boolean;
+  speed: number;
 }

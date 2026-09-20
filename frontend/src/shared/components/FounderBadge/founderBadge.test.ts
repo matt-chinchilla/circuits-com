@@ -138,6 +138,7 @@ describe('FounderBadge (DOM)', () => {
             intensity: 1.4,
             opacity: 0.45,
             sparks: false,
+            speed: 2.6,
           },
         }),
       ),
@@ -149,23 +150,25 @@ describe('FounderBadge (DOM)', () => {
     // the element reads sparks as a STRING attribute, not a boolean presence
     expect(lit.getAttribute('sparks')).toBe('false');
 
-    // sparks true is still spelled out rather than left to the default
+    // sparks true is still spelled out rather than left to the default; an
+    // unknown key renders the burning pin
     act(() =>
       root.render(
         createElement(FounderBadge, {
           size: 22,
           look: {
-            key: 'founder_badge_2',
+            key: 'founder_badge_9',
             scheme: 'blue',
             intensity: 1,
             opacity: 0.75,
             sparks: true,
+            speed: 2.6,
           },
         }),
       ),
     );
+    expect(host.firstElementChild!.tagName.toLowerCase()).toBe('fire-badge');
     expect(host.firstElementChild!.getAttribute('sparks')).toBe('true');
-    // one artwork today: an unknown key renders the same pin
     expect(host.firstElementChild!.getAttribute('badge')).toBe('true');
 
     // and a null look is the same as no look at all — the element defaults
@@ -201,6 +204,76 @@ describe('FounderBadge (DOM)', () => {
       '18',
       '15',
     ]);
+  });
+});
+
+describe('the pulsing artwork (founder_badge_2)', () => {
+  let host: HTMLDivElement;
+  let root: Root;
+  beforeEach(() => {
+    host = document.createElement('div');
+    document.body.appendChild(host);
+    root = createRoot(host);
+  });
+  afterEach(() => {
+    act(() => root.unmount());
+    host.remove();
+  });
+
+  it('renders the vendored <glow-badge>: scheme, intensity as glow, speed, same name', () => {
+    act(() =>
+      root.render(
+        createElement(FounderBadge, {
+          size: 18,
+          look: {
+            key: 'founder_badge_2',
+            scheme: 'indigo',
+            intensity: 1.3,
+            opacity: 0.4,
+            sparks: false,
+            speed: 4.2,
+          },
+        }),
+      ),
+    );
+    const el = host.firstElementChild!;
+    expect(el.tagName.toLowerCase()).toBe('glow-badge');
+    expect(el.getAttribute('size')).toBe('18');
+    expect(el.getAttribute('scheme')).toBe('indigo');
+    expect(el.getAttribute('glow')).toBe('1.3');
+    expect(el.getAttribute('speed')).toBe('4.2');
+    // the fire's own knobs never reach the pulsing element
+    for (const attr of ['intensity', 'opacity', 'sparks', 'badge']) {
+      expect(el.hasAttribute(attr)).toBe(false);
+    }
+    expect(el.getAttribute('role')).toBe('img');
+    expect(el.getAttribute('aria-label')).toBe(FOUNDER_BADGE_LABEL);
+    expect(el.className).toMatch(/badge/);
+    expect(customElements.get('glow-badge')).toBeTypeOf('function');
+  });
+});
+
+describe('the vendored pulsing design file', () => {
+  const DIR = join(__dirname, 'glowBadge');
+  const VENDOR = join(DIR, 'glow-badge.vendor.js');
+  // Recorded in glowBadge/PROVENANCE.md: the export with ONE patched line.
+  const SHA256 = '8aa125965889dca832beea2228a207933e5c3d333132dee598a9443e50c2ef5a';
+  const PNG_SHA256 = '899f9dbdaf9b334b7be09140b724cc056b0b8e9b77890895709676ef3c0a15c4';
+
+  it('is the owner’s export plus exactly the asset-URL patch', () => {
+    const src = readFileSync(VENDOR, 'utf8');
+    expect(createHash('sha256').update(src).digest('hex')).toBe(SHA256);
+    expect(readFileSync(join(DIR, 'PROVENANCE.md'), 'utf8')).toContain(SHA256);
+    // the patch: Vite resolves the texture; the page URL never does
+    expect(src).toContain("new URL('./dot-grid.png', import.meta.url).href");
+    expect(src).not.toContain('document.currentScript');
+    expect(src).toContain("if (customElements.get('glow-badge')) return;");
+  });
+
+  it('ships the dot-grid texture the design draws its enamel with', () => {
+    const png = readFileSync(join(DIR, 'dot-grid.png'));
+    expect(createHash('sha256').update(png).digest('hex')).toBe(PNG_SHA256);
+    expect(png.subarray(1, 4).toString()).toBe('PNG');
   });
 });
 
