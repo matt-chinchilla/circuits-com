@@ -111,6 +111,10 @@ def test_grant_patch_revoke_round_trip(client, db, seeded_db):
         ).status_code
         == 422
     )
+    # Pull the pulsing artwork back (released 2026-09-20) to prove the door
+    # still refuses an unavailable key.
+    db.query(Badge).filter_by(key=FOUNDER_BADGE_2).one().available = False
+    db.commit()
     assert (
         client.patch(
             f"/api/suppliers/{sid}/badges/{FOUNDER_FAMILY}",
@@ -192,9 +196,11 @@ def test_unknown_supplier_and_unheld_family_are_404(client, seeded_db):
         ).status_code
         == 422
     )
-    # ...and an unavailable one: the catalogue holds `founder_badge_2` dark
-    # until the owner releases it, so it is not choosable on the grant door
-    # either (the brief: "422 unknown/unavailable key").
+    # ...and an unavailable one: an artwork the catalogue has pulled back is
+    # not choosable on the grant door either (the brief: "422 unknown/unavailable
+    # key"). `founder_badge_2` shipped dark until 2026-09-20; darken it here.
+    db.query(Badge).filter_by(key=FOUNDER_BADGE_2).one().available = False
+    db.commit()
     assert (
         client.post(
             f"/api/suppliers/{sid}/badges", json={"key": FOUNDER_BADGE_2}, headers=h

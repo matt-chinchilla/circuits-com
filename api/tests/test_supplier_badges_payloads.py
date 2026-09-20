@@ -26,7 +26,7 @@ from app.models.badge import FOUNDER_BADGE_1, FOUNDER_BADGE_2, FOUNDER_FAMILY
 from app.routes.suppliers import supplier_to_dict
 from app.services.category_cache import clear as clear_category_cache
 
-DEFAULT_LOOK = {"scheme": "orange", "intensity": 1.0, "opacity": 0.75, "sparks": True}
+DEFAULT_LOOK = {"scheme": "orange", "intensity": 1.0, "opacity": 0.75, "sparks": True, "speed": 2.6}
 
 
 def _auth_header(client):
@@ -71,6 +71,7 @@ def test_public_list_carries_derived_founder_and_look(client, db, seeded_db):
         "intensity": 1.5,
         "opacity": 0.75,
         "sparks": True,
+        "speed": 2.6,
     }
     # Not a blanket true — the other seeded supplier holds nothing.
     other = after[str(seeded_db["supplier2"].id)]
@@ -88,6 +89,7 @@ def test_detail_carries_the_pair(client, db, seeded_db):
         "intensity": 1.0,
         "opacity": 0.4,
         "sparks": False,
+        "speed": 2.6,
     }
 
 
@@ -209,6 +211,7 @@ def test_the_silver_directory_carries_the_look(client, db, tier_boards, seeded_d
         "intensity": 0.5,
         "opacity": 1.0,
         "sparks": True,
+        "speed": 2.6,
     }
     other = by_name[seeded_db["supplier2"].name]
     assert other["founder"] is False and other["badge"] is None
@@ -247,6 +250,7 @@ def test_sponsor_boards_carry_founder_and_the_look(client, db, tier_boards, seed
         **DEFAULT_LOOK,
         "scheme": "red",
         "sparks": False,
+        "speed": 2.6,
     }
 
     kw = client.get("/api/sponsors/keyword/founder-kw").json()

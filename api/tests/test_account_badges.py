@@ -141,7 +141,10 @@ def test_customer_reads_and_restyles_only_their_own(client, db, seeded_db, badge
         client.patch("/api/account/badges/founder", json={"enabled": False}, headers=h).status_code
         == 422
     )
-    # An unavailable artwork is not choosable by anybody.
+    # An unavailable artwork is not choosable by anybody (badge_2 is released
+    # since 2026-09-20, so pull it back for the refusal).
+    db.query(Badge).filter_by(key=FOUNDER_BADGE_2).one().available = False
+    db.commit()
     assert (
         client.patch(
             "/api/account/badges/founder", json={"key": FOUNDER_BADGE_2}, headers=h

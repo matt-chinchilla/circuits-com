@@ -43,7 +43,7 @@ router = APIRouter(prefix="/api", tags=["badges"])
 # `enabled`, which only staff may touch. Every one of them backs a NOT NULL
 # column, so an explicit null is a 422 here rather than an IntegrityError 500
 # at commit — the same guard `admin_expenses` carries.
-LOOK_FIELDS = ("key", "scheme", "intensity", "opacity", "sparks")
+LOOK_FIELDS = ("key", "scheme", "intensity", "opacity", "sparks", "speed")
 NOT_NULLABLE = (*LOOK_FIELDS, "enabled")
 
 
@@ -58,6 +58,9 @@ class BadgeLookPatch(BaseModel):
     intensity: float | None = Field(None, ge=0.3, le=2)
     opacity: float | None = Field(None, ge=0.2, le=1)
     sparks: bool | None = None
+    # Pulsing badge (founder_badge_2) only: seconds per cycle. Stored for every
+    # holding so switching artwork and back loses nothing.
+    speed: float | None = Field(None, ge=1, le=6)
 
 
 class StaffBadgePatch(BadgeLookPatch):
@@ -134,6 +137,8 @@ def apply_look(row: SupplierBadge, patch: BadgeLookPatch, db: Session) -> None:
         row.opacity = Decimal(str(data["opacity"]))
     if "sparks" in data:
         row.sparks = bool(data["sparks"])
+    if "speed" in data:
+        row.speed = Decimal(str(data["speed"]))
 
 
 @router.get("/badges")

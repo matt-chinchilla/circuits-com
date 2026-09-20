@@ -17,6 +17,7 @@ from app.models.badge import (
     INTENSITY_CHECK_SQL,
     OPACITY_CHECK_SQL,
     SCHEME_CHECK_SQL,
+    SPEED_CHECK_SQL,
 )
 from app.services.badges import badge_look, founder_row, supplier_badge_fields
 
@@ -34,6 +35,7 @@ def test_holding_columns_and_defaults():
     assert c.intensity.default.arg == Decimal("1.00") or float(c.intensity.default.arg) == 1.0
     assert float(c.opacity.default.arg) == 0.75
     assert c.sparks.default.arg is True
+    assert float(c.speed.default.arg) == 2.6  # the pulsing badge's cycle (056)
     assert c.scheme.type.length >= 12 and SupplierBadge.__table__.c.family.type.length >= 40
 
 
@@ -56,7 +58,7 @@ def test_one_holding_per_family(db, seeded_db):
 def test_the_catalogue_is_seeded_with_both_founder_badges(db, seeded_db):
     rows = {b.key: b for b in db.query(Badge).all()}
     assert rows[FOUNDER_BADGE_1].available is True
-    assert rows[FOUNDER_BADGE_2].available is False
+    assert rows[FOUNDER_BADGE_2].available is True  # released 2026-09-20 (the pulsing badge)
     assert rows[FOUNDER_BADGE_1].family == rows[FOUNDER_BADGE_2].family == FOUNDER_FAMILY
 
 
@@ -81,6 +83,7 @@ def test_service_derives_founder_and_look(db, seeded_db):
         "intensity": 1.0,
         "opacity": 0.75,
         "sparks": True,
+        "speed": 2.6,
     }
     row.enabled = False
     db.commit()
@@ -142,6 +145,8 @@ def test_migration_054_is_chained_to_053():
         {"intensity": Decimal("2.01")},
         {"opacity": Decimal("0.19")},
         {"opacity": Decimal("1.01")},
+        {"speed": Decimal("0.9")},
+        {"speed": Decimal("6.1")},
     ],
 )
 def test_the_checks_refuse_out_of_range_looks(db, seeded_db, bad):
@@ -173,6 +178,7 @@ def test_the_checks_accept_the_range_edges(db, seeded_db):
             scheme="black",
             intensity=Decimal("0.30"),
             opacity=Decimal("1.00"),
+            speed=Decimal("6.0"),
         )
     )
     db.flush()  # the bounds are INCLUSIVE — a refusal here would be off-by-one
@@ -194,6 +200,15 @@ def test_the_model_and_055_agree_on_the_checks():
         assert f"sa.CheckConstraint({name}, name=" in src
 
 
+def test_the_model_and_056_agree_on_the_speed_check():
+    """056 added `speed` (the pulsing badge's cycle) with its own literal CHECK."""
+    src = (VERSIONS / "056_supplier_badge_speed.py").read_text()
+    assert 'revision = "056"' in src and 'down_revision = "055"' in src
+    assert f'SPEED_CHECK = "{SPEED_CHECK_SQL}"' in src
+    assert 'op.create_check_constraint("ck_supplier_badges_speed", "supplier_badges", SPEED_CHECK)' in src
+    assert 'server_default="2.6"' in src, "constant default = no table rewrite, and the design's own 2.6s"
+
+
 def test_the_model_checks_are_built_from_the_constants():
     bodies = {
         c.name: str(c.sqltext)
@@ -203,6 +218,7 @@ def test_the_model_checks_are_built_from_the_constants():
     assert bodies["ck_supplier_badges_scheme"] == SCHEME_CHECK_SQL
     assert bodies["ck_supplier_badges_intensity"] == INTENSITY_CHECK_SQL
     assert bodies["ck_supplier_badges_opacity"] == OPACITY_CHECK_SQL
+    assert bodies["ck_supplier_badges_speed"] == SPEED_CHECK_SQL
     for scheme in BADGE_SCHEMES:
         assert f"'{scheme}'" in SCHEME_CHECK_SQL
 
@@ -226,21 +242,21 @@ def test_reseeding_re_asserts_the_catalogue(db, seeded_db, monkeypatch):
     from app.db import seed as seed_module
 
     before = db.query(Badge).filter_by(key=FOUNDER_BADGE_2).one()
-    assert before.available is False
+    assert before.available is True
 
     monkeypatch.setattr(
         seed_module,
         "BADGE_CATALOGUE",
         (
             (FOUNDER_BADGE_1, FOUNDER_FAMILY, "Founding distributor", True, 0),
-            (FOUNDER_BADGE_2, FOUNDER_FAMILY, "Founding distributor (alt)", True, 7),
+            (FOUNDER_BADGE_2, FOUNDER_FAMILY, "Founding distributor (alt)", False, 7),
         ),
     )
     seed_module._seed_badges(db)
 
     after = db.query(Badge).filter_by(key=FOUNDER_BADGE_2).one()
     assert after.id == before.id, "re-asserting must UPDATE, never insert a twin"
-    assert after.available is True
+    assert after.available is False, "pulling an artwork back must take effect too"
     assert after.label == "Founding distributor (alt)"
     assert after.sort_order == 7
     assert db.query(Badge).filter_by(key=FOUNDER_BADGE_2).count() == 1

@@ -22,6 +22,7 @@ def badge_look(row: SupplierBadge) -> dict:
         "intensity": float(row.intensity),
         "opacity": float(row.opacity),
         "sparks": bool(row.sparks),
+        "speed": float(row.speed),
     }
 
 

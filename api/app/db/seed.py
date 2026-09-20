@@ -900,11 +900,11 @@ def get_or_create_sponsor(
 # fresh database must carry both founder keys or the editor has nothing to
 # offer and 055's backfill has nothing to join on. `founder_badge_2` ships
 # `available=False`: it exists so a holding can point at it, but it is not
-# offered until the owner says so.
+# offered until the owner says so — RELEASED 2026-09-20 as the "Pulsing Badge".
 BADGE_CATALOGUE = (
     # key, family, label, available, sort_order
     (FOUNDER_BADGE_1, FOUNDER_FAMILY, "Founding distributor", True, 0),
-    (FOUNDER_BADGE_2, FOUNDER_FAMILY, "Founding distributor (alternate)", False, 1),
+    (FOUNDER_BADGE_2, FOUNDER_FAMILY, "Founding distributor (pulsing)", True, 1),
 )
 
 
