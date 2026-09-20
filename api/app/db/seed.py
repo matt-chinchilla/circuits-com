@@ -903,7 +903,7 @@ def get_or_create_sponsor(
 # offered until the owner says so — RELEASED 2026-09-20 as the "Pulsing Badge".
 BADGE_CATALOGUE = (
     # key, family, label, available, sort_order
-    (FOUNDER_BADGE_1, FOUNDER_FAMILY, "Founding distributor", True, 0),
+    (FOUNDER_BADGE_1, FOUNDER_FAMILY, "Founding distributor (fire)", True, 0),
     (FOUNDER_BADGE_2, FOUNDER_FAMILY, "Founding distributor (pulsing)", True, 1),
 )
 
