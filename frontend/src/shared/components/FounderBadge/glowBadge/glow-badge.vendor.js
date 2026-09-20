@@ -75,8 +75,8 @@
       this.attachShadow({ mode: 'open' }).innerHTML = `<style>
 :host{display:inline-block;line-height:0;vertical-align:middle;flex:0 0 auto}
 #w{position:relative;display:block;width:24px;height:24px}
-#h{position:absolute;inset:-85%;border-radius:50%;pointer-events:none;background:radial-gradient(circle,var(--g) 0%,var(--g2) 22%,transparent 60%);mix-blend-mode:screen;opacity:0;animation:halo var(--d) linear infinite;will-change:opacity,transform}
-#h2{position:absolute;inset:-25%;border-radius:50%;pointer-events:none;background:radial-gradient(circle,var(--g) 30%,transparent 70%);filter:blur(2px);opacity:0;animation:halo2 var(--d) linear infinite;will-change:opacity}
+#h{position:absolute;inset:-42.5%;border-radius:50%;pointer-events:none;background:radial-gradient(circle,var(--g) 0%,var(--g2) 22%,transparent 60%);mix-blend-mode:screen;opacity:0;animation:halo var(--d) linear infinite;will-change:opacity,transform}
+#h2{position:absolute;inset:-12.5%;border-radius:50%;pointer-events:none;background:radial-gradient(circle,var(--g) 30%,transparent 70%);filter:blur(2px);opacity:0;animation:halo2 var(--d) linear infinite;will-change:opacity}
 svg{position:relative;z-index:1;display:block;width:100%;height:100%;overflow:visible}
 #pl,#fl,#fh{opacity:0;animation:enamel var(--d) linear infinite;will-change:opacity}
 #fl{animation-name:flight}#fh{animation-name:fhalo}
@@ -110,7 +110,7 @@ svg{position:relative;z-index:1;display:block;width:100%;height:100%;overflow:vi
       this._w.style.setProperty('--g2', `rgba(${r},${gg},${b},.55)`);
       this._w.style.setProperty('--s', glow);
       this._w.style.setProperty('--d', speed + 's');
-      if (!this._delay) this._delay = -(Math.random() * speed).toFixed(2) + 's';
+      if (!this._delay) this._delay = '0s'; /* PATCHED — every pin pulses in sync; see PROVENANCE.md */
       for (const el of this._w.querySelectorAll('#h,#h2,#pl,#fl,#fh,#sm,#sm2,#sp path')) el.style.animationDelay = this._delay;
     }
   }

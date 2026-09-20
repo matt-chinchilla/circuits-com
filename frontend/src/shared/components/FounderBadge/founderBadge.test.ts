@@ -257,10 +257,10 @@ describe('the vendored pulsing design file', () => {
   const DIR = join(__dirname, 'glowBadge');
   const VENDOR = join(DIR, 'glow-badge.vendor.js');
   // Recorded in glowBadge/PROVENANCE.md: the export with ONE patched line.
-  const SHA256 = '8aa125965889dca832beea2228a207933e5c3d333132dee598a9443e50c2ef5a';
+  const SHA256 = 'e94a5783972d53d94a4e973c96aa91d28126c8becba2f52f0f7ebcf9a2bacdf8';
   const PNG_SHA256 = '899f9dbdaf9b334b7be09140b724cc056b0b8e9b77890895709676ef3c0a15c4';
 
-  it('is the owner’s export plus exactly the asset-URL patch', () => {
+  it('is the owner’s export plus the asset-URL patch and the two owner-asked tunings', () => {
     const src = readFileSync(VENDOR, 'utf8');
     expect(createHash('sha256').update(src).digest('hex')).toBe(SHA256);
     expect(readFileSync(join(DIR, 'PROVENANCE.md'), 'utf8')).toContain(SHA256);
@@ -268,6 +268,11 @@ describe('the vendored pulsing design file', () => {
     expect(src).toContain("new URL('./dot-grid.png', import.meta.url).href");
     expect(src).not.toContain('document.currentScript');
     expect(src).toContain("if (customElements.get('glow-badge')) return;");
+    // halo reach halved (owner, 2026-09-20) and every pin in the same phase
+    expect(src).toContain('#h{position:absolute;inset:-42.5%;');
+    expect(src).toContain('#h2{position:absolute;inset:-12.5%;');
+    expect(src).toContain("this._delay = '0s'");
+    expect(src).not.toContain('Math.random() * speed');
   });
 
   it('ships the dot-grid texture the design draws its enamel with', () => {
