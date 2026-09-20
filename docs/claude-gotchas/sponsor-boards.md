@@ -36,7 +36,25 @@ The element paints an enamel pin plus a canvas particle fire that rises ~2.4× t
 it — the Gold `h3` needed `overflow: visible` (the truncate mixin's `overflow: hidden` clipped the
 flame; ellipsis lives on `.nameText`). `s.badge` is `{key, scheme, intensity, opacity, sparks} |
 null` from `services/badges.supplier_badge_fields` (a payload with no enabled founder-family row
-renders nothing). Look changes come from the admin/customer `BadgeEditorOverlay`; a write clears
-the category cache through `invalidate_catalog_caches()`. Spec:
+renders nothing; since 056 it also carries `speed`). Look changes come from the inline editor in the
+admin/customer `BadgesPanel`; a write clears the category cache through `invalidate_catalog_caches()`.
+
+**Second artwork, 2026-09-20 — the "Pulsing Badge" (`founder_badge_2`).** Same design project, file
+`Pulsing Badge.dc.html` → `glow-badge.js` + `dot-grid.png`, vendored under
+`FounderBadge/glowBadge/` (sha-pinned in its own `PROVENANCE.md`). It is a `<glow-badge>` custom
+element: an SVG enamel pin with a dot-grid texture and a CSS-keyframe "prestige" cycle (halo swells
+beyond the rim, the F lights, a sheen sweeps, three sparks) — no canvas, no rAF. Attributes
+`scheme` / `glow` 0–2 / `speed` s-per-cycle. `FounderBadge.tsx` switches on
+`badgeArtwork(look.key)`: the pulse gets `glow={look.intensity}` (the ranges nest, same default 1)
+and `speed={look.speed}` (its own column, migration 056, 1–6, default 2.6); every other key is the
+fire. The editor's tools bar follows the artwork too — Intensity/Opacity/Sparks for the fire,
+Glow/Speed for the pulse — while ALL fields stay stored on the one holding, so a company can switch
+back without re-tuning. The one edit to the export (`PROVENANCE.md` records it): upstream resolved
+`dot-grid.png` off `document.currentScript`, which is `null` for a bundled module and would have
+fallen back to the PAGE URL (`/category/x/dot-grid.png` → the SPA shell); the vendored line uses
+`new URL('./dot-grid.png', import.meta.url)` so Vite hashes and serves the texture. The halo
+reaches 85% of the pin beyond it on every side — the same `overflow: visible` rules that let the
+flame out cover it. Released by flipping `available` in `seed.BADGE_CATALOGUE` (a code edit; the
+seed re-asserts the catalogue on every boot). Spec:
 `docs/superpowers/specs/2026-09-18-supplier-badges-design.md`. Design captures and the editor
 proof live under `.superpowers/sdd/2026-09-1{7-supplier-founder,8-supplier-badges}/` (gitignored).
