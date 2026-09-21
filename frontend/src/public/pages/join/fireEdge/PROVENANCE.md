@@ -1,20 +1,28 @@
 # `fire-edge.vendor.js` — provenance
 
-**Byte-identical** to the owner's design export. Do not edit it; re-export instead.
+The owner's design export plus ONE patched line. Do not edit it beyond that patch; re-export and re-apply instead.
 
 - Source: the owner's Claude Design project `3bbc46a2-917c-4348-a7e1-3bb008cd9e2c`,
   file `ui_kits/website/fire-edge.js`, imported 2026-09-21 as
   `.superpowers/sdd/2026-09-21-join-founders-discount/design-import/fire-edge.js`.
-- sha256 `d80d76e684e0ad81f9dc9c7e93e567d1914962f70e6567da4037346276e17fbb`
-  (22,357 bytes). Verify with:
-  `cmp .superpowers/sdd/2026-09-21-join-founders-discount/design-import/fire-edge.js \
-       frontend/src/public/pages/join/fireEdge/fire-edge.vendor.js`
-- **No patches.** Unlike `glow-badge.vendor.js` there was nothing to patch: the
-  file loads no assets (every sprite is drawn into an offscreen `<canvas>` at
-  runtime) and never reads `document.currentScript`, so it bundles as-is. Only
-  the `.js` name changed; the bytes did not, which is what makes the `cmp` above
-  — and the sha in `fireEdge.test.ts` — the whole integrity check. A provenance
-  header inside the file would break both.
+- Upstream export sha256 `d80d76e684e0ad81f9dc9c7e93e567d1914962f70e6567da4037346276e17fbb` (22,357 bytes).
+  Vendored file sha256 `36e43f65a547b8484a846bce7968da8aaa17b23f7a0044f96671e9b37db600cf` (22,442 bytes) —
+  the difference is the one patch below. Verify with
+  `diff .superpowers/sdd/2026-09-21-join-founders-discount/design-import/fire-edge.js \
+        frontend/src/public/pages/join/fireEdge/fire-edge.vendor.js` → exactly one changed line.
+- **One patch (2026-09-21, owner: the embers must burn on phones too).** Upstream's
+  `_start()` refused to run at `(max-width: 768px)` as well as under
+  `prefers-reduced-motion: reduce`; the vendored line keeps ONLY the reduced-motion
+  gate: `if (reduced.matches) return; /* PATCHED … */`. Measured before patching
+  (emulated 390×844 phone, band open): 14 canvases at 1× backing store, largest
+  408×62 px, JS heap flat at 5 MB over 11 s, 60 fps — the mobile gate was a
+  precaution, not a budget. The Join page's static fallback slash is now shown
+  only under reduced motion (`.stack[data-fire='off']`, decided at ignition), so
+  the canvas strike and the CSS strike can never both appear.
+- Nothing else is patched: the file loads no assets (every sprite is drawn into
+  an offscreen `<canvas>` at runtime) and never reads `document.currentScript`.
+  The sha in `fireEdge.test.ts` pins the PATCHED bytes; a provenance header
+  inside the file would break it.
 - It lives under `@public/pages/join/` rather than `@shared/` because the Join
   page is its only consumer; the ≥2-consumer rule is what would move it.
 - Self-registering (`if (customElements.get('fire-edge')) return;` at the top),

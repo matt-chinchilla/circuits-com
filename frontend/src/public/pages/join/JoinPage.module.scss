@@ -1875,24 +1875,30 @@
 .priceVal {
   position: relative;
   display: inline-block;
+}
 
-  // No drawn slash: the fire (<fire-edge line>) travels the strike path and
-  // the coal bed it leaves IS the strike. Static fallback where the canvas is
-  // off (reduced-motion, ≤768px): a plain charred diagonal.
-  &::after {
-    content: '';
-    position: absolute;
-    left: -4%;
-    right: -4%;
-    top: 50%;
-    height: 3px;
-    margin-top: -1.5px;
-    border-radius: 2px;
-    background: #a8301f;
-    transform: rotate(-38deg);
-    opacity: 0;
-    pointer-events: none;
+// No drawn slash while the canvas runs: the fire (<fire-edge line>) travels
+// the strike path and the coal bed it leaves IS the strike. Where the canvas
+// cannot start (reduced motion — .stack[data-fire='off'], decided at ignition)
+// a charred diagonal on the SAME endpoints stands in.
+.slash {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  opacity: 0;
+  pointer-events: none;
+
+  line {
+    stroke: #a8301f;
+    stroke-width: 3px;
+    stroke-linecap: round;
   }
+}
+
+.stack[data-fire='off'][data-fd='on'] .slash {
+  opacity: 1;
 }
 
 .fdTag {
@@ -2000,13 +2006,6 @@
   --g5: #7a1f14;
 }
 
-// Where the canvas cannot run, the charred diagonal stands in for the burn.
-@media (max-width: 768px) {
-  .stack[data-fd='on'] .priceVal::after {
-    opacity: 1;
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .fdPanel {
     transition: none;
@@ -2023,7 +2022,7 @@
     display: none;
   }
 
-  .stack[data-fd='on'] .priceVal::after {
+  .stack[data-fd='on'] .slash {
     opacity: 1;
   }
 

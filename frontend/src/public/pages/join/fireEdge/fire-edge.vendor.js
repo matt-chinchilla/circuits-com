@@ -165,7 +165,7 @@
     }
     _start() {
       this._el = 0; this._t0 = performance.now(); this._acc = 0; this._p = []; this._s = []; this._k = []; this._coals = null; this._burnDone = false; this._coalAt = 0; this._coalBorn0 = 0; this._cc = null; this._trail = []; this._run = true; this._clear();
-      if (reduced.matches || mobile.matches) return;
+      if (reduced.matches) return; /* PATCHED — phones burn too (owner, 2026-09-21); upstream also gated ≤768px. See PROVENANCE.md */
       start(this);
     }
     _kill() { this._run = false; stop(this); this._clear(); }

@@ -282,6 +282,14 @@ export default function JoinPage() {
   // in step.
   const [fdOpen, setFdOpen] = useState(false);
   const [fdLive, setFdLive] = useState(false);
+  // The SAME gate <fire-edge> reads at ignition (reduced motion): where the
+  // canvas will not start, the static slash stands in — decided once, at the
+  // moment of ignition, never by a CSS media query, so the two can never
+  // both show (a viewport resize after the burn used to double them).
+  const fireOff = useMemo(
+    () => fdLive && window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+    [fdLive],
+  );
   const closeFounder = () => {
     setFdLive(false);
     setFdOpen(false);
@@ -625,6 +633,7 @@ export default function JoinPage() {
             className={styles.stack}
             data-tier-active={tier ?? undefined}
             data-fd={fdLive ? "on" : undefined}
+            data-fire={fireOff ? "off" : undefined}
           >
             <div className={styles.proof}>
               <div>
@@ -699,6 +708,24 @@ export default function JoinPage() {
                         <span className={styles.price}>
                           <span className={styles.priceVal}>
                             <span className={styles.priceTxt}>{price}</span>
+                            {/* Static strike on EXACTLY the fire line's endpoints
+                                (1.6,102.6 → 98.4,-2.6 in % of the box) — the
+                                old fixed -38° bar diverged from the coal bed at
+                                every aspect but one. */}
+                            <svg
+                              className={styles.slash}
+                              viewBox="0 0 100 100"
+                              preserveAspectRatio="none"
+                              aria-hidden="true"
+                            >
+                              <line
+                                x1="1.6"
+                                y1="102.6"
+                                x2="98.4"
+                                y2="-2.6"
+                                vectorEffect="non-scaling-stroke"
+                              />
+                            </svg>
                             <Fire
                               on={fdLive}
                               mode="line"
