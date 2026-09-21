@@ -41,7 +41,9 @@ interface JoinTier {
   /** Desk-quoted list price. Silver is null — its number comes from the API. */
   price: string | null;
   /** The Founder's Discount price, struck in beside the list price once the
-   *  Founder band is open. Silver is null — derived from the probe. */
+   *  Founder band is open. Silver is null — derived from the probe through
+   *  founderMonthly (owner, 2026-09-21: 15% off, rounded DOWN to the ten so
+   *  the customer always gets the better deal — $250 → $210, $2,500 → $2,100). */
   fd: string | null;
   ribbon: string;
   el: string;
@@ -72,7 +74,7 @@ const JOIN_TIERS: JoinTier[] = [
     id: "gold",
     name: "Gold",
     price: "$2,500",
-    fd: "$1,750",
+    fd: "$2,100",
     ribbon: "Pro",
     el: "Au",
     lead: "Everything in Silver, plus…",
@@ -670,7 +672,7 @@ export default function JoinPage() {
                   const price = t.id === "silver" ? monthlyLabel(monthly) : t.price;
                   const fdPrice =
                     t.id === "silver"
-                      ? monthlyLabel(monthly != null ? Math.round(monthly * 0.7) : null)
+                      ? monthlyLabel(monthly != null ? founderMonthly(monthly) : null)
                       : t.fd;
                   return (
                     <div
@@ -1361,4 +1363,11 @@ export default function JoinPage() {
 // than no number at all.
 function monthlyLabel(monthly: number | null): string | null {
   return monthly != null ? `$${monthly}` : null;
+}
+
+/** The Founder's Discount rule: 15% off the list price, rounded DOWN to the
+ *  nearest $10 — the customer always gets the better deal (owner, 2026-09-21).
+ *  Gold/Platinum carry the same rule as literals on JOIN_TIERS. */
+function founderMonthly(monthly: number): number {
+  return Math.floor((monthly * 0.85) / 10) * 10;
 }
