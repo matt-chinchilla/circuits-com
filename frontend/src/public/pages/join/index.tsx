@@ -42,8 +42,9 @@ interface JoinTier {
   price: string | null;
   /** The Founder's Discount price, struck in beside the list price once the
    *  Founder band is open. Silver is null — derived from the probe through
-   *  founderMonthly (owner, 2026-09-21: 15% off, rounded DOWN to the ten so
-   *  the customer always gets the better deal — $250 → $210, $2,500 → $2,100). */
+   *  founderMonthly. Gold/Platinum are OWNER-SET literals at or below 15% off
+   *  ($2,500 → $2,100, $10,000 → $8,500) — "always give the customer the
+   *  better deal" (2026-09-21); they are not derived by any formula. */
   fd: string | null;
   ribbon: string;
   el: string;
@@ -1365,9 +1366,9 @@ function monthlyLabel(monthly: number | null): string | null {
   return monthly != null ? `$${monthly}` : null;
 }
 
-/** The Founder's Discount rule: 15% off the list price, rounded DOWN to the
- *  nearest $10 — the customer always gets the better deal (owner, 2026-09-21).
- *  Gold/Platinum carry the same rule as literals on JOIN_TIERS. */
+/** Silver's Founder's Discount: 15% off the probed list price, rounded DOWN to
+ *  the nearest $10 so the customer always gets the better deal ($250 → $210;
+ *  owner, 2026-09-21). Gold/Platinum are owner-set literals on JOIN_TIERS. */
 function founderMonthly(monthly: number): number {
   return Math.floor((monthly * 0.85) / 10) * 10;
 }
