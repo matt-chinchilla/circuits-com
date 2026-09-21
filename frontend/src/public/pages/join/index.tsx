@@ -16,6 +16,7 @@ import { formatPhone } from "@shared/utils/phone";
 import { useCategories } from "@public/hooks/useCategories";
 import { api } from "@public/services/api";
 import TierBannerRibbon, { type SponsorTierId } from "@public/components/widgets/TierBannerRibbon";
+import FounderDiscount, { Fire } from "./FounderDiscount";
 import styles from "./JoinPage.module.scss";
 
 // Staged Join + Advertise surface (design kit "Join v3", 2026-08-14). One
@@ -39,6 +40,9 @@ interface JoinTier {
   name: string;
   /** Desk-quoted list price. Silver is null — its number comes from the API. */
   price: string | null;
+  /** The Founder's Discount price, struck in beside the list price once the
+   *  Founder band is open. Silver is null — derived from the probe. */
+  fd: string | null;
   ribbon: string;
   el: string;
   lead: string;
@@ -52,6 +56,7 @@ const JOIN_TIERS: JoinTier[] = [
     id: "silver",
     name: "Silver",
     price: null,
+    fd: null,
     ribbon: "Basic",
     el: "Ag",
     lead: "What's included",
@@ -67,6 +72,7 @@ const JOIN_TIERS: JoinTier[] = [
     id: "gold",
     name: "Gold",
     price: "$2,500",
+    fd: "$1,750",
     ribbon: "Pro",
     el: "Au",
     lead: "Everything in Silver, plus…",
@@ -84,6 +90,7 @@ const JOIN_TIERS: JoinTier[] = [
     id: "platinum",
     name: "Platinum",
     price: "$10,000",
+    fd: "$8,500",
     ribbon: "Enterprise",
     el: "Pt",
     lead: "Everything in Gold, plus…",
@@ -267,6 +274,15 @@ export default function JoinPage() {
   // ── Stage 01 ────────────────────────────────────────────────────────────
   const [tier, setTier] = useState<SponsorTierId | null>(null);
   const [hovered, setHovered] = useState<SponsorTierId | null>(null);
+  // Founder's Discount band. `fdLive` trails `fdOpen` by one frame — the price
+  // burns start only once the band has actually opened, so the two fires run
+  // in step.
+  const [fdOpen, setFdOpen] = useState(false);
+  const [fdLive, setFdLive] = useState(false);
+  const closeFounder = () => {
+    setFdLive(false);
+    setFdOpen(false);
+  };
 
   // ── Stage 02 (Silver board picker) ──────────────────────────────────────
   const [boards, setBoards] = useState<Board[] | null>(null);
@@ -605,6 +621,7 @@ export default function JoinPage() {
           <div
             className={styles.stack}
             data-tier-active={tier ?? undefined}
+            data-fd={fdLive ? "on" : undefined}
           >
             <div className={styles.proof}>
               <div>
@@ -623,9 +640,16 @@ export default function JoinPage() {
 
             {/* ── 01 · pick a tier ─────────────────────────────────────── */}
             <section className={styles.stage} aria-label="Step 1: pick a tier">
-              <div className={styles.stgHead}>
-                <StageNum>01</StageNum>
-                <h2 className={styles.stgTitle}>Pick your tier</h2>
+              <div className={styles.stgRow}>
+                <div className={styles.stgHead}>
+                  <StageNum>01</StageNum>
+                  <h2 className={styles.stgTitle}>Pick your tier</h2>
+                </div>
+                <FounderDiscount
+                  open={fdOpen}
+                  onToggle={() => (fdOpen ? closeFounder() : setFdOpen(true))}
+                  onArrive={() => setFdLive(true)}
+                />
               </div>
               <p className={styles.stgLine}>
                 {tier
@@ -644,6 +668,10 @@ export default function JoinPage() {
               >
                 {JOIN_TIERS.map(t => {
                   const price = t.id === "silver" ? monthlyLabel(monthly) : t.price;
+                  const fdPrice =
+                    t.id === "silver"
+                      ? monthlyLabel(monthly != null ? Math.round(monthly * 0.7) : null)
+                      : t.fd;
                   return (
                     <div
                       key={t.id}
@@ -666,8 +694,53 @@ export default function JoinPage() {
                       </span>
                       {price ? (
                         <span className={styles.price}>
-                          {price}
-                          <small> per month</small>
+                          <span className={styles.priceVal}>
+                            <span className={styles.priceTxt}>{price}</span>
+                            <Fire
+                              on={fdLive}
+                              mode="line"
+                              delay="0.1"
+                              dur="1"
+                              linear
+                              scale="11"
+                              blend="over"
+                              coals
+                              hold="1"
+                              linger="4"
+                              x1="1.6"
+                              y1="102.6"
+                              x2="98.4"
+                              y2="-2.6"
+                            />
+                            <span className={styles.fdTag} aria-hidden={!fdLive}>
+                              <span className={styles.fdIgn}>15% off</span>
+                              <Fire
+                                on={fdLive}
+                                mode="sweep"
+                                delay="0.9"
+                                dur="0.45"
+                                scale="7"
+                                blend="over"
+                                intensity="0.7"
+                              />
+                            </span>
+                          </span>
+                          <small>/mo</small>
+                          <span className={styles.fdNew} aria-hidden={!fdLive}>
+                            <span className={styles.fdIgn}>
+                              {fdPrice}
+                              <small>/mo</small>
+                            </span>
+                            <Fire
+                              on={fdLive}
+                              mode="sweep"
+                              delay="1.05"
+                              dur="0.45"
+                              scale="14"
+                              blend="over"
+                              intensity="0.8"
+                            />
+                          </span>
                         </span>
                       ) : (
                         <span className={styles.priceAsk}>

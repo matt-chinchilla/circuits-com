@@ -13,6 +13,13 @@ import styles from './TierBannerRibbon.module.scss';
 
 export type SponsorTierId = 'silver' | 'gold' | 'platinum';
 
+/** The palettes the ribbon can wear. `founder` is not a sponsorship tier —
+ *  it is the Join page's Founder's Discount card (design 2026-09-21), which
+ *  reuses this exact ring/comet/element tile in a brand-red colorway. Kept
+ *  separate from `SponsorTierId` so the sponsor-side maps below (and every
+ *  other consumer that switches on a real tier) stay exhaustive. */
+export type RibbonTierId = SponsorTierId | 'founder';
+
 /** The metal for each tier's element square — Ag/Au/Pt, the ribbon's opening
  *  glyph. Exported for consumers (the BOM table) that label by tier name. */
 export const SPONSOR_TIER_ELEMENT: Record<SponsorTierId, string> = {
@@ -22,7 +29,7 @@ export const SPONSOR_TIER_ELEMENT: Record<SponsorTierId, string> = {
 };
 
 interface TierBannerRibbonProps {
-  tier: SponsorTierId;   // picks the metal palette (data-tier attr)
+  tier: RibbonTierId;    // picks the metal palette (data-tier attr)
   el: string;            // element tile label: "Ag" | "Au" | "Pt"
   label: string;         // ribbon text: "Basic" | "Pro" | "Enterprise"
   /** true while the owning tier card is hovered OR selected — turns the

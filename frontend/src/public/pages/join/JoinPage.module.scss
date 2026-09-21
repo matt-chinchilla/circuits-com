@@ -356,6 +356,10 @@
 }
 
 .price {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
   font-size: 2rem;
   font-weight: 700;
   letter-spacing: -0.02em;
@@ -1506,6 +1510,529 @@
   }
 
   .successMark {
+    animation: none;
+  }
+}
+
+// ─── Founder's Discount (design 3bbc46a2, 2026-09-21) ───────────────────────
+//
+// ONE card in the tier material — dotted slab, top-metal border, ribbon ring —
+// in the black selected-tier finish with a brand-red palette. Opening it
+// "burns" the FEATURES list into place: the panel grows (0fr→1fr) while a
+// flickering ember edge rides its bottom lip, and perks ignite in sequence.
+// The same click flips `.stack[data-fd='on']` so every tier price gets a red
+// slash burned bottom-left→top-right.
+//
+// Ported 1:1 from ui_kits/website/advertise.css lines 535–632 + 683–700.
+
+// Stage-01 header row: numeral + title on the left, the Founder band right.
+.stgRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.tier.fd {
+  --tc: #e8695c;
+  --tc-bright: #ffb59f;
+  --tc-deep: #c0392b;
+  --g1: #ffe3d6;
+  --g2: #ff9a7a;
+  --g3: #e8695c;
+  --g4: #c0392b;
+  --g5: #7a1f14;
+  --fd: #c0392b;
+  --fd-soft: #e8695c;
+  --fd-hot: #ffb07a;
+
+  flex: 0 1 360px;
+  min-width: 0;
+  margin-top: 2px;
+  padding: 0;
+  gap: 0;
+  cursor: pointer;
+  background-color: #101314;
+  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.13) 1px, transparent 1px);
+  border-color: rgba(255, 255, 255, 0.14);
+  border-top-color: var(--tc);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.2),
+    0 20px 50px -20px color-mix(in srgb, var(--tc) 45%, transparent);
+
+  @media (hover: hover) {
+    &:hover {
+      transform: none;
+      box-shadow:
+        0 1px 2px rgba(0, 0, 0, 0.2),
+        0 20px 50px -20px color-mix(in srgb, var(--tc) 45%, transparent);
+    }
+  }
+
+  &:hover .fdHint {
+    text-decoration-color: currentColor;
+    color: var(--tc-bright);
+  }
+
+  &:not(.fdIsOpen):hover .fdChev {
+    transform: translateY(2px);
+  }
+}
+
+.tier.fd.fdIsOpen {
+  outline: 2px solid var(--tc-deep);
+  outline-offset: -1px;
+}
+
+@media (max-width: 760px) {
+  .tier.fd {
+    flex-basis: 100%;
+  }
+}
+
+.fdTile {
+  font: inherit;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  padding: 14px 20px 12px;
+  background: none;
+  border: none;
+  color: #ffffff;
+  cursor: pointer;
+  border-radius: inherit;
+
+  &:focus-visible {
+    outline: 2px solid var(--fd-soft);
+    outline-offset: -3px;
+  }
+}
+
+.fd .tierName {
+  color: var(--tc);
+  font-size: 1.05rem;
+}
+
+// Hint reads as a text link, not a control: title-red, inline chevron,
+// underline + chevron dip on hover.
+.fdHint {
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--tc);
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-underline-offset: 3px;
+  transition:
+    text-decoration-color 0.2s ease,
+    color 0.2s ease;
+}
+
+.fdTile:hover .fdHint,
+.fdTile:focus-visible .fdHint {
+  text-decoration-color: currentColor;
+  color: var(--tc-bright);
+}
+
+.fdChev {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  color: currentColor;
+  transition: transform 0.3s ease;
+}
+
+.fdTile:hover .fdChev {
+  transform: translateY(2px);
+}
+
+.fdIsOpen .fdChev,
+.fdIsOpen .fdTile:hover .fdChev {
+  transform: rotate(180deg);
+}
+
+// Panel: height via grid rows so the ember edge pinned at the panel's bottom
+// travels down with the reveal — the fire IS the growing lip.
+.fdPanel {
+  position: relative;
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 1.5s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.fdIsOpen .fdPanel {
+  grid-template-rows: 1fr;
+}
+
+.fdInner {
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0 20px;
+
+  // Warm interior heat while the panel grows: an opacity-only pseudo gradient
+  // (compositor), not an animated inset box-shadow (repaint).
+  &::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 90px;
+    pointer-events: none;
+    opacity: 0;
+    background: linear-gradient(to top, rgba(255, 120, 60, 0.35), transparent);
+  }
+}
+
+.fdIsOpen .fdInner {
+  padding: 4px 20px 18px;
+  transition: padding 0.3s ease;
+
+  &::after {
+    animation: joinInnerHeat 2.2s ease forwards;
+  }
+}
+
+.fd .featLabel {
+  color: var(--tc);
+  margin-top: 0;
+}
+
+.fd .featLead {
+  color: #cfd6d2;
+}
+
+.fd .perks {
+  color: #e6ebe8;
+}
+
+.fd .ck {
+  color: var(--tc);
+}
+
+// `.j3-checks` — the perk list inside the founder panel.
+.checks {
+  gap: 7px;
+}
+
+// Ignite targets are the INNER .fdIgn spans so the sibling <fire-edge> canvas
+// isn't hidden by the text's own opacity ramp.
+.fd .checks li {
+  position: relative;
+}
+
+.fd .checks .fdIgn {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  opacity: 0;
+}
+
+.fdIsOpen .checks .fdIgn {
+  animation: joinIgnite 0.9s ease forwards;
+  animation-delay: calc(0.45s + var(--i, 0) * 0.3s);
+}
+
+.fdBadges {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: 6px;
+  flex: none;
+  align-self: center;
+}
+
+// Burning lip — a 2px anchor at the panel's bottom; the <fire-edge lip> inside
+// paints the real particle fire (overscan 40px) as the panel grows.
+.fdFire {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -2px;
+  height: 2px;
+  pointer-events: none;
+}
+
+// Scorch mark left behind on the bottom rim once the burn completes.
+.tier.fd.fdIsOpen {
+  border-bottom-color: color-mix(in srgb, var(--fd) 55%, transparent);
+  transition: border-color 0.8s 1.5s ease;
+}
+
+.stack :global(fire-edge) {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+
+@keyframes joinIgnite {
+  0% {
+    opacity: 0;
+    transform: translateY(5px);
+    color: var(--fd-hot);
+    text-shadow:
+      0 0 6px var(--fd-soft),
+      0 0 14px var(--fd);
+  }
+  45% {
+    opacity: 1;
+    color: var(--fd-hot);
+    text-shadow:
+      0 0 5px var(--fd-soft),
+      0 0 10px color-mix(in srgb, var(--fd) 60%, transparent);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+    color: inherit;
+    text-shadow: none;
+  }
+}
+
+// Price-side ignite keeps its own red: no color stop at 100%, so the element's
+// declared color wins after fill-mode: forwards.
+@keyframes joinIgniteRed {
+  0% {
+    opacity: 0;
+    transform: translateY(4px);
+    text-shadow:
+      0 0 6px var(--fd-soft),
+      0 0 14px var(--fd);
+  }
+  45% {
+    opacity: 1;
+    text-shadow:
+      0 0 5px var(--fd-soft),
+      0 0 10px color-mix(in srgb, var(--fd) 60%, transparent);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+    text-shadow: none;
+  }
+}
+
+@keyframes joinInnerHeat {
+  0% {
+    opacity: 0;
+  }
+  30% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+// ─── Price burn on the three tiers (.stack[data-fd='on']) ───────────────────
+//
+// The slash draws bottom-left→top-right with a traveling ember head, then the
+// "15% off" tag and the new price under each badge ignite.
+
+// Discounted price sits on the price row, right-aligned to the card, at the
+// struck price's size.
+.fdNew {
+  display: none;
+  position: relative;
+  margin-left: auto;
+  font-size: inherit;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #c0392b;
+
+  small {
+    font-size: 0.74rem;
+    font-weight: 500;
+    letter-spacing: 0;
+    margin-left: 2px;
+    color: inherit;
+  }
+}
+
+.fdNew .fdIgn,
+.fdTag .fdIgn {
+  display: inline-block;
+  opacity: 0;
+}
+
+.fdNew .fdIgn {
+  display: inline-flex;
+  align-items: baseline;
+}
+
+.priceVal {
+  position: relative;
+  display: inline-block;
+
+  // No drawn slash: the fire (<fire-edge line>) travels the strike path and
+  // the coal bed it leaves IS the strike. Static fallback where the canvas is
+  // off (reduced-motion, ≤768px): a plain charred diagonal.
+  &::after {
+    content: '';
+    position: absolute;
+    left: -4%;
+    right: -4%;
+    top: 50%;
+    height: 3px;
+    margin-top: -1.5px;
+    border-radius: 2px;
+    background: #a8301f;
+    transform: rotate(-38deg);
+    opacity: 0;
+    pointer-events: none;
+  }
+}
+
+.fdTag {
+  display: none;
+  position: absolute;
+  left: calc(100% + 6px);
+  top: -0.75em;
+  white-space: nowrap;
+  font-family: $font-mono;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #c0392b;
+}
+
+.stack[data-fd='on'] .fdNew,
+.stack[data-fd='on'] .fdTag {
+  display: initial;
+}
+
+.stack[data-fd='on'] .fdNew {
+  display: inline-block;
+}
+
+// Charring: the struck price scorches — dark edge bloom, then settles
+// desaturated.
+.priceTxt {
+  transition: opacity 0.5s 0.9s ease;
+}
+
+.stack[data-fd='on'] .priceTxt {
+  animation: joinChar 1.2s 0.3s ease forwards;
+  opacity: 0.6;
+}
+
+.tier[data-selected] .priceTxt {
+  --char: #a89d96;
+}
+
+@keyframes joinChar {
+  0% {
+    color: inherit;
+    text-shadow: none;
+  }
+  30% {
+    color: #5a3b2e;
+    text-shadow:
+      0 0 6px rgba(70, 32, 18, 0.7),
+      0 0 14px rgba(192, 57, 43, 0.35);
+  }
+  100% {
+    color: #6b5a52;
+    text-shadow: none;
+  }
+}
+
+// Ember glow on the tag + new price: three breaths then hold — an infinite
+// text-shadow animation is a perpetual repaint on six elements.
+.stack[data-fd='on'] .fdTag .fdIgn {
+  animation:
+    joinIgniteRed 0.45s 0.9s ease forwards,
+    joinEmber 1.8s 1.4s ease-in-out 3;
+  --fd: #c0392b;
+  --fd-soft: #e8695c;
+  --fd-hot: #ffb07a;
+}
+
+.stack[data-fd='on'] .fdNew .fdIgn {
+  animation:
+    joinIgniteRed 0.45s 1.05s ease forwards,
+    joinEmber 1.8s 1.5s ease-in-out 3;
+  --fd: #c0392b;
+  --fd-soft: #e8695c;
+  --fd-hot: #ffb07a;
+}
+
+@keyframes joinEmber {
+  0%,
+  100% {
+    text-shadow:
+      0 0 3px rgba(232, 105, 92, 0.45),
+      0 0 8px rgba(192, 57, 43, 0.25);
+  }
+  50% {
+    text-shadow:
+      0 0 5px rgba(255, 150, 110, 0.75),
+      0 0 14px rgba(192, 57, 43, 0.45);
+  }
+}
+
+.tier[data-selected] .fdNew,
+.tier[data-selected] .fdTag {
+  color: #ff8a73;
+}
+
+// Founder's Discount open (and no tier picked yet): the stage numerals +
+// wheels take the Founder red, same as a tier pick.
+.stack[data-fd='on']:not([data-tier-active]) {
+  --tsel: #c0392b;
+  --g1: #ffe3d6;
+  --g2: #ff9a7a;
+  --g3: #e8695c;
+  --g4: #c0392b;
+  --g5: #7a1f14;
+}
+
+// Where the canvas cannot run, the charred diagonal stands in for the burn.
+@media (max-width: 768px) {
+  .stack[data-fd='on'] .priceVal::after {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fdPanel {
+    transition: none;
+  }
+
+  .fdIsOpen .checks .fdIgn,
+  .stack[data-fd='on'] .fdTag .fdIgn,
+  .stack[data-fd='on'] .fdNew .fdIgn {
+    animation: none;
+    opacity: 1;
+  }
+
+  .stack :global(fire-edge) {
+    display: none;
+  }
+
+  .stack[data-fd='on'] .priceVal::after {
+    opacity: 1;
+  }
+
+  .stack[data-fd='on'] .priceTxt {
+    animation: none;
+    color: #6b5a52;
+  }
+
+  .fdIsOpen .fdInner {
     animation: none;
   }
 }
