@@ -169,7 +169,7 @@ def test_the_look_survives_a_key_swap_and_an_explicit_null_is_refused(client, db
     ), "the body is extra='forbid'"
 
 
-def test_unknown_supplier_and_unheld_family_are_404(client, seeded_db):
+def test_unknown_supplier_and_unheld_family_are_404(client, db, seeded_db):
     h = _auth_header(client)
     sid = str(seeded_db["supplier1"].id)
     missing = str(uuid.uuid4())
