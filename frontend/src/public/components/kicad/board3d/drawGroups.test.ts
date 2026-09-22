@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { drawSlices, normaliseSpans, triangleSpan, type MaterialSpan, type Span } from './drawGroups';
+import { drawSlices, normaliseSpans, type MaterialSpan, type Span } from './drawGroups';
 
 /** Every slice non-empty, ascending, non-overlapping, inside [0, total), and a
  *  multiple of 3 wherever the input was. */
@@ -29,12 +29,6 @@ const CLASSES: MaterialSpan[] = [
   { start: 24, count: 12, materialIndex: 4 },
 ];
 const OPTS = { baseIndex: 0, litIndex: 1 };
-
-describe('triangleSpan', () => {
-  it('turns a triangle range (spec §2.3) into the index range three draws', () => {
-    expect(triangleSpan({ start: 4, count: 2 })).toEqual({ start: 12, count: 6 });
-  });
-});
 
 describe('normaliseSpans', () => {
   it('sorts, merges overlapping and touching spans, clamps and drops empties', () => {

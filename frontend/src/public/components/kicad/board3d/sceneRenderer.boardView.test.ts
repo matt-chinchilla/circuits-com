@@ -36,12 +36,13 @@ function group(material: MeshGroup['material'], layerName: string | null, extra:
   } as MeshGroup;
 }
 
-// The copper as buildScene lays it out: pads first (triangles 0–1), then
-// tracks (2–3), then zones (4–5). Class and net ranges count TRIANGLES.
+// The copper as buildScene lays it out: pads first (indices [0, 6)), then
+// tracks [6, 12), then zones [12, 18). Part, class and net ranges all count
+// INDICES, offsets into the group's `indices`.
 const copper = () => group('copper', 'F.Cu', {
   parts: [{ ref: 'R1', start: 0, count: 6 }],
-  classes: [{ kind: 'pads', start: 0, count: 2 }, { kind: 'tracks', start: 2, count: 2 }, { kind: 'zones', start: 4, count: 2 }],
-  nets: [{ net: 7, start: 1, count: 2 }, { net: 3, start: 3, count: 3 }],
+  classes: [{ kind: 'pads', start: 0, count: 6 }, { kind: 'tracks', start: 6, count: 6 }, { kind: 'zones', start: 12, count: 6 }],
+  nets: [{ net: 7, start: 3, count: 6 }, { net: 3, start: 9, count: 9 }],
 });
 
 const board = (): BoardScene => ({
@@ -180,7 +181,7 @@ describe('nets', () => {
   it("lights the net's copper through its ranges, across class boundaries", async () => {
     await mounted();
     r.highlightNet?.(7);
-    // Net 7 is triangles 1–2: indices [3, 9), half a pad and half a track.
+    // Net 7 is indices [3, 9): half a pad and half a track.
     expect(groups(byName('copper/F.Cu'))).toEqual([[0, 3, 0], [3, 6, 1], [9, 9, 0]]);
     r.highlightNet?.(null);
     expect(groups(byName('copper/F.Cu'))).toEqual([[0, 18, 0]]);
@@ -196,7 +197,7 @@ describe('nets', () => {
     await mounted();
     r.highlight?.('R1');
     r.highlightNet?.(3);
-    // R1's pads are indices [0, 6); net 3 is triangles 3–5, indices [9, 18).
+    // R1's pads are indices [0, 6); net 3 is [9, 18).
     expect(groups(byName('copper/F.Cu'))).toEqual([[0, 6, 1], [6, 3, 0], [9, 9, 1]]);
     expect(groups(byName('body/'))).toEqual([[0, 18, 1]]);
   });

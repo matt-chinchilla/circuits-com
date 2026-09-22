@@ -16,7 +16,7 @@ import type { BoardScene, Material, MeshGroup, PartRange, Quality } from '@publi
 import { fitDistance as fitDistanceFor, type Box3Like } from '@public/services/kicad/board3d/framing';
 import { highlightSlices, partAtFace } from '@public/services/kicad/board3d/partRanges';
 import { BACKGROUND, CAMERA, FLIP_MS, LIGHTS, MATERIALS, ORBIT, highlightSpecFor, type MaterialSpec } from './board3dTheme';
-import { drawSlices, triangleSpan, type MaterialSpan, type Span } from './drawGroups';
+import { drawSlices, type MaterialSpan, type Span } from './drawGroups';
 
 // Types from the dynamic imports themselves: a `typeof import(...)` is erased at
 // compile time, so the library is named for the type checker without any static
@@ -34,9 +34,9 @@ type CopperClass = 'tracks' | 'pads' | 'zones';
 
 /**
  * The copper groups' class and net tables (spec §2.3), named here as the
- * renderer reads them: `start`/`count` in TRIANGLES, which `triangleSpan`
- * converts. `MeshGroup` carries them as optional fields; this intersection is
- * what lets the renderer read them whichever way the pipeline's own type
+ * renderer reads them: `start`/`count` in INDICES, the same units as
+ * `PartRange`. `MeshGroup` carries them as optional fields; this intersection
+ * is what lets the renderer read them whichever way the pipeline's own type
  * spells the element (it is structurally the same shape).
  */
 interface RangeTables {
@@ -358,7 +358,7 @@ export function createSceneRenderer(options: SceneRendererOptions = {}): SceneRe
         const index = array.length;
         array.push(material);
         classes.push({ kind, index, material });
-        for (const range of ranges) classSpans.push({ ...triangleSpan(range), materialIndex: index });
+        for (const range of ranges) classSpans.push({ start: range.start, count: range.count, materialIndex: index });
       }
     }
     const mesh = new T.Mesh(geometry, array);
@@ -415,7 +415,7 @@ export function createSceneRenderer(options: SceneRendererOptions = {}): SceneRe
             for (const slice of highlightSlices(group.parts, highlighted, d.total)) if (slice.materialIndex === 1) lit.push(slice);
           }
           if (highlightedNet != null && group.nets != null) {
-            for (const range of group.nets) if (range.net === highlightedNet) lit.push(triangleSpan(range));
+            for (const range of group.nets) if (range.net === highlightedNet) lit.push(range);
           }
         }
       }

@@ -7,21 +7,14 @@
 // module is that arithmetic and nothing else — no three.js — so the renderer's
 // job is to hand ranges in and `addGroup` what comes out.
 //
-// Units: everything here is in INDICES, what `BufferGeometry.addGroup` counts.
-// The pipeline's class and net ranges count TRIANGLES (spec §2.3), and
-// `triangleSpan` is the one place that converts them.
+// Units: everything here is in INDICES, what `BufferGeometry.addGroup` counts —
+// the same units as the pipeline's part, class and net ranges (an offset into a
+// group's `indices`, a count that is a multiple of 3), so they pass straight in.
 
 /** A slice of a group's index buffer: `start` and `count` in indices. */
 export interface Span { start: number; count: number }
 /** A slice and the material (an index into the mesh's material array) it draws in. */
 export interface MaterialSpan extends Span { materialIndex: number }
-
-export const INDICES_PER_TRIANGLE = 3;
-
-/** A triangle range from the pipeline as the index range three draws. */
-export function triangleSpan(range: Span): Span {
-  return { start: range.start * INDICES_PER_TRIANGLE, count: range.count * INDICES_PER_TRIANGLE };
-}
 
 /** Sorted, clamped to [0, total), overlapping and touching spans merged, empty ones dropped. */
 export function normaliseSpans(spans: readonly Span[], total: number): Span[] {
