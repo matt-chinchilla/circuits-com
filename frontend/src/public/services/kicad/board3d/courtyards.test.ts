@@ -36,10 +36,27 @@ describe('courtyards on Glasgow', () => {
     expect(signedArea(c.ring.pts)).toBeLessThan(0);   // outer orientation
     expect(c.heightMm).toBeGreaterThanOrEqual(0.6);
   });
-  it('back-side courtyards are mirrored', () => {
-    const f = m.footprints.find((x) => x.place.side === 'B' && x.courtyard.length >= 4)!;
+});
+
+describe('courtyards — StickHub back side', () => {
+  const stickhub = readBoardModel(fixtureText('kicad-demos/stickhub/StickHub.kicad_pcb'), 0.01);
+  it('back-side courtyards are placed without a second mirror (the file saves them flipped)', () => {
+    // C38's courtyard rect is off-centre in y, so a mirror would move it.
+    const f = stickhub.footprints.find((x) => x.ref === 'C38')!;
+    expect(f.place.side).toBe('B');
+    const r = f.courtyard.find((sh) => sh.kind === 'rect');
+    if (r == null || r.kind !== 'rect') throw new Error('C38 has no courtyard rect');
+    expect(Math.abs(r.a.y + r.b.y)).toBeGreaterThan(0.2);
     const c = courtyardOf(f, 0.01)!;
     expect(c.side).toBe('B');
-    expect(Math.abs(signedArea(c.ring.pts))).toBeGreaterThan(0);
+    const t = (f.place.rotDeg * Math.PI) / 180;
+    const turn = (p: { x: number; y: number }) => ({
+      x: p.x * Math.cos(t) + p.y * Math.sin(t) + f.place.at.x,
+      y: -p.x * Math.sin(t) + p.y * Math.cos(t) + f.place.at.y,
+    });
+    const corners = [r.a, { x: r.b.x, y: r.a.y }, r.b, { x: r.a.x, y: r.b.y }].map(turn);
+    for (const e of corners) {
+      expect(Math.min(...c.ring.pts.map((q) => Math.hypot(q.x - e.x, q.y - e.y)))).toBeLessThan(0.03);
+    }
   });
 });

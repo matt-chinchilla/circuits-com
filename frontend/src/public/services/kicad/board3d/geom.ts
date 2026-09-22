@@ -25,13 +25,18 @@ export function rotate(p: Vec2, deg: number): Vec2 {
 }
 
 /**
- * Footprint-local → board. Mirror y for the back side, rotate by the footprint's
- * angle, translate to its position — the composition the vendored renderer's
- * FootprintPainter applies as `Matrix3.translation(at).rotate_self(rot)`.
+ * Footprint-local → board: rotate by the footprint's angle, translate to its
+ * position — the composition the vendored renderer's FootprintPainter applies
+ * as `Matrix3.translation(at).rotate_self(rot)`, and nothing more.
+ *
+ * NO mirror for the back side. KiCad saves a flipped footprint's children in
+ * coordinates that are ALREADY mirrored (the file un-rotates them but never
+ * un-flips them), so mirroring again reflects every asymmetric back-side part
+ * across its own x axis — StickHub's U2 put its pads beside its traces. The
+ * `side` still decides which layers a part's copper, mask and body sit on.
  */
 export function place(p: Vec2, pl: Placement): Vec2 {
-  const m = pl.side === 'B' ? { x: p.x, y: -p.y } : p;
-  return add(rotate(m, pl.rotDeg), pl.at);
+  return add(rotate(p, pl.rotDeg), pl.at);
 }
 
 /**

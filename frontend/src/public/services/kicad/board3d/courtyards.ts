@@ -38,7 +38,7 @@ export const COURTYARD_SNAP_MM = 0.02;
 export function courtyardOf(fp: FootprintModel, tolMm: number): Courtyard | null {
   const { polylines } = shapePolylines(fp.courtyard, tolMm);
   if (polylines.length === 0) return null;
-  // Placed AFTER flattening: place() is a rigid motion (mirror, turn, translate),
+  // Placed AFTER flattening: place() is a rigid motion (turn, translate),
   // so flattening first and placing the points gives the same curve for less work.
   const placed = polylines.map((pl) => pl.map((p) => place(p, fp.place)));
   const { loops } = chainLoops(placed, COURTYARD_SNAP_MM);

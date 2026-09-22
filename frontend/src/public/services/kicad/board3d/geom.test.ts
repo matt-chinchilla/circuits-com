@@ -14,9 +14,9 @@ describe('geom', () => {
     expect(p.x).toBeCloseTo(127, 6);
     expect(p.y).toBeCloseTo(108.085, 6);
   });
-  it('place on the back mirrors y before rotating', () => {
+  it('place on the back does NOT mirror: the file saves back-side children already flipped', () => {
     const p = place({ x: 1, y: 2 }, { at: { x: 0, y: 0 }, rotDeg: 0, side: 'B' });
-    expect(p).toEqual({ x: 1, y: -2 });
+    expect(p).toEqual({ x: 1, y: 2 });
   });
   it('signedArea and bbox', () => {
     expect(Math.abs(signedArea([{ x: 0, y: 0 }, { x: 2, y: 0 }, { x: 2, y: 1 }, { x: 0, y: 1 }]))).toBeCloseTo(2);

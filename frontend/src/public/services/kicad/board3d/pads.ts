@@ -86,7 +86,7 @@ export function padRing(shape: PadShape, size: Vec2, rratio: number | null, tolM
 export function placedPadRing(pad: PadModel, fp: Placement, tolMm: number): Ring {
   const centre = place(pad.at, fp);
   const local = padRing(pad.shape, pad.size, pad.rratio, tolMm).pts;
-  return { pts: local.map((q) => placeRingPoint(q, pad.rotDeg, fp.side, centre)) };
+  return { pts: local.map((q) => placeRingPoint(q, pad.rotDeg, centre)) };
 }
 
 /** Drill → ring at the pad centre: round → a circle, slot → a stadium turned with the pad. */
@@ -96,15 +96,15 @@ export function drillRing(pad: PadModel, fp: Placement, tolMm: number): Ring | n
   const centre = place(pad.at, fp);
   if (d.slotW != null && d.slotH != null && d.slotW > 0 && d.slotH > 0) {
     const local = stadiumPts(d.slotW, d.slotH, tolMm);
-    return { pts: local.map((q) => placeRingPoint(q, pad.rotDeg, fp.side, centre)) };
+    return { pts: local.map((q) => placeRingPoint(q, pad.rotDeg, centre)) };
   }
   if (!(d.d > 0)) return null;
   return circleRing(centre, d.d / 2, tolMm);
 }
 
-/** Shared tail of both placements: mirror for the back, turn, then translate. */
-function placeRingPoint(q: Vec2, rotDeg: number, side: Placement['side'], centre: Vec2): Vec2 {
-  const m = side === 'B' ? { x: q.x, y: -q.y } : q;
-  const r = rotate(m, rotDeg);
+/** Shared tail of both placements: turn, then translate. No back-side mirror,
+ *  for the reason `place` gives — the file's coordinates are already flipped. */
+function placeRingPoint(q: Vec2, rotDeg: number, centre: Vec2): Vec2 {
+  const r = rotate(q, rotDeg);
   return { x: r.x + centre.x, y: r.y + centre.y };
 }
