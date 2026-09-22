@@ -1,30 +1,10 @@
+import { arcPoints, arcStep } from './arcs';
 import { add, cross, len, scale, sub } from './geom';
 import type { Ring, Vec2 } from './types';
 
 const EPS = 1e-9;
-const DEG = Math.PI / 180;
 /** Beyond this multiple of the half width a miter spike is cut back to a bevel. */
 const MITER_LIMIT = 4;
-
-/**
- * Angular step that keeps a circle of radius `r` within `tolMm` of its polygon,
- * clamped to [2°, 15°]. Deliberately the same formula `flattenArc` uses — half
- * the textbook sagitta step, so the result errs fine rather than coarse.
- */
-export function arcStep(r: number, tolMm: number): number {
-  if (!(r > 0)) return 15 * DEG;
-  return Math.min(15 * DEG, Math.max(2 * DEG, Math.acos(Math.max(-1, 1 - tolMm / r))));
-}
-
-/** Points of an arc, endpoints INCLUDED, `segments` steps from `a0` sweeping `sweep`. */
-export function arcPoints(centre: Vec2, r: number, a0: number, sweep: number, segments: number): Vec2[] {
-  const out: Vec2[] = [];
-  for (let i = 0; i <= segments; i++) {
-    const t = a0 + (sweep * i) / segments;
-    out.push({ x: centre.x + r * Math.cos(t), y: centre.y + r * Math.sin(t) });
-  }
-  return out;
-}
 
 const unit = (d: Vec2): Vec2 => { const l = len(d); return l < EPS ? { x: 0, y: 0 } : { x: d.x / l, y: d.y / l }; };
 /** Left normal: d rotated +90°, so angle(n) = angle(d) + 90°. */
@@ -132,10 +112,5 @@ export function strokePolygon(pts: Vec2[], width: number, capSegments: number): 
 /** Circle → ring. At least 8 points; the step keeps the polygon within `tolMm`. */
 export function circleRing(c: Vec2, r: number, tolMm: number): Ring {
   const n = Math.max(8, Math.ceil((2 * Math.PI) / arcStep(r, tolMm)));
-  const pts: Vec2[] = [];
-  for (let i = 0; i < n; i++) {
-    const t = (2 * Math.PI * i) / n;
-    pts.push({ x: c.x + r * Math.cos(t), y: c.y + r * Math.sin(t) });
-  }
-  return { pts };
+  return { pts: arcPoints(c, r, 0, 2 * Math.PI, n).slice(0, -1) };   // the last point repeats the first
 }

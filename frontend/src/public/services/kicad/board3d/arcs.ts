@@ -36,21 +36,34 @@ export function threePointArc(a: Vec2, mid: Vec2, b: Vec2): ArcParams | null {
 }
 
 /**
- * Polyline from the arc's start to its end (both inclusive), stepping by
- * clamp(acos(1 − tol/r), 2°, 15°) so the sagitta stays under `tolMm`. A radius at
- * or below the tolerance saturates the clamp at 15° rather than short-circuiting
- * to the chord: the extra points are invisible but they keep the curve's winding
- * intact for the chainer and the tessellator.
+ * The ONE curve-flattening rule of the pipeline — arcs, circles, pad corners,
+ * stroke caps: the angular step clamp(acos(1 − tol/r), 2°, 15°), which keeps a
+ * circle of radius `r` within `tolMm` of its polygon (half the textbook sagitta
+ * step, so it errs fine rather than coarse). A radius at or below the tolerance
+ * saturates the clamp at 15° rather than short-circuiting to the chord: the
+ * extra points are invisible but they keep the curve's winding intact for the
+ * chainer and the tessellator.
  */
+export function arcStep(r: number, tolMm: number): number {
+  if (!(r > 0)) return 15 * DEG;
+  return Math.min(15 * DEG, Math.max(2 * DEG, Math.acos(Math.max(-1, 1 - tolMm / r))));
+}
+
+/** Points of an arc, endpoints INCLUDED, `segments` steps from `a0` sweeping `sweep`. */
+export function arcPoints(centre: Vec2, r: number, a0: number, sweep: number, segments: number): Vec2[] {
+  const out: Vec2[] = [];
+  for (let i = 0; i <= segments; i++) {
+    const t = a0 + (sweep * i) / segments;
+    out.push({ x: centre.x + r * Math.cos(t), y: centre.y + r * Math.sin(t) });
+  }
+  return out;
+}
+
+/** Polyline from the arc's start to its end (both inclusive), stepped by `arcStep`. */
 export function flattenArc(arc: ArcParams, tolMm: number): Vec2[] {
   const { c, r, a0, sweep } = arc;
-  const at = (t: number): Vec2 => ({ x: c.x + r * Math.cos(t), y: c.y + r * Math.sin(t) });
-  if (!(r > 0) || !Number.isFinite(sweep)) return [at(a0), at(a0)];
-  const step = Math.min(15 * DEG, Math.max(2 * DEG, Math.acos(Math.max(-1, 1 - tolMm / r))));
-  const n = Math.max(1, Math.ceil(Math.abs(sweep) / step));
-  const pts: Vec2[] = [];
-  for (let i = 0; i <= n; i++) pts.push(at(a0 + (sweep * i) / n));
-  return pts;
+  if (!(r > 0) || !Number.isFinite(sweep)) return arcPoints(c, r, a0, 0, 1);
+  return arcPoints(c, r, a0, sweep, Math.max(1, Math.ceil(Math.abs(sweep) / arcStep(r, tolMm))));
 }
 
 export function flattenThreePoint(a: Vec2, mid: Vec2, b: Vec2, tolMm: number): { pts: Vec2[]; degenerate: boolean } {

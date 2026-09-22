@@ -1,5 +1,6 @@
 import { place, rotate } from './geom';
-import { arcPoints, arcStep, circleRing } from './strokes';
+import { arcPoints, arcStep } from './arcs';
+import { circleRing } from './strokes';
 import type { PadModel, PadShape, Placement, Ring, Vec2 } from './types';
 
 /** KiCad's own default when a roundrect omits its ratio. */
