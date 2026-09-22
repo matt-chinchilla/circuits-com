@@ -173,14 +173,17 @@ export default function ViewerPage() {
   const canvasRef = useRef<DesignCanvasHandle>(null);
   const panelRef = useRef<PartPanelHandle>(null);
   /**
-   * What the CANVAS itself last reported, and on WHICH drawing. When the page's
-   * selection came from a click on the schematic, the schematic already shows
-   * it and the sync below must not send it straight back — but the board does
-   * not, and arriving there must still carry it over. (A view-blind version of
-   * this skipped the board whenever the schematic had reported the same
-   * designator; the browser showed the whole board with no outline.)
+   * What EACH drawing last showed selected, as the canvas itself reported it.
+   * The schematic and the board are two viewers with two selections, and the
+   * hidden one keeps its outline: a selection made on the schematic is not on
+   * the board until the reader arrives there, and a selection cleared on the
+   * board is still drawn on the schematic until the reader returns. The sync
+   * below reads this per drawing, so it neither echoes a selection back to the
+   * viewer that reported it nor leaves a cleared one outlined on the other.
+   * (A single, view-blind record skipped the board whenever the schematic had
+   * reported the same designator; the browser showed the board with no outline.)
    */
-  const canvasHas = useRef<{ ref: string | null; view: CanvasView | null }>({ ref: null, view: null });
+  const shown = useRef<Record<CanvasView, string | null>>({ schematic: null, board: null });
   /** The tab buttons, so an arrow key can move real DOM focus and not only the
    *  selection. Keyed by tab id rather than by index: `tabs` changes shape with
    *  the project, and a stale index would focus the wrong button. */
@@ -239,7 +242,7 @@ export default function ViewerPage() {
     setStackupSeen(false);
     setSelectedRef(null);
     setPlacementsSeen(false);
-    canvasHas.current = { ref: null, view: null };
+    shown.current = { schematic: null, board: null };
   }, []);
 
   // Deliberately NOT called on unmount: surviving the /viewer ↔ /bom trip is
@@ -264,7 +267,7 @@ export default function ViewerPage() {
     pendingFocus.current = null;
     setSelectedRef(null);
     setPlacementsSeen(false);
-    canvasHas.current = { ref: null, view: null };
+    shown.current = { schematic: null, board: null };
   };
 
   const focus = useCallback(
@@ -362,7 +365,7 @@ export default function ViewerPage() {
   /** The canvas reported a selection — the reader's click, or the echo of a
    *  focus. Either way it is now what the drawing shows. */
   const handleCanvasSelection = useCallback((selection: CanvasSelection) => {
-    canvasHas.current = { ref: selection.ref, view: selection.view ?? null };
+    if (selection.view != null) shown.current[selection.view] = selection.ref;
     setSelectedRef(selection.ref);
   }, []);
 
@@ -378,13 +381,15 @@ export default function ViewerPage() {
     if (session == null || canvasState !== 'ready') return;
     if (tab !== 'schematic' && tab !== 'board') return;
     if (selectedRef == null) {
-      if (canvasHas.current.ref != null) {
-        canvasHas.current = { ref: null, view: null };
+      // Only a drawing that still outlines something is told to clear — never
+      // the fresh viewer of a project that has just opened.
+      if (shown.current[tab] != null) {
+        shown.current[tab] = null;
         void canvasRef.current?.selectRef(null);
       }
       return;
     }
-    if (canvasHas.current.ref === selectedRef && canvasHas.current.view === tab) return;
+    if (shown.current[tab] === selectedRef) return;
     const where = session.refs.get(selectedRef);
     if (tab === 'schematic') {
       if (where != null && droppedSheets.has(where.sheet)) return;
@@ -427,7 +432,7 @@ export default function ViewerPage() {
         void focus(ref);
       } else if (tab === 'board') {
         setSelectedRef(ref);
-        canvasHas.current = { ref, view: 'board' };
+        shown.current.board = ref;
         void canvasRef.current?.focusRef(ref, undefined, 'board');
       } else {
         setSelectedRef(ref);
@@ -448,7 +453,7 @@ export default function ViewerPage() {
         setTab('board');
         // Claimed before the tab commit, so the arrival sync does not send a
         // second, zoom-less select alongside this focus.
-        canvasHas.current = { ref, view: 'board' };
+        shown.current.board = ref;
         void canvasRef.current?.focusRef(ref, undefined, 'board');
       } else {
         setTab('board3d');

@@ -1103,6 +1103,32 @@ describe('the part panel', () => {
     expect(canvas.selectRef).not.toHaveBeenCalledWith('H1', undefined, 'schematic');
   });
 
+  it('a selection cleared on one drawing is cleared on the other when the reader returns', async () => {
+    session = makeSession({ board: 'main.kicad_pcb' });
+    await render();
+    await canvasReady();
+    // Both drawings have outlined U1 (the schematic by a click, the board on arrival).
+    await act(async () => canvas.onSelection?.({ ref: 'U1', sheet: '/r/a', view: 'schematic' }));
+    await click(byText('Board'));
+    await act(async () => canvas.onSelection?.({ ref: 'U1', view: 'board' }));
+    canvas.selectRef.mockClear();
+    // Esc on the board clears the board now…
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+    expect(canvas.selectRef).toHaveBeenCalledWith(null);
+    await act(async () => canvas.onSelection?.({ ref: null, view: 'board' }));
+    canvas.selectRef.mockClear();
+    // …and the schematic, which still outlines U1, on the way back — once.
+    await click(byText('Schematic'));
+    expect(canvas.selectRef).toHaveBeenCalledWith(null);
+    await act(async () => canvas.onSelection?.({ ref: null, view: 'schematic' }));
+    canvas.selectRef.mockClear();
+    await click(byText('Board'));
+    await click(byText('Schematic'));
+    expect(canvas.selectRef).not.toHaveBeenCalled();
+  });
+
   it('a pick in the 3D view identifies the part and the 3D view is told what is selected', async () => {
     session = makeSession({ board: 'main.kicad_pcb' });
     await render();
