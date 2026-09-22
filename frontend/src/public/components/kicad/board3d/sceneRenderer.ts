@@ -12,11 +12,12 @@
 // are drawn only while something is moving. (3) The camera's up axis is +Z,
 // because MeshBuilder puts the board's thickness on z; fighting that with a
 // rotated model would put every later "which way is up" question in two places.
-import type { BoardScene, Material, MeshGroup, PartRange, Quality } from '@public/services/kicad/board3d/types';
+import type { BoardScene, ClassRange, Material, MeshGroup, PartRange, Quality } from '@public/services/kicad/board3d/types';
 import { fitDistance as fitDistanceFor, type Box3Like } from '@public/services/kicad/board3d/framing';
-import { highlightSlices, partAtFace } from '@public/services/kicad/board3d/partRanges';
+import {
+  classSlices, highlightSlices, netRangesOf, partAtFace, type IndexRange,
+} from '@public/services/kicad/board3d/partRanges';
 import { BACKGROUND, CAMERA, FLIP_MS, LIGHTS, MATERIALS, ORBIT, highlightSpecFor, type MaterialSpec } from './board3dTheme';
-import { drawSlices, type MaterialSpan, type Span } from './drawGroups';
 
 // Types from the dynamic imports themselves: a `typeof import(...)` is erased at
 // compile time, so the library is named for the type checker without any static
@@ -30,20 +31,7 @@ export type ViewName = 'top' | 'bottom' | 'reset';
  *  (spec 2026-09-22 §2.2). Tracks, pads and zones are slices of the copper
  *  groups; the rest are whole materials — vias are the drilled hole walls. */
 export type ObjectClass3D = 'tracks' | 'vias' | 'pads' | 'zones' | 'silk' | 'mask' | 'bodies';
-type CopperClass = 'tracks' | 'pads' | 'zones';
-
-/**
- * The copper groups' class and net tables (spec §2.3), named here as the
- * renderer reads them: `start`/`count` in INDICES, the same units as
- * `PartRange`. `MeshGroup` carries them as optional fields; this intersection
- * is what lets the renderer read them whichever way the pipeline's own type
- * spells the element (it is structurally the same shape).
- */
-interface RangeTables {
-  classes?: readonly { kind: CopperClass; start: number; count: number }[];
-  nets?: readonly { net: number; start: number; count: number }[];
-}
-type RangedGroup = MeshGroup & RangeTables;
+type CopperClass = ClassRange['kind'];
 
 /** A class that is a whole MATERIAL rather than a slice of the copper. */
 const MATERIAL_CLASS: Partial<Record<Material, ObjectClass3D>> = { body: 'bodies', silk: 'silk', mask: 'mask', 'hole-wall': 'vias' };
@@ -190,12 +178,11 @@ export function createSceneRenderer(options: SceneRendererOptions = {}): SceneRe
    *  are recomputed from the view state on every change. */
   interface Drawn {
     mesh: InstanceType<Three['Mesh']>;
-    group: RangedGroup;
+    group: MeshGroup;
     total: number;
     base: StandardMaterial;
     lit: StandardMaterial | null;
     classes: { kind: CopperClass; index: number; material: StandardMaterial }[];
-    classSpans: MaterialSpan[];
   }
   const drawn: Drawn[] = [];
   const hiddenLayers = new Set<string>();
@@ -320,8 +307,7 @@ export function createSceneRenderer(options: SceneRendererOptions = {}): SceneRe
     autoOrbit = false;
   };
 
-  function buildMesh(T: Three, source: MeshGroup): InstanceType<Three['Mesh']> {
-    const group: RangedGroup = source;
+  function buildMesh(T: Three, group: MeshGroup): InstanceType<Three['Mesh']> {
     const geometry = new T.BufferGeometry();
     geometry.setAttribute('position', new T.BufferAttribute(group.positions, 3));
     geometry.setAttribute('normal', new T.BufferAttribute(group.normals, 3));
@@ -348,24 +334,20 @@ export function createSceneRenderer(options: SceneRendererOptions = {}): SceneRe
     // A copper group's tracks, pads and zones each get their own clone of the
     // copper, so each can carry its own opacity.
     const classes: Drawn['classes'] = [];
-    const classSpans: MaterialSpan[] = [];
     if (group.material === 'copper' && group.classes != null) {
       for (const kind of COPPER_CLASSES) {
-        const ranges = group.classes.filter((c) => c.kind === kind);
-        if (ranges.length === 0) continue;
+        if (!group.classes.some((c) => c.kind === kind)) continue;
         const material = base.clone();
         materials.push(material);
-        const index = array.length;
+        classes.push({ kind, index: array.length, material });
         array.push(material);
-        classes.push({ kind, index, material });
-        for (const range of ranges) classSpans.push({ start: range.start, count: range.count, materialIndex: index });
       }
     }
     const mesh = new T.Mesh(geometry, array);
     // Drawn whole until the first `applyView`, which runs before any frame.
     geometry.addGroup(0, total, 0);
     if (group.parts != null) parted.push({ mesh, parts: group.parts });
-    drawn.push({ mesh, group, total, base, lit, classes, classSpans });
+    drawn.push({ mesh, group, total, base, lit, classes });
     mesh.name = `${group.material}/${group.layerName ?? ''}`;
     // Translucent bodies last, so they blend over the board rather than the board
     // being sorted over them.
@@ -393,20 +375,18 @@ export function createSceneRenderer(options: SceneRendererOptions = {}): SceneRe
       d.mesh.visible = !layerHidden && own > 0;
       if (kind != null) fade(d.base, MATERIALS[group.material], own);
 
-      const hidden = new Set<number>();
-      /** A class at full opacity draws in the group's own material, so an
-       *  untouched copper layer stays ONE draw call; only a faded or hidden
-       *  class pays for its own. */
-      const plain = new Set<number>();
+      /** Each class's material index for this pass: null = not drawn (opacity
+       *  0, and a highlight must not bring it back); 0 = the group's own
+       *  material, for a class at full opacity, so an untouched copper layer
+       *  stays ONE draw call and only a faded class pays for its own. */
+      const classMaterial = new Map<CopperClass, number | null>();
       for (const c of d.classes) {
         const o = opacityOf(c.kind);
         fade(c.material, MATERIALS.copper, o);
-        if (o <= 0) hidden.add(c.index);
-        else if (o >= 1) plain.add(c.index);
+        classMaterial.set(c.kind, o <= 0 ? null : o >= 1 ? 0 : c.index);
       }
-      const classSpans = plain.size === 0 ? d.classSpans : d.classSpans.map((s) => (plain.has(s.materialIndex) ? { ...s, materialIndex: 0 } : s));
 
-      const lit: Span[] = [];
+      const lit: IndexRange[] = [];
       if (d.lit != null) {
         if (group.layerName != null && group.layerName === highlightedLayer) {
           lit.push({ start: 0, count: d.total });
@@ -414,17 +394,26 @@ export function createSceneRenderer(options: SceneRendererOptions = {}): SceneRe
           if (highlighted != null && group.parts != null) {
             for (const slice of highlightSlices(group.parts, highlighted, d.total)) if (slice.materialIndex === 1) lit.push(slice);
           }
-          if (highlightedNet != null && group.nets != null) {
-            for (const range of group.nets) if (range.net === highlightedNet) lit.push(range);
-          }
+          lit.push(...netRangesOf(group.nets, highlightedNet));
         }
       }
 
+      // One partRanges tiling for classes and highlights together; adjacent
+      // slices that land on the same material are joined — each is a draw call.
       const geometry = d.mesh.geometry;
       geometry.clearGroups();
-      for (const slice of drawSlices(d.total, classSpans, lit, { baseIndex: 0, litIndex: d.lit == null ? 0 : 1, hidden })) {
-        geometry.addGroup(slice.start, slice.count, slice.materialIndex);
+      let run: { start: number; count: number; materialIndex: number } | null = null;
+      const flush = () => { if (run != null) geometry.addGroup(run.start, run.count, run.materialIndex); run = null; };
+      for (const slice of classSlices(group.classes, lit, d.total)) {
+        // A class with no material of its own (not present when the mesh was
+        // built) draws in the group's; a hidden class (null) is left out.
+        const own: number | null = slice.kind == null ? 0 : classMaterial.get(slice.kind) ?? (classMaterial.has(slice.kind) ? null : 0);
+        if (own == null) { flush(); continue; }
+        const materialIndex = slice.highlighted && d.lit != null ? 1 : own;
+        if (run != null && run.materialIndex === materialIndex && run.start + run.count === slice.start) run.count += slice.count;
+        else { flush(); run = { start: slice.start, count: slice.count, materialIndex }; }
       }
+      flush();
     }
     if (renderer != null) onChange();
   }
