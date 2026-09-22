@@ -72,10 +72,11 @@ export interface PageSeo {
   /** Pre-stringified JSON-LD graphs, one per <script type="application/ld+json">. */
   jsonLd: string[];
   /**
-   * Heading + links for the prerendered <noscript> body. A JS-enabled client
-   * never parses this (the HTML parser keeps noscript content as raw text when
-   * scripting is on), so it costs a JS visitor nothing and never competes with
-   * the SPA's own <h1>.
+   * Heading + links for the prerendered crawlable body (scripts/seoPrerender.ts
+   * renderBody; category and part routes build a richer body of their own).
+   * The SPA's first commit replaces that body and a script-enabled browser
+   * never paints it, so it costs a JS visitor nothing and never competes with
+   * the SPA's own <h1>. <PageHead> does not read these two fields.
    */
   heading: string;
   links: SeoLink[];

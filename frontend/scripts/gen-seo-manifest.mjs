@@ -31,28 +31,38 @@ async function getJson(url) {
 }
 
 // The list endpoint omits `description` on children, so each subcategory needs
-// its own detail call. parts/popular page sizes are pinned to 1 — the payload
-// is otherwise several hundred KB per category and none of it is used here, and
-// the part LINKS below come from a different endpoint (see childPartLinks).
+// its own detail call. It asks for the CANONICAL first page on purpose — the
+// exact query index.html preloads and the api's category warmer keeps rendered
+// (routes/categories.CANONICAL_PARAMS) — so each call is a process-cache hit
+// (~0.1s on prod) instead of a fresh render of a 100k-part category. No
+// trailing slash: FastAPI would 307 it first. The part LINKS come from
+// elsewhere (see childPartLinks), because these part rows carry no slug.
+const CANONICAL_CATEGORY_QUERY =
+  'popular_page=1&popular_per_page=1&parts_page=1&parts_per_page=25';
+
 async function childDescription(slug) {
-  const detail = await getJson(
-    `${API_BASE}/categories/${slug}/?parts_per_page=1&popular_per_page=1`,
-  );
+  const detail = await getJson(`${API_BASE}/categories/${slug}?${CANONICAL_CATEGORY_QUERY}`);
   return detail.description ?? null;
 }
 
-/** How many parts a subcategory links to — one screenful, matching page 1. */
+/**
+ * How many parts one list links to — one screenful, matching page 1. Mirrors
+ * PART_LINKS_PER_LIST in scripts/seoPrerender.ts, which renders these.
+ */
 const PART_LINKS_PER_SUBCATEGORY = 25;
 
 /**
- * Page-1 part links for ONE subcategory — the reason part pages are reachable.
+ * Page-1 part links for ONE subcategory — the TOP-UP for a thin one.
  *
- * Every part URL used to be a crawl orphan: the prerendered subcategory
- * document links only UPWARD (home + parent), because the parts themselves are
- * fetched and rendered by JS that a crawler reading raw HTML never runs. So the
- * static site had no path from home to any of the ~15,000 prerendered part
- * documents — they were reachable only through the sitemap. These links close
- * that gap: home -> category -> subcategory -> part, all in served HTML.
+ * A subcategory document lists its own PRERENDERED parts first (the ranked
+ * slice below, grouped by category in seoPrerender.ts): each is a real Product
+ * document in the sitemap. That used to be these page-1 links alone, and on
+ * 2026-09-22 only 341 of their 4,638 targets had a prerendered document — the
+ * rest served the SPA shell, and 14,636 of 14,977 part documents had no
+ * internal link at all. So these are now fetched only for a subcategory with
+ * fewer than a screenful of ranked parts, where a crawl dead end would
+ * otherwise be the alternative (~2.4s a call on prod, so skipping the rest
+ * matters too).
  *
  * The rows come from /api/parts/ rather than the category detail call above
  * because the category detail's part items carry NO `slug` (see
@@ -64,9 +74,9 @@ const PART_LINKS_PER_SUBCATEGORY = 25;
  * a leaf category page opens on (`resolve_sort` defaults a leaf to sku asc), so
  * these are the parts a visitor actually sees on page 1.
  *
- * Only slug/sku/manufacturer are read, and only the rendered href+label are
- * kept: the manifest is committed, and the full rows would add megabytes of
- * prices and descriptions that the noscript link list never reads.
+ * Only slug/sku/manufacturer are read, and only the rendered href/label/note
+ * are kept: the manifest is committed, and the full rows would add megabytes of
+ * prices and descriptions that the rendered link list never reads.
  */
 async function childPartLinks(categoryId) {
   const payload = await getJson(
@@ -80,9 +90,12 @@ async function childPartLinks(categoryId) {
     // at; /part/<uuid> would resolve to the generic SPA shell for a crawler.
     if (!part.slug || seen.has(part.slug)) continue;
     seen.add(part.slug);
+    // The anchor is the MPN alone, like the ranked links it sits beside; the
+    // manufacturer rides as plain text after it.
     links.push({
       href: `/part/${part.slug}`,
-      label: part.manufacturer_name ? `${part.sku} — ${part.manufacturer_name}` : part.sku,
+      label: part.sku,
+      ...(part.manufacturer_name ? { note: part.manufacturer_name } : {}),
     });
   }
   return links;
@@ -125,10 +138,10 @@ const topLevel = categories.filter((c) => Array.isArray(c.children));
  * no public list endpoint exposes, and paging 270k rows through /api/parts/
  * would be ~2,700 requests of data the head tags never read.
  *
- * Only the fields `partSeo` reads are kept. `description` is truncated here
- * rather than at render: it only ever reaches a meta description, which search
- * engines cut around 160 chars anyway, and the untruncated copy is most of the
- * file size.
+ * Only the fields the prerender reads are kept. `description` is truncated here
+ * rather than at render: it reaches a meta description (search engines cut
+ * around 160 chars anyway) and an 80-char note beside the part's links, and
+ * the untruncated copy is most of the file size.
  */
 async function fetchParts() {
   const payload = await getJson(`${API_BASE}/seo/prerender-parts`);
@@ -156,31 +169,49 @@ async function catalogPartTotal() {
   return payload.total ?? null;
 }
 
+const generatedAt = new Date().toISOString();
+const parts = await fetchParts();
+// How many ranked parts each subcategory already has, keyed as the prerender
+// groups them (parent/child slug pair).
+const rankedPerChild = new Map();
+for (const p of parts) {
+  if (!p.parentCategorySlug || !p.categorySlug) continue;
+  const key = `${p.parentCategorySlug}/${p.categorySlug}`;
+  rankedPerChild.set(key, (rankedPerChild.get(key) ?? 0) + 1);
+}
+
 const manifest = {
-  generatedAt: new Date().toISOString(),
+  generatedAt,
   source: API_BASE,
   categories: await mapWithConcurrency(topLevel, 4, async (category) => ({
     slug: category.slug,
     name: category.name,
     description: category.description ?? null,
-    children: await mapWithConcurrency(category.children ?? [], 4, async (child) => ({
-      slug: child.slug,
-      name: child.name,
-      description: await childDescription(child.slug),
-      parts: await childPartLinks(child.id),
-    })),
+    children: await mapWithConcurrency(category.children ?? [], 4, async (child) => {
+      const ranked = rankedPerChild.get(`${category.slug}/${child.slug}`) ?? 0;
+      return {
+        slug: child.slug,
+        name: child.name,
+        description: await childDescription(child.slug),
+        ...(ranked < PART_LINKS_PER_SUBCATEGORY ? { parts: await childPartLinks(child.id) } : {}),
+      };
+    }),
   })),
-  parts: await fetchParts(),
+  parts,
 };
 
 writeFileSync(OUT, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
 
 const childCount = manifest.categories.reduce((n, c) => n + c.children.length, 0);
 const children = manifest.categories.flatMap((c) => c.children);
-const partLinkCount = children.reduce((n, c) => n + c.parts.length, 0);
-// A subcategory with zero part links is the orphan symptom coming back, and it
-// looks identical to a genuinely empty subcategory in the file itself.
-const emptyChildren = children.filter((c) => c.parts.length === 0).length;
+const rankedKey = (category, child) => `${category.slug}/${child.slug}`;
+const toppedUp = children.filter((c) => c.parts).length;
+// A subcategory with zero part links of EITHER kind is the orphan symptom
+// coming back, and it looks identical to a genuinely empty subcategory.
+const emptyChildren = manifest.categories
+  .flatMap((c) => c.children.map((child) => [c, child]))
+  .filter(([c, child]) => !rankedPerChild.get(rankedKey(c, child)) && !(child.parts ?? []).length)
+  .length;
 const partTotal = await catalogPartTotal();
 // Say plainly whether the cap is binding. A silently-capped manifest looks
 // identical to a small catalog, and the difference is ~250k pages.
@@ -192,8 +223,9 @@ console.log(
   `wrote ${path.relative(process.cwd(), OUT)} (source ${API_BASE})\n` +
     `  categories:    ${manifest.categories.length}\n` +
     `  subcategories: ${childCount}\n` +
-    `  part links:    ${partLinkCount} across subcategories` +
-    (emptyChildren ? ` (${emptyChildren} with NONE)` : '') +
+    `  with ranked:   ${rankedPerChild.size} subcategories hold prerendered parts; ` +
+    `${toppedUp} topped up from page 1` +
+    (emptyChildren ? ` (${emptyChildren} with NO part links)` : '') +
     `\n` +
     `  parts:         ${manifest.parts.length}${partNote}`,
 );

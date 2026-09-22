@@ -13,9 +13,15 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+  BODY_ATTR,
+  BODY_FLASH_GUARD,
+  PART_LINKS_PER_LIST,
+  PART_TREE_FANOUT,
   SITEMAP_PARTS_PAGE_SIZE,
   buildRoutes,
   buildSitemaps,
+  partTreeLinks,
+  renderBody,
   writePrerender,
   type ManifestPart,
   type PrerenderRoute,
@@ -218,5 +224,214 @@ describe('writePrerender — the documents and the sitemaps land together', () =
   it('reports the part count it advertised in the build log', () => {
     const { messages } = build({ parts: [part('lm7805ct'), part('ne555p')] });
     expect(messages.join('\n')).toMatch(/2 part\) \+ 2 sitemap files advertising those 2 part URLs/);
+  });
+
+  it('a subcategory document serves its part links as real anchors, not noscript text', () => {
+    // The 2026-09-01 audit measured 233–906 chars of crawlable text, all of it
+    // inside <noscript>. A script-enabled HTML parser keeps noscript content as
+    // raw text, so those links were not links to it at all.
+    const { dir } = build(SUBCAT_MANIFEST);
+    const html = readFileSync(path.join(dir, 'category/ics/regs/index.html'), 'utf8');
+    expect(html).not.toContain('<noscript');
+
+    const root = /<div id="root">([\s\S]*?)<\/div>\s*<script/.exec(html)?.[1] ?? '';
+    expect(root.startsWith('<main data-seo-body>')).toBe(true);
+    const anchors = [...root.matchAll(/<a href="(\/part\/[^"]+)">([^<]+)<\/a>/g)].map((m) => m[1]);
+    expect(anchors).toEqual(['/part/lm7805ct', '/part/lm317t', '/part/page-one']);
+    expect(root).toContain('<h2>Voltage Regulators parts</h2>');
+  });
+
+  it('hides the body from a script-enabled browser with an UNMARKED guard', () => {
+    // Marked tags are stripped by @shared/seoPrerenderHandoff before the first
+    // render, and React's first commit is scheduled — a marked guard would let
+    // the body flash unstyled in between.
+    const { dir } = build(SUBCAT_MANIFEST);
+    const html = readFileSync(path.join(dir, 'category/ics/regs/index.html'), 'utf8');
+    const head = html.slice(0, html.indexOf('</head>'));
+    expect(head).toContain(BODY_FLASH_GUARD);
+    expect(BODY_FLASH_GUARD).not.toContain('data-seo-prerendered');
+    expect(BODY_FLASH_GUARD).toContain('@media (scripting: enabled)');
+    expect(BODY_FLASH_GUARD).toContain(`[${BODY_ATTR}]`);
+  });
+});
+
+// ── The crawlable body ──────────────────────────────────────────────────────
+
+const SUBCAT_MANIFEST: SeoManifest = {
+  categories: [
+    {
+      slug: 'ics',
+      name: 'Integrated Circuits',
+      description: 'ICs of every kind.',
+      children: [
+        {
+          slug: 'regs',
+          name: 'Voltage Regulators',
+          description: null,
+          // Page-1 links: one duplicates a ranked part and must not repeat.
+          parts: [
+            { href: '/part/lm7805ct', label: 'LM7805CT' },
+            { href: '/part/page-one', label: 'PAGE-ONE', note: 'Acme' },
+          ],
+        },
+        { slug: 'timers', name: 'Timers', description: null },
+      ],
+    },
+  ],
+  parts: [
+    part('lm7805ct', { manufacturerName: 'Texas Instruments', description: 'Linear regulator 5V 1.5A TO-220' }),
+    part('lm317t', { manufacturerName: 'STMicroelectronics' }),
+  ],
+};
+
+function bodyOf(routes: PrerenderRoute[], urlPath: string) {
+  const route = routes.find((r) => r.urlPath === urlPath);
+  if (!route?.body) throw new Error(`no body for ${urlPath}`);
+  return { body: route.body, html: renderBody(route.body) };
+}
+
+describe('the crawlable body', () => {
+  const routes = buildRoutes(SUBCAT_MANIFEST);
+
+  it('a subcategory lists its prerendered parts first, then tops up from page 1', () => {
+    const { body } = bodyOf(routes, '/category/ics/regs');
+    const partsSection = body.sections.find((s) => s.title === 'Voltage Regulators parts');
+    expect(partsSection?.links.map((l) => l.href)).toEqual([
+      '/part/lm7805ct',
+      '/part/lm317t',
+      '/part/page-one',
+    ]);
+    // The anchor is the MPN; the maker and a clipped description follow it.
+    expect(partsSection?.links[0]).toEqual({
+      href: '/part/lm7805ct',
+      label: 'LM7805CT',
+      note: 'Texas Instruments · Linear regulator 5V 1.5A TO-220',
+    });
+  });
+
+  it('never lists more than a screenful of parts', () => {
+    const manifest: SeoManifest = {
+      categories: [{ slug: 'ics', name: 'ICs', children: [{ slug: 'regs', name: 'Regs' }] }],
+      parts: manyParts(PART_LINKS_PER_LIST + 10),
+    };
+    const { body } = bodyOf(buildRoutes(manifest), '/category/ics/regs');
+    expect(body.sections[0].links).toHaveLength(PART_LINKS_PER_LIST);
+  });
+
+  it('a subcategory carries its breadcrumb, a heading, prose and its siblings', () => {
+    const { html } = bodyOf(routes, '/category/ics/regs');
+    expect(html).toContain(
+      '<nav aria-label="Breadcrumb"><a href="/">Circuit Center</a> › ' +
+        '<a href="/category/ics">Integrated Circuits</a></nav>',
+    );
+    expect(html.match(/<h1>/g)).toHaveLength(1);
+    expect(html).toContain('<h1>Voltage Regulators</h1>');
+    expect(html).toContain(
+      'Manufacturers listed in Voltage Regulators on Circuit Center include ' +
+        'STMicroelectronics and Texas Instruments.',
+    );
+    expect(html).toContain('<h2>More in Integrated Circuits</h2><ul><li><a href="/category/ics/timers">Timers</a></li></ul>');
+  });
+
+  it('does not double the full stop after a manufacturer that ends in one', () => {
+    const manifest: SeoManifest = {
+      categories: [{ slug: 'ics', name: 'ICs', children: [{ slug: 'regs', name: 'Regs' }] }],
+      parts: [part('ap2112k', { manufacturerName: 'Diodes Inc.' })],
+    };
+    const { html } = bodyOf(buildRoutes(manifest), '/category/ics/regs');
+    expect(html).toContain('include Diodes Inc.</p>');
+  });
+
+  it('a top-level category carries its description, its subcategories and its parts', () => {
+    const { html } = bodyOf(routes, '/category/ics');
+    expect(html).toContain('<p>ICs of every kind.</p>');
+    expect(html).toContain('<h2>Integrated Circuits subcategories</h2>');
+    expect(html).toContain('<a href="/category/ics/regs">Voltage Regulators</a>');
+    expect(html).toContain('<h2>Integrated Circuits parts</h2>');
+    expect(html).toContain('<a href="/part/lm7805ct">LM7805CT</a>');
+  });
+
+  it('an empty section renders no heading', () => {
+    // Timers has no parts of either kind: no "Timers parts" heading over nothing.
+    const { html } = bodyOf(routes, '/category/ics/timers');
+    expect(html).not.toContain('Timers parts');
+  });
+
+  it('escapes what it renders', () => {
+    const manifest: SeoManifest = {
+      categories: [
+        { slug: 'ics', name: 'ICs <b>', description: '</main><script>alert(1)</script>', children: [] },
+      ],
+    };
+    const { html } = bodyOf(buildRoutes(manifest), '/category/ics');
+    expect(html).not.toContain('<script>');
+    expect(html).toContain('&lt;/main&gt;&lt;script&gt;');
+    expect(html).toContain('<h1>ICs &lt;b&gt;</h1>');
+  });
+
+  it('every prerendered part in a category is reachable: 25 from the category, 8 from each part', () => {
+    const n = 2_442; // resistors, the largest group on 2026-09-22
+    const manifest: SeoManifest = {
+      categories: [{ slug: 'ics', name: 'ICs', children: [{ slug: 'regs', name: 'Regs' }] }],
+      parts: manyParts(n),
+    };
+    const built = buildRoutes(manifest);
+    const inbound = new Map<string, number>();
+    for (const route of built) {
+      for (const section of route.body?.sections ?? []) {
+        for (const link of section.links) {
+          if (link.href.startsWith('/part/')) {
+            // The top-level category repeats the subcategory's first screen;
+            // count the tree the subcategory and the part documents form.
+            if (route.urlPath === '/category/ics') continue;
+            inbound.set(link.href, (inbound.get(link.href) ?? 0) + 1);
+          }
+        }
+      }
+    }
+    const partUrls = built.filter((r) => r.urlPath.startsWith('/part/')).map((r) => r.urlPath);
+    expect(partUrls).toHaveLength(n);
+    for (const url of partUrls) expect(inbound.get(url), url).toBe(1);
+    for (const route of built) {
+      const links = route.body?.sections.flatMap((s) => s.links) ?? [];
+      if (route.urlPath.startsWith('/part/')) expect(links.length).toBeLessThanOrEqual(PART_TREE_FANOUT);
+    }
+  });
+
+  it('partTreeLinks gives every index past the first screen exactly one parent', () => {
+    const group = Array.from({ length: 500 }, (_, i) => i);
+    const parents = new Map<number, number>();
+    group.forEach((_, i) => {
+      for (const child of partTreeLinks(group, i)) parents.set(child, (parents.get(child) ?? 0) + 1);
+    });
+    for (let i = 0; i < group.length; i += 1) {
+      expect(parents.get(i) ?? 0).toBe(i < PART_LINKS_PER_LIST ? 0 : 1);
+    }
+  });
+});
+
+describe('the committed manifest renders within budget', () => {
+  // A regen against prod is what moves these numbers; a guard here keeps a
+  // richer body from quietly growing every document on disk.
+  const manifest = JSON.parse(
+    readFileSync(path.resolve(__dirname, '../seo-manifest.json'), 'utf8'),
+  ) as SeoManifest;
+  const routes = buildRoutes(manifest);
+
+  it('keeps every category body under ~6 KB', () => {
+    const categoryRoutes = routes.filter((r) => r.urlPath.startsWith('/category/'));
+    expect(categoryRoutes.length).toBeGreaterThan(0);
+    for (const route of categoryRoutes) {
+      expect(Buffer.byteLength(renderBody(route.body!)), route.urlPath).toBeLessThanOrEqual(6_144);
+    }
+  });
+
+  it('links every prerendered part document from at least one other document', () => {
+    const linked = new Set<string>();
+    for (const route of routes) {
+      for (const section of route.body?.sections ?? []) for (const l of section.links) linked.add(l.href);
+    }
+    const orphans = routes.filter((r) => r.urlPath.startsWith('/part/') && !linked.has(r.urlPath));
+    expect(orphans.map((r) => r.urlPath)).toEqual([]);
   });
 });

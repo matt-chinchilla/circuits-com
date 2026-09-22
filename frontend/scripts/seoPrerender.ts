@@ -5,9 +5,9 @@
 // <title>, same meta description, no canonical, no JSON-LD. This step writes
 // ONE static HTML file per templated route, each carrying that route's own head
 // (built by @public/services/seo, the same module <PageHead> renders from) plus
-// a <noscript> body for crawlers that do not execute JS. nginx then serves them
-// with the try_files rule already in frontend/nginx.conf — no runtime cost, no
-// extra request-path service, and not one byte added to the JS bundle.
+// a crawlable body inside #root (see renderBody). nginx then serves them with
+// the try_files rule already in frontend/nginx.conf — no runtime cost, no extra
+// request-path service, and not one byte added to the JS bundle.
 //
 // Scope is every templated route: home, the static pages, EVERY category and
 // subcategory, and a CAPPED slice of part pages.
@@ -51,6 +51,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import type { Plugin } from 'vite';
 import {
+  SITE_LINKS,
   SITE_ORIGIN,
   homeSeo,
   type PageSeo,
@@ -67,8 +68,13 @@ export interface ManifestCategory {
     slug: string;
     name: string;
     description?: string | null;
-    /** Page-1 part links, rendered into this subcategory's noscript body. */
-    parts?: SeoLink[];
+    /**
+     * Page-1 part links from /api/parts/ (sku order, what the live page opens
+     * on). The body lists the subcategory's PRERENDERED parts first and only
+     * tops up from these, so the generator fetches them only for a
+     * subcategory with fewer than PART_LINKS_PER_LIST ranked parts.
+     */
+    parts?: BodyLink[];
   }[];
 }
 
@@ -96,6 +102,31 @@ export interface PrerenderRoute {
   /** Output file, relative to dist/. */
   file: string;
   seo: PageSeo;
+  /** The crawlable body; absent = heading + description + links from `seo`. */
+  body?: PrerenderBody;
+}
+
+/** A body link; `note` is plain text after the anchor (never part of it). */
+export interface BodyLink extends SeoLink {
+  note?: string;
+}
+
+/**
+ * What a prerendered document carries inside #root for a client that runs no
+ * JS — crawlers reading raw HTML (Bing's first pass, social and AI fetchers)
+ * and no-JS browsers. The SPA's first commit replaces it (createRoot clears the
+ * container), and a script-enabled browser never paints it (BODY_FLASH_GUARD),
+ * so it costs a JS visitor nothing and never competes with the SPA's own <h1>.
+ * It is the same content the SPA renders — heading, prose, subcategory links,
+ * part links — so this is the page, not a crawler-only variant of it.
+ */
+export interface PrerenderBody {
+  /** Trail above the heading, home first; empty on home itself. */
+  breadcrumb: SeoLink[];
+  heading: string;
+  paragraphs: string[];
+  /** An empty `title` renders the list with no <h2>. */
+  sections: { title: string; links: BodyLink[] }[];
 }
 
 function escapeHtml(value: string): string {
@@ -150,16 +181,48 @@ function headTags(seo: PageSeo): string {
   return tags.join('\n    ');
 }
 
-function noscriptBody(seo: PageSeo): string {
-  const links = seo.links
-    .map((l: SeoLink) => `<li><a href="${escapeHtml(l.href)}">${escapeHtml(l.label)}</a></li>`)
+// The body used to be a <noscript> stub (233–906 chars of text, audit
+// 2026-09-01): a script-enabled parser keeps noscript content as raw text, so
+// the part links in it were weak or invisible to any crawler that parses HTML
+// the way a browser does. It is real DOM now, and this rule is what keeps a JS
+// visitor from seeing it flash unstyled before the SPA's first commit — the
+// exact visibility <noscript> gave it, without hiding it from the DOM. Browsers
+// without the `scripting` media feature (pre-2023) show it until that commit.
+// Deliberately NOT marked with MARK: the handoff strips marked tags BEFORE the
+// first render, and React's first commit is scheduled, not synchronous.
+export const BODY_ATTR = 'data-seo-body';
+export const BODY_FLASH_GUARD = `<style>@media (scripting: enabled){[${BODY_ATTR}]{display:none}}</style>`;
+
+function linkItem(link: BodyLink): string {
+  const note = link.note ? ` — ${escapeHtml(link.note)}` : '';
+  return `<li><a href="${escapeHtml(link.href)}">${escapeHtml(link.label)}</a>${note}</li>`;
+}
+
+export function renderBody(body: PrerenderBody): string {
+  const trail = body.breadcrumb.length
+    ? `<nav aria-label="Breadcrumb">${body.breadcrumb
+        .map((l) => `<a href="${escapeHtml(l.href)}">${escapeHtml(l.label)}</a>`)
+        .join(' › ')}</nav>`
+    : '';
+  const prose = body.paragraphs.map((p) => `<p>${escapeHtml(p)}</p>`).join('');
+  const sections = body.sections
+    .filter((s) => s.links.length > 0)
+    .map(
+      (s) =>
+        (s.title ? `<h2>${escapeHtml(s.title)}</h2>` : '') +
+        `<ul>${s.links.map(linkItem).join('')}</ul>`,
+    )
     .join('');
-  return (
-    `<noscript><h1>${escapeHtml(seo.heading)}</h1>` +
-    `<p>${escapeHtml(seo.description)}</p>` +
-    (links ? `<ul>${links}</ul>` : '') +
-    `</noscript>`
-  );
+  return `<main ${BODY_ATTR}>${trail}<h1>${escapeHtml(body.heading)}</h1>${prose}${sections}</main>`;
+}
+
+function defaultBody(seo: PageSeo): PrerenderBody {
+  return {
+    breadcrumb: [],
+    heading: seo.heading,
+    paragraphs: [seo.description],
+    sections: [{ title: '', links: seo.links }],
+  };
 }
 
 export function renderRoute(shell: string, route: PrerenderRoute): string {
@@ -204,11 +267,16 @@ export function renderRoute(shell: string, route: PrerenderRoute): string {
     `<meta property="og:url" content="${escapeHtml(seo.canonical ?? SITE_ORIGIN + route.urlPath)}"/>`,
     'the og:url meta',
   );
-  html = replaceOnce(html, /<\/head>/, `  ${headTags(seo)}\n  </head>`, '</head>');
+  html = replaceOnce(
+    html,
+    /<\/head>/,
+    `  ${headTags(seo)}\n    ${BODY_FLASH_GUARD}\n  </head>`,
+    '</head>',
+  );
   html = replaceOnce(
     html,
     /<div id="root"><\/div>/,
-    `<div id="root">${noscriptBody(seo)}</div>`,
+    `<div id="root">${renderBody(route.body ?? defaultBody(seo))}</div>`,
     'the empty #root div',
   );
   return html;
@@ -223,12 +291,96 @@ function readManifest(manifestPath: string): SeoManifest | null {
   }
 }
 
+/** Part links per list — one screenful, matching the live page's 25 rows. */
+export const PART_LINKS_PER_LIST = 25;
+
+/**
+ * Sibling links a part document carries. Together with the 25 a subcategory
+ * document lists, this makes every prerendered part reachable by crawlable
+ * links (see partTreeLinks) — until 2026-09-22 only 341 of 14,977 part
+ * documents had an internal link at all.
+ */
+export const PART_TREE_FANOUT = 8;
+
+const MANUFACTURERS_NAMED = 8;
+const NOTE_MAX = 80;
+
+function clip(text: string, max: number): string {
+  const flat = text.replace(/\s+/g, ' ').trim();
+  if (flat.length <= max) return flat;
+  const cut = flat.slice(0, max - 1);
+  const space = cut.lastIndexOf(' ');
+  return `${(space > max / 2 ? cut.slice(0, space) : cut).replace(/[\s,;:.–—-]+$/, '')}…`;
+}
+
+function partLink(part: ManifestPart): BodyLink {
+  const note = [part.manufacturerName, part.description ? clip(part.description, NOTE_MAX) : null]
+    .filter(Boolean)
+    .join(' · ');
+  return { href: `/part/${part.slug}`, label: part.sku, ...(note ? { note } : {}) };
+}
+
+/** Root-relative category URL a part belongs to, the key its siblings share. */
+function groupKey(part: ManifestPart): string | null {
+  return part.categorySlug ? categoryPath(part.categorySlug, part.parentCategorySlug ?? null) : null;
+}
+
+/**
+ * "Manufacturers listed in X include A, B and C." — named from the prerendered
+ * parts in the category, most-listed first. It is the one sentence of body copy
+ * that differs between subcategories whose descriptions are still the shared
+ * template (every child on 2026-09-22), and it claims nothing but "listed".
+ */
+function manufacturersSentence(name: string, parts: ManifestPart[]): string | null {
+  const counts = new Map<string, number>();
+  for (const p of parts) {
+    const m = p.manufacturerName?.trim();
+    if (m) counts.set(m, (counts.get(m) ?? 0) + 1);
+  }
+  const names = [...counts.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, MANUFACTURERS_NAMED)
+    .map(([m]) => m);
+  if (names.length === 0) return null;
+  const list =
+    names.length === 1 ? names[0] : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+  // "Diodes Inc." already ends the sentence; a second stop reads as a typo.
+  return `Manufacturers listed in ${name} on Circuit Center include ${list}${list.endsWith('.') ? '' : '.'}`;
+}
+
+/**
+ * The part documents part `index` of its category group links to: a
+ * PART_TREE_FANOUT-ary tree over the group's ranked list whose first
+ * PART_LINKS_PER_LIST entries hang off the category document itself. Every
+ * index past the first screen has exactly one parent, so the whole group is
+ * reachable in a handful of hops (2,442 resistors: depth 4 from the
+ * subcategory page) with no document carrying more than 8 extra links.
+ */
+export function partTreeLinks<T>(group: T[], index: number): T[] {
+  const start = PART_LINKS_PER_LIST + index * PART_TREE_FANOUT;
+  return group.slice(start, start + PART_TREE_FANOUT);
+}
+
 // A slug becomes a directory under dist/ AND a <loc> in a sitemap, so it must
 // be exactly the grammar slugify_sku emits: no separators to climb out of
 // part/, nothing a URL would have to percent-encode, never empty (which would
 // write part/index.html for the bare /part/ URL). A part that fails it gets no
 // document and — because the sitemaps derive from these routes — no <loc>.
 const SAFE_SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+/** The manifest's parts, filtered to the ones that get a document, in rank order. */
+function prerenderedParts(manifest: SeoManifest | null): ManifestPart[] {
+  const seen = new Set<string>();
+  const out: ManifestPart[] = [];
+  for (const part of manifest?.parts ?? []) {
+    // One document per URL: the generator already dedupes slugs (first wins,
+    // as /parts/by-slug does); a repeat here would overwrite the first file.
+    if (!SAFE_SLUG.test(part.slug) || seen.has(part.slug)) continue;
+    seen.add(part.slug);
+    out.push(part);
+  }
+  return out;
+}
 
 export function buildRoutes(manifest: SeoManifest | null): PrerenderRoute[] {
   const categories = manifest?.categories ?? [];
@@ -237,12 +389,43 @@ export function buildRoutes(manifest: SeoManifest | null): PrerenderRoute[] {
     label: c.name,
   }));
 
+  const parts = prerenderedParts(manifest);
+  // Rank order is preserved inside every group: the manifest is already sorted
+  // best-first, and a stable filter keeps it that way.
+  const byGroup = new Map<string, ManifestPart[]>();
+  for (const part of parts) {
+    const key = groupKey(part);
+    if (!key) continue;
+    const group = byGroup.get(key);
+    if (group) group.push(part);
+    else byGroup.set(key, [part]);
+  }
+  const nameByPath = new Map<string, string>();
+  for (const c of categories) {
+    nameByPath.set(`/category/${c.slug}`, c.name);
+    for (const child of c.children ?? []) nameByPath.set(`/category/${c.slug}/${child.slug}`, child.name);
+  }
+
+  const home = homeSeo(topLevelLinks);
   // Home is written to home.html, NOT index.html. index.html stays the generic
   // SPA fallback for every route this step does not cover (part pages, keyword
   // profiles, 404s); baking home's canonical into it would make all 3,600 part
   // URLs declare `rel=canonical -> /`. nginx maps `location = /` to home.html.
   const routes: PrerenderRoute[] = [
-    { urlPath: '/', file: 'home.html', seo: homeSeo(topLevelLinks) },
+    {
+      urlPath: '/',
+      file: 'home.html',
+      seo: home,
+      body: {
+        breadcrumb: [],
+        heading: home.heading,
+        paragraphs: [home.description],
+        sections: [
+          { title: 'Browse electronic components by category', links: topLevelLinks },
+          { title: 'Circuit Center', links: SITE_LINKS },
+        ],
+      },
+    },
     { urlPath: '/about', file: 'about/index.html', seo: STATIC_PAGE_SEO.about },
     { urlPath: '/contact', file: 'contact/index.html', seo: STATIC_PAGE_SEO.contact },
     // No '/pricing' entry: that route merged into /join on 2026-08-14 and now
@@ -266,44 +449,87 @@ export function buildRoutes(manifest: SeoManifest | null): PrerenderRoute[] {
     { urlPath: '/search', file: 'search/index.html', seo: STATIC_PAGE_SEO.search },
   ];
 
+  const homeCrumb: SeoLink = { href: '/', label: 'Circuit Center' };
+
   for (const category of categories) {
     const children = category.children ?? [];
-    routes.push({
-      urlPath: `/category/${category.slug}`,
-      file: `category/${category.slug}/index.html`,
-      seo: categorySeo({
-        name: category.name,
-        canonicalPath: `/category/${category.slug}`,
-        description: category.description ?? null,
-        children: children.map((c) => ({
-          href: `/category/${category.slug}/${c.slug}`,
-          label: c.name,
-        })),
-      }),
+    const topPath = `/category/${category.slug}`;
+    const childLinks: SeoLink[] = children.map((c) => ({
+      href: `${topPath}/${c.slug}`,
+      label: c.name,
+    }));
+    const seo = categorySeo({
+      name: category.name,
+      canonicalPath: topPath,
+      description: category.description ?? null,
+      children: childLinks,
     });
+    // The category's own parts first (none today — seed attaches to children),
+    // then its children's, in rank order.
+    const inCategory = [
+      ...(byGroup.get(topPath) ?? []),
+      ...parts.filter((p) => p.parentCategorySlug === category.slug),
+    ];
+    routes.push({
+      urlPath: topPath,
+      file: `category/${category.slug}/index.html`,
+      seo,
+      body: {
+        breadcrumb: [homeCrumb],
+        heading: category.name,
+        paragraphs: [
+          seo.description,
+          manufacturersSentence(category.name, inCategory),
+        ].filter((p): p is string => p != null),
+        sections: [
+          { title: `${category.name} subcategories`, links: childLinks },
+          {
+            title: `${category.name} parts`,
+            links: inCategory.slice(0, PART_LINKS_PER_LIST).map(partLink),
+          },
+        ],
+      },
+    });
+
     for (const child of children) {
-      const seo = categorySeo({
+      const childPath = `${topPath}/${child.slug}`;
+      const childSeo = categorySeo({
         name: child.name,
-        canonicalPath: `/category/${category.slug}/${child.slug}`,
+        canonicalPath: childPath,
         description: child.description ?? null,
         parent: { name: category.name, slug: category.slug },
       });
+      const ranked = byGroup.get(childPath) ?? [];
+      // Prerendered parts first: each is a real Product document in the
+      // sitemap. Only a subcategory with fewer than a screenful tops up from
+      // the page-1 list the live page opens on — those serve the SPA shell,
+      // but a subcategory with no link down at all is a crawl dead end.
+      const seen = new Set<string>();
+      const partLinks: BodyLink[] = [];
+      for (const link of [...ranked.map(partLink), ...(child.parts ?? [])]) {
+        if (partLinks.length >= PART_LINKS_PER_LIST) break;
+        if (seen.has(link.href)) continue;
+        seen.add(link.href);
+        partLinks.push(link);
+      }
       routes.push({
-        urlPath: `/category/${category.slug}/${child.slug}`,
+        urlPath: childPath,
         file: `category/${category.slug}/${child.slug}/index.html`,
-        // The subcategory's own parts, APPENDED after the breadcrumb links
-        // categorySeo built. Without them the prerendered document links only
-        // upward, and every part page below it is a crawl orphan reachable
-        // solely through the sitemap — a discovered URL with nothing linking
-        // to it carries no internal signal at all. This is the one place the
-        // home -> category -> subcategory -> part path exists in raw HTML.
-        //
-        // Appended here rather than passed as categorySeo's `children`: that
-        // field means subcategories, and the runtime <PageHead> on the live
-        // category page has no part list to pass, so a builder argument would
-        // have to be one the two consumers disagree about. links only feed the
-        // noscript body, which the prerender alone emits.
-        seo: { ...seo, links: [...seo.links, ...(child.parts ?? [])] },
+        seo: childSeo,
+        body: {
+          breadcrumb: [homeCrumb, { href: topPath, label: category.name }],
+          heading: child.name,
+          paragraphs: [childSeo.description, manufacturersSentence(child.name, ranked)].filter(
+            (p): p is string => p != null,
+          ),
+          sections: [
+            { title: `${child.name} parts`, links: partLinks },
+            {
+              title: `More in ${category.name}`,
+              links: childLinks.filter((l) => l.href !== childPath),
+            },
+          ],
+        },
       });
     }
   }
@@ -314,26 +540,53 @@ export function buildRoutes(manifest: SeoManifest | null): PrerenderRoute[] {
   // rest), since /part/<uuid> canonicalizes to the slug form anyway —
   // prerendering both shapes would emit two documents that disagree about
   // which is canonical.
-  const seenParts = new Set<string>();
-  for (const part of manifest?.parts ?? []) {
-    // One document per URL: the generator already dedupes slugs, and a repeat
-    // here would overwrite the first file and list the URL twice.
-    if (!SAFE_SLUG.test(part.slug) || seenParts.has(part.slug)) continue;
-    seenParts.add(part.slug);
+  const indexInGroup = new Map<string, number>();
+  for (const group of byGroup.values()) group.forEach((p, i) => indexInGroup.set(p.slug, i));
+
+  for (const part of parts) {
+    const groupPath = groupKey(part);
+    const seo = partSeo({
+      sku: part.sku,
+      manufacturerName: part.manufacturerName ?? '',
+      slug: part.slug,
+      description: part.description ?? null,
+      categoryName: part.categoryName ?? null,
+      bestPrice: part.bestPrice ?? null,
+      categoryPath: groupPath,
+    });
+    const categoryName = (groupPath && nameByPath.get(groupPath)) ?? part.categoryName ?? null;
+    const crumbs: SeoLink[] = [homeCrumb];
+    if (part.parentCategorySlug) {
+      const parentPath = `/category/${part.parentCategorySlug}`;
+      const parentName = nameByPath.get(parentPath);
+      if (parentName) crumbs.push({ href: parentPath, label: parentName });
+    }
+    if (groupPath && categoryName) crumbs.push({ href: groupPath, label: categoryName });
+
+    const group = groupPath ? byGroup.get(groupPath) ?? [] : [];
+    const siblings = groupPath ? partTreeLinks(group, indexInGroup.get(part.slug) ?? 0) : [];
+    const facts = [
+      part.manufacturerName ? `Manufacturer: ${part.manufacturerName}.` : null,
+      categoryName ? `Category: ${categoryName}.` : null,
+      'Compare distributor prices and stock on Circuit Center.',
+    ]
+      .filter(Boolean)
+      .join(' ');
     routes.push({
       urlPath: `/part/${part.slug}`,
       file: `part/${part.slug}/index.html`,
-      seo: partSeo({
-        sku: part.sku,
-        manufacturerName: part.manufacturerName ?? '',
-        slug: part.slug,
-        description: part.description ?? null,
-        categoryName: part.categoryName ?? null,
-        bestPrice: part.bestPrice ?? null,
-        categoryPath: part.categorySlug
-          ? categoryPath(part.categorySlug, part.parentCategorySlug ?? null)
-          : null,
-      }),
+      seo,
+      body: {
+        breadcrumb: crumbs,
+        heading: part.sku,
+        paragraphs: [part.description, facts].filter((p): p is string => !!p),
+        sections: [
+          {
+            title: categoryName ? `More ${categoryName}` : '',
+            links: siblings.map(partLink),
+          },
+        ],
+      },
     });
   }
 
