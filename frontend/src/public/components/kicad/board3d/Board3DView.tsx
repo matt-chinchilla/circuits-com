@@ -84,7 +84,7 @@ export function captionOf(scene: BoardScene, quality: Quality = 'full'): string 
   // drawing was approximated somewhere, not which of our passes did it.
   let simplified = 0;
   for (const w of scene.warnings) {
-    if (w.kind === 'holes-merged' || w.kind === 'no-courtyard' || w.kind === 'arc-degenerate') simplified += w.count;
+    if (w.kind === 'holes-merged' || w.kind === 'holes-marked' || w.kind === 'no-courtyard' || w.kind === 'arc-degenerate') simplified += w.count;
   }
   if (simplified > 0) parts.push(`${simplified} feature${simplified === 1 ? '' : 's'} simplified.`);
   return parts.join(' ');

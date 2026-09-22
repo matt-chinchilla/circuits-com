@@ -35,6 +35,9 @@ export type BoardWarning =
   | { kind: 'no-stackup' }
   | { kind: 'zones-unfilled'; count: number }
   | { kind: 'holes-merged'; count: number }
+  /** Drills drawn as marks, and mask openings drawn as raised pads, because one
+   *  face could not afford to cut them all (buildScene's FACE_HOLE_BUDGET). */
+  | { kind: 'holes-marked'; count: number }
   | { kind: 'no-courtyard'; count: number }
   | { kind: 'arc-degenerate'; count: number };
 export interface BoardModel {

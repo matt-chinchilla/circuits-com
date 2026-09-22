@@ -61,11 +61,11 @@ describe('Board3DView', () => {
     expect(host.dataset.buildMs).toBe('12');
   });
   it('lists warnings in the fixed order', async () => {
-    state.scene = scene([{ kind: 'zones-unfilled', count: 2 }, { kind: 'no-stackup' }, { kind: 'holes-merged', count: 3 }, { kind: 'no-courtyard', count: 1 }], false);
+    state.scene = scene([{ kind: 'zones-unfilled', count: 2 }, { kind: 'no-stackup' }, { kind: 'holes-merged', count: 3 }, { kind: 'no-courtyard', count: 1 }, { kind: 'holes-marked', count: 2 }], false);
     await act(async () => { root.render(createElement(Board3DView, { project, stackup: null, createRenderer: () => fakeRenderer() as never, quality: 'full' })); });
     const note = el.querySelector('[role="note"]')!.textContent!;
     expect(note.indexOf('Layer thicknesses are not in this file')).toBeLessThan(note.indexOf('2 copper pours were saved unfilled'));
-    expect(note).toContain('4 features simplified');
+    expect(note).toContain('6 features simplified');
     expect(note).not.toContain('Component bodies');
     state.scene = scene([]);
   });

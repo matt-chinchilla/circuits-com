@@ -98,3 +98,52 @@ describe('buildScene — the panel', () => {
     expect(s.warnings).toEqual(expect.arrayContaining([{ kind: 'no-stackup' }, { kind: 'zones-unfilled', count: 4 }]));
   });
 });
+
+/** A 1 mm grid of 0.3 mm vias (and optionally SMD pads) inside a plain outline. */
+function denseBoard(vias: number, pads = 0): string {
+  const side = Math.ceil(Math.sqrt(vias + pads));
+  const w = side + 4;
+  const lines = [
+    '(kicad_pcb (version 20221018) (generator pcbnew)',
+    '(layers (0 "F.Cu" signal) (31 "B.Cu" signal) (38 "B.Mask" user) (39 "F.Mask" user) (44 "Edge.Cuts" user))',
+    `(gr_rect (start 0 0) (end ${w} ${w}) (layer "Edge.Cuts") (width 0.1))`,
+  ];
+  let k = 0;
+  for (let i = 0; i < side; i++) {
+    for (let j = 0; j < side; j++, k++) {
+      if (k < vias) lines.push(`(via (at ${2 + i} ${2 + j}) (size 0.6) (drill 0.3) (layers "F.Cu" "B.Cu"))`);
+      else if (k < vias + pads) lines.push(`(footprint "x" (layer "F.Cu") (at ${2 + i} ${2 + j}) (property "Reference" "R${k}") (pad "1" smd rect (at 0 0) (size 0.4 0.4) (layers "F.Cu" "F.Mask")))`);
+    }
+  }
+  lines.push(')');
+  return lines.join('\n');
+}
+
+describe('buildScene — a dense board stays inside the face budget', () => {
+  it('cuts the first 1,500 drills and MARKS the rest, in bounded time', () => {
+    // 3,000 vias took ~9 s before the budget (earcut bridges every hole into ONE
+    // face); the build is now bounded by the budget rather than by the file.
+    const s = buildScene({ text: denseBoard(3000), stackup: null, quality: 'reduced' });
+    expect(s.warnings).toContainEqual({ kind: 'holes-marked', count: 1500 });
+    const marks = s.groups.filter((g) => g.material === 'hole-wall' && g.layerName?.endsWith('.Marks'));
+    expect(marks.map((g) => g.layerName).sort()).toEqual(['B.Marks', 'F.Marks']);
+    expect(s.stats.buildMs).toBeLessThan(6000);
+  });
+  it('raises the pads whose mask openings do not fit, and counts them', () => {
+    const s = buildScene({ text: denseBoard(0, 1600), stackup: null, quality: 'reduced' });
+    expect(s.warnings).toContainEqual({ kind: 'holes-marked', count: 100 });
+    // Every pad is still drawn, and still pickable by its footprint.
+    expect(s.groups.find((g) => g.material === 'copper' && g.layerName === 'F.Cu')!.parts).toHaveLength(1600);
+    const mask = s.groups.find((g) => g.material === 'mask' && g.layerName === 'F.Mask')!;
+    const copper = s.groups.find((g) => g.material === 'copper' && g.layerName === 'F.Cu')!;
+    const maskZ = mask.positions[2];
+    let above = 0;
+    for (let i = 2; i < copper.positions.length; i += 3) if (copper.positions[i] > maskZ) above++;
+    expect(above).toBe(100 * 4);   // 100 raised rect pads, four vertices each
+  });
+  it('Glasgow is inside the budget: nothing marked', () => {
+    const s = load('glasgow-revC3/glasgow.kicad_pcb');
+    expect(s.warnings.find((w) => w.kind === 'holes-marked')).toBeUndefined();
+    expect(s.groups.some((g) => g.layerName?.endsWith('.Marks'))).toBe(false);
+  });
+});
