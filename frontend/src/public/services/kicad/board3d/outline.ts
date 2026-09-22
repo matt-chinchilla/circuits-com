@@ -1,5 +1,6 @@
 import { flattenThreePoint } from './arcs';
 import { bbox, signedArea } from './geom';
+import { circleRing } from './strokes';
 import type { Ring, Shape, Vec2 } from './types';
 
 export interface Chained { loops: Ring[]; unchained: number }
@@ -56,6 +57,35 @@ export function chainLoops(polylines: Vec2[][], snapMm = 0.001): Chained {
 }
 
 /**
+ * Every shape as ONE polyline in the shape's own coordinates. Closed shapes
+ * (circle, rect, closed poly) repeat their first point so `chainLoops` takes
+ * them as loops immediately; open ones (line, arc) are left for the chainer.
+ * `degenerateArcs` counts the arcs whose three points were collinear and came
+ * out as their chord. One home for this conversion: the board outline and a
+ * footprint's courtyard are the same job on different shapes.
+ */
+export function shapePolylines(shapes: Shape[], tolMm: number): { polylines: Vec2[][]; degenerateArcs: number } {
+  const polylines: Vec2[][] = [];
+  let degenerateArcs = 0;
+  for (const s of shapes) {
+    if (s.kind === 'line') polylines.push([s.a, s.b]);
+    else if (s.kind === 'arc') {
+      const r = flattenThreePoint(s.a, s.mid, s.b, tolMm);
+      if (r.degenerate) degenerateArcs++;
+      polylines.push(r.pts);
+    } else if (s.kind === 'circle') {
+      const pts = circleRing(s.c, s.r, tolMm).pts;
+      polylines.push([...pts, pts[0]]);
+    } else if (s.kind === 'rect') {
+      polylines.push([s.a, { x: s.b.x, y: s.a.y }, s.b, { x: s.a.x, y: s.b.y }, s.a]);
+    } else if (s.kind === 'poly' && s.pts.length >= 3) {
+      polylines.push([...s.pts, s.pts[0]]);
+    }
+  }
+  return { polylines, degenerateArcs };
+}
+
+/**
  * Edge.Cuts → the board outline plus its cutouts. Circles, rects and closed polys
  * are loops already; lines and arcs (flattened at `tolMm`) get chained. The
  * largest |area| loop is the board. If anything fails to chain, the caller gets
@@ -64,30 +94,7 @@ export function chainLoops(polylines: Vec2[][], snapMm = 0.001): Chained {
 export function boardOutline(edgeItems: Shape[], tolMm: number): {
   outer: Ring; cutouts: Ring[]; open: boolean; unchained: number; degenerateArcs: number;
 } {
-  const polylines: Vec2[][] = [];
-  let degenerateArcs = 0;
-  for (const s of edgeItems) {
-    if (s.kind === 'line') polylines.push([s.a, s.b]);
-    else if (s.kind === 'arc') {
-      const r = flattenThreePoint(s.a, s.mid, s.b, tolMm);
-      if (r.degenerate) degenerateArcs++;
-      polylines.push(r.pts);
-    } else if (s.kind === 'circle') {
-      const step = Math.max((2 * Math.PI) / 180, Math.acos(Math.max(-1, 1 - tolMm / s.r)));
-      const n = Math.max(16, Math.ceil((2 * Math.PI) / step));
-      const pts: Vec2[] = [];
-      for (let i = 0; i < n; i++) {
-        const t = (2 * Math.PI * i) / n;
-        pts.push({ x: s.c.x + s.r * Math.cos(t), y: s.c.y + s.r * Math.sin(t) });
-      }
-      pts.push(pts[0]);
-      polylines.push(pts);
-    } else if (s.kind === 'rect') {
-      polylines.push([s.a, { x: s.b.x, y: s.a.y }, s.b, { x: s.a.x, y: s.b.y }, s.a]);
-    } else if (s.kind === 'poly' && s.pts.length >= 3) {
-      polylines.push([...s.pts, s.pts[0]]);
-    }
-  }
+  const { polylines, degenerateArcs } = shapePolylines(edgeItems, tolMm);
   const chained = chainLoops(polylines);
   const all = polylines.flat();
   if (chained.loops.length === 0 || chained.unchained > 0) {
