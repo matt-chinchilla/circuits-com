@@ -394,11 +394,17 @@ export function createSceneRenderer(options: SceneRendererOptions = {}): SceneRe
       if (kind != null) fade(d.base, MATERIALS[group.material], own);
 
       const hidden = new Set<number>();
+      /** A class at full opacity draws in the group's own material, so an
+       *  untouched copper layer stays ONE draw call; only a faded or hidden
+       *  class pays for its own. */
+      const plain = new Set<number>();
       for (const c of d.classes) {
         const o = opacityOf(c.kind);
         fade(c.material, MATERIALS.copper, o);
         if (o <= 0) hidden.add(c.index);
+        else if (o >= 1) plain.add(c.index);
       }
+      const classSpans = plain.size === 0 ? d.classSpans : d.classSpans.map((s) => (plain.has(s.materialIndex) ? { ...s, materialIndex: 0 } : s));
 
       const lit: Span[] = [];
       if (d.lit != null) {
@@ -416,7 +422,7 @@ export function createSceneRenderer(options: SceneRendererOptions = {}): SceneRe
 
       const geometry = d.mesh.geometry;
       geometry.clearGroups();
-      for (const slice of drawSlices(d.total, d.classSpans, lit, { baseIndex: 0, litIndex: d.lit == null ? 0 : 1, hidden })) {
+      for (const slice of drawSlices(d.total, classSpans, lit, { baseIndex: 0, litIndex: d.lit == null ? 0 : 1, hidden })) {
         geometry.addGroup(slice.start, slice.count, slice.materialIndex);
       }
     }

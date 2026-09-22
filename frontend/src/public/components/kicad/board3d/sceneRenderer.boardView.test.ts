@@ -96,12 +96,12 @@ async function mounted(): Promise<SceneRenderer> {
 }
 
 describe('the copper draws each class in its own material', () => {
-  it('one clone of the copper per class, one draw group per class', async () => {
+  it('one clone of the copper per class, yet an untouched layer is ONE draw group', async () => {
     await mounted();
     const cu = byName('copper/F.Cu');
     // [own, highlight, tracks, pads, zones]
     expect(mats(cu)).toHaveLength(5);
-    expect(groups(cu)).toEqual([[0, 6, 3], [6, 6, 2], [12, 6, 4]]);
+    expect(groups(cu)).toEqual([[0, 18, 0]]);
   });
 
   it('fades one class without touching the others, and 0 stops drawing it', async () => {
@@ -113,17 +113,18 @@ describe('the copper draws each class in its own material', () => {
     expect(tracks.transparent).toBe(true);
     expect(tracks.depthWrite).toBe(false);
     expect(mats(cu)[3].opacity).toBe(1);
-    expect(groups(cu)).toEqual([[0, 6, 3], [6, 6, 2], [12, 6, 4]]);
+    // Only the faded class draws in its own material.
+    expect(groups(cu)).toEqual([[0, 6, 0], [6, 6, 2], [12, 6, 0]]);
 
     r.setObjectOpacity?.('tracks', 0);
     expect(tracks.visible).toBe(false);
-    expect(groups(cu)).toEqual([[0, 6, 3], [12, 6, 4]]);
+    expect(groups(cu)).toEqual([[0, 6, 0], [12, 6, 0]]);
 
     r.setObjectOpacity?.('tracks', 1);
     expect(tracks.visible).toBe(true);
     expect(tracks.transparent).toBe(false);
     expect(tracks.depthWrite).toBe(true);
-    expect(groups(cu)).toEqual([[0, 6, 3], [6, 6, 2], [12, 6, 4]]);
+    expect(groups(cu)).toEqual([[0, 18, 0]]);
   });
 
   it('fades whole materials for bodies, silk, mask and vias', async () => {
@@ -162,7 +163,7 @@ describe('layers', () => {
     await mounted();
     r.highlightLayer?.('F.Mask');
     expect(groups(byName('mask/F.Mask'))).toEqual([[0, 18, 1]]);
-    expect(groups(byName('copper/F.Cu'))).toEqual([[0, 6, 3], [6, 6, 2], [12, 6, 4]]);
+    expect(groups(byName('copper/F.Cu'))).toEqual([[0, 18, 0]]);
     r.highlightLayer?.(null);
     expect(groups(byName('mask/F.Mask'))).toEqual([[0, 18, 0]]);
   });
@@ -180,15 +181,15 @@ describe('nets', () => {
     await mounted();
     r.highlightNet?.(7);
     // Net 7 is triangles 1–2: indices [3, 9), half a pad and half a track.
-    expect(groups(byName('copper/F.Cu'))).toEqual([[0, 3, 3], [3, 6, 1], [9, 3, 2], [12, 6, 4]]);
+    expect(groups(byName('copper/F.Cu'))).toEqual([[0, 3, 0], [3, 6, 1], [9, 9, 0]]);
     r.highlightNet?.(null);
-    expect(groups(byName('copper/F.Cu'))).toEqual([[0, 6, 3], [6, 6, 2], [12, 6, 4]]);
+    expect(groups(byName('copper/F.Cu'))).toEqual([[0, 18, 0]]);
   });
 
   it('net 0 ("no net") lights nothing', async () => {
     await mounted();
     r.highlightNet?.(0);
-    expect(groups(byName('copper/F.Cu'))).toEqual([[0, 6, 3], [6, 6, 2], [12, 6, 4]]);
+    expect(groups(byName('copper/F.Cu'))).toEqual([[0, 18, 0]]);
   });
 
   it('a part highlight and a net highlight share the one slicing', async () => {
@@ -196,7 +197,7 @@ describe('nets', () => {
     r.highlight?.('R1');
     r.highlightNet?.(3);
     // R1's pads are indices [0, 6); net 3 is triangles 3–5, indices [9, 18).
-    expect(groups(byName('copper/F.Cu'))).toEqual([[0, 6, 1], [6, 3, 2], [9, 9, 1]]);
+    expect(groups(byName('copper/F.Cu'))).toEqual([[0, 6, 1], [6, 3, 0], [9, 9, 1]]);
     expect(groups(byName('body/'))).toEqual([[0, 18, 1]]);
   });
 });
@@ -209,7 +210,7 @@ describe('state set before the meshes exist', () => {
     r.highlightNet?.(7);
     await r.mount(host, board(), 'full');
     expect(byName('silk/F.SilkS').visible).toBe(false);
-    expect(groups(byName('copper/F.Cu'))).toEqual([[6, 3, 1], [9, 3, 2], [12, 6, 4]]);
+    expect(groups(byName('copper/F.Cu'))).toEqual([[6, 3, 1], [9, 9, 0]]);
   });
 });
 
