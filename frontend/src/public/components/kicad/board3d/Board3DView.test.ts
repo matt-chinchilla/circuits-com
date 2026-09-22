@@ -345,11 +345,12 @@ describe('Board3DView — the callout on the selected part (owner, 2026-09-22: "
     expect(callout()!.hidden).toBe(false);
     const text = [...callout()!.querySelectorAll('p')].map((p) => p.textContent);
     expect(text).toEqual(['J5', 'PinHeader 2x22 P1.27mm Vertical SMD', 'estimated body']);
-    // The leader: a line from the dot at the anchor to the plate.
-    const line = el.querySelector('line')!, dot = el.querySelector('circle')!;
+    // The leader: a line (and its shadow under it) from the dot at the anchor to the plate.
+    const lines = [...el.querySelectorAll('line')], dot = el.querySelector('circle')!;
+    expect(lines).toHaveLength(2);
     expect(dot.getAttribute('cx')).toBe('120');
     expect(dot.getAttribute('cy')).toBe('90');
-    expect(line.getAttribute('x1')).toBe('120');
+    for (const line of lines) expect(line.getAttribute('x1')).toBe('120');
     expect(callout()!.style.transform).toMatch(/^translate\(\d+px, \d+px\)$/);
     // Behind the board: hidden, still mounted.
     act(() => { r.anchorMove?.({ x: 120, y: 90, visible: false }); });
@@ -435,10 +436,12 @@ describe('the stylesheet the frame depends on', () => {
     expect(scss).toMatch(/\.canvasHost \{[^{}]*flex:\s*1 1 auto/);
     expect(scss).toMatch(/\.canvasHost \{[^{}]*min-height:\s*0/);
   });
-  it('draws the callout as a plain plate — no glass, no glow — and the leader in the selection cyan', () => {
+  it('draws the callout as a plain plate — no glass, no glow — and the leader in cream over a dark shadow', () => {
     expect(scss).toMatch(/\.callout \{[^{}]*background:\s*\$callout-plate/);
     expect(scss).not.toMatch(/\.callout \{[^{}]*backdrop-filter/);
-    expect(scss).toMatch(/\$leader:\s*#4fc3f7/);
+    expect(scss).toMatch(/\.leaderLine \{[^{}]*stroke:\s*\$callout-ink/);
+    expect(scss).toMatch(/\.leaderShadow \{[^{}]*stroke:\s*\$leader-shadow/);
+    expect(scss).toMatch(/\.leaderDot \{[^{}]*fill:\s*\$callout-ink/);
     expect(scss).toMatch(/\.calloutTag \{[^{}]*border-top:\s*1px dotted/);
     expect(scss).toMatch(/\.leader \{[^{}]*pointer-events:\s*none/);
     expect(scss).toMatch(/\.tip \{[^{}]*pointer-events:\s*none/);

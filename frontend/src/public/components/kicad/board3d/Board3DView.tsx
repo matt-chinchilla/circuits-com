@@ -191,6 +191,7 @@ export default function Board3DView({
   const calloutRef = useRef<HTMLDivElement>(null);
   const leaderRef = useRef<SVGSVGElement>(null);
   const leaderLineRef = useRef<SVGLineElement>(null);
+  const leaderShadowRef = useRef<SVGLineElement>(null);
   const leaderDotRef = useRef<SVGCircleElement>(null);
   const tipRef = useRef<HTMLDivElement>(null);
   /** Bumped when a renderer has mounted, so the highlight effect below re-runs
@@ -242,10 +243,14 @@ export default function Board3DView({
     top = clampTo(top, CALLOUT_MARGIN_PX, Math.max(CALLOUT_MARGIN_PX, h - CALLOUT_MARGIN_PX - ch));
     callout.style.transform = `translate(${Math.round(left)}px, ${Math.round(top)}px)`;
     const ex = clampTo(at.x, left, left + cw), ey = clampTo(at.y, top, top + ch);
-    line.setAttribute('x1', String(at.x));
-    line.setAttribute('y1', String(at.y));
-    line.setAttribute('x2', String(ex));
-    line.setAttribute('y2', String(ey));
+    // The line and, under it, its dark shadow: the same segment twice.
+    for (const l of [line, leaderShadowRef.current]) {
+      if (l == null) continue;
+      l.setAttribute('x1', String(at.x));
+      l.setAttribute('y1', String(at.y));
+      l.setAttribute('x2', String(ex));
+      l.setAttribute('y2', String(ey));
+    }
     dot.setAttribute('cx', String(at.x));
     dot.setAttribute('cy', String(at.y));
   }, []);
@@ -451,8 +456,9 @@ export default function Board3DView({
                 part to a plate with its designator and what it is. Placed by
                 `place`, hidden until the renderer has projected its anchor. */}
             <svg ref={leaderRef} className={styles.leader} aria-hidden="true" style={{ display: 'none' }}>
+              <line ref={leaderShadowRef} className={styles.leaderShadow} />
               <line ref={leaderLineRef} className={styles.leaderLine} />
-              <circle ref={leaderDotRef} className={styles.leaderDot} r={4} />
+              <circle ref={leaderDotRef} className={styles.leaderDot} r={4.5} />
             </svg>
             {lines != null && (
               <div ref={calloutRef} className={styles.callout} data-callout={lines.title} hidden>

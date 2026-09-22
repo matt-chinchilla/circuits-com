@@ -127,13 +127,17 @@
 // part is. DOM, not WebGL text: no font goes near the canvas, and the plate
 // is positioned by the renderer through an inline transform each frame the
 // camera moves, never through React state. The plate is the canvas's own
-// dark with the silk's cream, and the leader is the selection cyan, so the
-// line and the lit part read as one thing. No glass, no glow: the callout is
-// the one bold element over the drawing, and it stays a plain plate.
+// dark with the silk's cream and a hairline of the selection cyan, which ties
+// it to the lit part. The leader itself is CREAM over a dark under-stroke: it
+// lands on the selected part, which is cyan, and a cyan line vanished there
+// (measured on J5 — the first cut drew it in the selection colour). No glass,
+// no glow: the callout is the one bold element over the drawing, and it
+// stays a plain plate.
 
 $callout-ink: #f2f0e6;
 $callout-plate: rgba(15, 21, 18, 0.88);
 $leader: #4fc3f7;
+$leader-shadow: rgba(10, 14, 12, 0.7);
 
 .leader {
   position: absolute;
@@ -145,16 +149,24 @@ $leader: #4fc3f7;
 }
 
 .leaderLine {
-  stroke: $leader;
-  stroke-width: 1.5;
-  stroke-opacity: 0.95;
-}
-
-// A cream rim on the dot, so it reads on copper, mask and a lit cyan body alike.
-.leaderDot {
-  fill: $leader;
   stroke: $callout-ink;
   stroke-width: 1.5;
+  stroke-linecap: round;
+}
+
+// The same segment under it, wider and dark, so the cream line has an edge
+// on the cream silkscreen and the pale tan bodies too.
+.leaderShadow {
+  stroke: $leader-shadow;
+  stroke-width: 4;
+  stroke-linecap: round;
+}
+
+// Cream, with a dark rim: on copper, mask, a tan chip and a lit cyan body alike.
+.leaderDot {
+  fill: $callout-ink;
+  stroke: $leader-shadow;
+  stroke-width: 2;
 }
 
 .callout {
