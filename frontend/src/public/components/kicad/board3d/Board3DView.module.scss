@@ -20,13 +20,24 @@
   }
 }
 
-// Top / Bottom / Flip / Reset, above the canvas rather than floating over it: they
-// are the tab's controls, not an overlay on a drawing, and a coarse pointer must
-// never have to choose between a button and an orbit gesture. One recessed track
-// — the same control the page's tab strip is — with the pressed view lit.
+// Above the canvas rather than floating over it: these are the tab's controls,
+// not an overlay on a drawing, and a coarse pointer must never have to choose
+// between a button and an orbit gesture. Two tracks at the two ends of one row
+// — Top / Bottom / Flip / Reset (where you look) at the left, the View mode
+// (what you see through) at the right — so they read as two things. On a phone
+// the row wraps and the View track takes its own line.
 .toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+
+// One recessed track — the same control the page's tab strip is — with the
+// pressed state lit.
+.track {
   display: inline-flex;
-  align-self: flex-start;
   gap: 2px;
   padding: 3px;
   background: linear-gradient(rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.28));
@@ -35,6 +46,21 @@
   box-shadow:
     inset 0 1px 2px rgba(60, 50, 90, 0.1),
     inset 0 0 0 1px rgba(255, 255, 255, 0.3);
+}
+
+// The word before the View track. Quiet: it names what the three states act
+// on, and nothing more.
+.viewGroup {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.trackLabel {
+  font-size: 0.8rem;
+  font-weight: 520;
+  color: #4b5158;
+  white-space: nowrap;
 }
 
 // 40px tall inside the track, so no hit-area expansion is needed and none can

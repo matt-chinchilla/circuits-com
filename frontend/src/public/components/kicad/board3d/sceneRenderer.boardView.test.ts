@@ -21,7 +21,7 @@ vi.mock('three', async (importOriginal) => {
 });
 
 import * as THREE from 'three';
-import { MATERIALS } from './board3dTheme';
+import { HIGHLIGHT_MATERIALS, MATERIALS, VIEW_MODE_LOOK } from './board3dTheme';
 import { createSceneRenderer, type SceneRenderer } from './sceneRenderer';
 
 /** Six triangles (18 indices) over one quad: enough for three class ranges. */
@@ -212,6 +212,42 @@ describe('state set before the meshes exist', () => {
     await r.mount(host, board(), 'full');
     expect(byName('silk/F.SilkS').visible).toBe(false);
     expect(groups(byName('copper/F.Cu'))).toEqual([[6, 3, 1], [9, 9, 0]]);
+  });
+});
+
+describe('the view mode', () => {
+  it('See-through caps the bodies, X-ray caps the mask too, Solid restores; the highlight is never capped', async () => {
+    await mounted();
+    const body = byName('body/'), mask = byName('mask/F.Mask');
+    expect(mats(body)[0].opacity).toBeCloseTo(MATERIALS.body.opacity);
+    r.setViewMode?.('see-through');
+    expect(mats(body)[0].opacity).toBeCloseTo(VIEW_MODE_LOOK['see-through'].body);
+    expect(mats(mask)[0].opacity).toBe(1);
+    expect(mats(mask)[0].transparent).toBe(false);
+    r.setViewMode?.('xray');
+    expect(mats(mask)[0].opacity).toBeCloseTo(VIEW_MODE_LOOK.xray.mask);
+    expect(mats(mask)[0].transparent).toBe(true);
+    expect(mats(mask)[0].depthWrite).toBe(false);
+    expect(mats(body)[0].opacity).toBeCloseTo(VIEW_MODE_LOOK.xray.body);
+    // The part the reader asked about keeps the highlight look, uncapped.
+    r.highlight?.('R1');
+    expect(mats(body)[1].opacity).toBeCloseTo(HIGHLIGHT_MATERIALS.body.opacity);
+    expect(groups(body)).toEqual([[0, 18, 1]]);
+    r.setViewMode?.('solid');
+    expect(mats(body)[0].opacity).toBeCloseTo(MATERIALS.body.opacity);
+    expect(mats(mask)[0].opacity).toBe(1);
+    expect(mats(mask)[0].transparent).toBe(false);
+    expect(mats(mask)[0].depthWrite).toBe(true);
+  });
+  it('multiplies with the Objects slider rather than replacing it, and the copper is never touched', async () => {
+    await mounted();
+    const body = byName('body/'), cu = byName('copper/F.Cu');
+    r.setObjectOpacity?.('bodies', 0.5);
+    r.setViewMode?.('see-through');
+    expect(mats(body)[0].opacity).toBeCloseTo(VIEW_MODE_LOOK['see-through'].body * 0.5);
+    r.setViewMode?.('xray');
+    expect(mats(cu)[0].opacity).toBe(1);
+    expect(mats(cu)[0].transparent).toBe(false);
   });
 });
 

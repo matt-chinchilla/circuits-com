@@ -17,7 +17,10 @@ import { fitDistance as fitDistanceFor, type Box3Like } from '@public/services/k
 import {
   classSlices, highlightSlices, netRangesOf, partAtFace, type IndexRange,
 } from '@public/services/kicad/board3d/partRanges';
-import { BACKGROUND, CAMERA, FLIP_MS, LIGHTS, MATERIALS, ORBIT, highlightSpecFor, type MaterialSpec } from './board3dTheme';
+import {
+  BACKGROUND, CAMERA, FLIP_MS, LIGHTS, MATERIALS, ORBIT, VIEW_MODE_LOOK, highlightSpecFor, type MaterialSpec,
+} from './board3dTheme';
+import { DEFAULT_VIEW_MODE, type ViewMode } from './viewMode';
 
 // Types from the dynamic imports themselves: a `typeof import(...)` is erased at
 // compile time, so the library is named for the type checker without any static
@@ -72,6 +75,9 @@ export interface SceneRenderer {
   /** The copper of net `net` in the highlight material, via the copper groups'
    *  net ranges; null (or 0, "no net") clears. */
   highlightNet?(net: number | null): void;
+  /** Solid, See-through or X-ray (`viewMode.ts`): caps the bodies' and the
+   *  mask's opacity per `VIEW_MODE_LOOK`. The highlighted part is never capped. */
+  setViewMode?(mode: ViewMode): void;
   /** Who to tell when the reader clicks a part (a designator) or empty board or
    *  sky (null). A click is a pointer-up within a few pixels of its pointer-down;
    *  an orbit drag never picks. */
@@ -146,17 +152,19 @@ const ease = (t: number) => t * t * (3 - 2 * t);
 
 type StandardMaterial = InstanceType<Three['MeshStandardMaterial']>;
 
-/** A material at `opacity` of its theme look: 1 is the theme exactly, 0 is not
- *  drawn. Anything below 1 blends and stops writing depth, or it would hide
- *  what is behind it while looking see-through. */
-function fade(material: StandardMaterial, spec: MaterialSpec, opacity: number): void {
+/** A material at `factor` of its theme look, under a `cap` (the view mode's):
+ *  1 and 1 is the theme exactly, a factor of 0 is not drawn. Anything below
+ *  full opacity blends and stops writing depth, or it would hide what is
+ *  behind it while looking see-through. */
+function fade(material: StandardMaterial, spec: MaterialSpec, factor: number, cap = 1): void {
+  const opacity = Math.min(spec.opacity, cap) * factor;
   const transparent = spec.transparent || opacity < 1;
   // Blending is compiled into the program; only a flip of it needs a rebuild.
   if (material.transparent !== transparent) material.needsUpdate = true;
   material.transparent = transparent;
-  material.opacity = spec.opacity * opacity;
+  material.opacity = opacity;
   material.depthWrite = spec.depthWrite && opacity >= 1;
-  material.visible = opacity > 0;
+  material.visible = factor > 0;
 }
 
 export function createSceneRenderer(options: SceneRendererOptions = {}): SceneRenderer {
@@ -189,6 +197,7 @@ export function createSceneRenderer(options: SceneRendererOptions = {}): SceneRe
   let highlightedLayer: string | null = null;
   let highlightedNet: number | null = null;
   const opacity = new Map<ObjectClass3D, number>();
+  let viewMode: ViewMode = DEFAULT_VIEW_MODE;
   let three: Three | null = null;
   let modelBox: Box3Like | null = null;
   let pickHandler: ((ref: string | null) => void) | null = null;
@@ -366,6 +375,13 @@ export function createSceneRenderer(options: SceneRendererOptions = {}): SceneRe
    * highlights re-sliced together, so they never fight over a range. A dozen
    * meshes and a few hundred ranges: cheap enough to redo on any change.
    */
+  /** The view mode's cap on a material's opacity: bodies and the mask are
+   *  what See-through and X-ray fade; everything else is left at 1. */
+  const capOf = (material: Material): number => {
+    const look = VIEW_MODE_LOOK[viewMode];
+    return material === 'body' ? look.body : material === 'mask' ? look.mask : 1;
+  };
+
   function applyView(): void {
     for (const d of drawn) {
       const { group } = d;
@@ -373,7 +389,7 @@ export function createSceneRenderer(options: SceneRendererOptions = {}): SceneRe
       const own = kind == null ? 1 : opacityOf(kind);
       const layerHidden = group.layerName != null && !NEVER_HIDDEN.has(group.material) && hiddenLayers.has(group.layerName);
       d.mesh.visible = !layerHidden && own > 0;
-      if (kind != null) fade(d.base, MATERIALS[group.material], own);
+      if (kind != null) fade(d.base, MATERIALS[group.material], own, capOf(group.material));
 
       /** Each class's material index for this pass: null = not drawn (opacity
        *  0, and a highlight must not bring it back); 0 = the group's own
@@ -594,6 +610,12 @@ export function createSceneRenderer(options: SceneRendererOptions = {}): SceneRe
     highlightNet(net) {
       // Net 0 is KiCad's "no net": lighting it would light every unconnected pad.
       highlightedNet = net == null || net <= 0 ? null : net;
+      applyView();
+    },
+
+    setViewMode(mode) {
+      if (mode === viewMode) return;
+      viewMode = mode;
       applyView();
     },
 

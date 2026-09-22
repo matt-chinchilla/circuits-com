@@ -11,6 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { BoardScene } from '@public/services/kicad/board3d/types';
 import type { KicadProject } from '@public/services/kicad/types';
 import { resetWebgl2ProbeForTests } from '../webgl';
+import { VIEW_MODE_STORAGE_KEY, resetViewModeForTests } from './viewMode';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -29,10 +30,12 @@ function fakeRenderer() {
   const r = {
     mounted: 0, disposed: 0, views: [] as string[], flips: 0,
     highlights: [] as (string | null)[],
+    modes: [] as string[],
     pick: null as ((ref: string | null) => void) | null,
     mount: async () => { r.mounted++; }, setView: (v: string) => { r.views.push(v); }, flip: () => { r.flips++; },
     pause: () => {}, resume: () => {}, dispose: () => { r.disposed++; }, info: () => ({ calls: 0, triangles: 0, pickMs: 0 }),
     highlight: (ref: string | null) => { r.highlights.push(ref); },
+    setViewMode: (mode: string) => { r.modes.push(mode); },
     onPick: (h: ((ref: string | null) => void) | null) => { r.pick = h; },
   };
   return r;
@@ -40,7 +43,10 @@ function fakeRenderer() {
 function setWebgl(ok: boolean) { resetWebgl2ProbeForTests(); HTMLCanvasElement.prototype.getContext = (() => (ok ? { getExtension: () => null } : null)) as never; }
 
 let root: Root, el: HTMLDivElement;
-beforeEach(() => { el = document.createElement('div'); document.body.appendChild(el); root = createRoot(el); setWebgl(true); });
+beforeEach(() => {
+  el = document.createElement('div'); document.body.appendChild(el); root = createRoot(el); setWebgl(true);
+  localStorage.clear(); resetViewModeForTests();
+});
 afterEach(() => { act(() => root.unmount()); el.remove(); });
 
 describe('Board3DView', () => {
@@ -251,6 +257,63 @@ describe('Board3DView — the Board panel state (spec 2026-09-22 §2.4)', () => 
   });
 });
 
+describe('Board3DView — the View toggle (Solid / See-through / X-ray)', () => {
+  const mount = (r: object, quality: 'full' | 'reduced' = 'full') =>
+    act(async () => { root.render(createElement(Board3DView, { project, stackup: null, createRenderer: () => r as never, quality })); });
+  const viewGroup = () => el.querySelector('[role="group"][aria-labelledby]')!;
+  const buttons = () => [...viewGroup().querySelectorAll('button')];
+
+  it('offers the three states under a visible "View" label, pressed per the stored choice', async () => {
+    localStorage.setItem(VIEW_MODE_STORAGE_KEY, 'see-through');
+    const r = fakeRenderer();
+    await mount(r);
+    expect(buttons().map((b) => b.textContent)).toEqual(['Solid', 'See-through', 'X-ray']);
+    expect(document.getElementById(viewGroup().getAttribute('aria-labelledby')!)?.textContent).toBe('View');
+    expect(buttons().map((b) => b.getAttribute('aria-pressed'))).toEqual(['false', 'true', 'false']);
+    // Every button says what it does, for a mouse reader who pauses on it.
+    for (const b of buttons()) expect(b.getAttribute('title')?.length).toBeGreaterThan(10);
+  });
+  it('tells the renderer the stored mode before the first frame, and every change after', async () => {
+    localStorage.setItem(VIEW_MODE_STORAGE_KEY, 'see-through');
+    const r = fakeRenderer();
+    await mount(r);
+    expect(r.modes[0]).toBe('see-through');
+    expect(new Set(r.modes)).toEqual(new Set(['see-through']));
+    await act(async () => { buttons()[2].click(); });
+    expect(r.modes.at(-1)).toBe('xray');
+    expect(buttons().map((b) => b.getAttribute('aria-pressed'))).toEqual(['false', 'false', 'true']);
+    expect(localStorage.getItem(VIEW_MODE_STORAGE_KEY)).toBe('xray');
+  });
+  it('remembers the choice for the next visit', async () => {
+    const r1 = fakeRenderer();
+    await mount(r1);
+    await act(async () => { buttons()[1].click(); });
+    act(() => root.unmount());
+    root = createRoot(el);
+    resetViewModeForTests();
+    const r2 = fakeRenderer();
+    await mount(r2);
+    expect(r2.modes[0]).toBe('see-through');
+    expect(buttons()[1].getAttribute('aria-pressed')).toBe('true');
+  });
+  it('on the reduced tier the toggle is still offered and the caption says what is left for it to do', async () => {
+    state.scene = scene([], false);
+    const r = fakeRenderer();
+    await mount(r, 'reduced');
+    expect(buttons()).toHaveLength(3);
+    expect(el.querySelector('[role="note"]')?.textContent).toContain('See-through and X-ray fade the solder mask only.');
+    state.scene = scene([]);
+  });
+  it('a renderer without the member is simply not asked', async () => {
+    const r = fakeRenderer() as Partial<ReturnType<typeof fakeRenderer>>;
+    delete r.setViewMode;
+    await mount(r);
+    await act(async () => { buttons()[2].click(); });
+    expect(el.querySelector('[role="alert"]')).toBeNull();
+    expect(buttons()[2].getAttribute('aria-pressed')).toBe('true');
+  });
+});
+
 // Class names are echoed back by vitest's CSS-off module proxy, so they prove
 // nothing about the stylesheet. This one reads the SOURCE: the canvas has no
 // content of its own, so without a reserved height the 3D tab is a 0px box.
@@ -269,5 +332,10 @@ describe('the stylesheet the frame depends on', () => {
   it('gives the canvas host its own paintable box', () => {
     expect(scss).toMatch(/\.canvasHost \{[^{}]*flex:\s*1 1 auto/);
     expect(scss).toMatch(/\.canvasHost \{[^{}]*min-height:\s*0/);
+  });
+  it('lays the two toolbar tracks at the two ends of one wrapping row', () => {
+    expect(scss).toMatch(/\.toolbar \{[^{}]*flex-wrap:\s*wrap/);
+    expect(scss).toMatch(/\.toolbar \{[^{}]*justify-content:\s*space-between/);
+    expect(scss).toMatch(/\.track \{[^{}]*border-radius:\s*13px/);
   });
 });

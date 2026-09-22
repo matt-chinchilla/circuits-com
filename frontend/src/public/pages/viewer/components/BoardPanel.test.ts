@@ -11,6 +11,7 @@ import { act, createElement, createRef, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { NetInfo } from '@public/components/kicad/canvasController';
+import { getViewMode, resetViewModeForTests } from '@public/components/kicad/board3d/viewMode';
 import { EMPTY_BOARD_VIEW, type BoardViewState, type PanelLayer } from '../boardView';
 import type { PartFacts } from '../partFacts';
 import BoardPanel, { SHEET_QUERY, type BoardPanelHandle } from './BoardPanel';
@@ -259,6 +260,28 @@ describe('Objects', () => {
     await render({ context: 'board3d' });
     expect(rangeFor('Bodies')).not.toBeNull();
     expect([...container.querySelectorAll('label')].some((l) => l.textContent === 'Grid')).toBe(false);
+  });
+
+  it('on the 3D tab mirrors the View toggle with its help line; the Board tab has none', async () => {
+    localStorage.clear();
+    resetViewModeForTests();
+    await render({ context: 'board3d' });
+    await click(tab('Objects'));
+    const group = container.querySelector('[role="group"][aria-labelledby]')!;
+    expect(document.getElementById(group.getAttribute('aria-labelledby')!)?.textContent).toBe('View');
+    const buttons = [...group.querySelectorAll('button')];
+    expect(buttons.map((b) => b.textContent)).toEqual(['Solid', 'See-through', 'X-ray']);
+    expect(buttons.map((b) => b.getAttribute('aria-pressed'))).toEqual(['true', 'false', 'false']);
+    expect(container.textContent).toContain('Bodies and solder mask as they are.');
+    await click(buttons[2]);
+    // The one store the toolbar over the canvas reads too.
+    expect(getViewMode()).toBe('xray');
+    expect(buttons[2].getAttribute('aria-pressed')).toBe('true');
+    expect(container.textContent).toContain('Bodies and solder mask faded, so the copper shows.');
+    await render({ context: 'board' });
+    expect(container.querySelector('[role="group"][aria-labelledby]')).toBeNull();
+    resetViewModeForTests();
+    localStorage.clear();
   });
 });
 

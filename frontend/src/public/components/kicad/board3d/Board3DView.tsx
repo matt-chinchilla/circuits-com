@@ -6,7 +6,7 @@
 //
 // It never touches three, a canvas or a geometry. Everything goes through the
 // SceneRenderer seam, which is also what lets the tests drive it with a fake.
-import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 import type { BoardScene, Quality } from '@public/services/kicad/board3d/types';
 import type { BoardStackup, KicadProject } from '@public/services/kicad/types';
 import { webgl2Supported } from '../webgl';
@@ -14,6 +14,7 @@ import { ORBIT } from './board3dTheme';
 import { currentQuality } from './quality';
 import { createSceneRenderer, type ObjectClass3D, type SceneRenderer, type ViewName } from './sceneRenderer';
 import { useBoardScene } from './useBoardScene';
+import { VIEW_MODES, getViewMode, setViewMode, useViewMode } from './viewMode';
 import styles from './Board3DView.module.scss';
 
 export interface Board3DViewProps {
@@ -113,8 +114,9 @@ export function captionOf(scene: BoardScene, quality: Quality = 'full'): string 
     // Nothing was attempted, so nothing is disclaimed — but a reader seeing a
     // bare board needs to know the bodies are missing by design, and that the
     // pads still answer. Device-neutral: the reduced tier is a narrow window OR
-    // a dense display, and a mouse reader must not be told to "tap".
-    parts.push('Component bodies are not drawn on this display. Select a pad to identify a part.');
+    // a dense display, and a mouse reader must not be told to "tap". The view
+    // toggle is still offered here, so it says what is left for it to do.
+    parts.push('Component bodies are not drawn on this display. Select a pad to identify a part. See-through and X-ray fade the solder mask only.');
   }
   const has = (kind: BoardScene['warnings'][number]['kind']) => scene.warnings.some((w) => w.kind === kind);
   if (has('no-stackup')) parts.push('Layer thicknesses are not in this file.');
@@ -165,6 +167,8 @@ export default function Board3DView({
   const hostRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<SceneRenderer | null>(null);
   const [view, setView] = useState<'top' | 'bottom' | null>(null);
+  const viewMode = useViewMode();
+  const viewLabelId = useId();
   /** Bumped when a renderer has mounted, so the highlight effect below re-runs
    *  against the live one rather than the null it saw before. */
   const [live, setLive] = useState(0);
@@ -194,9 +198,11 @@ export default function Board3DView({
     const renderer = (createRenderer ?? createSceneRenderer)();
     rendererRef.current = renderer;
     // Given before mount, so the renderer builds its meshes already in this
-    // state and the first frame never flashes a hidden layer.
+    // state and the first frame never flashes a hidden layer — or a solid body
+    // on a board the reader left see-through.
     applyBoardView(renderer, null, boardViewRef.current);
     appliedRef.current = boardViewRef.current;
+    renderer.setViewMode?.(getViewMode());
     let cancelled = false;
     renderer.onPick?.((ref) => {
       if (cancelled) return;
@@ -256,6 +262,10 @@ export default function Board3DView({
   }, [selectedRef, live]);
 
   useEffect(() => {
+    rendererRef.current?.setViewMode?.(viewMode);
+  }, [viewMode, live]);
+
+  useEffect(() => {
     const renderer = rendererRef.current;
     if (renderer == null) return;
     applyBoardView(renderer, appliedRef.current, boardViewRef.current);
@@ -294,19 +304,44 @@ export default function Board3DView({
   return (
     <div className={styles.wrap}>
       {ready && (
-        <div className={styles.toolbar} role="group" aria-label="Board view">
-          <button type="button" className={styles.ctl} aria-pressed={view === 'top'} onClick={() => go('top')}>
-            Top
-          </button>
-          <button type="button" className={styles.ctl} aria-pressed={view === 'bottom'} onClick={() => go('bottom')}>
-            Bottom
-          </button>
-          <button type="button" className={styles.ctl} onClick={() => rendererRef.current?.flip()}>
-            Flip
-          </button>
-          <button type="button" className={styles.ctl} onClick={() => go('reset')}>
-            Reset
-          </button>
+        <div className={styles.toolbar}>
+          <div className={styles.track} role="group" aria-label="Board view">
+            <button type="button" className={styles.ctl} aria-pressed={view === 'top'} onClick={() => go('top')}>
+              Top
+            </button>
+            <button type="button" className={styles.ctl} aria-pressed={view === 'bottom'} onClick={() => go('bottom')}>
+              Bottom
+            </button>
+            <button type="button" className={styles.ctl} onClick={() => rendererRef.current?.flip()}>
+              Flip
+            </button>
+            <button type="button" className={styles.ctl} onClick={() => go('reset')}>
+              Reset
+            </button>
+          </div>
+          {/* Solid / See-through / X-ray. Named "View" and not "Bodies": on the
+              reduced tier there are no bodies and the same three states fade
+              the solder mask alone (the caption says so). Mirrored on the Objects
+              tab; both read and write the one store in viewMode.ts. */}
+          <div className={styles.viewGroup}>
+            <span id={viewLabelId} className={styles.trackLabel}>
+              View
+            </span>
+            <div className={styles.track} role="group" aria-labelledby={viewLabelId}>
+              {VIEW_MODES.map((mode) => (
+                <button
+                  key={mode.id}
+                  type="button"
+                  className={styles.ctl}
+                  aria-pressed={viewMode === mode.id}
+                  title={mode.help}
+                  onClick={() => setViewMode(mode.id)}
+                >
+                  {mode.label}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       )}
       <div

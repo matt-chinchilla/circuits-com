@@ -325,6 +325,32 @@ $row-fine: 36px;
   white-space: nowrap;
 }
 
+// ─── The 3D view mode (Objects tab, 3D only) ──────────────────────────────
+// The toolbar's Solid / See-through / X-ray again, at the panel's scale, with
+// its help line under it. The word "View" is the same one the toolbar uses.
+
+.modeBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid $hair;
+}
+
+.modeRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+
+.modeLabel {
+  font-size: 0.8rem;
+  font-weight: 520;
+  color: $ink-2;
+  white-space: nowrap;
+}
+
 // ─── One object class ─────────────────────────────────────────────────────
 
 // The row reads left to right as Altium's does: the box, the class's glyph,

@@ -4,6 +4,7 @@
 // so the Board tab and the 3D tab can never disagree about what is hidden.
 import { useId, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import type { NetInfo } from '@public/components/kicad/canvasController';
+import { VIEW_MODES, setViewMode, useViewMode, viewModeOption } from '@public/components/kicad/board3d/viewMode';
 import {
   CLASSES_2D,
   CLASSES_3D,
@@ -254,11 +255,46 @@ function ClassControl({ row, view, onChange, last }: {
   );
 }
 
+/**
+ * The 3D tab's Solid / See-through / X-ray, mirrored from the toolbar over the
+ * canvas: the same store, so pressing one here lights it there. The help line
+ * under it is the current mode's — what a learner reads to know what the board
+ * is now showing them.
+ */
+function ViewModeControl() {
+  const id = useId();
+  const mode = useViewMode();
+  return (
+    <div className={styles.modeBlock}>
+      <div className={styles.modeRow}>
+        <span id={id} className={styles.modeLabel}>
+          View
+        </span>
+        <div className={styles.seg} role="group" aria-labelledby={id}>
+          {VIEW_MODES.map((option) => (
+            <button
+              key={option.id}
+              type="button"
+              className={styles.segBtn}
+              aria-pressed={mode === option.id}
+              onClick={() => setViewMode(option.id)}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <p className={styles.help}>{viewModeOption(mode).help}</p>
+    </div>
+  );
+}
+
 export function ObjectsTab({ context, nets, view, onChange }: ObjectsTabProps) {
   const last = useRef(new Map<ObjectClass, number>()).current;
   const rows: readonly ClassRow<ObjectClass>[] = context === 'board' ? CLASSES_2D : CLASSES_3D;
   return (
     <div className={styles.section}>
+      {context === 'board3d' && <ViewModeControl />}
       <ul className={styles.list} aria-label="Objects">
         {rows.map((row) => (
           <ClassControl key={row.kind} row={row} view={view} onChange={onChange} last={last} />

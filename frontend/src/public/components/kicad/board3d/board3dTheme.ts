@@ -7,6 +7,7 @@
 // a theme variable would have to be read out of the DOM at mount and re-read on
 // every theme change for a canvas that is already un-themed chrome.
 import type { Material } from '@public/services/kicad/board3d/types';
+import type { ViewMode } from './viewMode';
 
 export interface MaterialSpec {
   color: number;
@@ -69,6 +70,27 @@ export const HIGHLIGHT_MATERIALS: Record<'body' | 'copper' | 'surface', Highligh
     color: HIGHLIGHT, emissive: HIGHLIGHT, emissiveIntensity: 0.45,
     roughness: 0.7, metalness: 0, opacity: 1, transparent: false, depthWrite: true,
   },
+};
+
+/**
+ * What each view mode does to the board's opacities (owner, 2026-09-22: a
+ * "transparency mode"). Each value CAPS a material's own opacity — the
+ * smoked-glass body stays at .55 in Solid and drops to the cap in See-through;
+ * an opaque mask is untouched until X-ray. The Objects tab's sliders multiply
+ * on top, and the selected part's highlight material is never capped: in a
+ * see-through board the part the reader asked about stays the solid one.
+ */
+export interface ViewModeLook {
+  /** Cap on every body's opacity. */
+  body: number;
+  /** Cap on the solder mask's opacity. */
+  mask: number;
+}
+
+export const VIEW_MODE_LOOK: Record<ViewMode, ViewModeLook> = {
+  solid: { body: 1, mask: 1 },
+  'see-through': { body: 0.22, mask: 1 },
+  xray: { body: 0.16, mask: 0.3 },
 };
 
 /** The highlight a group of this material takes. */
