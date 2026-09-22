@@ -26,6 +26,13 @@ export interface Board3DViewProps {
   createRenderer?: () => SceneRenderer;
   /** Overrides the device heuristic, which is otherwise decided once at mount. */
   quality?: Quality;
+  /** The designator to draw highlighted, or null/undefined for none. Applied
+   *  whenever it changes and again when a renderer mounts, so a selection made
+   *  on another tab is already lit when this one opens. */
+  selectedRef?: string | null;
+  /** The reader clicked a part (its designator) or nothing (null). Held through
+   *  a ref like `createRenderer`, so an inline arrow cannot remount the renderer. */
+  onSelect?: (ref: string | null) => void;
 }
 
 /**
@@ -47,10 +54,15 @@ const DOT = ' · ';
  * is NOT, which is why the order is pinned by a test rather than left to however
  * the warnings happened to be appended.
  */
-export function captionOf(scene: BoardScene): string {
+export function captionOf(scene: BoardScene, quality: Quality = 'full'): string {
   const parts: string[] = [];
   if (scene.groups.some((g) => g.material === 'body')) {
     parts.push('Component bodies are estimates from courtyards, not part shapes.');
+  } else if (quality === 'reduced') {
+    // Nothing was attempted, so nothing is disclaimed — but a phone reader
+    // seeing a bare board needs to know the bodies are missing by design, and
+    // that the pads still answer a tap.
+    parts.push('Component bodies are not drawn at this size. Tap a pad to identify a part.');
   }
   const has = (kind: BoardScene['warnings'][number]['kind']) => scene.warnings.some((w) => w.kind === kind);
   if (has('no-stackup')) parts.push('Layer thicknesses are not in this file.');
@@ -77,7 +89,7 @@ const statsLine = (stats: BoardScene['stats']): string =>
     `built in ${Math.round(stats.buildMs)} ms`,
   ].join(DOT);
 
-export default function Board3DView({ project, stackup, createRenderer, quality }: Board3DViewProps) {
+export default function Board3DView({ project, stackup, createRenderer, quality, selectedRef, onSelect }: Board3DViewProps) {
   const supported = webgl2Supported();
   // Decided ONCE, at mount (spec §6): a window the visitor drags wider must not
   // silently re-tessellate the board underneath them.
@@ -92,6 +104,13 @@ export default function Board3DView({ project, stackup, createRenderer, quality 
   const hostRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<SceneRenderer | null>(null);
   const [view, setView] = useState<'top' | 'bottom' | null>(null);
+  /** Bumped when a renderer has mounted, so the highlight effect below re-runs
+   *  against the live one rather than the null it saw before. */
+  const [live, setLive] = useState(0);
+  const onSelectRef = useRef(onSelect);
+  onSelectRef.current = onSelect;
+  const selectedRefRef = useRef(selectedRef ?? null);
+  selectedRefRef.current = selectedRef ?? null;
 
   useEffect(() => {
     if (!supported || status !== 'ready' || scene == null) return;
@@ -100,6 +119,9 @@ export default function Board3DView({ project, stackup, createRenderer, quality 
     const renderer = (createRenderer ?? createSceneRenderer)();
     rendererRef.current = renderer;
     let cancelled = false;
+    renderer.onPick?.((ref) => {
+      if (!cancelled) onSelectRef.current?.(ref);
+    });
     void renderer
       .mount(host, scene, tier)
       .then(() => {
@@ -111,6 +133,8 @@ export default function Board3DView({ project, stackup, createRenderer, quality 
         host.dataset.calls = String(drawn.calls);
         host.dataset.triangles = String(drawn.triangles);
         host.dataset.buildMs = String(Math.round(scene.stats.buildMs));
+        renderer.highlight?.(selectedRefRef.current);
+        setLive((n) => n + 1);
       })
       .catch(() => undefined);
     return () => {
@@ -119,6 +143,10 @@ export default function Board3DView({ project, stackup, createRenderer, quality 
       renderer.dispose();
     };
   }, [supported, status, scene, tier]);
+
+  useEffect(() => {
+    rendererRef.current?.highlight?.(selectedRef ?? null);
+  }, [selectedRef, live]);
 
   // A hidden tab must not burn a frame budget on an orbit nobody can see.
   useEffect(() => {
@@ -151,7 +179,7 @@ export default function Board3DView({ project, stackup, createRenderer, quality 
   };
 
   const ready = supported && status === 'ready' && scene != null;
-  const caption = scene == null ? '' : captionOf(scene);
+  const caption = scene == null ? '' : captionOf(scene, tier);
   return (
     <div className={styles.wrap}>
       {ready && (

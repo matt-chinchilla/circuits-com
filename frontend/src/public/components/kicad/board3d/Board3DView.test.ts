@@ -26,7 +26,15 @@ import Board3DView from './Board3DView';
 
 const project = { name: 'p', files: new Map(), board: 'b.kicad_pcb', sheets: [], root: null } as unknown as KicadProject;
 function fakeRenderer() {
-  const r = { mounted: 0, disposed: 0, views: [] as string[], flips: 0, mount: async () => { r.mounted++; }, setView: (v: string) => { r.views.push(v); }, flip: () => { r.flips++; }, pause: () => {}, resume: () => {}, dispose: () => { r.disposed++; }, info: () => ({ calls: 0, triangles: 0 }) };
+  const r = {
+    mounted: 0, disposed: 0, views: [] as string[], flips: 0,
+    highlights: [] as (string | null)[],
+    pick: null as ((ref: string | null) => void) | null,
+    mount: async () => { r.mounted++; }, setView: (v: string) => { r.views.push(v); }, flip: () => { r.flips++; },
+    pause: () => {}, resume: () => {}, dispose: () => { r.disposed++; }, info: () => ({ calls: 0, triangles: 0 }),
+    highlight: (ref: string | null) => { r.highlights.push(ref); },
+    onPick: (h: ((ref: string | null) => void) | null) => { r.pick = h; },
+  };
   return r;
 }
 function setWebgl(ok: boolean) { resetWebgl2ProbeForTests(); HTMLCanvasElement.prototype.getContext = (() => (ok ? { getExtension: () => null } : null)) as never; }
@@ -71,6 +79,27 @@ describe('Board3DView', () => {
     act(() => root.unmount());
     expect(r.disposed).toBe(1);
     root = createRoot(el); // afterEach unmounts again harmlessly
+  });
+  it('lights the selected part once the renderer is live, follows changes, and reports picks', async () => {
+    const r = fakeRenderer();
+    const picked: (string | null)[] = [];
+    const render = (selectedRef: string | null) =>
+      root.render(createElement(Board3DView, { project, stackup: null, createRenderer: () => r as never, quality: 'full', selectedRef, onSelect: (ref: string | null) => picked.push(ref) }));
+    await act(async () => { render('U30'); });
+    // Applied on mount (the ref was set before the renderer existed), not lost.
+    expect(r.highlights.at(-1)).toBe('U30');
+    await act(async () => { render('C7'); });
+    expect(r.highlights.at(-1)).toBe('C7');
+    await act(async () => { render(null); });
+    expect(r.highlights.at(-1)).toBeNull();
+    act(() => { r.pick?.('R1'); r.pick?.(null); });
+    expect(picked).toEqual(['R1', null]);
+  });
+  it('a reduced-tier board says its bodies are not drawn and that pads still answer', async () => {
+    state.scene = scene([], false);
+    await act(async () => { root.render(createElement(Board3DView, { project, stackup: null, createRenderer: () => fakeRenderer() as never, quality: 'reduced' })); });
+    expect(el.querySelector('[role="note"]')?.textContent).toContain('Component bodies are not drawn at this size');
+    state.scene = scene([]);
   });
   it('shows the no-WebGL copy and never mounts', async () => {
     setWebgl(false);

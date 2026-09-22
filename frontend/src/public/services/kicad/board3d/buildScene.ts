@@ -19,7 +19,7 @@ import { readBoardModel } from './readBoardModel';
 import { MeshBuilder } from './tessellate';
 import {
   TOL_MM, type BoardModel, type BoardScene, type BoardWarning, type Material,
-  type MeshGroup, type Placement, type Quality, type Ring, type Shape, type Side, type Vec2,
+  type MeshGroup, type PartRange, type Placement, type Quality, type Ring, type Shape, type Side, type Vec2,
 } from './types';
 
 export interface BuildInput { text: string; stackup: BoardStackup | null; quality: Quality }
@@ -199,8 +199,20 @@ export function buildSceneFromModel(
 
   const groups: MeshGroup[] = [];
   const builder = () => new MeshBuilder(true, centre);
-  const emit = (b: MeshBuilder, material: Material, layerName: string | null): void => {
-    if (b.indices.length > 0) groups.push(b.build(material, layerName));
+  const emit = (b: MeshBuilder, material: Material, layerName: string | null, parts?: PartRange[]): void => {
+    if (b.indices.length === 0) return;
+    const group = b.build(material, layerName);
+    if (parts != null && parts.length > 0) group.parts = parts;
+    groups.push(group);
+  };
+  /** Run `draw` and record which slice of the builder's indices it produced for
+   *  `ref` — a picker's map from a hit triangle back to a footprint. An empty
+   *  slice (a footprint with no pads on this layer) records nothing. */
+  const ranged = (b: MeshBuilder, parts: PartRange[], ref: string, draw: () => void): void => {
+    const start = b.indices.length;
+    draw();
+    const count = b.indices.length - start;
+    if (count > 0) parts.push({ ref, start, count });
   };
 
   // Substrate: capped top and bottom, walled around the outline. The hole walls go
@@ -225,17 +237,22 @@ export function buildSceneFromModel(
     const z = copperZ[side];
 
     // Computed once and used twice: the copper slab draws these, and the mask
-    // subtracts the same rings as its openings.
+    // subtracts the same rings as its openings. Pads are drawn FIRST and per
+    // footprint, so each footprint's pads are one contiguous slice of the group's
+    // indices — the range a pick maps a hit triangle back through.
     const padRings: Ring[] = [];
-    for (const fp of model.footprints) {
-      for (const pad of fp.pads) {
-        if (!pad.layers.includes(cuName) || !(pad.size.x > 0) || !(pad.size.y > 0)) continue;
-        padRings.push(placedPadRing(pad, fp.place, tol));
-      }
-    }
-
     const copper = builder();
-    for (const ring of padRings) copper.addFace({ outer: ring, holes: [] }, z, up);
+    const padParts: PartRange[] = [];
+    for (const fp of model.footprints) {
+      ranged(copper, padParts, fp.ref, () => {
+        for (const pad of fp.pads) {
+          if (!pad.layers.includes(cuName) || !(pad.size.x > 0) || !(pad.size.y > 0)) continue;
+          const ring = placedPadRing(pad, fp.place, tol);
+          padRings.push(ring);
+          copper.addFace({ outer: ring, holes: [] }, z, up);
+        }
+      });
+    }
     for (const track of model.tracks) {
       if (track.layer !== cuName || !(track.width > 0)) continue;
       if (quality === 'reduced' && track.width < MIN_TRACK_MM) continue;
@@ -244,7 +261,7 @@ export function buildSceneFromModel(
     for (const zone of model.zones) {
       if (zone.layer === cuName) copper.addFace({ outer: zone.ring, holes: [] }, z, up);
     }
-    emit(copper, 'copper', cuName);
+    emit(copper, 'copper', cuName, padParts);
 
     const openings = prune(padRings);
     holesMerged += openings.dropped;
@@ -278,11 +295,14 @@ export function buildSceneFromModel(
   if (quality === 'full') {
     const { bodies, missing } = courtyards(model, tol);
     const bodyMesh = builder();
+    const bodyParts: PartRange[] = [];
     for (const body of bodies) {
       const base = maskZ[body.side];
-      bodyMesh.addPrism({ outer: body.ring, holes: [] }, base, body.side === 'F' ? base + body.heightMm : base - body.heightMm);
+      ranged(bodyMesh, bodyParts, body.ref, () => {
+        bodyMesh.addPrism({ outer: body.ring, holes: [] }, base, body.side === 'F' ? base + body.heightMm : base - body.heightMm);
+      });
     }
-    emit(bodyMesh, 'body', null);
+    emit(bodyMesh, 'body', null, bodyParts);
     if (missing > 0) warnings.push({ kind: 'no-courtyard', count: missing });
   }
 

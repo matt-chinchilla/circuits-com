@@ -43,7 +43,17 @@ export interface BoardModel {
   silk: ShapeOnLayer[]; warnings: BoardWarning[];
 }
 export type Material = 'substrate' | 'copper' | 'mask' | 'silk' | 'body' | 'hole-wall';
-export interface MeshGroup { material: Material; layerName: string | null; positions: Float32Array; normals: Float32Array; indices: Uint32Array }
+/** The slice of a group's `indices` that belongs to one footprint: `start` is an
+ *  offset INTO `indices` (not a triangle number), `count` is how many indices —
+ *  always a multiple of 3. Ranges are contiguous and ascending by construction. */
+export interface PartRange { ref: string; start: number; count: number }
+export interface MeshGroup {
+  material: Material; layerName: string | null; positions: Float32Array; normals: Float32Array; indices: Uint32Array;
+  /** Which footprint each triangle belongs to, for the groups that draw per-part
+   *  geometry (bodies at `full`; pads on every copper layer). Absent on a group
+   *  that draws nothing a reader can pick — substrate, mask, silk, hole walls. */
+  parts?: PartRange[];
+}
 export interface BoardScene {
   bounds: { min: Vec2; max: Vec2 }; thicknessMm: number | null; groups: MeshGroup[]; warnings: BoardWarning[];
   stats: { footprints: number; pads: number; vias: number; tracks: number; triangles: number; buildMs: number };

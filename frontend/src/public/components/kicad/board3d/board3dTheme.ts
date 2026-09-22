@@ -38,6 +38,34 @@ export const MATERIALS: Record<Material, MaterialSpec> = {
 };
 
 /**
+ * The selected footprint, lit from within so it reads at any orbit and against
+ * either the mask green or the copper. Cyan is the colour EDA tools have used
+ * for "selected" since KiCad 5's own highlight, and it sits away from every
+ * material on the board (copper orange, mask green, silk cream, body smoke) —
+ * a reader never has to ask whether a part is selected or merely bright.
+ * `emissive` is what makes it independent of the lights; the colour is also
+ * the base so a lit face and a shadowed one are the same hue.
+ */
+export const HIGHLIGHT = 0x4fc3f7;
+
+export interface HighlightSpec extends MaterialSpec {
+  emissive: number;
+  emissiveIntensity: number;
+}
+
+/** Per material that can carry a selection: the body block and the pads. */
+export const HIGHLIGHT_MATERIALS: Record<'body' | 'copper', HighlightSpec> = {
+  body: {
+    color: HIGHLIGHT, emissive: HIGHLIGHT, emissiveIntensity: 0.55,
+    roughness: 0.5, metalness: 0, opacity: 0.88, transparent: true, depthWrite: false,
+  },
+  copper: {
+    color: HIGHLIGHT, emissive: HIGHLIGHT, emissiveIntensity: 0.5,
+    roughness: 0.4, metalness: 0.2, opacity: 1, transparent: false, depthWrite: true,
+  },
+};
+
+/**
  * One directional light parented to the camera so it travels with the view — a
  * fixed light leaves half of an orbited board black — plus a hemisphere fill so
  * the shadowed side is readable. No shadow maps, no environment map, no
@@ -52,8 +80,9 @@ export const CAMERA = {
   fov: 35,
   elevationDeg: 35,
   azimuthDeg: 30,
-  /** Slack around the board's diagonal so the framing never clips a corner. */
-  fitMargin: 1.18,
+  /** Slack beyond an exact fit of the board's corners to the canvas edges (see
+   *  `services/kicad/board3d/framing.ts`); 1 is edge to edge. */
+  fitMargin: 1.04,
   /** Straight down would put the view axis on the up vector and the roll would be
    *  undefined; one degree off is indistinguishable and stable. */
   poleDeg: 89,

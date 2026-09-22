@@ -53,10 +53,38 @@ describe('buildScene — Glasgow', () => {
     // courtyards.test.ts pins.
     expect(s.warnings.find((w) => w.kind === 'no-courtyard')).toEqual({ kind: 'no-courtyard', count: 8 });
   });
+  it('records which footprint owns each body and pad triangle, so a pick can name it', () => {
+    const body = s.groups.find((g) => g.material === 'body')!;
+    expect(body.parts).toBeDefined();
+    // 264 courtyard bodies, one range each, tiling the group in order.
+    expect(body.parts).toHaveLength(264);
+    let cursor = 0;
+    for (const r of body.parts!) {
+      expect(r.start).toBe(cursor);
+      expect(r.count % 3).toBe(0);
+      cursor += r.count;
+    }
+    expect(cursor).toBe(body.indices.length);
+    expect(body.parts!.map((r) => r.ref)).toContain('U30');
+
+    const fcu = s.groups.find((g) => g.material === 'copper' && g.layerName === 'F.Cu')!;
+    const bcu = s.groups.find((g) => g.material === 'copper' && g.layerName === 'B.Cu')!;
+    // Pads come first, per footprint; tracks and pours follow with no owner.
+    const refs = new Set(fcu.parts!.map((r) => r.ref));
+    expect(refs.has('U30')).toBe(true);
+    expect(fcu.parts!.at(-1)!.start + fcu.parts!.at(-1)!.count).toBeLessThan(fcu.indices.length);
+    // A through-hole part's pads are on BOTH copper layers; U30 (a BGA) is on one.
+    expect(bcu.parts!.some((r) => r.ref === 'U30')).toBe(false);
+    // No table on the groups nobody can pick.
+    for (const g of s.groups) if (g.material !== 'body' && g.material !== 'copper') expect(g.parts).toBeUndefined();
+  });
   it('reduced quality has no bodies and fewer triangles', () => {
     const r = load('glasgow-revC3/glasgow.kicad_pcb', 'reduced');
     expect(r.groups.find((g) => g.material === 'body')).toBeUndefined();
     expect(r.stats.triangles).toBeLessThan(s.stats.triangles);
+    // …but a phone can still pick a part by its pads.
+    // 172 of the 272 footprints have a pad on F.Cu; the rest are back-side parts.
+    expect(r.groups.find((g) => g.material === 'copper' && g.layerName === 'F.Cu')!.parts).toHaveLength(172);
   });
   it('transferList lists every buffer once', () => {
     expect(transferList(s)).toHaveLength(s.groups.length * 3);

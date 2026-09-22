@@ -12,8 +12,10 @@
 // are drawn only while something is moving. (3) The camera's up axis is +Z,
 // because MeshBuilder puts the board's thickness on z; fighting that with a
 // rotated model would put every later "which way is up" question in two places.
-import type { BoardScene, MeshGroup, Quality } from '@public/services/kicad/board3d/types';
-import { BACKGROUND, CAMERA, FLIP_MS, LIGHTS, MATERIALS, ORBIT } from './board3dTheme';
+import type { BoardScene, MeshGroup, PartRange, Quality } from '@public/services/kicad/board3d/types';
+import { fitDistance as fitDistanceFor, type Box3Like } from '@public/services/kicad/board3d/framing';
+import { highlightSlices, partAtFace } from '@public/services/kicad/board3d/partRanges';
+import { BACKGROUND, CAMERA, FLIP_MS, HIGHLIGHT_MATERIALS, LIGHTS, MATERIALS, ORBIT } from './board3dTheme';
 
 // Types from the dynamic imports themselves: a `typeof import(...)` is erased at
 // compile time, so the library is named for the type checker without any static
@@ -38,6 +40,50 @@ export interface SceneRenderer {
   resume(): void;
   dispose(): void;
   info(): { calls: number; triangles: number };
+  /** Draw `ref`'s body and pads in the highlight material; null clears. A ref the
+   *  scene does not draw (no courtyard, no pads) simply highlights nothing. */
+  highlight?(ref: string | null): void;
+  /** Who to tell when the reader clicks a part (a designator) or empty board or
+   *  sky (null). A click is a pointer-up within a few pixels of its pointer-down;
+   *  an orbit drag never picks. */
+  onPick?(handler: ((ref: string | null) => void) | null): void;
+}
+
+/** A click is this much movement or less between pointer-down and pointer-up.
+ *  OrbitControls owns anything larger. */
+const CLICK_SLOP_PX = 6;
+const CLICK_MAX_MS = 500;
+
+/** The scheduler `deferTeardown` uses: `requestIdleCallback` where the browser has
+ *  it, else a macrotask. Named so a test can hand in a fake. */
+export interface TeardownScheduler {
+  requestIdleCallback?: (fn: () => void, options?: { timeout: number }) => number;
+  setTimeout: (fn: () => void, ms: number) => number;
+}
+
+/** Idle at the latest this long after the tab has switched; a busy page must
+ *  not hold a dead context indefinitely. */
+const TEARDOWN_TIMEOUT_MS = 1000;
+
+/**
+ * Run the expensive half of a dispose OFF the task that asked for it.
+ *
+ * Losing a WebGL context is synchronous and, on a software rasteriser, seconds
+ * long (measured 4.7 s under SwiftShader; the perf audit of 2026-09-22). It
+ * used to run inside the tab click's own React commit, so the tab the reader
+ * had just chosen could not paint until the one they left had finished dying.
+ * Deferring it lets the new tab paint first; the context is still lost, once,
+ * within the idle window. Never the current task, whatever the scheduler.
+ */
+export function deferTeardown(fn: () => void, scheduler: TeardownScheduler = window): void {
+  let done = false;
+  const once = () => {
+    if (done) return;
+    done = true;
+    fn();
+  };
+  if (typeof scheduler.requestIdleCallback === 'function') scheduler.requestIdleCallback(once, { timeout: TEARDOWN_TIMEOUT_MS });
+  else scheduler.setTimeout(once, 0);
 }
 
 const DEG = Math.PI / 180;
@@ -56,6 +102,14 @@ export function createSceneRenderer(): SceneRenderer {
   let observer: ResizeObserver | null = null;
   const geometries: InstanceType<Three['BufferGeometry']>[] = [];
   const materials: InstanceType<Three['MeshStandardMaterial']>[] = [];
+  /** The meshes a reader can pick from and that carry a highlight: those whose
+   *  group has a `parts` table (bodies at `full`, pads on every copper layer). */
+  const parted: { mesh: InstanceType<Three['Mesh']>; parts: PartRange[]; total: number }[] = [];
+  let three: Three | null = null;
+  let modelBox: Box3Like | null = null;
+  let pickHandler: ((ref: string | null) => void) | null = null;
+  let pointerDown: { x: number; y: number; at: number } | null = null;
+  let highlighted: string | null = null;
 
   let disposed = false;
   let paused = false;
@@ -159,7 +213,32 @@ export function createSceneRenderer(): SceneRenderer {
     });
     geometries.push(geometry);
     materials.push(material);
-    const mesh = new T.Mesh(geometry, material);
+    // A group with a parts table draws through a two-material array: index 0 is
+    // its own, 1 the highlight. Which triangles use which is a matter of the
+    // geometry's draw ranges, so a selection costs a range rewrite and at most
+    // two extra draw calls — never a colour attribute over 300k vertices.
+    const highlightSpec = group.parts != null && (group.material === 'body' || group.material === 'copper')
+      ? HIGHLIGHT_MATERIALS[group.material]
+      : null;
+    let mesh: InstanceType<Three['Mesh']>;
+    if (highlightSpec != null && group.parts != null) {
+      const lit = new T.MeshStandardMaterial({
+        color: highlightSpec.color,
+        emissive: highlightSpec.emissive,
+        emissiveIntensity: highlightSpec.emissiveIntensity,
+        roughness: highlightSpec.roughness,
+        metalness: highlightSpec.metalness,
+        transparent: highlightSpec.transparent,
+        opacity: highlightSpec.opacity,
+        depthWrite: highlightSpec.depthWrite,
+      });
+      materials.push(lit);
+      geometry.addGroup(0, group.indices.length, 0);
+      mesh = new T.Mesh(geometry, [material, lit]);
+      parted.push({ mesh, parts: group.parts, total: group.indices.length });
+    } else {
+      mesh = new T.Mesh(geometry, material);
+    }
     mesh.name = `${group.material}/${group.layerName ?? ''}`;
     // Translucent bodies last, so they blend over the board rather than the board
     // being sorted over them.
@@ -167,12 +246,58 @@ export function createSceneRenderer(): SceneRenderer {
     return mesh;
   }
 
+  /** The reset-pose distance for the canvas's CURRENT shape. Re-read on every
+   *  resize, so a Reset after the reader widens the window still fills it. */
+  function refit(): void {
+    if (modelBox == null || host == null) return;
+    const aspect = Math.max(1, host.clientWidth) / Math.max(1, host.clientHeight);
+    fitDistance = fitDistanceFor(modelBox, {
+      fovDeg: CAMERA.fov, aspect, elevationDeg: CAMERA.elevationDeg, margin: CAMERA.fitMargin,
+    });
+  }
+
+  /** The footprint under a canvas point, through the nearest hit of ANY mesh:
+   *  the substrate and mask take part as occluders, so a click on the bottom
+   *  face never picks a top-side body through the board. */
+  function pickAt(clientX: number, clientY: number): string | null {
+    if (three == null || renderer == null || camera == null || model == null) return null;
+    const rect = renderer.domElement.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return null;
+    const ndc = new three.Vector2(
+      ((clientX - rect.left) / rect.width) * 2 - 1,
+      -((clientY - rect.top) / rect.height) * 2 + 1,
+    );
+    const ray = new three.Raycaster();
+    ray.setFromCamera(ndc, camera);
+    const hit = ray.intersectObjects(model.children, false)[0];
+    if (hit == null || hit.faceIndex == null) return null;
+    const entry = parted.find((p) => p.mesh === hit.object);
+    return entry == null ? null : partAtFace(entry.parts, hit.faceIndex);
+  }
+
+  const onPointerDown = (e: PointerEvent): void => {
+    if (e.button !== 0 && e.pointerType === 'mouse') return;
+    pointerDown = { x: e.clientX, y: e.clientY, at: performance.now() };
+  };
+  const onPointerUp = (e: PointerEvent): void => {
+    const down = pointerDown;
+    pointerDown = null;
+    if (down == null || pickHandler == null) return;
+    if (Math.hypot(e.clientX - down.x, e.clientY - down.y) > CLICK_SLOP_PX) return;
+    if (performance.now() - down.at > CLICK_MAX_MS) return;
+    pickHandler(pickAt(e.clientX, e.clientY));
+  };
+  const onPointerCancel = (): void => {
+    pointerDown = null;
+  };
+
   function resize(): void {
     if (renderer == null || camera == null || host == null) return;
     const w = Math.max(1, host.clientWidth), h = Math.max(1, host.clientHeight);
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
+    refit();
     onChange();
   }
 
@@ -186,6 +311,7 @@ export function createSceneRenderer(): SceneRenderer {
       // dispose() can land while the two chunks are still in flight — leaving the
       // tab is exactly the moment a slow connection is noticed.
       if (disposed) return;
+      three = T;
 
       renderer = new T.WebGLRenderer({ antialias: quality === 'full', powerPreference: 'high-performance' });
       renderer.setPixelRatio(quality === 'full' ? Math.min(window.devicePixelRatio, 2) : 1);
@@ -206,7 +332,11 @@ export function createSceneRenderer(): SceneRenderer {
       const height = board.bounds.max.y - board.bounds.min.y;
       longAxis = width >= height ? 'x' : 'y';
       const diagonal = Math.max(1e-3, Math.hypot(width, height));
-      fitDistance = ((diagonal / 2) / Math.tan((CAMERA.fov / 2) * DEG)) * CAMERA.fitMargin;
+      // The model's real box, bodies included: what the framing fits to the
+      // canvas. `board.bounds` is the outline alone and knows nothing of height.
+      const box = new T.Box3().setFromObject(model);
+      modelBox = { min: { x: box.min.x, y: box.min.y, z: box.min.z }, max: { x: box.max.x, y: box.max.y, z: box.max.z } };
+      refit();
 
       const aspect = Math.max(1, element.clientWidth) / Math.max(1, element.clientHeight);
       camera = new T.PerspectiveCamera(CAMERA.fov, aspect, diagonal / 100, diagonal * 20);
@@ -236,9 +366,30 @@ export function createSceneRenderer(): SceneRenderer {
 
       observer = new ResizeObserver(resize);
       observer.observe(element);
+      canvas.addEventListener('pointerdown', onPointerDown);
+      canvas.addEventListener('pointerup', onPointerUp);
+      canvas.addEventListener('pointercancel', onPointerCancel);
+      // A selection asked for before the meshes existed is applied now.
+      if (highlighted != null) this.highlight?.(highlighted);
 
       renderer.render(scene, camera);
       wake();
+    },
+
+    highlight(ref) {
+      highlighted = ref;
+      for (const entry of parted) {
+        const geometry = entry.mesh.geometry;
+        geometry.clearGroups();
+        for (const slice of highlightSlices(entry.parts, ref, entry.total)) {
+          geometry.addGroup(slice.start, slice.count, slice.materialIndex);
+        }
+      }
+      if (renderer != null) onChange();
+    },
+
+    onPick(handler) {
+      pickHandler = handler;
     },
 
     setView(view) {
@@ -294,16 +445,19 @@ export function createSceneRenderer(): SceneRenderer {
       controls?.removeEventListener('start', onStart);
       controls?.dispose();
       controls = null;
-      for (const geometry of geometries) geometry.dispose();
+      // The cheap, synchronous half: nothing above touches the GPU. The canvas
+      // leaves the DOM now, so the tab the reader picked paints without it.
+      const gone = { renderer, geometries: geometries.slice(), materials: materials.slice() };
       geometries.length = 0;
-      for (const material of materials) material.dispose();
       materials.length = 0;
-      if (renderer != null) {
-        const canvas = renderer.domElement;
-        // WEBGL_lose_context, by its three.js name. Without it the context lives
-        // until the GC runs, and the 2D embed can be the one the browser evicts.
-        renderer.forceContextLoss();
-        renderer.dispose();
+      parted.length = 0;
+      pickHandler = null;
+      modelBox = null;
+      if (gone.renderer != null) {
+        const canvas = gone.renderer.domElement;
+        canvas.removeEventListener('pointerdown', onPointerDown);
+        canvas.removeEventListener('pointerup', onPointerUp);
+        canvas.removeEventListener('pointercancel', onPointerCancel);
         canvas.remove();
       }
       renderer = null;
@@ -311,6 +465,19 @@ export function createSceneRenderer(): SceneRenderer {
       camera = null;
       model = null;
       host = null;
+      three = null;
+      // The expensive half, off this task. WEBGL_lose_context by its three.js
+      // name: without it the context lives until the GC runs, and the 2D embed
+      // can be the one the browser evicts — so it is still lost, just not inside
+      // the click that left the tab.
+      if (gone.renderer != null) {
+        deferTeardown(() => {
+          for (const geometry of gone.geometries) geometry.dispose();
+          for (const material of gone.materials) material.dispose();
+          gone.renderer?.forceContextLoss();
+          gone.renderer?.dispose();
+        });
+      }
     },
 
     info() {
