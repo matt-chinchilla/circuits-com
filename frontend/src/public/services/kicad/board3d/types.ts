@@ -81,6 +81,10 @@ export interface MeshGroup {
 export interface BoardScene {
   bounds: { min: Vec2; max: Vec2 }; thicknessMm: number | null; groups: MeshGroup[]; warnings: BoardWarning[];
   stats: { footprints: number; pads: number; vias: number; tracks: number; triangles: number; buildMs: number };
+  /** The board's net table (`BoardModel.nets`), so a view that has only the
+   *  scene can name the nets its `NetRange`s number. Optional only so a scene
+   *  built by hand (a test's fake) need not carry one. */
+  nets?: NetInfo[];
 }
 export type Quality = 'full' | 'reduced';
 export const TOL_MM: Record<Quality, number> = { full: 0.01, reduced: 0.05 };

@@ -18,8 +18,8 @@ import { circleRing, strokePolygon } from './strokes';
 import { readBoardModel } from './readBoardModel';
 import { MeshBuilder } from './tessellate';
 import {
-  TOL_MM, type BoardModel, type BoardScene, type BoardWarning, type Material,
-  type MeshGroup, type PartRange, type Placement, type Quality, type Ring, type Shape, type Side, type Vec2,
+  TOL_MM, type BoardModel, type BoardScene, type BoardWarning, type ClassRange, type Material,
+  type MeshGroup, type NetRange, type PartRange, type Placement, type Quality, type Ring, type Shape, type Side, type Vec2,
 } from './types';
 
 export interface BuildInput { text: string; stackup: BoardStackup | null; quality: Quality }
@@ -299,10 +299,15 @@ function buildSceneFromModel(
 
   const groups: MeshGroup[] = [];
   const builder = () => new MeshBuilder(true, centre);
-  const emit = (b: MeshBuilder, material: Material, layerName: string | null, parts?: PartRange[]): void => {
+  /** The range tables a group carries: `parts` for picking, and on copper the
+   *  `classes` and `nets` the Board panel's opacity and net highlight slice by. */
+  interface Tables { parts?: PartRange[]; classes?: ClassRange[]; nets?: NetRange[] }
+  const emit = (b: MeshBuilder, material: Material, layerName: string | null, tables: Tables = {}): void => {
     if (b.indices.length === 0) return;
     const group = b.build(material, layerName);
-    if (parts != null && parts.length > 0) group.parts = parts;
+    if (tables.parts != null && tables.parts.length > 0) group.parts = tables.parts;
+    if (tables.classes != null) group.classes = tables.classes;
+    if (tables.nets != null) group.nets = tables.nets;
     groups.push(group);
   };
   /** Run `draw` and record which slice of the builder's indices it produced for
@@ -314,6 +319,30 @@ function buildSceneFromModel(
     const count = b.indices.length - start;
     if (count > 0) parts.push({ ref, start, count });
   };
+  /** The same for a copper class: one range per class that drew anything. */
+  const classed = (b: MeshBuilder, classes: ClassRange[], kind: ClassRange['kind'], draw: () => void): void => {
+    const start = b.indices.length;
+    draw();
+    const count = b.indices.length - start;
+    if (count > 0) classes.push({ kind, start, count });
+  };
+  /** And for a net: an item on no net (0) records nothing, and an item that
+   *  continues the run before it on the same net extends that run instead of
+   *  opening a new one — which is why tracks and pours draw in net order. */
+  const netted = (b: MeshBuilder, nets: NetRange[], net: number, draw: () => void): void => {
+    const start = b.indices.length;
+    draw();
+    const count = b.indices.length - start;
+    if (count === 0 || net === 0) return;
+    const last = nets.length > 0 ? nets[nets.length - 1] : null;
+    if (last != null && last.net === net && last.start + last.count === start) last.count += count;
+    else nets.push({ net, start, count });
+  };
+  /** Stable, so items of one net keep their file order; tracks and pours of
+   *  one net become ONE contiguous run, and a net highlight a few draw ranges
+   *  rather than one per track. Same material, same z: the order is invisible. */
+  const byNet = <T extends { net: number }>(items: T[]): T[] => [...items].sort((a, b) => a.net - b.net);
+  const tracksByNet = byNet(model.tracks), zonesByNet = byNet(model.zones);
 
   // Substrate: capped top and bottom, walled around the outline. The hole walls go
   // into their OWN group — they are the one surface the eye reads as thickness, and
@@ -342,12 +371,13 @@ function buildSceneFromModel(
     // indices — the range a pick maps a hit triangle back through.
     const padRings: Ring[] = [];
     const ringsOf = model.footprints.map((fp) => {
-      const rings: Ring[] = [];
+      const rings: { ring: Ring; net: number }[] = [];
       for (const pad of fp.pads) {
         if (!pad.layers.includes(cuName) || !(pad.size.x > 0) || !(pad.size.y > 0)) continue;
-        rings.push(placedPadRing(pad, fp.place, tol));
+        const ring = placedPadRing(pad, fp.place, tol);
+        rings.push({ ring, net: pad.net });
+        padRings.push(ring);
       }
-      padRings.push(...rings);
       return rings;
     });
 
@@ -368,22 +398,34 @@ function buildSceneFromModel(
     }
     holesMarked += maskCuts.over.length;
 
+    // Three classes in a FIXED order — pads, tracks, zones — each one
+    // contiguous slice, so the Board panel can give each its own opacity.
     const copper = builder();
     const padParts: PartRange[] = [];
-    model.footprints.forEach((fp, i) => {
-      ranged(copper, padParts, fp.ref, () => {
-        for (const ring of ringsOf[i]) copper.addFace({ outer: ring, holes: [] }, raised.has(ring) ? overMaskZ[side] : z, up);
+    const classes: ClassRange[] = [];
+    const nets: NetRange[] = [];
+    classed(copper, classes, 'pads', () => {
+      model.footprints.forEach((fp, i) => {
+        ranged(copper, padParts, fp.ref, () => {
+          for (const { ring, net } of ringsOf[i]) {
+            netted(copper, nets, net, () => copper.addFace({ outer: ring, holes: [] }, raised.has(ring) ? overMaskZ[side] : z, up));
+          }
+        });
       });
     });
-    for (const track of model.tracks) {
-      if (track.layer !== cuName || !(track.width > 0)) continue;
-      if (quality === 'reduced' && track.width < MIN_TRACK_MM) continue;
-      copper.addFace({ outer: strokePolygon(track.pts, track.width, caps), holes: [] }, z, up);
-    }
-    for (const zone of model.zones) {
-      if (zone.layer === cuName) copper.addFace({ outer: zone.ring, holes: [] }, z, up);
-    }
-    emit(copper, 'copper', cuName, padParts);
+    classed(copper, classes, 'tracks', () => {
+      for (const track of tracksByNet) {
+        if (track.layer !== cuName || !(track.width > 0)) continue;
+        if (quality === 'reduced' && track.width < MIN_TRACK_MM) continue;
+        netted(copper, nets, track.net, () => copper.addFace({ outer: strokePolygon(track.pts, track.width, caps), holes: [] }, z, up));
+      }
+    });
+    classed(copper, classes, 'zones', () => {
+      for (const zone of zonesByNet) {
+        if (zone.layer === cuName) netted(copper, nets, zone.net, () => copper.addFace({ outer: zone.ring, holes: [] }, z, up));
+      }
+    });
+    emit(copper, 'copper', cuName, { parts: padParts, classes, nets });
 
     const mask = builder();
     mask.addFace({ outer: outline.outer, holes: maskCuts.cut.map((c) => c.ring) }, maskZ[side], up);
@@ -427,7 +469,7 @@ function buildSceneFromModel(
         bodyMesh.addPrism({ outer: body.ring, holes: [] }, base, body.side === 'F' ? base + body.heightMm : base - body.heightMm);
       });
     }
-    emit(bodyMesh, 'body', null, bodyParts);
+    emit(bodyMesh, 'body', null, { parts: bodyParts });
     if (missing > 0) warnings.push({ kind: 'no-courtyard', count: missing });
   }
 
@@ -450,6 +492,7 @@ function buildSceneFromModel(
       triangles,
       buildMs: performance.now() - startedAt,
     },
+    nets: model.nets,
   };
 }
 

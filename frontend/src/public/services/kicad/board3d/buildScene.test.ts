@@ -3,10 +3,19 @@ import { fixtureText } from '../fixtures';
 import { readStackup } from '../boardStackup';
 import { buildScene, transferList } from './buildScene';
 
+// One build per (file, quality) for the whole file: no test mutates a scene,
+// and every extra Glasgow build is CPU the `buildMs` bound above competes with
+// when the suite runs its files in parallel.
+const scenes = new Map<string, ReturnType<typeof buildScene>>();
 const load = (rel: string, quality: 'full' | 'reduced' = 'full') => {
+  const key = `${rel}|${quality}`;
+  const hit = scenes.get(key);
+  if (hit != null) return hit;
   const text = fixtureText(rel);
   let stackup = null; try { stackup = readStackup(text); } catch { stackup = null; }
-  return buildScene({ text, stackup, quality });
+  const scene = buildScene({ text, stackup, quality });
+  scenes.set(key, scene);
+  return scene;
 };
 
 describe('buildScene — Glasgow', () => {
@@ -173,5 +182,126 @@ describe('buildScene — outlines that are not all gr_* lines', () => {
     expect(s.warnings).toContainEqual({ kind: 'outline-open', segments: 0 });
     expect(s.bounds.max.x - s.bounds.min.x).toBeCloseTo(42, 6);
     expect(s.bounds.max.y - s.bounds.min.y).toBeCloseTo(32, 6);
+  });
+});
+
+describe('buildScene — class and net ranges on the copper', () => {
+  const s = load('glasgow-revC3/glasgow.kicad_pcb');
+  const copper = s.groups.filter((g) => g.material === 'copper');
+  /** The net that drew index `index` of a group, read straight off its table. */
+  const netAt = (g: (typeof copper)[number], index: number) =>
+    g.nets!.find((r) => r.start <= index && index < r.start + r.count)?.net ?? 0;
+
+  it('every copper group carries both tables; no other group carries either', () => {
+    expect(copper.map((g) => g.layerName)).toEqual(['F.Cu', 'B.Cu']);
+    for (const g of copper) {
+      expect(g.classes, g.layerName!).toBeDefined();
+      expect(g.nets, g.layerName!).toBeDefined();
+    }
+    for (const g of s.groups) {
+      if (g.material === 'copper') continue;
+      expect(g.classes).toBeUndefined();
+      expect(g.nets).toBeUndefined();
+    }
+  });
+  it('class ranges tile every copper triangle exactly once: pads, then tracks, then zones', () => {
+    for (const g of copper) {
+      expect(g.classes!.map((c) => c.kind)).toEqual(['pads', 'tracks', 'zones']);
+      let cursor = 0;
+      for (const c of g.classes!) {
+        expect(c.start).toBe(cursor);
+        expect(c.count).toBeGreaterThan(0);
+        expect(c.count % 3).toBe(0);
+        cursor += c.count;
+      }
+      expect(cursor, g.layerName!).toBe(g.indices.length);
+      // The pads class is exactly the span the part table covers.
+      const lastPart = g.parts![g.parts!.length - 1];
+      expect(g.classes![0].count).toBe(lastPart.start + lastPart.count);
+    }
+  });
+  it('net ranges cover each triangle at most once, ascending, in bounds, whole triangles', () => {
+    const known = new Set((s.nets ?? []).map((n) => n.number));
+    for (const g of copper) {
+      let end = 0, covered = 0;
+      for (const r of g.nets!) {
+        expect(r.start).toBeGreaterThanOrEqual(end);
+        expect(r.count).toBeGreaterThan(0);
+        expect(r.start % 3).toBe(0);
+        expect(r.count % 3).toBe(0);
+        expect(r.net).toBeGreaterThan(0);
+        expect(known.has(r.net)).toBe(true);
+        end = r.start + r.count;
+        covered += r.count;
+      }
+      expect(end).toBeLessThanOrEqual(g.indices.length);
+      // Nearly everything on a copper layer is on a net.
+      expect(covered, g.layerName!).toBeGreaterThan(g.indices.length * 0.9);
+    }
+  });
+  it('tracks and pours are grouped by net: each net is at most one run per class', () => {
+    for (const g of copper) {
+      for (const kind of ['tracks', 'zones'] as const) {
+        const cls = g.classes!.find((c) => c.kind === kind)!;
+        const inside = (start: number) => start >= cls.start && start < cls.start + cls.count;
+        const runs = g.nets!.filter((r) => inside(r.start) || inside(r.start + r.count - 1));
+        expect(new Set(runs.map((r) => r.net)).size, `${g.layerName} ${kind}`).toBe(runs.length);
+      }
+    }
+  });
+  it('a known pad: C30 draws pad 1 (+3V3, net 2) then pad 2 (GND, net 3) on F.Cu', () => {
+    const fcu = copper[0];
+    const c30 = fcu.parts!.find((r) => r.ref === 'C30')!;
+    expect(netAt(fcu, c30.start)).toBe(2);
+    expect(netAt(fcu, c30.start + c30.count - 1)).toBe(3);
+    // GND owns pads, tracks AND the pours on the front.
+    const classOf = (index: number) => fcu.classes!.find((c) => c.start <= index && index < c.start + c.count)!.kind;
+    const kinds = new Set<string>();
+    for (const r of fcu.nets!) if (r.net === 3) { kinds.add(classOf(r.start)); kinds.add(classOf(r.start + r.count - 1)); }
+    expect([...kinds].sort()).toEqual(['pads', 'tracks', 'zones']);
+  });
+  it('the scene carries the board’s net table for the panel to name what it highlights', () => {
+    expect(s.nets).toHaveLength(251);
+    expect(s.nets!.find((n) => n.number === 3)).toEqual({ number: 3, name: 'GND' });
+  });
+  it('reduced quality still tiles, with fewer track triangles', () => {
+    const r = load('glasgow-revC3/glasgow.kicad_pcb', 'reduced');
+    const full = copper[0].classes!.find((c) => c.kind === 'tracks')!.count;
+    const fcu = r.groups.find((g) => g.material === 'copper' && g.layerName === 'F.Cu')!;
+    expect(fcu.classes!.reduce((n, c) => n + c.count, 0)).toBe(fcu.indices.length);
+    expect(fcu.classes!.find((c) => c.kind === 'tracks')!.count).toBeLessThan(full);
+  });
+  it('a hand-built board: exact ranges, unconnected items in no net range', () => {
+    const board = [
+      '(kicad_pcb (version 20221018) (generator pcbnew)',
+      '(layers (0 "F.Cu" signal) (31 "B.Cu" signal) (44 "Edge.Cuts" user))',
+      '(net 0 "") (net 1 "A") (net 2 "B")',
+      '(gr_rect (start 0 0) (end 20 20) (layer "Edge.Cuts") (width 0.1))',
+      '(footprint "x" (layer "F.Cu") (at 5 5) (property "Reference" "R1")',
+      '  (pad "1" smd rect (at 0 0) (size 1 1) (layers "F.Cu") (net 2 "B"))',
+      '  (pad "2" smd rect (at 2 0) (size 1 1) (layers "F.Cu")))',
+      '(segment (start 1 10) (end 5 10) (width 0.3) (layer "F.Cu") (net 2))',
+      '(segment (start 1 12) (end 5 12) (width 0.3) (layer "F.Cu") (net 1))',
+      '(segment (start 1 14) (end 5 14) (width 0.3) (layer "F.Cu") (net 2))',
+      '(zone (net 1) (net_name "A") (layer "F.Cu") (filled_polygon (layer "F.Cu") (pts (xy 10 10) (xy 15 10) (xy 15 15) (xy 10 15))))',
+      ')',
+    ].join('\n');
+    const scene = buildScene({ text: board, stackup: null, quality: 'reduced' });
+    const g = scene.groups.find((x) => x.material === 'copper' && x.layerName === 'F.Cu')!;
+    // Two rect pads (2 triangles each), three identical tracks, one quad pour.
+    const [pads, tracks, zones] = g.classes!;
+    expect(pads).toEqual({ kind: 'pads', start: 0, count: 12 });
+    expect(tracks.kind).toBe('tracks');
+    expect(tracks.start).toBe(12);
+    expect(zones).toEqual({ kind: 'zones', start: 12 + tracks.count, count: 6 });
+    const t = tracks.count / 3;
+    // Tracks draw in net order (A, then both B's as one run); pad 2 is on no net.
+    expect(g.nets).toEqual([
+      { net: 2, start: 0, count: 6 },
+      { net: 1, start: 12, count: t },
+      { net: 2, start: 12 + t, count: 2 * t },
+      { net: 1, start: 12 + 3 * t, count: 6 },
+    ]);
+    expect(scene.nets).toEqual([{ number: 1, name: 'A' }, { number: 2, name: 'B' }]);
   });
 });
