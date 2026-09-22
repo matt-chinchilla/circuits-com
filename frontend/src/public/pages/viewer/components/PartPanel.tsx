@@ -41,6 +41,7 @@ const DASH = '—';
 const SIDE: Record<'F' | 'B', string> = { F: 'Front', B: 'Back' };
 const MATCH_LABEL = { exact: 'Exact match', approx: 'Similar part', live: 'Live match' } as const;
 const LIFECYCLE_LABEL: Record<string, string> = { active: 'Active', nrnd: 'Not for new designs', obsolete: 'Obsolete' };
+const SHOW_ON: readonly [ShowOn, string][] = [['schematic', 'Schematic'], ['board', 'Board'], ['board3d', '3D']];
 
 /** `io_banks.kicad_sch` → `io_banks`. */
 function sheetName(path: string): string {
@@ -270,21 +271,11 @@ const PartPanel = forwardRef<PartPanelHandle, PartPanelProps>(function PartPanel
 
             <div className={styles.show} role="group" aria-label="Show on">
               <span className={styles.showLabel}>Show on</span>
-              {views.schematic && (
-                <button type="button" className={styles.showBtn} aria-pressed={current === 'schematic'} onClick={() => onShow('schematic')}>
-                  Schematic
+              {SHOW_ON.filter(([view]) => views[view]).map(([view, label]) => (
+                <button key={view} type="button" className={styles.showBtn} aria-pressed={current === view} onClick={() => onShow(view)}>
+                  {label}
                 </button>
-              )}
-              {views.board && (
-                <button type="button" className={styles.showBtn} aria-pressed={current === 'board'} onClick={() => onShow('board')}>
-                  Board
-                </button>
-              )}
-              {views.board3d && (
-                <button type="button" className={styles.showBtn} aria-pressed={current === 'board3d'} onClick={() => onShow('board3d')}>
-                  3D
-                </button>
-              )}
+              ))}
             </div>
           </>
         )}

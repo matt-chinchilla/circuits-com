@@ -122,9 +122,8 @@ function priceOf(row: TableRow, buildQty: number, pin: string | undefined): Part
   const offers: BomOffer[] = row.server?.offers ?? [];
   if (offers.length === 0) return null;
   const lineQty = Math.max(1, row.qty) * Math.max(1, buildQty);
-  const pinned = pin == null ? null : offers.find((o) => o.supplier_id === pin) ?? null;
-  const id = pinned != null ? null : recommend(offers, lineQty, tierRankFromOffers(offers));
-  const chosen = pinned ?? (id == null ? null : offers.find((o) => o.supplier_id === id) ?? null);
+  const offerOf = (id: string | null | undefined) => (id == null ? null : offers.find((o) => o.supplier_id === id) ?? null);
+  const chosen = offerOf(pin) ?? offerOf(recommend(offers, lineQty, tierRankFromOffers(offers)));
   if (chosen == null) return null;
   return { unit: priceAt(chosen, lineQty), lineQty, supplier: chosen.supplier_name, stock: chosen.stock_quantity };
 }
