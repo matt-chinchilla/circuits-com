@@ -1038,6 +1038,20 @@ describe('the part panel', () => {
     expect(canvas.activeSheet).toBe('sub/power.kicad_sch');
   });
 
+  it('on a phone, a search from the open sheet keeps it open; a selection from outside collapses it', async () => {
+    await render();
+    await canvasReady();
+    const peek = panel().querySelector('button[aria-expanded]') as HTMLButtonElement;
+    await click(peek);
+    expect(panel().dataset.open).toBeDefined();
+    await type('u1');
+    expect(headRef()).toBe('U1');
+    // The reader opened the sheet to ask; the answer stays on screen.
+    expect(panel().dataset.open).toBeDefined();
+    await act(async () => canvas.onSelection?.({ ref: null, view: 'schematic' }));
+    expect(panel().dataset.open).toBeUndefined();
+  });
+
   it('the search says so for a designator nobody knows, and Esc clears it', async () => {
     await render();
     await canvasReady();
@@ -1188,6 +1202,14 @@ describe('the tab strip stylesheet', () => {
     expect(mobile).toMatch(/\.tab \{[^{}]*flex:\s*1 1 auto/);
     // …and never scrolls sideways again.
     expect(scss).not.toMatch(/\.tabs \{[^{}]*overflow-x/);
+  });
+  it('gives the phone sheet an opaque base and draws each fact hairline unbroken', () => {
+    const panelScss = readFileSync(join(__dirname, 'components', 'PartPanel.module.scss'), 'utf8');
+    const mobile = panelScss.slice(panelScss.indexOf('@include responsive($bp-mobile)'));
+    const sheet = mobile.slice(mobile.indexOf('.panel {'), mobile.indexOf('.peek {'));
+    // The last background layer is a solid colour, not another translucent gradient.
+    expect(sheet).toMatch(/background:[\s\S]*,\s*#f7f8fb;/);
+    expect(panelScss).toMatch(/\.facts \{[^{}]*gap:\s*0;/);
   });
   it('keeps the stage clear of the bottom sheet on a phone', () => {
     const mobile = scss.slice(scss.indexOf('@include responsive($bp-mobile)'));

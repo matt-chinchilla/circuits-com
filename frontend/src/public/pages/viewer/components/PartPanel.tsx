@@ -54,12 +54,20 @@ const PartPanel = forwardRef<PartPanelHandle, PartPanelProps>(function PartPanel
   const inputRef = useRef<HTMLInputElement>(null);
   const [text, setText] = useState('');
   const listId = useId();
-  // Phone only: the sheet is either peeking (one row) or open. A new selection
-  // peeks — the essentials are on that row and the drawing the reader just
-  // tapped stays in view; a tap on the row opens the rest.
+  // Phone only: the sheet is either peeking (one row) or open. A selection made
+  // OUTSIDE the panel peeks — the essentials are on that row and the drawing
+  // the reader just tapped stays in view; a tap on the row opens the rest. A
+  // selection made from the panel's own search stays open: the reader opened
+  // the sheet to ask, and collapsing it would hide the answer.
   const [open, setOpen] = useState(false);
+  /** What the search just asked for, until the selection it caused arrives. */
+  const searched = useRef<string | null>(null);
   useEffect(() => {
+    const asked = searched.current;
+    searched.current = null;
+    if (asked != null && facts != null && facts.ref.toUpperCase() === asked.toUpperCase()) return;
     setOpen(false);
+    // Keyed on the designator alone: a re-priced line must not collapse the sheet.
   }, [facts?.ref]);
 
   useImperativeHandle(ref, () => ({
@@ -74,6 +82,7 @@ const PartPanel = forwardRef<PartPanelHandle, PartPanelProps>(function PartPanel
     e.preventDefault();
     const wanted = text.trim();
     if (wanted === '') return;
+    searched.current = wanted;
     onSearch(wanted);
     setText('');
     inputRef.current?.blur();
