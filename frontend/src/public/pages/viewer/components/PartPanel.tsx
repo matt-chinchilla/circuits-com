@@ -7,7 +7,7 @@
 //
 // It renders a `PartFacts` record and nothing else; every number here was read
 // from the project by `partFacts`, and an absent fact is an em dash.
-import { forwardRef, useEffect, useId, useImperativeHandle, useRef, useState, type FormEvent } from 'react';
+import { forwardRef, useEffect, useId, useImperativeHandle, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { formatUnit } from '@public/services/bom/format';
 import { footprintName, formatMm, type PartFacts } from '../partFacts';
@@ -79,6 +79,19 @@ const PartPanel = forwardRef<PartPanelHandle, PartPanelProps>(function PartPanel
     inputRef.current?.blur();
   };
 
+  /** Esc in the field: empty it first; empty already, leave the field and
+   *  clear the selection — the same Esc the rest of the page answers. */
+  const onSearchKey = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== 'Escape') return;
+    e.preventDefault();
+    if (text !== '') {
+      setText('');
+      return;
+    }
+    inputRef.current?.blur();
+    onClear();
+  };
+
   const peekLine = facts == null
     ? null
     : facts.found
@@ -123,6 +136,7 @@ const PartPanel = forwardRef<PartPanelHandle, PartPanelProps>(function PartPanel
             aria-label="Find a reference"
             value={text}
             onChange={(e) => setText(e.target.value)}
+            onKeyDown={onSearchKey}
             onFocus={onSearchFocus}
           />
           <kbd className={styles.key} aria-hidden="true">/</kbd>

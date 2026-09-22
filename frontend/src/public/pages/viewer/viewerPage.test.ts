@@ -1083,6 +1083,26 @@ describe('the part panel', () => {
     expect(canvas.focusRef).toHaveBeenCalledWith('U1', undefined, 'board');
   });
 
+  it('a selection the SCHEMATIC reported is still carried onto the board on arrival', async () => {
+    // The stub canvas echoes what the controller does: a click reports the
+    // designator with its view. A view-blind "the canvas already has it" check
+    // skipped the board whenever the schematic had reported the same designator.
+    session = makeSession({ board: 'main.kicad_pcb' });
+    await render();
+    await canvasReady();
+    await act(async () => canvas.onSelection?.({ ref: 'U1', sheet: '/r/a', view: 'schematic' }));
+    expect(canvas.selectRef).not.toHaveBeenCalled();
+    await click(byText('Board'));
+    expect(canvas.selectRef).toHaveBeenCalledWith('U1', undefined, 'board');
+    // …and a designator the schematic never lists outlines in place, never by
+    // naming the schematic view (which would activate the root sheet).
+    canvas.selectRef.mockClear();
+    await act(async () => canvas.onSelection?.({ ref: 'H1', view: 'board' }));
+    await click(byText('Schematic'));
+    expect(canvas.selectRef).toHaveBeenCalledWith('H1');
+    expect(canvas.selectRef).not.toHaveBeenCalledWith('H1', undefined, 'schematic');
+  });
+
   it('a pick in the 3D view identifies the part and the 3D view is told what is selected', async () => {
     session = makeSession({ board: 'main.kicad_pcb' });
     await render();

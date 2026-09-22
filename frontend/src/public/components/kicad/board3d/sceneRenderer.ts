@@ -114,6 +114,9 @@ export function createSceneRenderer(): SceneRenderer {
   let modelBox: Box3Like | null = null;
   let pickHandler: ((ref: string | null) => void) | null = null;
   let pointerDown: { x: number; y: number; at: number } | null = null;
+  /** Pointers currently down. A second finger (a pinch) voids the click: the
+   *  finger lifted last may not have moved, and it must not pick. */
+  const pointers = new Set<number>();
   let highlighted: string | null = null;
   /** How long the last raycast took — the measurement hook `info()` reports, so
    *  a browser step can separate the pick from the software raster around it. */
@@ -297,18 +300,25 @@ export function createSceneRenderer(): SceneRenderer {
   }
 
   const onPointerDown = (e: PointerEvent): void => {
+    pointers.add(e.pointerId);
+    if (pointers.size > 1) {
+      pointerDown = null;
+      return;
+    }
     if (e.button !== 0 && e.pointerType === 'mouse') return;
     pointerDown = { x: e.clientX, y: e.clientY, at: performance.now() };
   };
   const onPointerUp = (e: PointerEvent): void => {
+    pointers.delete(e.pointerId);
     const down = pointerDown;
     pointerDown = null;
-    if (down == null || pickHandler == null) return;
+    if (down == null || pickHandler == null || pointers.size > 0) return;
     if (Math.hypot(e.clientX - down.x, e.clientY - down.y) > CLICK_SLOP_PX) return;
     if (performance.now() - down.at > CLICK_MAX_MS) return;
     pickHandler(pickAt(e.clientX, e.clientY));
   };
-  const onPointerCancel = (): void => {
+  const onPointerCancel = (e: PointerEvent): void => {
+    pointers.delete(e.pointerId);
     pointerDown = null;
   };
 

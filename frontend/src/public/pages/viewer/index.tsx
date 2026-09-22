@@ -9,7 +9,7 @@ import { useLocation } from 'react-router-dom';
 import PageHead from '@public/components/PageHead';
 import PageHeaderBand from '@public/components/layout/PageHeaderBand';
 import DesignCanvas, { type CanvasSelection, type DesignCanvasHandle } from '@public/components/kicad/DesignCanvas';
-import type { CanvasStateName } from '@public/components/kicad/canvasController';
+import type { CanvasStateName, CanvasView } from '@public/components/kicad/canvasController';
 import StackupPanel from '@public/components/kicad/StackupPanel';
 import BomTable from '@public/components/bom/BomTable';
 import ShareBar from '@public/components/bom/ShareBar';
@@ -173,12 +173,14 @@ export default function ViewerPage() {
   const canvasRef = useRef<DesignCanvasHandle>(null);
   const panelRef = useRef<PartPanelHandle>(null);
   /**
-   * The designator the CANVAS itself last reported. When the page's selection
-   * came from a click on the drawing, the drawing already shows it; the sync
-   * below must not send it straight back as a `selectRef` (a harmless but
-   * wasted round trip that also re-emits the event).
+   * What the CANVAS itself last reported, and on WHICH drawing. When the page's
+   * selection came from a click on the schematic, the schematic already shows
+   * it and the sync below must not send it straight back — but the board does
+   * not, and arriving there must still carry it over. (A view-blind version of
+   * this skipped the board whenever the schematic had reported the same
+   * designator; the browser showed the whole board with no outline.)
    */
-  const canvasHas = useRef<string | null>(null);
+  const canvasHas = useRef<{ ref: string | null; view: CanvasView | null }>({ ref: null, view: null });
   /** The tab buttons, so an arrow key can move real DOM focus and not only the
    *  selection. Keyed by tab id rather than by index: `tabs` changes shape with
    *  the project, and a stale index would focus the wrong button. */
@@ -237,7 +239,7 @@ export default function ViewerPage() {
     setStackupSeen(false);
     setSelectedRef(null);
     setPlacementsSeen(false);
-    canvasHas.current = null;
+    canvasHas.current = { ref: null, view: null };
   }, []);
 
   // Deliberately NOT called on unmount: surviving the /viewer ↔ /bom trip is
@@ -262,7 +264,7 @@ export default function ViewerPage() {
     pendingFocus.current = null;
     setSelectedRef(null);
     setPlacementsSeen(false);
-    canvasHas.current = null;
+    canvasHas.current = { ref: null, view: null };
   };
 
   const focus = useCallback(
@@ -360,7 +362,7 @@ export default function ViewerPage() {
   /** The canvas reported a selection — the reader's click, or the echo of a
    *  focus. Either way it is now what the drawing shows. */
   const handleCanvasSelection = useCallback((selection: CanvasSelection) => {
-    canvasHas.current = selection.ref;
+    canvasHas.current = { ref: selection.ref, view: selection.view ?? null };
     setSelectedRef(selection.ref);
   }, []);
 
@@ -376,18 +378,26 @@ export default function ViewerPage() {
     if (session == null || canvasState !== 'ready') return;
     if (tab !== 'schematic' && tab !== 'board') return;
     if (selectedRef == null) {
-      if (canvasHas.current != null) {
-        canvasHas.current = null;
+      if (canvasHas.current.ref != null) {
+        canvasHas.current = { ref: null, view: null };
         void canvasRef.current?.selectRef(null);
       }
       return;
     }
-    if (canvasHas.current === selectedRef) return;
+    if (canvasHas.current.ref === selectedRef && canvasHas.current.view === tab) return;
     const where = session.refs.get(selectedRef);
     if (tab === 'schematic') {
       if (where != null && droppedSheets.has(where.sheet)) return;
-      if (where != null) setActiveSheet(where.sheet);
-      void canvasRef.current?.selectRef(selectedRef, where?.instancePath, 'schematic');
+      if (where != null) {
+        setActiveSheet(where.sheet);
+        void canvasRef.current?.selectRef(selectedRef, where.instancePath, 'schematic');
+      } else {
+        // A designator the schematic's BOM does not list (a mounting hole, a
+        // footprint-only part): outline it if the sheet on screen has it, and
+        // never switch sheets — naming the schematic view here would activate
+        // the ROOT sheet under a reader who is on another one.
+        void canvasRef.current?.selectRef(selectedRef);
+      }
     } else {
       void canvasRef.current?.selectRef(selectedRef, undefined, 'board');
     }
@@ -417,7 +427,7 @@ export default function ViewerPage() {
         void focus(ref);
       } else if (tab === 'board') {
         setSelectedRef(ref);
-        canvasHas.current = ref;
+        canvasHas.current = { ref, view: 'board' };
         void canvasRef.current?.focusRef(ref, undefined, 'board');
       } else {
         setSelectedRef(ref);
@@ -436,7 +446,9 @@ export default function ViewerPage() {
         void focus(ref);
       } else if (view === 'board') {
         setTab('board');
-        canvasHas.current = ref;
+        // Claimed before the tab commit, so the arrival sync does not send a
+        // second, zoom-less select alongside this focus.
+        canvasHas.current = { ref, view: 'board' };
         void canvasRef.current?.focusRef(ref, undefined, 'board');
       } else {
         setTab('board3d');
@@ -446,21 +458,17 @@ export default function ViewerPage() {
   );
 
   // `/` focuses the search and Esc clears the selection, anywhere on the page
-  // that is not itself a text field. The search field's own Esc empties it
-  // first; a second Esc from there clears the selection.
+  // that is not itself a text field. A field owns its own Esc: the panel's
+  // search empties itself first and clears the selection on a second press
+  // (PartPanel); the BOM's quantity box keeps the browser's behaviour.
   useEffect(() => {
     if (session == null) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) return;
-      if (e.key === '/' && !typingIn(e.target)) {
+      if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || typingIn(e.target)) return;
+      if (e.key === '/') {
         e.preventDefault();
         panelRef.current?.focusSearch();
       } else if (e.key === 'Escape') {
-        if (typingIn(e.target)) {
-          const field = e.target as HTMLInputElement;
-          if (field.value !== '') return;
-          field.blur();
-        }
         clearSelection();
       }
     };
