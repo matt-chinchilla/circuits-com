@@ -650,6 +650,21 @@ describe('KicanvasController', () => {
     expect(fake.viewer.zooms).toBe(1);
   });
 
+  it('focusRef with view "board" shows the board first, then selects the footprint', async () => {
+    const fake = fakeEmbed({ pages: PAGES, selectedFor: ['U1'], boardSelectedFor: ['U7'] });
+    const c = controller(fake);
+    await c.mount(document.createElement('div'), project({ 'main.kicad_sch': 's', 'main.kicad_pcb': 'b' }));
+    expect(fake.getActive()?.type).toBe('schematic');
+    expect(await c.focusRef('U7', undefined, 'board')).toBe('focused');
+    expect(fake.getActive()?.type).toBe('pcb');
+    expect([fake.sch.hidden, fake.board.hidden]).toEqual([true, false]);
+    expect(fake.boardSelected).toEqual(['U7']);
+    // …and back to a sheet by its instance path, which implies the schematic.
+    expect(await c.selectRef('U1', '/r')).toBe('focused');
+    expect(fake.getActive()?.type).toBe('schematic');
+    expect(fake.viewer.zooms).toBe(0);
+  });
+
   it("reports the reader's own picks on either drawing, as designators", async () => {
     const fake = fakeEmbed({ pages: PAGES });
     const c = controller(fake);

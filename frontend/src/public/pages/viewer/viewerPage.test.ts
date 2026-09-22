@@ -19,6 +19,8 @@
  */
 import { act, createElement, forwardRef, Profiler, useEffect, useImperativeHandle } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 type AnyProps = Record<string, never> & Record<string, unknown>;
@@ -36,7 +38,10 @@ const canvas = {
   /** How many times the host has MOUNTED. The Phase 2 invariant is one embed
    *  per project, so every tab trip has to leave this alone. */
   mounts: 0,
-  focusRef: vi.fn(async (_ref: string, _sheet?: string) => 'focused' as const),
+  focusRef: vi.fn(async (_ref: string, _sheet?: string, _view?: string) => 'focused' as const),
+  selectRef: vi.fn(async (_ref: string | null, _sheet?: string, _view?: string) => 'focused' as const),
+  /** The page's `onSelection` handler, so a test can play a click on the drawing. */
+  onSelection: null as ((s: { ref: string | null; sheet?: string; view?: string }) => void) | null,
 };
 
 /** Every (parsed, viewerHref) pair the page has handed the workbench, in order
@@ -58,6 +63,8 @@ const wb = {
 
 vi.mock('react-router-dom', () => ({
   useLocation: () => ({ pathname: '/viewer', search: '', hash, state: null, key: 'k' }),
+  // The part panel links to the part page; a plain anchor stands in for the router's.
+  Link: (props: AnyProps) => createElement('a', { href: props.to as string, className: props.className as string }, props.children as never),
 }));
 vi.mock('framer-motion', () => ({
   motion: { div: (props: AnyProps) => createElement('div', null, props.children as never) },
@@ -81,7 +88,8 @@ vi.mock('@public/components/kicad/DesignCanvas', () => ({
     canvas.view = props.view as string;
     canvas.activeSheet = props.activeSheet as string | undefined;
     canvas.onState = props.onState as (s: string) => void;
-    useImperativeHandle(ref, () => ({ focusRef: canvas.focusRef, zoom: async () => true }), []);
+    canvas.onSelection = props.onSelection as typeof canvas.onSelection;
+    useImperativeHandle(ref, () => ({ focusRef: canvas.focusRef, selectRef: canvas.selectRef, zoom: async () => true }), []);
     // The real host reports in its MOUNT effect, before the renderer bundle is
     // fetched — an effect here, not a render-body call, for the same reason:
     // it is a parent setState.
@@ -98,13 +106,19 @@ vi.mock('@public/components/kicad/DesignCanvas', () => ({
 /** The 3D host, stubbed for the same reason the canvas is: the contract this
  *  file tests is WHEN the page mounts it, not what three.js draws. */
 vi.mock('@public/components/kicad/board3d/Board3DView', () => ({
-  default: () => createElement('div', { 'data-testid': 'board3d' }),
+  default: (props: AnyProps) =>
+    createElement(
+      'div',
+      { 'data-testid': 'board3d', 'data-selected': (props.selectedRef as string | null) ?? '' },
+      // A stand-in for a pick on the 3D board.
+      createElement('button', { type: 'button', 'data-testid': 'pick3d', onClick: () => (props.onSelect as (r: string | null) => void)('U2') }, 'pick'),
+    ),
 }));
 vi.mock('@public/components/bom/BomTable', () => ({
   default: (props: AnyProps) =>
     createElement(
       'div',
-      { 'data-testid': 'bom-ref' },
+      { 'data-testid': 'bom-ref', 'data-selected': (props.selectedRef as string | null) ?? '' },
       ['U1', 'U2'].map((ref) =>
         createElement(
           'button',
@@ -204,7 +218,8 @@ function makeSession(over: { root?: string | null; board?: string | null; boardT
       missingSheets: [],
       formatVersions: {},
     },
-    parsed: { lines: [{ index: 0, qty: 2 }], warnings: [], error: null },
+    // One line carrying both designators, as the reader would write it.
+    parsed: { lines: [{ index: 0, qty: 2, refs: ['U1', 'U2'], value: '10k', footprint: 'R_0402', mpn: null, dnp: false }], warnings: [], error: null },
     refs: new Map([
       ['U1', { sheet: 'sub/power.kicad_sch', instancePath: '/r/a' }],
       ['U2', { sheet: 'main.kicad_sch', instancePath: '/r' }],
@@ -339,6 +354,8 @@ beforeEach(() => {
   canvas.mounts = 0;
   canvas.focusRef.mockClear();
   canvas.focusRef.mockResolvedValue('focused');
+  canvas.selectRef.mockClear();
+  canvas.selectRef.mockResolvedValue('focused');
   canvas.activeSheet = undefined;
   readStackupCalls.mockClear();
   wb.reset.mockClear();
@@ -951,5 +968,186 @@ describe('the tablist contract', () => {
     });
     expect(event.defaultPrevented).toBe(false);
     expect(byText('Schematic').getAttribute('aria-selected')).toBe(before);
+  });
+});
+
+
+// The part panel — one selection for the page, whichever door it came through.
+describe('the part panel', () => {
+  const panel = () => container.querySelector('[aria-label="Part"]') as HTMLElement;
+  const search = () => container.querySelector('input[aria-label="Find a reference"]') as HTMLInputElement;
+  const headRef = () => panel().querySelector('p')?.textContent ?? null;
+
+  async function type(text: string) {
+    const input = search();
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+      setter.call(input, text);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => {
+      input.form!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    });
+  }
+
+  it('starts empty, with the search and an invitation, on every tab', async () => {
+    session = makeSession({ board: 'main.kicad_pcb' });
+    await render();
+    expect(panel()).not.toBeNull();
+    expect(search()).not.toBeNull();
+    expect(panel().textContent).toMatch(/Click a part/);
+    await click(byText('Stackup'));
+    expect(panel().textContent).toMatch(/Click a part/);
+    await click(byText('BOM'));
+    expect(panel().textContent).toMatch(/Click a part/);
+  });
+
+  it('a click on the drawing identifies the part and marks its BOM chip', async () => {
+    wb.rows = [{ index: 0 }];
+    await render();
+    await canvasReady();
+    await act(async () => canvas.onSelection?.({ ref: 'U1', sheet: '/r/a', view: 'schematic' }));
+    expect(headRef()).toBe('U1');
+    expect(panel().textContent).toMatch(/Show on/);
+    // The drawing already shows it: nothing is sent back to the canvas.
+    expect(canvas.selectRef).not.toHaveBeenCalled();
+    await click(byText('BOM'));
+    expect((container.querySelector('[data-testid="bom-ref"]') as HTMLElement).dataset.selected).toBe('U1');
+    // …and clicking nothing clears it.
+    await click(byText('Schematic'));
+    await act(async () => canvas.onSelection?.({ ref: null, view: 'schematic' }));
+    expect(panel().textContent).toMatch(/Click a part/);
+  });
+
+  it('a BOM chip selects as well as focusing', async () => {
+    wb.rows = [{ index: 0 }];
+    await render();
+    await canvasReady();
+    await click(byText('BOM'));
+    await click(bomRef('U1'));
+    expect(headRef()).toBe('U1');
+    expect(canvas.focusRef).toHaveBeenCalledWith('U1', '/r/a');
+  });
+
+  it('the search resolves a designator in any case and takes the schematic to it', async () => {
+    await render();
+    await canvasReady();
+    await type('u1');
+    expect(headRef()).toBe('U1');
+    expect(canvas.focusRef).toHaveBeenCalledWith('U1', '/r/a');
+    expect(canvas.activeSheet).toBe('sub/power.kicad_sch');
+  });
+
+  it('the search says so for a designator nobody knows, and Esc clears it', async () => {
+    await render();
+    await canvasReady();
+    await type('U99');
+    expect(panel().textContent).toMatch(/U99/);
+    expect(panel().textContent).toMatch(/Not in this project/);
+    expect(canvas.focusRef).not.toHaveBeenCalled();
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+    expect(panel().textContent).toMatch(/Click a part/);
+    // The drawing is told to drop its outline only when it had one.
+    expect(canvas.selectRef).not.toHaveBeenCalledWith(null);
+  });
+
+  it('"/" focuses the search unless the reader is already typing', async () => {
+    await render();
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: '/', bubbles: true }));
+    });
+    expect(document.activeElement).toBe(search());
+  });
+
+  it('arriving at the board carries the selection over without a zoom, and "Show on Board" zooms', async () => {
+    session = makeSession({ board: 'main.kicad_pcb' });
+    wb.rows = [{ index: 0 }];
+    await render();
+    await canvasReady();
+    await click(byText('BOM'));
+    await click(bomRef('U1'));
+    canvas.focusRef.mockClear();
+    await click(byText('Board'));
+    expect(canvas.selectRef).toHaveBeenCalledWith('U1', undefined, 'board');
+    expect(canvas.focusRef).not.toHaveBeenCalled();
+    // Back on the schematic the outline follows, on the designator's own sheet.
+    canvas.selectRef.mockClear();
+    await click(byText('Schematic'));
+    expect(canvas.selectRef).toHaveBeenCalledWith('U1', '/r/a', 'schematic');
+    // The panel's own button is the travel gesture.
+    const show = [...panel().querySelectorAll('[aria-label="Show on"] button')].find((b) => b.textContent === 'Board') as HTMLButtonElement;
+    await click(show);
+    expect(byText('Board').getAttribute('aria-selected')).toBe('true');
+    expect(canvas.focusRef).toHaveBeenCalledWith('U1', undefined, 'board');
+  });
+
+  it('a pick in the 3D view identifies the part and the 3D view is told what is selected', async () => {
+    session = makeSession({ board: 'main.kicad_pcb' });
+    await render();
+    await click(byText('3D'));
+    await click(container.querySelector('[data-testid="pick3d"]') as HTMLElement);
+    expect(headRef()).toBe('U2');
+    expect((container.querySelector('[data-testid="board3d"]') as HTMLElement).dataset.selected).toBe('U2');
+    // Off the 3D tab and onto the schematic: the outline follows without a zoom.
+    await canvasReady();
+    await click(byText('Schematic'));
+    expect(canvas.selectRef).toHaveBeenCalledWith('U2', '/r', 'schematic');
+  });
+
+  it('reads the board\u2019s placements on the first selection, and only then', async () => {
+    session = makeSession({ board: 'main.kicad_pcb' });
+    await render();
+    await canvasReady();
+    // The fixture board has no footprints, so the facts show dashes — the point
+    // is WHEN the file is scanned, which readStackupCalls cannot see; the panel
+    // renders the position row only once a part is selected.
+    expect(panel().textContent).not.toMatch(/Position/);
+    await act(async () => canvas.onSelection?.({ ref: 'U1', sheet: '/r/a', view: 'schematic' }));
+    expect(panel().textContent).toMatch(/Position/);
+    expect(panel().textContent).toMatch(/Sheet/);
+  });
+
+  it('offers to price the BOM when the project is not priced yet, and prices it on the click', async () => {
+    await render();
+    await canvasReady();
+    await act(async () => canvas.onSelection?.({ ref: 'U1', sheet: '/r/a', view: 'schematic' }));
+    const btn = [...panel().querySelectorAll('button')].find((b) => /Price the BOM/.test(b.textContent ?? ''));
+    expect(btn).toBeDefined();
+    await click(btn as HTMLButtonElement);
+    expect(byText('BOM').getAttribute('aria-selected')).toBe('true');
+    expect(wbCalls.at(-1)?.parsed).toBe((session as { parsed: unknown }).parsed);
+  });
+
+  it('"Open another" clears the selection with the project', async () => {
+    await render();
+    await canvasReady();
+    await act(async () => canvas.onSelection?.({ ref: 'U1', sheet: '/r/a', view: 'schematic' }));
+    await click(byText('Open another'));
+    await click(container.querySelector('[data-testid="intake"]') as HTMLElement);
+    expect(panel().textContent).toMatch(/Click a part/);
+  });
+});
+
+// The tab strip is one track that shares its width on a phone: the fifth tab
+// used to push it 40px past a 390px screen. Class names prove nothing under
+// vitest (CSS is off), so this reads the stylesheet.
+describe('the tab strip stylesheet', () => {
+  const scss = readFileSync(join(__dirname, 'ViewerPage.module.scss'), 'utf8');
+  it('is a single track that stretches on a phone and lets every tab share the width', () => {
+    expect(scss).toMatch(/\.tabs \{[^{}]*display:\s*inline-flex/);
+    const mobile = scss.slice(scss.indexOf('@include responsive($bp-mobile)'));
+    expect(mobile).toMatch(/\.tabs \{[^{}]*align-self:\s*stretch/);
+    expect(mobile).toMatch(/\.tab \{[^{}]*flex:\s*1 1 0/);
+    // …and never scrolls sideways again.
+    expect(scss).not.toMatch(/\.tabs \{[^{}]*overflow-x/);
+  });
+  it('keeps the stage clear of the bottom sheet on a phone', () => {
+    const mobile = scss.slice(scss.indexOf('@include responsive($bp-mobile)'));
+    // `.loaded`'s min-height interpolates a variable (`#{…}`), so a brace-free
+    // scan would stop short; read the rule up to the next selector instead.
+    const loaded = mobile.slice(mobile.indexOf('.loaded {'));
+    expect(loaded.slice(0, loaded.indexOf('.stage'))).toMatch(/padding-bottom:\s*60px/);
   });
 });

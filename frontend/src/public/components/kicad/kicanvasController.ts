@@ -523,8 +523,8 @@ export class KicanvasController implements CanvasController {
    * not, the host is asking for somewhere else and the reader's gesture takes
    * the view back.
    */
-  private async activateForFocus(sheet: string): Promise<ActivateOutcome> {
-    const outcome = await this.activateFor('schematic', sheet);
+  private async activateForFocus(view: CanvasView, sheet?: string): Promise<ActivateOutcome> {
+    const outcome = await this.activateFor(view, sheet);
     // 'ok' is done. 'failed' is a real miss (no such page, a dropped basename
     // twin) or a dead mount: waiting longer cannot conjure a page, and retrying
     // a set_active_page that threw only throws again.
@@ -545,32 +545,36 @@ export class KicanvasController implements CanvasController {
     // wins. Taking the view back — which this used to do — would snap the
     // drawing off the sheet they just picked and leave the chip bar naming a
     // sheet that is not on screen, with nothing to converge it.
-    return this.showing(sheet) ? 'ok' : 'superseded';
+    return this.showing(view, sheet) ? 'ok' : 'superseded';
   }
 
-  /** Is the page `sheet` names the one on screen? Compared by DOCUMENT, because
+  /** Is the page `view`/`sheet` names the one on screen? Compared by DOCUMENT, because
    *  that is what the viewer holds and what decides what is drawn — two instance
    *  pages of one file share it (upstream's `file_by_name`), so an instance
    *  switch within a file is not a different drawing. */
-  private showing(sheet: string): boolean {
-    const wanted = this.findPage('schematic', sheet);
+  private showing(view: CanvasView, sheet?: string): boolean {
+    const wanted = this.findPage(view, sheet);
     const active = this.project()?.active_page ?? null;
     return wanted != null && active != null && active.document === wanted.document;
   }
 
-  async focusRef(ref: string, sheet?: string): Promise<FocusResult> {
-    return this.applySelection(ref, sheet, true);
+  async focusRef(ref: string, sheet?: string, view?: CanvasView): Promise<FocusResult> {
+    return this.applySelection(ref, sheet, view, true);
   }
 
-  async selectRef(ref: string | null, sheet?: string): Promise<FocusResult> {
-    return this.applySelection(ref, sheet, false);
+  async selectRef(ref: string | null, sheet?: string, view?: CanvasView): Promise<FocusResult> {
+    return this.applySelection(ref, sheet, view, false);
   }
 
-  /** The one routine behind focusRef and selectRef: switch sheet, select, and — for a
-   *  focus — zoom. `ref` null clears whatever the visible drawing has selected. */
-  private async applySelection(ref: string | null, sheet: string | undefined, zoom: boolean): Promise<FocusResult> {
-    if (sheet != null && ref != null) {
-      const activated = await this.activateForFocus(sheet);
+  /** The one routine behind focusRef and selectRef: switch view or sheet, select, and —
+   *  for a focus — zoom. `ref` null clears whatever the visible drawing has selected. A
+   *  sheet implies the schematic; a bare `view: 'board'` shows the board first. */
+  private async applySelection(
+    ref: string | null, sheet: string | undefined, view: CanvasView | undefined, zoom: boolean,
+  ): Promise<FocusResult> {
+    const target: CanvasView | null = sheet != null ? 'schematic' : view ?? null;
+    if (target != null && ref != null) {
+      const activated = await this.activateForFocus(target, target === 'schematic' ? sheet : undefined);
       // Stood down for a newer sheet choice — not a statement about `ref`.
       if (activated === 'superseded') return 'superseded';
       if (activated === 'failed') return 'not-found';
@@ -598,9 +602,9 @@ export class KicanvasController implements CanvasController {
     } finally {
       this.muted--;
     }
-    const view: CanvasView = this.project()?.active_page?.type === 'pcb' ? 'board' : 'schematic';
+    const shown: CanvasView = this.project()?.active_page?.type === 'pcb' ? 'board' : 'schematic';
     if (ref == null) {
-      this.emit({ type: 'selection', ref: null, view, sheet: this.activeSheetPath() });
+      this.emit({ type: 'selection', ref: null, view: shown, sheet: this.activeSheetPath() });
       return 'focused';
     }
     if (!viewer.selected) return 'not-found';
@@ -611,7 +615,7 @@ export class KicanvasController implements CanvasController {
         return 'unsupported';
       }
     }
-    this.emit({ type: 'selection', ref, view, sheet: this.activeSheetPath() });
+    this.emit({ type: 'selection', ref, view: shown, sheet: this.activeSheetPath() });
     return 'focused';
   }
 

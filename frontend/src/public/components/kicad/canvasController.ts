@@ -40,17 +40,22 @@ export interface CanvasController {
   mount(host: HTMLElement, project: KicadProject): Promise<void>;
   /** Show the board, or a schematic sheet (a path key from the project, or an instance path). True when a page was found. */
   activate(view: CanvasView, sheet?: string): Promise<boolean>;
-  /** Select and zoom to a reference designator, switching sheet first when one is given. */
-  focusRef(ref: string, sheet?: string): Promise<FocusResult>;
+  /**
+   * Select and zoom to a reference designator, switching sheet first when one
+   * is given. `view` names the drawing to select on: `'board'` shows the board
+   * first (a footprint), `'schematic'` a sheet (a symbol; `sheet` is its
+   * instance path). Absent, the drawing on screen is used as it stands.
+   */
+  focusRef(ref: string, sheet?: string, view?: CanvasView): Promise<FocusResult>;
   /**
    * Select a reference designator WITHOUT moving the camera — the selection
-   * outline appears where the part already is — switching sheet first when one
-   * is given. `null` clears the selection on the visible drawing. A host uses
-   * this to carry a selection made elsewhere (the 3D view, the part panel)
-   * onto the drawing the reader arrives at; `focusRef` is for a gesture that
-   * asked to be TAKEN to the part.
+   * outline appears where the part already is — switching sheet or view first
+   * on the same terms as `focusRef`. `null` clears the selection on the
+   * visible drawing. A host uses this to carry a selection made elsewhere (the
+   * 3D view, the part panel) onto the drawing the reader arrives at;
+   * `focusRef` is for a gesture that asked to be TAKEN to the part.
    */
-  selectRef(ref: string | null, sheet?: string): Promise<FocusResult>;
+  selectRef(ref: string | null, sheet?: string, view?: CanvasView): Promise<FocusResult>;
   /** Fit the page, or step the zoom. False when the renderer exposes no such control (the buttons then hide). */
   zoom(action: ZoomAction): Promise<boolean>;
   /**

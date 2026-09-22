@@ -25,12 +25,43 @@
 }
 
 // Loaded phase ---------------------------------------------------------------
-// A flex column: strip and tabs at their natural height, the drawing takes the
+// A flex column: strip and tabs at their natural height, the stage takes the
 // rest of the viewport below the navbar, at every width (owner, Phase 0 gate).
 .loaded {
   display: flex;
   flex-direction: column;
   min-height: calc(100dvh - #{$nav-height});
+}
+
+// The stage and the part panel, side by side. The stage holds whichever tab
+// panel is live and grows to fill the column; the rail keeps its own width and
+// sticks under the navbar, scrolling on its own when the stage is taller than
+// the viewport (the BOM table). `minmax(0, 1fr)` is what lets a wide table
+// shrink instead of pushing the rail off the bench.
+.stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 296px;
+  gap: 14px;
+  align-items: stretch;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.stageMain {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.rail {
+  position: sticky;
+  top: calc(#{$nav-height} + 12px);
+  align-self: start;
+  max-height: calc(100dvh - #{$nav-height} - 24px);
+  overflow: auto;
+  border-radius: 14px;
+  @include scrollbar-thin(4px);
 }
 
 .drawing {
@@ -48,52 +79,104 @@
   }
 }
 
+// The project strip: one bar, not a card — the name, what was read, and the
+// way out, on a single line that the notes tuck under. It used to be a 60px
+// glass card with the button on its own row on a phone.
 .strip {
-  @include bom-card;
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  gap: 10px 18px;
-  padding: 12px 16px;
-  margin-bottom: 14px;
+  align-items: baseline;
+  gap: 4px 14px;
+  padding: 2px 4px 10px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid rgba(26, 31, 35, 0.1);
 }
 
 .stripName {
+  font-family: $font-mono;
   font-weight: 600;
-  color: $text-primary;
+  font-size: 1.02rem;
+  color: #1a1f23;
 }
 
 .stripMeta {
   color: $text-secondary;
-  font-size: 0.88rem;
+  font-size: 0.86rem;
 }
 
 .stripAction {
   @include bom-glass-control;
+  position: relative;
   margin-left: auto;
-  padding: 7px 14px;
+  padding: 7px 12px;
+  font-size: 0.84rem;
   line-height: 1;
   cursor: pointer;
+  align-self: center;
+  @include tap-target(-6px);
 }
 
+// What the reader skipped or could not find, in the strip's own quiet voice.
+// These are notes about the read, not warnings about the reader's design, so
+// they are not gold.
+.stripNotes {
+  flex-basis: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: $text-secondary;
+}
+
+// The tabs as ONE control: a recessed glass track with the live view lit in
+// the brand green. A row of separate pills read as five unrelated buttons and,
+// with the 5th tab, overflowed a 390px phone by 40px and scrolled; the track
+// shares its width across the tabs on a phone instead, so every label is on
+// screen at 360px.
 .tabs {
-  display: flex;
-  gap: 8px;
-  overflow-x: auto;
-  padding-bottom: 6px;
-  margin-bottom: 12px;
-  @include scrollbar-thin(4px);
+  display: inline-flex;
+  align-self: flex-start;
+  gap: 2px;
+  padding: 3px;
+  margin-bottom: 10px;
+  background: linear-gradient(rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.28));
+  border: 1px solid rgba(26, 31, 35, 0.1);
+  border-radius: 13px;
+  box-shadow:
+    inset 0 1px 2px rgba(60, 50, 90, 0.1),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.3);
 }
 
 .tab {
-  @include bom-glass-control;
-  padding: 8px 14px;
+  position: relative;
+  min-height: 34px;
+  padding: 0 14px;
+  font-family: $font-body;
+  font-size: 0.88rem;
+  font-weight: 520;
   line-height: 1;
   white-space: nowrap;
+  color: #2b3137;
+  background: transparent;
+  border: 0;
+  border-radius: 10px;
   cursor: pointer;
+  transition: background-color 0.12s ease, color 0.12s ease;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.55);
+  }
+
+  &:focus-visible {
+    outline: 2px solid rgba(68, 189, 19, 0.8);
+    outline-offset: -2px;
+  }
 
   &[aria-selected='true'] {
     @include bom-primary-control;
+    border-radius: 10px;
+    line-height: 1;
   }
 }
 
@@ -194,8 +277,47 @@
 // The strip above the page is $nav-height-mobile (48px) here, not $nav-height
 // (36px), so the viewport left for the drawing is 12px smaller. Must come AFTER
 // `.loaded` above: same specificity, source order decides (CLAUDE.md).
+//
+// The part panel is a fixed sheet along the bottom here; its peek row is 52px
+// and the stage keeps that much clear below itself, so the drawing's Fit / +
+// / − controls never sit under it.
 @include responsive($bp-mobile) {
   .loaded {
     min-height: calc(100dvh - #{$nav-height-mobile});
+    padding-bottom: 60px;
+  }
+
+  .stage {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .rail {
+    position: static;
+    max-height: none;
+    overflow: visible;
+    border-radius: 0;
+  }
+
+  .stripAction {
+    margin-left: 0;
+  }
+
+  .tabs {
+    display: flex;
+    align-self: stretch;
+    gap: 0;
+  }
+
+  .tab {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 0 6px;
+    font-size: 0.84rem;
+    text-align: center;
+  }
+
+  .toast {
+    bottom: 68px;
   }
 }

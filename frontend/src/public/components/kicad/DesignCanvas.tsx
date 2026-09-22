@@ -56,9 +56,9 @@ export interface DesignCanvasProps {
 }
 
 export interface DesignCanvasHandle {
-  focusRef(ref: string, sheet?: string): Promise<FocusResult>;
+  focusRef(ref: string, sheet?: string, view?: CanvasView): Promise<FocusResult>;
   /** Select without moving the camera; null clears. See `CanvasController.selectRef`. */
-  selectRef(ref: string | null, sheet?: string): Promise<FocusResult>;
+  selectRef(ref: string | null, sheet?: string, view?: CanvasView): Promise<FocusResult>;
   zoom(action: ZoomAction): Promise<boolean>;
 }
 
@@ -149,8 +149,8 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(function 
   // Both members read `controllerRef.current` at CALL time, so the handle never goes
   // stale and `[]` keeps its identity fixed — a parent may hold it in a dep array.
   useImperativeHandle(ref, () => ({
-    focusRef: (r, sheet) => controllerRef.current?.focusRef(r, sheet) ?? Promise.resolve('unsupported' as const),
-    selectRef: (r, sheet) => controllerRef.current?.selectRef(r, sheet) ?? Promise.resolve('unsupported' as const),
+    focusRef: (r, sheet, view) => controllerRef.current?.focusRef(r, sheet, view) ?? Promise.resolve('unsupported' as const),
+    selectRef: (r, sheet, view) => controllerRef.current?.selectRef(r, sheet, view) ?? Promise.resolve('unsupported' as const),
     zoom: (action) => controllerRef.current?.zoom(action) ?? Promise.resolve(false),
   }), []);
 

@@ -104,6 +104,9 @@ interface BomTableProps {
    *  panel is open and drops it when closed, so the same table falls back to
    *  linking out to the viewer. */
   onRefClick?: (ref: string) => void;
+  /** The designator a host has selected elsewhere (its part panel, its
+   *  drawing): that chip is marked current so the table and the panel agree. */
+  selectedRef?: string | null;
   /** DNP lines counted, priced and totalled like any other line. Default off:
    *  the whole point of the flag is that nobody is buying those parts. */
   includeDnp: boolean;
@@ -269,6 +272,7 @@ export default function BomTable({
   onBuildQtyChange,
   onPickSimilar,
   onRefClick,
+  selectedRef = null,
   includeDnp,
   onIncludeDnpChange,
 }: BomTableProps) {
@@ -543,6 +547,7 @@ export default function BomTable({
                               // a label would override it. The title is for
                               // pointer users, who get no other affordance.
                               title={`Find ${ref} on the schematic`}
+                              aria-current={ref === selectedRef ? 'true' : undefined}
                               onClick={() => onRefClick(ref)}
                             >
                               {ref}

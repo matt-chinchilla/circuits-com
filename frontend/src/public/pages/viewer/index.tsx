@@ -8,18 +8,21 @@ import { motion } from 'framer-motion';
 import { useLocation } from 'react-router-dom';
 import PageHead from '@public/components/PageHead';
 import PageHeaderBand from '@public/components/layout/PageHeaderBand';
-import DesignCanvas, { type DesignCanvasHandle } from '@public/components/kicad/DesignCanvas';
+import DesignCanvas, { type CanvasSelection, type DesignCanvasHandle } from '@public/components/kicad/DesignCanvas';
 import type { CanvasStateName } from '@public/components/kicad/canvasController';
 import StackupPanel from '@public/components/kicad/StackupPanel';
 import BomTable from '@public/components/bom/BomTable';
 import ShareBar from '@public/components/bom/ShareBar';
 import { useBomWorkbench } from '@public/services/bom/useBomWorkbench';
 import { readStackup } from '@public/services/kicad/boardStackup';
+import { readPlacements } from '@public/services/kicad/boardPlacements';
 import { basename } from '@public/services/kicad/project';
 import type { KicadProject } from '@public/services/kicad/types';
 import { clearDesignSession, getDesignSession, openDesign, type DesignSession } from '@public/services/designSession';
 import { STATIC_PAGE_SEO } from '@public/services/seoRoutes';
 import ViewerIntake from './components/ViewerIntake';
+import PartPanel, { type PartPanelHandle, type ShowOn } from './components/PartPanel';
+import { knownRefs, partFacts, resolveRef } from './partFacts';
 import styles from './ViewerPage.module.scss';
 
 /**
@@ -122,6 +125,12 @@ function defaultTab(session: DesignSession): Tab {
   return session.project.root != null ? 'schematic' : 'board';
 }
 
+/** Is the keyboard's target a place where `/` and Esc mean something else? */
+function typingIn(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  return target.matches('input, textarea, select, [contenteditable=""], [contenteditable="true"]');
+}
+
 export default function ViewerPage() {
   const location = useLocation();
   const [session, setSession] = useState<DesignSession | null>(() => getDesignSession());
@@ -146,7 +155,30 @@ export default function ViewerPage() {
    * reader who never opens the tab was paying it on every project open.
    */
   const [stackupSeen, setStackupSeen] = useState(false);
+  /**
+   * The identified part — ONE selection for the whole page, whichever door it
+   * came through: a click on the schematic or board (the canvas reports it),
+   * a pick in the 3D view, a BOM designator chip, the panel's search, or the
+   * URL hash. Every mounted view draws it; the part panel describes it.
+   */
+  const [selectedRef, setSelectedRef] = useState<string | null>(null);
+  /**
+   * Has the board's placement table been asked for? The same one-way latch as
+   * `stackupSeen`: `readPlacements` re-scans the whole board (~40 ms on
+   * Glasgow), and a reader who never identifies a part never pays it. Armed by
+   * the first selection or by focusing the search, so a typed reference on a
+   * board-only project resolves before the reader finishes typing.
+   */
+  const [placementsSeen, setPlacementsSeen] = useState(false);
   const canvasRef = useRef<DesignCanvasHandle>(null);
+  const panelRef = useRef<PartPanelHandle>(null);
+  /**
+   * The designator the CANVAS itself last reported. When the page's selection
+   * came from a click on the drawing, the drawing already shows it; the sync
+   * below must not send it straight back as a `selectRef` (a harmless but
+   * wasted round trip that also re-emits the event).
+   */
+  const canvasHas = useRef<string | null>(null);
   /** The tab buttons, so an arrow key can move real DOM focus and not only the
    *  selection. Keyed by tab id rather than by index: `tabs` changes shape with
    *  the project, and a stale index would focus the wrong button. */
@@ -203,6 +235,9 @@ export default function ViewerPage() {
     setCanvasState('loading');
     setBomSeen(false);
     setStackupSeen(false);
+    setSelectedRef(null);
+    setPlacementsSeen(false);
+    canvasHas.current = null;
   }, []);
 
   // Deliberately NOT called on unmount: surviving the /viewer ↔ /bom trip is
@@ -225,6 +260,9 @@ export default function ViewerPage() {
     // A toast raised a moment ago would otherwise float over the fresh intake.
     setToast(null);
     pendingFocus.current = null;
+    setSelectedRef(null);
+    setPlacementsSeen(false);
+    canvasHas.current = null;
   };
 
   const focus = useCallback(
@@ -234,6 +272,10 @@ export default function ViewerPage() {
       const seq = ++focusSeq.current;
       const s = session;
       if (s == null) return;
+      // A focus IS a selection: the panel describes the part the reader asked
+      // to be taken to, whether or not the drawing could show it.
+      setSelectedRef(ref);
+      setPlacementsSeen(true);
       if (s.project.root == null) {
         // Reachable: arrive at /viewer#U1, then open a board-only project. Without
         // this we would select a Schematic tab that the tablist does not render.
@@ -310,6 +352,122 @@ export default function ViewerPage() {
     if (tab === 'stackup') setStackupSeen(true);
   }, [tab]);
 
+  // One-way: see `placementsSeen`.
+  useEffect(() => {
+    if (selectedRef != null) setPlacementsSeen(true);
+  }, [selectedRef]);
+
+  /** The canvas reported a selection — the reader's click, or the echo of a
+   *  focus. Either way it is now what the drawing shows. */
+  const handleCanvasSelection = useCallback((selection: CanvasSelection) => {
+    canvasHas.current = selection.ref;
+    setSelectedRef(selection.ref);
+  }, []);
+
+  /**
+   * Carry the selection onto the drawing the reader arrives at, WITHOUT the
+   * zoom: on the schematic the designator's own sheet is shown and the symbol
+   * outlined; on the board the footprint is outlined where it is. Runs on a
+   * tab arrival, and on a selection made off-canvas (the 3D view, the panel)
+   * while a drawing is on screen. A selection the canvas itself reported is
+   * already on it and is not sent back.
+   */
+  useEffect(() => {
+    if (session == null || canvasState !== 'ready') return;
+    if (tab !== 'schematic' && tab !== 'board') return;
+    if (selectedRef == null) {
+      if (canvasHas.current != null) {
+        canvasHas.current = null;
+        void canvasRef.current?.selectRef(null);
+      }
+      return;
+    }
+    if (canvasHas.current === selectedRef) return;
+    const where = session.refs.get(selectedRef);
+    if (tab === 'schematic') {
+      if (where != null && droppedSheets.has(where.sheet)) return;
+      if (where != null) setActiveSheet(where.sheet);
+      void canvasRef.current?.selectRef(selectedRef, where?.instancePath, 'schematic');
+    } else {
+      void canvasRef.current?.selectRef(selectedRef, undefined, 'board');
+    }
+    // `droppedSheets` is read, not depended on: it changes only with the project.
+  }, [tab, selectedRef, canvasState, session]);
+
+  const clearSelection = useCallback(() => {
+    focusSeq.current += 1;
+    setSelectedRef(null);
+  }, []);
+
+  /** The panel's search: resolve the typed designator against everything the
+   *  project names, then show it on whichever drawing is live. */
+  const searchRef = useCallback(
+    (text: string) => {
+      const s = session;
+      if (s == null) return;
+      setPlacementsSeen(true);
+      const known = knownRefs({ lines: s.parsed.lines, refs: s.refs, placements: placementsRef.current });
+      const ref = resolveRef(text, known);
+      if (ref == null) {
+        // The panel says "not in this project" for a designator nobody knows.
+        setSelectedRef(text.trim());
+        return;
+      }
+      if (tab === 'schematic') {
+        void focus(ref);
+      } else if (tab === 'board') {
+        setSelectedRef(ref);
+        canvasHas.current = ref;
+        void canvasRef.current?.focusRef(ref, undefined, 'board');
+      } else {
+        setSelectedRef(ref);
+      }
+    },
+    [session, tab, focus],
+  );
+
+  /** The panel's "Show on" row: take the reader to the part on that view. */
+  const showOn = useCallback(
+    (view: ShowOn) => {
+      const ref = selectedRef;
+      if (ref == null) return;
+      focusSeq.current += 1;
+      if (view === 'schematic') {
+        void focus(ref);
+      } else if (view === 'board') {
+        setTab('board');
+        canvasHas.current = ref;
+        void canvasRef.current?.focusRef(ref, undefined, 'board');
+      } else {
+        setTab('board3d');
+      }
+    },
+    [selectedRef, focus],
+  );
+
+  // `/` focuses the search and Esc clears the selection, anywhere on the page
+  // that is not itself a text field. The search field's own Esc empties it
+  // first; a second Esc from there clears the selection.
+  useEffect(() => {
+    if (session == null) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) return;
+      if (e.key === '/' && !typingIn(e.target)) {
+        e.preventDefault();
+        panelRef.current?.focusSearch();
+      } else if (e.key === 'Escape') {
+        if (typingIn(e.target)) {
+          const field = e.target as HTMLInputElement;
+          if (field.value !== '') return;
+          field.blur();
+        }
+        clearSelection();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [session, clearSelection]);
+
   useEffect(() => {
     if (toast == null) return;
     const id = setTimeout(() => setToast(null), 2500);
@@ -365,6 +523,43 @@ export default function ViewerPage() {
       return null;
     }
   }, [session, stackupWanted]);
+
+  /**
+   * Where every footprint sits, read from the board on the first selection
+   * (see `placementsSeen`) and once per project. Null for a project with no
+   * board, or a board the reader cannot scan — the panel then shows dashes
+   * for side and position rather than a guess.
+   */
+  const placements = useMemo(() => {
+    const board = session?.project.board;
+    if (session == null || board == null || !placementsSeen) return null;
+    try {
+      return readPlacements(session.project.files.get(board) ?? '');
+    } catch {
+      return null;
+    }
+  }, [session, placementsSeen]);
+  const placementsRef = useRef(placements);
+  placementsRef.current = placements;
+
+  const refIndex = useMemo(
+    () => (session == null ? [] : knownRefs({ lines: session.parsed.lines, refs: session.refs, placements })),
+    [session, placements],
+  );
+
+  const facts = useMemo(
+    () =>
+      session == null || selectedRef == null
+        ? null
+        : partFacts(selectedRef, {
+            lines: session.parsed.lines,
+            rows: wb.rows,
+            refs: session.refs,
+            placements,
+            buildQty: wb.buildQty,
+          }),
+    [session, selectedRef, wb.rows, wb.buildQty, placements],
+  );
 
   /**
    * Which drawing tab currently labels the shared canvas panel.
@@ -465,20 +660,22 @@ export default function ViewerPage() {
               <div className={styles.strip}>
                 <span className={styles.stripName}>{session.project.name}</span>
                 <span className={styles.stripMeta}>
-                  {session.project.sheets.length} {session.project.sheets.length === 1 ? 'sheet' : 'sheets'} &middot;{' '}
-                  {session.parsed.lines.reduce((n, l) => n + l.qty, 0).toLocaleString('en-US')} parts &middot; board:{' '}
-                  {session.project.board != null ? 'yes' : 'no'}
+                  {session.project.sheets.length} {session.project.sheets.length === 1 ? 'sheet' : 'sheets'},{' '}
+                  {session.parsed.lines.reduce((n, l) => n + l.qty, 0).toLocaleString('en-US')} parts,{' '}
+                  {session.project.board != null ? 'with a board' : 'no board'}
                 </span>
                 <button type="button" className={styles.stripAction} onClick={openAnother}>
                   Open another
                 </button>
+                {(session.project.warnings.length > 0 || session.parsed.warnings.length > 0) && (
+                  <ul className={styles.stripNotes}>
+                    {[...session.project.warnings, ...session.parsed.warnings].map((w) => (
+                      <li key={w}>{w}</li>
+                    ))}
+                  </ul>
+                )}
               </div>
 
-              {[...session.project.warnings, ...session.parsed.warnings].map((w) => (
-                <p key={w} className={styles.phaseWarn}>
-                  {w}
-                </p>
-              ))}
               {session.project.missingSheets.length > 0 && (
                 <p className={styles.pageError} role="alert">
                   Missing sheet file{session.project.missingSheets.length === 1 ? '' : 's'}:{' '}
@@ -540,6 +737,8 @@ export default function ViewerPage() {
                 </div>
               )}
 
+              <div className={styles.stage}>
+              <div className={styles.stageMain}>
               <div
                 id={PANEL_ID.drawing}
                 role="tabpanel"
@@ -553,6 +752,7 @@ export default function ViewerPage() {
                   view={tab === 'board' ? 'board' : 'schematic'}
                   activeSheet={tab === 'board' ? undefined : activeSheet}
                   onState={setCanvasState}
+                  onSelection={handleCanvasSelection}
                   onUnrenderableSheets={handleUnrenderable}
                 />
                 <p className={styles.notice}>
@@ -613,6 +813,7 @@ export default function ViewerPage() {
                         includeDnp={wb.includeDnp}
                         onIncludeDnpChange={wb.setIncludeDnp}
                         onRefClick={(ref) => void focus(ref)}
+                        selectedRef={selectedRef}
                       />
                       <ShareBar rows={wb.rows} buildQty={wb.buildQty} includeDnp={wb.includeDnp} onChangeFile={openAnother} />
                     </>
@@ -637,7 +838,12 @@ export default function ViewerPage() {
                       </p>
                     }
                   >
-                    <Board3DView project={session.project} stackup={stackup} />
+                    <Board3DView
+                      project={session.project}
+                      stackup={stackup}
+                      selectedRef={selectedRef}
+                      onSelect={setSelectedRef}
+                    />
                   </Suspense>
                 </section>
               )}
@@ -665,6 +871,27 @@ export default function ViewerPage() {
                   )}
                 </section>
               )}
+              </div>
+
+              <div className={styles.rail}>
+                <PartPanel
+                  ref={panelRef}
+                  facts={facts}
+                  knownRefs={refIndex}
+                  views={{
+                    schematic: session.project.root != null,
+                    board: session.project.board != null,
+                    board3d: session.project.board != null,
+                  }}
+                  current={tab === 'schematic' || tab === 'board' || tab === 'board3d' ? tab : null}
+                  onSearch={searchRef}
+                  onClear={clearSelection}
+                  onShow={showOn}
+                  onPriceBom={() => setTab('bom')}
+                  onSearchFocus={() => setPlacementsSeen(true)}
+                />
+              </div>
+              </div>
             </div>
           )}
         </div>
