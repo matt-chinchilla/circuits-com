@@ -111,6 +111,11 @@ interface BomTableProps {
    *  the whole point of the flag is that nobody is buying those parts. */
   includeDnp: boolean;
   onIncludeDnpChange: (include: boolean) => void;
+  /** The reader's supplier pins, when the HOST keeps them (the viewer does, so
+   *  its part panel prices a line the way this table does). Omitted, the table
+   *  keeps them itself. Pass both or neither. */
+  pins?: Readonly<Record<number, string>>;
+  onPinsChange?: (pins: Record<number, string>) => void;
 }
 
 interface RowView {
@@ -275,12 +280,20 @@ export default function BomTable({
   selectedRef = null,
   includeDnp,
   onIncludeDnpChange,
+  pins: hostPins,
+  onPinsChange,
 }: BomTableProps) {
   // Reader overrides of `recommend()`, keyed by line index. Client-only and
   // deliberately un-persisted — it is a what-if, not a decision. A pin whose
   // supplier is absent from a later BOM's offers simply fails to resolve and
   // the row falls back to the recommendation, so nothing has to clear it.
-  const [pins, setPins] = useState<Record<number, string>>({});
+  const [ownPins, setOwnPins] = useState<Record<number, string>>({});
+  const pins = hostPins ?? ownPins;
+  const setPins = (update: (prev: Readonly<Record<number, string>>) => Record<number, string>) => {
+    const next = update(pins);
+    if (onPinsChange != null) onPinsChange(next);
+    else setOwnPins(next);
+  };
 
   const views: RowView[] = useMemo(
     () =>

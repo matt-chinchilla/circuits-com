@@ -7,7 +7,8 @@
 // Two rules. A fact the sources do not state is null, never guessed — a part
 // with no board placement has no position, not (0, 0). And the price is the
 // SAME number the BOM table shows for that line: the same `recommend` at the
-// same line quantity, so the panel and the table can never disagree.
+// same line quantity, and the same supplier the reader pinned in the table
+// when they pinned one — so the panel and the table can never disagree.
 import type { ParsedBomLine } from '@public/services/bom/bomLines';
 import { priceAt, recommend, tierRankFromOffers } from '@public/services/bom/priceBreaks';
 import type { BomOffer, TableRow } from '@public/services/bom/types';
@@ -64,6 +65,9 @@ export interface PartSources {
   refs: ReadonlyMap<string, RefLocation>;
   placements: ReadonlyMap<string, FootprintPlacement> | null;
   buildQty: number;
+  /** The table's reader overrides of `recommend`, by line index (BomTable's
+   *  `pins`): a pinned supplier outranks the recommendation, as it does there. */
+  pins?: Readonly<Record<number, string>>;
 }
 
 /** The designator's own spelling in the project, for a search typed in any
@@ -111,14 +115,16 @@ function catalogOf(row: TableRow): PartCatalog | null {
   };
 }
 
-/** The BOM table's own rule, at the table's own quantity: `recommend` picks
- *  the offer, `priceAt` reads its ladder. Null when nothing is in stock. */
-function priceOf(row: TableRow, buildQty: number): PartPrice | null {
+/** The BOM table's own rule, at the table's own quantity: the reader's pin if
+ *  it still resolves, else what `recommend` picks; `priceAt` reads its ladder.
+ *  Null when nothing is in stock. */
+function priceOf(row: TableRow, buildQty: number, pin: string | undefined): PartPrice | null {
   const offers: BomOffer[] = row.server?.offers ?? [];
   if (offers.length === 0) return null;
   const lineQty = Math.max(1, row.qty) * Math.max(1, buildQty);
-  const id = recommend(offers, lineQty, tierRankFromOffers(offers));
-  const chosen = id == null ? null : offers.find((o) => o.supplier_id === id) ?? null;
+  const pinned = pin == null ? null : offers.find((o) => o.supplier_id === pin) ?? null;
+  const id = pinned != null ? null : recommend(offers, lineQty, tierRankFromOffers(offers));
+  const chosen = pinned ?? (id == null ? null : offers.find((o) => o.supplier_id === id) ?? null);
   if (chosen == null) return null;
   return { unit: priceAt(chosen, lineQty), lineQty, supplier: chosen.supplier_name, stock: chosen.stock_quantity };
 }
@@ -141,7 +147,7 @@ export function partFacts(ref: string, sources: PartSources): PartFacts {
     footprint: line?.footprint ?? placement?.lib ?? null,
     mpn: line?.mpn ?? null,
     catalog: row == null ? null : catalogOf(row),
-    price: row == null ? null : priceOf(row, sources.buildQty),
+    price: row == null ? null : priceOf(row, sources.buildQty, sources.pins?.[row.index]),
     resolving: row?.state === 'resolving',
     priced: sources.rows.length > 0,
   };

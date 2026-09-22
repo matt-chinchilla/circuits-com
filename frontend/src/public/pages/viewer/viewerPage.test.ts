@@ -114,9 +114,12 @@ vi.mock('@public/components/kicad/board3d/Board3DView', () => ({
       createElement('button', { type: 'button', 'data-testid': 'pick3d', onClick: () => (props.onSelect as (r: string | null) => void)('U2') }, 'pick'),
     ),
 }));
+/** What the BOM table stub was last rendered with. */
+const bomTable = { props: null as AnyProps | null };
 vi.mock('@public/components/bom/BomTable', () => ({
-  default: (props: AnyProps) =>
-    createElement(
+  default: (props: AnyProps) => {
+    bomTable.props = props;
+    return createElement(
       'div',
       { 'data-testid': 'bom-ref', 'data-selected': (props.selectedRef as string | null) ?? '' },
       ['U1', 'U2'].map((ref) =>
@@ -131,7 +134,8 @@ vi.mock('@public/components/bom/BomTable', () => ({
           ref,
         ),
       ),
-    ),
+    );
+  },
 }));
 vi.mock('@public/components/bom/ShareBar', () => ({
   default: () => createElement('div', { 'data-testid': 'sharebar' }),
@@ -1042,6 +1046,15 @@ describe('the part panel', () => {
     await click(byText('Schematic'));
     await act(async () => canvas.onSelection?.({ ref: null, view: 'schematic' }));
     expect(panel().textContent).toMatch(/Click a part/);
+  });
+
+  it('holds the table\u2019s supplier pins, so the panel can price a line the way the table does', async () => {
+    wb.rows = [{ index: 0 }];
+    await render();
+    await click(byText('BOM'));
+    expect(bomTable.props?.pins).toEqual({});
+    await act(async () => (bomTable.props?.onPinsChange as (p: Record<number, string>) => void)({ 0: 's2' }));
+    expect(bomTable.props?.pins).toEqual({ 0: 's2' });
   });
 
   it('a BOM chip selects as well as focusing', async () => {

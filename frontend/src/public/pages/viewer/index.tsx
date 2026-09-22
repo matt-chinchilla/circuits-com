@@ -167,6 +167,15 @@ export default function ViewerPage() {
    */
   const [selectedRef, setSelectedRef] = useState<string | null>(null);
   /**
+   * The BOM table's supplier pins, held HERE rather than inside the table, so
+   * the part panel prices a line with the supplier the reader chose there. A
+   * what-if, never persisted; dropped with the project.
+   */
+  const [pins, setPins] = useState<Record<number, string>>({});
+  useEffect(() => {
+    setPins({});
+  }, [session]);
+  /**
    * Has the board's placement table been asked for? The same one-way latch as
    * `stackupSeen`: `readPlacements` re-scans the whole board (~40 ms on
    * Glasgow). Armed at the first IDLE moment after a project with a board
@@ -605,8 +614,9 @@ export default function ViewerPage() {
             refs: session.refs,
             placements,
             buildQty: wb.buildQty,
+            pins,
           }),
-    [session, selectedRef, wb.rows, wb.buildQty, placements],
+    [session, selectedRef, wb.rows, wb.buildQty, placements, pins],
   );
 
   /**
@@ -864,6 +874,8 @@ export default function ViewerPage() {
                         onIncludeDnpChange={wb.setIncludeDnp}
                         onRefClick={(ref) => void focus(ref)}
                         selectedRef={selectedRef}
+                        pins={pins}
+                        onPinsChange={setPins}
                       />
                       <ShareBar rows={wb.rows} buildQty={wb.buildQty} includeDnp={wb.includeDnp} onChangeFile={openAnother} />
                     </>

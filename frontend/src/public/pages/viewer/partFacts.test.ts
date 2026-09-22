@@ -95,6 +95,16 @@ describe('partFacts', () => {
     expect(f.price).toEqual({ unit: 10, lineQty: 10, supplier: 'Mouser', stock: 500 });
   });
 
+  it('prices with the supplier the reader pinned in the table, as the table does', () => {
+    const rows = [row(U30)];
+    const index = (rows[0] as { index: number }).index;
+    const f = partFacts('U30', sources({ rows, buildQty: 10, pins: { [index]: 's2' } }));
+    expect(f.price).toEqual({ unit: 9, lineQty: 10, supplier: 'DigiKey', stock: 0 });
+    // A pin that no longer resolves falls back to the recommendation.
+    const g = partFacts('U30', sources({ rows, buildQty: 10, pins: { [index]: 'gone' } }));
+    expect(g.price?.supplier).toBe('Mouser');
+  });
+
   it('a priced BOM whose line had no match says so, and a resolving line says it is waiting', () => {
     const noMatch = row(CAPS, { server: null, state: 'not_found' });
     const f = partFacts('C1', sources({ rows: [noMatch] }));
