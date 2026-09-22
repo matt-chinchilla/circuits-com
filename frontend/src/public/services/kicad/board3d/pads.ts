@@ -1,4 +1,4 @@
-import { place, rotate } from './geom';
+import { place, rectCorners } from './geom';
 import { arcPoints, arcStep } from './arcs';
 import { circleRing } from './strokes';
 import type { PadModel, PadShape, Placement, Ring, Vec2 } from './types';
@@ -18,7 +18,7 @@ function halfCircleSegments(r: number, tolMm: number): number {
 
 /** Rectangle centred on the origin, corner order (−,−) (+,−) (+,+) (−,+). */
 function rectPts(hx: number, hy: number): Vec2[] {
-  return [{ x: -hx, y: -hy }, { x: hx, y: -hy }, { x: hx, y: hy }, { x: -hx, y: hy }];
+  return rectCorners({ x: -hx, y: -hy }, { x: hx, y: hy });
 }
 
 /** Rectangle with quarter-circle corners of radius `r`, centred on the origin. */
@@ -85,27 +85,25 @@ export function padRing(shape: PadShape, size: Vec2, rratio: number | null, tolM
  * which the footprint's two rotations cancel on the shape.)
  */
 export function placedPadRing(pad: PadModel, fp: Placement, tolMm: number): Ring {
-  const centre = place(pad.at, fp);
-  const local = padRing(pad.shape, pad.size, pad.rratio, tolMm).pts;
-  return { pts: local.map((q) => placeRingPoint(q, pad.rotDeg, centre)) };
+  const frame = padFrame(pad, fp);
+  return { pts: padRing(pad.shape, pad.size, pad.rratio, tolMm).pts.map((q) => place(q, frame)) };
 }
 
 /** Drill → ring at the pad centre: round → a circle, slot → a stadium turned with the pad. */
 export function drillRing(pad: PadModel, fp: Placement, tolMm: number): Ring | null {
   const d = pad.drill;
   if (d == null) return null;
-  const centre = place(pad.at, fp);
+  const frame = padFrame(pad, fp);
   if (d.slotW != null && d.slotH != null && d.slotW > 0 && d.slotH > 0) {
-    const local = stadiumPts(d.slotW, d.slotH, tolMm);
-    return { pts: local.map((q) => placeRingPoint(q, pad.rotDeg, centre)) };
+    return { pts: stadiumPts(d.slotW, d.slotH, tolMm).map((q) => place(q, frame)) };
   }
   if (!(d.d > 0)) return null;
-  return circleRing(centre, d.d / 2, tolMm);
+  return circleRing(frame.at, d.d / 2, tolMm);
 }
 
-/** Shared tail of both placements: turn, then translate. No back-side mirror,
- *  for the reason `place` gives — the file's coordinates are already flipped. */
-function placeRingPoint(q: Vec2, rotDeg: number, centre: Vec2): Vec2 {
-  const r = rotate(q, rotDeg);
-  return { x: r.x + centre.x, y: r.y + centre.y };
+/** The pad's own frame on the board: its centre placed through the footprint,
+ *  its turn the pad's absolute `rotDeg` (see `placedPadRing`). No back-side
+ *  mirror, for the reason `place` gives. */
+function padFrame(pad: PadModel, fp: Placement): Pick<Placement, 'at' | 'rotDeg'> {
+  return { at: place(pad.at, fp), rotDeg: pad.rotDeg };
 }

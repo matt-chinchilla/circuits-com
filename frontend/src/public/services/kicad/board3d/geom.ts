@@ -35,9 +35,12 @@ export function rotate(p: Vec2, deg: number): Vec2 {
  * across its own x axis — StickHub's U2 put its pads beside its traces. The
  * `side` still decides which layers a part's copper, mask and body sit on.
  */
-export function place(p: Vec2, pl: Placement): Vec2 {
+export function place(p: Vec2, pl: Pick<Placement, 'at' | 'rotDeg'>): Vec2 {
   return add(rotate(p, pl.rotDeg), pl.at);
 }
+
+/** An axis-aligned rectangle from two opposite corners, as a ring: a, (b.x, a.y), b, (a.x, b.y). */
+export const rectCorners = (a: Vec2, b: Vec2): Vec2[] => [a, { x: b.x, y: a.y }, b, { x: a.x, y: b.y }];
 
 /**
  * A footprint-local shape, placed on the board. A rect is axis-aligned only in
@@ -52,10 +55,8 @@ export function placeShape(shape: Shape, pl: Placement): Shape {
       return { ...shape, a: at(shape.a), mid: at(shape.mid), b: at(shape.b) };
     case 'circle':
       return { ...shape, c: at(shape.c) };
-    case 'rect': {
-      const { a, b } = shape;
-      return { kind: 'poly', pts: [a, { x: b.x, y: a.y }, b, { x: a.x, y: b.y }].map(at), width: shape.width, filled: shape.filled };
-    }
+    case 'rect':
+      return { kind: 'poly', pts: rectCorners(shape.a, shape.b).map(at), width: shape.width, filled: shape.filled };
     case 'poly':
       return { ...shape, pts: shape.pts.map(at) };
   }

@@ -1,5 +1,5 @@
 import { flattenThreePoint } from './arcs';
-import { bbox, signedArea } from './geom';
+import { bbox, rectCorners, signedArea } from './geom';
 import { circleRing } from './strokes';
 import type { Ring, Shape, Vec2 } from './types';
 
@@ -121,7 +121,7 @@ export function shapePolylines(shapes: Shape[], tolMm: number): { polylines: Vec
       const pts = circleRing(s.c, s.r, tolMm).pts;
       polylines.push([...pts, pts[0]]);
     } else if (s.kind === 'rect') {
-      polylines.push([s.a, { x: s.b.x, y: s.a.y }, s.b, { x: s.a.x, y: s.b.y }, s.a]);
+      polylines.push([...rectCorners(s.a, s.b), s.a]);
     } else if (s.kind === 'poly' && s.pts.length >= 3) {
       polylines.push([...s.pts, s.pts[0]]);
     }
@@ -155,12 +155,7 @@ export function boardOutline(edgeItems: Shape[], tolMm: number, contentPts: Vec2
       : contentPts.length > 0
         ? grow(bbox(contentPts), CONTENT_MARGIN_MM)
         : bbox([{ x: 0, y: 0 }, { x: 1, y: 1 }]);
-    const outer: Ring = {
-      pts: orient([
-        { x: b.min.x, y: b.min.y }, { x: b.max.x, y: b.min.y },
-        { x: b.max.x, y: b.max.y }, { x: b.min.x, y: b.max.y },
-      ], 'outer'),
-    };
+    const outer: Ring = { pts: orient(rectCorners(b.min, b.max), 'outer') };
     return { outer, cutouts: [], open: true, unchained: chained.unchained || polylines.length, degenerateArcs };
   }
   const sorted = [...chained.loops].sort((p, q) => Math.abs(signedArea(q.pts)) - Math.abs(signedArea(p.pts)));
