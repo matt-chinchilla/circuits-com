@@ -110,6 +110,8 @@ export function deferTeardown(fn: () => void, scheduler: TeardownScheduler = win
 
 const DEG = Math.PI / 180;
 const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
+/** Width / height, never divided by zero (happy-dom and a collapsed host lay out nothing). */
+const aspectOf = (el: HTMLElement) => Math.max(1, el.clientWidth) / Math.max(1, el.clientHeight);
 /** Smoothstep: the flip starts and ends at rest, which reads as a board being
  *  turned over rather than a sprite being spun. */
 const ease = (t: number) => t * t * (3 - 2 * t);
@@ -252,35 +254,18 @@ export function createSceneRenderer(options: SceneRendererOptions = {}): SceneRe
     geometry.setIndex(new T.BufferAttribute(group.indices, 1));
     geometry.computeBoundingSphere();
     const spec = MATERIALS[group.material];
-    const material = new T.MeshStandardMaterial({
-      color: spec.color,
-      roughness: spec.roughness,
-      metalness: spec.metalness,
-      transparent: spec.transparent,
-      opacity: spec.opacity,
-      depthWrite: spec.depthWrite,
-    });
+    // A spec is exactly MeshStandardMaterial parameters, so it is handed over whole.
+    const material = new T.MeshStandardMaterial({ ...spec });
     geometries.push(geometry);
     materials.push(material);
     // A group with a parts table draws through a two-material array: index 0 is
     // its own, 1 the highlight. Which triangles use which is a matter of the
     // geometry's draw ranges, so a selection costs a range rewrite and at most
     // two extra draw calls — never a colour attribute over 300k vertices.
-    const highlightSpec = group.parts != null && (group.material === 'body' || group.material === 'copper')
-      ? HIGHLIGHT_MATERIALS[group.material]
-      : null;
+    const highlightSpec = group.material === 'body' || group.material === 'copper' ? HIGHLIGHT_MATERIALS[group.material] : null;
     let mesh: InstanceType<Three['Mesh']>;
     if (highlightSpec != null && group.parts != null) {
-      const lit = new T.MeshStandardMaterial({
-        color: highlightSpec.color,
-        emissive: highlightSpec.emissive,
-        emissiveIntensity: highlightSpec.emissiveIntensity,
-        roughness: highlightSpec.roughness,
-        metalness: highlightSpec.metalness,
-        transparent: highlightSpec.transparent,
-        opacity: highlightSpec.opacity,
-        depthWrite: highlightSpec.depthWrite,
-      });
+      const lit = new T.MeshStandardMaterial({ ...highlightSpec });
       materials.push(lit);
       geometry.addGroup(0, group.indices.length, 0);
       mesh = new T.Mesh(geometry, [material, lit]);
@@ -299,9 +284,8 @@ export function createSceneRenderer(options: SceneRendererOptions = {}): SceneRe
    *  resize, so a Reset after the reader widens the window still fills it. */
   function refit(): void {
     if (modelBox == null || host == null) return;
-    const aspect = Math.max(1, host.clientWidth) / Math.max(1, host.clientHeight);
     fitDistance = fitDistanceFor(modelBox, {
-      fovDeg: CAMERA.fov, aspect, elevationDeg: CAMERA.elevationDeg, margin: CAMERA.fitMargin,
+      fovDeg: CAMERA.fov, aspect: aspectOf(host), elevationDeg: CAMERA.elevationDeg, margin: CAMERA.fitMargin,
     });
   }
 
@@ -409,8 +393,7 @@ export function createSceneRenderer(options: SceneRendererOptions = {}): SceneRe
       modelBox = { min: { x: box.min.x, y: box.min.y, z: box.min.z }, max: { x: box.max.x, y: box.max.y, z: box.max.z } };
       refit();
 
-      const aspect = Math.max(1, element.clientWidth) / Math.max(1, element.clientHeight);
-      camera = new T.PerspectiveCamera(CAMERA.fov, aspect, diagonal / 100, diagonal * 20);
+      camera = new T.PerspectiveCamera(CAMERA.fov, aspectOf(element), diagonal / 100, diagonal * 20);
       camera.up.set(0, 0, 1);
       const light = new T.DirectionalLight(LIGHTS.directional.color, LIGHTS.directional.intensity);
       light.position.set(
