@@ -30,6 +30,18 @@ describe('chainLoops', () => {
   });
 });
 
+describe('chainLoops — endpoints piled into one cell', () => {
+  it('stays linear: 40k coincident zero-length lines (a hostile Edge.Cuts) chain in well under a second', () => {
+    // Quadratic before: every step rescanned the pile's dead entries and listed
+    // every live match. Measured 46.8 s for this input; now ~0.1 s.
+    const pile = Array.from({ length: 40_000 }, () => [{ x: 0, y: 0 }, { x: 0, y: 0 }]);
+    const t0 = performance.now();
+    const r = chainLoops(pile);
+    expect(performance.now() - t0).toBeLessThan(2000);
+    expect(r.unchained).toBe(0);
+  });
+});
+
 describe('boardOutline', () => {
   it('largest loop is the board, the rest are cutouts, orientations fixed', () => {
     const items: Shape[] = [

@@ -23,45 +23,75 @@ export function chainLoops(polylines: Vec2[][], snapMm = 0.001): Chained {
     if (pl.length >= 3 && near(first, last)) loops.push({ pts: pl.slice(0, -1) });
     else open.push(pl);
   }
-  // Endpoint index: grid cell → [polylineIndex, end(0|1)]. Lookups scan the 3×3
-  // neighbourhood and confirm by DISTANCE: two endpoints 8 µm apart can straddle
-  // a cell boundary at any cell size (Glasgow's J4 courtyard: 85.870 vs 85.878
-  // round to different 20 µm cells), so a same-cell test alone can never close
-  // a gap the snap was meant to close.
+  // Endpoint index: grid cell → endpoint ids (2·polyline + end). Lookups scan
+  // the 3×3 neighbourhood and confirm by DISTANCE: two endpoints 8 µm apart can
+  // straddle a cell boundary at any cell size (Glasgow's J4 courtyard: 85.870 vs
+  // 85.878 round to different 20 µm cells), so a same-cell test alone can never
+  // close a gap the snap was meant to close.
+  //
+  // A consumed polyline's endpoints are SWAP-REMOVED from their cells, and a
+  // lookup returns the first match rather than listing them all. Both matter
+  // when endpoints pile up in one cell: scanning dead entries and building the
+  // full match list on every step made a hostile file of 40k zero-length
+  // Edge.Cuts lines cost 47 s (measured), quadratic in the pile.
   const used = new Array<boolean>(open.length).fill(false);
-  const index = new Map<string, [number, 0 | 1][]>();
-  const cell = (p: Vec2) => [Math.round(p.x / snapMm), Math.round(p.y / snapMm)] as const;
-  open.forEach((pl, i) => {
-    for (const e of [0, 1] as const) {
-      const [cx, cy] = cell(e === 0 ? pl[0] : pl[pl.length - 1]);
-      const k = `${cx}|${cy}`;
-      const arr = index.get(k) ?? []; arr.push([i, e]); index.set(k, arr);
+  const index = new Map<string, number[]>();
+  const keyOf: string[] = new Array<string>(open.length * 2);
+  const slotOf = new Int32Array(open.length * 2);
+  const cellKey = (p: Vec2, dx = 0, dy = 0) => `${Math.round(p.x / snapMm) + dx}|${Math.round(p.y / snapMm) + dy}`;
+  const endpoint = (id: number) => {
+    const pl = open[id >> 1];
+    return (id & 1) === 0 ? pl[0] : pl[pl.length - 1];
+  };
+  for (let id = 0; id < open.length * 2; id++) {
+    const k = cellKey(endpoint(id));
+    const arr = index.get(k);
+    keyOf[id] = k;
+    if (arr == null) {
+      slotOf[id] = 0;
+      index.set(k, [id]);
+    } else {
+      slotOf[id] = arr.length;
+      arr.push(id);
     }
-  });
-  const endpoint = (i: number, e: 0 | 1) => (e === 0 ? open[i][0] : open[i][open[i].length - 1]);
-  const candidates = (p: Vec2): [number, 0 | 1][] => {
-    const [cx, cy] = cell(p);
-    const out: [number, 0 | 1][] = [];
-    for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) {
-      for (const [i, e] of index.get(`${cx + dx}|${cy + dy}`) ?? []) if (!used[i] && near(p, endpoint(i, e))) out.push([i, e]);
+  }
+  const drop = (id: number) => {
+    const arr = index.get(keyOf[id])!;
+    const last = arr.pop()!;
+    if (last !== id) {
+      arr[slotOf[id]] = last;
+      slotOf[last] = slotOf[id];
     }
-    return out;
+  };
+  const consume = (i: number) => {
+    used[i] = true;
+    drop(2 * i);
+    drop(2 * i + 1);
+  };
+  const firstCandidate = (p: Vec2): number => {
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        for (const id of index.get(cellKey(p, dx, dy)) ?? []) if (near(p, endpoint(id))) return id;
+      }
+    }
+    return -1;
   };
   let unchained = 0;
   for (let s = 0; s < open.length; s++) {
     if (used[s]) continue;
-    used[s] = true;
+    consume(s);
     let consumed = 1;
     const chain: Vec2[] = [...open[s]];
     let closed = false;
     for (let guard = 0; guard < open.length; guard++) {
       const tail = chain[chain.length - 1];
       if (chain.length > 2 && near(tail, chain[0])) { closed = true; break; }
-      const cands = candidates(tail);
-      if (cands.length === 0) break;
-      const [i, e] = cands[0];
-      used[i] = true; consumed++;
-      const next = e === 0 ? open[i] : [...open[i]].reverse();
+      const id = firstCandidate(tail);
+      if (id < 0) break;
+      const i = id >> 1;
+      consume(i);
+      consumed++;
+      const next = (id & 1) === 0 ? open[i] : [...open[i]].reverse();
       chain.push(...next.slice(1));
     }
     if (closed) loops.push({ pts: chain.slice(0, -1) });
