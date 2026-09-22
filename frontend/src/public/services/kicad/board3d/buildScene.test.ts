@@ -171,7 +171,10 @@ describe('buildScene — a dense board stays inside the face budget', () => {
     // board took ~95 s; with it, ~2.6 s alone and up to ~6.5 s under the full
     // parallel suite on a loaded machine (a 6 s bound tripped once that way).
     expect(s.stats.buildMs).toBeLessThan(15_000);
-  });
+    // The test's OWN wall matches the bound it asserts: vitest's default 5 s
+    // killed it at ~5.8 s in a full parallel run (2026-09-22, measured at
+    // 985dd18 too), so the 15 s guard was never what tripped.
+  }, 20_000);
   it('raises the pads whose mask openings do not fit, and counts them', () => {
     const s = buildScene({ text: denseBoard(0, 1600), stackup: null, quality: 'reduced' });
     expect(s.warnings).toContainEqual({ kind: 'holes-marked', count: 100 });
