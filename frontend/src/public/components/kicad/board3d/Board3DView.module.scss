@@ -1,0 +1,126 @@
+// frontend/src/public/components/kicad/board3d/Board3DView.module.scss
+@use '@shared/styles/variables' as *;
+@use '@shared/styles/mixins' as *;
+@use '@public/styles/bomMaterial' as *;
+
+// A flex column: toolbar, canvas, caption, stats. The canvas is the only part that
+// grows, and it has NO content of its own — a WebGL canvas sized to its parent — so
+// the reserved height here is what makes the tab a board rather than a 0px box.
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-height: 420px;
+
+  // A phone gives the whole viewport less the tabs; 300px still reads as a board
+  // and leaves the caption (which carries the honesty about estimates) on screen.
+  @include responsive($bp-mobile) {
+    min-height: 300px;
+  }
+}
+
+// Top / Bottom / Flip / Reset, above the canvas rather than floating over it: they
+// are the tab's controls, not an overlay on a drawing, and a coarse pointer must
+// never have to choose between a button and an orbit gesture.
+.toolbar {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+// The 6px gap above caps the hit-area growth: two neighbours' ::before overlays are
+// positioned siblings, so more than half the gap steals the next button's face.
+.ctl {
+  @include bom-glass-control;
+  position: relative;
+  @include tap-target(-3px);
+  min-width: 56px;
+  min-height: 40px;
+  padding: 0 14px;
+  line-height: 1;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.canvasHost {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  border-radius: 8px;
+  overflow: hidden;
+  // Matches BACKGROUND in board3dTheme.ts, so a resize never flashes a pale gap
+  // between the CSS box and the cleared canvas.
+  background: #0f1512;
+  // The browser must never compete with the renderer for a two-finger gesture
+  // (CLAUDE.md: pan-y cancels pointermove; none is full tracking).
+  touch-action: none;
+  overscroll-behavior: contain;
+
+  &:focus-visible {
+    outline: 2px solid var(--theme-accent);
+    outline-offset: 2px;
+  }
+}
+
+.status {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  display: grid;
+  place-items: center;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.9rem;
+  pointer-events: none;
+}
+
+.problem {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  gap: 8px;
+  padding: 24px;
+  text-align: center;
+}
+
+.problemTitle {
+  margin: 0;
+  font-weight: 600;
+  color: #f2f0e6;
+}
+
+.problemBody {
+  margin: 0;
+  max-width: 44ch;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.9rem;
+}
+
+// ~31px tall as drawn, so it needs 7px to clear 44; it has no neighbour, and 7px
+// stays inside `.problem`'s 8px gap.
+.retry {
+  @include bom-glass-control;
+  position: relative;
+  @include tap-target(-7px);
+  justify-self: center;
+  padding: 8px 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+// The line that carries every admission this tab makes. Not small print: it sits
+// directly under the board, at body-adjacent size.
+.caption {
+  margin: 0;
+  color: $text-secondary;
+  font-size: 0.8rem;
+  max-width: 88ch;
+}
+
+.stats {
+  margin: 0;
+  font-family: $font-mono;
+  font-size: 0.72rem;
+  color: $text-secondary;
+}
