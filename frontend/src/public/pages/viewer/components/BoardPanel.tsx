@@ -91,6 +91,22 @@ function isSheet(): boolean {
   return typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia(SHEET_QUERY).matches;
 }
 
+/** The same answer as state, so a window dragged across the breakpoint
+ *  re-renders the rail with the right "open" — the sheet's on a phone, the
+ *  dock's on a desktop. */
+function useIsSheet(): boolean {
+  const [sheet, setSheet] = useState(isSheet);
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+    const list = window.matchMedia(SHEET_QUERY);
+    const sync = () => setSheet(list.matches);
+    sync();
+    list.addEventListener('change', sync);
+    return () => list.removeEventListener('change', sync);
+  }, []);
+  return sheet;
+}
+
 /** `io_banks.kicad_sch` → `io_banks`. */
 function sheetName(path: string): string {
   return path.split('/').pop()?.replace(/\.kicad_sch$/i, '') ?? path;
@@ -110,6 +126,7 @@ const BoardPanel = forwardRef<BoardPanelHandle, BoardPanelProps>(function BoardP
   useEffect(() => {
     writeDock(dock);
   }, [dock]);
+  const sheet = useIsSheet();
   const tabRefs = useRef<Partial<Record<PanelTab, HTMLButtonElement | null>>>({});
   /** The Layers tab's side filter and folded groups, held here so a trip to
    *  Objects and back finds them as they were left. Reset with the project. */
@@ -188,14 +205,16 @@ const BoardPanel = forwardRef<BoardPanelHandle, BoardPanelProps>(function BoardP
     // The sheet flag is cleared on a desktop too: a window that is later
     // narrowed must not arrive at a sheet the reader never opened.
     setOpen(false);
-    if (!isSheet()) setDock((d) => ({ ...d, docked: false }));
+    if (!sheet) setDock((d) => ({ ...d, docked: false }));
     tabRefs.current[shownTab]?.focus();
   };
+
+  /** Is the selected tab's panel on screen — the sheet up, or the drawer docked? */
+  const shownOpen = sheet ? open : dock.docked;
 
   /** A rail tab: the lit one again closes the drawer; any other opens it. */
   const choose = (id: PanelTab) => {
     if (!usable(id)) return;
-    const shownOpen = isSheet() ? open : dock.docked;
     if (id === shownTab && shownOpen) {
       close();
       return;
@@ -259,7 +278,7 @@ const BoardPanel = forwardRef<BoardPanelHandle, BoardPanelProps>(function BoardP
                   role="tab"
                   className={styles.railTab}
                   aria-selected={selected}
-                  aria-expanded={selected && dock.docked}
+                  aria-expanded={selected && shownOpen}
                   aria-controls={selected ? panelId(id) : undefined}
                   aria-disabled={disabled || undefined}
                   aria-describedby={disabled ? hintId : undefined}
@@ -281,7 +300,7 @@ const BoardPanel = forwardRef<BoardPanelHandle, BoardPanelProps>(function BoardP
           <button
             type="button"
             className={styles.railTab}
-            aria-expanded={dock.docked}
+            aria-expanded={shownOpen}
             aria-controls={bodyId}
             title="Part"
             ref={(el) => {
@@ -305,7 +324,7 @@ const BoardPanel = forwardRef<BoardPanelHandle, BoardPanelProps>(function BoardP
           {open ? (
             <span className={styles.peekEmpty}>{openLabel}</span>
           ) : facts == null ? (
-            <span className={styles.peekEmpty}>Select a part, or search a reference</span>
+            <span className={styles.peekEmpty}>Select a part or search</span>
           ) : (
             <>
               <span className={styles.peekRef}>{facts.ref}</span>

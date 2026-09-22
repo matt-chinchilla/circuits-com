@@ -376,10 +376,13 @@ describe('the rail and the dock', () => {
     atPhone(true);
     await render({ context: 'board' });
     expect(sheetOpen()).toBe(false);
+    // With the sheet down no rail tab reads as open, whatever the dock says.
+    expect([...container.querySelectorAll('[role="tab"]')].map((t) => t.getAttribute('aria-expanded'))).toEqual(['false', 'false', 'false']);
     // Closed sheet, lit tab: a tap opens the sheet (it must never be a no-op).
     await click(tab('Parts'));
     expect(sheetOpen()).toBe(true);
     expect(docked()).toBe(true);
+    expect(tab('Parts').getAttribute('aria-expanded')).toBe('true');
     // Open sheet, lit tab: a tap closes the sheet; the dock is untouched.
     await click(tab('Parts'));
     expect(sheetOpen()).toBe(false);

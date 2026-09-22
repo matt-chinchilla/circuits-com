@@ -1572,6 +1572,13 @@ describe('the workspace', () => {
     await click(fsButton());
     expect(fullscreenEl).toBeNull();
     expect(fsButton().getAttribute('aria-pressed')).toBe('false');
+    // The same button, the same element, from the 3D tab — which has no
+    // overlay button of its own.
+    await click(byText('3D'));
+    expect(container.querySelector('[data-testid="board3d"]')).not.toBeNull();
+    await click(fsButton());
+    expect(fullscreenEl).toBe(workspace());
+    expect(workspace().contains(container.querySelector('[data-testid="board3d"]'))).toBe(true);
   });
 
   it('folds the read’s notes behind a count in the top bar', async () => {

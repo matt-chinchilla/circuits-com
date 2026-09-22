@@ -64,7 +64,7 @@ $row-fine: 36px;
 .segBtn {
   position: relative;
   min-height: 30px;
-  padding: 0 9px;
+  padding: 0 8px;
   font-family: $font-body;
   font-size: 0.8rem;
   font-weight: 520;
@@ -95,18 +95,37 @@ $row-fine: 36px;
 
 .bulk {
   display: flex;
-  gap: 6px;
+  gap: 2px;
 }
 
+// Show all / Hide all as quiet text actions beside the side filter, not two
+// more glass buttons: at the drawer's width the pair of buttons wrapped under
+// the track, and the filter is the control that deserves the weight.
 .bulkBtn {
-  @include bom-glass-control;
   position: relative;
   min-height: 32px;
-  padding: 0 9px;
+  padding: 0 6px;
+  font-family: $font-body;
   font-size: 0.8rem;
+  font-weight: 520;
   line-height: 1;
-  border-radius: 9px;
+  white-space: nowrap;
+  color: $ink-2;
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+  cursor: pointer;
   @include tap-target(-6px 0);
+
+  &:hover {
+    color: $ink;
+    background: rgba(255, 255, 255, 0.6);
+  }
+
+  &:focus-visible {
+    outline: 2px solid $executive-blue;
+    outline-offset: -2px;
+  }
 }
 
 // ─── The tree ─────────────────────────────────────────────────────────────
