@@ -83,10 +83,10 @@ export function captionOf(scene: BoardScene, quality: Quality = 'full'): string 
 
 const statsLine = (stats: BoardScene['stats']): string =>
   [
-    `${stats.footprints} footprints`,
-    `${stats.pads} pads`,
-    `${stats.vias} vias`,
-    `built in ${Math.round(stats.buildMs)} ms`,
+    `${stats.footprints.toLocaleString('en-US')} footprints`,
+    `${stats.pads.toLocaleString('en-US')} pads`,
+    `${stats.vias.toLocaleString('en-US')} vias`,
+    `built in ${Math.round(stats.buildMs).toLocaleString('en-US')} ms`,
   ].join(DOT);
 
 export default function Board3DView({ project, stackup, createRenderer, quality, selectedRef, onSelect }: Board3DViewProps) {
@@ -120,7 +120,10 @@ export default function Board3DView({ project, stackup, createRenderer, quality,
     rendererRef.current = renderer;
     let cancelled = false;
     renderer.onPick?.((ref) => {
-      if (!cancelled) onSelectRef.current?.(ref);
+      if (cancelled) return;
+      // The pick's own cost, for the browser measurement step (like `calls`).
+      host.dataset.pickMs = String(Math.round(renderer.info().pickMs));
+      onSelectRef.current?.(ref);
     });
     void renderer
       .mount(host, scene, tier)
@@ -225,12 +228,16 @@ export default function Board3DView({ project, stackup, createRenderer, quality,
           </div>
         )}
       </div>
-      {caption !== '' && (
-        <p className={styles.caption} role="note">
-          {caption}
-        </p>
+      {scene != null && (
+        <div className={styles.footer}>
+          {caption !== '' && (
+            <p className={styles.caption} role="note">
+              {caption}
+            </p>
+          )}
+          <p className={styles.stats}>{statsLine(scene.stats)}</p>
+        </div>
       )}
-      {scene != null && <p className={styles.stats}>{statsLine(scene.stats)}</p>}
     </div>
   );
 }

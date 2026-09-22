@@ -31,7 +31,7 @@ function fakeRenderer() {
     highlights: [] as (string | null)[],
     pick: null as ((ref: string | null) => void) | null,
     mount: async () => { r.mounted++; }, setView: (v: string) => { r.views.push(v); }, flip: () => { r.flips++; },
-    pause: () => {}, resume: () => {}, dispose: () => { r.disposed++; }, info: () => ({ calls: 0, triangles: 0 }),
+    pause: () => {}, resume: () => {}, dispose: () => { r.disposed++; }, info: () => ({ calls: 0, triangles: 0, pickMs: 0 }),
     highlight: (ref: string | null) => { r.highlights.push(ref); },
     onPick: (h: ((ref: string | null) => void) | null) => { r.pick = h; },
   };
@@ -53,7 +53,7 @@ describe('Board3DView', () => {
   });
   it('publishes the measurement hook on the host after the first frame', async () => {
     const r = fakeRenderer();
-    r.info = () => ({ calls: 7, triangles: 1234 });
+    r.info = () => ({ calls: 7, triangles: 1234, pickMs: 0 });
     await act(async () => { root.render(createElement(Board3DView, { project, stackup: null, createRenderer: () => r as never, quality: 'full' })); });
     const host = el.querySelector<HTMLElement>('[tabindex="0"]')!;
     expect(host.dataset.calls).toBe('7');

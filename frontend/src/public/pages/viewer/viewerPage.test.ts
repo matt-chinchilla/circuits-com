@@ -1139,7 +1139,7 @@ describe('the tab strip stylesheet', () => {
     expect(scss).toMatch(/\.tabs \{[^{}]*display:\s*inline-flex/);
     const mobile = scss.slice(scss.indexOf('@include responsive($bp-mobile)'));
     expect(mobile).toMatch(/\.tabs \{[^{}]*align-self:\s*stretch/);
-    expect(mobile).toMatch(/\.tab \{[^{}]*flex:\s*1 1 0/);
+    expect(mobile).toMatch(/\.tab \{[^{}]*flex:\s*1 1 auto/);
     // …and never scrolls sideways again.
     expect(scss).not.toMatch(/\.tabs \{[^{}]*overflow-x/);
   });

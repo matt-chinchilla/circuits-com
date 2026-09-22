@@ -39,7 +39,7 @@ export interface SceneRenderer {
   pause(): void;
   resume(): void;
   dispose(): void;
-  info(): { calls: number; triangles: number };
+  info(): { calls: number; triangles: number; /** The last pick's raycast, ms; 0 before any. */ pickMs: number };
   /** Draw `ref`'s body and pads in the highlight material; null clears. A ref the
    *  scene does not draw (no courtyard, no pads) simply highlights nothing. */
   highlight?(ref: string | null): void;
@@ -53,6 +53,11 @@ export interface SceneRenderer {
  *  OrbitControls owns anything larger. */
 const CLICK_SLOP_PX = 6;
 const CLICK_MAX_MS = 500;
+/** When the ray under the pointer hits nothing pickable, four more rays this
+ *  far out are tried — a fingertip beside a 0402's pad on a phone, where the
+ *  bodies are not drawn, still identifies the part. Each cast is ~20 ms on a
+ *  300k-triangle board (measured), so the miss costs at most five casts. */
+const PICK_TOLERANCE_PX = 6;
 
 /** The scheduler `deferTeardown` uses: `requestIdleCallback` where the browser has
  *  it, else a macrotask. Named so a test can hand in a fake. */
@@ -110,6 +115,9 @@ export function createSceneRenderer(): SceneRenderer {
   let pickHandler: ((ref: string | null) => void) | null = null;
   let pointerDown: { x: number; y: number; at: number } | null = null;
   let highlighted: string | null = null;
+  /** How long the last raycast took — the measurement hook `info()` reports, so
+   *  a browser step can separate the pick from the software raster around it. */
+  let pickMs = 0;
 
   let disposed = false;
   let paused = false;
@@ -256,23 +264,36 @@ export function createSceneRenderer(): SceneRenderer {
     });
   }
 
-  /** The footprint under a canvas point, through the nearest hit of ANY mesh:
-   *  the substrate and mask take part as occluders, so a click on the bottom
-   *  face never picks a top-side body through the board. */
+  /** The footprint under ONE ray, through the nearest hit of ANY mesh: the
+   *  substrate and mask take part as occluders, so a click on the bottom face
+   *  never picks a top-side body through the board. */
+  function castAt(T: Three, cam: NonNullable<typeof camera>, group: NonNullable<typeof model>, rect: DOMRect, x: number, y: number): string | null {
+    const ndc = new T.Vector2(((x - rect.left) / rect.width) * 2 - 1, -((y - rect.top) / rect.height) * 2 + 1);
+    const ray = new T.Raycaster();
+    ray.setFromCamera(ndc, cam);
+    const hit = ray.intersectObjects(group.children, false)[0];
+    if (hit == null || hit.faceIndex == null) return null;
+    const entry = parted.find((p) => p.mesh === hit.object);
+    return entry == null ? null : partAtFace(entry.parts, hit.faceIndex);
+  }
+
+  /** The footprint under a canvas point, or under one of four points a few
+   *  pixels around it when the point itself is bare board. */
   function pickAt(clientX: number, clientY: number): string | null {
     if (three == null || renderer == null || camera == null || model == null) return null;
     const rect = renderer.domElement.getBoundingClientRect();
     if (rect.width === 0 || rect.height === 0) return null;
-    const ndc = new three.Vector2(
-      ((clientX - rect.left) / rect.width) * 2 - 1,
-      -((clientY - rect.top) / rect.height) * 2 + 1,
-    );
-    const ray = new three.Raycaster();
-    ray.setFromCamera(ndc, camera);
-    const hit = ray.intersectObjects(model.children, false)[0];
-    if (hit == null || hit.faceIndex == null) return null;
-    const entry = parted.find((p) => p.mesh === hit.object);
-    return entry == null ? null : partAtFace(entry.parts, hit.faceIndex);
+    const t0 = performance.now();
+    let ref = castAt(three, camera, model, rect, clientX, clientY);
+    if (ref == null) {
+      const d = PICK_TOLERANCE_PX;
+      for (const [dx, dy] of [[d, 0], [-d, 0], [0, d], [0, -d]]) {
+        ref = castAt(three, camera, model, rect, clientX + dx, clientY + dy);
+        if (ref != null) break;
+      }
+    }
+    pickMs = performance.now() - t0;
+    return ref;
   }
 
   const onPointerDown = (e: PointerEvent): void => {
@@ -482,7 +503,7 @@ export function createSceneRenderer(): SceneRenderer {
 
     info() {
       const render = renderer?.info.render;
-      return { calls: render?.calls ?? 0, triangles: render?.triangles ?? 0 };
+      return { calls: render?.calls ?? 0, triangles: render?.triangles ?? 0, pickMs };
     },
   };
 }

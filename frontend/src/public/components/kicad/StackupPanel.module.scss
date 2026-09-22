@@ -130,22 +130,26 @@
   stroke-dasharray: 3 3;
 }
 
+// The same hairline rows and quiet labels the part panel's fact list uses, so
+// the two read as one system when they sit side by side on the Stackup tab.
 .table {
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
-  font-size: 0.85rem;
+  font-size: 0.84rem;
 
   th,
   td {
     padding: 6px 8px;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    border-bottom: 1px solid rgba(26, 31, 35, 0.1);
     text-align: left;
+    line-height: 1.4;
   }
 
   th {
+    font-size: 0.78rem;
     font-weight: 600;
-    color: $text-secondary;
+    color: #676c71;
   }
 }
 
@@ -159,13 +163,21 @@
 // component groups conditional pairs with fragments and never a wrapper.
 .summary {
   display: grid;
-  grid-template-columns: auto auto;
-  gap: 4px 12px;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0 12px;
   margin: 0;
-  font-size: 0.85rem;
+  font-size: 0.84rem;
+
+  dt,
+  dd {
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(26, 31, 35, 0.1);
+    line-height: 1.4;
+  }
 
   dt {
-    color: $text-secondary;
+    color: #676c71;
+    white-space: nowrap;
   }
 
   dd {

@@ -309,11 +309,14 @@
     gap: 0;
   }
 
+  // Content-sized, sharing only the REMAINDER: equal columns (`1 1 0`) gave
+  // every tab 63px at 360 and "Schematic" (74px with its padding) overlapped
+  // "Board". Measured at 360: the five labels need 256px of 315.
   .tab {
-    flex: 1 1 0;
+    flex: 1 1 auto;
     min-width: 0;
     padding: 0 6px;
-    font-size: 0.84rem;
+    font-size: 0.82rem;
     text-align: center;
   }
 
