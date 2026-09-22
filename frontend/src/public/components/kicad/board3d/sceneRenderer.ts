@@ -30,7 +30,8 @@ export interface SceneRenderer {
    *  reads `info()` straight after, which is why the first frame is not deferred. */
   mount(host: HTMLElement, scene: BoardScene, quality: Quality): Promise<void>;
   setView(view: ViewName): void;
-  /** 180° about the board's long axis, animated over FLIP_MS. */
+  /** 180° about the board's long axis, animated over FLIP_MS — or cut straight
+   *  to the other side when the reader asked the OS for reduced motion. */
   flip(): void;
   /** Incremental orbit in degrees, for the host's arrow keys. Optional: a renderer
    *  that has no notion of an incremental turn ignores the keys rather than
@@ -49,14 +50,30 @@ export interface SceneRenderer {
   onPick?(handler: ((ref: string | null) => void) | null): void;
 }
 
+export interface SceneRendererOptions {
+  /** The reader asked for reduced motion: no auto-orbit on load, and a flip cuts
+   *  instead of turning. Read from `prefers-reduced-motion` at mount when not
+   *  given, which is what the page does; a test hands it in. */
+  reducedMotion?: boolean;
+}
+
+function prefersReducedMotion(): boolean {
+  try {
+    return typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  } catch {
+    return false;
+  }
+}
+
 /** A click is this much movement or less between pointer-down and pointer-up.
  *  OrbitControls owns anything larger. */
 const CLICK_SLOP_PX = 6;
 const CLICK_MAX_MS = 500;
-/** When the ray under the pointer hits nothing pickable, four more rays this
- *  far out are tried — a fingertip beside a 0402's pad on a phone, where the
- *  bodies are not drawn, still identifies the part. Each cast is ~20 ms on a
- *  300k-triangle board (measured), so the miss costs at most five casts. */
+/** When a TOUCH lands on nothing pickable, four more rays this far out are
+ *  tried — a fingertip beside a 0402's pad on a phone, where the bodies are not
+ *  drawn, still identifies the part. Each cast is ~20 ms on a 300k-triangle
+ *  board (measured), so a touch miss costs five casts; a mouse or pen is precise
+ *  and a click on bare board (the common "deselect") costs exactly one. */
 const PICK_TOLERANCE_PX = 6;
 
 /** The scheduler `deferTeardown` uses: `requestIdleCallback` where the browser has
@@ -97,7 +114,7 @@ const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n
  *  turned over rather than a sprite being spun. */
 const ease = (t: number) => t * t * (3 - 2 * t);
 
-export function createSceneRenderer(): SceneRenderer {
+export function createSceneRenderer(options: SceneRendererOptions = {}): SceneRenderer {
   let renderer: InstanceType<Three['WebGLRenderer']> | null = null;
   let scene: InstanceType<Three['Scene']> | null = null;
   let camera: InstanceType<Three['PerspectiveCamera']> | null = null;
@@ -129,7 +146,9 @@ export function createSceneRenderer(): SceneRenderer {
   let settleUntil = 0;
 
   let fitDistance = 1;
-  let autoOrbit = true;
+  /** Set for real at mount, from the reader's motion preference. */
+  let autoOrbit = false;
+  let reducedMotion = false;
   let longAxis: 'x' | 'y' = 'x';
 
   let flipping = false;
@@ -163,12 +182,34 @@ export function createSceneRenderer(): SceneRenderer {
   const moving = (now: number) => autoOrbit || flipping || now < settleUntil;
 
   function wake(): void {
-    if (disposed || paused || frame !== 0 || renderer == null) return;
+    if (disposed || paused || ticking || frame !== 0 || renderer == null) return;
     frame = requestAnimationFrame(tick);
   }
 
+  /** True while `tick` runs. The controls fire 'change' from INSIDE a tick
+   *  (auto-orbit and damping move the camera there), and a `wake()` from that
+   *  handler must not queue a second frame beside the one the tick queues itself
+   *  — that doubled the queued ticks every frame of a drag (measured 3,355
+   *  renders per frame after one second). The tick decides the next frame alone. */
+  let ticking = false;
+
   function tick(now: number): void {
     frame = 0;
+    ticking = true;
+    try {
+      step(now);
+    } finally {
+      ticking = false;
+    }
+    if (disposed || renderer == null) return;
+    if (!paused && moving(now)) {
+      if (frame === 0) frame = requestAnimationFrame(tick);
+    } else {
+      lastMs = 0;
+    }
+  }
+
+  function step(now: number): void {
     if (disposed || renderer == null || scene == null || camera == null || controls == null) return;
     // Clamped: a tab that was hidden for a minute must not jump a minute of orbit
     // on its first frame back.
@@ -191,9 +232,6 @@ export function createSceneRenderer(): SceneRenderer {
     }
     controls.update();
     renderer.render(scene, camera);
-
-    if (!paused && moving(now)) frame = requestAnimationFrame(tick);
-    else lastMs = 0;
   }
 
   /** Any controls change keeps the loop alive long enough for damping to settle. */
@@ -280,15 +318,15 @@ export function createSceneRenderer(): SceneRenderer {
     return entry == null ? null : partAtFace(entry.parts, hit.faceIndex);
   }
 
-  /** The footprint under a canvas point, or under one of four points a few
-   *  pixels around it when the point itself is bare board. */
-  function pickAt(clientX: number, clientY: number): string | null {
+  /** The footprint under a canvas point — or, for a touch, under one of four
+   *  points a few pixels around it when the point itself is bare board. */
+  function pickAt(clientX: number, clientY: number, pointerType: string): string | null {
     if (three == null || renderer == null || camera == null || model == null) return null;
     const rect = renderer.domElement.getBoundingClientRect();
     if (rect.width === 0 || rect.height === 0) return null;
     const t0 = performance.now();
     let ref = castAt(three, camera, model, rect, clientX, clientY);
-    if (ref == null) {
+    if (ref == null && pointerType === 'touch') {
       const d = PICK_TOLERANCE_PX;
       for (const [dx, dy] of [[d, 0], [-d, 0], [0, d], [0, -d]]) {
         ref = castAt(three, camera, model, rect, clientX + dx, clientY + dy);
@@ -315,7 +353,7 @@ export function createSceneRenderer(): SceneRenderer {
     if (down == null || pickHandler == null || pointers.size > 0) return;
     if (Math.hypot(e.clientX - down.x, e.clientY - down.y) > CLICK_SLOP_PX) return;
     if (performance.now() - down.at > CLICK_MAX_MS) return;
-    pickHandler(pickAt(e.clientX, e.clientY));
+    pickHandler(pickAt(e.clientX, e.clientY, e.pointerType));
   };
   const onPointerCancel = (e: PointerEvent): void => {
     pointers.delete(e.pointerId);
@@ -335,6 +373,8 @@ export function createSceneRenderer(): SceneRenderer {
   return {
     async mount(element, board, quality) {
       host = element;
+      reducedMotion = options.reducedMotion ?? prefersReducedMotion();
+      autoOrbit = !reducedMotion;
       const [T, orbit] = await Promise.all([
         import('three'),
         import('three/examples/jsm/controls/OrbitControls.js'),
@@ -439,6 +479,11 @@ export function createSceneRenderer(): SceneRenderer {
     flip() {
       if (model == null || flipping) return;
       autoOrbit = false;
+      if (reducedMotion) {
+        model.rotation[longAxis] = (model.rotation[longAxis] + Math.PI) % (2 * Math.PI);
+        onChange();
+        return;
+      }
       flipFrom = model.rotation[longAxis];
       flipStart = 0;
       flipping = true;
