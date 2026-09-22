@@ -5,7 +5,8 @@ import SkeletonLoader from '@public/components/widgets/SkeletonLoader';
 import PageHead from '@public/components/PageHead';
 import Icon from '@shared/components/Icon';
 import { api } from '@public/services/api';
-import { partSeo } from '@public/services/seoRoutes';
+import { isNotFoundError } from '@public/services/notFound';
+import { NOT_FOUND_SEO, partSeo } from '@public/services/seoRoutes';
 import { categoryPath } from '@shared/utils/categoryPath';
 import { safeHttpUrl, safeImageUrl } from '@shared/utils/url';
 import type { PartDetail, PartListing, RelatedPart, RelatedParts } from '@public/types/part';
@@ -146,6 +147,9 @@ export default function PartPage() {
   const [related, setRelated] = useState<RelatedParts | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // A DEFINITIVE 404 for this id/slug (never a network or 5xx failure): the
+  // URL is not a part, so the head says noindex instead of saying nothing.
+  const [notFound, setNotFound] = useState(false);
   // A dead remote image must fall through to the package art / icon tiers,
   // not render a broken-image glyph.
   const [imgFailed, setImgFailed] = useState(false);
@@ -155,6 +159,7 @@ export default function PartPage() {
     let cancelled = false;
     setLoading(true);
     setError(null);
+    setNotFound(false);
     setRelated(null);
     setImgFailed(false);
 
@@ -163,8 +168,14 @@ export default function PartPage() {
         if (cancelled) return;
         setPart(data);
       })
-      .catch(() => {
-        if (!cancelled) setError('Failed to load part details. Please try again later.');
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        if (isNotFoundError(err)) {
+          setNotFound(true);
+          setError("We couldn't find that part. It may have been removed or renamed.");
+        } else {
+          setError('Failed to load part details. Please try again later.');
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -239,7 +250,7 @@ export default function PartPage() {
       exit={{ opacity: 0, x: -20 }}
       transition={{ duration: 0.15, ease: 'easeInOut' as const }}
     >
-      {seo && <PageHead seo={seo} />}
+      {seo ? <PageHead seo={seo} /> : notFound ? <PageHead seo={NOT_FOUND_SEO} /> : null}
 
       <div className={styles.partHeader}>
         <div className={styles.headerInner}>

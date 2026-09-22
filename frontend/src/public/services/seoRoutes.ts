@@ -134,6 +134,29 @@ export const STATIC_PAGE_SEO: Record<StaticPageKey, PageSeo> = {
   },
 };
 
+/**
+ * The not-found state — the catch-all route, and a part or category URL the
+ * API answers with a definitive 404.
+ *
+ * nginx serves every unknown URL the SPA shell with a 200 (a soft 404), and the
+ * status code stays that way on purpose: ~770k real part URLs have no
+ * prerendered document either, and a 404 would drop every one of them (an
+ * owner decision, not a tag). What the page CAN say is `noindex`, which Google
+ * honours when its renderer sees JS add it. Deliberately NOT in STATIC_PAGE_SEO:
+ * it is a state, not a route, and must never be prerendered — the prerender
+ * would bake noindex into a document nginx could serve for a real URL.
+ */
+export const NOT_FOUND_SEO: PageSeo = {
+  title: 'Page Not Found | Circuit Center',
+  description:
+    "The page you tried to reach doesn't exist or may have moved. Search Circuit Center's electronic components directory instead.",
+  canonical: null,
+  robots: 'noindex',
+  jsonLd: [],
+  heading: 'Not Found',
+  links: SITE_LINKS,
+};
+
 export interface PartSeoInput {
   sku: string;
   manufacturerName: string;

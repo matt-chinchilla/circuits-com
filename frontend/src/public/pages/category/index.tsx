@@ -21,7 +21,8 @@ import {
   writeCategoryQuery,
   type CategoryQueryPatch,
 } from '@public/services/categoryQuery';
-import { categorySeo } from '@public/services/seoRoutes';
+import { isNotFoundError } from '@public/services/notFound';
+import { NOT_FOUND_SEO, categorySeo } from '@public/services/seoRoutes';
 import { getCategoryShell, setCategoryShell, type CategoryShell } from '@public/services/categoryShellMemo';
 import {
   categoryRowsKey,
@@ -134,6 +135,9 @@ export default function CategoryPage() {
   );
   const [fetching, setFetching] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // A DEFINITIVE 404 for this slug (never a network or 5xx failure) — the head
+  // then says noindex instead of whatever shell the list gave it.
+  const [notFound, setNotFound] = useState(false);
 
   // This component REMOUNTS on every category navigation (PublicLayout keys its
   // ErrorBoundary on the pathname), so a re-run of the fetch effect within one
@@ -152,6 +156,7 @@ export default function CategoryPage() {
     if (navigating) setLoading(getCategoryChromeMemo(slug) === undefined);
     setFetching(true);
     setError(null);
+    setNotFound(false);
 
     let cancelled = false;
     api
@@ -173,6 +178,11 @@ export default function CategoryPage() {
         if (isUnknownSortError(err) && !sortHealedRef.current) {
           sortHealedRef.current = true;
           setSearchParams(prev => writeCategoryQuery(prev, { sort: null }), { replace: true });
+          return;
+        }
+        if (isNotFoundError(err)) {
+          setNotFound(true);
+          setError("We couldn't find that category. It may have moved.");
           return;
         }
         setError('Failed to load category. Please try again later.');
@@ -419,7 +429,7 @@ export default function CategoryPage() {
       animate={{ opacity: 1 }}
       transition={{ duration: 0.15, ease: 'easeInOut' as const }}
     >
-      {seo && <PageHead seo={seo} />}
+      {notFound ? <PageHead seo={NOT_FOUND_SEO} /> : seo ? <PageHead seo={seo} /> : null}
       <div className={styles.categoryHeader}>
         <div className={styles.headerInner}>
           <nav className={styles.breadcrumb} aria-label="Breadcrumb">
