@@ -156,9 +156,16 @@
 }
 
 // The 3D tab's panel. Unlike its neighbours this one is MOUNTED only while its
-// tab is selected (its renderer owns a WebGL context), so it is never hidden —
-// but it keeps the same 4px so the four panels sit at one height.
+// tab is selected (its renderer owns a WebGL context), so it is never hidden and
+// needs no `display` workaround — but it DOES need to grow the way `.drawing`
+// above does. Measured without these four lines: the board rendered 317px tall
+// in a 900px viewport, because the host's own `min-height: 420px` was the only
+// thing giving the panel a size.
 .board3dPanel {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
   margin-top: 4px;
 }
 
