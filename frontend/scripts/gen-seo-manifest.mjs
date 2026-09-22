@@ -115,9 +115,11 @@ const topLevel = categories.filter((c) => Array.isArray(c.children));
  * hands back a hard-capped, ranked slice (photo AND price first, then stock
  * descending, then newest) and the rest of the catalog falls back to the SPA
  * shell + client-side helmet — already the behaviour of every part added since
- * the last regen. The sitemap advertises exactly the same capped ranked slice
- * (/api/sitemap-parts-{n}.xml shares the _ranked_parts query), so one knob —
- * PRERENDER_PART_LIMIT — moves both surfaces together.
+ * the last regen. The build then writes sitemap-parts-{n}.xml from the very
+ * part routes it prerenders out of THIS file (scripts/seoPrerender.ts), so the
+ * sitemap advertises exactly this snapshot — regenerating is what moves both.
+ * (Until 2026-09-22 the API ranked the sitemap live per fetch and it drifted
+ * from the committed snapshot: 35% of sampled sitemap URLs served the shell.)
  *
  * The ranking lives server-side because it needs a SUM over part_listings that
  * no public list endpoint exposes, and paging 270k rows through /api/parts/

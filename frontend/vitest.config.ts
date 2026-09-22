@@ -23,6 +23,8 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
-    include: ['src/**/*.test.ts'],
+    // scripts/ holds the build-time SEO prerender, whose writer is tested
+    // against a temp dist/ (scripts/seoPrerender.test.ts).
+    include: ['src/**/*.test.ts', 'scripts/**/*.test.ts'],
   },
 });

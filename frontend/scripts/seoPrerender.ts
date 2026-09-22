@@ -27,15 +27,25 @@
 // with a photo AND a price first, then stock descending, then newest. Parts
 // outside it serve the SPA shell and get their head tags from helmet after
 // hydration, which is already what every part added since the last regen does.
-// The sitemap advertises exactly this same slice: /api/sitemap-parts-{n}.xml
-// is built from the identical ranked query, so one knob (PRERENDER_PART_LIMIT)
-// moves both surfaces and no advertised URL serves the bare shell.
+//
+// The part sitemaps are written HERE, from the same route list, not by the API
+// (2026-09-22). /api/sitemap-parts-{n}.xml used to re-run the ranked query on
+// every crawler fetch while the documents came from the committed manifest, so
+// the two drifted apart every night as the feed moved stock: on 2026-09-21, 21
+// of 60 sampled sitemap part URLs (35 %) served the generic shell. Deriving
+// sitemap-parts-{n}.xml and the sitemap.xml index from the routes this step
+// just wrote makes "advertised" and "prerendered" one set by construction.
+// /sitemap-core.xml (static pages + categories) stays live on the API — the
+// taxonomy moves only on a reseed. nginx serves these files ahead of the API
+// (frontend/nginx.conf + nginx/nginx.ssl.conf; guard test_nginx_seo_prerender).
 //
 // The route data comes from seo-manifest.json, a snapshot committed alongside
 // the code because the frontend build stage has no network and no database.
 // Regenerate it with `node scripts/gen-seo-manifest.mjs` whenever the category
-// taxonomy or its descriptions change. A missing manifest degrades to the
-// static routes only; it never fails the build.
+// taxonomy or its descriptions change, and after big imports — the sitemaps
+// now move with it, so a stale manifest is a stale-but-TRUE sitemap rather
+// than one that promises documents this build never wrote. A missing manifest
+// degrades to the static routes and a core-only index; it never fails the build.
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
@@ -49,7 +59,7 @@ import {
 import { STATIC_PAGE_SEO, categorySeo, partSeo } from '../src/public/services/seoRoutes';
 import { categoryPath } from '../src/shared/utils/categoryPath';
 
-interface ManifestCategory {
+export interface ManifestCategory {
   slug: string;
   name: string;
   description?: string | null;
@@ -62,7 +72,7 @@ interface ManifestCategory {
   }[];
 }
 
-interface ManifestPart {
+export interface ManifestPart {
   slug: string;
   sku: string;
   manufacturerName?: string | null;
@@ -73,12 +83,14 @@ interface ManifestPart {
   bestPrice?: number | null;
 }
 
-interface SeoManifest {
+export interface SeoManifest {
+  /** ISO timestamp of the regen — the part sitemaps' <lastmod>. */
+  generatedAt?: string;
   categories?: ManifestCategory[];
   parts?: ManifestPart[];
 }
 
-interface PrerenderRoute {
+export interface PrerenderRoute {
   /** Root-relative URL. */
   urlPath: string;
   /** Output file, relative to dist/. */
@@ -150,7 +162,7 @@ function noscriptBody(seo: PageSeo): string {
   );
 }
 
-function renderRoute(shell: string, route: PrerenderRoute): string {
+export function renderRoute(shell: string, route: PrerenderRoute): string {
   const { seo } = route;
   let html = shell;
   html = replaceOnce(html, /<title>[\s\S]*?<\/title>/, `<title>${escapeHtml(seo.title)}</title>`, '<title>');
@@ -211,7 +223,14 @@ function readManifest(manifestPath: string): SeoManifest | null {
   }
 }
 
-function buildRoutes(manifest: SeoManifest | null): PrerenderRoute[] {
+// A slug becomes a directory under dist/ AND a <loc> in a sitemap, so it must
+// be exactly the grammar slugify_sku emits: no separators to climb out of
+// part/, nothing a URL would have to percent-encode, never empty (which would
+// write part/index.html for the bare /part/ URL). A part that fails it gets no
+// document and — because the sitemaps derive from these routes — no <loc>.
+const SAFE_SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+export function buildRoutes(manifest: SeoManifest | null): PrerenderRoute[] {
   const categories = manifest?.categories ?? [];
   const topLevelLinks: SeoLink[] = categories.map((c) => ({
     href: `/category/${c.slug}`,
@@ -295,7 +314,12 @@ function buildRoutes(manifest: SeoManifest | null): PrerenderRoute[] {
   // rest), since /part/<uuid> canonicalizes to the slug form anyway —
   // prerendering both shapes would emit two documents that disagree about
   // which is canonical.
+  const seenParts = new Set<string>();
   for (const part of manifest?.parts ?? []) {
+    // One document per URL: the generator already dedupes slugs, and a repeat
+    // here would overwrite the first file and list the URL twice.
+    if (!SAFE_SLUG.test(part.slug) || seenParts.has(part.slug)) continue;
+    seenParts.add(part.slug);
     routes.push({
       urlPath: `/part/${part.slug}`,
       file: `part/${part.slug}/index.html`,
@@ -316,6 +340,153 @@ function buildRoutes(manifest: SeoManifest | null): PrerenderRoute[] {
   return routes;
 }
 
+// ── Sitemaps ────────────────────────────────────────────────────────────────
+// A <urlset> may carry at most 50,000 URLs (sitemaps.org). 45,000 leaves
+// headroom, so a manifest that grows adds a page instead of breaching the cap —
+// the single 312,634-URL document of 2026-09-01 was rejected whole.
+export const SITEMAP_PARTS_PAGE_SIZE = 45_000;
+
+/** One sitemap document, relative to dist/. */
+export interface SitemapFile {
+  file: string;
+  xml: string;
+}
+
+const SITEMAP_NS = 'http://www.sitemaps.org/schemas/sitemap/0.9';
+
+function escapeXml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
+// <lastmod> is the day the manifest was generated — the only honest date a
+// snapshot has. The API stamped TODAY on every fetch, which claims a change
+// whether or not one happened, and Google ignores a lastmod it cannot trust.
+// An absent or malformed generatedAt emits no <lastmod> at all.
+function lastmodOf(generatedAt: string | undefined): string | null {
+  return /^(\d{4}-\d{2}-\d{2})T/.exec(generatedAt ?? '')?.[1] ?? null;
+}
+
+/**
+ * The sitemap index plus one sitemap-parts-{n}.xml per `pageSize` part
+ * documents, derived from the routes this build writes — never from a second
+ * list — so a part URL is advertised if and only if its document exists.
+ *
+ * With no part routes the index names /sitemap-core.xml alone and no parts
+ * page is written: a page that exists only to be empty is a 200 a crawler
+ * keeps re-fetching for nothing.
+ */
+export function buildSitemaps(
+  routes: PrerenderRoute[],
+  generatedAt?: string,
+  pageSize: number = SITEMAP_PARTS_PAGE_SIZE,
+): SitemapFile[] {
+  const lastmod = lastmodOf(generatedAt);
+  const lastmodTag = lastmod ? `<lastmod>${lastmod}</lastmod>` : '';
+
+  const partLocs = [
+    ...new Set(routes.filter((r) => r.urlPath.startsWith('/part/')).map((r) => r.urlPath)),
+  ].map((urlPath) => `${SITE_ORIGIN}${urlPath}`);
+
+  const pages: SitemapFile[] = [];
+  for (let i = 0; i < partLocs.length; i += pageSize) {
+    const entries = partLocs
+      .slice(i, i + pageSize)
+      .map(
+        (loc) =>
+          `<url><loc>${escapeXml(loc)}</loc>${lastmodTag}` +
+          `<changefreq>weekly</changefreq><priority>0.6</priority></url>`,
+      );
+    pages.push({
+      file: `sitemap-parts-${pages.length + 1}.xml`,
+      xml:
+        `<?xml version="1.0" encoding="UTF-8"?>\n` +
+        `<urlset xmlns="${SITEMAP_NS}">\n${entries.join('\n')}\n</urlset>\n`,
+    });
+  }
+
+  // The core child is rendered live by the API (static pages + categories), so
+  // this build cannot know when it last changed — it gets no <lastmod> rather
+  // than an invented one. The parts pages are this build's own output.
+  const children = [
+    `<sitemap><loc>${SITE_ORIGIN}/sitemap-core.xml</loc></sitemap>`,
+    ...pages.map(
+      (page) =>
+        `<sitemap><loc>${escapeXml(`${SITE_ORIGIN}/${page.file}`)}</loc>${lastmodTag}</sitemap>`,
+    ),
+  ];
+  const index: SitemapFile = {
+    file: 'sitemap.xml',
+    xml:
+      `<?xml version="1.0" encoding="UTF-8"?>\n` +
+      `<sitemapindex xmlns="${SITEMAP_NS}">\n${children.join('\n')}\n</sitemapindex>\n`,
+  };
+  return [index, ...pages];
+}
+
+export interface PrerenderLog {
+  info(message: string): void;
+  warn(message: string): void;
+}
+
+export interface PrerenderResult {
+  routes: PrerenderRoute[];
+  sitemaps: SitemapFile[];
+}
+
+/**
+ * Writes every prerendered document AND the sitemaps into `outDir`. The Vite
+ * plugin below is a thin wrapper, so a test can run the real writer against a
+ * temp directory. Returns null — having written nothing, sitemaps included —
+ * when there is no built shell to rewrite.
+ */
+export function writePrerender(
+  options: { manifestPath: string; outDir: string },
+  log: PrerenderLog,
+): PrerenderResult | null {
+  const outDir = options.outDir;
+  const shellPath = path.join(outDir, 'index.html');
+  if (!existsSync(shellPath)) return null;
+
+  const shell = readFileSync(shellPath, 'utf8');
+  const manifest = readManifest(options.manifestPath);
+  if (!manifest) {
+    log.warn(
+      `[seo-prerender] ${path.basename(options.manifestPath)} missing or unreadable — ` +
+        `category routes will fall back to the generic shell. ` +
+        `Run \`node scripts/gen-seo-manifest.mjs\` against a running API.`,
+    );
+  }
+
+  const routes = buildRoutes(manifest);
+  for (const route of routes) {
+    const dest = path.join(outDir, route.file);
+    mkdirSync(path.dirname(dest), { recursive: true });
+    writeFileSync(dest, renderRoute(shell, route), 'utf8');
+  }
+  const sitemaps = buildSitemaps(routes, manifest?.generatedAt);
+  for (const sitemap of sitemaps) {
+    writeFileSync(path.join(outDir, sitemap.file), sitemap.xml, 'utf8');
+  }
+
+  // Broken down by type because the part count is the one that can silently
+  // collapse: a manifest regenerated against an API without the capped-slice
+  // endpoint would still emit a plausible-looking total made of categories.
+  const parts = routes.filter((r) => r.urlPath.startsWith('/part/')).length;
+  const categories = routes.filter((r) => r.urlPath.startsWith('/category/')).length;
+  log.info(
+    `[seo-prerender] wrote ${routes.length} indexable HTML documents ` +
+      `(${routes.length - parts - categories} static, ${categories} category, ${parts} part) ` +
+      `+ ${sitemaps.length} sitemap files advertising those ${parts} part URLs ` +
+      `(manifest generated ${manifest?.generatedAt ?? 'never'})`,
+  );
+  return { routes, sitemaps };
+}
+
 export function seoPrerender(options: { manifestPath: string; outDir: string }): Plugin {
   return {
     name: 'circuits-seo-prerender',
@@ -327,36 +498,10 @@ export function seoPrerender(options: { manifestPath: string; outDir: string }):
       sequential: true,
       order: 'post',
       handler() {
-        const outDir = options.outDir;
-        const shellPath = path.join(outDir, 'index.html');
-        if (!existsSync(shellPath)) return;
-
-        const shell = readFileSync(shellPath, 'utf8');
-        const manifest = readManifest(options.manifestPath);
-        if (!manifest) {
-          this.warn(
-            `[seo-prerender] ${path.basename(options.manifestPath)} missing or unreadable — ` +
-              `category routes will fall back to the generic shell. ` +
-              `Run \`node scripts/gen-seo-manifest.mjs\` against a running API.`,
-          );
-        }
-
-        const routes = buildRoutes(manifest);
-        for (const route of routes) {
-          const dest = path.join(outDir, route.file);
-          mkdirSync(path.dirname(dest), { recursive: true });
-          writeFileSync(dest, renderRoute(shell, route), 'utf8');
-        }
-        // Broken down by type because the part count is the one that can
-        // silently collapse: a manifest regenerated against an API without
-        // the capped-slice endpoint would still emit a plausible-looking
-        // total made entirely of categories.
-        const parts = routes.filter((r) => r.urlPath.startsWith('/part/')).length;
-        const categories = routes.filter((r) => r.urlPath.startsWith('/category/')).length;
-        this.info(
-          `[seo-prerender] wrote ${routes.length} indexable HTML documents ` +
-            `(${routes.length - parts - categories} static, ${categories} category, ${parts} part)`,
-        );
+        writePrerender(options, {
+          info: (message) => this.info(message),
+          warn: (message) => this.warn(message),
+        });
       },
     },
   };

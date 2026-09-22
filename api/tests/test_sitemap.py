@@ -1,24 +1,27 @@
-"""Tests for the sitemap — an INDEX at /api/sitemap.xml plus its children.
+"""Tests for the API half of the sitemap — /api/sitemap.xml + /api/sitemap-core.xml.
 
-Two decisions are pinned here.
+Three decisions are pinned here.
 
 **The split (2026-09-01).** One <urlset> carrying every part reached 312,634
 URLs on prod, 6.25x the 50,000-URL sitemaps.org cap, so Google rejected the
-document whole. /api/sitemap.xml is now a <sitemapindex> naming
-/sitemap-core.xml (static pages + categories) and /sitemap-parts-{n}.xml. The
-children are advertised at ROOT-relative public URLs because a sitemap may only
-list URLs at or below its own path — a child served from /api/ could claim
-nothing but /api/* — which is what the nginx rewrite exists for.
+document whole. /sitemap.xml is a <sitemapindex>; children are advertised at
+ROOT-relative public URLs because a sitemap may only list URLs at or below its
+own path — a child served from /api/ could claim nothing but /api/* — which is
+what the nginx mapping exists for.
 
-**The parts sitemap advertises exactly the prerendered set.** ~95% of the old
-part URLs served the empty SPA shell, since only the capped, ranked slice from
-/api/seo/prerender-parts ships static HTML. Both now read one shared query, so
-there is one knob (PRERENDER_PART_LIMIT) rather than two that can disagree.
+**Part sitemaps belong to the build (2026-09-22).** /api/sitemap-parts-{n}.xml
+re-ran the ranked query on every crawler fetch while the prerendered documents
+came from a manifest committed weeks earlier; as the nightly feed moved stock
+the two sets drifted, and 35% of sampled advertised part URLs served the
+generic shell. The frontend build now writes sitemap.xml + sitemap-parts-{n}.xml
+from the very routes it prerenders (frontend/scripts/seoPrerender.test.ts pins
+that side), nginx serves them first, and the API keeps only the core child and
+a core-only FALLBACK index. The parts route is gone — a 404 — so no fallback
+path can ever advertise a live-ranked part again.
 
-The category assertions below predate the split (2026-06-03 nested-URL change)
-and are ported verbatim onto the core child: children live at the NESTED path
-`/category/{parent_slug}/{child_slug}`, never the bare flat child slug, or
-Google indexes a URL that only redirects to the real one.
+The category assertions below predate both (2026-06-03 nested-URL change): a
+child lives at the NESTED path `/category/{parent_slug}/{child_slug}`, never the
+bare flat child slug, or Google indexes a URL that only redirects.
 """
 
 import re
@@ -36,7 +39,7 @@ import pytest
 
 from app.models import Part, PartListing, Supplier
 from app.routes import sitemap as sitemap_module
-from app.routes.sitemap import PRERENDER_PART_LIMIT, SITEMAP_PARTS_PAGE_SIZE
+from app.routes.sitemap import PRERENDER_PART_LIMIT
 
 NS = "{http://www.sitemaps.org/schemas/sitemap/0.9}"
 
@@ -93,25 +96,30 @@ def _part(db, sku, *, stock=None, image=True, price="1.0000", age_days=0, slug=_
     return part
 
 
-# ── The index ───────────────────────────────────────────────────────────────
+# ── The index (the fallback nginx reaches only when the build shipped none) ──
 
 
 def test_the_index_is_a_sitemapindex_not_a_urlset(client, seeded_db):
-    """The whole point of the change: /sitemap.xml stopped being one urlset."""
+    """The whole point of the 2026-09-01 split: /sitemap.xml stopped being one urlset."""
     resp = client.get("/api/sitemap.xml")
     assert resp.status_code == 200
     assert resp.headers["content-type"].startswith("application/xml")
     assert _root(resp).tag == f"{NS}sitemapindex"
 
 
-def test_the_index_names_both_children_at_their_public_urls(client, seeded_db):
-    """Root-relative locs — a child under /api/ could only claim /api/* URLs."""
-    locs = _locs(client.get("/api/sitemap.xml").text)
-    assert "https://circuitcenter.ai/sitemap-core.xml" in locs
-    assert "https://circuitcenter.ai/sitemap-parts-1.xml" in locs
-    assert not [loc for loc in locs if "/api/" in loc], (
-        "the index must advertise the public URLs nginx maps, not the /api/ paths"
-    )
+def test_the_fallback_index_names_only_the_core_child(client, db, seeded_db):
+    """A build with no sitemap of its own prerendered no parts either.
+
+    So the API's index must not name a parts page even with parts in the DB:
+    advertising them is the build's job, because only the build knows which
+    documents exist.
+    """
+    _part(db, "LM7805CT", stock=10)
+    db.commit()
+
+    assert _locs(client.get("/api/sitemap.xml").text) == [
+        "https://circuitcenter.ai/sitemap-core.xml"
+    ]
 
 
 def test_the_index_carries_no_part_urls_of_its_own(client, seeded_db):
@@ -121,27 +129,19 @@ def test_the_index_carries_no_part_urls_of_its_own(client, seeded_db):
     assert [child.tag for child in root] == [f"{NS}sitemap"] * len(list(root))
 
 
-def test_the_index_lists_one_parts_page_per_page_that_exists(client, db, monkeypatch):
-    """Growth adds a child rather than overflowing one."""
-    for i in range(5):
-        _part(db, f"PART{i}")
+def test_the_live_ranked_parts_sitemap_is_gone(client, db):
+    """The drift source: it must stay a 404, not an empty or live-ranked page.
+
+    nginx falls back here when the frontend has no /sitemap-parts-{n}.xml; a
+    200 from a live query would re-advertise parts no document exists for.
+    """
+    _part(db, "LM7805CT", stock=10)
     db.commit()
-    monkeypatch.setattr(sitemap_module, "SITEMAP_PARTS_PAGE_SIZE", 2)
 
-    locs = _locs(client.get("/api/sitemap.xml").text)
-    parts_locs = [loc for loc in locs if "sitemap-parts" in loc]
-    assert parts_locs == [
-        "https://circuitcenter.ai/sitemap-parts-1.xml",
-        "https://circuitcenter.ai/sitemap-parts-2.xml",
-        "https://circuitcenter.ai/sitemap-parts-3.xml",
-    ]
-
-
-def test_an_empty_catalog_still_advertises_one_parts_page(client, db):
-    """Page 1 always exists, so the index never names a child that 404s."""
-    locs = _locs(client.get("/api/sitemap.xml").text)
-    assert "https://circuitcenter.ai/sitemap-parts-1.xml" in locs
-    assert client.get("/api/sitemap-parts-1.xml").status_code == 200
+    for page in (0, 1, 2):
+        assert client.get(f"/api/sitemap-parts-{page}.xml").status_code == 404
+    assert "SITEMAP_PARTS_PAGE_SIZE" not in vars(sitemap_module)
+    assert not [r for r in client.app.routes if "sitemap-parts" in getattr(r, "path", "")]
 
 
 # ── The core child: static pages + categories ───────────────────────────────
@@ -219,156 +219,22 @@ def test_sitemap_core_carries_no_part_urls(client, db, seeded_db):
     assert not [loc for loc in _locs(client.get("/api/sitemap-core.xml").text) if "/part/" in loc]
 
 
-# ── The parts children ──────────────────────────────────────────────────────
+# ── The prerender slice the build advertises ────────────────────────────────
 
 
-def test_the_page_size_leaves_headroom_under_the_protocol_cap(client):
-    """45,000 < 50,000: growth adds a page instead of invalidating the file."""
-    assert SITEMAP_PARTS_PAGE_SIZE == 45_000
-    assert SITEMAP_PARTS_PAGE_SIZE < 50_000
-
-
-def test_part_urls_use_the_slug_not_the_uuid(client, db):
-    """The MPN must be in the URL; a UUID carries no search signal."""
-    _part(db, "LM7805CT")
-    db.commit()
-
-    locs = _locs(client.get("/api/sitemap-parts-1.xml").text)
-    assert "https://circuitcenter.ai/part/lm7805ct" in locs
-    uuid_shaped = [
-        loc
-        for loc in locs
-        if re.search(r"/part/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", loc)
-    ]
-    assert not uuid_shaped, "the slug is being ignored for parts that have one"
-
-
-def test_part_entries_keep_their_lastmod_changefreq_and_priority(client, db):
-    _part(db, "LM7805CT")
-    db.commit()
-
-    xml = client.get("/api/sitemap-parts-1.xml").text
-    block = xml[xml.index("<loc>https://circuitcenter.ai/part/lm7805ct</loc>") :][:220]
-    assert "<changefreq>weekly</changefreq>" in block
-    assert "<priority>0.6</priority>" in block
-    assert re.search(r"<lastmod>\d{4}-\d{2}-\d{2}</lastmod>", block)
-
-
-def test_part_urls_are_unique(client, db):
-    """Duplicate <loc> is a malformed sitemap.
-
-    Two manufacturers shipping the same SKU slugify identically (CLAUDE.md), so
-    collisions are expected data, not corruption — they must collapse to one
-    entry rather than being emitted twice.
-    """
-    _part(db, "LM7805CT")
-    twin = _part(db, "LM7805CT-B")
-    twin.slug = "lm7805ct"
-    db.commit()
-
-    part_locs = [
-        loc for loc in _locs(client.get("/api/sitemap-parts-1.xml").text) if "/part/" in loc
-    ]
-    dupes = {loc for loc in part_locs if part_locs.count(loc) > 1}
-    assert not dupes, f"duplicate part <loc> entries: {sorted(dupes)[:5]}"
-    assert part_locs.count("https://circuitcenter.ai/part/lm7805ct") == 1
-
-
-def test_a_slugless_part_is_not_advertised(client, db):
-    """It has no prerendered document, so advertising it advertises the shell.
-
-    This REPLACES the old id-fallback behaviour: the sitemap used to emit
-    /part/{uuid} for a slugless part, which is exactly the class of URL the
-    audit found serving an empty SPA shell.
-    """
-    _part(db, "SLUGLESS", slug=None)
-    _part(db, "REAL")
-    db.commit()
-
-    locs = _locs(client.get("/api/sitemap-parts-1.xml").text)
-    assert locs == ["https://circuitcenter.ai/part/real"]
-
-
-def test_the_parts_page_emits_only_the_ranked_slice(client, db, monkeypatch):
-    """Same ranking as the prerender: featured first, then stock, then recency."""
-    # Stock is lopsided on purpose: drop the featured term from the shared
-    # ranking and DEEP wins on stock alone, so this test moves with it.
-    _part(db, "SPARSE", stock=1, image=True, price="2.5000")
-    _part(db, "DEEP", stock=9_000_000, image=False, price=None)
-    db.commit()
-    monkeypatch.setattr(sitemap_module, "PRERENDER_PART_LIMIT", 1)
-
-    locs = _locs(client.get("/api/sitemap-parts-1.xml").text)
-    assert locs == ["https://circuitcenter.ai/part/sparse"], (
-        "the sitemap must advertise the TOP of the same ranking the prerender uses"
-    )
-
-
-def test_the_sitemap_and_the_prerender_advertise_the_same_set(client, db):
-    """One knob, one query — the two must never disagree about which parts."""
-    for i in range(4):
-        _part(db, f"PART{i}")
-    db.commit()
-
-    prerendered = [p["slug"] for p in client.get("/api/seo/prerender-parts").json()["parts"]]
-    sitemapped = [
-        loc.rsplit("/", 1)[-1] for loc in _locs(client.get("/api/sitemap-parts-1.xml").text)
-    ]
-    assert sitemapped == prerendered
-
-
-def test_the_page_size_bounds_one_document(client, db, monkeypatch):
-    """A page carries at most SITEMAP_PARTS_PAGE_SIZE entries."""
-    for i in range(5):
-        _part(db, f"PART{i}")
-    db.commit()
-    monkeypatch.setattr(sitemap_module, "SITEMAP_PARTS_PAGE_SIZE", 2)
-
-    assert len(_locs(client.get("/api/sitemap-parts-1.xml").text)) == 2
-    assert len(_locs(client.get("/api/sitemap-parts-2.xml").text)) == 2
-    assert len(_locs(client.get("/api/sitemap-parts-3.xml").text)) == 1
-
-
-def test_the_pages_partition_the_slice_without_gaps_or_repeats(client, db, monkeypatch):
-    """Paging must be a partition — an unstable ORDER BY would drop rows."""
-    for i in range(5):
-        _part(db, f"PART{i}")
-    db.commit()
-    monkeypatch.setattr(sitemap_module, "SITEMAP_PARTS_PAGE_SIZE", 2)
-
-    paged = [
-        loc
-        for page in (1, 2, 3)
-        for loc in _locs(client.get(f"/api/sitemap-parts-{page}.xml").text)
-    ]
-    assert len(paged) == len(set(paged)) == 5
-
-
-def test_a_page_past_the_last_one_is_a_404(client, db):
-    _part(db, "ONLY")
-    db.commit()
-
-    assert client.get("/api/sitemap-parts-1.xml").status_code == 200
-    assert client.get("/api/sitemap-parts-2.xml").status_code == 404
-    assert client.get("/api/sitemap-parts-0.xml").status_code == 404
-
-
-def test_the_cap_is_the_ceiling_on_what_is_advertised(client, db, monkeypatch):
-    """The sitemap never advertises past the prerendered set."""
-    for i in range(4):
-        _part(db, f"PART{i}")
-    db.commit()
-    monkeypatch.setattr(sitemap_module, "PRERENDER_PART_LIMIT", 2)
-    monkeypatch.setattr(sitemap_module, "SITEMAP_PARTS_PAGE_SIZE", 1)
-
-    assert len(_locs(client.get("/api/sitemap-parts-1.xml").text)) == 1
-    assert len(_locs(client.get("/api/sitemap-parts-2.xml").text)) == 1
-    assert client.get("/api/sitemap-parts-3.xml").status_code == 404
-
-
-def test_the_cap_the_sitemap_pages_against_is_the_prerender_cap(client):
-    """Sanity: the two constants are the ones the module actually ships."""
+def test_the_cap_is_the_one_the_module_ships(client):
+    """The one knob. Raising it is a measured decision (see the 2026-09-22 report)."""
     assert PRERENDER_PART_LIMIT == 15_000
+
+
+def test_the_prerender_slice_carries_slugs_not_uuids(client, db):
+    """The MPN must be in the URL the build advertises; a UUID carries no signal."""
+    _part(db, "LM7805CT", stock=10)
+    _part(db, "SLUGLESS", slug=None)
+    db.commit()
+
+    slugs = [p["slug"] for p in client.get("/api/seo/prerender-parts").json()["parts"]]
+    assert slugs == ["lm7805ct"]
 
 
 # ── Every document is well-formed and cacheable ─────────────────────────────
@@ -379,7 +245,6 @@ def test_the_cap_the_sitemap_pages_against_is_the_prerender_cap(client):
     [
         ("/api/sitemap.xml", f"{NS}sitemapindex"),
         ("/api/sitemap-core.xml", f"{NS}urlset"),
-        ("/api/sitemap-parts-1.xml", f"{NS}urlset"),
     ],
 )
 def test_every_document_parses_with_the_right_root(client, seeded_db, path, root_tag):
@@ -390,9 +255,9 @@ def test_every_document_parses_with_the_right_root(client, seeded_db, path, root
 
 @pytest.mark.parametrize(
     "path",
-    ["/api/sitemap.xml", "/api/sitemap-core.xml", "/api/sitemap-parts-1.xml"],
+    ["/api/sitemap.xml", "/api/sitemap-core.xml"],
 )
 def test_every_document_is_cacheable_for_an_hour(client, seeded_db, path):
-    """The ranked query measured 716ms at 271k parts; a crawler hits these often."""
+    """A crawler re-fetches these often and they move on a reseed, not per hour."""
     resp = client.get(path)
     assert resp.headers["cache-control"] == "public, max-age=3600"
