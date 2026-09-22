@@ -1,5 +1,5 @@
 import { flattenThreePoint } from './arcs';
-import { bbox, rectCorners, signedArea } from './geom';
+import { bbox, rectCorners, signedArea, type Box } from './geom';
 import { circleRing } from './strokes';
 import type { Ring, Shape, Vec2 } from './types';
 
@@ -164,7 +164,7 @@ export function boardOutline(edgeItems: Shape[], tolMm: number, contentPts: Vec2
   return { outer, cutouts, open: false, unchained: 0, degenerateArcs };
 }
 
-const grow = (b: { min: Vec2; max: Vec2 }, m: number) => ({
+const grow = (b: Box, m: number): Box => ({
   min: { x: b.min.x - m, y: b.min.y - m }, max: { x: b.max.x + m, y: b.max.y + m },
 });
 

@@ -13,7 +13,7 @@
 // or one lies inside the other. Boundaries are deliberately exclusive — two pads
 // that share an edge, or a drill tangent to its own pad's rim, touch without
 // overlapping and both survive.
-import { bbox } from './geom';
+import { bbox, boxesOverlap, type Box } from './geom';
 import type { Ring, Vec2 } from './types';
 
 /** A picometre. Coordinates are KiCad millimetres, and KiCad itself rounds to
@@ -35,6 +35,16 @@ function segmentsCross(a1: Vec2, a2: Vec2, b1: Vec2, b2: Vec2): boolean {
   const d1 = orient(b1, b2, a1), d2 = orient(b1, b2, a2);
   const d3 = orient(a1, a2, b1), d4 = orient(a1, a2, b2);
   return ((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0));
+}
+
+/** Does any edge of ring `a` properly cross any edge of ring `b`? */
+function edgesCross(a: Vec2[], b: Vec2[]): boolean {
+  for (let i = 0, j = a.length - 1; i < a.length; j = i++) {
+    for (let k = 0, l = b.length - 1; k < b.length; l = k++) {
+      if (segmentsCross(a[j], a[i], b[l], b[k])) return true;
+    }
+  }
+  return false;
 }
 
 /** Is `p` within EPS of the segment ab? */
@@ -92,33 +102,22 @@ function anyPointInside(pts: Vec2[], host: Vec2[]): boolean {
  */
 export function ringContains(host: Ring, inner: Ring): boolean {
   if (host.pts.length < 3 || inner.pts.length < 3) return false;
-  const A = inner.pts, B = host.pts;
-  for (let i = 0, j = A.length - 1; i < A.length; j = i++) {
-    for (let k = 0, l = B.length - 1; k < B.length; l = k++) {
-      if (segmentsCross(A[j], A[i], B[l], B[k])) return false;
-    }
-  }
+  if (edgesCross(inner.pts, host.pts)) return false;
   // The centre rather than a vertex: two IDENTICAL rings share every vertex,
   // and a vertex on the boundary is not inside.
-  return pointInRing(centroid(A), B);
+  return pointInRing(centroid(inner.pts), host.pts);
 }
 
 /**
  * True when the two rings share interior area. Bounding boxes reject first —
  * most pairs on a board are nowhere near each other — and a box that merely
- * TOUCHES is a reject, same rule as the boundary above.
+ * TOUCHES is a reject, same rule as the boundary above. A caller that already
+ * holds the rings' boxes (`buildScene` caches them) hands them in.
  */
-export function ringsOverlap(a: Ring, b: Ring): boolean {
+export function ringsOverlap(a: Ring, b: Ring, boxA: Box = bbox(a.pts), boxB: Box = bbox(b.pts)): boolean {
   if (a.pts.length < 3 || b.pts.length < 3) return false;
-  const ba = bbox(a.pts), bb = bbox(b.pts);
-  if (ba.max.x <= bb.min.x || bb.max.x <= ba.min.x) return false;
-  if (ba.max.y <= bb.min.y || bb.max.y <= ba.min.y) return false;
-  const A = a.pts, B = b.pts;
-  for (let i = 0, j = A.length - 1; i < A.length; j = i++) {
-    for (let k = 0, l = B.length - 1; k < B.length; l = k++) {
-      if (segmentsCross(A[j], A[i], B[l], B[k])) return true;
-    }
-  }
+  if (!boxesOverlap(boxA, boxB)) return false;
+  if (edgesCross(a.pts, b.pts)) return true;
   // No crossing: either disjoint, or one ring is wholly inside the other.
-  return anyPointInside(A, B) || anyPointInside(B, A);
+  return anyPointInside(a.pts, b.pts) || anyPointInside(b.pts, a.pts);
 }

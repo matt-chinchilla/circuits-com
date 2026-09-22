@@ -73,8 +73,17 @@ export function signedArea(pts: Vec2[]): number {
   return a / 2;
 }
 
-export function bbox(pts: Vec2[]): { min: Vec2; max: Vec2 } {
+export interface Box { min: Vec2; max: Vec2 }
+
+export function bbox(pts: Vec2[]): Box {
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   for (const p of pts) { if (p.x < minX) minX = p.x; if (p.y < minY) minY = p.y; if (p.x > maxX) maxX = p.x; if (p.y > maxY) maxY = p.y; }
   return { min: { x: minX, y: minY }, max: { x: maxX, y: maxY } };
+}
+
+/** Do two boxes share interior? Touching edges do not — the same exclusive
+ *  boundary rule `overlap.ts` applies to the rings themselves. */
+export function boxesOverlap(a: Box, b: Box): boolean {
+  if (a.max.x <= b.min.x || b.max.x <= a.min.x) return false;
+  return !(a.max.y <= b.min.y || b.max.y <= a.min.y);
 }

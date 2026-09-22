@@ -9,7 +9,7 @@
 // never per pad or per track.
 import type { BoardStackup, KicadReadErrorKind } from '../types';
 import { courtyards } from './courtyards';
-import { bbox, place } from './geom';
+import { bbox, place, type Box } from './geom';
 import { zLadder } from './layers';
 import { boardOutline, shapePolylines } from './outline';
 import { ringContains, ringsOverlap } from './overlap';
@@ -56,21 +56,13 @@ const MIN_TRACK_MM = 0.2;
  */
 export const FACE_HOLE_BUDGET = { holes: 1500, vertices: 40_000 };
 
-interface Box { min: Vec2; max: Vec2 }
 interface Boxed { ring: Ring; box: Box; area: number }
 
 const boxArea = (b: Box): number => Math.max(0, b.max.x - b.min.x) * Math.max(0, b.max.y - b.min.y);
 
-/**
- * The boxes are only a REJECT — cached here because the pruning below is
- * quadratic and most pairs on a board are nowhere near each other. A pair whose
- * boxes do meet goes to `ringsOverlap`, which answers on the rings themselves.
- */
-function overlapping(a: Boxed, b: Boxed): boolean {
-  if (a.box.max.x <= b.box.min.x || b.box.max.x <= a.box.min.x) return false;
-  if (a.box.max.y <= b.box.min.y || b.box.max.y <= a.box.min.y) return false;
-  return ringsOverlap(a.ring, b.ring);
-}
+/** The boxes are cached because the pruning below is quadratic and most pairs
+ *  on a board are nowhere near each other: `ringsOverlap` rejects on them first. */
+const overlapping = (a: Boxed, b: Boxed): boolean => ringsOverlap(a.ring, b.ring, a.box, b.box);
 
 const boxed = (ring: Ring): Boxed => {
   const box = bbox(ring.pts);
