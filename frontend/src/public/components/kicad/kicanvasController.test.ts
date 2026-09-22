@@ -28,15 +28,24 @@ function project(files: Record<string, string>, extra: Partial<KicadProject> = {
   return { name: 'p', files: map, pro: null, root: sheets[0]?.path ?? null, sheets, board: [...map.keys()].find((k) => k.endsWith('.kicad_pcb')) ?? null, warnings: [], missingSheets: [], formatVersions: {}, ...extra };
 }
 
+/** `KiCanvasSelectEvent.type` — vendor viewers/base/events.ts:26-33. */
+const SELECT = 'kicanvas:select';
+
 function makeViewer(selectedFor: string[], log: string[]) {
   return Object.assign(new EventTarget(), {
     document: null as { filename: string } | null,
     selected: false as boolean | string,
-    select(ref: string) {
-      log.push(ref);
-      this.selected = selectedFor.includes(ref) ? ref : false;
+    zooms: 0,
+    select(ref: string | null) {
+      log.push(String(ref));
+      this.selected = ref != null && selectedFor.includes(ref) ? ref : false;
+      // Upstream dispatches the select event for EVERY assignment of `selected`,
+      // the controller's own calls included (viewers/base/viewer.ts:200-214).
+      this.dispatchEvent(new CustomEvent(SELECT, { detail: { item: this.selected ? { reference: ref } : undefined } }));
     },
-    zoom_to_selection() { /* no-op */ },
+    zoom_to_selection() {
+      this.zooms++;
+    },
   });
 }
 
@@ -618,6 +627,76 @@ describe('KicanvasController', () => {
     c.on('state', (e) => after.push(e.state));
     await pending;
     expect(after).toEqual([]);
+  });
+
+  it('selectRef selects without zooming, and null clears', async () => {
+    const fake = fakeEmbed({ pages: PAGES, selectedFor: ['U1'] });
+    const c = controller(fake);
+    await c.mount(document.createElement('div'), project({ 'main.kicad_sch': 's' }));
+    const seen: { ref: string | null; view?: string; sheet?: string }[] = [];
+    c.on('selection', (e) => seen.push({ ref: e.ref, view: e.view, sheet: e.sheet }));
+    expect(await c.selectRef('U1')).toBe('focused');
+    expect(fake.viewer.zooms).toBe(0);
+    expect(await c.selectRef('R999')).toBe('not-found');
+    expect(await c.selectRef(null)).toBe('focused');
+    expect(fake.selected).toEqual(['U1', 'R999', 'null']);
+    // One event per call the controller itself made — the viewer's own echo of
+    // those calls is muted, so a host never sees a selection twice.
+    expect(seen).toEqual([
+      { ref: 'U1', view: 'schematic', sheet: '/r' },
+      { ref: null, view: 'schematic', sheet: '/r' },
+    ]);
+    expect(await c.focusRef('U1')).toBe('focused');
+    expect(fake.viewer.zooms).toBe(1);
+  });
+
+  it("reports the reader's own picks on either drawing, as designators", async () => {
+    const fake = fakeEmbed({ pages: PAGES });
+    const c = controller(fake);
+    await c.mount(document.createElement('div'), project({ 'main.kicad_sch': 's', 'main.kicad_pcb': 'b' }));
+    const seen: { ref: string | null; view?: string; sheet?: string }[] = [];
+    c.on('selection', (e) => seen.push({ ref: e.ref, view: e.view, sheet: e.sheet }));
+    // A symbol (has a reference), then a wire (no reference), then an empty click.
+    fake.viewer.dispatchEvent(new CustomEvent(SELECT, { detail: { item: { reference: 'C7' } } }));
+    fake.viewer.dispatchEvent(new CustomEvent(SELECT, { detail: { item: { uuid: 'w' } } }));
+    fake.viewer.dispatchEvent(new CustomEvent(SELECT, { detail: { item: undefined } }));
+    await c.activate('board');
+    fake.boardViewer.dispatchEvent(new CustomEvent(SELECT, { detail: { item: { reference: 'U7' } } }));
+    expect(seen).toEqual([
+      { ref: 'C7', view: 'schematic', sheet: '/r' },
+      { ref: null, view: 'schematic', sheet: '/r' },
+      { ref: null, view: 'schematic', sheet: '/r' },
+      { ref: 'U7', view: 'board', sheet: undefined },
+    ]);
+  });
+
+  it('swallows the deselect every document load ends with, but not a later empty click', async () => {
+    const fake = fakeEmbed({ pages: PAGES });
+    const c = controller(fake);
+    await c.mount(document.createElement('div'), project({ 'main.kicad_sch': 's' }));
+    const seen: (string | null)[] = [];
+    c.on('selection', (e) => seen.push(e.ref));
+    // Upstream's load tail: `kicanvas:load`, then `selected = null` in the SAME task
+    // (vendor viewers/base/document-viewer.ts:62-86).
+    fake.viewer.dispatchEvent(new Event(LOAD));
+    fake.viewer.dispatchEvent(new CustomEvent(SELECT, { detail: { item: undefined } }));
+    // The microtask boundary is what ends the tail; a deselect after it is a gesture.
+    await Promise.resolve();
+    fake.viewer.dispatchEvent(new CustomEvent(SELECT, { detail: { item: undefined } }));
+    expect(seen).toEqual([null]);
+  });
+
+  it('listens to a viewer that renders after mount-ready, on the next activate', async () => {
+    const fake = fakeEmbed({ pages: PAGES, noViewer: true });
+    const c = controller(fake);
+    await c.mount(document.createElement('div'), project({ 'main.kicad_sch': 's', 'main.kicad_pcb': 'b' }));
+    const seen: (string | null)[] = [];
+    c.on('selection', (e) => seen.push(e.ref));
+    // The app element grows its viewer late — as upstream does after the project loads.
+    (fake.sch as HTMLElement & { viewer?: unknown }).viewer = fake.viewer;
+    await c.activate('schematic');
+    fake.viewer.dispatchEvent(new CustomEvent(SELECT, { detail: { item: { reference: 'R1' } } }));
+    expect(seen).toEqual(['R1']);
   });
 
   it('dispose() drops the handlers', async () => {

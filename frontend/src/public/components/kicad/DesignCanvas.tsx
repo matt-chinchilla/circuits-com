@@ -4,6 +4,13 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import type { KicadProject } from '@public/services/kicad/types';
 import type { CanvasController, CanvasStateName, CanvasView, FocusResult, ZoomAction } from './canvasController';
+
+/** What the drawing's selection became, and where. See `CanvasEvent`'s `selection`. */
+export interface CanvasSelection {
+  ref: string | null;
+  sheet?: string;
+  view?: CanvasView;
+}
 import { KicanvasController } from './kicanvasController';
 import { webgl2Supported } from './webgl';
 import styles from './DesignCanvas.module.scss';
@@ -20,6 +27,12 @@ export interface DesignCanvasProps {
   /** Path key of the schematic to show, or an instance path; default root. */
   activeSheet?: string;
   onState?: (state: CanvasStateName, detail?: string) => void;
+  /**
+   * The drawing's selection changed — the reader clicked a symbol or footprint
+   * (or nothing), or a `focusRef`/`selectRef` landed. Held through a ref like
+   * `onState`, so an inline arrow never remounts the embed.
+   */
+  onSelection?: (selection: CanvasSelection) => void;
   /**
    * The sheets the mounted renderer cannot draw for this project, reported once
    * per mount and BEFORE the renderer bundle is even fetched — so a host can
@@ -44,6 +57,8 @@ export interface DesignCanvasProps {
 
 export interface DesignCanvasHandle {
   focusRef(ref: string, sheet?: string): Promise<FocusResult>;
+  /** Select without moving the camera; null clears. See `CanvasController.selectRef`. */
+  selectRef(ref: string | null, sheet?: string): Promise<FocusResult>;
   zoom(action: ZoomAction): Promise<boolean>;
 }
 
@@ -63,7 +78,7 @@ const COPY: Record<Exclude<CanvasStateName, 'loading' | 'ready'>, { title: strin
 };
 
 const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(function DesignCanvas(
-  { project, view, activeSheet, onState, onUnrenderableSheets, height = 'default', createController },
+  { project, view, activeSheet, onState, onSelection, onUnrenderableSheets, height = 'default', createController },
   ref,
 ) {
   const hostRef = useRef<HTMLDivElement>(null);
@@ -81,6 +96,8 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(function 
   // remount the canvas — and this one reloads the project.
   const onUnrenderableRef = useRef(onUnrenderableSheets);
   onUnrenderableRef.current = onUnrenderableSheets;
+  const onSelectionRef = useRef(onSelection);
+  onSelectionRef.current = onSelection;
 
   useEffect(() => {
     if (!supported) {
@@ -107,10 +124,15 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(function 
       setDetail(e.detail);
       onStateRef.current?.(e.state, e.detail);
     });
+    const offSelection = controller.on('selection', (e) => {
+      if (cancelled) return;
+      onSelectionRef.current?.({ ref: e.ref, sheet: e.sheet, view: e.view });
+    });
     void controller.mount(host, project);
     return () => {
       cancelled = true;
       off();
+      offSelection();
       controller.dispose();
       controllerRef.current = null;
     };
@@ -128,6 +150,7 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(function 
   // stale and `[]` keeps its identity fixed — a parent may hold it in a dep array.
   useImperativeHandle(ref, () => ({
     focusRef: (r, sheet) => controllerRef.current?.focusRef(r, sheet) ?? Promise.resolve('unsupported' as const),
+    selectRef: (r, sheet) => controllerRef.current?.selectRef(r, sheet) ?? Promise.resolve('unsupported' as const),
     zoom: (action) => controllerRef.current?.zoom(action) ?? Promise.resolve(false),
   }), []);
 

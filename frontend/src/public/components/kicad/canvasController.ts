@@ -20,7 +20,16 @@ export type FocusResult = 'focused' | 'not-found' | 'unsupported' | 'superseded'
 
 export type CanvasEvent =
   | { type: 'state'; state: CanvasStateName; detail?: string }
-  | { type: 'selection'; ref: string | null }
+  /**
+   * The drawing's selection changed. `ref` is the reference designator of the
+   * symbol or footprint now selected, or null when the reader selected nothing
+   * identifiable (empty canvas, a wire, a sheet) or cleared it. `sheet` is the
+   * active schematic page's instance path — the same string `focusRef` takes —
+   * and `view` says which drawing the gesture came from. Emitted for the
+   * renderer's own picks AND for the controller's `focusRef`/`selectRef`, so a
+   * host can keep one selection whichever door it came through.
+   */
+  | { type: 'selection'; ref: string | null; sheet?: string; view?: CanvasView }
   | { type: 'documentChanged'; path: string; text: string };
 
 export type CanvasEventType = CanvasEvent['type'];
@@ -33,6 +42,15 @@ export interface CanvasController {
   activate(view: CanvasView, sheet?: string): Promise<boolean>;
   /** Select and zoom to a reference designator, switching sheet first when one is given. */
   focusRef(ref: string, sheet?: string): Promise<FocusResult>;
+  /**
+   * Select a reference designator WITHOUT moving the camera — the selection
+   * outline appears where the part already is — switching sheet first when one
+   * is given. `null` clears the selection on the visible drawing. A host uses
+   * this to carry a selection made elsewhere (the 3D view, the part panel)
+   * onto the drawing the reader arrives at; `focusRef` is for a gesture that
+   * asked to be TAKEN to the part.
+   */
+  selectRef(ref: string | null, sheet?: string): Promise<FocusResult>;
   /** Fit the page, or step the zoom. False when the renderer exposes no such control (the buttons then hide). */
   zoom(action: ZoomAction): Promise<boolean>;
   /**

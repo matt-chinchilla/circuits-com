@@ -36,7 +36,9 @@ interface KicanvasProject {
 interface KicanvasViewer {
   document?: { filename?: string } | null;
   selected?: unknown;
-  select?: (ref: string) => void;
+  /** A designator or uuid to resolve, or null to clear (vendor
+   *  viewers/base/document-viewer.ts:148-157: `item ?? null`). */
+  select?: (ref: string | null) => void;
   zoom_to_selection?: () => void;
   /** Repaints the canvas after a camera change (vendor viewers/base/viewer.ts:165,
    *  overridden at viewers/base/document-viewer.ts:138). The Viewport has no draw. */
@@ -64,6 +66,22 @@ const POLL_MS = 50;
 /** `KiCanvasLoadEvent.type` (vendor viewers/base/events.ts:13-14). The viewer
  *  dispatches it from `resolve_loaded` for every document it finishes loading. */
 const KICANVAS_LOAD = 'kicanvas:load';
+/** `KiCanvasSelectEvent.type` (vendor viewers/base/events.ts:26-33). Dispatched by
+ *  `Viewer._set_selected` (viewers/base/viewer.ts:200-214) on EVERY change of
+ *  `selected`, a deselect included, with `detail.item` = the selected bbox's context.
+ *  The target is the Viewer object itself (`Viewer extends EventTarget`,
+ *  viewers/base/viewer.ts:22) — `bubbles: true` reaches no DOM node. */
+const KICANVAS_SELECT = 'kicanvas:select';
+
+/** The reference designator a selected item carries, or null. A `Footprint`
+ *  (vendor kicad/board.ts:823-825) and a `SchematicSymbol` (kicad/schematic.ts:1247,
+ *  `reference` getter at :1399) both expose `reference: string`; a sheet, a wire, a
+ *  label or an empty click (item undefined) carry none — "nothing identifiable". */
+export function referenceOf(item: unknown): string | null {
+  if (item == null || typeof item !== 'object') return null;
+  const ref = (item as { reference?: unknown }).reference;
+  return typeof ref === 'string' && ref !== '' ? ref : null;
+}
 
 /** Upstream's own interactive zoom limits, mirrored. `Viewer.setup()` is the only
  *  call site and passes them as literals — `this.viewport.enable_pan_and_zoom(0.5, 190)`
@@ -175,6 +193,20 @@ export class KicanvasController implements CanvasController {
   /** Path keys sourcesFor() could not hand to the embed (basename collision). */
   private droppedPaths = new Set<string>();
   private readonly handlers = new Map<CanvasEventType, Set<(e: CanvasEvent) => void>>();
+  /** Viewers this controller already listens to for selection — the getter that reaches
+   *  them throws before the app's first render, so subscription is retried lazily and
+   *  must be idempotent. Weak: an old embed's viewers go with it. */
+  private readonly listened = new WeakSet<EventTarget>();
+  /** Viewers inside a document load's tail. Upstream's `DocumentViewer.load` ends by
+   *  dispatching `kicanvas:load` and then, synchronously in the same task, clearing the
+   *  selection (vendor viewers/base/document-viewer.ts:62-86) — a null select event
+   *  every sheet switch would otherwise pass to the host as "the reader deselected".
+   *  Marked on the load event, cleared in a microtask, which runs after that tail. */
+  private readonly loadTail = new WeakSet<EventTarget>();
+  /** Non-zero while the controller is calling `viewer.select()` itself: the viewer
+   *  dispatches the same event for those calls, and the controller emits its own,
+   *  once, with the outcome it actually knows. */
+  private muted = 0;
 
   constructor(options: KicanvasControllerOptions = {}) {
     this.options = {
@@ -283,6 +315,7 @@ export class KicanvasController implements CanvasController {
         // activate (spec §5.3): one enforced view before anyone sees `ready`.
         await this.activate(project.sheets.length > 0 ? 'schematic' : 'board');
         if (this.stale(epoch)) return;
+        this.listenForSelection();
         this.emit({ type: 'state', state: 'ready' });
         return;
       }
@@ -438,7 +471,42 @@ export class KicanvasController implements CanvasController {
     if (this.stale(mountEpoch)) return 'failed';
     if (schematic) schematic.hidden = view !== 'schematic';
     if (board) board.hidden = view !== 'board';
+    // A viewer that did not exist at mount-ready (the app renders after the
+    // project loads) is caught here, on the next activation that reaches it.
+    this.listenForSelection();
     return 'ok';
+  }
+
+  /** The active schematic page's instance path, for a selection event's `sheet`. */
+  private activeSheetPath(): string | undefined {
+    const page = this.project()?.active_page ?? null;
+    return page?.type === 'schematic' ? page.sheet_path : undefined;
+  }
+
+  /** Attach the selection (and load-tail) listeners to both viewers, once each. */
+  private listenForSelection(): void {
+    const { schematic, board } = this.apps();
+    this.attachSelection(viewerOf(schematic), 'schematic');
+    this.attachSelection(viewerOf(board), 'board');
+  }
+
+  private attachSelection(viewer: KicanvasViewer | null, view: CanvasView): void {
+    const target = viewer as unknown as EventTarget | null;
+    if (target == null || typeof target.addEventListener !== 'function' || this.listened.has(target)) return;
+    this.listened.add(target);
+    const epoch = this.epoch;
+    target.addEventListener(KICANVAS_LOAD, () => {
+      this.loadTail.add(target);
+      queueMicrotask(() => this.loadTail.delete(target));
+    });
+    target.addEventListener(KICANVAS_SELECT, (event) => {
+      if (this.stale(epoch) || this.muted > 0) return;
+      const ref = referenceOf((event as CustomEvent<{ item?: unknown }>).detail?.item);
+      // The deselect that ends every document load is the renderer's housekeeping,
+      // not the reader's gesture.
+      if (ref == null && this.loadTail.has(target)) return;
+      this.emit({ type: 'selection', ref, view, sheet: view === 'schematic' ? this.activeSheetPath() : undefined });
+    });
   }
 
   /**
@@ -491,7 +559,17 @@ export class KicanvasController implements CanvasController {
   }
 
   async focusRef(ref: string, sheet?: string): Promise<FocusResult> {
-    if (sheet != null) {
+    return this.applySelection(ref, sheet, true);
+  }
+
+  async selectRef(ref: string | null, sheet?: string): Promise<FocusResult> {
+    return this.applySelection(ref, sheet, false);
+  }
+
+  /** The one routine behind focusRef and selectRef: switch sheet, select, and — for a
+   *  focus — zoom. `ref` null clears whatever the visible drawing has selected. */
+  private async applySelection(ref: string | null, sheet: string | undefined, zoom: boolean): Promise<FocusResult> {
+    if (sheet != null && ref != null) {
       const activated = await this.activateForFocus(sheet);
       // Stood down for a newer sheet choice — not a statement about `ref`.
       if (activated === 'superseded') return 'superseded';
@@ -505,22 +583,35 @@ export class KicanvasController implements CanvasController {
     if (viewer?.document == null || typeof viewer.select !== 'function' || typeof viewer.zoom_to_selection !== 'function') {
       return 'unsupported';
     }
+    // Muted: the viewer dispatches `kicanvas:select` for this very call, and the
+    // controller's own emit below carries the outcome it actually knows.
+    this.muted++;
     try {
       // SchematicViewer.select takes a string and resolves it to a symbol or sheet
       // (vendor viewers/schematic/viewer.ts:62-77); an unresolved ref lands on
       // DocumentViewer.select as undefined, which sets `selected` to null rather
-      // than throwing (viewers/base/document-viewer.ts:148-157).
+      // than throwing (viewers/base/document-viewer.ts:148-157). A literal null
+      // clears (`item ?? null`, same lines).
       viewer.select(ref);
     } catch {
       return 'unsupported';
+    } finally {
+      this.muted--;
+    }
+    const view: CanvasView = this.project()?.active_page?.type === 'pcb' ? 'board' : 'schematic';
+    if (ref == null) {
+      this.emit({ type: 'selection', ref: null, view, sheet: this.activeSheetPath() });
+      return 'focused';
     }
     if (!viewer.selected) return 'not-found';
-    try {
-      viewer.zoom_to_selection();
-    } catch {
-      return 'unsupported';
+    if (zoom) {
+      try {
+        viewer.zoom_to_selection();
+      } catch {
+        return 'unsupported';
+      }
     }
-    this.emit({ type: 'selection', ref });
+    this.emit({ type: 'selection', ref, view, sheet: this.activeSheetPath() });
     return 'focused';
   }
 

@@ -24,10 +24,13 @@ function setWebgl(ok: boolean) {
 
 function fakeController(unrenderable?: string[]) {
   let handler: ((e: { type: 'state'; state: CanvasStateName }) => void) | null = null;
+  let selection: ((e: { type: 'selection'; ref: string | null; sheet?: string; view?: 'schematic' | 'board' }) => void) | null = null;
   const f = {
     disposed: 0,
     askedFor: null as KicadProject | null,
+    selected: [] as (string | null)[],
     emit: (state: CanvasStateName) => handler?.({ type: 'state', state }),
+    pick: (ref: string | null) => selection?.({ type: 'selection', ref, sheet: '/r', view: 'schematic' }),
     // Never resolves: every case here unmounts or retries while mount() is in flight.
     ctrl: {
       // Optional on the protocol: a renderer that drops nothing does not
@@ -43,14 +46,20 @@ function fakeController(unrenderable?: string[]) {
       mount: () => new Promise<void>(() => {}),
       activate: async () => true,
       focusRef: async () => 'focused' as const,
+      selectRef: async (ref: string | null) => {
+        f.selected.push(ref);
+        return 'focused' as const;
+      },
       zoom: async () => true,
       dispose: () => {
         f.disposed++;
       },
       on: (kind: string, h: unknown) => {
         if (kind === 'state') handler = h as typeof handler;
+        if (kind === 'selection') selection = h as typeof selection;
         return () => {
-          handler = null;
+          if (kind === 'state') handler = null;
+          if (kind === 'selection') selection = null;
         };
       },
     } as unknown as CanvasController,
@@ -136,6 +145,30 @@ describe('DesignCanvas', () => {
     await act(async () => f.emit('ready'));
     expect(second).toEqual(['ready']);
     expect(first).toEqual([]);
+    await act(async () => root.unmount());
+  });
+
+  it('hands the controller\u2019s selection to the CURRENT onSelection, and selectRef through the handle', async () => {
+    setWebgl(true);
+    const f = fakeController();
+    const seen: (string | null)[] = [];
+    const handle: { current: { selectRef: (r: string | null) => Promise<string> } | null } = { current: null };
+    const render = (onSelection: (s: { ref: string | null }) => void) =>
+      root.render(
+        createElement(DesignCanvas, { ref: handle, project, view: 'schematic', onSelection, createController: () => f.ctrl }),
+      );
+    await act(async () => render(() => seen.push('stale')));
+    // Same `project` identity: a new inline arrow must not remount the embed.
+    await act(async () => render((s) => seen.push(s.ref)));
+    await act(async () => f.emit('ready'));
+    await act(async () => f.pick('U1'));
+    await act(async () => f.pick(null));
+    expect(seen).toEqual(['U1', null]);
+    expect(f.disposed).toBe(0);
+    await act(async () => {
+      await handle.current?.selectRef(null);
+    });
+    expect(f.selected).toEqual([null]);
     await act(async () => root.unmount());
   });
 
