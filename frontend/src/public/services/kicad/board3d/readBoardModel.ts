@@ -9,18 +9,19 @@
 // author's disk and nothing here may follow it (spec §2).
 import { boardBlocks, footprintField, parseBlock } from '../boardFile';
 import { atom, child, children, head } from '../sexpr';
-import { KicadReadError, type SExpr } from '../types';
+import type { SExpr } from '../types';
 import { flattenThreePoint } from './arcs';
 import { dist, placeShape } from './geom';
+import { layerTableOf, netRowOf, sortNets } from './layerTable';
 import type {
-  BoardModel, FootprintModel, LayerDef, LayerKind, PadDrill, PadModel, PadShape,
+  BoardModel, FootprintModel, NetInfo, PadDrill, PadModel, PadShape,
   Placement, Shape, Side, TrackModel, Vec2, ViaModel, ZoneFill,
 } from './types';
 
 const PAD_KINDS: readonly PadModel['kind'][] = ['smd', 'thru_hole', 'np_thru_hole', 'connect'];
 const PAD_SHAPES: readonly PadShape[] = ['circle', 'oval', 'rect', 'roundrect', 'trapezoid', 'custom'];
 const FP_GRAPHICS = ['fp_line', 'fp_arc', 'fp_circle', 'fp_rect', 'fp_poly'];
-const TOP_HEADS = new Set(['version', 'layers', 'footprint', 'via', 'segment', 'arc', 'zone']);
+const TOP_HEADS = new Set(['version', 'layers', 'net', 'footprint', 'via', 'segment', 'arc', 'zone']);
 
 // ── atoms ───────────────────────────────────────────────────────────────────
 
@@ -45,46 +46,52 @@ function ptsOf(node: SExpr[]): Vec2[] {
   return pts == null ? [] : children(pts, 'xy').map((xy) => pt(xy));
 }
 
-// ── layers ──────────────────────────────────────────────────────────────────
+// ── nets ────────────────────────────────────────────────────────────────────
 
 /**
- * KiCad's own ceilings. Not a style preference: every `(layers *.Cu)` pad is
- * expanded against the copper table, so an unbounded table is multiplied by
- * the pad count — a 1 MB file declaring 2,000 copper layers allocated ~480 MB
- * in the worker (measured). 32 copper layers is KiCad's hard limit, and the
- * whole table (copper, technical and user layers) is well under 128 in every
- * version.
+ * Every item's net resolves through ONE table. KiCad 6–9 write `(net 3)` on a
+ * track and `(net 3 "GND")` on a pad, both numbers into the board's top-level
+ * table; a writer that names the net instead (`(net "GND")`, with no table to
+ * number it) is resolved by name, and a name the table lacks is ADDED to it
+ * under the next free number — so a net an item names is always a row of
+ * `BoardModel.nets`, and the 3D view can name what it highlights. A number the
+ * table lacks (a hand-edited file) is kept as written: it still highlights.
  */
-const MAX_COPPER_LAYERS = 32;
-const MAX_LAYER_ROWS = 128;
+class NetTable {
+  private readonly rows: NetInfo[] = [];
+  private readonly byName = new Map<string, number>();
+  private readonly numbers = new Set<number>();
+  private next = 1;
 
-function layerKind(name: string): LayerKind {
-  if (name.endsWith('.Cu')) return 'copper';
-  if (name === 'F.Mask' || name === 'B.Mask') return 'mask';
-  if (name === 'F.SilkS' || name === 'B.SilkS') return 'silk';
-  if (name === 'F.CrtYd' || name === 'B.CrtYd') return 'courtyard';
-  if (name === 'Edge.Cuts') return 'edge';
-  return 'other';
-}
-
-function layerSide(name: string): Side | 'In' {
-  if (name.startsWith('F.')) return 'F';
-  if (name.startsWith('B.')) return 'B';
-  return 'In';
-}
-
-/** `(layers (0 "F.Cu" signal) …)` in file order — which is top → bottom. */
-function readLayers(node: SExpr[]): LayerDef[] {
-  const out: LayerDef[] = [];
-  for (const row of node) {
-    if (!Array.isArray(row)) continue;
-    const ordinal = Number(head(row));
-    const name = atom(row, 1);
-    if (name == null || !Number.isFinite(ordinal)) continue;
-    out.push({ ordinal, name, kind: layerKind(name), side: layerSide(name) });
+  addRow(row: NetInfo): void {
+    if (this.numbers.has(row.number)) return;
+    this.rows.push(row);
+    this.numbers.add(row.number);
+    if (!this.byName.has(row.name)) this.byName.set(row.name, row.number);
+    this.next = Math.max(this.next, row.number + 1);
   }
-  return out;
+
+  /** The item's `(net …)` as a number; 0 when it has none. */
+  of(node: SExpr[]): number {
+    const net = child(node, 'net');
+    const raw = net == null ? null : atom(net, 1);
+    if (raw == null) return 0;
+    const number = Number(raw);
+    if (/^\d+$/.test(raw) && Number.isSafeInteger(number)) return number;
+    if (raw === '') return 0;
+    const known = this.byName.get(raw);
+    if (known != null) return known;
+    const added = this.next;
+    this.addRow({ number: added, name: raw });
+    return added;
+  }
+
+  list(): NetInfo[] {
+    return sortNets([...this.rows]);
+  }
 }
+
+// ── layers ──────────────────────────────────────────────────────────────────
 
 /**
  * `*.Cu` means every copper layer THIS board declares (two on a 2-layer board,
@@ -158,7 +165,7 @@ function readDrill(node: SExpr[]): PadDrill | null {
   return d > 0 ? { d } : null;
 }
 
-function readPad(node: SExpr[], ref: string, copperNames: string[]): PadModel {
+function readPad(node: SExpr[], ref: string, copperNames: string[], nets: NetTable): PadModel {
   const at = child(node, 'at');
   const size = child(node, 'size');
   const rratio = child(node, 'roundrect_rratio');
@@ -174,6 +181,7 @@ function readPad(node: SExpr[], ref: string, copperNames: string[]): PadModel {
     rratio: rratio == null ? null : num(rratio, 1),
     layers: expandLayers(node, copperNames),
     drill: readDrill(node),
+    net: nets.of(node),
   };
 }
 
@@ -183,7 +191,7 @@ function readPad(node: SExpr[], ref: string, copperNames: string[]): PadModel {
  * edge (connector cut-outs, outline footprints), so they belong beside the
  * gr_* edge items, not in the footprint.
  */
-function readFootprint(node: SExpr[], copperNames: string[], edgeOut: Shape[]): FootprintModel {
+function readFootprint(node: SExpr[], copperNames: string[], edgeOut: Shape[], nets: NetTable): FootprintModel {
   const at = child(node, 'at');
   const side: Side = str(child(node, 'layer')) === 'B.Cu' ? 'B' : 'F';
   const place: Placement = { at: pt(at), rotDeg: num(at, 3), side };
@@ -201,30 +209,30 @@ function readFootprint(node: SExpr[], copperNames: string[], edgeOut: Shape[]): 
     const shape = bucket == null ? null : shapeOf(item);
     if (shape != null) bucket?.push(shape);
   }
-  return { ref, lib: atom(node, 1) ?? '', place, pads: children(node, 'pad').map((p) => readPad(p, ref, copperNames)), courtyard, silk };
+  return { ref, lib: atom(node, 1) ?? '', place, pads: children(node, 'pad').map((p) => readPad(p, ref, copperNames, nets)), courtyard, silk };
 }
 
 // ── the rest of the board ───────────────────────────────────────────────────
 
-function readVia(node: SExpr[]): ViaModel | null {
+function readVia(node: SExpr[], nets: NetTable): ViaModel | null {
   const layers = child(node, 'layers');
   const from = str(layers, 1), to = str(layers, 2);
   if (from == null || to == null) return null;
-  return { at: pt(child(node, 'at')), size: num(child(node, 'size'), 1), drill: num(child(node, 'drill'), 1), layers: [from, to] };
+  return { at: pt(child(node, 'at')), size: num(child(node, 'size'), 1), drill: num(child(node, 'drill'), 1), layers: [from, to], net: nets.of(node) };
 }
 
-function readSegment(node: SExpr[]): TrackModel | null {
+function readSegment(node: SExpr[], nets: NetTable): TrackModel | null {
   const layer = str(child(node, 'layer'));
   if (layer == null) return null;
-  return { layer, width: num(child(node, 'width'), 1), pts: [pt(child(node, 'start')), pt(child(node, 'end'))] };
+  return { layer, width: num(child(node, 'width'), 1), pts: [pt(child(node, 'start')), pt(child(node, 'end'))], net: nets.of(node) };
 }
 
 /** A KiCad 7+ curved track. Flattened here so every TrackModel is a polyline. */
-function readArcTrack(node: SExpr[], tolMm: number): { track: TrackModel | null; degenerate: boolean } {
+function readArcTrack(node: SExpr[], tolMm: number, nets: NetTable): { track: TrackModel | null; degenerate: boolean } {
   const layer = str(child(node, 'layer'));
   if (layer == null) return { track: null, degenerate: false };
   const flat = flattenThreePoint(pt(child(node, 'start')), pt(child(node, 'mid')), pt(child(node, 'end')), tolMm);
-  return { track: { layer, width: num(child(node, 'width'), 1), pts: flat.pts }, degenerate: flat.degenerate };
+  return { track: { layer, width: num(child(node, 'width'), 1), pts: flat.pts, net: nets.of(node) }, degenerate: flat.degenerate };
 }
 
 /** A zone states one `(layer …)` or several `(layers …)`; its fills say which. */
@@ -249,15 +257,16 @@ function zoneLayerNames(node: SExpr[]): string[] {
  * on a non-copper layer (a mask or silk zone, which the 3D view never draws),
  * or the caption would report copper pours the board does not have.
  */
-function readZone(node: SExpr[]): { fills: ZoneFill[]; unfilled: boolean } {
+function readZone(node: SExpr[], nets: NetTable): { fills: ZoneFill[]; unfilled: boolean } {
   const names = zoneLayerNames(node);
   const fallback = names[0] ?? '';
   // `F&B.Cu` is KiCad 7+'s spelling of a two-sided zone.
   const onCopper = names.some((n) => n.endsWith('.Cu'));
+  const net = nets.of(node);
   const fills: ZoneFill[] = [];
   for (const poly of children(node, 'filled_polygon')) {
     const pts = ptsOf(poly);
-    if (pts.length >= 3) fills.push({ layer: str(child(poly, 'layer')) ?? fallback, ring: { pts } });
+    if (pts.length >= 3) fills.push({ layer: str(child(poly, 'layer')) ?? fallback, ring: { pts }, net });
   }
   const fill = child(node, 'fill');
   const pours = fill == null || atom(fill, 1) === 'yes';
@@ -278,9 +287,10 @@ export function readBoardModel(text: string, tolMm: number): BoardModel {
   const blocks = boardBlocks(text);
   const model: BoardModel = {
     version: 0, layers: [], edgeItems: [], footprints: [], vias: [], tracks: [],
-    zones: [], zonesUnfilled: 0, silk: [], warnings: [],
+    zones: [], zonesUnfilled: 0, silk: [], warnings: [], nets: [],
   };
   const copperNames: string[] = [];
+  const nets = new NetTable();
   let degenerate = 0;
 
   for (const block of blocks) {
@@ -292,36 +302,35 @@ export function readBoardModel(text: string, tolMm: number): BoardModel {
         model.version = num(node, 1);
         break;
       case 'layers':
-        model.layers = readLayers(node);
-        if (model.layers.length > MAX_LAYER_ROWS) {
-          throw new KicadReadError(`That board declares ${model.layers.length} layers; KiCad allows at most ${MAX_LAYER_ROWS}.`, 'unreadable');
-        }
+        model.layers = layerTableOf(node);
         for (const l of model.layers) if (l.kind === 'copper') copperNames.push(l.name);
-        if (copperNames.length > MAX_COPPER_LAYERS) {
-          throw new KicadReadError(`That board declares ${copperNames.length} copper layers; KiCad allows at most ${MAX_COPPER_LAYERS}.`, 'unreadable');
-        }
         break;
+      case 'net': {
+        const row = netRowOf(node);
+        if (row != null) nets.addRow(row);
+        break;
+      }
       case 'footprint':
-        model.footprints.push(readFootprint(node, copperNames, model.edgeItems));
+        model.footprints.push(readFootprint(node, copperNames, model.edgeItems, nets));
         break;
       case 'via': {
-        const via = readVia(node);
+        const via = readVia(node, nets);
         if (via != null) model.vias.push(via);
         break;
       }
       case 'segment': {
-        const track = readSegment(node);
+        const track = readSegment(node, nets);
         if (track != null) model.tracks.push(track);
         break;
       }
       case 'arc': {
-        const read = readArcTrack(node, tolMm);
+        const read = readArcTrack(node, tolMm, nets);
         if (read.track != null) model.tracks.push(read.track);
         if (read.degenerate) degenerate++;
         break;
       }
       case 'zone': {
-        const zone = readZone(node);
+        const zone = readZone(node, nets);
         model.zones.push(...zone.fills);
         if (zone.unfilled) model.zonesUnfilled++;
         break;
@@ -331,6 +340,7 @@ export function readBoardModel(text: string, tolMm: number): BoardModel {
     }
   }
 
+  model.nets = nets.list();
   if (degenerate > 0) model.warnings.push({ kind: 'arc-degenerate', count: degenerate });
   if (model.zonesUnfilled > 0) model.warnings.push({ kind: 'zones-unfilled', count: model.zonesUnfilled });
   return model;
