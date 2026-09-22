@@ -329,6 +329,7 @@ export default function JoinPage() {
 
   const carRef = useRef<HTMLDivElement | null>(null);
   const applyRef = useRef<HTMLElement | null>(null);
+  const stgRowRef = useRef<HTMLDivElement | null>(null);
   const stage2Ref = useRevealJoin(tier !== null);
   const stage3Ref = useRevealJoin(applyOpen);
   const faqRef = useRevealJoin();
@@ -652,12 +653,13 @@ export default function JoinPage() {
 
             {/* ── 01 · pick a tier ─────────────────────────────────────── */}
             <section className={styles.stage} aria-label="Step 1: pick a tier">
-              <div className={styles.stgRow}>
+              <div className={styles.stgRow} ref={stgRowRef}>
                 <div className={styles.stgHead}>
                   <StageNum>01</StageNum>
                   <h2 className={styles.stgTitle}>Pick your tier</h2>
                 </div>
                 <FounderDiscount
+                  anchorRef={stgRowRef}
                   open={fdOpen}
                   onToggle={() => (fdOpen ? closeFounder() : setFdOpen(true))}
                   onArrive={() => setFdLive(true)}

@@ -12,7 +12,7 @@
 // keeps only the char/colour aftermath. `active` flips with the state so
 // re-opening replays, and the timings mirror the CSS keyframe delays.
 
-import { useEffect, useRef, useState, type CSSProperties, type MouseEvent } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type MouseEvent, type RefObject } from 'react';
 import TierBannerRibbon from '@public/components/widgets/TierBannerRibbon';
 import { BADGE_SCHEMES } from '@shared/types/badge';
 import styles from './JoinPage.module.scss';
@@ -98,9 +98,13 @@ interface FounderDiscountProps {
   /** Fired once the band has actually opened — the page starts the price
    *  burns only then, so the two fires are in step. */
   onArrive?: () => void;
+  /** The element to scroll to the top of the viewport when the band opens —
+   *  the page passes its stage-01 header row so the band, its title and the
+   *  tier prices below stay on screen together. Falls back to the band itself. */
+  anchorRef?: RefObject<HTMLElement | null>;
 }
 
-export default function FounderDiscount({ open, onToggle, onArrive }: FounderDiscountProps) {
+export default function FounderDiscount({ open, onToggle, onArrive, anchorRef }: FounderDiscountProps) {
   const [schemeIx, setSchemeIx] = useState(0);
   const [grown, setGrown] = useState(false);
   const [hovered, setHovered] = useState(false);
@@ -122,26 +126,20 @@ export default function FounderDiscount({ open, onToggle, onArrive }: FounderDis
     // alone and re-running it would replay the burn on every parent render.
   }, [open]);
 
-  // Follow the growing panel: while it expands, nudge the page so the tile's
-  // bottom edge stays on screen. Plain scrollBy per frame; stops when the
-  // transition settles. Skipped under reduced-motion.
+  // Bring the whole stage-01 header row (numeral, title AND this band) to the
+  // top of the viewport as the band opens, so the growing perks panel and the
+  // tier prices burning below it stay in view together (owner ask, 2026-09-22;
+  // replaces the design's per-frame "follow the bottom edge" nudge, which let
+  // the row drift off the top on phones). Same 76px offset the page uses to
+  // clear the sticky nav when it scrolls to the application. Reduced motion
+  // still scrolls — the position is the point — but jumps instead of gliding.
   useEffect(() => {
-    const el = rootRef.current;
-    if (!grown || !el) return;
-    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    const t0 = performance.now();
-    let raf = 0;
-    const tick = () => {
-      const r = el.getBoundingClientRect();
-      const over = r.bottom + 28 - window.innerHeight;
-      const minTop = 96;
-      if (over > 0 && r.top - over > minTop) window.scrollBy(0, over);
-      else if (over > 0 && r.top > minTop) window.scrollBy(0, r.top - minTop);
-      if (performance.now() - t0 < 2000) raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [grown]);
+    if (!grown) return;
+    const anchor = anchorRef?.current ?? rootRef.current;
+    if (!anchor) return;
+    const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    window.scrollTo({ top: anchor.getBoundingClientRect().top + window.scrollY - 76, behavior: reduced ? 'auto' : 'smooth' });
+  }, [grown, anchorRef]);
 
   // Both badge iterations step through the enamel colours together every 3s.
   useEffect(() => {
