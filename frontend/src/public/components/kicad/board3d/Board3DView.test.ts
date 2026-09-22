@@ -98,7 +98,7 @@ describe('Board3DView', () => {
   it('a reduced-tier board says its bodies are not drawn and that pads still answer', async () => {
     state.scene = scene([], false);
     await act(async () => { root.render(createElement(Board3DView, { project, stackup: null, createRenderer: () => fakeRenderer() as never, quality: 'reduced' })); });
-    expect(el.querySelector('[role="note"]')?.textContent).toContain('Component bodies are not drawn at this size');
+    expect(el.querySelector('[role="note"]')?.textContent).toContain('Component bodies are not drawn on this display. Select a pad');
     state.scene = scene([]);
   });
   it('shows the no-WebGL copy and never mounts', async () => {
@@ -107,6 +107,49 @@ describe('Board3DView', () => {
     await act(async () => { root.render(createElement(Board3DView, { project, stackup: null, createRenderer: () => r as never })); });
     expect(el.textContent).toContain('This browser has WebGL disabled');
     expect(r.mounted).toBe(0);
+  });
+  it('a renderer that cannot start says so and Try again mounts a fresh one', async () => {
+    const made: ReturnType<typeof fakeRenderer>[] = [];
+    let fail = true;
+    const create = () => {
+      const r = fakeRenderer();
+      const ok = r.mount;
+      r.mount = async () => { await ok(); if (fail) throw new Error('no context'); };
+      made.push(r);
+      return r as never;
+    };
+    await act(async () => { root.render(createElement(Board3DView, { project, stackup: null, createRenderer: create, quality: 'full' })); });
+    expect(el.querySelector('[role="alert"]')?.textContent).toContain("Couldn't start the 3D view");
+    // No live-looking controls over an empty box.
+    expect([...el.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['Try again']);
+    fail = false;
+    await act(async () => { [...el.querySelectorAll('button')].find((b) => b.textContent === 'Try again')!.click(); });
+    expect(made).toHaveLength(2);
+    expect(made[0].disposed).toBe(1);
+    expect(el.querySelector('[role="alert"]')).toBeNull();
+    expect([...el.querySelectorAll('button')].map((b) => b.textContent)).toContain('Flip');
+    expect(state.retry).not.toHaveBeenCalled();
+  });
+  it('pauses while the canvas is scrolled off-screen and resumes when it returns', async () => {
+    let callback: ((entries: { isIntersecting: boolean }[]) => void) | null = null;
+    let disconnected = 0;
+    vi.stubGlobal('IntersectionObserver', class {
+      constructor(cb: typeof callback) { callback = cb; }
+      observe() {}
+      disconnect() { disconnected++; }
+    });
+    const r = fakeRenderer();
+    const calls: string[] = [];
+    r.pause = () => { calls.push('pause'); };
+    r.resume = () => { calls.push('resume'); };
+    await act(async () => { root.render(createElement(Board3DView, { project, stackup: null, createRenderer: () => r as never, quality: 'full' })); });
+    act(() => { callback?.([{ isIntersecting: false }]); });
+    act(() => { callback?.([{ isIntersecting: true }]); });
+    expect(calls).toEqual(['pause', 'resume']);
+    act(() => root.unmount());
+    expect(disconnected).toBe(1);
+    root = createRoot(el);
+    vi.unstubAllGlobals();
   });
   it('error state offers Try again which calls retry', async () => {
     state.status = 'error'; state.error = 'That board file is truncated'; state.scene = null;
@@ -126,6 +169,12 @@ describe('the stylesheet the frame depends on', () => {
   it('reserves a real height on desktop and a shorter one on a phone', () => {
     expect(scss).toMatch(/\.wrap \{[^{}]*min-height:\s*420px/);
     expect(scss).toMatch(/min-height:\s*300px/);
+  });
+  it('keeps the caption at AA and the canvas focus ring on the dark canvas', () => {
+    expect(scss).toMatch(/\$footer-ink:\s*#676c71/);
+    expect(scss).toMatch(/\.caption \{[^{}]*color:\s*\$footer-ink/);
+    expect(scss).toMatch(/\.stats \{[^{}]*color:\s*\$footer-ink/);
+    expect(scss).toMatch(/\.canvasHost \{[\s\S]*?&:focus-visible \{[^{}]*outline-offset:\s*-3px/);
   });
   it('gives the canvas host its own paintable box', () => {
     expect(scss).toMatch(/\.canvasHost \{[^{}]*flex:\s*1 1 auto/);

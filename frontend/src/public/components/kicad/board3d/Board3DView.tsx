@@ -46,6 +46,14 @@ const NO_WEBGL = {
   body: 'The drawing needs WebGL 2 to render. Enable hardware acceleration or try another browser — the BOM and stackup tabs work without it.',
 };
 
+/** When the scene built but the renderer could not start: no WebGL context
+ *  (the GPU process was blocklisted after a crash, too many live contexts), or
+ *  the renderer's own chunk failed to load. */
+const NO_START = {
+  title: "Couldn't start the 3D view",
+  body: 'The browser could not open a 3D drawing surface for this board. Try again, or use the Board tab.',
+};
+
 const DOT = ' · ';
 
 /**
@@ -59,10 +67,11 @@ export function captionOf(scene: BoardScene, quality: Quality = 'full'): string 
   if (scene.groups.some((g) => g.material === 'body')) {
     parts.push('Component bodies are estimates from courtyards, not part shapes.');
   } else if (quality === 'reduced') {
-    // Nothing was attempted, so nothing is disclaimed — but a phone reader
-    // seeing a bare board needs to know the bodies are missing by design, and
-    // that the pads still answer a tap.
-    parts.push('Component bodies are not drawn at this size. Tap a pad to identify a part.');
+    // Nothing was attempted, so nothing is disclaimed — but a reader seeing a
+    // bare board needs to know the bodies are missing by design, and that the
+    // pads still answer. Device-neutral: the reduced tier is a narrow window OR
+    // a dense display, and a mouse reader must not be told to "tap".
+    parts.push('Component bodies are not drawn on this display. Select a pad to identify a part.');
   }
   const has = (kind: BoardScene['warnings'][number]['kind']) => scene.warnings.some((w) => w.kind === kind);
   if (has('no-stackup')) parts.push('Layer thicknesses are not in this file.');
@@ -107,6 +116,10 @@ export default function Board3DView({ project, stackup, createRenderer, quality,
   /** Bumped when a renderer has mounted, so the highlight effect below re-runs
    *  against the live one rather than the null it saw before. */
   const [live, setLive] = useState(0);
+  /** The renderer's mount rejected. `attempt` is what "Try again" bumps to
+   *  run the mount effect afresh (the scene itself is fine and cached). */
+  const [mountFailed, setMountFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const onSelectRef = useRef(onSelect);
   onSelectRef.current = onSelect;
   const selectedRefRef = useRef(selectedRef ?? null);
@@ -139,29 +152,42 @@ export default function Board3DView({ project, stackup, createRenderer, quality,
         renderer.highlight?.(selectedRefRef.current);
         setLive((n) => n + 1);
       })
-      .catch(() => undefined);
+      .catch(() => {
+        if (!cancelled) setMountFailed(true);
+      });
+
+    // The loop runs only while the canvas can be SEEN: a hidden tab, or a
+    // canvas scrolled off-screen in a visible one (which the browser does not
+    // throttle), must not burn a frame budget on an orbit nobody watches.
+    let onScreen = true;
+    const sync = () => {
+      if (document.hidden || !onScreen) renderer.pause();
+      else renderer.resume();
+    };
+    document.addEventListener('visibilitychange', sync);
+    const io = typeof IntersectionObserver === 'function'
+      ? new IntersectionObserver((entries) => {
+        const entry = entries[entries.length - 1];
+        if (entry == null) return;
+        onScreen = entry.isIntersecting;
+        sync();
+      })
+      : null;
+    io?.observe(host);
+    if (document.hidden) renderer.pause();
+
     return () => {
       cancelled = true;
+      document.removeEventListener('visibilitychange', sync);
+      io?.disconnect();
       rendererRef.current = null;
       renderer.dispose();
     };
-  }, [supported, status, scene, tier]);
+  }, [supported, status, scene, tier, attempt]);
 
   useEffect(() => {
     rendererRef.current?.highlight?.(selectedRef ?? null);
   }, [selectedRef, live]);
-
-  // A hidden tab must not burn a frame budget on an orbit nobody can see.
-  useEffect(() => {
-    const onVisibility = () => {
-      if (document.hidden) rendererRef.current?.pause();
-      else rendererRef.current?.resume();
-    };
-    document.addEventListener('visibilitychange', onVisibility);
-    return () => {
-      document.removeEventListener('visibilitychange', onVisibility);
-    };
-  }, []);
 
   const go = (next: ViewName) => {
     rendererRef.current?.setView(next);
@@ -181,7 +207,16 @@ export default function Board3DView({ project, stackup, createRenderer, quality,
     event.preventDefault();
   };
 
-  const ready = supported && status === 'ready' && scene != null;
+  const ready = supported && status === 'ready' && scene != null && !mountFailed;
+  const failed = supported && (status === 'error' || mountFailed);
+  const tryAgain = () => {
+    if (mountFailed) {
+      setMountFailed(false);
+      setAttempt((n) => n + 1);
+    } else {
+      retry();
+    }
+  };
   const caption = scene == null ? '' : captionOf(scene, tier);
   return (
     <div className={styles.wrap}>
@@ -214,14 +249,16 @@ export default function Board3DView({ project, stackup, createRenderer, quality,
             Building the board&#8230;
           </p>
         )}
-        {(!supported || status === 'error') && (
+        {(!supported || failed) && (
           <div className={styles.problem} role="alert">
-            <p className={styles.problemTitle}>{supported ? "Couldn't build this board" : NO_WEBGL.title}</p>
+            <p className={styles.problemTitle}>
+              {!supported ? NO_WEBGL.title : mountFailed ? NO_START.title : "Couldn't build this board"}
+            </p>
             <p className={styles.problemBody}>
-              {supported ? (error ?? 'The board could not be built.') : NO_WEBGL.body}
+              {!supported ? NO_WEBGL.body : mountFailed ? NO_START.body : (error ?? 'The board could not be built.')}
             </p>
             {supported && (
-              <button type="button" className={styles.retry} onClick={retry}>
+              <button type="button" className={styles.retry} onClick={tryAgain}>
                 Try again
               </button>
             )}

@@ -126,7 +126,9 @@
   list-style: none;
   font-size: 0.8rem;
   line-height: 1.45;
-  color: $text-secondary;
+  // The part panel's secondary ink: $text-secondary is ~4.3:1 on the bench,
+  // under AA at this size.
+  color: #676c71;
 }
 
 // The tabs as ONE control: a recessed glass track with the live view lit in
@@ -168,8 +170,10 @@
     background: rgba(255, 255, 255, 0.55);
   }
 
+  // Ink-dark: the bright accent on this pale track is ~2.2:1, under the 3:1 a
+  // focus indicator needs.
   &:focus-visible {
-    outline: 2px solid rgba(68, 189, 19, 0.8);
+    outline: 2px solid $executive-blue;
     outline-offset: -2px;
   }
 
