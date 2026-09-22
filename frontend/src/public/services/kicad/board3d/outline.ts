@@ -6,7 +6,6 @@ import type { Ring, Shape, Vec2 } from './types';
 export interface Chained { loops: Ring[]; unchained: number }
 
 /** 1 µm snap: KiCad writes Edge.Cuts endpoints to 6 decimals, so exact equality misses. */
-const key = (p: Vec2, snap: number) => `${Math.round(p.x / snap)}|${Math.round(p.y / snap)}`;
 
 /**
  * Chain open polylines end-to-end into closed loops. Inputs that already close
@@ -15,35 +14,50 @@ const key = (p: Vec2, snap: number) => `${Math.round(p.x / snap)}|${Math.round(p
  * non-closing chain, not just the last one.
  */
 export function chainLoops(polylines: Vec2[][], snapMm = 0.001): Chained {
+  const near = (a: Vec2, b: Vec2) => Math.abs(a.x - b.x) <= snapMm && Math.abs(a.y - b.y) <= snapMm;
   const loops: Ring[] = [];
   const open: Vec2[][] = [];
   for (const pl of polylines) {
     if (pl.length < 2) continue;
     const first = pl[0], last = pl[pl.length - 1];
-    if (pl.length >= 3 && key(first, snapMm) === key(last, snapMm)) loops.push({ pts: pl.slice(0, -1) });
+    if (pl.length >= 3 && near(first, last)) loops.push({ pts: pl.slice(0, -1) });
     else open.push(pl);
   }
-  // endpoint index: key → list of [polylineIndex, end(0|1)]
+  // Endpoint index: grid cell → [polylineIndex, end(0|1)]. Lookups scan the 3×3
+  // neighbourhood and confirm by DISTANCE: two endpoints 8 µm apart can straddle
+  // a cell boundary at any cell size (Glasgow's J4 courtyard: 85.870 vs 85.878
+  // round to different 20 µm cells), so a same-cell test alone can never close
+  // a gap the snap was meant to close.
   const used = new Array<boolean>(open.length).fill(false);
   const index = new Map<string, [number, 0 | 1][]>();
+  const cell = (p: Vec2) => [Math.round(p.x / snapMm), Math.round(p.y / snapMm)] as const;
   open.forEach((pl, i) => {
     for (const e of [0, 1] as const) {
-      const k = key(e === 0 ? pl[0] : pl[pl.length - 1], snapMm);
+      const [cx, cy] = cell(e === 0 ? pl[0] : pl[pl.length - 1]);
+      const k = `${cx}|${cy}`;
       const arr = index.get(k) ?? []; arr.push([i, e]); index.set(k, arr);
     }
   });
+  const endpoint = (i: number, e: 0 | 1) => (e === 0 ? open[i][0] : open[i][open[i].length - 1]);
+  const candidates = (p: Vec2): [number, 0 | 1][] => {
+    const [cx, cy] = cell(p);
+    const out: [number, 0 | 1][] = [];
+    for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) {
+      for (const [i, e] of index.get(`${cx + dx}|${cy + dy}`) ?? []) if (!used[i] && near(p, endpoint(i, e))) out.push([i, e]);
+    }
+    return out;
+  };
   let unchained = 0;
   for (let s = 0; s < open.length; s++) {
     if (used[s]) continue;
     used[s] = true;
     let consumed = 1;
     const chain: Vec2[] = [...open[s]];
-    const startKey = key(chain[0], snapMm);
     let closed = false;
     for (let guard = 0; guard < open.length; guard++) {
       const tail = chain[chain.length - 1];
-      if (key(tail, snapMm) === startKey && chain.length > 2) { closed = true; break; }
-      const cands = (index.get(key(tail, snapMm)) ?? []).filter(([i]) => !used[i]);
+      if (chain.length > 2 && near(tail, chain[0])) { closed = true; break; }
+      const cands = candidates(tail);
       if (cands.length === 0) break;
       const [i, e] = cands[0];
       used[i] = true; consumed++;
