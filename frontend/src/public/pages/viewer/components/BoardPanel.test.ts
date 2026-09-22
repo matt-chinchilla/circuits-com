@@ -176,7 +176,9 @@ describe('Layers', () => {
   it('lists every layer with its swatch, a visibility box and its name', async () => {
     await render({ context: 'board' });
     await click(tab('Layers'));
-    const rows = [...container.querySelectorAll('ul[aria-label="Layers"] li')];
+    // The layer rows sit under their group rows: copper, then silk, then
+    // mechanical, in the order the layers arrived within each.
+    const rows = [...container.querySelectorAll('ul[aria-label="Layers"] ul li')];
     expect(rows.map((r) => r.querySelector('button')?.textContent)).toEqual(LAYERS.map((l) => l.name));
     expect((rows[0].querySelector('span[aria-hidden]') as HTMLElement).style.background).toContain('200');
     await click(box('Show B.Cu'));
@@ -380,5 +382,85 @@ describe('the rail and the dock', () => {
     expect(toggle.getAttribute('aria-expanded')).toBe('true');
     await click(toggle);
     expect(docked()).toBe(false);
+  });
+});
+
+// The Layers tab as a tree (owner, 2026-09-22): six groups in a fixed order,
+// a tri-state box per group, a fold per group, and a Top / Bottom / Both
+// filter that scopes the bulk actions to what is listed.
+describe('the layer tree', () => {
+  const groupRows = () => [...container.querySelectorAll('ul[aria-label="Layers"] > li')];
+  const groupToggle = (label: string) =>
+    [...container.querySelectorAll('button[aria-expanded]')].find((b) => b.textContent?.startsWith(label)) as HTMLButtonElement;
+  const groupBox = (label: string) => box(`Show all ${label.toLowerCase()} layers`);
+  const layerNames = () => [...container.querySelectorAll('ul[aria-label="Layers"] ul li button')].map((b) => b.textContent);
+
+  it('groups the layers under Copper, Silkscreen and Mechanical with a count on each', async () => {
+    await render({ context: 'board' });
+    await click(tab('Layers'));
+    expect(groupRows().map((li) => li.querySelector('button')?.textContent)).toEqual(['Copper3', 'Silkscreen1', 'Mechanical1']);
+    expect(layerNames()).toEqual(['F.Cu', 'In1.Cu', 'B.Cu', 'F.SilkS', 'Edge.Cuts']);
+    // Every group starts open.
+    expect(groupToggle('Copper').getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it('a group box shows or hides the whole group, and reads all / some / none', async () => {
+    await render({ context: 'board' });
+    await click(tab('Layers'));
+    expect(groupBox('Copper').checked).toBe(true);
+    expect(groupBox('Copper').indeterminate).toBe(false);
+    await click(box('Show In1.Cu'));
+    expect(groupBox('Copper').checked).toBe(true);
+    expect(groupBox('Copper').indeterminate).toBe(true);
+    // Some shown: the box's click SHOWS the rest.
+    await click(groupBox('Copper'));
+    expect(state.hiddenLayers.size).toBe(0);
+    // All shown: the box's click hides them all.
+    await click(groupBox('Copper'));
+    expect([...state.hiddenLayers].sort()).toEqual(['B.Cu', 'F.Cu', 'In1.Cu']);
+    expect(groupBox('Copper').checked).toBe(false);
+    expect(groupBox('Copper').indeterminate).toBe(false);
+    // …and the other groups are untouched.
+    expect(groupBox('Silkscreen').checked).toBe(true);
+  });
+
+  it('folds a group shut and open again, keeping its layers’ state', async () => {
+    await render({ context: 'board' });
+    await click(tab('Layers'));
+    await click(box('Show F.Cu'));
+    await click(groupToggle('Copper'));
+    expect(groupToggle('Copper').getAttribute('aria-expanded')).toBe('false');
+    expect(layerNames()).toEqual(['F.SilkS', 'Edge.Cuts']);
+    // The fold survives a trip to another tab and back.
+    await click(tab('Objects'));
+    await click(tab('Layers'));
+    expect(groupToggle('Copper').getAttribute('aria-expanded')).toBe('false');
+    await click(groupToggle('Copper'));
+    expect(layerNames()).toEqual(['F.Cu', 'In1.Cu', 'B.Cu', 'F.SilkS', 'Edge.Cuts']);
+    expect(box('Show F.Cu').checked).toBe(false);
+  });
+
+  it('Top / Bottom / Both list one face, and the bulk actions act on what is listed', async () => {
+    await render({ context: 'board' });
+    await click(tab('Layers'));
+    const side = (label: string) => [...container.querySelectorAll('[aria-label="Side"] button')].find((b) => b.textContent === label) as HTMLButtonElement;
+    expect(side('Both').getAttribute('aria-pressed')).toBe('true');
+    await click(side('Top'));
+    // Front layers and the board-wide Edge.Cuts; no inner or back copper.
+    expect(layerNames()).toEqual(['F.Cu', 'F.SilkS', 'Edge.Cuts']);
+    expect(groupRows().map((li) => li.querySelector('button')?.textContent)).toEqual(['Copper1', 'Silkscreen1', 'Mechanical1']);
+    await click(button('Hide all')!);
+    expect([...state.hiddenLayers].sort()).toEqual(['Edge.Cuts', 'F.Cu', 'F.SilkS']);
+    await click(side('Bottom'));
+    expect(layerNames()).toEqual(['B.Cu', 'Edge.Cuts']);
+    expect(box('Show B.Cu').checked).toBe(true);
+    // "Show all" on the Bottom view shows Edge.Cuts again and leaves the
+    // hidden front layers alone.
+    await click(button('Show all')!);
+    expect([...state.hiddenLayers].sort()).toEqual(['F.Cu', 'F.SilkS']);
+    // The choice survives a trip to Objects and back.
+    await click(tab('Objects'));
+    await click(tab('Layers'));
+    expect(side('Bottom').getAttribute('aria-pressed')).toBe('true');
   });
 });

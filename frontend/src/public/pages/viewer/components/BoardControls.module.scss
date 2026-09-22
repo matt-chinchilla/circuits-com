@@ -5,12 +5,16 @@
 // The Layers and Objects tabs of the Board panel. Same hairline list and type
 // as the part facts beside them: every row is at least 44px tall so a finger
 // can hit it, the checkbox sits in a 44px square of its own, and the colour
-// swatch is the layer's colour on the Board tab, nothing more.
+// swatch is the layer's colour on the Board tab, nothing more. Under a mouse
+// (`pointer: fine`) the rows tighten to 36px, the density a layer tree has in
+// every desktop CAD tool; the 44px floor is for fingers.
 
 $hair: rgba(26, 31, 35, 0.1);
 $ink: #1a1f23;
 $ink-2: #4b5158;
 $ink-3: #676c71;
+$row: 44px;
+$row-fine: 36px;
 
 .section {
   display: flex;
@@ -33,28 +37,167 @@ $ink-3: #676c71;
   color: $ink-3;
 }
 
+// The tab's tool row: the side filter at the left, Show all / Hide all at
+// the right, one line.
+.toolRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+// Top / Bottom / Both as ONE control: the page's recessed track at the
+// panel's scale, the chosen side lit.
+.seg {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  background: linear-gradient(rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.28));
+  border: 1px solid rgba(26, 31, 35, 0.1);
+  border-radius: 10px;
+  box-shadow:
+    inset 0 1px 2px rgba(60, 50, 90, 0.1),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.3);
+}
+
+.segBtn {
+  position: relative;
+  min-height: 30px;
+  padding: 0 10px;
+  font-family: $font-body;
+  font-size: 0.8rem;
+  font-weight: 520;
+  line-height: 1;
+  white-space: nowrap;
+  color: #2b3137;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+  @include tap-target(-7px 0);
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.55);
+  }
+
+  &:focus-visible {
+    outline: 2px solid $executive-blue;
+    outline-offset: -2px;
+  }
+
+  &[aria-pressed='true'] {
+    @include bom-primary-control;
+    border-radius: 8px;
+    line-height: 1;
+  }
+}
+
 .bulk {
   display: flex;
-  gap: 8px;
+  gap: 6px;
 }
 
 .bulkBtn {
   @include bom-glass-control;
   position: relative;
-  flex: 1 1 0;
-  min-height: 36px;
+  min-height: 32px;
   padding: 0 10px;
-  font-size: 0.82rem;
+  font-size: 0.8rem;
   line-height: 1;
   border-radius: 9px;
-  @include tap-target(-4px);
+  @include tap-target(-6px 0);
 }
 
-.list {
+// ─── The tree ─────────────────────────────────────────────────────────────
+
+.tree {
   display: flex;
   flex-direction: column;
   margin: 0;
   padding: 0;
+  list-style: none;
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+}
+
+// A group row: its tri-state box in the same column as the children's boxes,
+// then the fold toggle carrying the chevron, the name and the count.
+.groupRow {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  align-items: center;
+  column-gap: 4px;
+  min-height: $row;
+  border-bottom: 1px solid $hair;
+}
+
+.groupToggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: $row;
+  padding: 0 6px 0 2px;
+  font-family: $font-body;
+  font-size: 0.86rem;
+  font-weight: 600;
+  text-align: left;
+  color: $ink;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.6);
+  }
+
+  &:focus-visible {
+    outline: 2px solid $executive-blue;
+    outline-offset: -2px;
+  }
+}
+
+// Folded: points right. Open: points down. Transform only, so the fold
+// answers the click without a repaint of the list beneath it.
+.chevron {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  margin: 0 5px 0 3px;
+  border-right: 1.5px solid $ink-3;
+  border-bottom: 1.5px solid $ink-3;
+  transform: rotate(-45deg);
+  transition: transform 0.15s ease;
+
+  [aria-expanded='true'] > & {
+    transform: rotate(45deg) translate(-1px, -1px);
+  }
+}
+
+.groupName {
+  flex: 1 1 auto;
+  @include truncate;
+}
+
+.groupCount {
+  font-family: $font-mono;
+  font-size: 0.74rem;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  color: $ink-3;
+}
+
+// The layers under a group, indented one step so the tree reads as a tree.
+.list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0 0 0 22px;
   list-style: none;
 }
 
@@ -312,5 +455,33 @@ $ink-3: #676c71;
     font-weight: 600;
     color: #0c1a05;
     background: rgba(68, 189, 19, 0.2);
+  }
+}
+
+// Under a mouse the rows tighten; the boxes and names follow so nothing
+// inside a row is taller than the row.
+@media (pointer: fine) {
+  .row,
+  .groupRow,
+  .classRow {
+    min-height: $row-fine;
+  }
+
+  .check,
+  .name,
+  .groupToggle,
+  .range,
+  .net {
+    min-height: $row-fine;
+  }
+
+  .check {
+    height: $row-fine;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chevron {
+    transition: none;
   }
 }

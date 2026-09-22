@@ -93,12 +93,22 @@ export function setLayerVisible(state: BoardViewState, name: string, visible: bo
   return { ...state, hiddenLayers: hidden, highlightedLayer };
 }
 
+/**
+ * Show or hide every layer in `names` — the ones the panel is LISTING, which
+ * the side filter may have narrowed — and no other. "Show all" on the Top
+ * filter must not resurrect a bottom layer the reader hid on purpose. A lit
+ * layer that gets hidden stops being lit, as in `setLayerVisible`.
+ */
 export function setAllLayers(state: BoardViewState, names: readonly string[], visible: boolean): BoardViewState {
   if (visible) {
-    return state.hiddenLayers.size === 0 ? state : { ...state, hiddenLayers: new Set() };
+    if (!names.some((n) => state.hiddenLayers.has(n))) return state;
+    const hidden = new Set(state.hiddenLayers);
+    for (const n of names) hidden.delete(n);
+    return { ...state, hiddenLayers: hidden };
   }
   if (names.every((n) => state.hiddenLayers.has(n))) return state;
-  return { ...state, hiddenLayers: new Set([...state.hiddenLayers, ...names]), highlightedLayer: null };
+  const highlightedLayer = state.highlightedLayer != null && names.includes(state.highlightedLayer) ? null : state.highlightedLayer;
+  return { ...state, hiddenLayers: new Set([...state.hiddenLayers, ...names]), highlightedLayer };
 }
 
 /** Light `name`; the same name again clears. Lighting a hidden layer shows it. */
@@ -126,6 +136,91 @@ export function toggleNet(state: BoardViewState, net: number): BoardViewState {
 export function clearHighlights(state: BoardViewState): BoardViewState {
   if (state.highlightedLayer == null && state.highlightedNet == null) return state;
   return { ...state, highlightedLayer: null, highlightedNet: null };
+}
+
+// ─── The Layers tab's hierarchy ───────────────────────────────────────────
+// Layers are listed as a tree (owner, 2026-09-22: "group the content into
+// layers, like a directory-hierarchy"): six groups in a fixed order, each a
+// collapsible row with a tri-state box, the layers under it.
+
+export type LayerGroupId = 'copper' | 'mask' | 'paste' | 'silk' | 'mechanical' | 'other';
+
+export const LAYER_GROUPS: readonly { id: LayerGroupId; label: string }[] = [
+  { id: 'copper', label: 'Copper' },
+  { id: 'mask', label: 'Solder mask' },
+  { id: 'paste', label: 'Paste mask' },
+  { id: 'silk', label: 'Silkscreen' },
+  { id: 'mechanical', label: 'Mechanical' },
+  { id: 'other', label: 'Other' },
+];
+
+/**
+ * Which group a layer files under. Mechanical is the board's own geometry and
+ * its fabrication notes: Edge.Cuts, the courtyards, the fab layers, Margin,
+ * and KiCad's four drawing/comment/Eco layers (`*.User`). The numbered
+ * `User.N` layers and anything the palette does not know (F.Adhes, a custom
+ * name) go under Other.
+ */
+export function layerGroup(layer: Pick<PanelLayer, 'name' | 'kind'>): LayerGroupId {
+  switch (layer.kind) {
+    case 'copper':
+    case 'mask':
+    case 'paste':
+    case 'silk':
+      return layer.kind;
+    case 'edge':
+    case 'courtyard':
+    case 'fab':
+      return 'mechanical';
+    case 'user':
+      return /\.User$/.test(layer.name) ? 'mechanical' : 'other';
+    default:
+      return layer.name === 'Margin' ? 'mechanical' : 'other';
+  }
+}
+
+/** The Top / Bottom / Both filter at the top of the tab. */
+export type SideFilter = 'top' | 'bottom' | 'both';
+
+/** Is this layer listed under `side`? Board-wide layers (Edge.Cuts, Margin,
+ *  the user layers — `side: null`) belong to every view; inner copper to
+ *  neither face, so only to Both. */
+export function onSide(layer: Pick<PanelLayer, 'side'>, side: SideFilter): boolean {
+  if (side === 'both' || layer.side == null) return true;
+  return layer.side === (side === 'top' ? 'F' : 'B');
+}
+
+export interface LayerGroup {
+  id: LayerGroupId;
+  label: string;
+  layers: PanelLayer[];
+}
+
+/** The tab's tree: the groups in their fixed order, each with the listed
+ *  layers in the order they arrived, empty groups left out. */
+export function groupLayers(layers: readonly PanelLayer[], side: SideFilter = 'both'): LayerGroup[] {
+  const by = new Map<LayerGroupId, PanelLayer[]>();
+  for (const layer of layers) {
+    if (!onSide(layer, side)) continue;
+    const id = layerGroup(layer);
+    const list = by.get(id);
+    if (list == null) by.set(id, [layer]);
+    else list.push(layer);
+  }
+  return LAYER_GROUPS.flatMap(({ id, label }) => {
+    const grouped = by.get(id);
+    return grouped == null ? [] : [{ id, label, layers: grouped }];
+  });
+}
+
+export type GroupVisibility = 'all' | 'some' | 'none';
+
+/** The group row's tri-state: are all, some or none of `names` shown? */
+export function groupVisibility(state: BoardViewState, names: readonly string[]): GroupVisibility {
+  let shown = 0;
+  for (const n of names) if (!state.hiddenLayers.has(n)) shown += 1;
+  if (shown === 0) return names.length === 0 ? 'all' : 'none';
+  return shown === names.length ? 'all' : 'some';
 }
 
 // ─── The lists before any drawing has loaded ──────────────────────────────

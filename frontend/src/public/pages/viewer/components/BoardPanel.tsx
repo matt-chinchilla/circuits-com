@@ -24,7 +24,7 @@ import Icon from '@shared/components/Icon';
 import type { NetInfo } from '@public/components/kicad/canvasController';
 import { formatUnit } from '@public/services/bom/format';
 import { footprintName, formatMm, type PartFacts } from '../partFacts';
-import type { BoardViewState, PanelLayer } from '../boardView';
+import type { BoardViewState, LayerGroupId, PanelLayer, SideFilter } from '../boardView';
 import { readDock, writeDock, type PanelDock, type PanelTab } from '../panelDock';
 import { LayersTab, ObjectsTab, type BoardContext, type ViewUpdate } from './BoardControls';
 import styles from './BoardPanel.module.scss';
@@ -111,6 +111,10 @@ const BoardPanel = forwardRef<BoardPanelHandle, BoardPanelProps>(function BoardP
     writeDock(dock);
   }, [dock]);
   const tabRefs = useRef<Partial<Record<PanelTab, HTMLButtonElement | null>>>({});
+  /** The Layers tab's side filter and folded groups, held here so a trip to
+   *  Objects and back finds them as they were left. Reset with the project. */
+  const [side, setSide] = useState<SideFilter>('both');
+  const [collapsed, setCollapsed] = useState<ReadonlySet<LayerGroupId>>(() => new Set());
   /** A tab is offered when the project has a board; Layers and Objects are
    *  usable only while a drawing of it is on screen. */
   const usable = (id: PanelTab) => id === 'parts' || (board != null && board.context != null);
@@ -326,7 +330,16 @@ const BoardPanel = forwardRef<BoardPanelHandle, BoardPanelProps>(function BoardP
               {board.context == null ? (
                 <p className={styles.note}>{board.hint}</p>
               ) : shownTab === 'layers' ? (
-                <LayersTab context={board.context} layers={board.layers} view={board.view} onChange={board.onChange} />
+                <LayersTab
+                  context={board.context}
+                  layers={board.layers}
+                  view={board.view}
+                  onChange={board.onChange}
+                  side={side}
+                  onSide={setSide}
+                  collapsed={collapsed}
+                  onCollapsed={setCollapsed}
+                />
               ) : (
                 <ObjectsTab context={board.context} nets={board.nets} view={board.view} onChange={board.onChange} />
               )}

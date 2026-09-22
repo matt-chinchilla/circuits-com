@@ -1,12 +1,16 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { LayerInfo } from '@public/components/kicad/canvasController';
+import { layerKind, layerSide } from '@public/components/kicad/layerColors';
 import {
   EMPTY_BOARD_VIEW,
   applyToCanvas,
   clearHighlights,
   drawnIn3D,
+  groupLayers,
+  groupVisibility,
   layersFromFile,
   netsFromFile,
+  onSide,
   opacityOf,
   sameLayers,
   setAllLayers,
@@ -16,6 +20,7 @@ import {
   toggleNet,
   type BoardViewState,
   type CanvasBoardControls,
+  type PanelLayer,
 } from './boardView';
 
 const BOARD = `(kicad_pcb (version 20221018)
@@ -160,5 +165,75 @@ describe('applyToCanvas', () => {
     applyToCanvas(canvas, before, EMPTY_BOARD_VIEW);
     expect(canvas.setObjectOpacity.mock.calls).toEqual([['pads', 1]]);
     expect(canvas.highlightNet.mock.calls).toEqual([[null]]);
+  });
+});
+
+// The Layers tab's hierarchy: six groups in a fixed order, a side filter, a
+// tri-state per group, and bulk actions scoped to what is listed.
+describe('the layer hierarchy', () => {
+  const row = (name: string): PanelLayer => ({ name, kind: layerKind(name), side: layerSide(name), color: 'x' });
+  const GLASGOW = [
+    'F.Cu', 'In1.Cu', 'In2.Cu', 'B.Cu', 'F.Adhes', 'B.Adhes', 'F.Paste', 'B.Paste', 'F.SilkS', 'B.SilkS',
+    'F.Mask', 'B.Mask', 'Dwgs.User', 'Cmts.User', 'Eco1.User', 'Eco2.User', 'Edge.Cuts', 'Margin',
+    'F.CrtYd', 'B.CrtYd', 'F.Fab', 'B.Fab', 'User.1', 'Custom.Layer',
+  ].map(row);
+
+  it('files every layer under the owner’s six groups, in their order', () => {
+    const groups = groupLayers(GLASGOW);
+    expect(groups.map((g) => g.label)).toEqual(['Copper', 'Solder mask', 'Paste mask', 'Silkscreen', 'Mechanical', 'Other']);
+    const names = Object.fromEntries(groups.map((g) => [g.id, g.layers.map((l) => l.name)]));
+    expect(names.copper).toEqual(['F.Cu', 'In1.Cu', 'In2.Cu', 'B.Cu']);
+    expect(names.mask).toEqual(['F.Mask', 'B.Mask']);
+    expect(names.paste).toEqual(['F.Paste', 'B.Paste']);
+    expect(names.silk).toEqual(['F.SilkS', 'B.SilkS']);
+    // Edge, courtyards, fab, Margin and the four drawing/comment/Eco layers.
+    expect(names.mechanical).toEqual(['Dwgs.User', 'Cmts.User', 'Eco1.User', 'Eco2.User', 'Edge.Cuts', 'Margin', 'F.CrtYd', 'B.CrtYd', 'F.Fab', 'B.Fab']);
+    // User.N and anything unmapped.
+    expect(names.other).toEqual(['F.Adhes', 'B.Adhes', 'User.1', 'Custom.Layer']);
+    // Every layer is listed exactly once.
+    expect(groups.flatMap((g) => g.layers).length).toBe(GLASGOW.length);
+  });
+
+  it('leaves an empty group out', () => {
+    expect(groupLayers([row('F.Cu'), row('Edge.Cuts')]).map((g) => g.id)).toEqual(['copper', 'mechanical']);
+    expect(groupLayers([])).toEqual([]);
+  });
+
+  it('the side filter keeps board-wide layers on both faces and inner copper on neither', () => {
+    const top = groupLayers(GLASGOW, 'top').flatMap((g) => g.layers.map((l) => l.name));
+    expect(top).toContain('F.Cu');
+    expect(top).toContain('Edge.Cuts');
+    expect(top).toContain('Dwgs.User');
+    expect(top).not.toContain('B.Cu');
+    expect(top).not.toContain('In1.Cu');
+    const bottom = groupLayers(GLASGOW, 'bottom').flatMap((g) => g.layers.map((l) => l.name));
+    expect(bottom).toContain('B.Mask');
+    expect(bottom).toContain('Margin');
+    expect(bottom).not.toContain('F.Mask');
+    expect(bottom).not.toContain('In2.Cu');
+    expect(groupLayers(GLASGOW, 'both').flatMap((g) => g.layers).length).toBe(GLASGOW.length);
+    expect(onSide({ side: 'In' }, 'top')).toBe(false);
+    expect(onSide({ side: null }, 'bottom')).toBe(true);
+  });
+
+  it('answers all, some or none for a group', () => {
+    const names = ['F.Cu', 'B.Cu'];
+    expect(groupVisibility(EMPTY_BOARD_VIEW, names)).toBe('all');
+    expect(groupVisibility(setLayerVisible(EMPTY_BOARD_VIEW, 'F.Cu', false), names)).toBe('some');
+    expect(groupVisibility(setAllLayers(EMPTY_BOARD_VIEW, names, false), names)).toBe('none');
+    expect(groupVisibility(EMPTY_BOARD_VIEW, [])).toBe('all');
+  });
+
+  it('"Show all" restores only the listed layers, so a filtered view never resurrects the other face', () => {
+    const hidden = setAllLayers(EMPTY_BOARD_VIEW, ['F.Cu', 'B.Cu', 'F.Mask'], false);
+    const shownTop = setAllLayers(hidden, ['F.Cu', 'F.Mask'], true);
+    expect([...shownTop.hiddenLayers]).toEqual(['B.Cu']);
+    // Nothing to show: the same state comes back.
+    expect(setAllLayers(shownTop, ['F.Cu'], true)).toBe(shownTop);
+    // Hiding a group that holds the lit layer clears the light; another
+    // group's light survives.
+    const lit = toggleLayerHighlight(EMPTY_BOARD_VIEW, 'F.Cu');
+    expect(setAllLayers(lit, ['F.Cu', 'B.Cu'], false).highlightedLayer).toBeNull();
+    expect(setAllLayers(lit, ['F.Mask'], false).highlightedLayer).toBe('F.Cu');
   });
 });

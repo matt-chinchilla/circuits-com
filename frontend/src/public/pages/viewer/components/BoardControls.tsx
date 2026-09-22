@@ -8,6 +8,8 @@ import {
   CLASSES_2D,
   CLASSES_3D,
   drawnIn3D,
+  groupLayers,
+  groupVisibility,
   opacityOf,
   setAllLayers,
   setLayerVisible,
@@ -16,8 +18,11 @@ import {
   toggleNet,
   type BoardViewState,
   type ClassRow,
+  type LayerGroup,
+  type LayerGroupId,
   type ObjectClass,
   type PanelLayer,
+  type SideFilter,
 } from '../boardView';
 import styles from './BoardControls.module.scss';
 
@@ -33,64 +38,159 @@ export function netLabel(net: NetInfo): string {
 
 // ─── Layers ───────────────────────────────────────────────────────────────
 
+export const SIDES: readonly [SideFilter, string][] = [['top', 'Top'], ['bottom', 'Bottom'], ['both', 'Both']];
+
 export interface LayersTabProps {
   context: BoardContext;
   layers: readonly PanelLayer[];
   view: BoardViewState;
   onChange: ViewUpdate;
+  /** The Top / Bottom / Both filter: which face's layers are listed. Held by
+   *  the panel so it survives a trip to another tab. */
+  side: SideFilter;
+  onSide: (side: SideFilter) => void;
+  /** The groups the reader has folded shut, held by the panel for the same reason. */
+  collapsed: ReadonlySet<LayerGroupId>;
+  onCollapsed: (collapsed: ReadonlySet<LayerGroupId>) => void;
 }
 
-export function LayersTab({ context, layers, view, onChange }: LayersTabProps) {
-  const names = useMemo(() => layers.map((l) => l.name), [layers]);
+/**
+ * The layers as a tree (owner, 2026-09-22): six groups in a fixed order —
+ * Copper, Solder mask, Paste mask, Silkscreen, Mechanical, Other — each a
+ * row with a chevron, the name, a tri-state box for the whole group and the
+ * count, and the layers indented under it. Show all / Hide all and the group
+ * boxes act on what is LISTED, so a Top view never resurrects a bottom layer.
+ */
+export function LayersTab({ context, layers, view, onChange, side, onSide, collapsed, onCollapsed }: LayersTabProps) {
+  const ids = useId();
+  const groups = useMemo(() => groupLayers(layers, side), [layers, side]);
+  const listed = useMemo(() => groups.flatMap((g) => g.layers.map((l) => l.name)), [groups]);
   if (layers.length === 0) {
     return <p className={styles.note}>This board lists no layers that can be shown.</p>;
   }
+  const toggleGroup = (id: LayerGroupId) => {
+    const next = new Set(collapsed);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    onCollapsed(next);
+  };
   return (
     <div className={styles.section}>
-      <div className={styles.bulk}>
-        <button type="button" className={styles.bulkBtn} onClick={() => onChange((s) => setAllLayers(s, names, true))}>
-          Show all
-        </button>
-        <button type="button" className={styles.bulkBtn} onClick={() => onChange((s) => setAllLayers(s, names, false))}>
-          Hide all
-        </button>
+      <div className={styles.toolRow}>
+        <div className={styles.seg} role="group" aria-label="Side">
+          {SIDES.map(([id, label]) => (
+            <button key={id} type="button" className={styles.segBtn} aria-pressed={side === id} onClick={() => onSide(id)}>
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className={styles.bulk}>
+          <button type="button" className={styles.bulkBtn} onClick={() => onChange((s) => setAllLayers(s, listed, true))}>
+            Show all
+          </button>
+          <button type="button" className={styles.bulkBtn} onClick={() => onChange((s) => setAllLayers(s, listed, false))}>
+            Hide all
+          </button>
+        </div>
       </div>
       <p className={styles.help}>Click a layer&#8217;s name to highlight it; click again to clear.</p>
-      <ul className={styles.list} aria-label="Layers">
-        {layers.map((layer) => {
-          const inert = context === 'board3d' && !drawnIn3D(layer.name);
-          const visible = !view.hiddenLayers.has(layer.name);
-          const lit = view.highlightedLayer === layer.name;
-          return (
-            <li key={layer.name} className={styles.row} data-hidden={!visible || undefined} data-inert={inert || undefined}>
-              <label className={styles.check}>
-                <input
-                  type="checkbox"
-                  checked={visible}
-                  disabled={inert}
-                  aria-label={`Show ${layer.name}`}
-                  onChange={(e) => {
-                    const on = e.currentTarget.checked;
-                    onChange((s) => setLayerVisible(s, layer.name, on));
-                  }}
-                />
-              </label>
-              <span className={styles.swatch} style={{ background: layer.color }} aria-hidden="true" />
-              <button
-                type="button"
-                className={styles.name}
-                aria-pressed={lit}
-                disabled={inert}
-                onClick={() => onChange((s) => toggleLayerHighlight(s, layer.name))}
-              >
-                {layer.name}
-              </button>
-              {inert && <span className={styles.aside}>not in 3D</span>}
-            </li>
-          );
-        })}
-      </ul>
+      {groups.length === 0 ? (
+        <p className={styles.note}>No layers on this side.</p>
+      ) : (
+        <ul className={styles.tree} aria-label="Layers">
+          {groups.map((group) => (
+            <LayerGroupRows
+              key={group.id}
+              group={group}
+              listId={`${ids}-${group.id}`}
+              context={context}
+              view={view}
+              onChange={onChange}
+              open={!collapsed.has(group.id)}
+              onToggle={() => toggleGroup(group.id)}
+            />
+          ))}
+        </ul>
+      )}
     </div>
+  );
+}
+
+function LayerGroupRows({ group, listId, context, view, onChange, open, onToggle }: {
+  group: LayerGroup;
+  listId: string;
+  context: BoardContext;
+  view: BoardViewState;
+  onChange: ViewUpdate;
+  open: boolean;
+  onToggle: () => void;
+}) {
+  const names = group.layers.map((l) => l.name);
+  const shown = groupVisibility(view, names);
+  return (
+    <li className={styles.group}>
+      <div className={styles.groupRow}>
+        <label className={styles.check}>
+          <input
+            type="checkbox"
+            checked={shown !== 'none'}
+            // The box's third state is a DOM property, not an attribute.
+            ref={(el) => {
+              if (el != null) el.indeterminate = shown === 'some';
+            }}
+            aria-label={`Show all ${group.label.toLowerCase()} layers`}
+            onChange={() => onChange((s) => setAllLayers(s, names, shown !== 'all'))}
+          />
+        </label>
+        <button
+          type="button"
+          className={styles.groupToggle}
+          aria-expanded={open}
+          aria-controls={open ? listId : undefined}
+          onClick={onToggle}
+        >
+          <span className={styles.chevron} aria-hidden="true" />
+          <span className={styles.groupName}>{group.label}</span>
+          <span className={styles.groupCount}>{group.layers.length}</span>
+        </button>
+      </div>
+      {open && (
+        <ul id={listId} className={styles.list} aria-label={group.label}>
+          {group.layers.map((layer) => {
+            const inert = context === 'board3d' && !drawnIn3D(layer.name);
+            const visible = !view.hiddenLayers.has(layer.name);
+            const lit = view.highlightedLayer === layer.name;
+            return (
+              <li key={layer.name} className={styles.row} data-hidden={!visible || undefined} data-inert={inert || undefined}>
+                <label className={styles.check}>
+                  <input
+                    type="checkbox"
+                    checked={visible}
+                    disabled={inert}
+                    aria-label={`Show ${layer.name}`}
+                    onChange={(e) => {
+                      const on = e.currentTarget.checked;
+                      onChange((s) => setLayerVisible(s, layer.name, on));
+                    }}
+                  />
+                </label>
+                <span className={styles.swatch} style={{ background: layer.color }} aria-hidden="true" />
+                <button
+                  type="button"
+                  className={styles.name}
+                  aria-pressed={lit}
+                  disabled={inert}
+                  onClick={() => onChange((s) => toggleLayerHighlight(s, layer.name))}
+                >
+                  {layer.name}
+                </button>
+                {inert && <span className={styles.aside}>not in 3D</span>}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </li>
   );
 }
 
