@@ -183,7 +183,13 @@ export default defineConfig({
           if (id.includes('node_modules/three/')) {
             return 'board3d-three'
           }
-          if (id.includes('node_modules/earcut/') || id.includes('/services/kicad/board3d/')) {
+          // earcut ALONE. The 3D pipeline itself is reachable only through the
+          // lazy Board3DView (and its worker), so it splits there by itself;
+          // naming it here made Rollup pull the pipeline's shared deps
+          // (services/kicad/types.ts, sexpr.ts) into this chunk, which the
+          // /bom and /viewer route chunks then imported statically — earcut
+          // and the whole pipeline on every visit, 3D or not.
+          if (id.includes('node_modules/earcut/')) {
             return 'board3d'
           }
           return undefined

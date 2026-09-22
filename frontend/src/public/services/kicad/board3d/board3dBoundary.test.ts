@@ -80,4 +80,14 @@ describe('board3d import boundary', () => {
   it('the renderer, the one sanctioned importer, is seen by the pattern', () => {
     expect(readFileSync(join(HOST, 'sceneRenderer.ts'), 'utf8')).toMatch(THREE_IMPORT);
   });
+  it('the bundler names only earcut into the board3d chunk, never the pipeline', () => {
+    // Naming the pipeline's folder in manualChunks made Rollup pull its shared
+    // deps (services/kicad/types.ts, sexpr.ts) into that chunk, and the /bom
+    // and /viewer route chunks then imported it statically — earcut and the
+    // whole 3D pipeline on every visit. The pipeline splits by itself behind
+    // the lazy Board3DView; only earcut needs naming.
+    const config = readFileSync(join(__dirname, '../../../../../vite.config.ts'), 'utf8');
+    expect(config).toMatch(/node_modules\/earcut\//);
+    expect(config).not.toMatch(/id\.includes\(['"][^'"]*services\/kicad\/board3d/);
+  });
 });
