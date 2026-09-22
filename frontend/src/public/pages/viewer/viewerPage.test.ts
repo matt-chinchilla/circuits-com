@@ -95,6 +95,11 @@ vi.mock('@public/components/kicad/DesignCanvas', () => ({
     return createElement('div', { 'data-testid': 'canvas' });
   }),
 }));
+/** The 3D host, stubbed for the same reason the canvas is: the contract this
+ *  file tests is WHEN the page mounts it, not what three.js draws. */
+vi.mock('@public/components/kicad/board3d/Board3DView', () => ({
+  default: () => createElement('div', { 'data-testid': 'board3d' }),
+}));
 vi.mock('@public/components/bom/BomTable', () => ({
   default: (props: AnyProps) =>
     createElement(
@@ -673,7 +678,7 @@ describe('the Stackup tab', () => {
   it('sits after Board and before BOM, so the two drawings stay side by side', async () => {
     session = withBoard();
     await render();
-    expect(tabButtons().map((b) => b.textContent)).toEqual(['Schematic', 'Board', 'Stackup', 'BOM']);
+    expect(tabButtons().map((b) => b.textContent)).toEqual(['Schematic', 'Board', 'Stackup', '3D', 'BOM']);
   });
 
   it('shows the layer stack the board file carries', async () => {
@@ -782,6 +787,58 @@ describe('the Stackup tab', () => {
   });
 });
 
+describe('the 3D tab', () => {
+  it('offers a 3D tab for a project with a board, mounts the view only while selected, and unmounts on leaving', async () => {
+    session = makeSession({ board: 'main.kicad_pcb' });
+    await render();
+    const tab3d = [...container.querySelectorAll('[role="tab"]')].find((t) => t.textContent === '3D')!;
+    expect(tab3d).toBeDefined();
+    expect(container.querySelector('[data-testid="board3d"]')).toBeNull();
+    await click(tab3d as HTMLElement);
+    expect(container.querySelector('[data-testid="board3d"]')).not.toBeNull();
+    expect(tab3d.getAttribute('aria-selected')).toBe('true');
+    const stackupTab = [...container.querySelectorAll('[role="tab"]')].find((t) => t.textContent === 'Stackup')!;
+    await click(stackupTab as HTMLElement);
+    expect(container.querySelector('[data-testid="board3d"]')).toBeNull();
+  });
+
+  it('a schematic-only project has no 3D tab', async () => {
+    await render();
+    expect([...container.querySelectorAll('[role="tab"]')].map((t) => t.textContent)).not.toContain('3D');
+    expect(container.querySelector('#viewer-panel-3d')).toBeNull();
+  });
+
+  it('wires the tab to its panel only while that panel exists', async () => {
+    session = makeSession({ board: 'main.kicad_pcb' });
+    await render();
+    expect(byText('3D').getAttribute('aria-controls')).toBeNull();
+    await click(byText('3D'));
+    const panel = container.querySelector('#viewer-panel-3d');
+    expect(byText('3D').getAttribute('aria-controls')).toBe('viewer-panel-3d');
+    expect(panel?.getAttribute('role')).toBe('tabpanel');
+    expect(panel?.getAttribute('aria-labelledby')).toBe(byText('3D').id);
+  });
+
+  it('hands the 3D view the board’s own layer stack, read once for the session', async () => {
+    session = makeSession({ board: 'main.kicad_pcb' });
+    await render();
+    expect(readStackupCalls).not.toHaveBeenCalled();
+    await click(byText('3D'));
+    expect(readStackupCalls).toHaveBeenCalledTimes(1);
+    await click(byText('Stackup'));
+    expect(readStackupCalls).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the ONE canvas embed alive across the trip to 3D and back', async () => {
+    session = makeSession({ board: 'main.kicad_pcb' });
+    await render();
+    const before = canvas.mounts;
+    await click(byText('3D'));
+    await click(byText('Board'));
+    expect(canvas.mounts).toBe(before);
+  });
+});
+
 describe('the tablist contract', () => {
   it('pairs every tab with the panel it opens, both ways', async () => {
     session = makeSession({ board: 'main.kicad_pcb' });
@@ -794,9 +851,10 @@ describe('the tablist contract', () => {
       expect(t.getAttribute('aria-selected')).not.toBeNull();
       expect(t.id).not.toBe('');
       const controls = t.getAttribute('aria-controls');
-      // The BOM panel is not in the document until the tab is first opened, and
+      // Neither the BOM panel (not in the document until the tab is first
+      // opened) nor the 3D panel (mounted only while selected) is here yet, and
       // a reference to an absent element is worse than none.
-      if (t.textContent === 'BOM') {
+      if (t.textContent === 'BOM' || t.textContent === '3D') {
         expect(controls).toBeNull();
         continue;
       }
@@ -834,13 +892,13 @@ describe('the tablist contract', () => {
   it('is ONE tab stop: only the selected tab is reachable by Tab', async () => {
     session = makeSession({ board: 'main.kicad_pcb' });
     await render();
-    expect(tabButtons().map((b) => b.tabIndex)).toEqual([0, -1, -1, -1]);
+    expect(tabButtons().map((b) => b.tabIndex)).toEqual([0, -1, -1, -1, -1]);
     // The negative half of the contract: every OTHER tab says "false", or a
-    // stuck-on attribute tells a screen reader all four views are open.
-    expect(tabButtons().map((b) => b.getAttribute('aria-selected'))).toEqual(['true', 'false', 'false', 'false']);
+    // stuck-on attribute tells a screen reader all five views are open.
+    expect(tabButtons().map((b) => b.getAttribute('aria-selected'))).toEqual(['true', 'false', 'false', 'false', 'false']);
     await click(byText('Stackup'));
-    expect(tabButtons().map((b) => b.tabIndex)).toEqual([-1, -1, 0, -1]);
-    expect(tabButtons().map((b) => b.getAttribute('aria-selected'))).toEqual(['false', 'false', 'true', 'false']);
+    expect(tabButtons().map((b) => b.tabIndex)).toEqual([-1, -1, 0, -1, -1]);
+    expect(tabButtons().map((b) => b.getAttribute('aria-selected'))).toEqual(['false', 'false', 'true', 'false', 'false']);
   });
 
   it('moves focus AND selection with the arrows, wrapping at both ends', async () => {

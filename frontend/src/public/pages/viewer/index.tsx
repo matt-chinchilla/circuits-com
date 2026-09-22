@@ -1,9 +1,9 @@
 // Design Viewer — open a KiCad project in the browser (spec §7.1). Tabs:
-// Schematic, Board, Stackup, BOM. ONE canvas element serves both drawing tabs
+// Schematic, Board, Stackup, 3D, BOM. ONE canvas element serves both drawing tabs
 // (one embed per project); it is hidden, not unmounted, when another tab is
 // active — and so is every other panel, so that switching tabs never bins work
 // the reader has already paid for.
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { motion } from 'framer-motion';
 import { useLocation } from 'react-router-dom';
 import PageHead from '@public/components/PageHead';
@@ -22,7 +22,15 @@ import { STATIC_PAGE_SEO } from '@public/services/seoRoutes';
 import ViewerIntake from './components/ViewerIntake';
 import styles from './ViewerPage.module.scss';
 
-type Tab = 'schematic' | 'board' | 'stackup' | 'bom';
+/**
+ * three.js and the whole 3D host, behind a dynamic import (spec 2026-09-21 §8).
+ * Lazy so the renderer's chunk is fetched on the first visit to the tab and
+ * never by a reader who only came for the BOM — the same bargain `/viewer`
+ * already makes for KiCanvas.
+ */
+const Board3DView = lazy(() => import('@public/components/kicad/board3d/Board3DView'));
+
+type Tab = 'schematic' | 'board' | 'stackup' | 'board3d' | 'bom';
 
 export const POSITIONING =
   'Open your KiCad project in the browser and get every line of the BOM priced across our whole distributor catalog — read straight out of your schematic, with no CSV export, no account, and nobody trying to win your board order.';
@@ -91,12 +99,14 @@ const TAB_ID: Record<Tab, string> = {
   schematic: 'viewer-tab-schematic',
   board: 'viewer-tab-board',
   stackup: 'viewer-tab-stackup',
+  board3d: 'viewer-tab-3d',
   bom: 'viewer-tab-bom',
 };
 
 const PANEL_ID = {
   drawing: 'viewer-panel-drawing',
   stackup: 'viewer-panel-stackup',
+  board3d: 'viewer-panel-3d',
   bom: 'viewer-panel-bom',
 } as const;
 
@@ -104,6 +114,7 @@ const PANEL_OF: Record<Tab, keyof typeof PANEL_ID> = {
   schematic: 'drawing',
   board: 'drawing',
   stackup: 'stackup',
+  board3d: 'board3d',
   bom: 'bom',
 };
 
@@ -314,6 +325,9 @@ export default function ViewerPage() {
     // reader cannot parse — the panel then says why, which is a better answer
     // than a tab that quietly is not there.
     if (session.project.board != null) out.push({ id: 'stackup', label: 'Stackup' });
+    // Same rule as Stackup: offered for any project with a board, because the
+    // panel itself is where an unreadable one gets its explanation.
+    if (session.project.board != null) out.push({ id: 'board3d', label: '3D' });
     if (session.project.root != null) out.push({ id: 'bom', label: 'BOM' });
     return out;
   }, [session]);
@@ -337,8 +351,11 @@ export default function ViewerPage() {
    * commit where the tab is live but the latch has not caught up yet would
    * paint, and `role="alert"` would ANNOUNCE, "could not be read" about a board
    * nobody has tried to read.
+   *
+   * The 3D tab wants the same rows — the z ladder is what gives its slab a real
+   * thickness instead of an invented one — so it opens the same latch.
    */
-  const stackupWanted = stackupSeen || tab === 'stackup';
+  const stackupWanted = stackupSeen || tab === 'stackup' || tab === 'board3d';
   const stackup = useMemo(() => {
     const board = session?.project.board;
     if (session == null || board == null || !stackupWanted) return null;
@@ -403,6 +420,18 @@ export default function ViewerPage() {
   };
 
   const drawingVisible = tab === 'schematic' || tab === 'board';
+
+  /**
+   * The panel a tab opens, or undefined when that panel is not in the document
+   * — a reference to an absent element is worse than none. The BOM panel
+   * arrives with its first visit; the 3D panel exists ONLY while its tab is
+   * selected, because the renderer it holds owns a WebGL context.
+   */
+  const panelIdFor = (id: Tab): string | undefined => {
+    if (id === 'bom' && !bomSeen) return undefined;
+    if (id === 'board3d' && tab !== 'board3d') return undefined;
+    return PANEL_ID[PANEL_OF[id]];
+  };
 
   return (
     <motion.div
@@ -469,7 +498,7 @@ export default function ViewerPage() {
                     aria-selected={tab === t.id}
                     // Only for a panel that is really in the document: the BOM
                     // panel arrives with its first visit.
-                    aria-controls={t.id === 'bom' && !bomSeen ? undefined : PANEL_ID[PANEL_OF[t.id]]}
+                    aria-controls={panelIdFor(t.id)}
                     // Roving: the strip is one tab stop and the arrows move
                     // inside it.
                     tabIndex={tab === t.id ? 0 : -1}
@@ -588,6 +617,28 @@ export default function ViewerPage() {
                       <ShareBar rows={wb.rows} buildQty={wb.buildQty} includeDnp={wb.includeDnp} onChangeFile={openAnother} />
                     </>
                   )}
+                </section>
+              )}
+
+              {tab === 'board3d' && session.project.board != null && (
+                // Mounted ONLY while selected (spec 2026-09-21 D5): the 3D view
+                // holds its own WebGL context and releases it on the way out so
+                // the 2D embed keeps the browser's one it already has.
+                <section
+                  id={PANEL_ID.board3d}
+                  role="tabpanel"
+                  aria-labelledby={TAB_ID.board3d}
+                  className={styles.board3dPanel}
+                >
+                  <Suspense
+                    fallback={
+                      <p className={styles.notice} role="status">
+                        Loading the 3D view&#8230;
+                      </p>
+                    }
+                  >
+                    <Board3DView project={session.project} stackup={stackup} />
+                  </Suspense>
                 </section>
               )}
 
