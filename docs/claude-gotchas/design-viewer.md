@@ -541,11 +541,15 @@ Entries are sorted by path so the output order is a contract rather than
 ### `readStackup` never returns null — it THROWS, and a FIELD is what goes null
 
 The signature is `readStackup(boardText: string): BoardStackup`
-(`boardStackup.ts:90`). There is no nullable return anywhere in it:
+(`boardStackup.ts:77`; it was `:90` until 2026-09-22). There is no nullable
+return anywhere in it:
 
 - **It throws `KicadReadError(…, 'unreadable')`** for a file that does not open
-  with `(kicad_pcb …)` (`:91-93`) or whose s-expressions do not balance (`:104-108`
-  — the tokenizer's plain `Error` is re-labelled to the same `'unreadable'` kind).
+  with `(kicad_pcb …)` or whose s-expressions do not balance (the tokenizer's
+  plain `Error` is re-labelled to the same `'unreadable'` kind). **Both refusals
+  now live in `services/kicad/boardFile.ts` `boardBlocks` (`:20-30`)**, shared by
+  all three `.kicad_pcb` readers (4bfc546, 2026-09-22) — the `boardStackup.ts`
+  `:91-93` / `:104-108` references this bullet used to give are SUPERSEDED.
 - **Otherwise it always returns an object**, whose `stackup` field — with
   `copperFinish` and `listedThicknessMm` alongside it — is `null` when the board
   carries no `(setup (stackup …))` block. **Never a default.** The type says so:
@@ -554,7 +558,7 @@ The signature is `readStackup(boardText: string): BoardStackup`
 
 **Every caller must try/catch**, because `project.ts` picks the board by
 EXTENSION alone, so a mis-saved or half-copied `.kicad_pcb` really does reach it.
-The viewer's memo does (`pages/viewer/index.tsx:342-349`, `catch { return null }`)
+The viewer's memo does (`pages/viewer/index.tsx:574-583` as of 2026-09-22, was `:342-349`; `catch { return null }`)
 and that is load-bearing: the call sits in a `useMemo`, so an uncaught throw is
 thrown **from a render** and takes the whole page to the `ErrorBoundary` — the
 reader loses the schematic and the BOM over a file they may not have come for.
@@ -800,15 +804,35 @@ A fifth tab on `/viewer`, **3D**, orbits the dropped board. Spec:
   three.js, no KiCanvas, no `fetch(`. Unlike the `kicanvasController` seam (a
   convention nothing enforces — see above), **this one is a GATE**:
   `board3dBoundary.test.ts` walks the directory and fails on any of
-  `vendor/kicanvas`, `@vendor-build`, `kicanvasController`, `from 'three`,
+  `vendor/kicanvas`, `@vendor-build`, `kicanvasController`, three,
   `document.`, `window.`, `fetch(`, and separately asserts that **no file under
-  `src/public` outside `components/kicad/board3d/` imports three at all**. The
+  `src/public` outside `components/kicad/board3d/` imports three at all**.
+  **Widened 2026-09-22 (308935b)** because the gate had holes: it matched only
+  `from 'three`, while the renderer loads three with `import('three')`, so a
+  stray dynamic import anywhere passed — it now matches both forms and pins that
+  the one sanctioned importer IS seen; the network deny-list is `fetch(`,
+  `XMLHttpRequest`, `sendBeacon`, `WebSocket`, `EventSource`, `importScripts`,
+  `new Image`; and the scan follows the pipeline's `../` imports (`sexpr.ts`,
+  `types.ts`), which live outside the folder. (One comment in `sexpr.ts` said
+  `document.` and was reworded.) The
   board text comes from `session.project.files.get(session.project.board)` — the
   design session, never the renderer.
 - **`@public/components/kicad/board3d/`** — the host. `Board3DView.tsx` (default
   export, props `{ project, stackup, createRenderer?, quality? }`) over the
   `SceneRenderer` seam in `sceneRenderer.ts`, which is the ONLY file that imports
   three, and does it with a dynamic `import()` so three lands in its own chunk.
+
+**Chunks (453ed5d, 2026-09-22).** `manualChunks` names exactly two 3D chunks:
+`board3d-three` (three + OrbitControls) and `board3d` = **earcut ALONE** (7,403
+B raw / 3,161 B gz, was 31,192 / 12,237). It used to send the whole
+`services/kicad/board3d` folder to `board3d`, and Rollup then pulled the
+pipeline's shared deps (`services/kicad/types.ts`, `sexpr.ts`) in with it —
+which `useBomWorkbench` and the `/bom` + `/viewer` route chunks import — so
+every visit to either page loaded earcut and the pipeline statically, 3D or
+not. The pipeline needs no name: it is reachable only through the lazy
+`Board3DView` (which carries the no-worker fallback copy) and its worker, and
+splits there by itself. A config witness in `board3dBoundary.test.ts` reads
+`vite.config.ts` and fails on any `id.includes('…services/kicad/board3d…')`.
 
 ### The page wiring
 
@@ -836,7 +860,10 @@ KiCanvas's for the rest of the visit. Two consequences:
   the host's own `min-height: 420px` is then the only thing giving it a size.
 - `stackupWanted` ORs in `tab === 'board3d'`: the 3D view wants the same z ladder
   the Stackup tab reads, and the board is re-tokenised once per session, not once
-  per tab.
+  per tab. **That last claim was FALSE until 2026-09-22 (57fa887):** the OR alone
+  dropped the memo the moment the reader left 3D, so every return re-tokenised
+  the whole board inside the tab click. The 3D tab now also SETS the
+  `stackupSeen` latch (`tab === 'stackup' || tab === 'board3d'`).
 
 ### Honesty (spec D7) — what the caption may and may not say
 
@@ -845,7 +872,13 @@ reader's listed sum **or null** — never 1.6. Component bodies are estimated fr
 **courtyards**, and the caption says so in those words. Every simplification is
 COUNTED, in the fixed order `captionOf()` pins: bodies-are-estimates, then
 `no-stackup`, `outline-open`, unfilled pours, then one total for
-`holes-merged + no-courtyard + arc-degenerate` as "N features simplified".
+`holes-merged + holes-marked + no-courtyard + arc-degenerate` as "N features
+simplified" (`holes-marked` joined 2026-09-22 with the per-face hole budget,
+below). `outline-open` with ZERO segments reads "This board has no outline yet;
+showing the box around its copper." — anything else "Board outline did not
+close; showing its bounding box." Unfilled pours count COPPER zones only (a
+`B.Mask` zone saved unfilled is not a pour — the panel fixture's four were, and
+the caption told the reader about four copper pours the board does not have).
 
 **The count is only as honest as the overlap test.** `buildScene.prune` keeps the
 larger of two overlapping hole/opening rings (v1 has no polygon-clipping library)
@@ -878,7 +911,11 @@ drops tracks under 0.2 mm, halves the arc caps, coarsens the tolerance
 (`TOL_MM`), pins `setPixelRatio(1)`, turns MSAA off and **skips component bodies
 entirely** — which also skips their warning, because nothing was attempted. That
 is why a phone shows **no caption at all** on a clean board: there is nothing to
-admit. Measured Glasgow: 294,094 triangles / 9 draw calls full, 182,392 / 8
+admit. *(Superseded by the refinement, 32d624e: `reduced` now says "Component
+bodies are not drawn on this display. Select a pad to identify a part.", because
+a reader looking at a bare board needs to know the bodies are missing by design
+and that the pads still answer. Device-neutral since 3e8d23a — no "tap", no "at
+this size" — because the reduced tier is a narrow window OR a dense display.)* Measured Glasgow: 294,094 triangles / 9 draw calls full, 182,392 / 8
 reduced.
 
 ### Where the numbers live
@@ -895,6 +932,80 @@ at a clean 60 fps rAF cadence (measured 91 frames / 1.5 s), which is the other
 half of the design: `sceneRenderer` only runs frames while auto-orbiting,
 flipping or settling, and the first touch of the controls ends the auto-orbit for
 the tab's lifetime.
+
+### The general review round (2026-09-22) — what it changed
+
+17 fix commits and 8 refactors, `d446e9d..9693964`. The owner's rule was ONE
+review after the build; these are its findings, each with a test.
+
+- **Back-side parts were mirrored TWICE** (5856579, b5821be). KiCad saves a
+  flipped footprint's children in coordinates that are ALREADY mirrored (the file
+  un-rotates them but never un-flips them), and the vendored 2D renderer places
+  them with translate + rotate alone. `geom.place` and the pad-ring tail mirrored
+  y again, so every asymmetric B-side part had its pads, drills, body and silk
+  reflected across its own x axis. **`place` is rotate-then-translate, no mirror,
+  and `geom.ts` says so beside it.** Witness: `pads.stickhub.test.ts` — StickHub's
+  U2 (TDFN-8 on B.Cu) put **0 of 6** off-axis pads on the end of their track or
+  via; now **6 of 6** land within 0.05 mm. The old geom test had pinned the wrong
+  behaviour and the courtyard test could not fail.
+- **A dense board's build is bounded per FACE, not by via count** (67ba1b9).
+  earcut bridges every hole of a face into one outer ring, so a face costs
+  O(holes × vertices): 1,000 vias 0.96 s, 2,000 4.0 s, 4,000 17.6 s, **8,000
+  94.8 s**. `FACE_HOLE_BUDGET = { holes: 1500, vertices: 40_000 }` per flat face,
+  largest first (`withinBudget`: board cutouts and connector drills are always
+  real holes, and it is the 0.3 mm vias that give way); past it a
+  drill is drawn as a dark mark on the mask and a pad opening as its pad raised
+  just above the mask (`overMaskZ`, halfway to the silk), both counted as
+  `holes-marked`. `prune` and the mask's overlap filter use a grid index instead
+  of a linear scan. Measured: **8,000 vias 2.6 s, 50,000 vias 4.3 s**; Glasgow's
+  busiest face (F.Mask, 1,317 openings / 35.6k vertices) is inside both limits
+  and builds the same 294,094 triangles.
+- **A build past 45 s is stopped with an honest "too large"** (1deab2c).
+  `useBoardScene`'s watchdog (`BUILD_TIMEOUT_MS = 45_000`) terminates the worker
+  and reports `TOO_LARGE` ("This board is too large to build in 3D in the
+  browser. The Board tab still draws it.") instead of an endless spinner. The
+  hook tests were also made to check what they claimed (retry really spawns a
+  fresh worker; the no-worker fallback builds a real board to `ready`).
+- **Hostile inputs** — `chainLoops` stays linear when endpoints pile into one
+  cell (660cb58: 40k coincident zero-length Edge.Cuts lines, 2.4 MB, 46.8 s →
+  0.14 s; an 8 MB file of them 0.39 s). A layer table with more than 32 copper
+  layers (KiCad's hard limit) or 128 rows is refused `unreadable` (5e91ac7): every
+  `*.Cu` pad expands against the copper table, so an unbounded one multiplied by
+  the pad count (measured ~480 MB from a 1 MB file).
+- **The outline** (817b18f). A footprint's own Edge.Cuts graphics (connector
+  notches, slots, outline footprints) are placed with the footprint and join the
+  board edge, as KiCad counts them; a turned rect is placed as its four-corner
+  poly. A board with NO edge items is the box around its copper + 1 mm — it was a
+  1 mm square at the page origin, ~100 mm from the parts — and the caption says
+  "no outline yet" rather than "did not close".
+- **The render loop** (e464b41). OrbitControls fires `change` from INSIDE a tick
+  (auto-orbit, damping), and the `wake()` it triggered queued a second frame
+  beside the tick's own, so queued ticks grew every frame of the orbit and
+  doubled during a drag. The tick now decides the next frame alone — exactly one
+  in flight. `prefers-reduced-motion` turns off the load-time orbit and makes
+  Flip a cut. The four tolerance rays around a miss are for TOUCH only; a mouse
+  click on bare board is one raycast, not five.
+- **Pause, failure, contrast** (3e8d23a). An IntersectionObserver pauses the loop
+  while the canvas is scrolled out of view (the browser does not throttle that),
+  beside the existing `visibilitychange` pause. A renderer mount that rejects (no
+  context, chunk failed) shows the problem block with **Try again**, which mounts
+  a fresh renderer (`attempt`), instead of live-looking buttons over an empty
+  box. Caption, stats and strip notes use `#676c71` (AA on the bench); the canvas
+  focus ring draws inside the dark canvas and the tab/toolbar rings are ink-dark,
+  all over 3:1.
+- **Refactors, one home each** (4bfc546 … 9693964): the three `.kicad_pcb`
+  readers — `boardStackup`, `boardPlacements`, `board3d/readBoardModel` — share
+  `services/kicad/boardFile.ts` (`boardBlocks`: the header test + both
+  `unreadable` sentences; `parseBlock`; `footprintField` for Reference/Value in
+  both KiCad 6 and 7+ spellings), so they refuse the same files with the same
+  sentence by construction. ONE curve-flattening rule: `arcStep` / `arcPoints` /
+  `flattenArc` in `arcs.ts` (strokes and pads import them; `circleRing` is
+  `arcPoints` round a full turn). ONE placement path: pads place through
+  `geom.place` with their own frame, and every rectangle's corners come from
+  `geom.rectCorners`. `ringsOverlap(a, b, boxA?, boxB?)` takes the boxes the
+  pruner already holds (the bbox reject is `geom.boxesOverlap`, one `Box` type),
+  and `ringContains` shares its edge-crossing loop. One `overMaskZ`; material
+  specs spread whole into three; single-file symbols unexported.
 
 ---
 
@@ -941,6 +1052,13 @@ drawing tab with a selection uses `selectRef` so the tab is not yanked to a
 zoomed-in part. `DesignCanvas` surfaces it as `onSelection` (held through a
 ref, like `onState`) and `selectRef` on the handle. A `canvasHas` ref on the
 page records what the canvas itself reported, so an echo is never sent back.
+*(Superseded by d446e9d: the record is now PER DRAWING —
+`shown: Record<CanvasView, string | null>` — because the schematic and the board
+are two viewers with two selections, and one view-blind record skipped the board
+whenever the schematic had reported the same designator. And since 57fa887
+(2026-09-22) a `selectRef`/`focusRef` that answers `'not-found'` nulls that
+drawing's entry — the viewer has cleared its outline — or a later selection of
+the previous part was skipped as "already shown" and never drawn.)*
 
 ### The panel's facts, and where each number comes from
 
@@ -950,12 +1068,21 @@ quantity, siblings; `sheet` from the `refs` map), the board's placements, and
 the workbench's priced rows. The price is the SAME number the BOM table shows:
 `recommend()` at the table's line quantity, then `priceAt()` — so the panel and
 the table cannot disagree. An absent fact is a dash, never a default.
+**Corrected 2026-09-22 (c3a50f8):** they COULD disagree — the table lets the
+reader pin another supplier, and the panel ignored the pin. `BomTable`'s pins
+can now be held by the host (optional `pins` + `onPinsChange`; `/bom` still
+lets the table keep its own); the viewer holds them, drops them with the project,
+and `partFacts` applies the table's own rule: the pin if it still resolves, else
+`recommend()`, then `priceAt()`.
 
 **`services/kicad/boardPlacements.ts`** reads `(footprint … (at x y rot) (layer …)
 (fp_text reference|property "Reference"))` through `topLevelBlocks` — ~40 ms on
-Glasgow (measured), run on the main thread ONCE per project on the first
-selection or the first focus of the search (`placementsSeen`, the same one-way
-latch as `stackupSeen`). Seven of Glasgow's 272 footprints are annotated
+Glasgow (measured), run on the main thread ONCE per project (`placementsSeen`,
+the same one-way latch as `stackupSeen`). Until 2026-09-22 it was armed by the
+first selection or the first focus of the search — i.e. INSIDE that click; since
+57fa887 it is armed at the first idle moment after a project with a board opens
+(`requestIdleCallback`, `PLACEMENTS_IDLE_TIMEOUT_MS` = 2 s at the latest), and a
+selection or search focus that comes first still arms it. Seven of Glasgow's 272 footprints are annotated
 `REF**` (logos, kikit tabs) and a reference-keyed map keeps the first: 266
 entries, pinned. The reader is REQUIRED because the 3D scene (which knows
 positions) is built only when the 3D tab opens, and the panel shows on every
@@ -965,7 +1092,24 @@ Desktop: a 296px sticky rail beside the stage (`.stage` is a two-column grid,
 `minmax(0, 1fr)` first so the BOM table shrinks rather than pushing the rail
 off). Phone: the same markup as a fixed bottom sheet; a new selection PEEKS
 (designator, value, price on one row) so the drawing the reader just tapped
-stays visible; `.loaded` keeps 60px clear under the stage for the peek. `/`
+stays visible; `.loaded` keeps 60px clear under the stage for the peek.
+**Review round, 2026-09-22:**
+
+- **The sheet reaches up to `$bp-tablet` (1024px), not just `$bp-mobile`**
+  (7c4a4a2): the 296px rail left an 820px tablet a 455px stage, where the BOM
+  table showed two of its columns. Rail above 1024; sheet + full-width stage at
+  or below it (`ViewerPage.module.scss` and `PartPanel.module.scss`, both
+  `@include responsive($bp-tablet)`; the page's block must stay AFTER `.loaded`
+  — same specificity, source order decides).
+- **The sheet chips row moved INSIDE the drawing column**, so switching to and
+  from Schematic changes only the drawing's height; the rail used to move 35px
+  with it.
+- **The sheet is OPAQUE** (f4b2fe1): `bom-card`'s 85–93% white glass is laid over
+  a solid `#f7f8fb`. Floating over the footer and the 3D canvas, the translucent
+  card went grey and put its secondary ink under AA — the navbar lesson again.
+- **A selection made from the sheet's OWN search keeps it open**; one made on a
+  drawing still collapses it to the peek row. The fact list has no column gap,
+  so each row's hairline (a border on both `dt` and `dd`) is one line. `/`
 focuses the search and Esc clears, except while typing in a field (`typingIn`).
 `BomTable` marks the selected chip with `aria-current`.
 
