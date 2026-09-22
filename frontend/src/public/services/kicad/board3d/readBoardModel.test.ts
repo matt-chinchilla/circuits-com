@@ -131,3 +131,26 @@ describe('readBoardModel — zones and the layer table', () => {
     expect(() => readBoardModel(head + `(layers ${rows})\n)`, 0.01)).toThrow(/at most 128/);
   });
 });
+
+describe('readBoardModel — a footprint\'s own Edge.Cuts', () => {
+  it('joins the board edge, placed with the footprint', () => {
+    // An outline footprint at (50, 40) turned 90°: its 20 × 10 rect becomes a
+    // 10 × 20 box around the footprint's origin on the board.
+    const board = [
+      '(kicad_pcb (version 20221018) (generator pcbnew)',
+      '(layers (0 "F.Cu" signal) (31 "B.Cu" signal) (44 "Edge.Cuts" user))',
+      '(footprint "outline" (layer "F.Cu") (at 50 40 90) (property "Reference" "BRD1")',
+      '  (fp_rect (start -10 -5) (end 10 5) (layer "Edge.Cuts") (width 0.1)))',
+      ')',
+    ].join('\n');
+    const m = readBoardModel(board, 0.01);
+    expect(m.edgeItems).toHaveLength(1);
+    const e = m.edgeItems[0];
+    if (e.kind !== 'poly') throw new Error('a turned rect is placed as a poly');
+    const xs = e.pts.map((p) => p.x), ys = e.pts.map((p) => p.y);
+    expect(Math.max(...xs) - Math.min(...xs)).toBeCloseTo(10, 6);
+    expect(Math.max(...ys) - Math.min(...ys)).toBeCloseTo(20, 6);
+    expect((Math.max(...xs) + Math.min(...xs)) / 2).toBeCloseTo(50, 6);
+    expect((Math.max(...ys) + Math.min(...ys)) / 2).toBeCloseTo(40, 6);
+  });
+});

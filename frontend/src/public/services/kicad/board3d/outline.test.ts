@@ -72,4 +72,11 @@ describe('boardOutline', () => {
     expect(o.outer.pts).toHaveLength(4);
     expect(Math.abs(signedArea(o.outer.pts))).toBeCloseTo(5000, 6);
   });
+  it('with no outline at all, the box is the copper plus a millimetre — never a square at the origin', () => {
+    const o = boardOutline([], 0.01, [{ x: 100, y: 80 }, { x: 140, y: 110 }]);
+    expect(o.open).toBe(true);
+    expect(o.unchained).toBe(0);
+    const xs = o.outer.pts.map((p) => p.x), ys = o.outer.pts.map((p) => p.y);
+    expect([Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)]).toEqual([99, 141, 79, 111]);
+  });
 });

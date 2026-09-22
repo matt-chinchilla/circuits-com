@@ -1,4 +1,4 @@
-import type { Placement, Vec2 } from './types';
+import type { Placement, Shape, Vec2 } from './types';
 
 export const v = (x: number, y: number): Vec2 => ({ x, y });
 export const add = (a: Vec2, b: Vec2): Vec2 => ({ x: a.x + b.x, y: a.y + b.y });
@@ -37,6 +37,28 @@ export function rotate(p: Vec2, deg: number): Vec2 {
  */
 export function place(p: Vec2, pl: Placement): Vec2 {
   return add(rotate(p, pl.rotDeg), pl.at);
+}
+
+/**
+ * A footprint-local shape, placed on the board. A rect is axis-aligned only in
+ * its own frame, so a turned one becomes the closed poly of its four corners.
+ */
+export function placeShape(shape: Shape, pl: Placement): Shape {
+  const at = (p: Vec2) => place(p, pl);
+  switch (shape.kind) {
+    case 'line':
+      return { ...shape, a: at(shape.a), b: at(shape.b) };
+    case 'arc':
+      return { ...shape, a: at(shape.a), mid: at(shape.mid), b: at(shape.b) };
+    case 'circle':
+      return { ...shape, c: at(shape.c) };
+    case 'rect': {
+      const { a, b } = shape;
+      return { kind: 'poly', pts: [a, { x: b.x, y: a.y }, b, { x: a.x, y: b.y }].map(at), width: shape.width, filled: shape.filled };
+    }
+    case 'poly':
+      return { ...shape, pts: shape.pts.map(at) };
+  }
 }
 
 /**

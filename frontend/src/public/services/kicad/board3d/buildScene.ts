@@ -222,6 +222,16 @@ function addSilkShape(
   }
 }
 
+/** Where the board's copper is — the box a board with no outline is drawn in. */
+function contentPoints(model: BoardModel): Vec2[] {
+  const out: Vec2[] = [];
+  for (const fp of model.footprints) for (const pad of fp.pads) out.push(place(pad.at, fp.place));
+  for (const via of model.vias) out.push(via.at);
+  for (const track of model.tracks) out.push(...track.pts);
+  for (const zone of model.zones) out.push(...zone.ring.pts);
+  return out;
+}
+
 export function buildScene(input: BuildInput): BoardScene {
   const startedAt = performance.now();
   const model = readBoardModel(input.text, TOL_MM[input.quality]);
@@ -248,7 +258,7 @@ export function buildSceneFromModel(
     else warnings.push(w);
   }
 
-  const outline = boardOutline(model.edgeItems, tol);
+  const outline = boardOutline(model.edgeItems, tol, model.edgeItems.length > 0 ? [] : contentPoints(model));
   degenerateArcs += outline.degenerateArcs;
   if (outline.open) warnings.push({ kind: 'outline-open', segments: outline.unchained });
 

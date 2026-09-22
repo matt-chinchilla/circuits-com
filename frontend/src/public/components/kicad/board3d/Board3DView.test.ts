@@ -95,6 +95,14 @@ describe('Board3DView', () => {
     act(() => { r.pick?.('R1'); r.pick?.(null); });
     expect(picked).toEqual(['R1', null]);
   });
+  it('says a board with no outline has none, rather than that it did not close', async () => {
+    state.scene = scene([{ kind: 'outline-open', segments: 0 }]);
+    await act(async () => { root.render(createElement(Board3DView, { project, stackup: null, createRenderer: () => fakeRenderer() as never, quality: 'full' })); });
+    const note = el.querySelector('[role="note"]')!.textContent!;
+    expect(note).toContain('This board has no outline yet');
+    expect(note).not.toContain('did not close');
+    state.scene = scene([]);
+  });
   it('a reduced-tier board says its bodies are not drawn and that pads still answer', async () => {
     state.scene = scene([], false);
     await act(async () => { root.render(createElement(Board3DView, { project, stackup: null, createRenderer: () => fakeRenderer() as never, quality: 'reduced' })); });

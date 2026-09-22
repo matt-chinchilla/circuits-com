@@ -75,7 +75,13 @@ export function captionOf(scene: BoardScene, quality: Quality = 'full'): string 
   }
   const has = (kind: BoardScene['warnings'][number]['kind']) => scene.warnings.some((w) => w.kind === kind);
   if (has('no-stackup')) parts.push('Layer thicknesses are not in this file.');
-  if (has('outline-open')) parts.push('Board outline did not close; showing its bounding box.');
+  const open = scene.warnings.find((w) => w.kind === 'outline-open');
+  if (open != null) {
+    // Zero segments means there was no outline to close at all.
+    parts.push(open.segments === 0
+      ? 'This board has no outline yet; showing the box around its copper.'
+      : 'Board outline did not close; showing its bounding box.');
+  }
   for (const w of scene.warnings) {
     if (w.kind !== 'zones-unfilled') continue;
     parts.push(`${w.count} copper pour${w.count === 1 ? ' was' : 's were'} saved unfilled.`);

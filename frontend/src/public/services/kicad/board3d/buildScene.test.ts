@@ -148,3 +148,30 @@ describe('buildScene — a dense board stays inside the face budget', () => {
     expect(s.groups.some((g) => g.layerName?.endsWith('.Marks'))).toBe(false);
   });
 });
+
+describe('buildScene — outlines that are not all gr_* lines', () => {
+  it('a board whose outline is a footprint closes, and the model is centred on it', () => {
+    const board = [
+      '(kicad_pcb (version 20221018) (generator pcbnew)',
+      '(layers (0 "F.Cu" signal) (31 "B.Cu" signal) (44 "Edge.Cuts" user))',
+      '(footprint "outline" (layer "F.Cu") (at 50 40) (property "Reference" "BRD1")',
+      '  (fp_rect (start -10 -5) (end 10 5) (layer "Edge.Cuts") (width 0.1)))',
+      ')',
+    ].join('\n');
+    const s = buildScene({ text: board, stackup: null, quality: 'reduced' });
+    expect(s.warnings.find((w) => w.kind === 'outline-open')).toBeUndefined();
+    expect(s.bounds).toEqual({ min: { x: -10, y: -5 }, max: { x: 10, y: 5 } });
+  });
+  it('a board with no outline yet is drawn in the box around its copper', () => {
+    const board = [
+      '(kicad_pcb (version 20221018) (generator pcbnew)',
+      '(layers (0 "F.Cu" signal) (31 "B.Cu" signal) (44 "Edge.Cuts" user))',
+      '(segment (start 100 80) (end 140 110) (width 0.25) (layer "F.Cu"))',
+      ')',
+    ].join('\n');
+    const s = buildScene({ text: board, stackup: null, quality: 'reduced' });
+    expect(s.warnings).toContainEqual({ kind: 'outline-open', segments: 0 });
+    expect(s.bounds.max.x - s.bounds.min.x).toBeCloseTo(42, 6);
+    expect(s.bounds.max.y - s.bounds.min.y).toBeCloseTo(32, 6);
+  });
+});

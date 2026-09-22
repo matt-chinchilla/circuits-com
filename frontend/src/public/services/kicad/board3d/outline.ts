@@ -129,20 +129,32 @@ export function shapePolylines(shapes: Shape[], tolMm: number): { polylines: Vec
   return { polylines, degenerateArcs };
 }
 
+/** How far past the copper the fallback slab reaches, when there is no outline. */
+const CONTENT_MARGIN_MM = 1;
+
 /**
  * Edge.Cuts → the board outline plus its cutouts. Circles, rects and closed polys
  * are loops already; lines and arcs (flattened at `tolMm`) get chained. The
  * largest |area| loop is the board. If anything fails to chain, the caller gets
  * the axis-aligned bounding box and `open: true` — never a partial outline.
+ *
+ * With NO edge items at all (a layout that has no outline yet), the box is the
+ * board's own content — `contentPts`, the copper's points, plus a millimetre —
+ * rather than an invented square at the page origin, which put the slab and the
+ * orbit centre ~100 mm from everything the board actually draws.
  */
-export function boardOutline(edgeItems: Shape[], tolMm: number): {
+export function boardOutline(edgeItems: Shape[], tolMm: number, contentPts: Vec2[] = []): {
   outer: Ring; cutouts: Ring[]; open: boolean; unchained: number; degenerateArcs: number;
 } {
   const { polylines, degenerateArcs } = shapePolylines(edgeItems, tolMm);
   const chained = chainLoops(polylines);
   const all = polylines.flat();
   if (chained.loops.length === 0 || chained.unchained > 0) {
-    const b = bbox(all.length ? all : [{ x: 0, y: 0 }, { x: 1, y: 1 }]);
+    const b = all.length > 0
+      ? bbox(all)
+      : contentPts.length > 0
+        ? grow(bbox(contentPts), CONTENT_MARGIN_MM)
+        : bbox([{ x: 0, y: 0 }, { x: 1, y: 1 }]);
     const outer: Ring = {
       pts: orient([
         { x: b.min.x, y: b.min.y }, { x: b.max.x, y: b.min.y },
@@ -156,6 +168,10 @@ export function boardOutline(edgeItems: Shape[], tolMm: number): {
   const cutouts = sorted.slice(1).map((l) => ({ pts: orient(l.pts, 'hole') }));
   return { outer, cutouts, open: false, unchained: 0, degenerateArcs };
 }
+
+const grow = (b: { min: Vec2; max: Vec2 }, m: number) => ({
+  min: { x: b.min.x - m, y: b.min.y - m }, max: { x: b.max.x + m, y: b.max.y + m },
+});
 
 /** Outer loops carry signedArea < 0, holes > 0 (y-down convention used by tessellate.ts). */
 export function orient(pts: Vec2[], as: 'outer' | 'hole'): Vec2[] {

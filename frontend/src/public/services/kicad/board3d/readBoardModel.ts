@@ -10,7 +10,7 @@
 import { atom, child, children, head, parse, topLevelBlocks, type TopLevelBlock } from '../sexpr';
 import { KicadReadError, type SExpr } from '../types';
 import { flattenThreePoint } from './arcs';
-import { dist } from './geom';
+import { dist, placeShape } from './geom';
 import type {
   BoardModel, FootprintModel, LayerDef, LayerKind, PadDrill, PadModel, PadShape,
   Placement, Shape, Side, TrackModel, Vec2, ViaModel, ZoneFill,
@@ -195,7 +195,13 @@ function referenceOf(node: SExpr[]): string {
   return '';
 }
 
-function readFootprint(node: SExpr[], copperNames: string[]): FootprintModel {
+/**
+ * `edgeOut` collects the footprint's own Edge.Cuts graphics, PLACED on the
+ * board: KiCad counts a footprint's outline, slot or notch as part of the board
+ * edge (connector cut-outs, outline footprints), so they belong beside the
+ * gr_* edge items, not in the footprint.
+ */
+function readFootprint(node: SExpr[], copperNames: string[], edgeOut: Shape[]): FootprintModel {
   const at = child(node, 'at');
   const side: Side = str(child(node, 'layer')) === 'B.Cu' ? 'B' : 'F';
   const place: Placement = { at: pt(at), rotDeg: num(at, 3), side };
@@ -204,6 +210,11 @@ function readFootprint(node: SExpr[], copperNames: string[]): FootprintModel {
   for (const item of node) {
     if (!Array.isArray(item) || !FP_GRAPHICS.includes(head(item) ?? '')) continue;
     const layer = str(child(item, 'layer'));
+    if (layer === 'Edge.Cuts') {
+      const edge = shapeOf(item);
+      if (edge != null) edgeOut.push(placeShape(edge, place));
+      continue;
+    }
     const bucket = layer === `${side}.CrtYd` ? courtyard : layer === `${side}.SilkS` ? silk : null;
     const shape = bucket == null ? null : shapeOf(item);
     if (shape != null) bucket?.push(shape);
@@ -317,7 +328,7 @@ export function readBoardModel(text: string, tolMm: number): BoardModel {
         }
         break;
       case 'footprint':
-        model.footprints.push(readFootprint(node, copperNames));
+        model.footprints.push(readFootprint(node, copperNames, model.edgeItems));
         break;
       case 'via': {
         const via = readVia(node);
