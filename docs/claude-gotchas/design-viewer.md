@@ -898,6 +898,114 @@ the tab's lifetime.
 
 ---
 
+## **One selection for the whole `/viewer` page, and the part panel is a rendering of `partFacts` — never a second KiCanvas properties panel (2026-09-22)**
+
+The refinement stage of 2026-09-22 (ledger `.superpowers/sdd/2026-09-22-viewer-refinement/`,
+report `report.md`, probe `probe.md`) added the identification panel the owner
+asked for ("like Altium 365") and the cross-view selection behind it.
+
+### Where the selection comes from, and what the seam gained
+
+`pages/viewer/index.tsx` holds ONE `selectedRef`. Five doors set it: a click on
+the schematic or board (the canvas reports it), a pick in the 3D view, a BOM
+designator chip, the panel's search, and the `#ref` hash (through `focus()`).
+
+KiCanvas **does** emit a selection event — `KiCanvasSelectEvent`, type
+`"kicanvas:select"`, `viewers/base/events.ts:26-33`, dispatched by
+`Viewer._set_selected` (`viewers/base/viewer.ts:200-214`) for every change of
+`selected`, on the board (`BoardViewer.on_pick` → a `Footprint`,
+`viewers/board/viewer.ts:57-84`) and the schematic (the base `on_pick` → the
+first bbox's context, a `SchematicSymbol` or anything else painted). Two traps
+the controller absorbs, both pinned in `kicanvasController.test.ts`:
+
+- **The target is the `Viewer` object, not a DOM node** (`Viewer extends
+  EventTarget`), so `bubbles: true` reaches nothing; the controller attaches to
+  `app.viewer` itself, lazily (the getter throws before the app's first render)
+  and idempotently (a `WeakSet`), on mount-ready and after every activate.
+- **Every document load ends with a deselect** — `DocumentViewer.load`'s
+  `later()` tail dispatches `kicanvas:load` and then, synchronously in the same
+  task, `this.selected = null` (`document-viewer.ts:62-86`). Passed through, a
+  sheet switch would clear the reader's selection. The controller marks a viewer
+  "in its load tail" on the load event and clears the mark in a `queueMicrotask`
+  (exact, because `later` is `setTimeout(…, 0)`); a null selection inside the
+  mark is swallowed. The controller's own `select()` calls are muted the same
+  way and it emits its own event with the outcome it knows.
+
+The seam kept the `selection` event name spec §5.5 already declared (payload
+widened to `{ ref, sheet?, view? }`) and gained **`selectRef(ref | null, sheet?,
+view?)`** — the same sheet/view switch and select as `focusRef`, WITHOUT the
+zoom. Both take a `view`: `'board'` shows the board first so "Show on Board"
+can select a footprint; a `sheet` implies the schematic. `focusRef` stays the
+travel gesture (BOM chips, the hash, the panel's Show on row); arriving at a
+drawing tab with a selection uses `selectRef` so the tab is not yanked to a
+zoomed-in part. `DesignCanvas` surfaces it as `onSelection` (held through a
+ref, like `onState`) and `selectRef` on the handle. A `canvasHas` ref on the
+page records what the canvas itself reported, so an echo is never sent back.
+
+### The panel's facts, and where each number comes from
+
+`pages/viewer/partFacts.ts` (pure, node-tested) assembles the record the panel
+renders from three sources the page already holds: the BOM lines (identity,
+quantity, siblings; `sheet` from the `refs` map), the board's placements, and
+the workbench's priced rows. The price is the SAME number the BOM table shows:
+`recommend()` at the table's line quantity, then `priceAt()` — so the panel and
+the table cannot disagree. An absent fact is a dash, never a default.
+
+**`services/kicad/boardPlacements.ts`** reads `(footprint … (at x y rot) (layer …)
+(fp_text reference|property "Reference"))` through `topLevelBlocks` — ~40 ms on
+Glasgow (measured), run on the main thread ONCE per project on the first
+selection or the first focus of the search (`placementsSeen`, the same one-way
+latch as `stackupSeen`). Seven of Glasgow's 272 footprints are annotated
+`REF**` (logos, kikit tabs) and a reference-keyed map keeps the first: 266
+entries, pinned. The reader is REQUIRED because the 3D scene (which knows
+positions) is built only when the 3D tab opens, and the panel shows on every
+tab.
+
+Desktop: a 296px sticky rail beside the stage (`.stage` is a two-column grid,
+`minmax(0, 1fr)` first so the BOM table shrinks rather than pushing the rail
+off). Phone: the same markup as a fixed bottom sheet; a new selection PEEKS
+(designator, value, price on one row) so the drawing the reader just tapped
+stays visible; `.loaded` keeps 60px clear under the stage for the peek. `/`
+focuses the search and Esc clears, except while typing in a field (`typingIn`).
+`BomTable` marks the selected chip with `aria-current`.
+
+### The 3D side: ranges, picking, highlight, framing, teardown
+
+`buildScene` records `MeshGroup.parts: PartRange[]` — the slice of a group's
+`indices` each footprint owns — for bodies (`full` only) and for pads on every
+copper layer, which are drawn FIRST and per footprint so the slice is
+contiguous. `partRanges.ts` maps a hit `faceIndex` back to a designator (binary
+search) and a designator to draw slices. The renderer highlights through
+`geometry.addGroup` ranges and a two-material array (`HIGHLIGHT_MATERIALS`,
+cyan `#4fc3f7`, emissive so it reads at any orbit): a range rewrite and at most
+two extra draw calls, never a colour attribute over 300k vertices. A pick is a
+pointer-up within 6px/500ms of its pointer-down (an orbit drag never picks) and
+raycasts EVERY mesh nearest-first, so the substrate occludes a top-side body
+seen from below; at `reduced` quality a phone still picks by pads, and the
+caption says the bodies are not drawn at that size.
+
+Reset framing (`framing.ts`, pure) projects the model box's eight corners
+through the real perspective camera at every 10° of azimuth and solves for the
+distance at which all clear BOTH frustum edges: Glasgow on a 1376×616 canvas
+stands at **0.73 of the old diagonal rule's distance** (the bound is the near
+corner's rise at a 35° elevation, not the width). It re-fits on resize.
+
+**Leaving the 3D tab no longer loses the WebGL context inside the tab click's
+React commit** (perf audit 2026-09-22: `forceContextLoss` was a 4.7 s long
+task under SwiftShader, and the synchronous-on-click STRUCTURE was the defect).
+`dispose()` does the cheap half at once (cancel rAF, listeners, the canvas
+leaves the DOM) and `deferTeardown` runs geometry/material disposal and the
+context loss in `requestIdleCallback` (1 s timeout; `setTimeout(0)` fallback),
+exactly once. The context is still lost — just not before the new tab paints.
+
+### The papaparse split
+
+`services/kicad/schematicBom.ts` imported two caps from `services/bom/parseBom.ts`,
+whose top-level `import { parse } from 'papaparse'` shipped 24 KB gz of CSV
+parser to `/viewer`. The line shapes and caps now live in `services/bom/bomLines.ts`
+(papaparse-free) and `parseBom.ts` re-exports them, so CSV-side callers are
+unchanged. Cite `bomLines.ts` for `MAX_REFS_PER_LINE` from now on.
+
 ## Known limitations
 
 Documented so a future session does not "fix" them by accident.
