@@ -722,6 +722,11 @@ export default function ViewerPage() {
                 ))}
               </div>
 
+              <div className={styles.stage}>
+              <div className={styles.stageMain}>
+              {/* Inside the drawing column, not above the stage: only the drawing
+                  gives up the row's height, so the part panel beside it no
+                  longer jumps 35px on every switch to and from Schematic. */}
               {tab === 'schematic' && session.project.sheets.length > 1 && (
                 <div className={styles.chips} role="group" aria-label="Sheets">
                   {droppedSheets.size > 0 && (
@@ -749,9 +754,6 @@ export default function ViewerPage() {
                   })}
                 </div>
               )}
-
-              <div className={styles.stage}>
-              <div className={styles.stageMain}>
               <div
                 id={PANEL_ID.drawing}
                 role="tabpanel"

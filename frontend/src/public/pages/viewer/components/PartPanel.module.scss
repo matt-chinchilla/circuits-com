@@ -10,7 +10,7 @@
 // and the table are recognisably one system. No section eyebrows, no all-caps
 // labels: the structure is the type scale and two hairlines.
 //
-// Two shapes from one markup. Above $bp-mobile it is a rail beside the stage,
+// Two shapes from one markup. Above $bp-tablet it is a rail beside the stage,
 // sticky under the navbar, scrolling on its own. At and below it is a sheet
 // fixed along the bottom of the viewport: the `.peek` row is all that shows
 // until it is opened, so the drawing the reader just tapped stays in view.
@@ -392,9 +392,11 @@ $hair: rgba(26, 31, 35, 0.1);
   }
 }
 
-// ─── Phone: the bottom sheet ──────────────────────────────────────────────
+// ─── Phone and tablet: the bottom sheet ───────────────────────────────────
+// Up to $bp-tablet, not just $bp-mobile: a 296px rail beside the stage left an
+// 820px iPad a 455px stage, where the BOM table showed two of its columns.
 
-@include responsive($bp-mobile) {
+@include responsive($bp-tablet) {
   .panel {
     position: fixed;
     left: 0;

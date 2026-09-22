@@ -1038,6 +1038,17 @@ describe('the part panel', () => {
     expect(canvas.activeSheet).toBe('sub/power.kicad_sch');
   });
 
+  it('the sheet chips sit in the drawing column, so the panel beside it never moves with them', async () => {
+    await render();
+    const chips = container.querySelector('[role="group"][aria-label="Sheets"]') as HTMLElement;
+    expect(chips).not.toBeNull();
+    const drawing = container.querySelector('#' + CSS.escape(chips.nextElementSibling?.id ?? 'none'));
+    expect(drawing?.getAttribute('role')).toBe('tabpanel');
+    // The chips' column is not the one that holds the part panel.
+    expect(chips.parentElement!.contains(panel())).toBe(false);
+    expect(chips.parentElement!.parentElement!.contains(panel())).toBe(true);
+  });
+
   it('on a phone, a search from the open sheet keeps it open; a selection from outside collapses it', async () => {
     await render();
     await canvasReady();
@@ -1205,14 +1216,19 @@ describe('the tab strip stylesheet', () => {
   });
   it('gives the phone sheet an opaque base and draws each fact hairline unbroken', () => {
     const panelScss = readFileSync(join(__dirname, 'components', 'PartPanel.module.scss'), 'utf8');
-    const mobile = panelScss.slice(panelScss.indexOf('@include responsive($bp-mobile)'));
+    const mobile = panelScss.slice(panelScss.indexOf('@include responsive($bp-tablet)'));
     const sheet = mobile.slice(mobile.indexOf('.panel {'), mobile.indexOf('.peek {'));
     // The last background layer is a solid colour, not another translucent gradient.
     expect(sheet).toMatch(/background:[\s\S]*,\s*#f7f8fb;/);
     expect(panelScss).toMatch(/\.facts \{[^{}]*gap:\s*0;/);
   });
-  it('keeps the stage clear of the bottom sheet on a phone', () => {
-    const mobile = scss.slice(scss.indexOf('@include responsive($bp-mobile)'));
+  it('keeps the stage clear of the bottom sheet on a phone and a tablet', () => {
+    // The sheet (and the full-width stage) reaches up to $bp-tablet: a 296px
+    // rail at 820 left the stage 455px and the BOM table two columns.
+    const mobile = scss.slice(scss.indexOf('@include responsive($bp-tablet)'));
+    expect(mobile.slice(0, mobile.indexOf('@include responsive($bp-mobile)'))).toMatch(/\.stage \{[^{}]*flex-direction:\s*column/);
+    const panelScss = readFileSync(join(__dirname, 'components', 'PartPanel.module.scss'), 'utf8');
+    expect(panelScss).toMatch(/@include responsive\(\$bp-tablet\) \{\s*\.panel \{[^{}]*position:\s*fixed/);
     // `.loaded`'s min-height interpolates a variable (`#{…}`), so a brace-free
     // scan would stop short; read the rule up to the next selector instead.
     const loaded = mobile.slice(mobile.indexOf('.loaded {'));

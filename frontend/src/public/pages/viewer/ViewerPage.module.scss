@@ -186,6 +186,7 @@
 
 .chips {
   display: flex;
+  flex: 0 0 auto;
   flex-wrap: wrap;
   gap: 6px;
   margin-bottom: 10px;
@@ -278,16 +279,14 @@
   z-index: 50;
 }
 
-// The strip above the page is $nav-height-mobile (48px) here, not $nav-height
-// (36px), so the viewport left for the drawing is 12px smaller. Must come AFTER
+// Up to $bp-tablet the part panel is a fixed sheet along the bottom (see
+// PartPanel.module.scss): the stage takes the full width — a 296px rail beside
+// it left an 820px tablet a 455px stage and two columns of the BOM table. The
+// sheet's peek row is 52px and the stage keeps that much clear below itself,
+// so the drawing's Fit / + / − controls never sit under it. Must come AFTER
 // `.loaded` above: same specificity, source order decides (CLAUDE.md).
-//
-// The part panel is a fixed sheet along the bottom here; its peek row is 52px
-// and the stage keeps that much clear below itself, so the drawing's Fit / +
-// / − controls never sit under it.
-@include responsive($bp-mobile) {
+@include responsive($bp-tablet) {
   .loaded {
-    min-height: calc(100dvh - #{$nav-height-mobile});
     padding-bottom: 60px;
   }
 
@@ -301,6 +300,18 @@
     max-height: none;
     overflow: visible;
     border-radius: 0;
+  }
+
+  .toast {
+    bottom: 68px;
+  }
+}
+
+// The strip above the page is $nav-height-mobile (48px) here, not $nav-height
+// (36px), so the viewport left for the drawing is 12px smaller.
+@include responsive($bp-mobile) {
+  .loaded {
+    min-height: calc(100dvh - #{$nav-height-mobile});
   }
 
   .stripAction {
@@ -322,9 +333,5 @@
     padding: 0 6px;
     font-size: 0.82rem;
     text-align: center;
-  }
-
-  .toast {
-    bottom: 68px;
   }
 }
