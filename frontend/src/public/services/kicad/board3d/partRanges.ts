@@ -110,17 +110,22 @@ export function netRangesOf(nets: readonly NetRange[] | undefined, net: number |
 }
 
 /**
- * One draw range of a copper group that carries per-class opacity: which class
- * drew it (null where the group has no class table, or a gap in it) and whether
- * it is highlighted. The renderer maps each `(kind, highlighted)` pair to a
+ * One draw range of a group that carries per-class materials: which class drew
+ * it (null where the group has no class table, or a gap in it) and whether it
+ * is highlighted. The renderer maps each `(kind, highlighted)` pair to a
  * material; the slices tile `[0, totalIndices)` in order, every one non-empty,
  * and two neighbours never share both fields (they would have been one slice).
+ * The class kind is any string: the copper's tracks / pads / zones, or the
+ * bodies' opaque / glass runs the renderer derives from their families.
  */
-export interface ClassSlice { start: number; count: number; kind: ClassRange['kind'] | null; highlighted: boolean }
+export interface ClassSlice<K extends string = ClassRange['kind']> { start: number; count: number; kind: K | null; highlighted: boolean }
 
-export function classSlices(
-  classes: readonly ClassRange[] | undefined, highlight: readonly IndexRange[], totalIndices: number,
-): ClassSlice[] {
+/** Any class table: `ClassRange` is the copper's, with its three fixed kinds. */
+export interface KindRange<K extends string = string> extends IndexRange { kind: K }
+
+export function classSlices<K extends string = ClassRange['kind']>(
+  classes: readonly KindRange<K>[] | undefined, highlight: readonly IndexRange[], totalIndices: number,
+): ClassSlice<K>[] {
   const lifted = normalised(highlight, totalIndices);
   const byClass = (classes ?? [])
     .map((c) => ({ kind: c.kind, start: Math.max(0, c.start), end: Math.min(totalIndices, c.start + c.count) }))
@@ -132,7 +137,7 @@ export function classSlices(
   for (const h of lifted) cuts.add(h.start).add(h.start + h.count);
   const points = [...cuts].filter((p) => p >= 0 && p <= totalIndices).sort((a, b) => a - b);
 
-  const out: ClassSlice[] = [];
+  const out: ClassSlice<K>[] = [];
   let ci = 0, hi = 0;
   for (let i = 0; i + 1 < points.length; i++) {
     const start = points[i], end = points[i + 1];

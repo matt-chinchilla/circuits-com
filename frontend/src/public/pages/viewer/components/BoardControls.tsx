@@ -4,6 +4,7 @@
 // so the Board tab and the 3D tab can never disagree about what is hidden.
 import { useId, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import type { NetInfo } from '@public/components/kicad/canvasController';
+import { FAMILY_LEGEND, LEGEND } from '@public/components/kicad/board3d/board3dTheme';
 import { VIEW_MODES, setViewMode, useViewMode, viewModeOption } from '@public/components/kicad/board3d/viewMode';
 import {
   CLASSES_2D,
@@ -289,6 +290,40 @@ function ViewModeControl() {
   );
 }
 
+/**
+ * What the 3D board's colours mean (owner, 2026-09-22: "things just need to be
+ * clearly labeled"): a swatch and a name for each material the board is drawn
+ * in, then the body — named as the estimate it is — with the tint each family
+ * of part takes under it. Every swatch is the theme's own value, so the legend
+ * cannot drift from the drawing.
+ */
+function Legend() {
+  const id = useId();
+  return (
+    <section className={styles.legend} aria-labelledby={id}>
+      <h3 id={id} className={styles.legendHead}>
+        What the colours mean
+      </h3>
+      <ul className={styles.legendList}>
+        {LEGEND.map((item) => (
+          <li key={item.id} className={styles.legendRow} data-legend={item.id}>
+            <span className={styles.legendSwatch} style={{ background: item.css }} aria-hidden="true" />
+            <span className={styles.legendName}>{item.label}</span>
+          </li>
+        ))}
+      </ul>
+      <ul className={styles.legendFamilies} aria-label="Body colours by kind of part">
+        {FAMILY_LEGEND.map((item) => (
+          <li key={item.id} className={styles.legendRow} data-family={item.family}>
+            <span className={styles.legendSwatch} style={{ background: item.css }} aria-hidden="true" />
+            <span className={styles.legendName}>{item.label}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 export function ObjectsTab({ context, nets, view, onChange }: ObjectsTabProps) {
   const last = useRef(new Map<ObjectClass, number>()).current;
   const rows: readonly ClassRow<ObjectClass>[] = context === 'board' ? CLASSES_2D : CLASSES_3D;
@@ -300,6 +335,7 @@ export function ObjectsTab({ context, nets, view, onChange }: ObjectsTabProps) {
           <ClassControl key={row.kind} row={row} view={view} onChange={onChange} last={last} />
         ))}
       </ul>
+      {context === 'board3d' && <Legend />}
       <NetsList context={context} nets={nets} view={view} onChange={onChange} />
     </div>
   );

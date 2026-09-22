@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MeshBuilder, triangulate } from './tessellate';
+import { EDGE_CORNER_DEG, MeshBuilder, triangulate } from './tessellate';
 
 const sq = (s: number, cx = 0, cy = 0) => ({ pts: [{ x: cx - s, y: cy - s }, { x: cx + s, y: cy - s }, { x: cx + s, y: cy + s }, { x: cx - s, y: cy + s }] });
 
@@ -51,5 +51,47 @@ describe('MeshBuilder', () => {
       if (g.positions[3 * i] === -9 && g.normals[3 * i + 2] === 0 && g.normals[3 * i] < -0.99) inward = true;
     }
     expect(inward).toBe(true);
+  });
+});
+
+describe('addPrismEdges', () => {
+  it('draws the outer ring and one corner per vertex, in model space, and puts them on the group', () => {
+    const b = new MeshBuilder(true, { x: 10, y: 10 });
+    const ring = { pts: [{ x: 10, y: 10 }, { x: 12, y: 10 }, { x: 12, y: 11 }, { x: 10, y: 11 }] };
+    expect(b.addPrismEdges(ring, 1, 2)).toBe(8);
+    const g = b.build('body', null);
+    expect(g.edges).toBeInstanceOf(Float32Array);
+    expect(g.edges!.length).toBe(8 * 6);
+    // First segment: the top edge from (10,10) to (12,10) → model (0,0,2)→(2,0,2); y flipped, centre subtracted.
+    expect([...g.edges!.slice(0, 6)]).toEqual([0, -0, 2, 2, -0, 2].map((n) => n));
+    // Second: the corner at (10,10) from base to outer.
+    expect([...g.edges!.slice(6, 12)]).toEqual([0, -0, 1, 0, -0, 2]);
+    // A base BELOW the outer face (a bottom-side body) is drawn the same way round.
+    const c = new MeshBuilder(true);
+    c.addPrismEdges(ring, -0.1, -1.2);
+    expect(c.edges[2]).toBe(-1.2);
+    expect(c.edges[8]).toBe(-0.1);
+    expect(c.edges[11]).toBe(-1.2);
+  });
+  it('drops zero-length edges and rings that are not a polygon; a group with none has no edges field', () => {
+    const b = new MeshBuilder(false);
+    expect(b.addPrismEdges({ pts: [{ x: 0, y: 0 }, { x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }] }, 0, 1)).toBe(6);
+    expect(b.addPrismEdges({ pts: [{ x: 0, y: 0 }, { x: 1, y: 0 }] }, 0, 1)).toBe(0);
+    const empty = new MeshBuilder(false).build('silk', 'F.SilkS');
+    expect(empty.edges).toBeUndefined();
+    expect('edges' in empty).toBe(false);
+  });
+  it('a round courtyard gets its rim and no verticals; a chamfered box gets a vertical at every real corner', () => {
+    const circle = { pts: Array.from({ length: 48 }, (_, i) => ({ x: Math.cos((i / 48) * 2 * Math.PI), y: Math.sin((i / 48) * 2 * Math.PI) })) };
+    const b = new MeshBuilder(false);
+    expect(b.addPrismEdges(circle, 0, 1)).toBe(48);
+    // An octagon turns 45° at each vertex: eight rim edges and eight corners.
+    const octagon = { pts: Array.from({ length: 8 }, (_, i) => ({ x: Math.cos((i / 8) * 2 * Math.PI), y: Math.sin((i / 8) * 2 * Math.PI) })) };
+    const c = new MeshBuilder(false);
+    expect(c.addPrismEdges(octagon, 0, 1)).toBe(16);
+    // A point on a straight run (a rectangle with a midpoint) is not a corner.
+    const d = new MeshBuilder(false);
+    expect(d.addPrismEdges({ pts: [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 2, y: 0 }, { x: 2, y: 1 }, { x: 0, y: 1 }] }, 0, 1)).toBe(5 + 4);
+    expect(EDGE_CORNER_DEG).toBe(25);
   });
 });

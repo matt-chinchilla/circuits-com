@@ -15,10 +15,11 @@
 import type { BoardScene, ClassRange, Material, MeshGroup, PartRange, Quality } from '@public/services/kicad/board3d/types';
 import { fitDistance as fitDistanceFor, type Box3Like } from '@public/services/kicad/board3d/framing';
 import {
-  classSlices, highlightSlices, netRangesOf, partAtFace, type IndexRange,
+  classSlices, highlightSlices, netRangesOf, partAtFace, type IndexRange, type KindRange,
 } from '@public/services/kicad/board3d/partRanges';
 import {
-  BACKGROUND, CAMERA, FLIP_MS, LIGHTS, MATERIALS, ORBIT, VIEW_MODE_LOOK, highlightSpecFor, type MaterialSpec,
+  BACKGROUND, BODY_EDGE, BODY_OPAQUE, CAMERA, ENVIRONMENT, FAMILY_TINTS, FLIP_MS, LIGHTS, MATERIALS, ORBIT,
+  VIEW_MODE_LOOK, highlightSpecFor, shade, type FamilyTint, type MaterialSpec,
 } from './board3dTheme';
 import { DEFAULT_VIEW_MODE, type ViewMode } from './viewMode';
 
@@ -27,6 +28,7 @@ import { DEFAULT_VIEW_MODE, type ViewMode } from './viewMode';
 // import that a bundler could follow into the entry chunk.
 type Three = typeof import('three');
 type OrbitModule = typeof import('three/examples/jsm/controls/OrbitControls.js');
+type RoomModule = typeof import('three/examples/jsm/environments/RoomEnvironment.js');
 
 export type ViewName = 'top' | 'bottom' | 'reset';
 
@@ -151,6 +153,71 @@ const aspectOf = (el: HTMLElement) => Math.max(1, el.clientWidth) / Math.max(1, 
 const ease = (t: number) => t * t * (3 - 2 * t);
 
 type StandardMaterial = InstanceType<Three['MeshStandardMaterial']>;
+type LineMaterial = InstanceType<Three['LineBasicMaterial']>;
+
+/** A body's run of indices drawn opaque (an IC, a chip, a housing) or as
+ *  glass (an LED, an unplaced part) — the two body materials. */
+type BodyClass = 'opaque' | 'glass';
+
+/**
+ * The body group's parts as runs of one body material. `buildScene` draws
+ * the bodies in family order, so on a real board this is two runs; a group
+ * with no families (a scene built before they existed, a test's fake) is one
+ * glass run, which is exactly how it drew before.
+ */
+function bodyClassRanges(parts: readonly PartRange[] | undefined): KindRange<BodyClass>[] {
+  const out: KindRange<BodyClass>[] = [];
+  for (const part of parts ?? []) {
+    const kind: BodyClass = FAMILY_TINTS[part.family ?? 'other'].glass ? 'glass' : 'opaque';
+    const last = out.length > 0 ? out[out.length - 1] : null;
+    if (last != null && last.kind === kind && last.start + last.count === part.start) last.count += part.count;
+    else out.push({ kind, start: part.start, count: part.count });
+  }
+  return out;
+}
+
+/**
+ * One colour per vertex of the body group: the family's tint on the walls and
+ * a lighter one on the caps (an IC's marked top face), so a black box reads as
+ * a package. Written through `Color` so the hex is converted to linear light
+ * the way a material's own colour is — a raw sRGB fraction in the attribute
+ * would draw every body washed out. A vertex no range names (a group with no
+ * families) takes the smoked-glass tint the bodies always had.
+ */
+function bodyColors(T: Three, group: MeshGroup): Float32Array {
+  const colors = new Float32Array(group.positions.length);
+  const paint = (start: number, count: number, tint: FamilyTint) => {
+    const wall = new T.Color(tint.color), cap = new T.Color(shade(tint.color, tint.capShade));
+    for (let i = start; i < start + count; i++) {
+      const v = group.indices[i];
+      const c = Math.abs(group.normals[v * 3 + 2]) > 0.5 ? cap : wall;
+      colors[v * 3] = c.r;
+      colors[v * 3 + 1] = c.g;
+      colors[v * 3 + 2] = c.b;
+    }
+  };
+  paint(0, group.indices.length, FAMILY_TINTS.other);
+  for (const part of group.parts ?? []) if (part.family != null) paint(part.start, part.count, FAMILY_TINTS[part.family]);
+  return colors;
+}
+
+/**
+ * The room the materials reflect, as a prefiltered environment map. Null when
+ * the renderer cannot make one (a context without float render targets, a
+ * fake in a test): the board then draws by its two lights alone, matte but
+ * complete — an environment is a finish, never a dependency.
+ */
+function buildEnvironment(T: Three, Room: RoomModule['RoomEnvironment'], renderer: InstanceType<Three['WebGLRenderer']>) {
+  try {
+    const pmrem = new T.PMREMGenerator(renderer);
+    const room = new Room();
+    const texture = pmrem.fromScene(room, ENVIRONMENT.blur).texture;
+    pmrem.dispose();
+    return texture;
+  } catch {
+    return null;
+  }
+}
 
 /** A material at `factor` of its theme look, under a `cap` (the view mode's):
  *  1 and 1 is the theme exactly, a factor of 0 is not drawn. Anything below
@@ -177,20 +244,42 @@ export function createSceneRenderer(options: SceneRendererOptions = {}): SceneRe
   let observer: ResizeObserver | null = null;
   const geometries: InstanceType<Three['BufferGeometry']>[] = [];
   /** EVERY material made, the per-class clones included: dispose frees this list. */
-  const materials: StandardMaterial[] = [];
+  const materials: (StandardMaterial | LineMaterial)[] = [];
+  let environment: InstanceType<Three['Texture']> | null = null;
   /** The meshes a reader can pick from: those whose group has a `parts` table
    *  (bodies at `full`, pads on every copper layer). */
   const parted: { mesh: InstanceType<Three['Mesh']>; parts: PartRange[] }[] = [];
+  /** A class of a mesh with a material of its own: the copper's tracks, pads
+   *  and zones (clones of the copper, so each can carry its own opacity) and
+   *  the bodies' opaque run. `own` says the class ALWAYS draws in its material
+   *  — the opaque bodies differ from the glass base in more than opacity — where
+   *  a copper class at full opacity falls back to the group's material, so an
+   *  untouched copper layer stays ONE draw call. */
+  interface DrawnClass {
+    kind: string;
+    index: number;
+    material: StandardMaterial;
+    spec: MaterialSpec;
+    /** The Objects-tab slider it fades under. */
+    opacityKind: ObjectClass3D;
+    /** The material whose view-mode cap it takes. */
+    capOf: Material;
+    own: boolean;
+  }
   /** Every mesh with what `applyView` needs to redraw it: its material array is
-   *  [own, highlight?, …one clone of the copper per class], and its draw groups
-   *  are recomputed from the view state on every change. */
+   *  [own, highlight?, …one per class], its class table (the copper's from the
+   *  scene, the bodies' from their families) and its draw groups, recomputed
+   *  from the view state on every change. */
   interface Drawn {
     mesh: InstanceType<Three['Mesh']>;
     group: MeshGroup;
     total: number;
     base: StandardMaterial;
     lit: StandardMaterial | null;
-    classes: { kind: CopperClass; index: number; material: StandardMaterial }[];
+    classes: DrawnClass[];
+    ranges: readonly KindRange[] | undefined;
+    /** The bodies' outline, drawn over them; shown and faded with them. */
+    edges: { lines: InstanceType<Three['LineSegments']>; material: LineMaterial } | null;
   }
   const drawn: Drawn[] = [];
   const hiddenLayers = new Set<string>();
@@ -316,7 +405,8 @@ export function createSceneRenderer(options: SceneRendererOptions = {}): SceneRe
     autoOrbit = false;
   };
 
-  function buildMesh(T: Three, group: MeshGroup): InstanceType<Three['Mesh']> {
+  /** The objects one group becomes: its mesh, and for the bodies their outline. */
+  function buildMesh(T: Three, group: MeshGroup): InstanceType<Three['Object3D']>[] {
     const geometry = new T.BufferGeometry();
     geometry.setAttribute('position', new T.BufferAttribute(group.positions, 3));
     geometry.setAttribute('normal', new T.BufferAttribute(group.normals, 3));
@@ -324,8 +414,14 @@ export function createSceneRenderer(options: SceneRendererOptions = {}): SceneRe
     geometry.computeBoundingSphere();
     const total = group.indices.length;
     const spec = MATERIALS[group.material];
-    // A spec is exactly MeshStandardMaterial parameters, so it is handed over whole.
-    const base = new T.MeshStandardMaterial({ ...spec });
+    const body = group.material === 'body';
+    // A spec is exactly MeshStandardMaterial parameters, so it is handed over
+    // whole. The bodies carry their tint per vertex, and their faces are pushed
+    // back a hair so the outline drawn over them wins the depth test.
+    const base = new T.MeshStandardMaterial(body
+      ? { ...spec, vertexColors: true, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 }
+      : { ...spec });
+    if (body) geometry.setAttribute('color', new T.BufferAttribute(bodyColors(T, group), 3));
     geometries.push(geometry);
     materials.push(base);
     // Every mesh draws through a material array, and which triangles use which
@@ -343,12 +439,29 @@ export function createSceneRenderer(options: SceneRendererOptions = {}): SceneRe
     // A copper group's tracks, pads and zones each get their own clone of the
     // copper, so each can carry its own opacity.
     const classes: Drawn['classes'] = [];
+    let ranges: Drawn['ranges'];
     if (group.material === 'copper' && group.classes != null) {
+      ranges = group.classes;
       for (const kind of COPPER_CLASSES) {
         if (!group.classes.some((c) => c.kind === kind)) continue;
         const material = base.clone();
         materials.push(material);
-        classes.push({ kind, index: array.length, material });
+        classes.push({ kind, index: array.length, material, spec: MATERIALS.copper, opacityKind: kind, capOf: 'copper', own: false });
+        array.push(material);
+      }
+    }
+    // The bodies: the opaque families in their own material, the glass ones in
+    // the base. Two runs on a real board (buildScene draws them in family
+    // order), so two draw calls.
+    if (body) {
+      const bodyRanges = bodyClassRanges(group.parts);
+      ranges = bodyRanges;
+      if (bodyRanges.some((r) => r.kind === 'opaque')) {
+        const material = new T.MeshStandardMaterial({
+          ...BODY_OPAQUE, vertexColors: true, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1,
+        });
+        materials.push(material);
+        classes.push({ kind: 'opaque', index: array.length, material, spec: BODY_OPAQUE, opacityKind: 'bodies', capOf: 'body', own: true });
         array.push(material);
       }
     }
@@ -356,12 +469,30 @@ export function createSceneRenderer(options: SceneRendererOptions = {}): SceneRe
     // Drawn whole until the first `applyView`, which runs before any frame.
     geometry.addGroup(0, total, 0);
     if (group.parts != null) parted.push({ mesh, parts: group.parts });
-    drawn.push({ mesh, group, total, base, lit, classes });
     mesh.name = `${group.material}/${group.layerName ?? ''}`;
     // Translucent bodies last, so they blend over the board rather than the board
     // being sorted over them.
     mesh.renderOrder = spec.transparent ? 1 : 0;
-    return mesh;
+    const out: InstanceType<Three['Object3D']>[] = [mesh];
+    // The bodies' outline: one line object for every body on the board, so a
+    // box has a rim and reads as an object. Over the bodies (renderOrder 2),
+    // and never a pick target.
+    let edges: Drawn['edges'] = null;
+    if (group.edges != null && group.edges.length > 0) {
+      const lineGeometry = new T.BufferGeometry();
+      lineGeometry.setAttribute('position', new T.BufferAttribute(group.edges, 3));
+      lineGeometry.computeBoundingSphere();
+      const material = new T.LineBasicMaterial({ color: BODY_EDGE.color, transparent: true, opacity: BODY_EDGE.opacity, depthWrite: false });
+      const lines = new T.LineSegments(lineGeometry, material);
+      lines.name = `${group.material}/edges`;
+      lines.renderOrder = 2;
+      geometries.push(lineGeometry);
+      materials.push(material);
+      edges = { lines, material };
+      out.push(lines);
+    }
+    drawn.push({ mesh, group, total, base, lit, classes, ranges, edges });
+    return out;
   }
 
   const opacityOf = (kind: ObjectClass3D): number => {
@@ -390,16 +521,23 @@ export function createSceneRenderer(options: SceneRendererOptions = {}): SceneRe
       const layerHidden = group.layerName != null && !NEVER_HIDDEN.has(group.material) && hiddenLayers.has(group.layerName);
       d.mesh.visible = !layerHidden && own > 0;
       if (kind != null) fade(d.base, MATERIALS[group.material], own, capOf(group.material));
+      if (d.edges != null) {
+        // The rim follows the bodies' slider but not the view mode's cap: a
+        // see-through body is exactly where its outline has to stay crisp.
+        d.edges.lines.visible = d.mesh.visible;
+        d.edges.material.opacity = BODY_EDGE.opacity * own;
+      }
 
       /** Each class's material index for this pass: null = not drawn (opacity
        *  0, and a highlight must not bring it back); 0 = the group's own
-       *  material, for a class at full opacity, so an untouched copper layer
-       *  stays ONE draw call and only a faded class pays for its own. */
-      const classMaterial = new Map<CopperClass, number | null>();
+       *  material, for a copper class at full opacity, so an untouched copper
+       *  layer stays ONE draw call and only a faded class pays for its own;
+       *  the class's own index when it must always draw in its material. */
+      const classMaterial = new Map<string, number | null>();
       for (const c of d.classes) {
-        const o = opacityOf(c.kind);
-        fade(c.material, MATERIALS.copper, o);
-        classMaterial.set(c.kind, o <= 0 ? null : o >= 1 ? 0 : c.index);
+        const o = opacityOf(c.opacityKind);
+        fade(c.material, c.spec, o, capOf(c.capOf));
+        classMaterial.set(c.kind, o <= 0 ? null : c.own || o < 1 ? c.index : 0);
       }
 
       const lit: IndexRange[] = [];
@@ -420,7 +558,7 @@ export function createSceneRenderer(options: SceneRendererOptions = {}): SceneRe
       geometry.clearGroups();
       let run: { start: number; count: number; materialIndex: number } | null = null;
       const flush = () => { if (run != null) geometry.addGroup(run.start, run.count, run.materialIndex); run = null; };
-      for (const slice of classSlices(group.classes, lit, d.total)) {
+      for (const slice of classSlices(d.ranges, lit, d.total)) {
         // A class with no material of its own (not present when the mesh was
         // built) draws in the group's; a hidden class (null) is left out.
         const own: number | null = slice.kind == null ? 0 : classMaterial.get(slice.kind) ?? (classMaterial.has(slice.kind) ? null : 0);
@@ -450,8 +588,10 @@ export function createSceneRenderer(options: SceneRendererOptions = {}): SceneRe
     const ndc = new T.Vector2(((x - rect.left) / rect.width) * 2 - 1, -((y - rect.top) / rect.height) * 2 + 1);
     const ray = new T.Raycaster();
     ray.setFromCamera(ndc, cam);
-    // A hidden layer neither draws nor stands in the way of a pick.
-    const hit = ray.intersectObjects(group.children.filter((c) => c.visible), false)[0];
+    // A hidden layer neither draws nor stands in the way of a pick, and the
+    // bodies' outline is a line: a ray near it would report the line, not
+    // the body under it, so only the meshes are cast against.
+    const hit = ray.intersectObjects(group.children.filter((c) => c.visible && (c as { isMesh?: boolean }).isMesh === true), false)[0];
     if (hit == null || hit.faceIndex == null) return null;
     const entry = parted.find((p) => p.mesh === hit.object);
     return entry == null ? null : partAtFace(entry.parts, hit.faceIndex);
@@ -514,9 +654,10 @@ export function createSceneRenderer(options: SceneRendererOptions = {}): SceneRe
       host = element;
       reducedMotion = options.reducedMotion ?? prefersReducedMotion();
       autoOrbit = !reducedMotion;
-      const [T, orbit] = await Promise.all([
+      const [T, orbit, room] = await Promise.all([
         import('three'),
         import('three/examples/jsm/controls/OrbitControls.js'),
+        import('three/examples/jsm/environments/RoomEnvironment.js'),
       ]);
       // dispose() can land while the two chunks are still in flight — leaving the
       // tab is exactly the moment a slow connection is noticed.
@@ -534,8 +675,15 @@ export function createSceneRenderer(options: SceneRendererOptions = {}): SceneRe
 
       scene = new T.Scene();
       scene.background = new T.Color(BACKGROUND);
+      // The room the copper and mask reflect: procedural, built once per
+      // mount, released with the rest (see `buildEnvironment`).
+      environment = buildEnvironment(T, room.RoomEnvironment, renderer);
+      if (environment != null) {
+        scene.environment = environment;
+        scene.environmentIntensity = ENVIRONMENT.intensity;
+      }
       model = new T.Group();
-      for (const group of board.groups) model.add(buildMesh(T, group));
+      for (const group of board.groups) for (const object of buildMesh(T, group)) model.add(object);
       scene.add(model);
 
       const width = board.bounds.max.x - board.bounds.min.x;
@@ -683,9 +831,10 @@ export function createSceneRenderer(options: SceneRendererOptions = {}): SceneRe
       controls = null;
       // The cheap, synchronous half: nothing above touches the GPU. The canvas
       // leaves the DOM now, so the tab the reader picked paints without it.
-      const gone = { renderer, geometries: geometries.slice(), materials: materials.slice() };
+      const gone = { renderer, geometries: geometries.slice(), materials: materials.slice(), environment };
       geometries.length = 0;
       materials.length = 0;
+      environment = null;
       parted.length = 0;
       drawn.length = 0;
       pickHandler = null;
@@ -711,6 +860,7 @@ export function createSceneRenderer(options: SceneRendererOptions = {}): SceneRe
         deferTeardown(() => {
           for (const geometry of gone.geometries) geometry.dispose();
           for (const material of gone.materials) material.dispose();
+          gone.environment?.dispose();
           gone.renderer?.forceContextLoss();
           gone.renderer?.dispose();
         });

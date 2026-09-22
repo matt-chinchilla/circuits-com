@@ -283,6 +283,23 @@ describe('Objects', () => {
     resetViewModeForTests();
     localStorage.clear();
   });
+
+  it('on the 3D tab names every colour the board is drawn in, the body as the estimate it is', async () => {
+    await render({ context: 'board3d' });
+    await click(tab('Objects'));
+    const legend = [...container.querySelectorAll('section')].find((s) => s.textContent?.includes('What the colours mean'))!;
+    expect(legend).not.toBeUndefined();
+    const rows = [...legend.querySelectorAll('li')].map((li) => li.textContent);
+    expect(rows.slice(0, 5)).toEqual(['Copper', 'Solder mask', 'Silkscreen', 'Holes', 'Body — estimated from the courtyard']);
+    expect(rows.slice(5)).toEqual(['Chip (IC)', 'Capacitor, resistor, inductor', 'Connector', 'LED', 'Other part']);
+    // Every row carries a swatch painted with the theme's own colour.
+    for (const li of legend.querySelectorAll('li')) {
+      const swatch = li.querySelector('[aria-hidden="true"]') as HTMLElement;
+      expect(swatch.style.background).not.toBe('');
+    }
+    await render({ context: 'board' });
+    expect(container.textContent).not.toContain('What the colours mean');
+  });
 });
 
 describe('Nets', () => {

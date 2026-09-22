@@ -7,7 +7,15 @@ import { place, signedArea } from './geom';
 import { chainLoops, orient, shapePolylines } from './outline';
 import type { BoardModel, FootprintModel, Ring, Side } from './types';
 
-export interface Courtyard { ref: string; ring: Ring; heightMm: number; side: Side; areaMm2: number }
+export interface Courtyard {
+  ref: string;
+  /** The footprint's library id, for the family its body is tinted by. */
+  lib: string;
+  ring: Ring;
+  heightMm: number;
+  side: Side;
+  areaMm2: number;
+}
 
 /** Body height from courtyard area, and nothing else. An 0402 (1.7 mm²) and a
  *  QFN-48 (81 mm²) sit 0.6 and 3.2 mm tall — the right ORDER for a board that
@@ -49,7 +57,9 @@ export function courtyardOf(fp: FootprintModel, tolMm: number): Courtyard | null
     if (area > bestArea) { best = loop; bestArea = area; }
   }
   if (best == null || bestArea <= 0) return null;
-  return { ref: fp.ref, ring: { pts: orient(best.pts, 'outer') }, heightMm: estimateHeightMm(bestArea), side: fp.place.side, areaMm2: bestArea };
+  return {
+    ref: fp.ref, lib: fp.lib, ring: { pts: orient(best.pts, 'outer') }, heightMm: estimateHeightMm(bestArea), side: fp.place.side, areaMm2: bestArea,
+  };
 }
 
 export function courtyards(model: BoardModel, tolMm: number): { bodies: Courtyard[]; missing: number } {

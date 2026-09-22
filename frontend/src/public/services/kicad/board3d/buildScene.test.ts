@@ -42,6 +42,35 @@ describe('buildScene — Glasgow', () => {
       expect(max, `${g.material}/${g.layerName} index range`).toBeLessThan(g.positions.length / 3);
     }
   });
+  it('stamps every body with its family, draws them in family order, and gives the group its outline edges', () => {
+    const body = s.groups.find((g) => g.material === 'body')!;
+    const parts = body.parts!;
+    expect(parts.length).toBeGreaterThan(250);
+    for (const p of parts) expect(p.family, p.ref).toBeDefined();
+    // Family order: every opaque family before every glass one, so the
+    // renderer's two body materials are two contiguous runs.
+    const order = ['ic', 'passive', 'connector', 'led', 'other'];
+    const ranks = parts.map((p) => order.indexOf(p.family!));
+    for (let i = 1; i < ranks.length; i++) expect(ranks[i]).toBeGreaterThanOrEqual(ranks[i - 1]);
+    // …and still ascending by start, which the pick's binary search relies on.
+    for (let i = 1; i < parts.length; i++) expect(parts[i].start).toBe(parts[i - 1].start + parts[i - 1].count);
+    expect(parts.find((p) => p.ref === 'J5')?.family).toBe('connector');
+    expect(parts.filter((p) => p.family === 'led')).toHaveLength(12);
+    // Edges: at least the four rim edges of every body (a box has four, an arc
+    // many more) plus its corners, six floats each; no other group carries any.
+    expect(body.edges).toBeInstanceOf(Float32Array);
+    expect(body.edges!.length % 6).toBe(0);
+    expect(body.edges!.length / 6).toBeGreaterThan(parts.length * 4 - 1);
+    for (const g of s.groups) if (g.material !== 'body') expect(g.edges).toBeUndefined();
+    // The edges live in the same model space as the bodies' vertices.
+    let minZ = Infinity, maxZ = -Infinity;
+    for (let i = 2; i < body.edges!.length; i += 3) { minZ = Math.min(minZ, body.edges![i]); maxZ = Math.max(maxZ, body.edges![i]); }
+    let vMin = Infinity, vMax = -Infinity;
+    for (let i = 2; i < body.positions.length; i += 3) { vMin = Math.min(vMin, body.positions[i]); vMax = Math.max(vMax, body.positions[i]); }
+    expect(minZ).toBeGreaterThanOrEqual(vMin - 1e-6);
+    expect(maxZ).toBeLessThanOrEqual(vMax + 1e-6);
+    expect(transferList(s)).toContain(body.edges!.buffer);
+  });
   it('is centred on the origin with y flipped', () => {
     const sub = s.groups.find((g) => g.material === 'substrate')!;
     let minX = Infinity, maxX = -Infinity;
@@ -95,8 +124,9 @@ describe('buildScene — Glasgow', () => {
     // 172 of the 272 footprints have a pad on F.Cu; the rest are back-side parts.
     expect(r.groups.find((g) => g.material === 'copper' && g.layerName === 'F.Cu')!.parts).toHaveLength(172);
   });
-  it('transferList lists every buffer once', () => {
-    expect(transferList(s)).toHaveLength(s.groups.length * 3);
+  it('transferList lists every buffer once, the bodies\' edges included', () => {
+    expect(transferList(s)).toHaveLength(s.groups.length * 3 + s.groups.filter((g) => g.edges != null).length);
+    expect(new Set(transferList(s)).size).toBe(transferList(s).length);
   });
 });
 

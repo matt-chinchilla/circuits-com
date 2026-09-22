@@ -14,6 +14,7 @@ import { zLadder } from './layers';
 import { boardOutline, shapePolylines } from './outline';
 import { ringContains, ringsOverlap } from './overlap';
 import { drillRing, placedPadRing } from './pads';
+import { PART_FAMILIES, partFamily } from './partFamily';
 import { circleRing, strokePolygon } from './strokes';
 import { readBoardModel } from './readBoardModel';
 import { MeshBuilder } from './tessellate';
@@ -312,12 +313,16 @@ function buildSceneFromModel(
   };
   /** Run `draw` and record which slice of the builder's indices it produced for
    *  `ref` — a picker's map from a hit triangle back to a footprint. An empty
-   *  slice (a footprint with no pads on this layer) records nothing. */
-  const ranged = (b: MeshBuilder, parts: PartRange[], ref: string, draw: () => void): void => {
+   *  slice (a footprint with no pads on this layer) records nothing and
+   *  answers null. */
+  const ranged = (b: MeshBuilder, parts: PartRange[], ref: string, draw: () => void): PartRange | null => {
     const start = b.indices.length;
     draw();
     const count = b.indices.length - start;
-    if (count > 0) parts.push({ ref, start, count });
+    if (count === 0) return null;
+    const range: PartRange = { ref, start, count };
+    parts.push(range);
+    return range;
   };
   /** The same for a copper class: one range per class that drew anything. */
   const classed = (b: MeshBuilder, classes: ClassRange[], kind: ClassRange['kind'], draw: () => void): void => {
@@ -461,13 +466,23 @@ function buildSceneFromModel(
   // — nothing was simplified, because nothing was attempted.
   if (quality === 'full') {
     const { bodies, missing } = courtyards(model, tol);
+    // Drawn in FAMILY order (stable, so a family keeps its file order): every
+    // body of one family is then one contiguous run of the group's indices,
+    // and the renderer, which draws the opaque families in one material and
+    // the glass ones in another, gets two draw ranges rather than one per part.
+    const rank = new Map(PART_FAMILIES.map((f, i) => [f, i]));
+    const tinted = bodies.map((body) => ({ body, family: partFamily(body.lib, body.ref) }));
+    tinted.sort((a, b) => (rank.get(a.family) ?? 0) - (rank.get(b.family) ?? 0));
     const bodyMesh = builder();
     const bodyParts: PartRange[] = [];
-    for (const body of bodies) {
+    for (const { body, family } of tinted) {
       const base = maskZ[body.side];
-      ranged(bodyMesh, bodyParts, body.ref, () => {
-        bodyMesh.addPrism({ outer: body.ring, holes: [] }, base, body.side === 'F' ? base + body.heightMm : base - body.heightMm);
+      const outer = body.side === 'F' ? base + body.heightMm : base - body.heightMm;
+      const range = ranged(bodyMesh, bodyParts, body.ref, () => {
+        bodyMesh.addPrism({ outer: body.ring, holes: [] }, base, outer);
+        bodyMesh.addPrismEdges(body.ring, base, outer);
       });
+      if (range != null) range.family = family;
     }
     emit(bodyMesh, 'body', null, { parts: bodyParts });
     if (missing > 0) warnings.push({ kind: 'no-courtyard', count: missing });
@@ -502,6 +517,7 @@ export function transferList(scene: BoardScene): ArrayBuffer[] {
   const out: ArrayBuffer[] = [];
   for (const g of scene.groups) {
     out.push(g.positions.buffer as ArrayBuffer, g.normals.buffer as ArrayBuffer, g.indices.buffer as ArrayBuffer);
+    if (g.edges != null) out.push(g.edges.buffer as ArrayBuffer);
   }
   return out;
 }

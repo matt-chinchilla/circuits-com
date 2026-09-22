@@ -25,10 +25,26 @@ export function triangulate(poly: PolygonWithHoles): { verts: Float64Array; tris
   return { verts: new Float64Array(flat), tris: new Uint32Array(earcut(flat, holeIndices, 2)) };
 }
 
+/** A vertex is a corner — and gets a vertical edge line — when the outline
+ *  turns by more than this at it. A rectangle turns 90° at each corner; a
+ *  courtyard arc flattened at 0.01 mm turns a few degrees per vertex. */
+export const EDGE_CORNER_DEG = 25;
+
+/** The turn at `b` between the edges a→b and b→c, in degrees, 0 for straight on. */
+function turnDeg(a: Vec2, b: Vec2, c: Vec2): number {
+  const ux = b.x - a.x, uy = b.y - a.y, vx = c.x - b.x, vy = c.y - b.y;
+  const lu = Math.hypot(ux, uy), lv = Math.hypot(vx, vy);
+  if (lu < 1e-12 || lv < 1e-12) return 0;
+  const cos = Math.max(-1, Math.min(1, (ux * vx + uy * vy) / (lu * lv)));
+  return (Math.acos(cos) * 180) / Math.PI;
+}
+
 export class MeshBuilder {
   positions: number[] = [];
   normals: number[] = [];
   indices: number[] = [];
+  /** Line segments, six floats each (`MeshGroup.edges`); empty for most groups. */
+  edges: number[] = [];
 
   private readonly sy: number;
   private readonly cx: number;
@@ -124,13 +140,56 @@ export class MeshBuilder {
     return count;
   }
 
+  /**
+   * The outline of a prism as line segments: the ring at its OUTER face
+   * (`zOuter`, the face away from the board) and one vertical at each CORNER
+   * down to `zBase` — a vertex where the ring turns by more than
+   * `EDGE_CORNER_DEG`, so a box gets its four corners and a round courtyard
+   * (a flattened arc of many small turns) gets none, and draws as a drum with
+   * a rim rather than a cage of verticals. The base ring is left out — it lies
+   * on the board's own surface, where a line would fight the mask for the same
+   * pixels and say nothing the mask's opening does not. Zero-length edges are
+   * dropped, as `addWalls` drops them. Returns the number of segments added.
+   */
+  addPrismEdges(ring: Ring, zBase: number, zOuter: number): number {
+    const raw = ring.pts;
+    if (raw.length < 3) return 0;
+    // Zero-length edges first, so a repeated point neither draws nor counts
+    // as a turn.
+    const model: Vec2[] = [];
+    for (const p of raw) {
+      const m = this.toModel(p.x, p.y);
+      const last = model.length > 0 ? model[model.length - 1] : null;
+      if (last == null || Math.hypot(m.x - last.x, m.y - last.y) >= 1e-12) model.push(m);
+    }
+    if (model.length > 1) {
+      const first = model[0], last = model[model.length - 1];
+      if (Math.hypot(first.x - last.x, first.y - last.y) < 1e-12) model.pop();
+    }
+    if (model.length < 3) return 0;
+    const n = model.length;
+    let count = 0;
+    for (let i = 0; i < n; i++) {
+      const prev = model[(i + n - 1) % n], a = model[i], b = model[(i + 1) % n];
+      this.edges.push(a.x, a.y, zOuter, b.x, b.y, zOuter);
+      count++;
+      if (turnDeg(prev, a, b) > EDGE_CORNER_DEG) {
+        this.edges.push(a.x, a.y, zBase, a.x, a.y, zOuter);
+        count++;
+      }
+    }
+    return count;
+  }
+
   build(material: Material, layerName: string | null): MeshGroup {
-    return {
+    const group: MeshGroup = {
       material,
       layerName,
       positions: new Float32Array(this.positions),
       normals: new Float32Array(this.normals),
       indices: new Uint32Array(this.indices),
     };
+    if (this.edges.length > 0) group.edges = new Float32Array(this.edges);
+    return group;
   }
 }

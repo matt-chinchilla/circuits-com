@@ -2,6 +2,8 @@
 // under board3d/ speaks these types and nothing else: no DOM, no three.js, no
 // KiCanvas. Coordinates are KiCad millimetres, y-DOWN, exactly as the file states
 // them; buildScene flips y once at the very end.
+import type { PartFamily } from './partFamily';
+
 export interface Vec2 { x: number; y: number }
 export interface Ring { pts: Vec2[] }                       // closed; last point NOT repeated
 export interface PolygonWithHoles { outer: Ring; holes: Ring[] }
@@ -55,7 +57,14 @@ export type Material = 'substrate' | 'copper' | 'mask' | 'silk' | 'body' | 'hole
 /** The slice of a group's `indices` that belongs to one footprint: `start` is an
  *  offset INTO `indices` (not a triangle number), `count` is how many indices —
  *  always a multiple of 3. Ranges are contiguous and ascending by construction. */
-export interface PartRange { ref: string; start: number; count: number }
+export interface PartRange {
+  ref: string;
+  start: number;
+  count: number;
+  /** Body groups only: what kind of part the body stands for, read from the
+   *  footprint's name (`partFamily.ts`). The renderer tints the body by it. */
+  family?: PartFamily;
+}
 /** The slice of a COPPER group's `indices` one class of copper draws. Same units
  *  as `PartRange` — `start` an offset into `indices`, `count` a multiple of 3 —
  *  so one set of slicing helpers (`partRanges.ts`) serves parts, classes and
@@ -77,6 +86,11 @@ export interface MeshGroup {
   classes?: ClassRange[];
   /** Copper groups only: which net drew each triangle (absent when none did). */
   nets?: NetRange[];
+  /** Body groups only: the bodies' outline edges — each body's top ring and
+   *  its vertical corners — as line SEGMENTS, six floats (two xyz) each, in the
+   *  same model space as `positions`. Drawn as one line object over the
+   *  bodies, so a box reads as an object; absent when no body was drawn. */
+  edges?: Float32Array;
 }
 export interface BoardScene {
   bounds: { min: Vec2; max: Vec2 }; thicknessMm: number | null; groups: MeshGroup[]; warnings: BoardWarning[];
