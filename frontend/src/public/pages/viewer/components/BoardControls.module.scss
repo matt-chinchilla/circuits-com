@@ -44,7 +44,7 @@ $row-fine: 36px;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 6px;
 }
 
 // Top / Bottom / Both as ONE control: the page's recessed track at the
@@ -64,7 +64,7 @@ $row-fine: 36px;
 .segBtn {
   position: relative;
   min-height: 30px;
-  padding: 0 10px;
+  padding: 0 9px;
   font-family: $font-body;
   font-size: 0.8rem;
   font-weight: 520;
@@ -102,7 +102,7 @@ $row-fine: 36px;
   @include bom-glass-control;
   position: relative;
   min-height: 32px;
-  padding: 0 10px;
+  padding: 0 9px;
   font-size: 0.8rem;
   line-height: 1;
   border-radius: 9px;
@@ -192,8 +192,18 @@ $row-fine: 36px;
   color: $ink-3;
 }
 
-// The layers under a group, indented one step so the tree reads as a tree.
 .list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+// The layers under a group: the same list, indented one step so the tree
+// reads as a tree. Its own class, because `.list` is also the Objects list,
+// which must keep its full width for the slider.
+.layers {
   display: flex;
   flex-direction: column;
   margin: 0;
@@ -298,17 +308,26 @@ $row-fine: 36px;
 
 // ─── One object class ─────────────────────────────────────────────────────
 
+// The row reads left to right as Altium's does: the box, the class's glyph,
+// its name, then the opacity slider and its figure. The glyph takes the
+// row's ink, so a hidden class dims glyph and name together.
 .classRow {
   display: grid;
-  grid-template-columns: 44px minmax(0, 5.5em) minmax(0, 1fr) 3em;
+  grid-template-columns: 44px 20px minmax(0, 1fr) minmax(64px, 88px) 2.6em;
   align-items: center;
   column-gap: 6px;
-  min-height: 44px;
+  min-height: $row;
   border-bottom: 1px solid $hair;
 
-  &[data-hidden] .className {
+  &[data-hidden] .className,
+  &[data-hidden] .glyph {
     color: $ink-3;
   }
+}
+
+.glyph {
+  display: block;
+  color: $ink-2;
 }
 
 .className {

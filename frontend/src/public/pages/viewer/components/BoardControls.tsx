@@ -24,6 +24,7 @@ import {
   type PanelLayer,
   type SideFilter,
 } from '../boardView';
+import ObjectGlyph from './ObjectGlyph';
 import styles from './BoardControls.module.scss';
 
 export type BoardContext = 'board' | 'board3d';
@@ -155,7 +156,7 @@ function LayerGroupRows({ group, listId, context, view, onChange, open, onToggle
         </button>
       </div>
       {open && (
-        <ul id={listId} className={styles.list} aria-label={group.label}>
+        <ul id={listId} className={styles.layers} aria-label={group.label}>
           {group.layers.map((layer) => {
             const inert = context === 'board3d' && !drawnIn3D(layer.name);
             const visible = !view.hiddenLayers.has(layer.name);
@@ -227,6 +228,7 @@ function ClassControl({ row, view, onChange, last }: {
           }}
         />
       </label>
+      <ObjectGlyph kind={row.kind} className={styles.glyph} />
       <label className={styles.className} htmlFor={id}>
         {row.label}
       </label>

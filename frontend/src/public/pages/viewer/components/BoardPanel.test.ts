@@ -235,6 +235,22 @@ describe('Objects', () => {
     expect(state.opacity.zones).toBeUndefined();
   });
 
+  it('draws a glyph before every class name, in the row’s own ink', async () => {
+    await render({ context: 'board' });
+    await click(tab('Objects'));
+    const rows = [...container.querySelectorAll('ul[aria-label="Objects"] li')];
+    expect(rows.length).toBe(7);
+    for (const row of rows) {
+      const svg = row.querySelector('svg[data-glyph]')!;
+      expect(svg).not.toBeNull();
+      expect(svg.getAttribute('aria-hidden')).toBe('true');
+      // The glyph comes BEFORE the name, as Altium lists them.
+      const label = row.querySelector('label[for]')!;
+      expect(svg.compareDocumentPosition(label) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    }
+    expect(rows.map((r) => r.querySelector('svg')?.getAttribute('data-glyph'))).toEqual(['tracks', 'vias', 'pads', 'holes', 'zones', 'grid', 'page']);
+  });
+
   it('shows the 2D classes on the Board tab and the 3D classes on the 3D tab', async () => {
     await render({ context: 'board' });
     await click(tab('Objects'));
