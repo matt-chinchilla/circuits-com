@@ -27,6 +27,8 @@ type AnyProps = Record<string, never> & Record<string, unknown>;
 
 let hash = '';
 let session: unknown = null;
+/** What the intake's drop opens next. */
+let reopen: () => unknown = () => makeSession();
 
 /** What the canvas host was last rendered with, and the handle it exposes.
  *  `unrenderable` is what the stubbed renderer reports at mount. */
@@ -42,7 +44,23 @@ const canvas = {
   selectRef: vi.fn(async (_ref: string | null, _sheet?: string, _view?: string) => 'focused' as const),
   /** The page's `onSelection` handler, so a test can play a click on the drawing. */
   onSelection: null as ((s: { ref: string | null; sheet?: string; view?: string }) => void) | null,
+  /** The page's `onLayers` handler, so a test can play the board's `layers` event. */
+  onLayers: null as ((layers: FakeLayer[]) => void) | null,
+  /** The board as the fake renderer holds it: [] while no board is on screen. */
+  board: [] as FakeLayer[],
+  nets: [] as { number: number; name: string }[],
+  setLayerVisible: vi.fn((name: string, visible: boolean) => {
+    const layer = canvas.board.find((l) => l.name === name);
+    if (layer != null) layer.visible = visible;
+  }),
+  highlightLayer: vi.fn((name: string | null) => {
+    for (const l of canvas.board) l.highlighted = l.name === name;
+  }),
+  setObjectOpacity: vi.fn(),
+  highlightNet: vi.fn(),
 };
+
+interface FakeLayer { name: string; kind: string; side: string | null; color: string; visible: boolean; highlighted: boolean }
 
 /** Every (parsed, viewerHref) pair the page has handed the workbench, in order
  *  — the record that proves "one match per project". */
@@ -89,7 +107,19 @@ vi.mock('@public/components/kicad/DesignCanvas', () => ({
     canvas.activeSheet = props.activeSheet as string | undefined;
     canvas.onState = props.onState as (s: string) => void;
     canvas.onSelection = props.onSelection as typeof canvas.onSelection;
-    useImperativeHandle(ref, () => ({ focusRef: canvas.focusRef, selectRef: canvas.selectRef, zoom: async () => true }), []);
+    canvas.onLayers = props.onLayers as typeof canvas.onLayers;
+    useImperativeHandle(ref, () => ({
+      focusRef: canvas.focusRef,
+      selectRef: canvas.selectRef,
+      zoom: async () => true,
+      hasBoardControls: () => true,
+      layers: () => canvas.board.map((l) => ({ ...l })),
+      setLayerVisible: canvas.setLayerVisible,
+      highlightLayer: canvas.highlightLayer,
+      setObjectOpacity: canvas.setObjectOpacity,
+      nets: () => canvas.nets,
+      highlightNet: canvas.highlightNet,
+    }), []);
     // The real host reports in its MOUNT effect, before the renderer bundle is
     // fetched — an effect here, not a render-body call, for the same reason:
     // it is a parent setState.
@@ -105,9 +135,11 @@ vi.mock('@public/components/kicad/DesignCanvas', () => ({
 }));
 /** The 3D host, stubbed for the same reason the canvas is: the contract this
  *  file tests is WHEN the page mounts it, not what three.js draws. */
+/** What the 3D host was last rendered with — the Board panel state rides its props. */
+const board3d = { props: null as AnyProps | null };
 vi.mock('@public/components/kicad/board3d/Board3DView', () => ({
   default: (props: AnyProps) =>
-    createElement(
+    (board3d.props = props) && createElement(
       'div',
       { 'data-testid': 'board3d', 'data-selected': (props.selectedRef as string | null) ?? '' },
       // A stand-in for a pick on the 3D board.
@@ -186,7 +218,7 @@ vi.mock('@public/services/designSession', () => ({
     session = null;
   },
   openDesign: () => {
-    session = makeSession();
+    session = reopen();
     return session;
   },
 }));
@@ -207,7 +239,10 @@ const BOARD_TEXT = `(kicad_pcb (version 20221018)
     (layer "dielectric 1" (type "core") (thickness 1.53))
     (layer "B.Cu" (type "copper") (thickness 0.035))
     (copper_finish "None")))
-  (via (at 1 1) (size 0.6) (drill 0.3) (layers "F.Cu" "B.Cu"))
+  (net 0 "")
+  (net 1 "GND")
+  (net 2 "/SDA")
+  (via (at 1 1) (size 0.6) (drill 0.3) (layers "F.Cu" "B.Cu") (net 1))
 )`;
 
 /**
@@ -364,6 +399,7 @@ function chips(): HTMLButtonElement[] {
 beforeEach(() => {
   hash = '';
   session = makeSession();
+  reopen = () => makeSession();
   wbCalls.length = 0;
   wb.rows = [];
   wb.matching = false;
@@ -376,6 +412,13 @@ beforeEach(() => {
   canvas.selectRef.mockClear();
   canvas.selectRef.mockResolvedValue('focused');
   canvas.activeSheet = undefined;
+  canvas.board = [];
+  canvas.nets = [];
+  canvas.setLayerVisible.mockClear();
+  canvas.highlightLayer.mockClear();
+  canvas.setObjectOpacity.mockClear();
+  canvas.highlightNet.mockClear();
+  board3d.props = null;
   readStackupCalls.mockClear();
   readPlacementsCalls.mockClear();
   wb.reset.mockClear();
@@ -1003,7 +1046,7 @@ describe('the tablist contract', () => {
 
 // The part panel — one selection for the page, whichever door it came through.
 describe('the part panel', () => {
-  const panel = () => container.querySelector('[aria-label="Part"]') as HTMLElement;
+  const panel = () => container.querySelector('aside') as HTMLElement;
   const search = () => container.querySelector('input[aria-label="Find a reference"]') as HTMLInputElement;
   const headRef = () => panel().querySelector('p')?.textContent ?? null;
 
@@ -1283,6 +1326,152 @@ describe('the part panel', () => {
 // The tab strip is one track that shares its width on a phone: the fifth tab
 // used to push it 40px past a 390px screen. Class names prove nothing under
 // vitest (CSS is off), so this reads the stylesheet.
+describe('the Board panel', () => {
+  const aside = () => container.querySelector('aside') as HTMLElement;
+  const panelTab = (label: string) =>
+    [...aside().querySelectorAll('[role="tab"]')].find((t) => t.textContent === label) as HTMLButtonElement;
+  const layerBox = (name: string) => aside().querySelector(`input[aria-label="Show ${name}"]`) as HTMLInputElement;
+  const fakeLayer = (name: string): FakeLayer => ({
+    name, kind: 'copper', side: name[0], color: 'rgba(1, 2, 3, 1)', visible: true, highlighted: false,
+  });
+
+  /** The Board tab, with its board loaded and reporting — as the controller does. */
+  async function boardLoaded() {
+    await click(byText('Board'));
+    await canvasReady();
+    canvas.board = [fakeLayer('F.Cu'), fakeLayer('B.Cu')];
+    canvas.nets = [{ number: 1, name: 'GND' }, { number: 2, name: '/SDA' }];
+    await act(async () => canvas.onLayers?.(canvas.board.map((l) => ({ ...l }))));
+  }
+
+  beforeEach(() => {
+    session = makeSession({ board: 'main.kicad_pcb' });
+  });
+
+  it('is the part panel alone, with no tabs, for a project with no board', async () => {
+    session = makeSession();
+    await render();
+    expect(aside().getAttribute('aria-label')).toBe('Part');
+    expect(aside().querySelector('[role="tablist"]')).toBeNull();
+  });
+
+  it('offers Parts, Layers and Objects, and disables the board tabs on the schematic with the reason', async () => {
+    await render();
+    expect(aside().getAttribute('aria-label')).toBe('Board panel');
+    expect([...aside().querySelectorAll('[role="tab"]')].map((t) => t.textContent)).toEqual(['Parts', 'Layers', 'Objects']);
+    expect(panelTab('Parts').getAttribute('aria-selected')).toBe('true');
+    expect(panelTab('Layers').getAttribute('aria-disabled')).toBe('true');
+    expect(panelTab('Layers').title).toBe('Open the Board or 3D tab');
+    await click(panelTab('Layers'));
+    // Disabled: the Parts tab stays.
+    expect(panelTab('Parts').getAttribute('aria-selected')).toBe('true');
+    expect(aside().textContent).toMatch(/Click a part/);
+  });
+
+  it('lists the board’s layers from the file on the 3D tab, and the 3D view draws the same state', async () => {
+    await render();
+    await click(byText('3D'));
+    await click(panelTab('Layers'));
+    expect(panelTab('Layers').getAttribute('aria-selected')).toBe('true');
+    expect(layerBox('F.Cu').checked).toBe(true);
+    await click(layerBox('B.Cu'));
+    expect(layerBox('B.Cu').checked).toBe(false);
+    expect([...(board3d.props?.hiddenLayers as Set<string>)]).toEqual(['B.Cu']);
+    // Back to the schematic: the tab says why it cannot act, and keeps its place.
+    await click(byText('Schematic'));
+    expect(aside().textContent).toMatch(/Open the Board or 3D tab/);
+  });
+
+  it('a layer hidden on the Board tab stays hidden after Board → 3D → Board, even across a reload of the board', async () => {
+    await render();
+    await boardLoaded();
+    await click(panelTab('Layers'));
+    // The board's own list, in its own colours.
+    expect(layerBox('F.Cu')).not.toBeNull();
+    await click(layerBox('B.Cu'));
+    expect(canvas.setLayerVisible).toHaveBeenLastCalledWith('B.Cu', false);
+
+    await click(byText('3D'));
+    expect((board3d.props?.hiddenLayers as Set<string>).has('B.Cu')).toBe(true);
+    expect(layerBox('B.Cu').checked).toBe(false);
+
+    // The board comes back with a fresh layer set (every layer shown), as a
+    // reload leaves it; the page puts its choice back.
+    canvas.setLayerVisible.mockClear();
+    // Not on screen yet as the tab switches: the renderer answers [] until the
+    // board is back, and its `layers` event is the cue.
+    canvas.board = [];
+    await click(byText('Board'));
+    expect(canvas.setLayerVisible).not.toHaveBeenCalled();
+    canvas.board = [fakeLayer('F.Cu'), fakeLayer('B.Cu')];
+    await act(async () => canvas.onLayers?.(canvas.board.map((l) => ({ ...l }))));
+    expect(canvas.setLayerVisible.mock.calls).toEqual([['B.Cu', false]]);
+    expect(layerBox('B.Cu').checked).toBe(false);
+    // The echo of that call changes nothing more.
+    canvas.setLayerVisible.mockClear();
+    await act(async () => canvas.onLayers?.(canvas.board.map((l) => ({ ...l }))));
+    expect(canvas.setLayerVisible).not.toHaveBeenCalled();
+  });
+
+  it('Objects fades a class on the board and lists the board’s nets; a net lights on click and clears on a second', async () => {
+    await render();
+    await boardLoaded();
+    await click(panelTab('Objects'));
+    const labels = [...aside().querySelectorAll('input[type="range"]')].map((r) => (aside().querySelector(`label[for="${r.id}"]`) as HTMLElement).textContent);
+    expect(labels).toEqual(['Tracks', 'Vias', 'Pads', 'Through-holes', 'Zones', 'Grid', 'Page']);
+    await click(aside().querySelector('input[aria-label="Show zones"]') as HTMLElement);
+    expect(canvas.setObjectOpacity).toHaveBeenLastCalledWith('zones', 0);
+
+    const net = () => [...aside().querySelectorAll('button[aria-pressed]')].find((b) => b.textContent === 'GND') as HTMLButtonElement;
+    await click(net());
+    expect(canvas.highlightNet).toHaveBeenLastCalledWith(1);
+    expect(net().getAttribute('aria-pressed')).toBe('true');
+    await click(net());
+    expect(canvas.highlightNet).toHaveBeenLastCalledWith(null);
+
+    // The 3D tab offers its own classes, with the same shared opacity.
+    await click(byText('3D'));
+    const labels3d = [...aside().querySelectorAll('input[type="range"]')].map((r) => (aside().querySelector(`label[for="${r.id}"]`) as HTMLElement).textContent);
+    expect(labels3d).toEqual(['Tracks', 'Vias', 'Pads', 'Zones', 'Silkscreen', 'Mask', 'Bodies']);
+    expect((board3d.props?.opacity as Record<string, number>).zones).toBe(0);
+  });
+
+  it('Esc clears a lit net first, then the selection', async () => {
+    wb.rows = [{ index: 0 }];
+    await render();
+    await boardLoaded();
+    await act(async () => canvas.onSelection?.({ ref: 'U1', view: 'board' }));
+    await click(panelTab('Objects'));
+    await click([...aside().querySelectorAll('button[aria-pressed]')].find((b) => b.textContent === 'GND') as HTMLButtonElement);
+    const esc = async () => {
+      await act(async () => {
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      });
+    };
+    await esc();
+    expect(canvas.highlightNet).toHaveBeenLastCalledWith(null);
+    await click(panelTab('Parts'));
+    expect(aside().querySelector('p')?.textContent).toBe('U1');
+    await esc();
+    expect(aside().textContent).toMatch(/Click a part/);
+  });
+
+  it('starts over with every layer shown when another project is opened', async () => {
+    await render();
+    await click(byText('3D'));
+    await click(panelTab('Layers'));
+    await click(layerBox('F.Cu'));
+    expect((board3d.props?.hiddenLayers as Set<string>).size).toBe(1);
+    reopen = () => makeSession({ board: 'main.kicad_pcb' });
+    await click(byText('Open another'));
+    await click(container.querySelector('[data-testid="intake"]') as HTMLElement);
+    await click(byText('3D'));
+    expect((board3d.props?.hiddenLayers as Set<string>).size).toBe(0);
+    await click(panelTab('Layers'));
+    expect(layerBox('F.Cu').checked).toBe(true);
+  });
+});
+
 describe('the tab strip stylesheet', () => {
   const scss = readFileSync(join(__dirname, 'ViewerPage.module.scss'), 'utf8');
   it('is a single track that stretches on a phone and lets every tab share the width', () => {
@@ -1294,7 +1483,7 @@ describe('the tab strip stylesheet', () => {
     expect(scss).not.toMatch(/\.tabs \{[^{}]*overflow-x/);
   });
   it('gives the phone sheet an opaque base and draws each fact hairline unbroken', () => {
-    const panelScss = readFileSync(join(__dirname, 'components', 'PartPanel.module.scss'), 'utf8');
+    const panelScss = readFileSync(join(__dirname, 'components', 'BoardPanel.module.scss'), 'utf8');
     const mobile = panelScss.slice(panelScss.indexOf('@include responsive($bp-tablet)'));
     const sheet = mobile.slice(mobile.indexOf('.panel {'), mobile.indexOf('.peek {'));
     // The last background layer is a solid colour, not another translucent gradient.
@@ -1306,7 +1495,7 @@ describe('the tab strip stylesheet', () => {
     // rail at 820 left the stage 455px and the BOM table two columns.
     const mobile = scss.slice(scss.indexOf('@include responsive($bp-tablet)'));
     expect(mobile.slice(0, mobile.indexOf('@include responsive($bp-mobile)'))).toMatch(/\.stage \{[^{}]*flex-direction:\s*column/);
-    const panelScss = readFileSync(join(__dirname, 'components', 'PartPanel.module.scss'), 'utf8');
+    const panelScss = readFileSync(join(__dirname, 'components', 'BoardPanel.module.scss'), 'utf8');
     expect(panelScss).toMatch(/@include responsive\(\$bp-tablet\) \{\s*\.panel \{[^{}]*position:\s*fixed/);
     // `.loaded`'s min-height interpolates a variable (`#{…}`), so a brace-free
     // scan would stop short; read the rule up to the next selector instead.

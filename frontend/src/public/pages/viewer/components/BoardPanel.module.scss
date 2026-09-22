@@ -2,7 +2,7 @@
 @use '@shared/styles/mixins' as *;
 @use '@public/styles/bomMaterial' as *;
 
-// The part panel — the one memorable element of the viewer, so everything on
+// The Board panel (its Parts tab is the part panel) — the one memorable element of the viewer, so everything on
 // it is set the way a silkscreen legend and a datasheet header read: the
 // designator is the typographic hero, in the BOM's own silkscreen green and in
 // mono; facts are a hairline list with right-aligned tabular numbers; the
@@ -38,6 +38,84 @@ $hair: rgba(26, 31, 35, 0.1);
   flex-direction: column;
   gap: 14px;
   padding: 14px 16px 16px;
+}
+
+// ─── Tabs: Parts · Layers · Objects ───────────────────────────────────────
+// The page's own tab track at the panel's width: three equal segments, the
+// live one in the primary green. A disabled tab (no board on screen) is dimmed
+// and says why in its title and to a screen reader.
+
+.tabs {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  background: linear-gradient(rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.28));
+  border: 1px solid rgba(26, 31, 35, 0.1);
+  border-radius: 12px;
+  box-shadow:
+    inset 0 1px 2px rgba(60, 50, 90, 0.1),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.3);
+}
+
+.tab {
+  position: relative;
+  flex: 1 1 0;
+  min-height: 36px;
+  padding: 0 8px;
+  font-family: $font-body;
+  font-size: 0.84rem;
+  font-weight: 520;
+  line-height: 1;
+  white-space: nowrap;
+  color: #2b3137;
+  background: transparent;
+  border: 0;
+  border-radius: 9px;
+  cursor: pointer;
+  @include tap-target(-4px);
+
+  &:hover:not([aria-disabled='true']) {
+    background: rgba(255, 255, 255, 0.55);
+  }
+
+  &:focus-visible {
+    outline: 2px solid $executive-blue;
+    outline-offset: -2px;
+  }
+
+  &[aria-selected='true'] {
+    @include bom-primary-control;
+    border-radius: 9px;
+    line-height: 1;
+  }
+
+  &[aria-disabled='true'] {
+    color: #8a9099;
+    cursor: not-allowed;
+  }
+
+  &[aria-disabled='true'][aria-selected='true'] {
+    filter: saturate(0.3);
+  }
+}
+
+.tabBody {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 // ─── Search ───────────────────────────────────────────────────────────────

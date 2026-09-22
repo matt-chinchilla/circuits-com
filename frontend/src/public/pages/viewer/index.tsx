@@ -9,7 +9,7 @@ import { useLocation } from 'react-router-dom';
 import PageHead from '@public/components/PageHead';
 import PageHeaderBand from '@public/components/layout/PageHeaderBand';
 import DesignCanvas, { type CanvasSelection, type DesignCanvasHandle } from '@public/components/kicad/DesignCanvas';
-import type { CanvasStateName, CanvasView, FocusResult } from '@public/components/kicad/canvasController';
+import type { CanvasStateName, CanvasView, FocusResult, LayerInfo, NetInfo } from '@public/components/kicad/canvasController';
 import StackupPanel from '@public/components/kicad/StackupPanel';
 import BomTable from '@public/components/bom/BomTable';
 import ShareBar from '@public/components/bom/ShareBar';
@@ -21,8 +21,19 @@ import type { KicadProject } from '@public/services/kicad/types';
 import { clearDesignSession, getDesignSession, openDesign, type DesignSession } from '@public/services/designSession';
 import { STATIC_PAGE_SEO } from '@public/services/seoRoutes';
 import ViewerIntake from './components/ViewerIntake';
-import PartPanel, { type PartPanelHandle, type ShowOn } from './components/PartPanel';
+import BoardPanel, { type BoardPanelHandle, type ShowOn } from './components/BoardPanel';
 import { knownRefs, partFacts, resolveRef } from './partFacts';
+import {
+  EMPTY_BOARD_VIEW,
+  applyToCanvas,
+  clearHighlights,
+  layersFromFile,
+  netsFromFile,
+  panelLayers,
+  sameLayers,
+  type BoardViewState,
+  type PanelLayer,
+} from './boardView';
 import styles from './ViewerPage.module.scss';
 
 /**
@@ -125,6 +136,13 @@ const PANEL_OF: Record<Tab, keyof typeof PANEL_ID> = {
   bom: 'bom',
 };
 
+/** Why the Layers and Objects tabs are disabled, in the words the panel shows. */
+const BOARD_HINT = 'Open the Board or 3D tab';
+const BOARD_FAILED_HINT = 'The board drawing did not load in this browser; open the 3D tab';
+
+const NO_LAYERS: PanelLayer[] = [];
+const NO_NETS: NetInfo[] = [];
+
 function defaultTab(session: DesignSession): Tab {
   return session.project.root != null ? 'schematic' : 'board';
 }
@@ -184,8 +202,27 @@ export default function ViewerPage() {
    * should either come before the browser goes idle.
    */
   const [placementsSeen, setPlacementsSeen] = useState(false);
+  /**
+   * The Board panel's state (spec 2026-09-22 §2.4): hidden layers, the lit
+   * layer and net, and each object class's opacity. ONE record for the page,
+   * drawn by the Board tab and the 3D tab alike, so a choice made on one holds
+   * on the other and across every tab switch. Dropped with the project.
+   */
+  const [boardView, setBoardView] = useState<BoardViewState>(EMPTY_BOARD_VIEW);
+  const boardViewRef = useRef(boardView);
+  boardViewRef.current = boardView;
+  /** What the 2D board has actually been given (see `applyToCanvas`); null for
+   *  a board that has been given nothing yet. */
+  const canvasApplied = useRef<BoardViewState | null>(null);
+  /** The board's layers and nets as the LOADED 2D board reports them; empty
+   *  until it has loaded, when the panel lists them from the file instead. */
+  const [canvasLayers, setCanvasLayers] = useState<PanelLayer[]>(NO_LAYERS);
+  const [canvasNets, setCanvasNets] = useState<NetInfo[]>(NO_NETS);
+  /** Has the reader opened Layers or Objects for THIS project? The same one-way
+   *  latch as `stackupSeen`: the file's tables are read then, not on open. */
+  const [boardTablesSeen, setBoardTablesSeen] = useState(false);
   const canvasRef = useRef<DesignCanvasHandle>(null);
-  const panelRef = useRef<PartPanelHandle>(null);
+  const panelRef = useRef<BoardPanelHandle>(null);
   /**
    * What EACH drawing last showed selected, as the canvas itself reported it.
    * The schematic and the board are two viewers with two selections, and the
@@ -244,6 +281,15 @@ export default function ViewerPage() {
     null,
   );
 
+  /** A new project starts with every layer shown and nothing lit. */
+  const resetBoardView = useCallback(() => {
+    setBoardView(EMPTY_BOARD_VIEW);
+    canvasApplied.current = null;
+    setCanvasLayers(NO_LAYERS);
+    setCanvasNets(NO_NETS);
+    setBoardTablesSeen(false);
+  }, []);
+
   // The session is opened HERE and only here — never in an effect. React 19's
   // StrictMode double-invokes effects, and openDesign re-parses the schematic.
   const handleProject = useCallback((project: KicadProject) => {
@@ -257,7 +303,8 @@ export default function ViewerPage() {
     setSelectedRef(null);
     setPlacementsSeen(false);
     shown.current = { schematic: null, board: null };
-  }, []);
+    resetBoardView();
+  }, [resetBoardView]);
 
   // Deliberately NOT called on unmount: surviving the /viewer ↔ /bom trip is
   // the whole point of the session. Only this button ends it.
@@ -282,6 +329,7 @@ export default function ViewerPage() {
     setSelectedRef(null);
     setPlacementsSeen(false);
     shown.current = { schematic: null, board: null };
+    resetBoardView();
   };
 
   const focus = useCallback(
@@ -398,6 +446,35 @@ export default function ViewerPage() {
     setSelectedRef(selection.ref);
   }, []);
 
+  /** Bring the 2D board to the panel's state; a no-op while it is not on screen. */
+  const applyBoardToCanvas = useCallback(() => {
+    const handle = canvasRef.current;
+    if (handle == null) return;
+    const next = boardViewRef.current;
+    if (applyToCanvas(handle, canvasApplied.current, next)) canvasApplied.current = next;
+  }, []);
+
+  /**
+   * The board loaded, came back on screen, or changed a layer. A load builds
+   * its layer set afresh, so the panel's choices are re-applied here — only
+   * what differs, so the echo of our own change settles. The list the panel
+   * shows switches to the board's own once it has one.
+   */
+  const handleCanvasLayers = useCallback(
+    (layers: LayerInfo[]) => {
+      const rows = panelLayers(layers);
+      setCanvasLayers((prev) => (sameLayers(prev, rows) ? prev : rows));
+      setCanvasNets((prev) => (prev.length > 0 ? prev : canvasRef.current?.nets() ?? NO_NETS));
+      applyBoardToCanvas();
+    },
+    [applyBoardToCanvas],
+  );
+
+  // …and on every change the reader makes while the Board tab is live.
+  useEffect(() => {
+    if (tab === 'board' && canvasState === 'ready') applyBoardToCanvas();
+  }, [boardView, tab, canvasState, applyBoardToCanvas]);
+
   /**
    * Send a selection to the drawing `view` and keep `shown` honest about the
    * answer. A designator the drawing does not have ('not-found') still CLEARS
@@ -506,10 +583,10 @@ export default function ViewerPage() {
     [selectedRef, focus, outline],
   );
 
-  // `/` focuses the search and Esc clears the selection, anywhere on the page
+  // `/` focuses the search and Esc clears a highlight, then the selection, anywhere on the page
   // that is not itself a text field. A field owns its own Esc: the panel's
   // search empties itself first and clears the selection on a second press
-  // (PartPanel); the BOM's quantity box keeps the browser's behaviour.
+  // (BoardPanel); the BOM's quantity box keeps the browser's behaviour.
   useEffect(() => {
     if (session == null) return;
     const onKey = (e: KeyboardEvent) => {
@@ -518,12 +595,16 @@ export default function ViewerPage() {
         e.preventDefault();
         panelRef.current?.focusSearch();
       } else if (e.key === 'Escape') {
-        clearSelection();
+        // A lit layer or net goes first, where the reader can see it; the
+        // selection on the next press.
+        const view = boardViewRef.current;
+        if ((tab === 'board' || tab === 'board3d') && clearHighlights(view) !== view) setBoardView(clearHighlights);
+        else clearSelection();
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [session, clearSelection]);
+  }, [session, clearSelection, tab]);
 
   useEffect(() => {
     if (toast == null) return;
@@ -596,6 +677,20 @@ export default function ViewerPage() {
       return null;
     }
   }, [session, placementsSeen]);
+  /**
+   * The board's layer and net tables read from the FILE, for the panel before
+   * the 2D board has loaded (and for the 3D tab, which never loads it). Read
+   * when the reader first opens Layers or Objects, never on project open.
+   */
+  const boardTables = useMemo(() => {
+    const board = session?.project.board;
+    if (session == null || board == null || !boardTablesSeen) return null;
+    const text = session.project.files.get(board) ?? '';
+    return { layers: layersFromFile(text), nets: netsFromFile(text) };
+  }, [session, boardTablesSeen]);
+  const listedLayers = canvasLayers.length > 0 ? canvasLayers : boardTables?.layers ?? NO_LAYERS;
+  const listedNets = canvasNets.length > 0 ? canvasNets : boardTables?.nets ?? NO_NETS;
+
   const placementsRef = useRef(placements);
   placementsRef.current = placements;
 
@@ -673,6 +768,9 @@ export default function ViewerPage() {
   };
 
   const drawingVisible = tab === 'schematic' || tab === 'board';
+  /** The 2D drawing will not come (no WebGL, a timeout, an error): the Board
+   *  tab then has nothing for Layers and Objects to act on. */
+  const canvasFailed = canvasState !== 'loading' && canvasState !== 'ready';
 
   /**
    * The panel a tab opens, or undefined when that panel is not in the document
@@ -814,6 +912,7 @@ export default function ViewerPage() {
                   onState={setCanvasState}
                   onSelection={handleCanvasSelection}
                   onUnrenderableSheets={handleUnrenderable}
+                  onLayers={handleCanvasLayers}
                 />
                 <p className={styles.notice}>
                   Rendering by KiCanvas &mdash;{' '}
@@ -905,6 +1004,10 @@ export default function ViewerPage() {
                       stackup={stackup}
                       selectedRef={selectedRef}
                       onSelect={setSelectedRef}
+                      hiddenLayers={boardView.hiddenLayers}
+                      highlightedLayer={boardView.highlightedLayer}
+                      opacity={boardView.opacity}
+                      highlightedNet={boardView.highlightedNet}
                     />
                   </Suspense>
                 </section>
@@ -936,7 +1039,7 @@ export default function ViewerPage() {
               </div>
 
               <div className={styles.rail}>
-                <PartPanel
+                <BoardPanel
                   ref={panelRef}
                   facts={facts}
                   knownRefs={refIndex}
@@ -951,6 +1054,19 @@ export default function ViewerPage() {
                   onShow={showOn}
                   onPriceBom={() => setTab('bom')}
                   onSearchFocus={() => setPlacementsSeen(true)}
+                  board={
+                    session.project.board == null
+                      ? null
+                      : {
+                          context: tab === 'board3d' ? 'board3d' : tab === 'board' && !canvasFailed ? 'board' : null,
+                          hint: tab === 'board' && canvasFailed ? BOARD_FAILED_HINT : BOARD_HINT,
+                          layers: listedLayers,
+                          nets: listedNets,
+                          view: boardView,
+                          onChange: setBoardView,
+                          onOpen: () => setBoardTablesSeen(true),
+                        }
+                  }
                 />
               </div>
               </div>

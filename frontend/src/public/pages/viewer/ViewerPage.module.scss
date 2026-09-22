@@ -280,7 +280,7 @@
 }
 
 // Up to $bp-tablet the part panel is a fixed sheet along the bottom (see
-// PartPanel.module.scss): the stage takes the full width — a 296px rail beside
+// BoardPanel.module.scss): the stage takes the full width — a 296px rail beside
 // it left an 820px tablet a 455px stage and two columns of the BOM table. The
 // sheet's peek row is 52px and the stage keeps that much clear below itself,
 // so the drawing's Fit / + / − controls never sit under it. Must come AFTER
