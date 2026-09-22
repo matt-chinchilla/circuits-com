@@ -39,8 +39,14 @@ describe('buildScene — Glasgow', () => {
     for (let i = 0; i < sub.positions.length; i += 3) { minX = Math.min(minX, sub.positions[i]); maxX = Math.max(maxX, sub.positions[i]); }
     expect(minX + maxX).toBeCloseTo(0, 3);
   });
-  it('warnings: none except possibly merged holes', () => {
+  it('warnings: the 8 missing courtyards, and nothing else', () => {
     expect(s.warnings.filter((w) => w.kind !== 'holes-merged' && w.kind !== 'no-courtyard')).toEqual([]);
+    // Measured: 126 pad openings are dropped as duplicates on this board and
+    // EVERY one of them is wholly inside the opening it lost to, so the union is
+    // unchanged and nothing was approximated. The caption used to add those 126
+    // to the 8 below and tell the owner "134 features simplified" about his own
+    // board; a merge is reported only when it really loses area now.
+    expect(s.warnings.find((w) => w.kind === 'holes-merged')).toBeUndefined();
     // 8, not 9: cf30fd3 ("chainLoops matches endpoints by distance across grid
     // cells") closed J4's 8 µm courtyard gap, so J4 now gets a body. The 8 left are
     // the logos and the kikit tabs, which draw no courtyard at all — the same number

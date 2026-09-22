@@ -12,6 +12,7 @@ import { courtyards } from './courtyards';
 import { bbox, place } from './geom';
 import { zLadder } from './layers';
 import { boardOutline, shapePolylines } from './outline';
+import { ringContains, ringsOverlap } from './overlap';
 import { drillRing, placedPadRing } from './pads';
 import { circleRing, strokePolygon } from './strokes';
 import { readBoardModel } from './readBoardModel';
@@ -40,20 +41,21 @@ const LAYER_GAP_MM = 0.01;
 /** `reduced` drops tracks finer than this: they are sub-pixel at any framing that
  *  fits a whole board on a phone, and they are the bulk of the stroke count. */
 const MIN_TRACK_MM = 0.2;
-/** A ring covering more than this fraction of a smaller neighbour's box is the
- *  same hole twice (a via landing on a pad drill) — the realistic overlap. */
-const OVERLAP_FRACTION = 0.25;
 
 interface Box { min: Vec2; max: Vec2 }
 interface Boxed { ring: Ring; box: Box; area: number }
 
 const boxArea = (b: Box): number => Math.max(0, b.max.x - b.min.x) * Math.max(0, b.max.y - b.min.y);
 
+/**
+ * The boxes are only a REJECT — cached here because the pruning below is
+ * quadratic and most pairs on a board are nowhere near each other. A pair whose
+ * boxes do meet goes to `ringsOverlap`, which answers on the rings themselves.
+ */
 function overlapping(a: Boxed, b: Boxed): boolean {
-  const w = Math.min(a.box.max.x, b.box.max.x) - Math.max(a.box.min.x, b.box.min.x);
-  const h = Math.min(a.box.max.y, b.box.max.y) - Math.max(a.box.min.y, b.box.min.y);
-  if (w <= 0 || h <= 0) return false;
-  return w * h > OVERLAP_FRACTION * Math.min(a.area, b.area);
+  if (a.box.max.x <= b.box.min.x || b.box.max.x <= a.box.min.x) return false;
+  if (a.box.max.y <= b.box.min.y || b.box.max.y <= a.box.min.y) return false;
+  return ringsOverlap(a.ring, b.ring);
 }
 
 const boxed = (ring: Ring): Boxed => {
@@ -66,16 +68,23 @@ const boxed = (ring: Ring): Boxed => {
  * accepted is DROPPED and counted. v1 has no polygon-clipping library, so the
  * union of two overlapping holes is approximated by the bigger of the two —
  * which is why the count is surfaced as "N features simplified" rather than
- * swallowed. Bounding boxes only: exact ring intersection would cost more than
- * the artefact it prevents.
+ * swallowed. Two things make the count honest. "Overlaps" is a TRUE ring
+ * intersection (`overlap.ts`), not the bounding-box rule this used to apply;
+ * and a ring wholly CONTAINED in the one it loses to is dropped SILENTLY,
+ * because the union of the two is exactly the ring that was kept — nothing was
+ * approximated, so nothing is reported. All 126 of Glasgow's merged pad
+ * openings are that case (a fine-pitch pad inside a footprint's large one, or
+ * two coincident pads), which is why the caption used to claim 134
+ * simplifications on a board where the only real one was 8 missing courtyards.
  */
 function prune(rings: Ring[]): { kept: Boxed[]; dropped: number } {
   const items = rings.filter((r) => r.pts.length >= 3).map(boxed).sort((a, b) => b.area - a.area);
   const kept: Boxed[] = [];
   let dropped = 0;
   for (const item of items) {
-    if (kept.some((k) => overlapping(item, k))) dropped++;
-    else kept.push(item);
+    const hit = kept.find((k) => overlapping(item, k));
+    if (hit == null) kept.push(item);
+    else if (!ringContains(hit.ring, item.ring)) dropped++;
   }
   return { kept, dropped };
 }
