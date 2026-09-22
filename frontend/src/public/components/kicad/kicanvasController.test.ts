@@ -1,7 +1,11 @@
 // @vitest-environment happy-dom
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { KicadProject } from '@public/services/kicad/types';
+import type { LayerInfo } from './canvasController';
 import { KicanvasController, sourcesFor } from './kicanvasController';
+import { BOARD_LAYER_COLORS, FALLBACK_LAYER_COLOR, layerColor, layerKind, layerSide } from './layerColors';
 
 interface FakePage { type: 'pcb' | 'schematic'; filename: string; sheet_path: string; project_path: string; document: { filename: string } }
 
@@ -722,5 +726,261 @@ describe('KicanvasController', () => {
     c2.dispose();
     await c2.mount(document.createElement('div'), project({ 'main.kicad_sch': 's' }));
     expect(seen).toEqual([]); // dispose() cleared the handler map
+  });
+});
+
+/** A fake `ViewLayer` (vendor viewers/base/view-layers.ts:38-135): a plain boolean
+ *  `visible`, a `highlighted` flag and a `Color` whose `to_css()` upstream prints as
+ *  `rgba(r, g, b, a)`. */
+interface FakeLayer { name: string; visible: boolean; highlighted: boolean; color: { to_css: () => string } | null }
+
+/** A fake board `LayerSet`. Its ordering hands out VIRTUAL layers too (upstream's
+ *  `in_ui_order` never does), so the controller's filter is what is under test, not
+ *  upstream's order; `highlight` lights the physical layer and its `:<name>:*`
+ *  companions, as the board override does (vendor viewers/board/layers.ts:507-523). */
+function fakeLayerSet(names: string[]) {
+  const list: FakeLayer[] = names.map((name) => ({
+    name, visible: true, highlighted: false,
+    color: name === 'User.1' ? null : { to_css: () => `css(${name})` },
+  }));
+  const calls: string[] = [];
+  return {
+    list,
+    calls,
+    in_ui_order: function* () { yield* list; },
+    by_name: (n: string) => list.find((l) => l.name === n),
+    highlight(layer: FakeLayer | string | null) {
+      const name = layer == null ? null : typeof layer === 'string' ? layer : layer.name;
+      calls.push(`highlight:${name}`);
+      for (const l of list) l.highlighted = name != null && (l.name === name || l.name.startsWith(`:${name}:`));
+    },
+  };
+}
+
+const BOARD_LAYERS = ['F.Cu', ':F.Cu:Zones', ':Pads:Front', 'In1.Cu', 'B.Cu', 'F.SilkS', 'B.Mask', 'Edge.Cuts', 'User.1', ':Grid', ':DrawingSheet'];
+
+/** Gives the fake board viewer the `BoardViewer` surface (vendor viewers/board/viewer.ts):
+ *  `layers`, `board.nets`, `highlight_net`, `draw`, and the seven write-only opacity
+ *  accessors (:120-153) — setters with no getter, exactly as upstream declares them. */
+function boardSurface(fake: ReturnType<typeof fakeEmbed>, names = BOARD_LAYERS) {
+  const set = fakeLayerSet(names);
+  const log = { draws: 0, nets: [] as number[], opacity: [] as string[] };
+  const v = fake.boardViewer as unknown as Record<string, unknown>;
+  v.layers = set;
+  v.board = { nets: [{ number: 0, name: '' }, { number: 1, name: 'GND' }, { number: 2, name: '+3V3' }] };
+  v.highlight_net = (n: number) => log.nets.push(n);
+  v.draw = () => { log.draws++; };
+  for (const prop of ['track_opacity', 'via_opacity', 'pad_opacity', 'pad_hole_opacity', 'zone_opacity', 'grid_opacity', 'page_opacity']) {
+    Object.defineProperty(v, prop, { set: (value: number) => log.opacity.push(`${prop}=${value}`), configurable: true });
+  }
+  return { set, log };
+}
+
+async function mountedOnBoard(names = BOARD_LAYERS) {
+  const fake = fakeEmbed({ pages: PAGES });
+  const surface = boardSurface(fake, names);
+  const c = controller(fake);
+  await c.mount(document.createElement('div'), project({ 'main.kicad_sch': 's', 'main.kicad_pcb': 'b' }));
+  expect(await c.activate('board')).toBe(true);
+  await Promise.resolve(); // drain the event the activation queued
+  return { fake, c, ...surface };
+}
+
+describe('KicanvasController — board controls', () => {
+  it('lists only the PHYSICAL layers, with kind, side, the renderer’s colour and its flags', async () => {
+    const { c } = await mountedOnBoard();
+    const layers = c.layers();
+    expect(layers.map((l) => l.name)).toEqual(['F.Cu', 'In1.Cu', 'B.Cu', 'F.SilkS', 'B.Mask', 'Edge.Cuts', 'User.1']);
+    expect(layers[0]).toEqual({ name: 'F.Cu', kind: 'copper', side: 'F', color: 'css(F.Cu)', visible: true, highlighted: false });
+    expect(layers.map((l) => [l.kind, l.side])).toEqual([
+      ['copper', 'F'], ['copper', 'In'], ['copper', 'B'], ['silk', 'F'], ['mask', 'B'], ['edge', null], ['user', null],
+    ]);
+    // A layer whose Color is unreadable takes the copied palette's colour, never a blank.
+    expect(layers[6]!.color).toBe(BOARD_LAYER_COLORS['User.1']);
+  });
+
+  it('answers [] and ignores every call while a SCHEMATIC is on screen', async () => {
+    const { c, set, log } = await mountedOnBoard();
+    expect(await c.activate('schematic')).toBe(true);
+    expect(c.layers()).toEqual([]);
+    expect(c.nets()).toEqual([]);
+    c.setLayerVisible('F.Cu', false);
+    c.highlightLayer('F.Cu');
+    c.setObjectOpacity('tracks', 0.5);
+    c.highlightNet(1);
+    expect(set.list.find((l) => l.name === 'F.Cu')).toMatchObject({ visible: true, highlighted: false });
+    expect(set.calls).toEqual([]);
+    expect(log).toMatchObject({ nets: [], opacity: [] });
+  });
+
+  it('answers [] before the board has a layer set', async () => {
+    const fake = fakeEmbed({ pages: PAGES });
+    const c = controller(fake);
+    await c.mount(document.createElement('div'), project({ 'main.kicad_sch': 's', 'main.kicad_pcb': 'b' }));
+    await c.activate('board');
+    expect(c.layers()).toEqual([]);
+    expect(c.nets()).toEqual([]);
+    expect(() => c.setLayerVisible('F.Cu', false)).not.toThrow();
+  });
+
+  it('hides and shows a layer, redraws, and emits ONE layers event per turn — none for a call that changes nothing', async () => {
+    const { c, set, log } = await mountedOnBoard();
+    const seen: LayerInfo[][] = [];
+    c.on('layers', (e) => seen.push(e.layers));
+    c.setLayerVisible('F.Cu', false);
+    c.setLayerVisible('B.Cu', false);
+    expect(set.list.find((l) => l.name === 'F.Cu')!.visible).toBe(false);
+    expect(log.draws).toBe(2);
+    expect(seen).toHaveLength(0); // coalesced into the next microtask
+    await Promise.resolve();
+    expect(seen).toHaveLength(1);
+    expect(seen[0]!.filter((l) => !l.visible).map((l) => l.name)).toEqual(['F.Cu', 'B.Cu']);
+    // A host re-applying the same state on that event changes nothing, so the
+    // exchange settles instead of looping.
+    c.setLayerVisible('F.Cu', false);
+    c.setLayerVisible('B.Cu', false);
+    await Promise.resolve();
+    expect(seen).toHaveLength(1);
+    expect(log.draws).toBe(2);
+    c.setLayerVisible('F.Cu', true);
+    await Promise.resolve();
+    expect(seen).toHaveLength(2);
+  });
+
+  it('never touches a virtual layer or a name the board does not have', async () => {
+    const { c, set, log } = await mountedOnBoard();
+    c.setLayerVisible(':F.Cu:Zones', false);
+    c.setLayerVisible('In7.Cu', false);
+    c.highlightLayer(':Pads:Front');
+    c.highlightLayer('In7.Cu');
+    expect(set.list.every((l) => l.visible && !l.highlighted)).toBe(true);
+    expect(set.calls).toEqual([]);
+    expect(log.draws).toBe(0);
+  });
+
+  it('highlights a layer through the LayerSet (companions included), clears with null, and leaves visibility alone', async () => {
+    const { c, set, log } = await mountedOnBoard();
+    const seen: LayerInfo[][] = [];
+    c.on('layers', (e) => seen.push(e.layers));
+    c.setLayerVisible('B.Cu', false);
+    c.highlightLayer('B.Cu');
+    expect(set.calls).toEqual(['highlight:B.Cu']);
+    expect(c.layers().find((l) => l.name === 'B.Cu')).toMatchObject({ visible: false, highlighted: true });
+    expect(c.layers().filter((l) => l.highlighted).map((l) => l.name)).toEqual(['B.Cu']);
+    c.highlightLayer('F.Cu');
+    expect(set.list.find((l) => l.name === ':F.Cu:Zones')!.highlighted).toBe(true);
+    c.highlightLayer(null);
+    expect(set.list.some((l) => l.highlighted)).toBe(false);
+    expect(set.calls).toEqual(['highlight:B.Cu', 'highlight:F.Cu', 'highlight:null']);
+    await Promise.resolve();
+    expect(seen).toHaveLength(1);
+    // Clearing a highlight that is not there redraws nothing and emits nothing.
+    const draws = log.draws;
+    c.highlightLayer(null);
+    await Promise.resolve();
+    expect([log.draws, seen.length]).toEqual([draws, 1]);
+  });
+
+  it('sets each object class through the accessor upstream’s Objects panel uses, clamped to 0..1', async () => {
+    const { c, log } = await mountedOnBoard();
+    c.setObjectOpacity('tracks', 0.5);
+    c.setObjectOpacity('vias', 0);
+    c.setObjectOpacity('pads', 1);
+    c.setObjectOpacity('holes', 0.25);
+    c.setObjectOpacity('zones', 1.7);
+    c.setObjectOpacity('grid', -3);
+    c.setObjectOpacity('page', 0.1);
+    c.setObjectOpacity('page', Number.NaN);
+    expect(log.opacity).toEqual([
+      'track_opacity=0.5', 'via_opacity=0', 'pad_opacity=1', 'pad_hole_opacity=0.25',
+      'zone_opacity=1', 'grid_opacity=0', 'page_opacity=0.1',
+    ]);
+  });
+
+  it('lists the board’s nets without the unconnected net 0, and highlights or clears one', async () => {
+    const { c, log } = await mountedOnBoard();
+    expect(c.nets()).toEqual([{ number: 1, name: 'GND' }, { number: 2, name: '+3V3' }]);
+    c.highlightNet(2);
+    c.highlightNet(null);
+    // 0 would paint the WHOLE board into the overlay upstream (a falsy filter_net), so
+    // it clears instead — as does anything that is not a positive whole number.
+    c.highlightNet(0);
+    c.highlightNet(1.5);
+    expect(log.nets).toEqual([2, -1, -1, -1]);
+  });
+
+  it('emits layers after a board LOAD — a reload rebuilds the layer set with upstream’s defaults', async () => {
+    const { fake, c, set } = await mountedOnBoard();
+    const seen: LayerInfo[][] = [];
+    c.on('layers', (e) => seen.push(e.layers));
+    set.list.find((l) => l.name === 'F.Cu')!.visible = false;
+    fake.boardViewer.dispatchEvent(new Event(LOAD));
+    await Promise.resolve();
+    expect(seen).toHaveLength(1);
+    expect(seen[0]!.find((l) => l.name === 'F.Cu')!.visible).toBe(false);
+  });
+
+  it('emits layers when the board comes back on screen with no load — the host’s cue to re-apply', async () => {
+    const { c } = await mountedOnBoard();
+    await c.activate('schematic');
+    const seen: LayerInfo[][] = [];
+    c.on('layers', (e) => seen.push(e.layers));
+    // The viewer already holds the board document: upstream dispatches NO load here.
+    expect(await c.activate('board')).toBe(true);
+    await Promise.resolve();
+    expect(seen).toHaveLength(1);
+    expect(seen[0]!.map((l) => l.name)).toContain('F.Cu');
+  });
+
+  it('emits nothing for a board load while a schematic is on screen, nor after dispose()', async () => {
+    const { fake, c } = await mountedOnBoard();
+    const seen: LayerInfo[][] = [];
+    c.on('layers', (e) => seen.push(e.layers));
+    await c.activate('schematic');
+    fake.boardViewer.dispatchEvent(new Event(LOAD));
+    await Promise.resolve();
+    expect(seen).toEqual([]);
+    await c.activate('board');
+    await Promise.resolve();
+    seen.length = 0;
+    // A change queues its event for the next microtask; a dispose() in between wins.
+    c.setLayerVisible('F.Cu', false);
+    c.dispose();
+    await Promise.resolve();
+    expect(seen).toEqual([]);
+  });
+});
+
+describe('layerColors', () => {
+  /** The palette is a COPY of the vendored theme the embed is mounted with
+   *  (`theme="kicad"`); read that source and prove every entry still agrees. */
+  it('matches the vendored "kicad" theme entry for entry, as Color.to_css() prints it', () => {
+    const src = readFileSync(join(__dirname, '../../../../vendor/kicanvas/src/kicanvas/themes/kicad-default.ts'), 'utf8');
+    const board = src.slice(src.indexOf('board: {'), src.indexOf('schematic: {'));
+    const copper = board.slice(board.indexOf('copper: {'), board.indexOf('},', board.indexOf('copper: {')));
+    const css = (literal: string) => {
+      const p = literal.replace(/rgba?\(|\)/g, '').split(',').map(Number);
+      return `rgba(${p[0]}, ${p[1]}, ${p[2]}, ${p.length === 4 ? p[3] : 1})`;
+    };
+    const read = (block: string, key: string) => {
+      const m = block.match(new RegExp(`\\n\\s+${key}: Color\\.from_css\\("([^"]+)"\\)`));
+      return m == null ? null : css(m[1]!);
+    };
+    const names = Object.keys(BOARD_LAYER_COLORS);
+    expect(names).toHaveLength(32 + 27); // 32 copper + the 27 other layers upstream's panel lists
+    for (const name of names) {
+      const key = name.replace('.', '_').toLowerCase();
+      const want = key.endsWith('_cu') ? read(copper, key.replace('_cu', '')) : read(board, key);
+      expect(BOARD_LAYER_COLORS[name], name).toBe(want);
+    }
+  });
+
+  it('answers null for a name it does not know, and classifies names', () => {
+    expect(layerColor(':Pads:Front')).toBeNull();
+    expect(layerColor('toString')).toBeNull();
+    expect(FALLBACK_LAYER_COLOR).toBe('rgba(255, 255, 255, 1)');
+    expect(['F.Paste', 'B.CrtYd', 'F.Fab', 'Dwgs.User', 'User.4', 'Margin', 'F.Adhes'].map(layerKind))
+      .toEqual(['paste', 'courtyard', 'fab', 'user', 'user', 'other', 'other']);
+    expect(['F.Mask', 'B.SilkS', 'In12.Cu', 'Edge.Cuts', 'Cmts.User'].map(layerSide)).toEqual(['F', 'B', 'In', null, null]);
   });
 });

@@ -4,6 +4,8 @@ This programme is licensed under the GNU General Public License v3.0 or later (s
 
 === KiCanvas — https://github.com/theacodes/kicanvas @ b031159eb74aaa7eef2b026fd85d35bc05ff2095 (vendored as source with two local patches; see frontend/vendor/kicanvas/patches) ===
 
+KiCanvas's default board layer palette (its "kicad" theme, src/kicanvas/themes/kicad-default.ts) is also copied, as CSS colour strings, into frontend/src/public/components/kicad/layerColors.ts under the MIT License below.
+
 # KiCanvas License and Copyright Notices
 
 KiCanvas is (c) 2022 by Alethea Katherine Flowers

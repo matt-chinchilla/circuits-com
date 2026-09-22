@@ -13,8 +13,12 @@ import type {
   CanvasSource,
   CanvasView,
   FocusResult,
+  LayerInfo,
+  NetInfo,
+  ObjectClass2D,
   ZoomAction,
 } from './canvasController';
+import { FALLBACK_LAYER_COLOR, layerColor, layerKind, layerSide } from './layerColors';
 
 interface KicanvasPage {
   type: 'pcb' | 'schematic';
@@ -44,6 +48,60 @@ interface KicanvasViewer {
    *  overridden at viewers/base/document-viewer.ts:138). The Viewport has no draw. */
   draw?: () => void;
 }
+
+/** `ViewLayer` (vendor viewers/base/view-layers.ts:38-135). `visible` is a getter over a
+ *  boolean-or-function; physical board layers hold a plain boolean (viewers/board/
+ *  layers.ts:246 — only the virtual ones get a function), and the setter takes a boolean. */
+interface KicanvasViewLayer {
+  name: string;
+  visible: boolean;
+  highlighted: boolean;
+  color?: { to_css?: () => string } | null;
+}
+
+/** The board `LayerSet` (vendor viewers/board/layers.ts:224). `in_ui_order` is what
+ *  upstream's own Layers panel lists (elements/kc-board/layers-panel.ts:222) — the
+ *  physical layers only, copper first; `highlight` is the board override that also
+ *  lights a layer's virtual companions (layers.ts:507-523). A new set is built on EVERY
+ *  document load (`paint()` → `create_layer_set()`, viewers/base/document-viewer.ts:107-108),
+ *  so nothing written here survives a reload — hence the `layers` event. */
+interface KicanvasLayerSet {
+  in_ui_order?: () => Iterable<KicanvasViewLayer>;
+  in_display_order?: () => Iterable<KicanvasViewLayer>;
+  by_name?: (name: string) => KicanvasViewLayer | undefined;
+  highlight?: (layer: KicanvasViewLayer | string | null) => void;
+}
+
+/** The `BoardViewer` surface the board controls use (vendor viewers/board/viewer.ts):
+ *  `layers` (the LayerSet), `board.nets` (kicad/board.ts:49, `Net` = {number, name} at
+ *  kicad/common.ts:450), `highlight_net` (:108-111) and seven write-only opacity
+ *  accessors (:120-153). A schematic viewer has none of the last three. */
+type KicanvasBoardViewer = KicanvasViewer & {
+  layers?: KicanvasLayerSet | null;
+  board?: { nets?: Iterable<{ number?: unknown; name?: unknown }> } | null;
+  highlight_net?: (net: number) => void;
+};
+
+/** The upstream accessor behind each object class — the exact mapping upstream's own
+ *  Objects panel uses (vendor elements/kc-board/objects-panel.ts:28-50). */
+const OPACITY_SETTER: Record<ObjectClass2D, string> = {
+  tracks: 'track_opacity',
+  vias: 'via_opacity',
+  pads: 'pad_opacity',
+  holes: 'pad_hole_opacity',
+  zones: 'zone_opacity',
+  grid: 'grid_opacity',
+  page: 'page_opacity',
+};
+
+/** What `highlightNet(null)` hands `highlight_net`. Upstream has no clear: `paint_net`
+ *  repaints the overlay with only the items whose net equals `filter_net`, and skips every
+ *  net-less item while `filter_net` is truthy (vendor viewers/board/painter.ts:1236-1258,
+ *  the `if (this.filter_net) return;` guards and the `!= this.filter_net` tests). No net
+ *  is numbered -1, so the overlay is repainted empty. Net 0 must NEVER reach it: 0 is
+ *  falsy, the guards pass, and the WHOLE board is painted into the overlay — which is why
+ *  upstream's nets panel refuses it (elements/kc-board/nets-panel.ts:33-35). */
+const NO_NET = -1;
 
 type KicanvasApp = HTMLElement & { project?: KicanvasProject; viewer?: KicanvasViewer };
 
@@ -207,6 +265,9 @@ export class KicanvasController implements CanvasController {
    *  dispatches the same event for those calls, and the controller emits its own,
    *  once, with the outcome it actually knows. */
   private muted = 0;
+  /** A `layers` event is already queued for the next microtask. Several changes in one
+   *  turn — a host re-applying ten hidden layers — cost the host ONE event, not ten. */
+  private layersQueued = false;
 
   constructor(options: KicanvasControllerOptions = {}) {
     this.options = {
@@ -474,6 +535,12 @@ export class KicanvasController implements CanvasController {
     // A viewer that did not exist at mount-ready (the app renders after the
     // project loads) is caught here, on the next activation that reaches it.
     this.listenForSelection();
+    // The board is the drawing on screen again. A return to a board the viewer already
+    // holds dispatches no load (upstream's early return), yet the host's layer choices
+    // were made while it was NOT on screen — and every setter is a no-op then — so this
+    // is the host's cue to apply them. An empty list (no layer set yet) emits nothing;
+    // the load that builds it will.
+    if (view === 'board') this.queueLayers();
     return 'ok';
   }
 
@@ -498,6 +565,9 @@ export class KicanvasController implements CanvasController {
     target.addEventListener(KICANVAS_LOAD, () => {
       this.loadTail.add(target);
       queueMicrotask(() => this.loadTail.delete(target));
+      // A board load built a FRESH layer set with upstream's defaults (see
+      // KicanvasLayerSet): every host choice was just discarded.
+      if (view === 'board') this.queueLayers();
     });
     target.addEventListener(KICANVAS_SELECT, (event) => {
       if (this.stale(epoch) || this.muted > 0) return;
@@ -645,6 +715,176 @@ export class KicanvasController implements CanvasController {
       return true;
     } catch {
       return false;
+    }
+  }
+
+  /** The board viewer, only while the board is the page on screen and has a layer set —
+   *  the one condition every board control acts under. With a schematic showing this is
+   *  null, so `layers()`/`nets()` answer [] and every setter does nothing. */
+  private boardViewer(): { viewer: KicanvasBoardViewer; set: KicanvasLayerSet } | null {
+    if (this.project()?.active_page?.type !== 'pcb') return null;
+    const viewer = viewerOf(this.apps().board) as KicanvasBoardViewer | null;
+    try {
+      const set = viewer?.layers ?? null;
+      if (viewer == null || viewer.document == null || set == null) return null;
+      return { viewer, set };
+    } catch {
+      return null;
+    }
+  }
+
+  /** The physical layers of a set, in upstream's layer-panel order. `in_ui_order` never
+   *  yields a virtual layer upstream; the `:` filter holds whatever set we are handed. */
+  private physicalLayers(set: KicanvasLayerSet): KicanvasViewLayer[] {
+    const source = set.in_ui_order ?? set.in_display_order;
+    if (typeof source !== 'function') return [];
+    const seen = new Set<string>();
+    const out: KicanvasViewLayer[] = [];
+    for (const layer of source.call(set)) {
+      const name = layer?.name;
+      if (typeof name !== 'string' || name === '' || name.startsWith(':') || seen.has(name)) continue;
+      seen.add(name);
+      out.push(layer);
+    }
+    return out;
+  }
+
+  private layerByName(set: KicanvasLayerSet, name: string): KicanvasViewLayer | null {
+    if (name.startsWith(':') || typeof set.by_name !== 'function') return null;
+    return set.by_name(name) ?? null;
+  }
+
+  /** What the `layers` payload would say — compared before and after a call, so only a
+   *  call that CHANGED something emits. */
+  private layerKey(set: KicanvasLayerSet): string {
+    return this.physicalLayers(set).map((l) => `${l.name}:${l.visible ? 1 : 0}${l.highlighted ? 1 : 0}`).join('|');
+  }
+
+  private queueLayers(): void {
+    if (this.layersQueued) return;
+    this.layersQueued = true;
+    queueMicrotask(() => {
+      this.layersQueued = false;
+      // Not epoch-scoped: the payload is read NOW, from whatever embed is live, so a
+      // remount inside the same turn still gets its event rather than a swallowed one.
+      if (this.disposed) return;
+      const layers = this.layers();
+      if (layers.length > 0) this.emit({ type: 'layers', layers });
+    });
+  }
+
+  layers(): LayerInfo[] {
+    const board = this.boardViewer();
+    if (board == null) return [];
+    try {
+      return this.physicalLayers(board.set).map((layer) => {
+        let color: string | null = null;
+        try {
+          const css = layer.color?.to_css?.();
+          if (typeof css === 'string' && css !== '') color = css;
+        } catch {
+          // an unreadable colour falls back to the palette below
+        }
+        return {
+          name: layer.name,
+          kind: layerKind(layer.name),
+          side: layerSide(layer.name),
+          color: color ?? layerColor(layer.name) ?? FALLBACK_LAYER_COLOR,
+          visible: layer.visible === true,
+          highlighted: layer.highlighted === true,
+        };
+      });
+    } catch {
+      return [];
+    }
+  }
+
+  /** Upstream's layer panel toggles `layer.visible` and redraws (vendor
+   *  elements/kc-board/layers-panel.ts:97-113). The pad and hole virtual layers follow
+   *  their copper layer on their own (viewers/board/layers.ts:249-276). */
+  setLayerVisible(name: string, visible: boolean): void {
+    const board = this.boardViewer();
+    if (board == null) return;
+    try {
+      const layer = this.layerByName(board.set, name);
+      if (layer == null || layer.visible === visible) return;
+      layer.visible = visible;
+      board.viewer.draw?.();
+      this.queueLayers();
+    } catch {
+      // a renderer that refuses the write has changed nothing
+    }
+  }
+
+  /**
+   * Upstream's layer panel highlights through `layers.highlight(layer)` and clears with
+   * `highlight(null)` (vendor elements/kc-board/layers-panel.ts:78-92); the viewer then
+   * dims every other layer to 0.25 (viewers/base/viewer.ts:147-157). Unlike that panel,
+   * this does NOT force the layer visible: visibility is the host's to decide, and a
+   * highlight that flipped it behind the host's back would fight the host's re-apply on
+   * the very event it causes.
+   */
+  highlightLayer(name: string | null): void {
+    const board = this.boardViewer();
+    if (board == null || typeof board.set.highlight !== 'function') return;
+    try {
+      const before = this.layerKey(board.set);
+      if (name == null) {
+        board.set.highlight(null);
+      } else {
+        const layer = this.layerByName(board.set, name);
+        if (layer == null) return;
+        board.set.highlight(layer);
+      }
+      if (this.layerKey(board.set) === before) return;
+      board.viewer.draw?.();
+      this.queueLayers();
+    } catch {
+      // nothing to undo: highlight() either ran or threw before writing
+    }
+  }
+
+  /** The seven accessors upstream's Objects panel drives (see OPACITY_SETTER). Each sets
+   *  `opacity` on its layers and redraws itself (vendor viewers/board/viewer.ts:113-153). */
+  setObjectOpacity(kind: ObjectClass2D, opacity: number): void {
+    const board = this.boardViewer();
+    const prop = OPACITY_SETTER[kind];
+    if (board == null || prop == null || !Number.isFinite(opacity) || !(prop in board.viewer)) return;
+    try {
+      (board.viewer as unknown as Record<string, number>)[prop] = Math.min(1, Math.max(0, opacity));
+    } catch {
+      // a layer the accessor expects is missing from this set — nothing was drawn
+    }
+  }
+
+  /** `board.nets` — the file's (net N "name") table. Net 0 is the unconnected
+   *  pseudo-net, which can never be highlighted (see NO_NET), so it is not listed. */
+  nets(): NetInfo[] {
+    const board = this.boardViewer();
+    if (board == null) return [];
+    try {
+      const out: NetInfo[] = [];
+      for (const net of board.viewer.board?.nets ?? []) {
+        const number = net?.number;
+        if (typeof number !== 'number' || !Number.isInteger(number) || number <= 0) continue;
+        out.push({ number, name: typeof net.name === 'string' ? net.name : '' });
+      }
+      return out;
+    } catch {
+      return [];
+    }
+  }
+
+  /** `highlight_net(number)` paints the net over the board and redraws (vendor
+   *  viewers/board/viewer.ts:108-111); null — and 0, which upstream never passes — clear. */
+  highlightNet(net: number | null): void {
+    const board = this.boardViewer();
+    if (board == null || typeof board.viewer.highlight_net !== 'function') return;
+    const number = net != null && Number.isInteger(net) && net > 0 ? net : NO_NET;
+    try {
+      board.viewer.highlight_net(number);
+    } catch {
+      // a board without a painter yet has nothing to highlight
     }
   }
 

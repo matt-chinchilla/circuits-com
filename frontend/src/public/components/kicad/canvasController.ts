@@ -18,6 +18,31 @@ export type CanvasStateName = 'loading' | 'ready' | 'no-webgl' | 'timeout' | 'er
  */
 export type FocusResult = 'focused' | 'not-found' | 'unsupported' | 'superseded';
 
+/** What a physical board layer is for. */
+export type LayerKind = 'copper' | 'mask' | 'paste' | 'silk' | 'courtyard' | 'fab' | 'edge' | 'user' | 'other';
+
+/** One PHYSICAL board layer as the renderer holds it now. Virtual layers a
+ *  renderer invents for its own drawing (pads, hole walls, zone fills, net
+ *  names…) are never listed. */
+export interface LayerInfo {
+  /** KiCad's canonical layer name — `F.Cu`, `B.SilkS`, `Edge.Cuts`. */
+  name: string;
+  kind: LayerKind;
+  side: 'F' | 'B' | 'In' | null;
+  /** The colour the renderer draws the layer in, as a CSS colour. */
+  color: string;
+  visible: boolean;
+  highlighted: boolean;
+}
+
+/** The object classes of the 2D board drawing that carry their own opacity. */
+export type ObjectClass2D = 'tracks' | 'vias' | 'pads' | 'holes' | 'zones' | 'grid' | 'page';
+
+export interface NetInfo {
+  number: number;
+  name: string;
+}
+
 export type CanvasEvent =
   | { type: 'state'; state: CanvasStateName; detail?: string }
   /**
@@ -30,6 +55,16 @@ export type CanvasEvent =
    * host can keep one selection whichever door it came through.
    */
   | { type: 'selection'; ref: string | null; sheet?: string; view?: CanvasView }
+  /**
+   * The board's layer list, as `layers()` answers it. Emitted after every board
+   * load — a renderer rebuilds its layer state per load, so a host re-applies its
+   * own visibility, highlight, opacity and net choices on this event — when the
+   * board becomes the drawing on screen, and after any layer change the
+   * controller made (a visibility or highlight call that actually changed
+   * something; one that changes nothing emits nothing, so a host re-applying on
+   * this event settles instead of looping). Never emitted with an empty list.
+   */
+  | { type: 'layers'; layers: LayerInfo[] }
   | { type: 'documentChanged'; path: string; text: string };
 
 export type CanvasEventType = CanvasEvent['type'];
@@ -70,6 +105,22 @@ export interface CanvasController {
    * implementation as "none", never as "unknown".
    */
   unrenderableSheets?(project: KicadProject): string[];
+  // The board controls below are OPTIONAL: a renderer without them gets no
+  // Layers/Objects controls. Each acts on the BOARD drawing only, and only while
+  // it is the one on screen — with a schematic showing, `layers()` and `nets()`
+  // answer [] and every setter does nothing. A host keeps its own copy of the
+  // choices and re-applies them on the `layers` event.
+  /** The board's physical layers in the renderer's layer-panel order; [] before the board has loaded. */
+  layers?(): LayerInfo[];
+  setLayerVisible?(name: string, visible: boolean): void;
+  /** Draw `name` above the rest and dim everything else; null clears. */
+  highlightLayer?(name: string | null): void;
+  /** 0..1; 0 hides the class. */
+  setObjectOpacity?(kind: ObjectClass2D, opacity: number): void;
+  /** The board's nets, from the loaded board; [] before load. */
+  nets?(): NetInfo[];
+  /** Highlight one net's copper; null clears. */
+  highlightNet?(net: number | null): void;
   dispose(): void;
   on<T extends CanvasEventType>(type: T, handler: CanvasHandler<T>): () => void;
 }
