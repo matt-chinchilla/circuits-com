@@ -12,10 +12,11 @@
 // are drawn only while something is moving. (3) The camera's up axis is +Z,
 // because MeshBuilder puts the board's thickness on z; fighting that with a
 // rotated model would put every later "which way is up" question in two places.
-import type { BoardScene, MeshGroup, PartRange, Quality } from '@public/services/kicad/board3d/types';
+import type { BoardScene, Material, MeshGroup, PartRange, Quality } from '@public/services/kicad/board3d/types';
 import { fitDistance as fitDistanceFor, type Box3Like } from '@public/services/kicad/board3d/framing';
 import { highlightSlices, partAtFace } from '@public/services/kicad/board3d/partRanges';
-import { BACKGROUND, CAMERA, FLIP_MS, HIGHLIGHT_MATERIALS, LIGHTS, MATERIALS, ORBIT } from './board3dTheme';
+import { BACKGROUND, CAMERA, FLIP_MS, LIGHTS, MATERIALS, ORBIT, highlightSpecFor, type MaterialSpec } from './board3dTheme';
+import { drawSlices, triangleSpan, type MaterialSpan, type Span } from './drawGroups';
 
 // Types from the dynamic imports themselves: a `typeof import(...)` is erased at
 // compile time, so the library is named for the type checker without any static
@@ -24,6 +25,33 @@ type Three = typeof import('three');
 type OrbitModule = typeof import('three/examples/jsm/controls/OrbitControls.js');
 
 export type ViewName = 'top' | 'bottom' | 'reset';
+
+/** The object classes the Board panel's Objects tab can fade or hide in 3D
+ *  (spec 2026-09-22 §2.2). Tracks, pads and zones are slices of the copper
+ *  groups; the rest are whole materials — vias are the drilled hole walls. */
+export type ObjectClass3D = 'tracks' | 'vias' | 'pads' | 'zones' | 'silk' | 'mask' | 'bodies';
+type CopperClass = 'tracks' | 'pads' | 'zones';
+
+/**
+ * The copper groups' class and net tables (spec §2.3), named here as the
+ * renderer reads them: `start`/`count` in TRIANGLES, which `triangleSpan`
+ * converts. `MeshGroup` carries them as optional fields; this intersection is
+ * what lets the renderer read them whichever way the pipeline's own type
+ * spells the element (it is structurally the same shape).
+ */
+interface RangeTables {
+  classes?: readonly { kind: CopperClass; start: number; count: number }[];
+  nets?: readonly { net: number; start: number; count: number }[];
+}
+type RangedGroup = MeshGroup & RangeTables;
+
+/** A class that is a whole MATERIAL rather than a slice of the copper. */
+const MATERIAL_CLASS: Partial<Record<Material, ObjectClass3D>> = { body: 'bodies', silk: 'silk', mask: 'mask', 'hole-wall': 'vias' };
+/** In the order their materials are appended to a copper mesh. */
+const COPPER_CLASSES: readonly CopperClass[] = ['tracks', 'pads', 'zones'];
+/** What a layer toggle never hides: the board itself and the drilled walls
+ *  through it, which belong to no one layer. */
+const NEVER_HIDDEN: ReadonlySet<Material> = new Set<Material>(['substrate', 'hole-wall']);
 
 export interface SceneRenderer {
   /** Loads three, builds the meshes, draws ONE frame, then resolves. The host
@@ -44,6 +72,18 @@ export interface SceneRenderer {
   /** Draw `ref`'s body and pads in the highlight material; null clears. A ref the
    *  scene does not draw (no courtyard, no pads) simply highlights nothing. */
   highlight?(ref: string | null): void;
+  /** Show or hide every group drawn on `layerName` (`F.Cu`, `B.Mask`, `F.SilkS`…).
+   *  The substrate and the hole walls belong to no layer and are never hidden. */
+  setLayerVisible?(layerName: string, visible: boolean): void;
+  /** The groups on `layerName` take the highlight material, as a selected part
+   *  does; null clears. */
+  highlightLayer?(layerName: string | null): void;
+  /** 0..1, where 0 hides the class outright. Tracks, pads and zones by the
+   *  copper groups' class ranges; bodies, silk, mask and vias by material. */
+  setObjectOpacity?(kind: ObjectClass3D, opacity: number): void;
+  /** The copper of net `net` in the highlight material, via the copper groups'
+   *  net ranges; null (or 0, "no net") clears. */
+  highlightNet?(net: number | null): void;
   /** Who to tell when the reader clicks a part (a designator) or empty board or
    *  sky (null). A click is a pointer-up within a few pixels of its pointer-down;
    *  an orbit drag never picks. */
@@ -116,6 +156,21 @@ const aspectOf = (el: HTMLElement) => Math.max(1, el.clientWidth) / Math.max(1, 
  *  turned over rather than a sprite being spun. */
 const ease = (t: number) => t * t * (3 - 2 * t);
 
+type StandardMaterial = InstanceType<Three['MeshStandardMaterial']>;
+
+/** A material at `opacity` of its theme look: 1 is the theme exactly, 0 is not
+ *  drawn. Anything below 1 blends and stops writing depth, or it would hide
+ *  what is behind it while looking see-through. */
+function fade(material: StandardMaterial, spec: MaterialSpec, opacity: number): void {
+  const transparent = spec.transparent || opacity < 1;
+  // Blending is compiled into the program; only a flip of it needs a rebuild.
+  if (material.transparent !== transparent) material.needsUpdate = true;
+  material.transparent = transparent;
+  material.opacity = spec.opacity * opacity;
+  material.depthWrite = spec.depthWrite && opacity >= 1;
+  material.visible = opacity > 0;
+}
+
 export function createSceneRenderer(options: SceneRendererOptions = {}): SceneRenderer {
   let renderer: InstanceType<Three['WebGLRenderer']> | null = null;
   let scene: InstanceType<Three['Scene']> | null = null;
@@ -125,10 +180,28 @@ export function createSceneRenderer(options: SceneRendererOptions = {}): SceneRe
   let host: HTMLElement | null = null;
   let observer: ResizeObserver | null = null;
   const geometries: InstanceType<Three['BufferGeometry']>[] = [];
-  const materials: InstanceType<Three['MeshStandardMaterial']>[] = [];
-  /** The meshes a reader can pick from and that carry a highlight: those whose
-   *  group has a `parts` table (bodies at `full`, pads on every copper layer). */
-  const parted: { mesh: InstanceType<Three['Mesh']>; parts: PartRange[]; total: number }[] = [];
+  /** EVERY material made, the per-class clones included: dispose frees this list. */
+  const materials: StandardMaterial[] = [];
+  /** The meshes a reader can pick from: those whose group has a `parts` table
+   *  (bodies at `full`, pads on every copper layer). */
+  const parted: { mesh: InstanceType<Three['Mesh']>; parts: PartRange[] }[] = [];
+  /** Every mesh with what `applyView` needs to redraw it: its material array is
+   *  [own, highlight?, …one clone of the copper per class], and its draw groups
+   *  are recomputed from the view state on every change. */
+  interface Drawn {
+    mesh: InstanceType<Three['Mesh']>;
+    group: RangedGroup;
+    total: number;
+    base: StandardMaterial;
+    lit: StandardMaterial | null;
+    classes: { kind: CopperClass; index: number; material: StandardMaterial }[];
+    classSpans: MaterialSpan[];
+  }
+  const drawn: Drawn[] = [];
+  const hiddenLayers = new Set<string>();
+  let highlightedLayer: string | null = null;
+  let highlightedNet: number | null = null;
+  const opacity = new Map<ObjectClass3D, number>();
   let three: Three | null = null;
   let modelBox: Box3Like | null = null;
   let pickHandler: ((ref: string | null) => void) | null = null;
@@ -247,37 +320,107 @@ export function createSceneRenderer(options: SceneRendererOptions = {}): SceneRe
     autoOrbit = false;
   };
 
-  function buildMesh(T: Three, group: MeshGroup): InstanceType<Three['Mesh']> {
+  function buildMesh(T: Three, source: MeshGroup): InstanceType<Three['Mesh']> {
+    const group: RangedGroup = source;
     const geometry = new T.BufferGeometry();
     geometry.setAttribute('position', new T.BufferAttribute(group.positions, 3));
     geometry.setAttribute('normal', new T.BufferAttribute(group.normals, 3));
     geometry.setIndex(new T.BufferAttribute(group.indices, 1));
     geometry.computeBoundingSphere();
+    const total = group.indices.length;
     const spec = MATERIALS[group.material];
     // A spec is exactly MeshStandardMaterial parameters, so it is handed over whole.
-    const material = new T.MeshStandardMaterial({ ...spec });
+    const base = new T.MeshStandardMaterial({ ...spec });
     geometries.push(geometry);
-    materials.push(material);
-    // A group with a parts table draws through a two-material array: index 0 is
-    // its own, 1 the highlight. Which triangles use which is a matter of the
-    // geometry's draw ranges, so a selection costs a range rewrite and at most
-    // two extra draw calls — never a colour attribute over 300k vertices.
-    const highlightSpec = group.material === 'body' || group.material === 'copper' ? HIGHLIGHT_MATERIALS[group.material] : null;
-    let mesh: InstanceType<Three['Mesh']>;
-    if (highlightSpec != null && group.parts != null) {
-      const lit = new T.MeshStandardMaterial({ ...highlightSpec });
+    materials.push(base);
+    // Every mesh draws through a material array, and which triangles use which
+    // material is a matter of the geometry's draw ranges: a selection, a faded
+    // class or a lit net costs a range rewrite and a few draw calls — never a
+    // colour attribute over 300k vertices. Index 0 is the group's own material,
+    // 1 the highlight for anything that can be lit (a part, a layer, a net).
+    const array: StandardMaterial[] = [base];
+    let lit: StandardMaterial | null = null;
+    if (group.parts != null || group.layerName != null || (group.nets?.length ?? 0) > 0) {
+      lit = new T.MeshStandardMaterial({ ...highlightSpecFor(group.material) });
       materials.push(lit);
-      geometry.addGroup(0, group.indices.length, 0);
-      mesh = new T.Mesh(geometry, [material, lit]);
-      parted.push({ mesh, parts: group.parts, total: group.indices.length });
-    } else {
-      mesh = new T.Mesh(geometry, material);
+      array.push(lit);
     }
+    // A copper group's tracks, pads and zones each get their own clone of the
+    // copper, so each can carry its own opacity.
+    const classes: Drawn['classes'] = [];
+    const classSpans: MaterialSpan[] = [];
+    if (group.material === 'copper' && group.classes != null) {
+      for (const kind of COPPER_CLASSES) {
+        const ranges = group.classes.filter((c) => c.kind === kind);
+        if (ranges.length === 0) continue;
+        const material = base.clone();
+        materials.push(material);
+        const index = array.length;
+        array.push(material);
+        classes.push({ kind, index, material });
+        for (const range of ranges) classSpans.push({ ...triangleSpan(range), materialIndex: index });
+      }
+    }
+    const mesh = new T.Mesh(geometry, array);
+    // Drawn whole until the first `applyView`, which runs before any frame.
+    geometry.addGroup(0, total, 0);
+    if (group.parts != null) parted.push({ mesh, parts: group.parts });
+    drawn.push({ mesh, group, total, base, lit, classes, classSpans });
     mesh.name = `${group.material}/${group.layerName ?? ''}`;
     // Translucent bodies last, so they blend over the board rather than the board
     // being sorted over them.
     mesh.renderOrder = spec.transparent ? 1 : 0;
     return mesh;
+  }
+
+  const opacityOf = (kind: ObjectClass3D): number => {
+    const o = opacity.get(kind);
+    return o == null || !Number.isFinite(o) ? 1 : clamp(o, 0, 1);
+  };
+
+  /**
+   * The whole view state onto every mesh: which are shown, each class's
+   * opacity, and each geometry's draw groups — the part, layer and net
+   * highlights re-sliced together, so they never fight over a range. A dozen
+   * meshes and a few hundred ranges: cheap enough to redo on any change.
+   */
+  function applyView(): void {
+    for (const d of drawn) {
+      const { group } = d;
+      const kind = MATERIAL_CLASS[group.material];
+      const own = kind == null ? 1 : opacityOf(kind);
+      const layerHidden = group.layerName != null && !NEVER_HIDDEN.has(group.material) && hiddenLayers.has(group.layerName);
+      d.mesh.visible = !layerHidden && own > 0;
+      if (kind != null) fade(d.base, MATERIALS[group.material], own);
+
+      const hidden = new Set<number>();
+      for (const c of d.classes) {
+        const o = opacityOf(c.kind);
+        fade(c.material, MATERIALS.copper, o);
+        if (o <= 0) hidden.add(c.index);
+      }
+
+      const lit: Span[] = [];
+      if (d.lit != null) {
+        if (group.layerName != null && group.layerName === highlightedLayer) {
+          lit.push({ start: 0, count: d.total });
+        } else {
+          if (highlighted != null && group.parts != null) {
+            for (const slice of highlightSlices(group.parts, highlighted, d.total)) if (slice.materialIndex === 1) lit.push(slice);
+          }
+          if (highlightedNet != null && group.nets != null) {
+            for (const range of group.nets) if (range.net === highlightedNet) lit.push(triangleSpan(range));
+          }
+        }
+      }
+
+      const geometry = d.mesh.geometry;
+      geometry.clearGroups();
+      for (const slice of drawSlices(d.total, d.classSpans, lit, { baseIndex: 0, litIndex: d.lit == null ? 0 : 1, hidden })) {
+        geometry.addGroup(slice.start, slice.count, slice.materialIndex);
+      }
+    }
+    if (renderer != null) onChange();
   }
 
   /** The reset-pose distance for the canvas's CURRENT shape. Re-read on every
@@ -296,7 +439,8 @@ export function createSceneRenderer(options: SceneRendererOptions = {}): SceneRe
     const ndc = new T.Vector2(((x - rect.left) / rect.width) * 2 - 1, -((y - rect.top) / rect.height) * 2 + 1);
     const ray = new T.Raycaster();
     ray.setFromCamera(ndc, cam);
-    const hit = ray.intersectObjects(group.children, false)[0];
+    // A hidden layer neither draws nor stands in the way of a pick.
+    const hit = ray.intersectObjects(group.children.filter((c) => c.visible), false)[0];
     if (hit == null || hit.faceIndex == null) return null;
     const entry = parted.find((p) => p.mesh === hit.object);
     return entry == null ? null : partAtFace(entry.parts, hit.faceIndex);
@@ -423,8 +567,9 @@ export function createSceneRenderer(options: SceneRendererOptions = {}): SceneRe
       canvas.addEventListener('pointerdown', onPointerDown);
       canvas.addEventListener('pointerup', onPointerUp);
       canvas.addEventListener('pointercancel', onPointerCancel);
-      // A selection asked for before the meshes existed is applied now.
-      if (highlighted != null) this.highlight?.(highlighted);
+      // The view state — a selection, hidden layers, faded classes — asked for
+      // before the meshes existed is applied now, before the first frame.
+      applyView();
 
       renderer.render(scene, camera);
       wake();
@@ -432,14 +577,29 @@ export function createSceneRenderer(options: SceneRendererOptions = {}): SceneRe
 
     highlight(ref) {
       highlighted = ref;
-      for (const entry of parted) {
-        const geometry = entry.mesh.geometry;
-        geometry.clearGroups();
-        for (const slice of highlightSlices(entry.parts, ref, entry.total)) {
-          geometry.addGroup(slice.start, slice.count, slice.materialIndex);
-        }
-      }
-      if (renderer != null) onChange();
+      applyView();
+    },
+
+    setLayerVisible(layerName, visible) {
+      if (visible) hiddenLayers.delete(layerName);
+      else hiddenLayers.add(layerName);
+      applyView();
+    },
+
+    highlightLayer(layerName) {
+      highlightedLayer = layerName;
+      applyView();
+    },
+
+    setObjectOpacity(kind, value) {
+      opacity.set(kind, value);
+      applyView();
+    },
+
+    highlightNet(net) {
+      // Net 0 is KiCad's "no net": lighting it would light every unconnected pad.
+      highlightedNet = net == null || net <= 0 ? null : net;
+      applyView();
     },
 
     onPick(handler) {
@@ -510,6 +670,7 @@ export function createSceneRenderer(options: SceneRendererOptions = {}): SceneRe
       geometries.length = 0;
       materials.length = 0;
       parted.length = 0;
+      drawn.length = 0;
       pickHandler = null;
       modelBox = null;
       if (gone.renderer != null) {

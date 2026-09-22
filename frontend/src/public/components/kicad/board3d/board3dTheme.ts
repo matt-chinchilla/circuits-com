@@ -53,8 +53,10 @@ export interface HighlightSpec extends MaterialSpec {
   emissiveIntensity: number;
 }
 
-/** Per material that can carry a selection: the body block and the pads. */
-export const HIGHLIGHT_MATERIALS: Record<'body' | 'copper', HighlightSpec> = {
+/** Per material that can carry a highlight: the body block and the copper (a
+ *  selected part, a highlighted net or layer), and `surface` for the rest of a
+ *  highlighted layer — its mask, silk and drill marks. */
+export const HIGHLIGHT_MATERIALS: Record<'body' | 'copper' | 'surface', HighlightSpec> = {
   body: {
     color: HIGHLIGHT, emissive: HIGHLIGHT, emissiveIntensity: 0.55,
     roughness: 0.5, metalness: 0, opacity: 0.88, transparent: true, depthWrite: false,
@@ -63,7 +65,16 @@ export const HIGHLIGHT_MATERIALS: Record<'body' | 'copper', HighlightSpec> = {
     color: HIGHLIGHT, emissive: HIGHLIGHT, emissiveIntensity: 0.5,
     roughness: 0.4, metalness: 0.2, opacity: 1, transparent: false, depthWrite: true,
   },
+  surface: {
+    color: HIGHLIGHT, emissive: HIGHLIGHT, emissiveIntensity: 0.45,
+    roughness: 0.7, metalness: 0, opacity: 1, transparent: false, depthWrite: true,
+  },
 };
+
+/** The highlight a group of this material takes. */
+export function highlightSpecFor(material: Material): HighlightSpec {
+  return material === 'body' || material === 'copper' ? HIGHLIGHT_MATERIALS[material] : HIGHLIGHT_MATERIALS.surface;
+}
 
 /**
  * One directional light parented to the camera so it travels with the view — a
