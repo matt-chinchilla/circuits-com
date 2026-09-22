@@ -169,9 +169,34 @@ Browser measurement before the tab is declared done (not automated): chrome-devt
 | Dialect drift | four fixtures across KiCad 6/8/9 in the reader tests |
 | Overlapping holes/pads without a boolean library | drop-smaller + `holes-merged` count; revisit with a polygon-clipping library if the count is visible on real boards |
 
-## 11. Measurements (to fill during implementation)
+## 11. Measurements (2026-09-22, Glasgow revC3 via "Try the example project", local `docker compose` frontend at `http://localhost/viewer`)
 
-Glasgow revC3, desktop full / phone reduced: build ms · triangles · draw calls · fps · heap delta on exit · contexts after exit. Bundle: `board3d-three` gzip · `board3d` gzip · `kicanvas` gzip (must stay ≤ 119 KB).
+**Scene** — the hardware-independent numbers, read off `.canvasHost`'s `data-*` after the first frame:
+
+| | desktop (1440×900, `full`) | phone (390×844, `reduced`) | target |
+|---|---|---|---|
+| draw calls | **9** | **8** | ≤ 20 |
+| triangles | 294,094 | 182,392 | — |
+| build (worker) | 765 ms | 868 ms | — |
+| tab click → first frame | 1,629 ms | 1,331 ms | — |
+| second visit (cached scene) | 483 ms | — | — |
+| canvas | 1376×616 | 347×491 | — |
+| caption | "Component bodies are estimates from courtyards, not part shapes. 8 features simplified." | none — `reduced` draws no bodies, so there is nothing to admit | — |
+
+**Teardown (spec D5)** — leaving the 3D tab for Stackup: canvases **3 → 2** (the 2D embed's two survive), `#viewer-panel-3d` and the host gone from the DOM, heap **38.8 → 38.6 MB** (Δ −0.2 MB, target ≤ 5 MB).
+
+**Bundle** (`npm run build`, gzip -9):
+
+| chunk | raw | gzip | gate |
+|---|---|---|---|
+| `kicanvas-D85sgN60.js` | 470,487 | **113,113** | ≤ 121,856 ✓ |
+| `board3d-three-Cfv-oYeU.js` | 765,788 | 194,075 | own chunk, async ✓ |
+| `board3d-DJt2CeNE.js` | 31,192 | 12,237 | own chunk ✓ |
+| `worker-CGlb2Jev.js` | 31,129 | 12,192 | own chunk ✓ |
+
+`grep -c WebGLRenderer dist/assets/index-*.js` = **0** and `grep -c earcut …` = **0**, across all 47 entry documents. (The worker chunk is a second copy of the pure pipeline — Vite compiles a module worker as its own graph — so a visitor with a worker pays ~12 KB gz twice. Accepted.)
+
+**fps: NOT MEASURED.** This WSL2 host has no `/dev/dri`, so no browser on it has hardware GL: the chrome-devtools MCP browser reports `webgl2: false` outright, and Playwright's Chromium falls back to SwiftShader (`ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero)), SwiftShader driver)`). Under it the loop runs 0.75 fps desktop / 1.75 fps phone, which measures the CPU rasteriser (1,934 ms per frame at 0.85 Mpx with MSAA vs 700 ms at 0.17 Mpx without — it scales with pixels, not with our 8–9 draw calls). What the same page DOES show: with the orbit stopped the renderer sleeps and the page returns a clean 60 fps rAF cadence (91 frames / 1.5 s). The ≥ 50 / ≥ 30 fps targets need the owner's own machine.
 
 ## 12. Out of scope, with the seam left
 

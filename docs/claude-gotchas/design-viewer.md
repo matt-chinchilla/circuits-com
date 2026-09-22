@@ -789,6 +789,115 @@ The frontend suite at the time of writing: **106 files / 1316 tests**
 
 ---
 
+## **The 3D tab — `board3d/` is DOM-free and KiCanvas-free BY TEST, and the panel is torn down on the way out (2026-09-22)**
+
+A fifth tab on `/viewer`, **3D**, orbits the dropped board. Spec:
+`docs/superpowers/specs/2026-09-21-3d-board-viewer-design.md`; plan:
+`docs/superpowers/plans/2026-09-22-3d-board-viewer.md`. Two halves:
+
+- **`@public/services/kicad/board3d/`** — the PURE pipeline. Board text →
+  `BoardModel` → a `BoardScene` of merged typed-array mesh groups. No DOM, no
+  three.js, no KiCanvas, no `fetch(`. Unlike the `kicanvasController` seam (a
+  convention nothing enforces — see above), **this one is a GATE**:
+  `board3dBoundary.test.ts` walks the directory and fails on any of
+  `vendor/kicanvas`, `@vendor-build`, `kicanvasController`, `from 'three`,
+  `document.`, `window.`, `fetch(`, and separately asserts that **no file under
+  `src/public` outside `components/kicad/board3d/` imports three at all**. The
+  board text comes from `session.project.files.get(session.project.board)` — the
+  design session, never the renderer.
+- **`@public/components/kicad/board3d/`** — the host. `Board3DView.tsx` (default
+  export, props `{ project, stackup, createRenderer?, quality? }`) over the
+  `SceneRenderer` seam in `sceneRenderer.ts`, which is the ONLY file that imports
+  three, and does it with a dynamic `import()` so three lands in its own chunk.
+
+### The page wiring
+
+`type Tab` gained `'board3d'` (label **3D**, ids `viewer-tab-3d` /
+`viewer-panel-3d`), offered for **any project with a board** — the same rule as
+Stackup, because the panel is where an unreadable board gets its explanation.
+`Board3DView` is a React `lazy()` behind a `<Suspense>`, so the renderer's chunk
+is fetched on the first visit and never by a reader who came for the BOM.
+
+**The panel is MOUNTED ONLY WHILE ITS TAB IS SELECTED** (spec D5) — every other
+panel on this page is mounted for the session and shown with `hidden`, and
+copying that pattern here would leave a second live WebGL context beside
+KiCanvas's for the rest of the visit. Two consequences:
+
+- `aria-controls` for the 3D tab is emitted only while `tab === 'board3d'`
+  (`panelIdFor()` in `pages/viewer/index.tsx`), exactly as the BOM tab's is
+  emitted only once its panel exists. The tablist-contract test skips both.
+- **Measured teardown**: leaving the tab takes the page from 3 canvases to 2 (the
+  2D embed's two survive) and the JS heap back to within 0.2 MB. A return trip
+  re-mounts from `useBoardScene`'s per-project cache — 483 ms to first frame
+  against 1,629 ms cold, with no rebuild.
+- `.board3dPanel` must be `display: flex; flex-direction: column; flex: 1 1 auto;
+  min-height: 0` like `.drawing`. Without it the panel is a content-height flex
+  item and the board renders **317px tall in a 900px viewport** (measured), because
+  the host's own `min-height: 420px` is then the only thing giving it a size.
+- `stackupWanted` ORs in `tab === 'board3d'`: the 3D view wants the same z ladder
+  the Stackup tab reads, and the board is re-tokenised once per session, not once
+  per tab.
+
+### Honesty (spec D7) — what the caption may and may not say
+
+Nothing is measured that the board did not state. `thicknessMm` is the stackup
+reader's listed sum **or null** — never 1.6. Component bodies are estimated from
+**courtyards**, and the caption says so in those words. Every simplification is
+COUNTED, in the fixed order `captionOf()` pins: bodies-are-estimates, then
+`no-stackup`, `outline-open`, unfilled pours, then one total for
+`holes-merged + no-courtyard + arc-degenerate` as "N features simplified".
+
+**The count is only as honest as the overlap test.** `buildScene.prune` keeps the
+larger of two overlapping hole/opening rings (v1 has no polygon-clipping library)
+and counts the drop. Until 2026-09-22 "overlapping" was a **bounding-box** rule
+(>25% of the smaller box), and the drop was counted unconditionally — so Glasgow,
+the owner's own board, was captioned **"134 features simplified"**. Both halves
+were wrong in the same direction:
+
+- `overlap.ts` now answers on the RINGS: a proper edge crossing, or one ring
+  inside the other, with boundaries EXCLUSIVE (two pads that share an edge do not
+  overlap) and a bbox reject first. `ringContains` is the second export.
+- A ring **wholly contained** in the one it lost to is dropped **silently** —
+  the union of the two is exactly the ring that was kept, so nothing was
+  approximated and nothing is reported. Same reasoning `withoutOverlaps` already
+  applied to a pad's own drill.
+- Measured on Glasgow: all **126** merged pad openings are that case (a fine-pitch
+  pad inside a footprint's large one, or two coincident pads), and 0 hole rings
+  merge at all. The caption now reads **"8 features simplified"** — the 8 missing
+  courtyards, which is the only thing that really was. `buildScene.test.ts` pins
+  the absence of a `holes-merged` warning; a partial overlap still counts, pinned
+  in `overlap.test.ts`.
+
+### The quality switch
+
+Exactly one setting, `'full' | 'reduced'`, decided ONCE at mount by
+`currentQuality({ webgl2, innerWidth, devicePixelRatio })` —
+`webgl2 && innerWidth >= 900 && devicePixelRatio <= 2`, overridable with
+`setQualityOverride`. Nothing else in the subsystem branches on device. `reduced`
+drops tracks under 0.2 mm, halves the arc caps, coarsens the tolerance
+(`TOL_MM`), pins `setPixelRatio(1)`, turns MSAA off and **skips component bodies
+entirely** — which also skips their warning, because nothing was attempted. That
+is why a phone shows **no caption at all** on a clean board: there is nothing to
+admit. Measured Glasgow: 294,094 triangles / 9 draw calls full, 182,392 / 8
+reduced.
+
+### Where the numbers live
+
+Spec §11 carries the measured table (build ms, triangles, draw calls, bundle
+sizes, teardown) and `.superpowers/sdd/2026-09-22-3d-board-viewer/` carries the
+proof screenshots and the task report. **fps is the one target that could not be
+measured here**: this WSL2 instance has no `/dev/dri`, so the chrome-devtools MCP
+browser has WebGL disabled outright and Playwright's Chromium falls back to
+SwiftShader — a software rasteriser whose frame cost (1.9 s/frame at 1376×616) is
+a property of the CPU, not of the scene. The scene-side numbers that DO transfer
+are the draw calls and the triangle count; when the loop is asleep the page sits
+at a clean 60 fps rAF cadence (measured 91 frames / 1.5 s), which is the other
+half of the design: `sceneRenderer` only runs frames while auto-orbiting,
+flipping or settling, and the first touch of the controls ends the auto-orbit for
+the tab's lifetime.
+
+---
+
 ## Known limitations
 
 Documented so a future session does not "fix" them by accident.
