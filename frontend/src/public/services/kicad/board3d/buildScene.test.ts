@@ -137,7 +137,10 @@ describe('buildScene — a dense board stays inside the face budget', () => {
     expect(s.warnings).toContainEqual({ kind: 'holes-marked', count: 1500 });
     const marks = s.groups.filter((g) => g.material === 'hole-wall' && g.layerName?.endsWith('.Marks'));
     expect(marks.map((g) => g.layerName).sort()).toEqual(['B.Marks', 'F.Marks']);
-    expect(s.stats.buildMs).toBeLessThan(6000);
+    // A RUNAWAY guard, not a performance target: before the hole budget this
+    // board took ~95 s; with it, ~2.6 s alone and up to ~6.5 s under the full
+    // parallel suite on a loaded machine (a 6 s bound tripped once that way).
+    expect(s.stats.buildMs).toBeLessThan(15_000);
   });
   it('raises the pads whose mask openings do not fit, and counts them', () => {
     const s = buildScene({ text: denseBoard(0, 1600), stackup: null, quality: 'reduced' });
