@@ -6,6 +6,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { motion } from 'framer-motion';
 import { useLocation } from 'react-router-dom';
+import Icon from '@shared/components/Icon';
 import PageHead from '@public/components/PageHead';
 import PageHeaderBand from '@public/components/layout/PageHeaderBand';
 import DesignCanvas, { type CanvasSelection, type DesignCanvasHandle } from '@public/components/kicad/DesignCanvas';
@@ -773,6 +774,38 @@ export default function ViewerPage() {
   const canvasFailed = canvasState !== 'loading' && canvasState !== 'ready';
 
   /**
+   * Fullscreen is requested on the WORKSPACE, never on a canvas: the top bar,
+   * the rail, the drawer and the status line all come along, so the reader
+   * keeps every tool — and the privacy sentence — in fullscreen. The drawing's
+   * own overlay button (DesignCanvas) is pointed at the same element.
+   */
+  const workspaceRef = useRef<HTMLDivElement>(null);
+  const [fullscreen, setFullscreen] = useState(false);
+  const fullscreenEnabled = typeof document !== 'undefined' && document.fullscreenEnabled;
+  useEffect(() => {
+    if (!fullscreenEnabled) return;
+    // The document's event is the only report of an exit by Esc.
+    const sync = () => setFullscreen(document.fullscreenElement != null && document.fullscreenElement === workspaceRef.current);
+    document.addEventListener('fullscreenchange', sync);
+    return () => document.removeEventListener('fullscreenchange', sync);
+  }, [fullscreenEnabled]);
+  const toggleFullscreen = () => {
+    const el = workspaceRef.current;
+    if (el == null) return;
+    // Both reject on reachable paths (a permissions-policy denial, a request
+    // the browser does not count as user-activated); `void` discards the value,
+    // not the rejection, so the catch is what keeps a click from raising an
+    // unhandledrejection.
+    if (document.fullscreenElement === el) void document.exitFullscreen().catch(() => undefined);
+    else void el.requestFullscreen().catch(() => undefined);
+  };
+  const workspaceEl = useCallback(() => workspaceRef.current, []);
+
+  /** What the reader skipped or could not find: the strip's notes, folded
+   *  behind a count in the top bar. */
+  const notes = session == null ? [] : [...session.project.warnings, ...session.parsed.warnings];
+
+  /**
    * The panel a tab opens, or undefined when that panel is not in the document
    * — a reference to an absent element is worse than none. The BOM panel
    * arrives with its first visit; the 3D panel exists ONLY while its tab is
@@ -792,84 +825,143 @@ export default function ViewerPage() {
       transition={{ duration: 0.15, ease: 'easeInOut' as const }}
     >
       <PageHead seo={STATIC_PAGE_SEO.viewer} />
-      <PageHeaderBand
-        page="viewer"
-        title="Design Viewer"
-        subtitle={
-          <>
-            Open a KiCad project. See the schematic and board, and price the BOM read straight from your{' '}
-            <strong>schematic</strong>.
-          </>
-        }
-      />
-      <div className={styles.page}>
-        <div className={styles.stack}>
-          {session == null && (
-            <>
+
+      {session == null && (
+        <>
+          <PageHeaderBand
+            page="viewer"
+            title="Design Viewer"
+            subtitle={
+              <>
+                Open a KiCad project. See the schematic and board, and price the BOM read straight from your{' '}
+                <strong>schematic</strong>.
+              </>
+            }
+          />
+          <div className={styles.page}>
+            <div className={styles.stack}>
               <p className={styles.intro}>{POSITIONING} Your design files never leave your browser.</p>
               <ViewerIntake onProject={handleProject} />
-            </>
-          )}
+            </div>
+          </div>
+        </>
+      )}
 
-          {session != null && (
-            <div className={styles.loaded}>
-              <div className={styles.strip}>
-                <span className={styles.stripName}>{session.project.name}</span>
-                <span className={styles.stripMeta}>
-                  {session.project.sheets.length} {session.project.sheets.length === 1 ? 'sheet' : 'sheets'},{' '}
-                  {session.parsed.lines.reduce((n, l) => n + l.qty, 0).toLocaleString('en-US')} parts,{' '}
-                  {session.project.board != null ? 'with a board' : 'no board'}
-                </span>
-                <button type="button" className={styles.stripAction} onClick={openAnother}>
-                  Open another
+      {session != null && (
+        // The workspace: one full-height instrument. The band above the page
+        // is not drawn here — the top bar names the project, and every pixel
+        // below the navbar belongs to the tools and the stage.
+        <div ref={workspaceRef} className={styles.workspace} data-view={tab}>
+          <div className={styles.topbar}>
+            <div className={styles.project}>
+              <span className={styles.projectName}>{session.project.name}</span>
+              <span className={styles.projectMeta}>
+                {session.project.sheets.length} {session.project.sheets.length === 1 ? 'sheet' : 'sheets'},{' '}
+                {session.parsed.lines.reduce((n, l) => n + l.qty, 0).toLocaleString('en-US')} parts,{' '}
+                {session.project.board != null ? 'with a board' : 'no board'}
+              </span>
+              <button type="button" className={styles.openAnother} onClick={openAnother}>
+                Open another
+              </button>
+            </div>
+
+            <div className={styles.tabs} role="tablist" aria-label="Views" onKeyDown={onTabKeys}>
+              {tabs.map((t) => (
+                <button
+                  key={t.id}
+                  id={TAB_ID[t.id]}
+                  type="button"
+                  role="tab"
+                  className={styles.tab}
+                  aria-selected={tab === t.id}
+                  // Only for a panel that is really in the document: the BOM
+                  // panel arrives with its first visit.
+                  aria-controls={panelIdFor(t.id)}
+                  // Roving: the strip is one tab stop and the arrows move
+                  // inside it.
+                  tabIndex={tab === t.id ? 0 : -1}
+                  ref={(el) => {
+                    tabRefs.current[t.id] = el;
+                  }}
+                  onClick={() => setTab(t.id)}
+                >
+                  {t.label}
                 </button>
-                {(session.project.warnings.length > 0 || session.parsed.warnings.length > 0) && (
-                  <ul className={styles.stripNotes}>
-                    {[...session.project.warnings, ...session.parsed.warnings].map((w) => (
+              ))}
+            </div>
+
+            <div className={styles.topbarEnd}>
+              {notes.length > 0 && (
+                <details className={styles.notes}>
+                  <summary className={styles.notesSummary}>
+                    <Icon name="info" className={styles.notesGlyph} />
+                    {notes.length} {notes.length === 1 ? 'note' : 'notes'}
+                  </summary>
+                  <ul className={styles.notesList}>
+                    {notes.map((w) => (
                       <li key={w}>{w}</li>
                     ))}
                   </ul>
-                )}
-              </div>
-
-              {session.project.missingSheets.length > 0 && (
-                <p className={styles.pageError} role="alert">
-                  Missing sheet file{session.project.missingSheets.length === 1 ? '' : 's'}:{' '}
-                  {session.project.missingSheets.join(', ')} &mdash; add {session.project.missingSheets.length === 1 ? 'it' : 'them'} to
-                  the drop and the drawing and BOM will include {session.project.missingSheets.length === 1 ? 'it' : 'them'}.
-                </p>
+                </details>
               )}
+              {fullscreenEnabled && (
+                <button
+                  type="button"
+                  className={styles.iconBtn}
+                  onClick={toggleFullscreen}
+                  aria-label={fullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+                  aria-pressed={fullscreen}
+                  title={fullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+                >
+                  <Icon name={fullscreen ? 'corners-in' : 'corners-out'} />
+                </button>
+              )}
+            </div>
+          </div>
 
-              <div className={styles.tabs} role="tablist" aria-label="Views" onKeyDown={onTabKeys}>
-                {tabs.map((t) => (
-                  <button
-                    key={t.id}
-                    id={TAB_ID[t.id]}
-                    type="button"
-                    role="tab"
-                    className={styles.tab}
-                    aria-selected={tab === t.id}
-                    // Only for a panel that is really in the document: the BOM
-                    // panel arrives with its first visit.
-                    aria-controls={panelIdFor(t.id)}
-                    // Roving: the strip is one tab stop and the arrows move
-                    // inside it.
-                    tabIndex={tab === t.id ? 0 : -1}
-                    ref={(el) => {
-                      tabRefs.current[t.id] = el;
-                    }}
-                    onClick={() => setTab(t.id)}
-                  >
-                    {t.label}
-                  </button>
-                ))}
-              </div>
+          {session.project.missingSheets.length > 0 && (
+            <p className={styles.alert} role="alert">
+              Missing sheet file{session.project.missingSheets.length === 1 ? '' : 's'}:{' '}
+              {session.project.missingSheets.join(', ')} &mdash; add {session.project.missingSheets.length === 1 ? 'it' : 'them'} to
+              the drop and the drawing and BOM will include {session.project.missingSheets.length === 1 ? 'it' : 'them'}.
+            </p>
+          )}
 
-              <div className={styles.stage}>
-              <div className={styles.stageMain}>
-              {/* Inside the drawing column, not above the stage: only the drawing
-                  gives up the row's height, so the part panel beside it no
-                  longer jumps 35px on every switch to and from Schematic. */}
+          <div className={styles.bench}>
+            <BoardPanel
+              ref={panelRef}
+              facts={facts}
+              knownRefs={refIndex}
+              views={{
+                schematic: session.project.root != null,
+                board: session.project.board != null,
+                board3d: session.project.board != null,
+              }}
+              current={tab === 'schematic' || tab === 'board' || tab === 'board3d' ? tab : null}
+              onSearch={searchRef}
+              onClear={clearSelection}
+              onShow={showOn}
+              onPriceBom={() => setTab('bom')}
+              onSearchFocus={() => setPlacementsSeen(true)}
+              board={
+                session.project.board == null
+                  ? null
+                  : {
+                      context: tab === 'board3d' ? 'board3d' : tab === 'board' && !canvasFailed ? 'board' : null,
+                      hint: tab === 'board' && canvasFailed ? BOARD_FAILED_HINT : BOARD_HINT,
+                      layers: listedLayers,
+                      nets: listedNets,
+                      view: boardView,
+                      onChange: setBoardView,
+                      onOpen: () => setBoardTablesSeen(true),
+                    }
+              }
+            />
+
+            <div className={styles.stage}>
+              {/* Inside the stage, not above it: only the drawing gives up the
+                  row's height, so the drawer beside it never jumps on a switch
+                  to and from Schematic. */}
               {tab === 'schematic' && session.project.sheets.length > 1 && (
                 <div className={styles.chips} role="group" aria-label="Sheets">
                   {droppedSheets.size > 0 && (
@@ -913,13 +1005,8 @@ export default function ViewerPage() {
                   onSelection={handleCanvasSelection}
                   onUnrenderableSheets={handleUnrenderable}
                   onLayers={handleCanvasLayers}
+                  fullscreenTarget={workspaceEl}
                 />
-                <p className={styles.notice}>
-                  Rendering by KiCanvas &mdash;{' '}
-                  <a href="/vendor/kicanvas/NOTICE.txt" target="_blank" rel="noopener noreferrer">
-                    licences
-                  </a>
-                </p>
               </div>
 
               {bomSeen && (
@@ -959,7 +1046,7 @@ export default function ViewerPage() {
                     <p className={styles.phaseText}>
                       Nothing to price &mdash; no BOM lines were read from this schematic. Power,
                       virtual and unreferenced symbols, and anything marked not-in-BOM, are left
-                      out on purpose; the notes above this panel say what was skipped.
+                      out on purpose; the notes in the top bar say what was skipped.
                     </p>
                   )}
                   {!wb.matching && wb.rows.length > 0 && (
@@ -1036,48 +1123,27 @@ export default function ViewerPage() {
                   )}
                 </section>
               )}
-              </div>
+            </div>
+          </div>
 
-              <div className={styles.rail}>
-                <BoardPanel
-                  ref={panelRef}
-                  facts={facts}
-                  knownRefs={refIndex}
-                  views={{
-                    schematic: session.project.root != null,
-                    board: session.project.board != null,
-                    board3d: session.project.board != null,
-                  }}
-                  current={tab === 'schematic' || tab === 'board' || tab === 'board3d' ? tab : null}
-                  onSearch={searchRef}
-                  onClear={clearSelection}
-                  onShow={showOn}
-                  onPriceBom={() => setTab('bom')}
-                  onSearchFocus={() => setPlacementsSeen(true)}
-                  board={
-                    session.project.board == null
-                      ? null
-                      : {
-                          context: tab === 'board3d' ? 'board3d' : tab === 'board' && !canvasFailed ? 'board' : null,
-                          hint: tab === 'board' && canvasFailed ? BOARD_FAILED_HINT : BOARD_HINT,
-                          layers: listedLayers,
-                          nets: listedNets,
-                          view: boardView,
-                          onChange: setBoardView,
-                          onOpen: () => setBoardTablesSeen(true),
-                        }
-                  }
-                />
-              </div>
-              </div>
+          {/* The workspace's own footer: the privacy sentence, verbatim, on
+              every tab at every width, and the renderer's credit. */}
+          <p className={styles.statusLine}>
+            <span>Your design files never leave your browser.</span>
+            <span className={styles.statusCredit}>
+              Rendering by KiCanvas &mdash;{' '}
+              <a href="/vendor/kicanvas/NOTICE.txt" target="_blank" rel="noopener noreferrer">
+                licences
+              </a>
+            </span>
+          </p>
+
+          {/* Inside the workspace, so it is still drawn in fullscreen. */}
+          {toast != null && (
+            <div className={styles.toast} role="status">
+              {toast}
             </div>
           )}
-        </div>
-      </div>
-
-      {toast != null && (
-        <div className={styles.toast} role="status">
-          {toast}
         </div>
       )}
     </motion.div>

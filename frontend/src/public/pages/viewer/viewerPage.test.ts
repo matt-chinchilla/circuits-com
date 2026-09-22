@@ -46,6 +46,8 @@ const canvas = {
   onSelection: null as ((s: { ref: string | null; sheet?: string; view?: string }) => void) | null,
   /** The page's `onLayers` handler, so a test can play the board's `layers` event. */
   onLayers: null as ((layers: FakeLayer[]) => void) | null,
+  /** What the page told the canvas to take fullscreen. */
+  fullscreenTarget: null as (() => HTMLElement | null) | null,
   /** The board as the fake renderer holds it: [] while no board is on screen. */
   board: [] as FakeLayer[],
   nets: [] as { number: number; name: string }[],
@@ -108,6 +110,7 @@ vi.mock('@public/components/kicad/DesignCanvas', () => ({
     canvas.onState = props.onState as (s: string) => void;
     canvas.onSelection = props.onSelection as typeof canvas.onSelection;
     canvas.onLayers = props.onLayers as typeof canvas.onLayers;
+    canvas.fullscreenTarget = props.fullscreenTarget as typeof canvas.fullscreenTarget;
     useImperativeHandle(ref, () => ({
       focusRef: canvas.focusRef,
       selectRef: canvas.selectRef,
@@ -422,6 +425,8 @@ beforeEach(() => {
   readStackupCalls.mockClear();
   readPlacementsCalls.mockClear();
   wb.reset.mockClear();
+  // The Board panel remembers its dock per browser; a test must start blank.
+  localStorage.clear();
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -1491,15 +1496,152 @@ describe('the tab strip stylesheet', () => {
     expect(panelScss).toMatch(/\.facts \{[^{}]*gap:\s*0;/);
   });
   it('keeps the stage clear of the bottom sheet on a phone and a tablet', () => {
-    // The sheet (and the full-width stage) reaches up to $bp-tablet: a 296px
-    // rail at 820 left the stage 455px and the BOM table two columns.
+    // The sheet reaches up to $bp-tablet: a docked drawer at 820 would leave
+    // the stage 430px and the BOM table two columns. Its handle row is 52px
+    // and the workspace keeps exactly that much clear below itself.
     const mobile = scss.slice(scss.indexOf('@include responsive($bp-tablet)'));
-    expect(mobile.slice(0, mobile.indexOf('@include responsive($bp-mobile)'))).toMatch(/\.stage \{[^{}]*flex-direction:\s*column/);
+    expect(mobile.slice(0, mobile.indexOf('@include responsive($bp-mobile)'))).toMatch(/\.workspace \{[^{}]*padding-bottom:\s*52px/);
     const panelScss = readFileSync(join(__dirname, 'components', 'BoardPanel.module.scss'), 'utf8');
     expect(panelScss).toMatch(/@include responsive\(\$bp-tablet\) \{\s*\.panel \{[^{}]*position:\s*fixed/);
-    // `.loaded`'s min-height interpolates a variable (`#{…}`), so a brace-free
-    // scan would stop short; read the rule up to the next selector instead.
-    const loaded = mobile.slice(mobile.indexOf('.loaded {'));
-    expect(loaded.slice(0, loaded.indexOf('.stage'))).toMatch(/padding-bottom:\s*60px/);
+  });
+});
+
+// The workspace (owner, 2026-09-22): once a project is open the page is one
+// full-height instrument, and fullscreen takes ALL of it.
+describe('the workspace', () => {
+  /** happy-dom has no Fullscreen API: stand one up that records the element. */
+  let fullscreenEl: Element | null = null;
+  const requestFullscreen = vi.fn(function (this: Element) {
+    fullscreenEl = this;
+    document.dispatchEvent(new Event('fullscreenchange'));
+    return Promise.resolve();
+  });
+  beforeEach(() => {
+    fullscreenEl = null;
+    requestFullscreen.mockClear();
+    Object.defineProperty(document, 'fullscreenEnabled', { value: true, configurable: true });
+    Object.defineProperty(document, 'fullscreenElement', { get: () => fullscreenEl, configurable: true });
+    Object.defineProperty(HTMLElement.prototype, 'requestFullscreen', { value: requestFullscreen, configurable: true, writable: true });
+    Object.defineProperty(document, 'exitFullscreen', {
+      value: () => {
+        fullscreenEl = null;
+        document.dispatchEvent(new Event('fullscreenchange'));
+        return Promise.resolve();
+      },
+      configurable: true,
+      writable: true,
+    });
+  });
+
+  const workspace = () => container.querySelector('aside')!.parentElement!.parentElement as HTMLElement;
+  const fsButton = () => [...container.querySelectorAll('button')].find((b) => /fullscreen/i.test(b.getAttribute('aria-label') ?? ''))!;
+
+  it('has no band once a project is open, and its status line carries the privacy sentence and the credit', async () => {
+    session = makeSession({ board: 'main.kicad_pcb' });
+    await render();
+    // The intake's intro is gone with the intake; the sentence lives on in the
+    // workspace's own footer, word for word.
+    const status = [...container.querySelectorAll('p')].find((p) => /never leave your browser/.test(p.textContent ?? ''))!;
+    expect(status).toBeDefined();
+    expect(status.textContent).toContain('Your design files never leave your browser.');
+    expect(status.textContent).toContain('Rendering by KiCanvas');
+    expect(status.querySelector('a')?.getAttribute('href')).toBe('/vendor/kicanvas/NOTICE.txt');
+    // …and it is inside the workspace, so fullscreen keeps it.
+    expect(workspace().contains(status)).toBe(true);
+    // The top bar names the project and the way out.
+    expect(workspace().textContent).toContain('demo');
+    expect(byText('Open another')).toBeDefined();
+  });
+
+  it('takes the WHOLE workspace fullscreen from the top bar, and tells the canvas to do the same', async () => {
+    session = makeSession({ board: 'main.kicad_pcb' });
+    await render();
+    await canvasReady();
+    expect(fsButton().getAttribute('aria-pressed')).toBe('false');
+    await click(fsButton());
+    expect(requestFullscreen).toHaveBeenCalledTimes(1);
+    // The element asked was the workspace — the rail, the drawer, the tabs and
+    // the status line are all inside it — never the drawing's frame.
+    expect(fullscreenEl).toBe(workspace());
+    expect(workspace().contains(container.querySelector('aside'))).toBe(true);
+    expect(workspace().contains(container.querySelector('[role="tablist"][aria-label="Views"]'))).toBe(true);
+    expect(fsButton().getAttribute('aria-pressed')).toBe('true');
+    expect(fsButton().getAttribute('aria-label')).toBe('Exit fullscreen');
+    // The drawing's overlay button is pointed at the same element.
+    expect(canvas.fullscreenTarget?.()).toBe(workspace());
+    await click(fsButton());
+    expect(fullscreenEl).toBeNull();
+    expect(fsButton().getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('folds the read’s notes behind a count in the top bar', async () => {
+    const s = makeSession({ board: 'main.kicad_pcb' });
+    s.parsed.warnings = ['213 symbols skipped: 0 not in BOM, 213 power, virtual or unreferenced.'];
+    s.project.warnings = ['One file was ignored.'];
+    session = s;
+    await render();
+    const details = workspace().querySelector('details')!;
+    expect(details).not.toBeNull();
+    expect(details.querySelector('summary')?.textContent).toContain('2 notes');
+    expect(details.textContent).toContain('213 symbols skipped');
+    expect(details.textContent).toContain('One file was ignored.');
+  });
+
+  it('keeps a missing sheet as an alert under the bar, never folded into the notes', async () => {
+    const t = makeSession({ board: 'main.kicad_pcb' });
+    t.project.missingSheets = ['io_extra.kicad_sch'];
+    session = t;
+    await render();
+    // Not the stackup panel's own (hidden) alert: the strip is a direct child
+    // of the workspace, under the top bar.
+    const alert = [...workspace().querySelectorAll('[role="alert"]')].find((a) => /Missing sheet/.test(a.textContent ?? ''))!;
+    expect(alert).toBeDefined();
+    expect(alert.textContent).toMatch(/Missing sheet file: io_extra\.kicad_sch/);
+    expect(alert.parentElement).toBe(workspace());
+    expect(workspace().querySelector('details')).toBeNull();
+  });
+
+  it('draws the toast inside the workspace', async () => {
+    await render();
+    await canvasReady();
+    hash = '#U1';
+    await rerender();
+    expect(toastText()).toBe('Focused U1');
+    expect(workspace().contains(container.querySelector('[role="status"]'))).toBe(true);
+  });
+});
+
+// The workspace: the viewport below the navbar and nothing more, the stage
+// bounded so the BOM scrolls inside it, the drawer docked beside the rail.
+describe('the workspace stylesheet', () => {
+  const scss = readFileSync(join(__dirname, 'ViewerPage.module.scss'), 'utf8');
+  const panelScss = readFileSync(join(__dirname, 'components', 'BoardPanel.module.scss'), 'utf8');
+
+  it('is exactly the viewport below the navbar, on a desktop and on a phone', () => {
+    // `height` interpolates a variable (`#{…}`), so the rule is read up to its
+    // closing brace by hand rather than with a brace-free scan.
+    const desktop = scss.slice(scss.indexOf('.workspace {'));
+    expect(desktop.slice(0, desktop.indexOf('\n}'))).toMatch(/height:\s*calc\(100dvh - #\{\$nav-height\}\)/);
+    const mobile = scss.slice(scss.indexOf('@include responsive($bp-mobile)'));
+    const mobileWs = mobile.slice(mobile.indexOf('.workspace {'));
+    expect(mobileWs.slice(0, mobileWs.indexOf('\n  }'))).toMatch(/height:\s*calc\(100dvh - #\{\$nav-height-mobile\}\)/);
+    // The stage scrolls on its own; the workspace never grows past the viewport.
+    expect(scss).toMatch(/\.stage \{[^{}]*overflow:\s*auto/);
+    expect(scss).toMatch(/\.stage \{[^{}]*min-height:\s*0/);
+  });
+
+  it('docks the drawer beside a 48px rail at Altium’s width, and only when docked', () => {
+    expect(panelScss).toMatch(/\$rail-w:\s*48px/);
+    expect(panelScss).toMatch(/\$drawer-w:\s*340px/);
+    expect(panelScss).toMatch(/\.panel\[data-docked\] \.drawer \{[^{}]*display:\s*flex/);
+    // Closed is closed: the bare `.drawer` draws nothing.
+    expect(panelScss).toMatch(/\n\.drawer \{\s*display:\s*none;\s*\}/);
+    // Never a card inside the instrument: the frame's radius and shadow go.
+    expect(scss).toMatch(/> :first-child \{[^{}]*border-radius:\s*0/);
+    expect(scss).toMatch(/> :first-child \{[^{}]*box-shadow:\s*none/);
+  });
+
+  it('keeps the toast inside the workspace so fullscreen still shows it', () => {
+    expect(scss).toMatch(/\.toast \{[^{}]*position:\s*fixed/);
   });
 });

@@ -68,6 +68,14 @@ export interface DesignCanvasProps {
    * page's panel above the priced table.
    */
   height?: 'default' | 'compact';
+  /**
+   * What the overlay's fullscreen button takes fullscreen. Default: this frame,
+   * which is right where the drawing is context beside its subject (/bom). The
+   * viewer hands in its whole workspace instead, so the top bar, the rail and
+   * the drawer come along and the reader keeps every tool in fullscreen. Read at
+   * CLICK time, so a ref that is not yet populated is fine.
+   */
+  fullscreenTarget?: () => HTMLElement | null;
   /** Test seam. Defaults to a KicanvasController. */
   createController?: () => CanvasController;
 }
@@ -107,7 +115,7 @@ const COPY: Record<Exclude<CanvasStateName, 'loading' | 'ready'>, { title: strin
 };
 
 const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(function DesignCanvas(
-  { project, view, activeSheet, onState, onSelection, onUnrenderableSheets, onLayers, height = 'default', createController },
+  { project, view, activeSheet, onState, onSelection, onUnrenderableSheets, onLayers, height = 'default', fullscreenTarget, createController },
   ref,
 ) {
   const hostRef = useRef<HTMLDivElement>(null);
@@ -213,8 +221,21 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(function 
     if (ok === false && aliveRef.current) setZoomable(false);
   };
   const fullscreenEnabled = typeof document !== 'undefined' && document.fullscreenEnabled;
+  const fullscreenTargetRef = useRef(fullscreenTarget);
+  fullscreenTargetRef.current = fullscreenTarget;
+  const target = () => fullscreenTargetRef.current?.() ?? frameRef.current;
+  /** Is OUR element the fullscreen one? Tracked so the button reads as pressed
+   *  and offers the exit — the reader may also have left by Esc, which only
+   *  the document's event reports. */
+  const [inFullscreen, setInFullscreen] = useState(false);
+  useEffect(() => {
+    if (!fullscreenEnabled) return;
+    const sync = () => setInFullscreen(document.fullscreenElement != null && document.fullscreenElement === target());
+    document.addEventListener('fullscreenchange', sync);
+    return () => document.removeEventListener('fullscreenchange', sync);
+  }, [fullscreenEnabled]);
   const toggleFullscreen = () => {
-    const el = frameRef.current;
+    const el = target();
     if (el == null) return;
     // Both reject on reachable paths — a permissions-policy denial, an iframe without
     // allow="fullscreen", a request the browser does not count as user-activated. `void`
@@ -241,7 +262,15 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(function 
             </>
           )}
           {fullscreenEnabled && (
-            <button type="button" className={styles.ctl} onClick={toggleFullscreen} aria-label="Fullscreen">&#x26F6;</button>
+            <button
+              type="button"
+              className={styles.ctl}
+              onClick={toggleFullscreen}
+              aria-label={inFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+              aria-pressed={inFullscreen}
+            >
+              &#x26F6;
+            </button>
           )}
         </div>
       )}

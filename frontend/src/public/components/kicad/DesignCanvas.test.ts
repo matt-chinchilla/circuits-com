@@ -392,3 +392,68 @@ describe('DesignCanvas — height', () => {
     await act(async () => root.unmount());
   });
 });
+
+// The overlay's fullscreen button takes the FRAME fullscreen by default (the
+// /bom panel) and, when the host names another element, that one instead —
+// the viewer hands in its whole workspace so the rail and drawer come along.
+describe('DesignCanvas — fullscreen target', () => {
+  let fullscreenEl: Element | null = null;
+  const requestFullscreen = vi.fn(function (this: Element) {
+    fullscreenEl = this;
+    document.dispatchEvent(new Event('fullscreenchange'));
+    return Promise.resolve();
+  });
+  beforeEach(() => {
+    fullscreenEl = null;
+    requestFullscreen.mockClear();
+    Object.defineProperty(document, 'fullscreenEnabled', { value: true, configurable: true });
+    Object.defineProperty(document, 'fullscreenElement', { get: () => fullscreenEl, configurable: true });
+    Object.defineProperty(HTMLElement.prototype, 'requestFullscreen', { value: requestFullscreen, configurable: true, writable: true });
+    Object.defineProperty(document, 'exitFullscreen', {
+      value: () => {
+        fullscreenEl = null;
+        document.dispatchEvent(new Event('fullscreenchange'));
+        return Promise.resolve();
+      },
+      configurable: true,
+      writable: true,
+    });
+  });
+
+  async function mountReady(fullscreenTarget?: () => HTMLElement | null) {
+    setWebgl(true);
+    const f = fakeController();
+    await act(async () => {
+      root.render(createElement(DesignCanvas, { project, view: 'schematic', createController: () => f.ctrl, fullscreenTarget }));
+    });
+    await act(async () => f.emit('ready'));
+    const button = [...container.querySelectorAll('button')].find((b) => /fullscreen/i.test(b.getAttribute('aria-label') ?? ''))!;
+    expect(button).toBeDefined();
+    return button;
+  }
+
+  it('takes its own frame fullscreen when no target is named', async () => {
+    const button = await mountReady();
+    await act(async () => button.click());
+    expect(requestFullscreen).toHaveBeenCalledTimes(1);
+    expect(fullscreenEl).toBe(container.firstElementChild);
+    expect(button.getAttribute('aria-pressed')).toBe('true');
+    expect(button.getAttribute('aria-label')).toBe('Exit fullscreen');
+    await act(async () => button.click());
+    expect(fullscreenEl).toBeNull();
+    expect(button.getAttribute('aria-pressed')).toBe('false');
+    await act(async () => root.unmount());
+  });
+
+  it('takes the host’s element fullscreen when one is named, and reads it at click time', async () => {
+    const workspace = document.createElement('div');
+    document.body.append(workspace);
+    const button = await mountReady(() => workspace);
+    await act(async () => button.click());
+    expect(fullscreenEl).toBe(workspace);
+    // Pressed tracks the HOST's element, not the frame.
+    expect(button.getAttribute('aria-pressed')).toBe('true');
+    await act(async () => root.unmount());
+    workspace.remove();
+  });
+});

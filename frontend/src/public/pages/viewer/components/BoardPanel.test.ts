@@ -13,7 +13,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { NetInfo } from '@public/components/kicad/canvasController';
 import { EMPTY_BOARD_VIEW, type BoardViewState, type PanelLayer } from '../boardView';
 import type { PartFacts } from '../partFacts';
-import BoardPanel, { type BoardPanelHandle } from './BoardPanel';
+import BoardPanel, { SHEET_QUERY, type BoardPanelHandle } from './BoardPanel';
 import { NET_ROWS } from './BoardControls';
 import type { BoardContext } from './BoardControls';
 
@@ -103,6 +103,8 @@ const button = (text: string) =>
   [...container.querySelectorAll('button')].find((b) => b.textContent === text) as HTMLButtonElement | undefined;
 
 beforeEach(() => {
+  // The dock is remembered per browser; every test starts from the default.
+  localStorage.clear();
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -267,5 +269,116 @@ describe('Nets', () => {
     await click(tab('Objects'));
     expect(container.querySelectorAll('ul[aria-label="Nets"] li').length).toBe(NET_ROWS);
     expect(container.textContent).toMatch(new RegExp(`Showing ${NET_ROWS} of 250`));
+  });
+});
+
+// The rail and the drawer (owner, 2026-09-22): the icon tabs ARE the toggle,
+// the dock is remembered, and a part picked elsewhere opens the drawer.
+describe('the rail and the dock', () => {
+  const aside = () => container.querySelector('aside') as HTMLElement;
+  const docked = () => aside().dataset.docked !== undefined;
+  const sheetOpen = () => aside().dataset.open !== undefined;
+  /** Which shape the panel believes it has. happy-dom's window is 1024 wide —
+   *  the sheet's own breakpoint — and its media queries do not follow a width
+   *  set from a test, so the query is answered here outright. */
+  const atPhone = (phone: boolean) => {
+    Object.defineProperty(window, 'matchMedia', {
+      value: (media: string) => ({ media, matches: phone && media === SHEET_QUERY, addEventListener() {}, removeEventListener() {} }),
+      configurable: true,
+      writable: true,
+    });
+  };
+  beforeEach(() => atPhone(false));
+
+  it('opens on Parts, closes on the lit tab or the ×, and reopens on any tab', async () => {
+    await render({ context: 'board' });
+    expect(docked()).toBe(true);
+    expect(tab('Parts').getAttribute('aria-expanded')).toBe('true');
+    expect(tab('Layers').getAttribute('aria-expanded')).toBe('false');
+    // The lit tab again folds the drawer away; the selection stays.
+    await click(tab('Parts'));
+    expect(docked()).toBe(false);
+    expect(tab('Parts').getAttribute('aria-selected')).toBe('true');
+    expect(tab('Parts').getAttribute('aria-expanded')).toBe('false');
+    // Any tab opens it again, on that tab.
+    await click(tab('Layers'));
+    expect(docked()).toBe(true);
+    expect(tab('Layers').getAttribute('aria-expanded')).toBe('true');
+    expect(container.querySelector('ul[aria-label="Layers"]')).not.toBeNull();
+    // The × in the drawer's head closes it and hands focus back to the rail.
+    await click(container.querySelector('button[aria-label="Close panel"]'));
+    expect(docked()).toBe(false);
+    expect(document.activeElement).toBe(tab('Layers'));
+  });
+
+  it('remembers the dock per browser, and reads it back on the next mount', async () => {
+    await render({ context: 'board' });
+    await click(tab('Objects'));
+    expect(JSON.parse(localStorage.getItem('cc.viewer.panel') ?? 'null')).toEqual({ tab: 'objects', docked: true });
+    await click(tab('Objects'));
+    expect(JSON.parse(localStorage.getItem('cc.viewer.panel') ?? 'null')).toEqual({ tab: 'objects', docked: false });
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    await render({ context: 'board' });
+    expect(docked()).toBe(false);
+    expect(tab('Objects').getAttribute('aria-selected')).toBe('true');
+  });
+
+  it('a part picked elsewhere opens a closed drawer on Parts', async () => {
+    await render({ context: 'board' });
+    await click(tab('Parts'));
+    expect(docked()).toBe(false);
+    await render({ context: 'board', facts: { ref: 'U1', found: false } as PartFacts });
+    expect(docked()).toBe(true);
+    expect(tab('Parts').getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it('draws each rail tab as a glyph with its name for the reader, and a title for the pointer', async () => {
+    await render({ context: 'board' });
+    for (const label of ['Parts', 'Layers', 'Objects']) {
+      const t = tab(label);
+      expect(t.querySelector('i.ph-light')).not.toBeNull();
+      expect(t.textContent).toBe(label);
+      expect(t.title).toBe(label);
+    }
+    // Disabled tabs carry the reason as their title instead.
+    await render({ context: null });
+    expect(tab('Layers').title).toBe('Open the Board or 3D tab');
+  });
+
+  it('moves along the rail with Up and Down as well as Left and Right', async () => {
+    await render({ context: 'board' });
+    await key(tab('Parts'), 'ArrowDown');
+    expect(tab('Layers').getAttribute('aria-selected')).toBe('true');
+    await key(tab('Layers'), 'ArrowUp');
+    expect(tab('Parts').getAttribute('aria-selected')).toBe('true');
+  });
+
+  it('on a phone the lit tab toggles the SHEET, and leaves the dock alone', async () => {
+    atPhone(true);
+    await render({ context: 'board' });
+    expect(sheetOpen()).toBe(false);
+    // Closed sheet, lit tab: a tap opens the sheet (it must never be a no-op).
+    await click(tab('Parts'));
+    expect(sheetOpen()).toBe(true);
+    expect(docked()).toBe(true);
+    // Open sheet, lit tab: a tap closes the sheet; the dock is untouched.
+    await click(tab('Parts'));
+    expect(sheetOpen()).toBe(false);
+    expect(docked()).toBe(true);
+    // Another tab opens the sheet on that tab.
+    await click(tab('Layers'));
+    expect(sheetOpen()).toBe(true);
+    expect(tab('Layers').getAttribute('aria-selected')).toBe('true');
+  });
+
+  it('without a board the rail is one toggle for the part panel, not a tablist', async () => {
+    await render({ context: null, board: false });
+    expect(container.querySelector('[role="tablist"]')).toBeNull();
+    const toggle = aside().querySelector('button[aria-expanded]') as HTMLButtonElement;
+    expect(toggle.textContent).toBe('Part');
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    await click(toggle);
+    expect(docked()).toBe(false);
   });
 });
