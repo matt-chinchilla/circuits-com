@@ -7,8 +7,9 @@
 //
 // A number is copied from the file or it is absent — never defaulted. A
 // footprint with no `(at …)` is left out rather than placed at the origin.
-import { atom, child, children, parse, topLevelBlocks } from './sexpr';
-import { KicadReadError, type SExpr } from './types';
+import { boardBlocks, footprintField, parseBlock } from './boardFile';
+import { atom, child } from './sexpr';
+import type { SExpr } from './types';
 
 export interface FootprintPlacement {
   ref: string;
@@ -23,33 +24,14 @@ export interface FootprintPlacement {
   rotDeg: number;
 }
 
-const BOARD_HEAD = /^\s*\(\s*kicad_pcb[\s()]/;
-
-function parseBlock(text: string, start: number, end: number): SExpr[] | null {
-  try {
-    const node = parse(text.slice(start, end))[0];
-    return Array.isArray(node) ? node : null;
-  } catch {
-    return null;
-  }
-}
-
 function finite(raw: string | null): number | null {
   if (raw == null) return null;
   const n = Number(raw);
   return Number.isFinite(n) ? n : null;
 }
 
-/** KiCad 6 spells a field `(fp_text reference "U1" …)`; 7+ `(property "Reference" "U1" …)`. */
-function fieldOf(node: SExpr[], kind: 'reference' | 'value'): string | null {
-  for (const text of children(node, 'fp_text')) if (atom(text, 1) === kind) return atom(text, 2);
-  const name = kind === 'reference' ? 'Reference' : 'Value';
-  for (const prop of children(node, 'property')) if (atom(prop, 1) === name) return atom(prop, 2);
-  return null;
-}
-
 function placementOf(node: SExpr[]): FootprintPlacement | null {
-  const ref = fieldOf(node, 'reference');
+  const ref = footprintField(node, 'reference');
   const at = child(node, 'at');
   const x = finite(at == null ? null : atom(at, 1));
   const y = finite(at == null ? null : atom(at, 2));
@@ -59,7 +41,7 @@ function placementOf(node: SExpr[]): FootprintPlacement | null {
   return {
     ref,
     lib: atom(node, 1) ?? '',
-    value: fieldOf(node, 'value'),
+    value: footprintField(node, 'value'),
     side: (layer == null ? null : atom(layer, 1)) === 'B.Cu' ? 'B' : 'F',
     x,
     y,
@@ -78,19 +60,11 @@ function placementOf(node: SExpr[]): FootprintPlacement | null {
  * one of two positions is more honest than silently averaging them.
  */
 export function readPlacements(boardText: string): Map<string, FootprintPlacement> {
-  if (!BOARD_HEAD.test(boardText)) {
-    throw new KicadReadError('That file does not open with (kicad_pcb …) — it is not a KiCad board.', 'unreadable');
-  }
-  let blocks: { head: string; start: number; end: number }[];
-  try {
-    blocks = [...topLevelBlocks(boardText)];
-  } catch {
-    throw new KicadReadError('That board file is truncated or malformed and could not be read.', 'unreadable');
-  }
+  const blocks = boardBlocks(boardText);
   const out = new Map<string, FootprintPlacement>();
   for (const block of blocks) {
     if (block.head !== 'footprint') continue;
-    const node = parseBlock(boardText, block.start, block.end);
+    const node = parseBlock(boardText, block);
     const placed = node == null ? null : placementOf(node);
     if (placed != null && !out.has(placed.ref)) out.set(placed.ref, placed);
   }

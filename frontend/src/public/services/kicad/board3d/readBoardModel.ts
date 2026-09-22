@@ -7,7 +7,8 @@
 //
 // `(model …)` is never read: a 3D model path is a reference to a file on the
 // author's disk and nothing here may follow it (spec §2).
-import { atom, child, children, head, parse, topLevelBlocks, type TopLevelBlock } from '../sexpr';
+import { boardBlocks, footprintField, parseBlock } from '../boardFile';
+import { atom, child, children, head } from '../sexpr';
 import { KicadReadError, type SExpr } from '../types';
 import { flattenThreePoint } from './arcs';
 import { dist, placeShape } from './geom';
@@ -15,9 +16,6 @@ import type {
   BoardModel, FootprintModel, LayerDef, LayerKind, PadDrill, PadModel, PadShape,
   Placement, Shape, Side, TrackModel, Vec2, ViaModel, ZoneFill,
 } from './types';
-
-/** The same header the stackup reader tests, so both refuse the same files. */
-const BOARD_HEAD = /^\s*\(\s*kicad_pcb[\s()]/;
 
 const PAD_KINDS: readonly PadModel['kind'][] = ['smd', 'thru_hole', 'np_thru_hole', 'connect'];
 const PAD_SHAPES: readonly PadShape[] = ['circle', 'oval', 'rect', 'roundrect', 'trapezoid', 'custom'];
@@ -45,15 +43,6 @@ function pt(node: SExpr[] | undefined): Vec2 {
 function ptsOf(node: SExpr[]): Vec2[] {
   const pts = child(node, 'pts');
   return pts == null ? [] : children(pts, 'xy').map((xy) => pt(xy));
-}
-
-function parseBlock(text: string, start: number, end: number): SExpr[] | null {
-  try {
-    const node = parse(text.slice(start, end))[0];
-    return Array.isArray(node) ? node : null;
-  } catch {
-    return null;
-  }
 }
 
 // ── layers ──────────────────────────────────────────────────────────────────
@@ -188,13 +177,6 @@ function readPad(node: SExpr[], ref: string, copperNames: string[]): PadModel {
   };
 }
 
-/** KiCad 6 names a footprint in `fp_text reference`; 7+ in a Reference property. */
-function referenceOf(node: SExpr[]): string {
-  for (const text of children(node, 'fp_text')) if (atom(text, 1) === 'reference') return atom(text, 2) ?? '';
-  for (const prop of children(node, 'property')) if (atom(prop, 1) === 'Reference') return atom(prop, 2) ?? '';
-  return '';
-}
-
 /**
  * `edgeOut` collects the footprint's own Edge.Cuts graphics, PLACED on the
  * board: KiCad counts a footprint's outline, slot or notch as part of the board
@@ -205,7 +187,7 @@ function readFootprint(node: SExpr[], copperNames: string[], edgeOut: Shape[]): 
   const at = child(node, 'at');
   const side: Side = str(child(node, 'layer')) === 'B.Cu' ? 'B' : 'F';
   const place: Placement = { at: pt(at), rotDeg: num(at, 3), side };
-  const ref = referenceOf(node);
+  const ref = footprintField(node, 'reference') ?? '';
   const courtyard: Shape[] = [], silk: Shape[] = [];
   for (const item of node) {
     if (!Array.isArray(item) || !FP_GRAPHICS.includes(head(item) ?? '')) continue;
@@ -293,15 +275,7 @@ function readGraphic(node: SExpr[], model: BoardModel): void {
 // ── the reader ──────────────────────────────────────────────────────────────
 
 export function readBoardModel(text: string, tolMm: number): BoardModel {
-  if (!BOARD_HEAD.test(text)) {
-    throw new KicadReadError('That file does not open with (kicad_pcb …) — it is not a KiCad board.', 'unreadable');
-  }
-  let blocks: TopLevelBlock[];
-  try {
-    blocks = [...topLevelBlocks(text)];
-  } catch {
-    throw new KicadReadError('That board file is truncated or malformed and could not be read.', 'unreadable');
-  }
+  const blocks = boardBlocks(text);
   const model: BoardModel = {
     version: 0, layers: [], edgeItems: [], footprints: [], vias: [], tracks: [],
     zones: [], zonesUnfilled: 0, silk: [], warnings: [],
@@ -311,7 +285,7 @@ export function readBoardModel(text: string, tolMm: number): BoardModel {
 
   for (const block of blocks) {
     if (!TOP_HEADS.has(block.head) && !block.head.startsWith('gr_')) continue;
-    const node = parseBlock(text, block.start, block.end);
+    const node = parseBlock(text, block);
     if (node == null) continue;
     switch (block.head) {
       case 'version':

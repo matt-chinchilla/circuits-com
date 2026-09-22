@@ -2,22 +2,18 @@
 // Layer table, physical stackup and via groups from a .kicad_pcb (spec §4.4),
 // parsing only the blocks it needs via topLevelBlocks so a 10 MB board's
 // tracks are never materialized. Absent facts stay null — never defaulted.
-import { atom, child, children, parse, topLevelBlocks } from './sexpr';
-import {
-  KicadReadError,
-  type BoardStackup,
-  type CopperLayer,
-  type SExpr,
-  type StackupRow,
-  type ViaGroup,
-  type ViaType,
+import { boardBlocks, parseBlock } from './boardFile';
+import { atom, child, children } from './sexpr';
+import type {
+  BoardStackup,
+  CopperLayer,
+  SExpr,
+  StackupRow,
+  ViaGroup,
+  ViaType,
 } from './types';
 
 const KIND: Record<string, string> = { signal: 'Signal', power: 'Plane', mixed: 'Mixed', jumper: 'Jumper' };
-
-/** A board must open with (kicad_pcb …). buildProject accepts a .kicad_pcb that
- *  carries no (version …), so a file that is not a board at all can reach here. */
-const BOARD_HEAD = /^\s*\(\s*kicad_pcb[\s()]/;
 
 function num(node: SExpr[] | undefined): number | null {
   const v = node == null ? null : atom(node, 1);
@@ -28,15 +24,6 @@ function num(node: SExpr[] | undefined): number | null {
 
 function str(node: SExpr[] | undefined): string | null {
   return node == null ? null : atom(node, 1);
-}
-
-function parseBlock(text: string, start: number, end: number): SExpr[] | null {
-  try {
-    const node = parse(text.slice(start, end))[0];
-    return Array.isArray(node) ? node : null;
-  } catch {
-    return null;
-  }
 }
 
 function copperLayers(layers: SExpr[]): CopperLayer[] {
@@ -88,41 +75,29 @@ function viaOf(via: SExpr[]): ViaGroup | null {
 }
 
 export function readStackup(boardText: string): BoardStackup {
-  if (!BOARD_HEAD.test(boardText)) {
-    throw new KicadReadError('That file does not open with (kicad_pcb …) — it is not a KiCad board.', 'unreadable');
-  }
+  const blocks = boardBlocks(boardText);
   let copper: CopperLayer[] = [];
   let stackup: StackupRow[] | null = null;
   let copperFinish: string | null = null;
   let designThicknessMm: number | null = null;
   const groups = new Map<string, ViaGroup>();
 
-  // One error contract for the reader: a truncated or unbalanced board makes
-  // the scanner throw a plain Error, which the pages never see — it is the
-  // same 'unreadable' as a file that is not a board at all.
-  let blocks: Iterable<{ head: string; start: number; end: number }>;
-  try {
-    blocks = [...topLevelBlocks(boardText)];
-  } catch (err) {
-    if (err instanceof KicadReadError) throw err;
-    throw new KicadReadError('That board file is truncated or malformed and could not be read.', 'unreadable');
-  }
   for (const block of blocks) {
     if (block.head === 'layers') {
-      const node = parseBlock(boardText, block.start, block.end);
+      const node = parseBlock(boardText, block);
       if (node) copper = copperLayers(node);
     } else if (block.head === 'general') {
-      const node = parseBlock(boardText, block.start, block.end);
+      const node = parseBlock(boardText, block);
       if (node) designThicknessMm = num(child(node, 'thickness'));
     } else if (block.head === 'setup') {
-      const node = parseBlock(boardText, block.start, block.end);
+      const node = parseBlock(boardText, block);
       const read = node ? stackupRows(node) : null;
       if (read) {
         stackup = read.rows;
         copperFinish = read.finish;
       }
     } else if (block.head === 'via') {
-      const node = parseBlock(boardText, block.start, block.end);
+      const node = parseBlock(boardText, block);
       const via = node ? viaOf(node) : null;
       if (via == null) continue;
       const key = `${via.type}|${via.start}|${via.end}`;
