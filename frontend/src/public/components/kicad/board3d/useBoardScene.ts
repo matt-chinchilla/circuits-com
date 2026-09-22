@@ -35,6 +35,16 @@ function defaultSpawn(): Worker | null {
   }
 }
 
+/**
+ * The longest a worker build may run before it is stopped and the reader told
+ * why. The face budget bounds what buildScene does with holes (a 50,000-via
+ * board builds in ~4 s in node), so this is the backstop for whatever else a
+ * hostile or simply enormous file can make it do — an honest "too large" is
+ * better than a spinner that never ends.
+ */
+export const BUILD_TIMEOUT_MS = 45_000;
+export const TOO_LARGE = 'This board is too large to build in 3D in the browser. The Board tab still draws it.';
+
 const messageOf = (err: unknown): string =>
   err instanceof Error && err.message !== '' ? err.message : 'The board could not be built.';
 
@@ -61,12 +71,20 @@ function runBuild(input: BuildInput, spawn: () => Worker | null, took: (w: Worke
   // synchronously (a fake in a test, a browser that inlines a tiny module) must
   // not reply into a null handler.
   const settled = new Promise<BoardScene>((resolve, reject) => {
+    const watchdog = setTimeout(() => {
+      worker.terminate();
+      reject(new Error(TOO_LARGE));
+    }, BUILD_TIMEOUT_MS);
     worker.onmessage = (event: MessageEvent<BuildReply>) => {
+      clearTimeout(watchdog);
       const reply = event.data;
       if (reply != null && reply.ok) resolve(reply.scene);
       else reject(new Error(reply == null ? messageOf(null) : reply.message));
     };
-    worker.onerror = () => reject(new Error('The board builder stopped unexpectedly.'));
+    worker.onerror = () => {
+      clearTimeout(watchdog);
+      reject(new Error('The board builder stopped unexpectedly.'));
+    };
   });
   worker.postMessage(input);
   return settled;
