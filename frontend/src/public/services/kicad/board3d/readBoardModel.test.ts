@@ -86,10 +86,13 @@ describe('readBoardModel — StickHub (KiCad 9 dialect)', () => {
 });
 
 describe('readBoardModel — the panel (no stackup) and complex_hierarchy', () => {
-  it('panel: 6 pours, 2 of them filled into 3 polygons → 4 unfilled; 84 edge items', () => {
+  it('panel: the copper pour is filled (3 polygons); its unfilled zones are all on B.Mask, so none counts; 84 edge items', () => {
     const m = panel();
     expect(m.zones).toHaveLength(3);
-    expect(m.zonesUnfilled).toBe(4);
+    // The four zones with `(fill yes)` and nothing filled are `(layer "B.Mask")`
+    // — not copper pours, and never drawn — so "N copper pours were saved
+    // unfilled" would be false about this board.
+    expect(m.zonesUnfilled).toBe(0);
     expect(m.edgeItems).toHaveLength(84);
   });
   it('complex_hierarchy: 165 THT pads, all drilled', () => {
@@ -105,5 +108,26 @@ describe('readBoardModel — errors', () => {
     expect(() => readBoardModel('(kicad_sch (version 1))', 0.01)).toThrow(KicadReadError);
     const t = fixtureText('glasgow-revC3/glasgow.kicad_pcb');
     expect(() => readBoardModel(t.slice(0, 200000), 0.01)).toThrow(KicadReadError);
+  });
+});
+
+describe('readBoardModel — zones and the layer table', () => {
+  const head = '(kicad_pcb (version 20221018) (generator pcbnew)\n';
+  it('counts an unfilled zone only when it is on copper', () => {
+    const board = head + [
+      '(layers (0 "F.Cu" signal) (31 "B.Cu" signal) (38 "B.Mask" user))',
+      '(zone (net 0) (layer "B.Mask") (fill yes) (polygon (pts (xy 0 0) (xy 1 0) (xy 1 1))))',
+      '(zone (net 0) (layers "F&B.Cu") (fill yes) (polygon (pts (xy 0 0) (xy 1 0) (xy 1 1))))',
+      ')',
+    ].join('\n');
+    expect(readBoardModel(board, 0.01).zonesUnfilled).toBe(1);
+  });
+  it('refuses a copper-layer table past KiCad\'s 32', () => {
+    const rows = Array.from({ length: 40 }, (_, i) => `(${i} "In${i}.Cu" signal)`).join(' ');
+    expect(() => readBoardModel(head + `(layers ${rows})\n)`, 0.01)).toThrow(KicadReadError);
+  });
+  it('refuses a layer table past 128 rows', () => {
+    const rows = Array.from({ length: 200 }, (_, i) => `(${i} "User.${i}" user)`).join(' ');
+    expect(() => readBoardModel(head + `(layers ${rows})\n)`, 0.01)).toThrow(/at most 128/);
   });
 });

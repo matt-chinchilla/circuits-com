@@ -92,10 +92,11 @@ describe('buildScene — Glasgow', () => {
 });
 
 describe('buildScene — the panel', () => {
-  it('no stackup → null thickness + warning; unfilled zones reported', () => {
+  it('no stackup → null thickness + warning; its mask zones are not reported as unfilled copper', () => {
     const s = load('bad-thing-panel/panel.kicad_pcb');
     expect(s.thicknessMm).toBeNull();
-    expect(s.warnings).toEqual(expect.arrayContaining([{ kind: 'no-stackup' }, { kind: 'zones-unfilled', count: 4 }]));
+    expect(s.warnings).toEqual(expect.arrayContaining([{ kind: 'no-stackup' }]));
+    expect(s.warnings.find((w) => w.kind === 'zones-unfilled')).toBeUndefined();
   });
 });
 

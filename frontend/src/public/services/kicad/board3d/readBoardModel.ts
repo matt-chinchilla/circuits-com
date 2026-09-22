@@ -58,6 +58,17 @@ function parseBlock(text: string, start: number, end: number): SExpr[] | null {
 
 // ── layers ──────────────────────────────────────────────────────────────────
 
+/**
+ * KiCad's own ceilings. Not a style preference: every `(layers *.Cu)` pad is
+ * expanded against the copper table, so an unbounded table is multiplied by
+ * the pad count — a 1 MB file declaring 2,000 copper layers allocated ~480 MB
+ * in the worker (measured). 32 copper layers is KiCad's hard limit, and the
+ * whole table (copper, technical and user layers) is well under 128 in every
+ * version.
+ */
+export const MAX_COPPER_LAYERS = 32;
+export const MAX_LAYER_ROWS = 128;
+
 function layerKind(name: string): LayerKind {
   if (name.endsWith('.Cu')) return 'copper';
   if (name === 'F.Mask' || name === 'B.Mask') return 'mask';
@@ -241,10 +252,15 @@ function zoneLayerNames(node: SExpr[]): string[] {
  * One ZoneFill per `filled_polygon`, on ITS own layer — a zone spanning F.Cu and
  * B.Cu writes one polygon per side. `unfilled` is only ever true for a real
  * copper POUR: a keepout writes `(fill (thermal_gap …))` with no `yes`, has
- * nothing to fill, and must not raise "saved unfilled".
+ * nothing to fill, and must not raise "saved unfilled" — and neither may a zone
+ * on a non-copper layer (a mask or silk zone, which the 3D view never draws),
+ * or the caption would report copper pours the board does not have.
  */
 function readZone(node: SExpr[]): { fills: ZoneFill[]; unfilled: boolean } {
-  const fallback = zoneLayerNames(node)[0] ?? '';
+  const names = zoneLayerNames(node);
+  const fallback = names[0] ?? '';
+  // `F&B.Cu` is KiCad 7+'s spelling of a two-sided zone.
+  const onCopper = names.some((n) => n.endsWith('.Cu'));
   const fills: ZoneFill[] = [];
   for (const poly of children(node, 'filled_polygon')) {
     const pts = ptsOf(poly);
@@ -252,7 +268,7 @@ function readZone(node: SExpr[]): { fills: ZoneFill[]; unfilled: boolean } {
   }
   const fill = child(node, 'fill');
   const pours = fill == null || atom(fill, 1) === 'yes';
-  return { fills, unfilled: pours && fills.length === 0 };
+  return { fills, unfilled: onCopper && pours && fills.length === 0 };
 }
 
 function readGraphic(node: SExpr[], model: BoardModel): void {
@@ -292,7 +308,13 @@ export function readBoardModel(text: string, tolMm: number): BoardModel {
         break;
       case 'layers':
         model.layers = readLayers(node);
-        copperNames.push(...model.layers.filter((l) => l.kind === 'copper').map((l) => l.name));
+        if (model.layers.length > MAX_LAYER_ROWS) {
+          throw new KicadReadError(`That board declares ${model.layers.length} layers; KiCad allows at most ${MAX_LAYER_ROWS}.`, 'unreadable');
+        }
+        for (const l of model.layers) if (l.kind === 'copper') copperNames.push(l.name);
+        if (copperNames.length > MAX_COPPER_LAYERS) {
+          throw new KicadReadError(`That board declares ${copperNames.length} copper layers; KiCad allows at most ${MAX_COPPER_LAYERS}.`, 'unreadable');
+        }
         break;
       case 'footprint':
         model.footprints.push(readFootprint(node, copperNames));
