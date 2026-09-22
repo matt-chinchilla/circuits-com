@@ -15,14 +15,14 @@ describe('estimateHeightMm', () => {
 
 describe('courtyards on Glasgow', () => {
   const m = readBoardModel(fixtureText('glasgow-revC3/glasgow.kicad_pcb'), 0.01);
-  it('263 closed courtyards, 9 footprints without one', () => {
+  it('264 closed courtyards (J4 closes within the 20 µm courtyard snap), 8 footprints without one', () => {
     const r = courtyards(m, 0.01);
     // 8 footprints (the logos, the kikit tabs) draw no courtyard at all. The 9th
     // is J4, whose four F.CrtYd lines miss each other by 8 µm at one corner —
     // 1.778 against 1.770 — so the courtyard is genuinely open and the part gets
     // no body rather than a guessed one.
-    expect(r.bodies).toHaveLength(263);
-    expect(r.missing).toBe(9);
+    expect(r.bodies).toHaveLength(264);
+    expect(r.missing).toBe(8);
     expect(m.footprints.filter((f) => f.courtyard.length === 0)).toHaveLength(8);
   });
   it('the C at (127, 107.6, 90) has a closed courtyard placed around its centre', () => {

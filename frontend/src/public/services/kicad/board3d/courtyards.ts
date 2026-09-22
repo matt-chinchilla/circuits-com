@@ -28,13 +28,20 @@ export function estimateHeightMm(areaMm2: number): number {
  * The largest loop wins: a courtyard drawn as an outer boundary plus an inner
  * keep-clear (a connector's mating area) is one body, not two.
  */
+/** Endpoint snap for courtyard chaining. A courtyard is hand- or generator-drawn
+ *  at 10 µm precision on 50 µm strokes, and Glasgow's J4 misses closure by 8 µm
+ *  at one corner — a body-less connector for a gap a fifth of its own line
+ *  width. 20 µm closes it and stays well under the stroke; the BOARD outline keeps
+ *  the reader's 1 µm default, where a false closure would fabricate a board. */
+export const COURTYARD_SNAP_MM = 0.02;
+
 export function courtyardOf(fp: FootprintModel, tolMm: number): Courtyard | null {
   const { polylines } = shapePolylines(fp.courtyard, tolMm);
   if (polylines.length === 0) return null;
   // Placed AFTER flattening: place() is a rigid motion (mirror, turn, translate),
   // so flattening first and placing the points gives the same curve for less work.
   const placed = polylines.map((pl) => pl.map((p) => place(p, fp.place)));
-  const { loops } = chainLoops(placed);
+  const { loops } = chainLoops(placed, COURTYARD_SNAP_MM);
   let best: Ring | null = null;
   let bestArea = 0;
   for (const loop of loops) {
