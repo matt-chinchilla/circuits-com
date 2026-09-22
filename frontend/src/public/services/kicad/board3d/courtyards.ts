@@ -24,7 +24,7 @@ export function estimateHeightMm(areaMm2: number): number {
  *  at one corner — a body-less connector for a gap a fifth of its own line
  *  width. 20 µm closes it and stays well under the stroke; the BOARD outline keeps
  *  the reader's 1 µm default, where a false closure would fabricate a board. */
-export const COURTYARD_SNAP_MM = 0.02;
+const COURTYARD_SNAP_MM = 0.02;
 
 /**
  * The footprint's courtyard graphics, placed on the board and chained into one

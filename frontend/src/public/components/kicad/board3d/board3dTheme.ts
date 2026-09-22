@@ -46,7 +46,7 @@ export const MATERIALS: Record<Material, MaterialSpec> = {
  * `emissive` is what makes it independent of the lights; the colour is also
  * the base so a lit face and a shadowed one are the same hue.
  */
-export const HIGHLIGHT = 0x4fc3f7;
+const HIGHLIGHT = 0x4fc3f7;
 
 export interface HighlightSpec extends MaterialSpec {
   emissive: number;

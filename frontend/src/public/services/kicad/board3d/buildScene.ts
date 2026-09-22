@@ -235,8 +235,8 @@ export function buildScene(input: BuildInput): BoardScene {
  * of `buildMs` — the number the caption shows is what the visitor waited for, not
  * what the tessellator alone cost.
  */
-export function buildSceneFromModel(
-  model: BoardModel, stackup: BoardStackup | null, quality: Quality, startedAt = performance.now(),
+function buildSceneFromModel(
+  model: BoardModel, stackup: BoardStackup | null, quality: Quality, startedAt: number,
 ): BoardScene {
   const tol = TOL_MM[quality];
   const caps = quality === 'full' ? 8 : 4;

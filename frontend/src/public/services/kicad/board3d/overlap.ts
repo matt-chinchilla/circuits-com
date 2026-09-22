@@ -65,7 +65,7 @@ function onSegment(p: Vec2, a: Vec2, b: Vec2): boolean {
  * cast is arbitrary for a point exactly on a vertical edge, which two abutting
  * pads produce on every row.)
  */
-export function pointInRing(p: Vec2, pts: Vec2[]): boolean {
+function pointInRing(p: Vec2, pts: Vec2[]): boolean {
   let inside = false;
   for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
     const a = pts[j], b = pts[i];

@@ -55,8 +55,8 @@ function ptsOf(node: SExpr[]): Vec2[] {
  * whole table (copper, technical and user layers) is well under 128 in every
  * version.
  */
-export const MAX_COPPER_LAYERS = 32;
-export const MAX_LAYER_ROWS = 128;
+const MAX_COPPER_LAYERS = 32;
+const MAX_LAYER_ROWS = 128;
 
 function layerKind(name: string): LayerKind {
   if (name.endsWith('.Cu')) return 'copper';
