@@ -26,8 +26,8 @@ describe('StickHub U2 — a back-side part with pads off its local x axis', () =
   it('every routed pad centre lands where its copper ends (within 0.05 mm)', () => {
     const offAxis = u2.pads.filter((p) => Math.abs(p.at.y) > 0.1);
     const landed = offAxis.filter((p) => nearestEnd(place(p.at, u2.place)) < 0.05);
-    // Not every pad is routed from its centre, but the placement that is RIGHT
-    // puts the routed ones on their copper, and a mirrored one puts none there.
-    expect(landed.length).toBeGreaterThanOrEqual(offAxis.length / 2);
+    // All six land on their copper; the old mirrored placement put none there.
+    expect(offAxis).toHaveLength(6);
+    expect(landed.length).toBe(offAxis.length);
   });
 });
