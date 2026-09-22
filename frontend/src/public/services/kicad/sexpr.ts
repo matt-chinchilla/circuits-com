@@ -45,7 +45,7 @@ function skipQuoted(text: string, start: number): number {
   throw new Error(`unterminated string starting at ${start}`);
 }
 
-/** Parse a whole document. Returns the list of top-level nodes (KiCad files have one). */
+/** Parse a whole file. Returns the list of top-level nodes (KiCad files have one). */
 export function parse(text: string): SExpr[] {
   const root: SExpr[] = [];
   const stack: SExpr[][] = [root];

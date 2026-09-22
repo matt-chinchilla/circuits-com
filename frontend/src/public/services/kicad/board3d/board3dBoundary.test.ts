@@ -9,6 +9,33 @@ const SERVICE = __dirname;
 const HOST = join(__dirname, '../../../components/kicad/board3d');
 const PUBLIC = join(__dirname, '../../..');
 
+/** A three.js import in either form: static `from 'three…'` or dynamic
+ *  `import('three…')` — the renderer itself uses the dynamic one. */
+const THREE_IMPORT = /(?:from\s*|import\s*\()\s*['"]three/;
+/** Every way a module can talk to the network, not only `fetch(`. */
+const NETWORK = ['fetch(', 'XMLHttpRequest', 'sendBeacon', 'WebSocket', 'EventSource', 'importScripts', 'new Image'];
+
+/** The pipeline's own files plus the modules OUTSIDE its directory that it
+ *  imports (`../sexpr`, `../types`): a boundary that stops at the folder edge
+ *  is one relative import away from meaning nothing. */
+function pipelineFiles(): string[] {
+  const own = walk(SERVICE);
+  const outside = new Set<string>();
+  for (const file of own) {
+    for (const m of readFileSync(file, 'utf8').matchAll(/from\s*['"](\.\.\/[^'"]+)['"]/g)) {
+      const base = join(SERVICE, m[1]);
+      for (const candidate of [`${base}.ts`, join(base, 'index.ts')]) {
+        try {
+          if (statSync(candidate).isFile()) outside.add(candidate);
+        } catch {
+          // not this spelling
+        }
+      }
+    }
+  }
+  return [...own, ...outside];
+}
+
 function walk(dir: string, out: string[] = []): string[] {
   for (const name of readdirSync(dir)) {
     const p = join(dir, name);
@@ -20,17 +47,21 @@ function walk(dir: string, out: string[] = []): string[] {
 
 describe('board3d import boundary', () => {
   it('the pure pipeline never touches KiCanvas, three, the DOM or the network', () => {
-    for (const file of walk(SERVICE)) {
+    const files = pipelineFiles();
+    // …and the scan really does reach past the folder.
+    expect(files.some((f) => f.endsWith(join('kicad', 'sexpr.ts')))).toBe(true);
+    for (const file of files) {
       const src = readFileSync(file, 'utf8');
-      for (const bad of ['vendor/kicanvas', '@vendor-build', 'kicanvasController', "from 'three", 'document.', 'window.', 'fetch(']) {
+      for (const bad of ['vendor/kicanvas', '@vendor-build', 'kicanvasController', 'document.', 'window.', ...NETWORK]) {
         expect(src, `${file} contains ${bad}`).not.toContain(bad);
       }
+      expect(src, `${file} imports three`).not.toMatch(THREE_IMPORT);
     }
   });
   it('the host never touches KiCanvas or the network', () => {
     for (const file of walk(HOST)) {
       const src = readFileSync(file, 'utf8');
-      for (const bad of ['vendor/kicanvas', '@vendor-build', 'kicanvasController', 'fetch(']) {
+      for (const bad of ['vendor/kicanvas', '@vendor-build', 'kicanvasController', ...NETWORK]) {
         expect(src, `${file} contains ${bad}`).not.toContain(bad);
       }
     }
@@ -38,7 +69,15 @@ describe('board3d import boundary', () => {
   it('three is imported nowhere else under src/public', () => {
     for (const file of walk(PUBLIC)) {
       if (file.startsWith(HOST)) continue;
-      expect(readFileSync(file, 'utf8'), file).not.toMatch(/from ['"]three/);
+      expect(readFileSync(file, 'utf8'), file).not.toMatch(THREE_IMPORT);
     }
+  });
+  it('the patterns see both import forms', () => {
+    expect("const T = await import('three');").toMatch(THREE_IMPORT);
+    expect('import { Mesh } from "three";').toMatch(THREE_IMPORT);
+    expect("import('three/examples/jsm/controls/OrbitControls.js')").toMatch(THREE_IMPORT);
+  });
+  it('the renderer, the one sanctioned importer, is seen by the pattern', () => {
+    expect(readFileSync(join(HOST, 'sceneRenderer.ts'), 'utf8')).toMatch(THREE_IMPORT);
   });
 });
