@@ -271,6 +271,8 @@ export function buildSceneFromModel(
   const substrateLo = bottom?.z1 ?? ladder.substrateBottom;
   const maskZ: Record<Side, number> = { F: copperZ.F + LAYER_GAP_MM, B: copperZ.B - LAYER_GAP_MM };
   const silkZ: Record<Side, number> = { F: maskZ.F + LAYER_GAP_MM, B: maskZ.B - LAYER_GAP_MM };
+  /** Halfway from the mask to the silk: a raised pad, or a drill's mark. */
+  const overMaskZ: Record<Side, number> = { F: maskZ.F + LAYER_GAP_MM / 2, B: maskZ.B - LAYER_GAP_MM / 2 };
 
   // Centre and bounds are both in MODEL space: the geometry is recentred, so a
   // camera framed on the board's own coordinates would look where it used to be.
@@ -365,13 +367,12 @@ export function buildSceneFromModel(
       else marks[side].push(item.ring);
     }
     holesMarked += maskCuts.over.length;
-    const raisedZ = up ? maskZ[side] + LAYER_GAP_MM / 2 : maskZ[side] - LAYER_GAP_MM / 2;
 
     const copper = builder();
     const padParts: PartRange[] = [];
     model.footprints.forEach((fp, i) => {
       ranged(copper, padParts, fp.ref, () => {
-        for (const ring of ringsOf[i]) copper.addFace({ outer: ring, holes: [] }, raised.has(ring) ? raisedZ : z, up);
+        for (const ring of ringsOf[i]) copper.addFace({ outer: ring, holes: [] }, raised.has(ring) ? overMaskZ[side] : z, up);
       });
     });
     for (const track of model.tracks) {
@@ -393,10 +394,8 @@ export function buildSceneFromModel(
   // the hole-wall material — what the eye reads looking into a drill.
   for (const side of sides) {
     if (marks[side].length === 0) continue;
-    const up = side === 'F';
-    const markZ = up ? maskZ[side] + LAYER_GAP_MM / 2 : maskZ[side] - LAYER_GAP_MM / 2;
     const markMesh = builder();
-    for (const ring of marks[side]) markMesh.addFace({ outer: ring, holes: [] }, markZ, up);
+    for (const ring of marks[side]) markMesh.addFace({ outer: ring, holes: [] }, overMaskZ[side], side === 'F');
     emit(markMesh, 'hole-wall', `${side}.Marks`);
   }
 

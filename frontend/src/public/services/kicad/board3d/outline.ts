@@ -5,13 +5,13 @@ import type { Ring, Shape, Vec2 } from './types';
 
 export interface Chained { loops: Ring[]; unchained: number }
 
-/** 1 µm snap: KiCad writes Edge.Cuts endpoints to 6 decimals, so exact equality misses. */
-
 /**
- * Chain open polylines end-to-end into closed loops. Inputs that already close
- * (first == last within the snap) become loops directly. Anything that runs into
- * a dead end is counted in `unchained` — every polyline that went into the
- * non-closing chain, not just the last one.
+ * Chain open polylines end-to-end into closed loops. The default 1 µm snap is
+ * the board outline's: KiCad writes Edge.Cuts endpoints to 6 decimals, so
+ * exact equality misses. Inputs that already close (first == last within the
+ * snap) become loops directly. Anything that runs into a dead end is counted in
+ * `unchained` — every polyline that went into the non-closing chain, not just
+ * the last one.
  */
 export function chainLoops(polylines: Vec2[][], snapMm = 0.001): Chained {
   const near = (a: Vec2, b: Vec2) => Math.abs(a.x - b.x) <= snapMm && Math.abs(a.y - b.y) <= snapMm;
