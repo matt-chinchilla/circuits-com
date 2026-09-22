@@ -161,6 +161,21 @@ vi.mock('@public/services/kicad/boardStackup', async () => {
     },
   };
 });
+/** The same wrapper around the placement reader: WHEN the board is scanned. */
+const readPlacementsCalls = vi.fn();
+vi.mock('@public/services/kicad/boardPlacements', async () => {
+  const actual =
+    await vi.importActual<typeof import('@public/services/kicad/boardPlacements')>(
+      '@public/services/kicad/boardPlacements',
+    );
+  return {
+    ...actual,
+    readPlacements: (boardText: string) => {
+      readPlacementsCalls(boardText);
+      return actual.readPlacements(boardText);
+    },
+  };
+});
 vi.mock('@public/services/designSession', () => ({
   getDesignSession: () => session,
   clearDesignSession: () => {
@@ -358,6 +373,7 @@ beforeEach(() => {
   canvas.selectRef.mockResolvedValue('focused');
   canvas.activeSheet = undefined;
   readStackupCalls.mockClear();
+  readPlacementsCalls.mockClear();
   wb.reset.mockClear();
   container = document.createElement('div');
   document.body.appendChild(container);
@@ -846,6 +862,15 @@ describe('the 3D tab', () => {
     expect(readStackupCalls).toHaveBeenCalledTimes(1);
   });
 
+  it('a return to the 3D tab reuses the layer stack instead of re-reading the board', async () => {
+    session = makeSession({ board: 'main.kicad_pcb' });
+    await render();
+    await click(byText('3D'));
+    await click(byText('Board'));
+    await click(byText('3D'));
+    expect(readStackupCalls).toHaveBeenCalledTimes(1);
+  });
+
   it('keeps the ONE canvas embed alive across the trip to 3D and back', async () => {
     session = makeSession({ board: 'main.kicad_pcb' });
     await render();
@@ -1154,6 +1179,29 @@ describe('the part panel', () => {
     expect(canvas.selectRef).not.toHaveBeenCalled();
   });
 
+  it('a selection the drawing could not find clears its record, so the part is outlined again later', async () => {
+    session = makeSession({ board: 'main.kicad_pcb' });
+    await render();
+    await canvasReady();
+    // The board outlines U1.
+    await click(byText('Board'));
+    await act(async () => canvas.onSelection?.({ ref: 'U1', view: 'board' }));
+    // On the schematic, a footprint-less symbol is selected; back on the board
+    // the select MISSES — and a miss clears the board's outline.
+    await click(byText('Schematic'));
+    await act(async () => canvas.onSelection?.({ ref: 'U2', sheet: '/r', view: 'schematic' }));
+    canvas.selectRef.mockResolvedValueOnce('not-found' as never);
+    await click(byText('Board'));
+    expect(canvas.selectRef).toHaveBeenCalledWith('U2', undefined, 'board');
+    // U1 again, from the schematic: the board must be told, not skipped as
+    // "already shown".
+    await click(byText('Schematic'));
+    await act(async () => canvas.onSelection?.({ ref: 'U1', sheet: '/r/a', view: 'schematic' }));
+    canvas.selectRef.mockClear();
+    await click(byText('Board'));
+    expect(canvas.selectRef).toHaveBeenCalledWith('U1', undefined, 'board');
+  });
+
   it('a pick in the 3D view identifies the part and the 3D view is told what is selected', async () => {
     session = makeSession({ board: 'main.kicad_pcb' });
     await render();
@@ -1165,6 +1213,24 @@ describe('the part panel', () => {
     await canvasReady();
     await click(byText('Schematic'));
     expect(canvas.selectRef).toHaveBeenCalledWith('U2', '/r', 'schematic');
+  });
+
+  it('warms the placement table at the first idle moment, so the first selection does not pay for it', async () => {
+    const idle: (() => void)[] = [];
+    vi.stubGlobal('requestIdleCallback', (fn: () => void) => idle.push(fn));
+    vi.stubGlobal('cancelIdleCallback', () => {});
+    try {
+      session = makeSession({ board: 'main.kicad_pcb' });
+      await render();
+      await canvasReady();
+      expect(readPlacementsCalls).not.toHaveBeenCalled();
+      await act(async () => { for (const fn of idle.splice(0)) fn(); });
+      expect(readPlacementsCalls).toHaveBeenCalledTimes(1);
+      await act(async () => canvas.onSelection?.({ ref: 'U1', sheet: '/r/a', view: 'schematic' }));
+      expect(readPlacementsCalls).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('reads the board\u2019s placements on the first selection, and only then', async () => {

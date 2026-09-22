@@ -9,7 +9,7 @@ import { useLocation } from 'react-router-dom';
 import PageHead from '@public/components/PageHead';
 import PageHeaderBand from '@public/components/layout/PageHeaderBand';
 import DesignCanvas, { type CanvasSelection, type DesignCanvasHandle } from '@public/components/kicad/DesignCanvas';
-import type { CanvasStateName, CanvasView } from '@public/components/kicad/canvasController';
+import type { CanvasStateName, CanvasView, FocusResult } from '@public/components/kicad/canvasController';
 import StackupPanel from '@public/components/kicad/StackupPanel';
 import BomTable from '@public/components/bom/BomTable';
 import ShareBar from '@public/components/bom/ShareBar';
@@ -32,6 +32,10 @@ import styles from './ViewerPage.module.scss';
  * already makes for KiCanvas.
  */
 const Board3DView = lazy(() => import('@public/components/kicad/board3d/Board3DView'));
+
+/** The latest the placement table is warmed after a project opens, when the
+ *  browser never goes idle. */
+const PLACEMENTS_IDLE_TIMEOUT_MS = 2000;
 
 type Tab = 'schematic' | 'board' | 'stackup' | 'board3d' | 'bom';
 
@@ -165,9 +169,10 @@ export default function ViewerPage() {
   /**
    * Has the board's placement table been asked for? The same one-way latch as
    * `stackupSeen`: `readPlacements` re-scans the whole board (~40 ms on
-   * Glasgow), and a reader who never identifies a part never pays it. Armed by
-   * the first selection or by focusing the search, so a typed reference on a
-   * board-only project resolves before the reader finishes typing.
+   * Glasgow). Armed at the first IDLE moment after a project with a board
+   * opens, so the first identification does not pay that scan inside its own
+   * click; and still armed by the first selection or by focusing the search,
+   * should either come before the browser goes idle.
    */
   const [placementsSeen, setPlacementsSeen] = useState(false);
   const canvasRef = useRef<DesignCanvasHandle>(null);
@@ -352,9 +357,11 @@ export default function ViewerPage() {
     if (tab === 'bom') setBomSeen(true);
   }, [tab]);
 
-  // One-way: see `stackupSeen`.
+  // One-way: see `stackupSeen`. The 3D tab reads the same rows (its z ladder),
+  // so it latches too — otherwise leaving 3D dropped the memo and every return
+  // re-tokenised the whole board inside the tab click.
   useEffect(() => {
-    if (tab === 'stackup') setStackupSeen(true);
+    if (tab === 'stackup' || tab === 'board3d') setStackupSeen(true);
   }, [tab]);
 
   // One-way: see `placementsSeen`.
@@ -362,11 +369,39 @@ export default function ViewerPage() {
     if (selectedRef != null) setPlacementsSeen(true);
   }, [selectedRef]);
 
+  // …and warmed off the click path: at the first idle moment after a project
+  // with a board opens.
+  useEffect(() => {
+    if (session?.project.board == null || placementsSeen) return;
+    const arm = () => setPlacementsSeen(true);
+    if (typeof window.requestIdleCallback === 'function') {
+      const id = window.requestIdleCallback(arm, { timeout: PLACEMENTS_IDLE_TIMEOUT_MS });
+      return () => window.cancelIdleCallback(id);
+    }
+    const id = window.setTimeout(arm, PLACEMENTS_IDLE_TIMEOUT_MS);
+    return () => window.clearTimeout(id);
+  }, [session, placementsSeen]);
+
   /** The canvas reported a selection — the reader's click, or the echo of a
    *  focus. Either way it is now what the drawing shows. */
   const handleCanvasSelection = useCallback((selection: CanvasSelection) => {
     if (selection.view != null) shown.current[selection.view] = selection.ref;
     setSelectedRef(selection.ref);
+  }, []);
+
+  /**
+   * Send a selection to the drawing `view` and keep `shown` honest about the
+   * answer. A designator the drawing does not have ('not-found') still CLEARS
+   * whatever it outlined before — the viewer's own select resets it, silently —
+   * so the record goes to null too; left at the old designator, a later
+   * selection of that same part was skipped as "already shown" and never drawn.
+   * Only when nothing newer has been recorded for the view in the meantime.
+   */
+  const outline = useCallback((view: 'schematic' | 'board', send: () => Promise<FocusResult> | undefined) => {
+    const before = shown.current[view];
+    void send()?.then((result) => {
+      if (result === 'not-found' && shown.current[view] === before) shown.current[view] = null;
+    });
   }, []);
 
   /**
@@ -395,19 +430,19 @@ export default function ViewerPage() {
       if (where != null && droppedSheets.has(where.sheet)) return;
       if (where != null) {
         setActiveSheet(where.sheet);
-        void canvasRef.current?.selectRef(selectedRef, where.instancePath, 'schematic');
+        outline('schematic', () => canvasRef.current?.selectRef(selectedRef, where.instancePath, 'schematic'));
       } else {
         // A designator the schematic's BOM does not list (a mounting hole, a
         // footprint-only part): outline it if the sheet on screen has it, and
         // never switch sheets — naming the schematic view here would activate
         // the ROOT sheet under a reader who is on another one.
-        void canvasRef.current?.selectRef(selectedRef);
+        outline('schematic', () => canvasRef.current?.selectRef(selectedRef));
       }
     } else {
-      void canvasRef.current?.selectRef(selectedRef, undefined, 'board');
+      outline('board', () => canvasRef.current?.selectRef(selectedRef, undefined, 'board'));
     }
     // `droppedSheets` is read, not depended on: it changes only with the project.
-  }, [tab, selectedRef, canvasState, session]);
+  }, [tab, selectedRef, canvasState, session, outline]);
 
   const clearSelection = useCallback(() => {
     focusSeq.current += 1;
@@ -433,12 +468,12 @@ export default function ViewerPage() {
       } else if (tab === 'board') {
         setSelectedRef(ref);
         shown.current.board = ref;
-        void canvasRef.current?.focusRef(ref, undefined, 'board');
+        outline('board', () => canvasRef.current?.focusRef(ref, undefined, 'board'));
       } else {
         setSelectedRef(ref);
       }
     },
-    [session, tab, focus],
+    [session, tab, focus, outline],
   );
 
   /** The panel's "Show on" row: take the reader to the part on that view. */
@@ -454,12 +489,12 @@ export default function ViewerPage() {
         // Claimed before the tab commit, so the arrival sync does not send a
         // second, zoom-less select alongside this focus.
         shown.current.board = ref;
-        void canvasRef.current?.focusRef(ref, undefined, 'board');
+        outline('board', () => canvasRef.current?.focusRef(ref, undefined, 'board'));
       } else {
         setTab('board3d');
       }
     },
-    [selectedRef, focus],
+    [selectedRef, focus, outline],
   );
 
   // `/` focuses the search and Esc clears the selection, anywhere on the page
