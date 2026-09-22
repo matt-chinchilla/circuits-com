@@ -1,42 +1,17 @@
 import { parse as parseCsv } from 'papaparse';
 import { matchHeader, normalizeHeader, type BomRole } from './headerAliases';
+import { MAX_LINES, MAX_REFS_PER_LINE, type ParsedBomLine, type ParseResult } from './bomLines';
 
 /**
  * BOM text -> lines. Pure functions only; every behavior here is pinned by an
  * attested fixture in `fixtures.ts` and by the detector rules in
  * `docs/design-briefs/bom-kicad-research-2026-08-19.md`.
+ *
+ * The line shapes and the two caps live in `bomLines.ts` (no papaparse behind
+ * them) and are re-exported here so every CSV-side caller keeps its import.
  */
-
-export interface ParsedBomLine {
-  index: number;
-  mpn: string | null;
-  value: string | null;
-  footprint: string | null;
-  description: string | null;
-  manufacturer: string | null;
-  distributorPn: string | null;
-  qty: number;
-  refs: string[];
-  dnp: boolean;
-}
-
-export interface ParseResult {
-  lines: ParsedBomLine[];
-  /** Raw header cells, in order — what the mapper renders. */
-  headers: string[];
-  /** Normalized headers joined — the mapper-memory key (Task 15). */
-  headerSignature: string;
-  roleByColumn: (BomRole | null)[];
-  unmappedColumns: number[];
-  /** Dup refs, >200 refs/line, qty fallbacks — informative, never blocking. */
-  warnings: string[];
-  /** Hard failures ONLY: over the line cap, or nothing to read. */
-  error: string | null;
-}
-
-export const MAX_LINES = 2000;
-/** JLCPCB's attested per-line designator cap (packet section 1). */
-export const MAX_REFS_PER_LINE = 200;
+export { MAX_LINES, MAX_REFS_PER_LINE } from './bomLines';
+export type { ParsedBomLine, ParseResult } from './bomLines';
 
 /** The part-identity floor: without an MPN or a value there is nothing to
  *  price, and every other column is decoration. Lives here (not in the

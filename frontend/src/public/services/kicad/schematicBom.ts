@@ -5,7 +5,10 @@
 // property; power and not-in-BOM symbols skipped; grouped the way a grouped
 // CSV export would be. `qty` is always the true instance count — the
 // designator list is capped for display only.
-import { MAX_LINES, MAX_REFS_PER_LINE, type ParsedBomLine, type ParseResult } from '@public/services/bom/parseBom';
+// `bomLines`, not `parseBom`: the latter imports papaparse at the top, and this
+// path never parses a CSV — the two constants alone were shipping the parser
+// to /viewer (perf audit, 2026-09-22).
+import { MAX_LINES, MAX_REFS_PER_LINE, type ParsedBomLine, type ParseResult } from '@public/services/bom/bomLines';
 import { matchHeader, type BomRole } from '@public/services/bom/headerAliases';
 import { naturalRefCompare } from './naturalSort';
 import { basename, resolveSheetRef } from './project';
