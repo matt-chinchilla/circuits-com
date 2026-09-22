@@ -177,6 +177,15 @@ export default defineConfig({
           if (id.includes('/vendor/build/kicanvas')) {
             return 'kicanvas'
           }
+          // three.js + its examples (OrbitControls) — only the lazy 3D tab on
+          // /viewer imports it (spec 2026-09-21 §8). Must never join `kicanvas`
+          // (6 KB of headroom against its 119 KB gzip gate) nor the entry.
+          if (id.includes('node_modules/three/')) {
+            return 'board3d-three'
+          }
+          if (id.includes('node_modules/earcut/') || id.includes('/services/kicad/board3d/')) {
+            return 'board3d'
+          }
           return undefined
         },
       },
