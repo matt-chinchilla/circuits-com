@@ -14,6 +14,7 @@
 // rotated model would put every later "which way is up" question in two places.
 import type { BoardScene, ClassRange, Material, MeshGroup, PartRange, Quality } from '@public/services/kicad/board3d/types';
 import { fitDistance as fitDistanceFor, type Box3Like } from '@public/services/kicad/board3d/framing';
+import type { PartAnchor } from '@public/services/kicad/board3d/partAnchor';
 import {
   classSlices, highlightSlices, netRangesOf, partAtFace, type IndexRange, type KindRange,
 } from '@public/services/kicad/board3d/partRanges';
@@ -31,6 +32,14 @@ type OrbitModule = typeof import('three/examples/jsm/controls/OrbitControls.js')
 type RoomModule = typeof import('three/examples/jsm/environments/RoomEnvironment.js');
 
 export type ViewName = 'top' | 'bottom' | 'reset';
+
+/** Where the label's anchor landed on the canvas, in CSS pixels from its top
+ *  left. `visible` is false while the anchor faces away from the camera (the
+ *  part is on the far side of the board) or lies off the canvas. */
+export interface AnchorScreen { x: number; y: number; visible: boolean }
+
+/** The part under a resting mouse, and where the mouse is on the canvas. */
+export interface HoverHit { ref: string; x: number; y: number }
 
 /** The object classes the Board panel's Objects tab can fade or hide in 3D
  *  (spec 2026-09-22 §2.2). Tracks, pads and zones are slices of the copper
@@ -80,6 +89,18 @@ export interface SceneRenderer {
   /** Solid, See-through or X-ray (`viewMode.ts`): caps the bodies' and the
    *  mask's opacity per `VIEW_MODE_LOOK`. The highlighted part is never capped. */
   setViewMode?(mode: ViewMode): void;
+  /** The point the host's label anchors to (`partAnchor`), in model space;
+   *  null clears. Projected to the canvas after every frame the camera moves
+   *  on, and once right away, through `onAnchorMove`. */
+  setAnchor?(anchor: PartAnchor | null): void;
+  /** Who to tell where the anchor is on the canvas. Called after each frame
+   *  while an anchor is set, and with null when it is cleared. */
+  onAnchorMove?(handler: ((at: AnchorScreen | null) => void) | null): void;
+  /** Who to tell what a resting MOUSE is over: the part under it after a
+   *  pause (`HOVER_DELAY_MS`), or null when it has left one. One raycast per
+   *  pause, never per move, and the render loop is never woken for it. Touch
+   *  and pen never hover. */
+  onHover?(handler: ((hit: HoverHit | null) => void) | null): void;
   /** Who to tell when the reader clicks a part (a designator) or empty board or
    *  sky (null). A click is a pointer-up within a few pixels of its pointer-down;
    *  an orbit drag never picks. */
@@ -111,6 +132,10 @@ const CLICK_MAX_MS = 500;
  *  board (measured), so a touch miss costs five casts; a mouse or pen is precise
  *  and a click on bare board (the common "deselect") costs exactly one. */
 const PICK_TOLERANCE_PX = 6;
+/** How long a mouse rests before the part under it is named. A raycast is
+ *  ~20 ms on a 300k-triangle board, so the pointer's every move must not
+ *  cast; a pause this long is a reader looking, not passing through. */
+export const HOVER_DELAY_MS = 250;
 
 /** The scheduler `deferTeardown` uses: `requestIdleCallback` where the browser has
  *  it, else a macrotask. Named so a test can hand in a fake. */
@@ -287,6 +312,15 @@ export function createSceneRenderer(options: SceneRendererOptions = {}): SceneRe
   let highlightedNet: number | null = null;
   const opacity = new Map<ObjectClass3D, number>();
   let viewMode: ViewMode = DEFAULT_VIEW_MODE;
+  let anchor: PartAnchor | null = null;
+  let anchorHandler: ((at: AnchorScreen | null) => void) | null = null;
+  /** Scratch vectors for the projection, made once three is loaded: a frame
+   *  must not allocate. */
+  let scratch: { world: InstanceType<Three['Vector3']>; normal: InstanceType<Three['Vector3']>; toCamera: InstanceType<Three['Vector3']> } | null = null;
+  let hoverHandler: ((hit: HoverHit | null) => void) | null = null;
+  let hoverTimer: ReturnType<typeof setTimeout> | null = null;
+  let hoverAt: { x: number; y: number } | null = null;
+  let hovered: string | null = null;
   let three: Three | null = null;
   let modelBox: Box3Like | null = null;
   let pickHandler: ((ref: string | null) => void) | null = null;
@@ -392,7 +426,77 @@ export function createSceneRenderer(options: SceneRendererOptions = {}): SceneRe
     }
     controls.update();
     renderer.render(scene, camera);
+    projectAnchor();
   }
+
+  /**
+   * The anchor onto the canvas, for the host's label: through the model's
+   * world matrix (a flipped board turns its anchors with it) and the camera.
+   * Facing is the part's side against the camera — a top-side part is shown
+   * while the camera is above the board's plane, and hidden from below, where
+   * the board itself would be in the way.
+   */
+  function projectAnchor(): void {
+    if (anchorHandler == null || anchor == null) return;
+    if (camera == null || model == null || host == null || scratch == null) return;
+    const { world, normal, toCamera } = scratch;
+    model.updateMatrixWorld();
+    world.set(anchor.x, anchor.y, anchor.z).applyMatrix4(model.matrixWorld);
+    normal.set(0, 0, anchor.side === 'F' ? 1 : -1).transformDirection(model.matrixWorld);
+    toCamera.copy(camera.position).sub(world);
+    const facing = normal.dot(toCamera) > 0;
+    world.project(camera);
+    const visible = facing && world.z < 1 && Math.abs(world.x) <= 1.05 && Math.abs(world.y) <= 1.05;
+    anchorHandler({
+      x: ((world.x + 1) / 2) * Math.max(1, host.clientWidth),
+      y: ((1 - world.y) / 2) * Math.max(1, host.clientHeight),
+      visible,
+    });
+  }
+
+  /** The hover, after the mouse has rested: one cast, then the handler. */
+  function hoverCheck(): void {
+    hoverTimer = null;
+    if (disposed || hoverHandler == null || hoverAt == null || renderer == null) return;
+    const ref = pickAt(hoverAt.x, hoverAt.y, 'mouse');
+    if (ref == null) {
+      if (hovered != null) {
+        hovered = null;
+        hoverHandler(null);
+      }
+      return;
+    }
+    hovered = ref;
+    const rect = renderer.domElement.getBoundingClientRect();
+    hoverHandler({ ref, x: hoverAt.x - rect.left, y: hoverAt.y - rect.top });
+  }
+
+  function clearHover(): void {
+    if (hoverTimer != null) {
+      clearTimeout(hoverTimer);
+      hoverTimer = null;
+    }
+    hoverAt = null;
+    if (hovered != null) {
+      hovered = null;
+      hoverHandler?.(null);
+    }
+  }
+
+  const onPointerMove = (e: PointerEvent): void => {
+    if (hoverHandler == null) return;
+    // A finger or a pen never hovers, and a mouse that is dragging is orbiting.
+    if (e.pointerType !== 'mouse' || pointerDown != null || pointers.size > 0) {
+      clearHover();
+      return;
+    }
+    hoverAt = { x: e.clientX, y: e.clientY };
+    if (hoverTimer != null) clearTimeout(hoverTimer);
+    hoverTimer = setTimeout(hoverCheck, HOVER_DELAY_MS);
+  };
+  const onPointerLeave = (): void => {
+    clearHover();
+  };
 
   /** Any controls change keeps the loop alive long enough for damping to settle. */
   const onChange = (): void => {
@@ -617,6 +721,7 @@ export function createSceneRenderer(options: SceneRendererOptions = {}): SceneRe
   }
 
   const onPointerDown = (e: PointerEvent): void => {
+    clearHover();
     pointers.add(e.pointerId);
     if (pointers.size > 1) {
       pointerDown = null;
@@ -647,6 +752,7 @@ export function createSceneRenderer(options: SceneRendererOptions = {}): SceneRe
     camera.updateProjectionMatrix();
     refit();
     onChange();
+    projectAnchor();
   }
 
   return {
@@ -663,6 +769,7 @@ export function createSceneRenderer(options: SceneRendererOptions = {}): SceneRe
       // tab is exactly the moment a slow connection is noticed.
       if (disposed) return;
       three = T;
+      scratch = { world: new T.Vector3(), normal: new T.Vector3(), toCamera: new T.Vector3() };
 
       renderer = new T.WebGLRenderer({ antialias: quality === 'full', powerPreference: 'high-performance' });
       renderer.setPixelRatio(quality === 'full' ? Math.min(window.devicePixelRatio, 2) : 1);
@@ -726,12 +833,32 @@ export function createSceneRenderer(options: SceneRendererOptions = {}): SceneRe
       canvas.addEventListener('pointerdown', onPointerDown);
       canvas.addEventListener('pointerup', onPointerUp);
       canvas.addEventListener('pointercancel', onPointerCancel);
+      canvas.addEventListener('pointermove', onPointerMove);
+      canvas.addEventListener('pointerleave', onPointerLeave);
       // The view state — a selection, hidden layers, faded classes — asked for
       // before the meshes existed is applied now, before the first frame.
       applyView();
 
       renderer.render(scene, camera);
+      projectAnchor();
       wake();
+    },
+
+    setAnchor(next) {
+      anchor = next;
+      if (next == null) anchorHandler?.(null);
+      else projectAnchor();
+    },
+
+    onAnchorMove(handler) {
+      anchorHandler = handler;
+      if (anchor == null) handler?.(null);
+      else projectAnchor();
+    },
+
+    onHover(handler) {
+      if (handler == null) clearHover();
+      hoverHandler = handler;
     },
 
     highlight(ref) {
@@ -823,6 +950,10 @@ export function createSceneRenderer(options: SceneRendererOptions = {}): SceneRe
       disposed = true;
       if (frame !== 0) cancelAnimationFrame(frame);
       frame = 0;
+      if (hoverTimer != null) clearTimeout(hoverTimer);
+      hoverTimer = null;
+      hoverHandler = null;
+      anchorHandler = null;
       observer?.disconnect();
       observer = null;
       controls?.removeEventListener('change', onChange);
@@ -844,6 +975,8 @@ export function createSceneRenderer(options: SceneRendererOptions = {}): SceneRe
         canvas.removeEventListener('pointerdown', onPointerDown);
         canvas.removeEventListener('pointerup', onPointerUp);
         canvas.removeEventListener('pointercancel', onPointerCancel);
+        canvas.removeEventListener('pointermove', onPointerMove);
+        canvas.removeEventListener('pointerleave', onPointerLeave);
         canvas.remove();
       }
       renderer = null;
@@ -852,6 +985,7 @@ export function createSceneRenderer(options: SceneRendererOptions = {}): SceneRe
       model = null;
       host = null;
       three = null;
+      scratch = null;
       // The expensive half, off this task. WEBGL_lose_context by its three.js
       // name: without it the context lives until the GC runs, and the 2D embed
       // can be the one the browser evicts — so it is still lost, just not inside

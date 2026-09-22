@@ -715,6 +715,13 @@ export default function ViewerPage() {
     [session, selectedRef, wb.rows, wb.buildQty, placements, pins],
   );
 
+  /** What the 3D callout says under the designator: the same value and
+   *  footprint the part panel shows, so the two can never disagree. */
+  const partLabel = useMemo(
+    () => (facts == null || !facts.found ? null : { ref: facts.ref, value: facts.value, footprint: facts.footprint }),
+    [facts],
+  );
+
   /**
    * Which drawing tab currently labels the shared canvas panel.
    *
@@ -1091,6 +1098,7 @@ export default function ViewerPage() {
                       stackup={stackup}
                       selectedRef={selectedRef}
                       onSelect={setSelectedRef}
+                      label={partLabel}
                       hiddenLayers={boardView.hiddenLayers}
                       highlightedLayer={boardView.highlightedLayer}
                       opacity={boardView.opacity}

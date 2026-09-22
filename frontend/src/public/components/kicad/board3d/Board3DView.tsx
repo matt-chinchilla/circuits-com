@@ -6,13 +6,17 @@
 //
 // It never touches three, a canvas or a geometry. Everything goes through the
 // SceneRenderer seam, which is also what lets the tests drive it with a fake.
-import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
+import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
+import { hasEstimatedBody, partAnchor } from '@public/services/kicad/board3d/partAnchor';
 import type { BoardScene, Quality } from '@public/services/kicad/board3d/types';
 import type { BoardStackup, KicadProject } from '@public/services/kicad/types';
 import { webgl2Supported } from '../webgl';
 import { ORBIT } from './board3dTheme';
 import { currentQuality } from './quality';
-import { createSceneRenderer, type ObjectClass3D, type SceneRenderer, type ViewName } from './sceneRenderer';
+import { labelLines, type PartLabel } from './partLabel';
+import {
+  createSceneRenderer, type AnchorScreen, type HoverHit, type ObjectClass3D, type SceneRenderer, type ViewName,
+} from './sceneRenderer';
 import { useBoardScene } from './useBoardScene';
 import { VIEW_MODES, getViewMode, setViewMode, useViewMode } from './viewMode';
 import styles from './Board3DView.module.scss';
@@ -34,6 +38,10 @@ export interface Board3DViewProps {
   /** The reader clicked a part (its designator) or nothing (null). Held through
    *  a ref like `createRenderer`, so an inline arrow cannot remount the renderer. */
   onSelect?: (ref: string | null) => void;
+  /** What the callout on the selected part says under its designator: the
+   *  value and footprint the page knows (partFacts). Absent, the callout is
+   *  the designator alone. */
+  label?: PartLabel | null;
   /** The Board panel's state (spec 2026-09-22 §2.4), shared with the Board
    *  tab: layers hidden by name, the highlighted layer and net, and each
    *  object class's opacity (absent = 1; 2D-only classes are ignored here).
@@ -100,6 +108,17 @@ const NO_START = {
 
 const DOT = ' · ';
 
+/** The callout's distance from its anchor: to the right of the dot and above
+ *  it, the way a drawing's leader lifts away from the part it names. */
+const CALLOUT_GAP_PX = 22;
+const CALLOUT_RISE_PX = 26;
+/** Inset the callout keeps from the canvas edge. */
+const CALLOUT_MARGIN_PX = 8;
+/** The tooltip sits down and right of the mouse, off the cursor. */
+const TIP_OFFSET_PX = 14;
+
+const clampTo = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
+
 /**
  * The caption, in the fixed order of spec §5 — the estimate disclaimer first,
  * then each warning. Every sentence here is an admission about what the drawing
@@ -150,7 +169,7 @@ const statsLine = (stats: BoardScene['stats']): string =>
   ].join(DOT);
 
 export default function Board3DView({
-  project, stackup, createRenderer, quality, selectedRef, onSelect,
+  project, stackup, createRenderer, quality, selectedRef, onSelect, label,
   hiddenLayers, highlightedLayer, opacity, highlightedNet,
 }: Board3DViewProps) {
   const supported = webgl2Supported();
@@ -169,6 +188,11 @@ export default function Board3DView({
   const [view, setView] = useState<'top' | 'bottom' | null>(null);
   const viewMode = useViewMode();
   const viewLabelId = useId();
+  const calloutRef = useRef<HTMLDivElement>(null);
+  const leaderRef = useRef<SVGSVGElement>(null);
+  const leaderLineRef = useRef<SVGLineElement>(null);
+  const leaderDotRef = useRef<SVGCircleElement>(null);
+  const tipRef = useRef<HTMLDivElement>(null);
   /** Bumped when a renderer has mounted, so the highlight effect below re-runs
    *  against the live one rather than the null it saw before. */
   const [live, setLive] = useState(0);
@@ -191,6 +215,57 @@ export default function Board3DView({
   /** What the CURRENT renderer was last told, so a change sends only the diff. */
   const appliedRef = useRef<BoardView3D | null>(null);
 
+  /**
+   * Put the callout and its leader where the renderer says the anchor is —
+   * straight onto the DOM, never through React state: this runs after every
+   * frame of an orbit. The plate sits up and to the right of the dot, flips to
+   * the left at the canvas's right edge and drops below at its top; the
+   * leader runs from the dot to the nearest point of the plate's border.
+   */
+  const place = useCallback((at: AnchorScreen | null) => {
+    const callout = calloutRef.current, leader = leaderRef.current, line = leaderLineRef.current, dot = leaderDotRef.current, host = hostRef.current;
+    if (callout == null || leader == null || line == null || dot == null || host == null) return;
+    if (at == null || !at.visible) {
+      callout.hidden = true;
+      leader.style.display = 'none';
+      return;
+    }
+    callout.hidden = false;
+    leader.style.display = '';
+    const w = host.clientWidth, h = host.clientHeight;
+    const cw = callout.offsetWidth, ch = callout.offsetHeight;
+    let left = at.x + CALLOUT_GAP_PX;
+    if (left + cw > w - CALLOUT_MARGIN_PX) left = at.x - CALLOUT_GAP_PX - cw;
+    left = clampTo(left, CALLOUT_MARGIN_PX, Math.max(CALLOUT_MARGIN_PX, w - CALLOUT_MARGIN_PX - cw));
+    let top = at.y - CALLOUT_RISE_PX - ch;
+    if (top < CALLOUT_MARGIN_PX) top = at.y + CALLOUT_RISE_PX;
+    top = clampTo(top, CALLOUT_MARGIN_PX, Math.max(CALLOUT_MARGIN_PX, h - CALLOUT_MARGIN_PX - ch));
+    callout.style.transform = `translate(${Math.round(left)}px, ${Math.round(top)}px)`;
+    const ex = clampTo(at.x, left, left + cw), ey = clampTo(at.y, top, top + ch);
+    line.setAttribute('x1', String(at.x));
+    line.setAttribute('y1', String(at.y));
+    line.setAttribute('x2', String(ex));
+    line.setAttribute('y2', String(ey));
+    dot.setAttribute('cx', String(at.x));
+    dot.setAttribute('cy', String(at.y));
+  }, []);
+
+  /** The hover tooltip: the designator under a resting mouse, unless it is
+   *  the selected part, whose callout already says so. */
+  const showTip = useCallback((hit: HoverHit | null) => {
+    const tip = tipRef.current, host = hostRef.current;
+    if (tip == null || host == null) return;
+    if (hit == null || hit.ref === selectedRefRef.current) {
+      tip.hidden = true;
+      return;
+    }
+    tip.textContent = hit.ref;
+    tip.hidden = false;
+    const left = clampTo(hit.x + TIP_OFFSET_PX, 0, Math.max(0, host.clientWidth - tip.offsetWidth));
+    const top = clampTo(hit.y + TIP_OFFSET_PX, 0, Math.max(0, host.clientHeight - tip.offsetHeight));
+    tip.style.transform = `translate(${Math.round(left)}px, ${Math.round(top)}px)`;
+  }, []);
+
   useEffect(() => {
     if (!supported || status !== 'ready' || scene == null) return;
     const host = hostRef.current;
@@ -209,6 +284,12 @@ export default function Board3DView({
       // The pick's own cost, for the browser measurement step (like `calls`).
       host.dataset.pickMs = String(Math.round(renderer.info().pickMs));
       onSelectRef.current?.(ref);
+    });
+    renderer.onAnchorMove?.((at) => {
+      if (!cancelled) place(at);
+    });
+    renderer.onHover?.((hit) => {
+      if (!cancelled) showTip(hit);
     });
     void renderer
       .mount(host, scene, tier)
@@ -255,11 +336,21 @@ export default function Board3DView({
       rendererRef.current = null;
       renderer.dispose();
     };
-  }, [supported, status, scene, tier, attempt]);
+  }, [supported, status, scene, tier, attempt, place, showTip]);
 
   useEffect(() => {
     rendererRef.current?.highlight?.(selectedRef ?? null);
   }, [selectedRef, live]);
+
+  // The callout's anchor: the selected part's body top, else its pads; none
+  // for a part the scene does not draw, and the callout stays hidden.
+  useEffect(() => {
+    const renderer = rendererRef.current;
+    if (renderer == null || renderer.setAnchor == null) return;
+    const anchor = scene != null && selectedRef != null ? partAnchor(scene, selectedRef) : null;
+    renderer.setAnchor(anchor);
+    if (anchor == null) place(null);
+  }, [selectedRef, scene, live, place]);
 
   useEffect(() => {
     rendererRef.current?.setViewMode?.(viewMode);
@@ -301,6 +392,8 @@ export default function Board3DView({
     }
   };
   const caption = scene == null ? '' : captionOf(scene, tier);
+  const lines = selectedRef == null ? null : labelLines(label != null && label.ref === selectedRef ? label : { ref: selectedRef, value: null, footprint: null });
+  const estimated = scene != null && selectedRef != null && hasEstimatedBody(scene, selectedRef);
   return (
     <div className={styles.wrap}>
       {ready && (
@@ -352,6 +445,25 @@ export default function Board3DView({
         tabIndex={ready ? 0 : -1}
         onKeyDown={onKeyDown}
       >
+        {ready && (
+          <>
+            {/* The callout on the selected part: a leader from a dot on the
+                part to a plate with its designator and what it is. Placed by
+                `place`, hidden until the renderer has projected its anchor. */}
+            <svg ref={leaderRef} className={styles.leader} aria-hidden="true" style={{ display: 'none' }}>
+              <line ref={leaderLineRef} className={styles.leaderLine} />
+              <circle ref={leaderDotRef} className={styles.leaderDot} r={4} />
+            </svg>
+            {lines != null && (
+              <div ref={calloutRef} className={styles.callout} data-callout={lines.title} hidden>
+                <p className={styles.calloutTitle}>{lines.title}</p>
+                {lines.detail != null && <p className={styles.calloutDetail}>{lines.detail}</p>}
+                {estimated && <p className={styles.calloutTag}>estimated body</p>}
+              </div>
+            )}
+            <div ref={tipRef} className={styles.tip} role="tooltip" hidden />
+          </>
+        )}
         {supported && status === 'building' && (
           <p className={styles.status} role="status">
             Building the board&#8230;

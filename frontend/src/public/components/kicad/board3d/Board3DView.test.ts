@@ -15,9 +15,16 @@ import { VIEW_MODE_STORAGE_KEY, resetViewModeForTests } from './viewMode';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
+/** One triangle of a group, at z, owned by `ref` when given. */
+const tri = (material: BoardScene['groups'][number]['material'], layerName: string | null, z: number, ref?: string): BoardScene['groups'][number] => ({
+  material, layerName,
+  positions: new Float32Array([0, 0, z, 1, 0, z, 0, 1, z]), normals: new Float32Array([0, 0, 1, 0, 0, 1, 0, 0, 1]),
+  indices: new Uint32Array([0, 1, 2]),
+  ...(ref == null ? {} : { parts: [{ ref, start: 0, count: 3 }] }),
+});
 const scene = (warnings: BoardScene['warnings'], withBody = true): BoardScene => ({
   bounds: { min: { x: -1, y: -1 }, max: { x: 1, y: 1 } }, thicknessMm: 1.6,
-  groups: withBody ? [{ material: 'body', layerName: null, positions: new Float32Array(9), normals: new Float32Array(9), indices: new Uint32Array([0, 1, 2]) }] : [],
+  groups: withBody ? [tri('body', null, 1)] : [],
   warnings, stats: { footprints: 2, pads: 4, vias: 1, tracks: 3, triangles: 1, buildMs: 12 },
 });
 const state = { status: 'ready', scene: scene([]), error: null as string | null, retry: vi.fn() };
@@ -31,11 +38,17 @@ function fakeRenderer() {
     mounted: 0, disposed: 0, views: [] as string[], flips: 0,
     highlights: [] as (string | null)[],
     modes: [] as string[],
+    anchors: [] as unknown[],
+    anchorMove: null as ((at: { x: number; y: number; visible: boolean } | null) => void) | null,
+    hover: null as ((hit: { ref: string; x: number; y: number } | null) => void) | null,
     pick: null as ((ref: string | null) => void) | null,
     mount: async () => { r.mounted++; }, setView: (v: string) => { r.views.push(v); }, flip: () => { r.flips++; },
     pause: () => {}, resume: () => {}, dispose: () => { r.disposed++; }, info: () => ({ calls: 0, triangles: 0, pickMs: 0 }),
     highlight: (ref: string | null) => { r.highlights.push(ref); },
     setViewMode: (mode: string) => { r.modes.push(mode); },
+    setAnchor: (a: unknown) => { r.anchors.push(a); },
+    onAnchorMove: (h: typeof r.anchorMove) => { r.anchorMove = h; },
+    onHover: (h: typeof r.hover) => { r.hover = h; },
     onPick: (h: ((ref: string | null) => void) | null) => { r.pick = h; },
   };
   return r;
@@ -314,6 +327,95 @@ describe('Board3DView — the View toggle (Solid / See-through / X-ray)', () => 
   });
 });
 
+describe('Board3DView — the callout on the selected part (owner, 2026-09-22: "clearly labeled")', () => {
+  const J5 = { ref: 'J5', value: 'PinHeader_2x22_P1.27mm', footprint: 'Glasgow:PinHeader_2x22_P1.27mm_Vertical__SMD' };
+  const mount = (r: object, selectedRef: string | null, label: typeof J5 | null = null) =>
+    act(async () => { root.render(createElement(Board3DView, { project, stackup: null, createRenderer: () => r as never, quality: 'full', selectedRef, label })); });
+  const callout = () => el.querySelector<HTMLElement>('[data-callout]');
+
+  it('names the part — designator, then what it is with the library dropped — and says its body is an estimate', async () => {
+    state.scene = { ...scene([]), groups: [tri('substrate', null, 0), tri('body', null, 1, 'J5')] };
+    const r = fakeRenderer();
+    await mount(r, 'J5', J5);
+    // The anchor was taken from the scene: the body's top.
+    expect(r.anchors.at(-1)).toMatchObject({ body: true, side: 'F', z: 1 });
+    // Hidden until the renderer has projected it.
+    expect(callout()!.hidden).toBe(true);
+    act(() => { r.anchorMove?.({ x: 120, y: 90, visible: true }); });
+    expect(callout()!.hidden).toBe(false);
+    const text = [...callout()!.querySelectorAll('p')].map((p) => p.textContent);
+    expect(text).toEqual(['J5', 'PinHeader 2x22 P1.27mm Vertical SMD', 'estimated body']);
+    // The leader: a line from the dot at the anchor to the plate.
+    const line = el.querySelector('line')!, dot = el.querySelector('circle')!;
+    expect(dot.getAttribute('cx')).toBe('120');
+    expect(dot.getAttribute('cy')).toBe('90');
+    expect(line.getAttribute('x1')).toBe('120');
+    expect(callout()!.style.transform).toMatch(/^translate\(\d+px, \d+px\)$/);
+    // Behind the board: hidden, still mounted.
+    act(() => { r.anchorMove?.({ x: 120, y: 90, visible: false }); });
+    expect(callout()!.hidden).toBe(true);
+    expect(el.querySelector('svg')!.style.display).toBe('none');
+    // Cleared: the anchor is taken away and the callout goes.
+    await mount(r, null, null);
+    expect(r.anchors.at(-1)).toBeNull();
+    expect(callout()).toBeNull();
+    state.scene = scene([]);
+  });
+
+  it('a part anchored to its pads — no body drawn — carries no estimate tag, and a bare designator is a callout too', async () => {
+    state.scene = { ...scene([], false), groups: [tri('substrate', null, 0), tri('copper', 'F.Cu', 0.5, 'C7')] };
+    const r = fakeRenderer();
+    await mount(r, 'C7', null);
+    expect(r.anchors.at(-1)).toMatchObject({ body: false, side: 'F' });
+    act(() => { r.anchorMove?.({ x: 10, y: 10, visible: true }); });
+    expect([...callout()!.querySelectorAll('p')].map((p) => p.textContent)).toEqual(['C7']);
+    state.scene = scene([]);
+  });
+
+  it('a part the scene does not draw has no anchor and no visible callout', async () => {
+    state.scene = { ...scene([]), groups: [tri('body', null, 1, 'J5')] };
+    const r = fakeRenderer();
+    await mount(r, 'R99', null);
+    expect(r.anchors.at(-1)).toBeNull();
+    expect(callout()!.hidden).toBe(true);
+    state.scene = scene([]);
+  });
+
+  it('a resting mouse names the part under it in a tooltip, except the selected one, whose callout already does', async () => {
+    state.scene = { ...scene([]), groups: [tri('body', null, 1, 'J5')] };
+    const r = fakeRenderer();
+    await mount(r, 'J5', J5);
+    // happy-dom lays nothing out: give the host a size for the clamp.
+    const host = el.querySelector<HTMLElement>('[tabindex="0"]')!;
+    Object.defineProperty(host, 'clientWidth', { value: 400, configurable: true });
+    Object.defineProperty(host, 'clientHeight', { value: 300, configurable: true });
+    const tip = el.querySelector<HTMLElement>('[role="tooltip"]')!;
+    expect(tip.hidden).toBe(true);
+    act(() => { r.hover?.({ ref: 'C7', x: 40, y: 30 }); });
+    expect(tip.hidden).toBe(false);
+    expect(tip.textContent).toBe('C7');
+    expect(tip.style.transform).toBe('translate(54px, 44px)');
+    act(() => { r.hover?.({ ref: 'J5', x: 40, y: 30 }); });
+    expect(tip.hidden).toBe(true);
+    act(() => { r.hover?.({ ref: 'C7', x: 40, y: 30 }); });
+    act(() => { r.hover?.(null); });
+    expect(tip.hidden).toBe(true);
+    state.scene = scene([]);
+  });
+
+  it('a renderer without the anchor and hover members still shows the callout text', async () => {
+    state.scene = { ...scene([]), groups: [tri('body', null, 1, 'J5')] };
+    const r = fakeRenderer() as Partial<ReturnType<typeof fakeRenderer>>;
+    delete r.setAnchor;
+    delete r.onAnchorMove;
+    delete r.onHover;
+    await mount(r, 'J5', J5);
+    expect(callout()!.textContent).toContain('J5');
+    expect(el.querySelector('[role="alert"]')).toBeNull();
+    state.scene = scene([]);
+  });
+});
+
 // Class names are echoed back by vitest's CSS-off module proxy, so they prove
 // nothing about the stylesheet. This one reads the SOURCE: the canvas has no
 // content of its own, so without a reserved height the 3D tab is a 0px box.
@@ -332,6 +434,14 @@ describe('the stylesheet the frame depends on', () => {
   it('gives the canvas host its own paintable box', () => {
     expect(scss).toMatch(/\.canvasHost \{[^{}]*flex:\s*1 1 auto/);
     expect(scss).toMatch(/\.canvasHost \{[^{}]*min-height:\s*0/);
+  });
+  it('draws the callout as a plain plate — no glass, no glow — and the leader in the selection cyan', () => {
+    expect(scss).toMatch(/\.callout \{[^{}]*background:\s*\$callout-plate/);
+    expect(scss).not.toMatch(/\.callout \{[^{}]*backdrop-filter/);
+    expect(scss).toMatch(/\$leader:\s*#4fc3f7/);
+    expect(scss).toMatch(/\.calloutTag \{[^{}]*border-top:\s*1px dotted/);
+    expect(scss).toMatch(/\.leader \{[^{}]*pointer-events:\s*none/);
+    expect(scss).toMatch(/\.tip \{[^{}]*pointer-events:\s*none/);
   });
   it('lays the two toolbar tracks at the two ends of one wrapping row', () => {
     expect(scss).toMatch(/\.toolbar \{[^{}]*flex-wrap:\s*wrap/);

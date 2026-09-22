@@ -32,7 +32,7 @@ vi.mock('three', async (importOriginal) => {
 });
 
 import * as THREE from 'three';
-import { createSceneRenderer, type SceneRenderer } from './sceneRenderer';
+import { HOVER_DELAY_MS, createSceneRenderer, type SceneRenderer } from './sceneRenderer';
 
 let queue: ((now: number) => void)[] = [];
 let clock = 0;
@@ -147,5 +147,89 @@ describe('the pick', () => {
     pointer(canvas(), 'pointerup', 200, 150, 'touch');
     expect(cast).toHaveBeenCalledTimes(5);
     expect(picks).toEqual([null, null]);
+  });
+});
+
+describe('the hover (mouse only, after a pause)', () => {
+  it('casts once per pause, never per move, and never wakes the loop', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      r = createSceneRenderer({ reducedMotion: true });
+      await r.mount(host, board(), 'full');
+      // The mount's own first tick and the settle window after it, drained:
+      // with reduced motion nothing is moving, so the loop sleeps here.
+      for (let i = 0; i < 80; i++) frame();
+      expect(queue).toHaveLength(0);
+      const hits: unknown[] = [];
+      r.onHover?.((hit) => hits.push(hit));
+      const cast = vi.spyOn(THREE.Raycaster.prototype, 'intersectObjects');
+      const before = renders.count;
+      for (let i = 0; i < 6; i++) pointer(canvas(), 'pointermove', 100 + i, 100);
+      expect(cast).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(HOVER_DELAY_MS - 1);
+      expect(cast).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(1);
+      expect(cast).toHaveBeenCalledTimes(1);
+      // Nothing pickable on this board, and nothing was hovered before: no call.
+      expect(hits).toEqual([]);
+      // The loop stayed asleep: no frame drawn, none queued.
+      expect(renders.count).toBe(before);
+      expect(queue).toHaveLength(0);
+      // Touch and pen never hover.
+      pointer(canvas(), 'pointermove', 120, 100, 'touch');
+      vi.advanceTimersByTime(HOVER_DELAY_MS);
+      expect(cast).toHaveBeenCalledTimes(1);
+      // A press cancels a pending hover.
+      pointer(canvas(), 'pointermove', 130, 100);
+      pointer(canvas(), 'pointerdown', 130, 100);
+      vi.advanceTimersByTime(HOVER_DELAY_MS);
+      expect(cast).toHaveBeenCalledTimes(1);
+      pointer(canvas(), 'pointerup', 130, 100);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe('the label anchor', () => {
+  it('is projected onto the canvas, faces the camera from above and hides from below', async () => {
+    r = createSceneRenderer({ reducedMotion: true });
+    await r.mount(host, board(), 'full');
+    const seen: ({ x: number; y: number; visible: boolean } | null)[] = [];
+    r.onAnchorMove?.((at) => seen.push(at));
+    // No anchor yet: told so once.
+    expect(seen).toEqual([null]);
+    r.setAnchor?.({ x: 0, y: 0, z: 0, side: 'F', body: false });
+    const top = seen.at(-1)!;
+    expect(top).not.toBeNull();
+    expect(top!.visible).toBe(true);
+    // The origin, framed: near the middle of a 400×300 canvas.
+    expect(top!.x).toBeGreaterThan(100);
+    expect(top!.x).toBeLessThan(300);
+    expect(top!.y).toBeGreaterThan(50);
+    expect(top!.y).toBeLessThan(250);
+    // The same point on the BACK face is hidden from a camera above the board.
+    r.setAnchor?.({ x: 0, y: 0, z: 0, side: 'B', body: false });
+    expect(seen.at(-1)!.visible).toBe(false);
+    // Looking from below, the back face shows and the front hides.
+    r.setView('bottom');
+    frame();
+    expect(seen.at(-1)!.visible).toBe(true);
+    r.setAnchor?.({ x: 0, y: 0, z: 0, side: 'F', body: false });
+    expect(seen.at(-1)!.visible).toBe(false);
+    // Cleared: told null.
+    r.setAnchor?.(null);
+    expect(seen.at(-1)).toBeNull();
+  });
+  it('is re-projected after every frame the camera moves on', async () => {
+    r = createSceneRenderer({ reducedMotion: true });
+    await r.mount(host, board(), 'full');
+    r.setAnchor?.({ x: 5, y: 0, z: 0, side: 'F', body: false });
+    const seen: unknown[] = [];
+    r.onAnchorMove?.((at) => seen.push(at));
+    const n = seen.length;
+    r.orbit?.(30, 0);
+    frame();
+    expect(seen.length).toBeGreaterThan(n);
   });
 });
