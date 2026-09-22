@@ -12,7 +12,7 @@ import type { BoardStackup, KicadProject } from '@public/services/kicad/types';
 import { webgl2Supported } from '../webgl';
 import { ORBIT } from './board3dTheme';
 import { currentQuality } from './quality';
-import { createSceneRenderer, type SceneRenderer, type ViewName } from './sceneRenderer';
+import { createSceneRenderer, type ObjectClass3D, type SceneRenderer, type ViewName } from './sceneRenderer';
 import { useBoardScene } from './useBoardScene';
 import styles from './Board3DView.module.scss';
 
@@ -33,6 +33,49 @@ export interface Board3DViewProps {
   /** The reader clicked a part (its designator) or nothing (null). Held through
    *  a ref like `createRenderer`, so an inline arrow cannot remount the renderer. */
   onSelect?: (ref: string | null) => void;
+  /** The Board panel's state (spec 2026-09-22 §2.4), shared with the Board
+   *  tab: layers hidden by name, the highlighted layer and net, and each
+   *  object class's opacity (absent = 1; 2D-only classes are ignored here).
+   *  Applied to every renderer as it is made and again on each change. */
+  hiddenLayers?: ReadonlySet<string>;
+  highlightedLayer?: string | null;
+  opacity?: Partial<Record<ObjectClass3D, number>>;
+  highlightedNet?: number | null;
+}
+
+/** The part of the Board panel state the 3D view draws. */
+export interface BoardView3D {
+  hiddenLayers: ReadonlySet<string>;
+  highlightedLayer: string | null;
+  opacity: Partial<Record<ObjectClass3D, number>>;
+  highlightedNet: number | null;
+}
+
+const OBJECT_CLASSES_3D: readonly ObjectClass3D[] = ['tracks', 'vias', 'pads', 'zones', 'silk', 'mask', 'bodies'];
+const NO_LAYERS: ReadonlySet<string> = new Set();
+const NO_OPACITY: Partial<Record<ObjectClass3D, number>> = {};
+
+/**
+ * Tell `renderer` what differs between the state it was last given (`prev`,
+ * null for a renderer that has been given nothing) and `next`. A fresh
+ * renderer gets every hidden layer, both highlights and every non-default
+ * opacity; after that only the changes, so a slider drag is one call per step.
+ * A renderer without a member is simply not asked.
+ */
+export function applyBoardView(renderer: SceneRenderer, prev: BoardView3D | null, next: BoardView3D): void {
+  if (renderer.setLayerVisible != null) {
+    for (const name of next.hiddenLayers) if (prev == null || !prev.hiddenLayers.has(name)) renderer.setLayerVisible(name, false);
+    if (prev != null) for (const name of prev.hiddenLayers) if (!next.hiddenLayers.has(name)) renderer.setLayerVisible(name, true);
+  }
+  if (prev == null || prev.highlightedLayer !== next.highlightedLayer) renderer.highlightLayer?.(next.highlightedLayer);
+  if (prev == null || prev.highlightedNet !== next.highlightedNet) renderer.highlightNet?.(next.highlightedNet);
+  if (renderer.setObjectOpacity != null) {
+    for (const kind of OBJECT_CLASSES_3D) {
+      const was = prev == null ? 1 : prev.opacity[kind] ?? 1;
+      const now = next.opacity[kind] ?? 1;
+      if (was !== now) renderer.setObjectOpacity(kind, now);
+    }
+  }
 }
 
 /**
@@ -104,7 +147,10 @@ const statsLine = (stats: BoardScene['stats']): string =>
     `built in ${Math.round(stats.buildMs).toLocaleString('en-US')} ms`,
   ].join(DOT);
 
-export default function Board3DView({ project, stackup, createRenderer, quality, selectedRef, onSelect }: Board3DViewProps) {
+export default function Board3DView({
+  project, stackup, createRenderer, quality, selectedRef, onSelect,
+  hiddenLayers, highlightedLayer, opacity, highlightedNet,
+}: Board3DViewProps) {
   const supported = webgl2Supported();
   // Decided ONCE, at mount (spec §6): a window the visitor drags wider must not
   // silently re-tessellate the board underneath them.
@@ -130,6 +176,16 @@ export default function Board3DView({ project, stackup, createRenderer, quality,
   onSelectRef.current = onSelect;
   const selectedRefRef = useRef(selectedRef ?? null);
   selectedRefRef.current = selectedRef ?? null;
+  const boardView: BoardView3D = {
+    hiddenLayers: hiddenLayers ?? NO_LAYERS,
+    highlightedLayer: highlightedLayer ?? null,
+    opacity: opacity ?? NO_OPACITY,
+    highlightedNet: highlightedNet ?? null,
+  };
+  const boardViewRef = useRef(boardView);
+  boardViewRef.current = boardView;
+  /** What the CURRENT renderer was last told, so a change sends only the diff. */
+  const appliedRef = useRef<BoardView3D | null>(null);
 
   useEffect(() => {
     if (!supported || status !== 'ready' || scene == null) return;
@@ -137,6 +193,10 @@ export default function Board3DView({ project, stackup, createRenderer, quality,
     if (host == null) return;
     const renderer = (createRenderer ?? createSceneRenderer)();
     rendererRef.current = renderer;
+    // Given before mount, so the renderer builds its meshes already in this
+    // state and the first frame never flashes a hidden layer.
+    applyBoardView(renderer, null, boardViewRef.current);
+    appliedRef.current = boardViewRef.current;
     let cancelled = false;
     renderer.onPick?.((ref) => {
       if (cancelled) return;
@@ -194,6 +254,13 @@ export default function Board3DView({ project, stackup, createRenderer, quality,
   useEffect(() => {
     rendererRef.current?.highlight?.(selectedRef ?? null);
   }, [selectedRef, live]);
+
+  useEffect(() => {
+    const renderer = rendererRef.current;
+    if (renderer == null) return;
+    applyBoardView(renderer, appliedRef.current, boardViewRef.current);
+    appliedRef.current = boardViewRef.current;
+  }, [hiddenLayers, highlightedLayer, opacity, highlightedNet]);
 
   const go = (next: ViewName) => {
     rendererRef.current?.setView(next);

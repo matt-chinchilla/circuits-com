@@ -169,6 +169,88 @@ describe('Board3DView', () => {
   });
 });
 
+describe('Board3DView — the Board panel state (spec 2026-09-22 §2.4)', () => {
+  function viewRenderer() {
+    const r = fakeRenderer();
+    const calls: unknown[][] = [];
+    return Object.assign(r, {
+      calls,
+      setLayerVisible: (name: string, visible: boolean) => { calls.push(['setLayerVisible', name, visible]); },
+      highlightLayer: (name: string | null) => { calls.push(['highlightLayer', name]); },
+      setObjectOpacity: (kind: string, o: number) => { calls.push(['setObjectOpacity', kind, o]); },
+      highlightNet: (net: number | null) => { calls.push(['highlightNet', net]); },
+    });
+  }
+  type ViewProps = { hiddenLayers?: Set<string>; highlightedLayer?: string | null; opacity?: Record<string, number>; highlightedNet?: number | null };
+  const renderWith = (r: object, view: ViewProps) =>
+    root.render(createElement(Board3DView, { project, stackup: null, createRenderer: () => r as never, quality: 'full', ...view }));
+
+  it('applies the whole state to the renderer on mount, 3D classes only', async () => {
+    const r = viewRenderer();
+    await act(async () => {
+      renderWith(r, { hiddenLayers: new Set(['F.SilkS']), highlightedLayer: 'F.Cu', opacity: { tracks: 0.4, grid: 0.2, page: 0 }, highlightedNet: 5 });
+    });
+    expect(r.mounted).toBe(1);
+    expect(r.calls).toEqual([
+      ['setLayerVisible', 'F.SilkS', false],
+      ['highlightLayer', 'F.Cu'],
+      ['highlightNet', 5],
+      ['setObjectOpacity', 'tracks', 0.4],
+    ]);
+  });
+
+  it('on a change, tells the renderer only what changed', async () => {
+    const r = viewRenderer();
+    await act(async () => { renderWith(r, { hiddenLayers: new Set(['F.SilkS']), highlightedLayer: 'F.Cu', opacity: { tracks: 0.4 }, highlightedNet: 5 }); });
+    r.calls.length = 0;
+    await act(async () => { renderWith(r, { hiddenLayers: new Set(['B.Cu']), highlightedLayer: 'F.Cu', opacity: { mask: 0 }, highlightedNet: null }); });
+    expect(r.calls).toEqual([
+      ['setLayerVisible', 'B.Cu', false],
+      ['setLayerVisible', 'F.SilkS', true],
+      ['highlightNet', null],
+      ['setObjectOpacity', 'tracks', 1],
+      ['setObjectOpacity', 'mask', 0],
+    ]);
+    // A re-render with equal state (new objects, same contents) is silent.
+    r.calls.length = 0;
+    await act(async () => { renderWith(r, { hiddenLayers: new Set(['B.Cu']), highlightedLayer: 'F.Cu', opacity: { mask: 0 }, highlightedNet: null }); });
+    expect(r.calls).toEqual([]);
+    expect(r.mounted).toBe(1);
+  });
+
+  it('with no state given, only clears the highlights on mount', async () => {
+    const r = viewRenderer();
+    await act(async () => { renderWith(r, {}); });
+    expect(r.calls).toEqual([['highlightLayer', null], ['highlightNet', null]]);
+  });
+
+  it('a fresh renderer (Try again) is given the whole state again', async () => {
+    const made: ReturnType<typeof viewRenderer>[] = [];
+    let fail = true;
+    const create = () => {
+      const r = viewRenderer();
+      const ok = r.mount;
+      r.mount = async () => { await ok(); if (fail) throw new Error('no context'); };
+      made.push(r);
+      return r as never;
+    };
+    const view = { hiddenLayers: new Set(['F.Mask']), highlightedLayer: null, opacity: {}, highlightedNet: null };
+    await act(async () => { root.render(createElement(Board3DView, { project, stackup: null, createRenderer: create, quality: 'full', ...view })); });
+    fail = false;
+    await act(async () => { [...el.querySelectorAll('button')].find((b) => b.textContent === 'Try again')!.click(); });
+    expect(made).toHaveLength(2);
+    expect(made[1].calls).toContainEqual(['setLayerVisible', 'F.Mask', false]);
+  });
+
+  it('leaves a renderer without the optional members alone', async () => {
+    const r = fakeRenderer();
+    await act(async () => { renderWith(r, { hiddenLayers: new Set(['F.SilkS']), highlightedLayer: 'F.Cu', opacity: { tracks: 0.4 }, highlightedNet: 5 }); });
+    await act(async () => { renderWith(r, { hiddenLayers: new Set(), highlightedLayer: null, opacity: {}, highlightedNet: 2 }); });
+    expect(r.mounted).toBe(1);
+    expect(el.querySelector('[role="alert"]')).toBeNull();
+  });
+});
+
 // Class names are echoed back by vitest's CSS-off module proxy, so they prove
 // nothing about the stylesheet. This one reads the SOURCE: the canvas has no
 // content of its own, so without a reserved height the 3D tab is a 0px box.
