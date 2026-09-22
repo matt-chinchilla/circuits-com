@@ -3,7 +3,16 @@
 // Never touches the embed: everything goes through the controller.
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import type { KicadProject } from '@public/services/kicad/types';
-import type { CanvasController, CanvasStateName, CanvasView, FocusResult, ZoomAction } from './canvasController';
+import type {
+  CanvasController,
+  CanvasStateName,
+  CanvasView,
+  FocusResult,
+  LayerInfo,
+  NetInfo,
+  ObjectClass2D,
+  ZoomAction,
+} from './canvasController';
 
 /** What the drawing's selection became, and where. See `CanvasEvent`'s `selection`. */
 export interface CanvasSelection {
@@ -45,6 +54,14 @@ export interface DesignCanvasProps {
    */
   onUnrenderableSheets?: (paths: string[]) => void;
   /**
+   * The board's layer list changed or was rebuilt — the controller's `layers` event.
+   * Arrives after every board load (the renderer has just discarded every layer,
+   * opacity and net choice), when the board comes back on screen, and after a
+   * handle call that changed a layer. A host re-applies its board-view state here.
+   * Held through a ref like `onSelection`, so an inline arrow never remounts.
+   */
+  onLayers?: (layers: LayerInfo[]) => void;
+  /**
    * How much room the frame takes. `default` fills the parent (the viewer hands
    * it the viewport below the tabs); `compact` is a fixed slice of the viewport,
    * for a host where the drawing is context beside its real subject — the BOM
@@ -60,6 +77,18 @@ export interface DesignCanvasHandle {
   /** Select without moving the camera; null clears. See `CanvasController.selectRef`. */
   selectRef(ref: string | null, sheet?: string, view?: CanvasView): Promise<FocusResult>;
   zoom(action: ZoomAction): Promise<boolean>;
+  /** True while the mounted renderer implements the board controls below; a host
+   *  shows no Layers/Objects controls without them. False with no renderer at all. */
+  hasBoardControls(): boolean;
+  // The board controls, forwarded to the mounted controller at CALL time (see
+  // `CanvasController`): they act on the board only while it is on screen, and
+  // with no renderer — or one without them — answer [] and do nothing.
+  layers(): LayerInfo[];
+  setLayerVisible(name: string, visible: boolean): void;
+  highlightLayer(name: string | null): void;
+  setObjectOpacity(kind: ObjectClass2D, opacity: number): void;
+  nets(): NetInfo[];
+  highlightNet(net: number | null): void;
 }
 
 const COPY: Record<Exclude<CanvasStateName, 'loading' | 'ready'>, { title: string; body: string }> = {
@@ -78,7 +107,7 @@ const COPY: Record<Exclude<CanvasStateName, 'loading' | 'ready'>, { title: strin
 };
 
 const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(function DesignCanvas(
-  { project, view, activeSheet, onState, onSelection, onUnrenderableSheets, height = 'default', createController },
+  { project, view, activeSheet, onState, onSelection, onUnrenderableSheets, onLayers, height = 'default', createController },
   ref,
 ) {
   const hostRef = useRef<HTMLDivElement>(null);
@@ -98,6 +127,8 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(function 
   onUnrenderableRef.current = onUnrenderableSheets;
   const onSelectionRef = useRef(onSelection);
   onSelectionRef.current = onSelection;
+  const onLayersRef = useRef(onLayers);
+  onLayersRef.current = onLayers;
 
   useEffect(() => {
     if (!supported) {
@@ -128,11 +159,16 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(function 
       if (cancelled) return;
       onSelectionRef.current?.({ ref: e.ref, sheet: e.sheet, view: e.view });
     });
+    const offLayers = controller.on('layers', (e) => {
+      if (cancelled) return;
+      onLayersRef.current?.(e.layers);
+    });
     void controller.mount(host, project);
     return () => {
       cancelled = true;
       off();
       offSelection();
+      offLayers();
       controller.dispose();
       controllerRef.current = null;
     };
@@ -146,12 +182,19 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(function 
     void controllerRef.current?.activate(view, activeSheet);
   }, [state, view, activeSheet]);
 
-  // Both members read `controllerRef.current` at CALL time, so the handle never goes
+  // Every member reads `controllerRef.current` at CALL time, so the handle never goes
   // stale and `[]` keeps its identity fixed — a parent may hold it in a dep array.
   useImperativeHandle(ref, () => ({
     focusRef: (r, sheet, view) => controllerRef.current?.focusRef(r, sheet, view) ?? Promise.resolve('unsupported' as const),
     selectRef: (r, sheet, view) => controllerRef.current?.selectRef(r, sheet, view) ?? Promise.resolve('unsupported' as const),
     zoom: (action) => controllerRef.current?.zoom(action) ?? Promise.resolve(false),
+    hasBoardControls: () => typeof controllerRef.current?.layers === 'function',
+    layers: () => controllerRef.current?.layers?.() ?? [],
+    setLayerVisible: (name, visible) => controllerRef.current?.setLayerVisible?.(name, visible),
+    highlightLayer: (name) => controllerRef.current?.highlightLayer?.(name),
+    setObjectOpacity: (kind, opacity) => controllerRef.current?.setObjectOpacity?.(kind, opacity),
+    nets: () => controllerRef.current?.nets?.() ?? [],
+    highlightNet: (net) => controllerRef.current?.highlightNet?.(net),
   }), []);
 
   const frameRef = useRef<HTMLDivElement>(null);

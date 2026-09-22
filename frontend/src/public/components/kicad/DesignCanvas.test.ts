@@ -7,12 +7,14 @@ import { createRoot, type Root } from 'react-dom/client';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { CanvasController, CanvasStateName } from './canvasController';
+import type { CanvasController, CanvasStateName, LayerInfo } from './canvasController';
 import type { KicadProject } from '@public/services/kicad/types';
-import DesignCanvas from './DesignCanvas';
+import DesignCanvas, { type DesignCanvasHandle } from './DesignCanvas';
 import { resetWebgl2ProbeForTests } from './webgl';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+const LAYER: LayerInfo = { name: 'F.Cu', kind: 'copper', side: 'F', color: 'rgba(200, 52, 52, 1)', visible: true, highlighted: false };
 
 const project = { name: 'demo', files: new Map(), sheets: [] } as unknown as KicadProject;
 
@@ -169,6 +171,81 @@ describe('DesignCanvas', () => {
       await handle.current?.selectRef(null);
     });
     expect(f.selected).toEqual([null]);
+    await act(async () => root.unmount());
+  });
+
+  it('forwards every board control through the handle and the layers event to the CURRENT onLayers', async () => {
+    setWebgl(true);
+    const f = fakeController();
+    const calls: string[] = [];
+    let layersHandler: ((e: { type: 'layers'; layers: LayerInfo[] }) => void) | null = null;
+    const on = f.ctrl.on.bind(f.ctrl);
+    const ctrl = Object.assign(f.ctrl, {
+      layers: () => [LAYER],
+      setLayerVisible: (name: string, visible: boolean) => calls.push(`visible:${name}:${visible}`),
+      highlightLayer: (name: string | null) => calls.push(`layer:${name}`),
+      setObjectOpacity: (kind: string, opacity: number) => calls.push(`opacity:${kind}:${opacity}`),
+      nets: () => [{ number: 3, name: 'SDA' }],
+      highlightNet: (net: number | null) => calls.push(`net:${net}`),
+      on: (kind: string, h: unknown) => {
+        if (kind !== 'layers') return on(kind as 'state', h as never);
+        layersHandler = h as typeof layersHandler;
+        return () => {
+          layersHandler = null;
+        };
+      },
+    }) as CanvasController;
+    const handle: { current: DesignCanvasHandle | null } = { current: null };
+    const seen: string[] = [];
+    const render = (onLayers: (layers: LayerInfo[]) => void) =>
+      root.render(createElement(DesignCanvas, { ref: handle, project, view: 'board', onLayers, createController: () => ctrl }));
+    await act(async () => render(() => seen.push('stale')));
+    // A new inline arrow must not remount the embed — and must be the one called.
+    await act(async () => render((layers) => seen.push(layers.map((l) => l.name).join(','))));
+    await act(async () => layersHandler?.({ type: 'layers', layers: [LAYER] }));
+    expect(seen).toEqual(['F.Cu']);
+    expect(f.disposed).toBe(0);
+
+    const h = handle.current!;
+    expect(h.hasBoardControls()).toBe(true);
+    expect(h.layers()).toEqual([LAYER]);
+    expect(h.nets()).toEqual([{ number: 3, name: 'SDA' }]);
+    h.setLayerVisible('B.Cu', false);
+    h.highlightLayer('F.Cu');
+    h.highlightLayer(null);
+    h.setObjectOpacity('zones', 0.4);
+    h.highlightNet(3);
+    h.highlightNet(null);
+    expect(calls).toEqual(['visible:B.Cu:false', 'layer:F.Cu', 'layer:null', 'opacity:zones:0.4', 'net:3', 'net:null']);
+
+    // The handle keeps its identity across renders, and after unmount the
+    // controller is gone: every member answers empty and does nothing.
+    await act(async () => root.unmount());
+    expect(layersHandler).toBeNull();
+    expect(h.hasBoardControls()).toBe(false);
+    expect(h.layers()).toEqual([]);
+    expect(h.nets()).toEqual([]);
+    expect(() => h.setLayerVisible('F.Cu', true)).not.toThrow();
+    expect(calls).toHaveLength(6);
+  });
+
+  it('answers "no board controls" for a renderer that does not implement them', async () => {
+    setWebgl(true);
+    const f = fakeController();
+    const handle: { current: DesignCanvasHandle | null } = { current: null };
+    await act(async () => {
+      root.render(createElement(DesignCanvas, { ref: handle, project, view: 'board', createController: () => f.ctrl }));
+    });
+    const h = handle.current!;
+    expect(h.hasBoardControls()).toBe(false);
+    expect(h.layers()).toEqual([]);
+    expect(h.nets()).toEqual([]);
+    expect(() => {
+      h.setLayerVisible('F.Cu', false);
+      h.highlightLayer('F.Cu');
+      h.setObjectOpacity('tracks', 0);
+      h.highlightNet(1);
+    }).not.toThrow();
     await act(async () => root.unmount());
   });
 
