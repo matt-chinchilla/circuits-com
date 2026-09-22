@@ -905,7 +905,7 @@ were wrong in the same direction:
 
 Exactly one setting, `'full' | 'reduced'`, decided ONCE at mount by
 `currentQuality({ webgl2, innerWidth, devicePixelRatio })` —
-`webgl2 && innerWidth >= 900 && devicePixelRatio <= 2`, overridable with
+`webgl2 && innerWidth >= 900` (the `devicePixelRatio <= 2` gate was REMOVED 2026-09-22 — the owner's 2.24×/2.52× desktop monitors, on an RTX 4070 Ti, landed on the reduced tier and he saw a blurred board with no component bodies; the pixel cost is capped by `setPixelRatio(min(dpr, 2))` in the renderer, not by the tier), overridable with
 `setQualityOverride`. Nothing else in the subsystem branches on device. `reduced`
 drops tracks under 0.2 mm, halves the arc caps, coarsens the tolerance
 (`TOL_MM`), pins `setPixelRatio(1)`, turns MSAA off and **skips component bodies
