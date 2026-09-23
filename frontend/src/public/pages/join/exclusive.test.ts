@@ -10,6 +10,7 @@ import {
   normalizeCodeInput,
   parseStash,
   readJoinParams,
+  slotCounts,
   type SlotRow,
 } from './exclusive';
 
@@ -83,6 +84,29 @@ describe('groupSlots', () => {
   it('returns no groups for no rows', () => {
     expect(groupSlots([], 'gold')).toEqual([]);
     expect(groupSlots([], 'platinum')).toEqual([]);
+  });
+});
+
+describe('slotCounts / taken slots', () => {
+  const rows = [
+    row({ category_id: 'a', name: 'Amplifiers', parent_name: 'ICs', state: 'open' }),
+    row({ category_id: 'b', name: 'Clocks', parent_name: 'ICs', state: 'taken' }),
+    row({ category_id: 'c', name: 'Resistors', parent_name: 'Passives', state: 'held', held_until: 'x' }),
+    row({ category_id: 'd', name: 'Sensors', parent_name: 'ICs', state: 'open' }),
+  ];
+
+  it('counts each state', () => {
+    expect(slotCounts(rows)).toEqual({ open: 2, held: 1, taken: 1 });
+    expect(slotCounts([])).toEqual({ open: 0, held: 0, taken: 0 });
+  });
+
+  it('keeps taken rows in their group, in server order — a taken slot is shown, not removed', () => {
+    const ics = groupSlots(rows, 'gold').find((g) => g.name === 'ICs')!;
+    expect(ics.rows.map((r) => [r.name, r.state])).toEqual([
+      ['Amplifiers', 'open'],
+      ['Clocks', 'taken'],
+      ['Sensors', 'open'],
+    ]);
   });
 });
 

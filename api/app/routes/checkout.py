@@ -340,9 +340,10 @@ async def create_silver_checkout(
 
 @router.get("/exclusive/slots")
 def exclusive_slots(tier: str = "", db: Session = Depends(get_db)) -> dict:
-    """Open and held Gold (subcategory) or Platinum (top-level) slots. Taken
-    slots (R16 — Paused still pays) are omitted; a held slot carries the time
-    its hold lapses at the latest."""
+    """Every Gold (subcategory) or Platinum (top-level) slot with its state:
+    open, held (carries the time its hold lapses at the latest) or taken (R16 —
+    Paused still pays). Taken slots stay listed as occupied (owner,
+    2026-09-23); the occupant is never named."""
     _secret_key()
     try:
         t = checkout_intents.exclusive_tier(tier)

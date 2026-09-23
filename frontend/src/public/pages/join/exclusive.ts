@@ -55,7 +55,8 @@ export interface SlotGroup {
 
 /** Gold slots are subcategories, grouped under their parent in server order;
  *  Platinum slots are the top-level categories themselves — one flat group.
- *  Held rows are KEPT: the picker shows them as "being purchased". */
+ *  Held AND taken rows are KEPT: the picker shows them as "being purchased" /
+ *  "taken" (owner, 2026-09-23 — a missing row reads as a missing category). */
 export function groupSlots(rows: SlotRow[], tier: ExclusiveTier): SlotGroup[] {
   if (rows.length === 0) return [];
   if (tier === 'platinum') return [{ key: 'platinum', name: 'Top-level categories', rows }];
@@ -70,6 +71,23 @@ export function groupSlots(rows: SlotRow[], tier: ExclusiveTier): SlotGroup[] {
     g.rows.push(r);
   }
   return [...groups.values()];
+}
+
+export interface SlotCounts {
+  open: number;
+  held: number;
+  taken: number;
+}
+
+export function slotCounts(rows: SlotRow[]): SlotCounts {
+  const out: SlotCounts = { open: 0, held: 0, taken: 0 };
+  for (const r of rows) out[r.state] += 1;
+  return out;
+}
+
+/** "4 open · 1 taken" — the taken count only when there is one. */
+export function countsLine(c: SlotCounts): string {
+  return c.taken > 0 ? `${c.open} open · ${c.taken} taken` : `${c.open} open`;
 }
 
 export interface JoinParams {

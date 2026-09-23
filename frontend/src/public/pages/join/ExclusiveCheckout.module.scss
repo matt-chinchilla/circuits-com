@@ -6,9 +6,10 @@
 // The slot picker reuses JoinPage.module.scss's picker primitives (search,
 // category accordion, board rows); this module adds only what is new:
 //
-//   1. .buy / .buyGrid         — picker column beside the price ticket
-//   2. .slotRow / .slotHeld    — rows that SELECT in-page (never navigate)
-//   3. .codeField              — the rep-code input + its status line
+//   1. .buy / .buyGrid         — picker column beside the sticky price ticket
+//   2. .slotRow / .slotHeld / .slotTaken — rows that SELECT in-page (never
+//                                navigate); held and taken rows stay LISTED
+//   3. .codeField              — the rep-code input, a tear-off in the ticket
 //   4. .ticket                 — the price summary, server numbers only
 //   5. .panel[data-tier]       — retints the shared .sck-* placement ticket
 //   6. .receipt / .notice      — return-trip states
@@ -27,8 +28,8 @@
 
 .buyGrid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 330px;
-  gap: 20px;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 24px;
   align-items: start;
 
   @include responsive(900px) {
@@ -130,6 +131,52 @@
   max-width: 17ch;
 }
 
+// Occupied: a sponsor holds this slot (R16 — Paused still pays). It stays in
+// the list so the directory reads complete; solid and quiet, where a HELD row
+// is striped (in progress). Never selectable, never lifts on hover.
+.slotTaken {
+  cursor: not-allowed;
+  background: #f2f4f3;
+  border-color: rgba(15, 35, 25, 0.07);
+
+  @media (hover: hover) {
+    &:hover {
+      border-color: rgba(15, 35, 25, 0.07);
+      box-shadow: none;
+    }
+  }
+
+  [data-name] {
+    color: #68716c;
+  }
+
+  .slotMark {
+    border-color: transparent;
+    background: color-mix(in srgb, var(--tsel, #{$sponsor-gold}) 45%, #ffffff);
+  }
+}
+
+.takenTag {
+  flex: none;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+  color: color-mix(in srgb, var(--tsel, #{$sponsor-gold}) 80%, #1c2420);
+  background: color-mix(in srgb, var(--tsel, #{$sponsor-gold}) 13%, #ffffff);
+}
+
+.allTaken {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 0.86rem;
+  line-height: 1.5;
+  background: #fff8e6;
+  color: #5d4a12;
+}
+
 .openTag {
   font-family: $font-mono;
   font-size: 0.68rem;
@@ -141,11 +188,13 @@
 // ─── 3. rep code ────────────────────────────────────────────────────────────
 
 .codeField {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding-top: 14px;
-  border-top: 1px dashed rgba(15, 35, 25, 0.12);
+  margin: 2px -18px 0; // the perforation runs edge to edge of the ticket body
+  padding: 14px 18px 0;
+  border-top: 1.5px dashed color-mix(in srgb, var(--tsel, #{$sponsor-gold}) 30%, rgba(15, 35, 25, 0.14));
 }
 
 .codeLabel {
@@ -158,7 +207,6 @@
   display: flex;
   gap: 8px;
   align-items: center;
-  max-width: 320px;
 }
 
 .codeInput {
@@ -243,6 +291,14 @@
     0 18px 40px -28px color-mix(in srgb, var(--tsel, #{$sponsor-gold}) 70%, transparent);
   overflow: hidden;
 
+  // A sticky rail beside the (much taller) picker: the price and the Buy
+  // button ride along while the buyer scrolls the slots — no dead column
+  // under a short ticket. Only when the viewport can hold the whole ticket.
+  @media (min-width: 901px) and (min-height: 760px) {
+    position: sticky;
+    top: calc(#{$nav-height} + 24px);
+  }
+
   @include responsive(900px) {
     max-width: 460px;
   }
@@ -279,8 +335,18 @@
 
 .ticketEmpty {
   margin: 0;
-  font-size: 0.86rem;
-  color: #5b655f;
+  font-size: 0.98rem;
+  font-weight: 650;
+  line-height: 1.3;
+  color: #37413c;
+
+  small {
+    display: block;
+    margin-top: 2px;
+    font-size: 0.74rem;
+    font-weight: 500;
+    color: #5b655f;
+  }
 }
 
 .lines {
@@ -329,20 +395,33 @@
   border-top: 1px solid rgba(15, 35, 25, 0.1);
 }
 
+.totalLabel {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #4a544e;
+}
+
 .totalLine {
   margin: 0;
-  font-size: 0.9rem;
-  color: #37413c;
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  line-height: 1.1;
 
   strong {
     display: inline-block;
     font-family: $font-mono;
-    font-size: 1.55rem;
+    font-size: 1.9rem;
     font-weight: 700;
     font-variant-numeric: tabular-nums;
-    letter-spacing: -0.01em;
+    letter-spacing: -0.02em;
     color: #14231b;
   }
+}
+
+.totalPer {
+  font-size: 0.9rem;
+  color: #4a544e;
 }
 
 // A one-shot tick when the charged number changes (a code landed) — motion

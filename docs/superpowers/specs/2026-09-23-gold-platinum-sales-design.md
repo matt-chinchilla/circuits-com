@@ -123,7 +123,7 @@ Actions: `code_created`, `code_updated`, `checkout_started`, `hold_released`, `s
 
 | route | purpose |
 |---|---|
-| `GET /exclusive/slots?tier=gold\|platinum` | Open and held slots (R16 defines taken; taken slots omitted). Rows: `category_id, name, parent_name, path, state ("open"\|"held"), held_until?`. Also `list_usd`, `founder_usd`. |
+| `GET /exclusive/slots?tier=gold\|platinum` | Every slot with its state (R16 defines taken; **taken slots stay listed, marked occupied** — owner, 2026-09-23; the occupant is never named). Rows: `category_id, name, parent_name, path, state ("open"\|"held"\|"taken"), held_until?`. Also `list_usd`, `founder_usd`. |
 | `POST /quote {tier, category_id?, code?, email?}` | `list_usd, founder_usd, price_usd, savings_usd, code: {accepted, points} \| null, slot_state`. `email_lock` is evaluated only when `email` is sent (LU-F18). No side effects. |
 | `POST /exclusive {tier, category_id, code?, company_name, email, website?}` | Re-validates everything; **commits** the intent (the hold); mints the session with `Idempotency-Key: checkout:{intent_id}`; on any Stripe error marks the intent `expired` before answering (LU-F6, SA-F14). Returns `{url, release_token}`. 409 `slot_taken` / `slot_held` (+`held_until`) / `already_sponsor`; 429 `hold_limit`. |
 | `POST /exclusive/release {release_token}` | The buyer's own "back" path: expires the Stripe session (`POST /v1/checkout/sessions/{id}/expire`), marks the intent `released`. |

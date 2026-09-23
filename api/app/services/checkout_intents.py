@@ -109,7 +109,7 @@ class SlotRow:
     name: str
     parent_name: str | None
     path: str
-    state: str  # "open" | "held"
+    state: str  # "open" | "held" | "taken"
     held_until: str | None
 
 
@@ -186,8 +186,12 @@ def _live_hold(db: Session, category_id: uuid.UUID, now: datetime) -> CheckoutIn
 
 
 def slot_rows(db: Session, tier: str, now: datetime | None = None) -> list[SlotRow]:
-    """Every OPEN or HELD exclusive slot for ``tier``; taken slots (R16) are
-    omitted. Gold = subcategories, Platinum = top-level categories. Read-only."""
+    """Every exclusive slot for ``tier`` with its state: ``open``, ``held`` (a
+    live checkout) or ``taken`` (R16's occupant — Paused still pays). Taken
+    slots stay LISTED (owner, 2026-09-23: a vanished row reads as if the
+    category never existed); only the state travels, never who holds it — a
+    Paused board is not public. Gold = subcategories, Platinum = top-level
+    categories. Read-only."""
     t = exclusive_tier(tier)
     stamp = now or datetime.now(UTC)
     taken = {
@@ -222,16 +226,15 @@ def slot_rows(db: Session, tier: str, now: datetime | None = None) -> list[SlotR
         ]
     rows = []
     for cat, parent in candidates:
-        if cat.id in taken:
-            continue
-        until = held.get(cat.id)
+        occupied = cat.id in taken
+        until = None if occupied else held.get(cat.id)
         rows.append(
             SlotRow(
                 category_id=str(cat.id),
                 name=cat.name,
                 parent_name=parent.name if parent else None,
                 path=f"/category/{parent.slug}/{cat.slug}" if parent else f"/category/{cat.slug}",
-                state="held" if until is not None else "open",
+                state="taken" if occupied else ("held" if until is not None else "open"),
                 held_until=iso(until),
             )
         )

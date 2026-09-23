@@ -144,13 +144,19 @@ class TestSlots:
             assert resp.status_code == 422, bad
             assert isinstance(resp.json()["detail"], str)
 
-    def test_gold_lists_children_without_an_occupant(self, client, stripe_key, board):
+    def test_gold_lists_every_child_with_its_state(self, client, stripe_key, board):
+        """Owner, 2026-09-23: a taken slot stays in the list, marked occupied —
+        a vanished row reads as if the category never existed."""
         body = client.get(SLOTS, params={"tier": "gold"}).json()
         assert body["tier"] == "gold"
         assert body["list_usd"] == 2500
         assert body["founder_usd"] == 2100
         by_name = {s["name"]: s for s in body["slots"]}
-        assert set(by_name) == {"Amplifiers", "Data Converters", "Resistors"}
+        assert set(by_name) == {"Amplifiers", "Clock and Timing", "Data Converters", "Resistors"}
+        assert by_name["Clock and Timing"]["state"] == "taken"
+        assert by_name["Clock and Timing"]["held_until"] is None
+        # Only the state travels — never who holds it (a Paused board is not public).
+        assert set(by_name["Clock and Timing"]) == set(by_name["Amplifiers"])
         amps = by_name["Amplifiers"]
         assert amps == {
             "category_id": str(board["amps"].id),
@@ -161,12 +167,15 @@ class TestSlots:
             "held_until": None,
         }
 
-    def test_platinum_lists_top_level_without_an_occupant(self, client, stripe_key, board):
+    def test_platinum_lists_every_top_level_with_its_state(self, client, stripe_key, board):
         body = client.get(SLOTS, params={"tier": "Platinum"}).json()
         assert body["tier"] == "platinum"
         assert body["list_usd"] == 10000
         assert body["founder_usd"] == 8500
-        assert [s["name"] for s in body["slots"]] == ["Integrated Circuits"]
+        assert [(s["name"], s["state"]) for s in body["slots"]] == [
+            ("Integrated Circuits", "open"),
+            ("Passives", "taken"),
+        ]
         row = body["slots"][0]
         assert row["parent_name"] is None
         assert row["path"] == "/category/integrated-circuits"
@@ -182,16 +191,16 @@ class TestSlots:
             )
         )
         db.commit()
-        names = {s["name"] for s in client.get(SLOTS, params={"tier": "gold"}).json()["slots"]}
-        assert "Amplifiers" not in names
+        states = {s["name"]: s["state"] for s in client.get(SLOTS, params={"tier": "gold"}).json()["slots"]}
+        assert states["Amplifiers"] == "taken"
 
     def test_expired_sponsor_frees_the_slot(self, client, stripe_key, db, board):
         db.query(Sponsor).filter(Sponsor.category_id == board["clock"].id).update(
             {"status": "Expired"}
         )
         db.commit()
-        names = {s["name"] for s in client.get(SLOTS, params={"tier": "gold"}).json()["slots"]}
-        assert "Clock and Timing" in names
+        states = {s["name"]: s["state"] for s in client.get(SLOTS, params={"tier": "gold"}).json()["slots"]}
+        assert states["Clock and Timing"] == "open"
 
     def test_a_silver_row_does_not_take_a_gold_slot(self, client, stripe_key, db, board):
         db.add(
@@ -203,8 +212,8 @@ class TestSlots:
             )
         )
         db.commit()
-        names = {s["name"] for s in client.get(SLOTS, params={"tier": "gold"}).json()["slots"]}
-        assert "Amplifiers" in names
+        states = {s["name"]: s["state"] for s in client.get(SLOTS, params={"tier": "gold"}).json()["slots"]}
+        assert states["Amplifiers"] == "open"
 
     def test_live_intent_reads_held_and_a_lapsed_one_open(
         self, client, stripe_key, fake, db, board

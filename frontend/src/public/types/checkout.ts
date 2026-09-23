@@ -10,7 +10,8 @@ export interface SlotRow {
   name: string;
   parent_name: string | null;
   path: string;
-  state: 'open' | 'held';
+  /** `taken` = occupied (R16 — Paused still pays); listed, never selectable. */
+  state: 'open' | 'held' | 'taken';
   held_until: string | null;
 }
 

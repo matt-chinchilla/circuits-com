@@ -3,8 +3,10 @@ import GlowButton from '@public/components/widgets/GlowButton';
 import Icon from '@shared/components/Icon';
 import { api } from '@public/services/api';
 import {
+  countsLine,
   groupSlots,
   heldLine,
+  slotCounts,
   money,
   normalizeCodeInput,
   type ExclusiveTier,
@@ -25,7 +27,8 @@ import x from './ExclusiveCheckout.module.scss';
 //   * a failed or unconfigured slot fetch NEVER reads as sold out;
 //   * every figure on the ticket is one the server returned (the slots
 //     payload's list/founder prices, or /quote's price once a code is in);
-//   * a held slot stays listed as "being purchased", not removed.
+//   * a held slot stays listed as "being purchased", and a taken slot stays
+//     listed as taken (owner, 2026-09-23) — neither is ever removed.
 
 export interface IconIndex {
   byParent: Map<string, string>;
@@ -122,7 +125,7 @@ export default function ExclusiveBuy({
     // Held — possibly by this buyer's own abandoned checkout, which the page
     // is releasing right now: keep wanting it until the list is re-read.
     if (hit?.state === 'held') return;
-    if (hit) {
+    if (hit?.state === 'open') {
       setSlotId(hit.category_id);
       if (hit.parent_name) setOpenCat(hit.parent_name);
     }
@@ -202,22 +205,28 @@ export default function ExclusiveBuy({
 
   const slotButton = (r: SlotRow) => {
     const held = r.state === 'held';
+    const taken = r.state === 'taken';
+    const blocked = held || taken;
     const on = r.category_id === slotId;
     return (
       <li key={r.category_id}>
         <button
           type="button"
-          className={[styles.board, x.slotRow, held ? x.slotHeld : ''].filter(Boolean).join(' ')}
+          className={[styles.board, x.slotRow, held ? x.slotHeld : '', taken ? x.slotTaken : '']
+            .filter(Boolean)
+            .join(' ')}
           aria-pressed={on}
-          aria-disabled={held || undefined}
+          aria-disabled={blocked || undefined}
+          aria-label={taken ? `${r.name} — taken` : undefined}
+          title={taken ? `${r.name} already has a ${tierName} sponsor` : undefined}
           onClick={() => {
-            if (held) return;
+            if (blocked) return;
             setWantedSlot(null);
             setSlotId(on ? null : r.category_id);
           }}
         >
           <span className={x.slotMark} aria-hidden="true">
-            &#10003;
+            {taken ? '' : <>&#10003;</>}
           </span>
           {iconFor(r) && (
             <span className={styles.boardIcon} aria-hidden="true">
@@ -227,7 +236,9 @@ export default function ExclusiveBuy({
           <span className={styles.boardName} data-name="">
             {r.name}
           </span>
-          {held ? (
+          {taken ? (
+            <span className={x.takenTag}>Taken</span>
+          ) : held ? (
             <span className={x.heldNote}>{heldLine(r.held_until)}</span>
           ) : (
             <span className={x.openTag}>Open</span>
@@ -268,16 +279,25 @@ export default function ExclusiveBuy({
     );
   }
 
-  const openCount = rows.filter(r => r.state === 'open').length;
+  const counts = slotCounts(rows);
 
   return (
     <div className={x.buy}>
       <div className={x.buyGrid}>
         <div>
           <p className={x.pickHead}>
-            {openCount} {openCount === 1 ? 'slot' : 'slots'} open
+            {countsLine(counts)}
             {tier === 'gold' ? ' — one sponsor per subcategory' : ' — one sponsor per category'}
           </p>
+          {counts.open === 0 && (
+            <p className={x.allTaken}>
+              Every {tierName} slot is taken right now. The partners desk keeps a waitlist and
+              can hold you the first one that opens.{' '}
+              <button type="button" className={styles.linkBtn} onClick={onAskDesk}>
+                Ask the desk
+              </button>
+            </p>
+          )}
           {tier === 'gold' ? (
             <>
               <input
@@ -291,7 +311,7 @@ export default function ExclusiveBuy({
               {needle ? (
                 matchGroups.length === 0 ? (
                   <p className={styles.pickerNote}>
-                    No open slot matches &ldquo;{query}&rdquo;.{' '}
+                    No subcategory matches &ldquo;{query}&rdquo;.{' '}
                     <button type="button" className={styles.linkBtn} onClick={onAskDesk}>
                       Ask the desk
                     </button>
@@ -312,7 +332,7 @@ export default function ExclusiveBuy({
                   <div className={styles.boardCatGrid}>
                     {groups.map(g => {
                       const on = openCat === g.key;
-                      const open = g.rows.filter(r => r.state === 'open').length;
+                      const groupCounts = slotCounts(g.rows);
                       const hasPick = g.rows.some(r => r.category_id === slotId);
                       return (
                         <button
@@ -329,7 +349,7 @@ export default function ExclusiveBuy({
                           <span className={styles.boardCatBody}>
                             <span className={styles.boardCatName}>{g.name}</span>
                             <span className={styles.boardCatSub}>
-                              {open} open
+                              {countsLine(groupCounts)}
                               {hasPick && <em> · your pick</em>}
                             </span>
                           </span>
@@ -363,65 +383,6 @@ export default function ExclusiveBuy({
           ) : (
             <ul className={x.flatList}>{rows.map(slotButton)}</ul>
           )}
-
-          <div className={x.codeField}>
-            <label className={x.codeLabel} htmlFor="join-rep-code">
-              Have a code from your sales rep?
-            </label>
-            <div className={x.codeRow}>
-              <input
-                id="join-rep-code"
-                type="text"
-                inputMode="text"
-                autoCapitalize="characters"
-                autoCorrect="off"
-                autoComplete="off"
-                spellCheck={false}
-                maxLength={20}
-                className={x.codeInput}
-                data-state={
-                  codeState.kind === 'ok' ? 'ok' : codeState.kind === 'bad' ? 'bad' : undefined
-                }
-                placeholder="XXXX-XXXX"
-                value={code}
-                onChange={e => setCode(e.target.value)}
-                onBlur={() => setCode(c => normalizeCodeInput(c))}
-                aria-describedby="join-rep-code-status"
-              />
-              {code && (
-                <button
-                  type="button"
-                  className={x.codeClear}
-                  onClick={() => setCode('')}
-                  aria-label="Remove the code"
-                >
-                  &#215;
-                </button>
-              )}
-            </div>
-            <p
-              id="join-rep-code-status"
-              className={x.codeStatus}
-              data-state={
-                codeState.kind === 'ok'
-                  ? 'ok'
-                  : codeState.kind === 'bad' || codeState.kind === 'error'
-                    ? 'bad'
-                    : undefined
-              }
-              aria-live="polite"
-            >
-              {codeState.kind === 'checking'
-                ? 'Checking the code…'
-                : codeState.kind === 'ok'
-                  ? `Code ${normalized} applied.`
-                  : codeState.kind === 'bad' || codeState.kind === 'error'
-                    ? codeState.message
-                    : code && !complete
-                      ? 'Codes are 8 characters, like AB12-CD34.'
-                      : 'Optional — the Founder’s Deal applies either way.'}
-            </p>
-          </div>
         </div>
 
         <aside className={x.ticket} aria-label="Price summary">
@@ -436,7 +397,10 @@ export default function ExclusiveBuy({
                 </small>
               </p>
             ) : (
-              <p className={x.ticketEmpty}>Pick a slot to buy it.</p>
+              <p className={x.ticketEmpty}>
+                No slot picked yet
+                <small>{tier === 'gold' ? 'Choose a subcategory' : 'Choose a category'} to see it here.</small>
+              </p>
             )}
             {listUsd != null && founderUsd != null && priceUsd != null && (
               <>
@@ -457,17 +421,17 @@ export default function ExclusiveBuy({
                   )}
                 </dl>
                 <div className={x.total}>
+                  <span className={x.totalLabel}>You pay</span>
                   <p className={x.totalLine}>
-                    You pay{' '}
                     <strong key={priceUsd} className={x.tick}>
                       {money(priceUsd)}
                     </strong>
-                    /month, tax included
+                    <span className={x.totalPer}>/month</span>
                   </p>
                   {savingsUsd != null && savingsUsd > 0 && (
                     <p className={x.save}>{money(savingsUsd)}/month off the list price</p>
                   )}
-                  <p className={x.terms}>12-month minimum · billed monthly</p>
+                  <p className={x.terms}>Tax included · 12-month minimum · billed monthly</p>
                 </div>
               </>
             )}
@@ -478,6 +442,64 @@ export default function ExclusiveBuy({
                   : 'This slot was just taken — pick another.'}
               </p>
             )}
+            <div className={x.codeField}>
+              <label className={x.codeLabel} htmlFor="join-rep-code">
+                Code from your sales rep
+              </label>
+              <div className={x.codeRow}>
+                <input
+                  id="join-rep-code"
+                  type="text"
+                  inputMode="text"
+                  autoCapitalize="characters"
+                  autoCorrect="off"
+                  autoComplete="off"
+                  spellCheck={false}
+                  maxLength={20}
+                  className={x.codeInput}
+                  data-state={
+                    codeState.kind === 'ok' ? 'ok' : codeState.kind === 'bad' ? 'bad' : undefined
+                  }
+                  placeholder="XXXX-XXXX"
+                  value={code}
+                  onChange={e => setCode(e.target.value)}
+                  onBlur={() => setCode(c => normalizeCodeInput(c))}
+                  aria-describedby="join-rep-code-status"
+                />
+                {code && (
+                  <button
+                    type="button"
+                    className={x.codeClear}
+                    onClick={() => setCode('')}
+                    aria-label="Remove the code"
+                  >
+                    &#215;
+                  </button>
+                )}
+              </div>
+              <p
+                id="join-rep-code-status"
+                className={x.codeStatus}
+                data-state={
+                  codeState.kind === 'ok'
+                    ? 'ok'
+                    : codeState.kind === 'bad' || codeState.kind === 'error'
+                      ? 'bad'
+                      : undefined
+                }
+                aria-live="polite"
+              >
+                {codeState.kind === 'checking'
+                  ? 'Checking the code…'
+                  : codeState.kind === 'ok'
+                    ? `Code ${normalized} applied.`
+                    : codeState.kind === 'bad' || codeState.kind === 'error'
+                      ? codeState.message
+                      : code && !complete
+                        ? 'Codes are 8 characters, like AB12-CD34.'
+                        : 'Optional — the Founder’s Deal applies either way.'}
+              </p>
+            </div>
             <GlowButton
               type="button"
               variant="gold"
