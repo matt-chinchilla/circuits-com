@@ -73,7 +73,16 @@ class FakeStripe:
             product = next(p for p in self.products if p["id"] == path.rsplit("/", 1)[1])
             product.update({k: v for k, v in params.items() if k != "metadata"})
             return product
+        if method == "POST" and path.startswith("/prices/"):
+            price = next(p for p in self.prices if p["id"] == path.rsplit("/", 1)[1])
+            if "active" in params:
+                price["active"] = params["active"] in (True, "true")
+            return price
         if (method, path) == ("POST", "/prices"):
+            if params.get("transfer_lookup_key") in (True, "true"):
+                for other in self.prices:
+                    if other["lookup_key"] == params["lookup_key"]:
+                        other["lookup_key"] = None
             price = {
                 "id": self._id("price"),
                 "active": True,
@@ -130,12 +139,16 @@ def test_fresh_sandbox_gets_inclusive_prices_with_the_live_lookup_keys(fake, set
     assert setup_mod.main([]) == 0
     bodies = {p["lookup_key"]: p for p in fake.posts("/prices")}
     assert set(bodies) == {
+        "silver_advertising_monthly",
+        "silver_platform_monthly",
         "gold_advertising_monthly",
         "gold_platform_monthly",
         "platinum_advertising_monthly",
         "platinum_platform_monthly",
     }
     assert {k: int(b["unit_amount"]) for k, b in bodies.items()} == {
+        "silver_advertising_monthly": 22500,
+        "silver_platform_monthly": 2500,
         "gold_advertising_monthly": 225000,
         "gold_platform_monthly": 25000,
         "platinum_advertising_monthly": 900000,
@@ -158,7 +171,7 @@ def test_products_carry_the_advertising_and_platform_tax_codes(fake, setup_mod):
             else "txcd_10103001"
         )
         assert product["tax_code"] == expected, price["lookup_key"]
-    assert len(fake.products) == 4, "one product per (tier, line) — never one per run"
+    assert len(fake.products) == 6, "one product per (tier, line) — never one per run"
 
 
 def test_the_portal_configuration_only_updates_the_card(fake, setup_mod):
@@ -179,7 +192,7 @@ def test_the_portal_configuration_only_updates_the_card(fake, setup_mod):
 def test_the_split_is_ninety_ten_of_the_quote_ladder_list_price(setup_mod):
     # QUOTE_LADDER is the price home; the script is stdlib-only and carries its
     # own copy, so the two must agree (and lookup keys come from one rule).
-    for tier in ("gold", "platinum"):
+    for tier in ("silver", "gold", "platinum"):
         lines = setup_mod.price_lines(tier)
         assert [line["lookup_key"] for line in lines] == lookup_keys_for(tier)
         assert sum(line["unit_amount"] for line in lines) == QUOTE_LADDER[tier][0] * 100
@@ -262,3 +275,25 @@ def test_every_request_is_version_pinned_and_gets_use_the_query_string(setup_mod
     query = urllib.parse.parse_qs(urllib.parse.urlsplit(get.full_url).query)
     assert query == {"lookup_keys[0]": ["gold_platform_monthly"]}
     assert post.data == b"name=x"
+
+
+def test_a_stale_amount_is_repriced_on_the_same_product_and_the_key_moves(fake, setup_mod):
+    """The sandbox Silver twins were made at $90 + $10 before the live repricing to
+    $225 + $25 (2026-08-22). unit_amount is immutable, so the fix is the live one:
+    a NEW price on the SAME product with transfer_lookup_key, then archive the old."""
+    for line, amount, code in (("advertising", 9000, "txcd_10701000"), ("platform", 1000, "txcd_10103001")):
+        fake.products.append({"id": f"prod_silver_{line}", "active": True, "name": "old",
+                              "tax_code": code, "metadata": {}})
+        fake.prices.append({"id": f"price_old_{line}", "active": True, "product": f"prod_silver_{line}",
+                            "currency": "usd", "unit_amount": amount, "recurring": {"interval": "month"},
+                            "tax_behavior": "inclusive", "lookup_key": f"silver_{line}_monthly"})
+    assert setup_mod.main([]) == 0
+    live = {p["lookup_key"]: p for p in fake.prices if p["active"] and p["lookup_key"]}
+    assert live["silver_advertising_monthly"]["unit_amount"] == 22500
+    assert live["silver_platform_monthly"]["unit_amount"] == 2500
+    assert live["silver_advertising_monthly"]["product"] == "prod_silver_advertising"
+    silver_posts = [b for b in fake.posts("/prices") if b["lookup_key"].startswith("silver_")]
+    assert all(b.get("transfer_lookup_key") in (True, "true") for b in silver_posts)
+    old = {p["id"]: p for p in fake.prices}
+    assert old["price_old_advertising"]["active"] is False
+    assert old["price_old_platform"]["active"] is False

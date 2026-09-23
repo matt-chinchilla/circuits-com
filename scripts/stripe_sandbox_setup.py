@@ -48,8 +48,8 @@ KEY_VAR = "STRIPE_SECRET_KEY_TEST"
 # List prices in dollars — must equal QUOTE_LADDER[tier][0] in
 # api/app/services/stripe_quotes.py (a test pins the two together; this script
 # stays stdlib-only so it runs without the api's dependencies).
-LIST_USD = {"gold": 2500, "platinum": 10000}
-TIERS = ("gold", "platinum")
+LIST_USD = {"silver": 250, "gold": 2500, "platinum": 10000}
+TIERS = ("silver", "gold", "platinum")
 
 # (line, share of list in percent, tax code, product name suffix)
 LINES = (
@@ -197,6 +197,41 @@ def ensure_price(key, want, dry_run, report):
     ).get("data", [])
     if found:
         problems = _price_problems(found[0], want)
+        if problems and all(p.startswith("unit_amount ") for p in problems):
+            # Only the amount is stale (the sandbox Silver twins predate the live
+            # 2026-08-22 repricing). unit_amount is immutable, so do what live did:
+            # a new price on the SAME product takes the lookup key, the old one is
+            # archived. Any other mismatch is a human's call — reported, never fixed.
+            old = found[0]
+            product = old.get("product")
+            product_id = product.get("id") if isinstance(product, dict) else product
+            if dry_run:
+                report(
+                    f"  reprice  {want['lookup_key']} ({old.get('id')}) "
+                    f"{old.get('unit_amount')} -> {want['unit_amount']} cents"
+                )
+                return True
+            new = api(
+                "POST",
+                "/prices",
+                key,
+                {
+                    "product": product_id,
+                    "currency": "usd",
+                    "unit_amount": want["unit_amount"],
+                    "recurring": {"interval": "month"},
+                    "tax_behavior": "inclusive",
+                    "lookup_key": want["lookup_key"],
+                    "transfer_lookup_key": True,
+                    "metadata": {"managed_by": MANAGED_BY},
+                },
+            )
+            api("POST", f"/prices/{old['id']}", key, {"active": False})
+            report(
+                f"  repriced {want['lookup_key']} {old['id']} -> {new['id']} "
+                f"({want['unit_amount']} cents); old archived"
+            )
+            return True
         if problems:
             report(
                 f"  MISMATCH {want['lookup_key']} ({found[0].get('id')}): " + "; ".join(problems)
