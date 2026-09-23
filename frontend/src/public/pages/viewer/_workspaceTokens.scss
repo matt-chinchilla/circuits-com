@@ -13,9 +13,20 @@
 // Night is the instrument going dark, not the site: the navbar is already the
 // steel theme's near-black, the 3D canvas is dark in both, the schematic is a
 // white sheet on the desk either way, and the BOM table and the stackup stay
-// the printed pages they are. Contrast (WCAG, measured against the night
-// bench #14181c and the drawer over it, ~#1b2025): ink 13.9:1, ink-2 10:1,
-// ink-3 5.8:1, the designator green 10:1, the focus ring 8.9:1.
+// the printed pages they are.
+//
+// Contrast, MEASURED on the served build 2026-09-22 (text colour from
+// getComputedStyle, background from the screenshot's own pixels beside the
+// glyphs, 1440x900, Sheets tab open — the composited chrome, not the token).
+// Night: ink 12.5–14.6:1 (chrome / drawer / bench), ink-2 8.9–9.4:1, ink-3
+// 5.4–6.3:1, ink on the lit current row 8.7:1, the lit ink on the pressed
+// switch 12.5:1, the "root" tag on the lit row 5.2:1 (the lowest pair).
+// Day: ink 15.3:1, ink-2 7.4:1, ink-3 4.8–5.1:1 (the lowest: project meta
+// on the chrome, 4.84:1), ink on the lit row 13.2:1. Every text pair is over
+// 4.5:1 in both; ink-4 (3.2:1 day, 3.9:1 night) colours only the DISABLED
+// rail glyph, which is exempt. Analytic, not measured: the focus ring
+// (#62d92b) at 9.8:1 on the night bench and $executive-blue at 9.4:1 by day,
+// both over the 3:1 an indicator needs.
 
 @mixin workspace-day-tokens {
   --vw-bench: #f2f4f9;
