@@ -147,7 +147,7 @@ export default function BillingPanel({ sponsorId, tier, companyName, onSponsorEx
 
   if (phase === 'blocked' || phase === 'error' || !billing) {
     return (
-      <section className={formStyles.panel}>
+      <section className={`${formStyles.panel} ${formStyles.panelStacked}`}>
         <header className={formStyles.panelHead}>
           <h2 className={formStyles.panelTitle}>Billing</h2>
         </header>
@@ -422,7 +422,7 @@ export default function BillingPanel({ sponsorId, tier, companyName, onSponsorEx
   const cardUrl = cardLink ? safeHttpUrl(cardLink.url) : null;
 
   return (
-    <section className={formStyles.panel} aria-labelledby="billing-panel-title">
+    <section className={`${formStyles.panel} ${formStyles.panelStacked}`} aria-labelledby="billing-panel-title">
       <header className={formStyles.panelHead}>
         <h2 id="billing-panel-title" className={formStyles.panelTitle}>
           Billing

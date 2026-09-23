@@ -98,7 +98,7 @@ export default function QuotePanel({ sponsorId, tier }: Props) {
 
   if (blocked) {
     return (
-      <section className={styles.panel}>
+      <section className={`${styles.panel} ${styles.panelStacked}`}>
         <header className={styles.panelHead}>
           <h2 className={styles.panelTitle}>Quotes</h2>
         </header>
@@ -186,7 +186,7 @@ export default function QuotePanel({ sponsorId, tier }: Props) {
     address.postal_code.trim().length >= 5;
 
   return (
-    <section className={styles.panel}>
+    <section className={`${styles.panel} ${styles.panelStacked}`}>
       <header className={styles.panelHead}>
         <h2 className={styles.panelTitle}>Quotes</h2>
       </header>

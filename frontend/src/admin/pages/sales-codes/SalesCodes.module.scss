@@ -657,6 +657,8 @@
 // Tier: three-way segmented control on real radios (keyboard arrows work).
 .segmented {
   display: inline-flex;
+  align-self: flex-start;
+  flex-wrap: wrap;
   padding: 3px;
   gap: 3px;
   @include a-glass-well;

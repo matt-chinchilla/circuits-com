@@ -337,6 +337,12 @@
   font-variant-numeric: tabular-nums;
 }
 
+// `.invoices th` outranks a bare `.num`; the header must align with its column.
+.invoices th.num {
+  text-align: right;
+  font-family: inherit;
+}
+
 .mono {
   font-family: $font-mono;
   font-size: 12px;
@@ -385,8 +391,15 @@
     margin-left: 12px;
   }
 
-  a {
+  a,
+  .linkButton {
     font-weight: 600;
     color: var(--a-primary);
+    text-decoration: none;
+
+    &:hover {
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
   }
 }
