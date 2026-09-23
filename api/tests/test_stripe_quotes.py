@@ -67,7 +67,12 @@ class FakeStripe:
             keys = request.url.params.get_list("lookup_keys[]")
             return httpx.Response(
                 200,
-                json={"data": [{"id": f"price_{k}", "lookup_key": k} for k in keys]},
+                json={
+                    "data": [
+                        {"id": f"price_{k}", "lookup_key": k, "product": f"prod_{k}"}
+                        for k in keys
+                    ]
+                },
             )
         if method == "GET" and path == "/v1/customers":
             wanted = request.url.params.get("email")
@@ -85,15 +90,19 @@ class FakeStripe:
                 )
             return httpx.Response(200, json={"id": self.form(request).get("id")})
         if method == "GET" and path.startswith("/v1/coupons/"):
-            return httpx.Response(
-                200,
-                json={
-                    "id": path.rsplit("/", 1)[1],
-                    "amount_off": self.existing_coupon_amount,
-                    "duration": self.existing_coupon_duration,
-                    "currency": "usd",
-                },
-            )
+            coupon_id = path.rsplit("/", 1)[1]
+            body = {
+                "id": coupon_id,
+                "amount_off": self.existing_coupon_amount,
+                "duration": self.existing_coupon_duration,
+                "currency": "usd",
+                "valid": True,
+            }
+            # applies_to is includable only — present when the GET expands it.
+            if "applies_to" in request.url.params.get_list("expand[]"):
+                tier = coupon_id.split("-AT-")[0].lower()
+                body["applies_to"] = {"products": [f"prod_{k}" for k in lookup_keys_for(tier)]}
+            return httpx.Response(200, json=body)
         if method == "POST" and path == "/v1/quotes":
             return httpx.Response(200, json={"id": "qt_testquote0001", "status": "draft"})
         if method == "POST" and path.endswith("/finalize"):
@@ -171,6 +180,9 @@ def test_discounted_quote_builds_the_exact_all_in_total():
     coupon = _sent(fake, "POST", "/v1/coupons")
     assert coupon["amount_off"] == "125000"  # (2500 − 1250) × 100
     assert coupon["duration"] == "forever"
+    # Fenced to the products Stripe resolved for the tier, not hard-coded ids.
+    assert coupon["applies_to[products][0]"] == "prod_gold_advertising_monthly"
+    assert coupon["applies_to[products][1]"] == "prod_gold_platform_monthly"
 
 
 def test_list_price_quote_sends_no_discount():
