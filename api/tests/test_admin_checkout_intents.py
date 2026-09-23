@@ -144,6 +144,63 @@ def test_attention_lists_conflicts_holds_and_failing(
     assert cancels.date() == (since + timedelta(days=settings.BILLING_GRACE_DAYS)).date()
 
 
+def test_attention_lists_overdue_invoiced_customers(client, db, seeded_db, fake, auth_header):
+    """F4: a rep-quoted (send_invoice) customer never "fails" a charge, so it
+    is found by ONE list of overdue open invoices — failing since the due date,
+    cancelled by the sweep a grace later."""
+    now = datetime.now(UTC)
+    rows = {}
+    for key, due_in_days in (("overdue", -10), ("notdue", 5)):
+        sponsor = Sponsor(
+            supplier_id=seeded_db["supplier1"].id,
+            keyword=f"invoiced-{key}",
+            tier="Gold",
+            status="Active",
+            amount=Decimal("1850"),
+        )
+        db.add(sponsor)
+        db.flush()
+        sub = f"sub_attn{key}0001"
+        db.add(
+            SponsorBilling(
+                sponsor_id=sponsor.id,
+                stripe_subscription_id=sub,
+                collection_method="send_invoice",
+                channel="quote",
+                list_usd=2500,
+                price_usd=1850,
+            )
+        )
+        due = int((now + timedelta(days=due_in_days)).timestamp())
+        fake.add_subscription(sub, collection_method="send_invoice")
+        fake.add_open_invoice(
+            f"in_attn{key}0001",
+            sub=sub,
+            amount=185000,
+            due_date=due,
+            collection_method="send_invoice",
+        )
+        rows[key] = (sponsor, due)
+    db.commit()
+
+    resp = client.get(f"{URL}/attention", headers=auth_header())
+    assert resp.status_code == 200, resp.text
+    failing = resp.json()["failing"]
+    sponsor, due = rows["overdue"]
+    assert [f["sponsor_id"] for f in failing] == [str(sponsor.id)]
+    row = failing[0]
+    assert row["collection_method"] == "send_invoice"
+    due_at = datetime.fromtimestamp(due, UTC)
+    assert datetime.fromisoformat(row["failing_since"]) == due_at
+    assert datetime.fromisoformat(row["cancels_on"]) == due_at + timedelta(
+        days=settings.BILLING_GRACE_DAYS
+    )
+    lists = fake.calls("GET", "/v1/invoices")
+    assert len(lists) == 1
+    assert lists[0].params["collection_method"] == "send_invoice"
+    assert lists[0].params["status"] == "open"
+
+
 def test_attention_404s_without_stripe(client, seeded_db, auth_header, monkeypatch):
     monkeypatch.setattr(settings, "STRIPE_SECRET_KEY", None)
     assert client.get(f"{URL}/attention", headers=auth_header()).status_code == 404

@@ -7,7 +7,8 @@ Stripe dashboard (D1):
   sale refused whose cancel + refund has not completed (``status='conflict'``,
   ``resolved_at`` NULL — THE conflict queue), live exclusive holds, and billed
   sponsors whose payments are failing (with the date the sweep will release
-  them).
+  them): card rows by ``failing_since``, rep-invoiced (``send_invoice``) rows
+  by their oldest overdue invoice's due date — ONE Stripe list call.
 * ``POST /{id}/resolve`` → ``{"resolved": bool}``: run the conflict's cancel +
   refund now (the same ``billing_followups.resolve_conflict`` the webhook's
   background task and the sweep run). ``false`` = still failing; the row stays.
@@ -23,9 +24,11 @@ username.
 
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import UTC, datetime, timedelta
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
@@ -37,10 +40,12 @@ from app.models.sales import CheckoutIntent, SponsorBilling
 from app.services import stripe_billing, stripe_quotes
 from app.services.auth_service import get_current_user, require_billing_reader, require_staff
 from app.services.billing_followups import resolve_conflict
-from app.services.billing_mirror import audit
+from app.services.billing_mirror import audit, invoice_subscription_id
 from app.services.checkout_intents import CONFLICT, OPEN, RELEASED
 from app.services.sales_pricing import EXCLUSIVE_TIERS
 from app.services.stripe_quotes import StripeApiError
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/api/admin/checkout-intents",
@@ -90,6 +95,10 @@ def _intent_row(intent: CheckoutIntent, names: dict) -> dict:
     }
 
 
+def _aware(value: datetime) -> datetime:
+    return value if value.tzinfo else value.replace(tzinfo=UTC)
+
+
 def _load_intent(db: Session, intent_id: str) -> CheckoutIntent:
     try:
         key = uuid.UUID(intent_id)
@@ -102,11 +111,11 @@ def _load_intent(db: Session, intent_id: str) -> CheckoutIntent:
 
 
 @router.get("/attention")
-def attention(
+async def attention(
     db: Session = Depends(get_db),
     _: User = Depends(require_billing_reader),
 ) -> dict:
-    _secret_key()
+    key = _secret_key()
     now = datetime.now(UTC)
 
     conflicts = (
@@ -128,35 +137,66 @@ def attention(
     names = _category_names(db, {i.category_id for i in conflicts + holds})
 
     grace = timedelta(days=settings.BILLING_GRACE_DAYS)
-    failing = []
-    rows = (
+    live_billed = (
         db.query(SponsorBilling, Sponsor, Supplier.name)
         .join(Sponsor, Sponsor.id == SponsorBilling.sponsor_id)
         .outerjoin(Supplier, Supplier.id == Sponsor.supplier_id)
-        .filter(
-            SponsorBilling.failing_since.isnot(None),
-            or_(Sponsor.status.is_(None), Sponsor.status != "Expired"),
-        )
-        .order_by(SponsorBilling.failing_since)
-        .all()
+        .filter(or_(Sponsor.status.is_(None), Sponsor.status != "Expired"))
     )
-    sponsor_names = _category_names(db, {sponsor.category_id for _, sponsor, _ in rows})
-    for billing, sponsor, supplier_name in rows:
-        since = billing.failing_since
-        since = since if since.tzinfo else since.replace(tzinfo=UTC)
-        failing.append(
-            {
-                "sponsor_id": str(sponsor.id),
-                "supplier_name": supplier_name,
-                "tier": sponsor.tier,
-                "category_name": sponsor_names.get(sponsor.category_id),
-                "keyword": sponsor.keyword,
-                "price_usd": billing.price_usd,
-                "collection_method": billing.collection_method,
-                "failing_since": since.isoformat(),
-                "cancels_on": (since + grace).isoformat(),
-            }
-        )
+    # Card rows: the webhook derives failing_since from the mirror.
+    rows = [
+        (billing, sponsor, supplier_name, _aware(billing.failing_since))
+        for billing, sponsor, supplier_name in live_billed.filter(
+            SponsorBilling.failing_since.isnot(None)
+        ).all()
+    ]
+    # Invoiced rows (rep quotes) never "fail" a charge — they are late. ONE
+    # list of overdue open send_invoice invoices finds them (F4); each is
+    # failing since its oldest overdue invoice's due date.
+    invoiced = {
+        billing.stripe_subscription_id: (billing, sponsor, supplier_name)
+        for billing, sponsor, supplier_name in live_billed.filter(
+            SponsorBilling.collection_method == "send_invoice",
+            SponsorBilling.stripe_subscription_id.isnot(None),
+        ).all()
+    }
+    if invoiced:
+        listed = {row[0].sponsor_id for row in rows}
+        try:
+            async with stripe_quotes.make_client(key) as client:
+                overdue = await stripe_billing.list_overdue_send_invoice_invoices(client, now)
+        except (StripeApiError, httpx.HTTPError):
+            logger.exception("attention: listing overdue invoices failed")
+            overdue = []
+        due_by_sub: dict[str, datetime] = {}
+        for invoice in overdue:
+            sub_id = invoice_subscription_id(invoice)
+            due = invoice.get("due_date")
+            if sub_id in invoiced and isinstance(due, int) and not isinstance(due, bool):
+                due_at = datetime.fromtimestamp(due, UTC)
+                if sub_id not in due_by_sub or due_at < due_by_sub[sub_id]:
+                    due_by_sub[sub_id] = due_at
+        for sub_id, due_at in due_by_sub.items():
+            billing, sponsor, supplier_name = invoiced[sub_id]
+            if billing.sponsor_id not in listed:
+                rows.append((billing, sponsor, supplier_name, due_at))
+    rows.sort(key=lambda row: row[3])
+
+    sponsor_names = _category_names(db, {sponsor.category_id for _, sponsor, _, _ in rows})
+    failing = [
+        {
+            "sponsor_id": str(sponsor.id),
+            "supplier_name": supplier_name,
+            "tier": sponsor.tier,
+            "category_name": sponsor_names.get(sponsor.category_id),
+            "keyword": sponsor.keyword,
+            "price_usd": billing.price_usd,
+            "collection_method": billing.collection_method,
+            "failing_since": since.isoformat(),
+            "cancels_on": (since + grace).isoformat(),
+        }
+        for billing, sponsor, supplier_name, since in rows
+    ]
 
     return {
         "conflicts": [_intent_row(i, names) for i in conflicts],
