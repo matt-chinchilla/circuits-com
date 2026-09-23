@@ -26,6 +26,7 @@ import FounderBadge from '@shared/components/FounderBadge/FounderBadge';
 import { CsCopy, csTelHref } from './csFx';
 import { api } from '@public/services/api';
 import SilverCheckoutModal from './SilverCheckoutModal';
+import { chargedMonthly } from '@public/services/checkoutPrice';
 import './categorySponsor.scss';
 import './silverPartners.scss';
 
@@ -322,7 +323,10 @@ export default function SilverPartners({
   // Self-serve checkout, when the server offers it. One probe per mount
   // (cancel-flagged); a 404 means billing is unconfigured and every open
   // slot keeps its classic contact-page routing — graceful in both worlds.
+  // The CHARGED price (the probe's price_usd — the Founder's Deal), with the
+  // list price kept only to show what it is struck from.
   const [checkoutMonthly, setCheckoutMonthly] = useState<number | null>(null);
+  const [checkoutList, setCheckoutList] = useState<number | null>(null);
   const [buying, setBuying] = useState(false);
   useEffect(() => {
     if (!categoryId) return;
@@ -331,7 +335,8 @@ export default function SilverPartners({
       .getSilverCheckoutInfo()
       .then(info => {
         if (cancelled) return;
-        setCheckoutMonthly(info.monthly_total);
+        setCheckoutMonthly(chargedMonthly(info));
+        setCheckoutList(info.monthly_total);
         // ?sponsor=1 — the deep link /pricing (and any rep's email) uses to
         // land a buyer on THIS board with the panel already open. Read from
         // the live URL, not a prop: this component is not the router's owner.
@@ -450,6 +455,7 @@ export default function SilverPartners({
           categoryId={categoryId}
           categoryName={categoryName}
           monthlyTotal={checkoutMonthly}
+          listTotal={checkoutList}
           onClose={() => setBuying(false)}
         />
       )}

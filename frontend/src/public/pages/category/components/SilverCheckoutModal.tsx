@@ -80,8 +80,10 @@ interface ConfirmProps {
   /** The subcategory being sold — what a self-serve purchase is FOR. */
   categoryId: string;
   categoryName: string;
-  /** All-in monthly price, from the server probe. Never hardcoded here. */
+  /** The CHARGED monthly price (the probe's price_usd). Never hardcoded here. */
   monthlyTotal: number;
+  /** The list price it is struck from, when the probe sent one. */
+  listTotal?: number | null;
   onClose: () => void;
 }
 
@@ -193,6 +195,8 @@ export default function SilverCheckoutModal(props: SilverCheckoutModalProps): Re
   // Server-probed price, carried by the confirm props only. Pulled out here
   // because JSX inside the receipt/confirm ternary can't narrow `props`.
   const monthlyTotal = props.variant === 'receipt' ? null : props.monthlyTotal;
+  const listTotal = props.variant === 'receipt' ? null : (props.listTotal ?? null);
+  const discounted = monthlyTotal != null && listTotal != null && monthlyTotal < listTotal;
 
   // Portaled to <body>: the board sits inside stacking/transform contexts
   // (the tier row, the flashlight boards) that would otherwise paint page
@@ -303,6 +307,12 @@ export default function SilverCheckoutModal(props: SilverCheckoutModalProps): Re
                 per month {'·'} tax included
                 <br />
                 12-month minimum term, billed monthly
+                {discounted ? (
+                  <>
+                    <br />
+                    Founder&rsquo;s Deal {'·'} list <s>${listTotal}</s>
+                  </>
+                ) : null}
               </span>
             </div>
             <span className="sck-fingers" aria-hidden="true"></span>
