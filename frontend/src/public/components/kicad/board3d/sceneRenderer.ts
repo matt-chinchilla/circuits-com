@@ -20,8 +20,10 @@ import {
 } from '@public/services/kicad/board3d/partRanges';
 import {
   BACKGROUND, BODY_EDGE, BODY_OPAQUE, CAMERA, ENVIRONMENT, FAMILY_TINTS, FLIP_MS, LIGHTS, MATERIALS, ORBIT,
-  VIEW_MODE_LOOK, highlightSpecFor, shade, type FamilyTint, type MaterialSpec,
+  PASSIVE_TINTS, SURFACE_FINISHES, VIEW_MODE_LOOK, highlightSpecFor, leadTint, shade,
+  type FamilyTint, type MaterialSpec, type SurfaceFinish,
 } from './board3dTheme';
+import { surfaceTexels } from './proceduralTexture';
 import { DEFAULT_VIEW_MODE, type ViewMode } from './viewMode';
 
 // Types from the dynamic imports themselves: a `typeof import(...)` is erased at
@@ -47,8 +49,13 @@ export interface HoverHit { ref: string; x: number; y: number }
 export type ObjectClass3D = 'tracks' | 'vias' | 'pads' | 'zones' | 'silk' | 'mask' | 'bodies';
 type CopperClass = ClassRange['kind'];
 
-/** A class that is a whole MATERIAL rather than a slice of the copper. */
-const MATERIAL_CLASS: Partial<Record<Material, ObjectClass3D>> = { body: 'bodies', silk: 'silk', mask: 'mask', 'hole-wall': 'vias' };
+/** A class that is a whole MATERIAL rather than a slice of the copper. A
+ *  part's pins and terminations fade with its body: the Bodies slider is
+ *  "the parts", and a body faded to nothing over a field of floating pins
+ *  would read as a rendering fault. */
+const MATERIAL_CLASS: Partial<Record<Material, ObjectClass3D>> = {
+  body: 'bodies', lead: 'bodies', silk: 'silk', mask: 'mask', 'hole-wall': 'vias',
+};
 /** In the order their materials are appended to a copper mesh. */
 const COPPER_CLASSES: readonly CopperClass[] = ['tracks', 'pads', 'zones'];
 /** What a layer toggle never hides: the board itself and the drilled walls
@@ -222,8 +229,71 @@ function bodyColors(T: Three, group: MeshGroup): Float32Array {
     }
   };
   paint(0, group.indices.length, FAMILY_TINTS.other);
-  for (const part of group.parts ?? []) if (part.family != null) paint(part.start, part.count, FAMILY_TINTS[part.family]);
+  for (const part of group.parts ?? []) if (part.family != null) paint(part.start, part.count, bodyTint(part));
   return colors;
+}
+
+/** A body's tint: its family's, or for a chip passive the tint of what it is. */
+function bodyTint(part: PartRange): FamilyTint {
+  if (part.family === 'passive' && part.passive != null) return PASSIVE_TINTS[part.passive];
+  return FAMILY_TINTS[part.family ?? 'other'];
+}
+
+/**
+ * One colour per vertex of the lead group: the plating of the part the lead
+ * belongs to — gold on a connector, tin on everything else (and on a vertex no
+ * range names). Linear light through `Color`, as the bodies'.
+ */
+function leadColors(T: Three, group: MeshGroup): Float32Array {
+  const colors = new Float32Array(group.positions.length);
+  const paint = (start: number, count: number, hex: number) => {
+    const c = new T.Color(hex);
+    for (let i = start; i < start + count; i++) {
+      const v = group.indices[i];
+      colors[v * 3] = c.r;
+      colors[v * 3 + 1] = c.g;
+      colors[v * 3 + 2] = c.b;
+    }
+  };
+  paint(0, group.indices.length, leadTint(undefined));
+  for (const part of group.parts ?? []) paint(part.start, part.count, leadTint(part.family));
+  return colors;
+}
+
+/** Whether a group carries a usable UV set: two floats per vertex. A group
+ *  without one draws untextured rather than sampling garbage. */
+export const hasUvs = (group: MeshGroup): group is MeshGroup & { uvs: Float32Array } =>
+  group.uvs != null && group.uvs.length === (group.positions.length / 3) * 2;
+
+/**
+ * A finish (`proceduralTexture.ts`) as a texture: tiled, mipmapped, linear —
+ * it is data, not colour, so no sRGB conversion. A DataTexture over the bytes
+ * rather than a CanvasTexture: the same pixels without a 2D context to make,
+ * which a worker-less test DOM and a context-starved browser both lack.
+ */
+export function finishTexture(T: Three, finish: SurfaceFinish, maxAnisotropy = 1): InstanceType<Three['DataTexture']> {
+  const { size } = finish.noise;
+  const texture = new T.DataTexture(surfaceTexels(finish.noise), size, size, T.RGBAFormat, T.UnsignedByteType);
+  texture.wrapS = T.RepeatWrapping;
+  texture.wrapT = T.RepeatWrapping;
+  texture.repeat.set(finish.repeat, finish.repeat);
+  texture.magFilter = T.LinearFilter;
+  texture.minFilter = T.LinearMipmapLinearFilter;
+  texture.generateMipmaps = true;
+  // Brushed streaks seen at a grazing angle smear without it; 4 is plenty.
+  texture.anisotropy = Math.max(1, Math.min(4, maxAnisotropy));
+  texture.needsUpdate = true;
+  return texture;
+}
+
+/** A material takes a finish: the one texture as its roughness AND its bump
+ *  (green and red channels), and the finish's own roughness under the map. */
+export function applyFinish(material: StandardMaterial, texture: InstanceType<Three['Texture']>, finish: SurfaceFinish): void {
+  material.roughnessMap = texture;
+  material.bumpMap = texture;
+  material.bumpScale = finish.bumpScale;
+  material.roughness = finish.roughness;
+  material.needsUpdate = true;
 }
 
 /**
@@ -271,6 +341,9 @@ export function createSceneRenderer(options: SceneRendererOptions = {}): SceneRe
   /** EVERY material made, the per-class clones included: dispose frees this list. */
   const materials: (StandardMaterial | LineMaterial)[] = [];
   let environment: InstanceType<Three['Texture']> | null = null;
+  /** The surface finishes, made the first time a textured group asks and ONE
+   *  per finish for the whole mount; dispose frees them. */
+  const finishes = new Map<keyof typeof SURFACE_FINISHES, InstanceType<Three['DataTexture']>>();
   /** The meshes a reader can pick from: those whose group has a `parts` table
    *  (bodies at `full`, pads on every copper layer). */
   const parted: { mesh: InstanceType<Three['Mesh']>; parts: PartRange[] }[] = [];
@@ -509,6 +582,17 @@ export function createSceneRenderer(options: SceneRendererOptions = {}): SceneRe
     autoOrbit = false;
   };
 
+  /** The finish's texture, made on first use. */
+  function finishOf(T: Three, name: keyof typeof SURFACE_FINISHES): InstanceType<Three['DataTexture']> {
+    let texture = finishes.get(name);
+    if (texture == null) {
+      const max = (renderer as { capabilities?: { getMaxAnisotropy?: () => number } } | null)?.capabilities?.getMaxAnisotropy?.() ?? 1;
+      texture = finishTexture(T, SURFACE_FINISHES[name], max);
+      finishes.set(name, texture);
+    }
+    return texture;
+  }
+
   /** The objects one group becomes: its mesh, and for the bodies their outline. */
   function buildMesh(T: Three, group: MeshGroup): InstanceType<Three['Object3D']>[] {
     const geometry = new T.BufferGeometry();
@@ -516,16 +600,25 @@ export function createSceneRenderer(options: SceneRendererOptions = {}): SceneRe
     geometry.setAttribute('normal', new T.BufferAttribute(group.normals, 3));
     geometry.setIndex(new T.BufferAttribute(group.indices, 1));
     geometry.computeBoundingSphere();
+    const textured = hasUvs(group);
+    if (textured) geometry.setAttribute('uv', new T.BufferAttribute(group.uvs, 2));
     const total = group.indices.length;
     const spec = MATERIALS[group.material];
     const body = group.material === 'body';
+    const lead = group.material === 'lead';
     // A spec is exactly MeshStandardMaterial parameters, so it is handed over
     // whole. The bodies carry their tint per vertex, and their faces are pushed
-    // back a hair so the outline drawn over them wins the depth test.
+    // back a hair so the outline drawn over them — and the terminations that
+    // share their end walls — win the depth test. The leads carry their
+    // plating per vertex, and wear the brushed finish when they have UVs.
     const base = new T.MeshStandardMaterial(body
       ? { ...spec, vertexColors: true, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 }
-      : { ...spec });
+      : lead ? { ...spec, vertexColors: true } : { ...spec });
     if (body) geometry.setAttribute('color', new T.BufferAttribute(bodyColors(T, group), 3));
+    if (lead) {
+      geometry.setAttribute('color', new T.BufferAttribute(leadColors(T, group), 3));
+      if (textured) applyFinish(base, finishOf(T, 'lead'), SURFACE_FINISHES.lead);
+    }
     geometries.push(geometry);
     materials.push(base);
     // Every mesh draws through a material array, and which triangles use which
@@ -564,6 +657,9 @@ export function createSceneRenderer(options: SceneRendererOptions = {}): SceneRe
         const material = new T.MeshStandardMaterial({
           ...BODY_OPAQUE, vertexColors: true, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1,
         });
+        // Moulded epoxy: the opaque bodies only. Glass stays smooth — a lens
+        // is polished — and the highlight stays flat so it reads as a state.
+        if (textured) applyFinish(material, finishOf(T, 'body'), SURFACE_FINISHES.body);
         materials.push(material);
         classes.push({ kind: 'opaque', index: array.length, material, spec: BODY_OPAQUE, opacityKind: 'bodies', capOf: 'body', own: true });
         array.push(material);
@@ -962,10 +1058,11 @@ export function createSceneRenderer(options: SceneRendererOptions = {}): SceneRe
       controls = null;
       // The cheap, synchronous half: nothing above touches the GPU. The canvas
       // leaves the DOM now, so the tab the reader picked paints without it.
-      const gone = { renderer, geometries: geometries.slice(), materials: materials.slice(), environment };
+      const gone = { renderer, geometries: geometries.slice(), materials: materials.slice(), environment, textures: [...finishes.values()] };
       geometries.length = 0;
       materials.length = 0;
       environment = null;
+      finishes.clear();
       parted.length = 0;
       drawn.length = 0;
       pickHandler = null;
@@ -995,6 +1092,7 @@ export function createSceneRenderer(options: SceneRendererOptions = {}): SceneRe
           for (const geometry of gone.geometries) geometry.dispose();
           for (const material of gone.materials) material.dispose();
           gone.environment?.dispose();
+          for (const texture of gone.textures) texture.dispose();
           gone.renderer?.forceContextLoss();
           gone.renderer?.dispose();
         });

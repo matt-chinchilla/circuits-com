@@ -308,8 +308,8 @@ describe('Objects', () => {
     const legend = [...container.querySelectorAll('section')].find((s) => s.textContent?.includes('What the colours mean'))!;
     expect(legend).not.toBeUndefined();
     const rows = [...legend.querySelectorAll('li')].map((li) => li.textContent);
-    expect(rows.slice(0, 5)).toEqual(['Copper', 'Solder mask', 'Silkscreen', 'Holes', 'Body — estimated from the courtyard']);
-    expect(rows.slice(5)).toEqual(['Chip (IC)', 'Capacitor, resistor, inductor', 'Connector', 'LED', 'Other part']);
+    expect(rows.slice(0, 6)).toEqual(['Copper', 'Solder mask', 'Silkscreen', 'Holes', 'Body — height estimated', 'Pins and terminals']);
+    expect(rows.slice(6)).toEqual(['Chip (IC)', 'Capacitor', 'Resistor', 'Inductor or ferrite', 'Other passive', 'Connector', 'LED', 'Other part']);
     // Every row carries a swatch painted with the theme's own colour.
     for (const li of legend.querySelectorAll('li')) {
       const swatch = li.querySelector('[aria-hidden="true"]') as HTMLElement;

@@ -30,7 +30,10 @@ vi.mock('three', async (importOriginal) => {
 });
 
 import * as THREE from 'three';
-import { BODY_EDGE, BODY_OPAQUE, ENVIRONMENT, FAMILY_TINTS, HIGHLIGHT_MATERIALS, MATERIALS, VIEW_MODE_LOOK, shade } from './board3dTheme';
+import {
+  BODY_EDGE, BODY_OPAQUE, ENVIRONMENT, FAMILY_TINTS, HIGHLIGHT_MATERIALS, LEAD_TINTS, MATERIALS, PASSIVE_TINTS,
+  SURFACE_FINISHES, VIEW_MODE_LOOK, shade,
+} from './board3dTheme';
 import { createSceneRenderer, type SceneRenderer } from './sceneRenderer';
 
 /** Six triangles (18 indices) over one quad: enough for three class ranges. */
@@ -393,6 +396,152 @@ describe('the materials (owner, 2026-09-22: "better textures")', () => {
     expect(byName('body/').visible).toBe(false);
     r.setObjectOpacity?.('bodies', 1);
     expect(lines[0].visible).toBe(true);
+  });
+});
+
+describe('pins, terminations and the surface finish (spec 2026-09-22 realistic parts)', () => {
+  /** Two quads: a textured opaque body group (an IC and a capacitor chip),
+   *  and the lead group beside it — J1's gold contacts, then U1's tin feet. */
+  const quad = [-10, -5, 0, 10, -5, 0, 10, 5, 0, -10, 5, 0];
+  const uv = [0, 0, 1, 0, 1, 1, 0, 1];
+  const up = (n: number) => { const a = new Float32Array(n * 3); for (let v = 0; v < n; v++) a[v * 3 + 2] = 1; return a; };
+  const parts = () => {
+    const scene = board();
+    const at = scene.groups.findIndex((g) => g.material === 'body');
+    scene.groups[at] = {
+      material: 'body', layerName: null,
+      positions: new Float32Array([...quad, ...quad, ...quad]), normals: up(12),
+      indices: new Uint32Array([0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7, 8, 9, 10, 8, 10, 11]),
+      uvs: new Float32Array([...uv, ...uv, ...uv]),
+      parts: [
+        { ref: 'U1', start: 0, count: 6, family: 'ic' },
+        { ref: 'C1', start: 6, count: 6, family: 'passive', passive: 'cap' },
+        { ref: 'D1', start: 12, count: 6, family: 'led' },
+      ],
+    };
+    scene.groups.push({
+      material: 'lead', layerName: null,
+      positions: new Float32Array([...quad, ...quad]), normals: up(8),
+      indices: new Uint32Array([0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7]),
+      uvs: new Float32Array([...uv, ...uv]),
+      parts: [{ ref: 'J1', start: 0, count: 6, family: 'connector' }, { ref: 'U1', start: 6, count: 6, family: 'ic' }],
+    });
+    return scene;
+  };
+  async function mountedParts(): Promise<SceneRenderer> {
+    r = createSceneRenderer({ reducedMotion: true });
+    await r.mount(host, parts(), 'full');
+    return r;
+  }
+
+  it('draws the leads as ONE opaque metal mesh with UVs, plated per part: gold on a connector, tin elsewhere', async () => {
+    await mountedParts();
+    const lead = byName('lead/');
+    const [base] = mats(lead);
+    expect(base.metalness).toBeCloseTo(MATERIALS.lead.metalness);
+    expect(base.vertexColors).toBe(true);
+    expect(base.transparent).toBe(false);
+    expect(lead.geometry.getAttribute('uv').itemSize).toBe(2);
+    expect(groups(lead)).toEqual([[0, 12, 0]]);
+    const color = lead.geometry.getAttribute('color');
+    const gold = new THREE.Color(LEAD_TINTS.gold), tin = new THREE.Color(LEAD_TINTS.tin);
+    expect(color.getX(0)).toBeCloseTo(gold.r, 6);
+    expect(color.getZ(0)).toBeCloseTo(gold.b, 6);
+    expect(color.getX(4)).toBeCloseTo(tin.r, 6);
+    expect(color.getZ(4)).toBeCloseTo(tin.b, 6);
+  });
+
+  it('finishes the opaque bodies in epoxy grain and the leads in brushed plating; glass and the highlight stay smooth', async () => {
+    await mountedParts();
+    const [glass, bodyLit, opaque] = mats(byName('body/'));
+    const [lead, leadLit] = mats(byName('lead/'));
+    expect(opaque.roughnessMap).not.toBeNull();
+    expect(opaque.bumpMap).toBe(opaque.roughnessMap);
+    expect(opaque.bumpScale).toBe(SURFACE_FINISHES.body.bumpScale);
+    expect(opaque.roughness).toBe(SURFACE_FINISHES.body.roughness);
+    expect(lead.roughnessMap).not.toBeNull();
+    expect(lead.bumpMap).toBe(lead.roughnessMap);
+    expect(lead.roughnessMap).not.toBe(opaque.roughnessMap);
+    expect(lead.roughness).toBe(SURFACE_FINISHES.lead.roughness);
+    const texture = opaque.roughnessMap!;
+    expect(texture.wrapS).toBe(THREE.RepeatWrapping);
+    expect(texture.wrapT).toBe(THREE.RepeatWrapping);
+    expect(texture.image.width).toBe(SURFACE_FINISHES.body.noise.size);
+    expect(lead.roughnessMap!.repeat.x).toBe(SURFACE_FINISHES.lead.repeat);
+    for (const m of [glass, bodyLit, leadLit]) {
+      expect(m.roughnessMap).toBeNull();
+      expect(m.bumpMap).toBeNull();
+    }
+  });
+
+  it('a group without UVs draws untextured, as it always did', async () => {
+    const scene = parts();
+    for (const g of scene.groups) delete g.uvs;
+    r = createSceneRenderer({ reducedMotion: true });
+    await r.mount(host, scene, 'full');
+    expect(mats(byName('body/'))[2].roughnessMap).toBeNull();
+    expect(mats(byName('lead/'))[0].roughnessMap).toBeNull();
+    expect(byName('lead/').geometry.getAttribute('uv')).toBeUndefined();
+  });
+
+  it('tints a chip passive by what it is', async () => {
+    await mountedParts();
+    const color = byName('body/').geometry.getAttribute('color');
+    const cap = new THREE.Color(shade(PASSIVE_TINTS.cap.color, PASSIVE_TINTS.cap.capShade));
+    expect(color.getX(4)).toBeCloseTo(cap.r, 6);
+    expect(color.getY(4)).toBeCloseTo(cap.g, 6);
+  });
+
+  it("a part's pins light with its body", async () => {
+    await mountedParts();
+    r.highlight?.('U1');
+    expect(groups(byName('lead/'))).toEqual([[0, 6, 0], [6, 6, 1]]);
+    expect(mats(byName('lead/'))[1].emissive.getHex()).toBe(HIGHLIGHT_MATERIALS.copper.emissive);
+    r.highlight?.('J1');
+    expect(groups(byName('lead/'))).toEqual([[0, 6, 1], [6, 6, 0]]);
+  });
+
+  it('stay opaque in See-through and X-ray — the pins show through the glass — and fade with the Bodies slider', async () => {
+    await mountedParts();
+    const [lead] = mats(byName('lead/'));
+    for (const mode of ['see-through', 'xray'] as const) {
+      r.setViewMode?.(mode);
+      expect(lead.opacity).toBe(1);
+      expect(lead.transparent).toBe(false);
+      expect(lead.depthWrite).toBe(true);
+    }
+    r.setObjectOpacity?.('bodies', 0.5);
+    expect(lead.opacity).toBeCloseTo(0.5);
+    r.setObjectOpacity?.('bodies', 0);
+    expect(byName('lead/').visible).toBe(false);
+  });
+
+  it('are picked like a body', async () => {
+    await mountedParts();
+    const picks: (string | null)[] = [];
+    r.onPick?.((ref) => picks.push(ref));
+    const lead = byName('lead/');
+    vi.spyOn(THREE.Raycaster.prototype, 'intersectObjects').mockReturnValue([{ object: lead, faceIndex: 2, distance: 1, point: new THREE.Vector3() } as never]);
+    const canvas = host.querySelector('canvas')!;
+    canvas.getBoundingClientRect = () => ({ left: 0, top: 0, width: 400, height: 300, right: 400, bottom: 300, x: 0, y: 0, toJSON: () => ({}) });
+    const at = { clientX: 10, clientY: 10, pointerId: 1, pointerType: 'mouse', button: 0, bubbles: true };
+    canvas.dispatchEvent(new PointerEvent('pointerdown', at));
+    canvas.dispatchEvent(new PointerEvent('pointerup', at));
+    expect(picks).toEqual(['U1']);
+  });
+
+  it('makes ONE texture per finish per mount and releases both at dispose', async () => {
+    const idle: (() => void)[] = [];
+    (window as unknown as { requestIdleCallback: (fn: () => void) => number }).requestIdleCallback = (fn) => { idle.push(fn); return idle.length; };
+    await mountedParts();
+    const textures = new Set(meshes.flatMap((m) => mats(m)).flatMap((m) => [m.roughnessMap, m.bumpMap]).filter((t) => t != null));
+    expect(textures.size).toBe(2);
+    const spies = [...textures].map((t) => vi.spyOn(t!, 'dispose'));
+    r.dispose();
+    expect(spies.every((s) => s.mock.calls.length === 0)).toBe(true);
+    for (const fn of idle) fn();
+    expect(spies.every((s) => s.mock.calls.length === 1)).toBe(true);
+    delete (window as unknown as { requestIdleCallback?: unknown }).requestIdleCallback;
   });
 });
 

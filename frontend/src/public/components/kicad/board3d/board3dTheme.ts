@@ -7,7 +7,8 @@
 // a theme variable would have to be read out of the DOM at mount and re-read on
 // every theme change for a canvas that is already un-themed chrome.
 import { PART_FAMILIES, type PartFamily } from '@public/services/kicad/board3d/partFamily';
-import type { Material } from '@public/services/kicad/board3d/types';
+import type { Material, PartRange } from '@public/services/kicad/board3d/types';
+import { BRUSHED, GRAIN, type NoiseSpec } from './proceduralTexture';
 import type { ViewMode } from './viewMode';
 
 export interface MaterialSpec {
@@ -56,6 +57,9 @@ export const MATERIALS: Record<Material, MaterialSpec> = {
   mask: { color: MASK, roughness: 0.45, metalness: 0, opacity: 1, transparent: false, depthWrite: true },
   silk: { color: SILK, roughness: 0.9, metalness: 0, opacity: 1, transparent: false, depthWrite: true },
   body: { color: 0xffffff, roughness: 0.45, metalness: 0, opacity: 0.55, transparent: true, depthWrite: false },
+  // The pins and terminations: plated metal, the plating's colour per vertex
+  // (`LEAD_TINTS`), so the base is white like the bodies'.
+  lead: { color: 0xffffff, roughness: 0.3, metalness: 0.9, opacity: 1, transparent: false, depthWrite: true },
 };
 
 /** The opaque body material — an IC's package, a ceramic chip, a housing. Same
@@ -82,11 +86,48 @@ export interface FamilyTint {
  */
 export const FAMILY_TINTS: Record<PartFamily, FamilyTint> = {
   ic: { color: 0x141516, capShade: 1.7, glass: false, label: 'Chip (IC)' },
-  passive: { color: 0xa6957a, capShade: 1.08, glass: false, label: 'Capacitor, resistor, inductor' },
+  passive: { color: 0xa6957a, capShade: 1.08, glass: false, label: 'Other passive' },
   connector: { color: 0x2a2d31, capShade: 1.18, glass: false, label: 'Connector' },
   led: { color: 0xe8d7a0, capShade: 1.1, glass: true, label: 'LED' },
   other: { color: SMOKE, capShade: 1.15, glass: true, label: 'Other part' },
 };
+
+/** A chip passive's body by what it is (`PartRange.passive`), over the
+ *  family's own tint: a capacitor's tan ceramic, a resistor's black top (its
+ *  metal ends give the read), an inductor's grey ferrite. A passive the name
+ *  does not place — a fuse, a varistor — keeps `FAMILY_TINTS.passive`. */
+export const PASSIVE_TINTS: Record<NonNullable<PartRange['passive']>, FamilyTint> = {
+  cap: { color: 0xb48a56, capShade: 1.06, glass: false, label: 'Capacitor' },
+  res: { color: 0x1d1d1f, capShade: 1.6, glass: false, label: 'Resistor' },
+  ind: { color: 0x5c6064, capShade: 1.14, glass: false, label: 'Inductor or ferrite' },
+};
+
+/** The plating a part's pins and terminations wear: gold on a connector's
+ *  contacts (what a mating part touches), tin everywhere else. */
+export const LEAD_TINTS = { gold: 0xd4a93b, tin: 0xc9cdd1 } as const;
+
+/** The plating of `family`'s leads. */
+export const leadTint = (family: PartRange['family']): number => (family === 'connector' ? LEAD_TINTS.gold : LEAD_TINTS.tin);
+
+/**
+ * How a textured material takes its finish (`proceduralTexture.ts`): which
+ * noise, how many times it repeats per UV unit (the pipeline's UVs are
+ * millimetres / 2, so repeat 1 lays one 256-texel tile over 2 mm), how deep the
+ * bump reads, and the roughness under the map — the map only LOWERS roughness
+ * (down to its floor), so the material starts above the untextured value and
+ * averages out near it. The bump is SCREEN-space in three (its height step per
+ * pixel, the surface's own scale normalised away), so `bumpScale` is roughly
+ * the normal's tilt per unit height step between neighbouring pixels: .25 on
+ * a 4-texel grain is a few hundredths of a radian at close range — a satin
+ * speckle, never a pitted surface — and mipmapping flattens it further out.
+ */
+export interface SurfaceFinish { noise: NoiseSpec; repeat: number; bumpScale: number; roughness: number }
+export const SURFACE_FINISHES = {
+  /** The opaque bodies: moulded epoxy, a fine satin speckle. */
+  body: { noise: GRAIN, repeat: 1, bumpScale: 0.25, roughness: 0.72 },
+  /** The leads: brushed plating, finer — two tiles per 2 mm. */
+  lead: { noise: BRUSHED, repeat: 2, bumpScale: 0.15, roughness: 0.36 },
+} satisfies Record<'body' | 'lead', SurfaceFinish>;
 
 /** The rim drawn over every body's outline: a thin dark line, never capped by
  *  the view mode, so a see-through body still has a crisp edge. */
@@ -112,13 +153,22 @@ export const LEGEND: readonly LegendItem[] = [
   { id: 'mask', label: 'Solder mask', css: cssHex(MASK) },
   { id: 'silk', label: 'Silkscreen', css: cssHex(SILK) },
   { id: 'holes', label: 'Holes', css: cssHex(HOLE_WALL) },
-  { id: 'body', label: 'Body — estimated from the courtyard', css: cssHex(FAMILY_TINTS.ic.color) },
+  { id: 'body', label: 'Body — height estimated', css: cssHex(FAMILY_TINTS.ic.color) },
+  // Two platings, one swatch: tin, with a connector's gold in the corner.
+  { id: 'leads', label: 'Pins and terminals', css: `linear-gradient(135deg, ${cssHex(LEAD_TINTS.tin)} 55%, ${cssHex(LEAD_TINTS.gold)} 55%)` },
 ];
 
-/** The body tints, one row per family, under the body's own legend row. */
-export const FAMILY_LEGEND: readonly (LegendItem & { family: PartFamily })[] = PART_FAMILIES.map((family) => {
+const swatch = (tint: FamilyTint) => (tint.glass ? glassCss(tint.color, MATERIALS.body.opacity) : cssHex(tint.color));
+
+/** The body tints, one row per family, under the body's own legend row — the
+ *  passives split into the three a reader meets most, then the rest. */
+type FamilyLegendItem = LegendItem & { family: PartFamily };
+export const FAMILY_LEGEND: readonly FamilyLegendItem[] = PART_FAMILIES.flatMap((family): FamilyLegendItem[] => {
   const tint = FAMILY_TINTS[family];
-  return { id: family, family, label: tint.label, css: tint.glass ? glassCss(tint.color, MATERIALS.body.opacity) : cssHex(tint.color) };
+  if (family !== 'passive') return [{ id: family, family, label: tint.label, css: swatch(tint) }];
+  const kinds = (Object.keys(PASSIVE_TINTS) as (keyof typeof PASSIVE_TINTS)[])
+    .map((kind) => ({ id: `passive-${kind}`, family, label: PASSIVE_TINTS[kind].label, css: swatch(PASSIVE_TINTS[kind]) }));
+  return [...kinds, { id: family, family, label: tint.label, css: swatch(tint) }];
 });
 
 /**
@@ -176,8 +226,10 @@ export const VIEW_MODE_LOOK: Record<ViewMode, ViewModeLook> = {
   xray: { body: 0.16, mask: 0.3 },
 };
 
-/** The highlight a group of this material takes. */
+/** The highlight a group of this material takes. A part's pins light as its
+ *  copper does: metal, opaque, so they stay crisp against its glowing body. */
 export function highlightSpecFor(material: Material): HighlightSpec {
+  if (material === 'lead') return HIGHLIGHT_MATERIALS.copper;
   return material === 'body' || material === 'copper' ? HIGHLIGHT_MATERIALS[material] : HIGHLIGHT_MATERIALS.surface;
 }
 
