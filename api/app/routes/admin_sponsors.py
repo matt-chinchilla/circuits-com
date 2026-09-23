@@ -33,6 +33,7 @@ from app.schemas.sponsor import (
 )
 from app.services import category_cache
 from app.services.auth_service import get_current_user, require_staff
+from app.services.billing_guard import refuse_if_billing_active
 
 router = APIRouter(
     prefix="/api/admin/sponsors",
@@ -250,6 +251,12 @@ def update_sponsor(
 
     update_data = body.model_dump(exclude_unset=True)
 
+    # R15: typing "Expired" would hide a board the customer keeps paying for.
+    # Billing → Cancel is the way to end a billed sponsorship (it expires the
+    # row itself); Paused ("hide the board, keep billing") stays allowed.
+    if update_data.get("status") == "Expired" and sponsor.status != "Expired":
+        refuse_if_billing_active(db, sponsor_id=sponsor.id)
+
     # Resolve post-update tier + placement so all guards see the same
     # final state (handles partial PATCH where only one of tier/category_id
     # is touched).
@@ -309,6 +316,9 @@ def delete_sponsor(
     sponsor = db.query(Sponsor).filter(Sponsor.id == _parse_sponsor_id(sponsor_id)).first()
     if not sponsor:
         raise HTTPException(status_code=404, detail="Sponsor not found")
+
+    # R15: the billing row would cascade away while Stripe keeps charging.
+    refuse_if_billing_active(db, sponsor_id=sponsor.id)
 
     # The banner reads the `sponsors` table directly now (2026-06-03
     # single-source-of-truth), so deleting the row removes the company from the

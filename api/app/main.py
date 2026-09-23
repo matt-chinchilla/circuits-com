@@ -13,6 +13,7 @@ from app.routes import (
     account_dashboard,
     account_expenses,
     account_inbox,
+    admin_checkout_intents,
     admin_expenses,
     admin_leads,
     admin_manufacturers,
@@ -44,16 +45,22 @@ from app.routes import (
     suppliers,
 )
 from app.routes.categories import warm_category_cache
-from app.services import category_cache
+from app.services import billing_sweep, category_cache
 
 
 @asynccontextmanager
 async def _lifespan(_: FastAPI):
     """Render every category's first page into the process cache shortly after
     boot and every 25 minutes after (services/category_cache), so the pages
-    visitors land on are never built on a visitor's clock. Off under pytest."""
+    visitors land on are never built on a visitor's clock. Off under pytest.
+
+    Also starts the hourly billing sweep (services/billing_sweep, spec §10):
+    holds, post-activation follow-ups, conflict refunds, 14-day dunning. A
+    thread in this process so it can clear the category cache it affects."""
     if settings.CATEGORY_CACHE_WARM:
         category_cache.start_warmer(warm_category_cache)
+    if settings.BILLING_SWEEP_ENABLED:
+        billing_sweep.start_sweeper()
     yield
 
 
@@ -96,6 +103,7 @@ app.include_router(calendar.router)
 app.include_router(sitemap.router)
 app.include_router(stripe_webhooks.router)
 app.include_router(admin_quotes.router)
+app.include_router(admin_checkout_intents.router)
 app.include_router(feed_credentials.router)
 app.include_router(checkout.router)
 app.include_router(bom.router)
