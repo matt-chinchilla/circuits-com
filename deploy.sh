@@ -7,6 +7,9 @@ set -euo pipefail
 # Usage:
 #   ./deploy.sh              Deploy latest committed changes (frontend + API)
 #   ./deploy.sh --frontend   Deploy frontend only (faster)
+#                            Every path builds the frontend image LOCALLY from a
+#                            clean worktree of origin/master and ships it with
+#                            docker save | ssh docker load (see ship_frontend_image)
 #   ./deploy.sh --reseed     Deploy all + clear & reseed database
 #   ./deploy.sh pull         Mirror the PRODUCTION database into your LOCAL one
 #                            (backs up local first, then overwrites it)
@@ -21,6 +24,7 @@ set -euo pipefail
 #   - AWS CLI configured (aws sts get-caller-identity works)
 #   - VPN connected (WireGuard to 3.225.10.152)
 #   - SSH key at ~/.ssh/id_ed25519
+#   - Local Docker running (the frontend image is built here, x86_64)
 #   - Changes committed and pushed to origin/master
 # ============================================================================
 
@@ -66,6 +70,12 @@ check_prerequisites() {
         exit 1
     fi
 
+    # The frontend image is built on THIS machine now (ship_frontend_image).
+    if ! docker info > /dev/null 2>&1; then
+        red "ERROR: local Docker is not running — the frontend image is built here, never on the box."
+        exit 1
+    fi
+
     # Check git is clean
     if [[ -n "$(git status --porcelain 2>/dev/null)" ]]; then
         yellow "WARNING: You have uncommitted changes. Commit and push first."
@@ -91,6 +101,50 @@ check_prerequisites() {
 
 # ─── Commands ────────────────────────────────────────────────────────────────
 
+# The frontend image is built HERE and shipped; the box never builds it (D7).
+#
+# THE OUTAGE (2026-09-23): the Vite build plus the ~15k-page SEO prerender
+# swap-thrashed the 1.9 GB t3.small until it stopped answering. The recovery
+# was this recipe by hand; every deploy path now runs it:
+#   1. a CLEAN detached worktree of origin/master — never the working tree, so
+#      nothing uncommitted can ship, and what ships is what the box pulls;
+#   2. `docker build --target prod` locally (x86_64 here and on the box);
+#   3. the box's current :latest is retagged :previous — the rollback is
+#        sudo docker tag circuits-com-frontend:previous circuits-com-frontend:latest
+#        then  $COMPOSE_CMD up -d --no-build frontend  and restart nginx;
+#   4. docker save | gzip -1 | ssh … docker load, then tag :latest — the name
+#      compose runs (project circuits-com + service frontend, no image: key);
+#   5. the caller's remote line starts it with `up -d --no-build`.
+# The sha tag is dropped after the retag on both ends so they don't pile up on
+# a 20 GB disk; the image carries the commit as a label instead:
+#   sudo docker inspect -f '{{index .Config.Labels "org.opencontainers.image.revision"}}' circuits-com-frontend:latest
+ship_frontend_image() {
+    local sha wt tag
+    git fetch -q origin master
+    sha=$(git rev-parse --short origin/master)
+    wt=$(mktemp -d "${TMPDIR:-/tmp}/cc-ship-XXXXXX")
+    git worktree add -q --detach "$wt" origin/master
+    tag="circuits-com-frontend:$sha"
+    yellow "Building $tag locally from a clean worktree of origin/master (a few minutes)..."
+    if ! DOCKER_BUILDKIT=1 docker build -q --target prod \
+            --label "org.opencontainers.image.revision=$sha" \
+            -t "$tag" "$wt/frontend" > /dev/null; then
+        git worktree remove --force "$wt"
+        red "Local frontend build failed — nothing was shipped, the box is untouched."
+        exit 1
+    fi
+    git worktree remove --force "$wt"
+    run_remote "sudo docker image inspect circuits-com-frontend:latest > /dev/null 2>&1 && sudo docker tag circuits-com-frontend:latest circuits-com-frontend:previous || true" < /dev/null
+    yellow "Shipping $tag to the box..."
+    # push_ssh_key reads /dev/null: the image stream is this group's stdin and
+    # only ssh may consume it.
+    docker save "$tag" | gzip -1 | { push_ssh_key < /dev/null; ssh -o ConnectTimeout=15 -o StrictHostKeyChecking=no "$EC2_USER@$EC2_IP" 'gunzip | sudo docker load > /dev/null'; } \
+        || { red "Image transfer failed — the box still runs its previous frontend."; exit 1; }
+    run_remote "sudo docker tag $tag circuits-com-frontend:latest && sudo docker rmi $tag > /dev/null" < /dev/null
+    docker rmi "$tag" > /dev/null 2>&1 || true
+    green "Shipped frontend $sha."
+}
+
 deploy_all() {
     echo "Deploying all services..."
     # `up -d` recreates api + frontend, but nginx is unaffected and keeps
@@ -101,14 +155,22 @@ deploy_all() {
     # DOCKER_BUILDKIT=1 enables BuildKit cache mounts in the Dockerfiles
     # (~5-10× speedup on dep-install when package-lock/pyproject hasn't
     # changed). Docker 23+ defaults to BuildKit; the export is belt+braces.
-    run_remote "cd $APP_DIR && sudo git pull && DOCKER_BUILDKIT=1 $COMPOSE_CMD build frontend && DOCKER_BUILDKIT=1 $COMPOSE_CMD build api calendar-reminders cost-sync feed-import && $COMPOSE_CMD up -d && $COMPOSE_CMD restart nginx && sudo docker image prune -f"
-    green "All services rebuilt, nginx restarted."
+    # The frontend is NOT built here (D7, see ship_frontend_image); the api
+    # image and its three job services still build on the box. `up -d
+    # --no-build` then starts whatever is tagged — a missing image is an
+    # error, never a surprise build.
+    ship_frontend_image
+    run_remote "cd $APP_DIR && sudo git pull && DOCKER_BUILDKIT=1 $COMPOSE_CMD build api calendar-reminders cost-sync feed-import && $COMPOSE_CMD up -d --no-build && $COMPOSE_CMD restart nginx && sudo docker image prune -f"
+    green "All services rebuilt (frontend shipped prebuilt), nginx restarted."
 }
 
 deploy_frontend() {
     echo "Deploying frontend only..."
-    run_remote "cd $APP_DIR && sudo git pull && DOCKER_BUILDKIT=1 $COMPOSE_CMD build frontend && $COMPOSE_CMD up -d frontend && $COMPOSE_CMD restart nginx && sudo docker image prune -f"
-    green "Frontend rebuilt, nginx restarted."
+    ship_frontend_image
+    # git pull still matters: nginx.ssl.conf and the compose files are read
+    # from the checkout on the box.
+    run_remote "cd $APP_DIR && sudo git pull && $COMPOSE_CMD up -d --no-build frontend && $COMPOSE_CMD restart nginx && sudo docker image prune -f"
+    green "Frontend shipped prebuilt, nginx restarted."
 }
 
 # Refuse to destroy a catalog nobody can rebuild without the operator saying so
@@ -127,6 +189,51 @@ confirm_reseed() {
     yellow "──────────────────────────────────────────────────────────────"
     yellow "  ./deploy.sh --reseed TRUNCATEs the catalog on PRODUCTION."
     yellow "──────────────────────────────────────────────────────────────"
+
+    # Stripe-billed sponsors (LU-F17). The TRUNCATE cascades through sponsors
+    # into sponsor_billing, but NOTHING here cancels the Stripe subscription:
+    # the company loses its board while Stripe keeps charging its card every
+    # month. Counted on the live box, typed back like the parts count below,
+    # and asked FIRST — the parts prompt returns early when no parts are at
+    # risk, and a paying customer is at risk either way.
+    local has_billing billed typed_billed
+    echo "Counting Stripe-billed sponsors..."
+    has_billing=$(run_remote "sudo docker exec circuits-com-db-1 psql -U circuits -d circuits -tAc \"SELECT to_regclass('public.sponsor_billing') IS NOT NULL;\"" < /dev/null 2>/dev/null | tr -d '[:space:]')
+    case "$has_billing" in
+        t)
+            billed=$(run_remote "sudo docker exec circuits-com-db-1 psql -U circuits -d circuits -tAc \"SELECT count(*) FROM sponsor_billing b JOIN sponsors s ON s.id=b.sponsor_id WHERE s.status IS NULL OR s.status <> 'Expired';\"" < /dev/null 2>/dev/null | tr -d '[:space:]')
+            ;;
+        f)
+            # A box still before migration 057: its backfill builds
+            # sponsor_billing from exactly this column, so count that.
+            billed=$(run_remote "sudo docker exec circuits-com-db-1 psql -U circuits -d circuits -tAc \"SELECT count(*) FROM sponsors s WHERE s.stripe_subscription_id IS NOT NULL AND (s.status IS NULL OR s.status <> 'Expired');\"" < /dev/null 2>/dev/null | tr -d '[:space:]')
+            ;;
+        *)
+            billed=""
+            ;;
+    esac
+    if ! [[ "$billed" =~ ^[0-9]+$ ]]; then
+        red "Could not count Stripe-billed sponsors on prod — refusing to reseed blind."
+        exit 1
+    fi
+    if (( billed > 0 )); then
+        echo ""
+        red "  Stripe-billed sponsors that will lose their board but keep being charged: $billed"
+        echo "  The reseed never touches Stripe. Cancel (or plan to re-create) those"
+        echo "  sponsorships from /admin first, or they pay for boards that are gone."
+        echo ""
+        yellow "To proceed anyway, type that number ($billed):"
+        printf "> "
+        read -r typed_billed
+        if [[ "$typed_billed" != "$billed" ]]; then
+            echo ""
+            green "Reseed cancelled. Nothing was touched."
+            exit 0
+        fi
+    else
+        echo "No active Stripe-billed sponsors."
+    fi
+
     echo "Measuring what this would destroy..."
 
     live_parts=$(run_remote "sudo docker exec circuits-com-db-1 psql -U circuits -d circuits -tAc 'SELECT count(*) FROM parts;'" 2>/dev/null | tr -d '[:space:]')
@@ -193,7 +300,8 @@ PYCOUNT
 deploy_reseed() {
     confirm_reseed
     echo "Deploying all services + clearing and reseeding database..."
-    run_remote "cd $APP_DIR && sudo git pull && DOCKER_BUILDKIT=1 $COMPOSE_CMD build frontend && DOCKER_BUILDKIT=1 $COMPOSE_CMD build api calendar-reminders cost-sync feed-import && $COMPOSE_CMD up -d && $COMPOSE_CMD restart nginx && sudo docker image prune -f"
+    ship_frontend_image
+    run_remote "cd $APP_DIR && sudo git pull && DOCKER_BUILDKIT=1 $COMPOSE_CMD build api calendar-reminders cost-sync feed-import && $COMPOSE_CMD up -d --no-build && $COMPOSE_CMD restart nginx && sudo docker image prune -f"
     # Five things are carried across the TRUNCATE by hand: users, the calendar,
     # the message inbox, shared BOM links, and the per-supplier feed config.
     #
@@ -374,6 +482,28 @@ verify_site() {
 
     if [[ "$primary_code" != "200" ]]; then
         red "Primary domain is not returning 200 — check: ./deploy.sh --logs"
+    fi
+
+    # Key-gated Stripe routes 404 when their secret never reached the api
+    # container (the compose allowlist trap). An unsigned POST to the webhook
+    # must be REJECTED (400), never "not found" — a 404 there means Stripe's
+    # deliveries are failing and it will disable the endpoint after days of
+    # retries. The api may still be in its alembic → seed window, so these are
+    # reported, not fatal: re-run the two curls by hand if they come back 502.
+    local webhook_code slots_code
+    webhook_code=$(curl -sS -o /dev/null -w "%{http_code}" --connect-timeout 10 -X POST https://circuitcenter.ai/api/stripe/webhook 2>/dev/null || echo "000")
+    slots_code=$(curl -sS -o /dev/null -w "%{http_code}" --connect-timeout 10 "https://circuitcenter.ai/api/checkout/exclusive/slots?tier=gold" 2>/dev/null || echo "000")
+
+    if [[ "$webhook_code" == "400" ]]; then
+        green "Webhook:  POST /api/stripe/webhook (unsigned)       → HTTP $webhook_code (secret present, signature enforced)"
+    else
+        red   "Webhook:  POST /api/stripe/webhook (unsigned)       → HTTP $webhook_code (expected 400 — 404 = STRIPE_WEBHOOK_SECRET missing)"
+    fi
+
+    if [[ "$slots_code" == "200" ]]; then
+        green "Checkout: GET /api/checkout/exclusive/slots?tier=gold → HTTP $slots_code"
+    else
+        red   "Checkout: GET /api/checkout/exclusive/slots?tier=gold → HTTP $slots_code (expected 200 — 404 = STRIPE_SECRET_KEY missing)"
     fi
 }
 
