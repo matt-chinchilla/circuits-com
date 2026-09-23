@@ -25,6 +25,8 @@ const CODE_MESSAGES: Record<string, string> = {
   // R15 — delete/expire refused while a Stripe subscription still charges.
   billing_active:
     'This sponsorship is still billed in Stripe — cancel it under Billing first, then expire or delete it.',
+  // Retry/refund was asked of a hold that is not an unresolved conflict.
+  not_a_conflict: 'That checkout is not waiting on a refund — refresh the list.',
   // The subscription sits on retired price objects; the rule cannot re-price it.
   legacy_price:
     'This subscription is on an older price, so its discount cannot be changed here — ask the owner.',

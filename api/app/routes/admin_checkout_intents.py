@@ -35,7 +35,7 @@ from app.db.session import get_db
 from app.models import Category, Sponsor, Supplier, User
 from app.models.sales import CheckoutIntent, SponsorBilling
 from app.services import stripe_billing, stripe_quotes
-from app.services.auth_service import get_current_user, require_staff
+from app.services.auth_service import get_current_user, require_billing_reader, require_staff
 from app.services.billing_followups import resolve_conflict
 from app.services.billing_mirror import audit
 from app.services.checkout_intents import CONFLICT, OPEN, RELEASED
@@ -104,7 +104,7 @@ def _load_intent(db: Session, intent_id: str) -> CheckoutIntent:
 @router.get("/attention")
 def attention(
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(require_billing_reader),
 ) -> dict:
     _secret_key()
     now = datetime.now(UTC)

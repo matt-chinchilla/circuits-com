@@ -43,10 +43,13 @@ LIVE_EXCLUSIVE_INDEX = (
 # Every sponsor already owned by a Stripe subscription gets its billing row
 # (LU-F9b). Today that is only self-serve Silver, sold at the $250 list.
 BACKFILL_BILLING = """
+-- post_activation_done_at is stamped on purpose: the sweep must NOT move the card on
+-- live pre-057 subscriptions at deploy; a legacy card moves only when a rep opens a card link.
 INSERT INTO sponsor_billing (sponsor_id, stripe_subscription_id, collection_method, channel,
-                             list_usd, price_usd, card_link_version, void_pending, updated_at)
+                             list_usd, price_usd, card_link_version, void_pending,
+                             post_activation_done_at, updated_at)
 SELECT s.id, s.stripe_subscription_id, 'charge_automatically', 'self_serve',
-       250, COALESCE(s.amount, 250)::int, 0, false, now()
+       250, COALESCE(s.amount, 250)::int, 0, false, now(), now()
 FROM sponsors s
 WHERE s.stripe_subscription_id IS NOT NULL
 ON CONFLICT (sponsor_id) DO NOTHING

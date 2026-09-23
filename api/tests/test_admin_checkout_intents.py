@@ -241,3 +241,11 @@ def test_a_customer_is_refused(client, db, child, fake, seeded_db, auth_header):
     assert resp.json()["detail"] == "staff_only"
     hold = _intent(db, child)
     assert client.post(f"{URL}/{hold.id}/release", headers=customer).status_code == 403
+
+
+def test_a_viewer_cannot_read_the_attention_list(client, db, fake):
+    """R6: the list names paying customers and their failing charges — a view-only
+    outsider is refused it like every other billing read."""
+    resp = client.get(f"{URL}/attention", headers=_viewer_header(db))
+    assert resp.status_code == 403
+    assert resp.json()["detail"] == "no_billing_access"

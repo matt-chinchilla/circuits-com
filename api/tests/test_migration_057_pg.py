@@ -164,6 +164,21 @@ def test_a_subscription_owned_sponsor_gets_exactly_one_billing_row(world):
     ]
 
 
+def test_backfilled_rows_are_already_past_post_activation(world):
+    """The sweep's post-activation step moves the card off the subscription. A
+    live pre-057 subscription must NOT be touched just because we deployed —
+    its card moves only when a rep opens a card link (spec R14)."""
+    done = (
+        world["conn"]
+        .execute(
+            text("SELECT post_activation_done_at FROM sponsor_billing WHERE sponsor_id = :s"),
+            {"s": world["sponsor_id"]},
+        )
+        .scalar_one()
+    )
+    assert done is not None
+
+
 def test_a_sponsor_without_a_subscription_gets_none(world):
     count = (
         world["conn"]

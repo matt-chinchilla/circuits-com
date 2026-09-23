@@ -651,7 +651,11 @@ export default function JoinPage() {
       <PageHeaderBand
         page="join"
         title="Join Circuit Center"
-        subtitle="Get listed and advertised in the components directory — sponsorship tiers from $250/mo."
+        subtitle={
+          silverPrice != null
+            ? `Get listed and advertised in the components directory — sponsorship tiers from ${money(silverPrice)}/mo.`
+            : "Get listed and advertised in the components directory."
+        }
       />
 
       <div className={styles.page}>
