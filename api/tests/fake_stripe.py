@@ -1,7 +1,7 @@
 """A shared, in-memory Stripe for the billing tests (spec §5 / §14).
 
 One ``httpx.MockTransport`` handler plays the slice of Stripe's REST surface
-the app touches, with a request tape. Three lessons are built in:
+the app touches, with a request tape. Four lessons are built in:
 
 * **It filters list endpoints by their query params**, decoded the way Stripe
   decodes them. A fake that ignored the query once certified a ``+``-in-email
@@ -16,6 +16,10 @@ the app touches, with a request tape. Three lessons are built in:
   coupon at ``source.coupon``; coupons omit ``applies_to`` unless expanded.
 * **It asserts every request carries ``Stripe-Version: 2026-07-29.dahlia``** —
   an unpinned call fails the test that made it, wherever it came from.
+* **It honours ``Idempotency-Key`` on POST like Stripe**: the same key with the
+  same path + params replays the FIRST response (a stored 402 decline too) with
+  no second effect; the same key with anything different is a 400. A test of a
+  "pay at most once" key is only meaningful against a fake that remembers it.
 
 Seed state with the ``add_*`` helpers, drive code through ``fake.client()``
 (or ``monkeypatch.setattr(stripe_quotes, "make_client", fake.make_client)`` to
@@ -66,6 +70,13 @@ def _truthy(value: str | None) -> bool:
 class FakeStripe:
     def __init__(self) -> None:
         self.tape: list[Req] = []
+        # The FULL request URL of each tape entry, as it went on the wire — how
+        # a test proves a query value was percent-encoded (a raw ``+`` decodes
+        # server-side as a space). Kept beside ``tape``, not in ``Req``, so
+        # the tuple shape tests unpack stays five wide.
+        self.urls: list[str] = []
+        # Idempotency-Key → (fingerprint of the first request, status, body).
+        self.idempotency: dict[str, tuple[tuple, int, bytes]] = {}
         self.prices: dict[str, dict] = {}
         self.subscriptions: dict[str, dict] = {}
         self.invoices: dict[str, dict] = {}
@@ -91,6 +102,10 @@ class FakeStripe:
         self.update_ignores_discounts = (
             False  # a sub update that "succeeds" but keeps the old discount
         )
+        # Quotes: a finalize that lands on this total instead of the computed
+        # one (the honesty gate's mismatch), and a cancel that fails.
+        self.quote_finalize_total: int | None = None
+        self.quote_cancel_status: int | None = None  # e.g. 500 → cancel errors
 
         self._seq = itertools.count(1)
         for tier, list_usd in _LIST_USD.items():
@@ -438,6 +453,33 @@ class FakeStripe:
         self.portal_configurations.append(row)
         return row
 
+    def add_quote(
+        self,
+        quote_id: str,
+        *,
+        customer: str | None = None,
+        status: str = "open",
+        amount_total: int = 0,
+        metadata: dict | None = None,
+        number: str | None = None,
+        created: int | None = None,
+    ) -> dict:
+        """A quote as if built elsewhere (``metadata`` defaults to NONE of
+        ours, so the accept guard's refusal can be driven)."""
+        row = {
+            "id": quote_id,
+            "object": "quote",
+            "status": status,
+            "number": number,
+            "amount_total": amount_total,
+            "customer": customer,
+            "metadata": dict(metadata or {}),
+            "created": created if created is not None else 1_800_000_000 + next(self._seq),
+            "subscription": None,
+        }
+        self.quotes[quote_id] = row
+        return row
+
     # ── views (dahlia shapes) ─────────────────────────────────────────────
 
     def _coupon_view(self, row: dict, expand: list[str]) -> dict:
@@ -485,10 +527,61 @@ class FakeStripe:
             values = request.url.params.get_list(key)
             params[key] = values if len(values) > 1 or key.endswith("[]") else values[0]
         self.tape.append(Req(method, path, form, params, httpx.Headers(request.headers)))
+        self.urls.append(str(request.url))
+        if request.url.host == "files.stripe.com":
+            return self._files(method, path)
         expand = request.url.params.get_list("expand[]") + [
             v for k, v in form.items() if k.startswith("expand[")
         ]
-        return self._route(method, path, form, params, expand)
+        key = request.headers.get("Idempotency-Key")
+        if method != "POST" or not key:
+            return self._route(method, path, form, params, expand)
+
+        # Stripe's idempotency, as it behaves: the first POST under a key is
+        # SAVED (status + body, a 402 decline included) and every later POST
+        # under it is answered from that record, with no second effect; a key
+        # reused with a different path or different params is a 400. A 5xx is
+        # not saved — that request never "began executing" as far as a retry
+        # is concerned (Stripe's own rule for a request it could not run).
+        fingerprint = (path, tuple(sorted(form.items())))
+        saved = self.idempotency.get(key)
+        if saved is not None:
+            first, status, body = saved
+            if first != fingerprint:
+                return httpx.Response(
+                    400,
+                    json={
+                        "error": {
+                            "type": "idempotency_error",
+                            "message": (
+                                "Keys for idempotent requests can only be used with the "
+                                "same parameters they were first used with. Try using a "
+                                f"key other than '{key}' if you meant to execute a "
+                                "different request."
+                            ),
+                        }
+                    },
+                )
+            return httpx.Response(
+                status,
+                content=body,
+                headers={"content-type": "application/json", "Idempotent-Replayed": "true"},
+            )
+        response = self._route(method, path, form, params, expand)
+        if response.status_code < 500:
+            self.idempotency[key] = (fingerprint, response.status_code, response.content)
+        return response
+
+    def _files(self, method: str, path: str) -> httpx.Response:
+        """files.stripe.com — only a quote's PDF is served here."""
+        m = re.fullmatch(r"/v1/quotes/([^/]+)/pdf", path)
+        if method != "GET" or m is None:
+            return _err(404, f"unrouted files {method} {path}")
+        if m.group(1) not in self.quotes:
+            return _no_such("quote", m.group(1))
+        return httpx.Response(
+            200, content=b"%PDF-1.7 fake", headers={"content-type": "application/pdf"}
+        )
 
     def _route(
         self, method: str, path: str, form: dict, params: dict, expand: list[str]
@@ -847,7 +940,11 @@ class FakeStripe:
                 return httpx.Response(200, json=dict(row))
             if method == "POST" and action == ["finalize"]:
                 row["status"], row["number"] = "open", f"QT-{parts[1][-4:]}"
+                if self.quote_finalize_total is not None:
+                    row["amount_total"] = self.quote_finalize_total
             elif method == "POST" and action == ["cancel"]:
+                if self.quote_cancel_status:
+                    return _err(self.quote_cancel_status, "cancel exploded")
                 row["status"] = "canceled"
             elif method == "POST" and action == ["accept"]:
                 row["status"] = "accepted"

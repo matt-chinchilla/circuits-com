@@ -7,9 +7,13 @@ function httpError(status: number, detail: unknown) {
   return { isAxiosError: true, response: { status, data: { detail } } };
 }
 
+// A hand-kept sample: the COMPLETE set is discovered from the api source by
+// api/tests/test_error_codes_have_messages.py, which fails when a route raises a
+// machine code this map has no sentence for.
 const SALES_CODES = [
   'no_billing_access',
   'billing_active',
+  'not_a_conflict',
   'legacy_price',
   'ambiguous_subscription',
   'unsupported_payment',

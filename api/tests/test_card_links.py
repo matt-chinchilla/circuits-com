@@ -187,7 +187,8 @@ def test_done_pays_an_open_invoice_once_and_lands_on_join(client, db, billed, fa
     assert first.headers["location"] == f"{settings.APP_BASE_URL.rstrip('/')}/join?card=updated"
     pays = fake.calls("POST", "/v1/invoices/in_000000000031/pay")
     assert len(pays) == 1
-    assert pays[0].headers["Idempotency-Key"] == f"card-done:{billed.id}:1"
+    # No card on the customer yet (the link was never opened): keyed "none".
+    assert pays[0].headers["Idempotency-Key"] == f"card-done:{billed.id}:1:none"
     assert fake.invoices["in_000000000031"]["status"] == "paid"
     row = db.query(SponsorPayment).filter_by(stripe_invoice_id="in_000000000031").one()
     assert row.status == "paid" and row.sponsor_id == billed.id
@@ -215,3 +216,77 @@ def test_send_invoice_subscriptions_get_no_card_link(client, db, billed, fake, a
         "This customer pays by emailed invoice — share the invoice link instead."
     )
     assert db.get(SponsorBilling, billed.id).card_link_version == 0
+
+
+# ── /done's pay key: once per link version AND card (F10) ────────────────────
+
+
+def _customer_card(fake, pm_id: str) -> None:
+    """The customer's default card is now ``pm_id`` (what the portal writes)."""
+    fake.add_payment_method(pm_id)
+    fake.customers[CUS]["invoice_settings"]["default_payment_method"] = pm_id
+
+
+def test_a_reloaded_done_pays_exactly_once_on_the_same_card(client, db, billed, fake, auth_header):
+    """Two open invoices, the same card, /done loaded twice: the first attempt
+    pays the oldest; the reload reaches Stripe under the SAME key and Stripe
+    (which remembers it) refuses to act a second time — the newer invoice is
+    left for Stripe's own retry schedule, never paid by a page reload."""
+    fake.add_open_invoice("in_000000000041", sub=SUB, amount=210000, created=1_800_000_001)
+    fake.add_open_invoice("in_000000000042", sub=SUB, amount=210000, created=1_800_000_002)
+    _customer_card(fake, "pm_cardAAAA01")
+    url = _mint(client, billed, auth_header()).json()["url"]
+
+    for _ in range(2):
+        resp = client.get(_path(url) + "/done", follow_redirects=False)
+        assert resp.status_code == 302
+        assert resp.headers["location"].endswith("/join?card=updated")
+
+    pays = [r for r in fake.posts() if r.path.endswith("/pay")]
+    assert len(pays) == 2  # the reload DID reach Stripe…
+    keys = {r.headers["Idempotency-Key"] for r in pays}
+    assert keys == {f"card-done:{billed.id}:1:pm_cardAAAA01"}  # …under the same key
+    assert fake.invoices["in_000000000041"]["status"] == "paid"
+    assert fake.invoices["in_000000000042"]["status"] == "open"  # exactly one effect
+    assert db.query(BillingAudit).filter(BillingAudit.action == "card_updated").count() == 1
+
+
+def test_a_declined_first_attempt_does_not_block_the_new_card(
+    client, db, billed, fake, auth_header
+):
+    """The first /done declines (Stripe stores that 402 under the key for
+    24 h). The customer goes back and saves a DIFFERENT card: the next /done
+    must reach Stripe under a FRESH key and pay — a key per link version alone
+    would replay the stored decline for a day."""
+    fake.add_open_invoice("in_000000000043", sub=SUB, amount=210000)
+    _customer_card(fake, "pm_cardOLD001")
+    fake.pay_fails = True
+    url = _mint(client, billed, auth_header()).json()["url"]
+    assert client.get(_path(url) + "/done", follow_redirects=False).status_code == 302
+    assert fake.invoices["in_000000000043"]["status"] == "open"
+
+    _customer_card(fake, "pm_cardNEW001")
+    fake.pay_fails = False  # the new card is good
+    assert client.get(_path(url) + "/done", follow_redirects=False).status_code == 302
+
+    pays = fake.calls("POST", "/v1/invoices/in_000000000043/pay")
+    assert [r.headers["Idempotency-Key"] for r in pays] == [
+        f"card-done:{billed.id}:1:pm_cardOLD001",
+        f"card-done:{billed.id}:1:pm_cardNEW001",
+    ]
+    assert fake.invoices["in_000000000043"]["status"] == "paid"
+    row = db.query(SponsorPayment).filter_by(stripe_invoice_id="in_000000000043").one()
+    assert row.status == "paid"
+
+
+def test_the_same_declined_card_replays_the_decline(client, db, billed, fake, auth_header):
+    """The flip side: a reload on the SAME declined card is answered from
+    Stripe's record — no second charge attempt against a card that said no."""
+    fake.add_open_invoice("in_000000000044", sub=SUB, amount=210000)
+    _customer_card(fake, "pm_cardOLD002")
+    fake.pay_fails = True
+    url = _mint(client, billed, auth_header()).json()["url"]
+    client.get(_path(url) + "/done", follow_redirects=False)
+    fake.pay_fails = False  # would succeed if Stripe actually ran it again
+    client.get(_path(url) + "/done", follow_redirects=False)
+    assert fake.invoices["in_000000000044"]["status"] == "open"

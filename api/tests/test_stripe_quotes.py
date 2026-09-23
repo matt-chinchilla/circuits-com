@@ -1,11 +1,14 @@
-"""Sales quotes — the service against a scripted Stripe, the routes against
-a monkeypatched service.
+"""Sales quotes — the service against the shared in-memory Stripe, the routes
+against a monkeypatched service (and, twice, the same fake behind the route).
 
-The service tests drive real httpx through ``MockTransport``: every branch the
-code takes (customer reuse, lazy coupon mint, conflict-verify, the finalize
-self-check-and-cancel) is proven by what the fake Stripe RECEIVED, not by what
-the function claims. ``asyncio.run`` keeps them independent of pytest-asyncio
-configuration.
+The service tests drive real httpx through ``tests/fake_stripe.FakeStripe``:
+every branch the code takes (customer reuse, lazy coupon mint, conflict-verify,
+the finalize self-check-and-cancel) is proven by what the fake Stripe RECEIVED,
+not by what the function claims. The fake COMPUTES a quote's total from the
+prices and the coupon it was sent, filters ``/v1/customers`` on the decoded
+``email`` query param, and asserts the pinned ``Stripe-Version`` on every call
+— a weaker private fake that echoed a pre-set "right" total hid all three.
+``asyncio.run`` keeps them independent of pytest-asyncio configuration.
 
 The money invariant under test everywhere: the quote's finalized total equals
 the rule's price EXACTLY — "$1,850 all-in" must never become $1,928.54.
@@ -13,9 +16,7 @@ the rule's price EXACTLY — "$1,850 all-in" must never become $1,928.54.
 
 import asyncio
 import json
-from urllib.parse import parse_qsl
 
-import httpx
 import pytest
 
 from app.config import settings
@@ -25,131 +26,21 @@ from app.services.stripe_quotes import (
     StripeApiError,
     create_sponsor_quote,
     lookup_keys_for,
-    make_client,
 )
+from tests.fake_stripe import FakeStripe
 
 ADDRESS = {"line1": "1 Main St", "city": "Lake Ronkonkoma", "state": "NY", "postal_code": "11779"}
 
 
-class FakeStripe:
-    """Just enough of Stripe's REST surface, with a request tape.
-
-    ``urls`` records the FULL request URL — the encoding defect (a raw ``+``
-    reaching Stripe and decoding as a space) was invisible while the fake
-    ignored query strings, so this fake reads them the way Stripe would:
-    ``/v1/customers`` actually filters on the decoded ``email`` param."""
-
-    def __init__(self):
-        self.tape: list[tuple[str, str, dict]] = []
-        self.urls: list[str] = []
-        self.customers: list[dict] = []  # rows: {id, email, metadata}
-        self.quote_rows: list[dict] = []
-        self.quote_metadata: dict = {"managed_by": "circuits-com"}
-        self.coupon_exists = False
-        self.existing_coupon_amount: int | None = None
-        self.existing_coupon_duration = "forever"
-        self.cancel_fails = False
-        self.finalized_total: int | None = None  # None → echo the "right" total
-        self.right_total = 0
-
-    def form(self, request: httpx.Request) -> dict:
-        return dict(parse_qsl(request.content.decode()))
-
-    def handler(self, request: httpx.Request) -> httpx.Response:
-        path, method = request.url.path, request.method
-        self.tape.append((method, path, self.form(request)))
-        self.urls.append(str(request.url))
-
-        if request.url.host == "files.stripe.com":
-            return httpx.Response(200, content=b"%PDF-1.7 fake")
-
-        if method == "GET" and path == "/v1/prices":
-            keys = request.url.params.get_list("lookup_keys[]")
-            return httpx.Response(
-                200,
-                json={
-                    "data": [
-                        {"id": f"price_{k}", "lookup_key": k, "product": f"prod_{k}"} for k in keys
-                    ]
-                },
-            )
-        if method == "GET" and path == "/v1/customers":
-            wanted = request.url.params.get("email")
-            rows = [c for c in self.customers if c.get("email") == wanted]
-            return httpx.Response(200, json={"data": rows})
-        if method == "POST" and path == "/v1/customers":
-            return httpx.Response(200, json={"id": "cus_new"})
-        if method == "POST" and path.startswith("/v1/customers/"):
-            return httpx.Response(200, json={"id": path.rsplit("/", 1)[1]})
-        if method == "POST" and path == "/v1/coupons":
-            if self.coupon_exists:
-                return httpx.Response(
-                    400,
-                    json={
-                        "error": {
-                            "message": "Coupon already exists.",
-                            "code": "resource_already_exists",
-                        }
-                    },
-                )
-            return httpx.Response(200, json={"id": self.form(request).get("id")})
-        if method == "GET" and path.startswith("/v1/coupons/"):
-            coupon_id = path.rsplit("/", 1)[1]
-            body = {
-                "id": coupon_id,
-                "amount_off": self.existing_coupon_amount,
-                "duration": self.existing_coupon_duration,
-                "currency": "usd",
-                "valid": True,
-            }
-            # applies_to is includable only — present when the GET expands it.
-            if "applies_to" in request.url.params.get_list("expand[]"):
-                tier = coupon_id.split("-AT-")[0].lower()
-                body["applies_to"] = {"products": [f"prod_{k}" for k in lookup_keys_for(tier)]}
-            return httpx.Response(200, json=body)
-        if method == "POST" and path == "/v1/quotes":
-            return httpx.Response(200, json={"id": "qt_testquote0001", "status": "draft"})
-        if method == "POST" and path.endswith("/finalize"):
-            total = self.right_total if self.finalized_total is None else self.finalized_total
-            return httpx.Response(
-                200,
-                json={
-                    "id": "qt_testquote0001",
-                    "number": "QT-0001",
-                    "status": "open",
-                    "amount_total": total,
-                },
-            )
-        if method == "POST" and path.endswith("/cancel"):
-            if self.cancel_fails:
-                return httpx.Response(500, json={"error": {"message": "cancel exploded"}})
-            return httpx.Response(200, json={"id": "qt_testquote0001", "status": "canceled"})
-        if method == "GET" and path.startswith("/v1/quotes/"):
-            return httpx.Response(
-                200, json={"id": path.rsplit("/", 1)[1], "metadata": self.quote_metadata}
-            )
-        if method == "POST" and path.endswith("/accept"):
-            return httpx.Response(
-                200, json={"id": path.split("/")[3], "status": "accepted", "subscription": "sub_42"}
-            )
-        if method == "GET" and path == "/v1/quotes":
-            return httpx.Response(200, json={"data": self.quote_rows})
-        return httpx.Response(404, json={"error": {"message": f"unrouted {method} {path}"}})
-
-
 def _run(fake: FakeStripe, coro_factory):
     async def go():
-        async with make_client("sk_test_x", transport=httpx.MockTransport(fake.handler)) as client:
+        async with fake.client() as client:
             return await coro_factory(client)
 
     return asyncio.run(go())
 
 
-def _quote(fake: FakeStripe, *, tier="Gold", pts=10):
-    """A quote at ``pts`` code points; the fake finalizes at the rule's price."""
-    tier_key = tier.strip().lower()
-    if tier_key in sales_pricing.TIERS and 0 <= pts <= sales_pricing.MAX_CODE_POINTS:
-        fake.right_total = sales_pricing.price_usd(tier_key, pts) * 100
+def _quote(fake: FakeStripe, *, tier="Gold", pts=10, email="info@kennedy.com"):
     return _run(
         fake,
         lambda client: create_sponsor_quote(
@@ -158,20 +49,24 @@ def _quote(fake: FakeStripe, *, tier="Gold", pts=10):
             tier=tier,
             supplier_id="supplier-1",
             supplier_name="Kennedy Electronics",
-            email="info@kennedy.com",
+            email=email,
             address=ADDRESS,
             code_points=pts,
         ),
     )
 
 
-def _sent(fake: FakeStripe, method: str, path: str) -> dict:
-    for m, p, form in fake.tape:
-        if m == method and p == path:
-            return form
-    raise AssertionError(
-        f"{method} {path} never reached Stripe; tape={[(m, p) for m, p, _ in fake.tape]}"
-    )
+def _only_quote(fake: FakeStripe) -> str:
+    assert len(fake.quotes) == 1, list(fake.quotes)
+    return next(iter(fake.quotes))
+
+
+def _gold_coupon(fake: FakeStripe, **overrides) -> None:
+    """A pre-existing ``GOLD-AT-1850`` — by default exactly the one the rule
+    would mint (65000 off, forever, USD, valid, fenced to Gold's products)."""
+    kwargs = {"amount_off": 65000, "products": fake.product_ids("gold")}
+    kwargs.update(overrides)
+    fake.add_coupon("GOLD-AT-1850", **kwargs)
 
 
 # ── create_sponsor_quote ────────────────────────────────────────────────────
@@ -184,9 +79,11 @@ def test_discounted_quote_builds_the_exact_all_in_total():
     result = _quote(fake, tier="Gold", pts=10)
     assert result["amount_total"] == 185000
     assert result["price_usd"] == 1850
-    assert result["quote_id"] == "qt_testquote0001"
+    qid = _only_quote(fake)
+    assert result["quote_id"] == qid
+    assert fake.quotes[qid]["status"] == "open"
 
-    quote = _sent(fake, "POST", "/v1/quotes")
+    quote = fake.last("POST", "/v1/quotes").form
     assert quote["subscription_data[metadata][sponsor_id]"] == "sponsor-1"
     assert quote["automatic_tax[enabled]"] == "true"
     assert quote["collection_method"] == "send_invoice"
@@ -194,13 +91,14 @@ def test_discounted_quote_builds_the_exact_all_in_total():
     assert quote["line_items[0][price]"] == "price_gold_advertising_monthly"
     assert quote["line_items[1][price]"] == "price_gold_platform_monthly"
 
-    coupon = _sent(fake, "POST", "/v1/coupons")
+    coupon = fake.last("POST", "/v1/coupons").form
     assert coupon["amount_off"] == "65000"  # (2500 − 1850) × 100
     assert coupon["duration"] == "forever"
     assert coupon["name"] == "Gold Founder's Deal — $1,850/mo"
     # Fenced to the products Stripe resolved for the tier, not hard-coded ids.
-    assert coupon["applies_to[products][0]"] == "prod_gold_advertising_monthly"
-    assert coupon["applies_to[products][1]"] == "prod_gold_platform_monthly"
+    gold_adv, gold_plat = fake.product_ids("gold")
+    assert coupon["applies_to[products][0]"] == gold_adv
+    assert coupon["applies_to[products][1]"] == gold_plat
 
 
 def test_zero_points_quotes_the_founders_deal_never_list():
@@ -209,28 +107,25 @@ def test_zero_points_quotes_the_founders_deal_never_list():
     fake = FakeStripe()
     result = _quote(fake, tier="Gold", pts=0)
     assert result["amount_total"] == 210000
-    assert _sent(fake, "POST", "/v1/quotes")["discounts[0][coupon]"] == "GOLD-AT-2100"
+    assert fake.last("POST", "/v1/quotes").form["discounts[0][coupon]"] == "GOLD-AT-2100"
 
 
 def test_fifteen_points_stop_at_the_seventy_percent_floor():
     fake = FakeStripe()
     result = _quote(fake, tier="Platinum", pts=15)
     assert result["amount_total"] == 700000
-    assert _sent(fake, "POST", "/v1/quotes")["discounts[0][coupon]"] == "PLATINUM-AT-7000"
+    assert fake.last("POST", "/v1/quotes").form["discounts[0][coupon]"] == "PLATINUM-AT-7000"
 
 
 def test_existing_customer_is_reused_and_address_refreshed():
     fake = FakeStripe()
-    fake.customers = [
-        {
-            "id": "cus_existing",
-            "email": "info@kennedy.com",
-            "metadata": {"supplier_id": "supplier-1"},
-        }
-    ]
+    fake.add_customer(
+        "cus_existing", email="info@kennedy.com", metadata={"supplier_id": "supplier-1"}
+    )
     result = _quote(fake)
     assert result["customer_id"] == "cus_existing"
-    update = _sent(fake, "POST", "/v1/customers/cus_existing")
+    assert fake.calls("POST", "/v1/customers") == []  # nobody was created
+    update = fake.last("POST", "/v1/customers/cus_existing").form
     assert update["address[state]"] == "NY"
     assert update["address[country]"] == "US"
 
@@ -240,16 +135,13 @@ def test_shared_billing_inbox_never_overwrites_another_suppliers_customer():
     metadata.supplier_id, so the OTHER company's customer is left untouched
     and this supplier gets its own."""
     fake = FakeStripe()
-    fake.customers = [
-        {
-            "id": "cus_other",
-            "email": "info@kennedy.com",
-            "metadata": {"supplier_id": "someone-else"},
-        }
-    ]
+    fake.add_customer("cus_other", email="info@kennedy.com", metadata={"supplier_id": "else"})
     result = _quote(fake)
-    assert result["customer_id"] == "cus_new"
-    assert not any(p == "/v1/customers/cus_other" for _, p, _ in fake.tape)
+    assert result["customer_id"] != "cus_other"
+    created = fake.last("POST", "/v1/customers").form
+    assert created["metadata[supplier_id]"] == "supplier-1"
+    assert fake.calls("POST", "/v1/customers/cus_other") == []
+    assert fake.customers["cus_other"]["metadata"] == {"supplier_id": "else"}
 
 
 def test_plus_addressed_email_is_percent_encoded_in_the_lookup():
@@ -257,44 +149,30 @@ def test_plus_addressed_email_is_percent_encoded_in_the_lookup():
     lookup would never match and every quote would mint a duplicate customer.
     The params channel must encode it."""
     fake = FakeStripe()
-    fake.customers = [
-        {
-            "id": "cus_plus",
-            "email": "billing+ap@kennedy.com",
-            "metadata": {"supplier_id": "supplier-1"},
-        }
-    ]
-    fake.right_total = 185000
-    result = _run(
-        fake,
-        lambda client: create_sponsor_quote(
-            client,
-            sponsor_id="sponsor-1",
-            tier="Gold",
-            supplier_id="supplier-1",
-            supplier_name="Kennedy Electronics",
-            email="billing+ap@kennedy.com",
-            address=ADDRESS,
-            code_points=10,
-        ),
+    fake.add_customer(
+        "cus_plus", email="billing+ap@kennedy.com", metadata={"supplier_id": "supplier-1"}
     )
+    result = _quote(fake, email="billing+ap@kennedy.com")
     # The fake filters on the DECODED email — a reused (not duplicate)
     # customer proves the round-trip survived encoding…
     assert result["customer_id"] == "cus_plus"
+    assert fake.calls("POST", "/v1/customers") == []
     # …and the wire never carried a bare '+' in the customers query.
-    lookup_urls = [u for u in fake.urls if "/v1/customers?" in u]
-    assert lookup_urls and all("+" not in u for u in lookup_urls)
+    lookups = [u for u in fake.urls if u.startswith("https://api.stripe.com/v1/customers?")]
+    assert lookups and all("+" not in u.split("?", 1)[1] for u in lookups)
 
 
 def test_total_mismatch_cancels_the_quote_and_raises():
     """The honesty gate: a finalized total that is not the sticker must die
     server-side, never reach a customer."""
     fake = FakeStripe()
-    fake.finalized_total = 132854  # the $1,328.54 the requirement forbids
+    fake.quote_finalize_total = 132854  # the $1,328.54 the requirement forbids
     with pytest.raises(StripeApiError) as err:
         _quote(fake, tier="Platinum", pts=10)
     assert "canceled" in str(err.value)
-    assert any(p.endswith("/cancel") for _, p, _ in fake.tape)
+    qid = _only_quote(fake)
+    assert fake.calls("POST", f"/v1/quotes/{qid}/cancel")
+    assert fake.quotes[qid]["status"] == "canceled"
 
 
 def test_failed_cancel_still_reports_the_mismatch_with_the_quote_id():
@@ -302,13 +180,15 @@ def test_failed_cancel_still_reports_the_mismatch_with_the_quote_id():
     MISMATCH — naming the still-open quote — not a bare network error that
     reads as 'nothing happened, retry'."""
     fake = FakeStripe()
-    fake.finalized_total = 132854
-    fake.cancel_fails = True
+    fake.quote_finalize_total = 132854
+    fake.quote_cancel_status = 500
     with pytest.raises(StripeApiError) as err:
         _quote(fake, tier="Platinum", pts=10)
     message = str(err.value)
-    assert "qt_testquote0001" in message
+    qid = _only_quote(fake)
+    assert qid in message
     assert "still OPEN" in message
+    assert fake.quotes[qid]["status"] == "open"
 
 
 @pytest.mark.parametrize("pts", [-1, 16, 100])
@@ -330,24 +210,26 @@ def test_unknown_tier_is_refused():
     assert fake.tape == []
 
 
-def test_coupon_conflict_with_matching_amount_is_reused():
+def test_coupon_conflict_with_matching_fields_is_reused():
     fake = FakeStripe()
-    fake.coupon_exists = True
-    fake.existing_coupon_amount = 65000
-    _quote(fake, tier="Gold", pts=10)
-    assert _sent(fake, "POST", "/v1/quotes")["discounts[0][coupon]"] == "GOLD-AT-1850"
+    _gold_coupon(fake)
+    result = _quote(fake, tier="Gold", pts=10)
+    assert fake.last("POST", "/v1/quotes").form["discounts[0][coupon]"] == "GOLD-AT-1850"
+    # The conflict was verified WITH the fence expanded, then reused as-is.
+    verify = fake.last("GET", "/v1/coupons/GOLD-AT-1850")
+    assert verify.params["expand[]"] == ["applies_to"]
+    assert result["amount_total"] == 185000
 
 
 def test_coupon_conflict_with_wrong_amount_is_an_error_not_a_discount():
     """A hand-made coupon wearing our deterministic name but the wrong amount
     would misprice the quote — refuse loudly."""
     fake = FakeStripe()
-    fake.coupon_exists = True
-    fake.existing_coupon_amount = 5000
+    _gold_coupon(fake, amount_off=5000)
     with pytest.raises(StripeApiError) as err:
         _quote(fake, tier="Gold", pts=10)
     assert err.value.status == 409
-    assert not any(p == "/v1/quotes" for _, p, _ in fake.tape)
+    assert fake.calls("POST", "/v1/quotes") == []
 
 
 def test_coupon_conflict_with_once_duration_is_refused():
@@ -355,56 +237,89 @@ def test_coupon_conflict_with_once_duration_is_refused():
     the RIGHT amount would discount only the first invoice and silently revert
     every renewal to list price. Amount alone is not enough to reuse."""
     fake = FakeStripe()
-    fake.coupon_exists = True
-    fake.existing_coupon_amount = 65000
-    fake.existing_coupon_duration = "once"
+    _gold_coupon(fake, duration="once")
     with pytest.raises(StripeApiError) as err:
         _quote(fake, tier="Gold", pts=10)
     assert err.value.status == 409
     assert "duration" in str(err.value)
+    assert fake.calls("POST", "/v1/quotes") == []
+
+
+def test_coupon_conflict_fenced_to_other_products_is_refused():
+    """The right amount and duration, but fenced to Platinum's products (or to
+    nothing, which discounts EVERYTHING): the discount would land on the wrong
+    lines, so the name alone never makes it reusable."""
+    fake = FakeStripe()
+    _gold_coupon(fake, products=fake.product_ids("platinum"))
+    with pytest.raises(StripeApiError) as err:
+        _quote(fake, tier="Gold", pts=10)
+    assert err.value.status == 409
+    assert "applies_to" in str(err.value)
+    assert fake.calls("POST", "/v1/quotes") == []
+
+    unfenced = FakeStripe()
+    _gold_coupon(unfenced, products=None)
+    with pytest.raises(StripeApiError) as err:
+        _quote(unfenced, tier="Gold", pts=10)
+    assert err.value.status == 409
+    assert unfenced.calls("POST", "/v1/quotes") == []
+
+
+def test_coupon_conflict_that_is_no_longer_valid_is_refused():
+    """``valid: false`` = exhausted or past its redeem_by: Stripe would reject
+    the quote's discount, so reuse must stop here with a 409."""
+    fake = FakeStripe()
+    _gold_coupon(fake, valid=False)
+    with pytest.raises(StripeApiError) as err:
+        _quote(fake, tier="Gold", pts=10)
+    assert err.value.status == 409
+    assert "valid" in str(err.value)
+    assert fake.calls("POST", "/v1/quotes") == []
 
 
 def test_accept_refuses_a_quote_this_app_did_not_create():
     fake = FakeStripe()
-    fake.quote_metadata = {}
+    fake.add_quote("qt_testquote0001", metadata={})
     with pytest.raises(StripeApiError) as err:
         _run(fake, lambda client: stripe_quotes.accept_quote(client, "qt_testquote0001"))
     assert err.value.status == 422
-    assert not any(p.endswith("/accept") for _, p, _ in fake.tape)
+    assert fake.calls("POST", "/v1/quotes/qt_testquote0001/accept") == []
+    assert fake.quotes["qt_testquote0001"]["status"] == "open"
 
 
 def test_accept_returns_the_subscription_for_our_own_quote():
     fake = FakeStripe()
+    fake.add_quote("qt_testquote0001", metadata={"managed_by": "circuits-com"})
     result = _run(fake, lambda client: stripe_quotes.accept_quote(client, "qt_testquote0001"))
-    assert result["subscription_id"] == "sub_42"
     assert result["status"] == "accepted"
+    assert result["subscription_id"] == fake.quotes["qt_testquote0001"]["subscription"]
+    assert result["subscription_id"].startswith("sub_")
 
 
 def test_sponsor_quote_list_filters_to_this_sponsorship():
     """One supplier, many placements, one Stripe customer: the panel must see
     only ITS quotes, or 'Customer accepted' on page A can activate board B."""
     fake = FakeStripe()
-    fake.customers = [
-        {"id": "cus_1", "email": "info@kennedy.com", "metadata": {"supplier_id": "supplier-1"}}
-    ]
-    fake.quote_rows = [
-        {
-            "id": "qt_mine00000001",
-            "number": "QT-1",
-            "status": "open",
-            "amount_total": 30000,
-            "created": 1,
-            "metadata": {"sponsor_id": "sponsor-1"},
-        },
-        {
-            "id": "qt_other0000001",
-            "number": "QT-2",
-            "status": "open",
-            "amount_total": 9000,
-            "created": 2,
-            "metadata": {"sponsor_id": "sponsor-OTHER"},
-        },
-    ]
+    fake.add_customer("cus_1", email="info@kennedy.com", metadata={"supplier_id": "supplier-1"})
+    fake.add_quote(
+        "qt_mine00000001",
+        customer="cus_1",
+        number="QT-1",
+        amount_total=30000,
+        created=1,
+        metadata={"sponsor_id": "sponsor-1"},
+    )
+    fake.add_quote(
+        "qt_other0000001",
+        customer="cus_1",
+        number="QT-2",
+        amount_total=9000,
+        created=2,
+        metadata={"sponsor_id": "sponsor-OTHER"},
+    )
+    fake.add_quote(  # another customer's quote for the same sponsor id
+        "qt_stranger0001", customer="cus_x", metadata={"sponsor_id": "sponsor-1"}
+    )
     rows = _run(
         fake,
         lambda client: stripe_quotes.list_sponsor_quotes(
@@ -412,17 +327,13 @@ def test_sponsor_quote_list_filters_to_this_sponsorship():
         ),
     )
     assert [r["quote_id"] for r in rows] == ["qt_mine00000001"]
+    assert rows[0]["amount_total"] == 30000
+    assert fake.last("GET", "/v1/quotes").params["customer"] == "cus_1"
 
 
 def test_sponsor_quote_list_is_empty_when_no_customer_matches_the_supplier():
     fake = FakeStripe()
-    fake.customers = [
-        {
-            "id": "cus_other",
-            "email": "info@kennedy.com",
-            "metadata": {"supplier_id": "someone-else"},
-        }
-    ]
+    fake.add_customer("cus_other", email="info@kennedy.com", metadata={"supplier_id": "else"})
     rows = _run(
         fake,
         lambda client: stripe_quotes.list_sponsor_quotes(
@@ -430,7 +341,18 @@ def test_sponsor_quote_list_is_empty_when_no_customer_matches_the_supplier():
         ),
     )
     assert rows == []
-    assert not any(p == "/v1/quotes" for _, p, _ in fake.tape)
+    assert fake.calls("GET", "/v1/quotes") == []
+
+
+def test_quote_pdf_is_read_from_the_files_host():
+    fake = FakeStripe()
+    fake.add_quote("qt_testquote0001")
+    pdf = _run(fake, lambda client: stripe_quotes.quote_pdf(client, "qt_testquote0001"))
+    assert pdf == b"%PDF-1.7 fake"
+    assert fake.urls[-1].startswith("https://files.stripe.com/v1/quotes/")
+    with pytest.raises(StripeApiError) as err:
+        _run(fake, lambda client: stripe_quotes.quote_pdf(client, "qt_nosuchquote01"))
+    assert err.value.status == 404
 
 
 def test_ladder_first_entry_is_the_list_price():
@@ -504,9 +426,8 @@ def test_create_quote_end_to_end_prices_by_the_rule_and_audits(
     """Route → service → FakeStripe with no service monkeypatch: 10 points on
     the seeded Gold sponsor is a $1,850 quote on GOLD-AT-1850, audited."""
     from app.models.sales import BillingAudit
-    from tests.fake_stripe import FakeStripe as SharedFakeStripe
 
-    fake = SharedFakeStripe()
+    fake = FakeStripe()
     monkeypatch.setattr(stripe_quotes, "make_client", fake.make_client)
     resp = client.post(
         f"/api/admin/sponsors/{seeded_db['sponsor'].id}/quote",
@@ -639,18 +560,16 @@ def test_pdf_and_ladder_run_end_to_end_against_mock_transport(
     """One route exercised WITHOUT monkeypatching the service — the transport
     is swapped instead, so route→service→httpx wiring is proven whole."""
     fake = FakeStripe()
-
-    def patched_make_client(secret_key, transport=None):
-        return httpx.AsyncClient(
-            base_url=stripe_quotes.STRIPE_API,
-            headers={"Authorization": f"Bearer {secret_key}"},
-            transport=httpx.MockTransport(fake.handler),
-        )
-
-    monkeypatch.setattr(stripe_quotes, "make_client", patched_make_client)
+    fake.add_quote("qt_testquote0001", metadata={"managed_by": "circuits-com"})
+    monkeypatch.setattr(stripe_quotes, "make_client", fake.make_client)
     resp = client.get("/api/admin/quotes/qt_testquote0001/pdf", headers=auth_header())
     assert resp.status_code == 200
     assert resp.content == b"%PDF-1.7 fake"
+    assert fake.urls[-1] == "https://files.stripe.com/v1/quotes/qt_testquote0001/pdf"
+    # …and the accept route through the same wiring stamps the subscription.
+    resp = client.post("/api/admin/quotes/qt_testquote0001/accept", headers=auth_header())
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["subscription_id"] == fake.quotes["qt_testquote0001"]["subscription"]
 
 
 def test_quote_id_pattern_never_escapes_the_path():
